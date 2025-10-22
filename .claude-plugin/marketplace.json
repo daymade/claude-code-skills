@@ -1,0 +1,94 @@
+{
+  "name": "daymade-skills",
+  "owner": {
+    "name": "daymade",
+    "email": "daymadev89@gmail.com"
+  },
+  "metadata": {
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, and LLM icon access",
+    "version": "1.2.0",
+    "homepage": "https://github.com/daymade/claude-code-skills"
+  },
+  "plugins": [
+    {
+      "name": "github-ops",
+      "description": "Comprehensive GitHub operations using gh CLI and GitHub API for pull requests, issues, repositories, workflows, and API interactions",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": ["github", "gh-cli", "pull-request", "issues", "workflows", "api"],
+      "skills": ["./github-ops"]
+    },
+    {
+      "name": "markdown-tools",
+      "description": "Convert documents (PDFs, Word, PowerPoint, Confluence exports) to markdown with Windows/WSL path handling support",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "document-conversion",
+      "keywords": ["markdown", "pdf", "docx", "confluence", "markitdown", "wsl"],
+      "skills": ["./markdown-tools"]
+    },
+    {
+      "name": "mermaid-tools",
+      "description": "Generate Mermaid diagrams from markdown with automatic PNG/SVG rendering and extraction from documents",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "documentation",
+      "keywords": ["mermaid", "diagrams", "visualization", "flowchart", "sequence"],
+      "skills": ["./mermaid-tools"]
+    },
+    {
+      "name": "statusline-generator",
+      "description": "Configure Claude Code statuslines with multi-line layouts, cost tracking via ccusage, git status, and customizable colors",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "customization",
+      "keywords": ["statusline", "ccusage", "git-status", "customization", "prompt"],
+      "skills": ["./statusline-generator"]
+    },
+    {
+      "name": "teams-channel-post-writer",
+      "description": "Create professional Microsoft Teams channel posts with Adaptive Cards, formatted announcements, and corporate communication standards",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "communication",
+      "keywords": ["teams", "microsoft", "adaptive-cards", "communication", "announcements"],
+      "skills": ["./teams-channel-post-writer"]
+    },
+    {
+      "name": "repomix-unmixer",
+      "description": "Extract files from repomix packaged formats (XML, Markdown, JSON) with automatic format detection and validation",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "utilities",
+      "keywords": ["repomix", "unmix", "extract", "xml", "conversion"],
+      "skills": ["./repomix-unmixer"]
+    },
+    {
+      "name": "skill-creator",
+      "description": "Guide for creating effective Claude Code skills with initialization scripts, validation, packaging, and privacy best practices",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": ["skill-creation", "claude-code", "development", "tooling", "workflow"],
+      "skills": ["./skill-creator"]
+    },
+    {
+      "name": "llm-icon-finder",
+      "description": "Find and access AI/LLM model brand icons from lobe-icons library in SVG/PNG/WEBP formats",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "assets",
+      "keywords": ["icons", "ai-models", "llm", "branding", "lobe-icons"],
+      "skills": ["./llm-icon-finder"]
+    }
+  ]
+}
