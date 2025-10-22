@@ -1,10 +1,10 @@
 # Claude Code Skills Marketplace
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-6-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-8-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.2.0-green.svg)](https://github.com/daymade/claude-code-skills)
 
-Professional Claude Code skills marketplace featuring 6 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 8 production-ready skills for enhanced development workflows.
 
 ## 🚀 Quick Start
 
@@ -16,13 +16,26 @@ Add this marketplace to Claude Code:
 /plugin marketplace add daymade/claude-code-skills
 ```
 
-Then install the productivity skills bundle:
+Install individual skills as needed:
 
 ```bash
-/plugin install productivity-skills
+# Install specific skills
+/plugin marketplace install daymade/claude-code-skills#github-ops
+/plugin marketplace install daymade/claude-code-skills#markdown-tools
+/plugin marketplace install daymade/claude-code-skills#skill-creator
+
+# Or install all skills
+/plugin marketplace install daymade/claude-code-skills#github-ops
+/plugin marketplace install daymade/claude-code-skills#markdown-tools
+/plugin marketplace install daymade/claude-code-skills#mermaid-tools
+/plugin marketplace install daymade/claude-code-skills#statusline-generator
+/plugin marketplace install daymade/claude-code-skills#teams-channel-post-writer
+/plugin marketplace install daymade/claude-code-skills#repomix-unmixer
+/plugin marketplace install daymade/claude-code-skills#skill-creator
+/plugin marketplace install daymade/claude-code-skills#llm-icon-finder
 ```
 
-All 6 skills will be automatically available in your Claude Code session!
+Each skill can be installed independently - choose only what you need!
 
 ## 📦 Included Skills
 
@@ -142,19 +155,62 @@ Extracts files from repomix-packed repositories and restores directory structure
 - UTF-8 encoding support
 - Comprehensive validation workflows
 
+---
+
+### 7. **skill-creator** - Skill Development Toolkit
+
+Guide for creating effective Claude Code skills with comprehensive tooling.
+
+**When to use:**
+- Creating new Claude Code skills
+- Validating skill structure and quality
+- Packaging skills for distribution
+- Learning skill development best practices
+- Understanding privacy requirements
+
+**Key features:**
+- Skill initialization script (generates templates)
+- Validation and packaging automation
+- Privacy-safe examples and guidelines
+- Progressive disclosure design patterns
+- Complete skill creation workflow
+
+---
+
+### 8. **llm-icon-finder** - AI/LLM Brand Icon Finder
+
+Access 100+ AI model and LLM provider brand icons from lobe-icons library.
+
+**When to use:**
+- Finding brand icons for AI models/providers
+- Downloading logos for Claude, GPT, Gemini, etc.
+- Getting icons in multiple formats (SVG/PNG/WEBP)
+- Building AI tool documentation
+- Creating presentations about LLMs
+
+**Key features:**
+- 100+ AI/LLM model icons
+- Multiple format support (SVG, PNG, WEBP)
+- URL generation for direct access
+- Local download capabilities
+- Searchable icon catalog
+
 ## 🎯 Use Cases
 
 ### For GitHub Workflows
 Use **github-ops** to streamline PR creation, issue management, and API operations.
 
 ### For Documentation
-Combine **markdown-tools** for document conversion and **mermaid-tools** for diagram generation to create comprehensive documentation.
+Combine **markdown-tools** for document conversion and **mermaid-tools** for diagram generation to create comprehensive documentation. Use **llm-icon-finder** to add brand icons.
 
 ### For Team Communication
 Use **teams-channel-post-writer** to share knowledge and **statusline-generator** to track costs while working.
 
 ### For Repository Management
 Use **repomix-unmixer** to extract and validate repomix-packed skills or repositories.
+
+### For Skill Development
+Use **skill-creator** to build, validate, and package your own Claude Code skills following best practices.
 
 ## 📚 Documentation
 
@@ -172,6 +228,8 @@ Each skill includes:
 - **statusline-generator**: See `statusline-generator/references/color_codes.md` for customization
 - **teams-channel-post-writer**: See `teams-channel-post-writer/references/writing-guidelines.md` for quality standards
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
+- **skill-creator**: See `skill-creator/SKILL.md` for complete skill creation workflow
+- **llm-icon-finder**: See `llm-icon-finder/references/icons-list.md` for available icons
 
 ## 🛠️ Requirements
 
@@ -228,4 +286,4 @@ If you find these skills useful, please:
 
 **Built with ❤️ using the skill-creator skill for Claude Code**
 
-Last updated: 2025-10-22 | Version 1.0.0
+Last updated: 2025-10-22 | Version 1.2.0
