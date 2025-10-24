@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Code Skills Marketplace - Demo Gallery</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+
+        header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .badges {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .nav {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .nav h2 {
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .nav-item {
+            padding: 10px 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s ease;
+            text-align: center;
+            border: 2px solid transparent;
+        }
+
+        .nav-item:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .skill-section {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .skill-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .skill-icon {
+            font-size: 3rem;
+            margin-right: 20px;
+        }
+
+        .skill-title h2 {
+            color: #667eea;
+            font-size: 2rem;
+            margin-bottom: 5px;
+        }
+
+        .skill-title p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .demo-count {
+            margin-left: auto;
+            background: #667eea;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+        }
+
+        .demos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 30px;
+        }
+
+        .demo-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .demo-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+        }
+
+        .demo-card h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+
+        .demo-image {
+            width: 100%;
+            border-radius: 8px;
+            border: 3px solid #e0e0e0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .demo-image:hover {
+            border-color: #667eea;
+            transform: scale(1.02);
+        }
+
+        .demo-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            position: relative;
+            margin: 50px auto;
+            max-width: 90%;
+            max-height: 90%;
+            animation: slideIn 0.3s;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-content img {
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+        }
+
+        .close {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .close:hover {
+            color: #667eea;
+            transform: scale(1.1);
+        }
+
+        footer {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            margin-top: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        footer h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        footer a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            opacity: 0.9;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2rem;
+            }
+
+            .demos-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .skill-header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .demo-count {
+                margin-left: 0;
+                margin-top: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 Claude Code Skills Marketplace</h1>
+            <p>Visual Demonstration Gallery</p>
+            <div class="badges">
+                <span class="badge">✨ 8 Skills</span>
+                <span class="badge">📹 10 Demos</span>
+                <span class="badge">🎨 100% Coverage</span>
+                <span class="badge">💾 1.56 MB Total</span>
+            </div>
+        </header>
+
+        <!-- Quick Navigation -->
+        <div class="nav">
+            <h2>Quick Navigation</h2>
+            <div class="nav-grid">
+                <a href="#skill-creator" class="nav-item">⭐ skill-creator</a>
+                <a href="#github-ops" class="nav-item">🔧 github-ops</a>
+                <a href="#markdown-tools" class="nav-item">📝 markdown-tools</a>
+                <a href="#mermaid-tools" class="nav-item">📊 mermaid-tools</a>
+                <a href="#statusline-generator" class="nav-item">⚙️ statusline-generator</a>
+                <a href="#teams-channel-post-writer" class="nav-item">💬 teams-channel-post-writer</a>
+                <a href="#repomix-unmixer" class="nav-item">📦 repomix-unmixer</a>
+                <a href="#llm-icon-finder" class="nav-item">🎨 llm-icon-finder</a>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">8</div>
+                <div class="stat-label">Skills Available</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">10</div>
+                <div class="stat-label">Demo Videos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">100%</div>
+                <div class="stat-label">Skill Coverage</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">1.56</div>
+                <div class="stat-label">MB Total Size</div>
+            </div>
+        </div>
+
+        <!-- skill-creator -->
+        <div class="skill-section" id="skill-creator">
+            <div class="skill-header">
+                <div class="skill-icon">⭐</div>
+                <div class="skill-title">
+                    <h2>skill-creator</h2>
+                    <p>Essential meta-skill for creating your own Claude Code skills</p>
+                </div>
+                <div class="demo-count">3 Demos</div>
+            </div>
+            <div class="demos-grid">
+                <div class="demo-card">
+                    <h3>📝 Initialize New Skill</h3>
+                    <img src="skill-creator/init-skill.gif" alt="Initialize Skill Demo" class="demo-image" onclick="openModal(this.src)">
+                    <div class="demo-meta">
+                        <span>⏱️ ~15 seconds</span>
+                        <span>💾 228 KB</span>
+                    </div>
+                </div>
+                <div class="demo-card">
+                    <h3>✅ Validate Skill Quality</h3>
+                    <img src="skill-creator/validate-skill.gif" alt="Validate Skill Demo" class="demo-image" onclick="openModal(this.src)">
+                    <div class="demo-meta">
+                        <span>⏱️ ~10 seconds</span>
+                        <span>💾 115 KB</span>
+                    </div>
+                </div>
+                <div class="demo-card">
+                    <h3>📦 Package for Distribution</h3>
+                    <img src="skill-creator/package-skill.gif" alt="Package Skill Demo" class="demo-image" onclick="openModal(this.src)">
+                    <div class="demo-meta">
+                        <span>⏱️ ~12 seconds</span>
+                        <span>💾 167 KB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- github-ops -->
+        <div class="skill-section" id="github-ops">
+            <div class="skill-header">
+                <div class="skill-icon">🔧</div>
+                <div class="skill-title">
+                    <h2>github-ops</h2>
+                    <p>Comprehensive GitHub operations using gh CLI and API</p>
+                </div>
+                <div class="demo-count">1 Demo</div>
+            </div>
+            <div class="demos-grid">
+                <div class="demo-card">
+                    <h3>🔀 Create Pull Request</h3>
+                    <img src="github-ops/create-pr.gif" alt="Create PR Demo" class="demo-image" onclick="openModal(this.src)">
+                    <div class="demo-meta">
+                        <span>⏱️ ~15 seconds</span>
+                        <span>💾 165 KB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- markdown-tools -->
+        <div class="skill-section" id="markdown-tools">
+            <div class="skill-header">
+                <div class="skill-icon">📝</div>
+                <div class="skill-title">
+                    <h2>markdown-tools</h2>
+                    <p>Convert documents to markdown with Windows/WSL path handling</p>
+                </div>
+                <div class="demo-count">1 Demo</div>
+            </div>
+            <div class="demos-grid">
+                <div class="demo-card">
+                    <h3>📄 Convert Documents</h3>
+                    <img src="markdown-tools/convert-docs.gif" alt="Convert Documents Demo" class="demo-image" onclick="openModal(this.src)">
+                    <div class="demo-meta">
+                        <span>⏱️ ~12 seconds</span>
+                        <span>💾 206 KB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- mermaid-tools -->
+        <div class="skill-section" id="mermaid-tools">
+            <div class="skill-header">
+                <div class="skill-icon">📊</div>
+                <div class="skill-title">
+                    <h2>mermaid-tools</h2>
+                    <p>Extract Mermaid diagrams and generate high-quality PNGs</p>
+                </div>
+                <div class="demo-count">1 Demo</div>
+            </div>
+            <div class="demos-grid">
+                <div class="demo-card">
+                    <h3>🎨 Extract & Generate Diagrams</h3>
+                    <img src="mermaid-tools/extract-diagrams.gif" alt="Extract Diagrams Demo" class="demo-image" onclick="openModal(this.src)">
+                    <div class="demo-meta">
+                        <span>⏱️ ~14 seconds</span>
+                        <span>💾 166 KB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- statusline-generator -->
+        <div class="skill-section" id="statusline-generator">
+            <div class="skill-header">
+                <div class="skill-icon">⚙️</div>
+                <div class="skill-title">
+                    <h2>statusline-generator</h2>
+                    <p>Customize Claude Code statusline with cost tracking</p>
+                </div>
+                <div class="demo-count">1 Demo</div>
+            </div>
+            <div class="demos-grid">
+                <div class="demo-card">
+                    <h3>🎛️ Customize Statusline</h3>
+                    <img src="statusline-generator/customize-statusline.gif" alt="Customize Statusline Demo" class="demo-image" onclick="openModal(this.src)">
+                    <div class="demo-meta">
+                        <span>⏱️ ~16 seconds</span>
+                        <span>💾 191 KB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- teams-channel-post-writer -->
+        <div class="skill-section" id="teams-channel-post-writer">
+            <div class="skill-header">
+                <div class="skill-icon">💬</div>
+                <div class="skill-title">
+                    <h2>teams-channel-post-writer</h2>
+                    <p>Create professional Teams channel posts</p>
+                </div>
+                <div class="demo-count">1 Demo</div>
+            </div>
+            <div class="demos-grid">
+                <div class="demo-card">
+                    <h3>✍️ Write Teams Post</h3>
+                    <img src="teams-channel-post-writer/write-post.gif" alt="Write Teams Post Demo" class="demo-image" onclick="openModal(this.src)">
+                    <div class="demo-meta">
+                        <span>⏱️ ~18 seconds</span>
+                        <span>💾 1.0 MB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- repomix-unmixer -->
+        <div class="skill-section" id="repomix-unmixer">
+            <div class="skill-header">
+                <div class="skill-icon">📦</div>
+                <div class="skill-title">
+                    <h2>repomix-unmixer</h2>
+                    <p>Extract files from repomix-packed repositories</p>
+                </div>
+                <div class="demo-count">1 Demo</div>
+            </div>
+            <div class="demos-grid">
+                <div class="demo-card">
+                    <h3>📂 Extract Repository</h3>
+                    <img src="repomix-unmixer/extract-repo.gif" alt="Extract Repository Demo" class="demo-image" onclick="openModal(this.src)">
+                    <div class="demo-meta">
+                        <span>⏱️ ~14 seconds</span>
+                        <span>💾 152 KB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- llm-icon-finder -->
+        <div class="skill-section" id="llm-icon-finder">
+            <div class="skill-header">
+                <div class="skill-icon">🎨</div>
+                <div class="skill-title">
+                    <h2>llm-icon-finder</h2>
+                    <p>Access 100+ AI/LLM model brand icons</p>
+                </div>
+                <div class="demo-count">1 Demo</div>
+            </div>
+            <div class="demos-grid">
+                <div class="demo-card">
+                    <h3>🔍 Find AI/LLM Icons</h3>
+                    <img src="llm-icon-finder/find-icons.gif" alt="Find Icons Demo" class="demo-image" onclick="openModal(this.src)">
+                    <div class="demo-meta">
+                        <span>⏱️ ~16 seconds</span>
+                        <span>💾 227 KB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <h3>🚀 Get Started</h3>
+            <p>Install the Claude Code Skills Marketplace and start using these skills today!</p>
+            <br>
+            <p><strong>Quick Install:</strong></p>
+            <p><code>/plugin marketplace add daymade/claude-code-skills</code></p>
+            <br>
+            <p>
+                <a href="https://github.com/daymade/claude-code-skills" target="_blank">📖 Documentation</a> |
+                <a href="https://github.com/daymade/claude-code-skills/blob/main/README.zh-CN.md" target="_blank">🇨🇳 中文文档</a> |
+                <a href="https://github.com/daymade/claude-code-skills" target="_blank">⭐ Star on GitHub</a>
+            </p>
+            <br>
+            <p style="color: #666; font-size: 0.9rem;">
+                Version 1.3.0 | MIT License | Built with ❤️ using skill-creator
+            </p>
+        </footer>
+    </div>
+
+    <!-- Modal for full-size view -->
+    <div id="modal" class="modal" onclick="closeModal()">
+        <span class="close">&times;</span>
+        <div class="modal-content">
+            <img id="modal-img">
+        </div>
+    </div>
+
+    <script>
+        function openModal(src) {
+            const modal = document.getElementById('modal');
+            const modalImg = document.getElementById('modal-img');
+            modal.style.display = 'block';
+            modalImg.src = src;
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        // Smooth scroll for navigation
+        document.querySelectorAll('.nav-item').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+
+        // Close modal on ESC key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>

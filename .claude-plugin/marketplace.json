@@ -11,6 +11,16 @@
   },
   "plugins": [
     {
+      "name": "skill-creator",
+      "description": "Essential meta-skill for creating effective Claude Code skills with initialization scripts, validation, packaging, and privacy best practices",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": ["skill-creation", "claude-code", "development", "tooling", "workflow", "meta-skill", "essential"],
+      "skills": ["./skill-creator"]
+    },
+    {
       "name": "github-ops",
       "description": "Comprehensive GitHub operations using gh CLI and GitHub API for pull requests, issues, repositories, workflows, and API interactions",
       "source": "./",
@@ -69,16 +79,6 @@
       "category": "utilities",
       "keywords": ["repomix", "unmix", "extract", "xml", "conversion"],
       "skills": ["./repomix-unmixer"]
-    },
-    {
-      "name": "skill-creator",
-      "description": "Guide for creating effective Claude Code skills with initialization scripts, validation, packaging, and privacy best practices",
-      "source": "./",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "developer-tools",
-      "keywords": ["skill-creation", "claude-code", "development", "tooling", "workflow"],
-      "skills": ["./skill-creator"]
     },
     {
       "name": "llm-icon-finder",
