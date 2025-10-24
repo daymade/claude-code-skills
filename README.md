@@ -55,16 +55,17 @@ The `skill-creator` is the **meta-skill** that enables you to build, validate, a
 
 ### What You Can Do
 
-```bash
-# Initialize a new skill from template
-skill-creator/scripts/init_skill.py my-awesome-skill --path ~/my-skills
+After installing skill-creator, simply ask Claude Code:
 
-# Validate your skill structure and quality
-skill-creator/scripts/quick_validate.py ~/my-skills/my-awesome-skill
-
-# Package your skill for distribution
-skill-creator/scripts/package_skill.py ~/my-skills/my-awesome-skill
 ```
+"Create a new skill called my-awesome-skill in ~/my-skills"
+
+"Validate my skill at ~/my-skills/my-awesome-skill"
+
+"Package my skill at ~/my-skills/my-awesome-skill for distribution"
+```
+
+Claude Code, with skill-creator loaded, will guide you through the entire skill creation process - from understanding your requirements to packaging the final skill.
 
 📚 **Full documentation**: [skill-creator/SKILL.md](./skill-creator/SKILL.md)
 

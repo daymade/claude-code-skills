@@ -67,10 +67,12 @@ case $choice in
         echo -e "${YELLOW}/plugin marketplace add daymade/claude-code-skills${NC}"
         echo -e "${YELLOW}/plugin marketplace install daymade/claude-code-skills#skill-creator${NC}"
         echo ""
-        echo -e "${GREEN}After installation:${NC}"
-        echo "- Initialize a skill: skill-creator/scripts/init_skill.py <skill-name> --path <output-dir>"
-        echo "- Validate a skill: skill-creator/scripts/quick_validate.py /path/to/skill"
-        echo "- Package a skill: skill-creator/scripts/package_skill.py /path/to/skill"
+        echo -e "${GREEN}After installation, ask Claude Code:${NC}"
+        echo "  \"Create a new skill called my-awesome-skill in ~/my-skills\""
+        echo "  \"Validate my skill at ~/my-skills/my-awesome-skill\""
+        echo "  \"Package my skill at ~/my-skills/my-awesome-skill\""
+        echo ""
+        echo "Claude Code will guide you through the skill creation process!"
         ;;
     2)
         echo ""

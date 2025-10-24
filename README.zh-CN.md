@@ -55,16 +55,17 @@
 
 ### 你可以做什么
 
-```bash
-# 从模板初始化一个新技能
-skill-creator/scripts/init_skill.py my-awesome-skill --path ~/my-skills
+安装 skill-creator 后，只需向 Claude Code 提问：
 
-# 验证你的技能结构和质量
-skill-creator/scripts/quick_validate.py ~/my-skills/my-awesome-skill
-
-# 打包你的技能用于分发
-skill-creator/scripts/package_skill.py ~/my-skills/my-awesome-skill
 ```
+"在 ~/my-skills 中创建一个名为 my-awesome-skill 的新技能"
+
+"验证 ~/my-skills/my-awesome-skill 中的技能"
+
+"打包 ~/my-skills/my-awesome-skill 技能以便分发"
+```
+
+加载了 skill-creator 的 Claude Code 将引导你完成整个技能创建过程——从理解你的需求到打包最终技能。
 
 📚 **完整文档**：[skill-creator/SKILL.md](./skill-creator/SKILL.md)
 

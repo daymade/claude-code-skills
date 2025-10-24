@@ -76,10 +76,12 @@ switch ($choice) {
         $commands += "/plugin marketplace install daymade/claude-code-skills#skill-creator"
 
         $afterInstall = @"
-After installation:
-- Initialize a skill: skill-creator/scripts/init_skill.py <skill-name> --path <output-dir>
-- Validate a skill: skill-creator/scripts/quick_validate.py /path/to/skill
-- Package a skill: skill-creator/scripts/package_skill.py /path/to/skill
+After installation, ask Claude Code:
+  "Create a new skill called my-awesome-skill in ~/my-skills"
+  "Validate my skill at ~/my-skills/my-awesome-skill"
+  "Package my skill at ~/my-skills/my-awesome-skill"
+
+Claude Code will guide you through the skill creation process!
 "@
     }
     "2" {
