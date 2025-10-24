@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **New Skill**: cli-demo-generator - Professional CLI demo generation with VHS automation
+  - Automated demo generation from command lists
+  - Batch processing with YAML/JSON configs
+  - Interactive recording with asciinema
+  - Smart timing and multiple output formats
 - Comprehensive improvement plan with 5 implementation phases
 - Automated installation scripts for macOS/Linux (`install.sh`) and Windows (`install.ps1`)
 - Complete Chinese translation (README.zh-CN.md)

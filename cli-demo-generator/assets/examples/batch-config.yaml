@@ -1,0 +1,31 @@
+# Example batch configuration for generating multiple demos
+# Usage: batch_generate.py batch-config.yaml --output-dir ./output
+
+demos:
+  - name: "Installation Demo"
+    output: "install.gif"
+    title: "Package Installation"
+    theme: "Dracula"
+    width: 1400
+    height: 700
+    commands:
+      - "npm install my-package"
+      - "npm run build"
+
+  - name: "Usage Demo"
+    output: "usage.gif"
+    title: "Basic Usage"
+    theme: "Nord"
+    commands:
+      - "my-package --help"
+      - "my-package init"
+      - "my-package run"
+
+  - name: "Quick Start"
+    output: "quickstart.gif"
+    theme: "Tokyo Night"
+    commands:
+      - "git clone https://github.com/user/repo.git"
+      - "cd repo"
+      - "npm install"
+      - "npm start"

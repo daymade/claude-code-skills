@@ -133,6 +133,9 @@ Add the marketplace:
 
 # AI/LLM icons
 /plugin marketplace install daymade/claude-code-skills#llm-icon-finder
+
+# CLI demo generation
+/plugin marketplace install daymade/claude-code-skills#cli-demo-generator
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -326,6 +329,27 @@ Access 100+ AI model and LLM provider brand icons from lobe-icons library.
 
 ---
 
+### 8. **cli-demo-generator** - CLI Demo Generation
+
+Generate professional animated CLI demos and terminal recordings with VHS automation.
+
+**When to use:**
+- Creating demos for documentation
+- Recording terminal workflows as GIFs
+- Generating animated tutorials
+- Batch-generating multiple demos
+- Showcasing CLI tools
+
+**Key features:**
+- Automated demo generation from command lists
+- Batch processing with YAML/JSON configs
+- Interactive recording with asciinema
+- Smart timing based on command complexity
+- Multiple output formats (GIF, MP4, WebM)
+- VHS tape file templates
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -365,6 +389,7 @@ Each skill includes:
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
 - **skill-creator**: See `skill-creator/SKILL.md` for complete skill creation workflow
 - **llm-icon-finder**: See `llm-icon-finder/references/icons-list.md` for available icons
+- **cli-demo-generator**: See `cli-demo-generator/references/vhs_syntax.md` for VHS syntax and `cli-demo-generator/references/best_practices.md` for demo guidelines
 
 ## 🛠️ Requirements
 
@@ -373,6 +398,8 @@ Each skill includes:
 - **gh CLI** (for github-ops)
 - **markitdown** (for markdown-tools)
 - **mermaid-cli** (for mermaid-tools)
+- **VHS** (for cli-demo-generator): `brew install vhs`
+- **asciinema** (optional, for cli-demo-generator interactive recording)
 - **ccusage** (optional, for statusline cost tracking)
 
 ## ❓ FAQ

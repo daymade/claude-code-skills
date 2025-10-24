@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, and LLM icon access",
-    "version": "1.2.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, and LLM icon access",
+    "version": "1.3.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -89,6 +89,16 @@
       "category": "assets",
       "keywords": ["icons", "ai-models", "llm", "branding", "lobe-icons"],
       "skills": ["./llm-icon-finder"]
+    },
+    {
+      "name": "cli-demo-generator",
+      "description": "Generate professional animated CLI demos and terminal recordings with VHS. Supports automated generation, batch processing, and interactive recording for documentation and tutorials",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": ["cli", "demo", "terminal", "vhs", "gif", "recording", "animation", "documentation"],
+      "skills": ["./cli-demo-generator"]
     }
   ]
 }

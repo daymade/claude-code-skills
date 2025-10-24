@@ -133,6 +133,9 @@ iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scri
 
 # AI/LLM 图标
 /plugin marketplace install daymade/claude-code-skills#llm-icon-finder
+
+# CLI 演示生成
+/plugin marketplace install daymade/claude-code-skills#cli-demo-generator
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -348,6 +351,27 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
+### 8. **cli-demo-generator** - CLI 演示生成器
+
+使用 VHS 自动化生成专业的 CLI 动画演示和终端录制。
+
+**使用场景：**
+- 为文档创建演示
+- 将终端工作流录制为 GIF
+- 生成动画教程
+- 批量生成多个演示
+- 展示 CLI 工具
+
+**主要功能：**
+- 从命令列表自动生成演示
+- 使用 YAML/JSON 配置批处理
+- 使用 asciinema 进行交互式录制
+- 基于命令复杂度的智能时序
+- 多种输出格式（GIF、MP4、WebM）
+- VHS tape 文件模板
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -387,6 +411,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - **repomix-unmixer**：参见 `repomix-unmixer/references/repomix-format.md` 了解格式规范
 - **skill-creator**：参见 `skill-creator/SKILL.md` 了解完整的技能创建工作流
 - **llm-icon-finder**：参见 `llm-icon-finder/references/icons-list.md` 了解可用图标
+- **cli-demo-generator**：参见 `cli-demo-generator/references/vhs_syntax.md` 了解 VHS 语法和 `cli-demo-generator/references/best_practices.md` 了解演示指南
 
 ## 🛠️ 系统要求
 
@@ -395,6 +420,8 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - **gh CLI**（用于 github-ops）
 - **markitdown**（用于 markdown-tools）
 - **mermaid-cli**（用于 mermaid-tools）
+- **VHS**（用于 cli-demo-generator）：`brew install vhs`
+- **asciinema**（可选，用于 cli-demo-generator 交互式录制）
 - **ccusage**（可选，用于状态栏成本跟踪）
 
 ## ❓ 常见问题
