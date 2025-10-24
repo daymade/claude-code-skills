@@ -20,7 +20,7 @@ Professional Claude Code skills marketplace featuring 8 production-ready skills 
 
 - [🌟 Essential Skill: skill-creator](#-essential-skill-skill-creator)
 - [🚀 Quick Installation](#-quick-installation)
-- [🇨🇳 Chinese User Guide](#-中文用户指南--chinese-user-guide)
+- [🇨🇳 Chinese User Guide](#-chinese-user-guide)
 - [📦 Other Available Skills](#-other-available-skills)
 - [🎬 Interactive Demo Gallery](#-interactive-demo-gallery)
 - [🎯 Use Cases](#-use-cases)
@@ -138,32 +138,9 @@ Each skill can be installed independently - choose only what you need!
 
 ---
 
-## 🇨🇳 中文用户指南 / Chinese User Guide
+## 🇨🇳 Chinese User Guide
 
-### 推荐工具 / Recommended Tools
-
-**CC-Switch - Claude Code 配置管理器**
-
-对于中国用户，我们强烈推荐使用 [CC-Switch](https://github.com/farion1231/cc-switch) 来管理 Claude Code 的 API 提供商配置。
-
-CC-Switch 的主要功能：
-- ✅ 快速切换不同的 API 供应商（DeepSeek、Qwen、GLM 等）
-- ✅ 测试端点响应时间，自动选择最快的提供商
-- ✅ 管理 MCP 服务器配置
-- ✅ 自动备份和导入/导出配置
-- ✅ 跨平台支持（Windows、macOS、Linux）
-
-**安装方法：**
-1. 从 [Releases](https://github.com/farion1231/cc-switch/releases) 下载对应系统的安装包
-2. 安装并启动应用
-3. 添加你的 API 配置
-4. 通过界面或系统托盘切换配置
-
-**系统要求：** Windows 10+、macOS 10.15+ 或 Linux (Ubuntu 22.04+)
-
----
-
-**For Chinese users**, we highly recommend using [CC-Switch](https://github.com/farion1231/cc-switch) to manage Claude Code API provider configurations.
+**For Chinese users:** We highly recommend using [CC-Switch](https://github.com/farion1231/cc-switch) to manage Claude Code API provider configurations.
 
 CC-Switch enables you to:
 - ✅ Quickly switch between different API providers (DeepSeek, Qwen, GLM, etc.)
@@ -174,11 +151,9 @@ CC-Switch enables you to:
 
 **Setup:** Download from [Releases](https://github.com/farion1231/cc-switch/releases), install, add your API configs, and switch via UI or system tray.
 
-### 📖 完整中文文档 / Full Chinese Documentation
+### Complete Chinese Documentation
 
-请查看 [README.zh-CN.md](./README.zh-CN.md) 获取完整的中文文档。
-
-For complete Chinese documentation, see [README.zh-CN.md](./README.zh-CN.md).
+For full documentation in Chinese, see [README.zh-CN.md](./README.zh-CN.md).
 
 ---
 
@@ -426,7 +401,7 @@ Yes, all skills are open-source and reviewed. The code is available in this repo
 
 ### How do Chinese users handle API access?
 
-We recommend using [CC-Switch](https://github.com/farion1231/cc-switch) to manage API provider configurations. See the [Chinese User Guide](#-中文用户指南--chinese-user-guide) section above.
+We recommend using [CC-Switch](https://github.com/farion1231/cc-switch) to manage API provider configurations. See the [Chinese User Guide](#-chinese-user-guide) section above.
 
 ### What's the difference between skill-creator and other skills?
 
