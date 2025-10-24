@@ -348,6 +348,10 @@ Generate professional animated CLI demos and terminal recordings with VHS automa
 - Multiple output formats (GIF, MP4, WebM)
 - VHS tape file templates
 
+**🎬 Live Demo**
+
+![CLI Demo Generator Demo](./demos/cli-demo-generator/generate-demo.gif)
+
 ---
 
 ## 🎬 Interactive Demo Gallery
