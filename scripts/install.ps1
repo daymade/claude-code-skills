@@ -41,15 +41,29 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     Write-Host ""
 }
 
-# Installation menu
-Write-Host "What would you like to install?"
-Write-Host ""
-Write-Host "1) skill-creator only (RECOMMENDED - enables you to create your own skills)"
-Write-Host "2) All skills"
-Write-Host "3) Custom selection"
-Write-Host "4) Exit"
-Write-Host ""
-$choice = Read-Host "Enter your choice (1-4)"
+# Check if running interactively
+$isInteractive = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected
+
+if ($isInteractive) {
+    # Installation menu
+    Write-Host "What would you like to install?"
+    Write-Host ""
+    Write-Host "1) skill-creator only (RECOMMENDED - enables you to create your own skills)"
+    Write-Host "2) All skills"
+    Write-Host "3) Custom selection"
+    Write-Host "4) Exit"
+    Write-Host ""
+    $choice = Read-Host "Enter your choice (1-4)"
+} else {
+    Write-Info "Running in non-interactive mode."
+    Write-Host "Defaulting to option 1: skill-creator only (RECOMMENDED)"
+    Write-Host ""
+    Write-Host "To run interactively, download and run directly:"
+    Write-Host "  Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.ps1' -OutFile install.ps1"
+    Write-Host "  .\install.ps1"
+    Write-Host ""
+    $choice = "1"
+}
 
 $commands = @()
 $commands += "/plugin marketplace add daymade/claude-code-skills"
@@ -90,7 +104,13 @@ After installation:
         Write-Host "  7) repomix-unmixer (repomix extraction)"
         Write-Host "  8) llm-icon-finder (AI/LLM icons)"
         Write-Host ""
-        $selections = (Read-Host "Enter skill numbers separated by spaces (e.g., '1 2 3')").Split(' ')
+
+        if ($isInteractive) {
+            $selections = (Read-Host "Enter skill numbers separated by spaces (e.g., '1 2 3')").Split(' ')
+        } else {
+            Write-Info "Non-interactive mode: Installing skill-creator only"
+            $selections = @("1")
+        }
 
         $skillMap = @{
             "1" = "skill-creator"

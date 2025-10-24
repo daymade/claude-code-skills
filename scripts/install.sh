@@ -34,15 +34,28 @@ fi
 echo -e "${GREEN}✓ Claude Code detected${NC}"
 echo ""
 
-# Installation options
-echo "What would you like to install?"
-echo ""
-echo "1) skill-creator only (RECOMMENDED - enables you to create your own skills)"
-echo "2) All skills"
-echo "3) Custom selection"
-echo "4) Exit"
-echo ""
-read -p "Enter your choice (1-4): " choice
+# Check if running interactively
+if [ -t 0 ]; then
+    # Interactive mode
+    echo "What would you like to install?"
+    echo ""
+    echo "1) skill-creator only (RECOMMENDED - enables you to create your own skills)"
+    echo "2) All skills"
+    echo "3) Custom selection"
+    echo "4) Exit"
+    echo ""
+    read -p "Enter your choice (1-4): " choice
+else
+    # Non-interactive mode (piped from curl)
+    echo -e "${YELLOW}Running in non-interactive mode.${NC}"
+    echo "Defaulting to option 1: skill-creator only (RECOMMENDED)"
+    echo ""
+    echo "To run interactively, download and run directly:"
+    echo "  curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh -o install.sh"
+    echo "  bash install.sh"
+    echo ""
+    choice=1
+fi
 
 case $choice in
     1)
@@ -83,7 +96,14 @@ case $choice in
         echo "  7) repomix-unmixer (repomix extraction)"
         echo "  8) llm-icon-finder (AI/LLM icons)"
         echo ""
-        read -p "Enter skill numbers separated by spaces (e.g., '1 2 3'): " selections
+
+        if [ -t 0 ]; then
+            read -p "Enter skill numbers separated by spaces (e.g., '1 2 3'): " selections
+        else
+            echo -e "${YELLOW}Non-interactive mode: Installing skill-creator only${NC}"
+            selections="1"
+        fi
+
         echo ""
         echo "Run these commands in Claude Code:"
         echo ""
