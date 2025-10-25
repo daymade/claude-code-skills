@@ -125,7 +125,13 @@ Conclude this step when there is a clear sense of the functionality the skill sh
 To turn concrete examples into an effective skill, analyze each example by:
 
 1. Considering how to execute on the example from scratch
-2. Identifying what scripts, references, and assets would be helpful when executing these workflows repeatedly
+2. Determining the appropriate level of freedom for Claude
+3. Identifying what scripts, references, and assets would be helpful when executing these workflows repeatedly
+
+**Match specificity to task risk:**
+- **High freedom (text instructions)**: Multiple valid approaches exist; context determines best path (e.g., code reviews, troubleshooting, content analysis)
+- **Medium freedom (pseudocode with parameters)**: Preferred patterns exist with acceptable variation (e.g., API integration patterns, data processing workflows)
+- **Low freedom (exact scripts)**: Operations are fragile, consistency critical, sequence matters (e.g., PDF rotation, database migrations, form validation)
 
 Example: When building a `pdf-editor` skill to handle queries like "Help me rotate this PDF," the analysis shows:
 
@@ -222,3 +228,5 @@ After testing the skill, users may request improvements. Often this happens righ
 2. Notice struggles or inefficiencies
 3. Identify how SKILL.md or bundled resources should be updated
 4. Implement changes and test again
+
+**Refinement filter:** Only add what solves observed problems. If best practices already cover it, don't duplicate.
