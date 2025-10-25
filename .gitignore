@@ -32,7 +32,6 @@ env/
 *.swp
 *.swo
 *~
-.DS_Store
 
 # Testing
 .pytest_cache/
@@ -51,3 +50,29 @@ temp/
 # OS files
 Thumbs.db
 .DS_Store
+
+# Archives (should not be in root)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# Build artifacts
+*.o
+*.a
+*.exe
+*.dll
+*.dylib
+
+# Documentation artifacts that should be in docs/
+IMPROVEMENT_PLAN.md
+IMPLEMENTATION_SUMMARY.md
+RELEASE_NOTES_*.md
+INSTALLATION.md
+
+# Backup files
+*.bak
+*.backup
+*~
