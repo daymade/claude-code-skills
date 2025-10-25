@@ -8,6 +8,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- None
+
+### Changed
+- None
+
+### Deprecated
+- None
+
+### Removed
+- None
+
+### Fixed
+- None
+
+### Security
+- None
+
+## [1.4.0] - 2025-10-25
+
+### Added
+- **New Skill**: cloudflare-troubleshooting - API-driven Cloudflare diagnostics and troubleshooting
+  - Systematic investigation of SSL errors, DNS issues, and redirect loops
+  - Direct Cloudflare API integration for evidence-based troubleshooting
+  - Bundled Python scripts: `check_cloudflare_config.py` and `fix_ssl_mode.py`
+  - Comprehensive reference documentation (SSL modes, API overview, common issues)
+- **New Skill**: ui-designer - Design system extraction from UI mockups and screenshots
+  - Automated design system extraction (colors, typography, spacing)
+  - Design system documentation generation
+  - PRD and implementation prompt creation
+  - Bundled templates: design-system.md, vibe-design-template.md, app-overview-generator.md
+- Enhanced `.gitignore` patterns for archives, build artifacts, and documentation files
+
+### Changed
+- Updated marketplace.json from 9 to 11 skills
+- Updated marketplace version from 1.3.0 to 1.4.0
+- Enhanced marketplace metadata description to include new capabilities
+- Updated CLAUDE.md with complete 11-skill listing
+- Updated README.md to reflect 11 available skills
+- Updated README.zh-CN.md to reflect 11 available skills
+
+## [1.3.0] - 2025-10-23
+
+### Added
 - **New Skill**: cli-demo-generator - Professional CLI demo generation with VHS automation
   - Automated demo generation from command lists
   - Batch processing with YAML/JSON configs
@@ -35,17 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced documentation navigation and discoverability
 - Improved README structure with better organization
 
-### Deprecated
-- None
-
 ### Removed
 - skill-creator from "Other Available Skills" numbered list (now featured separately)
-
-### Fixed
-- None
-
-### Security
-- None
 
 ## [1.2.0] - 2025-10-22
 
@@ -102,7 +136,9 @@ We use [Semantic Versioning](https://semver.org/):
 4. Create git tag: `git tag -a v1.x.x -m "Release v1.x.x"`
 5. Push tag: `git push origin v1.x.x`
 
-[Unreleased]: https://github.com/daymade/claude-code-skills/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/daymade/claude-code-skills/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/daymade/claude-code-skills/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/daymade/claude-code-skills/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/daymade/claude-code-skills/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/daymade/claude-code-skills/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/daymade/claude-code-skills/releases/tag/v1.0.0
