@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-8-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-11-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.2.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -14,7 +14,7 @@
 
 </div>
 
-专业的 Claude Code 技能市场，提供 8 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 11 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -370,6 +370,58 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - 多种输出格式（GIF、MP4、WebM）
 - VHS tape 文件模板
 
+**🎬 实时演示**
+
+![CLI 演示生成器演示](./demos/cli-demo-generator/generate-demo.gif)
+
+---
+
+### 9. **cloudflare-troubleshooting** - Cloudflare 诊断
+
+使用 API 驱动的证据收集来调查和解决 Cloudflare 配置问题。
+
+**使用场景：**
+- 网站显示 ERR_TOO_MANY_REDIRECTS
+- SSL/TLS 配置错误
+- DNS 解析问题
+- Cloudflare 相关问题
+
+**主要功能：**
+- 基于证据的调查方法
+- 全面的 Cloudflare API 参考
+- SSL/TLS 模式故障排除（Flexible、Full、Strict）
+- DNS、缓存和防火墙诊断
+- 代理方法，配有可选的辅助脚本
+
+**🎬 实时演示**
+
+![Cloudflare 故障排除演示](./demos/cloudflare-troubleshooting/diagnose-redirect-loop.gif)
+
+---
+
+### 10. **ui-designer** - UI 设计系统提取器
+
+从参考 UI 图像中提取设计系统，并生成可实施的设计提示。
+
+**使用场景：**
+- 拥有需要分析的 UI 截图/模型
+- 需要提取色板、排版、间距
+- 构建与参考美学匹配的 MVP UI
+- 创建一致的设计系统
+- 生成多个 UI 变体
+
+**主要功能：**
+- 从图像系统化提取设计系统
+- 色板、排版、组件分析
+- 交互式 MVP PRD 生成
+- 模板驱动的工作流（设计系统 → PRD → 实施提示）
+- 多变体 UI 生成（3 个移动端，2 个网页端）
+- React + Tailwind CSS + Lucide 图标
+
+**🎬 实时演示**
+
+![UI 设计器演示](./demos/ui-designer/extract-design-system.gif)
+
 ---
 
 ## 🎬 交互式演示画廊
@@ -412,6 +464,8 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - **skill-creator**：参见 `skill-creator/SKILL.md` 了解完整的技能创建工作流
 - **llm-icon-finder**：参见 `llm-icon-finder/references/icons-list.md` 了解可用图标
 - **cli-demo-generator**：参见 `cli-demo-generator/references/vhs_syntax.md` 了解 VHS 语法和 `cli-demo-generator/references/best_practices.md` 了解演示指南
+- **cloudflare-troubleshooting**：参见 `cloudflare-troubleshooting/references/api_overview.md` 了解 API 文档
+- **ui-designer**：参见 `ui-designer/SKILL.md` 了解完整的设计系统提取工作流
 
 ## 🛠️ 系统要求
 
@@ -455,7 +509,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ### skill-creator 和其他技能有什么区别？
 
-**skill-creator** 是一个元技能 - 它帮助你创建其他技能。其他 7 个技能是最终用户技能，提供特定功能（GitHub 操作、文档转换等）。如果你想用自己的工作流扩展 Claude Code，从 skill-creator 开始。
+**skill-creator** 是一个元技能 - 它帮助你创建其他技能。其他 10 个技能是最终用户技能，提供特定功能（GitHub 操作、文档转换等）。如果你想用自己的工作流扩展 Claude Code，从 skill-creator 开始。
 
 ---
 

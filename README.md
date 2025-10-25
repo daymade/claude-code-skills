@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-8-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-11-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.2.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -14,7 +14,7 @@
 
 </div>
 
-Professional Claude Code skills marketplace featuring 8 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 11 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -351,6 +351,54 @@ Generate professional animated CLI demos and terminal recordings with VHS automa
 **🎬 Live Demo**
 
 ![CLI Demo Generator Demo](./demos/cli-demo-generator/generate-demo.gif)
+
+---
+
+### 9. **cloudflare-troubleshooting** - Cloudflare Diagnostics
+
+Investigate and resolve Cloudflare configuration issues using API-driven evidence gathering.
+
+**When to use:**
+- Site shows ERR_TOO_MANY_REDIRECTS
+- SSL/TLS configuration errors
+- DNS resolution problems
+- Cloudflare-related issues
+
+**Key features:**
+- Evidence-based investigation methodology
+- Comprehensive Cloudflare API reference
+- SSL/TLS mode troubleshooting (Flexible, Full, Strict)
+- DNS, cache, and firewall diagnostics
+- Agentic approach with optional helper scripts
+
+**🎬 Live Demo**
+
+![Cloudflare Troubleshooting Demo](./demos/cloudflare-troubleshooting/diagnose-redirect-loop.gif)
+
+---
+
+### 10. **ui-designer** - UI Design System Extractor
+
+Extract design systems from reference UI images and generate implementation-ready design prompts.
+
+**When to use:**
+- Have UI screenshots/mockups to analyze
+- Need to extract color palettes, typography, spacing
+- Building MVP UI matching reference aesthetics
+- Creating consistent design systems
+- Generating multiple UI variations
+
+**Key features:**
+- Systematic design system extraction from images
+- Color palette, typography, component analysis
+- Interactive MVP PRD generation
+- Template-driven workflow (design system → PRD → implementation prompt)
+- Multi-variation UI generation (3 mobile, 2 web)
+- React + Tailwind CSS + Lucide icons
+
+**🎬 Live Demo**
+
+![UI Designer Demo](./demos/ui-designer/extract-design-system.gif)
 
 ---
 
