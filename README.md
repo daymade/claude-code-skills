@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-12-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.5.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-13-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.6.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 12 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 13 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -136,6 +136,9 @@ claude plugin install llm-icon-finder@daymade/claude-code-skills
 
 # CLI demo generation
 claude plugin install cli-demo-generator@daymade/claude-code-skills
+
+# YouTube video/audio downloading
+claude plugin install youtube-downloader@daymade/claude-code-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -428,6 +431,31 @@ Create persuasive, audience-ready slide decks from topics or documents with data
 
 ---
 
+### 12. **youtube-downloader** - YouTube Video & Audio Downloader
+
+Download YouTube videos and audio using yt-dlp with robust error handling and automatic workarounds for common issues.
+
+**When to use:**
+- Downloading YouTube videos or playlists
+- Extracting audio from YouTube videos as MP3
+- Experiencing yt-dlp download failures or nsig extraction errors
+- Need help with format selection or quality options
+- Working with YouTube content in regions with access restrictions
+
+**Key features:**
+- Android client workaround for nsig extraction issues (automatic)
+- Audio-only download with MP3 conversion
+- Format listing and custom format selection
+- Output directory customization
+- Network error handling for proxy/restricted environments
+- Availability check for yt-dlp dependency
+
+**🎬 Live Demo**
+
+![YouTube Downloader Demo](./demos/youtube-downloader/download-video.gif)
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -452,6 +480,9 @@ Use **skill-creator** (see [Essential Skill](#-essential-skill-skill-creator) se
 ### For Presentations & Business Communication
 Use **ppt-creator** to generate professional slide decks with data visualizations, structured storytelling, and complete PPTX output for pitches, reviews, and keynotes.
 
+### For Media & Content Download
+Use **youtube-downloader** to download YouTube videos and extract audio from videos with automatic workarounds for common download issues.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -472,6 +503,7 @@ Each skill includes:
 - **llm-icon-finder**: See `llm-icon-finder/references/icons-list.md` for available icons
 - **cli-demo-generator**: See `cli-demo-generator/references/vhs_syntax.md` for VHS syntax and `cli-demo-generator/references/best_practices.md` for demo guidelines
 - **ppt-creator**: See `ppt-creator/references/WORKFLOW.md` for 9-stage creation process and `ppt-creator/references/ORCHESTRATION_OVERVIEW.md` for automation
+- **youtube-downloader**: See `youtube-downloader/SKILL.md` for usage examples and troubleshooting
 
 ## 🛠️ Requirements
 
@@ -480,6 +512,7 @@ Each skill includes:
 - **gh CLI** (for github-ops)
 - **markitdown** (for markdown-tools)
 - **mermaid-cli** (for mermaid-tools)
+- **yt-dlp** (for youtube-downloader): `brew install yt-dlp` or `pip install yt-dlp`
 - **VHS** (for cli-demo-generator): `brew install vhs`
 - **asciinema** (optional, for cli-demo-generator interactive recording)
 - **ccusage** (optional, for statusline cost tracking)

@@ -25,6 +25,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.6.0] - 2025-10-26
+
+### Added
+- **New Skill**: youtube-downloader - YouTube video and audio downloading with yt-dlp
+  - Download YouTube videos and playlists with robust error handling
+  - Audio-only download with MP3 conversion
+  - Android client workaround for nsig extraction issues (automatic)
+  - Format listing and custom format selection
+  - Network error handling for proxy/restricted environments
+  - Bundled Python script: `download_video.py` with yt-dlp availability check
+  - Comprehensive troubleshooting documentation for common yt-dlp issues
+  - Demo tape file and GIF showing download workflow
+
+### Changed
+- Updated marketplace.json from 12 to 13 skills
+- Updated marketplace version from 1.5.0 to 1.6.0
+- Enhanced marketplace metadata description to include YouTube downloading capability
+- Updated CLAUDE.md with complete 13-skill listing
+- Updated CLAUDE.md marketplace version to v1.6.0
+- Updated README.md to reflect 13 available skills
+- Updated README.md badges (skills count, version)
+- Added youtube-downloader to manual installation instructions
+- Added youtube-downloader use case section in README
+- Added youtube-downloader to documentation quick links
+- Added yt-dlp to requirements section
+
+## [1.5.0] - 2025-10-26
+
+### Added
+- **New Skill**: ppt-creator - Professional presentation creation with dual-path PPTX generation
+  - Pyramid Principle structure (conclusion → reasons → evidence)
+  - Assertion-evidence slide framework
+  - Automatic data synthesis and chart generation (matplotlib)
+  - Dual-path PPTX creation (Marp CLI + document-skills:pptx)
+  - Complete orchestration: content → data → charts → PPTX with charts
+  - 45-60 second speaker notes per slide
+  - Quality scoring with auto-refinement (target: 75/100)
+
+### Changed
+- Updated marketplace.json from 11 to 12 skills
+- Updated marketplace version from 1.4.0 to 1.5.0
+
 ## [1.4.0] - 2025-10-25
 
 ### Added
@@ -136,7 +178,9 @@ We use [Semantic Versioning](https://semver.org/):
 4. Create git tag: `git tag -a v1.x.x -m "Release v1.x.x"`
 5. Push tag: `git push origin v1.x.x`
 
-[Unreleased]: https://github.com/daymade/claude-code-skills/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/daymade/claude-code-skills/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/daymade/claude-code-skills/compare/v1.5.0...v1.6.0
+[1.5.0]: https://github.com/daymade/claude-code-skills/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/daymade/claude-code-skills/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/daymade/claude-code-skills/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/daymade/claude-code-skills/compare/v1.1.0...v1.2.0
