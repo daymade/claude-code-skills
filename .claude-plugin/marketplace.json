@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, and UI design system extraction",
-    "version": "1.4.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, and professional presentation creation",
+    "version": "1.5.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -119,6 +119,16 @@
       "category": "design",
       "keywords": ["ui", "design-system", "mockup", "screenshot", "design-extraction", "mvp"],
       "skills": ["./ui-designer"]
+    },
+    {
+      "name": "ppt-creator",
+      "description": "Create professional slide decks from topics or documents. Generates structured content with data-driven charts, speaker notes, and complete PPTX files. Applies persuasive storytelling principles (Pyramid Principle, assertion-evidence). Supports multiple formats (Marp, PowerPoint). Use for presentations, pitches, slide decks, or keynotes",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": ["presentation", "powerpoint", "pptx", "slides", "marp", "charts", "data-visualization", "pyramid-principle"],
+      "skills": ["./ppt-creator"]
     }
   ]
 }

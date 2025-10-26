@@ -184,3 +184,4 @@ See README.md section "🇨🇳 中文用户指南" for details.
 
 Always consult Anthropic's skill authoring best practices before creating or updating skills:
 https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices.md
+- remember this release workflow in claude.md
