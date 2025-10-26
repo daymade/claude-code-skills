@@ -85,6 +85,16 @@ Files not intended to be loaded into context, but rather used within the output 
 - **Allowed**: Standard placeholders (`~/workspace/project`, `username`, `your-company`)
 - **Best practice**: Use generic examples and placeholders; all paths should reference bundled skill files or use standard environment-agnostic patterns
 
+##### Versioning
+
+**CRITICAL**: Skills should NOT contain version history or version numbers in SKILL.md:
+
+- **Forbidden**: Version sections (`## Version`, `## Changelog`, `## Release History`) in SKILL.md
+- **Forbidden**: Version numbers in SKILL.md body content
+- **Correct location**: Skill versions are tracked in marketplace.json under `plugins[].version`
+- **Rationale**: Marketplace infrastructure manages versioning; SKILL.md should be timeless content focused on functionality
+- **Example**: Instead of documenting v1.0.0 → v1.1.0 changes in SKILL.md, update the version in marketplace.json only
+
 ### Progressive Disclosure Design Principle
 
 Skills use a three-level loading system to manage context efficiently:
