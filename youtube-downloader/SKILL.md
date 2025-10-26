@@ -7,169 +7,226 @@ description: Download YouTube videos and audio using yt-dlp with robust error ha
 
 ## Overview
 
-Enable reliable YouTube video and audio downloads using yt-dlp with built-in workarounds for common issues like nsig extraction failures and network problems. Particularly useful for users behind proxies or in regions with YouTube access restrictions.
+Enable reliable YouTube video and audio downloads using yt-dlp with built-in workarounds for common issues like nsig extraction failures and network problems. This skill provides workflows for obtaining high-quality downloads (up to 4K) using PO token providers or browser cookies.
 
 ## When to Use This Skill
 
 This skill should be invoked when users:
 - Request downloading YouTube videos or playlists
 - Want to extract audio from YouTube videos
-- Experience yt-dlp download failures or nsig extraction errors
+- Experience yt-dlp download failures or limited format availability
 - Need help with format selection or quality options
-- Ask about downloading from YouTube with specific requirements (resolution, format, etc.)
+- Report only low-quality (360p) formats available
+- Ask about downloading YouTube content in specific quality (1080p, 4K, etc.)
+- Need to convert downloaded WebM videos to MP4 format for wider compatibility
 
 ## Prerequisites
 
-Verify yt-dlp is installed before proceeding:
+### 1. Verify yt-dlp Installation
 
 ```bash
 which yt-dlp
+yt-dlp --version
 ```
 
-If not installed, install via:
+If not installed or outdated (< 2025.10.22):
 
 ```bash
-brew install yt-dlp  # macOS
+brew upgrade yt-dlp  # macOS
 # or
-pip install yt-dlp  # Cross-platform
+pip install --upgrade yt-dlp  # Cross-platform
 ```
 
-## Quick Start
+**Critical**: Outdated yt-dlp versions cause nsig extraction failures and missing formats.
 
-### Basic Video Download
+### 2. Check Current Quality Access
 
-For simple video downloads, use the bundled `scripts/download_video.py`:
-
-```bash
-scripts/download_video.py "https://youtu.be/VIDEO_ID"
-```
-
-This automatically applies the Android client workaround to avoid nsig extraction issues.
-
-### Audio-Only Download
-
-To extract audio as MP3:
-
-```bash
-scripts/download_video.py "https://youtu.be/VIDEO_ID" --audio-only
-```
-
-### Custom Output Directory
-
-Specify where to save downloads:
-
-```bash
-scripts/download_video.py "https://youtu.be/VIDEO_ID" -o ~/Downloads/YouTube
-```
-
-## Common Tasks
-
-### 1. List Available Formats
-
-Before downloading, check available video/audio formats:
-
-```bash
-scripts/download_video.py "https://youtu.be/VIDEO_ID" --list-formats
-```
-
-Or use yt-dlp directly:
+Before downloading, check available formats:
 
 ```bash
 yt-dlp -F "https://youtu.be/VIDEO_ID"
 ```
 
-### 2. Download Specific Format
+**If only format 18 (360p) appears**: PO token provider setup needed for high-quality access.
 
-After identifying format codes from the list:
+## High-Quality Download Workflow
 
-```bash
-scripts/download_video.py "https://youtu.be/VIDEO_ID" -f "bestvideo+bestaudio"
-```
+### Step 1: Install PO Token Provider (One-time Setup)
 
-Common format specifications:
-- `bestvideo+bestaudio/best` - Best quality video and audio
-- `bestvideo[height<=1080]+bestaudio` - Max 1080p video
-- `bestaudio` - Audio only (best quality)
-- `18` - Format code 18 (typically 360p MP4)
-
-### 3. Download Playlist
-
-Use yt-dlp directly for playlists:
+For 1080p/1440p/4K access, install a PO token provider plugin into yt-dlp's Python environment:
 
 ```bash
-yt-dlp --extractor-args "youtube:player_client=android" "PLAYLIST_URL"
+# Find yt-dlp's Python path
+head -1 $(which yt-dlp)
+
+# Install plugin (adjust path to match yt-dlp version)
+/opt/homebrew/Cellar/yt-dlp/$(yt-dlp --version)/libexec/bin/python -m pip install bgutil-ytdlp-pot-provider
 ```
 
-### 4. Download with Subtitles
+**Verification**: Run `yt-dlp -F "VIDEO_URL"` again. Look for formats 137 (1080p), 271 (1440p), or 313 (4K).
 
-Include subtitles in the download:
+See `references/po-token-setup.md` for detailed setup instructions and troubleshooting.
+
+### Step 2: Download with Best Quality
+
+Once PO token provider is installed:
 
 ```bash
-yt-dlp --extractor-args "youtube:player_client=android" --write-subs --sub-lang en "VIDEO_URL"
+# Download best quality up to 1080p
+yt-dlp -f "bestvideo[height<=1080]+bestaudio/best" "VIDEO_URL"
+
+# Download best available quality (4K if available)
+yt-dlp -f "bestvideo+bestaudio/best" "VIDEO_URL"
 ```
 
-## Troubleshooting
+### Step 3: Verify Download Quality
+
+```bash
+# Check video resolution
+ffprobe -v error -select_streams v:0 -show_entries stream=width,height,codec_name -of default=noprint_wrappers=1 video.mp4
+```
+
+Expected output for 1080p:
+```
+codec_name=vp9
+width=1920
+height=1080
+```
+
+## Alternative: Browser Cookies Method
+
+If PO token provider setup is problematic, use browser cookies:
+
+```bash
+# Firefox
+yt-dlp --cookies-from-browser firefox -f "bestvideo[height<=1080]+bestaudio/best" "VIDEO_URL"
+
+# Chrome
+yt-dlp --cookies-from-browser chrome -f "bestvideo[height<=1080]+bestaudio/best" "VIDEO_URL"
+```
+
+**Benefits**: Access to age-restricted and members-only content.
+**Requirement**: Must be logged into YouTube in the specified browser.
+
+## Common Tasks
+
+### Audio-Only Download
+
+Extract audio as MP3:
+
+```bash
+yt-dlp -x --audio-format mp3 "VIDEO_URL"
+```
+
+### Custom Output Directory
+
+```bash
+yt-dlp -P ~/Downloads/YouTube "VIDEO_URL"
+```
+
+### Download with Subtitles
+
+```bash
+yt-dlp --write-subs --sub-lang en "VIDEO_URL"
+```
+
+### Playlist Download
+
+```bash
+yt-dlp -f "bestvideo[height<=1080]+bestaudio/best" "PLAYLIST_URL"
+```
+
+### Convert WebM to MP4
+
+YouTube high-quality downloads often use WebM format (VP9 codec). Convert to MP4 for wider compatibility:
+
+```bash
+# Check if ffmpeg is installed
+which ffmpeg || brew install ffmpeg  # macOS
+
+# Convert WebM to MP4 with good quality settings
+ffmpeg -i "video.webm" -c:v libx264 -preset medium -crf 23 -c:a aac -b:a 128k "video.mp4"
+```
+
+**Parameters explained:**
+- `-c:v libx264`: Use H.264 video codec (widely compatible)
+- `-preset medium`: Balance between encoding speed and file size
+- `-crf 23`: Constant Rate Factor for quality (18-28 range, lower = better quality)
+- `-c:a aac`: Use AAC audio codec
+- `-b:a 128k`: Audio bitrate 128 kbps
+
+**Tip**: Conversion maintains 1080p resolution and provides ~6x encoding speed on modern hardware.
+
+## Troubleshooting Quick Reference
+
+### Only 360p Available (Format 18)
+
+**Cause**: Missing PO token provider or outdated yt-dlp.
+
+**Solution**:
+1. Update yt-dlp: `brew upgrade yt-dlp`
+2. Install PO token provider (see Step 1 above)
+3. Or use browser cookies method
 
 ### nsig Extraction Failed
 
-**Symptoms:**
+**Symptoms**:
 ```
 WARNING: [youtube] nsig extraction failed: Some formats may be missing
-ERROR: Requested format is not available
 ```
 
-**Solution:**
-Use the Android client workaround (automatically applied by `scripts/download_video.py`):
+**Solution**:
+1. Update yt-dlp to latest version
+2. Install PO token provider
+3. If still failing, use Android client: `yt-dlp --extractor-args "youtube:player_client=android" "VIDEO_URL"`
 
-```bash
-yt-dlp --extractor-args "youtube:player_client=android" "VIDEO_URL"
-```
+### Slow Downloads or Network Errors
 
-This is a YouTube-specific issue where the default web client fails to extract signature parameters. The Android client bypasses this restriction.
+For users in China or behind restrictive proxies:
+- Downloads may be slow due to network conditions
+- Allow sufficient time for completion
+- yt-dlp automatically retries on transient failures
 
-### GVS PO Token Warning
+### PO Token Warning (Harmless)
 
-**Symptoms:**
 ```
 WARNING: android client https formats require a GVS PO Token
 ```
 
-**Impact:**
-This warning can be ignored for most use cases. The download will still succeed using available formats. Only some high-quality formats may be skipped.
+**Action**: Ignore if download succeeds. This indicates Android client has limited format access without PO tokens.
 
-**Solution (if needed):**
-For advanced users requiring all formats, see: https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide
-
-### Network Issues in China or Behind Proxies
-
-Downloads may experience intermittent connectivity. The script handles this automatically by retrying, but slower speeds are expected due to network conditions. Allow sufficient time for completion.
-
-## Script Reference
+## Bundled Script Reference
 
 ### scripts/download_video.py
 
-A Python wrapper around yt-dlp that applies best practices by default:
-- Uses Android client workaround automatically
-- Creates output directories if needed
-- Provides clear success/failure feedback
-- Supports common download scenarios
+A convenience wrapper that applies Android client workaround by default:
+
+**Basic usage:**
+```bash
+scripts/download_video.py "VIDEO_URL"
+```
 
 **Arguments:**
 - `url` - YouTube video URL (required)
-- `-o, --output-dir` - Output directory (default: current directory)
+- `-o, --output-dir` - Output directory
 - `-f, --format` - Format specification
-- `--no-android-client` - Disable Android client workaround
-- `-a, --audio-only` - Download audio only (as MP3)
+- `-a, --audio-only` - Extract audio as MP3
 - `-F, --list-formats` - List available formats
+- `--no-android-client` - Disable Android client workaround
 
-**Example usage:**
-```bash
-# Basic download
-scripts/download_video.py "https://youtu.be/VIDEO_ID"
+**Note**: This script uses Android client (360p only without PO tokens). For high quality, use yt-dlp directly with PO token provider.
 
-# Audio only to specific directory
-scripts/download_video.py "https://youtu.be/VIDEO_ID" -o ~/Music --audio-only
+## Quality Expectations
 
-# Custom format
-scripts/download_video.py "https://youtu.be/VIDEO_ID" -f "bestvideo[height<=720]+bestaudio"
-```
+| Setup | 360p | 720p | 1080p | 1440p | 4K |
+|-------|------|------|-------|-------|-----|
+| No setup (default) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Android client only | ✓ | ✗ | ✗ | ✗ | ✗ |
+| **PO token provider** | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Browser cookies | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+## Further Reading
+
+- **PO Token Setup**: See `references/po-token-setup.md` for detailed installation and troubleshooting
+- **yt-dlp Documentation**: https://github.com/yt-dlp/yt-dlp
+- **Format Selection Guide**: https://github.com/yt-dlp/yt-dlp#format-selection

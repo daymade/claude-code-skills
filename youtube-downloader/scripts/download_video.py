@@ -7,11 +7,17 @@ especially useful for users behind proxies or in regions with YouTube access iss
 
 Requirements:
     - yt-dlp: Install via `brew install yt-dlp` (macOS) or `pip install yt-dlp` (cross-platform)
+    - For high-quality downloads (1080p+): Install PO token provider
+      See ../references/po-token-setup.md for setup instructions
 
 Usage:
     scripts/download_video.py "https://youtu.be/VIDEO_ID"
     scripts/download_video.py "https://youtu.be/VIDEO_ID" --audio-only
     scripts/download_video.py "https://youtu.be/VIDEO_ID" -o ~/Downloads
+
+Note:
+    This script uses Android client workaround, which provides 360p quality only.
+    For 1080p/4K quality, use yt-dlp directly with PO token provider installed.
 """
 
 import argparse
@@ -62,6 +68,13 @@ def download_video(
     if list_formats:
         cmd.extend(["-F", url])
         result = subprocess.run(cmd)
+
+        # Check if PO token provider might be needed
+        if result.returncode == 0 and use_android_client:
+            print("\n💡 Tip: Using Android client (360p only).")
+            print("   For 1080p/4K, install PO token provider:")
+            print("   See ../references/po-token-setup.md for instructions")
+
         return result.returncode
 
     # Set output directory
