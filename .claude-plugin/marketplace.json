@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, and YouTube video downloading",
-    "version": "1.6.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, and secure repomix packaging",
+    "version": "1.7.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -139,6 +139,16 @@
       "category": "utilities",
       "keywords": ["youtube", "yt-dlp", "video-download", "audio-extraction", "mp3", "download", "youtube-dl"],
       "skills": ["./youtube-downloader"]
+    },
+    {
+      "name": "repomix-safe-mixer",
+      "description": "Safely package codebases with repomix by automatically detecting and removing hardcoded credentials before packing. Use when packaging code for distribution, creating reference packages, or when the user mentions security concerns about sharing code with repomix",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "security",
+      "keywords": ["repomix", "security", "credentials", "secrets-scanning", "safe-packaging", "secret-detection", "code-security"],
+      "skills": ["./repomix-safe-mixer"]
     }
   ]
 }

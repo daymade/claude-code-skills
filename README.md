@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-13-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.6.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-14-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.7.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 13 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 14 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -456,6 +456,31 @@ Download YouTube videos and audio using yt-dlp with robust error handling and au
 
 ---
 
+### 13. **repomix-safe-mixer** - Secure Repomix Packaging
+
+Safely package codebases with repomix by automatically detecting and removing hardcoded credentials before packing.
+
+**When to use:**
+- Packaging code with repomix for distribution or sharing
+- Creating reference packages from proprietary codebases
+- Security concerns about accidentally exposing credentials
+- Pre-commit security checks for hardcoded secrets
+- Auditing codebases for credential exposure
+
+**Key features:**
+- Detects 20+ credential patterns (AWS, Supabase, Stripe, OpenAI, etc.)
+- Scan → Report → Pack workflow with automatic blocking
+- Standalone security scanner for pre-commit hooks
+- Environment variable replacement guidance
+- JSON output for CI/CD integration
+- Exclude patterns for false positive handling
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -471,8 +496,8 @@ Combine **markdown-tools** for document conversion and **mermaid-tools** for dia
 ### For Team Communication
 Use **teams-channel-post-writer** to share knowledge and **statusline-generator** to track costs while working.
 
-### For Repository Management
-Use **repomix-unmixer** to extract and validate repomix-packed skills or repositories.
+### For Repository Management & Security
+Use **repomix-unmixer** to extract and validate repomix-packed skills or repositories. Use **repomix-safe-mixer** to package codebases securely, automatically detecting and blocking hardcoded credentials before distribution.
 
 ### For Skill Development
 Use **skill-creator** (see [Essential Skill](#-essential-skill-skill-creator) section above) to build, validate, and package your own Claude Code skills following best practices.
@@ -504,6 +529,7 @@ Each skill includes:
 - **cli-demo-generator**: See `cli-demo-generator/references/vhs_syntax.md` for VHS syntax and `cli-demo-generator/references/best_practices.md` for demo guidelines
 - **ppt-creator**: See `ppt-creator/references/WORKFLOW.md` for 9-stage creation process and `ppt-creator/references/ORCHESTRATION_OVERVIEW.md` for automation
 - **youtube-downloader**: See `youtube-downloader/SKILL.md` for usage examples and troubleshooting
+- **repomix-safe-mixer**: See `repomix-safe-mixer/references/common_secrets.md` for detected credential patterns
 
 ## 🛠️ Requirements
 
@@ -518,6 +544,7 @@ Each skill includes:
 - **ccusage** (optional, for statusline cost tracking)
 - **pandas & matplotlib** (optional, for ppt-creator chart generation)
 - **Marp CLI** (optional, for ppt-creator Marp PPTX export): `npm install -g @marp-team/marp-cli`
+- **repomix** (for repomix-safe-mixer): `npm install -g repomix`
 
 ## ❓ FAQ
 

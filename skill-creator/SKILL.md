@@ -81,9 +81,10 @@ Files not intended to be loaded into context, but rather used within the output 
 - **Forbidden**: Absolute paths to user directories (`/home/username/`, `/Users/username/`, `/mnt/c/Users/username/`)
 - **Forbidden**: Personal usernames, company names, department names, product names
 - **Forbidden**: OneDrive paths, cloud storage paths, or any environment-specific absolute paths
+- **Forbidden**: Hardcoded skill installation paths like `~/.claude/skills/` or `/Users/username/Workspace/claude-code-skills/`
 - **Allowed**: Relative paths within the skill bundle (`scripts/example.py`, `references/guide.md`)
 - **Allowed**: Standard placeholders (`~/workspace/project`, `username`, `your-company`)
-- **Best practice**: Use generic examples and placeholders; all paths should reference bundled skill files or use standard environment-agnostic patterns
+- **Best practice**: Reference bundled scripts using simple relative paths like `scripts/script_name.py` - Claude will resolve the actual location
 
 ##### Versioning
 
