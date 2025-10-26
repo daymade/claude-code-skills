@@ -25,7 +25,7 @@ This skill activates when:
 Extract all files from a repomix file and restore the original directory structure using the bundled `unmix_repomix.py` script:
 
 ```bash
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
+python3 scripts/unmix_repomix.py \
   "<path_to_repomix_file>" \
   "<output_directory>"
 ```
@@ -36,7 +36,7 @@ python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
 
 **Example:**
 ```bash
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
+python3 scripts/unmix_repomix.py \
   "/path/to/repomix-output.xml" \
   "/tmp/extracted-files"
 ```
@@ -118,7 +118,7 @@ For JSON-style repomix output:
 Extract skills that were shared as a repomix file:
 
 ```bash
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
+python3 scripts/unmix_repomix.py \
   "/path/to/skills.xml" \
   "/tmp/unmixed-skills"
 ```
@@ -130,7 +130,7 @@ Then review, validate, or install the extracted skills.
 Extract a packed repository to review its structure and contents:
 
 ```bash
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
+python3 scripts/unmix_repomix.py \
   "/path/to/repo-output.xml" \
   "/tmp/review-repo"
 
@@ -143,7 +143,7 @@ tree /tmp/review-repo
 Restore files from a repomix backup to a working directory:
 
 ```bash
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
+python3 scripts/unmix_repomix.py \
   "/path/to/backup.xml" \
   "~/workspace/restored-project"
 ```
@@ -167,11 +167,11 @@ Always provide an output directory to avoid cluttering the current working direc
 
 ```bash
 # Good: Explicit output directory
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
+python3 scripts/unmix_repomix.py \
   "input.xml" "/tmp/output"
 
 # Avoid: Default output (may clutter current directory)
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py "input.xml"
+python3 scripts/unmix_repomix.py "input.xml"
 ```
 
 ### Use Temporary Directories for Review
@@ -180,7 +180,7 @@ Extract to temporary directories first for review:
 
 ```bash
 # Extract to /tmp for review
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
+python3 scripts/unmix_repomix.py \
   "skills.xml" "/tmp/review-skills"
 
 # Review the contents
@@ -196,11 +196,11 @@ Never extract directly to important directories without review:
 
 ```bash
 # Bad: Might overwrite existing files
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
+python3 scripts/unmix_repomix.py \
   "repo.xml" "~/workspace/my-project"
 
 # Good: Extract to temp, review, then move
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
+python3 scripts/unmix_repomix.py \
   "repo.xml" "/tmp/extracted"
 # Review, then:
 mv /tmp/extracted ~/workspace/my-project
@@ -234,7 +234,7 @@ mkdir -p /tmp/output
 chmod 755 /tmp/output
 
 # Or use a directory you own
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
+python3 scripts/unmix_repomix.py \
   "input.xml" "$HOME/extracted"
 ```
 
@@ -255,12 +255,12 @@ The script uses UTF-8 encoding by default. If issues persist:
 **Solution:**
 ```bash
 # Option 1: Use a fresh output directory
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
+python3 scripts/unmix_repomix.py \
   "input.xml" "/tmp/output-$(date +%s)"
 
 # Option 2: Clear the directory first
 rm -rf /tmp/output && mkdir /tmp/output
-python3 ~/.claude/skills/repomix-unmixer/scripts/unmix_repomix.py \
+python3 scripts/unmix_repomix.py \
   "input.xml" "/tmp/output"
 ```
 
