@@ -10,10 +10,10 @@ Get started with Claude Code Skills Marketplace in less than 2 minutes!
 
 ```bash
 # Add the marketplace
-/plugin marketplace add daymade/claude-code-skills
+claude plugin marketplace add daymade/claude-code-skills
 
 # Install skill-creator
-/plugin marketplace install daymade/claude-code-skills#skill-creator
+claude plugin install skill-creator@daymade/claude-code-skills
 ```
 
 ### Step 2: Initialize Your First Skill
@@ -102,11 +102,11 @@ Follow the interactive prompts to select skills.
 
 ```bash
 # Step 1: Add the marketplace
-/plugin marketplace add daymade/claude-code-skills
+claude plugin marketplace add daymade/claude-code-skills
 
 # Step 2: Install skills you need
-/plugin marketplace install daymade/claude-code-skills#github-ops
-/plugin marketplace install daymade/claude-code-skills#markdown-tools
+claude plugin install github-ops@daymade/claude-code-skills
+claude plugin install markdown-tools@daymade/claude-code-skills
 # ... add more as needed
 
 # Step 3: Restart Claude Code
@@ -129,7 +129,7 @@ Follow the interactive prompts to select skills.
 
 ```bash
 # Use the same install command to update
-/plugin marketplace install daymade/claude-code-skills#skill-name
+claude plugin install skill-name@daymade/claude-code-skills
 ```
 
 ---

@@ -66,14 +66,14 @@ if ($isInteractive) {
 }
 
 $commands = @()
-$commands += "/plugin marketplace add daymade/claude-code-skills"
+$commands += "claude plugin marketplace add daymade/claude-code-skills"
 
 switch ($choice) {
     "1" {
         Write-Host ""
         Write-Cyan "Installing skill-creator..."
         Write-Host ""
-        $commands += "/plugin marketplace install daymade/claude-code-skills#skill-creator"
+        $commands += "claude plugin install skill-creator@daymade/claude-code-skills"
 
         $afterInstall = @"
 After installation, ask Claude Code:
@@ -91,7 +91,7 @@ Claude Code will guide you through the skill creation process!
         $skills = @("skill-creator", "github-ops", "markdown-tools", "mermaid-tools",
                     "statusline-generator", "teams-channel-post-writer", "repomix-unmixer", "llm-icon-finder")
         foreach ($skill in $skills) {
-            $commands += "/plugin marketplace install daymade/claude-code-skills#$skill"
+            $commands += "claude plugin install $skill@daymade/claude-code-skills"
         }
     }
     "3" {
@@ -127,7 +127,7 @@ Claude Code will guide you through the skill creation process!
 
         foreach ($num in $selections) {
             if ($skillMap.ContainsKey($num)) {
-                $commands += "/plugin marketplace install daymade/claude-code-skills#$($skillMap[$num])"
+                $commands += "claude plugin install $($skillMap[$num])@daymade/claude-code-skills"
             }
         }
     }

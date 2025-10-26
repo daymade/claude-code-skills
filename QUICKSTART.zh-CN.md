@@ -10,10 +10,10 @@
 
 ```bash
 # 添加市场
-/plugin marketplace add daymade/claude-code-skills
+claude plugin marketplace add daymade/claude-code-skills
 
 # 安装 skill-creator
-/plugin marketplace install daymade/claude-code-skills#skill-creator
+claude plugin install skill-creator@daymade/claude-code-skills
 ```
 
 ### 步骤 2：初始化你的第一个技能
@@ -102,11 +102,11 @@ iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scri
 
 ```bash
 # 步骤 1：添加市场
-/plugin marketplace add daymade/claude-code-skills
+claude plugin marketplace add daymade/claude-code-skills
 
 # 步骤 2：安装你需要的技能
-/plugin marketplace install daymade/claude-code-skills#github-ops
-/plugin marketplace install daymade/claude-code-skills#markdown-tools
+claude plugin install github-ops@daymade/claude-code-skills
+claude plugin install markdown-tools@daymade/claude-code-skills
 # ... 根据需要添加更多
 
 # 步骤 3：重启 Claude Code
@@ -129,7 +129,7 @@ iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scri
 
 ```bash
 # 使用相同的安装命令进行更新
-/plugin marketplace install daymade/claude-code-skills#skill-name
+claude plugin install skill-name@daymade/claude-code-skills
 ```
 
 ---

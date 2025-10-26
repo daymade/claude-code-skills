@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 11 production-ready skills organized in a plugin marketplace structure. Each skill is a self-contained package that extends Claude's capabilities with specialized knowledge, workflows, and bundled resources.
+This is a Claude Code skills marketplace containing 12 production-ready skills organized in a plugin marketplace structure. Each skill is a self-contained package that extends Claude's capabilities with specialized knowledge, workflows, and bundled resources.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -40,8 +40,8 @@ curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scr
 iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.ps1 | iex
 
 # Manual installation
-/plugin marketplace add daymade/claude-code-skills
-/plugin marketplace install daymade/claude-code-skills#skill-creator
+claude plugin marketplace add daymade/claude-code-skills
+claude plugin install skill-creator@daymade/claude-code-skills
 ```
 
 ### Skill Validation and Packaging
@@ -61,10 +61,10 @@ skill-creator/scripts/init_skill.py <skill-name> --path <output-directory>
 
 ```bash
 # Add local marketplace
-/plugin marketplace add daymade/claude-code-skills
+claude plugin marketplace add daymade/claude-code-skills
 
 # Install specific skill (start with skill-creator)
-/plugin marketplace install daymade/claude-code-skills#skill-creator
+claude plugin install skill-creator@daymade/claude-code-skills
 
 # Test by copying to user skills directory
 cp -r skill-name ~/.claude/skills/
@@ -118,9 +118,27 @@ Skills for public distribution must NOT contain:
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 11 plugins, each mapping to one skill
+- Contains 12 plugins, each mapping to one skill
 - Each plugin has: name, description, version, category, keywords, skills array
 - Marketplace metadata: name, owner, version, homepage
+
+### Versioning Architecture
+
+**Two separate version tracking systems:**
+
+1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
+   - Tracks the marketplace catalog as a whole
+   - Current: v1.5.0
+   - Bump when: Adding/removing skills, major marketplace restructuring
+   - Semantic versioning: MAJOR.MINOR.PATCH
+
+2. **Individual Skill Versions** (`.claude-plugin/marketplace.json` → `plugins[].version`)
+   - Each skill has its own independent version
+   - Example: ppt-creator v1.0.0, skill-creator v1.0.0
+   - Bump when: Updating that specific skill
+   - **CRITICAL**: Skills should NOT have version sections in SKILL.md
+
+**Key Principle**: SKILL.md files should be timeless content focused on functionality. Versions are tracked in marketplace.json only.
 
 ## Available Skills
 
@@ -137,6 +155,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 9. **cli-demo-generator** - CLI demo and terminal recording with VHS
 10. **cloudflare-troubleshooting** - API-driven Cloudflare diagnostics and debugging
 11. **ui-designer** - Design system extraction from UI mockups
+12. **ppt-creator** - Professional presentation creation with dual-path PPTX generation
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
@@ -179,6 +198,136 @@ For Chinese users having API access issues, recommend [CC-Switch](https://github
 - Cross-platform (Windows, macOS, Linux)
 
 See README.md section "🇨🇳 中文用户指南" for details.
+
+## Release Workflow
+
+When adding a new skill or creating a marketplace release:
+
+### 1. Create the Skill
+```bash
+# Develop skill in its directory
+skill-name/
+├── SKILL.md (no version history!)
+├── scripts/
+└── references/
+
+# Validate
+./skill-creator/scripts/quick_validate.py skill-name
+
+# Package
+./skill-creator/scripts/package_skill.py skill-name
+```
+
+### 2. Update Marketplace Configuration
+
+Edit `.claude-plugin/marketplace.json`:
+
+```json
+{
+  "metadata": {
+    "version": "1.x.0"  // Bump minor version for new skill
+  },
+  "plugins": [
+    {
+      "name": "new-skill",
+      "version": "1.0.0",  // Skill's initial version
+      "description": "...",
+      "category": "...",
+      "keywords": [...],
+      "skills": ["./new-skill"]
+    }
+  ]
+}
+```
+
+### 3. Update Documentation
+
+**README.md:**
+- Update badges (skills count, marketplace version)
+- Add skill description and features
+- Create demo GIF using cli-demo-generator
+- Add use case section
+- Add documentation references
+- Add requirements (if applicable)
+
+**CLAUDE.md:**
+- Update skill count in Repository Overview
+- Add skill to Available Skills list
+- Update Marketplace Configuration count
+
+### 4. Generate Demo (Optional but Recommended)
+
+```bash
+# Use cli-demo-generator to create demo GIF
+./cli-demo-generator/scripts/auto_generate_demo.py \
+  -c "command1" \
+  -c "command2" \
+  -o demos/skill-name/demo-name.gif \
+  --title "Skill Demo" \
+  --theme "Dracula"
+```
+
+### 5. Commit and Release
+
+```bash
+# Commit marketplace update
+git add .claude-plugin/marketplace.json skill-name/
+git commit -m "Release vX.Y.0: Add skill-name
+
+- Add skill-name vX.Y.Z
+- Update marketplace to vX.Y.0
+..."
+
+# Commit documentation
+git add README.md CLAUDE.md demos/
+git commit -m "docs: Update README for vX.Y.0 with skill-name"
+
+# Push
+git push
+
+# Create GitHub release
+gh release create vX.Y.0 \
+  --title "Release vX.Y.0: Add skill-name - Description" \
+  --notes "$(cat <<'EOF'
+## New Skill: skill-name
+
+Features:
+- Feature 1
+- Feature 2
+
+Installation:
+```bash
+claude plugin install skill-name@daymade/claude-code-skills
+```
+
+Changelog: ...
+EOF
+)"
+```
+
+### Version Bumping Guide
+
+**Marketplace version (metadata.version):**
+- **MAJOR** (2.0.0): Breaking changes, incompatible marketplace structure
+- **MINOR** (1.5.0): New skill added, significant feature addition
+- **PATCH** (1.4.1): Bug fixes, documentation updates, skill updates
+
+**Skill version (plugins[].version):**
+- **MAJOR** (2.0.0): Breaking API changes for the skill
+- **MINOR** (1.2.0): New features in the skill
+- **PATCH** (1.1.1): Bug fixes in the skill
+
+### Example: v1.5.0 Release (ppt-creator)
+
+```bash
+# 1. Created ppt-creator skill
+# 2. Updated marketplace.json: 1.4.0 → 1.5.0
+# 3. Added ppt-creator plugin entry (version: 1.0.0)
+# 4. Updated README.md (badges, description, demo)
+# 5. Generated demo GIF with cli-demo-generator
+# 6. Committed changes
+# 7. Created GitHub release with gh CLI
+```
 
 ## Best Practices Reference
 

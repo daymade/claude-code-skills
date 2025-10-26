@@ -64,8 +64,8 @@ case $choice in
         echo ""
         echo "Run these commands in Claude Code:"
         echo ""
-        echo -e "${YELLOW}/plugin marketplace add daymade/claude-code-skills${NC}"
-        echo -e "${YELLOW}/plugin marketplace install daymade/claude-code-skills#skill-creator${NC}"
+        echo -e "${YELLOW}claude plugin marketplace add daymade/claude-code-skills${NC}"
+        echo -e "${YELLOW}claude plugin install skill-creator@daymade/claude-code-skills${NC}"
         echo ""
         echo -e "${GREEN}After installation, ask Claude Code:${NC}"
         echo "  \"Create a new skill called my-awesome-skill in ~/my-skills\""
@@ -80,10 +80,10 @@ case $choice in
         echo ""
         echo "Run these commands in Claude Code:"
         echo ""
-        echo -e "${YELLOW}/plugin marketplace add daymade/claude-code-skills${NC}"
+        echo -e "${YELLOW}claude plugin marketplace add daymade/claude-code-skills${NC}"
         echo ""
         for skill in skill-creator github-ops markdown-tools mermaid-tools statusline-generator teams-channel-post-writer repomix-unmixer llm-icon-finder; do
-            echo -e "${YELLOW}/plugin marketplace install daymade/claude-code-skills#${skill}${NC}"
+            echo -e "${YELLOW}claude plugin install ${skill}@daymade/claude-code-skills${NC}"
         done
         ;;
     3)
@@ -109,13 +109,13 @@ case $choice in
         echo ""
         echo "Run these commands in Claude Code:"
         echo ""
-        echo -e "${YELLOW}/plugin marketplace add daymade/claude-code-skills${NC}"
+        echo -e "${YELLOW}claude plugin marketplace add daymade/claude-code-skills${NC}"
         echo ""
         SKILLS=(skill-creator github-ops markdown-tools mermaid-tools statusline-generator teams-channel-post-writer repomix-unmixer llm-icon-finder)
         for num in $selections; do
             idx=$((num-1))
             if [ $idx -ge 0 ] && [ $idx -lt 8 ]; then
-                echo -e "${YELLOW}/plugin marketplace install daymade/claude-code-skills#${SKILLS[$idx]}${NC}"
+                echo -e "${YELLOW}claude plugin install ${SKILLS[$idx]}@daymade/claude-code-skills${NC}"
             fi
         done
         ;;

@@ -49,8 +49,8 @@
 ### 快速安装
 
 ```bash
-/plugin marketplace add daymade/claude-code-skills
-/plugin marketplace install daymade/claude-code-skills#skill-creator
+claude plugin marketplace add daymade/claude-code-skills
+claude plugin install skill-creator@daymade/claude-code-skills
 ```
 
 ### 你可以做什么
@@ -108,34 +108,34 @@ iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scri
 
 **必备技能**（推荐首先安装）：
 ```bash
-/plugin marketplace install daymade/claude-code-skills#skill-creator
+claude plugin install skill-creator@daymade/claude-code-skills
 ```
 
 **安装其他技能：**
 ```bash
 # GitHub 操作
-/plugin marketplace install daymade/claude-code-skills#github-ops
+claude plugin install github-ops@daymade/claude-code-skills
 
 # 文档转换
-/plugin marketplace install daymade/claude-code-skills#markdown-tools
+claude plugin install markdown-tools@daymade/claude-code-skills
 
 # 图表生成
-/plugin marketplace install daymade/claude-code-skills#mermaid-tools
+claude plugin install mermaid-tools@daymade/claude-code-skills
 
 # 状态栏定制
-/plugin marketplace install daymade/claude-code-skills#statusline-generator
+claude plugin install statusline-generator@daymade/claude-code-skills
 
 # Teams 通信
-/plugin marketplace install daymade/claude-code-skills#teams-channel-post-writer
+claude plugin install teams-channel-post-writer@daymade/claude-code-skills
 
 # Repomix 提取
-/plugin marketplace install daymade/claude-code-skills#repomix-unmixer
+claude plugin install repomix-unmixer@daymade/claude-code-skills
 
 # AI/LLM 图标
-/plugin marketplace install daymade/claude-code-skills#llm-icon-finder
+claude plugin install llm-icon-finder@daymade/claude-code-skills
 
 # CLI 演示生成
-/plugin marketplace install daymade/claude-code-skills#cli-demo-generator
+claude plugin install cli-demo-generator@daymade/claude-code-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -492,7 +492,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 使用相同的安装命令进行更新：
 ```bash
-/plugin marketplace install daymade/claude-code-skills#skill-name
+claude plugin install skill-name@daymade/claude-code-skills
 ```
 
 ### 我可以贡献自己的技能吗？

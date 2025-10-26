@@ -49,8 +49,8 @@ The `skill-creator` is the **meta-skill** that enables you to build, validate, a
 ### Quick Install
 
 ```bash
-/plugin marketplace add daymade/claude-code-skills
-/plugin marketplace install daymade/claude-code-skills#skill-creator
+claude plugin marketplace add daymade/claude-code-skills
+claude plugin install skill-creator@daymade/claude-code-skills
 ```
 
 ### What You Can Do
@@ -108,34 +108,34 @@ Add the marketplace:
 
 **Essential Skill** (recommended first install):
 ```bash
-/plugin marketplace install daymade/claude-code-skills#skill-creator
+claude plugin install skill-creator@daymade/claude-code-skills
 ```
 
 **Install Other Skills:**
 ```bash
 # GitHub operations
-/plugin marketplace install daymade/claude-code-skills#github-ops
+claude plugin install github-ops@daymade/claude-code-skills
 
 # Document conversion
-/plugin marketplace install daymade/claude-code-skills#markdown-tools
+claude plugin install markdown-tools@daymade/claude-code-skills
 
 # Diagram generation
-/plugin marketplace install daymade/claude-code-skills#mermaid-tools
+claude plugin install mermaid-tools@daymade/claude-code-skills
 
 # Statusline customization
-/plugin marketplace install daymade/claude-code-skills#statusline-generator
+claude plugin install statusline-generator@daymade/claude-code-skills
 
 # Teams communication
-/plugin marketplace install daymade/claude-code-skills#teams-channel-post-writer
+claude plugin install teams-channel-post-writer@daymade/claude-code-skills
 
 # Repomix extraction
-/plugin marketplace install daymade/claude-code-skills#repomix-unmixer
+claude plugin install repomix-unmixer@daymade/claude-code-skills
 
 # AI/LLM icons
-/plugin marketplace install daymade/claude-code-skills#llm-icon-finder
+claude plugin install llm-icon-finder@daymade/claude-code-skills
 
 # CLI demo generation
-/plugin marketplace install daymade/claude-code-skills#cli-demo-generator
+claude plugin install cli-demo-generator@daymade/claude-code-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -500,7 +500,7 @@ No, these skills are specifically designed for Claude Code. You'll need Claude C
 
 Use the same install command to update:
 ```bash
-/plugin marketplace install daymade/claude-code-skills#skill-name
+claude plugin install skill-name@daymade/claude-code-skills
 ```
 
 ### Can I contribute my own skill?
