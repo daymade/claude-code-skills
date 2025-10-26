@@ -46,6 +46,7 @@ htmlcov/
 tmp/
 temp/
 *.tmp
+output/
 
 # OS files
 Thumbs.db
