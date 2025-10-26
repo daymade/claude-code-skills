@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-11-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.4.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-12-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.5.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 11 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 12 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -402,6 +402,32 @@ Extract design systems from reference UI images and generate implementation-read
 
 ---
 
+### 11. **ppt-creator** - Professional Presentation Creation
+
+Create persuasive, audience-ready slide decks from topics or documents with data-driven charts and dual-format PPTX output.
+
+**When to use:**
+- Creating presentations, pitch decks, or keynotes
+- Need structured content with professional storytelling
+- Require data visualization and charts
+- Want complete PPTX files with speaker notes
+- Building business reviews or product pitches
+
+**Key features:**
+- Pyramid Principle structure (conclusion → reasons → evidence)
+- Assertion-evidence slide framework
+- Automatic data synthesis and chart generation (matplotlib)
+- Dual-path PPTX creation (Marp CLI + document-skills:pptx)
+- Complete orchestration: content → data → charts → PPTX with charts
+- 45-60 second speaker notes per slide
+- Quality scoring with auto-refinement (target: 75/100)
+
+**🎬 Live Demo**
+
+![PPT Creator Demo](./demos/ppt-creator/create-presentation.gif)
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -423,6 +449,9 @@ Use **repomix-unmixer** to extract and validate repomix-packed skills or reposit
 ### For Skill Development
 Use **skill-creator** (see [Essential Skill](#-essential-skill-skill-creator) section above) to build, validate, and package your own Claude Code skills following best practices.
 
+### For Presentations & Business Communication
+Use **ppt-creator** to generate professional slide decks with data visualizations, structured storytelling, and complete PPTX output for pitches, reviews, and keynotes.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -442,6 +471,7 @@ Each skill includes:
 - **skill-creator**: See `skill-creator/SKILL.md` for complete skill creation workflow
 - **llm-icon-finder**: See `llm-icon-finder/references/icons-list.md` for available icons
 - **cli-demo-generator**: See `cli-demo-generator/references/vhs_syntax.md` for VHS syntax and `cli-demo-generator/references/best_practices.md` for demo guidelines
+- **ppt-creator**: See `ppt-creator/references/WORKFLOW.md` for 9-stage creation process and `ppt-creator/references/ORCHESTRATION_OVERVIEW.md` for automation
 
 ## 🛠️ Requirements
 
@@ -453,6 +483,8 @@ Each skill includes:
 - **VHS** (for cli-demo-generator): `brew install vhs`
 - **asciinema** (optional, for cli-demo-generator interactive recording)
 - **ccusage** (optional, for statusline cost tracking)
+- **pandas & matplotlib** (optional, for ppt-creator chart generation)
+- **Marp CLI** (optional, for ppt-creator Marp PPTX export): `npm install -g @marp-team/marp-cli`
 
 ## ❓ FAQ
 
