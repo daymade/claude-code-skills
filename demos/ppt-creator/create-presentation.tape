@@ -2,7 +2,7 @@ Output demos/ppt-creator/create-presentation.gif
 
 Set FontSize 18
 Set Width 1400
-Set Height 700
+Set Height 800
 Set Theme "Catppuccin Mocha"
 Set Padding 30
 Set TypingSpeed 50ms
@@ -18,42 +18,59 @@ Type "# ✓ ppt-creator activates automatically" Sleep 500ms
 Enter
 Sleep 2s
 
-Type "# Stage 1-7: Content Preparation" Sleep 500ms
+Type "# Stage 2: Storyline (Pyramid Principle)" Sleep 500ms
 Enter
 Sleep 1s
-Type "  → slides.md (Marp format)" Sleep 500ms
+Type "  → Conclusion: Renewable energy adoption is accelerating" Sleep 500ms
 Enter
 Sleep 1s
-Type "  → refs.md (speaker notes)" Sleep 500ms
+
+Type "# Stage 3: Outline & Slide Titles (Assertions)" Sleep 500ms
+Enter
+Sleep 1s
+Type "  → 12 slides with assertion-style headings" Sleep 500ms
 Enter
 Sleep 2s
 
-Type "# Stage 8b-8c: Data & Charts" Sleep 500ms
+Type "# Stage 4: Evidence & Charts" Sleep 500ms
 Enter
 Sleep 1s
-Type "  → synthetic_data.csv" Sleep 500ms
+Type "  → Selecting charts via VIS-GUIDE.md" Sleep 500ms
 Enter
 Sleep 1s
-Type "  → chart_energy_adoption.png" Sleep 500ms
+Type "  → scripts/chartkit.py generates PNG charts" Sleep 500ms
 Enter
 Sleep 2s
 
-Type "# Stage 8d: Dual-Path PPTX Creation" Sleep 500ms
+Type "# Stage 6: Speaker Notes (45-60s per slide)" Sleep 500ms
 Enter
 Sleep 1s
-Type "  → Path A: Marp CLI" Sleep 500ms
-Enter
-Sleep 1s
-Type "  → Path B: document-skills:pptx" Sleep 500ms
+Type "  → Opening → Assertion → Evidence → Transition" Sleep 500ms
 Enter
 Sleep 2s
 
-Type "# Stage 8e: Chart Insertion" Sleep 500ms
+Type "# Stage 7: Self-Check & Scoring (RUBRIC.md)" Sleep 500ms
 Enter
 Sleep 1s
-Type "  ✓ presentation_marp_with_charts.pptx" Sleep 500ms
+Type "  → Score: 82/100 (target: ≥75)" Sleep 500ms
+Enter
+Sleep 2s
+
+Type "# Stage 8: Package Deliverables (/output/)" Sleep 500ms
 Enter
 Sleep 1s
-Type "  ✓ presentation_pptx_with_charts.pptx" Sleep 500ms
+Type "  ✓ slides.md (Marp/Reveal.js format)" Sleep 500ms
+Enter
+Sleep 1s
+Type "  ✓ notes.md (speaker notes)" Sleep 500ms
+Enter
+Sleep 1s
+Type "  ✓ refs.md (citations & sources)" Sleep 500ms
+Enter
+Sleep 1s
+Type "  ✓ assets/*.png (generated charts)" Sleep 500ms
+Enter
+Sleep 1s
+Type "  ✓ presentation.pptx (if python-pptx available)" Sleep 500ms
 Enter
 Sleep 3s
