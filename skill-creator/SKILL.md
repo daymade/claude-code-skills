@@ -194,6 +194,18 @@ To begin implementation, start with the reusable resources identified above: `sc
 
 Also, delete any example files and directories not needed for the skill. The initialization script creates example files in `scripts/`, `references/`, and `assets/` to demonstrate structure, but most skills won't need all of them.
 
+#### Reference File Naming
+
+Filenames must be self-explanatory without reading contents.
+
+**Pattern**: `<content-type>_<specificity>.md`
+
+**Examples**:
+- ❌ `commands.md`, `cli_usage.md`, `reference.md`
+- ✅ `script_parameters.md`, `api_endpoints.md`, `database_schema.md`
+
+**Test**: Can someone understand the file's contents from the name alone?
+
 #### Update SKILL.md
 
 **Writing Style:** Write the entire skill using **imperative/infinitive form** (verb-first instructions), not second person. Use objective, instructional language (e.g., "To accomplish X, do Y" rather than "You should do X" or "If you need to do X"). This maintains consistency and clarity for AI consumption.
@@ -204,7 +216,47 @@ To complete SKILL.md, answer the following questions:
 2. When should the skill be used?
 3. In practice, how should Claude use the skill? All reusable skill contents developed above should be referenced so that Claude knows how to use them.
 
-### Step 5: Packaging a Skill
+### Step 5: Security Review
+
+Before packaging or distributing a skill, run the security scanner to detect hardcoded secrets and personal information:
+
+```bash
+# Required before packaging
+python scripts/security_scan.py <path/to/skill-folder>
+
+# Verbose mode includes additional checks for paths, emails, and code patterns
+python scripts/security_scan.py <path/to/skill-folder> --verbose
+```
+
+**Detection coverage:**
+- Hardcoded secrets (API keys, passwords, tokens) via gitleaks
+- Personal information (usernames, emails, company names) in verbose mode
+- Unsafe code patterns (command injection risks) in verbose mode
+
+**First-time setup:** Install gitleaks if not present:
+
+```bash
+# macOS
+brew install gitleaks
+
+# Linux/Windows - see script output for installation instructions
+```
+
+**Exit codes:**
+- `0` - Clean (safe to package)
+- `1` - High severity issues
+- `2` - Critical issues (MUST fix before distribution)
+- `3` - gitleaks not installed
+- `4` - Scan error
+
+**Remediation for detected secrets:**
+
+1. Remove hardcoded secrets from all files
+2. Use environment variables: `os.environ.get("API_KEY")`
+3. Rotate credentials if previously committed to git
+4. Re-run scan to verify fixes before packaging
+
+### Step 6: Packaging a Skill
 
 Once the skill is ready, it should be packaged into a distributable zip file that gets shared with the user. The packaging process automatically validates the skill first to ensure it meets all requirements:
 
@@ -230,7 +282,7 @@ The packaging script will:
 
 If validation fails, the script will report the errors and exit without creating a package. Fix any validation errors and run the packaging command again.
 
-### Step 6: Iterate
+### Step 7: Iterate
 
 After testing the skill, users may request improvements. Often this happens right after using the skill, with fresh context of how the skill performed.
 

@@ -12,8 +12,48 @@ Example:
 
 import sys
 import zipfile
+import re
 from pathlib import Path
 from quick_validate import validate_skill
+from security_scan import calculate_skill_hash
+
+
+def validate_security_marker(skill_path: Path) -> tuple[bool, str]:
+    """
+    Validate security marker file exists and hash matches current content
+
+    Returns:
+        (is_valid, message) - True if valid, False if re-scan needed
+    """
+    security_marker = skill_path / ".security-scan-passed"
+
+    # Check existence
+    if not security_marker.exists():
+        return False, "Security scan not completed"
+
+    # Read stored hash
+    try:
+        marker_content = security_marker.read_text()
+        hash_match = re.search(r'Content hash:\s*([a-f0-9]{64})', marker_content)
+
+        if not hash_match:
+            return False, "Security marker missing content hash (old format)"
+
+        stored_hash = hash_match.group(1)
+    except Exception as e:
+        return False, f"Cannot read security marker: {e}"
+
+    # Calculate current hash
+    try:
+        current_hash = calculate_skill_hash(skill_path)
+    except Exception as e:
+        return False, f"Cannot calculate content hash: {e}"
+
+    # Compare hashes
+    if stored_hash != current_hash:
+        return False, "Skill content changed since last security scan"
+
+    return True, "Security scan valid"
 
 
 def package_skill(skill_path, output_dir=None):
@@ -44,14 +84,28 @@ def package_skill(skill_path, output_dir=None):
         print(f"❌ Error: SKILL.md not found in {skill_path}")
         return None
 
-    # Run validation before packaging
-    print("🔍 Validating skill...")
+    # Step 1: Validate skill structure and metadata
+    print("🔍 Step 1: Validating skill structure...")
     valid, message = validate_skill(skill_path)
     if not valid:
-        print(f"❌ Validation failed: {message}")
-        print("   Please fix the validation errors before packaging.")
+        print(f"❌ FAILED: {message}")
+        print("   Fix validation errors before packaging.")
         return None
-    print(f"✅ {message}\n")
+    print(f"✅ PASSED: {message}\n")
+
+    # Step 2: Validate security scan (HARD REQUIREMENT)
+    print("🔍 Step 2: Validating security scan...")
+    is_valid, message = validate_security_marker(skill_path)
+
+    if not is_valid:
+        print(f"❌ BLOCKED: {message}")
+        print(f"   You MUST run: python scripts/security_scan.py {skill_path.name}")
+        print("   Security review is MANDATORY before packaging.")
+        return None
+    print(f"✅ PASSED: {message}\n")
+
+    # Step 3: Package the skill
+    print("📦 Step 3: Creating package...")
 
     # Determine output location
     skill_name = skill_path.name
