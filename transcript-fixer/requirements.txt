@@ -1,0 +1,4 @@
+# Transcript Fixer Dependencies
+
+# HTTP client for GLM API calls
+httpx>=0.24.0

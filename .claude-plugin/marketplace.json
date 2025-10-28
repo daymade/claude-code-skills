@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, and secure repomix packaging",
-    "version": "1.7.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, and ASR transcription correction",
+    "version": "1.8.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -149,6 +149,16 @@
       "category": "security",
       "keywords": ["repomix", "security", "credentials", "secrets-scanning", "safe-packaging", "secret-detection", "code-security"],
       "skills": ["./repomix-safe-mixer"]
+    },
+    {
+      "name": "transcript-fixer",
+      "description": "Corrects speech-to-text (ASR/STT) transcription errors in meeting notes, lecture recordings, interviews, and voice memos through dictionary-based rules and AI corrections. Use when users mention transcript correction, ASR errors, speech-to-text mistakes, homophone errors, or working with transcription files",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": ["transcription", "asr", "stt", "speech-to-text", "correction", "ai", "meeting-notes", "nlp"],
+      "skills": ["./transcript-fixer"]
     }
   ]
 }

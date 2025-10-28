@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-14-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.7.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-15-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.8.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 14 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 15 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -481,6 +481,49 @@ Safely package codebases with repomix by automatically detecting and removing ha
 
 ---
 
+### 14. **transcript-fixer** - ASR Transcription Correction
+
+Correct speech-to-text (ASR/STT) transcription errors through dictionary-based rules and AI-powered corrections with automatic pattern learning.
+
+**When to use:**
+- Correcting meeting notes, lecture recordings, or interview transcripts
+- Fixing Chinese/English homophone errors and technical terminology
+- Building domain-specific correction dictionaries
+- Improving transcript accuracy through iterative learning
+- Collaborating with teams on shared correction knowledge bases
+
+**Key features:**
+- Two-stage correction pipeline (dictionary + AI)
+- Automatic pattern detection and learning
+- Domain-specific dictionaries (general, embodied_ai, finance, medical)
+- SQLite-based correction repository
+- Team collaboration with import/export
+- GLM API integration for AI corrections
+- Cost optimization through dictionary promotion
+
+**Example workflow:**
+```bash
+# Initialize and add corrections
+uv run scripts/fix_transcription.py --init
+uv run scripts/fix_transcription.py --add "错误词" "正确词" --domain general
+
+# Run full correction pipeline
+uv run scripts/fix_transcription.py --input meeting.md --stage 3
+
+# Review and approve learned patterns
+uv run scripts/fix_transcription.py --review-learned
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [transcript-fixer/references/](./transcript-fixer/references/) for workflow guides, SQL queries, troubleshooting, best practices, team collaboration, and API setup.
+
+**Requirements**: Python 3.6+, uv package manager, GLM API key (get from https://open.bigmodel.cn/)
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -508,6 +551,9 @@ Use **ppt-creator** to generate professional slide decks with data visualization
 ### For Media & Content Download
 Use **youtube-downloader** to download YouTube videos and extract audio from videos with automatic workarounds for common download issues.
 
+### For Transcription & ASR Correction
+Use **transcript-fixer** to correct speech-to-text errors in meeting notes, lectures, and interviews through dictionary-based rules and AI-powered corrections with automatic learning.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -530,6 +576,7 @@ Each skill includes:
 - **ppt-creator**: See `ppt-creator/references/WORKFLOW.md` for 9-stage creation process and `ppt-creator/references/ORCHESTRATION_OVERVIEW.md` for automation
 - **youtube-downloader**: See `youtube-downloader/SKILL.md` for usage examples and troubleshooting
 - **repomix-safe-mixer**: See `repomix-safe-mixer/references/common_secrets.md` for detected credential patterns
+- **transcript-fixer**: See `transcript-fixer/references/workflow_guide.md` for step-by-step workflows and `transcript-fixer/references/team_collaboration.md` for collaboration patterns
 
 ## 🛠️ Requirements
 
