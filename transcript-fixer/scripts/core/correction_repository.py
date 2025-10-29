@@ -19,6 +19,20 @@ from contextlib import contextmanager
 from dataclasses import dataclass, asdict
 import threading
 
+# CRITICAL FIX: Import thread-safe connection pool
+from .connection_pool import ConnectionPool, PoolExhaustedError
+
+# CRITICAL FIX: Import domain validation (SQL injection prevention)
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.domain_validator import (
+    validate_domain,
+    validate_source,
+    validate_correction_inputs,
+    validate_confidence,
+    ValidationError as DomainValidationError
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,50 +104,65 @@ class CorrectionRepository:
     - Audit logging
     """
 
-    def __init__(self, db_path: Path):
+    def __init__(self, db_path: Path, max_connections: int = 5):
         """
         Initialize repository with database path.
 
+        CRITICAL FIX: Now uses thread-safe connection pool instead of
+        unsafe ThreadLocal + check_same_thread=False pattern.
+
         Args:
             db_path: Path to SQLite database file
+            max_connections: Maximum connections in pool (default: 5)
+
+        Raises:
+            ValueError: If max_connections < 1
+            FileNotFoundError: If db_path parent doesn't exist
         """
-        self.db_path = db_path
-        self._local = threading.local()
+        self.db_path = Path(db_path)
+
+        # CRITICAL FIX: Replace unsafe ThreadLocal with connection pool
+        # OLD: self._local = threading.local() + check_same_thread=False
+        # NEW: Proper connection pool with thread safety enforced
+        self._pool = ConnectionPool(
+            db_path=self.db_path,
+            max_connections=max_connections
+        )
+
+        # Ensure database schema exists
         self._ensure_database_exists()
 
-    def _get_connection(self) -> sqlite3.Connection:
-        """Get thread-local database connection."""
-        if not hasattr(self._local, 'connection'):
-            self._local.connection = sqlite3.connect(
-                self.db_path,
-                isolation_level=None,  # Autocommit mode off, manual transactions
-                check_same_thread=False
-            )
-            self._local.connection.row_factory = sqlite3.Row
-            # Enable foreign keys
-            self._local.connection.execute("PRAGMA foreign_keys = ON")
-        return self._local.connection
+        logger.info(f"Repository initialized with {max_connections} max connections")
 
     @contextmanager
     def _transaction(self):
         """
         Context manager for database transactions.
 
+        CRITICAL FIX: Now uses connection from pool, ensuring thread safety.
+
         Provides ACID guarantees:
         - Atomicity: All or nothing
         - Consistency: Constraints enforced
         - Isolation: Serializable by default
         - Durability: Changes persisted to disk
+
+        Yields:
+            sqlite3.Connection: Database connection from pool
+
+        Raises:
+            DatabaseError: If transaction fails
+            PoolExhaustedError: If no connection available
         """
-        conn = self._get_connection()
-        try:
-            conn.execute("BEGIN IMMEDIATE")  # Acquire write lock immediately
-            yield conn
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Transaction rolled back: {e}")
-            raise DatabaseError(f"Database operation failed: {e}") from e
+        with self._pool.get_connection() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")  # Acquire write lock immediately
+                yield conn
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Transaction rolled back: {e}", exc_info=True)
+                raise DatabaseError(f"Database operation failed: {e}") from e
 
     def _ensure_database_exists(self) -> None:
         """Create database schema if not exists."""
@@ -165,6 +194,9 @@ class CorrectionRepository:
         """
         Add a new correction with full validation.
 
+        CRITICAL FIX: Now validates all inputs to prevent SQL injection
+        and DoS attacks via excessively long inputs.
+
         Args:
             from_text: Original (incorrect) text
             to_text: Corrected text
@@ -181,6 +213,14 @@ class CorrectionRepository:
             ValidationError: If validation fails
             DatabaseError: If database operation fails
         """
+        # CRITICAL FIX: Validate all inputs before touching database
+        try:
+            from_text, to_text, domain, source, notes, added_by = \
+                validate_correction_inputs(from_text, to_text, domain, source, notes, added_by)
+            confidence = validate_confidence(confidence)
+        except DomainValidationError as e:
+            raise ValidationError(str(e)) from e
+
         with self._transaction() as conn:
             try:
                 cursor = conn.execute("""
@@ -241,46 +281,45 @@ class CorrectionRepository:
 
     def get_correction(self, from_text: str, domain: str = "general") -> Optional[Correction]:
         """Get a specific correction."""
-        conn = self._get_connection()
-        cursor = conn.execute("""
-            SELECT * FROM corrections
-            WHERE from_text = ? AND domain = ? AND is_active = 1
-        """, (from_text, domain))
+        with self._pool.get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT * FROM corrections
+                WHERE from_text = ? AND domain = ? AND is_active = 1
+            """, (from_text, domain))
 
-        row = cursor.fetchone()
-        return self._row_to_correction(row) if row else None
+            row = cursor.fetchone()
+            return self._row_to_correction(row) if row else None
 
     def get_all_corrections(self, domain: Optional[str] = None, active_only: bool = True) -> List[Correction]:
         """Get all corrections, optionally filtered by domain."""
-        conn = self._get_connection()
-
-        if domain:
-            if active_only:
-                cursor = conn.execute("""
-                    SELECT * FROM corrections
-                    WHERE domain = ? AND is_active = 1
-                    ORDER BY from_text
-                """, (domain,))
+        with self._pool.get_connection() as conn:
+            if domain:
+                if active_only:
+                    cursor = conn.execute("""
+                        SELECT * FROM corrections
+                        WHERE domain = ? AND is_active = 1
+                        ORDER BY from_text
+                    """, (domain,))
+                else:
+                    cursor = conn.execute("""
+                        SELECT * FROM corrections
+                        WHERE domain = ?
+                        ORDER BY from_text
+                    """, (domain,))
             else:
-                cursor = conn.execute("""
-                    SELECT * FROM corrections
-                    WHERE domain = ?
-                    ORDER BY from_text
-                """, (domain,))
-        else:
-            if active_only:
-                cursor = conn.execute("""
-                    SELECT * FROM corrections
-                    WHERE is_active = 1
-                    ORDER BY domain, from_text
-                """)
-            else:
-                cursor = conn.execute("""
-                    SELECT * FROM corrections
-                    ORDER BY domain, from_text
-                """)
+                if active_only:
+                    cursor = conn.execute("""
+                        SELECT * FROM corrections
+                        WHERE is_active = 1
+                        ORDER BY domain, from_text
+                    """)
+                else:
+                    cursor = conn.execute("""
+                        SELECT * FROM corrections
+                        ORDER BY domain, from_text
+                    """)
 
-        return [self._row_to_correction(row) for row in cursor.fetchall()]
+            return [self._row_to_correction(row) for row in cursor.fetchall()]
 
     def get_corrections_dict(self, domain: str = "general") -> Dict[str, str]:
         """Get corrections as a simple dictionary for processing."""
@@ -458,8 +497,27 @@ class CorrectionRepository:
         """, (action, entity_type, entity_id, user, details, success, error_message))
 
     def close(self) -> None:
-        """Close database connection."""
-        if hasattr(self._local, 'connection'):
-            self._local.connection.close()
-            delattr(self._local, 'connection')
-            logger.info("Database connection closed")
+        """
+        Close all database connections in pool.
+
+        CRITICAL FIX: Now closes connection pool properly.
+
+        Call this on application shutdown to ensure clean cleanup.
+        After calling, repository cannot be used anymore.
+        """
+        logger.info("Closing database connection pool")
+        self._pool.close_all()
+
+    def get_pool_statistics(self):
+        """
+        Get connection pool statistics for monitoring.
+
+        Returns:
+            PoolStatistics with current state
+
+        Useful for:
+        - Health checks
+        - Monitoring dashboards
+        - Debugging connection issues
+        """
+        return self._pool.get_statistics()

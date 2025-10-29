@@ -25,6 +25,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.9.0] - 2025-10-29
+
+### Added
+- **New Skill**: video-comparer - Video comparison and quality analysis tool
+  - Compare original and compressed videos with interactive HTML reports
+  - Calculate quality metrics (PSNR, SSIM) for compression analysis
+  - Generate frame-by-frame visual comparisons with three viewing modes (slider, side-by-side, grid)
+  - Extract video metadata (codec, resolution, bitrate, duration, file size)
+  - Multi-platform FFmpeg installation instructions (macOS, Linux, Windows)
+  - Bundled Python script: `compare.py` with security features (path validation, resource limits)
+  - Comprehensive reference documentation (video metrics interpretation, FFmpeg commands, configuration)
+  - Self-contained HTML output with embedded frames (no server required)
+
+### Changed
+- Updated marketplace skills count from 15 to 16
+- Updated marketplace version from 1.8.0 to 1.9.0
+- Updated README.md badges (skills count, version)
+- Updated README.md to include video-comparer in skills listing
+- Updated CLAUDE.md skills count from 15 to 16
+- Added video-comparer use case section to README.md
+- Added FFmpeg to requirements section
+
 ## [1.6.0] - 2025-10-26
 
 ### Added

@@ -9,6 +9,7 @@ All cmd_* functions take parsed args and execute the requested operation.
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -21,23 +22,27 @@ from core import (
     LearningEngine,
 )
 from utils import validate_configuration, print_validation_summary
+from utils.health_check import HealthChecker, CheckLevel, format_health_output
+from utils.metrics import get_metrics, format_metrics_summary
+from utils.config import get_config
+from utils.db_migrations_cli import create_migration_cli
 
 
-def _get_service():
+def _get_service() -> CorrectionService:
     """Get configured CorrectionService instance."""
-    config_dir = Path.home() / ".transcript-fixer"
-    db_path = config_dir / "corrections.db"
-    repository = CorrectionRepository(db_path)
+    # P1-5 FIX: Use centralized configuration
+    config = get_config()
+    repository = CorrectionRepository(config.database.path)
     return CorrectionService(repository)
 
 
-def cmd_init(args):
+def cmd_init(args: argparse.Namespace) -> None:
     """Initialize ~/.transcript-fixer/ directory"""
     service = _get_service()
     service.initialize()
 
 
-def cmd_add_correction(args):
+def cmd_add_correction(args: argparse.Namespace) -> None:
     """Add a single correction"""
     service = _get_service()
     try:
@@ -48,7 +53,7 @@ def cmd_add_correction(args):
         sys.exit(1)
 
 
-def cmd_list_corrections(args):
+def cmd_list_corrections(args: argparse.Namespace) -> None:
     """List all corrections"""
     service = _get_service()
     corrections = service.get_corrections(args.domain)
@@ -60,7 +65,7 @@ def cmd_list_corrections(args):
     print(f"\nTotal: {len(corrections)} corrections\n")
 
 
-def cmd_run_correction(args):
+def cmd_run_correction(args: argparse.Namespace) -> None:
     """Run the correction workflow"""
     # Validate input file
     input_path = Path(args.input)
@@ -142,12 +147,37 @@ def cmd_run_correction(args):
             changes=stage1_changes + stage2_changes
         )
 
-        # TODO: Run learning engine
-        # learning = LearningEngine(...)
-        # suggestions = learning.analyze_and_suggest()
-        # if suggestions:
-        #     print(f"🎓 Learning: Found {len(suggestions)} new correction suggestions")
-        #     print(f"   Run --review-learned to review them\n")
+        # Run learning engine - AUTO-LEARN from AI results!
+        if stage2_changes:
+            print("=" * 60)
+            print("🎓 Learning System: Analyzing AI Corrections")
+            print("=" * 60)
+
+            config_dir = Path.home() / ".transcript-fixer"
+            learning = LearningEngine(
+                history_dir=config_dir / "history",
+                learned_dir=config_dir / "learned",
+                correction_service=service
+            )
+
+            stats = learning.analyze_and_auto_approve(stage2_changes, args.domain)
+
+            print(f"📊 Analysis Results:")
+            print(f"   Total changes: {stats['total_changes']}")
+            print(f"   Unique patterns: {stats['unique_patterns']}")
+
+            if stats['auto_approved'] > 0:
+                print(f"   ✅ Auto-approved: {stats['auto_approved']} patterns")
+                print(f"      (Added to dictionary for next run)")
+
+            if stats['pending_review'] > 0:
+                print(f"   ⏳ Pending review: {stats['pending_review']} patterns")
+                print(f"      (Run --review-learned to approve manually)")
+
+            if stats.get('savings_potential'):
+                print(f"\n   💰 {stats['savings_potential']}")
+
+            print()
 
     # Stage 3: Generate diff report
     if args.stage >= 3:
@@ -159,23 +189,306 @@ def cmd_run_correction(args):
     print("✅ Correction complete!")
 
 
-def cmd_review_learned(args):
+def cmd_review_learned(args: argparse.Namespace) -> None:
     """Review learned suggestions"""
     # TODO: Implement learning engine with SQLite backend
     print("⚠️  Learning engine not yet implemented with SQLite backend")
     print("   This feature will be added in a future update")
 
 
-def cmd_approve(args):
+def cmd_approve(args: argparse.Namespace) -> None:
     """Approve a learned suggestion"""
     # TODO: Implement learning engine with SQLite backend
     print("⚠️  Learning engine not yet implemented with SQLite backend")
     print("   This feature will be added in a future update")
 
 
-def cmd_validate(args):
+def cmd_validate(args: argparse.Namespace) -> None:
     """Validate configuration and JSON files"""
     errors, warnings = validate_configuration()
     exit_code = print_validation_summary(errors, warnings)
     if exit_code != 0:
         sys.exit(exit_code)
+
+
+def cmd_health(args: argparse.Namespace) -> None:
+    """
+    Perform system health check
+
+    CRITICAL FIX (P1-4): Production-grade health monitoring
+    """
+    # Parse check level
+    level_map = {
+        'basic': CheckLevel.BASIC,
+        'standard': CheckLevel.STANDARD,
+        'deep': CheckLevel.DEEP
+    }
+    level = level_map.get(args.level, CheckLevel.STANDARD)
+
+    # Run health check
+    checker = HealthChecker()
+    health = checker.check_health(level=level)
+
+    # Output format
+    if args.format == 'json':
+        print(health.to_json())
+    else:
+        output = format_health_output(health, verbose=args.verbose)
+        print(output)
+
+    # Exit with appropriate code
+    if health.status.value == 'unhealthy':
+        sys.exit(1)
+    elif health.status.value == 'degraded':
+        sys.exit(2)
+    else:
+        sys.exit(0)
+
+
+def cmd_metrics(args: argparse.Namespace) -> None:
+    """
+    Display collected metrics
+
+    CRITICAL FIX (P1-7): Production-grade metrics and observability
+    """
+    metrics = get_metrics()
+
+    # Output format
+    if args.format == 'json':
+        print(metrics.to_json())
+    elif args.format == 'prometheus':
+        print(metrics.to_prometheus())
+    else:
+        # Text summary
+        summary = metrics.get_summary()
+        output = format_metrics_summary(summary)
+        print(output)
+
+
+def cmd_config(args: argparse.Namespace) -> None:
+    """
+    Configuration management commands
+
+    CRITICAL FIX (P1-5): Production-grade configuration management
+    """
+    from utils.config import create_example_config, Environment
+
+    if args.action == 'show':
+        # Display current configuration
+        config = get_config()
+        output = {
+            'environment': config.environment.value,
+            'database_path': str(config.database.path),
+            'config_dir': str(config.paths.config_dir),
+            'api_key_set': config.api.api_key is not None,
+            'debug': config.debug,
+            'features': {
+                'learning': config.features.enable_learning,
+                'metrics': config.features.enable_metrics,
+                'health_checks': config.features.enable_health_checks,
+                'rate_limiting': config.features.enable_rate_limiting,
+                'caching': config.features.enable_caching,
+                'auto_approval': config.features.enable_auto_approval,
+            }
+        }
+        print('Current Configuration:')
+        for key, value in output.items():
+            print(f'  {key}: {value}')
+
+    elif args.action == 'create-example':
+        # Create example config file
+        output_path = Path(args.path) if args.path else get_config().paths.config_dir / 'config.json'
+        create_example_config(output_path)
+        print(f'Example config created: {output_path}')
+
+    elif args.action == 'validate':
+        # Validate configuration
+        config = get_config()
+        errors, warnings = config.validate()
+
+        print('Configuration Validation:')
+        if errors:
+            print('  Errors:')
+            for error in errors:
+                print(f'    ❌ {error}')
+            sys.exit(1)
+        if warnings:
+            print('  Warnings:')
+            for warning in warnings:
+                print(f'    ⚠️  {warning}')
+        if not errors and not warnings:
+            print('  ✅ Configuration is valid')
+        sys.exit(0 if not errors else 1)
+
+    elif args.action == 'set-env':
+        # Set environment
+        if args.env not in [e.value for e in Environment]:
+            print(f'Invalid environment: {args.env}')
+            print(f'Valid environments: {", ".join(e.value for e in Environment)}')
+            sys.exit(1)
+
+        print(f'Environment set to: {args.env}')
+        print('To make this permanent, set TRANSCRIPT_FIXER_ENV environment variable:')
+
+
+def cmd_migration(args: argparse.Namespace) -> None:
+    """
+    Database migration commands (P1-6 fix)
+
+    CRITICAL FIX (P1-6): Production database migration system
+    """
+    migration_cli = create_migration_cli()
+
+    if args.action == 'status':
+        migration_cli.cmd_status(args)
+    elif args.action == 'history':
+        migration_cli.cmd_history(args)
+    elif args.action == 'migrate':
+        migration_cli.cmd_migrate(args)
+    elif args.action == 'rollback':
+        migration_cli.cmd_rollback(args)
+    elif args.action == 'plan':
+        migration_cli.cmd_plan(args)
+    elif args.action == 'validate':
+        migration_cli.cmd_validate(args)
+    elif args.action == 'create':
+        migration_cli.cmd_create_migration(args)
+    else:
+        print("Unknown migration action")
+        sys.exit(1)
+
+
+def cmd_audit_retention(args: argparse.Namespace) -> None:
+    """
+    Audit log retention management commands (P1-11 fix)
+
+    CRITICAL FIX (P1-11): Production-grade audit log retention and compliance
+    """
+    from utils.audit_log_retention import get_retention_manager
+    import json
+
+    # Get retention manager with configured database path
+    config = get_config()
+    manager = get_retention_manager(config.database.path)
+
+    if args.action == 'cleanup':
+        # Clean up expired audit logs
+        entity_type = getattr(args, 'entity_type', None)
+        dry_run = getattr(args, 'dry_run', False)
+
+        if dry_run:
+            print("🔍 DRY RUN MODE - No actual changes will be made\n")
+
+        print("🧹 Cleaning up expired audit logs...")
+        results = manager.cleanup_expired_logs(entity_type=entity_type, dry_run=dry_run)
+
+        if not results:
+            print("ℹ️  No cleanup operations performed (permanent retention or no expired logs)")
+            return
+
+        print("\n📊 Cleanup Results:")
+        print("=" * 70)
+
+        for result in results:
+            status = "✅ Success" if result.success else "❌ Failed"
+            print(f"\n{result.entity_type}: {status}")
+            print(f"  Scanned: {result.records_scanned}")
+            print(f"  Deleted: {result.records_deleted}")
+            print(f"  Archived: {result.records_archived}")
+            print(f"  Anonymized: {result.records_anonymized}")
+            print(f"  Execution time: {result.execution_time_ms}ms")
+
+            if result.errors:
+                print(f"  Errors: {', '.join(result.errors)}")
+
+        print()
+
+    elif args.action == 'report':
+        # Generate compliance report
+        print("📋 Generating compliance report...\n")
+        report = manager.generate_compliance_report()
+
+        print("=" * 70)
+        print("AUDIT LOG COMPLIANCE REPORT")
+        print("=" * 70)
+        print(f"Report Date: {report.report_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Compliance Status: {'✅ COMPLIANT' if report.is_compliant else '❌ NON-COMPLIANT'}")
+        print(f"\nTotal Audit Logs: {report.total_audit_logs:,}")
+
+        if report.oldest_log_date:
+            print(f"Oldest Log: {report.oldest_log_date.strftime('%Y-%m-%d %H:%M:%S')}")
+        if report.newest_log_date:
+            print(f"Newest Log: {report.newest_log_date.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        print(f"\nStorage: {report.storage_size_mb:.2f} MB")
+        print(f"Archived Files: {report.archived_logs_count}")
+
+        print("\nLogs by Entity Type:")
+        for entity_type, count in sorted(report.logs_by_entity_type.items()):
+            print(f"  {entity_type}: {count:,}")
+
+        if report.retention_violations:
+            print("\n⚠️  Retention Violations:")
+            for violation in report.retention_violations:
+                print(f"  • {violation}")
+            print("\nRun 'audit-retention cleanup' to resolve violations")
+
+        print()
+
+        # JSON output option
+        if getattr(args, 'format', 'text') == 'json':
+            print(json.dumps(report.to_dict(), indent=2))
+
+    elif args.action == 'policies':
+        # Show retention policies
+        print("📜 Retention Policies:")
+        print("=" * 70)
+
+        policies = manager.load_retention_policies()
+
+        for entity_type, policy in sorted(policies.items()):
+            status = "✅ Active" if policy.is_active else "❌ Inactive"
+            days_str = "PERMANENT" if policy.retention_days == -1 else f"{policy.retention_days} days"
+
+            print(f"\n{entity_type}: {status}")
+            print(f"  Retention: {days_str}")
+            print(f"  Strategy: {policy.strategy.value.upper()}")
+
+            if policy.critical_action_retention_days:
+                crit_days = policy.critical_action_retention_days
+                print(f"  Critical Actions: {crit_days} days (extended)")
+
+            if policy.description:
+                print(f"  Description: {policy.description}")
+
+        print()
+
+    elif args.action == 'restore':
+        # Restore from archive
+        archive_file = Path(getattr(args, 'archive_file', ''))
+
+        if not archive_file:
+            print("❌ Error: --archive-file required for restore action")
+            sys.exit(1)
+
+        if not archive_file.exists():
+            print(f"❌ Error: Archive file not found: {archive_file}")
+            sys.exit(1)
+
+        verify_only = getattr(args, 'verify_only', False)
+
+        if verify_only:
+            print(f"🔍 Verifying archive: {archive_file.name}")
+            count = manager.restore_from_archive(archive_file, verify_only=True)
+            print(f"✅ Archive is valid: contains {count} log entries")
+        else:
+            print(f"📦 Restoring from archive: {archive_file.name}")
+            count = manager.restore_from_archive(archive_file, verify_only=False)
+            print(f"✅ Restored {count} log entries")
+
+        print()
+
+    else:
+        print(f"❌ Unknown audit-retention action: {args.action}")
+        print("Valid actions: cleanup, report, policies, restore")
+        sys.exit(1)

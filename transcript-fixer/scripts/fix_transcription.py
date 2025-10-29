@@ -36,11 +36,16 @@ from cli import (
     cmd_review_learned,
     cmd_approve,
     cmd_validate,
+    cmd_health,
+    cmd_metrics,
+    cmd_config,
+    cmd_migration,
+    cmd_audit_retention,
     create_argument_parser,
 )
 
 
-def main():
+def main() -> None:
     """Main entry point - parse arguments and dispatch to commands"""
     parser = create_argument_parser()
     args = parser.parse_args()
@@ -48,6 +53,37 @@ def main():
     # Dispatch commands
     if args.init:
         cmd_init(args)
+    elif args.health:
+        # Map argument names for health command
+        args.level = args.health_level
+        args.format = args.health_format
+        cmd_health(args)
+    elif args.metrics:
+        # Map argument names for metrics command
+        args.format = args.metrics_format
+        cmd_metrics(args)
+    elif args.config_action:
+        # Map argument names for config command (P1-5 fix)
+        args.action = args.config_action
+        args.path = args.config_path
+        args.env = args.config_env
+        cmd_config(args)
+    elif args.migration_action:
+        # Map argument names for migration command (P1-6 fix)
+        args.action = args.migration_action
+        args.version = args.migration_version
+        args.dry_run = args.migration_dry_run
+        args.force = args.migration_force
+        args.yes = args.migration_yes
+        args.format = args.migration_history_format
+        args.name = args.migration_name
+        args.description = args.migration_description
+        cmd_migration(args)
+    elif args.audit_retention_action:
+        # Map argument names for audit-retention command (P1-11 fix)
+        args.action = args.audit_retention_action
+        # Other arguments (entity_type, dry_run, archive_file, verify_only) already have correct names
+        cmd_audit_retention(args)
     elif args.validate:
         cmd_validate(args)
     elif args.add_correction:

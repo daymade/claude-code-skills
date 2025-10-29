@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, and ASR transcription correction",
-    "version": "1.8.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, and video comparison quality analysis",
+    "version": "1.9.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -159,6 +159,16 @@
       "category": "productivity",
       "keywords": ["transcription", "asr", "stt", "speech-to-text", "correction", "ai", "meeting-notes", "nlp"],
       "skills": ["./transcript-fixer"]
+    },
+    {
+      "name": "video-comparer",
+      "description": "Compare two videos and generate interactive HTML reports with quality metrics (PSNR, SSIM) and frame-by-frame visual comparisons. Use when analyzing compression results, evaluating codec performance, or assessing video quality differences",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "media",
+      "keywords": ["video", "comparison", "quality-analysis", "psnr", "ssim", "compression", "ffmpeg", "codec"],
+      "skills": ["./video-comparer"]
     }
   ]
 }

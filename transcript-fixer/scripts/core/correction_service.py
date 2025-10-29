@@ -448,24 +448,24 @@ class CorrectionService:
             List of rule dictionaries with pattern, replacement, description
         """
         try:
-            conn = self.repository._get_connection()
-            cursor = conn.execute("""
-                SELECT pattern, replacement, description
-                FROM context_rules
-                WHERE is_active = 1
-                ORDER BY priority DESC
-            """)
+            with self.repository._pool.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT pattern, replacement, description
+                    FROM context_rules
+                    WHERE is_active = 1
+                    ORDER BY priority DESC
+                """)
 
-            rules = []
-            for row in cursor.fetchall():
-                rules.append({
-                    "pattern": row[0],
-                    "replacement": row[1],
-                    "description": row[2]
-                })
+                rules = []
+                for row in cursor.fetchall():
+                    rules.append({
+                        "pattern": row[0],
+                        "replacement": row[1],
+                        "description": row[2]
+                    })
 
-            logger.debug(f"Loaded {len(rules)} context rules")
-            return rules
+                logger.debug(f"Loaded {len(rules)} context rules")
+                return rules
 
         except Exception as e:
             logger.error(f"Failed to load context rules: {e}")

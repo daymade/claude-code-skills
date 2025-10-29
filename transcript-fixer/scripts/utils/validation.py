@@ -18,16 +18,6 @@ import os
 import sys
 from pathlib import Path
 
-# Handle imports for both standalone and package usage
-try:
-    from core import CorrectionRepository, CorrectionService
-except ImportError:
-    # Fallback for when run from scripts directory directly
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from core import CorrectionRepository, CorrectionService
-
 
 def validate_configuration() -> tuple[list[str], list[str]]:
     """
@@ -56,6 +46,10 @@ def validate_configuration() -> tuple[list[str], list[str]]:
     # Validate SQLite database
     if db_path.exists():
         try:
+            # CRITICAL FIX: Lazy import to prevent circular dependency
+            # circular import: core → utils.domain_validator → utils → utils.validation → core
+            from core import CorrectionRepository, CorrectionService
+
             repository = CorrectionRepository(db_path)
             service = CorrectionService(repository)
 
@@ -64,9 +58,9 @@ def validate_configuration() -> tuple[list[str], list[str]]:
             print(f"✅ Database valid: {stats['total_corrections']} corrections")
 
             # Check tables exist
-            conn = repository._get_connection()
-            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = [row[0] for row in cursor.fetchall()]
+            with repository._pool.get_connection() as conn:
+                cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                tables = [row[0] for row in cursor.fetchall()]
 
             expected_tables = [
                 'corrections', 'context_rules', 'correction_history',

@@ -14,14 +14,15 @@ from .correction_repository import CorrectionRepository, Correction, DatabaseErr
 from .correction_service import CorrectionService, ValidationRules
 
 # Processing components (imported lazily to avoid dependency issues)
-def _lazy_import(name):
+def _lazy_import(name: str) -> object:
     """Lazy import to avoid loading heavy dependencies."""
     if name == 'DictionaryProcessor':
         from .dictionary_processor import DictionaryProcessor
         return DictionaryProcessor
     elif name == 'AIProcessor':
-        from .ai_processor import AIProcessor
-        return AIProcessor
+        # Use async processor by default for 5-10x speedup on large files
+        from .ai_processor_async import AIProcessorAsync
+        return AIProcessorAsync
     elif name == 'LearningEngine':
         from .learning_engine import LearningEngine
         return LearningEngine

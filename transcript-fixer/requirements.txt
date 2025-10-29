@@ -2,3 +2,6 @@
 
 # HTTP client for GLM API calls
 httpx>=0.24.0
+
+# File locking for thread-safe operations (P1-1 fix)
+filelock>=3.13.0

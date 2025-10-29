@@ -14,6 +14,11 @@ from .commands import (
     cmd_review_learned,
     cmd_approve,
     cmd_validate,
+    cmd_health,
+    cmd_metrics,
+    cmd_config,
+    cmd_migration,
+    cmd_audit_retention,
 )
 from .argument_parser import create_argument_parser
 
@@ -25,5 +30,10 @@ __all__ = [
     'cmd_review_learned',
     'cmd_approve',
     'cmd_validate',
+    'cmd_health',
+    'cmd_metrics',
+    'cmd_config',
+    'cmd_migration',
+    'cmd_audit_retention',
     'create_argument_parser',
 ]

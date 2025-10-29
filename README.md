@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-15-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.8.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-16-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.9.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 15 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 16 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -139,6 +139,9 @@ claude plugin install cli-demo-generator@daymade/claude-code-skills
 
 # YouTube video/audio downloading
 claude plugin install youtube-downloader@daymade/claude-code-skills
+
+# Video comparison and quality analysis
+claude plugin install video-comparer@daymade/claude-code-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -524,6 +527,54 @@ uv run scripts/fix_transcription.py --review-learned
 
 ---
 
+### 15. **video-comparer** - Video Comparison and Quality Analysis
+
+Compare two videos and generate interactive HTML reports with quality metrics and frame-by-frame visual comparisons.
+
+**When to use:**
+- Comparing original and compressed videos
+- Analyzing video compression quality and efficiency
+- Evaluating codec performance or bitrate reduction impact
+- Assessing before/after compression results
+- Quality analysis for video encoding workflows
+
+**Key features:**
+- Quality metrics calculation (PSNR, SSIM)
+- Frame-by-frame visual comparison with three viewing modes:
+  - Slider mode: Drag to reveal differences
+  - Side-by-side mode: Simultaneous display
+  - Grid mode: Compact 2-column layout
+- Video metadata extraction (codec, resolution, bitrate, duration, file size)
+- Self-contained HTML reports (no server required, works offline)
+- Security features (path validation, resource limits, timeout controls)
+- Multi-platform FFmpeg support (macOS, Linux, Windows)
+
+**Example usage:**
+```bash
+# Basic comparison
+python3 scripts/compare.py original.mp4 compressed.mp4
+
+# Custom output and frame interval
+python3 scripts/compare.py original.mp4 compressed.mp4 -o report.html --interval 10
+
+# Batch processing
+for original in originals/*.mp4; do
+    compressed="compressed/$(basename "$original")"
+    output="reports/$(basename "$original" .mp4).html"
+    python3 scripts/compare.py "$original" "$compressed" -o "$output"
+done
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [video-comparer/references/](./video-comparer/references/) for quality metrics interpretation, FFmpeg commands, and configuration options.
+
+**Requirements**: Python 3.8+, FFmpeg/FFprobe (install via `brew install ffmpeg`, `apt install ffmpeg`, or `winget install ffmpeg`)
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -547,6 +598,9 @@ Use **skill-creator** (see [Essential Skill](#-essential-skill-skill-creator) se
 
 ### For Presentations & Business Communication
 Use **ppt-creator** to generate professional slide decks with data visualizations, structured storytelling, and complete PPTX output for pitches, reviews, and keynotes.
+
+### For Video Quality Analysis
+Use **video-comparer** to analyze compression results, evaluate codec performance, and generate interactive comparison reports. Combine with **youtube-downloader** to compare different quality downloads.
 
 ### For Media & Content Download
 Use **youtube-downloader** to download YouTube videos and extract audio from videos with automatic workarounds for common download issues.
@@ -576,6 +630,7 @@ Each skill includes:
 - **ppt-creator**: See `ppt-creator/references/WORKFLOW.md` for 9-stage creation process and `ppt-creator/references/ORCHESTRATION_OVERVIEW.md` for automation
 - **youtube-downloader**: See `youtube-downloader/SKILL.md` for usage examples and troubleshooting
 - **repomix-safe-mixer**: See `repomix-safe-mixer/references/common_secrets.md` for detected credential patterns
+- **video-comparer**: See `video-comparer/references/video_metrics.md` for quality metrics interpretation and `video-comparer/references/configuration.md` for customization options
 - **transcript-fixer**: See `transcript-fixer/references/workflow_guide.md` for step-by-step workflows and `transcript-fixer/references/team_collaboration.md` for collaboration patterns
 
 ## 🛠️ Requirements
@@ -586,6 +641,7 @@ Each skill includes:
 - **markitdown** (for markdown-tools)
 - **mermaid-cli** (for mermaid-tools)
 - **yt-dlp** (for youtube-downloader): `brew install yt-dlp` or `pip install yt-dlp`
+- **FFmpeg/FFprobe** (for video-comparer): `brew install ffmpeg`, `apt install ffmpeg`, or `winget install ffmpeg`
 - **VHS** (for cli-demo-generator): `brew install vhs`
 - **asciinema** (optional, for cli-demo-generator interactive recording)
 - **ccusage** (optional, for statusline cost tracking)
