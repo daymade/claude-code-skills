@@ -193,6 +193,261 @@ When creating a new skill:
 5. Package using `package_skill.py` (auto-validates)
 6. Iterate based on testing feedback
 
+## Adding a New Skill to Marketplace
+
+**CRITICAL**: When adding a skill to this marketplace, you MUST update all of these files in the correct order. Missing any file will result in incomplete integration.
+
+### Step-by-Step Process
+
+#### 1. Refine the Skill (if needed)
+```bash
+# Ensure skill follows best practices
+# - SKILL.md uses imperative/infinitive form
+# - Third-person description in YAML frontmatter
+# - Progressive disclosure (details in references/)
+# - Security scan passed
+
+cd skill-creator
+python3 scripts/security_scan.py ../skill-name --verbose
+```
+
+#### 2. Package the Skill
+```bash
+cd skill-creator
+python3 scripts/package_skill.py ../skill-name
+
+# This will:
+# - Validate skill structure
+# - Check security scan status
+# - Create skill-name.zip in skill-creator/
+# - Move zip to skill-name/ directory
+```
+
+#### 3. Update CHANGELOG.md ⚠️ REQUIRED
+
+Add new version entry at the top (after [Unreleased]):
+
+```markdown
+## [X.Y.0] - YYYY-MM-DD
+
+### Added
+- **New Skill**: skill-name - Brief description
+  - Feature 1
+  - Feature 2
+  - Feature 3
+  - Bundled scripts/references/assets
+  - Key capabilities
+
+### Changed
+- Updated marketplace skills count from N to N+1
+- Updated marketplace version from X.(Y-1).0 to X.Y.0
+- Updated README.md badges (skills count, version)
+- Updated README.md to include skill-name in skills listing
+- Updated CLAUDE.md skills count from N to N+1
+- Added skill-name use case section to README.md
+- Added dependencies to requirements section (if any)
+```
+
+**Version numbering**: Increment MINOR version (e.g., 1.8.0 → 1.9.0) when adding a skill.
+
+#### 4. Update README.md ⚠️ REQUIRED
+
+**a. Update badges (top of file):**
+```markdown
+[![Skills](https://img.shields.io/badge/skills-N-blue.svg)]
+[![Version](https://img.shields.io/badge/version-X.Y.0-green.svg)]
+```
+
+**b. Update description:**
+```markdown
+Professional Claude Code skills marketplace featuring N production-ready skills...
+```
+
+**c. Add installation command:**
+```markdown
+# Brief description
+claude plugin install skill-name@daymade/claude-code-skills
+```
+
+**d. Add skill section (### N. **skill-name**):**
+```markdown
+### N. **skill-name** - One-line Title
+
+Brief description paragraph.
+
+**When to use:**
+- Use case 1
+- Use case 2
+- Use case 3
+
+**Key features:**
+- Feature 1
+- Feature 2
+- Feature 3
+
+**Example usage:**
+\`\`\`bash
+# Example commands
+\`\`\`
+
+**🎬 Live Demo**
+
+*Coming soon* (or add demo GIF)
+
+📚 **Documentation**: See [skill-name/references/](./skill-name/references/)...
+
+**Requirements**: Dependencies (e.g., Python 3.8+, FFmpeg, etc.)
+```
+
+**e. Add use case section:**
+```markdown
+### For [Use Case Category]
+Use **skill-name** to [describe primary use case]. Combine with **other-skill** to [describe integration].
+```
+
+**f. Add documentation quick link:**
+```markdown
+- **skill-name**: See `skill-name/references/...` for ...
+```
+
+**g. Update requirements section (if needed):**
+```markdown
+- **Tool Name** (for skill-name): `install command`
+```
+
+#### 5. Update CLAUDE.md ⚠️ REQUIRED
+
+**a. Update repository overview:**
+```markdown
+This is a Claude Code skills marketplace containing N production-ready skills...
+```
+
+**b. Update marketplace configuration:**
+```markdown
+The marketplace is configured in `.claude-plugin/marketplace.json`:
+- Contains N plugins, each mapping to one skill
+```
+
+**c. Update marketplace version:**
+```markdown
+1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
+   - Tracks the marketplace catalog as a whole
+   - Current: vX.Y.0
+```
+
+**d. Add skill to Available Skills list:**
+```markdown
+N. **skill-name** - Brief description with key feature
+```
+
+#### 6. Update .claude-plugin/marketplace.json ⚠️ CRITICAL
+
+**MOST IMPORTANT FILE** - This file makes the skill installable!
+
+**a. Update metadata.description:**
+```json
+"description": "Professional Claude Code skills for ..., and [new skill capability]"
+```
+
+**b. Update metadata.version:**
+```json
+"version": "X.Y.0"
+```
+
+**c. Add new plugin entry to plugins array:**
+```json
+{
+  "name": "skill-name",
+  "description": "Clear description with trigger conditions. Use when [scenarios]",
+  "source": "./",
+  "strict": false,
+  "version": "1.0.0",
+  "category": "appropriate-category",
+  "keywords": ["keyword1", "keyword2", "keyword3", ...],
+  "skills": ["./skill-name"]
+}
+```
+
+**Categories:** `developer-tools`, `document-conversion`, `documentation`, `customization`, `communication`, `utilities`, `assets`, `design`, `productivity`, `security`, `media`
+
+**d. Validate JSON syntax:**
+```bash
+python3 -m json.tool .claude-plugin/marketplace.json > /dev/null
+```
+
+#### 7. Verification Checklist
+
+Before committing, verify:
+
+- [ ] CHANGELOG.md has new version entry
+- [ ] README.md badges updated (skills count + version)
+- [ ] README.md has skill section with number
+- [ ] README.md has use case section
+- [ ] README.md has documentation link
+- [ ] README.md requirements updated (if needed)
+- [ ] CLAUDE.md skill count updated in 3 places
+- [ ] CLAUDE.md has skill in Available Skills list
+- [ ] marketplace.json metadata.version updated
+- [ ] marketplace.json metadata.description updated
+- [ ] marketplace.json has new plugin entry
+- [ ] marketplace.json validates (python3 -m json.tool)
+- [ ] skill-name.zip package exists
+- [ ] Security scan passed
+
+### Common Mistakes to Avoid
+
+1. **Forgetting marketplace.json** ⚠️ - The most critical file! Without this, the skill cannot be installed via `claude plugin install`
+2. **Inconsistent version numbers** - CHANGELOG, README badges, CLAUDE.md, and marketplace.json must all match
+3. **Inconsistent skill counts** - README description, badges, CLAUDE.md must all have same count
+4. **Missing skill number in README** - Skills must be numbered sequentially (1, 2, 3, ...)
+5. **Invalid JSON syntax** - Always validate marketplace.json after editing
+6. **Forgetting dependencies** - Update README requirements section if skill needs external tools
+
+### File Update Summary Template
+
+When adding a skill, this is the complete file list:
+
+```
+Files to Update:
+✅ CHANGELOG.md                        (Add version entry)
+✅ README.md                          (5 locations: badges, description, install, skill section, use case, docs link, requirements)
+✅ CLAUDE.md                          (3 locations: overview, marketplace config, available skills)
+✅ .claude-plugin/marketplace.json    (CRITICAL: metadata + new plugin entry)
+✅ skill-name/                        (The actual skill directory)
+✅ skill-name/skill-name.zip          (Packaged skill)
+```
+
+### Version Numbering Convention
+
+- **MAJOR.MINOR.PATCH** (Semantic Versioning)
+- Increment **MINOR** when adding a new skill: 1.8.0 → 1.9.0
+- Increment **PATCH** for bug fixes or small updates: 1.9.0 → 1.9.1
+- Increment **MAJOR** for breaking changes or major restructuring: 1.9.0 → 2.0.0
+
+### Quick Reference Commands
+
+```bash
+# 1. Refine and validate skill
+cd skill-creator
+python3 scripts/security_scan.py ../skill-name --verbose
+
+# 2. Package skill
+python3 scripts/package_skill.py ../skill-name
+
+# 3. Validate marketplace.json
+cd ..
+python3 -m json.tool .claude-plugin/marketplace.json > /dev/null && echo "✅ Valid"
+
+# 4. Check what needs committing
+git status
+
+# 5. View specific file changes
+git diff CHANGELOG.md
+git diff README.md
+git diff CLAUDE.md
+git diff .claude-plugin/marketplace.json
+```
+
 ## Chinese User Support
 
 For Chinese users having API access issues, recommend [CC-Switch](https://github.com/farion1231/cc-switch):
