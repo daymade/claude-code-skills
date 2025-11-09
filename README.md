@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-16-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.9.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-17-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.10.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 16 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 17 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -142,6 +142,9 @@ claude plugin install youtube-downloader@daymade/claude-code-skills
 
 # Video comparison and quality analysis
 claude plugin install video-comparer@daymade/claude-code-skills
+
+# QA testing infrastructure with autonomous execution
+claude plugin install qa-expert@daymade/claude-code-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -575,6 +578,61 @@ done
 
 ---
 
+### 16. **qa-expert** - Comprehensive QA Testing Infrastructure
+
+Establish world-class QA testing processes with autonomous LLM execution, Google Testing Standards, and OWASP security best practices.
+
+**When to use:**
+- Setting up QA infrastructure for new or existing projects
+- Writing standardized test cases following Google Testing Standards (AAA pattern)
+- Implementing security testing (OWASP Top 10 coverage)
+- Executing comprehensive test plans with automatic progress tracking
+- Filing bugs with proper P0-P4 severity classification
+- Calculating quality metrics and enforcing quality gates
+- Enabling autonomous LLM-driven test execution (100x speedup)
+- Preparing QA documentation for third-party team handoffs
+
+**Key features:**
+- **One-command initialization**: Complete QA infrastructure with templates, CSVs, and documentation
+- **Autonomous execution**: Master prompt enables LLM to auto-execute all tests, auto-track results, auto-file bugs
+- **Google Testing Standards**: AAA pattern compliance, 90% coverage targets, fail-fast validation
+- **OWASP security testing**: 90% Top 10 coverage with specific attack vectors
+- **Quality gates enforcement**: 100% execution, ≥80% pass rate, 0 P0 bugs, ≥80% code coverage
+- **Ground Truth Principle**: Prevents doc/CSV sync issues (test docs = authoritative source)
+- **Bug tracking**: P0-P4 classification with detailed repro steps and environment info
+- **Day 1 onboarding**: 5-hour guide for new QA engineers
+- **30+ LLM prompts**: Ready-to-use prompts for specific QA tasks
+- **Metrics dashboard**: Test execution progress, pass rate, bug analysis, quality gates status
+
+**Example usage:**
+```bash
+# Initialize QA project (creates full infrastructure)
+python3 scripts/init_qa_project.py my-app ./
+
+# Calculate quality metrics and gates status
+python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
+
+# For autonomous execution, copy master prompt from:
+# references/master_qa_prompt.md → paste to LLM → auto-executes 342 tests over 5 weeks
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [qa-expert/references/](./qa-expert/references/) for:
+- `master_qa_prompt.md` - Single command for autonomous execution (100x speedup)
+- `google_testing_standards.md` - AAA pattern, coverage thresholds, OWASP testing
+- `day1_onboarding.md` - 5-hour onboarding timeline for new QA engineers
+- `ground_truth_principle.md` - Preventing doc/CSV sync issues
+- `llm_prompts_library.md` - 30+ ready-to-use QA prompts
+
+**Requirements**: Python 3.8+
+
+**💡 Innovation**: The autonomous execution capability (via master prompt) enables LLM to execute entire test suites 100x faster than manual execution, with zero human error in tracking. Perfect for third-party QA handoffs - just provide the master prompt and they can start testing immediately.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -608,6 +666,9 @@ Use **youtube-downloader** to download YouTube videos and extract audio from vid
 ### For Transcription & ASR Correction
 Use **transcript-fixer** to correct speech-to-text errors in meeting notes, lectures, and interviews through dictionary-based rules and AI-powered corrections with automatic learning.
 
+### For QA Testing & Quality Assurance
+Use **qa-expert** to establish comprehensive QA testing infrastructure with autonomous LLM execution, Google Testing Standards, and OWASP security testing. Perfect for project launches, third-party QA handoffs, and enforcing quality gates (100% execution, ≥80% pass rate, 0 P0 bugs). The master prompt enables 100x faster test execution with zero tracking errors.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -632,6 +693,7 @@ Each skill includes:
 - **repomix-safe-mixer**: See `repomix-safe-mixer/references/common_secrets.md` for detected credential patterns
 - **video-comparer**: See `video-comparer/references/video_metrics.md` for quality metrics interpretation and `video-comparer/references/configuration.md` for customization options
 - **transcript-fixer**: See `transcript-fixer/references/workflow_guide.md` for step-by-step workflows and `transcript-fixer/references/team_collaboration.md` for collaboration patterns
+- **qa-expert**: See `qa-expert/references/master_qa_prompt.md` for autonomous execution (100x speedup) and `qa-expert/references/google_testing_standards.md` for AAA pattern and OWASP testing
 
 ## 🛠️ Requirements
 

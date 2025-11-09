@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, and video comparison quality analysis",
-    "version": "1.9.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, and comprehensive QA testing infrastructure",
+    "version": "1.10.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -169,6 +169,16 @@
       "category": "media",
       "keywords": ["video", "comparison", "quality-analysis", "psnr", "ssim", "compression", "ffmpeg", "codec"],
       "skills": ["./video-comparer"]
+    },
+    {
+      "name": "qa-expert",
+      "description": "Comprehensive QA testing infrastructure with autonomous LLM execution, Google Testing Standards (AAA pattern), and OWASP security testing. Use when establishing QA processes, writing test cases, executing test plans, tracking bugs with P0-P4 classification, calculating quality metrics, enforcing quality gates, or preparing third-party QA handoffs. Enables 100x faster test execution via master prompts",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": ["qa", "testing", "test-cases", "bug-tracking", "google-standards", "owasp", "security", "automation", "quality-gates", "metrics"],
+      "skills": ["./qa-expert"]
     }
   ]
 }

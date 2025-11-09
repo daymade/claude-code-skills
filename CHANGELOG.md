@@ -25,6 +25,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.10.0] - 2025-11-10
+
+### Added
+- **New Skill**: qa-expert - Comprehensive QA testing infrastructure with autonomous LLM execution
+  - One-command QA project initialization with complete templates and tracking CSVs
+  - Google Testing Standards implementation (AAA pattern, 90% coverage targets)
+  - Autonomous LLM-driven test execution via master prompts (100x speed improvement)
+  - OWASP Top 10 security testing framework (90% coverage target)
+  - Bug tracking with P0-P4 severity classification
+  - Quality gates enforcement (100% execution, ≥80% pass rate, 0 P0 bugs, ≥80% code coverage)
+  - Ground Truth Principle for preventing doc/CSV sync issues
+  - Day 1 onboarding guide for new QA engineers (5-hour timeline)
+  - Bundled scripts: `init_qa_project.py`, `calculate_metrics.py`
+  - Bundled references: master_qa_prompt.md, google_testing_standards.md, day1_onboarding.md, ground_truth_principle.md, llm_prompts_library.md
+  - Complete test case and bug tracking templates
+  - 30+ ready-to-use LLM prompts for QA tasks
+  - Progressive disclosure pattern (metadata → SKILL.md → bundled resources)
+
+### Changed
+- Updated marketplace skills count from 16 to 17
+- Updated marketplace version from 1.9.0 to 1.10.0
+- Updated README.md badges (skills count, version)
+- Updated README.md to include qa-expert in skills listing
+- Updated CLAUDE.md skills count from 16 to 17
+- Added qa-expert use case section to README.md
+- Enhanced marketplace metadata description to include QA testing capability
+
 ## [1.9.0] - 2025-10-29
 
 ### Added
@@ -200,7 +227,11 @@ We use [Semantic Versioning](https://semver.org/):
 4. Create git tag: `git tag -a v1.x.x -m "Release v1.x.x"`
 5. Push tag: `git push origin v1.x.x`
 
-[Unreleased]: https://github.com/daymade/claude-code-skills/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/daymade/claude-code-skills/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/daymade/claude-code-skills/compare/v1.9.0...v1.10.0
+[1.9.0]: https://github.com/daymade/claude-code-skills/compare/v1.8.0...v1.9.0
+[1.8.0]: https://github.com/daymade/claude-code-skills/compare/v1.7.0...v1.8.0
+[1.7.0]: https://github.com/daymade/claude-code-skills/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/daymade/claude-code-skills/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/daymade/claude-code-skills/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/daymade/claude-code-skills/compare/v1.3.0...v1.4.0

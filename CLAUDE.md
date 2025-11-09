@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 16 production-ready skills organized in a plugin marketplace structure. Each skill is a self-contained package that extends Claude's capabilities with specialized knowledge, workflows, and bundled resources.
+This is a Claude Code skills marketplace containing 17 production-ready skills organized in a plugin marketplace structure. Each skill is a self-contained package that extends Claude's capabilities with specialized knowledge, workflows, and bundled resources.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -118,7 +118,7 @@ Skills for public distribution must NOT contain:
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 16 plugins, each mapping to one skill
+- Contains 17 plugins, each mapping to one skill
 - Each plugin has: name, description, version, category, keywords, skills array
 - Marketplace metadata: name, owner, version, homepage
 
@@ -128,7 +128,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
    - Tracks the marketplace catalog as a whole
-   - Current: v1.9.0
+   - Current: v1.10.0
    - Bump when: Adding/removing skills, major marketplace restructuring
    - Semantic versioning: MAJOR.MINOR.PATCH
 
@@ -160,6 +160,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 14. **repomix-safe-mixer** - Secure repomix packaging with automatic credential detection
 15. **transcript-fixer** - ASR/STT transcription error correction with dictionary and AI learning
 16. **video-comparer** - Video comparison and quality analysis with interactive HTML reports
+17. **qa-expert** - Comprehensive QA testing infrastructure with autonomous LLM execution and Google Testing Standards
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
@@ -243,9 +244,12 @@ Add new version entry at the top (after [Unreleased]):
 - Updated marketplace version from X.(Y-1).0 to X.Y.0
 - Updated README.md badges (skills count, version)
 - Updated README.md to include skill-name in skills listing
+- Updated README.zh-CN.md badges (skills count, version)
+- Updated README.zh-CN.md to include skill-name in skills listing
 - Updated CLAUDE.md skills count from N to N+1
 - Added skill-name use case section to README.md
-- Added dependencies to requirements section (if any)
+- Added skill-name use case section to README.zh-CN.md
+- Added dependencies to requirements section (if any, both EN and ZH)
 ```
 
 **Version numbering**: Increment MINOR version (e.g., 1.8.0 → 1.9.0) when adding a skill.
@@ -375,7 +379,56 @@ N. **skill-name** - Brief description with key feature
 python3 -m json.tool .claude-plugin/marketplace.json > /dev/null
 ```
 
-#### 7. Verification Checklist
+#### 7. Update README.zh-CN.md ⚠️ REQUIRED
+
+**CRITICAL**: Chinese documentation must be kept in sync with English version.
+
+**a. Update badges (top of file):**
+```markdown
+[![Skills](https://img.shields.io/badge/skills-N-blue.svg)]
+[![Version](https://img.shields.io/badge/version-X.Y.0-green.svg)]
+```
+
+**b. Update description:**
+```markdown
+专业的 Claude Code 技能市场，提供 N 个生产就绪的技能，用于增强开发工作流。
+```
+
+**c. Add installation command:**
+```markdown
+# 简短描述
+claude plugin install skill-name@daymade/claude-code-skills
+```
+
+**d. Add skill section (### N. **skill-name** - Chinese Title):**
+- Translate all content from English README
+- Include: 使用场景 (When to use), 主要功能 (Key features), 示例用法 (Example usage)
+- Maintain same structure as English version
+- Include documentation links and requirements
+
+**e. Add use case section:**
+```markdown
+### [Use Case Category in Chinese]
+使用 **skill-name** [describe use case in Chinese]. 与 **other-skill** 结合使用以 [describe integration].
+```
+
+**f. Add documentation quick link:**
+```markdown
+- **skill-name**：参见 `skill-name/references/...` 了解 ...
+```
+
+**g. Update requirements section (if needed):**
+```markdown
+- **Tool Name**（用于 skill-name）：`install command`
+```
+
+**Translation tips:**
+- Use professional technical Chinese
+- Maintain consistency with existing translations
+- Keep code examples in English (don't translate variable names, function names)
+- Translate user-facing descriptions, features, and use cases
+
+#### 8. Verification Checklist
 
 Before committing, verify:
 
@@ -385,6 +438,12 @@ Before committing, verify:
 - [ ] README.md has use case section
 - [ ] README.md has documentation link
 - [ ] README.md requirements updated (if needed)
+- [ ] README.zh-CN.md badges updated (skills count + version) ⚠️ NEW
+- [ ] README.zh-CN.md has skill section with number ⚠️ NEW
+- [ ] README.zh-CN.md has use case section ⚠️ NEW
+- [ ] README.zh-CN.md has documentation link ⚠️ NEW
+- [ ] README.zh-CN.md requirements updated (if needed) ⚠️ NEW
+- [ ] README.zh-CN.md installation command added ⚠️ NEW
 - [ ] CLAUDE.md skill count updated in 3 places
 - [ ] CLAUDE.md has skill in Available Skills list
 - [ ] marketplace.json metadata.version updated
@@ -397,11 +456,13 @@ Before committing, verify:
 ### Common Mistakes to Avoid
 
 1. **Forgetting marketplace.json** ⚠️ - The most critical file! Without this, the skill cannot be installed via `claude plugin install`
-2. **Inconsistent version numbers** - CHANGELOG, README badges, CLAUDE.md, and marketplace.json must all match
-3. **Inconsistent skill counts** - README description, badges, CLAUDE.md must all have same count
-4. **Missing skill number in README** - Skills must be numbered sequentially (1, 2, 3, ...)
-5. **Invalid JSON syntax** - Always validate marketplace.json after editing
-6. **Forgetting dependencies** - Update README requirements section if skill needs external tools
+2. **Forgetting Chinese documentation** ⚠️ - README.zh-CN.md must be updated in sync with README.md (6 locations)
+3. **Inconsistent version numbers** - CHANGELOG, README badges (both EN and ZH), CLAUDE.md, and marketplace.json must all match
+4. **Inconsistent skill counts** - README description (both EN and ZH), badges, CLAUDE.md must all have same count
+5. **Missing skill number in README** - Skills must be numbered sequentially (1, 2, 3, ...) in both EN and ZH versions
+6. **Invalid JSON syntax** - Always validate marketplace.json after editing
+7. **Forgetting dependencies** - Update README requirements section (both EN and ZH) if skill needs external tools
+8. **Incomplete Chinese translation** - Must translate all sections: description, use cases, features, use case section, docs link
 
 ### File Update Summary Template
 
@@ -410,12 +471,15 @@ When adding a skill, this is the complete file list:
 ```
 Files to Update:
 ✅ CHANGELOG.md                        (Add version entry)
-✅ README.md                          (5 locations: badges, description, install, skill section, use case, docs link, requirements)
+✅ README.md                          (7 locations: badges, description, install, skill section, use case, docs link, requirements)
+✅ README.zh-CN.md                    (7 locations: badges, description, install, skill section, use case, docs link, requirements) ⚠️ CRITICAL
 ✅ CLAUDE.md                          (3 locations: overview, marketplace config, available skills)
 ✅ .claude-plugin/marketplace.json    (CRITICAL: metadata + new plugin entry)
 ✅ skill-name/                        (The actual skill directory)
 ✅ skill-name/skill-name.zip          (Packaged skill)
 ```
+
+**IMPORTANT**: README.zh-CN.md is MANDATORY. Do not skip Chinese documentation updates!
 
 ### Version Numbering Convention
 
@@ -444,8 +508,13 @@ git status
 # 5. View specific file changes
 git diff CHANGELOG.md
 git diff README.md
+git diff README.zh-CN.md
 git diff CLAUDE.md
 git diff .claude-plugin/marketplace.json
+
+# 6. Verify Chinese documentation is in sync
+grep "skills-[0-9]*" README.md README.zh-CN.md
+grep "version-[0-9.]*" README.md README.zh-CN.md
 ```
 
 ## Chinese User Support
