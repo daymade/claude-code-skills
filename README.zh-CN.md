@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-17-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.10.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-18-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.11.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 17 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 18 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -145,6 +145,9 @@ claude plugin install video-comparer@daymade/claude-code-skills
 
 # QA 测试基础设施和自主执行
 claude plugin install qa-expert@daymade/claude-code-skills
+
+# 使用 EARS 方法论优化提示词
+claude plugin install prompt-optimizer@daymade/claude-code-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -673,6 +676,65 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 
 ---
 
+### 17. **prompt-optimizer** - 使用 EARS 方法论进行提示词工程
+
+使用 EARS（简易需求语法）将模糊的提示词转换为精确、结构化的规范 - 这是罗尔斯·罗伊斯公司创建的一种将自然语言转换为可测试需求的方法论。
+
+**方法论灵感来源：** [阿星AI工作室](https://mp.weixin.qq.com/s/yUVX-9FovSq7ZGChkHpuXQ)，他们开创性地将 EARS 与领域理论基础相结合，实现了实用的提示词增强。
+
+**使用场景：**
+- 将松散的需求转换为结构化规范
+- 优化 AI 代码生成或内容创作的提示词
+- 将模糊的功能请求分解为原子化、可测试的陈述
+- 为技术需求添加领域理论基础
+- 将"构建 X"请求转换为详细的实施规范
+- 通过经过验证的框架学习提示词工程最佳实践
+
+**主要功能：**
+- **EARS 转换**：5 种句式模式（普适、事件驱动、状态驱动、条件、不期望行为）
+- **6 步优化工作流**：分析 → 转换 → 识别理论 → 提取示例 → 增强 → 呈现
+- **领域理论目录**：40+ 框架映射到 10 个领域（生产力、UX、游戏化、学习、电商、安全）
+- **结构化提示框架**：角色/技能/工作流/示例/格式模板
+- **高级技术**：多利益相关者需求、非功能性规范、复杂条件逻辑
+- **完整示例**：拖延症应用、电商产品页、学习平台、密码重置
+- **理论基础**：GTD、BJ Fogg 行为模型、格式塔原则、AIDA、零信任等
+- **渐进式披露**：捆绑参考文档（ears_syntax.md、domain_theories.md、examples.md）
+
+**示例用法：**
+```markdown
+# 之前（模糊）
+"帮我构建一个密码重置功能"
+
+# EARS 转换后（7 个原子需求）
+1. 当用户点击"忘记密码"时，系统应显示邮箱输入框
+2. 当用户提交有效邮箱时，系统应发送有效期为 1 小时的密码重置链接
+3. 当用户点击重置链接时，系统应验证令牌是否未过期
+4. 当令牌有效时，系统应显示密码创建表单，要求最少 12 个字符、1 个大写字母、1 个数字、1 个特殊字符
+5. 当用户提交符合要求的新密码时，系统应使用 bcrypt 哈希密码并使令牌失效
+6. 当用户在 1 小时内尝试密码重置超过 3 次时，系统应阻止进一步尝试 1 小时
+7. 如果重置令牌已过期，系统应显示错误消息和请求新链接的选项
+
+# 使用领域理论增强
+- 零信任架构（每步验证）
+- 纵深防御（速率限制 + 令牌过期 + 密码复杂性）
+- 渐进式披露（多步骤 UX 流程）
+
+# 完整提示包括角色、技能、工作流、示例、格式
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [prompt-optimizer/references/](./prompt-optimizer/references/)：
+- `ears_syntax.md` - 完整的 EARS 模式和转换规则
+- `domain_theories.md` - 40+ 理论映射到领域并提供选择指导
+- `examples.md` - 包含前后对比的完整转换示例
+
+**💡 创新**：EARS 方法论通过强制明确条件、触发器和可测量标准来消除歧义。结合领域理论基础（GTD、BJ Fogg、格式塔等），它将"构建一个待办事项应用"转换为包含行为心理学原则、UX 最佳实践和具体测试用例的完整规范 - 从第一天起就支持测试驱动开发。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -709,6 +771,9 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 ### QA 测试与质量保证
 使用 **qa-expert** 建立具有自主 LLM 执行、Google 测试标准和 OWASP 安全测试的综合 QA 测试基础设施。非常适合项目启动、第三方 QA 交接和执行质量门禁（100% 执行、≥80% 通过率、0 个 P0 错误）。主提示可实现 100 倍更快的测试执行，零跟踪错误。
 
+### 提示词工程与需求工程
+使用 **prompt-optimizer** 将模糊的功能请求转换为具有领域理论基础的精确 EARS 规范。非常适合产品需求文档、AI 辅助编码和学习提示词工程最佳实践。与 **skill-creator** 结合使用以创建结构良好的技能提示，或与 **ppt-creator** 结合使用以确保演示内容需求清晰明确。
+
 ## 📚 文档
 
 每个技能包括：
@@ -736,6 +801,7 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 - **video-comparer**：参见 `video-comparer/references/video_metrics.md` 了解质量指标解释和 `video-comparer/references/configuration.md` 了解自定义选项
 - **transcript-fixer**：参见 `transcript-fixer/references/workflow_guide.md` 了解分步工作流和 `transcript-fixer/references/team_collaboration.md` 了解协作模式
 - **qa-expert**：参见 `qa-expert/references/master_qa_prompt.md` 了解自主执行（100 倍加速）和 `qa-expert/references/google_testing_standards.md` 了解 AAA 模式和 OWASP 测试
+- **prompt-optimizer**：参见 `prompt-optimizer/references/ears_syntax.md` 了解 EARS 转换模式、`prompt-optimizer/references/domain_theories.md` 了解理论目录和 `prompt-optimizer/references/examples.md` 了解完整转换示例
 
 ## 🛠️ 系统要求
 

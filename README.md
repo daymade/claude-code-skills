@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-17-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.10.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-18-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.11.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 17 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 18 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -145,6 +145,9 @@ claude plugin install video-comparer@daymade/claude-code-skills
 
 # QA testing infrastructure with autonomous execution
 claude plugin install qa-expert@daymade/claude-code-skills
+
+# Prompt optimization using EARS methodology
+claude plugin install prompt-optimizer@daymade/claude-code-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -633,6 +636,65 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 
 ---
 
+### 17. **prompt-optimizer** - Prompt Engineering with EARS Methodology
+
+Transform vague prompts into precise, well-structured specifications using EARS (Easy Approach to Requirements Syntax) - a methodology created by Rolls-Royce for converting natural language into testable requirements.
+
+**Methodology inspired by:** [阿星AI工作室 (A-Xing AI Studio)](https://mp.weixin.qq.com/s/yUVX-9FovSq7ZGChkHpuXQ), which pioneered combining EARS with domain theory grounding for practical prompt enhancement.
+
+**When to use:**
+- Converting loose requirements into structured specifications
+- Optimizing prompts for AI code generation or content creation
+- Breaking down vague feature requests into atomic, testable statements
+- Adding domain theory grounding to technical requirements
+- Transforming "build X" requests into detailed implementation specs
+- Learning prompt engineering best practices with proven frameworks
+
+**Key features:**
+- **EARS transformation**: 5 sentence patterns (ubiquitous, event-driven, state-driven, conditional, unwanted behavior)
+- **6-step optimization workflow**: Analyze → Transform → Identify theories → Extract examples → Enhance → Present
+- **Domain theory catalog**: 40+ frameworks mapped to 10 domains (productivity, UX, gamification, learning, e-commerce, security)
+- **Structured prompt framework**: Role/Skills/Workflows/Examples/Formats template
+- **Advanced techniques**: Multi-stakeholder requirements, non-functional specs, complex conditional logic
+- **Complete examples**: Procrastination app, e-commerce product page, learning dashboard, password reset
+- **Theory grounding**: GTD, BJ Fogg Behavior Model, Gestalt Principles, AIDA, Zero Trust, and more
+- **Progressive disclosure**: Bundled references (ears_syntax.md, domain_theories.md, examples.md)
+
+**Example usage:**
+```markdown
+# Before (vague)
+"Build me a password reset feature"
+
+# After EARS transformation (7 atomic requirements)
+1. When user clicks "Forgot Password", the system shall display email input field
+2. When user submits valid email, the system shall send password reset link valid for 1 hour
+3. When user clicks reset link, the system shall verify token has not expired
+4. When token is valid, the system shall display password creation form requiring minimum 12 characters, 1 uppercase, 1 number, 1 special character
+5. When user submits new password meeting requirements, the system shall hash password with bcrypt and invalidate reset token
+6. When user attempts password reset more than 3 times in 1 hour, the system shall block further attempts for 1 hour
+7. If reset token has expired, the system shall display error message and option to request new link
+
+# Enhanced with domain theories
+- Zero Trust Architecture (verify at each step)
+- Defense in Depth (rate limiting + token expiration + password complexity)
+- Progressive Disclosure (multi-step UX flow)
+
+# Full prompt includes Role, Skills, Workflows, Examples, Formats
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [prompt-optimizer/references/](./prompt-optimizer/references/) for:
+- `ears_syntax.md` - Complete EARS patterns and transformation rules
+- `domain_theories.md` - 40+ theories mapped to domains with selection guidance
+- `examples.md` - Full transformation examples with before/after comparisons
+
+**💡 Innovation**: EARS methodology eliminates ambiguity by forcing explicit conditions, triggers, and measurable criteria. Combined with domain theory grounding (GTD, BJ Fogg, Gestalt, etc.), it transforms "build a todo app" into a complete specification with behavioral psychology principles, UX best practices, and concrete test cases - enabling test-driven development from day one.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -669,6 +731,9 @@ Use **transcript-fixer** to correct speech-to-text errors in meeting notes, lect
 ### For QA Testing & Quality Assurance
 Use **qa-expert** to establish comprehensive QA testing infrastructure with autonomous LLM execution, Google Testing Standards, and OWASP security testing. Perfect for project launches, third-party QA handoffs, and enforcing quality gates (100% execution, ≥80% pass rate, 0 P0 bugs). The master prompt enables 100x faster test execution with zero tracking errors.
 
+### For Prompt Engineering & Requirements Engineering
+Use **prompt-optimizer** to transform vague feature requests into precise EARS specifications with domain theory grounding. Perfect for product requirements documents, AI-assisted coding, and learning prompt engineering best practices. Combine with **skill-creator** to create well-structured skill prompts, or with **ppt-creator** to ensure presentation content requirements are clearly specified.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -694,6 +759,7 @@ Each skill includes:
 - **video-comparer**: See `video-comparer/references/video_metrics.md` for quality metrics interpretation and `video-comparer/references/configuration.md` for customization options
 - **transcript-fixer**: See `transcript-fixer/references/workflow_guide.md` for step-by-step workflows and `transcript-fixer/references/team_collaboration.md` for collaboration patterns
 - **qa-expert**: See `qa-expert/references/master_qa_prompt.md` for autonomous execution (100x speedup) and `qa-expert/references/google_testing_standards.md` for AAA pattern and OWASP testing
+- **prompt-optimizer**: See `prompt-optimizer/references/ears_syntax.md` for EARS transformation patterns, `prompt-optimizer/references/domain_theories.md` for theory catalog, and `prompt-optimizer/references/examples.md` for complete transformations
 
 ## 🛠️ Requirements
 

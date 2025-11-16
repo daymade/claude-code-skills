@@ -25,6 +25,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.11.0] - 2025-11-16
+
+### Added
+- **New Skill**: prompt-optimizer - Transform vague prompts into precise EARS specifications
+  - EARS (Easy Approach to Requirements Syntax) transformation methodology
+  - 6-step optimization workflow: analyze, transform, identify theories, extract examples, enhance, present
+  - 5 EARS sentence patterns (ubiquitous, event-driven, state-driven, conditional, unwanted behavior)
+  - Domain theory grounding with 10+ categories (productivity, UX, gamification, learning, e-commerce, security)
+  - 40+ industry frameworks mapped to use cases (GTD, BJ Fogg, Gestalt, AIDA, Zero Trust, etc.)
+  - Role/Skills/Workflows/Examples/Formats prompt enhancement framework
+  - Advanced optimization techniques (multi-stakeholder, non-functional requirements, complex logic)
+  - Bundled references: ears_syntax.md, domain_theories.md, examples.md
+  - Complete transformation examples (procrastination app, e-commerce, learning platform, password reset)
+  - Progressive disclosure pattern (metadata → SKILL.md → bundled resources)
+
+### Changed
+- Updated marketplace skills count from 17 to 18
+- Updated marketplace version from 1.10.0 to 1.11.0
+- Updated README.md badges (skills count, version)
+- Updated README.md to include prompt-optimizer in skills listing
+- Updated README.zh-CN.md badges (skills count, version)
+- Updated README.zh-CN.md to include prompt-optimizer in skills listing
+- Updated CLAUDE.md skills count from 17 to 18
+- Added prompt-optimizer use case section to README.md
+- Added prompt-optimizer use case section to README.zh-CN.md
+- Enhanced marketplace metadata description to include prompt optimization capability
+- **prompt-optimizer v1.1.0**: Improved skill following Anthropic best practices
+  - Reduced SKILL.md from 369 to 195 lines (47% reduction) using progressive disclosure
+  - Added new reference: advanced_techniques.md (325 lines) for multi-stakeholder, non-functional, and complex logic patterns
+  - Added 4th complete example (password reset security) to examples.md
+  - Added attribution to 阿星AI工作室 (A-Xing AI Studio) for EARS methodology inspiration
+  - Enhanced reference loading guidance with specific triggers for each file
+  - Improved conciseness and clarity following skill authoring best practices
+
 ## [1.10.0] - 2025-11-10
 
 ### Added

@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, and comprehensive QA testing infrastructure",
-    "version": "1.10.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, and prompt optimization with EARS methodology",
+    "version": "1.11.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -179,6 +179,16 @@
       "category": "developer-tools",
       "keywords": ["qa", "testing", "test-cases", "bug-tracking", "google-standards", "owasp", "security", "automation", "quality-gates", "metrics"],
       "skills": ["./qa-expert"]
+    },
+    {
+      "name": "prompt-optimizer",
+      "description": "Transform vague prompts into precise, well-structured specifications using EARS (Easy Approach to Requirements Syntax) methodology. Use when users provide loose requirements, ambiguous feature descriptions, need to enhance prompts for AI-generated code/products/documents, request prompt optimization, or want to improve requirements engineering. Applies domain theories (GTD, BJ Fogg, Gestalt, AIDA, Zero Trust) and structured Role/Skills/Workflows/Examples/Formats framework",
+      "source": "./",
+      "strict": false,
+      "version": "1.1.0",
+      "category": "productivity",
+      "keywords": ["prompt-engineering", "ears", "requirements", "specifications", "optimization", "domain-theory", "prompt-enhancement", "ai-prompting"],
+      "skills": ["./prompt-optimizer"]
     }
   ]
 }
