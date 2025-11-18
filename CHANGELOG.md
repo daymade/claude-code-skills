@@ -25,6 +25,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [youtube-downloader-1.1.0] - 2025-11-19
+
+### Changed
+- **youtube-downloader** v1.0.0 → v1.1.0: Enhanced with HLS streaming support
+  - Added comprehensive HLS stream download support (m3u8 format)
+  - Added support for platforms like Mux, Vimeo, and other HLS-based services
+  - Added ffmpeg-based download workflow with authentication headers
+  - Added Referer header configuration for protected streams
+  - Added protocol whitelisting guidance
+  - Added separate audio/video stream handling and merging workflow
+  - Added troubleshooting for 403 Forbidden errors
+  - Added troubleshooting for yt-dlp stuck on cookie extraction
+  - Added troubleshooting for expired signatures
+  - Added performance tips (10-15x realtime speed)
+  - Updated skill description to include HLS streams and authentication
+  - Updated "When to Use" triggers to include m3u8/HLS downloads
+  - Updated Overview to mention multiple streaming platforms
+
 ## [1.11.0] - 2025-11-16
 
 ### Added

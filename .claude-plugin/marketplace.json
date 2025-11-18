@@ -132,12 +132,12 @@
     },
     {
       "name": "youtube-downloader",
-      "description": "Download YouTube videos and audio using yt-dlp with robust error handling. Use when users request downloading YouTube videos, extracting audio from YouTube, or need help with yt-dlp download issues like nsig extraction failures or network problems",
+      "description": "Download YouTube videos and HLS streams (m3u8) from platforms like Mux, Vimeo, etc. using yt-dlp and ffmpeg. Use when users request downloading videos, extracting audio, handling protected streams with authentication headers, or troubleshooting download issues like nsig extraction failures, 403 errors, or cookie extraction problems",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "utilities",
-      "keywords": ["youtube", "yt-dlp", "video-download", "audio-extraction", "mp3", "download", "youtube-dl"],
+      "keywords": ["youtube", "yt-dlp", "video-download", "audio-extraction", "mp3", "download", "hls", "m3u8", "ffmpeg", "streaming", "mux", "vimeo"],
       "skills": ["./youtube-downloader"]
     },
     {

@@ -1,13 +1,16 @@
 ---
 name: youtube-downloader
-description: Download YouTube videos and audio using yt-dlp with robust error handling. Use this skill when users request downloading YouTube videos, extracting audio from YouTube, or need help with yt-dlp download issues like nsig extraction failures or network problems.
+description: Download YouTube videos and HLS streams (m3u8) from platforms like Mux, Vimeo, etc. using yt-dlp and ffmpeg. Use this skill when users request downloading videos, extracting audio, handling protected streams with authentication headers, or troubleshooting download issues like nsig extraction failures, 403 errors, or cookie extraction problems.
 ---
 
 # YouTube Downloader
 
 ## Overview
 
-Enable reliable YouTube video and audio downloads using yt-dlp with built-in workarounds for common issues like nsig extraction failures and network problems. This skill provides workflows for obtaining high-quality downloads (up to 4K) using PO token providers or browser cookies.
+Enable reliable video and audio downloads from YouTube and HLS streaming platforms (Mux, Vimeo, etc.) using yt-dlp and ffmpeg. This skill provides workflows for:
+- YouTube downloads (up to 4K) using PO token providers or browser cookies
+- HLS stream downloads with authentication headers
+- Handling protected content and troubleshooting common download failures
 
 ## When to Use This Skill
 
@@ -19,6 +22,8 @@ This skill should be invoked when users:
 - Report only low-quality (360p) formats available
 - Ask about downloading YouTube content in specific quality (1080p, 4K, etc.)
 - Need to convert downloaded WebM videos to MP4 format for wider compatibility
+- Request downloading HLS streams (m3u8) from platforms like Mux, Vimeo, or other streaming services
+- Need to download protected streams that require authentication headers
 
 ## Prerequisites
 
@@ -224,6 +229,130 @@ scripts/download_video.py "VIDEO_URL"
 | Android client only | ✓ | ✗ | ✗ | ✗ | ✗ |
 | **PO token provider** | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Browser cookies | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+## HLS Stream Downloads (m3u8)
+
+For streaming platforms like Mux, Vimeo, and other HLS-based services, use ffmpeg as the primary tool. These streams often require authentication headers that yt-dlp may not handle correctly.
+
+### Identifying HLS Streams
+
+HLS streams use `.m3u8` playlist files:
+- Master playlist: Lists multiple quality options
+- Rendition playlist: Contains actual video/audio segment URLs
+
+### Download Workflow
+
+#### Step 1: Obtain the Stream URL
+
+Get the m3u8 URL from the video source. For protected streams:
+1. Open browser DevTools → Network tab
+2. Play the video
+3. Filter for "m3u8" to find the playlist URLs
+4. Copy the rendition URL (usually contains quality info like "rendition.m3u8")
+
+#### Step 2: Identify Required Headers
+
+Many CDNs require authentication headers:
+- **Referer**: Origin website (e.g., `https://maven.com/`)
+- **Origin**: Same as Referer for CORS
+- **User-Agent**: Browser identification
+
+Check the Network tab to see which headers the browser sends.
+
+#### Step 3: Download with ffmpeg
+
+Use ffmpeg with the `-headers` flag for protected streams:
+
+```bash
+ffmpeg -headers "Referer: https://example.com/" \
+  -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+  -i "https://cdn.example.com/path/rendition.m3u8?params" \
+  -c copy -bsf:a aac_adtstoasc \
+  output.mp4
+```
+
+**Key parameters:**
+- `-headers`: Set HTTP headers (critical for authentication)
+- `-protocol_whitelist`: Enable required protocols for HLS
+- `-c copy`: Stream copy (no re-encoding, faster)
+- `-bsf:a aac_adtstoasc`: Fix AAC audio compatibility
+
+**Common header patterns:**
+```bash
+# Single header
+-headers "Referer: https://example.com/"
+
+# Multiple headers
+-headers "Referer: https://example.com/" \
+-headers "User-Agent: Mozilla/5.0..."
+
+# Alternative syntax
+-headers $'Referer: https://example.com/\r\nUser-Agent: Mozilla/5.0...'
+```
+
+### Handling Separate Audio/Video Streams
+
+Some platforms (like Mux) deliver audio and video separately:
+
+1. **Download audio stream:**
+```bash
+ffmpeg -headers "Referer: https://example.com/" \
+  -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+  -i "https://cdn.example.com/audio/rendition.m3u8" \
+  -c copy audio.m4a
+```
+
+2. **Download video stream:**
+```bash
+ffmpeg -headers "Referer: https://example.com/" \
+  -protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy \
+  -i "https://cdn.example.com/video/rendition.m3u8" \
+  -c copy video.mp4
+```
+
+3. **Merge streams:**
+```bash
+ffmpeg -i video.mp4 -i audio.m4a -c copy merged.mp4
+```
+
+### Troubleshooting HLS Downloads
+
+#### 403 Forbidden Errors
+
+**Cause**: Missing or incorrect authentication headers.
+
+**Solution**:
+1. Verify Referer header matches the video source website
+2. Check if additional headers (Origin, User-Agent) are needed
+3. Ensure the m3u8 URL includes all query parameters from browser
+
+#### yt-dlp Stuck on Cookie Extraction
+
+**Symptom**: `Extracting cookies from chrome` hangs indefinitely.
+
+**Solution**: Use ffmpeg directly instead of yt-dlp for HLS streams.
+
+#### Protocol Not Whitelisted
+
+**Error**: `Protocol 'https' not on whitelist 'file,crypto,data'`
+
+**Solution**: Add `-protocol_whitelist file,http,https,tcp,tls,crypto,httpproxy`
+
+#### Empty Segments or No Streams
+
+**Cause**: Expired signatures in the m3u8 URLs.
+
+**Solution**:
+1. Get fresh URLs from browser DevTools
+2. Download immediately after obtaining URLs
+3. Look for rendition URLs with updated signature parameters
+
+### Performance Tips
+
+- HLS downloads typically run at 10-15x realtime speed
+- No re-encoding with `-c copy` (fastest)
+- Monitor download with real-time progress display
+- Use absolute output paths to avoid directory confusion
 
 ## Further Reading
 
