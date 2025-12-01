@@ -194,6 +194,8 @@ To begin implementation, start with the reusable resources identified above: `sc
 
 Also, delete any example files and directories not needed for the skill. The initialization script creates example files in `scripts/`, `references/`, and `assets/` to demonstrate structure, but most skills won't need all of them.
 
+**When updating an existing skill**: Scan all existing reference files to check if they need corresponding updates. New features often require updates to architecture, workflow, or other existing documentation to maintain consistency.
+
 #### Reference File Naming
 
 Filenames must be self-explanatory without reading contents.
@@ -276,13 +278,41 @@ The packaging script will:
    - YAML frontmatter format and required fields
    - Skill naming conventions and directory structure
    - Description completeness and quality
-   - File organization and resource references
+   - **Path reference integrity** - all `scripts/`, `references/`, and `assets/` paths mentioned in SKILL.md must exist
 
 2. **Package** the skill if validation passes, creating a zip file named after the skill (e.g., `my-skill.zip`) that includes all files and maintains the proper directory structure for distribution.
 
+**Common validation failure:** If SKILL.md references `scripts/my_script.py` but the file doesn't exist, validation will fail with "Missing referenced files: scripts/my_script.py". Ensure all bundled resources exist before packaging.
+
 If validation fails, the script will report the errors and exit without creating a package. Fix any validation errors and run the packaging command again.
 
-### Step 7: Iterate
+### Step 7: Update Marketplace
+
+After packaging, update the marketplace registry to include the new or updated skill.
+
+**For new skills**, add an entry to `.claude-plugin/marketplace.json`:
+
+```json
+{
+  "name": "skill-name",
+  "description": "Copy from SKILL.md frontmatter description",
+  "source": "./",
+  "strict": false,
+  "version": "1.0.0",
+  "category": "developer-tools",
+  "keywords": ["relevant", "keywords"],
+  "skills": ["./skill-name"]
+}
+```
+
+**For updated skills**, bump the version in `plugins[].version` following semver:
+- Patch (1.0.x): Bug fixes, typo corrections
+- Minor (1.x.0): New features, additional references
+- Major (x.0.0): Breaking changes, restructured workflows
+
+**Also update** `metadata.version` and `metadata.description` if the overall plugin collection changed significantly.
+
+### Step 8: Iterate
 
 After testing the skill, users may request improvements. Often this happens right after using the skill, with fresh context of how the skill performed.
 

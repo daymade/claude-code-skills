@@ -5,17 +5,17 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, and prompt optimization with EARS methodology",
-    "version": "1.11.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, and documentation cleanup",
+    "version": "1.13.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
     {
       "name": "skill-creator",
-      "description": "Essential meta-skill for creating effective Claude Code skills with initialization scripts, validation, packaging, and privacy best practices",
+      "description": "Essential meta-skill for creating effective Claude Code skills with initialization scripts, validation, packaging, marketplace registration, and privacy best practices",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": ["skill-creation", "claude-code", "development", "tooling", "workflow", "meta-skill", "essential"],
       "skills": ["./skill-creator"]
@@ -189,6 +189,26 @@
       "category": "productivity",
       "keywords": ["prompt-engineering", "ears", "requirements", "specifications", "optimization", "domain-theory", "prompt-enhancement", "ai-prompting"],
       "skills": ["./prompt-optimizer"]
+    },
+    {
+      "name": "claude-code-history-files-finder",
+      "description": "Find and recover content from Claude Code session history files. Use when searching for deleted files, tracking changes across sessions, analyzing conversation history, or recovering code/documents from previous Claude interactions. Triggers include mentions of session history, recover deleted, find in history, previous conversation, or .claude/projects",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": ["session-history", "recovery", "deleted-files", "conversation-history", "file-tracking", "claude-code", "history-analysis"],
+      "skills": ["./claude-code-history-files-finder"]
+    },
+    {
+      "name": "docs-cleaner",
+      "description": "Consolidates redundant documentation while preserving all valuable content. Use when cleaning up documentation bloat, merging redundant docs, reducing documentation sprawl, or consolidating multiple files covering the same topic",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": ["documentation", "cleanup", "consolidation", "redundancy", "merge", "docs"],
+      "skills": ["./docs-cleaner"]
     }
   ]
 }
