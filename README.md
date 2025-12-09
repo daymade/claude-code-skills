@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-18-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.11.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-20-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.13.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 18 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 20 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -148,6 +148,12 @@ claude plugin install qa-expert@daymade/claude-code-skills
 
 # Prompt optimization using EARS methodology
 claude plugin install prompt-optimizer@daymade/claude-code-skills
+
+# Session history recovery
+claude plugin install claude-code-history-files-finder@daymade/claude-code-skills
+
+# Documentation consolidation
+claude plugin install docs-cleaner@daymade/claude-code-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -695,6 +701,70 @@ Transform vague prompts into precise, well-structured specifications using EARS 
 
 ---
 
+### 18. **claude-code-history-files-finder** - Session History Recovery
+
+Find and recover content from Claude Code session history files stored in `~/.claude/projects/`.
+
+**When to use:**
+- Recovering deleted or lost files from previous Claude Code sessions
+- Searching for specific code across conversation history
+- Tracking file modifications across multiple sessions
+- Finding sessions containing specific keywords or implementations
+
+**Key features:**
+- **Session search**: Find sessions by keywords with frequency ranking
+- **Content recovery**: Extract files from Write tool calls with deduplication
+- **Statistics analysis**: Message counts, tool usage breakdown, file operations
+- **Batch operations**: Process multiple sessions with keyword filtering
+- **Streaming processing**: Handle large session files (>100MB) efficiently
+
+**Example usage:**
+```bash
+# List recent sessions for a project
+python3 scripts/analyze_sessions.py list /path/to/project
+
+# Search sessions for keywords
+python3 scripts/analyze_sessions.py search /path/to/project "ComponentName" "featureX"
+
+# Recover deleted files from a session
+python3 scripts/recover_content.py ~/.claude/projects/.../session.jsonl -k DeletedComponent -o ./recovered/
+
+# Get session statistics
+python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [claude-code-history-files-finder/references/](./claude-code-history-files-finder/references/) for:
+- `session_file_format.md` - JSONL structure and extraction patterns
+- `workflow_examples.md` - Detailed recovery and analysis workflows
+
+---
+
+### 19. **docs-cleaner** - Documentation Consolidation
+
+Consolidate redundant documentation while preserving all valuable content.
+
+**When to use:**
+- Cleaning up documentation bloat across projects
+- Merging redundant docs covering the same topics
+- Reducing documentation sprawl after rapid development
+- Consolidating multiple files into authoritative sources
+
+**Key features:**
+- **Content preservation**: Never lose valuable information during cleanup
+- **Redundancy detection**: Identify overlapping documentation
+- **Smart merging**: Combine related docs while maintaining structure
+- **Validation**: Ensure consolidated docs are complete and accurate
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -734,6 +804,12 @@ Use **qa-expert** to establish comprehensive QA testing infrastructure with auto
 ### For Prompt Engineering & Requirements Engineering
 Use **prompt-optimizer** to transform vague feature requests into precise EARS specifications with domain theory grounding. Perfect for product requirements documents, AI-assisted coding, and learning prompt engineering best practices. Combine with **skill-creator** to create well-structured skill prompts, or with **ppt-creator** to ensure presentation content requirements are clearly specified.
 
+### For Session History & File Recovery
+Use **claude-code-history-files-finder** to recover deleted files from previous Claude Code sessions, search for specific implementations across conversation history, or track file evolution over time. Essential for recovering accidentally deleted code or finding that feature implementation you remember but can't locate.
+
+### For Documentation Maintenance
+Use **docs-cleaner** to consolidate redundant documentation while preserving valuable content. Perfect for cleaning up documentation sprawl after rapid development phases or merging overlapping docs into authoritative sources.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -760,6 +836,8 @@ Each skill includes:
 - **transcript-fixer**: See `transcript-fixer/references/workflow_guide.md` for step-by-step workflows and `transcript-fixer/references/team_collaboration.md` for collaboration patterns
 - **qa-expert**: See `qa-expert/references/master_qa_prompt.md` for autonomous execution (100x speedup) and `qa-expert/references/google_testing_standards.md` for AAA pattern and OWASP testing
 - **prompt-optimizer**: See `prompt-optimizer/references/ears_syntax.md` for EARS transformation patterns, `prompt-optimizer/references/domain_theories.md` for theory catalog, and `prompt-optimizer/references/examples.md` for complete transformations
+- **claude-code-history-files-finder**: See `claude-code-history-files-finder/references/session_file_format.md` for JSONL structure and `claude-code-history-files-finder/references/workflow_examples.md` for recovery workflows
+- **docs-cleaner**: See `docs-cleaner/SKILL.md` for consolidation workflows
 
 ## 🛠️ Requirements
 

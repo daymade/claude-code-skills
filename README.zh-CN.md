@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-18-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.11.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-20-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.13.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 18 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 20 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -148,6 +148,12 @@ claude plugin install qa-expert@daymade/claude-code-skills
 
 # 使用 EARS 方法论优化提示词
 claude plugin install prompt-optimizer@daymade/claude-code-skills
+
+# 会话历史恢复
+claude plugin install claude-code-history-files-finder@daymade/claude-code-skills
+
+# 文档整合
+claude plugin install docs-cleaner@daymade/claude-code-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -735,6 +741,70 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 
 ---
 
+### 18. **claude-code-history-files-finder** - 会话历史恢复
+
+从存储在 `~/.claude/projects/` 的 Claude Code 会话历史文件中查找和恢复内容。
+
+**使用场景：**
+- 从之前的 Claude Code 会话中恢复已删除或丢失的文件
+- 在对话历史中搜索特定代码
+- 跨多个会话跟踪文件修改
+- 查找包含特定关键字或实现的会话
+
+**主要功能：**
+- **会话搜索**：按关键字查找会话并按频率排名
+- **内容恢复**：从 Write 工具调用中提取文件并去重
+- **统计分析**：消息计数、工具使用明细、文件操作
+- **批量操作**：使用关键字过滤处理多个会话
+- **流式处理**：高效处理大型会话文件（>100MB）
+
+**示例用法：**
+```bash
+# 列出项目的最近会话
+python3 scripts/analyze_sessions.py list /path/to/project
+
+# 搜索包含关键字的会话
+python3 scripts/analyze_sessions.py search /path/to/project "ComponentName" "featureX"
+
+# 从会话中恢复已删除的文件
+python3 scripts/recover_content.py ~/.claude/projects/.../session.jsonl -k DeletedComponent -o ./recovered/
+
+# 获取会话统计信息
+python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [claude-code-history-files-finder/references/](./claude-code-history-files-finder/references/)：
+- `session_file_format.md` - JSONL 结构和提取模式
+- `workflow_examples.md` - 详细的恢复和分析工作流
+
+---
+
+### 19. **docs-cleaner** - 文档整合
+
+整合冗余文档的同时保留所有有价值的内容。
+
+**使用场景：**
+- 清理项目中的文档膨胀
+- 合并涵盖相同主题的冗余文档
+- 减少快速开发后的文档扩散
+- 将多个文件整合为权威来源
+
+**主要功能：**
+- **内容保留**：清理过程中永不丢失有价值的信息
+- **冗余检测**：识别重叠的文档
+- **智能合并**：在保持结构的同时合并相关文档
+- **验证**：确保整合后的文档完整准确
+
+**🎬 实时演示**
+
+*即将推出*
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -774,6 +844,12 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 ### 提示词工程与需求工程
 使用 **prompt-optimizer** 将模糊的功能请求转换为具有领域理论基础的精确 EARS 规范。非常适合产品需求文档、AI 辅助编码和学习提示词工程最佳实践。与 **skill-creator** 结合使用以创建结构良好的技能提示，或与 **ppt-creator** 结合使用以确保演示内容需求清晰明确。
 
+### 会话历史与文件恢复
+使用 **claude-code-history-files-finder** 从之前的 Claude Code 会话中恢复已删除的文件、在对话历史中搜索特定实现，或跟踪文件随时间的演变。对于恢复意外删除的代码或查找你记得但找不到的功能实现至关重要。
+
+### 文档维护
+使用 **docs-cleaner** 在保留有价值内容的同时整合冗余文档。非常适合在快速开发阶段后清理文档扩散或将重叠的文档合并为权威来源。
+
 ## 📚 文档
 
 每个技能包括：
@@ -802,6 +878,8 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 - **transcript-fixer**：参见 `transcript-fixer/references/workflow_guide.md` 了解分步工作流和 `transcript-fixer/references/team_collaboration.md` 了解协作模式
 - **qa-expert**：参见 `qa-expert/references/master_qa_prompt.md` 了解自主执行（100 倍加速）和 `qa-expert/references/google_testing_standards.md` 了解 AAA 模式和 OWASP 测试
 - **prompt-optimizer**：参见 `prompt-optimizer/references/ears_syntax.md` 了解 EARS 转换模式、`prompt-optimizer/references/domain_theories.md` 了解理论目录和 `prompt-optimizer/references/examples.md` 了解完整转换示例
+- **claude-code-history-files-finder**：参见 `claude-code-history-files-finder/references/session_file_format.md` 了解 JSONL 结构和 `claude-code-history-files-finder/references/workflow_examples.md` 了解恢复工作流
+- **docs-cleaner**：参见 `docs-cleaner/SKILL.md` 了解整合工作流
 
 ## 🛠️ 系统要求
 
