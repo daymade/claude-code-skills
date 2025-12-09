@@ -25,6 +25,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.13.0] - 2025-12-09
+
+### Added
+- **New Skill**: claude-code-history-files-finder - Session history recovery for Claude Code
+  - Search sessions by keywords with frequency ranking
+  - Recover deleted files from Write tool calls with automatic deduplication
+  - Analyze session statistics (message counts, tool usage, file operations)
+  - Batch operations for processing multiple sessions
+  - Streaming processing for large session files (>100MB)
+  - Bundled scripts: analyze_sessions.py, recover_content.py
+  - Bundled references: session_file_format.md, workflow_examples.md
+  - Follows Anthropic skill authoring best practices (third-person description, imperative style, progressive disclosure)
+
+- **New Skill**: docs-cleaner - Documentation consolidation
+  - Consolidate redundant documentation while preserving valuable content
+  - Redundancy detection for overlapping documents
+  - Smart merging with structure preservation
+  - Validation for consolidated documents
+
+### Changed
+- Updated marketplace skills count from 18 to 20
+- Updated marketplace version from 1.11.0 to 1.13.0
+- Updated README.md badges (skills count: 20, version: 1.13.0)
+- Updated README.md to include claude-code-history-files-finder in skills listing (skill 18)
+- Updated README.md to include docs-cleaner in skills listing (skill 19)
+- Updated README.zh-CN.md badges (skills count: 20, version: 1.13.0)
+- Updated README.zh-CN.md to include both new skills with Chinese translations
+- Updated CLAUDE.md skills count from 18 to 20
+- Added session history recovery use case section to README.md
+- Added documentation maintenance use case section to README.md
+- Added corresponding use case sections to README.zh-CN.md
+- Added installation commands for both new skills
+- Added quick links for documentation references
+
 ## [youtube-downloader-1.1.0] - 2025-11-19
 
 ### Changed
