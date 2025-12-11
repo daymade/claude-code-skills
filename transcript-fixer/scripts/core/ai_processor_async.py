@@ -352,6 +352,13 @@ class AIProcessorAsync:
                             exc_info=True
                         )
 
+                # CLAUDE_FALLBACK: Signal Claude Code to take over manual correction
+                print("[CLAUDE_FALLBACK] GLM API unavailable. Claude Code should analyze this text for ASR errors:")
+                print("---")
+                print(chunk[:2000] if len(chunk) > 2000 else chunk)
+                print("---")
+                print("After fixing, MUST save corrections: --add \"错误词\" \"正确词\" --domain general")
+
                 logger.warning(
                     f"Using original text for chunk {chunk_index} after all retries failed",
                     chunk_index=chunk_index

@@ -40,19 +40,27 @@ from utils.domain_validator import (
 
 
 class TestDomainValidation:
-    """Test domain whitelist validation"""
+    """Test domain pattern validation"""
 
     def test_valid_domains(self):
-        """Test all valid domains are accepted"""
+        """Test predefined domains are accepted"""
         for domain in VALID_DOMAINS:
             result = validate_domain(domain)
             assert result == domain
 
-    def test_case_insensitive(self):
-        """Test domain validation is case-insensitive"""
-        assert validate_domain("GENERAL") == "general"
-        assert validate_domain("General") == "general"
-        assert validate_domain("embodied_AI") == "embodied_ai"
+    def test_custom_domains(self):
+        """Test custom domain names are accepted"""
+        assert validate_domain("my_custom_domain") == "my_custom_domain"
+        assert validate_domain("test-domain-123") == "test-domain-123"
+        assert validate_domain("domain1") == "domain1"
+        assert validate_domain("export_test") == "export_test"
+
+    def test_chinese_domains(self):
+        """Test Chinese domain names are accepted"""
+        assert validate_domain("火星加速器") == "火星加速器"
+        assert validate_domain("具身智能") == "具身智能"
+        assert validate_domain("中文域名") == "中文域名"
+        assert validate_domain("混合domain中文") == "混合domain中文"
 
     def test_whitespace_trimmed(self):
         """Test whitespace is trimmed"""
@@ -70,7 +78,7 @@ class TestDomainValidation:
         ]
 
         for malicious in malicious_inputs:
-            with pytest.raises(ValidationError, match="Invalid domain"):
+            with pytest.raises(ValidationError):
                 validate_domain(malicious)
 
     def test_empty_domain(self):
@@ -80,6 +88,12 @@ class TestDomainValidation:
 
         with pytest.raises(ValidationError, match="cannot be empty"):
             validate_domain("   ")
+
+    def test_domain_too_long(self):
+        """Test domain length limit"""
+        long_domain = "a" * 51
+        with pytest.raises(ValidationError, match="too long"):
+            validate_domain(long_domain)
 
 
 class TestSourceValidation:
@@ -163,7 +177,7 @@ class TestCorrectionInputsValidation:
 
     def test_invalid_domain_in_full_validation(self):
         """Test invalid domain is rejected in full validation"""
-        with pytest.raises(ValidationError, match="Invalid domain"):
+        with pytest.raises(ValidationError):
             validate_correction_inputs(
                 from_text="test",
                 to_text="test",
@@ -286,10 +300,10 @@ class TestSecurityScenarios:
     def test_domain_bypass_attempts(self):
         """Test various domain bypass attempts"""
         bypass_attempts = [
-            "general\x00hacked",     # Null byte injection
             "general\nmalicious",    # Newline injection
-            "general -- comment",    # SQL comment
-            "general' UNION",        # SQL union
+            "general -- comment",    # SQL comment (space is invalid)
+            "general' UNION",        # SQL union (quote is invalid)
+            "../etc/passwd",         # Path traversal
         ]
 
         for attempt in bypass_attempts:

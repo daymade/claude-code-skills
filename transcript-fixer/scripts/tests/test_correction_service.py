@@ -84,6 +84,14 @@ class TestCorrectionService(unittest.TestCase):
         self.service.validate_domain_name("embodied_ai")
         self.service.validate_domain_name("test-domain-123")
 
+    def test_validate_chinese_domain(self):
+        """Test acceptance of Chinese domain names."""
+        # Should not raise - Chinese characters are valid
+        self.service.validate_domain_name("火星加速器")
+        self.service.validate_domain_name("具身智能")
+        self.service.validate_domain_name("中文域名-123")
+        self.service.validate_domain_name("混合domain中文")
+
     # ==================== Correction Operations Tests ====================
 
     def test_add_correction(self):

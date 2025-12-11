@@ -15,7 +15,7 @@
       "description": "Essential meta-skill for creating effective Claude Code skills with initialization scripts, validation, packaging, marketplace registration, and privacy best practices",
       "source": "./",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.2.1",
       "category": "developer-tools",
       "keywords": ["skill-creation", "claude-code", "development", "tooling", "workflow", "meta-skill", "essential"],
       "skills": ["./skill-creator"]
@@ -152,10 +152,10 @@
     },
     {
       "name": "transcript-fixer",
-      "description": "Corrects speech-to-text (ASR/STT) transcription errors in meeting notes, lecture recordings, interviews, and voice memos through dictionary-based rules and AI corrections. Use when users mention transcript correction, ASR errors, speech-to-text mistakes, homophone errors, or working with transcription files",
+      "description": "Corrects speech-to-text (ASR/STT) transcription errors in meeting notes, lecture recordings, interviews, and voice memos through dictionary-based rules and AI corrections. Supports Chinese domain names, AI fallback to Claude Code, and iterative dictionary building. Use when users mention transcript correction, ASR errors, speech-to-text mistakes, homophone errors, or working with transcription files",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "productivity",
       "keywords": ["transcription", "asr", "stt", "speech-to-text", "correction", "ai", "meeting-notes", "nlp"],
       "skills": ["./transcript-fixer"]

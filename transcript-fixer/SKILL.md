@@ -14,6 +14,19 @@ Correct speech-to-text transcription errors through dictionary-based rules, AI-p
 - Fixing Chinese/English homophone errors or technical terminology
 - Collaborating on shared correction knowledge bases
 
+## Prerequisites
+
+**Python execution must use `uv`** - never use system Python directly.
+
+If `uv` is not installed:
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows PowerShell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
 ## Quick Start
 
 **Recommended: Use Enhanced Wrapper** (auto-detects API key, opens HTML diff):
@@ -88,19 +101,62 @@ Three-stage pipeline stores corrections in `~/.transcript-fixer/corrections.db`:
 4. **Review learned patterns**: `--review-learned` and `--approve` high-confidence suggestions
 
 **Stages**: Dictionary (instant, free) → AI via GLM API (parallel) → Full pipeline
-**Domains**: `general`, `embodied_ai`, `finance`, `medical` (isolates corrections)
+**Domains**: `general`, `embodied_ai`, `finance`, `medical`, or custom names including Chinese (e.g., `火星加速器`, `具身智能`)
 **Learning**: Patterns appearing ≥3 times at ≥80% confidence move from AI to dictionary
 
 See `references/workflow_guide.md` for detailed workflows, `references/script_parameters.md` for complete CLI reference, and `references/team_collaboration.md` for collaboration patterns.
 
+## Critical Workflow: Dictionary Iteration
+
+**MUST save corrections after each fix.** This is the skill's core value.
+
+After fixing errors manually, immediately save to dictionary:
+```bash
+uv run scripts/fix_transcription.py --add "错误词" "正确词" --domain general
+```
+
+See `references/iteration_workflow.md` for complete iteration guide with checklist.
+
+## AI Fallback Strategy
+
+When GLM API is unavailable (503, network issues), the script outputs `[CLAUDE_FALLBACK]` marker.
+
+Claude Code should then:
+1. Analyze the text directly for ASR errors
+2. Fix using Edit tool
+3. **MUST save corrections to dictionary** with `--add`
+
+## Database Operations
+
+**MUST read `references/database_schema.md` before any database operations.**
+
+Quick reference:
+```bash
+# View all corrections
+sqlite3 ~/.transcript-fixer/corrections.db "SELECT * FROM active_corrections;"
+
+# Check schema version
+sqlite3 ~/.transcript-fixer/corrections.db "SELECT value FROM system_config WHERE key='schema_version';"
+```
+
+## Stages
+
+| Stage | Description | Speed | Cost |
+|-------|-------------|-------|------|
+| 1 | Dictionary only | Instant | Free |
+| 2 | AI only | ~10s | API calls |
+| 3 | Full pipeline | ~10s | API calls |
+
 ## Bundled Resources
 
 **Scripts:**
+- `ensure_deps.py` - Initialize shared virtual environment (run once, optional)
 - `fix_transcript_enhanced.py` - Enhanced wrapper (recommended for interactive use)
 - `fix_transcription.py` - Core CLI (for automation)
 - `examples/bulk_import.py` - Bulk import example
 
 **References** (load as needed):
+- **Critical**: `database_schema.md` (read before DB operations), `iteration_workflow.md` (dictionary iteration best practices)
 - Getting started: `installation_setup.md`, `glm_api_setup.md`, `workflow_guide.md`
 - Daily use: `quick_reference.md`, `script_parameters.md`, `dictionary_guide.md`
 - Advanced: `sql_queries.md`, `file_formats.md`, `architecture.md`, `best_practices.md`
