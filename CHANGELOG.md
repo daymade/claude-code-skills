@@ -25,6 +25,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.16.0] - 2025-12-11
+
+### Added
+- **New Skill**: skills-search - CCPM registry search and management
+  - Search for Claude Code skills in the CCPM registry
+  - Install skills by name with `ccpm install <skill-name>`
+  - List installed skills with `ccpm list`
+  - Get detailed skill information with `ccpm info <skill-name>`
+  - Uninstall skills with `ccpm uninstall <skill-name>`
+  - Install skill bundles (web-dev, content-creation, developer-tools)
+  - Supports multiple installation formats (registry, GitHub owner/repo, full URLs)
+  - Troubleshooting guidance for common issues
+
+### Changed
+- Updated marketplace skills count from 22 to 23
+- Updated marketplace version from 1.15.0 to 1.16.0
+- Updated README.md badges (skills count: 23, version: 1.16.0)
+- Updated README.md to include skills-search in skills listing (skill #20)
+- Updated README.zh-CN.md badges (skills count: 23, version: 1.16.0)
+- Updated README.zh-CN.md to include skills-search with Chinese translation
+- Updated CLAUDE.md skills count from 22 to 23
+- Added skills-search use case section to README.md
+- Added skills-search use case section to README.zh-CN.md
+- Added installation command for skills-search
+- Enhanced marketplace metadata description to include CCPM skill management
+
 ## [1.13.0] - 2025-12-09
 
 ### Added
