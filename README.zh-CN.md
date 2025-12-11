@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-20-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.13.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-23-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.16.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 20 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 23 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -154,6 +154,9 @@ claude plugin install claude-code-history-files-finder@daymade/claude-code-skill
 
 # 文档整合
 claude plugin install docs-cleaner@daymade/claude-code-skills
+
+# CCPM 技能注册表搜索和管理
+claude plugin install skills-search@daymade/claude-code-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -805,6 +808,55 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 
 ---
 
+### 20. **skills-search** - CCPM 技能注册表搜索
+
+从 CCPM（Claude Code 插件管理器）注册表中搜索、发现、安装和管理 Claude Code 技能。
+
+**使用场景：**
+- 为特定任务查找技能（例如"查找 PDF 技能"）
+- 按名称安装技能
+- 列出当前已安装的技能
+- 获取技能的详细信息
+- 管理你的 Claude Code 技能集合
+
+**主要功能：**
+- **注册表搜索**：使用 `ccpm search <query>` 搜索 CCPM 注册表
+- **技能安装**：使用 `ccpm install <skill-name>` 安装技能
+- **版本支持**：使用 `@version` 语法安装特定版本
+- **批量安装**：安装预配置的技能包（web-dev、content-creation、developer-tools）
+- **多种格式**：支持注册表名称、GitHub owner/repo 和完整 URL
+- **技能信息**：使用 `ccpm info <skill-name>` 获取详细的技能信息
+
+**示例用法：**
+```bash
+# 搜索技能
+ccpm search pdf              # 查找 PDF 相关技能
+ccpm search "code review"    # 查找代码审查技能
+
+# 安装技能
+ccpm install skill-creator                # 从注册表安装
+ccpm install daymade/skill-creator        # 从 GitHub 安装
+ccpm install skill-creator@1.0.0          # 安装特定版本
+
+# 列出和管理
+ccpm list                    # 列出已安装的技能
+ccpm info skill-creator      # 获取技能详情
+ccpm uninstall pdf-processor # 删除技能
+
+# 安装技能包
+ccpm install-bundle web-dev  # 安装 Web 开发技能包
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [skills-search/SKILL.md](./skills-search/SKILL.md) 了解完整的命令参考
+
+**要求**：CCPM CLI（`npm install -g @daymade/ccpm`）
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -850,6 +902,9 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 ### 文档维护
 使用 **docs-cleaner** 在保留有价值内容的同时整合冗余文档。非常适合在快速开发阶段后清理文档扩散或将重叠的文档合并为权威来源。
 
+### 技能发现与管理
+使用 **skills-search** 从 CCPM 注册表中查找、安装和管理 Claude Code 技能。非常适合为特定任务发现新技能、为常见工作流安装技能包，以及保持技能集合的有序管理。
+
 ## 📚 文档
 
 每个技能包括：
@@ -880,6 +935,7 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 - **prompt-optimizer**：参见 `prompt-optimizer/references/ears_syntax.md` 了解 EARS 转换模式、`prompt-optimizer/references/domain_theories.md` 了解理论目录和 `prompt-optimizer/references/examples.md` 了解完整转换示例
 - **claude-code-history-files-finder**：参见 `claude-code-history-files-finder/references/session_file_format.md` 了解 JSONL 结构和 `claude-code-history-files-finder/references/workflow_examples.md` 了解恢复工作流
 - **docs-cleaner**：参见 `docs-cleaner/SKILL.md` 了解整合工作流
+- **skills-search**：参见 `skills-search/SKILL.md` 了解 CCPM CLI 命令和注册表操作
 
 ## 🛠️ 系统要求
 
@@ -893,6 +949,7 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 - **ccusage**（可选，用于状态栏成本跟踪）
 - **yt-dlp**（用于 youtube-downloader）：`brew install yt-dlp` 或 `pip install yt-dlp`
 - **FFmpeg/FFprobe**（用于 video-comparer）：`brew install ffmpeg`、`apt install ffmpeg` 或 `winget install ffmpeg`
+- **CCPM CLI**（用于 skills-search）：`npm install -g @daymade/ccpm`
 
 ## ❓ 常见问题
 

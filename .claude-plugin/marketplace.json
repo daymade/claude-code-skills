@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, and CLAUDE.md progressive disclosure optimization",
-    "version": "1.15.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, and CCPM skill registry search and management",
+    "version": "1.16.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -229,6 +229,16 @@
       "category": "productivity",
       "keywords": ["claude-md", "progressive-disclosure", "optimization", "context-efficiency", "configuration", "token-savings"],
       "skills": ["./claude-md-progressive-disclosurer"]
+    },
+    {
+      "name": "skills-search",
+      "description": "Search, discover, install, and manage Claude Code skills from the CCPM registry. Use when users want to find skills for specific tasks, install skills by name, list installed skills, get skill details, or manage their Claude Code skill collection. Triggers include find skills, search for plugins, install skill, list installed skills, or any CCPM registry operations",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": ["ccpm", "skills", "search", "install", "registry", "plugin", "marketplace", "discovery", "skill-management"],
+      "skills": ["./skills-search"]
     }
   ]
 }

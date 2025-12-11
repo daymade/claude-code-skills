@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-20-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.13.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-23-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.16.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 20 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 23 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -154,6 +154,9 @@ claude plugin install claude-code-history-files-finder@daymade/claude-code-skill
 
 # Documentation consolidation
 claude plugin install docs-cleaner@daymade/claude-code-skills
+
+# CCPM skill registry search and management
+claude plugin install skills-search@daymade/claude-code-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -765,6 +768,55 @@ Consolidate redundant documentation while preserving all valuable content.
 
 ---
 
+### 20. **skills-search** - CCPM Skill Registry Search
+
+Search, discover, install, and manage Claude Code skills from the CCPM (Claude Code Plugin Manager) registry.
+
+**When to use:**
+- Finding skills for specific tasks (e.g., "find PDF skills")
+- Installing skills by name
+- Listing currently installed skills
+- Getting detailed information about a skill
+- Managing your Claude Code skill collection
+
+**Key features:**
+- **Registry search**: Search CCPM registry with `ccpm search <query>`
+- **Skill installation**: Install skills with `ccpm install <skill-name>`
+- **Version support**: Install specific versions with `@version` syntax
+- **Bundle installation**: Install pre-configured skill bundles (web-dev, content-creation, developer-tools)
+- **Multiple formats**: Supports registry names, GitHub owner/repo, and full URLs
+- **Skill info**: Get detailed skill information with `ccpm info <skill-name>`
+
+**Example usage:**
+```bash
+# Search for skills
+ccpm search pdf              # Find PDF-related skills
+ccpm search "code review"    # Find code review skills
+
+# Install skills
+ccpm install skill-creator                # From registry
+ccpm install daymade/skill-creator        # From GitHub
+ccpm install skill-creator@1.0.0          # Specific version
+
+# List and manage
+ccpm list                    # List installed skills
+ccpm info skill-creator      # Get skill details
+ccpm uninstall pdf-processor # Remove a skill
+
+# Install bundles
+ccpm install-bundle web-dev  # Install web development skills bundle
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [skills-search/SKILL.md](./skills-search/SKILL.md) for complete command reference
+
+**Requirements**: CCPM CLI (`npm install -g @daymade/ccpm`)
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -810,6 +862,9 @@ Use **claude-code-history-files-finder** to recover deleted files from previous 
 ### For Documentation Maintenance
 Use **docs-cleaner** to consolidate redundant documentation while preserving valuable content. Perfect for cleaning up documentation sprawl after rapid development phases or merging overlapping docs into authoritative sources.
 
+### For Skill Discovery & Management
+Use **skills-search** to find, install, and manage Claude Code skills from the CCPM registry. Perfect for discovering new skills for specific tasks, installing skill bundles for common workflows, and keeping your skill collection organized.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -838,6 +893,7 @@ Each skill includes:
 - **prompt-optimizer**: See `prompt-optimizer/references/ears_syntax.md` for EARS transformation patterns, `prompt-optimizer/references/domain_theories.md` for theory catalog, and `prompt-optimizer/references/examples.md` for complete transformations
 - **claude-code-history-files-finder**: See `claude-code-history-files-finder/references/session_file_format.md` for JSONL structure and `claude-code-history-files-finder/references/workflow_examples.md` for recovery workflows
 - **docs-cleaner**: See `docs-cleaner/SKILL.md` for consolidation workflows
+- **skills-search**: See `skills-search/SKILL.md` for CCPM CLI commands and registry operations
 
 ## 🛠️ Requirements
 
@@ -854,6 +910,7 @@ Each skill includes:
 - **pandas & matplotlib** (optional, for ppt-creator chart generation)
 - **Marp CLI** (optional, for ppt-creator Marp PPTX export): `npm install -g @marp-team/marp-cli`
 - **repomix** (for repomix-safe-mixer): `npm install -g repomix`
+- **CCPM CLI** (for skills-search): `npm install -g @daymade/ccpm`
 
 ## ❓ FAQ
 
