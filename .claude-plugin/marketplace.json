@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, and documentation cleanup",
-    "version": "1.13.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, and PDF generation with Chinese font support",
+    "version": "1.14.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -209,6 +209,16 @@
       "category": "productivity",
       "keywords": ["documentation", "cleanup", "consolidation", "redundancy", "merge", "docs"],
       "skills": ["./docs-cleaner"]
+    },
+    {
+      "name": "pdf-creator",
+      "description": "Create PDF documents from markdown with proper Chinese font support using weasyprint. Use when converting markdown to PDF, generating formal documents (legal filings, trademark applications, reports), or when Chinese typography is required. Triggers include convert to PDF, generate PDF, markdown to PDF, or printable documents",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "document-conversion",
+      "keywords": ["pdf", "markdown", "weasyprint", "chinese-fonts", "document-generation", "legal", "reports", "typography"],
+      "skills": ["./pdf-creator"]
     }
   ]
 }
