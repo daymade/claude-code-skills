@@ -58,6 +58,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added corresponding use case sections to README.zh-CN.md
 - Added installation commands for both new skills
 - Added quick links for documentation references
+- **skill-creator** v1.2.0 → v1.2.1: Added cache directory warning
+  - Added critical warning about not editing skills in `~/.claude/plugins/cache/`
+  - Explains that cache is read-only and changes are lost on refresh
+  - Provides correct vs wrong path examples
+- **transcript-fixer** v1.0.0 → v1.1.0: Enhanced with Chinese domain support and AI fallback
+  - Added Chinese/Japanese/Korean character support for domain names (e.g., `火星加速器`, `具身智能`)
+  - Added `[CLAUDE_FALLBACK]` signal when GLM API is unavailable for Claude Code to take over
+  - Added Prerequisites section requiring `uv` for Python execution
+  - Added Critical Workflow section for dictionary iteration best practices
+  - Added AI Fallback Strategy section with manual correction guidance
+  - Added Database Operations section with schema reference requirement
+  - Added Stages table for quick reference (Dictionary → AI → Full pipeline)
+  - Added new bundled script: `ensure_deps.py` for shared virtual environment
+  - Added new bundled references: `database_schema.md`, `iteration_workflow.md`
+  - Updated domain validation from whitelist to pattern matching
+  - Updated tests for Chinese domain names and security bypass attempts
 
 ## [youtube-downloader-1.1.0] - 2025-11-19
 

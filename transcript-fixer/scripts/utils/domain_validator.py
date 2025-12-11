@@ -20,8 +20,8 @@ from __future__ import annotations
 from typing import Final, Set
 import re
 
-# Domain whitelist - ONLY these values are allowed
-VALID_DOMAINS: Final[Set[str]] = {
+# Predefined domains (for documentation/reference, not enforced as whitelist)
+PREDEFINED_DOMAINS: Final[Set[str]] = {
     'general',
     'embodied_ai',
     'finance',
@@ -29,6 +29,16 @@ VALID_DOMAINS: Final[Set[str]] = {
     'legal',
     'technical',
 }
+
+# Domain validation pattern - supports Chinese, Japanese, Korean characters
+# \u4e00-\u9fff: CJK Unified Ideographs (Chinese)
+# \u3040-\u309f: Hiragana, \u30a0-\u30ff: Katakana (Japanese)
+# \uac00-\ud7af: Hangul Syllables (Korean)
+DOMAIN_PATTERN: Final[str] = r'^[\w\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af-]+$'
+MAX_DOMAIN_LENGTH: Final[int] = 50
+
+# Keep VALID_DOMAINS as alias for backward compatibility
+VALID_DOMAINS = PREDEFINED_DOMAINS
 
 # Source whitelist
 VALID_SOURCES: Final[Set[str]] = {
@@ -53,23 +63,31 @@ class ValidationError(Exception):
 
 def validate_domain(domain: str) -> str:
     """
-    Validate domain against whitelist.
+    Validate domain name using pattern matching.
 
     CRITICAL: Prevents SQL injection via domain parameter.
-    Domain is used in WHERE clauses - must be whitelisted.
+    Domain is used in WHERE clauses - must match safe pattern.
+
+    Supports:
+    - Alphanumeric characters (a-z, A-Z, 0-9)
+    - Underscores and hyphens
+    - Chinese, Japanese, Korean characters
 
     Args:
         domain: Domain string to validate
 
     Returns:
-        Validated domain (guaranteed to be in whitelist)
+        Validated domain (guaranteed to match safe pattern)
 
     Raises:
-        ValidationError: If domain not in whitelist
+        ValidationError: If domain contains invalid characters
 
     Examples:
         >>> validate_domain('general')
         'general'
+
+        >>> validate_domain('火星加速器')
+        '火星加速器'
 
         >>> validate_domain('hacked"; DROP TABLE corrections--')
         ValidationError: Invalid domain
@@ -77,17 +95,28 @@ def validate_domain(domain: str) -> str:
     if not domain:
         raise ValidationError("Domain cannot be empty")
 
-    domain = domain.strip().lower()
+    domain = domain.strip()
 
     # Check again after stripping (whitespace-only input)
     if not domain:
         raise ValidationError("Domain cannot be empty")
 
-    if domain not in VALID_DOMAINS:
+    # Check length
+    if len(domain) > MAX_DOMAIN_LENGTH:
         raise ValidationError(
-            f"Invalid domain: '{domain}'. "
-            f"Valid domains: {sorted(VALID_DOMAINS)}"
+            f"Domain name too long: {len(domain)} chars (max: {MAX_DOMAIN_LENGTH})"
         )
+
+    # Check pattern (supports Chinese and other CJK characters)
+    if not re.match(DOMAIN_PATTERN, domain):
+        raise ValidationError(
+            f"Domain name contains invalid characters: {domain}. "
+            f"Allowed: alphanumeric, underscore, hyphen, Chinese/Japanese/Korean characters"
+        )
+
+    # Check for path traversal attempts
+    if '..' in domain or '/' in domain or '\\' in domain:
+        raise ValidationError(f"Domain name contains path traversal: {domain}")
 
     return domain
 

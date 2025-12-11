@@ -32,7 +32,11 @@ class ValidationRules:
     max_text_length: int = 1000
     min_text_length: int = 1
     max_domain_length: int = 50
-    allowed_domain_pattern: str = r'^[a-zA-Z0-9_-]+$'
+    # Support Chinese, Japanese, Korean characters in domain names
+    # \u4e00-\u9fff: CJK Unified Ideographs (Chinese)
+    # \u3040-\u309f: Hiragana, \u30a0-\u30ff: Katakana (Japanese)
+    # \uac00-\ud7af: Hangul Syllables (Korean)
+    allowed_domain_pattern: str = r'^[\w\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af-]+$'
     max_confidence: float = 1.0
     min_confidence: float = 0.0
 

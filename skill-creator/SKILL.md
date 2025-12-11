@@ -110,6 +110,24 @@ Skills use a three-level loading system to manage context efficiently:
 
 Anthropic has wrote skill authoring best practices, you SHOULD retrieve it before you create or update any skills, the link is https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices.md
 
+## ⚠️ CRITICAL: Edit Skills at Source Location
+
+**NEVER edit skills in `~/.claude/plugins/cache/`** — that's a read-only cache directory. All changes there are:
+- Lost when cache refreshes
+- Not synced to source control
+- Wasted effort requiring manual re-merge
+
+**ALWAYS verify you're editing the source repository:**
+```bash
+# WRONG - cache location (read-only copy)
+~/.claude/plugins/cache/daymade-skills/my-skill/1.0.0/my-skill/SKILL.md
+
+# RIGHT - source repository
+/path/to/your/claude-code-skills/my-skill/SKILL.md
+```
+
+**Before any edit**, confirm the file path does NOT contain `/cache/` or `/plugins/cache/`.
+
 ## Skill Creation Process
 
 To create a skill, follow the "Skill Creation Process" in order, skipping steps only if there is a clear reason why they are not applicable.
