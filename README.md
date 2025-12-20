@@ -49,8 +49,9 @@ The `skill-creator` is the **meta-skill** that enables you to build, validate, a
 ### Quick Install
 
 ```bash
-claude plugin marketplace add daymade/claude-code-skills
-claude plugin install skill-creator@daymade/claude-code-skills
+claude plugin marketplace add https://github.com/daymade/claude-code-skills
+# Marketplace name: daymade-skills (from marketplace.json)
+claude plugin install skill-creator@daymade-skills
 ```
 
 ### What You Can Do
@@ -103,60 +104,62 @@ iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scri
 
 Add the marketplace:
 ```bash
-/plugin marketplace add daymade/claude-code-skills
+/plugin marketplace add https://github.com/daymade/claude-code-skills
 ```
+
+Marketplace name is `daymade-skills` (from marketplace.json). Use `@daymade-skills` when installing plugins.
 
 **Essential Skill** (recommended first install):
 ```bash
-claude plugin install skill-creator@daymade/claude-code-skills
+claude plugin install skill-creator@daymade-skills
 ```
 
 **Install Other Skills:**
 ```bash
 # GitHub operations
-claude plugin install github-ops@daymade/claude-code-skills
+claude plugin install github-ops@daymade-skills
 
 # Document conversion
-claude plugin install markdown-tools@daymade/claude-code-skills
+claude plugin install markdown-tools@daymade-skills
 
 # Diagram generation
-claude plugin install mermaid-tools@daymade/claude-code-skills
+claude plugin install mermaid-tools@daymade-skills
 
 # Statusline customization
-claude plugin install statusline-generator@daymade/claude-code-skills
+claude plugin install statusline-generator@daymade-skills
 
 # Teams communication
-claude plugin install teams-channel-post-writer@daymade/claude-code-skills
+claude plugin install teams-channel-post-writer@daymade-skills
 
 # Repomix extraction
-claude plugin install repomix-unmixer@daymade/claude-code-skills
+claude plugin install repomix-unmixer@daymade-skills
 
 # AI/LLM icons
-claude plugin install llm-icon-finder@daymade/claude-code-skills
+claude plugin install llm-icon-finder@daymade-skills
 
 # CLI demo generation
-claude plugin install cli-demo-generator@daymade/claude-code-skills
+claude plugin install cli-demo-generator@daymade-skills
 
 # YouTube video/audio downloading
-claude plugin install youtube-downloader@daymade/claude-code-skills
+claude plugin install youtube-downloader@daymade-skills
 
 # Video comparison and quality analysis
-claude plugin install video-comparer@daymade/claude-code-skills
+claude plugin install video-comparer@daymade-skills
 
 # QA testing infrastructure with autonomous execution
-claude plugin install qa-expert@daymade/claude-code-skills
+claude plugin install qa-expert@daymade-skills
 
 # Prompt optimization using EARS methodology
-claude plugin install prompt-optimizer@daymade/claude-code-skills
+claude plugin install prompt-optimizer@daymade-skills
 
 # Session history recovery
-claude plugin install claude-code-history-files-finder@daymade/claude-code-skills
+claude plugin install claude-code-history-files-finder@daymade-skills
 
 # Documentation consolidation
-claude plugin install docs-cleaner@daymade/claude-code-skills
+claude plugin install docs-cleaner@daymade-skills
 
 # CCPM skill registry search and management
-claude plugin install skills-search@daymade/claude-code-skills
+claude plugin install skills-search@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -926,7 +929,7 @@ No, these skills are specifically designed for Claude Code. You'll need Claude C
 
 Use the same install command to update:
 ```bash
-claude plugin install skill-name@daymade/claude-code-skills
+claude plugin install skill-name@daymade-skills
 ```
 
 ### Can I contribute my own skill?
