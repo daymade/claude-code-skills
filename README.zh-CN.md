@@ -49,8 +49,9 @@
 ### 快速安装
 
 ```bash
-claude plugin marketplace add daymade/claude-code-skills
-claude plugin install skill-creator@daymade/claude-code-skills
+claude plugin marketplace add https://github.com/daymade/claude-code-skills
+# Marketplace 名称：daymade-skills（来自 marketplace.json）
+claude plugin install skill-creator@daymade-skills
 ```
 
 ### 你可以做什么
@@ -103,60 +104,62 @@ iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scri
 
 添加市场：
 ```bash
-/plugin marketplace add daymade/claude-code-skills
+/plugin marketplace add https://github.com/daymade/claude-code-skills
 ```
+
+Marketplace 名称是 `daymade-skills`（来自 marketplace.json），安装插件时请使用 `@daymade-skills`。
 
 **必备技能**（推荐首先安装）：
 ```bash
-claude plugin install skill-creator@daymade/claude-code-skills
+claude plugin install skill-creator@daymade-skills
 ```
 
 **安装其他技能：**
 ```bash
 # GitHub 操作
-claude plugin install github-ops@daymade/claude-code-skills
+claude plugin install github-ops@daymade-skills
 
 # 文档转换
-claude plugin install markdown-tools@daymade/claude-code-skills
+claude plugin install markdown-tools@daymade-skills
 
 # 图表生成
-claude plugin install mermaid-tools@daymade/claude-code-skills
+claude plugin install mermaid-tools@daymade-skills
 
 # 状态栏定制
-claude plugin install statusline-generator@daymade/claude-code-skills
+claude plugin install statusline-generator@daymade-skills
 
 # Teams 通信
-claude plugin install teams-channel-post-writer@daymade/claude-code-skills
+claude plugin install teams-channel-post-writer@daymade-skills
 
 # Repomix 提取
-claude plugin install repomix-unmixer@daymade/claude-code-skills
+claude plugin install repomix-unmixer@daymade-skills
 
 # AI/LLM 图标
-claude plugin install llm-icon-finder@daymade/claude-code-skills
+claude plugin install llm-icon-finder@daymade-skills
 
 # CLI 演示生成
-claude plugin install cli-demo-generator@daymade/claude-code-skills
+claude plugin install cli-demo-generator@daymade-skills
 
 # YouTube 视频/音频下载
-claude plugin install youtube-downloader@daymade/claude-code-skills
+claude plugin install youtube-downloader@daymade-skills
 
 # 视频比较和质量分析
-claude plugin install video-comparer@daymade/claude-code-skills
+claude plugin install video-comparer@daymade-skills
 
 # QA 测试基础设施和自主执行
-claude plugin install qa-expert@daymade/claude-code-skills
+claude plugin install qa-expert@daymade-skills
 
 # 使用 EARS 方法论优化提示词
-claude plugin install prompt-optimizer@daymade/claude-code-skills
+claude plugin install prompt-optimizer@daymade-skills
 
 # 会话历史恢复
-claude plugin install claude-code-history-files-finder@daymade/claude-code-skills
+claude plugin install claude-code-history-files-finder@daymade-skills
 
 # 文档整合
-claude plugin install docs-cleaner@daymade/claude-code-skills
+claude plugin install docs-cleaner@daymade-skills
 
 # CCPM 技能注册表搜索和管理
-claude plugin install skills-search@daymade/claude-code-skills
+claude plugin install skills-search@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -965,7 +968,7 @@ ccpm install-bundle web-dev  # 安装 Web 开发技能包
 
 使用相同的安装命令进行更新：
 ```bash
-claude plugin install skill-name@daymade/claude-code-skills
+claude plugin install skill-name@daymade-skills
 ```
 
 ### 我可以贡献自己的技能吗？

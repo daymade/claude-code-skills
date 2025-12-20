@@ -40,8 +40,9 @@ curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scr
 iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.ps1 | iex
 
 # Manual installation
-claude plugin marketplace add daymade/claude-code-skills
-claude plugin install skill-creator@daymade/claude-code-skills
+claude plugin marketplace add https://github.com/daymade/claude-code-skills
+# Marketplace name: daymade-skills (from marketplace.json)
+claude plugin install skill-creator@daymade-skills
 ```
 
 ### Skill Validation and Packaging
@@ -61,10 +62,11 @@ skill-creator/scripts/init_skill.py <skill-name> --path <output-directory>
 
 ```bash
 # Add local marketplace
-claude plugin marketplace add daymade/claude-code-skills
+claude plugin marketplace add https://github.com/daymade/claude-code-skills
+# Marketplace name: daymade-skills (from marketplace.json)
 
 # Install specific skill (start with skill-creator)
-claude plugin install skill-creator@daymade/claude-code-skills
+claude plugin install skill-creator@daymade-skills
 
 # Test by copying to user skills directory
 cp -r skill-name ~/.claude/skills/
@@ -276,7 +278,7 @@ Professional Claude Code skills marketplace featuring N production-ready skills.
 **c. Add installation command:**
 ```markdown
 # Brief description
-claude plugin install skill-name@daymade/claude-code-skills
+claude plugin install skill-name@daymade-skills
 ```
 
 **d. Add skill section (### N. **skill-name**):**
@@ -403,7 +405,7 @@ python3 -m json.tool .claude-plugin/marketplace.json > /dev/null
 **c. Add installation command:**
 ```markdown
 # 简短描述
-claude plugin install skill-name@daymade/claude-code-skills
+claude plugin install skill-name@daymade-skills
 ```
 
 **d. Add skill section (### N. **skill-name** - Chinese Title):**
@@ -631,7 +633,7 @@ Features:
 
 Installation:
 ```bash
-claude plugin install skill-name@daymade/claude-code-skills
+claude plugin install skill-name@daymade-skills
 ```
 
 Changelog: ...

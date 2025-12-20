@@ -89,10 +89,11 @@ Before submitting, validate your skill:
 5. **Test locally:**
    ```bash
    # Add your fork as marketplace
-   /plugin marketplace add your-username/claude-code-skills
+   /plugin marketplace add https://github.com/your-username/claude-code-skills
+   # Marketplace name comes from .claude-plugin/marketplace.json
 
    # Install and test
-   /plugin install productivity-skills
+   /plugin install productivity-skills@your-marketplace-name
    ```
 
 6. **Submit Pull Request:**
