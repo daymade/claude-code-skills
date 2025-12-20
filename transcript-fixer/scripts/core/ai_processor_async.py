@@ -148,11 +148,14 @@ class AIProcessorAsync:
         CRITICAL FIX (P1-3): Ensures HTTP client cleanup
         """
         # Run async processing in sync context
-        try:
-            return asyncio.run(self._process_async(text, context))
-        finally:
-            # Ensure HTTP client is closed
-            asyncio.run(self._close_http_client())
+        async def _run_with_cleanup():
+            try:
+                return await self._process_async(text, context)
+            finally:
+                # Ensure HTTP client is closed in the same event loop
+                await self._close_http_client()
+
+        return asyncio.run(_run_with_cleanup())
 
     async def _process_async(self, text: str, context: str) -> Tuple[str, List[AIChange]]:
         """
