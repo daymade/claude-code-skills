@@ -18,9 +18,11 @@ def find_path_references(content: str) -> list[str]:
     - Placeholder paths (xxx, example, etc.)
     - Paths in example contexts (lines containing "Example:", "e.g.", etc.)
     - Generic documentation examples
+    - Paths prefixed with file:// (e.g., file://scripts/xxx) - these are external tool references, not skill-internal paths
     """
     # Pattern to match bundled resource paths (scripts/, references/, assets/)
-    pattern = r'(?:scripts|references|assets)/[\w./-]+'
+    # Use negative lookbehind to exclude file:// prefixed paths
+    pattern = r'(?<!file://)(?:scripts|references|assets)/[\w./-]+'
 
     # Find all matches with their line context
     unique_paths = set()
