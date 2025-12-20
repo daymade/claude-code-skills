@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, and CCPM skill registry search and management",
-    "version": "1.16.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, and iOS app development with XcodeGen and SwiftUI",
+    "version": "1.18.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -15,7 +15,7 @@
       "description": "Essential meta-skill for creating effective Claude Code skills with initialization scripts, validation, packaging, marketplace registration, and privacy best practices",
       "source": "./",
       "strict": false,
-      "version": "1.2.1",
+      "version": "1.2.2",
       "category": "developer-tools",
       "keywords": ["skill-creation", "claude-code", "development", "tooling", "workflow", "meta-skill", "essential"],
       "skills": ["./skill-creator"]
@@ -239,6 +239,26 @@
       "category": "developer-tools",
       "keywords": ["ccpm", "skills", "search", "install", "registry", "plugin", "marketplace", "discovery", "skill-management"],
       "skills": ["./skills-search"]
+    },
+    {
+      "name": "promptfoo-evaluation",
+      "description": "Configures and runs LLM evaluation using Promptfoo framework. Use when setting up prompt testing, creating evaluation configs (promptfooconfig.yaml), writing Python custom assertions, implementing llm-rubric for LLM-as-judge, or managing few-shot examples in prompts. Triggers on keywords like promptfoo, eval, LLM evaluation, prompt testing, or model comparison",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": ["promptfoo", "evaluation", "llm-testing", "prompt-testing", "assertions", "llm-rubric", "few-shot", "model-comparison"],
+      "skills": ["./promptfoo-evaluation"]
+    },
+    {
+      "name": "iOS-APP-developer",
+      "description": "Develops iOS applications with XcodeGen, SwiftUI, and SPM. Use when configuring XcodeGen project.yml, resolving SPM dependency issues, deploying to devices, handling code signing, debugging camera/AVFoundation, iOS version compatibility issues, or fixing Library not loaded @rpath framework errors. Includes state machine testing patterns for @MainActor classes",
+      "source": "./",
+      "strict": false,
+      "version": "1.1.0",
+      "category": "developer-tools",
+      "keywords": ["ios", "xcodegen", "swiftui", "spm", "avfoundation", "camera", "code-signing", "device-deployment", "swift", "xcode", "testing"],
+      "skills": ["./iOS-APP-developer"]
     }
   ]
 }

@@ -108,7 +108,7 @@ Skills use a three-level loading system to manage context efficiently:
 
 ### Skill Creation Best Practice
 
-Anthropic has wrote skill authoring best practices, you SHOULD retrieve it before you create or update any skills, the link is https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices.md
+Anthropic has wrote skill authoring best practices, you SHOULD retrieve it before you create or update any skills, the link is https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices.md
 
 ## ⚠️ CRITICAL: Edit Skills at Source Location
 
