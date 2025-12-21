@@ -106,6 +106,8 @@ iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scri
 claude plugin marketplace add https://github.com/daymade/claude-code-skills
 
 # Marketplace 名称：daymade-skills（来自 marketplace.json）
+# 安装命令请使用 @daymade-skills（例如 skill-name@daymade-skills）
+# 所有命令都应使用 `claude plugin ...`（没有 `/plugin` 命令）
 # 步骤 2：安装你需要的技能
 claude plugin install github-ops@daymade-skills
 claude plugin install markdown-tools@daymade-skills
@@ -114,7 +116,9 @@ claude plugin install markdown-tools@daymade-skills
 # 步骤 3：重启 Claude Code
 ```
 
-### 可用技能
+### 可用技能（快速入门）
+
+本表为快速入门列表。完整 25 个技能请见 [README.zh-CN.md](./README.zh-CN.md)。
 
 | 技能 | 描述 | 使用场景 |
 |-------|-------------|-------------|
@@ -173,7 +177,7 @@ claude plugin install skill-name@daymade-skills
 ## 常见问题
 
 **Q：我应该首先安装哪些技能？**
-A：如果你想创建技能，从 **skill-creator** 开始。否则，根据你的需求安装（参见上表）。
+A：如果你想创建技能，从 **skill-creator** 开始。否则，根据你的需求安装（参见快速入门表及 README 完整列表）。
 
 **Q：我可以安装多个技能吗？**
 A：可以！每个技能都是独立的。根据需要安装任意数量的技能。
@@ -196,7 +200,7 @@ A：查看 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解指南。我们欢迎技�
 
 - 📖 阅读完整的 [README.zh-CN.md](./README.zh-CN.md) 获取详细信息
 - 🌐 English users see [README.md](./README.md)
-- 💡 查看 [IMPROVEMENT_PLAN.md](./IMPROVEMENT_PLAN.md) 了解即将推出的功能
+- 💡 查看 [CHANGELOG.md](./CHANGELOG.md) 了解近期更新
 - 🤝 在 [CONTRIBUTING.md](./CONTRIBUTING.md) 贡献
 
 **祝你构建技能愉快！🚀**
