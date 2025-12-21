@@ -65,6 +65,15 @@ uv run scripts/fix_transcription.py --review-learned
 - `*_stage2.md` - AI corrections applied (final version)
 - `*_对比.html` - Visual diff (open in browser for best experience)
 
+**Generate word-level diff** (recommended for reviewing corrections):
+```bash
+uv run scripts/generate_word_diff.py original.md corrected.md output.html
+```
+
+This creates an HTML file showing word-by-word differences with clear highlighting:
+- 🔴 `japanese 3 pro` → 🟢 `Gemini 3 Pro` (complete word replacements)
+- Easy to spot exactly what changed without character-level noise
+
 ## Example Session
 
 **Input transcript** (`meeting.md`):
@@ -153,6 +162,7 @@ sqlite3 ~/.transcript-fixer/corrections.db "SELECT value FROM system_config WHER
 - `ensure_deps.py` - Initialize shared virtual environment (run once, optional)
 - `fix_transcript_enhanced.py` - Enhanced wrapper (recommended for interactive use)
 - `fix_transcription.py` - Core CLI (for automation)
+- `generate_word_diff.py` - Generate word-level diff HTML for reviewing corrections
 - `examples/bulk_import.py` - Bulk import example
 
 **References** (load as needed):
