@@ -25,6 +25,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.18.0] - 2025-12-20
+
+### Added
+- **New Skill**: pdf-creator - Convert markdown to PDF with Chinese font support (WeasyPrint)
+- **New Skill**: claude-md-progressive-disclosurer - Optimize CLAUDE.md with progressive disclosure
+- **New Skill**: promptfoo-evaluation - Promptfoo-based LLM evaluation workflows
+- **New Skill**: iOS-APP-developer - iOS app development with XcodeGen, SwiftUI, and SPM
+
+### Changed
+- Updated marketplace skills count from 23 to 25
+- Updated marketplace version from 1.16.0 to 1.18.0
+- Updated README/README.zh-CN badges, skill lists, use cases, quick links, and requirements
+- Updated QUICKSTART docs to clarify marketplace install syntax and remove obsolete links
+- Updated CLAUDE.md skill counts and added the new skills to the list
+
 ## [1.16.0] - 2025-12-11
 
 ### Added

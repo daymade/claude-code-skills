@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-23-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.16.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-25-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.18.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 23 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 25 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -104,10 +104,12 @@ iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scri
 
 添加市场：
 ```bash
-/plugin marketplace add https://github.com/daymade/claude-code-skills
+claude plugin marketplace add https://github.com/daymade/claude-code-skills
 ```
 
 Marketplace 名称是 `daymade-skills`（来自 marketplace.json），安装插件时请使用 `@daymade-skills`。
+不要把仓库路径当成 marketplace 名称（例如 `@daymade/claude-code-skills` 会失败）。
+所有插件命令都应使用 `claude plugin ...`（没有 `/plugin` 命令）。
 
 **必备技能**（推荐首先安装）：
 ```bash
@@ -140,8 +142,23 @@ claude plugin install llm-icon-finder@daymade-skills
 # CLI 演示生成
 claude plugin install cli-demo-generator@daymade-skills
 
+# Cloudflare 诊断
+claude plugin install cloudflare-troubleshooting@daymade-skills
+
+# UI 设计系统提取
+claude plugin install ui-designer@daymade-skills
+
+# 演示文稿创建
+claude plugin install ppt-creator@daymade-skills
+
 # YouTube 视频/音频下载
 claude plugin install youtube-downloader@daymade-skills
+
+# 安全 Repomix 打包
+claude plugin install repomix-safe-mixer@daymade-skills
+
+# ASR 转录校正
+claude plugin install transcript-fixer@daymade-skills
 
 # 视频比较和质量分析
 claude plugin install video-comparer@daymade-skills
@@ -158,8 +175,20 @@ claude plugin install claude-code-history-files-finder@daymade-skills
 # 文档整合
 claude plugin install docs-cleaner@daymade-skills
 
+# PDF 生成（含中文字体支持）
+claude plugin install pdf-creator@daymade-skills
+
+# CLAUDE.md 渐进式披露优化
+claude plugin install claude-md-progressive-disclosurer@daymade-skills
+
 # CCPM 技能注册表搜索和管理
 claude plugin install skills-search@daymade-skills
+
+# Promptfoo LLM 评测框架
+claude plugin install promptfoo-evaluation@daymade-skills
+
+# iOS 应用开发
+claude plugin install iOS-APP-developer@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -860,6 +889,127 @@ ccpm install-bundle web-dev  # 安装 Web 开发技能包
 
 ---
 
+### 21. **pdf-creator** - PDF 生成（中文字体支持）
+
+使用 WeasyPrint 将 markdown 转换为专业 PDF，并提供完善的中文字体支持。
+
+**使用场景：**
+- 将 markdown 转换为可分享/可打印的 PDF
+- 生成正式文档（法律文件、报告）
+- 需要正确的中文排版
+
+**主要功能：**
+- WeasyPrint + Markdown 转换管道
+- 内置中文字体回退
+- A4 版式与打印友好边距
+- 批量转换脚本
+
+**示例用法：**
+```bash
+uv run --with weasyprint --with markdown scripts/md_to_pdf.py input.md output.pdf
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [pdf-creator/SKILL.md](./pdf-creator/SKILL.md) 了解设置与工作流。
+
+**要求**：Python 3.8+，`weasyprint`、`markdown`
+
+---
+
+### 22. **claude-md-progressive-disclosurer** - CLAUDE.md 优化
+
+使用渐进式披露原则优化 CLAUDE.md，减少上下文负担但保留关键规则。
+
+**使用场景：**
+- CLAUDE.md 过长或重复
+- 需要将详细流程移至 references
+- 希望把可复用工作流抽成技能
+
+**主要功能：**
+- 章节分类（保留/迁移/提取/移除）
+- 变更前后行数对比
+- references 指针格式与最佳实践
+
+**示例用法：**
+```
+"请用渐进式披露优化我的 ~/.claude/CLAUDE.md，并给出方案"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [claude-md-progressive-disclosurer/SKILL.md](./claude-md-progressive-disclosurer/SKILL.md)。
+
+---
+
+### 23. **promptfoo-evaluation** - Promptfoo LLM 评测
+
+使用 Promptfoo 配置并运行 LLM 评测，进行提示词测试与模型对比。
+
+**使用场景：**
+- 搭建 prompt 测试与评测配置
+- 对比不同模型输出
+- 编写自定义断言或 LLM-as-judge 评分
+
+**主要功能：**
+- promptfooconfig.yaml 模板
+- Python 自定义断言
+- llm-rubric 评分指引
+- echo provider 预览流程
+
+**示例用法：**
+```bash
+npx promptfoo@latest init
+npx promptfoo@latest eval
+npx promptfoo@latest view
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [promptfoo-evaluation/references/promptfoo_api.md](./promptfoo-evaluation/references/promptfoo_api.md)。
+
+**要求**：Node.js（Promptfoo 通过 `npx promptfoo@latest`）
+
+---
+
+### 24. **iOS-APP-developer** - iOS 应用开发
+
+使用 XcodeGen、SwiftUI 与 SPM 构建、配置和调试 iOS 应用。
+
+**使用场景：**
+- 配置 XcodeGen `project.yml`
+- 修复 SPM 依赖或嵌入问题
+- 处理签名与真机部署错误
+- 调试相机/AVFoundation
+
+**主要功能：**
+- XcodeGen 项目模板
+- SPM 动态框架嵌入修复
+- 代码签名与配置指导
+- 真机部署与故障排查清单
+
+**示例用法：**
+```bash
+xcodegen generate
+xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [iOS-APP-developer/references/xcodegen-full.md](./iOS-APP-developer/references/xcodegen-full.md)。
+
+**要求**：macOS + Xcode，XcodeGen
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -871,6 +1021,9 @@ ccpm install-bundle web-dev  # 安装 Web 开发技能包
 
 ### 文档处理
 结合 **markdown-tools** 进行文档转换和 **mermaid-tools** 进行图表生成，创建全面的文档。使用 **llm-icon-finder** 添加品牌图标。
+
+### PDF 与可打印文档
+使用 **pdf-creator** 将 markdown 转换为适合打印的 PDF，并提供中文字体支持，适用于正式报告和归档材料。
 
 ### 团队通信
 使用 **teams-channel-post-writer** 分享知识，使用 **statusline-generator** 在工作时跟踪成本。
@@ -905,6 +1058,15 @@ ccpm install-bundle web-dev  # 安装 Web 开发技能包
 ### 文档维护
 使用 **docs-cleaner** 在保留有价值内容的同时整合冗余文档。非常适合在快速开发阶段后清理文档扩散或将重叠的文档合并为权威来源。
 
+### CLAUDE.md 优化
+使用 **claude-md-progressive-disclosurer** 通过渐进式披露减少 CLAUDE.md 体积，同时保留关键规则。
+
+### LLM 评测与模型对比
+使用 **promptfoo-evaluation** 运行提示词测试、对比模型输出并执行自定义断言评测。
+
+### iOS 应用开发
+使用 **iOS-APP-developer** 配置 XcodeGen 项目，处理 SPM 依赖、签名与部署问题。
+
 ### 技能发现与管理
 使用 **skills-search** 从 CCPM 注册表中查找、安装和管理 Claude Code 技能。非常适合为特定任务发现新技能、为常见工作流安装技能包，以及保持技能集合的有序管理。
 
@@ -938,7 +1100,11 @@ ccpm install-bundle web-dev  # 安装 Web 开发技能包
 - **prompt-optimizer**：参见 `prompt-optimizer/references/ears_syntax.md` 了解 EARS 转换模式、`prompt-optimizer/references/domain_theories.md` 了解理论目录和 `prompt-optimizer/references/examples.md` 了解完整转换示例
 - **claude-code-history-files-finder**：参见 `claude-code-history-files-finder/references/session_file_format.md` 了解 JSONL 结构和 `claude-code-history-files-finder/references/workflow_examples.md` 了解恢复工作流
 - **docs-cleaner**：参见 `docs-cleaner/SKILL.md` 了解整合工作流
+- **pdf-creator**：参见 `pdf-creator/SKILL.md` 了解 PDF 转换与字体设置
+- **claude-md-progressive-disclosurer**：参见 `claude-md-progressive-disclosurer/SKILL.md` 了解 CLAUDE.md 优化工作流
 - **skills-search**：参见 `skills-search/SKILL.md` 了解 CCPM CLI 命令和注册表操作
+- **promptfoo-evaluation**：参见 `promptfoo-evaluation/references/promptfoo_api.md` 了解评测模式
+- **iOS-APP-developer**：参见 `iOS-APP-developer/references/xcodegen-full.md` 了解 XcodeGen 选项与 project.yml 细节
 
 ## 🛠️ 系统要求
 
@@ -952,7 +1118,10 @@ ccpm install-bundle web-dev  # 安装 Web 开发技能包
 - **ccusage**（可选，用于状态栏成本跟踪）
 - **yt-dlp**（用于 youtube-downloader）：`brew install yt-dlp` 或 `pip install yt-dlp`
 - **FFmpeg/FFprobe**（用于 video-comparer）：`brew install ffmpeg`、`apt install ffmpeg` 或 `winget install ffmpeg`
+- **weasyprint、markdown**（用于 pdf-creator）
 - **CCPM CLI**（用于 skills-search）：`npm install -g @daymade/ccpm`
+- **Promptfoo**（用于 promptfoo-evaluation）：`npx promptfoo@latest`
+- **macOS + Xcode、XcodeGen**（用于 iOS-APP-developer）
 
 ## ❓ 常见问题
 
@@ -985,7 +1154,7 @@ claude plugin install skill-name@daymade-skills
 
 ### skill-creator 和其他技能有什么区别？
 
-**skill-creator** 是一个元技能 - 它帮助你创建其他技能。其他 10 个技能是最终用户技能，提供特定功能（GitHub 操作、文档转换等）。如果你想用自己的工作流扩展 Claude Code，从 skill-creator 开始。
+**skill-creator** 是一个元技能 - 它帮助你创建其他技能。其他技能是面向最终用户的技能，提供特定功能（GitHub 操作、文档转换等）。如果你想用自己的工作流扩展 Claude Code，从 skill-creator 开始。
 
 ---
 
@@ -1035,4 +1204,4 @@ claude plugin install skill-name@daymade-skills
 
 **使用 skill-creator 技能为 Claude Code 精心打造 ❤️**
 
-最后更新：2025-10-22 | 版本 1.2.0
+最后更新：2025-12-20 | 市场版本 1.18.0

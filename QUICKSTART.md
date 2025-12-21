@@ -106,6 +106,8 @@ Follow the interactive prompts to select skills.
 claude plugin marketplace add https://github.com/daymade/claude-code-skills
 
 # Marketplace name: daymade-skills (from marketplace.json)
+# Use @daymade-skills in install commands (e.g., skill-name@daymade-skills)
+# Do not use /plugin; all commands are `claude plugin ...`
 # Step 2: Install skills you need
 claude plugin install github-ops@daymade-skills
 claude plugin install markdown-tools@daymade-skills
@@ -114,7 +116,9 @@ claude plugin install markdown-tools@daymade-skills
 # Step 3: Restart Claude Code
 ```
 
-### Available Skills
+### Available Skills (Starter Set)
+
+This table is a quick starter list. See [README.md](./README.md) for the full catalog (25 skills).
 
 | Skill | Description | When to Use |
 |-------|-------------|-------------|
@@ -158,7 +162,7 @@ If you're in China, install [CC-Switch](https://github.com/farion1231/cc-switch)
 ## Common Questions
 
 **Q: Which skills should I install first?**
-A: Start with **skill-creator** if you want to create skills. Otherwise, install based on your needs (see table above).
+A: Start with **skill-creator** if you want to create skills. Otherwise, install based on your needs (see the starter table and the full list in README).
 
 **Q: Can I install multiple skills?**
 A: Yes! Each skill is independent. Install as many or as few as you need.
@@ -175,7 +179,7 @@ A: Open an issue at [github.com/daymade/claude-code-skills](https://github.com/d
 
 - 📖 Read the full [README.md](./README.md) for detailed information
 - 🇨🇳 中文用户查看 [README.zh-CN.md](./README.zh-CN.md)
-- 💡 Check [IMPROVEMENT_PLAN.md](./IMPROVEMENT_PLAN.md) for upcoming features
+- 💡 Review [CHANGELOG.md](./CHANGELOG.md) for recent updates
 - 🤝 Contribute at [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 **Happy skill building! 🚀**

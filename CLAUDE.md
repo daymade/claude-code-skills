@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 23 production-ready skills organized in a plugin marketplace structure. Each skill is a self-contained package that extends Claude's capabilities with specialized knowledge, workflows, and bundled resources.
+This is a Claude Code skills marketplace containing 25 production-ready skills organized in a plugin marketplace structure. Each skill is a self-contained package that extends Claude's capabilities with specialized knowledge, workflows, and bundled resources.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -120,7 +120,7 @@ Skills for public distribution must NOT contain:
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 23 plugins, each mapping to one skill
+- Contains 25 plugins, each mapping to one skill
 - Each plugin has: name, description, version, category, keywords, skills array
 - Marketplace metadata: name, owner, version, homepage
 
@@ -130,7 +130,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
    - Tracks the marketplace catalog as a whole
-   - Current: v1.16.0
+   - Current: v1.18.0
    - Bump when: Adding/removing skills, major marketplace restructuring
    - Semantic versioning: MAJOR.MINOR.PATCH
 
@@ -169,6 +169,8 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 21. **pdf-creator** - Create PDF documents from markdown with Chinese font support using weasyprint
 22. **claude-md-progressive-disclosurer** - Optimize CLAUDE.md files using progressive disclosure principles
 23. **skills-search** - Search, discover, install, and manage Claude Code skills from the CCPM registry
+24. **promptfoo-evaluation** - Run LLM evaluations with Promptfoo for prompt testing and model comparison
+25. **iOS-APP-developer** - iOS app development with XcodeGen, SwiftUI, and SPM troubleshooting
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 

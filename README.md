@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-23-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.16.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-25-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.18.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 23 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 25 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -104,10 +104,12 @@ iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scri
 
 Add the marketplace:
 ```bash
-/plugin marketplace add https://github.com/daymade/claude-code-skills
+claude plugin marketplace add https://github.com/daymade/claude-code-skills
 ```
 
 Marketplace name is `daymade-skills` (from marketplace.json). Use `@daymade-skills` when installing plugins.
+Do not use the repo path as a marketplace name (e.g. `@daymade/claude-code-skills` will fail).
+All plugin commands should use `claude plugin ...` (there is no `/plugin` command).
 
 **Essential Skill** (recommended first install):
 ```bash
@@ -140,8 +142,23 @@ claude plugin install llm-icon-finder@daymade-skills
 # CLI demo generation
 claude plugin install cli-demo-generator@daymade-skills
 
+# Cloudflare diagnostics
+claude plugin install cloudflare-troubleshooting@daymade-skills
+
+# UI design system extraction
+claude plugin install ui-designer@daymade-skills
+
+# Presentation creation
+claude plugin install ppt-creator@daymade-skills
+
 # YouTube video/audio downloading
 claude plugin install youtube-downloader@daymade-skills
+
+# Secure repomix packaging
+claude plugin install repomix-safe-mixer@daymade-skills
+
+# ASR transcript correction
+claude plugin install transcript-fixer@daymade-skills
 
 # Video comparison and quality analysis
 claude plugin install video-comparer@daymade-skills
@@ -158,8 +175,20 @@ claude plugin install claude-code-history-files-finder@daymade-skills
 # Documentation consolidation
 claude plugin install docs-cleaner@daymade-skills
 
+# PDF generation with Chinese font support
+claude plugin install pdf-creator@daymade-skills
+
+# CLAUDE.md progressive disclosure optimization
+claude plugin install claude-md-progressive-disclosurer@daymade-skills
+
 # CCPM skill registry search and management
 claude plugin install skills-search@daymade-skills
+
+# Promptfoo LLM evaluation framework
+claude plugin install promptfoo-evaluation@daymade-skills
+
+# iOS app development
+claude plugin install iOS-APP-developer@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -820,6 +849,128 @@ ccpm install-bundle web-dev  # Install web development skills bundle
 
 ---
 
+### 21. **pdf-creator** - PDF Creation with Chinese Font Support
+
+Create professional PDF documents from markdown with proper Chinese typography using WeasyPrint.
+
+**When to use:**
+- Converting markdown to PDF for sharing or printing
+- Generating formal documents (legal filings, reports)
+- Ensuring correct Chinese font rendering
+
+**Key features:**
+- WeasyPrint + Markdown conversion pipeline
+- Built-in Chinese font fallbacks
+- A4 layout defaults with print-friendly margins
+- Batch conversion scripts
+
+**Example usage:**
+```bash
+uv run --with weasyprint --with markdown scripts/md_to_pdf.py input.md output.pdf
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [pdf-creator/SKILL.md](./pdf-creator/SKILL.md) for setup and workflow details.
+
+**Requirements**: Python 3.8+, `weasyprint`, `markdown`
+
+---
+
+### 22. **claude-md-progressive-disclosurer** - CLAUDE.md Optimization
+
+Optimize user CLAUDE.md files using progressive disclosure to reduce context bloat while preserving critical rules.
+
+**When to use:**
+- CLAUDE.md is too long or repetitive
+- Need to move detailed procedures into references
+- Want to extract reusable workflows into skills
+
+**Key features:**
+- Section classification (keep/move/extract/remove)
+- Before/after line-count reporting
+- Reference file and pointer formats
+- Best-practice optimization workflow
+
+**Example usage:**
+```
+"Optimize my ~/.claude/CLAUDE.md using progressive disclosure and propose a plan."
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [claude-md-progressive-disclosurer/SKILL.md](./claude-md-progressive-disclosurer/SKILL.md).
+
+---
+
+### 23. **promptfoo-evaluation** - Promptfoo LLM Evaluation
+
+Configure and run LLM evaluations with Promptfoo for prompt testing and model comparisons.
+
+**When to use:**
+- Setting up prompt tests and eval configs
+- Comparing LLM outputs across providers
+- Adding custom assertions or LLM-as-judge grading
+
+**Key features:**
+- promptfooconfig.yaml templates
+- Python custom assertions
+- llm-rubric scoring guidance
+- Built-in preview (echo provider) workflows
+
+**Example usage:**
+```bash
+npx promptfoo@latest init
+npx promptfoo@latest eval
+npx promptfoo@latest view
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [promptfoo-evaluation/references/promptfoo_api.md](./promptfoo-evaluation/references/promptfoo_api.md).
+
+**Requirements**: Node.js (Promptfoo via `npx promptfoo@latest`)
+
+---
+
+### 24. **iOS-APP-developer** - iOS App Development
+
+Build, configure, and debug iOS apps with XcodeGen, SwiftUI, and Swift Package Manager.
+
+**When to use:**
+- Setting up XcodeGen `project.yml`
+- Fixing SPM dependency or embed issues
+- Handling code signing and device deployment errors
+- Debugging camera/AVFoundation problems
+
+**Key features:**
+- XcodeGen project templates
+- SPM dynamic framework embedding fixes
+- Code signing and provisioning guidance
+- Device deployment and troubleshooting checklists
+
+**Example usage:**
+```bash
+xcodegen generate
+xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [iOS-APP-developer/references/xcodegen-full.md](./iOS-APP-developer/references/xcodegen-full.md).
+
+**Requirements**: macOS + Xcode, XcodeGen
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -831,6 +982,9 @@ Use **github-ops** to streamline PR creation, issue management, and API operatio
 
 ### For Documentation
 Combine **markdown-tools** for document conversion and **mermaid-tools** for diagram generation to create comprehensive documentation. Use **llm-icon-finder** to add brand icons.
+
+### For PDF & Printable Documents
+Use **pdf-creator** to convert markdown to print-ready PDFs with proper Chinese font support for formal documents and reports.
 
 ### For Team Communication
 Use **teams-channel-post-writer** to share knowledge and **statusline-generator** to track costs while working.
@@ -865,8 +1019,17 @@ Use **claude-code-history-files-finder** to recover deleted files from previous 
 ### For Documentation Maintenance
 Use **docs-cleaner** to consolidate redundant documentation while preserving valuable content. Perfect for cleaning up documentation sprawl after rapid development phases or merging overlapping docs into authoritative sources.
 
+### For CLAUDE.md Optimization
+Use **claude-md-progressive-disclosurer** to reduce CLAUDE.md bloat by moving detailed sections into references while keeping core rules visible.
+
 ### For Skill Discovery & Management
 Use **skills-search** to find, install, and manage Claude Code skills from the CCPM registry. Perfect for discovering new skills for specific tasks, installing skill bundles for common workflows, and keeping your skill collection organized.
+
+### For LLM Evaluation & Model Comparison
+Use **promptfoo-evaluation** to set up prompt tests, compare model outputs, and run automated evaluations with custom assertions.
+
+### For iOS App Development
+Use **iOS-APP-developer** to configure XcodeGen projects, resolve SPM dependency issues, and troubleshoot code signing or device deployment.
 
 ## 📚 Documentation
 
@@ -887,6 +1050,8 @@ Each skill includes:
 - **skill-creator**: See `skill-creator/SKILL.md` for complete skill creation workflow
 - **llm-icon-finder**: See `llm-icon-finder/references/icons-list.md` for available icons
 - **cli-demo-generator**: See `cli-demo-generator/references/vhs_syntax.md` for VHS syntax and `cli-demo-generator/references/best_practices.md` for demo guidelines
+- **cloudflare-troubleshooting**: See `cloudflare-troubleshooting/references/api_overview.md` for API documentation
+- **ui-designer**: See `ui-designer/SKILL.md` for design system extraction workflow
 - **ppt-creator**: See `ppt-creator/references/WORKFLOW.md` for 9-stage creation process and `ppt-creator/references/ORCHESTRATION_OVERVIEW.md` for automation
 - **youtube-downloader**: See `youtube-downloader/SKILL.md` for usage examples and troubleshooting
 - **repomix-safe-mixer**: See `repomix-safe-mixer/references/common_secrets.md` for detected credential patterns
@@ -896,7 +1061,11 @@ Each skill includes:
 - **prompt-optimizer**: See `prompt-optimizer/references/ears_syntax.md` for EARS transformation patterns, `prompt-optimizer/references/domain_theories.md` for theory catalog, and `prompt-optimizer/references/examples.md` for complete transformations
 - **claude-code-history-files-finder**: See `claude-code-history-files-finder/references/session_file_format.md` for JSONL structure and `claude-code-history-files-finder/references/workflow_examples.md` for recovery workflows
 - **docs-cleaner**: See `docs-cleaner/SKILL.md` for consolidation workflows
+- **pdf-creator**: See `pdf-creator/SKILL.md` for PDF conversion and font setup
+- **claude-md-progressive-disclosurer**: See `claude-md-progressive-disclosurer/SKILL.md` for CLAUDE.md optimization workflow
 - **skills-search**: See `skills-search/SKILL.md` for CCPM CLI commands and registry operations
+- **promptfoo-evaluation**: See `promptfoo-evaluation/references/promptfoo_api.md` for evaluation patterns
+- **iOS-APP-developer**: See `iOS-APP-developer/references/xcodegen-full.md` for XcodeGen options and project.yml details
 
 ## 🛠️ Requirements
 
@@ -907,6 +1076,7 @@ Each skill includes:
 - **mermaid-cli** (for mermaid-tools)
 - **yt-dlp** (for youtube-downloader): `brew install yt-dlp` or `pip install yt-dlp`
 - **FFmpeg/FFprobe** (for video-comparer): `brew install ffmpeg`, `apt install ffmpeg`, or `winget install ffmpeg`
+- **weasyprint, markdown** (for pdf-creator)
 - **VHS** (for cli-demo-generator): `brew install vhs`
 - **asciinema** (optional, for cli-demo-generator interactive recording)
 - **ccusage** (optional, for statusline cost tracking)
@@ -914,6 +1084,8 @@ Each skill includes:
 - **Marp CLI** (optional, for ppt-creator Marp PPTX export): `npm install -g @marp-team/marp-cli`
 - **repomix** (for repomix-safe-mixer): `npm install -g repomix`
 - **CCPM CLI** (for skills-search): `npm install -g @daymade/ccpm`
+- **Promptfoo** (for promptfoo-evaluation): `npx promptfoo@latest`
+- **macOS + Xcode, XcodeGen** (for iOS-APP-developer)
 
 ## ❓ FAQ
 
@@ -946,7 +1118,7 @@ We recommend using [CC-Switch](https://github.com/farion1231/cc-switch) to manag
 
 ### What's the difference between skill-creator and other skills?
 
-**skill-creator** is a meta-skill - it helps you create other skills. The other 7 skills are end-user skills that provide specific functionalities (GitHub ops, document conversion, etc.). If you want to extend Claude Code with your own workflows, start with skill-creator.
+**skill-creator** is a meta-skill - it helps you create other skills. The other skills are end-user skills that provide specific functionalities (GitHub ops, document conversion, etc.). If you want to extend Claude Code with your own workflows, start with skill-creator.
 
 ---
 
@@ -996,4 +1168,4 @@ If you find these skills useful, please:
 
 **Built with ❤️ using the skill-creator skill for Claude Code**
 
-Last updated: 2025-10-22 | Version 1.2.0
+Last updated: 2025-12-20 | Marketplace version 1.18.0
