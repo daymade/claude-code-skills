@@ -32,6 +32,18 @@ Skills use a three-level loading system:
 
 ### Installation Scripts
 
+**In Claude Code (in-app):**
+```text
+/plugin marketplace add daymade/claude-code-skills
+```
+
+Then:
+1. Select **Browse and install plugins**
+2. Select **daymade/claude-code-skills**
+3. Select **skill-creator**
+4. Select **Install now**
+
+**From your terminal (CLI):**
 ```bash
 # Automated installation (macOS/Linux)
 curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh | bash
@@ -72,6 +84,8 @@ claude plugin install skill-creator@daymade-skills
 cp -r skill-name ~/.claude/skills/
 # Then restart Claude Code
 ```
+
+In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude plugin ...`.
 
 ### Git Operations
 

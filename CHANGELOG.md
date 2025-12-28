@@ -25,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.18.1] - 2025-12-28
+
+### Changed
+- **markdown-tools**: Enhanced with PDF image extraction capability
+  - Added `extract_pdf_images.py` script using PyMuPDF
+  - Refactored SKILL.md for clearer workflow documentation
+  - Updated installation instructions to use `markitdown[pdf]` extra
+- Updated marketplace version from 1.18.0 to 1.18.1
+
 ## [1.18.0] - 2025-12-20
 
 ### Added

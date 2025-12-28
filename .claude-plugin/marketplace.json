@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, and iOS app development with XcodeGen and SwiftUI",
-    "version": "1.18.0",
+    "version": "1.18.1",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -32,10 +32,10 @@
     },
     {
       "name": "markdown-tools",
-      "description": "Convert documents (PDFs, Word, PowerPoint, Confluence exports) to markdown with Windows/WSL path handling support",
+      "description": "Convert documents (PDFs, Word, PowerPoint, Confluence exports) to markdown with Windows/WSL path handling and PDF image extraction support",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "document-conversion",
       "keywords": ["markdown", "pdf", "docx", "confluence", "markitdown", "wsl"],
       "skills": ["./markdown-tools"]

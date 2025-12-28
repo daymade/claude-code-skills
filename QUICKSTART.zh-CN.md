@@ -8,6 +8,18 @@
 
 ### 步骤 1：安装 skill-creator
 
+**在 Claude Code 内（应用内）：**
+```text
+/plugin marketplace add daymade/claude-code-skills
+```
+
+然后：
+1. 选择 **Browse and install plugins**
+2. 选择 **daymade/claude-code-skills**
+3. 选择 **skill-creator**
+4. 选择 **Install now**
+
+**在终端（CLI）：**
 ```bash
 # 添加市场
 claude plugin marketplace add https://github.com/daymade/claude-code-skills
@@ -107,7 +119,7 @@ claude plugin marketplace add https://github.com/daymade/claude-code-skills
 
 # Marketplace 名称：daymade-skills（来自 marketplace.json）
 # 安装命令请使用 @daymade-skills（例如 skill-name@daymade-skills）
-# 所有命令都应使用 `claude plugin ...`（没有 `/plugin` 命令）
+# 在 Claude Code 内使用 `/plugin ...`，在终端中使用 `claude plugin ...`
 # 步骤 2：安装你需要的技能
 claude plugin install github-ops@daymade-skills
 claude plugin install markdown-tools@daymade-skills

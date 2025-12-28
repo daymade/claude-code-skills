@@ -48,6 +48,18 @@
 
 ### 快速安装
 
+**在 Claude Code 内（应用内）：**
+```text
+/plugin marketplace add daymade/claude-code-skills
+```
+
+然后：
+1. 选择 **Browse and install plugins**
+2. 选择 **daymade/claude-code-skills**
+3. 选择 **skill-creator**
+4. 选择 **Install now**
+
+**在终端（CLI）：**
 ```bash
 claude plugin marketplace add https://github.com/daymade/claude-code-skills
 # Marketplace 名称：daymade-skills（来自 marketplace.json）
@@ -88,6 +100,18 @@ claude plugin install skill-creator@daymade-skills
 
 ## 🚀 快速安装
 
+### 在 Claude Code 内安装（应用内）
+
+```text
+/plugin marketplace add daymade/claude-code-skills
+```
+
+然后：
+1. 选择 **Browse and install plugins**
+2. 选择 **daymade/claude-code-skills**
+3. 选择你需要的插件
+4. 选择 **Install now**
+
 ### 自动化安装（推荐）
 
 **macOS/Linux：**
@@ -109,7 +133,7 @@ claude plugin marketplace add https://github.com/daymade/claude-code-skills
 
 Marketplace 名称是 `daymade-skills`（来自 marketplace.json），安装插件时请使用 `@daymade-skills`。
 不要把仓库路径当成 marketplace 名称（例如 `@daymade/claude-code-skills` 会失败）。
-所有插件命令都应使用 `claude plugin ...`（没有 `/plugin` 命令）。
+在 Claude Code 内使用 `/plugin ...` 斜杠命令，在终端中使用 `claude plugin ...`。
 
 **必备技能**（推荐首先安装）：
 ```bash
@@ -264,20 +288,20 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ### 2. **markdown-tools** - 文档转换套件
 
-将文档转换为 markdown，支持 Windows/WSL 路径处理和 Obsidian 集成。
+将文档转换为 markdown，支持 Windows/WSL 路径处理和 PDF 图片提取。
 
 **使用场景：**
 - 转换 .doc/.docx/PDF/PPTX 为 markdown
+- 从 PDF 文件中提取图片
 - 处理 Confluence 导出
 - 处理 Windows/WSL 路径转换
-- 使用 markitdown 工具
 
 **主要功能：**
 - 多格式文档转换
-- Confluence 导出处理
+- PDF 图片提取（使用 PyMuPDF）
 - Windows/WSL 路径自动化
-- Obsidian vault 集成
-- 路径转换辅助脚本
+- Confluence 导出处理
+- 路径转换和图片提取辅助脚本
 
 **🎬 实时演示**
 
