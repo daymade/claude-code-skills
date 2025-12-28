@@ -48,6 +48,18 @@ The `skill-creator` is the **meta-skill** that enables you to build, validate, a
 
 ### Quick Install
 
+**In Claude Code (in-app):**
+```text
+/plugin marketplace add daymade/claude-code-skills
+```
+
+Then:
+1. Select **Browse and install plugins**
+2. Select **daymade/claude-code-skills**
+3. Select **skill-creator**
+4. Select **Install now**
+
+**From your terminal (CLI):**
 ```bash
 claude plugin marketplace add https://github.com/daymade/claude-code-skills
 # Marketplace name: daymade-skills (from marketplace.json)
@@ -88,6 +100,18 @@ Claude Code, with skill-creator loaded, will guide you through the entire skill 
 
 ## 🚀 Quick Installation
 
+### Install Inside Claude Code (In-App)
+
+```text
+/plugin marketplace add daymade/claude-code-skills
+```
+
+Then:
+1. Select **Browse and install plugins**
+2. Select **daymade/claude-code-skills**
+3. Select the plugin you want
+4. Select **Install now**
+
 ### Automated Installation (Recommended)
 
 **macOS/Linux:**
@@ -109,7 +133,7 @@ claude plugin marketplace add https://github.com/daymade/claude-code-skills
 
 Marketplace name is `daymade-skills` (from marketplace.json). Use `@daymade-skills` when installing plugins.
 Do not use the repo path as a marketplace name (e.g. `@daymade/claude-code-skills` will fail).
-All plugin commands should use `claude plugin ...` (there is no `/plugin` command).
+In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude plugin ...`.
 
 **Essential Skill** (recommended first install):
 ```bash
@@ -242,20 +266,20 @@ Comprehensive GitHub operations using gh CLI and GitHub API.
 
 ### 2. **markdown-tools** - Document Conversion Suite
 
-Converts documents to markdown with Windows/WSL path handling and Obsidian integration.
+Converts documents to markdown with Windows/WSL path handling and PDF image extraction.
 
 **When to use:**
 - Converting .doc/.docx/PDF/PPTX to markdown
+- Extracting images from PDF files
 - Processing Confluence exports
 - Handling Windows/WSL path conversions
-- Working with markitdown utility
 
 **Key features:**
 - Multi-format document conversion
-- Confluence export processing
+- PDF image extraction using PyMuPDF
 - Windows/WSL path automation
-- Obsidian vault integration
-- Helper scripts for path conversion
+- Confluence export processing
+- Helper scripts for path conversion and image extraction
 
 **🎬 Live Demo**
 
