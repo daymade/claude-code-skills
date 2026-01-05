@@ -25,6 +25,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.18.2] - 2026-01-05
+
+### Changed
+- **claude-md-progressive-disclosurer**: Enhanced workflow with safety and verification features
+  - Added mandatory backup step (Step 0) before any modifications
+  - Added pre-execution verification checklist (Step 3.5) to prevent information loss
+  - Added post-optimization testing (Step 5) for discoverability validation
+  - Added exception criteria for size guidelines (safety-critical, high-frequency, security-sensitive)
+  - Added project-level vs user-level CLAUDE.md guidance
+  - Updated references/progressive_disclosure_principles.md with verification methods
+- Updated claude-md-progressive-disclosurer plugin version from 1.0.0 to 1.0.1
+
 ## [1.18.1] - 2025-12-28
 
 ### Changed

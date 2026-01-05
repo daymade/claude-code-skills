@@ -46,7 +46,20 @@ Every line in CLAUDE.md consumes context tokens on EVERY conversation. Moving 10
 | 1-10 | Keep in CLAUDE.md |
 | 11-30 | Consider consolidating or moving |
 | 31-50 | Strongly consider moving to references |
-| 50+ | Must move to references or extract to skill |
+| 50+ | Move to references or extract to skill |
+
+### Exceptions (Keep Regardless of Size)
+
+**Do NOT move** even if >50 lines:
+
+| Category | Reason | Examples |
+|----------|--------|----------|
+| **Safety-critical** | Severe consequences if forgotten | Deployment protocols, production access rules |
+| **High-frequency** | Used in most conversations | Core commands, common patterns |
+| **Easily violated** | Claude ignores when not visible | Style rules, permission checks |
+| **Security-sensitive** | Must always be enforced | Data handling, access restrictions |
+
+**Rule**: If forgetting causes production incidents, data loss, or security breaches → keep visible.
 
 ## Reference File Organization
 
@@ -86,3 +99,49 @@ After optimization, verify:
 2. **Information preserved**: All functionality still accessible
 3. **Discoverability**: Claude finds moved content when needed
 4. **Maintenance**: Easier to update individual reference files
+
+### Verification Methods
+
+#### 1. Information Preservation Check
+
+Before executing, create a checklist of key items from each moved section:
+
+```markdown
+| Key Item | Original Line | New Location | Verified |
+|----------|---------------|--------------|----------|
+| Server IP | L123 | infra.md:15 | [ ] |
+| Password | L200 | infra.md:42 | [ ] |
+| Critical rule | L45 | Kept | [ ] |
+```
+
+#### 2. Discoverability Test
+
+After optimization, test with real queries:
+
+```
+Test: "How do I deploy to production?"
+Expected: Should find deployment steps in reference file
+
+Test: "What's the database password?"
+Expected: Should find in infrastructure reference
+
+Test: "Can I force push to main?"
+Expected: Should find rule (ideally still in CLAUDE.md)
+```
+
+#### 3. Pointer Verification Script
+
+```bash
+# Check all referenced files exist
+grep -oh '`[^`]*\.md`' ~/.claude/CLAUDE.md | \
+  sed 's/`//g' | while read f; do
+    test -f "$f" && echo "✓ $f" || echo "✗ MISSING: $f"
+  done
+```
+
+#### 4. Backup Comparison
+
+```bash
+# See what was removed
+diff ~/.claude/CLAUDE.md.bak.* ~/.claude/CLAUDE.md | grep "^<"
+```
