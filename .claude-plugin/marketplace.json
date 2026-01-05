@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, and iOS app development with XcodeGen and SwiftUI",
-    "version": "1.18.1",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, and fact-checking with automated corrections",
+    "version": "1.19.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -259,6 +259,16 @@
       "category": "developer-tools",
       "keywords": ["ios", "xcodegen", "swiftui", "spm", "avfoundation", "camera", "code-signing", "device-deployment", "swift", "xcode", "testing"],
       "skills": ["./iOS-APP-developer"]
+    },
+    {
+      "name": "fact-checker",
+      "description": "Verifies factual claims in documents using web search and official sources, then proposes corrections with user confirmation. Use when the user asks to fact-check, verify information, validate claims, check accuracy, or update outdated information in documents. Supports AI model specs, technical documentation, statistics, and general factual statements",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": ["fact-checking", "verification", "accuracy", "sources", "validation", "corrections", "web-search"],
+      "skills": ["./fact-checker"]
     }
   ]
 }
