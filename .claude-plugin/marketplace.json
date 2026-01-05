@@ -225,7 +225,7 @@
       "description": "Optimize user CLAUDE.md files by applying progressive disclosure principles. This skill should be used when users want to reduce CLAUDE.md bloat, move detailed content to references, extract reusable patterns into skills, or improve context efficiency. Triggers include optimize CLAUDE.md, reduce CLAUDE.md size, apply progressive disclosure, or complaints about CLAUDE.md being too long",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "productivity",
       "keywords": ["claude-md", "progressive-disclosure", "optimization", "context-efficiency", "configuration", "token-savings"],
       "skills": ["./claude-md-progressive-disclosurer"]
