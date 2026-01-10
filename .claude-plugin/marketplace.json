@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, and fact-checking with automated corrections",
-    "version": "1.19.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, and MCP server to Claude Skills conversion with 90%+ context savings",
+    "version": "1.20.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -269,6 +269,16 @@
       "category": "productivity",
       "keywords": ["fact-checking", "verification", "accuracy", "sources", "validation", "corrections", "web-search"],
       "skills": ["./fact-checker"]
+    },
+    {
+      "name": "mcp-skills-plugin",
+      "description": "Convert MCP servers to Claude Skills with progressive disclosure pattern, reducing context usage by 90%+. Use when users want to convert MCP to skill, create skill from MCP, list MCP servers, batch convert MCP, generate skills from .mcp.json, or work with MCP server configurations. Includes session start hook for auto-loading MCP Skills Registry",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": ["mcp", "skills", "context-efficiency", "progressive-disclosure", "mcp-server", "conversion", "token-savings"],
+      "skills": ["./mcp-skills-plugin"]
     }
   ]
 }
