@@ -25,6 +25,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.21.1] - 2026-01-11
+
+### Changed
+- **Updated Skill**: macos-cleaner v1.0.0 → v1.1.0 - Major improvements based on real-world usage
+  - Added "Value Over Vanity" principle: Goal is identifying truly useless items, not maximizing cleanup numbers
+  - Added "Network Environment Awareness": Consider slow internet (especially in China) when recommending cache deletion
+  - Added "Impact Analysis Required": Every cleanup recommendation must explain consequences
+  - Added comprehensive "Anti-Patterns" section: What NOT to delete (Xcode DerivedData, npm _cacache, uv cache, Playwright, iOS DeviceSupport, etc.)
+  - Added "Multi-Layer Deep Exploration" guide: Complete tmux + Mole TUI navigation workflow
+  - Added "High-Quality Report Template": Proven 3-tier classification report format (🟢/🟡/🔴)
+  - Added "Report Quality Checklist": 8-point verification before presenting findings
+  - Added explicit prohibition of `docker volume prune -f` - must confirm per-project
+  - Updated safety principles to emphasize cache value over cleanup metrics
+
 ## [1.21.0] - 2026-01-11
 
 ### Added

@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, and intelligent macOS disk space recovery",
-    "version": "1.21.0",
+    "version": "1.21.1",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -17,8 +17,18 @@
       "strict": false,
       "version": "1.2.2",
       "category": "developer-tools",
-      "keywords": ["skill-creation", "claude-code", "development", "tooling", "workflow", "meta-skill", "essential"],
-      "skills": ["./skill-creator"]
+      "keywords": [
+        "skill-creation",
+        "claude-code",
+        "development",
+        "tooling",
+        "workflow",
+        "meta-skill",
+        "essential"
+      ],
+      "skills": [
+        "./skill-creator"
+      ]
     },
     {
       "name": "github-ops",
@@ -27,8 +37,17 @@
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
-      "keywords": ["github", "gh-cli", "pull-request", "issues", "workflows", "api"],
-      "skills": ["./github-ops"]
+      "keywords": [
+        "github",
+        "gh-cli",
+        "pull-request",
+        "issues",
+        "workflows",
+        "api"
+      ],
+      "skills": [
+        "./github-ops"
+      ]
     },
     {
       "name": "markdown-tools",
@@ -37,8 +56,17 @@
       "strict": false,
       "version": "1.1.0",
       "category": "document-conversion",
-      "keywords": ["markdown", "pdf", "docx", "confluence", "markitdown", "wsl"],
-      "skills": ["./markdown-tools"]
+      "keywords": [
+        "markdown",
+        "pdf",
+        "docx",
+        "confluence",
+        "markitdown",
+        "wsl"
+      ],
+      "skills": [
+        "./markdown-tools"
+      ]
     },
     {
       "name": "mermaid-tools",
@@ -47,8 +75,16 @@
       "strict": false,
       "version": "1.0.0",
       "category": "documentation",
-      "keywords": ["mermaid", "diagrams", "visualization", "flowchart", "sequence"],
-      "skills": ["./mermaid-tools"]
+      "keywords": [
+        "mermaid",
+        "diagrams",
+        "visualization",
+        "flowchart",
+        "sequence"
+      ],
+      "skills": [
+        "./mermaid-tools"
+      ]
     },
     {
       "name": "statusline-generator",
@@ -57,8 +93,16 @@
       "strict": false,
       "version": "1.0.0",
       "category": "customization",
-      "keywords": ["statusline", "ccusage", "git-status", "customization", "prompt"],
-      "skills": ["./statusline-generator"]
+      "keywords": [
+        "statusline",
+        "ccusage",
+        "git-status",
+        "customization",
+        "prompt"
+      ],
+      "skills": [
+        "./statusline-generator"
+      ]
     },
     {
       "name": "teams-channel-post-writer",
@@ -67,8 +111,16 @@
       "strict": false,
       "version": "1.0.0",
       "category": "communication",
-      "keywords": ["teams", "microsoft", "adaptive-cards", "communication", "announcements"],
-      "skills": ["./teams-channel-post-writer"]
+      "keywords": [
+        "teams",
+        "microsoft",
+        "adaptive-cards",
+        "communication",
+        "announcements"
+      ],
+      "skills": [
+        "./teams-channel-post-writer"
+      ]
     },
     {
       "name": "repomix-unmixer",
@@ -77,8 +129,16 @@
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
-      "keywords": ["repomix", "unmix", "extract", "xml", "conversion"],
-      "skills": ["./repomix-unmixer"]
+      "keywords": [
+        "repomix",
+        "unmix",
+        "extract",
+        "xml",
+        "conversion"
+      ],
+      "skills": [
+        "./repomix-unmixer"
+      ]
     },
     {
       "name": "llm-icon-finder",
@@ -87,8 +147,16 @@
       "strict": false,
       "version": "1.0.0",
       "category": "assets",
-      "keywords": ["icons", "ai-models", "llm", "branding", "lobe-icons"],
-      "skills": ["./llm-icon-finder"]
+      "keywords": [
+        "icons",
+        "ai-models",
+        "llm",
+        "branding",
+        "lobe-icons"
+      ],
+      "skills": [
+        "./llm-icon-finder"
+      ]
     },
     {
       "name": "cli-demo-generator",
@@ -97,8 +165,19 @@
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
-      "keywords": ["cli", "demo", "terminal", "vhs", "gif", "recording", "animation", "documentation"],
-      "skills": ["./cli-demo-generator"]
+      "keywords": [
+        "cli",
+        "demo",
+        "terminal",
+        "vhs",
+        "gif",
+        "recording",
+        "animation",
+        "documentation"
+      ],
+      "skills": [
+        "./cli-demo-generator"
+      ]
     },
     {
       "name": "cloudflare-troubleshooting",
@@ -107,8 +186,18 @@
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
-      "keywords": ["cloudflare", "troubleshooting", "ssl", "dns", "api", "debugging", "devops"],
-      "skills": ["./cloudflare-troubleshooting"]
+      "keywords": [
+        "cloudflare",
+        "troubleshooting",
+        "ssl",
+        "dns",
+        "api",
+        "debugging",
+        "devops"
+      ],
+      "skills": [
+        "./cloudflare-troubleshooting"
+      ]
     },
     {
       "name": "ui-designer",
@@ -117,8 +206,17 @@
       "strict": false,
       "version": "1.0.0",
       "category": "design",
-      "keywords": ["ui", "design-system", "mockup", "screenshot", "design-extraction", "mvp"],
-      "skills": ["./ui-designer"]
+      "keywords": [
+        "ui",
+        "design-system",
+        "mockup",
+        "screenshot",
+        "design-extraction",
+        "mvp"
+      ],
+      "skills": [
+        "./ui-designer"
+      ]
     },
     {
       "name": "ppt-creator",
@@ -127,8 +225,19 @@
       "strict": false,
       "version": "1.0.0",
       "category": "productivity",
-      "keywords": ["presentation", "powerpoint", "pptx", "slides", "marp", "charts", "data-visualization", "pyramid-principle"],
-      "skills": ["./ppt-creator"]
+      "keywords": [
+        "presentation",
+        "powerpoint",
+        "pptx",
+        "slides",
+        "marp",
+        "charts",
+        "data-visualization",
+        "pyramid-principle"
+      ],
+      "skills": [
+        "./ppt-creator"
+      ]
     },
     {
       "name": "youtube-downloader",
@@ -137,8 +246,23 @@
       "strict": false,
       "version": "1.1.0",
       "category": "utilities",
-      "keywords": ["youtube", "yt-dlp", "video-download", "audio-extraction", "mp3", "download", "hls", "m3u8", "ffmpeg", "streaming", "mux", "vimeo"],
-      "skills": ["./youtube-downloader"]
+      "keywords": [
+        "youtube",
+        "yt-dlp",
+        "video-download",
+        "audio-extraction",
+        "mp3",
+        "download",
+        "hls",
+        "m3u8",
+        "ffmpeg",
+        "streaming",
+        "mux",
+        "vimeo"
+      ],
+      "skills": [
+        "./youtube-downloader"
+      ]
     },
     {
       "name": "repomix-safe-mixer",
@@ -147,8 +271,18 @@
       "strict": false,
       "version": "1.0.0",
       "category": "security",
-      "keywords": ["repomix", "security", "credentials", "secrets-scanning", "safe-packaging", "secret-detection", "code-security"],
-      "skills": ["./repomix-safe-mixer"]
+      "keywords": [
+        "repomix",
+        "security",
+        "credentials",
+        "secrets-scanning",
+        "safe-packaging",
+        "secret-detection",
+        "code-security"
+      ],
+      "skills": [
+        "./repomix-safe-mixer"
+      ]
     },
     {
       "name": "transcript-fixer",
@@ -157,8 +291,19 @@
       "strict": false,
       "version": "1.1.0",
       "category": "productivity",
-      "keywords": ["transcription", "asr", "stt", "speech-to-text", "correction", "ai", "meeting-notes", "nlp"],
-      "skills": ["./transcript-fixer"]
+      "keywords": [
+        "transcription",
+        "asr",
+        "stt",
+        "speech-to-text",
+        "correction",
+        "ai",
+        "meeting-notes",
+        "nlp"
+      ],
+      "skills": [
+        "./transcript-fixer"
+      ]
     },
     {
       "name": "video-comparer",
@@ -167,8 +312,19 @@
       "strict": false,
       "version": "1.0.0",
       "category": "media",
-      "keywords": ["video", "comparison", "quality-analysis", "psnr", "ssim", "compression", "ffmpeg", "codec"],
-      "skills": ["./video-comparer"]
+      "keywords": [
+        "video",
+        "comparison",
+        "quality-analysis",
+        "psnr",
+        "ssim",
+        "compression",
+        "ffmpeg",
+        "codec"
+      ],
+      "skills": [
+        "./video-comparer"
+      ]
     },
     {
       "name": "qa-expert",
@@ -177,8 +333,21 @@
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
-      "keywords": ["qa", "testing", "test-cases", "bug-tracking", "google-standards", "owasp", "security", "automation", "quality-gates", "metrics"],
-      "skills": ["./qa-expert"]
+      "keywords": [
+        "qa",
+        "testing",
+        "test-cases",
+        "bug-tracking",
+        "google-standards",
+        "owasp",
+        "security",
+        "automation",
+        "quality-gates",
+        "metrics"
+      ],
+      "skills": [
+        "./qa-expert"
+      ]
     },
     {
       "name": "prompt-optimizer",
@@ -187,8 +356,19 @@
       "strict": false,
       "version": "1.1.0",
       "category": "productivity",
-      "keywords": ["prompt-engineering", "ears", "requirements", "specifications", "optimization", "domain-theory", "prompt-enhancement", "ai-prompting"],
-      "skills": ["./prompt-optimizer"]
+      "keywords": [
+        "prompt-engineering",
+        "ears",
+        "requirements",
+        "specifications",
+        "optimization",
+        "domain-theory",
+        "prompt-enhancement",
+        "ai-prompting"
+      ],
+      "skills": [
+        "./prompt-optimizer"
+      ]
     },
     {
       "name": "claude-code-history-files-finder",
@@ -197,8 +377,18 @@
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
-      "keywords": ["session-history", "recovery", "deleted-files", "conversation-history", "file-tracking", "claude-code", "history-analysis"],
-      "skills": ["./claude-code-history-files-finder"]
+      "keywords": [
+        "session-history",
+        "recovery",
+        "deleted-files",
+        "conversation-history",
+        "file-tracking",
+        "claude-code",
+        "history-analysis"
+      ],
+      "skills": [
+        "./claude-code-history-files-finder"
+      ]
     },
     {
       "name": "docs-cleaner",
@@ -207,8 +397,17 @@
       "strict": false,
       "version": "1.0.0",
       "category": "productivity",
-      "keywords": ["documentation", "cleanup", "consolidation", "redundancy", "merge", "docs"],
-      "skills": ["./docs-cleaner"]
+      "keywords": [
+        "documentation",
+        "cleanup",
+        "consolidation",
+        "redundancy",
+        "merge",
+        "docs"
+      ],
+      "skills": [
+        "./docs-cleaner"
+      ]
     },
     {
       "name": "pdf-creator",
@@ -217,8 +416,19 @@
       "strict": false,
       "version": "1.0.0",
       "category": "document-conversion",
-      "keywords": ["pdf", "markdown", "weasyprint", "chinese-fonts", "document-generation", "legal", "reports", "typography"],
-      "skills": ["./pdf-creator"]
+      "keywords": [
+        "pdf",
+        "markdown",
+        "weasyprint",
+        "chinese-fonts",
+        "document-generation",
+        "legal",
+        "reports",
+        "typography"
+      ],
+      "skills": [
+        "./pdf-creator"
+      ]
     },
     {
       "name": "claude-md-progressive-disclosurer",
@@ -227,8 +437,17 @@
       "strict": false,
       "version": "1.0.1",
       "category": "productivity",
-      "keywords": ["claude-md", "progressive-disclosure", "optimization", "context-efficiency", "configuration", "token-savings"],
-      "skills": ["./claude-md-progressive-disclosurer"]
+      "keywords": [
+        "claude-md",
+        "progressive-disclosure",
+        "optimization",
+        "context-efficiency",
+        "configuration",
+        "token-savings"
+      ],
+      "skills": [
+        "./claude-md-progressive-disclosurer"
+      ]
     },
     {
       "name": "skills-search",
@@ -237,8 +456,20 @@
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
-      "keywords": ["ccpm", "skills", "search", "install", "registry", "plugin", "marketplace", "discovery", "skill-management"],
-      "skills": ["./skills-search"]
+      "keywords": [
+        "ccpm",
+        "skills",
+        "search",
+        "install",
+        "registry",
+        "plugin",
+        "marketplace",
+        "discovery",
+        "skill-management"
+      ],
+      "skills": [
+        "./skills-search"
+      ]
     },
     {
       "name": "promptfoo-evaluation",
@@ -247,8 +478,19 @@
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
-      "keywords": ["promptfoo", "evaluation", "llm-testing", "prompt-testing", "assertions", "llm-rubric", "few-shot", "model-comparison"],
-      "skills": ["./promptfoo-evaluation"]
+      "keywords": [
+        "promptfoo",
+        "evaluation",
+        "llm-testing",
+        "prompt-testing",
+        "assertions",
+        "llm-rubric",
+        "few-shot",
+        "model-comparison"
+      ],
+      "skills": [
+        "./promptfoo-evaluation"
+      ]
     },
     {
       "name": "iOS-APP-developer",
@@ -257,8 +499,22 @@
       "strict": false,
       "version": "1.1.0",
       "category": "developer-tools",
-      "keywords": ["ios", "xcodegen", "swiftui", "spm", "avfoundation", "camera", "code-signing", "device-deployment", "swift", "xcode", "testing"],
-      "skills": ["./iOS-APP-developer"]
+      "keywords": [
+        "ios",
+        "xcodegen",
+        "swiftui",
+        "spm",
+        "avfoundation",
+        "camera",
+        "code-signing",
+        "device-deployment",
+        "swift",
+        "xcode",
+        "testing"
+      ],
+      "skills": [
+        "./iOS-APP-developer"
+      ]
     },
     {
       "name": "fact-checker",
@@ -267,8 +523,18 @@
       "strict": false,
       "version": "1.0.0",
       "category": "productivity",
-      "keywords": ["fact-checking", "verification", "accuracy", "sources", "validation", "corrections", "web-search"],
-      "skills": ["./fact-checker"]
+      "keywords": [
+        "fact-checking",
+        "verification",
+        "accuracy",
+        "sources",
+        "validation",
+        "corrections",
+        "web-search"
+      ],
+      "skills": [
+        "./fact-checker"
+      ]
     },
     {
       "name": "twitter-reader",
@@ -277,18 +543,42 @@
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
-      "keywords": ["twitter", "x", "social-media", "jina", "content-fetching", "api", "scraping", "threads"],
-      "skills": ["./twitter-reader"]
+      "keywords": [
+        "twitter",
+        "x",
+        "social-media",
+        "jina",
+        "content-fetching",
+        "api",
+        "scraping",
+        "threads"
+      ],
+      "skills": [
+        "./twitter-reader"
+      ]
     },
     {
       "name": "macos-cleaner",
       "description": "Intelligent macOS disk space analysis and cleanup with safety-first philosophy. Use when users report disk space issues, need to clean their Mac, or want to understand storage consumption. Analyzes system caches, application remnants, large files, and development environments (Docker, Homebrew, npm, pip) with risk categorization (Safe/Caution/Keep) and requires explicit user confirmation before any deletions. Includes Mole visual tool integration for hybrid workflow",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "utilities",
-      "keywords": ["macos", "disk-space", "cleanup", "cache", "storage", "developer-tools", "docker", "homebrew", "system-maintenance", "safety"],
-      "skills": ["./macos-cleaner"]
+      "keywords": [
+        "macos",
+        "disk-space",
+        "cleanup",
+        "cache",
+        "storage",
+        "developer-tools",
+        "docker",
+        "homebrew",
+        "system-maintenance",
+        "safety"
+      ],
+      "skills": [
+        "./macos-cleaner"
+      ]
     }
   ]
 }
