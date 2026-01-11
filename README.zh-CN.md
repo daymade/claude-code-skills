@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-25-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.18.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-27-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.20.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 25 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 27 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -213,6 +213,9 @@ claude plugin install promptfoo-evaluation@daymade-skills
 
 # iOS 应用开发
 claude plugin install iOS-APP-developer@daymade-skills
+
+# Twitter/X 内容获取
+claude plugin install twitter-reader@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -1034,6 +1037,55 @@ xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build
 
 ---
 
+### 25. **twitter-reader** - Twitter/X 内容获取
+
+使用 Jina.ai API 获取 Twitter/X 帖子内容，无需 JavaScript 渲染或身份验证即可绕过限制。
+
+**使用场景：**
+- 检索推文内容用于分析或文档记录
+- 获取话题回复与对话上下文
+- 从帖子中提取图片和媒体
+- 批量下载多条推文作为参考
+
+**主要功能：**
+- 无需 JavaScript 渲染或浏览器自动化
+- 无需 Twitter 身份验证
+- 返回带元数据的 Markdown 格式内容
+- 支持单条和批量获取
+- 包含作者、时间戳、帖子文本、图片和回复
+- 环境变量配置实现安全的 API 密钥管理
+
+**示例用法：**
+```bash
+# 设置你的 Jina API 密钥（从 https://jina.ai/ 获取）
+export JINA_API_KEY="your_api_key_here"
+
+# 获取单条推文
+curl "https://r.jina.ai/https://x.com/USER/status/TWEET_ID" \
+  -H "Authorization: Bearer ${JINA_API_KEY}"
+
+# 批量获取多条推文
+scripts/fetch_tweets.sh \
+  "https://x.com/user/status/123" \
+  "https://x.com/user/status/456"
+
+# 使用 Python 脚本获取到文件
+python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [twitter-reader/SKILL.md](./twitter-reader/SKILL.md) 了解完整细节和 URL 格式支持。
+
+**要求**：
+- **Jina.ai API 密钥**（从 https://jina.ai/ 获取 - 提供免费套餐）
+- **curl**（大多数系统预装）
+- **Python 3.6+**（用于 Python 脚本）
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -1091,6 +1143,9 @@ xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build
 ### iOS 应用开发
 使用 **iOS-APP-developer** 配置 XcodeGen 项目，处理 SPM 依赖、签名与部署问题。
 
+### Twitter/X 内容研究
+使用 **twitter-reader** 无需 JavaScript 渲染或身份验证即可获取推文内容。非常适合记录社交媒体讨论、归档话题、分析推文内容或从 Twitter/X 收集参考资料。与 **markdown-tools** 结合可将获取的内容转换为其他格式，或与 **repomix-safe-mixer** 结合安全地打包研究集合。
+
 ### 技能发现与管理
 使用 **skills-search** 从 CCPM 注册表中查找、安装和管理 Claude Code 技能。非常适合为特定任务发现新技能、为常见工作流安装技能包，以及保持技能集合的有序管理。
 
@@ -1129,6 +1184,7 @@ xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build
 - **skills-search**：参见 `skills-search/SKILL.md` 了解 CCPM CLI 命令和注册表操作
 - **promptfoo-evaluation**：参见 `promptfoo-evaluation/references/promptfoo_api.md` 了解评测模式
 - **iOS-APP-developer**：参见 `iOS-APP-developer/references/xcodegen-full.md` 了解 XcodeGen 选项与 project.yml 细节
+- **twitter-reader**：参见 `twitter-reader/SKILL.md` 了解 API 密钥设置和 URL 格式支持
 
 ## 🛠️ 系统要求
 
@@ -1146,6 +1202,7 @@ xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build
 - **CCPM CLI**（用于 skills-search）：`npm install -g @daymade/ccpm`
 - **Promptfoo**（用于 promptfoo-evaluation）：`npx promptfoo@latest`
 - **macOS + Xcode、XcodeGen**（用于 iOS-APP-developer）
+- **Jina.ai API 密钥**（用于 twitter-reader）：https://jina.ai/ 提供免费套餐
 
 ## ❓ 常见问题
 

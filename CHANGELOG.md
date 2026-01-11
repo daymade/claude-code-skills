@@ -25,6 +25,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.20.0] - 2026-01-11
+
+### Added
+- **New Skill**: twitter-reader - Fetch Twitter/X post content using Jina.ai API
+  - Bypass JavaScript restrictions without authentication
+  - Retrieve tweet content including author, timestamp, post text, images, and thread replies
+  - Support for individual posts or batch fetching from x.com or twitter.com URLs
+  - Bundled scripts: `fetch_tweet.py` (Python) and `fetch_tweets.sh` (Bash)
+  - Environment variable configuration for secure API key management
+  - Supports both x.com and twitter.com URL formats
+
+### Changed
+- Updated marketplace skills count from 26 to 27
+- Updated marketplace version from 1.19.0 to 1.20.0
+- Updated README.md badges (skills count: 27, version: 1.20.0)
+- Updated README.md to include twitter-reader in skills listing
+- Updated README.zh-CN.md badges (skills count: 27, version: 1.20.0)
+- Updated README.zh-CN.md to include twitter-reader in skills listing
+- Updated CLAUDE.md skills count from 26 to 27
+- Added twitter-reader use case section to README.md
+- Added twitter-reader use case section to README.zh-CN.md
+
+### Security
+- **twitter-reader**: Implemented secure API key management using environment variables
+  - Removed hardcoded API keys from all scripts and documentation
+  - Added validation for JINA_API_KEY environment variable
+  - Enforced HTTPS-only URLs in Python script
+
 ## [1.18.2] - 2026-01-05
 
 ### Changed

@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-25-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.18.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-27-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.20.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 25 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 27 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -213,6 +213,9 @@ claude plugin install promptfoo-evaluation@daymade-skills
 
 # iOS app development
 claude plugin install iOS-APP-developer@daymade-skills
+
+# Twitter/X content fetching
+claude plugin install twitter-reader@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -995,6 +998,55 @@ xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build
 
 ---
 
+### 25. **twitter-reader** - Twitter/X Content Fetching
+
+Fetch Twitter/X post content using Jina.ai API to bypass JavaScript restrictions without authentication.
+
+**When to use:**
+- Retrieving tweet content for analysis or documentation
+- Fetching thread replies and conversation context
+- Extracting images and media from posts
+- Batch downloading multiple tweets for reference
+
+**Key features:**
+- No JavaScript rendering or browser automation needed
+- No Twitter authentication required
+- Returns markdown-formatted content with metadata
+- Supports both individual and batch fetching
+- Includes author, timestamp, post text, images, and replies
+- Environment variable configuration for secure API key management
+
+**Example usage:**
+```bash
+# Set your Jina API key (get from https://jina.ai/)
+export JINA_API_KEY="your_api_key_here"
+
+# Fetch a single tweet
+curl "https://r.jina.ai/https://x.com/USER/status/TWEET_ID" \
+  -H "Authorization: Bearer ${JINA_API_KEY}"
+
+# Batch fetch multiple tweets
+scripts/fetch_tweets.sh \
+  "https://x.com/user/status/123" \
+  "https://x.com/user/status/456"
+
+# Fetch to file using Python script
+python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [twitter-reader/SKILL.md](./twitter-reader/SKILL.md) for full details and URL format support.
+
+**Requirements**:
+- **Jina.ai API key** (get from https://jina.ai/ - free tier available)
+- **curl** (pre-installed on most systems)
+- **Python 3.6+** (for Python script)
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1055,6 +1107,9 @@ Use **promptfoo-evaluation** to set up prompt tests, compare model outputs, and 
 ### For iOS App Development
 Use **iOS-APP-developer** to configure XcodeGen projects, resolve SPM dependency issues, and troubleshoot code signing or device deployment.
 
+### For Twitter/X Content Research
+Use **twitter-reader** to fetch tweet content without JavaScript rendering or authentication. Perfect for documenting social media discussions, archiving threads, analyzing tweet content, or gathering reference material from Twitter/X. Combine with **markdown-tools** to convert fetched content into other formats, or with **repomix-safe-mixer** to package research collections securely.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -1090,6 +1145,7 @@ Each skill includes:
 - **skills-search**: See `skills-search/SKILL.md` for CCPM CLI commands and registry operations
 - **promptfoo-evaluation**: See `promptfoo-evaluation/references/promptfoo_api.md` for evaluation patterns
 - **iOS-APP-developer**: See `iOS-APP-developer/references/xcodegen-full.md` for XcodeGen options and project.yml details
+- **twitter-reader**: See `twitter-reader/SKILL.md` for API key setup and URL format support
 
 ## 🛠️ Requirements
 
@@ -1102,6 +1158,7 @@ Each skill includes:
 - **FFmpeg/FFprobe** (for video-comparer): `brew install ffmpeg`, `apt install ffmpeg`, or `winget install ffmpeg`
 - **weasyprint, markdown** (for pdf-creator)
 - **VHS** (for cli-demo-generator): `brew install vhs`
+- **Jina.ai API key** (for twitter-reader): Free tier available at https://jina.ai/
 - **asciinema** (optional, for cli-demo-generator interactive recording)
 - **ccusage** (optional, for statusline cost tracking)
 - **pandas & matplotlib** (optional, for ppt-creator chart generation)
