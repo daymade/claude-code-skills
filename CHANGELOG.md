@@ -25,6 +25,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.21.0] - 2026-01-11
+
+### Added
+- **New Skill**: macos-cleaner - Intelligent macOS disk space analysis and cleanup with safety-first philosophy
+  - Smart analysis of system caches, application caches, logs, and temporary files
+  - Application remnant detection (orphaned data from uninstalled apps)
+  - Large file discovery with automatic categorization (videos, archives, databases, disk images)
+  - Development environment cleanup (Docker, Homebrew, npm, pip, Git repositories)
+  - Interactive safe deletion with user confirmation at every step
+  - Risk-level categorization (🟢 Safe / 🟡 Caution / 🔴 Keep)
+  - Integration guide for Mole visual cleanup tool
+  - Before/after cleanup reports with space recovery metrics
+  - Bundled scripts: `analyze_caches.py`, `analyze_dev_env.py`, `analyze_large_files.py`, `find_app_remnants.py`, `safe_delete.py`, `cleanup_report.py`
+  - Comprehensive safety rules and cleanup target documentation
+  - Time Machine backup recommendations for large deletions
+  - Professional user experience: analyze first, explain thoroughly, execute with confirmation
+
+### Changed
+- Updated marketplace skills count from 27 to 28
+- Updated marketplace version from 1.20.0 to 1.21.0
+- Updated README.md badges (skills count: 28, version: 1.21.0)
+- Updated README.md to include macos-cleaner in skills listing
+- Updated README.zh-CN.md badges (skills count: 28, version: 1.21.0)
+- Updated README.zh-CN.md to include macos-cleaner in skills listing
+- Updated CLAUDE.md skills count from 27 to 28
+- Added macos-cleaner use case section to README.md
+- Added macos-cleaner use case section to README.zh-CN.md
+
 ## [1.20.0] - 2026-01-11
 
 ### Added
