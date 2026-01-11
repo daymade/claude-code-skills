@@ -4,69 +4,31 @@ How to integrate [Mole](https://github.com/tw93/Mole) with the macOS Cleaner ski
 
 ## About Mole
 
-**Mole** is a visual macOS disk cleanup tool with a native macOS interface. It provides:
+**Mole** is a command-line interface (CLI) tool for macOS disk cleanup. It provides:
 
-- Visual disk usage analysis
-- One-click cleanup for common targets
-- Safe deletion with preview
-- Native macOS design
+- Interactive terminal-based disk usage analysis
+- Comprehensive cleanup for caches, logs, and application remnants
+- Developer environment cleanup (Docker, npm, pip, Homebrew, etc.)
+- Safe deletion with preview (`--dry-run`)
 
 **Repository**: https://github.com/tw93/Mole
 
-## When to Recommend Mole
+## Critical: TTY Environment Required
 
-Suggest Mole to users in these scenarios:
+**IMPORTANT**: Mole requires a TTY (terminal) environment for interactive commands. When running Mole from automated environments (scripts, Claude Code, CI/CD), use `tmux` to provide a proper TTY.
 
-### 1. User Prefers Visual Interface
+```bash
+# Create tmux session for Mole commands
+tmux new-session -d -s mole -x 120 -y 40
 
-```
-User: "I prefer clicking buttons rather than running commands"
-```
+# Send command to tmux session
+tmux send-keys -t mole 'mo analyze' Enter
 
-**Response**:
-```
-I recommend using Mole alongside these scripts:
+# Capture output
+tmux capture-pane -t mole -p
 
-1. Use the analysis scripts to understand what's using space
-2. Install Mole for visual cleanup: https://github.com/tw93/Mole
-3. Use Mole's GUI to execute cleanup with visual confirmation
-
-Would you like me to guide you through the analysis first?
-```
-
-### 2. Complex Cleanup Needs
-
-```
-User: "I have lots of cache files and don't want to run commands for each"
-```
-
-**Response**:
-```
-Mole can help with batch cleanup. It provides visual categories:
-
-- System caches
-- Application caches
-- Log files
-- Trash
-
-Install Mole and you can review and clean multiple categories at once.
-```
-
-### 3. Ongoing Maintenance
-
-```
-User: "I want to clean my Mac regularly"
-```
-
-**Response**:
-```
-For regular maintenance, I recommend:
-
-1. Keep Mole installed for weekly quick cleanups
-2. Use our analysis scripts monthly for deep analysis
-3. Use safe_delete.py for specific files/folders
-
-This hybrid approach gives you both convenience and precision.
+# Clean up when done
+tmux kill-session -t mole
 ```
 
 ## Installation
@@ -74,231 +36,407 @@ This hybrid approach gives you both convenience and precision.
 ### Check if Mole is Installed
 
 ```bash
-if [ -d "/Applications/Mole.app" ]; then
-  echo "✅ Mole is installed"
-  open -a Mole
-else
-  echo "💡 Mole is not installed"
-  echo "   Install from: https://github.com/tw93/Mole"
-fi
+# Check if mole command exists
+which mo && mo --version
 ```
 
-### Installation Methods
+Expected output:
+```
+/opt/homebrew/bin/mo
+Mole version X.Y.Z
+macOS: XX.X
+Architecture: arm64
+...
+```
 
-**Method 1: Download from GitHub Releases**
+### Installation via Homebrew (Recommended)
 
 ```bash
-# Guide user to:
-# 1. Visit https://github.com/tw93/Mole/releases
-# 2. Download latest .dmg file
-# 3. Open .dmg and drag Mole.app to /Applications
+brew install tw93/tap/mole
 ```
 
-**Method 2: Build from Source** (if user is developer)
+### Version Check and Update
+
+**IMPORTANT**: Always check if Mole is up-to-date before use. The tool updates frequently with bug fixes and new features.
 
 ```bash
-git clone https://github.com/tw93/Mole.git
-cd Mole
-# Follow build instructions in README
+# Check current vs latest version
+brew info tw93/tap/mole | head -5
+
+# If outdated, upgrade
+brew upgrade tw93/tap/mole
 ```
 
-## Workflow Integration
+## Available Commands
 
-### Hybrid Workflow: Scripts + Mole
-
-**Best practice**: Use both tools for their strengths.
-
-#### Step 1: Analysis with Scripts
-
-Run comprehensive analysis:
+**CRITICAL**: Only use `mo --help` to view help. Do NOT append `--help` to other commands as it may cause unexpected behavior.
 
 ```bash
-# System analysis
-python3 scripts/analyze_caches.py
-python3 scripts/analyze_large_files.py --threshold 100
-python3 scripts/find_app_remnants.py
-
-# Developer analysis (if applicable)
-python3 scripts/analyze_dev_env.py
+# View all commands (SAFE - the only help command)
+mo --help
 ```
 
-This gives detailed reports with safety categorization.
+Available commands from `mo --help`:
 
-#### Step 2: Review Findings
+| Command | Description | Safety |
+|---------|-------------|--------|
+| `mo` | Interactive main menu | Requires TTY |
+| `mo clean` | Free up disk space | **DANGEROUS** - deletes files |
+| `mo clean --dry-run` | Preview cleanup (no deletion) | Safe |
+| `mo analyze` | Explore disk usage | Safe (read-only) |
+| `mo status` | Monitor system health | Safe (read-only) |
+| `mo uninstall` | Remove apps completely | **DANGEROUS** |
+| `mo purge` | Remove old project artifacts | **DANGEROUS** |
+| `mo optimize` | Check and maintain system | Caution required |
+| `mo installer` | Find and remove installer files | Caution required |
 
-Present findings to user in readable format (see SKILL.md Step 4).
+## mo analyze vs mo clean --dry-run
 
-#### Step 3: Execute Cleanup
+**CRITICAL**: These are two different tools with different purposes. Use the right tool for the job.
 
-For different types of cleanup:
+### Comparison Table
 
-**Option A: Use Mole** (for batch operations)
-- System caches: Use Mole's "System" category
-- Application caches: Use Mole's "Applications" category
-- Trash: Use Mole's "Trash" feature
+| Aspect | `mo analyze` | `mo clean --dry-run` |
+|--------|--------------|---------------------|
+| **Primary Purpose** | Explore disk usage interactively | Preview cleanup categories |
+| **Use When** | Understanding what consumes space | Ready to see cleanup options |
+| **Interface** | Interactive TUI with tree navigation | Static list output |
+| **Navigation** | Arrow keys to drill into directories | No navigation |
+| **Detail Level** | Full directory breakdown | Only cleanup-eligible items |
+| **Recommended Order** | **Use FIRST** | Use SECOND (after analyze) |
 
-**Option B: Use Scripts** (for precision)
-- Large files: Use `safe_delete.py` with specific paths
-- Application remnants: Use `safe_delete.py` with confirmed orphans
-- Dev environment: Run cleanup commands directly
+### When to Use Each
 
-**Option C: Manual** (for sensitive items)
-- Guide user to review in Finder
-- User deletes manually
+**Use `mo analyze` when:**
+- User asks "What's taking up space?" or "Where is my disk space going?"
+- Need to understand storage consumption patterns
+- Want to explore specific directories interactively
+- Investigating unexpected disk usage
 
-### Example Integrated Session
+**Use `mo clean --dry-run` when:**
+- Already know what's consuming space (after `mo analyze`)
+- User is ready to see cleanup recommendations
+- Need a quick preview of what can be cleaned
+- Preparing to run `mo clean` for actual cleanup
 
-```markdown
-🔍 Analysis Results
+### Workflow Recommendation
 
-I've analyzed your Mac and found:
-- System caches: 45 GB (safe to clean)
-- Large files: 38 GB (need review)
-- App remnants: 8 GB (medium confidence)
-- Docker: 25 GB (requires caution)
-
-Recommended cleanup approach:
-
-1. **Use Mole for safe batch cleanup** (45 GB)
-   - Open Mole
-   - Select "System Caches"
-   - Click "Clean"
-   - This will clear ~/Library/Caches safely
-
-2. **Use scripts for large file review** (38 GB)
-   - I found 20 large files >100MB
-   - Let me show you the list
-   - We'll use safe_delete.py to delete selected files
-
-3. **Manual review for app remnants** (8 GB)
-   - 5 folders for possibly uninstalled apps
-   - Please verify these apps are truly gone:
-     - Adobe Creative Cloud (3 GB)
-     - Old Xcode version (2 GB)
-     - ...
-
-4. **Manual Docker cleanup** (25 GB)
-   - Requires technical review
-   - I'll guide you through checking volumes
-
-Shall we proceed with step 1 using Mole?
+```
+Step 1: mo analyze (understand the problem)
+    ↓
+Step 2: Present findings to user
+    ↓
+Step 3: mo clean --dry-run (show cleanup options)
+    ↓
+Step 4: User confirms cleanup categories
+    ↓
+Step 5: User runs mo clean (actual cleanup)
 ```
 
-## Mole Feature Mapping
+### Common Mistake
 
-Map Mole's features to our script capabilities:
+```bash
+# ❌ WRONG: Jumping straight to cleanup preview
+tmux send-keys -t mole 'mo clean --dry-run' Enter
+# This only shows cleanup-eligible items, not the full picture
 
-| Mole Feature | Script Equivalent | Use Case |
-|--------------|-------------------|----------|
-| System Caches | `analyze_caches.py --user-only` | Quick cache cleanup |
-| Application Caches | `analyze_caches.py` | Per-app cache analysis |
-| Large Files | `analyze_large_files.py` | Find space hogs |
-| Trash | N/A (Finder) | Empty trash |
-| Duplicate Files | Manual `fdupes` | Find duplicates |
+# ✅ CORRECT: Start with disk analysis
+tmux send-keys -t mole 'mo analyze' Enter
+# This shows where ALL disk space is going
+```
 
-**Mole's advantages**:
-- Visual representation
-- One-click cleanup
-- Native macOS integration
+### Interactive TUI Navigation (mo analyze)
 
-**Scripts' advantages**:
-- Developer-specific tools (Docker, npm, pip)
-- Application remnant detection
-- Detailed categorization and safety notes
-- Batch operations with confirmation
+`mo analyze` provides an interactive tree view. Navigate using tmux key sequences:
 
-## Coordinated Cleanup Strategy
+```bash
+# Start analysis
+tmux send-keys -t mole 'mo analyze' Enter
 
-### For Non-Technical Users
+# Wait for scan to complete (5-10 minutes for Home directory!)
+sleep 300  # 5 minutes for large directories
 
-1. **Install Mole** - Primary cleanup tool
-2. **Keep scripts** - For occasional deep analysis
-3. **Workflow**:
-   - Monthly: Run `analyze_caches.py` to see what's using space
-   - Use Mole to execute cleanup
-   - Special cases: Use scripts
+# Capture current view
+tmux capture-pane -t mole -p
 
-### For Technical Users / Developers
+# Navigate down to next item
+tmux send-keys -t mole Down
 
-1. **Keep both** - Mole for quick cleanup, scripts for precision
-2. **Workflow**:
-   - Weekly: Mole for routine cache cleanup
-   - Monthly: Full script analysis for deep cleaning
-   - As needed: Script-based cleanup for dev environment
+# Expand/enter selected directory
+tmux send-keys -t mole Enter
 
-### For Power Users
+# Go back up
+tmux send-keys -t mole Up
 
-1. **Scripts only** - Full control and automation
-2. **Workflow**:
-   - Schedule analysis scripts with cron/launchd
-   - Review reports
-   - Execute cleanup with `safe_delete.py` or direct commands
+# Quit the TUI
+tmux send-keys -t mole 'q'
+```
 
-## Limitations & Complementary Use
+## Safe Analysis Workflow
 
-### What Mole Does Well
+### Step 1: Check Version First
 
-✅ Visual disk usage analysis
-✅ Safe cache cleanup
-✅ User-friendly interface
-✅ Quick routine maintenance
+```bash
+# Always ensure latest version
+brew info tw93/tap/mole | head -3
+```
 
-### What Mole Doesn't Do (Use Scripts For)
+### Step 2: Create TTY Environment
 
-❌ Docker cleanup
-❌ Homebrew cache (command-line only)
-❌ npm/pip cache
-❌ Application remnant detection with confidence levels
-❌ Large .git directory detection
-❌ Development environment analysis
+```bash
+# Start tmux session
+tmux new-session -d -s mole -x 120 -y 40
+```
 
-### Recommended Approach
+### Step 3: Run Analysis (Safe Commands Only)
 
-**Use Mole for**: 80% of routine cleanup needs
-**Use Scripts for**: 20% of specialized/technical cleanup needs
+```bash
+# Disk analysis - SAFE, read-only
+tmux send-keys -t mole 'mo analyze' Enter
+
+# Wait for scan to complete (be patient!)
+sleep 30  # Home directory scanning can take several minutes
+
+# Capture results
+tmux capture-pane -t mole -p
+```
+
+### Step 4: Preview Cleanup (No Actual Deletion)
+
+```bash
+# Preview what would be cleaned - SAFE
+tmux send-keys -t mole 'mo clean --dry-run' Enter
+sleep 10
+tmux capture-pane -t mole -p
+```
+
+### Step 5: User Confirmation Required
+
+**NEVER** execute `mo clean` without explicit user confirmation. Always:
+1. Show the `--dry-run` preview results to user
+2. Wait for user to confirm each category
+3. User runs the actual cleanup command themselves
+
+## Safety Principles
+
+### 0. Value Over Vanity (Most Important)
+
+**Your goal is NOT to maximize cleaned space.** Your goal is to identify truly useless items while preserving valuable caches.
+
+**The vanity trap**: Showing "Cleaned 50GB!" feels impressive but:
+- User spends 2 hours redownloading npm packages
+- Next Xcode build takes 30 minutes instead of 30 seconds
+- AI project fails because models need redownload
+
+**Items that should usually be KEPT:**
+| Item | Why Keep It |
+|------|-------------|
+| Xcode DerivedData | Saves 10-30 min per rebuild |
+| npm _cacache | Avoids re-downloading all packages |
+| ~/.cache/uv | Python package cache |
+| Playwright browsers | Avoids 2GB+ redownload |
+| iOS DeviceSupport | Needed for device debugging |
+| Docker stopped containers | May restart anytime |
+
+**Items that are truly safe to delete:**
+| Item | Why Safe |
+|------|----------|
+| Trash | User already deleted |
+| Homebrew old versions | Replaced by newer |
+| npm _npx | Temporary executions |
+
+### 1. Never Execute Dangerous Commands Automatically
+
+```bash
+# ❌ NEVER do this automatically
+mo clean
+mo uninstall
+mo purge
+docker system prune -a --volumes
+docker volume prune -f
+rm -rf ~/Library/Caches/*
+
+# ✅ ALWAYS use preview/dry-run first
+mo clean --dry-run
+```
+
+### 2. Patience is Critical
+
+- `mo analyze` on large home directories can take 5-10 minutes
+- Do NOT interrupt or skip slow scans
+- Report progress to user regularly
+- Wait for complete results before making decisions
+
+### 3. User Executes Cleanup
+
+After analysis and confirmation:
+```
+Present findings to user, then provide command for them to run:
+
+"Based on the analysis, you can reclaim approximately 30GB.
+To proceed, please run this command in your terminal:
+
+    mo clean
+
+You will be prompted to confirm each category interactively."
+```
+
+## Mole Command Details
+
+### mo analyze
+
+Interactive disk usage explorer. Scans these locations:
+- Home directory (`~`)
+- App Library (`~/Library/Application Support`)
+- Applications (`/Applications`)
+- System Library (`/Library`)
+- Volumes
+
+**Usage in tmux**:
+```bash
+tmux send-keys -t mole 'mo analyze' Enter
+
+# Navigate with arrow keys (send via tmux)
+tmux send-keys -t mole Down  # Move to next item
+tmux send-keys -t mole Enter # Select/expand item
+tmux send-keys -t mole 'q'   # Quit
+```
+
+### mo clean --dry-run
+
+Preview cleanup without deletion. Shows:
+- User essentials (caches, logs, trash)
+- macOS system caches
+- Browser caches
+- Developer tool caches (npm, pip, uv, Homebrew, Docker, etc.)
+
+**Whitelist**: Mole maintains a whitelist of protected patterns. Check with:
+```bash
+mo clean --whitelist
+```
+
+### mo status
+
+System health monitoring (CPU, memory, disk, network). Requires TTY for real-time display.
+
+### mo purge
+
+Cleans old project build artifacts (node_modules, target, venv, etc.) from configured directories.
+
+Check/configure scan paths:
+```bash
+mo purge --paths
+```
+
+## Integration with Claude Code
+
+### Recommended Workflow
+
+1. **Version check**: Ensure Mole is installed and up-to-date
+2. **TTY setup**: Create tmux session for interactive commands
+3. **Analysis**: Run `mo analyze` or `mo clean --dry-run`
+4. **Progress reporting**: Inform user of scan progress
+5. **Present findings**: Show structured results to user
+6. **User confirmation**: Wait for explicit approval
+7. **Provide command**: Give user the command to run themselves
+
+### Example Session
+
+```python
+# 1. Check version
+$ brew info tw93/tap/mole | head -3
+# Output: tw93/tap/mole: stable 1.20.0
+# Installed: 1.13.13 -> needs upgrade
+
+# 2. Upgrade if needed
+$ brew upgrade tw93/tap/mole
+
+# 3. Create tmux session
+$ tmux new-session -d -s mole -x 120 -y 40
+
+# 4. Run dry-run analysis
+$ tmux send-keys -t mole 'mo clean --dry-run' Enter
+
+# 5. Wait and capture output
+$ sleep 15 && tmux capture-pane -t mole -p
+
+# 6. Present to user:
+"""
+📊 Cleanup Preview (dry-run - no files deleted)
+
+User essentials:
+  - User app cache: 16.67 GB
+  - User app logs: 102.3 MB
+  - Trash: 642.9 MB
+
+Developer tools:
+  - uv cache: 9.96 GB
+  - npm cache: (pending)
+  - Docker: (pending)
+
+Total recoverable: ~27 GB
+
+To proceed with cleanup, please run in your terminal:
+    mo clean
+"""
+```
 
 ## Troubleshooting
 
-### Mole Not Opening
+### "device not configured" Error
 
+**Cause**: Command run without TTY environment.
+
+**Solution**: Use tmux:
 ```bash
-# Check if Mole is installed
-ls -l /Applications/Mole.app
-
-# Try opening from command line (see error messages)
-open -a Mole
-
-# If not installed
-echo "Download from: https://github.com/tw93/Mole/releases"
+tmux new-session -d -s mole
+tmux send-keys -t mole 'mo status' Enter
 ```
 
-### Mole Shows Different Numbers than Scripts
+### Scan Stuck on "pending"
 
-**Explanation**:
-- Mole uses different calculation methods
-- Scripts use `du` command (more accurate for directory sizes)
-- Both are valid, differences typically <5%
+**Cause**: Large directories take time to scan.
 
-**Not a problem**: Use Mole's numbers for decisions
+**Solution**: Be patient. Home directory with many files can take 5-10 minutes. Monitor progress:
+```bash
+# Check if still scanning (spinner animation in output)
+tmux capture-pane -t mole -p | tail -10
+```
 
-### Mole Can't Delete Some Caches
+### Non-Interactive Mode Auto-Executes
 
-**Reason**: Permission issues (some caches are protected)
+**WARNING**: Some Mole commands may auto-execute in non-TTY environments without confirmation!
+
+**Solution**: ALWAYS use tmux for ANY Mole command, even help:
+```bash
+# ❌ DANGEROUS - may auto-execute
+mo clean --help  # Might run cleanup instead of showing help!
+
+# ✅ SAFE - use mo --help only
+mo --help  # The ONLY safe help command
+```
+
+### Version Mismatch
+
+**Cause**: Local version outdated.
 
 **Solution**:
-1. Use scripts with sudo for system caches
-2. Or manually delete in Finder with authentication
+```bash
+# Check versions
+brew info tw93/tap/mole
+
+# Upgrade
+brew upgrade tw93/tap/mole
+```
 
 ## Summary
 
-**Best Practice**: Use both tools
-
-- **Mole**: Visual cleanup, routine maintenance, user-friendly
-- **Scripts**: Deep analysis, developer tools, precise control
-
-**Workflow**:
-1. Analyze with scripts (comprehensive report)
-2. Execute with Mole (safe and visual) OR scripts (precise and technical)
-3. Maintain with Mole (weekly/monthly routine)
-
-This combination provides the best user experience for macOS cleanup.
+**Key Points**:
+1. Mole is a **CLI tool**, not a GUI application
+2. Install via `brew install tw93/tap/mole`
+3. **Always check version** before use
+4. **Use tmux** for all interactive commands
+5. `mo --help` is the **ONLY safe help command**
+6. **Never auto-execute** cleanup commands
+7. **Be patient** - scans take time
+8. **User runs cleanup** - provide command, don't execute
