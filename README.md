@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-27-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.20.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-28-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.21.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 27 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 28 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -1047,6 +1047,106 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 
 ---
 
+### 26. **macos-cleaner** - Intelligent macOS Disk Space Recovery
+
+**The safest way to reclaim disk space on macOS.** Analyze system caches, application remnants, large files, and development environments with intelligent categorization and interactive cleanup.
+
+**Why macos-cleaner stands out:**
+- **Safety-First Philosophy**: Never deletes without explicit user confirmation. Every operation includes risk assessment (🟢 Safe / 🟡 Caution / 🔴 Keep).
+- **Intelligence Over Automation**: Analyzes first, explains thoroughly, then lets you decide. Unlike one-click cleaners that blindly delete, we help you understand what you're removing and why.
+- **Developer-Friendly**: Deep analysis of Docker, Homebrew, npm, pip caches - tools that generic cleaners miss.
+- **Transparent & Educational**: Every recommendation includes an explanation of what the file is, why it's safe (or not), and what happens if you delete it.
+- **Professional Quality**: Built by developers who know the pain of accidentally deleting important files. Includes comprehensive safety checks and Time Machine backup recommendations.
+
+**Our design principles:**
+1. **User Control First**: You make the decisions, we provide the insights
+2. **Explain Everything**: No mysterious deletions - full transparency on impact
+3. **Conservative Defaults**: When uncertain, we preserve rather than delete
+4. **Developer Context**: Understand development tool caches, not just system files
+5. **Hybrid Approach**: Combine script precision with visual tools (Mole integration)
+
+**When to use:**
+- Your Mac is running out of disk space (>80% full)
+- You're a developer with Docker/npm/pip/Homebrew caches piling up
+- You want to understand what's consuming space, not just delete blindly
+- You need to clean up after uninstalled applications
+- You prefer understanding over automation
+
+**Key features:**
+- **Smart Cache Analysis**: Categorizes system caches, app caches, logs by safety level
+- **Application Remnant Detection**: Finds orphaned data from uninstalled apps with confidence scoring
+- **Large File Discovery**: Intelligent categorization (videos, archives, databases, disk images, build artifacts)
+- **Development Environment Cleanup**: Docker (images, containers, volumes, build cache), Homebrew, npm, pip, old Git repos
+- **Interactive Safe Deletion**: Batch confirmation, selective deletion, undo-friendly (uses Trash when possible)
+- **Before/After Reports**: Track space recovery with detailed breakdown
+- **Mole Integration**: Seamless workflow with visual cleanup tool for GUI preferences
+- **Risk Categorization**: Every item labeled with safety level and explanation
+- **Time Machine Awareness**: Recommends backups before large deletions (>10 GB)
+
+**What makes us different:**
+- ✅ **Trust Through Transparency**: Other cleaners hide what they delete. We show everything and explain why.
+- ✅ **Developer-Centric**: We clean Docker, not just browser caches. We understand `.git` directories, `node_modules`, and build artifacts.
+- ✅ **Safety Checks Built-In**: Protection against deleting system files, user data, credentials, active databases, or files in use.
+- ✅ **Educational**: Learn what's safe to delete and why, so you can maintain your Mac confidently.
+- ❌ **Not a One-Click Solution**: We don't delete automatically. If you want "clean everything now", use other tools. We're for users who want control.
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install macos-cleaner@daymade-skills
+
+# Ask Claude Code to analyze your Mac
+"My Mac is running out of space, help me analyze what's using storage"
+
+# Claude will:
+# 1. Run comprehensive disk analysis
+# 2. Present categorized findings with safety levels
+# 3. Explain each category (caches, remnants, large files, dev tools)
+# 4. Recommend cleanup approach
+# 5. Execute ONLY what you confirm
+
+# Example analysis output:
+📊 Disk Space Analysis
+━━━━━━━━━━━━━━━━━━━━━━━━
+Total:     500 GB
+Used:      450 GB (90%)
+Available:  50 GB (10%)
+
+🟢 Safe to Clean (95 GB):
+  - System caches:     45 GB (apps regenerate automatically)
+  - Homebrew cache:     5 GB (reinstalls when needed)
+  - npm cache:          3 GB (safe to clear)
+  - Old logs:           8 GB (diagnostic data only)
+  - Trash:             34 GB (already marked for deletion)
+
+🟡 Review Recommended (62 GB):
+  - Large downloads:   38 GB (may contain important files)
+  - App remnants:       8 GB (verify apps are truly uninstalled)
+  - Docker images:     12 GB (may be in use)
+  - Old .git repos:     4 GB (verify project is archived)
+
+🔴 Keep Unless Certain (0 GB):
+  - No high-risk items detected
+
+Recommendation: Start with 🟢 Safe items (95 GB), then review 🟡 items together.
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [macos-cleaner/references/](./macos-cleaner/references/) for:
+- `cleanup_targets.md` - Detailed explanations of every cleanup target
+- `mole_integration.md` - How to combine scripts with Mole visual tool
+- `safety_rules.md` - Comprehensive safety guidelines and what to never delete
+
+**Requirements**:
+- **Python 3.6+** (pre-installed on macOS)
+- **macOS** (tested on macOS 10.15+)
+- **Optional**: [Mole](https://github.com/tw93/Mole) for visual cleanup interface
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1107,6 +1207,9 @@ Use **promptfoo-evaluation** to set up prompt tests, compare model outputs, and 
 ### For iOS App Development
 Use **iOS-APP-developer** to configure XcodeGen projects, resolve SPM dependency issues, and troubleshoot code signing or device deployment.
 
+### For macOS System Maintenance & Disk Space Recovery
+Use **macos-cleaner** to intelligently analyze and reclaim disk space on macOS with safety-first approach. Unlike one-click cleaners that blindly delete, macos-cleaner explains what each file is, categorizes by risk level (🟢/🟡/🔴), and requires explicit confirmation before any deletion. Perfect for developers dealing with Docker/Homebrew/npm/pip cache bloat, users wanting to understand storage consumption, or anyone who values transparency over automation. Combines script-based precision with optional Mole visual tool integration for hybrid workflow.
+
 ### For Twitter/X Content Research
 Use **twitter-reader** to fetch tweet content without JavaScript rendering or authentication. Perfect for documenting social media discussions, archiving threads, analyzing tweet content, or gathering reference material from Twitter/X. Combine with **markdown-tools** to convert fetched content into other formats, or with **repomix-safe-mixer** to package research collections securely.
 
@@ -1146,6 +1249,7 @@ Each skill includes:
 - **promptfoo-evaluation**: See `promptfoo-evaluation/references/promptfoo_api.md` for evaluation patterns
 - **iOS-APP-developer**: See `iOS-APP-developer/references/xcodegen-full.md` for XcodeGen options and project.yml details
 - **twitter-reader**: See `twitter-reader/SKILL.md` for API key setup and URL format support
+- **macos-cleaner**: See `macos-cleaner/references/cleanup_targets.md` for detailed cleanup target explanations, `macos-cleaner/references/mole_integration.md` for Mole visual tool integration, and `macos-cleaner/references/safety_rules.md` for comprehensive safety guidelines
 
 ## 🛠️ Requirements
 
@@ -1163,6 +1267,7 @@ Each skill includes:
 - **ccusage** (optional, for statusline cost tracking)
 - **pandas & matplotlib** (optional, for ppt-creator chart generation)
 - **Marp CLI** (optional, for ppt-creator Marp PPTX export): `npm install -g @marp-team/marp-cli`
+- **Mole** (optional, for macos-cleaner visual cleanup): Download from https://github.com/tw93/Mole
 - **repomix** (for repomix-safe-mixer): `npm install -g repomix`
 - **CCPM CLI** (for skills-search): `npm install -g @daymade/ccpm`
 - **Promptfoo** (for promptfoo-evaluation): `npx promptfoo@latest`

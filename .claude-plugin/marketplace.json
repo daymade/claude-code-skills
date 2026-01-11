@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, and Twitter/X content fetching",
-    "version": "1.20.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, and intelligent macOS disk space recovery",
+    "version": "1.21.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -279,6 +279,16 @@
       "category": "utilities",
       "keywords": ["twitter", "x", "social-media", "jina", "content-fetching", "api", "scraping", "threads"],
       "skills": ["./twitter-reader"]
+    },
+    {
+      "name": "macos-cleaner",
+      "description": "Intelligent macOS disk space analysis and cleanup with safety-first philosophy. Use when users report disk space issues, need to clean their Mac, or want to understand storage consumption. Analyzes system caches, application remnants, large files, and development environments (Docker, Homebrew, npm, pip) with risk categorization (Safe/Caution/Keep) and requires explicit user confirmation before any deletions. Includes Mole visual tool integration for hybrid workflow",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "utilities",
+      "keywords": ["macos", "disk-space", "cleanup", "cache", "storage", "developer-tools", "docker", "homebrew", "system-maintenance", "safety"],
+      "skills": ["./macos-cleaner"]
     }
   ]
 }
