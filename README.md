@@ -1456,6 +1456,7 @@ If you find these skills useful, please:
 - [Agent Skills Guide](https://docs.claude.com/en/docs/claude-code/skills)
 - [Plugin Marketplaces](https://docs.claude.com/en/docs/claude-code/plugin-marketplaces)
 - [Anthropic Skills Repository](https://github.com/anthropics/skills)
+- [Trail of Bits Security Skills](https://github.com/trailofbits/skills) - Security skills for static analysis with CodeQL/Semgrep, variant analysis, code auditing, and fix verification
 
 ## 📞 Contact
 
