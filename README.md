@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-28-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.21.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-30-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.22.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 28 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 30 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -216,6 +216,12 @@ claude plugin install iOS-APP-developer@daymade-skills
 
 # Twitter/X content fetching
 claude plugin install twitter-reader@daymade-skills
+
+# Skill quality review and improvement
+claude plugin install skill-reviewer@daymade-skills
+
+# GitHub contribution strategy
+claude plugin install github-contributor@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -1147,6 +1153,108 @@ Recommendation: Start with 🟢 Safe items (95 GB), then review 🟡 items toget
 
 ---
 
+### 27. **skill-reviewer** - Skill Quality Review & Improvement
+
+Review and improve Claude Code skills against official best practices with three powerful modes.
+
+**When to use:**
+- Validating your own skills before publishing
+- Evaluating others' skill repositories
+- Contributing improvements to open-source skills via auto-PR
+- Ensuring skills follow marketplace standards
+
+**Key features:**
+- **Self-review mode**: Run automated validation via skill-creator scripts
+- **External review mode**: Clone, analyze, and generate improvement reports
+- **Auto-PR mode**: Fork → improve → submit PR with additive-only changes
+- **Evaluation checklist**: Frontmatter, instructions, resources verification
+- **Additive-only principle**: Never delete files when contributing to others
+- **PR guidelines**: Tone recommendations and professional templates
+- **Auto-install dependencies**: Automatically installs skill-creator if missing
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install skill-reviewer@daymade-skills
+
+# Self-review your skill
+"Validate my skill at ~/my-skills/my-awesome-skill"
+
+# Review external skill repository
+"Review the skills at https://github.com/user/skill-repo"
+
+# Auto-PR improvements
+"Fork, improve, and submit PR for https://github.com/user/skill-repo"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [skill-reviewer/references/](./skill-reviewer/references/) for:
+- `evaluation_checklist.md` - Complete skill evaluation criteria
+- `pr_template.md` - Professional PR description template
+- `marketplace_template.json` - Marketplace configuration template
+
+---
+
+### 28. **github-contributor** - GitHub Contribution Strategy
+
+Strategic guide for becoming an effective GitHub contributor and building your open-source reputation.
+
+**When to use:**
+- Looking for projects to contribute to
+- Learning contribution best practices
+- Building your GitHub presence and reputation
+- Understanding how to write high-quality PRs
+
+**Key features:**
+- **Four contribution types**: Documentation, Code Quality, Bug Fixes, Features
+- **Project selection criteria**: What makes a good first project vs red flags
+- **PR excellence workflow**: Before → During → After submission checklist
+- **Reputation building ladder**: Documentation → Bug Fixes → Features → Maintainer
+- **GitHub CLI commands**: Quick reference for fork, PR, issue operations
+- **Conventional commit format**: Type, scope, description structure
+- **Common mistakes**: What to avoid and best practices
+
+**Contribution types explained:**
+```
+Level 1: Documentation fixes (lowest barrier, high impact)
+    ↓ (build familiarity)
+Level 2: Code quality (medium effort, demonstrates skill)
+    ↓ (understand codebase)
+Level 3: Bug fixes (high impact, builds trust)
+    ↓ (trusted contributor)
+Level 4: Feature additions (highest visibility)
+    ↓ (potential maintainer)
+```
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install github-contributor@daymade-skills
+
+# Find good first issues
+"Help me find projects with good first issues in Python"
+
+# Write a high-quality PR
+"Guide me through creating a PR for this bug fix"
+
+# Build contribution strategy
+"Help me plan a contribution strategy for building my GitHub profile"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [github-contributor/references/](./github-contributor/references/) for:
+- `pr_checklist.md` - Complete PR quality checklist
+- `project_evaluation.md` - How to evaluate projects for contribution
+- `communication_templates.md` - Issue and PR communication templates
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1213,6 +1321,9 @@ Use **macos-cleaner** to intelligently analyze and reclaim disk space on macOS w
 ### For Twitter/X Content Research
 Use **twitter-reader** to fetch tweet content without JavaScript rendering or authentication. Perfect for documenting social media discussions, archiving threads, analyzing tweet content, or gathering reference material from Twitter/X. Combine with **markdown-tools** to convert fetched content into other formats, or with **repomix-safe-mixer** to package research collections securely.
 
+### For Skill Quality & Open-Source Contributions
+Use **skill-reviewer** to validate your own skills against best practices before publishing, or to review and improve others' skill repositories. Combine with **github-contributor** to find high-impact open-source projects, create professional PRs, and build your contributor reputation. Perfect for developers who want to contribute to the Claude Code ecosystem or any GitHub project systematically.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -1250,6 +1361,8 @@ Each skill includes:
 - **iOS-APP-developer**: See `iOS-APP-developer/references/xcodegen-full.md` for XcodeGen options and project.yml details
 - **twitter-reader**: See `twitter-reader/SKILL.md` for API key setup and URL format support
 - **macos-cleaner**: See `macos-cleaner/references/cleanup_targets.md` for detailed cleanup target explanations, `macos-cleaner/references/mole_integration.md` for Mole visual tool integration, and `macos-cleaner/references/safety_rules.md` for comprehensive safety guidelines
+- **skill-reviewer**: See `skill-reviewer/references/evaluation_checklist.md` for complete evaluation criteria, `skill-reviewer/references/pr_template.md` for PR templates, and `skill-reviewer/references/marketplace_template.json` for marketplace configuration
+- **github-contributor**: See `github-contributor/references/pr_checklist.md` for PR quality checklist, `github-contributor/references/project_evaluation.md` for project evaluation criteria, and `github-contributor/references/communication_templates.md` for issue/PR templates
 
 ## 🛠️ Requirements
 
@@ -1354,4 +1467,4 @@ If you find these skills useful, please:
 
 **Built with ❤️ using the skill-creator skill for Claude Code**
 
-Last updated: 2025-12-20 | Marketplace version 1.18.0
+Last updated: 2026-01-15 | Marketplace version 1.22.0
