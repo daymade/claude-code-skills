@@ -164,8 +164,10 @@ Common skills users may want:
 
 Install CCPM globally:
 ```bash
-npm install -g @anthropic/ccpm
+npm install -g @daymade/ccpm
 ```
+
+For more information, visit [CCPM official website](https://ccpm.dev).
 
 ### Skill not available after install
 
