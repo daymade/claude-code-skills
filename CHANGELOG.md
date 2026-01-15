@@ -25,6 +25,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - None
 
+## [1.22.0] - 2026-01-15
+
+### Added
+- **New Skill**: skill-reviewer - Reviews and improves Claude Code skills against official best practices
+  - Self-review mode: Validate your own skills before publishing
+  - External review mode: Evaluate others' skill repositories
+  - Auto-PR mode: Fork, improve, and submit PRs to external repos
+  - Automated validation via bundled skill-creator scripts
+  - Evaluation checklist covering frontmatter, instructions, and resources
+  - Additive-only contribution principle (never delete files)
+  - PR guidelines with tone recommendations and templates
+  - Self-review checklist for respect verification
+  - References: evaluation_checklist.md, pr_template.md, marketplace_template.json
+  - Auto-install dependencies: automatically installs skill-creator if missing
+
+- **New Skill**: github-contributor - Strategic guide for becoming an effective GitHub contributor
+  - Four contribution types: Documentation, Code Quality, Bug Fixes, Features
+  - Project selection criteria with red flags
+  - PR excellence workflow with templates
+  - Reputation building ladder (Documentation → Bug Fixes → Features → Maintainer)
+  - GitHub CLI command reference
+  - Conventional commit message format
+  - Common mistakes and best practices
+  - References: pr_checklist.md, project_evaluation.md, communication_templates.md
+
+### Changed
+- Updated marketplace skills count from 28 to 30
+- Updated marketplace version from 1.21.1 to 1.22.0
+- Updated README.md badges (skills count: 30, version: 1.22.0)
+- Updated README.md to include skill-reviewer in skills listing
+- Updated README.md to include github-contributor in skills listing
+- Updated README.zh-CN.md badges (skills count: 30, version: 1.22.0)
+- Updated README.zh-CN.md to include skill-reviewer in skills listing
+- Updated README.zh-CN.md to include github-contributor in skills listing
+- Updated CLAUDE.md skills count from 28 to 30
+- Added skill-reviewer use case section to README.md
+- Added github-contributor use case section to README.md
+- Added skill-reviewer use case section to README.zh-CN.md
+- Added github-contributor use case section to README.zh-CN.md
+
 ## [1.21.1] - 2026-01-11
 
 ### Changed

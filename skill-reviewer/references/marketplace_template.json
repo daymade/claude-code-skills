@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "name": "{marketplace-name}",
+    "description": "{Brief description of the marketplace/skill collection}",
+    "owner": "{github-username}",
+    "version": "1.0.0",
+    "homepage": "https://github.com/{owner}/{repo}"
+  },
+  "plugins": [
+    {
+      "name": "{skill-name}",
+      "description": "{Copy from SKILL.md frontmatter description - must be third-person and include trigger conditions}",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "{category}",
+      "keywords": [
+        "{keyword1}",
+        "{keyword2}",
+        "{keyword3}"
+      ],
+      "skills": [
+        "./"
+      ]
+    }
+  ]
+}

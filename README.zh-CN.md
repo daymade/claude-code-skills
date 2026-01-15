@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-28-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.21.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-30-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.22.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 28 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 30 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -219,6 +219,12 @@ claude plugin install twitter-reader@daymade-skills
 
 # macOS 磁盘空间清理
 claude plugin install macos-cleaner@daymade-skills
+
+# 技能质量审查与改进
+claude plugin install skill-reviewer@daymade-skills
+
+# GitHub 贡献策略
+claude plugin install github-contributor@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -1189,6 +1195,108 @@ claude plugin install macos-cleaner@daymade-skills
 
 ---
 
+### 27. **skill-reviewer** - 技能质量审查与改进
+
+以三种强大模式审查和改进 Claude Code 技能，确保符合官方最佳实践。
+
+**使用场景：**
+- 发布前验证你自己的技能
+- 评估他人的技能仓库
+- 通过 auto-PR 为开源技能贡献改进
+- 确保技能符合市场标准
+
+**主要功能：**
+- **自检模式**：通过 skill-creator 脚本运行自动化验证
+- **外部审查模式**：克隆、分析并生成改进报告
+- **Auto-PR 模式**：Fork → 改进 → 提交 PR（仅添加性更改）
+- **评估清单**：验证 frontmatter、说明、资源
+- **仅添加原则**：贡献他人项目时绝不删除文件
+- **PR 指南**：语气建议和专业模板
+- **自动安装依赖**：若缺少 skill-creator 则自动安装
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install skill-reviewer@daymade-skills
+
+# 自检你的技能
+"验证 ~/my-skills/my-awesome-skill 的技能"
+
+# 审查外部技能仓库
+"审查 https://github.com/user/skill-repo 的技能"
+
+# Auto-PR 改进
+"Fork、改进并为 https://github.com/user/skill-repo 提交 PR"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [skill-reviewer/references/](./skill-reviewer/references/) 了解：
+- `evaluation_checklist.md` - 完整的技能评估标准
+- `pr_template.md` - 专业 PR 描述模板
+- `marketplace_template.json` - marketplace 配置模板
+
+---
+
+### 28. **github-contributor** - GitHub 贡献策略
+
+成为高效 GitHub 贡献者并建立开源声誉的战略指南。
+
+**使用场景：**
+- 寻找可贡献的项目
+- 学习贡献最佳实践
+- 建立你的 GitHub 影响力和声誉
+- 了解如何撰写高质量 PR
+
+**主要功能：**
+- **四种贡献类型**：文档、代码质量、Bug 修复、功能开发
+- **项目选择标准**：优质首选项目 vs 危险信号
+- **PR 卓越工作流**：提交前 → 撰写中 → 提交后清单
+- **声誉建设阶梯**：文档 → Bug 修复 → 功能开发 → 维护者
+- **GitHub CLI 命令**：fork、PR、issue 操作快速参考
+- **约定式提交格式**：type、scope、description 结构
+- **常见错误**：需要避免的问题和最佳实践
+
+**贡献类型解释：**
+```
+Level 1: 文档修复（门槛最低，影响力高）
+    ↓ (建立熟悉度)
+Level 2: 代码质量（中等努力，展示技能）
+    ↓ (理解代码库)
+Level 3: Bug 修复（高影响力，建立信任）
+    ↓ (受信任的贡献者)
+Level 4: 功能添加（最高可见度）
+    ↓ (潜在维护者)
+```
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install github-contributor@daymade-skills
+
+# 找到好的首次贡献机会
+"帮我找一些 Python 项目中有 good first issue 的项目"
+
+# 撰写高质量 PR
+"指导我为这个 bug 修复创建一个 PR"
+
+# 制定贡献策略
+"帮我规划一个建立 GitHub 档案的贡献策略"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [github-contributor/references/](./github-contributor/references/) 了解：
+- `pr_checklist.md` - 完整的 PR 质量清单
+- `project_evaluation.md` - 如何评估可贡献的项目
+- `communication_templates.md` - Issue 和 PR 沟通模板
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -1255,6 +1363,9 @@ claude plugin install macos-cleaner@daymade-skills
 ### 技能发现与管理
 使用 **skills-search** 从 CCPM 注册表中查找、安装和管理 Claude Code 技能。非常适合为特定任务发现新技能、为常见工作流安装技能包，以及保持技能集合的有序管理。
 
+### 技能质量与开源贡献
+使用 **skill-reviewer** 在发布前验证你的技能是否符合最佳实践，或审查并改进他人的技能仓库。与 **github-contributor** 结合使用，寻找高影响力的开源项目、创建专业的 PR，并系统性地建立贡献者声誉。非常适合希望为 Claude Code 生态系统或任何 GitHub 项目做出贡献的开发者。
+
 ## 📚 文档
 
 每个技能包括：
@@ -1292,6 +1403,8 @@ claude plugin install macos-cleaner@daymade-skills
 - **iOS-APP-developer**：参见 `iOS-APP-developer/references/xcodegen-full.md` 了解 XcodeGen 选项与 project.yml 细节
 - **twitter-reader**：参见 `twitter-reader/SKILL.md` 了解 API 密钥设置和 URL 格式支持
 - **macos-cleaner**：参见 `macos-cleaner/references/cleanup_targets.md` 了解详细清理目标说明、`macos-cleaner/references/mole_integration.md` 了解 Mole 可视化工具集成、`macos-cleaner/references/safety_rules.md` 了解全面安全指南
+- **skill-reviewer**：参见 `skill-reviewer/references/evaluation_checklist.md` 了解完整评估标准、`skill-reviewer/references/pr_template.md` 了解 PR 模板、`skill-reviewer/references/marketplace_template.json` 了解 marketplace 配置
+- **github-contributor**：参见 `github-contributor/references/pr_checklist.md` 了解 PR 质量清单、`github-contributor/references/project_evaluation.md` 了解项目评估标准、`github-contributor/references/communication_templates.md` 了解 issue/PR 沟通模板
 
 ## 🛠️ 系统要求
 
@@ -1393,4 +1506,4 @@ claude plugin install skill-name@daymade-skills
 
 **使用 skill-creator 技能为 Claude Code 精心打造 ❤️**
 
-最后更新：2025-12-20 | 市场版本 1.18.0
+最后更新：2026-01-15 | 市场版本 1.22.0
