@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 30 production-ready skills organized in a plugin marketplace structure. Each skill is a self-contained package that extends Claude's capabilities with specialized knowledge, workflows, and bundled resources.
+This is a Claude Code skills marketplace containing 32 production-ready skills organized in a plugin marketplace structure. Each skill is a self-contained package that extends Claude's capabilities with specialized knowledge, workflows, and bundled resources.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -134,7 +134,7 @@ Skills for public distribution must NOT contain:
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 30 plugins, each mapping to one skill
+- Contains 32 plugins, each mapping to one skill
 - Each plugin has: name, description, version, category, keywords, skills array
 - Marketplace metadata: name, owner, version, homepage
 
@@ -144,7 +144,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
    - Tracks the marketplace catalog as a whole
-   - Current: v1.22.0
+   - Current: v1.23.0
    - Bump when: Adding/removing skills, major marketplace restructuring
    - Semantic versioning: MAJOR.MINOR.PATCH
 
@@ -172,7 +172,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 10. **cloudflare-troubleshooting** - API-driven Cloudflare diagnostics and debugging
 11. **ui-designer** - Design system extraction from UI mockups
 12. **ppt-creator** - Professional presentation creation with dual-path PPTX generation
-13. **youtube-downloader** - YouTube video and audio downloading with yt-dlp error handling
+13. **youtube-downloader** - YouTube video/audio downloads with PO token handling, cookies, and proxy-aware retries
 14. **repomix-safe-mixer** - Secure repomix packaging with automatic credential detection
 15. **transcript-fixer** - ASR/STT transcription error correction with dictionary and AI learning
 16. **video-comparer** - Video comparison and quality analysis with interactive HTML reports
@@ -190,8 +190,23 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 28. **macos-cleaner** - Intelligent macOS disk space analysis and cleanup with safety-first philosophy, risk categorization, and interactive confirmation
 29. **skill-reviewer** - Reviews and improves Claude Code skills against official best practices with self-review, external review, and auto-PR modes
 30. **github-contributor** - Strategic guide for becoming an effective GitHub contributor with opportunity discovery, project selection, and reputation building
+31. **i18n-expert** - Complete internationalization/localization setup and auditing for UI codebases with framework support, key architecture, and parity validation
+32. **claude-skills-troubleshooting** - Diagnose and resolve Claude Code plugin and skill configuration issues with diagnostic scripts and architecture documentation
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
+
+## YouTube Downloader SOP (Internal)
+
+Use this SOP to avoid common yt-dlp failures and confusion:
+
+1. Quote YouTube URLs in shell commands (zsh treats `?` as glob). Example: `'https://www.youtube.com/watch?v=VIDEO_ID'`.
+2. Ensure proxy is active for both yt-dlp and PO Token providers (HTTP_PROXY/HTTPS_PROXY/ALL_PROXY).
+3. If you see “Sign in to confirm you’re not a bot”, request cookie permission and use browser cookies.
+4. Start the PO Token provider before downloading. Prefer Docker bgutil; fall back to browser-based WPC when Docker is unavailable or fails.
+5. Use `web_safari` client when cookies are present; otherwise use `mweb` for PO tokens.
+6. Keep the browser window open while WPC is minting tokens and make sure it can reach YouTube through the same proxy.
+7. If you see “Only images are available” or “Requested format is not available”, treat it as PO token failure and retry after fixing provider/browser state.
+8. If you see SSL EOF or fragment errors, treat it as proxy instability. Retry with progressive formats or switch to a more stable proxy.
 
 ## Python Development
 
