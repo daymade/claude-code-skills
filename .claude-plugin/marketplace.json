@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, and GitHub contribution strategy",
-    "version": "1.22.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, and plugin/skill troubleshooting with diagnostic tools",
+    "version": "1.24.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -618,6 +618,51 @@
       ],
       "skills": [
         "./github-contributor"
+      ]
+    },
+    {
+      "name": "i18n-expert",
+      "description": "Complete internationalization/localization setup and auditing for UI codebases. Configure i18n frameworks, replace hard-coded strings with translation keys, ensure locale parity between en-US and zh-CN, and validate pluralization and formatting. Use when setting up i18n for React/Next.js/Vue apps, auditing existing implementations, replacing hard-coded strings, ensuring proper error code mapping, or validating pluralization and date/time/number formatting across locales",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "i18n",
+        "internationalization",
+        "localization",
+        "translation",
+        "react-i18next",
+        "next-intl",
+        "vue-i18n",
+        "locale",
+        "multilingual",
+        "globalization"
+      ],
+      "skills": [
+        "./i18n-expert"
+      ]
+    },
+    {
+      "name": "claude-skills-troubleshooting",
+      "description": "Diagnose and resolve Claude Code plugin and skill configuration issues. Debug plugin installation, enablement, and activation problems with systematic workflows. Use when plugins are installed but not showing in available skills list, skills are not activating as expected, troubleshooting enabledPlugins configuration in settings.json, debugging 'plugin not working' or 'skill not showing' issues, or understanding plugin state architecture and lifecycle",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "utilities",
+      "keywords": [
+        "troubleshooting",
+        "debugging",
+        "plugins",
+        "skills",
+        "diagnostics",
+        "configuration",
+        "enabledPlugins",
+        "settings",
+        "marketplace"
+      ],
+      "skills": [
+        "./claude-skills-troubleshooting"
       ]
     }
   ]

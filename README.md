@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-30-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.22.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-32-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.24.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 30 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 32 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -526,12 +526,12 @@ Download YouTube videos and audio using yt-dlp with robust error handling and au
 - Working with YouTube content in regions with access restrictions
 
 **Key features:**
-- Android client workaround for nsig extraction issues (automatic)
+- Auto PO Token provider (Docker-first, browser fallback) for high-quality access
+- Browser-cookie verification for “not a bot” prompts (privacy-friendly)
 - Audio-only download with MP3 conversion
 - Format listing and custom format selection
 - Output directory customization
-- Network error handling for proxy/restricted environments
-- Availability check for yt-dlp dependency
+- Proxy-aware downloads for restricted environments
 
 **🎬 Live Demo**
 
@@ -1153,7 +1153,52 @@ Recommendation: Start with 🟢 Safe items (95 GB), then review 🟡 items toget
 
 ---
 
-### 27. **skill-reviewer** - Skill Quality Review & Improvement
+### 27. **fact-checker** - Document Fact-Checking
+
+Verify factual claims in documents using web search and official sources, then propose corrections with user confirmation.
+
+**When to use:**
+- Fact-checking documents for accuracy
+- Verifying AI model specifications and technical documentation
+- Updating outdated information in documents
+- Validating statistical claims and benchmarks
+- Checking API capabilities and version numbers
+
+**Key features:**
+- Web search integration with authoritative sources
+- AI model specification verification
+- Technical documentation accuracy checks
+- Statistical data validation
+- Automated correction reports with user confirmation
+- Supports general factual statements and technical claims
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install fact-checker@daymade-skills
+
+# Fact-check a document
+"Please fact-check this section about AI model capabilities"
+
+# Verify technical specs
+"Check if these Claude model specifications are still accurate"
+
+# Update outdated info
+"Verify and update the version numbers in this documentation"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [fact-checker/SKILL.md](./fact-checker/SKILL.md) for full workflow and claim types.
+
+**Requirements**:
+- Web search access (via Claude Code)
+
+---
+
+### 28. **skill-reviewer** - Skill Quality Review & Improvement
 
 Review and improve Claude Code skills against official best practices with three powerful modes.
 
@@ -1198,7 +1243,7 @@ claude plugin install skill-reviewer@daymade-skills
 
 ---
 
-### 28. **github-contributor** - GitHub Contribution Strategy
+### 29. **github-contributor** - GitHub Contribution Strategy
 
 Strategic guide for becoming an effective GitHub contributor and building your open-source reputation.
 
@@ -1252,6 +1297,99 @@ claude plugin install github-contributor@daymade-skills
 - `pr_checklist.md` - Complete PR quality checklist
 - `project_evaluation.md` - How to evaluate projects for contribution
 - `communication_templates.md` - Issue and PR communication templates
+
+---
+
+### 31. **i18n-expert** - Internationalization & Localization
+
+Complete internationalization/localization setup and auditing for UI codebases. Configure i18n frameworks, replace hard-coded strings with translation keys, ensure locale parity between en-US and zh-CN, and validate pluralization and formatting.
+
+**When to use:**
+- Setting up i18n for new React/Next.js/Vue applications
+- Auditing existing i18n implementations for key parity and completeness
+- Replacing hard-coded strings with translation keys
+- Ensuring proper error code mapping to localized messages
+- Validating pluralization, date/time/number formatting across locales
+- Implementing language switching and SEO metadata localization
+
+**Key features:**
+- Library selection and setup (react-i18next, next-intl, vue-i18n)
+- Key architecture and locale file organization (JSON, YAML, PO, XLIFF)
+- Translation generation strategy (AI, professional, manual)
+- Routing and language detection/switching
+- SEO and metadata localization
+- RTL support for applicable locales
+- Key parity validation between en-US and zh-CN
+- Pluralization and formatting validation
+- Error code mapping to localized messages
+- Bundled i18n_audit.py script for key usage extraction
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install i18n-expert@daymade-skills
+
+# Setup i18n for a new project
+"Set up i18n for my React app with English and Chinese support"
+
+# Audit existing i18n implementation
+"Audit the i18n setup and find missing translation keys"
+
+# Replace hard-coded strings
+"Replace all hard-coded strings in this component with i18n keys"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [i18n-expert/SKILL.md](./i18n-expert/SKILL.md) for complete workflow and architecture guidance.
+
+**Requirements**:
+- **Python 3.6+** (for audit script)
+- **React/Next.js/Vue** (framework-specific i18n library)
+
+---
+
+### 32. **claude-skills-troubleshooting** - Plugin & Skill Troubleshooting
+
+Diagnose and resolve Claude Code plugin and skill configuration issues. Debug plugin installation, enablement, and activation problems with systematic workflows.
+
+**When to use:**
+- Plugins installed but not showing in available skills list
+- Skills not activating as expected despite installation
+- Troubleshooting enabledPlugins configuration in settings.json
+- Debugging "plugin not working" or "skill not showing" issues
+- Understanding plugin state architecture and lifecycle
+
+**Key features:**
+- Quick diagnosis via diagnostic script (detects installed vs enabled mismatch)
+- Plugin state architecture documentation (installed_plugins.json vs settings.json)
+- Marketplace cache freshness detection and update guidance
+- Known GitHub issues tracking (#17832, #19696, #17089, #13543, #16260)
+- Batch enable script for missing plugins from a marketplace
+- Skills vs Commands architecture explanation
+- Comprehensive diagnostic commands reference
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install claude-skills-troubleshooting@daymade-skills
+
+# Run diagnostic
+python3 scripts/diagnose_plugins.py
+
+# Batch enable missing plugins
+python3 scripts/enable_all_plugins.py daymade-skills
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [claude-skills-troubleshooting/SKILL.md](./claude-skills-troubleshooting/SKILL.md) for complete troubleshooting workflow and architecture guidance.
+
+**Requirements**: None (uses Claude Code built-in Python)
 
 ---
 
@@ -1324,6 +1462,12 @@ Use **twitter-reader** to fetch tweet content without JavaScript rendering or au
 ### For Skill Quality & Open-Source Contributions
 Use **skill-reviewer** to validate your own skills against best practices before publishing, or to review and improve others' skill repositories. Combine with **github-contributor** to find high-impact open-source projects, create professional PRs, and build your contributor reputation. Perfect for developers who want to contribute to the Claude Code ecosystem or any GitHub project systematically.
 
+### For Internationalization & Localization
+Use **i18n-expert** to set up complete i18n infrastructure for React/Next.js/Vue applications, audit existing implementations for missing translation keys, and ensure locale parity between en-US and zh-CN. Perfect for teams launching products to global markets, maintaining multi-language UIs, or replacing hard-coded strings with proper i18n keys. Combine with **skill-creator** to create locale-aware skills, or with **docs-cleaner** to consolidate documentation across multiple languages.
+
+### For Plugin & Skill Troubleshooting
+Use **claude-skills-troubleshooting** to diagnose and resolve Claude Code plugin and skill configuration issues. Debug why plugins appear installed but don't show in available skills, understand the installed_plugins.json vs settings.json enabledPlugins architecture, and batch-enable missing plugins from a marketplace. Essential for marketplace maintainers debugging installation issues, developers troubleshooting skill activation, or anyone confused by the GitHub #17832 auto-enable bug.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -1363,6 +1507,9 @@ Each skill includes:
 - **macos-cleaner**: See `macos-cleaner/references/cleanup_targets.md` for detailed cleanup target explanations, `macos-cleaner/references/mole_integration.md` for Mole visual tool integration, and `macos-cleaner/references/safety_rules.md` for comprehensive safety guidelines
 - **skill-reviewer**: See `skill-reviewer/references/evaluation_checklist.md` for complete evaluation criteria, `skill-reviewer/references/pr_template.md` for PR templates, and `skill-reviewer/references/marketplace_template.json` for marketplace configuration
 - **github-contributor**: See `github-contributor/references/pr_checklist.md` for PR quality checklist, `github-contributor/references/project_evaluation.md` for project evaluation criteria, and `github-contributor/references/communication_templates.md` for issue/PR templates
+- **i18n-expert**: See `i18n-expert/SKILL.md` for complete i18n setup workflow, key architecture guidance, and audit procedures
+- **claude-skills-troubleshooting**: See `claude-skills-troubleshooting/SKILL.md` for plugin troubleshooting workflow and architecture
+- **fact-checker**: See `fact-checker/SKILL.md` for fact-checking workflow and claim verification process
 
 ## 🛠️ Requirements
 
@@ -1467,4 +1614,4 @@ If you find these skills useful, please:
 
 **Built with ❤️ using the skill-creator skill for Claude Code**
 
-Last updated: 2026-01-15 | Marketplace version 1.22.0
+Last updated: 2026-01-22 | Marketplace version 1.23.0

@@ -10,6 +10,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.24.0] - 2026-01-22
+
+### Added
+- **New Skill**: claude-skills-troubleshooting - Diagnose and resolve Claude Code plugin and skill configuration issues
+  - Plugin installation and enablement debugging
+  - installed_plugins.json vs settings.json enabledPlugins diagnosis
+  - Marketplace cache freshness detection
+  - Plugin state architecture documentation
+  - Bundled diagnostic script (diagnose_plugins.py)
+  - Batch enable script for missing plugins (enable_all_plugins.py)
+  - Known GitHub issues tracking (#17832, #19696, #17089, #13543, #16260)
+  - Skills vs Commands architecture explanation
+
+### Changed
+- Updated marketplace skills count from 31 to 32
+- Updated marketplace version from 1.23.0 to 1.24.0
+- Updated README.md badges (skills count, version)
+- Updated README.md to include claude-skills-troubleshooting in skills listing
+- Updated README.zh-CN.md badges (skills count, version)
+- Updated README.zh-CN.md to include claude-skills-troubleshooting in skills listing
+- Updated CLAUDE.md skills count from 31 to 32
+- Added claude-skills-troubleshooting use case section to README.md
+- Added claude-skills-troubleshooting use case section to README.zh-CN.md
+
+## [1.23.0] - 2026-01-22
+
+### Added
+- **New Skill**: i18n-expert - Complete internationalization/localization setup and auditing for UI codebases
+  - Library selection and setup (react-i18next, next-intl, vue-i18n)
+  - Key architecture and locale file organization (JSON, YAML, PO, XLIFF)
+  - Translation generation strategy (AI, professional, manual)
+  - Routing and language detection/switching
+  - SEO and metadata localization
+  - RTL support for applicable locales
+  - Key parity validation between en-US and zh-CN
+  - Pluralization and formatting validation
+  - Error code mapping to localized messages
+  - Bundled i18n_audit.py script for key usage extraction
+  - Scope inputs: framework, existing i18n state, target locales, translation quality needs
+
+### Changed
+- Updated marketplace skills count from 30 to 31
+- Updated marketplace version from 1.22.0 to 1.23.0
+- Updated README.md badges (skills count, version)
+- Updated README.md to include i18n-expert in skills listing
+- Updated README.zh-CN.md badges (skills count, version)
+- Updated README.zh-CN.md to include i18n-expert in skills listing
+- Updated CLAUDE.md skills count from 30 to 31
+- Added i18n-expert use case section to README.md
+- Added i18n-expert use case section to README.zh-CN.md
+
 ### Changed
 - None
 

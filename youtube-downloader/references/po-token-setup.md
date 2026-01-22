@@ -16,6 +16,41 @@ With PO token provider: **Full access** to all quality levels including 4K.
 
 ## Recommended Solution: PO Token Provider Plugin
 
+## Operational SOP (Internal)
+
+Use this checklist to prevent common failures:
+
+1. Quote URLs in shell commands to avoid zsh globbing (`'https://www.youtube.com/watch?v=VIDEO_ID'`).
+2. Ensure proxy is active for yt-dlp and token providers (HTTP_PROXY/HTTPS_PROXY/ALL_PROXY).
+3. If YouTube asks to confirm you’re not a bot, use browser cookies. Do not proceed without cookies.
+4. Start the PO token provider before downloading.
+   - Prefer Docker bgutil when available.
+   - Fall back to WPC (browser) if Docker is missing or fails.
+5. Use `web_safari` when cookies are present; use `mweb` otherwise for PO tokens.
+6. Keep the browser window open during WPC token minting.
+7. If you see “Only images are available” or “Requested format is not available”, treat it as PO token failure and retry after fixing provider/browser state.
+8. If you see SSL EOF/fragment errors, treat it as proxy instability and retry with progressive formats or a better proxy.
+
+### Automatic Setup (Preferred for non-technical users)
+
+If Docker is available, you can start the PO token provider automatically:
+
+1. Install the plugin into yt-dlp's Python environment (one-time):
+```bash
+<YTDLP_PYTHON> -m pip install bgutil-ytdlp-pot-provider
+```
+In China, prefer a local PyPI mirror:
+```bash
+<YTDLP_PYTHON> -m pip install bgutil-ytdlp-pot-provider -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+2. Start the provider (Docker):
+```bash
+docker run -d --name bgutil-pot-provider -p 4416:4416 --init brainicism/bgutil-ytdlp-pot-provider
+```
+
+3. Retry yt-dlp downloads using a web client (e.g., `mweb`) so PO tokens apply.
+
 ### Installation
 
 Install a PO token provider plugin to handle token generation automatically. The plugin must be installed into yt-dlp's own Python environment.
@@ -31,7 +66,7 @@ head -1 $(which yt-dlp)
 
 ```bash
 # For Homebrew-installed yt-dlp (macOS)
-/opt/homebrew/Cellar/yt-dlp/$(yt-dlp --version)/libexec/bin/python -m pip install bgutil-ytdlp-pot-provider
+<YTDLP_PYTHON> -m pip install bgutil-ytdlp-pot-provider
 
 # For pip-installed yt-dlp
 python3 -m pip install bgutil-ytdlp-pot-provider --user
@@ -61,7 +96,19 @@ Look for high-quality formats (137, 248, 271, 313) in the output. If present, th
 - **Method**: Launches browser to mint tokens
 - **Best for**: Users comfortable with browser automation
 
-### 3. yt-dlp-get-pot-rustypipe
+### 3. yt-dlp-getpot-wpc (Browser-based, no Docker)
+
+- **Installation**: `pip install yt-dlp-getpot-wpc`
+- **Requires**: yt-dlp 2025.09.26 or above
+- **Method**: Uses a browser window to mint tokens
+- **Best for**: Environments without Docker or restricted networks
+
+In China, prefer a local PyPI mirror:
+```bash
+pip install yt-dlp-getpot-wpc -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+### 4. yt-dlp-get-pot-rustypipe
 
 - **Installation**: `pip install yt-dlp-get-pot-rustypipe`
 - **Method**: Uses rustypipe-botguard
