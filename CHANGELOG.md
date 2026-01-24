@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.25.0] - 2026-01-24
+
+### Added
+- **New Skill**: meeting-minutes-taker - Transform meeting transcripts into structured minutes
+  - Multi-pass parallel generation with UNION merge strategy
+  - Evidence-based recording with speaker quotes
+  - Mermaid diagrams for architecture discussions
+  - Iterative human-in-the-loop refinement workflow
+  - Bundled references: template and completeness checklist
+
+### Changed
+- Updated marketplace skills count from 32 to 33
+- Updated marketplace version from 1.24.0 to 1.25.0
+- Updated skill-creator to v1.3.0:
+  - Added Step 5: Sanitization Review (Optional)
+  - New references/sanitization_checklist.md with 8 categories of content to sanitize
+  - Automated grep scan commands for detecting sensitive content
+  - 3-phase sanitization process and completion checklist
+
 ## [1.24.0] - 2026-01-22
 
 ### Added
