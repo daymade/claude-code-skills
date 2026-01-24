@@ -236,7 +236,59 @@ To complete SKILL.md, answer the following questions:
 2. When should the skill be used?
 3. In practice, how should Claude use the skill? All reusable skill contents developed above should be referenced so that Claude knows how to use them.
 
-### Step 5: Security Review
+### Step 5: Sanitization Review (Optional)
+
+**Ask the user before executing this step:** "This skill appears to be extracted from a business project. Would you like me to perform a sanitization review to remove business-specific content before public distribution?"
+
+Skip this step if:
+- The skill was created from scratch for public use
+- The user explicitly declines sanitization
+- The skill is intended for internal/private use only
+
+**When to perform sanitization:**
+- Skill was extracted from a business/internal project
+- Skill contains domain-specific examples from real systems
+- Skill will be distributed publicly or to other teams
+
+**Sanitization process:**
+
+1. **Load the checklist**: Read [references/sanitization_checklist.md](references/sanitization_checklist.md) for detailed guidance
+
+2. **Run automated scans** to identify potential sensitive content:
+   ```bash
+   # Product/project names, person names, paths
+   grep -rniE "portal|underwriting|mercury|glean|/Users/|/home/" skill-folder/
+
+   # Chinese characters (if skill should be English-only)
+   grep -rn '[一-龥]' skill-folder/
+   ```
+
+3. **Review and replace** each category:
+   - Product/project names → generic terms
+   - Person names → "Alice", "Bob", role-based references
+   - Entity names → generic entities (ORDER, USER, PRODUCT)
+   - Folder structures → generic paths
+   - Internal jargon → industry-standard terms
+   - Language-specific content → translate or remove
+
+4. **Verify completeness**:
+   - Re-run all grep patterns (should return no matches)
+   - Read through skill to ensure coherence
+   - Confirm skill still functions correctly
+
+**Common replacements:**
+
+| Business-Specific | Generic Replacement |
+|-------------------|---------------------|
+| "Mercury Prepared" | "the project" |
+| "Reviewer Portal" | "the application" |
+| "Oliver will handle..." | "Alice will handle..." |
+| `REVIEW_RESULT` | `ORDER` |
+| `risk_level` | `status` |
+| "ultrathink" | "deep review" |
+| "后面再说" | "defer to later" |
+
+### Step 6: Security Review
 
 Before packaging or distributing a skill, run the security scanner to detect hardcoded secrets and personal information:
 
@@ -276,7 +328,7 @@ brew install gitleaks
 3. Rotate credentials if previously committed to git
 4. Re-run scan to verify fixes before packaging
 
-### Step 6: Packaging a Skill
+### Step 7: Packaging a Skill
 
 Once the skill is ready, it should be packaged into a distributable zip file that gets shared with the user. The packaging process automatically validates the skill first to ensure it meets all requirements:
 
@@ -304,7 +356,7 @@ The packaging script will:
 
 If validation fails, the script will report the errors and exit without creating a package. Fix any validation errors and run the packaging command again.
 
-### Step 7: Update Marketplace
+### Step 8: Update Marketplace
 
 After packaging, update the marketplace registry to include the new or updated skill.
 
@@ -330,7 +382,7 @@ After packaging, update the marketplace registry to include the new or updated s
 
 **Also update** `metadata.version` and `metadata.description` if the overall plugin collection changed significantly.
 
-### Step 8: Iterate
+### Step 9: Iterate
 
 After testing the skill, users may request improvements. Often this happens right after using the skill, with fresh context of how the skill performed.
 
