@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-32-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.24.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-33-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.25.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 32 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 33 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -1393,6 +1393,41 @@ python3 scripts/enable_all_plugins.py daymade-skills
 
 ---
 
+### 33. **meeting-minutes-taker** - Meeting Minutes Generator
+
+Transform meeting transcripts into high-fidelity, structured meeting minutes with iterative human review.
+
+**When to use:**
+- Meeting transcript provided and minutes/notes/summaries requested
+- Multiple versions of meeting minutes need merging without content loss
+- Existing minutes need review against original transcript for missing items
+
+**Key features:**
+- Multi-pass parallel generation with UNION merge strategy
+- Evidence-based recording with speaker quotes
+- Mermaid diagrams for architecture discussions
+- Iterative human-in-the-loop refinement workflow
+- Cross-AI comparison for bias reduction
+- Completeness checklist for systematic review
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install meeting-minutes-taker@daymade-skills
+
+# Then provide a meeting transcript and request minutes
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [meeting-minutes-taker/SKILL.md](./meeting-minutes-taker/SKILL.md) for complete workflow and template guidance.
+
+**Requirements**: None
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1428,6 +1463,9 @@ Use **youtube-downloader** to download YouTube videos and extract audio from vid
 
 ### For Transcription & ASR Correction
 Use **transcript-fixer** to correct speech-to-text errors in meeting notes, lectures, and interviews through dictionary-based rules and AI-powered corrections with automatic learning.
+
+### For Meeting Documentation
+Use **meeting-minutes-taker** to transform raw meeting transcripts into structured, evidence-based minutes. Combine with **transcript-fixer** to clean up ASR errors before generating minutes. Features multi-pass generation with UNION merge to avoid content loss.
 
 ### For QA Testing & Quality Assurance
 Use **qa-expert** to establish comprehensive QA testing infrastructure with autonomous LLM execution, Google Testing Standards, and OWASP security testing. Perfect for project launches, third-party QA handoffs, and enforcing quality gates (100% execution, ≥80% pass rate, 0 P0 bugs). The master prompt enables 100x faster test execution with zero tracking errors.

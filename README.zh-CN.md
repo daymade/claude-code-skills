@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-32-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.24.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-33-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.25.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 32 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 33 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -1435,6 +1435,41 @@ python3 scripts/enable_all_plugins.py daymade-skills
 
 ---
 
+### 33. **meeting-minutes-taker** - 会议纪要生成器
+
+将会议录音转写稿转换为高保真、结构化的会议纪要，支持迭代式人工审核。
+
+**使用场景：**
+- 提供会议转写稿，需要生成会议纪要/笔记/摘要
+- 多个版本的会议纪要需要合并且不丢失内容
+- 现有纪要需要对照原始转写稿审核是否遗漏
+
+**主要功能：**
+- 多轮并行生成与 UNION 合并策略
+- 基于证据的记录，附带发言者引用
+- 用于架构讨论的 Mermaid 图表
+- 迭代式人机协作优化流程
+- 跨 AI 对比以减少偏差
+- 完整性检查清单用于系统化审核
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install meeting-minutes-taker@daymade-skills
+
+# 然后提供会议转写稿并请求生成纪要
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [meeting-minutes-taker/SKILL.md](./meeting-minutes-taker/SKILL.md) 了解完整的工作流程和模板指导。
+
+**要求**：无
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -1470,6 +1505,9 @@ python3 scripts/enable_all_plugins.py daymade-skills
 
 ### 转录与 ASR 校正
 使用 **transcript-fixer** 通过基于字典的规则和 AI 驱动的校正自动学习，纠正会议记录、讲座和访谈中的语音转文本错误。
+
+### 会议文档
+使用 **meeting-minutes-taker** 将原始会议转写稿转换为结构化、基于证据的会议纪要。与 **transcript-fixer** 结合使用可在生成纪要前清理 ASR 错误。特点是多轮生成配合 UNION 合并以避免内容丢失。
 
 ### QA 测试与质量保证
 使用 **qa-expert** 建立具有自主 LLM 执行、Google 测试标准和 OWASP 安全测试的综合 QA 测试基础设施。非常适合项目启动、第三方 QA 交接和执行质量门禁（100% 执行、≥80% 通过率、0 个 P0 错误）。主提示可实现 100 倍更快的测试执行，零跟踪错误。
