@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, and plugin/skill troubleshooting with diagnostic tools",
-    "version": "1.26.0",
+    "version": "1.27.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -51,18 +51,21 @@
     },
     {
       "name": "markdown-tools",
-      "description": "Convert documents (PDFs, Word, PowerPoint, Confluence exports) to markdown with Windows/WSL path handling and PDF image extraction support",
+      "description": "Convert documents (PDFs, Word, PowerPoint) to high-quality markdown with multi-tool orchestration. Supports Quick Mode (fast, single tool) and Heavy Mode (best quality, multi-tool merge with segment-level selection). Features PyMuPDF4LLM for LLM-optimized PDF conversion, pandoc for DOCX/PPTX structure preservation, quality validation with HTML reports, and image extraction with metadata",
       "source": "./",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "document-conversion",
       "keywords": [
         "markdown",
         "pdf",
         "docx",
-        "confluence",
+        "pptx",
+        "pymupdf4llm",
+        "pandoc",
         "markitdown",
-        "wsl"
+        "heavy-mode",
+        "quality-validation"
       ],
       "skills": [
         "./markdown-tools"

@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.27.0] - 2026-01-25
+
+### Added
+- **Enhanced Skill**: markdown-tools v1.2.0 - Multi-tool orchestration with Heavy Mode
+  - Dual mode architecture: Quick Mode (fast) and Heavy Mode (best quality)
+  - New `convert.py` - Main orchestrator with tool selection matrix
+  - New `merge_outputs.py` - Segment-level multi-tool output merger
+  - New `validate_output.py` - Quality validation with HTML reports
+  - Enhanced `extract_pdf_images.py` - Image extraction with metadata (page, position, dimensions)
+  - PyMuPDF4LLM integration for LLM-optimized PDF conversion
+  - pandoc integration for DOCX/PPTX structure preservation
+  - Quality metrics: text retention, table retention, image retention
+  - New references: heavy-mode-guide.md, tool-comparison.md
+
+### Changed
+- Updated marketplace version from 1.26.0 to 1.27.0
+- Updated markdown-tools plugin version from 1.1.0 to 1.2.0
+
 ## [1.26.0] - 2026-01-25
 
 ### Added
