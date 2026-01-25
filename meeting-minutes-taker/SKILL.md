@@ -1,7 +1,7 @@
 ---
 name: meeting-minutes-taker
 description: |
-  Transforms raw meeting transcripts into high-fidelity, structured meeting minutes with iterative review for completeness. This skill should be used when (1) a meeting transcript is provided and meeting minutes, notes, or summaries are requested, (2) multiple versions of meeting minutes need to be merged without losing content, (3) existing minutes need to be reviewed against the original transcript for missing items. Features evidence-based recording with speaker quotes, Mermaid diagrams for architecture discussions, multi-turn parallel generation to avoid content loss, and iterative human-in-the-loop refinement.
+  Transforms raw meeting transcripts into high-fidelity, structured meeting minutes with iterative review for completeness. This skill should be used when (1) a meeting transcript is provided and meeting minutes, notes, or summaries are requested, (2) multiple versions of meeting minutes need to be merged without losing content, (3) existing minutes need to be reviewed against the original transcript for missing items. Features evidence-based recording with speaker quotes, Mermaid diagrams for architecture discussions, multi-turn parallel generation to avoid content loss, and iterative human-in-the-loop refinement.
 ---
 
 # Meeting Minutes Taker
@@ -26,13 +26,13 @@ Copy this checklist and track progress:
 Meeting Minutes Progress:
 - [ ] Step 1: Read and analyze transcript
 - [ ] Step 2: Multi-turn generation (PARALLEL subagents with Task tool)
-  - [ ] Create transcript-specific dir: <output_dir>/intermediate/<transcript-name>/
-  - [ ] Launch 3 Task subagents IN PARALLEL (single message, 3 Task tool calls)
-    - [ ] Subagent 1 → <output_dir>/intermediate/<transcript-name>/version1.md
-    - [ ] Subagent 2 → <output_dir>/intermediate/<transcript-name>/version2.md
-    - [ ] Subagent 3 → <output_dir>/intermediate/<transcript-name>/version3.md
-  - [ ] Merge: UNION all versions, AGGRESSIVELY include ALL diagrams → draft_minutes.md
-  - [ ] Final: Compare draft against transcript, add omissions
+  - [ ] Create transcript-specific dir: <output_dir>/intermediate/<transcript-name>/
+  - [ ] Launch 3 Task subagents IN PARALLEL (single message, 3 Task tool calls)
+    - [ ] Subagent 1 → <output_dir>/intermediate/<transcript-name>/version1.md
+    - [ ] Subagent 2 → <output_dir>/intermediate/<transcript-name>/version2.md
+    - [ ] Subagent 3 → <output_dir>/intermediate/<transcript-name>/version3.md
+  - [ ] Merge: UNION all versions, AGGRESSIVELY include ALL diagrams → draft_minutes.md
+  - [ ] Final: Compare draft against transcript, add omissions
 - [ ] Step 3: Self-review for completeness
 - [ ] Step 4: Present draft to user for human review
 - [ ] Step 5: Cross-AI comparison (if human provides external AI output)
@@ -147,15 +147,15 @@ Task 2 → Write to: <output_dir>/intermediate/<transcript-name>/version2.md (co
 Task 3 → Write to: <output_dir>/intermediate/<transcript-name>/version3.md (complete minutes)
 
 Merge Phase:
-  Read: <output_dir>/intermediate/<transcript-name>/version1.md
-  Read: <output_dir>/intermediate/<transcript-name>/version2.md
-  Read: <output_dir>/intermediate/<transcript-name>/version3.md
-  → UNION merge, consolidate duplicates, INCLUDE ALL DIAGRAMS → Write to: draft_minutes.md
+  Read: <output_dir>/intermediate/<transcript-name>/version1.md
+  Read: <output_dir>/intermediate/<transcript-name>/version2.md
+  Read: <output_dir>/intermediate/<transcript-name>/version3.md
+  → UNION merge, consolidate duplicates, INCLUDE ALL DIAGRAMS → Write to: draft_minutes.md
 
 Final Review:
-  Read: draft_minutes.md
-  Read: original_transcript.md
-  → Compare & add omissions → Write to: final_minutes.md
+  Read: draft_minutes.md
+  Read: original_transcript.md
+  → Compare & add omissions → Write to: final_minutes.md
 ```
 
 **Benefits of file-based context offloading:**
@@ -182,11 +182,11 @@ Final Review:
 - **Structured sections** - Executive Summary, Key Decisions, Discussion, Action Items, Parking Lot
 - **Proper quote formatting** - See Quote Formatting Requirements section below
 - **Mermaid diagrams** (STRONGLY ENCOURAGED) - Visual diagrams elevate minutes beyond pure text:
-  - **ER diagrams** for database/schema discussions
-  - **Sequence diagrams** for data flow and API interactions
-  - **Flowcharts** for process/workflow decisions
-  - **State diagrams** for state machine discussions
-  - Diagrams make minutes significantly easier for humans to review and understand
+  - **ER diagrams** for database/schema discussions
+  - **Sequence diagrams** for data flow and API interactions
+  - **Flowcharts** for process/workflow decisions
+  - **State diagrams** for state machine discussions
+  - Diagrams make minutes significantly easier for humans to review and understand
 - **Context-first document structure** - Place all reviewed artifacts (UI mockups, API docs, design images) at the TOP of the document (after metadata, before Executive Summary) to establish context before decisions; copy images to `assets/<meeting-name>/` folder and embed inline using `![description](assets/...)` syntax; include brief descriptions with the visuals - this creates "next level" human-readable minutes where readers understand what was discussed before reading the discussion
 - **Speaker attribution** - Correctly attribute decisions to speakers
 
@@ -328,45 +328,45 @@ If v3 has a flowchart for "Status Query Mechanism" but v1/v2 don't have it, that
 
 ```mermaid
 sequenceDiagram
-    participant FE as Frontend
-    participant BE as Backend
-    participant SVC as External Service
-    participant DB as Database
-    FE->>BE: Click "Submit Order"
-    BE->>SVC: POST /process (send data)
-    SVC-->>BE: Return {status}
-    BE->>DB: Save result
-    BE-->>FE: Return success
+    participant FE as Frontend
+    participant BE as Backend
+    participant SVC as External Service
+    participant DB as Database
+    FE->>BE: Click "Submit Order"
+    BE->>SVC: POST /process (send data)
+    SVC-->>BE: Return {status}
+    BE->>DB: Save result
+    BE-->>FE: Return success
 ```
 
 #### Example: Database Schema (ER Diagram)
 
 ```mermaid
 erDiagram
-    ORDER ||--o{ ORDER_ITEM : "1:N"
-    ORDER {
-        uuid id PK
-        string customer_name
-        decimal total_amount
-    }
-    ORDER_ITEM {
-        uuid id PK
-        uuid order_id FK
-        int quantity
-    }
+    ORDER ||--o{ ORDER_ITEM : "1:N"
+    ORDER {
+        uuid id PK
+        string customer_name
+        decimal total_amount
+    }
+    ORDER_ITEM {
+        uuid id PK
+        uuid order_id FK
+        int quantity
+    }
 ```
 
 #### Example: Version Switching (Workflow Diagram)
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant System
-    Note over System: Current: V2 Active
-    User->>System: Create V3 (inactive)
-    User->>System: Set V2 inactive
-    User->>System: Set V3 active
-    Note over System: New: V3 Active
+    participant User
+    participant System
+    Note over System: Current: V2 Active
+    User->>System: Create V3 (inactive)
+    User->>System: Set V2 inactive
+    User->>System: Set V3 active
+    Note over System: New: V3 Active
 ```
 
 ### Quote Formatting Requirements (CRITICAL)
@@ -381,14 +381,14 @@ sequenceDiagram
 **✅ CORRECT: Blockquote on separate lines**
 ```markdown
 * **Quote:**
-  > "This is the correct format" - **Speaker**
+  > "This is the correct format" - **Speaker**
 ```
 
 **✅ CORRECT: Multiple quotes**
 ```markdown
 * **Quote:**
-  > "First quote from the discussion" - **Speaker1**
-  > "Second quote supporting the same decision" - **Speaker2**
+  > "First quote from the discussion" - **Speaker1**
+  > "Second quote supporting the same decision" - **Speaker2**
 ```
 
 **Key formatting rules:**
@@ -405,10 +405,10 @@ sequenceDiagram
 
 * **Decision:** Specific decision made
 * **Logic:**
-  * Reasoning point 1
-  * Reasoning point 2
+  * Reasoning point 1
+  * Reasoning point 2
 * **Quote:**
-  > "Exact quote from transcript" - **Speaker Name**
+  > "Exact quote from transcript" - **Speaker Name**
 ```
 
 ### Deferred Items → Parking Lot
@@ -430,13 +430,13 @@ Meeting minutes are **not one-shot outputs**. High-quality minutes emerge throug
 
 ```
 Round 1: Initial generation
-  └─ Human review: "Check original transcript for missing items"
+  └─ Human review: "Check original transcript for missing items"
 Round 2: Deep transcript review, add omitted content
-  └─ Human review: "UserProfile conflicts with existing Account entity naming"
+  └─ Human review: "UserProfile conflicts with existing Account entity naming"
 Round 3: Update terminology to use "CustomerProfile" instead
-  └─ Human review: "Note field conflicts with existing Comment system"
+  └─ Human review: "Note field conflicts with existing Comment system"
 Round 4: Update to use "Annotation" instead of "Note"
-  └─ Human approval: Final version ready
+  └─ Human approval: Final version ready
 ```
 
 ### Key Principle
