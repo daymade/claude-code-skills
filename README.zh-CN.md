@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-33-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.25.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-34-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.26.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 33 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 34 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -1470,6 +1470,41 @@ claude plugin install meeting-minutes-taker@daymade-skills
 
 ---
 
+### 34. **deep-research** - 深度调研报告生成器
+
+生成格式可控的调研报告，支持证据追踪与引用。
+
+**使用场景：**
+- 需要结构化调研报告、文献综述或行业/市场分析
+- 需要严格的章节格式或模板约束
+- 需要证据映射、引用与来源质量审查
+- 需要多轮综合以避免遗漏关键发现
+
+**主要功能：**
+- 报告规格与格式合约工作流
+- 证据表与来源质量评级
+- 多轮完整草稿与 UNION 合并
+- 引用校验与冲突处理
+- 即用型报告模板与格式规则
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install deep-research@daymade-skills
+
+# 然后提供报告规格或模板并请求生成调研报告
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [deep-research/SKILL.md](./deep-research/SKILL.md) 与 [deep-research/references/research_report_template.md](./deep-research/references/research_report_template.md) 了解工作流程与结构。
+
+**要求**：无
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -1481,6 +1516,9 @@ claude plugin install meeting-minutes-taker@daymade-skills
 
 ### 文档处理
 结合 **markdown-tools** 进行文档转换和 **mermaid-tools** 进行图表生成，创建全面的文档。使用 **llm-icon-finder** 添加品牌图标。
+
+### 调研与分析
+使用 **deep-research** 生成格式可控的调研报告，包含证据表与引用。与 **fact-checker** 结合用于验证关键结论，或与 **twitter-reader** 结合收集社媒资料。
 
 ### PDF 与可打印文档
 使用 **pdf-creator** 将 markdown 转换为适合打印的 PDF，并提供中文字体支持，适用于正式报告和归档材料。
@@ -1578,6 +1616,7 @@ claude plugin install meeting-minutes-taker@daymade-skills
 - **prompt-optimizer**：参见 `prompt-optimizer/references/ears_syntax.md` 了解 EARS 转换模式、`prompt-optimizer/references/domain_theories.md` 了解理论目录和 `prompt-optimizer/references/examples.md` 了解完整转换示例
 - **claude-code-history-files-finder**：参见 `claude-code-history-files-finder/references/session_file_format.md` 了解 JSONL 结构和 `claude-code-history-files-finder/references/workflow_examples.md` 了解恢复工作流
 - **docs-cleaner**：参见 `docs-cleaner/SKILL.md` 了解整合工作流
+- **deep-research**：参见 `deep-research/references/research_report_template.md` 了解报告结构，并参见 `deep-research/references/source_quality_rubric.md` 了解来源分级标准
 - **pdf-creator**：参见 `pdf-creator/SKILL.md` 了解 PDF 转换与字体设置
 - **claude-md-progressive-disclosurer**：参见 `claude-md-progressive-disclosurer/SKILL.md` 了解 CLAUDE.md 优化工作流
 - **skills-search**：参见 `skills-search/SKILL.md` 了解 CCPM CLI 命令和注册表操作

@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-33-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.25.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-34-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.26.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 33 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 34 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -1428,6 +1428,41 @@ claude plugin install meeting-minutes-taker@daymade-skills
 
 ---
 
+### 34. **deep-research** - Research Report Generator
+
+Generate format-controlled research reports with evidence tracking and citations.
+
+**When to use:**
+- Need a structured research report, literature review, or market/industry analysis
+- Require strict section formatting or a template to be enforced
+- Need evidence mapping, citations, and source quality review
+- Want multi-pass synthesis to avoid missing key findings
+
+**Key features:**
+- Report spec and format contract workflow
+- Evidence table with source quality rubric
+- Multi-pass complete drafting with UNION merge
+- Citation verification and conflict handling
+- Ready-to-use report template and formatting rules
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install deep-research@daymade-skills
+
+# Then provide a report spec or template and request a deep research report
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [deep-research/SKILL.md](./deep-research/SKILL.md) and [deep-research/references/research_report_template.md](./deep-research/references/research_report_template.md) for workflow and structure.
+
+**Requirements**: None
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1439,6 +1474,9 @@ Use **github-ops** to streamline PR creation, issue management, and API operatio
 
 ### For Documentation
 Combine **markdown-tools** for document conversion and **mermaid-tools** for diagram generation to create comprehensive documentation. Use **llm-icon-finder** to add brand icons.
+
+### For Research & Analysis
+Use **deep-research** to produce format-controlled research reports with evidence tables and citations. Combine with **fact-checker** to validate claims or with **twitter-reader** for social-source collection.
 
 ### For PDF & Printable Documents
 Use **pdf-creator** to convert markdown to print-ready PDFs with proper Chinese font support for formal documents and reports.
@@ -1536,6 +1574,7 @@ Each skill includes:
 - **prompt-optimizer**: See `prompt-optimizer/references/ears_syntax.md` for EARS transformation patterns, `prompt-optimizer/references/domain_theories.md` for theory catalog, and `prompt-optimizer/references/examples.md` for complete transformations
 - **claude-code-history-files-finder**: See `claude-code-history-files-finder/references/session_file_format.md` for JSONL structure and `claude-code-history-files-finder/references/workflow_examples.md` for recovery workflows
 - **docs-cleaner**: See `docs-cleaner/SKILL.md` for consolidation workflows
+- **deep-research**: See `deep-research/references/research_report_template.md` for report structure and `deep-research/references/source_quality_rubric.md` for source triage
 - **pdf-creator**: See `pdf-creator/SKILL.md` for PDF conversion and font setup
 - **claude-md-progressive-disclosurer**: See `claude-md-progressive-disclosurer/SKILL.md` for CLAUDE.md optimization workflow
 - **skills-search**: See `skills-search/SKILL.md` for CCPM CLI commands and registry operations
