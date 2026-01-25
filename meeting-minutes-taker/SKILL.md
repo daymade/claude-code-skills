@@ -1,7 +1,7 @@
 ---
 name: meeting-minutes-taker
 description: |
-  Transforms raw meeting transcripts into high-fidelity, structured meeting minutes with iterative review for completeness. This skill should be used when (1) a meeting transcript is provided and meeting minutes, notes, or summaries are requested, (2) multiple versions of meeting minutes need to be merged without losing content, (3) existing minutes need to be reviewed against the original transcript for missing items. Features evidence-based recording with speaker quotes, Mermaid diagrams for architecture discussions, multi-turn parallel generation to avoid content loss, and iterative human-in-the-loop refinement.
+  Transforms raw meeting transcripts into high-fidelity, structured meeting minutes with iterative review for completeness. This skill should be used when (1) a meeting transcript is provided and meeting minutes, notes, or summaries are requested, (2) multiple versions of meeting minutes need to be merged without losing content, (3) existing minutes need to be reviewed against the original transcript for missing items, (4) transcript has anonymous speakers like "Speaker 1/2/3" that need identification. Features include: speaker identification via feature analysis (word count, speaking style, topic focus) with context.md team directory mapping, intelligent file naming from content, integration with transcript-fixer for pre-processing, evidence-based recording with speaker quotes, Mermaid diagrams for architecture discussions, multi-turn parallel generation to avoid content loss, and iterative human-in-the-loop refinement.
 ---
 
 # Meeting Minutes Taker
@@ -10,13 +10,40 @@ Transform raw meeting transcripts into comprehensive, evidence-based meeting min
 
 ## Quick Start
 
+**Pre-processing (Optional but Recommended):**
+- **Document conversion**: Use `markdown-tools` skill to convert .docx/.pdf to Markdown first (preserves tables/images)
+- **Transcript cleanup**: Use `transcript-fixer` skill to fix ASR/STT errors if transcript quality is poor
+- **Context file**: Prepare `context.md` with team directory for accurate speaker identification
+
+**Core Workflow:**
 1. Read the transcript provided by user
 2. Load project-specific context file if provided by user (optional)
-3. **Multi-turn generation**: Use multiple passes or subagents with isolated context, merge using UNION
-4. Self-review using [references/completeness_review_checklist.md](references/completeness_review_checklist.md)
-5. Present draft to user for human line-by-line review
-6. **Cross-AI comparison** (optional): Human may provide output from other AI tools (e.g., Gemini, ChatGPT) - merge to reduce bias
-7. Iterate on feedback until human approves final version
+3. **Intelligent file naming**: Auto-generate filename from content (see below)
+4. **Speaker identification**: If transcript has "Speaker 1/2/3", identify speakers before generation
+5. **Multi-turn generation**: Use multiple passes or subagents with isolated context, merge using UNION
+6. Self-review using [references/completeness_review_checklist.md](references/completeness_review_checklist.md)
+7. Present draft to user for human line-by-line review
+8. **Cross-AI comparison** (optional): Human may provide output from other AI tools (e.g., Gemini, ChatGPT) - merge to reduce bias
+9. Iterate on feedback until human approves final version
+
+### Intelligent File Naming
+
+Auto-generate output filename from transcript content:
+
+**Pattern**: `YYYY-MM-DD-<topic>-<type>.md`
+
+| Component | Source | Examples |
+|-----------|--------|----------|
+| Date | Transcript metadata or first date mention | `2026-01-25` |
+| Topic | Main discussion subject (2-4 words, kebab-case) | `api-design`, `product-roadmap` |
+| Type | Meeting category | `review`, `sync`, `planning`, `retro`, `kickoff` |
+
+**Examples:**
+- `2026-01-25-order-api-design-review.md`
+- `2026-01-20-q1-sprint-planning.md`
+- `2026-01-18-onboarding-flow-sync.md`
+
+**Ask user to confirm** the suggested filename before writing.
 
 ## Core Workflow
 
@@ -24,7 +51,14 @@ Copy this checklist and track progress:
 
 ```
 Meeting Minutes Progress:
+- [ ] Step 0 (Optional): Pre-process transcript with transcript-fixer
 - [ ] Step 1: Read and analyze transcript
+- [ ] Step 1.5: Speaker identification (if transcript has "Speaker 1/2/3")
+  - [ ] Analyze speaker features (word count, style, topic focus)
+  - [ ] Match against context.md team directory (if provided)
+  - [ ] Present speaker mapping to user for confirmation
+- [ ] Step 1.6: Generate intelligent filename, confirm with user
+- [ ] Step 1.7: Quality assessment (optional, affects processing depth)
 - [ ] Step 2: Multi-turn generation (PARALLEL subagents with Task tool)
   - [ ] Create transcript-specific dir: <output_dir>/intermediate/<transcript-name>/
   - [ ] Launch 3 Task subagents IN PARALLEL (single message, 3 Task tool calls)
@@ -50,6 +84,112 @@ Analyze the transcript to identify:
 - Key decisions with supporting quotes
 - Action items with owners
 - Deferred items / open questions
+
+### Step 1.5: Speaker Identification (When Needed)
+
+**Trigger**: Transcript only has generic labels like "Speaker 1", "Speaker 2", "发言人1", etc.
+
+**Approach** (inspired by Anker Skill):
+
+#### Phase A: Feature Analysis (Pattern Recognition)
+
+For each speaker, analyze:
+
+| Feature | What to Look For |
+|---------|-----------------|
+| **Word count** | Total words spoken (high = senior/lead, low = observer) |
+| **Segment count** | Number of times they speak (frequent = active participant) |
+| **Avg segment length** | Average words per turn (long = presenter, short = responder) |
+| **Filler ratio** | % of filler words (对/嗯/啊/就是/然后) - low = prepared speaker |
+| **Speaking style** | Formal/informal, technical depth, decision authority |
+| **Topic focus** | Areas they discuss most (backend, frontend, product, etc.) |
+| **Interaction pattern** | Do others ask them questions? Do they assign tasks? |
+
+**Example analysis output:**
+```
+Speaker Analysis:
+┌──────────┬────────┬──────────┬─────────────┬─────────────┬────────────────────────┐
+│ Speaker  │ Words  │ Segments │ Avg Length  │ Filler %    │ Role Guess             │
+├──────────┼────────┼──────────┼─────────────┼─────────────┼────────────────────────┤
+│ 发言人1  │ 41,736 │ 93       │ 449 chars   │ 3.6%        │ 主讲人 (99% of content)│
+│ 发言人2  │ 101    │ 8        │ 13 chars    │ 4.0%        │ 对话者 (short responses)│
+└──────────┴────────┴──────────┴─────────────┴─────────────┴────────────────────────┘
+
+Inference rules:
+- 占比 > 70% + 平均长度 > 100字 → 主讲人
+- 平均长度 < 50字 → 对话者/响应者
+- 语气词占比 < 5% → 正式/准备充分
+- 语气词占比 > 10% → 非正式/即兴发言
+```
+
+#### Phase B: Context Mapping (If Context File Provided)
+
+When user provides a project context file (e.g., `context.md`):
+
+1. Load team directory section
+2. Match feature patterns to known team members
+3. Cross-reference roles with speaking patterns
+
+**Context file should include:**
+```markdown
+## Team Directory
+| Name | Role | Communication Style |
+|------|------|---------------------|
+| Alice | Backend Lead | Technical, decisive, assigns backend tasks |
+| Bob | PM | Product-focused, asks requirements questions |
+| Carol | TPM | Process-focused, tracks timeline/resources |
+```
+
+#### Phase C: Confirmation Before Proceeding
+
+**CRITICAL**: Never silently assume speaker identity.
+
+Present analysis summary to user:
+```
+Speaker Analysis:
+- Speaker 1 → Alice (Backend Lead) - 80% confidence based on: technical focus, task assignment pattern
+- Speaker 2 → Bob (PM) - 75% confidence based on: product questions, requirements discussion
+- Speaker 3 → Carol (TPM) - 70% confidence based on: timeline concerns, resource tracking
+
+Please confirm or correct these mappings before I proceed.
+```
+
+After user confirmation, apply mappings consistently throughout the document.
+
+### Step 1.7: Transcript Quality Assessment (Optional)
+
+Evaluate transcript quality to determine processing depth:
+
+**Scoring Criteria (1-10 scale):**
+
+| Factor | Score Impact |
+|--------|-------------|
+| **Content volume** | >10k chars: +2, 5-10k: +1, <2k: cap at 3 |
+| **Filler word ratio** | <5%: +2, 5-10%: +1, >10%: -1 |
+| **Speaker clarity** | Main speaker >80%: +1 (clear presenter) |
+| **Technical depth** | High technical content: +1 |
+
+**Quality Tiers:**
+
+| Score | Tier | Processing Approach |
+|-------|------|---------------------|
+| ≥8 | **High** | Full structured minutes with all sections, diagrams, quotes |
+| 5-7 | **Medium** | Standard minutes, focus on key decisions and action items |
+| <5 | **Low** | Summary only - brief highlights, skip detailed transcription |
+
+**Example assessment:**
+```
+📊 Transcript Quality Assessment:
+- Content: 41,837 chars (+2)
+- Filler ratio: 3.6% (+2)
+- Main speaker: 99% (+1)
+- Technical depth: High (+1)
+→ Quality Score: 10/10 (High)
+→ Recommended: Full structured minutes with diagrams
+```
+
+**User decision point**: If quality is Low (<5), ask user:
+> "Transcript quality is low (碎片对话/噪音较多). Generate full minutes or summary only?"
 
 ### Step 2: Multi-Turn Initial Generation (Critical)
 
@@ -309,7 +449,38 @@ If v3 has a flowchart for "Status Query Mechanism" but v1/v2 don't have it, that
 |------|--------------|
 | [meeting_minutes_template.md](references/meeting_minutes_template.md) | First generation - Contains template structure |
 | [completeness_review_checklist.md](references/completeness_review_checklist.md) | During review steps - Contains completeness checks |
+| [context_file_template.md](references/context_file_template.md) | When helping user create context.md - Contains team directory template |
 | Project context file (user-provided) | When user provides project-specific context (team directory, terminology, conventions) |
+
+### Recommended Pre-processing Pipeline
+
+**Full pipeline for .docx transcripts:**
+
+```
+Step 0: markdown-tools      # Convert .docx → Markdown (preserves tables/images)
+        ↓
+Step 0.5: transcript-fixer  # Fix ASR errors (optional, if quality is poor)
+        ↓
+Step 1+: meeting-minutes-taker  # Generate structured minutes
+```
+
+**Commands:**
+```bash
+# 1. Install markitdown (one-time)
+uv tool install "markitdown[pdf]"
+
+# 2. Convert .docx to markdown
+markitdown "录音转写.docx" -o transcript.md
+
+# 3. Then use meeting-minutes-taker on transcript.md
+```
+
+**Benefits of combo workflow:**
+- **Tables preserved**: markitdown converts Word tables to Markdown tables
+- **Images extracted**: Can be embedded in final minutes
+- **Cleaner quotes**: transcript-fixer removes ASR typos before quote extraction
+- **Accurate speaker ID**: Style analysis works better on clean text
+- **正交设计**: Each skill does one thing well, composable pipeline
 
 ## Common Patterns
 

@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, and plugin/skill troubleshooting with diagnostic tools",
-    "version": "1.27.0",
+    "version": "1.28.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -670,17 +670,17 @@
     },
     {
       "name": "meeting-minutes-taker",
-      "description": "Transform meeting transcripts into high-fidelity, structured meeting minutes with iterative review. Use when a meeting transcript is provided and meeting minutes are requested, multiple versions need merging without content loss, or existing minutes need review against original transcript. Features evidence-based recording with speaker quotes, Mermaid diagrams for architecture discussions, multi-turn parallel generation to avoid content loss, and iterative human-in-the-loop refinement",
+      "description": "Transform meeting transcripts into high-fidelity, structured meeting minutes with iterative review. Features speaker identification via feature analysis (word count, speaking style, topic focus) with context.md team directory mapping, intelligent file naming from content, integration with markdown-tools and transcript-fixer for pre-processing, evidence-based recording with speaker quotes, Mermaid diagrams for architecture discussions, and multi-turn parallel generation with UNION merge",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "productivity",
       "keywords": [
         "meeting",
         "minutes",
         "transcript",
         "notes",
-        "documentation",
+        "speaker-identification",
         "mermaid",
         "quotes",
         "action-items"

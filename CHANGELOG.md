@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.28.0] - 2026-01-25
+
+### Added
+- **Enhanced Skill**: meeting-minutes-taker v1.1.0 - Speaker identification and pre-processing pipeline
+  - Speaker identification via feature analysis (word count, segment count, filler ratio, speaking style)
+  - Context file template (`references/context_file_template.md`) for team directory mapping
+  - Intelligent file naming pattern: `YYYY-MM-DD-<topic>-<type>.md`
+  - Pre-processing pipeline integration with markdown-tools and transcript-fixer
+  - Transcript quality assessment workflow
+
+### Changed
+- Updated marketplace version from 1.27.0 to 1.28.0
+- Updated meeting-minutes-taker plugin version from 1.0.0 to 1.1.0
+
 ## [1.27.0] - 2026-01-25
 
 ### Added
