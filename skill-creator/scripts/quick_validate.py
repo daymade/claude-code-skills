@@ -9,6 +9,31 @@ import re
 from pathlib import Path
 
 
+def find_invalid_frontmatter_indentation(frontmatter: str) -> list[tuple[int, str]]:
+    """
+    Detect non-space indentation characters in YAML frontmatter.
+
+    YAML indentation must use ASCII spaces. Tabs or non-ASCII whitespace
+    (e.g., NBSP) can cause YAML parse errors.
+    """
+    issues = []
+    for line_no, line in enumerate(frontmatter.splitlines(), start=1):
+        # Scan leading whitespace only.
+        for ch in line:
+            if not ch.isspace():
+                break
+            if ch != ' ':
+                issues.append((line_no, ch))
+                break
+    return issues
+
+
+def describe_whitespace(ch: str) -> str:
+    if ch == '\t':
+        return "TAB"
+    return f"U+{ord(ch):04X}"
+
+
 def find_path_references(content: str) -> list[str]:
     """
     Extract path references from SKILL.md content.
@@ -77,7 +102,7 @@ def validate_skill(skill_path):
         return False, "SKILL.md not found"
 
     # Read and validate frontmatter
-    content = skill_md.read_text()
+    content = skill_md.read_text(encoding="utf-8")
     if not content.startswith('---'):
         return False, "No YAML frontmatter found"
 
@@ -87,6 +112,19 @@ def validate_skill(skill_path):
         return False, "Invalid frontmatter format"
 
     frontmatter = match.group(1)
+
+    # Check for invalid indentation characters in frontmatter
+    invalid_indent = find_invalid_frontmatter_indentation(frontmatter)
+    if invalid_indent:
+        samples = ", ".join(
+            f"line {line_no} ({describe_whitespace(ch)})"
+            for line_no, ch in invalid_indent[:3]
+        )
+        more = "" if len(invalid_indent) <= 3 else f" (+{len(invalid_indent) - 3} more)"
+        return False, (
+            "Invalid whitespace in frontmatter indentation; use ASCII spaces only. "
+            f"Found: {samples}{more}"
+        )
 
     # Check required fields
     if 'name:' not in frontmatter:
