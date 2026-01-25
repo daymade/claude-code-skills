@@ -10,6 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.26.0] - 2026-01-25
+
+### Added
+- **New Skill**: deep-research - Format-controlled research reports with evidence mapping
+  - Report spec and format contract workflow
+  - Multi-pass parallel drafting with UNION merge
+  - Evidence table with source quality rubric
+  - Citation verification and conflict handling
+  - Bundled references: report template, formatting rules, research plan checklist, source quality rubric, completeness checklist
+
+### Changed
+- Updated marketplace skills count from 33 to 34
+- Updated marketplace version from 1.25.0 to 1.26.0
+- Updated README.md badges (skills count, version)
+- Updated README.md to include deep-research in skills listing
+- Updated README.zh-CN.md badges (skills count, version)
+- Updated README.zh-CN.md to include deep-research in skills listing
+- Updated CLAUDE.md skills count from 33 to 34
+- Added deep-research use case section to README.md
+- Added deep-research use case section to README.zh-CN.md
+- Added deep-research documentation quick link to README.md
+- Added deep-research documentation quick link to README.zh-CN.md
+
 ## [1.25.0] - 2026-01-24
 
 ### Added
