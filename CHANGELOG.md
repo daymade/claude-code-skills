@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.29.0] - 2026-01-29
+
+### Added
+- **Enhanced Skill**: skill-creator v1.4.0 - Comprehensive YAML frontmatter documentation
+  - Complete YAML frontmatter reference table with all available fields
+  - `context: fork` documentation - critical for subagent-accessible skills
+  - Invocation control comparison table showing behavior differences
+  - `$ARGUMENTS` placeholder explanation with usage examples
+  - `allowed-tools` wildcard syntax examples (`Bash(git *)`, `Bash(npm *)`, `Bash(docker compose *)`)
+  - `hooks` field inline example for pre-invoke configuration
+  - Updated init_skill.py template with commented optional fields
+
+### Changed
+- Updated marketplace version from 1.28.0 to 1.29.0
+- Updated skill-creator plugin version from 1.3.0 to 1.4.0
+
+### Contributors
+- [@costa-marcello](https://github.com/costa-marcello) - PR #6: Initial frontmatter documentation
+
 ## [1.28.0] - 2026-01-25
 
 ### Added

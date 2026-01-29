@@ -144,13 +144,13 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
    - Tracks the marketplace catalog as a whole
-   - Current: v1.26.0
+   - Current: v1.29.0
    - Bump when: Adding/removing skills, major marketplace restructuring
    - Semantic versioning: MAJOR.MINOR.PATCH
 
 2. **Individual Skill Versions** (`.claude-plugin/marketplace.json` → `plugins[].version`)
    - Each skill has its own independent version
-   - Example: ppt-creator v1.0.0, skill-creator v1.0.0
+   - Example: ppt-creator v1.0.0, skill-creator v1.4.0
    - Bump when: Updating that specific skill
    - **CRITICAL**: Skills should NOT have version sections in SKILL.md
 
