@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-34-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.29.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-35-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.30.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 34 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 35 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -1463,6 +1463,45 @@ claude plugin install deep-research@daymade-skills
 
 ---
 
+### 35. **competitors-analysis** - Evidence-Based Competitor Tracking
+
+Analyze competitor repositories with evidence-based approach. All analysis must be based on actual cloned code, never assumptions.
+
+**When to use:**
+- Track and analyze competitor products or technologies
+- Create evidence-based competitor profiles
+- Generate competitive analysis reports
+- Need to document technical decisions with cited sources
+
+**Key features:**
+- Pre-analysis checklist to ensure repositories are cloned locally
+- Forbidden patterns to prevent assumptions ("推测...", "可能...", "应该...")
+- Required patterns for source citation (file:line_number format)
+- Tech stack analysis guides for Node.js, Python, Rust projects
+- Directory structure conventions for organized competitor tracking
+- Bundled templates: profile template, analysis checklist
+- Management script for batch clone/pull/status operations
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install competitors-analysis@daymade-skills
+
+# Then ask Claude to analyze a competitor
+"分析竞品 https://github.com/org/repo"
+"添加竞品到 flowzero 产品的竞品列表"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [competitors-analysis/SKILL.md](./competitors-analysis/SKILL.md) and [competitors-analysis/references/](./competitors-analysis/references/) for templates.
+
+**Requirements**: Git (for cloning repositories)
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1477,6 +1516,9 @@ Combine **markdown-tools** for document conversion and **mermaid-tools** for dia
 
 ### For Research & Analysis
 Use **deep-research** to produce format-controlled research reports with evidence tables and citations. Combine with **fact-checker** to validate claims or with **twitter-reader** for social-source collection.
+
+### For Competitive Intelligence
+Use **competitors-analysis** to track and analyze competitor repositories with evidence-based approach. All findings are sourced from actual code (file:line_number), eliminating speculation. Combine with **deep-research** for comprehensive competitive landscape reports.
 
 ### For PDF & Printable Documents
 Use **pdf-creator** to convert markdown to print-ready PDFs with proper Chinese font support for formal documents and reports.
@@ -1587,6 +1629,7 @@ Each skill includes:
 - **i18n-expert**: See `i18n-expert/SKILL.md` for complete i18n setup workflow, key architecture guidance, and audit procedures
 - **claude-skills-troubleshooting**: See `claude-skills-troubleshooting/SKILL.md` for plugin troubleshooting workflow and architecture
 - **fact-checker**: See `fact-checker/SKILL.md` for fact-checking workflow and claim verification process
+- **competitors-analysis**: See `competitors-analysis/SKILL.md` for evidence-based analysis workflow and `competitors-analysis/references/profile_template.md` for competitor profile template
 
 ## 🛠️ Requirements
 

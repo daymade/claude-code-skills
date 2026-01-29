@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 34 production-ready skills organized in a plugin marketplace structure. Each skill is a self-contained package that extends Claude's capabilities with specialized knowledge, workflows, and bundled resources.
+This is a Claude Code skills marketplace containing 35 production-ready skills organized in a plugin marketplace structure. Each skill is a self-contained package that extends Claude's capabilities with specialized knowledge, workflows, and bundled resources.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -134,7 +134,7 @@ Skills for public distribution must NOT contain:
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 34 plugins, each mapping to one skill
+- Contains 35 plugins, each mapping to one skill
 - Each plugin has: name, description, version, category, keywords, skills array
 - Marketplace metadata: name, owner, version, homepage
 
@@ -144,7 +144,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
    - Tracks the marketplace catalog as a whole
-   - Current: v1.29.0
+   - Current: v1.30.0
    - Bump when: Adding/removing skills, major marketplace restructuring
    - Semantic versioning: MAJOR.MINOR.PATCH
 
@@ -194,6 +194,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 32. **claude-skills-troubleshooting** - Diagnose and resolve Claude Code plugin and skill configuration issues with diagnostic scripts and architecture documentation
 33. **meeting-minutes-taker** - Transform meeting transcripts into structured minutes with multi-pass generation, speaker quotes, and iterative human review
 34. **deep-research** - Generate format-controlled research reports with evidence mapping, citations, and multi-pass synthesis
+35. **competitors-analysis** - Evidence-based competitor tracking and analysis with source citations (file:line_number format)
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 

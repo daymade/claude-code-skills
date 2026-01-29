@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, and plugin/skill troubleshooting with diagnostic tools",
-    "version": "1.29.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, and evidence-based competitor analysis with source citations",
+    "version": "1.30.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -708,6 +708,26 @@
       ],
       "skills": [
         "./deep-research"
+      ]
+    },
+    {
+      "name": "competitors-analysis",
+      "description": "Analyze competitor repositories with evidence-based approach. Use when tracking competitors, creating competitor profiles, or generating competitive analysis. All analysis must be based on actual cloned code, never assumptions. Triggers include analyze competitor, add competitor, competitive analysis, or 竞品分析",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "competitors",
+        "competitive-analysis",
+        "competitor-tracking",
+        "evidence-based",
+        "market-research",
+        "竞品分析",
+        "code-analysis"
+      ],
+      "skills": [
+        "./competitors-analysis"
       ]
     }
   ]
