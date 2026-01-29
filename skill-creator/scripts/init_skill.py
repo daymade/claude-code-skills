@@ -23,8 +23,8 @@ description: [TODO: Complete and informative explanation of what the skill does 
 # agent: Explore                   # Subagent type when context: fork (Explore, Plan, general-purpose, or custom)
 # disable-model-invocation: true   # Only allow manual /skill-name invocation, prevent auto-triggering
 # user-invocable: false            # Hide from / menu (for background knowledge only)
-# allowed-tools: Read, Grep        # Tools allowed without permission prompts
-# argument-hint: [filename]        # Autocomplete hint for arguments
+# allowed-tools: Read, Grep, Bash(git *), Bash(npm *)  # Tools allowed without permission prompts (wildcards supported)
+# argument-hint: [filename]        # Autocomplete hint for arguments. Use $ARGUMENTS in content to access user input
 ---
 
 # {skill_title}

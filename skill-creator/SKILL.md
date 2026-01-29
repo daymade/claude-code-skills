@@ -66,10 +66,12 @@ allowed-tools: Read, Grep, Bash(git *)
 | `agent` | No | Which subagent type to use when `context: fork` is set. Options: `Explore`, `Plan`, `general-purpose`, or custom agents from `.claude/agents/`. Default: `general-purpose`. |
 | `disable-model-invocation` | No | Set to `true` to prevent Claude from automatically loading this skill. Use for workflows you want to trigger manually with `/name`. Default: `false`. |
 | `user-invocable` | No | Set to `false` to hide from the `/` menu. Use for background knowledge users shouldn't invoke directly. Default: `true`. |
-| `allowed-tools` | No | Tools Claude can use without asking permission when this skill is active. Example: `Read, Grep, Bash(git *)`. |
+| `allowed-tools` | No | Tools Claude can use without asking permission when this skill is active. Supports wildcards: `Read, Grep, Bash(git *)`, `Bash(npm *)`, `Bash(docker compose *)`. |
 | `model` | No | Model to use when this skill is active. |
 | `argument-hint` | No | Hint shown during autocomplete to indicate expected arguments. Example: `[issue-number]` or `[filename] [format]`. |
-| `hooks` | No | Hooks scoped to this skill's lifecycle. See Claude Code Hooks documentation for configuration format. |
+| `hooks` | No | Hooks scoped to this skill's lifecycle. Example: `hooks: { pre-invoke: [{ command: "echo Starting" }] }`. See Claude Code Hooks documentation. |
+
+**Special placeholder:** `$ARGUMENTS` in skill content is replaced with text the user provides after the skill name. For example, `/deep-research quantum computing` replaces `$ARGUMENTS` with `quantum computing`.
 
 ##### When to Use `context: fork`
 
@@ -93,6 +95,7 @@ Research $ARGUMENTS thoroughly:
 2. Read and analyze the code
 3. Summarize findings with specific file references
 ```
+When invoked as `/deep-research authentication flow`, `$ARGUMENTS` becomes `authentication flow`.
 
 **Example: Reference skill that runs inline:**
 ```yaml
