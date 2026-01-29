@@ -1,257 +1,375 @@
 ---
 name: claude-md-progressive-disclosurer
-description: Optimize user CLAUDE.md files by applying progressive disclosure principles. This skill should be used when users want to reduce CLAUDE.md bloat, move detailed content to references, extract reusable patterns into skills, or improve context efficiency. Triggers include "optimize CLAUDE.md", "reduce CLAUDE.md size", "apply progressive disclosure", or complaints about CLAUDE.md being too long.
+description: |
+  Optimize CLAUDE.md files using progressive disclosure.
+  Goal: Maximize LLM working efficiency, NOT minimize line count.
+  Use when: User wants to optimize CLAUDE.md, complains about context issues, or file exceeds 500 lines.
 ---
 
-# CLAUDE.md Progressive Disclosure Optimizer
+# CLAUDE.md 渐进式披露优化器
 
-Analyze and optimize user CLAUDE.md files to reduce context overhead while preserving functionality.
+## 核心理念
 
-## Quick Start
+> "找到最小的高信号 token 集合，最大化期望结果的可能性。" — Anthropic
 
-1. **Backup** the original file first
-2. **Audit** the current state (list all sections with line counts)
-3. **Classify** each section using the criteria below
-4. **Propose** optimizations with before/after comparison table
-5. **Verify** information completeness checklist before executing
-6. **Execute** approved changes
-7. **Test** that moved content remains discoverable
+**目标是最大化 LLM 工作效能，而非最小化行数。**
 
-## Section Classification
+### 两层架构
 
-Analyze each section and classify:
+```
+Level 1 (CLAUDE.md) - 每次对话都加载
+├── 信息记录原则               ← 防止未来膨胀的自我约束
+├── Reference 索引（开头）     ← 入口1：遇到问题查这里
+├── 核心命令表
+├── 铁律/禁令（含代码示例）
+├── 常见错误诊断（症状→原因→修复）
+├── 代码模式（可直接复制）
+├── 目录映射（功能→文件）
+├── 修改代码前必读             ← 入口2：改代码前查这里
+└── Reference 触发索引（末尾） ← 入口3：长对话后复述
 
-| Category | Criteria | Action |
-|----------|----------|--------|
-| **Keep in CLAUDE.md** | Core principles, short rules (<10 lines), frequently needed | Keep as-is |
-| **Move to references/** | Detailed procedures, code examples, troubleshooting guides | Create `~/.claude/references/<name>.md` |
-| **Extract to skill** | Reusable workflows, scripts, domain-specific knowledge | Create skill in skills repository |
-| **Remove** | Duplicates existing skills, outdated, or unnecessary | Delete after confirmation |
+Level 2 (references/) - 按需即时加载
+├── 详细 SOP 流程
+├── 边缘情况处理
+├── 完整配置示例
+└── 历史决策记录
+```
 
-### Exceptions to Size Guidelines
+### 多入口原则（重要！）
 
-Even if a section is >50 lines, **KEEP in CLAUDE.md** if any of these apply:
+同一 Level 2 资源可以有**多个入口**，服务于不同查找路径：
 
-| Exception | Reason | Example |
-|-----------|--------|---------|
-| **Safety-critical** | Consequences of forgetting are severe | Deployment protocols, "never force push to main" |
-| **High-frequency** | Referenced in most conversations | Core development patterns, common commands |
-| **Easy to violate** | Claude tends to ignore when not visible | Code style rules, permission requirements |
-| **Security-sensitive** | Must be always enforced | Production access restrictions, data handling rules |
+| 入口 | 位置 | 触发场景 | 用户心态 |
+|------|------|----------|----------|
+| Reference 索引 | 开头 | 遇到错误/问题 | "出 bug 了，查哪个文档？" |
+| 修改代码前必读 | 中间 | 准备改代码 | "我要改 X，要注意什么？" |
+| Reference 触发索引 | 末尾 | 长对话定位 | "刚才说的那个文档是哪个？" |
 
-**Rule of thumb**: If forgetting the rule could cause production incidents, data loss, or security breaches, keep it visible regardless of length.
+**这不是重复，是多入口。** 就像书有目录（按章节）、索引（按关键词）、快速参考卡（按任务）。
 
-## Optimization Workflow
+---
 
-### Step 0: Backup Original File
+## 优化工作流
 
-**CRITICAL**: Always create a backup before any changes.
+### Step 1: 备份
 
 ```bash
-# Create timestamped backup
-cp ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.bak.$(date +%Y%m%d_%H%M%S)
-
-# For project-level CLAUDE.md
 cp CLAUDE.md CLAUDE.md.bak.$(date +%Y%m%d_%H%M%S)
 ```
 
-If issues found after optimization:
+### Step 2: 内容分类
+
+对每个章节分类：
+
+| 问题 | 是 | 否 |
+|------|----|-----|
+| 高频使用？ | Level 1 | ↓ |
+| 违反后果严重？ | Level 1 | ↓ |
+| 有代码模式需要直接复制？ | Level 1 保留模式 | ↓ |
+| 有明确触发条件？ | Level 2 + 触发条件 | ↓ |
+| 历史/参考资料？ | Level 2 | 考虑删除 |
+
+### Step 3: 创建 Reference 文件
+
+命名：`docs/references/{主题}-sop.md`
+
+### Step 4: 更新 Level 1
+
+1. **在开头添加「信息记录原则」**（项目概述之后，Reference 索引之前）
+2. **添加 Reference 索引**（紧随信息记录原则之后）
+3. 用触发条件格式替换详细内容
+4. 保留代码模式和错误诊断
+5. **添加「修改代码前必读」表格**（按"要改什么"索引）
+6. **在末尾再放一份触发索引表**
+
+### Step 5: 验证
+
 ```bash
-# Restore from backup
-cp ~/.claude/CLAUDE.md.bak.YYYYMMDD_HHMMSS ~/.claude/CLAUDE.md
+# 检查引用文件存在
+grep -oh '`[^`]*\.md`' CLAUDE.md | sed 's/`//g' | while read f; do
+  test -f "$f" && echo "✓ $f" || echo "✗ MISSING: $f"
+done
 ```
 
-### Step 1: Audit Current State
+---
 
-```
-Task Progress:
-- [ ] Create backup (Step 0)
-- [ ] Read ~/.claude/CLAUDE.md
-- [ ] Count total lines
-- [ ] List all ## sections with line counts
-- [ ] Identify sections >20 lines
-```
+## Level 1 内容分类
 
-### Step 2: Classify Each Section
+### 🔴 绝对不能移走
 
-For each section >20 lines, determine:
+| 内容类型 | 原因 |
+|---------|------|
+| **核心命令** | 高频使用 |
+| **铁律/禁令** | 违反后果严重，必须始终可见 |
+| **代码模式** | LLM 需要直接复制，避免重新推导 |
+| **错误诊断** | 完整的症状→原因→修复流程 |
+| **目录映射** | 帮助 LLM 快速定位文件 |
+| **触发索引表** | 帮助 LLM 在长对话中定位 Level 2 |
 
-1. **Frequency**: How often is this information needed?
-2. **Complexity**: Does it contain code blocks, tables, or detailed steps?
-3. **Reusability**: Could other users benefit from this as a skill?
+### 🟡 保留摘要 + 触发条件
 
-### Step 3: Propose Changes
+| 内容类型 | Level 1 | Level 2 |
+|---------|---------|---------|
+| SOP 流程 | 触发条件 + 关键陷阱 | 完整步骤 |
+| 配置示例 | 最常用的 1-2 个 | 完整配置 |
+| API 文档 | 常用方法签名 | 完整参数说明 |
 
-Present optimization plan in this format:
+### 🟢 可以完全移走
+
+| 内容类型 | 原因 |
+|---------|------|
+| 历史决策记录 | 低频访问 |
+| 性能数据 | 参考性质 |
+| 技术债务清单 | 按需查看 |
+| 边缘情况 | 有明确触发条件时再加载 |
+
+---
+
+## 引用格式（四种）
+
+### 1. 详细格式（正文中的重要引用）
 
 ```markdown
-## Optimization Proposal
+**📖 何时读 `docs/references/xxx-sop.md`**：
+- [具体错误信息，如 `ERR_DLOPEN_FAILED`]
+- [具体场景，如"添加新的原生模块时"]
 
-**Current**: X lines
-**After**: Y lines (Z% reduction)
-
-| Section | Lines | Action | Destination |
-|---------|-------|--------|-------------|
-| Section A | 50 | Move to references | ~/.claude/references/section_a.md |
-| Section B | 80 | Extract to skill | skill-name/ |
-| Section C | 5 | Keep | - |
+> 包含：[关键词 1]、[关键词 2]、[代码模板]。
 ```
 
-### Step 3.5: Pre-execution Verification Checklist
-
-**CRITICAL**: Before executing any changes, verify information completeness.
-
-For each section being moved or modified:
-
-1. **Extract key items** to verify:
-   - Credentials/passwords/API keys
-   - Critical rules ("never do X", "always do Y")
-   - Specific values (ports, IPs, URLs, paths)
-   - Code snippets that are frequently referenced
-   - Cross-references to other sections
-
-2. **Create verification checklist**:
-   ```markdown
-   ## Verification Checklist for [Section Name]
-
-   | Key Item | Original Location | New Location | Verified |
-   |----------|-------------------|--------------|----------|
-   | Server IP 47.96.x.x | Line 123 | infrastructure.md:15 | [ ] |
-   | "Never push to main" rule | Line 45 | Kept in CLAUDE.md | [ ] |
-   | Login credentials | Line 200 | api-login.md:30 | [ ] |
-   ```
-
-3. **Check cross-references**:
-   - If Section A references Section B, ensure links work after moving
-   - Update any relative paths to absolute paths if needed
-
-### Step 4: Execute Changes
-
-After user approval AND verification checklist complete:
-
-1. Create reference files in `~/.claude/references/`
-2. Update CLAUDE.md with pointers to moved content
-3. Create skills if applicable
-4. **Verify each checklist item exists in new location**
-5. Report final line count
-
-### Step 5: Post-optimization Testing
-
-Verify that Claude can still discover moved content:
-
-1. **Test discoverability** - Ask questions that require moved content:
-   ```
-   Test queries to run:
-   - "How do I connect to the production database?"
-   - "What are the deployment steps for [service]?"
-   - "Show me the credentials for [system]"
-   ```
-
-2. **Verify pointer functionality** - Each "See `reference.md`" link should work:
-   ```bash
-   # Check all referenced files exist
-   grep -oh '`~/.claude/references/[^`]*`' ~/.claude/CLAUDE.md | \
-     sed 's/`//g' | while read f; do
-       eval test -f "$f" && echo "✓ $f" || echo "✗ MISSING: $f"
-     done
-   ```
-
-3. **Compare with backup** - Ensure no unintended deletions:
-   ```bash
-   diff ~/.claude/CLAUDE.md.bak.* ~/.claude/CLAUDE.md | grep "^<" | head -20
-   ```
-
-4. **Document results**:
-   ```markdown
-   ## Optimization Results
-
-   | Metric | Before | After |
-   |--------|--------|-------|
-   | Total lines | X | Y |
-   | Reduction | - | Z% |
-   | References created | - | N files |
-   | Skills extracted | - | M skills |
-
-   **Verification**: All N checklist items verified ✓
-   **Testing**: All K test queries returned correct information ✓
-   ```
-
-## Reference File Format
-
-When moving content to `~/.claude/references/`:
+### 2. 问题触发表格（开头/末尾索引）
 
 ```markdown
-# [Section Title]
+## Reference 索引（遇到问题先查这里）
 
-[Full original content, possibly enhanced with additional examples]
+| 触发场景 | 文档 | 核心内容 |
+|----------|------|---------|
+| `ERR_DLOPEN_FAILED` | `native-modules-sop.md` | ABI 机制、懒加载 |
+| 打包后 `Cannot find module` | `vite-sop.md` | MODULES_TO_COPY |
 ```
 
-## CLAUDE.md Pointer Format
-
-Replace moved sections with:
+### 3. 任务触发表格（修改代码前必读）
 
 ```markdown
-## [Section Title]
+## 修改代码前必读
 
-[One-line summary]. See `~/.claude/references/[filename].md`
+| 你要改什么 | 先读这个 | 关键陷阱 |
+|-----------|---------|---------|
+| 原生模块相关 | `native-modules-sop.md` | 必须懒加载；electron-rebuild 会静默失败 |
+| 打包配置 | `packaging-sop.md` | DMG contents 必须用函数形式 |
 ```
 
-## Best Practices
-
-- **Keep core principles visible**: Rules like "never do X" should stay in CLAUDE.md
-- **Group related references**: Combine small related sections into one reference file
-- **Preserve quick commands**: Keep frequently-used command snippets in CLAUDE.md
-- **Test after optimization**: Ensure Claude can still find moved information
-
-## Common Patterns
-
-### Pattern: Infrastructure/Credentials
-**Before**: Full API examples, deployment scripts, server lists
-**After**: One-line pointer to `~/.claude/references/infrastructure.md`
-
-### Pattern: Code Generation Rules
-**Before**: 50+ lines of coding standards with examples
-**After**: Keep bullet-point rules, move examples to references
-
-### Pattern: Reusable Workflows
-**Before**: Complete scripts embedded in CLAUDE.md
-**After**: Extract to skill with scripts/ directory
-
-## Project-Level vs User-Level CLAUDE.md
-
-This skill handles both types, but strategies differ:
-
-### User-Level (`~/.claude/CLAUDE.md`)
-
-| Aspect | Approach |
-|--------|----------|
-| **Reference location** | `~/.claude/references/` |
-| **Scope** | Personal preferences, global rules |
-| **Sharing** | Not shared, personal only |
-| **Size target** | 100-200 lines ideal |
-
-### Project-Level (`/path/to/project/CLAUDE.md`)
-
-| Aspect | Approach |
-|--------|----------|
-| **Reference location** | `docs/` or `.claude/` in project root |
-| **Scope** | Project-specific patterns, architecture |
-| **Sharing** | Committed to git, shared with team |
-| **Size target** | 300-600 lines acceptable (more project context needed) |
-
-### Key Differences
-
-1. **Reference paths**: Use relative paths for project-level (`docs/best-practices/`)
-2. **Git considerations**: Project references are versioned with code
-3. **Team alignment**: Project CLAUDE.md should reflect team consensus
-4. **Update frequency**: Project-level changes more often as code evolves
-
-### Project-Level Pointer Format
+### 4. 内联格式（简短引用）
 
 ```markdown
-## [Section Title]
-
-[Summary]. See `docs/06-best-practices/[topic].md`
+完整流程见 `database-sop.md`（FTS5 转义、健康检查）。
 ```
 
-**Note**: For project CLAUDE.md, prefer `docs/` over hidden directories for discoverability by human team members.
+**多样性原则**：不要所有引用都用同一格式。
+
+---
+
+## 四条核心原则
+
+### 原则 0：添加「信息记录原则」（防止未来膨胀）
+
+**问题**：优化完成后，用户会继续要求 Claude "记录这个信息到 CLAUDE.md"，如果没有规则指导，CLAUDE.md 会再次膨胀。
+
+**解决**：在 CLAUDE.md 开头（项目概述之后）添加「信息记录原则」：
+
+```markdown
+## 信息记录原则（Claude 必读）
+
+本文档采用**渐进式披露**架构，优化 LLM 工作效能。
+
+### Level 1（本文件）只记录
+
+| 类型 | 示例 |
+|------|------|
+| 核心命令表 | `pnpm run restart` |
+| 铁律/禁令 | 必须懒加载原生模块 |
+| 常见错误诊断 | 症状→原因→修复（完整流程） |
+| 代码模式 | 可直接复制的代码块 |
+| 目录导航 | 功能→文件映射 |
+| 触发索引表 | 指向 Level 2 的入口 |
+
+### Level 2（docs/references/）记录
+
+| 类型 | 示例 |
+|------|------|
+| 详细 SOP 流程 | 完整的 20 步操作指南 |
+| 边缘情况处理 | 罕见错误的诊断 |
+| 完整配置示例 | 所有参数的说明 |
+| 历史决策记录 | 为什么这样设计 |
+
+### 用户要求记录信息时
+
+1. **判断是否高频使用**：
+   - 是 → 写入 CLAUDE.md（Level 1）
+   - 否 → 写入对应 reference 文件（Level 2）
+
+2. **Level 1 引用 Level 2 必须包含**：
+   - 触发条件（什么情况该读）
+   - 内容摘要（读了能得到什么）
+
+3. **禁止**：
+   - 在 Level 1 放置低频的详细流程
+   - 引用 Level 2 但不写触发条件
+```
+
+**原因**：这条规则让 Claude 自己知道什么该记在哪里，实现"自我约束"，避免后续对话中 CLAUDE.md 再次膨胀。
+
+### 原则 1：触发索引表放开头和末尾
+
+**原因**：LLM 注意力呈 U 型分布——开头和末尾强，中间弱。
+
+| 位置 | 作用 |
+|------|------|
+| **开头** | 对话开始时建立全局认知："有哪些 Level 2 可用" |
+| **末尾** | 对话变长后复述提醒："现在应该读哪个 Level 2" |
+
+```markdown
+<!-- CLAUDE.md 开头（项目概述之后） -->
+## Reference 索引
+
+| 触发场景 | 文档 | 核心内容 |
+|---------|------|---------|
+| ABI 错误 | `native-modules-sop.md` | 懒加载模式 |
+| 打包模块缺失 | `vite-sop.md` | MODULES_TO_COPY |
+
+... (正文内容) ...
+
+<!-- CLAUDE.md 末尾（再放一份） -->
+## Reference 触发索引
+
+| 触发场景 | 文档 | 核心内容 |
+|---------|------|---------|
+| ABI 错误 | `native-modules-sop.md` | 懒加载模式 |
+| 打包模块缺失 | `vite-sop.md` | MODULES_TO_COPY |
+```
+
+### 原则 2：引用必须有触发条件
+
+**错误**：`详见 native-modules-sop.md`
+
+**正确**：
+```markdown
+**📖 何时读 `native-modules-sop.md`**：
+- 遇到 `ERR_DLOPEN_FAILED` 错误
+- 需要添加新的原生模块
+
+> 包含：ABI 机制、懒加载模式、手动修复命令
+```
+
+**原因**：没有触发条件，LLM 不知道什么时候该去读。
+
+### 原则 3：代码模式必须保留在 Level 1
+
+**错误**：把代码示例移到 Level 2，Level 1 只写"使用懒加载模式"。
+
+**正确**：Level 1 保留完整的可复制代码：
+```javascript
+// ✅ 正确：懒加载，只在需要时加载
+let _Database = null;
+function getDatabase() {
+  if (!_Database) {
+    _Database = require("better-sqlite3");
+  }
+  return _Database;
+}
+```
+
+**原因**：LLM 需要直接复制代码，移走后每次都要重新推导或读取 Level 2。
+
+---
+
+## 反模式警告
+
+### ⚠️ 反模式 1：过度精简
+
+**案例**：把 2937 行压缩到 165 行
+
+**结果**：
+- 丢失代码模式，每次重新推导
+- 丢失诊断流程，遇错不知查哪
+- 丢失目录映射，找文件效率低
+
+**正确**：保留所有高频使用的内容，即使行数较多。
+
+### ⚠️ 反模式 2：无触发条件的引用
+
+**案例**：`详见 xxx.md`
+
+**问题**：LLM 不知道何时加载，要么忽略，要么每次都读。
+
+**正确**：触发条件 + 内容摘要。
+
+### ⚠️ 反模式 3：移走代码模式
+
+**案例**：把常用代码示例移到 Level 2
+
+**问题**：LLM 每次写代码都要先读 Level 2，增加延迟和 token 消耗。
+
+**正确**：高频使用的代码模式保留在 Level 1。
+
+### ⚠️ 反模式 4：删除而非移动
+
+**案例**：删除"不重要"的章节
+
+**问题**：信息丢失，未来需要时无处可查。
+
+**正确**：移到 Level 2，保留触发条件。
+
+---
+
+## 信息量检验
+
+### ✅ 正确的信息量
+
+| 检验项 | 通过标准 |
+|--------|---------|
+| 日常命令 | 不需要读 Level 2 |
+| 常见错误 | 有完整诊断流程 |
+| 代码编写 | 有可复制的模式 |
+| 特定问题 | 知道读哪个 Level 2 |
+| 触发索引 | 在文档末尾，表格形式 |
+
+### ❌ 不足的信号
+
+- LLM 反复问同样的问题
+- LLM 每次重新推导代码模式
+- 用户需要反复提醒规则
+
+### ❌ 过多的信号
+
+- 大段低频详细流程在 Level 1
+- **完全相同的内容**在多处（注意：多入口指向同一资源 ≠ 重复）
+- 边缘情况和常见情况混在一起
+
+---
+
+## 项目级 vs 用户级
+
+| 维度 | 用户级 | 项目级 |
+|------|--------|--------|
+| 位置 | `~/.claude/CLAUDE.md` | `项目/CLAUDE.md` |
+| References | `~/.claude/references/` | `docs/references/` |
+| 行数参考 | 100-300 | 300-600 |
+
+---
+
+## 快速检查清单
+
+优化完成后，检查：
+
+- [ ] **「信息记录原则」在文档开头**（防止未来膨胀）
+- [ ] **Reference 索引在文档开头**（入口1：遇到问题查这里）
+- [ ] 核心命令表完整
+- [ ] 铁律/禁令有代码示例
+- [ ] 常见错误有完整诊断流程（症状→原因→修复）
+- [ ] 代码模式可直接复制
+- [ ] 目录映射（功能→文件）
+- [ ] **「修改代码前必读」表格**（入口2：按"要改什么"索引）
+- [ ] **Reference 触发索引在文档末尾**（入口3：长对话后复述）
+- [ ] 每个 Level 2 引用都有触发条件
+- [ ] 引用的文件都存在
