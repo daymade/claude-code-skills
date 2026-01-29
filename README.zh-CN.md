@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-34-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.29.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-35-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.30.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 34 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 35 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -1505,6 +1505,45 @@ claude plugin install deep-research@daymade-skills
 
 ---
 
+### 35. **competitors-analysis** - 证据驱动的竞品追踪
+
+基于证据的竞品仓库分析。所有分析必须基于实际克隆的代码，禁止任何推测。
+
+**使用场景：**
+- 追踪和分析竞品产品或技术
+- 创建基于证据的竞品档案
+- 生成竞争分析报告
+- 需要以引用来源记录技术决策
+
+**主要功能：**
+- 分析前检查清单，确保仓库已本地克隆
+- 禁止模式以防止假设（"推测..."、"可能..."、"应该..."）
+- 必须的引用格式（文件:行号）
+- 支持 Node.js、Python、Rust 项目的技术栈分析指南
+- 目录结构规范用于组织竞品追踪
+- 内置模板：竞品档案模板、分析检查清单
+- 管理脚本用于批量克隆/拉取/状态检查操作
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install competitors-analysis@daymade-skills
+
+# 然后让 Claude 分析竞品
+"分析竞品 https://github.com/org/repo"
+"添加竞品到 flowzero 产品的竞品列表"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [competitors-analysis/SKILL.md](./competitors-analysis/SKILL.md) 与 [competitors-analysis/references/](./competitors-analysis/references/) 了解模板。
+
+**要求**：Git（用于克隆仓库）
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -1519,6 +1558,9 @@ claude plugin install deep-research@daymade-skills
 
 ### 调研与分析
 使用 **deep-research** 生成格式可控的调研报告，包含证据表与引用。与 **fact-checker** 结合用于验证关键结论，或与 **twitter-reader** 结合收集社媒资料。
+
+### 竞争情报
+使用 **competitors-analysis** 以证据驱动的方法追踪和分析竞品仓库。所有发现都来自实际代码（文件:行号），杜绝臆测。与 **deep-research** 结合生成全面的竞争格局报告。
 
 ### PDF 与可打印文档
 使用 **pdf-creator** 将 markdown 转换为适合打印的 PDF，并提供中文字体支持，适用于正式报告和归档材料。
@@ -1629,6 +1671,7 @@ claude plugin install deep-research@daymade-skills
 - **i18n-expert**：参见 `i18n-expert/SKILL.md` 了解完整的 i18n 设置工作流程、键架构指导和审计程序
 - **claude-skills-troubleshooting**：参见 `claude-skills-troubleshooting/SKILL.md` 了解插件故障排除工作流程和架构
 - **fact-checker**：参见 `fact-checker/SKILL.md` 了解事实核查工作流程和声明验证过程
+- **competitors-analysis**：参见 `competitors-analysis/SKILL.md` 了解证据驱动的分析工作流程和 `competitors-analysis/references/profile_template.md` 了解竞品档案模板
 
 ## 🛠️ 系统要求
 

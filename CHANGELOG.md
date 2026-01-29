@@ -10,6 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.30.0] - 2026-01-29
+
+### Added
+- **New Skill**: competitors-analysis - Evidence-based competitor tracking and analysis
+  - Pre-analysis checklist to ensure repositories are cloned locally
+  - Forbidden patterns to prevent assumptions and speculation
+  - Required patterns for source citation (file:line_number)
+  - Tech stack analysis guides for Node.js, Python, Rust projects
+  - Directory structure conventions for competitor tracking
+  - Bundled references: profile_template.md, analysis_checklist.md
+  - Management script: update-competitors.sh (clone/pull/status)
+
+### Changed
+- Updated marketplace skills count from 34 to 35
+- Updated marketplace version from 1.29.0 to 1.30.0
+- Updated README.md badges (skills count, version)
+- Updated README.md to include competitors-analysis in skills listing
+- Updated README.zh-CN.md badges (skills count, version)
+- Updated README.zh-CN.md to include competitors-analysis in skills listing
+- Updated CLAUDE.md skills count from 34 to 35
+- Added competitors-analysis use case section to README.md
+- Added competitors-analysis use case section to README.zh-CN.md
+
 ## [1.29.0] - 2026-01-29
 
 ### Added
