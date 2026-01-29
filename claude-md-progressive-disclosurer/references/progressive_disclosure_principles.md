@@ -1,147 +1,221 @@
-# Progressive Disclosure Principles for CLAUDE.md
+# 实践案例与教训
 
-## Core Concept
+本文档记录优化 CLAUDE.md 过程中的实际案例和教训。
 
-Progressive disclosure is a design pattern that sequences information based on need. For CLAUDE.md:
+---
 
-- **Level 1 (Always loaded)**: CLAUDE.md core content (~100-200 lines ideal)
-- **Level 2 (On-demand)**: `~/.claude/references/` files
-- **Level 3 (Skill-triggered)**: Skills with their own SKILL.md and resources
+## 案例 1：过度精简的失败
 
-## Token Economics
+### 背景
+某项目 CLAUDE.md 原有 2937 行，尝试优化。
 
-Every line in CLAUDE.md consumes context tokens on EVERY conversation. Moving 100 lines to references saves tokens on conversations that don't need that information.
+### 错误做法
+压缩到 165 行，移走了大部分内容。
 
-**Example calculation**:
-- CLAUDE.md with 500 lines ≈ 2000 tokens per conversation
-- Optimized 150 lines ≈ 600 tokens per conversation
-- 10 conversations/day = 14,000 tokens saved daily
+### 结果
+- ❌ 丢失代码模式，LLM 每次重新推导
+- ❌ 丢失诊断流程，遇错不知查哪
+- ❌ 丢失目录映射，找文件效率低
 
-## What Belongs in CLAUDE.md
+### 正确做法
+保留 482 行，关键内容如下：
 
-### Must Include
-- Identity/persona instructions
-- Critical safety rules ("never do X")
-- Frequently-referenced short rules
-- Tool preferences (ast-grep, difft, uv)
-- Directory/path conventions
+| 内容 | 保留位置 | 原因 |
+|------|----------|------|
+| 核心命令表 | Level 1 | 高频使用 |
+| 懒加载代码模式 | Level 1 | 需要直接复制 |
+| ABI 错误诊断 | Level 1 | 完整流程 |
+| 详细 SOP | Level 2 | 有触发条件 |
 
-### Should Move to References
-- Detailed API examples (>5 lines of code)
-- Troubleshooting guides with multiple steps
-- Infrastructure credentials and procedures
-- Deployment workflows
-- Database schemas
+### 教训
+**行数不是目标，效能才是。**
 
-### Should Become Skills
-- Reusable workflows with scripts
-- Domain-specific knowledge bases
-- Complex multi-step procedures
-- Anything another user might benefit from
+---
 
-## Section Size Guidelines
+## 案例 2：无触发条件的引用
 
-| Lines | Recommendation |
-|-------|----------------|
-| 1-10 | Keep in CLAUDE.md |
-| 11-30 | Consider consolidating or moving |
-| 31-50 | Strongly consider moving to references |
-| 50+ | Move to references or extract to skill |
-
-### Exceptions (Keep Regardless of Size)
-
-**Do NOT move** even if >50 lines:
-
-| Category | Reason | Examples |
-|----------|--------|----------|
-| **Safety-critical** | Severe consequences if forgotten | Deployment protocols, production access rules |
-| **High-frequency** | Used in most conversations | Core commands, common patterns |
-| **Easily violated** | Claude ignores when not visible | Style rules, permission checks |
-| **Security-sensitive** | Must always be enforced | Data handling, access restrictions |
-
-**Rule**: If forgetting causes production incidents, data loss, or security breaches → keep visible.
-
-## Reference File Organization
-
-```
-~/.claude/
-├── CLAUDE.md                    # Core principles only
-└── references/
-    ├── infrastructure.md        # Servers, APIs, credentials paths
-    ├── coding_standards.md      # Detailed code examples
-    ├── troubleshooting.md       # Common issues and solutions
-    └── domain_knowledge.md      # Project-specific information
+### 错误做法
+```markdown
+详见 native-modules-sop.md
 ```
 
-## Anti-Patterns
+### 问题
+LLM 不知道什么时候该去读这个文件。
 
-### 1. Embedded Scripts
-**Bad**: 100-line Python script in CLAUDE.md
-**Good**: Script in skill's `scripts/` directory
+### 正确做法
+```markdown
+**📖 何时读 `native-modules-sop.md`**：
+- 遇到 `ERR_DLOPEN_FAILED` 错误
+- 需要添加新的原生模块
 
-### 2. Duplicate Documentation
-**Bad**: Same info in CLAUDE.md and a skill
-**Good**: Single source of truth with pointers
+> 包含：ABI 机制、懒加载模式、手动修复命令
+```
 
-### 3. Rarely-Used Details
-**Bad**: Edge-case procedures in CLAUDE.md
-**Good**: Edge cases in references, linked when relevant
+### 教训
+**每个引用必须有触发条件 + 内容摘要。**
 
-### 4. Version-Specific Instructions
-**Bad**: "If using v2.3, do X; if v2.4, do Y"
-**Good**: Current version only, archive old versions
+---
 
-## Measuring Success
+## 案例 3：代码模式被移走
 
-After optimization, verify:
+### 错误做法
+Level 1 只写"使用懒加载模式"，代码示例放 Level 2。
 
-1. **Line count reduction**: Target 50%+ reduction
-2. **Information preserved**: All functionality still accessible
-3. **Discoverability**: Claude finds moved content when needed
-4. **Maintenance**: Easier to update individual reference files
+### 问题
+LLM 每次写代码都要先读 Level 2，或者凭记忆推导（可能出错）。
 
-### Verification Methods
+### 正确做法
+Level 1 保留完整代码：
 
-#### 1. Information Preservation Check
+```javascript
+// ✅ 正确：懒加载
+let _Database = null;
+function getDatabase() {
+  if (!_Database) {
+    _Database = require("better-sqlite3");
+  }
+  return _Database;
+}
+```
 
-Before executing, create a checklist of key items from each moved section:
+### 教训
+**高频使用的代码模式必须在 Level 1 可直接复制。**
+
+---
+
+## 案例 4：触发索引表位置错误
+
+### 错误做法
+触发索引表只放在 CLAUDE.md 中间某个位置。
+
+### 问题
+LLM 注意力呈 U 型分布：开头和末尾强，中间弱。只放中间会被忽略。
+
+### 正确做法
+触发索引表放在 CLAUDE.md **开头和末尾两个位置**：
 
 ```markdown
-| Key Item | Original Line | New Location | Verified |
-|----------|---------------|--------------|----------|
-| Server IP | L123 | infra.md:15 | [ ] |
-| Password | L200 | infra.md:42 | [ ] |
-| Critical rule | L45 | Kept | [ ] |
+<!-- CLAUDE.md 开头（项目概述之后） -->
+## Reference 索引
+
+| 触发场景 | 文档 | 核心内容 |
+|---------|------|---------|
+| ABI 错误 | `native-modules-sop.md` | 懒加载模式 |
+| 打包模块缺失 | `vite-sop.md` | MODULES_TO_COPY |
+
+... (正文内容) ...
+
+<!-- CLAUDE.md 末尾 -->
+## Reference 触发索引
+
+| 触发场景 | 文档 | 核心内容 |
+|---------|------|---------|
+| ABI 错误 | `native-modules-sop.md` | 懒加载模式 |
+| 打包模块缺失 | `vite-sop.md` | MODULES_TO_COPY |
 ```
 
-#### 2. Discoverability Test
+### 教训
+**三个入口服务于不同查找路径，这不是重复，是多入口。**
 
-After optimization, test with real queries:
+---
 
+## 案例 5：误删「修改代码前必读」
+
+### 错误做法
+认为「Reference 索引」和「修改代码前必读」内容重复，删除后者。
+
+### 问题
+两个表格服务于**不同的查找路径**：
+- Reference 索引：按**错误/问题**触发（"出 bug 了查哪个？"）
+- 修改代码前必读：按**要改的代码**触发（"我要改 X，注意什么？"）
+
+### 正确做法
+保留三个入口：
+1. **开头 Reference 索引** - 遇到问题时查
+2. **修改代码前必读** - 准备改代码时查
+3. **末尾触发索引** - 长对话后定位
+
+### 教训
+**多入口指向同一资源 ≠ 重复信息。** 就像书有目录、索引、快速参考卡。
+
+---
+
+## 案例 6：缺少信息记录原则
+
+### 背景
+优化完成后，CLAUDE.md 从 2937 行精简到 524 行，结构清晰。
+
+### 问题
+后续用户继续要求 Claude "把这个记录到 CLAUDE.md"，Claude 没有判断标准，只能照做。一个月后 CLAUDE.md 又膨胀回 1500+ 行。
+
+### 错误做法
+只优化内容，不添加规则。
+
+### 正确做法
+在 CLAUDE.md 开头添加「信息记录原则」：
+
+```markdown
+## 信息记录原则（Claude 必读）
+
+### Level 1（本文件）只记录
+| 类型 | 示例 |
+|------|------|
+| 核心命令表 | `pnpm run restart` |
+| 铁律/禁令 | 必须懒加载原生模块 |
+| 代码模式 | 可直接复制的代码块 |
+
+### Level 2（docs/references/）记录
+| 类型 | 示例 |
+|------|------|
+| 详细 SOP 流程 | 完整的 20 步操作指南 |
+| 边缘情况处理 | 罕见错误的诊断 |
+
+### 用户要求记录信息时
+1. 判断是否高频使用 → 是则 Level 1，否则 Level 2
+2. Level 1 引用 Level 2 必须包含触发条件
+3. 禁止在 Level 1 放置低频详细流程
 ```
-Test: "How do I deploy to production?"
-Expected: Should find deployment steps in reference file
 
-Test: "What's the database password?"
-Expected: Should find in infrastructure reference
+### 教训
+**优化的目的是「以后不再需要优化」。** 添加规则让 Claude 自我约束，实现长期可持续。
 
-Test: "Can I force push to main?"
-Expected: Should find rule (ideally still in CLAUDE.md)
-```
+---
 
-#### 3. Pointer Verification Script
+## 信息量判断标准
 
-```bash
-# Check all referenced files exist
-grep -oh '`[^`]*\.md`' ~/.claude/CLAUDE.md | \
-  sed 's/`//g' | while read f; do
-    test -f "$f" && echo "✓ $f" || echo "✗ MISSING: $f"
-  done
-```
+### 信息不足的信号
 
-#### 4. Backup Comparison
+| 信号 | 说明 |
+|------|------|
+| LLM 反复问同样的问题 | 缺少关键规则 |
+| LLM 每次重新推导代码 | 缺少代码模式 |
+| 用户反复提醒规则 | 规则没有足够强调 |
+| 不知道读哪个 Level 2 | 触发条件不明确 |
 
-```bash
-# See what was removed
-diff ~/.claude/CLAUDE.md.bak.* ~/.claude/CLAUDE.md | grep "^<"
-```
+### 信息过多的信号
+
+| 信号 | 说明 |
+|------|------|
+| 大段低频流程在 Level 1 | 应移到 Level 2 |
+| 同一内容重复出现 | 去重 |
+| 边缘和常见情况混在一起 | 边缘移到 Level 2 |
+
+---
+
+## Level 1 保留内容检查清单
+
+| 内容类型 | 必须保留 | 可移走 |
+|----------|----------|--------|
+| **信息记录原则** | ✅ 防止膨胀 | |
+| Reference 索引（开头） | ✅ 入口1 | |
+| 核心命令表 | ✅ | |
+| 铁律/禁令 | ✅ | |
+| 常见错误诊断（完整流程） | ✅ | |
+| 代码模式（可直接复制） | ✅ | |
+| 目录映射 | ✅ | |
+| 修改代码前必读 | ✅ 入口2 | |
+| Reference 触发索引（末尾） | ✅ 入口3 | |
+| 详细 SOP 步骤 | | ✅ |
+| 边缘情况处理 | | ✅ |
+| 历史决策记录 | | ✅ |
+| 性能数据 | | ✅ |
