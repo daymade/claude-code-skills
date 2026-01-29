@@ -18,6 +18,13 @@ from pathlib import Path
 SKILL_TEMPLATE = """---
 name: {skill_name}
 description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
+# ─── OPTIONAL FIELDS (uncomment as needed) ───
+# context: fork                    # Run in subagent context. IMPORTANT: Required for skills that subagents should use via Task tool
+# agent: Explore                   # Subagent type when context: fork (Explore, Plan, general-purpose, or custom)
+# disable-model-invocation: true   # Only allow manual /skill-name invocation, prevent auto-triggering
+# user-invocable: false            # Hide from / menu (for background knowledge only)
+# allowed-tools: Read, Grep        # Tools allowed without permission prompts
+# argument-hint: [filename]        # Autocomplete hint for arguments
 ---
 
 # {skill_title}
