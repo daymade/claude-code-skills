@@ -48,7 +48,7 @@ The `skill-creator` is the **meta-skill** that enables you to build, validate, a
 
 ### Quick Install
 
-**In Claude Code (in-app):**
+**In Claude Code / AdaL (in-app):**
 ```text
 /plugin marketplace add daymade/claude-code-skills
 ```
