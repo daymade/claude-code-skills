@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-35-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.30.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-36-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.31.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 35 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 36 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -1541,6 +1541,53 @@ claude plugin install competitors-analysis@daymade-skills
 📚 **文档**：参见 [competitors-analysis/SKILL.md](./competitors-analysis/SKILL.md) 与 [competitors-analysis/references/](./competitors-analysis/references/) 了解模板。
 
 **要求**：Git（用于克隆仓库）
+
+---
+
+### 36. **python-venv** - Python 虚拟环境管理
+
+强制在使用第三方 Python 包时使用虚拟环境。支持 uv 和 venv，自动检测现有环境。
+
+**使用场景：**
+- 运行需要第三方包的 Python 脚本
+- 使用 pip/uv pip 安装 Python 包
+- 有依赖关系的多文件 Python 项目
+- 管理 Python 项目依赖
+
+**主要功能：**
+- **自动检测现有 venv**：检查 .venv、venv、env、.env 目录
+- **智能复用**：复用现有的虚拟环境，而不是创建新的
+- **uv 优先**：使用 uv 进行更快的包管理，回退到 python3 -m venv
+- **跨平台**：支持 Linux、macOS、Windows 和 WSL
+- **Conda/Mamba 支持**：检测并使用 conda 环境
+- **项目检测**：识别 uv.lock、pyproject.toml、requirements.txt、Poetry、Pipfile
+- **故障排除指南**：帮助解决常见 venv 问题
+- **安全强制执行**：只为第三方包强制 venv，跳过仅使用标准库的代码
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install python-venv@daymade-skills
+
+# 运行 Python 脚本（如果需要会创建 venv）
+"运行这个使用了 pandas 和 numpy 的 script.py"
+
+# 安装包（会使用 venv）
+"安装 requests 和 beautifulsoup4"
+
+# 带有 requirements 的项目
+"项目有 requirements.txt，请安装包"
+
+# 仅使用标准库（跳过 venv）
+"打印 hello world"  # 不创建 venv
+```
+
+**要求：**
+- **Python 3.7+**（用于 venv 支持）
+- **uv**（可选，用于更快的操作）
+- **conda/mamba**（可选，用于 conda 环境支持）
+
+**📚 文档**：参见 [python-venv/SKILL.md](./python-venv/SKILL.md) 了解完整的工作流程和故障排除指南。
 
 ---
 

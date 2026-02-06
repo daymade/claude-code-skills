@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-35-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.30.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-36-blue.svg)](https://github.com/daymade-claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.31.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 35 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 36 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -1499,6 +1499,53 @@ claude plugin install competitors-analysis@daymade-skills
 📚 **Documentation**: See [competitors-analysis/SKILL.md](./competitors-analysis/SKILL.md) and [competitors-analysis/references/](./competitors-analysis/references/) for templates.
 
 **Requirements**: Git (for cloning repositories)
+
+---
+
+### 36. **python-venv** - Python Virtual Environment Management
+
+Enforce Python virtual environment usage for third-party package installations. Supports uv and venv with automatic detection of existing environments.
+
+**When to use:**
+- Running Python scripts requiring third-party packages
+- Installing Python packages via pip/uv pip
+- Multi-file Python projects with dependencies
+- Managing Python project dependencies
+
+**Key features:**
+- **Auto-detects existing venv**: Checks for .venv, venv, env, .env directories
+- **Smart reuse**: Reuses existing virtual environments instead of creating new ones
+- **uv priority**: Uses uv for faster package management, falls back to python3 -m venv
+- **Cross-platform**: Works on Linux, macOS, Windows, and WSL
+- **Conda/Mamba support**: Detects and uses conda environments when available
+- **Project detection**: Recognizes uv.lock, pyproject.toml, requirements.txt, Poetry, Pipfile
+- **Troubleshooting guide**: Helps solve common venv issues
+- **Safe enforcement**: Only enforces venv for third-party packages, skips stdlib-only code
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install python-venv@daymade-skills
+
+# Run a Python script (skill will create venv if needed)
+"Run this script.py that uses pandas and numpy"
+
+# Install packages (skill will use venv)
+"Install requests and beautifulsoup4"
+
+# Project with requirements
+"It has requirements.txt, please install the packages"
+
+# Standard library only (skips venv)
+"print hello world"  # No venv created
+```
+
+**Requirements:**
+- **Python 3.7+** (for venv support)
+- **uv** (optional, for faster operations)
+- **conda/mamba** (optional, for conda environment support)
+
+**📚 Documentation**: See [python-venv/SKILL.md](./python-venv/SKILL.md) for complete workflow and troubleshooting guidance.
 
 ---
 
