@@ -10,6 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.31.0] - 2026-02-07
+
+### Added
+- **New Skill**: tunnel-doctor - Diagnose and fix Tailscale + proxy/VPN route conflicts
+  - 6-step diagnostic workflow for route conflict detection and resolution
+  - Shadowrocket, Clash, Surge proxy tool fix guides
+  - Tailscale SSH ACL configuration (check vs accept)
+  - WSL snap vs apt Tailscale installation guidance
+  - Bundled references: proxy_fixes.md with per-tool instructions
+  - Shadowrocket config API documentation
+
+### Changed
+- Updated marketplace skills count from 35 to 36
+- Updated marketplace version from 1.30.0 to 1.31.0
+- Updated README.md badges (skills count, version)
+- Updated README.md to include tunnel-doctor in skills listing
+- Updated README.zh-CN.md badges (skills count, version)
+- Updated README.zh-CN.md to include tunnel-doctor in skills listing
+- Updated CLAUDE.md skills count from 35 to 36
+
 ## [1.30.0] - 2026-01-29
 
 ### Added
