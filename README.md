@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-35-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.30.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-36-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.31.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 35 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 36 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -1502,6 +1502,43 @@ claude plugin install competitors-analysis@daymade-skills
 
 ---
 
+### 36. **tunnel-doctor** - Tailscale + Proxy/VPN Route Conflict Fixer
+
+Diagnose and fix route conflicts when using Tailscale alongside proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS, with specific guidance for SSH access to WSL instances.
+
+**When to use:**
+- Tailscale ping works but SSH/TCP connections time out
+- Proxy tools hijack the Tailscale CGNAT range (100.64.0.0/10)
+- Setting up Tailscale SSH to WSL and encountering `operation not permitted`
+- Need to make Tailscale and Shadowrocket/Clash/Surge coexist on macOS
+
+**Key features:**
+- 6-step diagnostic workflow from symptom identification to end-to-end verification
+- Root cause analysis: `tun-excluded-routes` adds conflicting `en0` system routes
+- Per-tool fix guides for Shadowrocket, Clash, and Surge
+- Tailscale SSH ACL configuration (`check` vs `accept`)
+- WSL snap vs apt Tailscale installation (snap sandbox breaks SSH)
+- Shadowrocket config API for automated configuration
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install tunnel-doctor@daymade-skills
+
+# Then ask Claude to diagnose
+"Tailscale ping works but SSH times out"
+"Fix Tailscale and Shadowrocket route conflict on macOS"
+"Set up Tailscale SSH to my WSL instance"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [tunnel-doctor/references/proxy_fixes.md](./tunnel-doctor/references/proxy_fixes.md) for per-tool fix instructions.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1582,6 +1619,9 @@ Use **skill-reviewer** to validate your own skills against best practices before
 
 ### For Internationalization & Localization
 Use **i18n-expert** to set up complete i18n infrastructure for React/Next.js/Vue applications, audit existing implementations for missing translation keys, and ensure locale parity between en-US and zh-CN. Perfect for teams launching products to global markets, maintaining multi-language UIs, or replacing hard-coded strings with proper i18n keys. Combine with **skill-creator** to create locale-aware skills, or with **docs-cleaner** to consolidate documentation across multiple languages.
+
+### For Network & VPN Troubleshooting
+Use **tunnel-doctor** to diagnose and fix route conflicts between Tailscale and proxy/VPN tools on macOS. Essential when Tailscale ping works but TCP connections fail, or when setting up Tailscale SSH to WSL instances alongside Shadowrocket, Clash, or Surge.
 
 ### For Plugin & Skill Troubleshooting
 Use **claude-skills-troubleshooting** to diagnose and resolve Claude Code plugin and skill configuration issues. Debug why plugins appear installed but don't show in available skills, understand the installed_plugins.json vs settings.json enabledPlugins architecture, and batch-enable missing plugins from a marketplace. Essential for marketplace maintainers debugging installation issues, developers troubleshooting skill activation, or anyone confused by the GitHub #17832 auto-enable bug.

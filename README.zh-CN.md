@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-35-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.30.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-36-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.31.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 35 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 36 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -1544,6 +1544,43 @@ claude plugin install competitors-analysis@daymade-skills
 
 ---
 
+### 36. **tunnel-doctor** - Tailscale + 代理/VPN 路由冲突修复
+
+诊断和修复 macOS 上 Tailscale 与代理/VPN 工具（Shadowrocket、Clash、Surge）的路由冲突，特别针对 SSH 访问 WSL 实例的场景。
+
+**使用场景：**
+- Tailscale ping 正常但 SSH/TCP 连接超时
+- 代理工具劫持了 Tailscale CGNAT 网段（100.64.0.0/10）
+- 设置 Tailscale SSH 到 WSL 时遇到 `operation not permitted`
+- 需要让 Tailscale 和 Shadowrocket/Clash/Surge 在 macOS 上共存
+
+**主要功能：**
+- 6 步诊断流程：从症状识别到端到端验证
+- Root cause 分析：`tun-excluded-routes` 添加冲突的 `en0` 系统路由
+- 针对 Shadowrocket、Clash、Surge 的逐工具修复指南
+- Tailscale SSH ACL 配置（`check` vs `accept`）
+- WSL snap vs apt 安装 Tailscale（snap 沙箱导致 SSH 失败）
+- Shadowrocket 配置 API 用于自动化配置
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install tunnel-doctor@daymade-skills
+
+# 然后让 Claude 诊断
+"Tailscale ping 正常但 SSH 超时"
+"修复 macOS 上 Tailscale 和 Shadowrocket 的路由冲突"
+"设置 Tailscale SSH 到我的 WSL 实例"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [tunnel-doctor/references/proxy_fixes.md](./tunnel-doctor/references/proxy_fixes.md) 了解各工具修复指南。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -1624,6 +1661,9 @@ claude plugin install competitors-analysis@daymade-skills
 
 ### 国际化与本地化
 使用 **i18n-expert** 为 React/Next.js/Vue 应用程序设置完整的 i18n 基础设施、审计现有实现中缺失的翻译键，并确保 en-US 和 zh-CN 之间的语言环境一致性。非常适合向全球市场推出产品的团队、维护多语言 UI，或将硬编码字符串替换为正确的 i18n 键。与 **skill-creator** 结合使用可创建支持语言环境的技能，或与 **docs-cleaner** 结合使用可整合多种语言的文档。
+
+### 网络与 VPN 故障排查
+使用 **tunnel-doctor** 诊断和修复 macOS 上 Tailscale 与代理/VPN 工具的路由冲突。当 Tailscale ping 正常但 TCP 连接失败，或在使用 Shadowrocket、Clash、Surge 的同时设置 Tailscale SSH 到 WSL 实例时特别有用。
 
 ### 插件与技能故障排除
 使用 **claude-skills-troubleshooting** 诊断和解决 Claude Code 插件和技能配置问题。调试为什么插件显示已安装但未显示在可用技能列表中、了解 installed_plugins.json 与 settings.json enabledPlugins 架构，以及批量启用市场中缺失的插件。非常适合市场维护者调试安装问题、开发者调试技能激活，或任何对 GitHub #17832 自动启用 bug 感到困惑的人。
