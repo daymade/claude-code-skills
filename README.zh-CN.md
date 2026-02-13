@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-36-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.31.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-37-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.32.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 36 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 37 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -225,6 +225,9 @@ claude plugin install skill-reviewer@daymade-skills
 
 # GitHub 贡献策略
 claude plugin install github-contributor@daymade-skills
+
+# Windows 远程桌面 / AVD 连接诊断
+claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -1581,6 +1584,45 @@ claude plugin install tunnel-doctor@daymade-skills
 
 ---
 
+### 37. **windows-remote-desktop-connection-doctor** - AVD/W365 连接质量诊断
+
+诊断 macOS 上 Windows App（Microsoft Remote Desktop / Azure Virtual Desktop / W365）连接质量问题，专注于传输协议优化（UDP Shortpath vs WebSocket 回退）。
+
+**使用场景：**
+- VDI 连接缓慢，RTT 高（>100ms）
+- 传输协议显示 WebSocket 而非 UDP
+- RDP Shortpath 无法建立
+- 更换网络位置后连接质量下降
+- 需要识别 VPN/代理对 STUN/TURN 的干扰
+
+**主要功能：**
+- 5 步诊断流程：从连接信息收集到修复验证
+- 传输协议分析（UDP Shortpath > TCP > WebSocket 优先级）
+- VPN/代理干扰检测（ShadowRocket TUN 模式、Tailscale 出口节点）
+- Windows App 日志解析：健康检查失败、证书错误、FetchClientOptions 超时
+- ISP UDP 限制测试与 STUN 连通性检查
+- 中国 ISP UDP 限速的专门指导
+- 正常 vs 异常日志对比方法论
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
+
+# 然后让 Claude 诊断
+"我的 VDI 连接显示 WebSocket 而不是 UDP，RTT 165ms"
+"诊断为什么 RDP Shortpath 不工作"
+"Windows App 传输协议一直是 WebSocket"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [windows-remote-desktop-connection-doctor/references/](./windows-remote-desktop-connection-doctor/references/) 了解日志分析模式和 AVD 传输协议详情。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -1665,6 +1707,9 @@ claude plugin install tunnel-doctor@daymade-skills
 ### 网络与 VPN 故障排查
 使用 **tunnel-doctor** 诊断和修复 macOS 上 Tailscale 与代理/VPN 工具的路由冲突。当 Tailscale ping 正常但 TCP 连接失败，或在使用 Shadowrocket、Clash、Surge 的同时设置 Tailscale SSH 到 WSL 实例时特别有用。
 
+### 远程桌面与 VDI 优化
+使用 **windows-remote-desktop-connection-doctor** 诊断 macOS 上 Azure Virtual Desktop / W365 连接质量问题。当传输协议显示 WebSocket 而非 UDP Shortpath、RTT 异常高，或更换网络位置后 RDP Shortpath 失败时特别有用。结合网络证据收集与 Windows App 日志分析，系统性定位根因。
+
 ### 插件与技能故障排除
 使用 **claude-skills-troubleshooting** 诊断和解决 Claude Code 插件和技能配置问题。调试为什么插件显示已安装但未显示在可用技能列表中、了解 installed_plugins.json 与 settings.json enabledPlugins 架构，以及批量启用市场中缺失的插件。非常适合市场维护者调试安装问题、开发者调试技能激活，或任何对 GitHub #17832 自动启用 bug 感到困惑的人。
 
@@ -1712,6 +1757,7 @@ claude plugin install tunnel-doctor@daymade-skills
 - **claude-skills-troubleshooting**：参见 `claude-skills-troubleshooting/SKILL.md` 了解插件故障排除工作流程和架构
 - **fact-checker**：参见 `fact-checker/SKILL.md` 了解事实核查工作流程和声明验证过程
 - **competitors-analysis**：参见 `competitors-analysis/SKILL.md` 了解证据驱动的分析工作流程和 `competitors-analysis/references/profile_template.md` 了解竞品档案模板
+- **windows-remote-desktop-connection-doctor**：参见 `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` 了解日志解析模式和 `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` 了解传输协议详情
 
 ## 🛠️ 系统要求
 

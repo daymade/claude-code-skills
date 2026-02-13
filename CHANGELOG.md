@@ -10,6 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.32.0] - 2026-02-09
+
+### Added
+- **New Skill**: windows-remote-desktop-connection-doctor - Diagnose AVD/W365 connection quality issues
+  - 5-step diagnostic workflow for transport protocol analysis
+  - UDP Shortpath vs WebSocket detection and root cause identification
+  - VPN/proxy interference detection (ShadowRocket, Clash, Tailscale)
+  - Windows App log parsing for STUN/TURN/ICE negotiation failures
+  - ISP UDP restriction testing and Chinese ISP-specific guidance
+  - Bundled references: windows_app_log_analysis.md, avd_transport_protocols.md
+
+### Changed
+- Updated marketplace skills count from 36 to 37
+- Updated marketplace version from 1.31.0 to 1.32.0
+- Updated README.md badges (skills count, version)
+- Updated README.md to include windows-remote-desktop-connection-doctor in skills listing
+- Updated README.zh-CN.md badges (skills count, version)
+- Updated README.zh-CN.md to include windows-remote-desktop-connection-doctor in skills listing
+- Updated CLAUDE.md skills count from 36 to 37
+
 ## [1.31.0] - 2026-02-07
 
 ### Added

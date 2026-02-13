@@ -2,8 +2,8 @@
 name: claude-md-progressive-disclosurer
 description: |
   Optimize CLAUDE.md files using progressive disclosure.
-  Goal: Maximize LLM working efficiency, NOT minimize line count.
-  Use when: User wants to optimize CLAUDE.md, complains about context issues, or file exceeds 500 lines.
+  Goal: Maximize information efficiency, readability, and maintainability.
+  Use when: User wants to optimize CLAUDE.md, information is duplicated across files, or LLM repeatedly fails to follow rules.
 ---
 
 # CLAUDE.md 渐进式披露优化器
@@ -12,7 +12,14 @@ description: |
 
 > "找到最小的高信号 token 集合，最大化期望结果的可能性。" — Anthropic
 
-**目标是最大化 LLM 工作效能，而非最小化行数。**
+**目标是最大化信息效率、可读性、可维护性。**
+
+### 铁律：禁止用行数作为评价指标
+
+- 行数少不代表更好，行数多不代表更差
+- 优化的评判标准是：**单一信息源**（同一信息不在多处维护）、**认知相关性**（当前任务不需要的信息不干扰注意力）、**维护一致性**（改一处不需要同步另一处）
+- 禁止在优化方案中出现"从 X 行精简到 Y 行"、"减少 Z%"等表述
+- 一个结构清晰、信息不重复的长文件，比一个砍掉关键信息的短文件更好
 
 ### 两层架构
 
@@ -285,16 +292,16 @@ function getDatabase() {
 
 ## 反模式警告
 
-### ⚠️ 反模式 1：过度精简
+### ⚠️ 反模式 1：以行数为目标的过度精简
 
-**案例**：把 2937 行压缩到 165 行
+**案例**：为了"减少行数"，移走了代码模式、诊断流程、目录映射
 
 **结果**：
-- 丢失代码模式，每次重新推导
+- 丢失代码模式，LLM 每次重新推导
 - 丢失诊断流程，遇错不知查哪
 - 丢失目录映射，找文件效率低
 
-**正确**：保留所有高频使用的内容，即使行数较多。
+**正确**：保留所有高频使用的内容。优化的判断标准是信息是否重复维护、是否与当前任务无关，而不是"文件太长"。
 
 ### ⚠️ 反模式 2：无触发条件的引用
 
@@ -319,6 +326,14 @@ function getDatabase() {
 **问题**：信息丢失，未来需要时无处可查。
 
 **正确**：移到 Level 2，保留触发条件。
+
+### ⚠️ 反模式 5：用行数当 KPI
+
+**案例**：优化方案写"从 2000 行精简到 500 行，减少 75%"
+
+**问题**：把行数当成功指标，会驱动错误决策——为了凑数字而砍掉有用的信息。
+
+**正确**：用信息质量评估优化效果——信息是否有重复？维护负担是否降低？LLM 是否能更快找到需要的信息？
 
 ---
 
@@ -354,7 +369,7 @@ function getDatabase() {
 |------|--------|--------|
 | 位置 | `~/.claude/CLAUDE.md` | `项目/CLAUDE.md` |
 | References | `~/.claude/references/` | `docs/references/` |
-| 行数参考 | 100-300 | 300-600 |
+| 信息范围 | 个人偏好、全局规则 | 项目架构、团队规范 |
 
 ---
 
