@@ -144,7 +144,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
    - Tracks the marketplace catalog as a whole
-   - Current: v1.32.0
+   - Current: v1.32.1
    - Bump when: Adding/removing skills, major marketplace restructuring
    - Semantic versioning: MAJOR.MINOR.PATCH
 

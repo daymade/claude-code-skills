@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, and Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing",
-    "version": "1.32.0",
+    "version": "1.32.1",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -438,7 +438,7 @@
       "description": "Optimize user CLAUDE.md files by applying progressive disclosure principles. This skill should be used when users want to reduce CLAUDE.md bloat, move detailed content to references, extract reusable patterns into skills, or improve context efficiency. Triggers include optimize CLAUDE.md, reduce CLAUDE.md size, apply progressive disclosure, or complaints about CLAUDE.md being too long",
       "source": "./",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "productivity",
       "keywords": [
         "claude-md",
