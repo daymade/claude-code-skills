@@ -156,6 +156,23 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 **Key Principle**: SKILL.md files should be timeless content focused on functionality. Versions are tracked in marketplace.json only.
 
+### ⚠️ Updating Existing Skills (MANDATORY)
+
+**Any commit that modifies a skill's files MUST bump that skill's version in `marketplace.json`.**
+
+This applies when you change ANY file under a skill directory:
+- `SKILL.md` (instructions, description, workflow)
+- `references/` (documentation, principles, examples)
+- `scripts/` (executable code)
+- `assets/` (templates, resources)
+
+**Version bump rules:**
+- Content/doc updates (new sections, rewritten principles) → bump **MINOR** (1.0.1 → 1.1.0)
+- Bug fixes, typo fixes → bump **PATCH** (1.0.1 → 1.0.2)
+- Breaking changes (renamed commands, removed features) → bump **MAJOR** (1.0.1 → 2.0.0)
+
+**Pre-commit check:** Before committing, run `git diff --name-only` and verify: for every `skill-name/` directory that appears, `marketplace.json` also has a version bump for that skill's `plugins[].version`.
+
 ## Available Skills
 
 **Priority Order** (by importance):
