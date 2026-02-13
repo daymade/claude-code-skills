@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-36-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.31.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-37-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.32.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 36 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 37 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -222,6 +222,9 @@ claude plugin install skill-reviewer@daymade-skills
 
 # GitHub contribution strategy
 claude plugin install github-contributor@daymade-skills
+
+# Windows Remote Desktop / AVD connection diagnosis
+claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -1539,6 +1542,45 @@ claude plugin install tunnel-doctor@daymade-skills
 
 ---
 
+### 37. **windows-remote-desktop-connection-doctor** - AVD/W365 Connection Quality Diagnostician
+
+Diagnose Windows App (Microsoft Remote Desktop / Azure Virtual Desktop / W365) connection quality issues on macOS, with focus on transport protocol optimization (UDP Shortpath vs WebSocket fallback).
+
+**When to use:**
+- VDI connection is slow with high RTT (>100ms)
+- Transport Protocol shows WebSocket instead of UDP
+- RDP Shortpath fails to establish
+- Connection quality degraded after changing network location
+- Need to identify VPN/proxy interference with STUN/TURN
+
+**Key features:**
+- 5-step diagnostic workflow from connection info collection to fix verification
+- Transport protocol analysis (UDP Shortpath > TCP > WebSocket hierarchy)
+- VPN/proxy interference detection (ShadowRocket TUN mode, Tailscale exit node)
+- Windows App log parsing for health check failures, certificate errors, FetchClientOptions timeouts
+- ISP UDP restriction testing with STUN connectivity checks
+- Chinese ISP-specific guidance for UDP throttling issues
+- Working vs broken log comparison methodology
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
+
+# Then ask Claude to diagnose
+"My VDI connection shows WebSocket instead of UDP, RTT is 165ms"
+"Diagnose why RDP Shortpath is not working"
+"Windows App transport protocol stuck on WebSocket"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [windows-remote-desktop-connection-doctor/references/](./windows-remote-desktop-connection-doctor/references/) for log analysis patterns and AVD transport protocol details.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1623,6 +1665,9 @@ Use **i18n-expert** to set up complete i18n infrastructure for React/Next.js/Vue
 ### For Network & VPN Troubleshooting
 Use **tunnel-doctor** to diagnose and fix route conflicts between Tailscale and proxy/VPN tools on macOS. Essential when Tailscale ping works but TCP connections fail, or when setting up Tailscale SSH to WSL instances alongside Shadowrocket, Clash, or Surge.
 
+### For Remote Desktop & VDI Optimization
+Use **windows-remote-desktop-connection-doctor** to diagnose Azure Virtual Desktop / W365 connection quality issues on macOS. Essential when transport shows WebSocket instead of UDP Shortpath, when RTT is unexpectedly high, or when RDP Shortpath fails after changing network locations. Combines network evidence gathering with Windows App log analysis for systematic root cause identification.
+
 ### For Plugin & Skill Troubleshooting
 Use **claude-skills-troubleshooting** to diagnose and resolve Claude Code plugin and skill configuration issues. Debug why plugins appear installed but don't show in available skills, understand the installed_plugins.json vs settings.json enabledPlugins architecture, and batch-enable missing plugins from a marketplace. Essential for marketplace maintainers debugging installation issues, developers troubleshooting skill activation, or anyone confused by the GitHub #17832 auto-enable bug.
 
@@ -1670,6 +1715,7 @@ Each skill includes:
 - **claude-skills-troubleshooting**: See `claude-skills-troubleshooting/SKILL.md` for plugin troubleshooting workflow and architecture
 - **fact-checker**: See `fact-checker/SKILL.md` for fact-checking workflow and claim verification process
 - **competitors-analysis**: See `competitors-analysis/SKILL.md` for evidence-based analysis workflow and `competitors-analysis/references/profile_template.md` for competitor profile template
+- **windows-remote-desktop-connection-doctor**: See `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` for log parsing patterns and `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` for transport protocol details
 
 ## 🛠️ Requirements
 
