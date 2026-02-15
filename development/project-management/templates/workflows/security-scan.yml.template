@@ -1,0 +1,301 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run security scan daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    {% if LANGUAGE == "python" %}
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install security tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety safety-db semgrep
+    {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install security tools
+      run: |
+        npm ci
+        npm install --save-dev npm-audit-resport
+    {% endif %}
+
+    {% if LANGUAGE == "python" %}
+    - name: Run Bandit security scan
+      run: |
+        echo "Running Bandit security scanner..."
+        bandit -r src/ -f json -o bandit-report.json || true
+        bandit -r src/ -f txt -o bandit-report.txt || true
+        bandit -r src/ -f html -o bandit-report.html || true
+
+    - name: Run Safety dependency check
+      run: |
+        echo "Running Safety dependency checker..."
+        if [ -f requirements.txt ]; then
+          safety check --json > safety-report.json || true
+          safety check > safety-report.txt || true
+        else
+          echo "No requirements.txt found, skipping safety check"
+          echo '{"ok": true}' > safety-report.json
+          echo "No requirements.txt found" > safety-report.txt
+        fi
+
+    - name: Run Semgrep security scan
+      run: |
+        echo "Running Semgrep security scanner..."
+        semgrep --config=auto --json --output=semgrep-report.json src/ || true
+        semgrep --config=auto --text --output=semgrep-report.txt src/ || true
+    {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+    - name: Run npm audit
+      run: |
+        echo "Running npm audit..."
+        npm audit --json > audit-report.json || true
+        npm audit > audit-report.txt || true
+
+    - name: Run Snyk security scan
+      run: |
+        echo "Running Snyk security scanner..."
+        npx snyk test --json > snyk-report.json || true
+        npx snyk test > snyk-report.txt || true
+    {% endif %}
+
+    - name: Check for secrets
+      run: |
+        echo "Checking for potential secrets..."
+        # Common secret patterns
+        PATTERNS=(
+          "password\s*[:=]\s*['\"][^'\"]+['\"]"
+          "api_key\s*[:=]\s*['\"][^'\"]+['\"]"
+          "secret\s*[:=]\s*['\"][^'\"]+['\"]"
+          "token\s*[:=]\s*['\"][^'\"]+['\"]"
+          "aws_access_key_id\s*[:=]\s*['\"][^'\"]+['\"]"
+          "aws_secret_access_key\s*[:=]\s*['\"][^'\"]+['\"]"
+        )
+
+        FOUND_SECRETS=()
+        for pattern in "${PATTERNS[@]}"; do
+          {% if LANGUAGE == "python" %}
+          MATCHES=$(grep -r -i -E "$pattern" src/ --include="*.py" || true)
+          {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+          MATCHES=$(grep -r -i -E "$pattern" src/ --include="*.js" --include="*.ts" || true)
+          {% elif LANGUAGE == "go" %}
+          MATCHES=$(grep -r -i -E "$pattern" src/ --include="*.go" || true)
+          {% elif LANGUAGE == "rust" %}
+          MATCHES=$(grep -r -i -E "$pattern" src/ --include="*.rs" || true)
+          {% endif %}
+          if [ -n "$MATCHES" ]; then
+            FOUND_SECRETS+=("$pattern")
+            echo "::warning::Potential secret found with pattern: $pattern"
+          fi
+        done
+
+        if [ ${#FOUND_SECRETS[@]} -gt 0 ]; then
+          echo "::error::Found potential hardcoded secrets"
+          exit 1
+        fi
+
+        echo "✅ No hardcoded secrets detected"
+
+    - name: Check .gitignore coverage
+      run: |
+        echo "Checking .gitignore coverage..."
+
+        # Check for sensitive files in .gitignore
+        IGNORED_PATTERNS=(
+          ".env"
+          "*.key"
+          "*.pem"
+          "credentials/"
+          "secrets/"
+        )
+
+        MISSING_PATTERNS=()
+        for pattern in "${IGNORED_PATTERNS[@]}"; do
+          if ! grep -q "^$pattern" .gitignore; then
+            MISSING_PATTERNS+=("$pattern")
+            echo "::warning::.gitignore missing pattern: $pattern"
+          fi
+        done
+
+        if [ ${#MISSING_PATTERNS[@]} -gt 0 ]; then
+          echo "::error::.gitignore is missing sensitive file patterns"
+          exit 1
+        fi
+
+        echo "✅ .gitignore coverage is adequate"
+
+    - name: Generate security summary
+      run: |
+        cat > security-summary.md << EOF
+        # Security Scan Summary
+
+        **Date:** $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        **Commit:** ${{ github.sha }}
+        **Branch:** ${{ github.ref_name }}
+
+        ## Scan Results
+
+        {% if LANGUAGE == "python" %}
+        ### Bandit (Python Security)
+        EOF
+
+        if [ -f bandit-report.txt ]; then
+          echo "" >> security-summary.md
+          echo '```' >> security-summary.md
+          cat bandit-report.txt >> security-summary.md
+          echo '```' >> security-summary.md
+        fi
+
+        cat >> security-summary.md << EOF
+
+        ### Safety (Dependency Vulnerabilities)
+        EOF
+
+        if [ -f safety-report.txt ]; then
+          echo "" >> security-summary.md
+          echo '```' >> security-summary.md
+          cat safety-report.txt >> security-summary.md
+          echo '```' >> security-summary.md
+        fi
+
+        cat >> security-summary.md << EOF
+
+        ### Semgrep (Static Analysis)
+        EOF
+
+        if [ -f semgrep-report.txt ]; then
+          echo "" >> security-summary.md
+          echo '```' >> security-summary.md
+          head -50 semgrep-report.txt >> security-summary.md
+          echo '```' >> security-summary.md
+        fi
+        {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+        ### npm audit (Dependency Vulnerabilities)
+        EOF
+
+        if [ -f audit-report.txt ]; then
+          echo "" >> security-summary.md
+          echo '```' >> security-summary.md
+          cat audit-report.txt >> security-summary.md
+          echo '```' >> security-summary.md
+        fi
+
+        cat >> security-summary.md << EOF
+
+        ### Snyk (Security Scanner)
+        EOF
+
+        if [ -f snyk-report.txt ]; then
+          echo "" >> security-summary.md
+          echo '```' >> security-summary.md
+          cat snyk-report.txt >> security-summary.md
+          echo '```' >> security-summary.md
+        fi
+        {% endif %}
+
+        cat >> security-summary.md << EOF
+
+        ### Secrets Scan
+        - ✅ No hardcoded secrets detected
+
+        ### .gitignore Coverage
+        - ✅ All sensitive file patterns covered
+
+        ## Recommendations
+
+        - Review security findings for potential issues
+        - Update dependencies if vulnerabilities are reported
+        - Address static analysis findings
+        - Regular security audits recommended
+
+        EOF
+
+        cat security-summary.md
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports-${{ github.run_number }}
+        path: |
+          {% if LANGUAGE == "python" %}
+          bandit-report.json
+          bandit-report.txt
+          bandit-report.html
+          safety-report.json
+          safety-report.txt
+          semgrep-report.json
+          semgrep-report.txt
+          {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+          audit-report.json
+          audit-report.txt
+          snyk-report.json
+          snyk-report.txt
+          {% endif %}
+          security-summary.md
+
+    - name: Comment on PR with security findings
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const summary = fs.readFileSync('security-summary.md', 'utf8');
+
+          // Add emoji for PR comment
+          const prComment = `🔒 **Security Scan Results**
+
+          ${summary}
+
+          ---
+          *This comment was automatically generated by the Security Scan workflow*
+          `;
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: prComment
+          });
+
+    - name: Fail on critical security issues
+      run: |
+        # Check for critical security issues
+        {% if LANGUAGE == "python" %}
+        if [ -f bandit-report.json ]; then
+          CRITICAL=$(jq '[.results[] | select(.issue_severity == "HIGH")] | length' bandit-report.json)
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "::error::Found $CRITICAL high-severity security issues"
+            exit 1
+          fi
+        fi
+        {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+        if [ -f audit-report.json ]; then
+          CRITICAL=$(jq '.metadata.vulnerabilities.high' audit-report.json)
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "::error::Found $CRITICAL high-severity security issues"
+            exit 1
+          fi
+        fi
+        {% endif %}
+
+        echo "✅ No critical security issues found"

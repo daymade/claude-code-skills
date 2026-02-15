@@ -1,0 +1,170 @@
+# {{PROJECT_NAME}} - 里程碑追踪系统
+
+> **单一真相源 (Single Source of Truth)** - 所有项目里程碑的集中追踪
+>
+> 最后更新: {{TODAY_DATE}}
+> 项目状态: 初始化阶段
+
+---
+
+## 📊 里程碑概览
+
+| ID | 名称 | Phase | 状态 | 完成日期 | 进度 |
+|----|------|-------|------|----------|------|
+{% for i in range(1, PHASES + 1) %}
+| M{{i}} | Phase {{i}} - {{PHASE_NAMES[i-1]}} | Phase {{i}} | 🔄 未开始 | - | 0% |
+{% endfor %}
+
+**总体进度**: 0% (0/{{PHASES}} 里程碑完成)
+
+---
+
+## 🎯 关键指标
+
+### 代码产出
+- **核心代码**: 0 行
+- **测试代码**: 0 行
+- **文档**: 1,000+ 行 (本文件)
+- **总产出**: ~1,000 行
+
+### 测试覆盖
+- **测试数量**: 0 个
+- **通过率**: N/A
+- **覆盖率**: N/A (目标 ≥{{COVERAGE_THRESHOLD}}%)
+
+---
+
+## 📈 Timeline 可视化
+
+```mermaid
+timeline
+    title {{PROJECT_NAME}} - 项目 Timeline
+    {{TODAY_DATE}} : 项目启动<br/>Git 仓库初始化
+               : 目录结构创建<br/>里程碑系统建立
+    未来       : Phase 1 (未开始)
+               : Phase 2 (未开始)
+               : ... 其他阶段
+```
+
+---
+
+## 📋 详细里程碑信息
+
+{% for i in range(1, PHASES + 1) %}
+### 🔄 M{{i}}: Phase {{i}} - {{PHASE_NAMES[i-1]}}
+
+**状态**: 🔄 未开始 (0%)
+
+**计划交付物**:
+- [ ] 核心功能开发
+- [ ] 单元测试编写
+- [ ] 文档完善
+- [ ] 代码审查
+
+**验证标准**:
+- [ ] 所有测试通过
+- [ ] 代码覆盖率 ≥{{COVERAGE_THRESHOLD}}%
+- [ ] 文档完整
+- [ ] 安全扫描通过
+
+**预计开始时间**: TBD
+**预计完成时间**: TBD
+
+**Git 标签**: `v0.{{i}}.0-phase{{i}}`
+
+---
+
+{% endfor %}
+
+## 🔗 依赖关系图
+
+```mermaid
+graph TD
+{% for i in range(1, PHASES) %}
+    M{{i}}[M{{i}}: Phase {{i}}] --> M{{i+1}}[M{{i+1}}: Phase {{i+1}}]
+{% endfor %}
+
+{% for i in range(1, PHASES + 1) %}
+    style M{{i}} fill:#FFD700
+{% endfor %}
+```
+
+---
+
+## 📝 事件日志
+
+### {{TODAY_DATE}}
+
+#### 项目启动
+- Git 仓库初始化完成
+- 目录结构创建完成
+- 里程碑追踪系统建立
+- 验证脚本生成
+
+---
+
+## 🎯 下一步行动
+
+### 立即 (P0)
+1. ⏳ 定义 Phase 1 具体任务
+2. ⏳ 设置开发环境
+3. ⏳ 编写第一个功能
+4. ⏳ 编写第一个测试
+
+### 短期 (本周)
+1. ⏳ Phase 1 核心功能开发
+2. ⏳ 单元测试覆盖
+3. ⏳ 初始文档编写
+4. ⏳ CI/CD 验证
+
+### 中期 (本月)
+1. ⏳ Phase 1 完成
+2. ⏳ Phase 2 规划
+3. ⏳ 代码审查
+4. ⏳ 性能优化
+
+---
+
+## 📚 参考文档
+
+### 项目文档
+- `docs/project/PROJECT_STATE.md` - 项目状态详细
+- `docs/project/TIMELINE.md` - Timeline 可视化
+- `README.md` - 项目概览
+
+### 阶段文档
+{% for i in range(1, PHASES + 1) %}
+- `docs/phases/phase{{i}}/` - Phase {{i}} 文档
+{% endfor %}
+
+### 报告
+- `docs/reports/` - 各类报告 (代码审查、测试、安全等)
+
+### 指南
+- `docs/guides/` - 开发指南
+
+---
+
+## 🔧 维护说明
+
+### 更新频率
+- **事件日志**: 每日更新
+- **进度概览**: 每周更新
+- **速度追踪**: 每个阶段完成后更新
+- **Timeline 图表**: 每个里程碑完成后更新
+
+### 更新责任人
+- **主要维护者**: {{PROJECT_NAME}} Team
+- **审查者**: Project Lead
+- **批准者**: Stakeholder
+
+### 版本控制
+- 本文件使用 Git 版本控制
+- 每次重大更新创建 Git commit
+- 使用 Conventional Commits 规范
+
+---
+
+**最后更新: {{TODAY_DATE}}**
+**项目版本**: v0.1.0 (Initialization)
+**下一个里程碑**: M1 - Phase 1 ({{PHASE_NAMES[0]}})
