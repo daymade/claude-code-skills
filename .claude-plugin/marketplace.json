@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, and Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing",
-    "version": "1.32.1",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, and Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development",
+    "version": "1.33.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -732,10 +732,10 @@
     },
     {
       "name": "tunnel-doctor",
-      "description": "Diagnose and fix route conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Use when Tailscale ping works but SSH/TCP times out, when proxy tools hijack the 100.64.0.0/10 CGNAT range, or when setting up Tailscale SSH to WSL instances",
+      "description": "Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers three conflict layers: route hijacking, HTTP proxy env var interception, and system proxy bypass. Includes SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when setting up Tailscale SSH to WSL instances, or when bootstrapping remote dev environments over Tailscale",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
@@ -746,9 +746,13 @@
         "route-conflict",
         "wsl",
         "ssh",
+        "ssh-tunnel",
+        "autossh",
         "proxy",
         "networking",
-        "macos"
+        "macos",
+        "makefile",
+        "remote-development"
       ],
       "skills": [
         "./tunnel-doctor"

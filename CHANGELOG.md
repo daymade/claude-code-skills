@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.33.0] - 2026-02-16
+
+### Changed
+- **tunnel-doctor** v1.0.0 → v1.1.0: Added remote development SOP with SSH tunnel and Makefile patterns
+  - New SOP section: proxy-safe Makefile pattern (`--noproxy localhost` for all health checks)
+  - New SOP section: SSH tunnel Makefile targets (`tunnel`/`tunnel-bg` with autossh)
+  - New SOP section: multi-port tunnel configuration
+  - New SOP section: SSH non-login shell setup (deduped, references proxy_fixes.md)
+  - New SOP section: end-to-end workflow (first-time setup + daily workflow)
+  - New SOP section: pre-flight checklist (10 verification items)
+  - New diagnostic step 2D: auth redirect fix via SSH local port forwarding
+  - New diagnostic step 2E: localhost proxy interception in Makefiles/scripts
+  - Fixed step ordering: 2A→2B→2C→2D→2E (was 2A→2C→2D→2E→2B)
+  - Fixed description to third-person voice per skill best practices
+  - Replaced hardcoded IP with `<tailscale-ip>` placeholder (5 occurrences)
+  - Added SSH non-login shell pitfall to references/proxy_fixes.md
+  - Added localhost proxy interception section to references/proxy_fixes.md
+  - Strengthened `--data-binary` vs `-d` warning in references/proxy_fixes.md
+  - New keywords: ssh-tunnel, autossh, makefile, remote-development
+- Updated marketplace version from 1.32.1 to 1.33.0
+
 ## [1.32.0] - 2026-02-09
 
 ### Added
