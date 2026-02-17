@@ -1547,23 +1547,25 @@ claude plugin install competitors-analysis@daymade-skills
 
 ---
 
-### 36. **tunnel-doctor** - Tailscale + 代理/VPN 路由冲突修复
+### 36. **tunnel-doctor** - Tailscale + 代理/VPN 冲突修复
 
-诊断和修复 macOS 上 Tailscale 与代理/VPN 工具（Shadowrocket、Clash、Surge）的路由冲突，特别针对 SSH 访问 WSL 实例的场景。
+诊断和修复 macOS 上 Tailscale 与代理/VPN 工具（Shadowrocket、Clash、Surge）的冲突。覆盖四个独立冲突层，特别针对 SSH 访问 WSL 实例的场景。
 
 **使用场景：**
 - Tailscale ping 正常但 SSH/TCP 连接超时
 - 代理工具劫持了 Tailscale CGNAT 网段（100.64.0.0/10）
+- 浏览器返回 HTTP 503 但 curl 和 SSH 正常
+- `git push/pull` 失败并报 "failed to begin relaying via HTTP"
 - 设置 Tailscale SSH 到 WSL 时遇到 `operation not permitted`
 - 需要让 Tailscale 和 Shadowrocket/Clash/Surge 在 macOS 上共存
 
 **主要功能：**
-- 6 步诊断流程：从症状识别到端到端验证
-- Root cause 分析：`tun-excluded-routes` 添加冲突的 `en0` 系统路由
+- 四层诊断模型：路由劫持、HTTP 环境变量、系统代理绕过、SSH ProxyCommand 双重隧道
 - 针对 Shadowrocket、Clash、Surge 的逐工具修复指南
+- SSH ProxyCommand 双重隧道检测与修复（git push/pull 失败）
 - Tailscale SSH ACL 配置（`check` vs `accept`）
 - WSL snap vs apt 安装 Tailscale（snap 沙箱导致 SSH 失败）
-- Shadowrocket 配置 API 用于自动化配置
+- 远程开发 SOP 与代理安全的 Makefile 模式
 
 **示例用法：**
 ```bash
@@ -1573,6 +1575,7 @@ claude plugin install tunnel-doctor@daymade-skills
 # 然后让 Claude 诊断
 "Tailscale ping 正常但 SSH 超时"
 "修复 macOS 上 Tailscale 和 Shadowrocket 的路由冲突"
+"git push 失败 failed to begin relaying via HTTP"
 "设置 Tailscale SSH 到我的 WSL 实例"
 ```
 
@@ -1580,7 +1583,7 @@ claude plugin install tunnel-doctor@daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [tunnel-doctor/references/proxy_fixes.md](./tunnel-doctor/references/proxy_fixes.md) 了解各工具修复指南。
+📚 **文档**：参见 [tunnel-doctor/references/proxy_conflict_reference.md](./tunnel-doctor/references/proxy_conflict_reference.md) 了解各工具配置与冲突架构。
 
 ---
 
@@ -1705,7 +1708,7 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 使用 **i18n-expert** 为 React/Next.js/Vue 应用程序设置完整的 i18n 基础设施、审计现有实现中缺失的翻译键，并确保 en-US 和 zh-CN 之间的语言环境一致性。非常适合向全球市场推出产品的团队、维护多语言 UI，或将硬编码字符串替换为正确的 i18n 键。与 **skill-creator** 结合使用可创建支持语言环境的技能，或与 **docs-cleaner** 结合使用可整合多种语言的文档。
 
 ### 网络与 VPN 故障排查
-使用 **tunnel-doctor** 诊断和修复 macOS 上 Tailscale 与代理/VPN 工具的路由冲突。当 Tailscale ping 正常但 TCP 连接失败，或在使用 Shadowrocket、Clash、Surge 的同时设置 Tailscale SSH 到 WSL 实例时特别有用。
+使用 **tunnel-doctor** 诊断和修复 macOS 上 Tailscale 与代理/VPN 工具的四层冲突（路由劫持、HTTP 环境变量、系统代理、SSH ProxyCommand）。当 Tailscale ping 正常但 TCP 连接失败、git push 报 "failed to begin relaying via HTTP"，或在使用 Shadowrocket、Clash、Surge 的同时设置 Tailscale SSH 到 WSL 实例时特别有用。
 
 ### 远程桌面与 VDI 优化
 使用 **windows-remote-desktop-connection-doctor** 诊断 macOS 上 Azure Virtual Desktop / W365 连接质量问题。当传输协议显示 WebSocket 而非 UDP Shortpath、RTT 异常高，或更换网络位置后 RDP Shortpath 失败时特别有用。结合网络证据收集与 Windows App 日志分析，系统性定位根因。

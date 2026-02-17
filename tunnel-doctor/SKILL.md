@@ -1,6 +1,6 @@
 ---
 name: tunnel-doctor
-description: Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers three conflict layers - (1) route hijacking (proxy TUN overrides Tailscale routes), (2) HTTP proxy env var interception (http_proxy/NO_PROXY misconfiguration), and (3) system proxy bypass (browser goes through VPN proxy, DIRECT rule can't reach Tailscale utun). Includes SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when setting up Tailscale SSH to WSL instances, or when bootstrapping remote dev environments over Tailscale.
+description: Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers four conflict layers - (1) route hijacking, (2) HTTP proxy env var interception, (3) system proxy bypass, and (4) SSH ProxyCommand double tunneling causing git push/pull failures. Includes SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when git push fails with "failed to begin relaying via HTTP", when setting up Tailscale SSH to WSL instances, or when bootstrapping remote dev environments over Tailscale.
 allowed-tools: Read, Grep, Edit, Bash
 ---
 
@@ -8,15 +8,16 @@ allowed-tools: Read, Grep, Edit, Bash
 
 Diagnose and fix conflicts when Tailscale coexists with proxy/VPN tools on macOS, with specific guidance for SSH access to WSL instances.
 
-## Three Conflict Layers
+## Four Conflict Layers
 
-Tailscale + proxy tools can conflict at three independent layers. Each has different symptoms:
+Proxy/VPN tools on macOS create conflicts at four independent layers. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations (same proxy environment, different target):
 
 | Layer | What breaks | What still works | Root cause |
 |-------|-------------|------------------|------------|
 | 1. Route table | Everything (SSH, curl, browser) | `tailscale ping` | `tun-excluded-routes` adds `en0` route overriding Tailscale utun |
 | 2. HTTP env vars | `curl`, Python requests, Node.js fetch | SSH, browser | `http_proxy` set without `NO_PROXY` for Tailscale |
 | 3. System proxy (browser) | Browser only (HTTP 503) | SSH, `curl` (both with/without proxy) | Browser uses VPN system proxy; DIRECT rule routes via Wi-Fi, not Tailscale utun |
+| 4. SSH ProxyCommand double tunnel | `git push/pull` (intermittent) | `ssh -T` (small data) | `connect -H` creates HTTP CONNECT tunnel redundant with Shadowrocket TUN; landing proxy drops large/long-lived transfers |
 
 ## Diagnostic Workflow
 
@@ -29,6 +30,7 @@ Determine which scenario applies:
 - **Tailscale ping works, SSH/TCP times out** → Route conflict (Step 2B)
 - **Remote dev server auth redirects to `localhost` → browser can't follow** → SSH tunnel needed (Step 2D)
 - **`make status` / scripts curl to localhost fail with proxy** → localhost proxy interception (Step 2E)
+- **`git push/pull` fails with `FATAL: failed to begin relaying via HTTP`** → SSH double tunnel (Step 2F)
 - **SSH connects but `operation not permitted`** → Tailscale SSH config issue (Step 4)
 - **SSH connects but `be-child ssh` exits code 1** → WSL snap sandbox issue (Step 5)
 
@@ -36,6 +38,7 @@ Determine which scenario applies:
 - SSH does NOT use `http_proxy`/`NO_PROXY` env vars. If SSH works but HTTP doesn't → Layer 2.
 - `curl` uses `http_proxy` env var, NOT the system proxy. Browser uses system proxy (set by VPN). If `curl` works but browser doesn't → Layer 3.
 - If `tailscale ping` works but regular `ping` doesn't → Layer 1 (route table corrupted).
+- If `ssh -T git@github.com` works but `git push` fails intermittently → Layer 4 (double tunnel).
 
 ### Step 2A: Fix HTTP Proxy Environment Variables
 
@@ -66,7 +69,7 @@ export NO_PROXY=localhost,127.0.0.1,.ts.net,100.64.0.0/10,192.168.*,10.*,172.16.
 
 **Two layers complement each other**: `.ts.net` handles domain-based access, `100.64.0.0/10` handles direct IP access.
 
-**NO_PROXY syntax pitfalls** — see [references/proxy_fixes.md](references/proxy_fixes.md) for the compatibility matrix.
+**NO_PROXY syntax pitfalls** — see [references/proxy_conflict_reference.md](references/proxy_conflict_reference.md) for the compatibility matrix.
 
 Verify the fix:
 
@@ -196,9 +199,37 @@ Alternatively, set `no_proxy` globally in `~/.zshrc`:
 export no_proxy=localhost,127.0.0.1
 ```
 
+### Step 2F: Fix SSH ProxyCommand Double Tunnel (git push/pull failures)
+
+**Symptom**: `ssh -T git@github.com` succeeds consistently, but `git push` or `git pull` fails intermittently with:
+
+```
+FATAL: failed to begin relaying via HTTP.
+Connection closed by UNKNOWN port 65535
+```
+
+Small operations (auth, fetch metadata) work; large data transfers fail.
+
+**Root cause**: When Shadowrocket TUN is active, it already routes all TCP traffic through its VPN tunnel. If SSH config also uses `ProxyCommand connect -H`, data flows through two proxy layers — the landing proxy drops large/long-lived HTTP CONNECT connections.
+
+**Diagnosis**:
+
+```bash
+# 1. Confirm Shadowrocket TUN is active
+ifconfig | grep '^utun'
+
+# 2. Check SSH config for ProxyCommand
+grep -A5 'Host github.com' ~/.ssh/config
+
+# 3. Confirm: removing ProxyCommand fixes push
+GIT_SSH_COMMAND="ssh -o ProxyCommand=none" git push origin main
+```
+
+**Fix** — remove ProxyCommand and switch to `ssh.github.com:443`. See [references/proxy_conflict_reference.md § SSH ProxyCommand and Git Operations](references/proxy_conflict_reference.md) for the full SSH config, why port 443 helps, and fallback options when VPN is off.
+
 ### Step 3: Fix Proxy Tool Configuration
 
-Identify the proxy tool and apply the appropriate fix. See [references/proxy_fixes.md](references/proxy_fixes.md) for detailed instructions per tool.
+Identify the proxy tool and apply the appropriate fix. See [references/proxy_conflict_reference.md](references/proxy_conflict_reference.md) for detailed instructions per tool.
 
 **Key principle**: Do NOT use `tun-excluded-routes` to exclude `100.64.0.0/10`. This causes the proxy to add a `→ en0` route that overrides Tailscale. Instead, let the traffic enter the proxy TUN and use a DIRECT rule to pass it through.
 
@@ -374,7 +405,7 @@ Each `-L` flag is independent. If one port is already bound locally, `ExitOnForw
 
 ### 4. SSH Non-Login Shell Setup
 
-SSH non-login shells don't load `~/.zshrc`, so nvm/Homebrew tools and proxy env vars are unavailable. Prefix all remote commands with `source ~/.zshrc 2>/dev/null;`. See [references/proxy_fixes.md § SSH Non-Login Shell Pitfall](references/proxy_fixes.md) for details and examples.
+SSH non-login shells don't load `~/.zshrc`, so nvm/Homebrew tools and proxy env vars are unavailable. Prefix all remote commands with `source ~/.zshrc 2>/dev/null;`. See [references/proxy_conflict_reference.md § SSH Non-Login Shell Pitfall](references/proxy_conflict_reference.md) for details and examples.
 
 For Makefile targets that run remote commands:
 
@@ -453,4 +484,4 @@ Before starting remote development, verify:
 
 ## References
 
-- [references/proxy_fixes.md](references/proxy_fixes.md) — Detailed fix instructions for Shadowrocket, Clash, and Surge
+- [references/proxy_conflict_reference.md](references/proxy_conflict_reference.md) — Per-tool configuration (Shadowrocket, Clash, Surge), NO_PROXY syntax, SSH ProxyCommand, and conflict architecture

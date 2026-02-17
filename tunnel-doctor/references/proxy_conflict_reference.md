@@ -178,17 +178,120 @@ Check MagicDNS status:
 tailscale dns status
 ```
 
+## SSH ProxyCommand and Git Operations
+
+### The Problem
+
+Many developers in China configure SSH with `ProxyCommand connect -H 127.0.0.1:<port>` to tunnel SSH through their HTTP proxy. This works fine for interactive SSH and small operations. But when Shadowrocket (or Clash/Surge) runs in TUN mode, this creates a **double tunnel**:
+
+1. `connect -H` creates an HTTP CONNECT tunnel to the local proxy port
+2. Shadowrocket TUN captures the same traffic at the system level
+
+The landing proxy sees a long-lived HTTP CONNECT connection and may drop it during large data transfers (`git push`, `git clone` of large repos).
+
+### Data Flow Comparison
+
+```
+Double tunnel (broken):
+SSH → connect -H (HTTP CONNECT tunnel) → Shadowrocket local port 1082
+                                          → Shadowrocket TUN → landing proxy → GitHub
+
+Single tunnel (correct):
+SSH → system network stack → Shadowrocket TUN → landing proxy → GitHub
+```
+
+The HTTP CONNECT tunnel adds protocol framing overhead. The landing proxy (落地代理) sees a long-lived HTTP CONNECT connection and may apply aggressive timeouts or buffer limits, dropping the connection during large transfers.
+
+### Detecting TUN Mode
+
+```bash
+# If utun interfaces exist (other than Tailscale's), a VPN TUN is active
+ifconfig | grep '^utun'
+```
+
+If Shadowrocket/Clash/Surge TUN is active, `ProxyCommand connect -H` is redundant.
+
+### The Fix — SSH over Port 443 without ProxyCommand
+
+```bash
+# 1. Add ssh.github.com host key
+ssh-keyscan -p 443 ssh.github.com >> ~/.ssh/known_hosts
+
+# 2. Update ~/.ssh/config
+```
+
+```
+Host github.com
+    HostName ssh.github.com
+    Port 443
+    User git
+    # No ProxyCommand — Shadowrocket TUN handles routing at the system level.
+    # Port 443 gets longer timeouts from landing proxies than port 22.
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    IdentityFile ~/.ssh/id_ed25519
+```
+
+### Why Port 443
+
+HTTP proxies (and landing proxies) are optimized for port 443 traffic:
+- **Longer connection timeouts**: HTTPS connections are expected to be long-lived (WebSocket, streaming, large file downloads)
+- **Larger buffer limits**: Proxies allocate more resources for 443 traffic
+- **No protocol inspection**: Port 22 may trigger deep packet inspection on some proxies; 443 is treated as opaque TLS
+
+GitHub officially supports SSH on port 443 via `ssh.github.com` — it's the same service, same authentication, different port.
+
+### Fallback When VPN Is Off
+
+Without Shadowrocket TUN, SSH can't reach GitHub directly from China. Options:
+
+1. **Keep old config as comment** — manually uncomment ProxyCommand when needed
+2. **Use Match directive** — conditionally apply ProxyCommand (advanced):
+
+```
+Host github.com
+    HostName ssh.github.com
+    Port 443
+    User git
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    IdentityFile ~/.ssh/id_ed25519
+
+# Uncomment when Shadowrocket is off:
+#   ProxyCommand /opt/homebrew/bin/connect -H 127.0.0.1:1082 %h %p
+```
+
+### Verification
+
+```bash
+# Auth test
+ssh -T git@github.com
+# → Hi username! You've successfully authenticated...
+
+# Verbose — confirm ssh.github.com:443
+ssh -v -T git@github.com 2>&1 | grep 'Connecting to'
+# → Connecting to ssh.github.com [20.205.243.160] port 443.
+
+# Large transfer test
+cd /path/to/repo && git push origin main
+```
+
+### Performance Trade-off
+
+Connection setup is slightly slower (~6s vs ~2s) because TUN routing has more network hops than a direct HTTP CONNECT tunnel. Actual data transfer speed is the same (bottlenecked by bandwidth, not connection setup).
+
 ## General Principles
 
-### Three Conflict Layers
+### Four Conflict Layers
 
-Proxy tools and Tailscale can conflict at three independent layers on macOS:
+Proxy tools create conflicts at four independent layers on macOS. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations through the same proxy infrastructure:
 
 | Layer | Setting | What it controls | Symptom when wrong |
 |-------|---------|------------------|--------------------|
 | 1. Route table | `tun-excluded-routes` | OS-level IP routing | Everything broken (SSH, curl, browser). `tailscale ping` works but `ping` doesn't |
 | 2. HTTP env vars | `http_proxy` / `NO_PROXY` | CLI tools (curl, wget, Python, Node.js) | `curl` times out, SSH works, browser works |
 | 3. System proxy | `skip-proxy` | Browser and system HTTP clients | Browser 503, `curl` works (both with/without proxy), SSH works |
+| 4. SSH ProxyCommand | `ProxyCommand connect -H` | SSH git operations (push/pull/clone) | `ssh -T` works, `git push` fails intermittently with `failed to begin relaying via HTTP` |
 
 **Each layer is independent.** A fix at one layer doesn't help the others. You may need fixes at multiple layers simultaneously.
 
@@ -218,12 +321,14 @@ Adding `100.64.0.0/10` to `skip-proxy` makes the system bypass the proxy entirel
 
 ### The Correct Approach
 
-For full Tailscale compatibility with proxy tools, apply all three:
+For full Tailscale compatibility with proxy tools, apply all four fixes:
 
 1. **`[Rule]`**: `IP-CIDR,100.64.0.0/10,DIRECT` — handles TUN-level traffic
 2. **`skip-proxy`**: Add `100.64.0.0/10` — fixes browser access
 3. **`NO_PROXY` env var**: Add `100.64.0.0/10,.ts.net` — fixes CLI HTTP tools
-4. **`tun-excluded-routes`**: Do NOT add `100.64.0.0/10` — this breaks everything
+4. **SSH `~/.ssh/config`**: Remove `ProxyCommand`, use `ssh.github.com:443` — fixes git push/pull
+
+**Critical anti-pattern**: Do NOT add `100.64.0.0/10` to `tun-excluded-routes` — this breaks everything (see "Why tun-excluded-routes Breaks Tailscale" above).
 
 ### Quick Verification
 

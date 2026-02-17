@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.33.1] - 2026-02-17
+
+### Changed
+- **tunnel-doctor** v1.1.0 → v1.2.0: Add Layer 4 SSH ProxyCommand double tunnel diagnostics
+  - New conflict layer: SSH ProxyCommand double tunneling causing intermittent git push/pull failures
+  - New diagnostic step 2F: detect and fix redundant HTTP CONNECT tunnel when Shadowrocket TUN is active
+  - Structural improvements per skill best practices:
+    - Eliminate content duplication between SKILL.md and reference (73 → 27 lines)
+    - Rename `proxy_fixes.md` → `proxy_conflict_reference.md` for clarity
+    - Trim SKILL.md to 487 lines (under 500 limit)
+    - Fix "apply all four" listing 5 items (separate anti-pattern warning)
+    - Clarify Layer 4's relationship to Tailscale theme
+
 ## [1.33.0] - 2026-02-16
 
 ### Changed
