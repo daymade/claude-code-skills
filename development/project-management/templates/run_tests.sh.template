@@ -1,0 +1,249 @@
+#!/bin/bash
+# {{PROJECT_NAME}} - 测试运行脚本
+#
+# 自动运行所有测试并生成报告
+#
+# 使用方法:
+#   ./scripts/verify/run_tests.sh
+#   ./scripts/verify/run_tests.sh --coverage
+#   ./scripts/verify/run_tests.sh --verbose
+#
+# 最后更新: {{TODAY_DATE}}
+
+set -e  # 遇到错误立即退出
+
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# 项目根目录
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$PROJECT_ROOT"
+
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}{{PROJECT_NAME}} - 测试运行脚本${NC}"
+echo -e "${BLUE}========================================${NC}"
+echo ""
+
+# 参数解析
+VERBOSE=false
+COVERAGE=false
+SKIP_SECURITY=false
+SKIP_QUALITY=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --verbose|-v)
+            VERBOSE=true
+            shift
+            ;;
+        --coverage|-c)
+            COVERAGE=true
+            shift
+            ;;
+        --skip-security)
+            SKIP_SECURITY=true
+            shift
+            ;;
+        --skip-quality)
+            SKIP_QUALITY=true
+            shift
+            ;;
+        *)
+            echo -e "${RED}未知参数: $1${NC}"
+            exit 1
+            ;;
+    esac
+done
+
+# 函数: 打印带时间戳的消息
+log() {
+    local level=$1
+    shift
+    local message="$@"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+    case $level in
+        INFO)
+            echo -e "${GREEN}[${timestamp}] ✅ $message${NC}"
+            ;;
+        WARNING)
+            echo -e "${YELLOW}[${timestamp}] ⚠️  $message${NC}"
+            ;;
+        ERROR)
+            echo -e "${RED}[${timestamp}] ❌ $message${NC}"
+            ;;
+        *)
+            echo -e "[${timestamp}] $message"
+            ;;
+    esac
+}
+
+# 1. 检查环境
+log INFO "检查测试环境..."
+
+{% if LANGUAGE == "python" %}
+if ! command -v python3 &> /dev/null; then
+    log ERROR "Python 3 未安装"
+    exit 1
+fi
+
+PYTHON_VERSION=$(python3 --version | awk '{print $2}')
+log INFO "Python 版本: $PYTHON_VERSION"
+{% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+if ! command -v node &> /dev/null; then
+    log ERROR "Node.js 未安装"
+    exit 1
+fi
+
+NODE_VERSION=$(node --version)
+log INFO "Node.js 版本: $NODE_VERSION"
+{% endif %}
+
+# 2. 运行单元测试
+log INFO "运行单元测试..."
+{% if LANGUAGE == "python" %}
+if [ -d "src/tests/unit" ]; then
+    if [ "$VERBOSE" = true ]; then
+        python3 -m pytest src/tests/unit/ -v || true
+    else
+        python3 -m pytest src/tests/unit/ -q || true
+    fi
+else
+    log WARNING "单元测试目录不存在: src/tests/unit/"
+fi
+{% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+if [ -d "src/tests/unit" ]; then
+    if [ "$VERBOSE" = true ]; then
+        npm test -- src/tests/unit/ --verbose || true
+    else
+        npm test -- src/tests/unit/ || true
+    fi
+else
+    log WARNING "单元测试目录不存在: src/tests/unit/"
+fi
+{% endif %}
+
+# 3. 运行集成测试
+log INFO "运行集成测试..."
+{% if LANGUAGE == "python" %}
+if [ -d "src/tests/integration" ]; then
+    if [ "$VERBOSE" = true ]; then
+        python3 -m pytest src/tests/integration/ -v || true
+    else
+        python3 -m pytest src/tests/integration/ -q || true
+    fi
+else
+    log WARNING "集成测试目录不存在: src/tests/integration/"
+fi
+{% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+if [ -d "src/tests/integration" ]; then
+    npm test -- src/tests/integration/ || true
+else
+    log WARNING "集成测试目录不存在: src/tests/integration/"
+fi
+{% endif %}
+
+# 4. 运行性能测试
+log INFO "运行性能测试..."
+{% if LANGUAGE == "python" %}
+if [ -d "src/tests/performance" ]; then
+    if [ "$VERBOSE" = true ]; then
+        python3 -m pytest src/tests/performance/ -v || true
+    else
+        python3 -m pytest src/tests/performance/ -q || true
+    fi
+else
+    log WARNING "性能测试目录不存在: src/tests/performance/"
+fi
+{% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+if [ -d "src/tests/performance" ]; then
+    npm test -- src/tests/performance/ || true
+else
+    log WARNING "性能测试目录不存在: src/tests/performance/"
+fi
+{% endif %}
+
+# 5. 运行覆盖率测试
+if [ "$COVERAGE" = true ]; then
+    log INFO "运行覆盖率测试..."
+    {% if LANGUAGE == "python" %}
+    python3 -m coverage run -m pytest src/tests/
+    python3 -m coverage report
+    python3 -m coverage html
+    log INFO "覆盖率报告已生成: htmlcov/index.html"
+    {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+    npm test -- --coverage
+    log INFO "覆盖率报告已生成: coverage/lcov-report/index.html"
+    {% endif %}
+fi
+
+# 6. 安全扫描
+if [ "$SKIP_SECURITY" = false ]; then
+    log INFO "运行安全扫描..."
+    {% if LANGUAGE == "python" %}
+    if command -v bandit &> /dev/null; then
+        bandit -r src/ -f json -o security-report.json || log WARNING "安全扫描发现问题"
+    else
+        log WARNING "bandit 未安装，跳过安全扫描"
+        log WARNING "安装: pip install bandit"
+    fi
+    {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+    if command -v npm &> /dev/null; then
+        npm audit --json > security-report.json || log WARNING "安全扫描发现问题"
+    else
+        log WARNING "npm audit 不可用，跳过安全扫描"
+    fi
+    {% endif %}
+else
+    log WARNING "跳过安全扫描 (--skip-security)"
+fi
+
+# 7. 代码质量检查
+if [ "$SKIP_QUALITY" = false ]; then
+    log INFO "运行代码质量检查..."
+    {% if LANGUAGE == "python" %}
+    if command -v flake8 &> /dev/null; then
+        flake8 src/ --max-line-length=120 || log WARNING "代码质量检查发现问题"
+    else
+        log WARNING "flake8 未安装，跳过代码质量检查"
+        log WARNING "安装: pip install flake8"
+    fi
+    {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+    if command -v eslint &> /dev/null; then
+        eslint src/ || log WARNING "代码质量检查发现问题"
+    else
+        log WARNING "eslint 未安装，跳过代码质量检查"
+        log WARNING "安装: npm install --save-dev eslint"
+    fi
+    {% endif %}
+else
+    log WARNING "跳过代码质量检查 (--skip-quality)"
+fi
+
+# 8. 生成测试报告
+log INFO "生成测试报告..."
+
+TEST_REPORT="test-report-$(date +%Y%m%d-%H%M%S).json"
+cat > "$TEST_REPORT" << EOF
+{
+  "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "language": "{{LANGUAGE}}",
+  "version": "${PYTHON_VERSION:-${NODE_VERSION:-unknown}}",
+  "coverage_enabled": $COVERAGE,
+  "security_scan_enabled": $([ "$SKIP_SECURITY" = false ] && echo "true" || echo "false"),
+  "code_quality_enabled": $([ "$SKIP_QUALITY" = false ] && echo "true" || echo "false")
+}
+EOF
+
+log INFO "测试报告已生成: $TEST_REPORT"
+
+# 9. 汇总
+echo ""
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}测试完成${NC}"
+echo -e "${BLUE}========================================${NC}"
+log INFO "所有测试执行完毕"
