@@ -212,7 +212,7 @@ This applies when you change ANY file under a skill directory:
 33. **meeting-minutes-taker** - Transform meeting transcripts into structured minutes with multi-pass generation, speaker quotes, and iterative human review
 34. **deep-research** - Generate format-controlled research reports with evidence mapping, citations, and multi-pass synthesis
 35. **competitors-analysis** - Evidence-based competitor tracking and analysis with source citations (file:line_number format)
-36. **tunnel-doctor** - Diagnose and fix Tailscale + proxy/VPN route conflicts on macOS with WSL SSH support
+36. **tunnel-doctor** - Diagnose and fix Tailscale + proxy/VPN conflicts (four layers: route, HTTP env, system proxy, SSH ProxyCommand) on macOS with WSL SSH support
 37. **windows-remote-desktop-connection-doctor** - Diagnose AVD/W365 connection quality issues with transport protocol analysis and Windows App log parsing
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.

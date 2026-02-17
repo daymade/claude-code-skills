@@ -732,10 +732,10 @@
     },
     {
       "name": "tunnel-doctor",
-      "description": "Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers three conflict layers: route hijacking, HTTP proxy env var interception, and system proxy bypass. Includes SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when setting up Tailscale SSH to WSL instances, or when bootstrapping remote dev environments over Tailscale",
+      "description": "Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers four conflict layers: route hijacking, HTTP proxy env var interception, system proxy bypass, and SSH ProxyCommand double tunneling. Includes SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when git push fails with failed to begin relaying via HTTP, when setting up Tailscale SSH to WSL instances, or when bootstrapping remote dev environments over Tailscale",
       "source": "./",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
@@ -749,6 +749,8 @@
         "ssh-tunnel",
         "autossh",
         "proxy",
+        "proxycommand",
+        "git-push",
         "networking",
         "macos",
         "makefile",

@@ -1505,23 +1505,25 @@ claude plugin install competitors-analysis@daymade-skills
 
 ---
 
-### 36. **tunnel-doctor** - Tailscale + Proxy/VPN Route Conflict Fixer
+### 36. **tunnel-doctor** - Tailscale + Proxy/VPN Conflict Fixer
 
-Diagnose and fix route conflicts when using Tailscale alongside proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS, with specific guidance for SSH access to WSL instances.
+Diagnose and fix conflicts when using Tailscale alongside proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers four independent conflict layers with specific guidance for SSH access to WSL instances.
 
 **When to use:**
 - Tailscale ping works but SSH/TCP connections time out
 - Proxy tools hijack the Tailscale CGNAT range (100.64.0.0/10)
+- Browser returns HTTP 503 but curl and SSH work
+- `git push/pull` fails with "failed to begin relaying via HTTP"
 - Setting up Tailscale SSH to WSL and encountering `operation not permitted`
 - Need to make Tailscale and Shadowrocket/Clash/Surge coexist on macOS
 
 **Key features:**
-- 6-step diagnostic workflow from symptom identification to end-to-end verification
-- Root cause analysis: `tun-excluded-routes` adds conflicting `en0` system routes
+- Four-layer diagnostic model: route hijacking, HTTP env vars, system proxy bypass, SSH ProxyCommand double tunneling
 - Per-tool fix guides for Shadowrocket, Clash, and Surge
+- SSH ProxyCommand double tunnel detection and fix (git push/pull failures)
 - Tailscale SSH ACL configuration (`check` vs `accept`)
 - WSL snap vs apt Tailscale installation (snap sandbox breaks SSH)
-- Shadowrocket config API for automated configuration
+- Remote development SOP with proxy-safe Makefile patterns
 
 **Example usage:**
 ```bash
@@ -1531,6 +1533,7 @@ claude plugin install tunnel-doctor@daymade-skills
 # Then ask Claude to diagnose
 "Tailscale ping works but SSH times out"
 "Fix Tailscale and Shadowrocket route conflict on macOS"
+"git push fails with failed to begin relaying via HTTP"
 "Set up Tailscale SSH to my WSL instance"
 ```
 
@@ -1538,7 +1541,7 @@ claude plugin install tunnel-doctor@daymade-skills
 
 *Coming soon*
 
-📚 **Documentation**: See [tunnel-doctor/references/proxy_fixes.md](./tunnel-doctor/references/proxy_fixes.md) for per-tool fix instructions.
+📚 **Documentation**: See [tunnel-doctor/references/proxy_conflict_reference.md](./tunnel-doctor/references/proxy_conflict_reference.md) for per-tool configuration and conflict architecture.
 
 ---
 
@@ -1663,7 +1666,7 @@ Use **skill-reviewer** to validate your own skills against best practices before
 Use **i18n-expert** to set up complete i18n infrastructure for React/Next.js/Vue applications, audit existing implementations for missing translation keys, and ensure locale parity between en-US and zh-CN. Perfect for teams launching products to global markets, maintaining multi-language UIs, or replacing hard-coded strings with proper i18n keys. Combine with **skill-creator** to create locale-aware skills, or with **docs-cleaner** to consolidate documentation across multiple languages.
 
 ### For Network & VPN Troubleshooting
-Use **tunnel-doctor** to diagnose and fix route conflicts between Tailscale and proxy/VPN tools on macOS. Essential when Tailscale ping works but TCP connections fail, or when setting up Tailscale SSH to WSL instances alongside Shadowrocket, Clash, or Surge.
+Use **tunnel-doctor** to diagnose and fix conflicts between Tailscale and proxy/VPN tools on macOS across four independent layers (route hijacking, HTTP env vars, system proxy, SSH ProxyCommand). Essential when Tailscale ping works but TCP connections fail, when git push fails with "failed to begin relaying via HTTP", or when setting up Tailscale SSH to WSL instances alongside Shadowrocket, Clash, or Surge.
 
 ### For Remote Desktop & VDI Optimization
 Use **windows-remote-desktop-connection-doctor** to diagnose Azure Virtual Desktop / W365 connection quality issues on macOS. Essential when transport shows WebSocket instead of UDP Shortpath, when RTT is unexpectedly high, or when RDP Shortpath fails after changing network locations. Combines network evidence gathering with Windows App log analysis for systematic root cause identification.
