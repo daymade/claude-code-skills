@@ -1665,6 +1665,9 @@ Use **skill-reviewer** to validate your own skills against best practices before
 ### For Internationalization & Localization
 Use **i18n-expert** to set up complete i18n infrastructure for React/Next.js/Vue applications, audit existing implementations for missing translation keys, and ensure locale parity between en-US and zh-CN. Perfect for teams launching products to global markets, maintaining multi-language UIs, or replacing hard-coded strings with proper i18n keys. Combine with **skill-creator** to create locale-aware skills, or with **docs-cleaner** to consolidate documentation across multiple languages.
 
+### For Performance Auditing
+Use **[perf-audit](https://github.com/Faresabdelghany/Perf-audit-skill)** to run comprehensive performance audits on Next.js applications. Measures FCP, LCP, CLS, TTFB, bundle size, and Lighthouse scores across all pages including authenticated routes. Features regression detection, interaction timing, and actionable fix recommendations.
+
 ### For Network & VPN Troubleshooting
 Use **tunnel-doctor** to diagnose and fix conflicts between Tailscale and proxy/VPN tools on macOS across four independent layers (route hijacking, HTTP env vars, system proxy, SSH ProxyCommand). Essential when Tailscale ping works but TCP connections fail, when git push fails with "failed to begin relaying via HTTP", or when setting up Tailscale SSH to WSL instances alongside Shadowrocket, Clash, or Surge.
 
