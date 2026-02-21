@@ -712,7 +712,7 @@
     },
     {
       "name": "competitors-analysis",
-      "description": "Analyze competitor repositories with evidence-based approach. Use when tracking competitors, creating competitor profiles, or generating competitive analysis. All analysis must be based on actual cloned code, never assumptions. Triggers include analyze competitor, add competitor, competitive analysis, or 竞品分析",
+      "description": "Analyze competitor repositories with evidence-based approach. Use when tracking competitors, creating competitor profiles, or generating competitive analysis. All analysis must be based on actual cloned code, never assumptions. Triggers include analyze competitor, add competitor, competitive analysis, or \u7ade\u54c1\u5206\u6790",
       "source": "./",
       "strict": false,
       "version": "1.0.0",
@@ -723,7 +723,7 @@
         "competitor-tracking",
         "evidence-based",
         "market-research",
-        "竞品分析",
+        "\u7ade\u54c1\u5206\u6790",
         "code-analysis"
       ],
       "skills": [
@@ -785,6 +785,29 @@
       ],
       "skills": [
         "./windows-remote-desktop-connection-doctor"
+      ]
+    },
+    {
+      "name": "oiloil-ui-ux-guide",
+      "description": "Modern, clean UI/UX guidance and review skill. Provides actionable UX/UI recommendations, design principles, and design review checklists. Covers CRAP principles, task-first UX, cognitive load, HCI laws, and modern minimal style enforcement. Use when reviewing UI designs or building new features",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "design",
+      "keywords": [
+        "ui",
+        "ux",
+        "design",
+        "crap-principles",
+        "hci",
+        "cognitive-load",
+        "review",
+        "accessibility",
+        "minimal-design",
+        "icon-set"
+      ],
+      "skills": [
+        "./oiloil-ui-ux-guide"
       ]
     }
   ]

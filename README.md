@@ -1582,7 +1582,43 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 📚 **Documentation**: See [windows-remote-desktop-connection-doctor/references/](./windows-remote-desktop-connection-doctor/references/) for log analysis patterns and AVD transport protocol details.
 
+
 ---
+
+
+### 38. **oiloil-ui-ux-guide** - Modern UI/UX Guidance & Review
+
+Modern, clean UI/UX guidance and review skill with actionable recommendations.
+
+**When to use:**
+- Need actionable UX/UI recommendations for new features
+- Reviewing existing UI for design improvements
+- Applying CRAP principles (Contrast/Repetition/Alignment/Proximity)
+- Reducing cognitive load and enforcing modern minimal style
+- Ensuring state coverage (loading, empty, error, success, permission)
+
+**Key features:**
+- Two modes: `guide` (do/don't rules) and `review` (P0/P1/P2 fix list)
+- Task-first UX with clear primary action hierarchy
+- CRAP visual hierarchy enforcement
+- HCI laws (Fitts, Hick, Miller) and interaction psychology
+- Cognitive load control and progressive disclosure
+- Modern minimal style — no emoji icons, consistent icon set required
+
+**Example usage:**
+```bash
+# Install the skill
+npx skills add oil-oil/oiloil-ui-ux-guide
+
+# Then ask Claude for guidance or review
+"Review the UI of our settings page and give me P0/P1/P2 fixes"
+"Give me UI/UX do/don't rules for a dashboard layout"
+```
+
+📚 **Documentation**: See [oiloil-ui-ux-guide repo](https://github.com/oil-oil/oiloil-ui-ux-guide) for full documentation.
+
+---
+
 
 ## 🎬 Interactive Demo Gallery
 
