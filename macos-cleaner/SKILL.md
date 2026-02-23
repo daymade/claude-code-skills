@@ -14,19 +14,24 @@ Intelligently analyze macOS disk usage and provide actionable cleanup recommenda
 ## Core Principles
 
 1. **Safety First, Never Bypass**: NEVER execute dangerous commands (`rm -rf`, `mo clean`, etc.) without explicit user confirmation. No shortcuts, no workarounds.
-2. **Value Over Vanity**: Your goal is NOT to maximize cleaned space. Your goal is to identify what is **truly useless** vs **valuable cache**. Clearing 50GB of useful cache just to show a big number is harmful.
-3. **Network Environment Awareness**: Many users (especially in China) have slow/unreliable internet. Re-downloading caches can take hours. A cache that saves 30 minutes of download time is worth keeping.
-4. **Impact Analysis Required**: Every cleanup recommendation MUST include "what happens if deleted" column. Never just list items without explaining consequences.
-5. **Patience Over Speed**: Disk scans can take 5-10 minutes. NEVER interrupt or skip slow operations. Report progress to user regularly.
-6. **User Executes Cleanup**: After analysis, provide the cleanup command for the user to run themselves. Do NOT auto-execute cleanup.
-7. **Conservative Defaults**: When in doubt, don't delete. Err on the side of caution.
+2. **Precision Deletion Only**: Delete by specifying exact object IDs/names. Never use batch prune commands.
+3. **Every Object Listed**: Reports must show every specific image, volume, container — not just "12 GB of unused images".
+4. **Value Over Vanity**: Your goal is NOT to maximize cleaned space. Your goal is to identify what is **truly useless** vs **valuable cache**. Clearing 50GB of useful cache just to show a big number is harmful.
+5. **Network Environment Awareness**: Many users (especially in China) have slow/unreliable internet. Re-downloading caches can take hours. A cache that saves 30 minutes of download time is worth keeping.
+6. **Impact Analysis Required**: Every cleanup recommendation MUST include "what happens if deleted" column. Never just list items without explaining consequences.
+7. **Double-Check Before Delete**: Verify each Docker object with independent cross-checks before deletion (see Step 2A).
+8. **Patience Over Speed**: Disk scans can take 5-10 minutes. NEVER interrupt or skip slow operations. Report progress to user regularly.
+9. **User Executes Cleanup**: After analysis, provide the cleanup command for the user to run themselves. Do NOT auto-execute cleanup.
+10. **Conservative Defaults**: When in doubt, don't delete. Err on the side of caution.
 
 **ABSOLUTE PROHIBITIONS:**
-- ❌ NEVER run `rm -rf` on user directories automatically
-- ❌ NEVER run `mo clean` without dry-run preview first
-- ❌ NEVER use `docker volume prune -f` or `docker system prune -a --volumes`
+- ❌ NEVER use `docker image prune`, `docker volume prune`, `docker system prune`, or ANY prune-family command (exception: `docker builder prune` is safe — build cache contains only intermediate layers, never user data)
+- ❌ NEVER use `docker container prune` — stopped containers may be restarted at any time
+- ❌ NEVER run `rm -rf` on user directories without explicit confirmation
+- ❌ NEVER run `mo clean` without `--dry-run` preview first
 - ❌ NEVER skip analysis steps to save time
-- ❌ NEVER append `--help` to Mole commands (except `mo --help`)
+- ❌ NEVER append `--help` to Mole commands (only `mo --help` is safe)
+- ❌ NEVER present cleanup reports with only categories — every object must be individually listed
 - ❌ NEVER recommend deleting useful caches just to inflate cleanup numbers
 
 ## Workflow Decision Tree
@@ -320,6 +325,102 @@ docker volume rm ragflow_mysql_data ragflow_redis_data
 ```
 
 **Safety level**: 🟢 Homebrew/npm cleanup, 🔴 Docker volumes require per-project confirmation
+
+### Step 2A: Docker Deep Analysis
+
+Use agent team to analyze Docker resources in parallel for comprehensive coverage:
+
+**Agent 1 — Images**:
+```bash
+# List all images sorted by size
+docker images --format "table {{.ID}}\t{{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}" | sort -k3 -h -r
+
+# Identify dangling images (no tag)
+docker images -f "dangling=true" --format "{{.ID}}\t{{.Size}}\t{{.CreatedSince}}"
+
+# For each image, check if any container references it
+docker ps -a --filter "ancestor=<IMAGE_ID>" --format "{{.Names}}\t{{.Status}}"
+```
+
+**Agent 2 — Containers and Volumes**:
+```bash
+# All containers with status
+docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Size}}"
+
+# All volumes with size
+docker system df -v | grep -A 1000 "VOLUME NAME"
+
+# Identify dangling volumes
+docker volume ls -f dangling=true
+
+# For each volume, check which container uses it
+docker ps -a --filter "volume=<VOLUME_NAME>" --format "{{.Names}}"
+```
+
+**Agent 3 — System Level**:
+```bash
+# Docker disk usage summary
+docker system df
+
+# Build cache
+docker builder du
+
+# Container logs size
+for c in $(docker ps -a --format "{{.Names}}"); do
+  echo "$c: $(docker inspect --format='{{.LogPath}}' $c | xargs ls -lh 2>/dev/null | awk '{print $5}')"
+done
+```
+
+**Version Management Awareness**: Identify version-managed images (e.g., Supabase managed by CLI). When newer versions are confirmed running, older versions are safe to remove. Pay attention to Docker Compose naming conventions (dash vs underscore).
+
+### Step 2B: OrbStack-Specific Analysis
+
+OrbStack users have additional considerations.
+
+**data.img.raw is a Sparse File**:
+```bash
+# Logical size (can show 8TB+, meaningless)
+ls -lh ~/Library/OrbStack/data/data.img.raw
+
+# Actual disk usage (this is what matters)
+du -h ~/Library/OrbStack/data/data.img.raw
+```
+
+The logical vs actual size difference is normal. Only actual usage counts.
+
+**Post-Cleanup: Reclaim Disk Space**: After cleaning Docker objects inside OrbStack, `data.img.raw` does NOT shrink automatically. Instruct user: Open OrbStack Settings → "Reclaim disk space" to compact the sparse file.
+
+**OrbStack Logs**: Typically 1-2 MB total (`~/Library/OrbStack/log/`). Not worth cleaning.
+
+### Step 2C: Double-Check Verification Protocol
+
+Before deleting ANY Docker object, perform independent verification.
+
+**For Images**:
+```bash
+# Verify no container (running or stopped) references the image
+docker ps -a --filter "ancestor=<IMAGE_ID>" --format "{{.Names}}\t{{.Status}}"
+
+# If empty → safe to delete with: docker rmi <IMAGE_ID>
+```
+
+**For Volumes**:
+```bash
+# Verify no container mounts the volume
+docker ps -a --filter "volume=<VOLUME_NAME>" --format "{{.Names}}"
+
+# If empty → check if database volume (see below)
+# If not database → safe to delete with: docker volume rm <VOLUME_NAME>
+```
+
+**Database Volume Red Flag Rule**: If volume name contains mysql, postgres, redis, mongo, or mariadb, MANDATORY content inspection:
+```bash
+# Inspect database volume contents with temporary container
+docker run --rm -v <VOLUME_NAME>:/data alpine ls -la /data
+docker run --rm -v <VOLUME_NAME>:/data alpine du -sh /data/*
+```
+
+Only delete after user confirms the data is not needed.
 
 ## Step 3: Integration with Mole
 
@@ -625,6 +726,34 @@ Items marked 🟡 require your judgment based on usage patterns.
 Items marked 🔴 require explicit confirmation per-item.
 ```
 
+### Docker Report: Required Object-Level Detail
+
+Docker reports MUST list every individual object, not just categories:
+
+```markdown
+#### Dangling Images (no tag, no container references)
+| Image ID | Size | Created | Safe? |
+|----------|------|---------|-------|
+| a02c40cc28df | 884 MB | 2 months ago | ✅ No container uses it |
+| 555434521374 | 231 MB | 3 months ago | ✅ No container uses it |
+
+#### Stopped Containers
+| Name | Image | Status | Size |
+|------|-------|--------|------|
+| ragflow-mysql | mysql:8.0 | Exited 2 weeks ago | 1.2 GB |
+
+#### Volumes
+| Volume | Size | Mounted By | Contains |
+|--------|------|------------|----------|
+| ragflow_mysql_data | 1.8 GB | ragflow-mysql | MySQL databases |
+| redis_data | 500 MB | (none - dangling) | Redis dump |
+
+#### 🔴 Database Volumes Requiring Inspection
+| Volume | Inspected Contents | User Decision |
+|--------|--------------------|---------------|
+| ragflow_mysql_data | 8 databases, 45 tables | Still need? |
+```
+
 ## High-Quality Report Template
 
 After multi-layer exploration, present findings using this proven template:
@@ -716,7 +845,7 @@ After multi-layer exploration, present findings using this proven template:
 
 ---
 
-### 推荐操作
+### ✅ 推荐操作
 
 **立即可执行** (无需确认):
 ```bash
@@ -907,7 +1036,33 @@ Breakdown:
 - Enable "Empty Trash Automatically" in Finder preferences
 ```
 
-## Safety Guidelines
+## Bonus: Dockerfile Optimization Discoveries
+
+During image analysis, if you discover oversized images, suggest multi-stage build optimization:
+
+```dockerfile
+# Before: 884 MB (full build environment in final image)
+FROM node:20
+COPY . .
+RUN npm ci && npm run build
+CMD ["node", "dist/index.js"]
+
+# After: ~150 MB (only runtime in final image)
+FROM node:20 AS builder
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-slim
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+CMD ["node", "dist/index.js"]
+```
+
+Key techniques: multi-stage builds, slim/alpine base images, `.dockerignore`, layer ordering.
+
+## ⚠️ Safety Guidelines
 
 ### Always Preserve
 
@@ -919,7 +1074,7 @@ Never delete these without explicit user instruction:
 - SSH keys, credentials, certificates
 - Time Machine backups
 
-### Require Sudo Confirmation
+### ⚠️ Require Sudo Confirmation
 
 These operations require elevated privileges. Ask user to run commands manually:
 - Clearing `/Library/Caches` (system-wide)
@@ -936,7 +1091,7 @@ Please run this command manually:
 ⚠️ You'll be asked for your password.
 ```
 
-### Backup Recommendation
+### 💡 Backup Recommendation
 
 Before executing any cleanup >10GB, recommend:
 

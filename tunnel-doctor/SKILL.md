@@ -1,6 +1,6 @@
 ---
 name: tunnel-doctor
-description: Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers four conflict layers - (1) route hijacking, (2) HTTP proxy env var interception, (3) system proxy bypass, and (4) SSH ProxyCommand double tunneling causing git push/pull failures. Includes SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when git push fails with "failed to begin relaying via HTTP", when setting up Tailscale SSH to WSL instances, or when bootstrapping remote dev environments over Tailscale.
+description: Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers five conflict layers - (1) route hijacking, (2) HTTP proxy env var interception, (3) system proxy bypass, (4) SSH ProxyCommand double tunneling, and (5) VM/container runtime proxy propagation (OrbStack/Docker). Includes SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when git push fails with "failed to begin relaying via HTTP", when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, or when bootstrapping remote dev environments over Tailscale.
 allowed-tools: Read, Grep, Edit, Bash
 ---
 
@@ -8,9 +8,9 @@ allowed-tools: Read, Grep, Edit, Bash
 
 Diagnose and fix conflicts when Tailscale coexists with proxy/VPN tools on macOS, with specific guidance for SSH access to WSL instances.
 
-## Four Conflict Layers
+## Five Conflict Layers
 
-Proxy/VPN tools on macOS create conflicts at four independent layers. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations (same proxy environment, different target):
+Proxy/VPN tools on macOS create conflicts at five independent layers. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations; Layer 5 affects VM/container runtimes:
 
 | Layer | What breaks | What still works | Root cause |
 |-------|-------------|------------------|------------|
@@ -18,6 +18,7 @@ Proxy/VPN tools on macOS create conflicts at four independent layers. Layers 1-3
 | 2. HTTP env vars | `curl`, Python requests, Node.js fetch | SSH, browser | `http_proxy` set without `NO_PROXY` for Tailscale |
 | 3. System proxy (browser) | Browser only (HTTP 503) | SSH, `curl` (both with/without proxy) | Browser uses VPN system proxy; DIRECT rule routes via Wi-Fi, not Tailscale utun |
 | 4. SSH ProxyCommand double tunnel | `git push/pull` (intermittent) | `ssh -T` (small data) | `connect -H` creates HTTP CONNECT tunnel redundant with Shadowrocket TUN; landing proxy drops large/long-lived transfers |
+| 5. VM/Container proxy propagation | `docker pull`, `docker build` | Host `curl`, running containers | VM runtime (OrbStack/Docker Desktop) auto-injects or caches proxy config; removing proxy makes it worse (VM traffic via TUN → TLS timeout) |
 
 ## Diagnostic Workflow
 
@@ -31,6 +32,8 @@ Determine which scenario applies:
 - **Remote dev server auth redirects to `localhost` → browser can't follow** → SSH tunnel needed (Step 2D)
 - **`make status` / scripts curl to localhost fail with proxy** → localhost proxy interception (Step 2E)
 - **`git push/pull` fails with `FATAL: failed to begin relaying via HTTP`** → SSH double tunnel (Step 2F)
+- **`docker pull` fails with `TLS handshake timeout` or `docker build` can't fetch base images** → VM/container proxy propagation (Step 2G)
+- **`git clone` fails with `Connection closed by 198.18.x.x`** → TUN DNS hijack for SSH (Step 2H)
 - **SSH connects but `operation not permitted`** → Tailscale SSH config issue (Step 4)
 - **SSH connects but `be-child ssh` exits code 1** → WSL snap sandbox issue (Step 5)
 
@@ -39,6 +42,8 @@ Determine which scenario applies:
 - `curl` uses `http_proxy` env var, NOT the system proxy. Browser uses system proxy (set by VPN). If `curl` works but browser doesn't → Layer 3.
 - If `tailscale ping` works but regular `ping` doesn't → Layer 1 (route table corrupted).
 - If `ssh -T git@github.com` works but `git push` fails intermittently → Layer 4 (double tunnel).
+- If host `curl https://...` works but `docker pull` times out → Layer 5 (VM proxy propagation).
+- If DNS resolves to `198.18.x.x` virtual IPs → TUN DNS hijack (Step 2H).
 
 ### Step 2A: Fix HTTP Proxy Environment Variables
 
@@ -226,6 +231,153 @@ GIT_SSH_COMMAND="ssh -o ProxyCommand=none" git push origin main
 ```
 
 **Fix** — remove ProxyCommand and switch to `ssh.github.com:443`. See [references/proxy_conflict_reference.md § SSH ProxyCommand and Git Operations](references/proxy_conflict_reference.md) for the full SSH config, why port 443 helps, and fallback options when VPN is off.
+
+### Step 2G: Fix VM/Container Runtime Proxy Propagation (Docker pull/build failures)
+
+**Symptom**: `docker pull` or `docker build` fails with `net/http: TLS handshake timeout` or `Internal Server Error` from `auth.docker.io`, while host `curl` to the same URLs works fine.
+
+**Applies to**: OrbStack, Docker Desktop, or any VM-based Docker runtime on macOS with Shadowrocket/Clash TUN active.
+
+**Root cause**: VM-based Docker runtimes (OrbStack, Docker Desktop) run the Docker daemon inside a lightweight VM. The VM's outbound traffic takes a different network path than host processes:
+
+```
+Host process (curl):   Process → TUN (Shadowrocket) → landing proxy → internet ✅
+VM process (Docker):   Docker daemon → VM bridge → host network → TUN → ??? ❌
+```
+
+The TUN handles host-originated traffic correctly but may drop or delay VM-bridged traffic (different TCP stack, MTU, keepalive behavior).
+
+**Three sub-problems and their fixes**:
+
+#### 2G-1: OrbStack auto-detects and caches proxy (most common)
+
+OrbStack's `network_proxy: auto` reads `http_proxy` from the shell environment and writes it to `~/.orbstack/config/docker.json`. **Crucially**, `orbctl config set network_proxy none` does NOT clean up `docker.json` — the cached proxy persists.
+
+**Diagnosis**:
+
+```bash
+# OrbStack config says "none" but Docker still shows proxy
+orbctl config get network_proxy     # → "none"
+docker info | grep -i proxy         # → HTTP Proxy: http://127.0.0.1:1082  ← stale!
+
+# The real source of truth:
+cat ~/.orbstack/config/docker.json
+# → {"proxies": {"http-proxy": "http://127.0.0.1:1082", ...}}  ← cached!
+```
+
+**Fix** — DON'T remove the proxy. Instead, add precise `no-proxy` to prevent localhost interception while keeping the proxy as the VM's outbound channel:
+
+```bash
+# Write corrected config (keeps proxy, adds no-proxy for local traffic)
+python3 -c "
+import json
+config = {
+    'proxies': {
+        'http-proxy': 'http://127.0.0.1:1082',
+        'https-proxy': 'http://127.0.0.1:1082',
+        'no-proxy': 'localhost,127.0.0.1,::1,192.168.128.0/24,100.64.0.0/10,host.internal,*.local'
+    }
+}
+json.dump(config, open('$HOME/.orbstack/config/docker.json', 'w'), indent=2)
+"
+
+# Full restart (not just docker engine)
+orbctl stop && sleep 3 && orbctl start
+```
+
+**Why NOT remove the proxy**: When TUN is active, removing the Docker proxy means VM traffic goes directly through the bridge → TUN path, which causes TLS handshake timeouts. The proxy provides a working outbound channel because OrbStack maps host `127.0.0.1` into the VM.
+
+#### 2G-2: Removing proxy makes Docker worse (counter-intuitive)
+
+| Docker config | Traffic path | Result |
+|---------------|-------------|--------|
+| Proxy ON, no `no-proxy` | Docker → proxy → TUN → internet | Docker Hub ✅, localhost probes ❌ |
+| Proxy OFF | Docker → VM bridge → host → TUN → internet | TLS timeout ❌ |
+| **Proxy ON + `no-proxy`** | **External: Docker → proxy → internet ✅; Local: Docker → direct ✅** | **Both work ✅** |
+
+#### 2G-3: Deploy scripts probe localhost through proxy
+
+Deploy scripts that `curl localhost` inside the Docker environment will route through the proxy. Fix by adding `NO_PROXY` at the script level:
+
+```bash
+# In deploy.sh or similar scripts:
+_local_bypass="localhost,127.0.0.1,::1"
+if [[ -n "${NO_PROXY:-}" ]]; then
+    export NO_PROXY="${_local_bypass},${NO_PROXY}"
+else
+    export NO_PROXY="${_local_bypass}"
+fi
+export no_proxy="$NO_PROXY"
+
+# Use 127.0.0.1 instead of localhost in probe URLs (some proxy implementations
+# only match exact string "localhost" in no-proxy, not the resolved IP)
+curl http://127.0.0.1:3001/health   # ✅ bypasses proxy
+curl http://localhost:3001/health    # ❌ may still go through proxy
+```
+
+**Verify the fix**:
+
+```bash
+# Docker proxy check (should show proxy + no-proxy)
+docker info | grep -iE "proxy|No Proxy"
+
+# Pull test
+docker pull --quiet hello-world
+
+# Local probe test
+curl -s http://127.0.0.1:3001/health
+```
+
+### Step 2H: Fix TUN DNS Hijack for SSH/Git (198.18.x.x virtual IPs)
+
+**Symptom**: `git clone/fetch/push` fails with `Connection closed by 198.18.0.x port 443`. `ssh -T git@github.com` may also fail. DNS resolution returns `198.18.x.x` addresses instead of real IPs.
+
+**Root cause**: Shadowrocket TUN intercepts all DNS queries and returns virtual IPs in the `198.18.0.0/15` range. It then routes traffic to these virtual IPs through the TUN for protocol-aware proxying. HTTP/HTTPS works because the landing proxy understands these protocols, but SSH-over-443 (used by GitHub) gets mishandled — the TUN sees port 443 traffic, expects HTTPS, and drops the SSH handshake.
+
+**Diagnosis**:
+
+```bash
+# DNS returns virtual IP (TUN hijack)
+nslookup ssh.github.com
+# → 198.18.0.26  ← Shadowrocket virtual IP, NOT real GitHub IP
+
+# Direct IP works (bypasses DNS hijack)
+ssh -o HostName=140.82.112.35 -o Port=443 git@github.com
+# → "Hi user! You've successfully authenticated"
+```
+
+**Fix** — use direct IP in SSH config to bypass DNS hijack:
+
+```bash
+# ~/.ssh/config
+Host github.com
+    HostName 140.82.112.35    # GitHub SSH server real IP (bypasses TUN DNS hijack)
+    Port 443
+    User git
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    IdentityFile ~/.ssh/id_ed25519
+```
+
+**GitHub SSH server IPs** (as of 2026, verify with `dig +short ssh.github.com @8.8.8.8`):
+- `140.82.112.35` (primary)
+- `140.82.112.36` (alternate)
+
+**Trade-off**: Hardcoded IPs break if GitHub changes them. Monitor `ssh -T git@github.com` — if it starts failing, update the IP. A cron job can automate this:
+
+```bash
+# Weekly check (add to crontab)
+0 9 * * 1 dig +short ssh.github.com @8.8.8.8 | head -1 > /tmp/github-ssh-ip.txt
+```
+
+**Alternative** (if you control Shadowrocket rules): Add GitHub SSH IPs to DIRECT rule so TUN passes them through without protocol inspection:
+
+```
+IP-CIDR,140.82.112.0/24,DIRECT
+IP-CIDR,192.30.252.0/22,DIRECT
+```
+
+This is more robust but requires proxy tool config access.
 
 ### Step 3: Fix Proxy Tool Configuration
 

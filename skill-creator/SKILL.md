@@ -52,9 +52,8 @@ All frontmatter fields except `description` are optional. Configure skill behavi
 name: my-skill
 description: What this skill does and when to use it. Use when...
 context: fork
-agent: Explore
-disable-model-invocation: true
-allowed-tools: Read, Grep, Bash(git *)
+agent: general-purpose
+argument-hint: [topic]
 ---
 ```
 
@@ -62,26 +61,52 @@ allowed-tools: Read, Grep, Bash(git *)
 |-------|----------|-------------|
 | `name` | No | Display name for the skill. If omitted, uses the directory name. Lowercase letters, numbers, and hyphens only (max 64 characters). |
 | `description` | Recommended | What the skill does and when to use it. Claude uses this to decide when to apply the skill. If omitted, uses the first paragraph of markdown content. |
-| `context` | No | **Set to `fork` to run in a forked subagent context.** This is critical for skills that should be available to subagents spawned via the Task tool. Without `context: fork`, the skill runs inline in the main conversation. |
+| `context` | No | **Set to `fork` to run in a forked subagent context.** See "Inline vs Fork: Critical Decision" below — choosing wrong breaks your skill. |
 | `agent` | No | Which subagent type to use when `context: fork` is set. Options: `Explore`, `Plan`, `general-purpose`, or custom agents from `.claude/agents/`. Default: `general-purpose`. |
 | `disable-model-invocation` | No | Set to `true` to prevent Claude from automatically loading this skill. Use for workflows you want to trigger manually with `/name`. Default: `false`. |
 | `user-invocable` | No | Set to `false` to hide from the `/` menu. Use for background knowledge users shouldn't invoke directly. Default: `true`. |
-| `allowed-tools` | No | Tools Claude can use without asking permission when this skill is active. Supports wildcards: `Read, Grep, Bash(git *)`, `Bash(npm *)`, `Bash(docker compose *)`. |
+| `allowed-tools` | No | Pre-approved tools list. **Recommendation: Do NOT set this field.** Omitting it gives the skill full tool access governed by the user's permission settings. Setting it restricts the skill's capabilities unnecessarily. |
 | `model` | No | Model to use when this skill is active. |
 | `argument-hint` | No | Hint shown during autocomplete to indicate expected arguments. Example: `[issue-number]` or `[filename] [format]`. |
 | `hooks` | No | Hooks scoped to this skill's lifecycle. Example: `hooks: { pre-invoke: [{ command: "echo Starting" }] }`. See Claude Code Hooks documentation. |
 
 **Special placeholder:** `$ARGUMENTS` in skill content is replaced with text the user provides after the skill name. For example, `/deep-research quantum computing` replaces `$ARGUMENTS` with `quantum computing`.
 
-##### When to Use `context: fork`
+##### Inline vs Fork: Critical Decision
 
-Use `context: fork` when the skill:
-- Performs multi-step autonomous tasks (research, analysis, code generation)
-- Should be available to subagents spawned via the Task tool
-- Needs isolated context that won't pollute the main conversation
-- Contains explicit task instructions (not just guidelines or reference content)
+**This is the most important architectural decision when designing a skill.** Choosing wrong will silently break your skill's core capabilities.
 
-**Example: Task-based skill with subagent execution:**
+**CRITICAL CONSTRAINT: Subagents cannot spawn other subagents.** A skill running with `context: fork` (as a subagent) CANNOT:
+- Use the Task tool to spawn parallel exploration agents
+- Use the Skill tool to invoke other skills
+- Orchestrate any multi-agent workflow
+
+**Decision guide:**
+
+| Your skill needs to... | Use | Why |
+|------------------------|-----|-----|
+| Orchestrate parallel agents (Task tool) | **Inline** (no `context`) | Subagents can't spawn subagents |
+| Call other skills (Skill tool) | **Inline** (no `context`) | Subagents can't invoke skills |
+| Run Bash commands for external CLIs | **Inline** (no `context`) | Full tool access in main context |
+| Perform a single focused task (research, analysis) | **Fork** (`context: fork`) | Isolated context, clean execution |
+| Provide reference knowledge (coding conventions) | **Inline** (no `context`) | Guidelines enrich main conversation |
+| Be callable BY other skills | **Fork** (`context: fork`) | Must be a subagent to be spawned |
+
+**Example: Orchestrator skill (MUST be inline):**
+```yaml
+---
+name: product-analysis
+description: Multi-path parallel product analysis with cross-model synthesis
+---
+
+# Orchestrates parallel agents — inline is REQUIRED
+1. Auto-detect available tools (which codex, etc.)
+2. Launch 3-5 Task agents in parallel (Explore subagents)
+3. Optionally invoke /competitors-analysis via Skill tool
+4. Synthesize all results
+```
+
+**Example: Specialist skill (fork is correct):**
 ```yaml
 ---
 name: deep-research
@@ -95,9 +120,8 @@ Research $ARGUMENTS thoroughly:
 2. Read and analyze the code
 3. Summarize findings with specific file references
 ```
-When invoked as `/deep-research authentication flow`, `$ARGUMENTS` becomes `authentication flow`.
 
-**Example: Reference skill that runs inline:**
+**Example: Reference skill (inline, no task):**
 ```yaml
 ---
 name: api-conventions
@@ -108,6 +132,44 @@ When writing API endpoints:
 - Use RESTful naming conventions
 - Return consistent error formats
 ```
+
+##### Composable Skill Design (Orthogonality)
+
+Skills should be **orthogonal**: each skill handles one concern, and they combine through composition.
+
+**Pattern: Orchestrator (inline) calls Specialist (fork)**
+```
+product-analysis (inline, orchestrator)
+  ├─ Task agents for parallel exploration
+  ├─ Skill('competitors-analysis', 'X') → fork subagent
+  └─ Synthesizes all results
+
+competitors-analysis (fork, specialist)
+  └─ Single focused task: analyze one competitor codebase
+```
+
+**Rules for composability:**
+1. The **caller** must be inline (no `context: fork`) to use Task/Skill tools
+2. The **callee** should use `context: fork` to run in isolated subagent context
+3. Each skill has a single responsibility — don't mix orchestration with execution
+4. Share methodology via references (e.g., checklists, templates), not by duplicating code
+
+##### Auto-Detection Over Manual Flags
+
+**Never add manual flags for capabilities that can be auto-detected.** Instead of requiring users to pass `--with-codex` or `--verbose`, detect capabilities at runtime:
+
+```
+# Good: Auto-detect and inform
+Step 0: Check available tools
+  - `which codex` → If found, inform user and enable cross-model analysis
+  - `ls package.json` → If found, tailor prompts for Node.js project
+  - `which docker` → If found, enable container-based execution
+
+# Bad: Manual flags
+argument-hint: [scope] [--with-codex] [--docker] [--verbose]
+```
+
+**Principle:** Capabilities auto-detect, user decides scope. A skill should discover what it CAN do and act accordingly, not require users to remember what tools are installed.
 
 ##### Invocation Control
 
