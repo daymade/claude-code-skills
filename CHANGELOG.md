@@ -10,6 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.34.1] - 2026-02-23
+
+### Changed
+- Bumped marketplace metadata version from 1.34.0 to 1.34.1 in `.claude-plugin/marketplace.json`
+- Added product-analysis entries to `README.md` and `README.zh-CN.md` and aligned skills count / version badges to 38 / 1.34.1
+- Added product-analysis quick links in both READMEs and added use-case section in both READMEs
+- Added **product-analysis** to `CLAUDE.md` and updated CLAUDE skill counts / version references to 38 and v1.34.1
+- Bumped `skills-search` plugin version in `marketplace.json` from 1.0.0 to 1.1.0
+- Bumped updated skill versions in `marketplace.json` after documentation updates:
+  - `skill-creator`: 1.4.0 -> 1.4.1
+  - `iOS-APP-developer`: 1.1.0 -> 1.1.1
+  - `macos-cleaner`: 1.1.0 -> 1.1.1
+  - `competitors-analysis`: 1.0.0 -> 1.0.1
+  - `tunnel-doctor`: 1.2.0 -> 1.2.1
+  - `product-analysis`: 1.0.0 -> 1.0.1
+
 ## [1.33.1] - 2026-02-17
 
 ### Changed
