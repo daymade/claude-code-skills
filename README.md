@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-37-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.32.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-38-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.34.1-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 37 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 38 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -225,6 +225,9 @@ claude plugin install github-contributor@daymade-skills
 
 # Windows Remote Desktop / AVD connection diagnosis
 claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
+
+# Product analysis and optimization
+claude plugin install product-analysis@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -1584,6 +1587,45 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 ---
 
+### 38. **product-analysis** - Multi-Path Product Analysis & Optimization
+
+Run a scalable, evidence-driven product audit using parallel Claude Code agents and optional Codex CLI parallelization. Covers UX, API, architecture, and competitive benchmark workflows with quantified findings and priority recommendations.
+
+**When to use:**
+- Product launch readiness reviews
+- Multi-perspective codebase and UX audits before release
+- API quality checks with endpoint and consumption consistency reviews
+- Competitive benchmarking against selected competitor repos
+
+**Key features:**
+- Auto-detects tool context (project stack + optional `codex` availability)
+- Parallel analysis across dimensions: `full`, `ux`, `api`, `arch`, `compare`
+- Multi-agent synthesis with quantified findings and P0/P1/P2 recommendations
+- Built-in comparison hooks with `competitors-analysis`
+- Cross-validation workflow to reduce overfitting from a single model perspective
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install product-analysis@daymade-skills
+
+# Then ask Claude for analysis
+"Run product-analysis in full mode for launch audit"
+"Do a UX audit and report quantified navigation findings"
+"Run API audit and identify unused endpoints"
+"Compare this product with our top competitors"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [product-analysis/SKILL.md](./product-analysis/SKILL.md) and [product-analysis/references/analysis_dimensions.md](./product-analysis/references/analysis_dimensions.md) for dimension definitions and workflow guidance.
+
+**Requirements**: Optional `codex` CLI (for multi-model parallel mode). Skill runs with Claude only if `codex` is not installed.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1668,6 +1710,9 @@ Use **i18n-expert** to set up complete i18n infrastructure for React/Next.js/Vue
 ### For Network & VPN Troubleshooting
 Use **tunnel-doctor** to diagnose and fix conflicts between Tailscale and proxy/VPN tools on macOS across four independent layers (route hijacking, HTTP env vars, system proxy, SSH ProxyCommand). Essential when Tailscale ping works but TCP connections fail, when git push fails with "failed to begin relaying via HTTP", or when setting up Tailscale SSH to WSL instances alongside Shadowrocket, Clash, or Surge.
 
+### For Product Audits
+Use **product-analysis** for structured pre-release and architecture reviews. It combines UX, API, and architecture analysis into measurable findings with priority-ranked recommendations. Add `compare` mode to benchmark against competitor implementations through evidence-backed reports.
+
 ### For Remote Desktop & VDI Optimization
 Use **windows-remote-desktop-connection-doctor** to diagnose Azure Virtual Desktop / W365 connection quality issues on macOS. Essential when transport shows WebSocket instead of UDP Shortpath, when RTT is unexpectedly high, or when RDP Shortpath fails after changing network locations. Combines network evidence gathering with Windows App log analysis for systematic root cause identification.
 
@@ -1719,6 +1764,7 @@ Each skill includes:
 - **fact-checker**: See `fact-checker/SKILL.md` for fact-checking workflow and claim verification process
 - **competitors-analysis**: See `competitors-analysis/SKILL.md` for evidence-based analysis workflow and `competitors-analysis/references/profile_template.md` for competitor profile template
 - **windows-remote-desktop-connection-doctor**: See `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` for log parsing patterns and `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` for transport protocol details
+- **product-analysis**: See `product-analysis/SKILL.md` for workflow and `product-analysis/references/synthesis_methodology.md` for cross-agent weighting and recommendation logic
 
 ## 🛠️ Requirements
 
@@ -1741,6 +1787,7 @@ Each skill includes:
 - **CCPM CLI** (for skills-search): `npm install -g @daymade/ccpm`
 - **Promptfoo** (for promptfoo-evaluation): `npx promptfoo@latest`
 - **macOS + Xcode, XcodeGen** (for iOS-APP-developer)
+- **Codex CLI** (optional, for product-analysis multi-model mode)
 
 ## ❓ FAQ
 

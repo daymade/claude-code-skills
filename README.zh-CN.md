@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-37-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.32.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-38-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.34.1-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 37 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 38 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -228,6 +228,9 @@ claude plugin install github-contributor@daymade-skills
 
 # Windows 远程桌面 / AVD 连接诊断
 claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
+
+# 产品审计与优化
+claude plugin install product-analysis@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -1626,6 +1629,45 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 ---
 
+### 38. **product-analysis** - 多路径产品审计与优化
+
+使用并行的 Claude Code 分析代理（必要时结合 Codex CLI）进行产品审计，覆盖 UX、API、架构和竞品对比场景，输出可量化指标与优先级建议。
+
+**使用场景：**
+- 上线前审核或定期产品健康度检查
+- 需要一份覆盖用户体验、接口与架构的综合审计报告
+- 发版前发现未使用接口、重复入口或导航复杂度问题
+- 结合 `competitors-analysis` 做竞品对比
+
+**主要功能：**
+- 自动识别项目类型和 `codex` 可用性
+- 支持 `full / ux / api / arch / compare` 多维度审计模式
+- Claude 与可选 Codex 代理并行分析，降低单点偏见
+- 产出量化指标与 P0/P1/P2 修复优先级建议
+- 输出可落地的优化方案（行动项 + 依据）
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install product-analysis@daymade-skills
+
+# 然后请求审计
+"用 full 模式做一轮产品上线前审计"
+"做一轮 UX 审计并给出可量化问题"
+"做一轮 API 审计，识别未使用的接口"
+"用 compare 模式和竞品进行对标"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [product-analysis/SKILL.md](./product-analysis/SKILL.md) 与 [product-analysis/references/analysis_dimensions.md](./product-analysis/references/analysis_dimensions.md) 了解审计维度与工作流。
+
+**要求**：可选 `codex` CLI（用于多模型并行模式）。未安装时自动降级为纯 Claude 分析。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -1710,6 +1752,9 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 ### 网络与 VPN 故障排查
 使用 **tunnel-doctor** 诊断和修复 macOS 上 Tailscale 与代理/VPN 工具的四层冲突（路由劫持、HTTP 环境变量、系统代理、SSH ProxyCommand）。当 Tailscale ping 正常但 TCP 连接失败、git push 报 "failed to begin relaying via HTTP"，或在使用 Shadowrocket、Clash、Surge 的同时设置 Tailscale SSH 到 WSL 实例时特别有用。
 
+### 产品审计与优化
+使用 **product-analysis** 进行上线前和例行产品体检，覆盖 UX、API、架构与竞品对比场景。支持 P0/P1/P2 分级建议，并可根据可量化指标输出可执行优化清单。适用于需要跨团队协作验证方向是否合理的复杂产品。
+
 ### 远程桌面与 VDI 优化
 使用 **windows-remote-desktop-connection-doctor** 诊断 macOS 上 Azure Virtual Desktop / W365 连接质量问题。当传输协议显示 WebSocket 而非 UDP Shortpath、RTT 异常高，或更换网络位置后 RDP Shortpath 失败时特别有用。结合网络证据收集与 Windows App 日志分析，系统性定位根因。
 
@@ -1761,6 +1806,7 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 - **fact-checker**：参见 `fact-checker/SKILL.md` 了解事实核查工作流程和声明验证过程
 - **competitors-analysis**：参见 `competitors-analysis/SKILL.md` 了解证据驱动的分析工作流程和 `competitors-analysis/references/profile_template.md` 了解竞品档案模板
 - **windows-remote-desktop-connection-doctor**：参见 `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` 了解日志解析模式和 `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` 了解传输协议详情
+- **product-analysis**：参见 `product-analysis/SKILL.md` 了解工作流，参见 `product-analysis/references/synthesis_methodology.md` 了解跨代理加权与推荐逻辑
 
 ## 🛠️ 系统要求
 
@@ -1779,6 +1825,7 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 - **Promptfoo**（用于 promptfoo-evaluation）：`npx promptfoo@latest`
 - **macOS + Xcode、XcodeGen**（用于 iOS-APP-developer）
 - **Jina.ai API 密钥**（用于 twitter-reader）：https://jina.ai/ 提供免费套餐
+- **Codex CLI**（可选，用于 product-analysis 多模型并行模式）
 - **Mole**（可选，用于 macos-cleaner 可视化清理）：从 https://github.com/tw93/Mole 下载
 
 ## ❓ 常见问题
