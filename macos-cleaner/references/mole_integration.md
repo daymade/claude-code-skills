@@ -228,22 +228,7 @@ tmux capture-pane -t mole -p
 - Next Xcode build takes 30 minutes instead of 30 seconds
 - AI project fails because models need redownload
 
-**Items that should usually be KEPT:**
-| Item | Why Keep It |
-|------|-------------|
-| Xcode DerivedData | Saves 10-30 min per rebuild |
-| npm _cacache | Avoids re-downloading all packages |
-| ~/.cache/uv | Python package cache |
-| Playwright browsers | Avoids 2GB+ redownload |
-| iOS DeviceSupport | Needed for device debugging |
-| Docker stopped containers | May restart anytime |
-
-**Items that are truly safe to delete:**
-| Item | Why Safe |
-|------|----------|
-| Trash | User already deleted |
-| Homebrew old versions | Replaced by newer |
-| npm _npx | Temporary executions |
+See SKILL.md sections "Anti-Patterns: What NOT to Delete" and "What IS Safe to Delete" for the full tables of items to keep vs items safe to remove.
 
 ### 1. Never Execute Dangerous Commands Automatically
 

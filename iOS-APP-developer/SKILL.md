@@ -1,6 +1,6 @@
 ---
 name: developing-ios-apps
-description: Develops iOS applications with XcodeGen, SwiftUI, and SPM. Triggers on XcodeGen project.yml configuration, SPM dependency issues, device deployment problems, code signing errors, camera/AVFoundation debugging, iOS version compatibility, or "Library not loaded @rpath" framework errors. Use when building iOS apps, fixing Xcode build failures, or deploying to real devices.
+description: Develops iOS/macOS applications with XcodeGen, SwiftUI, and SPM. Handles Apple Developer signing, notarization, and CI/CD pipelines. Triggers on XcodeGen project.yml, SPM dependency issues, device deployment, code signing errors (Error -25294, keychain mismatch, adhoc fallback, EMFILE, notarization credential conflict, continueOnError), camera/AVFoundation debugging, iOS version compatibility, "Library not loaded @rpath", Electron @electron/osx-sign/@electron/notarize config, notarytool, GitHub Actions secrets in conditionals, or certificate/provisioning problems. Use when building iOS/macOS apps, fixing Xcode build failures, deploying to real devices, or configuring CI/CD signing pipelines.
 ---
 
 # iOS App Development
@@ -15,6 +15,9 @@ Build, configure, and deploy iOS applications using XcodeGen and Swift Package M
 | `xcodegen generate` loses signing | Overwrites project settings | Configure in `project.yml` target settings, not global |
 | Command-line signing fails | Free Apple ID limitation | Use Xcode GUI or paid developer account ($99/yr) |
 | "Cannot be set when automaticallyAdjustsVideoMirroring is YES" | Setting `isVideoMirrored` without disabling automatic | Set `automaticallyAdjustsVideoMirroring = false` first. See [Camera](#camera--avfoundation) |
+| App signed as adhoc despite certificate | `@electron/packager` defaults `continueOnError: true` | Set `continueOnError: false` in osxSign. See [Code Signing](#macos-code-signing--notarization) |
+| "Cannot use password credentials, API key credentials..." | Passing `teamId` to `@electron/notarize` with API key auth | **Remove `teamId`**. `notarytool` infers team from API key. See [Code Signing](#macos-code-signing--notarization) |
+| EMFILE during signing (large embedded runtime) | `@electron/osx-sign` traverses all files in .app bundle | Add `ignore` filter + `ulimit -n 65536` in CI. See [Code Signing](#macos-code-signing--notarization) |
 
 ## Quick Reference
 
@@ -297,9 +300,73 @@ Filter in Console.app by subsystem.
 
 **For detailed camera implementation**: See [references/camera-avfoundation.md](references/camera-avfoundation.md)
 
+## macOS Code Signing & Notarization
+
+For distributing macOS apps (Electron or native) outside the App Store, signing + notarization is required. Without it users see "Apple cannot check this app for malicious software."
+
+**5-step checklist:**
+
+| Step | What | Critical detail |
+|------|------|-----------------|
+| 1 | Create CSR in Keychain Access | Common Name doesn't matter; choose "Saved to disk" |
+| 2 | Request **Developer ID Application** cert at developer.apple.com | Choose **G2 Sub-CA** (not Previous Sub-CA) |
+| 3 | Install `.cer` → must choose **`login` keychain** | iCloud/System → Error -25294 (private key mismatch) |
+| 4 | Export P12 from `login` keychain with password | Base64: `base64 -i cert.p12 \| pbcopy` |
+| 5 | Create App Store Connect API Key (Developer role) | Download `.p8` once only; record Key ID + Issuer ID |
+
+**GitHub Secrets required (5 secrets):**
+
+| Secret | Source |
+|--------|--------|
+| `MACOS_CERT_P12` | Step 4 base64 |
+| `MACOS_CERT_PASSWORD` | Step 4 password |
+| `APPLE_API_KEY` | Step 5 `.p8` base64 |
+| `APPLE_API_KEY_ID` | Step 5 Key ID |
+| `APPLE_API_ISSUER` | Step 5 Issuer ID |
+
+> **`APPLE_TEAM_ID` is NOT needed.** `notarytool` infers team from the API key. Passing `teamId` to `@electron/notarize` v2.5.0 causes a credential conflict error.
+
+**Electron Forge osxSign critical settings:**
+
+```typescript
+osxSign: {
+  identity: 'Developer ID Application',
+  hardenedRuntime: true,
+  entitlements: 'entitlements.mac.plist',
+  entitlementsInherit: 'entitlements.mac.plist',
+  continueOnError: false,  // CRITICAL: default is true, silently falls back to adhoc
+  // Skip non-binary files in large embedded runtimes (prevents EMFILE)
+  ignore: (filePath: string) => {
+    if (!filePath.includes('python-runtime')) return false;
+    if (/\.(so|dylib|node)$/.test(filePath)) return false;
+    return true;
+  },
+  // CI: explicitly specify keychain (apple-actions/import-codesign-certs uses signing_temp.keychain)
+  ...(process.env.MACOS_SIGNING_KEYCHAIN
+    ? { keychain: process.env.MACOS_SIGNING_KEYCHAIN }
+    : {}),
+},
+```
+
+**Fail-fast three-layer defense:**
+
+1. `@electron/osx-sign`: `continueOnError: false` — signing error throws immediately
+2. `postPackage` hook: `codesign --verify --deep --strict` + adhoc detection
+3. Release trigger script: verify local HEAD matches remote before dispatch
+
+**Verify signing:**
+```bash
+security find-identity -v -p codesigning | grep "Developer ID Application"
+```
+
+For complete step-by-step guide, entitlements, workflow examples, and full troubleshooting (7 real-world errors with root causes): **[references/apple-codesign-notarize.md](references/apple-codesign-notarize.md)**
+
+---
+
 ## Resources
 
 - [references/xcodegen-full.md](references/xcodegen-full.md) - Complete project.yml options
 - [references/swiftui-compatibility.md](references/swiftui-compatibility.md) - iOS version API differences
 - [references/camera-avfoundation.md](references/camera-avfoundation.md) - Camera preview debugging
 - [references/testing-mainactor.md](references/testing-mainactor.md) - Testing @MainActor classes (state machines, regression tests)
+- [references/apple-codesign-notarize.md](references/apple-codesign-notarize.md) - Apple Developer signing + notarization for macOS/Electron CI/CD

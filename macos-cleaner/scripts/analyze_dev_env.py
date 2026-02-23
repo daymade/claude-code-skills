@@ -131,8 +131,8 @@ def check_docker():
             if 'Total:' in line:
                 print(f"   {line}")
 
-    print(f"\n💡 Cleanup command: docker system prune -a --volumes")
-    print(f"   ⚠️  Warning: This will remove ALL unused Docker resources")
+    print("\n💡 Cleanup: Remove specific images/volumes by ID/name (see SKILL.md)")
+    print("   ⚠️  NEVER use 'docker system prune' -- always specify exact objects")
 
     return total_size
 

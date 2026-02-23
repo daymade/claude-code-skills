@@ -39,7 +39,41 @@ Ask user to verify instead.
 
 Before deleting >10 GB, recommend Time Machine backup.
 
-### Rule 5: Use Trash When Possible
+### Rule 5: Docker Prune Prohibition
+
+**NEVER use any Docker prune command.** This includes:
+- `docker image prune` / `docker image prune -a`
+- `docker container prune`
+- `docker volume prune` / `docker volume prune -f`
+- `docker system prune` / `docker system prune -a --volumes`
+
+**Why**: Prune commands operate on categories, not specific objects. They can silently destroy database volumes, user uploads, and container state that the user intended to keep. A user who loses their MySQL data because of a prune command will never trust this tool again.
+
+**Correct approach**: Always specify exact object IDs or names:
+```bash
+# Images: delete by specific ID
+docker rmi a02c40cc28df 555434521374
+
+# Containers: delete by specific name
+docker rm container-name-1 container-name-2
+
+# Volumes: delete by specific name
+docker volume rm project-mysql-data project-redis-data
+```
+
+### Rule 6: Double-Check Verification Protocol
+
+Before deleting ANY Docker object, perform independent cross-verification. This applies to images, volumes, and containers.
+
+**Key requirements**:
+- For images: verify no container (running or stopped) references the image
+- For volumes: verify no container mounts the volume
+- For database volumes (name contains mysql, postgres, redis, mongo, mariadb): MANDATORY content inspection with a temporary container
+- Even if Docker reports a volume as "dangling", the data inside may be valuable
+
+See **SKILL.md Step 4** for the complete verification commands and database volume inspection workflow.
+
+### Rule 7: Use Trash When Possible
 
 Prefer moving to Trash over permanent deletion:
 
@@ -143,23 +177,30 @@ Please run this command manually:
 - User should be aware of system-wide impact
 - Audit trail (user types password)
 
-### Docker Volumes
+### Docker Objects (Images, Containers, Volumes)
 
-**Action**: Always list volumes before cleanup
+**Action**: List every object individually. Use precision deletion only (see Rule 5 and Rule 6).
 
-**Example**:
+**NEVER use prune commands.** Always specify exact IDs/names.
+
+**Example for volumes**:
 ```
-⚠️ Docker cleanup may remove important data.
+Docker volumes found:
+  postgres_data    (1.2 GB)  - Contains PostgreSQL database
+  redis_data       (500 MB)  - Contains Redis cache data
+  app_uploads      (3 GB)    - Contains user-uploaded files
 
-Current volumes:
-  postgres_data    (1.2 GB)  - May contain database
-  redis_data       (500 MB)  - May contain cache
-  app_uploads      (3 GB)    - May contain user files
+Database volumes inspected with temporary container:
+  postgres_data: 8 databases, 45 tables, last modified 2 days ago
+  redis_data: 12 MB dump.rdb
 
-Review each volume:
-  docker volume inspect <volume_name>
+Confirm EACH volume individually:
+  Delete postgres_data? [y/N]:
+  Delete redis_data? [y/N]:
+  Delete app_uploads? [y/N]:
 
-Proceed with cleanup? [y/N]:
+Deletion commands (after confirmation):
+  docker volume rm postgres_data redis_data
 ```
 
 ### Application Preferences
