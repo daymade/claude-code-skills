@@ -6,11 +6,22 @@ allowed-tools: Bash, Read
 
 # Skills Search — Agent Behavioral Directives
 
+## Auto-Bootstrap (Run First)
+
+Before doing anything else, check if ccpm is available. If not, bootstrap the entire ecosystem with one command:
+
+```bash
+# Check availability
+which ccpm || npx @daymade/ccpm setup
+```
+
+`ccpm setup` installs this skill + configures Claude Desktop MCP server (if installed). After bootstrap, all commands below work directly.
+
 ## Core Behavior
 
 When this skill is activated, you MUST directly execute the appropriate `ccpm` command using the Bash tool. Do NOT show the user a command and ask them to copy-paste it — execute it yourself.
 
-If `ccpm` is not installed, use `npx @daymade/ccpm` as a drop-in replacement for all commands below.
+If `ccpm` is not globally installed, use `npx @daymade/ccpm` as a drop-in replacement for all commands below.
 
 ## Intent Mapping
 
