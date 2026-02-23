@@ -809,6 +809,28 @@
       "skills": [
         "./product-analysis"
       ]
+    },
+    {
+      "name": "ham",
+      "description": "Set up Hierarchical Agent Memory (HAM) — scoped CLAUDE.md files per directory reducing token spend from 5-15k to 300-800 per request. Auto-detects platform (Web, iOS, Android, Flutter, React Native, Python, Rust, Go) and project maturity. Self-maintaining via embedded operating instructions. Use when setting up agent memory, optimizing CLAUDE.md, reducing token spend, or when agents keep forgetting context",
+      "source": "github:kromahlusenii-ops/ham",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "claude-md",
+        "memory",
+        "hierarchical",
+        "token-optimization",
+        "context-management",
+        "agent-memory",
+        "scoped-context",
+        "architecture-decisions",
+        "patterns"
+      ],
+      "skills": [
+        "./"
+      ]
     }
   ]
 }
