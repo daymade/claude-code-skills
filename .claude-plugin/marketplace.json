@@ -809,6 +809,27 @@
       "skills": [
         "./product-analysis"
       ]
+    },
+    {
+      "name": "delegate",
+      "source": "./delegate",
+      "description": "Parallel code implementation orchestrator. Breaks tasks into independent work units, spawns up to 5 concurrent agents with git worktree isolation, auto-retry on failure, structured review phase.",
+      "version": "1.1.0",
+      "category": "developer-tools",
+      "keywords": [
+        "parallel",
+        "orchestration",
+        "agents",
+        "code-generation",
+        "worktree",
+        "multi-agent"
+      ],
+      "author": {
+        "name": "Aayo Awoyemi"
+      },
+      "skills": [
+        "./delegate"
+      ]
     }
   ]
 }
