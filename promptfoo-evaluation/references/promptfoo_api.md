@@ -21,10 +21,12 @@ providers:
 
 ```yaml
 providers:
-  - id: anthropic:messages:claude-sonnet-4-5-20250929
+  - id: anthropic:messages:claude-sonnet-4-6
     config:
       max_tokens: 4096
       temperature: 0.7
+      # For relay/proxy APIs:
+      # apiBaseUrl: https://your-relay.example.com/api
 ```
 
 ### OpenAI
@@ -41,7 +43,7 @@ providers:
 
 ```yaml
 providers:
-  - id: anthropic:messages:claude-sonnet-4-5-20250929
+  - id: anthropic:messages:claude-sonnet-4-6
     label: Claude
   - id: openai:gpt-4.1
     label: GPT-4.1
@@ -193,6 +195,26 @@ defaultTest:
       provider: anthropic:claude-3-haiku  # Override for this assertion
 ```
 
+### Relay/Proxy Provider with LLM-as-Judge
+
+When using a relay or proxy API, each `llm-rubric` needs its own `provider` config — the main provider's `apiBaseUrl` is NOT inherited:
+
+```yaml
+providers:
+  - id: anthropic:messages:claude-sonnet-4-6
+    config:
+      apiBaseUrl: https://your-relay.example.com/api
+
+defaultTest:
+  assert:
+    - type: llm-rubric
+      value: "Evaluate quality"
+      provider:
+        id: anthropic:messages:claude-sonnet-4-6
+        config:
+          apiBaseUrl: https://your-relay.example.com/api  # Must repeat here
+```
+
 ## Environment Variables
 
 | Variable | Description |
@@ -202,6 +224,21 @@ defaultTest:
 | `PROMPTFOO_PYTHON` | Python binary path |
 | `PROMPTFOO_CACHE_ENABLED` | Enable caching (default: true) |
 | `PROMPTFOO_CACHE_PATH` | Cache directory |
+
+## Concurrency Control
+
+**CRITICAL**: `maxConcurrency` must be placed under `commandLineOptions:` in the YAML config. Placing it at the top level is silently ignored.
+
+```yaml
+# ✅ Correct — under commandLineOptions
+commandLineOptions:
+  maxConcurrency: 1
+
+# ❌ Wrong — top level (silently ignored, defaults to ~4)
+maxConcurrency: 1
+```
+
+When using relay APIs with LLM-as-judge, set `maxConcurrency: 1` because generation and grading share the same concurrent request pool.
 
 ## CLI Commands
 
@@ -216,11 +253,11 @@ npx promptfoo@latest eval [options]
 #   --config <path>     Config file path
 #   --output <path>     Output file path
 #   --grader <provider> Override grader model
-#   --no-cache          Disable caching
+#   --no-cache          Disable caching (important for re-runs)
 #   --filter-metadata   Filter tests by metadata
 #   --repeat <n>        Repeat each test n times
 #   --delay <ms>        Delay between requests
-#   --max-concurrency   Parallel requests
+#   --max-concurrency   Parallel requests (CLI override)
 
 # View results
 npx promptfoo@latest view [options]
