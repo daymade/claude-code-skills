@@ -51,13 +51,17 @@ prompts:
 
 # Models to compare
 providers:
-  - id: anthropic:messages:claude-sonnet-4-5-20250929
-    label: Claude-4.5-Sonnet
+  - id: anthropic:messages:claude-sonnet-4-6
+    label: Claude-Sonnet-4.6
   - id: openai:gpt-4.1
     label: GPT-4.1
 
 # Test cases
 tests: file://tests/cases.yaml
+
+# Concurrency control (MUST be under commandLineOptions, NOT top-level)
+commandLineOptions:
+  maxConcurrency: 2
 
 # Default assertions for all tests
 defaultTest:
@@ -177,10 +181,25 @@ assert:
     provider: openai:gpt-4.1  # Optional: override grader model
 ```
 
+**When using a relay/proxy API**, each `llm-rubric` assertion needs its own `provider` config with `apiBaseUrl`. Otherwise the grader falls back to the default Anthropic/OpenAI endpoint and gets 401 errors:
+
+```yaml
+assert:
+  - type: llm-rubric
+    value: |
+      Evaluate quality on a 0-1 scale.
+    threshold: 0.7
+    provider:
+      id: anthropic:messages:claude-sonnet-4-6
+      config:
+        apiBaseUrl: https://your-relay.example.com/api
+```
+
 **Best practices:**
 - Provide clear scoring criteria
 - Use `threshold` to set minimum passing score
 - Default grader uses available API keys (OpenAI → Anthropic → Google)
+- **When using relay/proxy**: every `llm-rubric` must have its own `provider` with `apiBaseUrl` — the main provider's `apiBaseUrl` is NOT inherited
 
 ## Common Assertion Types
 
@@ -196,7 +215,7 @@ assert:
 
 ## File References
 
-All paths are relative to config file location:
+All `file://` paths are resolved relative to `promptfooconfig.yaml` location (NOT the YAML file containing the reference). This is a common gotcha when `tests:` references a separate YAML file — the `file://` paths inside that test file still resolve from the config root.
 
 ```yaml
 # Load file content as variable
@@ -235,6 +254,29 @@ npx promptfoo@latest eval --filter-metadata category=math
 npx promptfoo@latest view
 ```
 
+## Relay / Proxy API Configuration
+
+When using an API relay or proxy instead of direct Anthropic/OpenAI endpoints:
+
+```yaml
+providers:
+  - id: anthropic:messages:claude-sonnet-4-6
+    label: Claude-Sonnet-4.6
+    config:
+      max_tokens: 4096
+      apiBaseUrl: https://your-relay.example.com/api  # Promptfoo appends /v1/messages
+
+# CRITICAL: maxConcurrency MUST be under commandLineOptions (NOT top-level)
+commandLineOptions:
+  maxConcurrency: 1  # Respect relay rate limits
+```
+
+**Key rules:**
+- `apiBaseUrl` goes in `providers[].config` — Promptfoo appends `/v1/messages` automatically
+- `maxConcurrency` must be under `commandLineOptions:` — placing it at top level is silently ignored
+- When using relay with LLM-as-judge, set `maxConcurrency: 1` to avoid concurrent request limits (generation + grading share the same pool)
+- Pass relay token as `ANTHROPIC_API_KEY` env var
+
 ## Troubleshooting
 
 **Python not found:**
@@ -246,7 +288,20 @@ export PROMPTFOO_PYTHON=python3
 Outputs over 30000 characters are truncated. Use `head_limit` in assertions.
 
 **File not found errors:**
-Ensure paths are relative to `promptfooconfig.yaml` location.
+All `file://` paths resolve relative to `promptfooconfig.yaml` location.
+
+**maxConcurrency ignored (shows "up to N at a time"):**
+`maxConcurrency` must be under `commandLineOptions:`, not at the YAML top level. This is a common mistake.
+
+**LLM-as-judge returns 401 with relay API:**
+Each `llm-rubric` assertion must have its own `provider` with `apiBaseUrl`. The main provider config is not inherited by grader assertions.
+
+**HTML tags in model output inflating metrics:**
+Models may output `<br>`, `<b>`, etc. in structured content. Strip HTML in Python assertions before measuring:
+```python
+import re
+clean_text = re.sub(r'<[^>]+>', '', raw_text)
+```
 
 ## Echo Provider (Preview Mode)
 
@@ -327,7 +382,7 @@ For Chinese/long-form content evaluations (10k+ characters):
 
 ```yaml
 providers:
-  - id: anthropic:messages:claude-sonnet-4-5-20250929
+  - id: anthropic:messages:claude-sonnet-4-6
     config:
       max_tokens: 8192  # Increase for long outputs
 
