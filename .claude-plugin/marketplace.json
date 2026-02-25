@@ -809,6 +809,33 @@
       "skills": [
         "./product-analysis"
       ]
+    },
+    {
+      "name": "evos-operational-skills",
+      "description": "8 domain-expert operational skills covering logistics exception management, carrier relationships, customs compliance, inventory planning, returns processing, production scheduling, quality non-conformance, and energy procurement. Each codifies 15+ years of real industry expertise",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "operations",
+      "keywords": [
+        "logistics",
+        "manufacturing",
+        "retail",
+        "energy",
+        "operations",
+        "supply-chain",
+        "domain-expertise"
+      ],
+      "skills": [
+        "./logistics-exception-management",
+        "./carrier-relationship-management",
+        "./customs-trade-compliance",
+        "./inventory-demand-planning",
+        "./returns-reverse-logistics",
+        "./production-scheduling",
+        "./quality-nonconformance",
+        "./energy-procurement"
+      ]
     }
   ]
 }
