@@ -712,7 +712,7 @@
     },
     {
       "name": "competitors-analysis",
-      "description": "Analyze competitor repositories with evidence-based approach. Use when tracking competitors, creating competitor profiles, or generating competitive analysis. All analysis must be based on actual cloned code, never assumptions. Triggers include analyze competitor, add competitor, competitive analysis, or 竞品分析",
+      "description": "Analyze competitor repositories with evidence-based approach. Use when tracking competitors, creating competitor profiles, or generating competitive analysis. All analysis must be based on actual cloned code, never assumptions. Triggers include analyze competitor, add competitor, competitive analysis, or \u7ade\u54c1\u5206\u6790",
       "source": "./",
       "strict": false,
       "version": "1.0.1",
@@ -723,7 +723,7 @@
         "competitor-tracking",
         "evidence-based",
         "market-research",
-        "竞品分析",
+        "\u7ade\u54c1\u5206\u6790",
         "code-analysis"
       ],
       "skills": [
@@ -808,6 +808,27 @@
       ],
       "skills": [
         "./product-analysis"
+      ]
+    },
+    {
+      "name": "deapi-media",
+      "description": "AI media generation \u2014 transcribe YouTube/audio, generate images, text-to-speech, OCR, remove backgrounds, upscale, create videos. 10-20x cheaper via decentralized GPU cloud.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "ai-tools",
+      "keywords": [
+        "transcription",
+        "text-to-image",
+        "text-to-speech",
+        "ocr",
+        "video-generation",
+        "media",
+        "ai-tools",
+        "deapi"
+      ],
+      "skills": [
+        "./deapi-media"
       ]
     }
   ]
