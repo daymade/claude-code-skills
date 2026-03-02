@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, and multi-path parallel product analysis with cross-model test-time compute scaling",
-    "version": "1.34.1",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, multi-path parallel product analysis with cross-model test-time compute scaling, and real financial data collection for US equities with validation and yfinance pitfall handling",
+    "version": "1.36.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -808,6 +808,72 @@
       ],
       "skills": [
         "./product-analysis"
+      ]
+    },
+    {
+      "name": "excel-automation",
+      "description": "Create, parse, and control Excel files on macOS. Professional formatting with openpyxl (font colors, fills, borders, conditional formatting), complex xlsm parsing with stdlib zipfile+xml for investment bank financial models, and Excel window control via AppleScript (zoom, scroll, select). Use when creating formatted Excel reports, parsing financial models, or automating Excel on macOS",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "excel",
+        "openpyxl",
+        "xlsm",
+        "spreadsheet",
+        "formatting",
+        "financial-model",
+        "applescript",
+        "macos",
+        "dcf",
+        "investment-banking"
+      ],
+      "skills": [
+        "./excel-automation"
+      ]
+    },
+    {
+      "name": "capture-screen",
+      "description": "Programmatic screenshot capture on macOS. Get window IDs via Swift CGWindowListCopyWindowInfo, capture specific windows with screencapture -l, and control application windows via AppleScript. Supports multi-shot workflows for capturing different sections of the same window. Use when taking automated screenshots, capturing application windows, or creating visual documentation",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "utilities",
+      "keywords": [
+        "screenshot",
+        "screencapture",
+        "macos",
+        "window-capture",
+        "swift",
+        "applescript",
+        "automation",
+        "visual-documentation"
+      ],
+      "skills": [
+        "./capture-screen"
+      ]
+    },
+    {
+      "name": "financial-data-collector",
+      "description": "Collect real financial data for any US publicly traded company from free public sources (yfinance). Output structured JSON with market data, historical financials, WACC inputs, and analyst estimates. Handles NaN year detection, CapEx sign preservation, and FCF definition mismatches. Use when users request company financials, stock data, DCF inputs, or financial data collection for any US equity ticker",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "finance",
+        "financial-data",
+        "yfinance",
+        "stock-data",
+        "dcf",
+        "wacc",
+        "market-data",
+        "investment-research",
+        "sec-filings"
+      ],
+      "skills": [
+        "./financial-data-collector"
       ]
     }
   ]

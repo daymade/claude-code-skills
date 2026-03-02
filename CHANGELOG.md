@@ -10,6 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.36.0] - 2026-03-02
+
+### Added
+- **New Skill**: financial-data-collector - Collect real financial data for US public companies via yfinance
+  - Structured JSON output with market data, income statement, cash flow, balance sheet, WACC inputs, analyst estimates
+  - Validation script with 9 checks (field completeness, cross-field consistency, sign conventions, NaN detection)
+  - Reference docs: output-schema.md, yfinance-pitfalls.md (NaN years, field aliases, FCF definition mismatch)
+  - NO FALLBACK principle: null for missing data, never default values
+
+### Changed
+- Updated marketplace skills count from 38 to 39
+- Updated marketplace version from 1.35.0 to 1.36.0
+- Updated README.md and README.zh-CN.md badges (skills count, version)
+- Updated CLAUDE.md skills count and list
+
 ## [1.34.1] - 2026-02-23
 
 ### Changed
