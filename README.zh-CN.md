@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-38-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.34.1-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-39-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.36.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 38 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 39 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -231,6 +231,9 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 # 产品审计与优化
 claude plugin install product-analysis@daymade-skills
+
+# 美股金融数据采集
+claude plugin install financial-data-collector@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -1668,6 +1671,44 @@ claude plugin install product-analysis@daymade-skills
 
 ---
 
+### 39. **financial-data-collector** - 美股金融数据采集
+
+从免费公开数据源（yfinance）采集美股上市公司的实时金融数据，输出结构化 JSON，包含市场数据、历史财务报表（利润表、现金流量表、资产负债表）、WACC 输入参数和分析师一致预期——可直接用于下游 DCF 建模、可比公司分析或财报复盘。
+
+**使用场景：**
+- 构建 DCF 或估值模型前采集结构化金融数据
+- 拉取任意美股 ticker 的市场数据（股价、流通股、beta、市值）
+- 获取历史利润表、现金流量表、资产负债表数据
+- 获取无风险利率（10Y Treasury）和分析师一致预期
+
+**主要功能：**
+- 健壮的 yfinance 字段映射，使用别名链（应对 API 跨版本不稳定）
+- NaN 年份检测与透明报告（从不用估计值填充）
+- 9 项校验：字段完整性、市值交叉验证、资本支出符号约定、净负债一致性
+- NO FALLBACK 原则：缺失数据返回 `null` 并附 `_source` 溯源，绝不使用默认值
+- FCF 定义差异标记（yfinance FCF 不扣除 SBC，与投行 FCF 有 ~30% 差距）
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install financial-data-collector@daymade-skills
+
+# 然后请求数据采集
+"采集 META 的金融数据"
+"获取 AAPL 最近 3 年的财务数据"
+"拉取 NVDA 的 DCF 输入数据"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [financial-data-collector/SKILL.md](./financial-data-collector/SKILL.md)、[output-schema.md](./financial-data-collector/references/output-schema.md) 和 [yfinance-pitfalls.md](./financial-data-collector/references/yfinance-pitfalls.md)。
+
+**要求**：Python 3.11+、`yfinance`、`pandas`（通过 uv 内联依赖自动安装）。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -1709,6 +1750,9 @@ claude plugin install product-analysis@daymade-skills
 
 ### 转录与 ASR 校正
 使用 **transcript-fixer** 通过基于字典的规则和 AI 驱动的校正自动学习，纠正会议记录、讲座和访谈中的语音转文本错误。
+
+### 金融数据与投研
+使用 **financial-data-collector** 采集任意美股上市公司的结构化金融数据，将 JSON 输出接入 DCF 建模、可比公司分析或财报复盘工作流。
 
 ### 会议文档
 使用 **meeting-minutes-taker** 将原始会议转写稿转换为结构化、基于证据的会议纪要。与 **transcript-fixer** 结合使用可在生成纪要前清理 ASR 错误。特点是多轮生成配合 UNION 合并以避免内容丢失。

@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-38-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.34.1-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-39-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.36.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 38 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 39 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -228,6 +228,9 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 # Product analysis and optimization
 claude plugin install product-analysis@daymade-skills
+
+# Financial data collection for US equities
+claude plugin install financial-data-collector@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -1626,6 +1629,44 @@ claude plugin install product-analysis@daymade-skills
 
 ---
 
+### 39. **financial-data-collector** - Financial Data Collection for US Equities
+
+Collect real financial data for any US publicly traded company from free public sources (yfinance). Output structured JSON with market data, historical financials (income statement, cash flow, balance sheet), WACC inputs, and analyst estimates — ready for downstream DCF modeling, comps analysis, or earnings review.
+
+**When to use:**
+- Collecting structured financial data before building DCF or valuation models
+- Pulling market data (price, shares, beta, market cap) for any US equity ticker
+- Gathering historical income statement, cash flow, and balance sheet data
+- Getting risk-free rate (10Y Treasury) and analyst consensus estimates
+
+**Key features:**
+- Robust yfinance field mapping with alias chains (handles API instability across versions)
+- NaN year detection and transparent reporting (never fills with estimates)
+- 9-check validation: field completeness, market cap cross-check, CapEx sign convention, net debt consistency
+- NO FALLBACK principle: missing data returns `null` with `_source` attribution, never default values
+- FCF definition mismatch flagging (yfinance FCF ≠ investment bank FCF due to SBC)
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install financial-data-collector@daymade-skills
+
+# Then ask Claude to collect data
+"Collect financial data for META"
+"Get financials for AAPL --years 3"
+"Pull DCF inputs for NVDA"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [financial-data-collector/SKILL.md](./financial-data-collector/SKILL.md), [output-schema.md](./financial-data-collector/references/output-schema.md), and [yfinance-pitfalls.md](./financial-data-collector/references/yfinance-pitfalls.md).
+
+**Requirements**: Python 3.11+, `yfinance`, `pandas` (auto-installed via uv inline dependencies).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1667,6 +1708,9 @@ Use **youtube-downloader** to download YouTube videos and extract audio from vid
 
 ### For Transcription & ASR Correction
 Use **transcript-fixer** to correct speech-to-text errors in meeting notes, lectures, and interviews through dictionary-based rules and AI-powered corrections with automatic learning.
+
+### For Financial Data & Investment Research
+Use **financial-data-collector** to pull structured financial data for any US public company, then feed the JSON output into DCF modeling, comps analysis, or earnings review workflows.
 
 ### For Meeting Documentation
 Use **meeting-minutes-taker** to transform raw meeting transcripts into structured, evidence-based minutes. Combine with **transcript-fixer** to clean up ASR errors before generating minutes. Features multi-pass generation with UNION merge to avoid content loss.
