@@ -16,8 +16,19 @@ Requirements:
     export DYLD_LIBRARY_PATH="/opt/homebrew/lib:$DYLD_LIBRARY_PATH"
 """
 
+import os
+import platform
+import re
 import sys
 from pathlib import Path
+
+# Auto-configure library path on macOS ARM (Homebrew) — must be before weasyprint import
+if platform.system() == 'Darwin':
+    _homebrew_lib = '/opt/homebrew/lib'
+    if Path(_homebrew_lib).is_dir():
+        _cur = os.environ.get('DYLD_LIBRARY_PATH', '')
+        if _homebrew_lib not in _cur:
+            os.environ['DYLD_LIBRARY_PATH'] = f"{_homebrew_lib}:{_cur}" if _cur else _homebrew_lib
 
 import markdown
 from weasyprint import CSS, HTML
@@ -89,8 +100,8 @@ th, td {
     border: 1px solid #666;
     padding: 8px 6px;
     text-align: left;
-    word-wrap: break-word;
-    word-break: break-all;
+    overflow-wrap: break-word;
+    word-break: normal;
 }
 
 th {
@@ -134,6 +145,24 @@ blockquote {
 """
 
 
+def _ensure_list_spacing(text: str) -> str:
+    """Ensure blank lines before list items for proper markdown parsing.
+
+    The Python markdown library requires a blank line before a list when it
+    follows a paragraph. Without it, list items render as plain text.
+    """
+    lines = text.split('\n')
+    result = []
+    list_re = re.compile(r'^(\s*)([-*+]|\d+\.)\s')
+    for i, line in enumerate(lines):
+        if i > 0 and list_re.match(line):
+            prev = lines[i - 1]
+            if prev.strip() and not list_re.match(prev):
+                result.append('')
+        result.append(line)
+    return '\n'.join(result)
+
+
 def markdown_to_pdf(md_file: str, pdf_file: str | None = None) -> str:
     """
     Convert markdown file to PDF with Chinese font support.
@@ -150,8 +179,8 @@ def markdown_to_pdf(md_file: str, pdf_file: str | None = None) -> str:
     if pdf_file is None:
         pdf_file = str(md_path.with_suffix('.pdf'))
 
-    # Read markdown content
-    md_content = md_path.read_text(encoding='utf-8')
+    # Read and preprocess markdown content
+    md_content = _ensure_list_spacing(md_path.read_text(encoding='utf-8'))
 
     # Convert to HTML
     html_content = markdown.markdown(
