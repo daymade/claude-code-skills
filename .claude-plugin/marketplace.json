@@ -875,6 +875,30 @@
       "skills": [
         "./financial-data-collector"
       ]
+    },
+    {
+      "name": "skillboss-ai-gateway",
+      "description": "Unified AI gateway providing one API key for 100+ AI services including Claude, GPT, Gemini, DeepSeek, image/video generation (DALL-E, Midjourney, Flux, Runway, Kling), voice (ElevenLabs), and web scraping. OpenAI-compatible API works with existing code. Use when accessing multiple AI models, generating images/videos, synthesizing voice, or integrating external services",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "ai-services",
+      "keywords": [
+        "ai-gateway",
+        "openai-compatible",
+        "mcp",
+        "claude",
+        "gpt",
+        "gemini",
+        "image-generation",
+        "video-generation",
+        "voice-synthesis",
+        "api-gateway",
+        "unified-api"
+      ],
+      "skills": [
+        "./skillboss-ai-gateway"
+      ]
     }
   ]
 }
