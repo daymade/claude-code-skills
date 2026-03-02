@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-39-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.36.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-41-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.37.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 39 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 41 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -234,6 +234,12 @@ claude plugin install product-analysis@daymade-skills
 
 # 美股金融数据采集
 claude plugin install financial-data-collector@daymade-skills
+
+# Excel 创建、解析与 macOS 自动化控制
+claude plugin install excel-automation@daymade-skills
+
+# macOS 程序化窗口截图工作流
+claude plugin install capture-screen@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -1709,6 +1715,82 @@ claude plugin install financial-data-collector@daymade-skills
 
 ---
 
+### 40. **excel-automation** - Excel 创建、解析与 macOS 控制
+
+用于创建专业格式化 Excel、通过标准库 XML/ZIP 解析复杂 `.xlsm` 模型，并在 macOS 上通过 AppleScript 控制 Excel 窗口。
+
+**使用场景：**
+- 需要按投研规范批量生成格式化工作簿
+- `openpyxl` 无法读取复杂券商/投行 `.xlsm` 模型
+- 需要在不完整加载大文件的情况下抽取目标工作表与单元格
+- 在 macOS 上自动执行 Excel 缩放、滚动、选区等窗口操作
+
+**主要功能：**
+- 提供可复用的 `openpyxl` 格式化模板脚本
+- 使用 `zipfile` + `xml.etree` 解析复杂工作簿（轻依赖）
+- 内置损坏 `definedNames` 修复流程
+- 提供带超时保护的 AppleScript 命令模式
+- 附带格式规范参考（颜色、数字格式、表格样式）
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install excel-automation@daymade-skills
+
+# 然后请求 Claude 自动化 Excel 工作流
+"创建一个格式化的估值模板工作簿"
+"解析这个 .xlsm 并提取 DCF 工作表"
+"生成 Excel 缩放和滚动后截图的 AppleScript 流程"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [excel-automation/SKILL.md](./excel-automation/SKILL.md) 和 [formatting-reference.md](./excel-automation/references/formatting-reference.md)。
+
+**要求**：Python 3.8+、`uv`、`openpyxl`（通过 `uv run --with openpyxl` 自动安装）；AppleScript 窗口控制需要 macOS。
+
+---
+
+### 41. **capture-screen** - macOS 程序化截图
+
+通过三步法实现稳定的窗口截图自动化：Swift 获取 CGWindowID、AppleScript 控制应用状态、`screencapture` 输出截图文件。
+
+**使用场景：**
+- 为文档或审计流程自动化生成可重复截图
+- 只捕获目标应用窗口而非整屏
+- 在脚本化滚动/缩放后分段截图
+- 构建 macOS 视觉证据采集流水线
+
+**主要功能：**
+- 内置 Swift 脚本获取准确窗口 ID（`CGWindowListCopyWindowInfo`）
+- 提供已验证的 AppleScript 激活与预处理命令模式
+- 支持窗口级静默截图、延时截图与格式控制
+- 提供分段多图采集工作流模板
+- 明确列出在 macOS 上不可用的错误方案，避免踩坑
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install capture-screen@daymade-skills
+
+# 然后请求 Claude 执行程序化截图
+"找到 Excel 窗口 ID 并静默截图"
+"为这个工作簿生成分段截图工作流"
+"通过脚本滚动后抓取 Chrome 窗口多个区域"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [capture-screen/SKILL.md](./capture-screen/SKILL.md)。
+
+**要求**：macOS（Swift + AppleScript + `screencapture`）。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -1753,6 +1835,12 @@ claude plugin install financial-data-collector@daymade-skills
 
 ### 金融数据与投研
 使用 **financial-data-collector** 采集任意美股上市公司的结构化金融数据，将 JSON 输出接入 DCF 建模、可比公司分析或财报复盘工作流。
+
+### Excel 与财务模型自动化
+使用 **excel-automation** 创建格式化工作簿、解析复杂 `.xlsm` 模型，并自动化 Excel 窗口操作以提升分析效率。
+
+### macOS 视觉采集自动化
+使用 **capture-screen** 脚本化执行可重复窗口截图。可与 **excel-automation** 结合生成可直接用于汇报的表格可视化截图。
 
 ### 会议文档
 使用 **meeting-minutes-taker** 将原始会议转写稿转换为结构化、基于证据的会议纪要。与 **transcript-fixer** 结合使用可在生成纪要前清理 ASR 错误。特点是多轮生成配合 UNION 合并以避免内容丢失。
@@ -1851,6 +1939,8 @@ claude plugin install financial-data-collector@daymade-skills
 - **competitors-analysis**：参见 `competitors-analysis/SKILL.md` 了解证据驱动的分析工作流程和 `competitors-analysis/references/profile_template.md` 了解竞品档案模板
 - **windows-remote-desktop-connection-doctor**：参见 `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` 了解日志解析模式和 `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` 了解传输协议详情
 - **product-analysis**：参见 `product-analysis/SKILL.md` 了解工作流，参见 `product-analysis/references/synthesis_methodology.md` 了解跨代理加权与推荐逻辑
+- **excel-automation**：参见 `excel-automation/SKILL.md` 了解创建/解析/控制工作流，参见 `excel-automation/references/formatting-reference.md` 了解格式规范
+- **capture-screen**：参见 `capture-screen/SKILL.md` 了解基于 CGWindowID 的 macOS 截图流程
 
 ## 🛠️ 系统要求
 
@@ -1871,6 +1961,8 @@ claude plugin install financial-data-collector@daymade-skills
 - **Jina.ai API 密钥**（用于 twitter-reader）：https://jina.ai/ 提供免费套餐
 - **Codex CLI**（可选，用于 product-analysis 多模型并行模式）
 - **Mole**（可选，用于 macos-cleaner 可视化清理）：从 https://github.com/tw93/Mole 下载
+- **uv + openpyxl**（用于 excel-automation）：`uv run --with openpyxl ...`
+- **macOS**（用于 capture-screen 与 excel-automation 的 AppleScript 控制流程）
 
 ## ❓ 常见问题
 
