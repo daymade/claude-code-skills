@@ -12,6 +12,7 @@ Create professional PDF documents from markdown with proper Chinese font support
 Convert a single markdown file:
 
 ```bash
+cd ~/workspace/claude-code-skills/pdf-creator
 uv run --with weasyprint --with markdown scripts/md_to_pdf.py input.md output.pdf
 ```
 
@@ -21,14 +22,7 @@ Batch convert multiple files:
 uv run --with weasyprint --with markdown scripts/batch_convert.py *.md --output-dir ./pdfs
 ```
 
-## macOS Environment Setup
-
-If encountering library errors, set these environment variables first:
-
-```bash
-export DYLD_LIBRARY_PATH="/opt/homebrew/lib:$DYLD_LIBRARY_PATH"
-export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
-```
+macOS ARM (Homebrew) 的 `DYLD_LIBRARY_PATH` 会自动检测配置，无需手动设置。
 
 ## Font Configuration
 
