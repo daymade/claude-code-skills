@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-39-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.36.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-41-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.37.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 39 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 41 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -231,6 +231,12 @@ claude plugin install product-analysis@daymade-skills
 
 # Financial data collection for US equities
 claude plugin install financial-data-collector@daymade-skills
+
+# Excel automation for creation, parsing, and macOS control
+claude plugin install excel-automation@daymade-skills
+
+# Programmatic macOS screenshot capture workflows
+claude plugin install capture-screen@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -1631,7 +1637,7 @@ claude plugin install product-analysis@daymade-skills
 
 ### 39. **financial-data-collector** - Financial Data Collection for US Equities
 
-Collect real financial data for any US publicly traded company from free public sources (yfinance). Output structured JSON with market data, historical financials (income statement, cash flow, balance sheet), WACC inputs, and analyst estimates — ready for downstream DCF modeling, comps analysis, or earnings review.
+Collect real financial data for any US publicly traded company from free public sources (yfinance). Output structured JSON with market data, historical financials (income statement, cash flow, balance sheet), WACC inputs, and analyst estimates - ready for downstream DCF modeling, comps analysis, or earnings review.
 
 **When to use:**
 - Collecting structured financial data before building DCF or valuation models
@@ -1664,6 +1670,82 @@ claude plugin install financial-data-collector@daymade-skills
 📚 **Documentation**: See [financial-data-collector/SKILL.md](./financial-data-collector/SKILL.md), [output-schema.md](./financial-data-collector/references/output-schema.md), and [yfinance-pitfalls.md](./financial-data-collector/references/yfinance-pitfalls.md).
 
 **Requirements**: Python 3.11+, `yfinance`, `pandas` (auto-installed via uv inline dependencies).
+
+---
+
+### 40. **excel-automation** - Excel Creation, Parsing, and macOS Control
+
+Create professionally formatted Excel files, parse complex `.xlsm` models with stdlib XML/ZIP workflows, and control Microsoft Excel windows on macOS via AppleScript.
+
+**When to use:**
+- Building finance-ready spreadsheets with consistent formatting rules
+- Parsing complex bank/broker `.xlsm` files that fail in `openpyxl`
+- Extracting targeted sheet/cell data without loading huge workbooks
+- Automating Excel window operations (zoom, scroll, select) on macOS
+
+**Key features:**
+- Production template for formatted workbook generation via `openpyxl`
+- Complex workbook parser using `zipfile` + `xml.etree` (no heavy dependencies)
+- Corrupted `definedNames` repair workflow for problematic files
+- Verified AppleScript command patterns with timeout safeguards
+- Bundled formatting reference for colors, number formats, and table patterns
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install excel-automation@daymade-skills
+
+# Then ask Claude to automate Excel workflows
+"Create a formatted valuation template workbook"
+"Parse this .xlsm and extract the DCF sheet"
+"Generate an AppleScript sequence to zoom and scroll Excel before screenshot"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [excel-automation/SKILL.md](./excel-automation/SKILL.md) and [formatting-reference.md](./excel-automation/references/formatting-reference.md).
+
+**Requirements**: Python 3.8+, `uv`, `openpyxl` (auto via `uv run --with openpyxl`), macOS for AppleScript window control.
+
+---
+
+### 41. **capture-screen** - Programmatic macOS Screenshot Capture
+
+Capture application windows by CGWindowID with a reliable three-step workflow: discover window IDs via Swift, control app state via AppleScript, and capture outputs with `screencapture`.
+
+**When to use:**
+- Automating repeatable screenshot workflows for documentation
+- Capturing specific app windows instead of full-screen screenshots
+- Producing multi-shot sequences after scripted scroll/zoom changes
+- Building visual evidence capture pipelines on macOS
+
+**Key features:**
+- Bundled Swift script to resolve accurate window IDs (`CGWindowListCopyWindowInfo`)
+- Verified AppleScript patterns for app activation and window preparation
+- Window-scoped capture commands with silent mode, delays, and format control
+- Multi-shot workflow pattern for section-by-section capture
+- Clear anti-pattern notes for methods that fail on macOS
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install capture-screen@daymade-skills
+
+# Then ask Claude to capture windows programmatically
+"Find the Excel window ID and capture it silently"
+"Create a multi-shot capture workflow for this workbook"
+"Capture Chrome window sections with scripted scrolling"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [capture-screen/SKILL.md](./capture-screen/SKILL.md).
+
+**Requirements**: macOS (Swift + AppleScript + `screencapture`).
 
 ---
 
@@ -1711,6 +1793,12 @@ Use **transcript-fixer** to correct speech-to-text errors in meeting notes, lect
 
 ### For Financial Data & Investment Research
 Use **financial-data-collector** to pull structured financial data for any US public company, then feed the JSON output into DCF modeling, comps analysis, or earnings review workflows.
+
+### For Excel & Financial Modeling Automation
+Use **excel-automation** to create formatted workbooks, parse complex `.xlsm` models, and automate Excel window controls for repetitive analyst workflows.
+
+### For Visual Capture Automation on macOS
+Use **capture-screen** to script repeatable app-window screenshots. Combine with **excel-automation** to generate report-ready workbook visuals.
 
 ### For Meeting Documentation
 Use **meeting-minutes-taker** to transform raw meeting transcripts into structured, evidence-based minutes. Combine with **transcript-fixer** to clean up ASR errors before generating minutes. Features multi-pass generation with UNION merge to avoid content loss.
@@ -1809,6 +1897,8 @@ Each skill includes:
 - **competitors-analysis**: See `competitors-analysis/SKILL.md` for evidence-based analysis workflow and `competitors-analysis/references/profile_template.md` for competitor profile template
 - **windows-remote-desktop-connection-doctor**: See `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` for log parsing patterns and `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` for transport protocol details
 - **product-analysis**: See `product-analysis/SKILL.md` for workflow and `product-analysis/references/synthesis_methodology.md` for cross-agent weighting and recommendation logic
+- **excel-automation**: See `excel-automation/SKILL.md` for create/parse/control workflows and `excel-automation/references/formatting-reference.md` for formatting standards
+- **capture-screen**: See `capture-screen/SKILL.md` for CGWindowID-based screenshot workflows on macOS
 
 ## 🛠️ Requirements
 
@@ -1832,6 +1922,8 @@ Each skill includes:
 - **Promptfoo** (for promptfoo-evaluation): `npx promptfoo@latest`
 - **macOS + Xcode, XcodeGen** (for iOS-APP-developer)
 - **Codex CLI** (optional, for product-analysis multi-model mode)
+- **uv + openpyxl** (for excel-automation): `uv run --with openpyxl ...`
+- **macOS** (for capture-screen and excel-automation AppleScript control workflows)
 
 ## ❓ FAQ
 

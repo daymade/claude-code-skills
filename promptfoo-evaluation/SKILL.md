@@ -440,7 +440,7 @@ tiaogaoren/
 └── results/
 ```
 
-**See:** `/Users/tiansheng/Workspace/prompts/tiaogaoren/` for full implementation.
+**See:** `./tiaogaoren/` (example project root) for full implementation.
 
 ## Resources
 

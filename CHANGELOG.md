@@ -10,6 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.37.0] - 2026-03-02
+
+### Added
+- **New Skill**: excel-automation - Create formatted Excel files, parse complex xlsm models, and control Excel on macOS
+  - Bundled scripts for workbook generation and complex XML/ZIP parsing
+  - Bundled reference: formatting-reference.md for styles, number formats, and layout patterns
+  - AppleScript control patterns with timeout-safe execution guidance
+- **New Skill**: capture-screen - Programmatic macOS screenshot capture workflows
+  - Bundled Swift script for CGWindowID discovery
+  - AppleScript + screencapture multi-shot workflow patterns
+  - Clear anti-pattern guidance for unreliable window ID methods
+- Added missing `promptfoo-evaluation/scripts/metrics.py` referenced by skill examples
+
+### Changed
+- Updated marketplace skills/plugins count from 39 to 41
+- Updated marketplace version from 1.36.0 to 1.37.0
+- Bumped `promptfoo-evaluation` plugin version from 1.0.0 to 1.1.0 (skill content update + missing script fix)
+- Updated README.md and README.zh-CN.md badges, installation commands, skill listings, use cases, quick links, and requirements
+- Updated CLAUDE.md counts, version reference, and Available Skills list (added #40 and #41)
+
 ## [1.36.0] - 2026-03-02
 
 ### Added
