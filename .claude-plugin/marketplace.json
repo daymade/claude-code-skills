@@ -875,6 +875,27 @@
       "skills": [
         "./financial-data-collector"
       ]
+    },
+    {
+      "name": "playwright-skill",
+      "description": "Production-tested Playwright patterns for E2E, API, component, visual, accessibility, and security testing. Covers locators, fixtures, POM, network mocking, auth flows, debugging, CI/CD, framework recipes, and migration guides from Cypress/Selenium. Use when writing or improving Playwright tests, setting up CI/CD for Playwright, or migrating from Cypress/Selenium",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "playwright",
+        "testing",
+        "e2e",
+        "automation",
+        "ci-cd",
+        "page-object-model",
+        "migration",
+        "accessibility"
+      ],
+      "skills": [
+        "./playwright-skill"
+      ]
     }
   ]
 }
