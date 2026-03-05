@@ -7,6 +7,11 @@ description: Strategic guide for becoming an effective GitHub contributor. Cover
 
 Strategic guide for becoming an effective GitHub contributor and building your open-source reputation.
 
+## Prerequisites
+
+- Install GitHub CLI and verify availability: `gh --version`
+- Authenticate before running commands: `gh auth status || gh auth login`
+
 ## The Strategy
 
 **Core insight**: Many open-source projects have room for improvement. By contributing high-quality PRs, you:
@@ -102,7 +107,7 @@ Opportunity signals:
 
 ```bash
 # GitHub search for good first issues
-gh search issues "good first issue" --language=python --sort=created
+gh search issues "good first issue" --language=python --sort=created --state=open
 
 # Search by topic
 gh search repos "topic:cli" --sort=stars --limit=20
@@ -129,15 +134,23 @@ Pre-PR Checklist:
 **Title**: Clear, conventional format
 
 ```
-feat: Add support for YAML config files
-fix: Resolve race condition in connection pool
-docs: Update installation instructions for Windows
-refactor: Extract validation logic into separate module
+feat(config): add support for YAML config files
+fix(pool): resolve race condition in connection pool
+docs(readme): update installation instructions for Windows
+refactor(validation): extract validation logic into separate module
 ```
+
+**Evidence loop**: Prove the change with a reproducible fail -> fix -> pass loop.
+
+- Reproduce the failure with one command.
+- Apply the fix.
+- Rerun the exact same command and capture the passing output.
+- Compare baseline vs fixed vs reference behavior.
+- Redact local paths, secrets, tokens, and internal hostnames before posting logs or screenshots.
 
 **Description**: Structured and thorough
 
-```markdown
+````markdown
 ## Summary
 [What this PR does in 1-2 sentences]
 
@@ -148,12 +161,48 @@ refactor: Extract validation logic into separate module
 - [Change 1]
 - [Change 2]
 
+## Evidence Loop
+Command:
+```bash
+# Baseline (before fix)
+[command]
+
+# Fixed (after fix, same command)
+[command]
+```
+
+Raw output:
+```text
+[paste baseline output]
+```
+
+```text
+[paste fixed output]
+```
+
+## Comparison
+| Case | Command / Scenario | Result | Evidence |
+|------|--------------------|--------|----------|
+| Baseline | `[same command]` | Fail | [raw output block] |
+| Fixed | `[same command]` | Pass | [raw output block] |
+| Reference | [spec, issue, or main branch behavior] | Expected | [link or note] |
+
+## Sources/Attribution
+- [Issue, docs, or code references]
+
+## Risks
+- [Potential downside and impact]
+
+## Rollback Plan
+- Revert commit(s): [hash]
+- Restore previous behavior with: [command]
+
 ## Testing
 [How you tested this]
 
 ## Screenshots (if UI)
 [Before/After images]
-```
+````
 
 ### After Submitting
 
@@ -217,6 +266,9 @@ Contribution Workflow:
 - [ ] Comment on issue to claim
 - [ ] Fork and set up locally
 - [ ] Make focused changes
+- [ ] Run evidence loop (reproduce fail -> apply fix -> rerun same command pass)
+- [ ] Add baseline vs fixed vs reference comparison
+- [ ] Redact paths/secrets/internal hosts in logs and screenshots
 - [ ] Test thoroughly
 - [ ] Write clear PR description
 - [ ] Respond to review feedback
@@ -232,13 +284,13 @@ Contribution Workflow:
 gh repo fork owner/repo --clone
 
 # Create PR
-gh pr create --title "feat: ..." --body "..."
+gh pr create --title "feat(scope): ..." --body "..."
 
 # Check PR status
 gh pr status
 
 # View project issues
-gh issue list --repo owner/repo --label "good first issue"
+gh issue list --repo owner/repo --label "good first issue" --state=open
 ```
 
 ### Commit Message Format
