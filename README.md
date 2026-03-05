@@ -1749,6 +1749,14 @@ claude plugin install capture-screen@daymade-skills
 
 ---
 
+### Community Skills
+
+| Name | Description | Link |
+|------|-------------|------|
+| **product-manager-skills** | Senior PM agent with 6 knowledge domains, 12 templates, 30+ frameworks — discovery, strategy, delivery, SaaS metrics, PM career coaching (IC to CPO), AI product craft. Install via `clawhub install product-manager-skills` | [Source](https://github.com/Digidai/product-manager-skills) |
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
