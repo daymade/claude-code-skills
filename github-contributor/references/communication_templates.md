@@ -82,7 +82,7 @@ After:
 
 ### Feature Addition
 
-```markdown
+````markdown
 ## Summary
 
 Implements #[issue number]
@@ -112,7 +112,7 @@ result = new_feature(...)
 ## Migration Guide (if breaking)
 
 [Instructions for users to migrate]
-```
+````
 
 ### Documentation Update
 
@@ -132,6 +132,92 @@ Improves documentation for [area].
 
 [Screenshot or link to rendered docs]
 ```
+
+### Required PR Addendum
+
+Use this block in every PR description.
+
+````markdown
+## Evidence Loop
+
+Command:
+```bash
+# Baseline (before fix)
+[command]
+
+# Fixed (after fix, same command)
+[command]
+```
+
+Raw output:
+```text
+[baseline output]
+```
+
+```text
+[fixed output]
+```
+
+## Comparison (Baseline vs Fixed vs Reference)
+
+| Case | Command / Scenario | Result | Evidence |
+|------|--------------------|--------|----------|
+| Baseline | `[same command]` | Fail | [raw output block] |
+| Fixed | `[same command]` | Pass | [raw output block] |
+| Reference | [spec, issue, or main behavior] | Expected | [link or note] |
+
+## Sources/Attribution
+
+- [Issue, docs, benchmark source, or code reference]
+
+## Risks
+
+- [Risk and impact]
+
+## Rollback Plan
+
+- Revert commit(s): [hash]
+- Restore previous behavior with: [command]
+````
+
+## Reproducible PR Comment
+
+Use this template when maintainers ask for proof or rerun details.
+
+````markdown
+Validated with the same command before and after the fix.
+
+### Command
+```bash
+[command]
+```
+
+### Environment
+- OS: [name/version]
+- Runtime: [language/runtime + version]
+- Commit: [sha]
+- Runner: [local shell or CI job URL]
+
+### Baseline Output (before fix)
+```text
+[raw output]
+```
+
+### Fixed Output (after fix, same command)
+```text
+[raw output]
+```
+
+### Reference Output / Expected Behavior
+```text
+[spec output or expected result]
+```
+
+### Redaction Check
+- [x] Removed local absolute paths (for example, `/Users/...`)
+- [x] Removed tokens/secrets
+- [x] Removed internal URLs/hostnames
+````
 
 ## Responding to Reviews
 

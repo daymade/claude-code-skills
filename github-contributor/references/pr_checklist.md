@@ -44,6 +44,20 @@ refactor/extract-validation-logic
 - [ ] No unnecessary changes (whitespace, imports)
 - [ ] Comments explain "why", not "what"
 
+### Evidence Loop
+
+- [ ] Reproduce the failure with one command and capture baseline output
+- [ ] Apply the fix
+- [ ] Rerun the exact same command and capture passing output
+- [ ] Add baseline vs fixed vs reference comparison
+
+### Redaction Gate
+
+- [ ] Remove local absolute paths (for example, `/Users/...`) from logs and screenshots
+- [ ] Remove secrets/tokens/API keys from logs and screenshots
+- [ ] Remove internal URLs/hostnames from logs and screenshots
+- [ ] Recheck every pasted block before submitting
+
 ### Documentation
 
 - [ ] README updated (if applicable)
@@ -59,6 +73,9 @@ refactor/extract-validation-logic
 - [ ] Testing approach
 - [ ] Screenshots (for UI changes)
 - [ ] Related issues linked
+- [ ] Sources/Attribution section added
+- [ ] Risks section added
+- [ ] Rollback Plan section added
 
 ## PR Title Format
 
@@ -76,7 +93,7 @@ chore(deps): update lodash to 4.17.21
 
 ## PR Description Template
 
-```markdown
+````markdown
 ## Summary
 
 Brief description of what this PR does.
@@ -92,6 +109,47 @@ Closes #123
 - Change 1
 - Change 2
 - Change 3
+
+## Evidence Loop
+
+Command:
+```bash
+# Baseline (before fix)
+[command]
+
+# Fixed (after fix, same command)
+[command]
+```
+
+Raw output:
+```text
+[baseline output]
+```
+
+```text
+[fixed output]
+```
+
+## Comparison (Baseline vs Fixed vs Reference)
+
+| Case | Command / Scenario | Result | Evidence |
+|------|--------------------|--------|----------|
+| Baseline | `[same command]` | Fail | [raw output block] |
+| Fixed | `[same command]` | Pass | [raw output block] |
+| Reference | [spec, issue, or main behavior] | Expected | [link or note] |
+
+## Sources/Attribution
+
+- [Issue, docs, benchmark source, or code reference]
+
+## Risks
+
+- [Risk and impact]
+
+## Rollback Plan
+
+- Revert commit(s): [hash]
+- Restore previous behavior with: [command]
 
 ## Testing
 
@@ -112,6 +170,16 @@ How did you test this change?
 - [ ] Tests pass
 - [ ] Documentation updated
 - [ ] Code follows project style
+````
+
+## Comparison Table Template
+
+```markdown
+| Case | Command / Scenario | Result | Evidence |
+|------|--------------------|--------|----------|
+| Baseline | `[same command]` | Fail | [raw output block] |
+| Fixed | `[same command]` | Pass | [raw output block] |
+| Reference | [spec, issue, or main behavior] | Expected | [link or note] |
 ```
 
 ## After Submitting
