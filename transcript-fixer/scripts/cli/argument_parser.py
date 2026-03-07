@@ -62,8 +62,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--domain", "-d",
-        default="general",
-        help="Correction domain"
+        default=None,
+        help="Correction domain (default: all domains)"
     )
 
     # Learning commands

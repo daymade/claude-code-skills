@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.38.0] - 2026-03-07
+
+### Added
+- **New Skill**: continue-claude-work v1.1.0 - Recover local `.claude` session context and continue interrupted work without `claude --resume`
+  - Bundled Python script (`extract_resume_context.py`) for one-call context extraction
+  - Compact-boundary-aware extraction using `isCompactSummary` flag (highest-signal context from session compaction summaries)
+  - Subagent workflow recovery — parses `subagents/` directory to report completed vs interrupted agents with last outputs
+  - Session end reason detection — classifies clean exit, interrupted (ctrl-c), error cascade, or abandoned
+  - Size-adaptive reading strategy based on file size and compaction count
+  - Noise filtering — skips progress/queue-operation/api_error (37-53% of session lines)
+  - Self-session exclusion, stale index fallback, ghost session warnings
+  - MEMORY.md and session-memory integration, git workspace state fusion
+
+### Changed
+- **skill-creator** v1.4.1 → v1.5.0: SKILL.md rewrite, added eval benchmarking system (run_eval, run_loop, aggregate_benchmark), agents (analyzer, comparator, grader), eval-viewer, and improve_description script
+- **transcript-fixer** v1.1.0 → v1.2.0: `--domain` defaults to all domains, added `get_domain_stats()`, cross-domain listing, and zero-match hints
+- **tunnel-doctor** v1.3.0 → v1.4.0: Added Step 2C-1 for local vanity domain proxy interception, bundled `quick_diagnose.py` automated diagnostic script
+- **pdf-creator** v1.0.0 → v1.1.0: Replaced Python `markdown` library with pandoc for MD→HTML conversion, removed `_ensure_list_spacing` workaround
+- **github-contributor** v1.0.2 → v1.0.3: Fixed gh CLI field name (`stargazersCount` → `stargazerCount`), added Prerequisites section
+- Updated marketplace skills/plugins count from 41 to 42
+- Updated marketplace version from 1.37.0 to 1.38.0
+- Updated README.md and README.zh-CN.md badges, installation commands, skill listings, use cases, quick links, and requirements
+- Updated CLAUDE.md counts, version reference, and Available Skills list (added #42)
+
 ## [1.37.0] - 2026-03-02
 
 ### Added

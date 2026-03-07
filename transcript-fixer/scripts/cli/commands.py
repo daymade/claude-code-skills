@@ -58,11 +58,22 @@ def cmd_list_corrections(args: argparse.Namespace) -> None:
     service = _get_service()
     corrections = service.get_corrections(args.domain)
 
-    print(f"\n📋 Corrections (domain: {args.domain})")
+    if args.domain:
+        header = f"domain: {args.domain}, {len(corrections)} total"
+    else:
+        header = f"all domains, {len(corrections)} total"
+
+    print(f"\n📋 Corrections ({header})")
     print("=" * 60)
-    for wrong, correct in sorted(corrections.items()):
-        print(f"  '{wrong}' → '{correct}'")
-    print(f"\nTotal: {len(corrections)} corrections\n")
+
+    if args.domain:
+        for wrong, correct in sorted(corrections.items()):
+            print(f"  '{wrong}' → '{correct}'")
+    else:
+        all_corrections = service.repository.get_all_corrections(active_only=True)
+        for c in all_corrections:
+            print(f"  [{c.domain}]  '{c.from_text}' → '{c.to_text}'")
+    print()
 
 
 def cmd_run_correction(args: argparse.Namespace) -> None:
@@ -83,12 +94,23 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
     # Load corrections and rules
     corrections = service.get_corrections(args.domain)
     context_rules = service.load_context_rules()
+    domain_stats = service.get_domain_stats()
 
     # Read input file
     print(f"📖 Reading: {input_path.name}")
     with open(input_path, 'r', encoding='utf-8') as f:
         original_text = f.read()
-    print(f"   File size: {len(original_text):,} characters\n")
+    print(f"   File size: {len(original_text):,} characters")
+
+    # Show domain loading info
+    if args.domain:
+        print(f"📚 Loaded {len(corrections)} corrections (domain: {args.domain})")
+    elif domain_stats:
+        parts = ", ".join(f"{d}: {n}" for d, n in sorted(domain_stats.items()))
+        print(f"📚 Loaded {len(corrections)} corrections ({parts})")
+    else:
+        print(f"📚 No corrections in database")
+    print()
 
     # Stage 1: Dictionary corrections
     stage1_changes = []
@@ -109,7 +131,17 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
         stage1_file = output_dir / f"{input_path.stem}_stage1.md"
         with open(stage1_file, 'w', encoding='utf-8') as f:
             f.write(stage1_text)
-        print(f"💾 Saved: {stage1_file.name}\n")
+        print(f"💾 Saved: {stage1_file.name}")
+
+        # Hint when 0 corrections and other domains have rules
+        if summary['total_changes'] == 0 and args.domain and domain_stats:
+            other = {d: n for d, n in domain_stats.items() if d != args.domain}
+            if other:
+                parts = ", ".join(f"{d} ({n})" for d, n in sorted(other.items()))
+                total = sum(other.values())
+                print(f"hint: no rules in domain '{args.domain}'. Available: {parts}")
+                print(f"hint: run without --domain to use all {total} rules")
+        print()
 
     # Stage 2: AI corrections
     stage2_changes = []

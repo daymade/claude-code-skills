@@ -2,17 +2,24 @@
 
 How to evaluate open-source projects before contributing.
 
+## Prerequisites
+
+- Install GitHub CLI and verify availability: `gh --version`
+- Authenticate before running commands: `gh auth status || gh auth login`
+
 ## Quick Health Check
 
 ```bash
 # Check recent activity
-gh repo view owner/repo --json updatedAt,stargazersCount,openIssues
+gh repo view owner/repo \
+  --json updatedAt,stargazerCount,issues \
+  --jq '{updatedAt, stargazers: .stargazerCount, openIssues: .issues.totalCount}'
 
 # Check PR response time
 gh pr list --repo owner/repo --state merged --limit 10
 
 # Check issue activity
-gh issue list --repo owner/repo --limit 20
+gh issue list --repo owner/repo --state=open --limit 20
 ```
 
 ## Evaluation Criteria
@@ -131,7 +138,7 @@ gh search repos "topic:cli" --sort=stars
 gh search repos "language:python" --sort=stars
 
 # Find with good first issues
-gh search issues "good first issue" --language=rust
+gh search issues "good first issue" --language=rust --state=open
 ```
 
 ### By Need
