@@ -1,0 +1,220 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        {% if LANGUAGE == "python" %}
+        python-version: [3.11, 3.12]
+        {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+        node-version: [18, 20]
+        {% elif LANGUAGE == "go" %}
+        go-version: [1.21, 1.22]
+        {% elif LANGUAGE == "rust" %}
+        rust-version: [stable, nightly]
+        {% endif %}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    {% if LANGUAGE == "python" %}
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov coverage bandit flake8
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Lint with flake8
+      run: |
+        flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 src/ --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+
+    - name: Security check with bandit
+      run: |
+        bandit -r src/ -f json -o security-report.json || true
+        bandit -r src/ -f txt -o security-report.txt || true
+
+    - name: Run unit tests
+      run: |
+        if [ -d "src/tests/unit" ]; then
+          pytest src/tests/unit/ -v --cov=src --cov-report=xml --cov-report=html
+        else
+          echo "No unit tests found"
+        fi
+
+    - name: Run integration tests
+      run: |
+        if [ -d "src/tests/integration" ]; then
+          pytest src/tests/integration/ -v
+        else
+          echo "No integration tests found"
+        fi
+
+    - name: Run performance tests
+      run: |
+        if [ -d "src/tests/performance" ]; then
+          pytest src/tests/performance/ -v
+        else
+          echo "No performance tests found"
+        fi
+    {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+    - name: Set up Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm install --save-dev jest eslint
+
+    - name: Lint with ESLint
+      run: |
+        eslint src/ --format json --output eslint-report.json || true
+        eslint src/ --format stylish || true
+
+    - name: Run unit tests
+      run: |
+        if [ -d "src/tests/unit" ]; then
+          npm test -- src/tests/unit/ --coverage --coverageReporters=json --coverageReporters=html
+        else
+          echo "No unit tests found"
+        fi
+
+    - name: Run integration tests
+      run: |
+        if [ -d "src/tests/integration" ]; then
+          npm test -- src/tests/integration/
+        else
+          echo "No integration tests found"
+        fi
+    {% elif LANGUAGE == "go" %}
+    - name: Set up Go ${{ matrix.go-version }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Install dependencies
+      run: |
+        go mod download
+        go install golang.org/x/lint/golint@latest
+
+    - name: Lint with golint
+      run: |
+        golint ./...
+
+    - name: Run tests
+      run: |
+        go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+    - name: Generate coverage report
+      run: |
+        go tool cover -html=coverage.out -o coverage.html
+    {% elif LANGUAGE == "rust" %}
+    - name: Set up Rust ${{ matrix.rust-version }}
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust-version }}
+        override: true
+
+    - name: Install dependencies
+      run: |
+        cargo install cargo-tarpaulin
+
+    - name: Run tests
+      run: |
+        cargo test --verbose
+
+    - name: Generate coverage
+      run: |
+        cargo tarpaulin --out Xml --out Html
+    {% endif %}
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Archive coverage reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report-${{ matrix.{% if LANGUAGE == "python" %}python-version{% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}node-version{% elif LANGUAGE == "go" %}go-version{% elif LANGUAGE == "rust" %}rust-version{% endif %} }}
+        path: |
+          htmlcov/
+          coverage/
+          coverage.html
+
+    - name: Archive security reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-report-${{ matrix.{% if LANGUAGE == "python" %}python-version{% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}node-version{% elif LANGUAGE == "go" %}go-version{% elif LANGUAGE == "rust" %}rust-version{% endif %} }}
+        path: |
+          security-report.json
+          security-report.txt
+
+    - name: Check test coverage threshold
+      run: |
+        {% if LANGUAGE == "python" %}
+        if [ -f coverage.xml ]; then
+          coverage=$(coverage report | grep TOTAL | awk '{print $4}' | sed 's/%//')
+          echo "Coverage: $coverage%"
+          if (( $(echo "$coverage < {{COVERAGE_THRESHOLD}}" | bc -l) )); then
+            echo "Coverage $coverage% is below {{COVERAGE_THRESHOLD}}% threshold"
+            exit 1
+          fi
+        fi
+        {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+        if [ -f coverage/coverage-final.json ]; then
+          coverage=$(node -e "console.log(require('./coverage/coverage-final.json').total.lines.pct)")
+          echo "Coverage: $coverage%"
+          if (( $(echo "$coverage < {{COVERAGE_THRESHOLD}}" | bc -l) )); then
+            echo "Coverage $coverage% is below {{COVERAGE_THRESHOLD}}% threshold"
+            exit 1
+          fi
+        fi
+        {% endif %}
+
+  test-summary:
+    needs: test
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+
+    - name: Generate test summary
+      run: |
+        echo "# Test Results Summary" > test-summary.md
+        echo "" >> test-summary.md
+        echo "**Date:** $(date)" >> test-summary.md
+        **Versions:** {% if LANGUAGE == "python" %}Python 3.11, 3.12{% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}Node.js 18, 20{% elif LANGUAGE == "go" %}Go 1.21, 1.22{% elif LANGUAGE == "rust" %}Rust stable, nightly{% endif %} >> test-summary.md
+        echo "" >> test-summary.md
+        echo "## Coverage Reports" >> test-summary.md
+        ls -la coverage-report-*/ >> test-summary.md 2>/dev/null || echo "No coverage reports found"
+        echo "" >> test-summary.md
+        echo "## Security Reports" >> test-summary.md
+        ls -la security-report-*/ >> test-summary.md 2>/dev/null || echo "No security reports found"
+
+    - name: Upload test summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-summary
+        path: test-summary.md
