@@ -382,6 +382,14 @@ class CorrectionService:
 
     # ==================== Statistics and Reporting ====================
 
+    def get_domain_stats(self) -> Dict[str, int]:
+        """Get count of active corrections per domain."""
+        all_corrections = self.repository.get_all_corrections(active_only=True)
+        stats: Dict[str, int] = {}
+        for c in all_corrections:
+            stats[c.domain] = stats.get(c.domain, 0) + 1
+        return stats
+
     def get_statistics(self, domain: Optional[str] = None) -> Dict[str, any]:
         """
         Get correction statistics.

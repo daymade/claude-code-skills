@@ -6,6 +6,7 @@ Quick validation script for skills - minimal version
 import sys
 import os
 import re
+import yaml
 from pathlib import Path
 
 
@@ -57,7 +58,7 @@ def find_path_references(content: str) -> list[str]:
         if any(x in line_lower for x in [
             'example:', 'examples:', 'e.g.', 'for example',
             '- **example', '- example:', 'such as',
-            'pattern:', 'usage:', '❌', '✅',
+            'pattern:', 'usage:', '\u274c', '\u2705',
             '- **allowed', '- **best practice', 'would be helpful',
             'like `scripts/', 'like `references/', 'like `assets/',
         ]):
@@ -92,6 +93,14 @@ def validate_path_references(skill_path: Path, content: str) -> tuple[bool, list
     return len(missing) == 0, missing
 
 
+# Define allowed properties (union of official and our extensions)
+ALLOWED_PROPERTIES = {
+    'name', 'description', 'license', 'allowed-tools', 'metadata',
+    'compatibility', 'context', 'agent', 'disable-model-invocation',
+    'user-invocable', 'model', 'argument-hint', 'hooks',
+}
+
+
 def validate_skill(skill_path):
     """Basic validation of a skill"""
     skill_path = Path(skill_path)
@@ -111,10 +120,10 @@ def validate_skill(skill_path):
     if not match:
         return False, "Invalid frontmatter format"
 
-    frontmatter = match.group(1)
+    frontmatter_text = match.group(1)
 
     # Check for invalid indentation characters in frontmatter
-    invalid_indent = find_invalid_frontmatter_indentation(frontmatter)
+    invalid_indent = find_invalid_frontmatter_indentation(frontmatter_text)
     if invalid_indent:
         samples = ", ".join(
             f"line {line_no} ({describe_whitespace(ch)})"
@@ -126,29 +135,62 @@ def validate_skill(skill_path):
             f"Found: {samples}{more}"
         )
 
+    # Parse YAML frontmatter
+    try:
+        frontmatter = yaml.safe_load(frontmatter_text)
+        if not isinstance(frontmatter, dict):
+            return False, "Frontmatter must be a YAML dictionary"
+    except yaml.YAMLError as e:
+        return False, f"Invalid YAML in frontmatter: {e}"
+
+    # Check for unexpected properties
+    unexpected_keys = set(frontmatter.keys()) - ALLOWED_PROPERTIES
+    if unexpected_keys:
+        return False, (
+            f"Unexpected key(s) in SKILL.md frontmatter: {', '.join(sorted(unexpected_keys))}. "
+            f"Allowed properties are: {', '.join(sorted(ALLOWED_PROPERTIES))}"
+        )
+
     # Check required fields
-    if 'name:' not in frontmatter:
-        return False, "Missing 'name' in frontmatter"
-    if 'description:' not in frontmatter:
+    if 'description' not in frontmatter:
         return False, "Missing 'description' in frontmatter"
 
-    # Extract name for validation
-    name_match = re.search(r'name:\s*(.+)', frontmatter)
-    if name_match:
-        name = name_match.group(1).strip()
-        # Check naming convention (hyphen-case: lowercase with hyphens)
-        if not re.match(r'^[a-z0-9-]+$', name):
-            return False, f"Name '{name}' should be hyphen-case (lowercase letters, digits, and hyphens only)"
-        if name.startswith('-') or name.endswith('-') or '--' in name:
-            return False, f"Name '{name}' cannot start/end with hyphen or contain consecutive hyphens"
+    # Extract name for validation (optional per official spec, but validate if present)
+    name = frontmatter.get('name', '')
+    if isinstance(name, str):
+        name = name.strip()
+        if name:
+            # Check naming convention (kebab-case: lowercase with hyphens)
+            if not re.match(r'^[a-z0-9-]+$', name):
+                return False, f"Name '{name}' should be kebab-case (lowercase letters, digits, and hyphens only)"
+            if name.startswith('-') or name.endswith('-') or '--' in name:
+                return False, f"Name '{name}' cannot start/end with hyphen or contain consecutive hyphens"
+            # Check name length (max 64 characters per spec)
+            if len(name) > 64:
+                return False, f"Name is too long ({len(name)} characters). Maximum is 64 characters."
+    elif name is not None:
+        return False, f"Name must be a string, got {type(name).__name__}"
 
     # Extract and validate description
-    desc_match = re.search(r'description:\s*(.+)', frontmatter)
-    if desc_match:
-        description = desc_match.group(1).strip()
+    description = frontmatter.get('description', '')
+    if not isinstance(description, str):
+        return False, f"Description must be a string, got {type(description).__name__}"
+    description = description.strip()
+    if description:
         # Check for angle brackets
         if '<' in description or '>' in description:
             return False, "Description cannot contain angle brackets (< or >)"
+        # Check description length (max 1024 characters per spec)
+        if len(description) > 1024:
+            return False, f"Description is too long ({len(description)} characters). Maximum is 1024 characters."
+
+    # Validate compatibility field if present (optional)
+    compatibility = frontmatter.get('compatibility', '')
+    if compatibility:
+        if not isinstance(compatibility, str):
+            return False, f"Compatibility must be a string, got {type(compatibility).__name__}"
+        if len(compatibility) > 500:
+            return False, f"Compatibility is too long ({len(compatibility)} characters). Maximum is 500 characters."
 
     # Validate path references exist
     paths_valid, missing_paths = validate_path_references(skill_path, content)
@@ -161,7 +203,7 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python quick_validate.py <skill_directory>")
         sys.exit(1)
-    
+
     valid, message = validate_skill(sys.argv[1])
     print(message)
     sys.exit(0 if valid else 1)

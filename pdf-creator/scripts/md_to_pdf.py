@@ -2,7 +2,7 @@
 """
 Markdown to PDF converter with Chinese font support.
 
-Converts markdown files to PDF using weasyprint, with proper Chinese typography.
+Converts markdown files to PDF using pandoc (markdown→HTML) + weasyprint (HTML→PDF).
 Designed for formal documents (trademark filings, legal documents, reports).
 
 Usage:
@@ -10,7 +10,8 @@ Usage:
     python md_to_pdf.py input.md  # outputs input.pdf
 
 Requirements:
-    pip install weasyprint markdown
+    pip install weasyprint
+    pandoc (system install, e.g. brew install pandoc)
 
     macOS environment setup (if needed):
     export DYLD_LIBRARY_PATH="/opt/homebrew/lib:$DYLD_LIBRARY_PATH"
@@ -18,7 +19,8 @@ Requirements:
 
 import os
 import platform
-import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -30,7 +32,6 @@ if platform.system() == 'Darwin':
         if _homebrew_lib not in _cur:
             os.environ['DYLD_LIBRARY_PATH'] = f"{_homebrew_lib}:{_cur}" if _cur else _homebrew_lib
 
-import markdown
 from weasyprint import CSS, HTML
 
 
@@ -145,22 +146,21 @@ blockquote {
 """
 
 
-def _ensure_list_spacing(text: str) -> str:
-    """Ensure blank lines before list items for proper markdown parsing.
+def _md_to_html(md_file: str) -> str:
+    """Convert markdown to HTML using pandoc."""
+    if not shutil.which('pandoc'):
+        print("Error: pandoc not found. Install with: brew install pandoc", file=sys.stderr)
+        sys.exit(1)
 
-    The Python markdown library requires a blank line before a list when it
-    follows a paragraph. Without it, list items render as plain text.
-    """
-    lines = text.split('\n')
-    result = []
-    list_re = re.compile(r'^(\s*)([-*+]|\d+\.)\s')
-    for i, line in enumerate(lines):
-        if i > 0 and list_re.match(line):
-            prev = lines[i - 1]
-            if prev.strip() and not list_re.match(prev):
-                result.append('')
-        result.append(line)
-    return '\n'.join(result)
+    result = subprocess.run(
+        ['pandoc', md_file, '-f', 'markdown', '-t', 'html'],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"Error: pandoc failed: {result.stderr}", file=sys.stderr)
+        sys.exit(1)
+
+    return result.stdout
 
 
 def markdown_to_pdf(md_file: str, pdf_file: str | None = None) -> str:
@@ -179,14 +179,8 @@ def markdown_to_pdf(md_file: str, pdf_file: str | None = None) -> str:
     if pdf_file is None:
         pdf_file = str(md_path.with_suffix('.pdf'))
 
-    # Read and preprocess markdown content
-    md_content = _ensure_list_spacing(md_path.read_text(encoding='utf-8'))
-
-    # Convert to HTML
-    html_content = markdown.markdown(
-        md_content,
-        extensions=['tables', 'fenced_code', 'codehilite', 'toc']
-    )
+    # Convert to HTML via pandoc
+    html_content = _md_to_html(md_file)
 
     # Create full HTML document
     full_html = f"""<!DOCTYPE html>
