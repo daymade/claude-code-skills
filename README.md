@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-41-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.37.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-42-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.38.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 41 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 42 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -237,6 +237,9 @@ claude plugin install excel-automation@daymade-skills
 
 # Programmatic macOS screenshot capture workflows
 claude plugin install capture-screen@daymade-skills
+
+# Resume interrupted Claude work from local session artifacts
+claude plugin install continue-claude-work@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -1749,6 +1752,41 @@ claude plugin install capture-screen@daymade-skills
 
 ---
 
+### 42. **continue-claude-work** - Resume Interrupted Claude Work
+
+Recover actionable context from local `~/.claude` session artifacts and continue implementation without reopening the old interactive session. Uses a bundled Python script for intelligent context extraction.
+
+**When to use:**
+- A user provides a Claude session ID and wants the task continued
+- You need to inspect local `.claude` JSONL files instead of running `claude --resume`
+- A previous session was interrupted and the next concrete step must be reconstructed
+- A multi-agent workflow was interrupted and you need to know which subagents completed
+
+**Key features:**
+- Compact-boundary-aware extraction — reads Claude's own session compaction summaries as highest-signal context
+- Subagent workflow recovery — reports completed vs. interrupted subagents with last outputs
+- Session end reason detection — classifies clean exit, interrupted (ctrl-c), error cascade, or abandoned
+- Size-adaptive strategy — different reading approaches for small (<500KB) vs. large (>5MB) sessions
+- Noise filtering — skips progress/queue-operation/api_error messages (37-53% of session lines)
+- Self-session exclusion, stale index fallback, MEMORY.md integration, git workspace state
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install continue-claude-work@daymade-skills
+
+# Then ask Claude to resume from local artifacts
+"continue work from session 123e4567-e89b-12d3-a456-426614174000"
+"don't resume, just read the .claude files and continue"
+"check what I was working on in the last session and keep going"
+```
+
+📚 **Documentation**: See [continue-claude-work/SKILL.md](./continue-claude-work/SKILL.md).
+
+**Requirements**: Python 3.8+, `git` for workspace reconciliation.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1811,6 +1849,9 @@ Use **prompt-optimizer** to transform vague feature requests into precise EARS s
 
 ### For Session History & File Recovery
 Use **claude-code-history-files-finder** to recover deleted files from previous Claude Code sessions, search for specific implementations across conversation history, or track file evolution over time. Essential for recovering accidentally deleted code or finding that feature implementation you remember but can't locate.
+
+### For Resuming Interrupted Claude Sessions
+Use **continue-claude-work** to recover the last actionable request from local `~/.claude` artifacts and continue implementation without reopening the original session. Combine with **claude-code-history-files-finder** when you need broader cross-session search, statistics, or deleted-file recovery.
 
 ### For Documentation Maintenance
 Use **docs-cleaner** to consolidate redundant documentation while preserving valuable content. Perfect for cleaning up documentation sprawl after rapid development phases or merging overlapping docs into authoritative sources.
@@ -1899,6 +1940,7 @@ Each skill includes:
 - **product-analysis**: See `product-analysis/SKILL.md` for workflow and `product-analysis/references/synthesis_methodology.md` for cross-agent weighting and recommendation logic
 - **excel-automation**: See `excel-automation/SKILL.md` for create/parse/control workflows and `excel-automation/references/formatting-reference.md` for formatting standards
 - **capture-screen**: See `capture-screen/SKILL.md` for CGWindowID-based screenshot workflows on macOS
+- **continue-claude-work**: See `continue-claude-work/SKILL.md` for local artifact recovery, drift checks, and resume workflow
 
 ## 🛠️ Requirements
 
@@ -1924,6 +1966,7 @@ Each skill includes:
 - **Codex CLI** (optional, for product-analysis multi-model mode)
 - **uv + openpyxl** (for excel-automation): `uv run --with openpyxl ...`
 - **macOS** (for capture-screen and excel-automation AppleScript control workflows)
+- **Python 3.8+** (for continue-claude-work): bundled script for session extraction (no external dependencies)
 
 ## ❓ FAQ
 

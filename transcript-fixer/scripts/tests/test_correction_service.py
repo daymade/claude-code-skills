@@ -160,6 +160,31 @@ class TestCorrectionService(unittest.TestCase):
         success = self.service.remove_correction("nonexistent", "general")
         self.assertFalse(success)
 
+    # ==================== Domain Stats Tests ====================
+
+    def test_get_corrections_all_domains(self):
+        """domain=None loads all domains."""
+        self.service.add_correction("a", "b", "general")
+        self.service.add_correction("c", "d", "finance")
+        all_corr = self.service.get_corrections(None)
+        self.assertEqual(len(all_corr), 2)
+        self.assertIn("a", all_corr)
+        self.assertIn("c", all_corr)
+
+    def test_get_domain_stats(self):
+        """get_domain_stats returns per-domain counts."""
+        self.service.add_correction("a", "b", "general")
+        self.service.add_correction("c", "d", "finance")
+        self.service.add_correction("e", "f", "finance")
+        stats = self.service.get_domain_stats()
+        self.assertEqual(stats["general"], 1)
+        self.assertEqual(stats["finance"], 2)
+
+    def test_get_domain_stats_empty(self):
+        """get_domain_stats returns empty dict when no corrections."""
+        stats = self.service.get_domain_stats()
+        self.assertEqual(stats, {})
+
     # ==================== Import/Export Tests ====================
 
     def test_import_corrections(self):

@@ -27,6 +27,7 @@ Proxy/VPN tools on macOS create conflicts at five independent layers. Layers 1-3
 Determine which scenario applies:
 
 - **Browser returns HTTP 503, but `curl` and SSH both work** → System proxy bypass conflict (Step 2C)
+- **`local.<domain>` fails in browser/default `curl`, but direct/no-proxy request works** → Local vanity domain proxy interception (Step 2C-1)
 - **Tailscale ping works, SSH works, but curl/HTTP times out** → HTTP proxy env var conflict (Step 2A)
 - **Tailscale ping works, SSH/TCP times out** → Route conflict (Step 2B)
 - **Remote dev server auth redirects to `localhost` → browser can't follow** → SSH tunnel needed (Step 2D)
@@ -44,6 +45,25 @@ Determine which scenario applies:
 - If `ssh -T git@github.com` works but `git push` fails intermittently → Layer 4 (double tunnel).
 - If host `curl https://...` works but `docker pull` times out → Layer 5 (VM proxy propagation).
 - If DNS resolves to `198.18.x.x` virtual IPs → TUN DNS hijack (Step 2H).
+
+### Fast Path: Run Automated Checks
+
+For common macOS conflicts (env proxy, system proxy exceptions, direct/proxy path split, local TLS trust), run:
+
+```bash
+python3 scripts/quick_diagnose.py --host local.claude4.dev --url https://local.claude4.dev/health
+```
+
+Optional route ownership check for a Tailscale destination:
+
+```bash
+python3 scripts/quick_diagnose.py --host <target-host> --url http://<target-host>:<port>/health --tailscale-ip <100.x.x.x>
+```
+
+Interpretation:
+- `direct=PASS` + `forced_proxy=FAIL` = host must bypass proxy (`skip-proxy` + `NO_PROXY`).
+- `strict_tls=FAIL` + `direct=PASS` = path is reachable; trust issue only (install/trust local CA).
+- `host in scutil exceptions: no` = browser/system clients still likely proxied.
 
 ### Step 2A: Fix HTTP Proxy Environment Variables
 
@@ -149,6 +169,41 @@ skip-proxy = 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, localhost
 **Why `skip-proxy` works but `tun-excluded-routes` doesn't**:
 - `skip-proxy`: Bypasses the HTTP proxy layer only. Traffic still flows through the TUN interface and Tailscale utun handles it. Safe.
 - `tun-excluded-routes`: Removes the CIDR from the TUN routing entirely. This creates a competing `en0` route that overrides Tailscale. Breaks everything.
+
+#### Step 2C-1: Fix Local Vanity Domain Interception (`local.<domain>`)
+
+**Symptom**: `https://local.<domain>` fails in browser or default `curl`, but succeeds with direct/no-proxy command:
+
+```bash
+env -u http_proxy -u https_proxy curl -k -I https://local.<domain>/health
+# -> 200
+curl -I https://local.<domain>/health
+# -> proxy CONNECT then TLS reset/failure
+```
+
+**Root cause**: The domain is routed through system/shell proxy instead of local direct path.
+
+**Fix**:
+1. Add domain to proxy app bypass list (`skip-proxy` for Shadowrocket).
+2. Add domain to shell bypass list (`NO_PROXY`/`no_proxy`).
+3. If local TLS uses internal CA, trust the local root certificate.
+
+```bash
+# ~/.zshrc
+export NO_PROXY=localhost,127.0.0.1,.ts.net,100.64.0.0/10,192.168.*,10.*,172.16.*,local.<domain>,www.local.<domain>
+export no_proxy="$NO_PROXY"
+```
+
+**Verification**:
+
+```bash
+python3 scripts/quick_diagnose.py --host local.<domain> --url https://local.<domain>/health
+```
+
+Expected:
+- `host in NO_PROXY: yes`
+- `host in scutil exceptions: yes`
+- `ambient=PASS` and `direct=PASS`
 
 ### Step 2D: Fix Auth Redirect for Remote Dev (SSH Tunnel)
 

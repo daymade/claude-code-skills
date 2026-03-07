@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-41-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.37.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-42-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.38.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 41 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 42 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -240,6 +240,9 @@ claude plugin install excel-automation@daymade-skills
 
 # macOS 程序化窗口截图工作流
 claude plugin install capture-screen@daymade-skills
+
+# 基于本地会话产物续做中断的 Claude 工作
+claude plugin install continue-claude-work@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -1791,6 +1794,41 @@ claude plugin install capture-screen@daymade-skills
 
 ---
 
+### 42. **continue-claude-work** - 续做中断的 Claude 工作
+
+从本地 `~/.claude` 会话产物中恢复可执行上下文，并在不重新打开旧交互会话的前提下继续实现工作。内置 Python 脚本实现智能上下文提取。
+
+**使用场景：**
+- 用户提供 Claude 会话 ID，希望继续上次的任务
+- 需要直接检查本地 `.claude` JSONL 文件，而不是运行 `claude --resume`
+- 上一次会话被中断，需要重建下一步具体动作
+- 多 agent 工作流被中断，需要了解哪些 subagent 已完成
+
+**主要功能：**
+- Compact-boundary 感知提取 — 读取 Claude 自身的会话压缩摘要作为最高信噪比上下文
+- Subagent 工作流恢复 — 报告已完成与被中断的 subagent 及其最后输出
+- 会话结束原因检测 — 区分正常退出、中断（ctrl-c）、错误级联、废弃会话
+- 大小自适应策略 — 对小型（<500KB）和大型（>5MB）会话采用不同读取方式
+- 噪声过滤 — 跳过 progress/queue-operation/api_error 消息（占会话行数的 37-53%）
+- 自会话排除、过期索引回退、MEMORY.md 集成、git 工作区状态
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install continue-claude-work@daymade-skills
+
+# 然后让 Claude 基于本地产物续做
+"continue work from session 123e4567-e89b-12d3-a456-426614174000"
+"不用真的 resume，去 .claude 里找上下文继续做"
+"查看上次会话做了什么，然后继续"
+```
+
+📚 **文档**：参见 [continue-claude-work/SKILL.md](./continue-claude-work/SKILL.md)。
+
+**要求**：Python 3.8+，用于工作区核对的 `git`。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -1853,6 +1891,9 @@ claude plugin install capture-screen@daymade-skills
 
 ### 会话历史与文件恢复
 使用 **claude-code-history-files-finder** 从之前的 Claude Code 会话中恢复已删除的文件、在对话历史中搜索特定实现，或跟踪文件随时间的演变。对于恢复意外删除的代码或查找你记得但找不到的功能实现至关重要。
+
+### 续做中断的 Claude 会话
+使用 **continue-claude-work** 从本地 `~/.claude` 产物中恢复最后一个可执行请求，并在不重新打开原始会话的情况下继续实现。若还需要跨会话搜索、统计分析或恢复已删除文件，可与 **claude-code-history-files-finder** 配合使用。
 
 ### 文档维护
 使用 **docs-cleaner** 在保留有价值内容的同时整合冗余文档。非常适合在快速开发阶段后清理文档扩散或将重叠的文档合并为权威来源。
@@ -1941,6 +1982,7 @@ claude plugin install capture-screen@daymade-skills
 - **product-analysis**：参见 `product-analysis/SKILL.md` 了解工作流，参见 `product-analysis/references/synthesis_methodology.md` 了解跨代理加权与推荐逻辑
 - **excel-automation**：参见 `excel-automation/SKILL.md` 了解创建/解析/控制工作流，参见 `excel-automation/references/formatting-reference.md` 了解格式规范
 - **capture-screen**：参见 `capture-screen/SKILL.md` 了解基于 CGWindowID 的 macOS 截图流程
+- **continue-claude-work**：参见 `continue-claude-work/SKILL.md` 了解本地会话产物恢复、漂移检查与续做流程
 
 ## 🛠️ 系统要求
 
@@ -1963,6 +2005,7 @@ claude plugin install capture-screen@daymade-skills
 - **Mole**（可选，用于 macos-cleaner 可视化清理）：从 https://github.com/tw93/Mole 下载
 - **uv + openpyxl**（用于 excel-automation）：`uv run --with openpyxl ...`
 - **macOS**（用于 capture-screen 与 excel-automation 的 AppleScript 控制流程）
+- **Python 3.8+**（用于 continue-claude-work）：内置脚本进行会话提取（无外部依赖）
 
 ## ❓ 常见问题
 
