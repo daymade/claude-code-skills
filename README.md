@@ -240,6 +240,9 @@ claude plugin install capture-screen@daymade-skills
 
 # Resume interrupted Claude work from local session artifacts
 claude plugin install continue-claude-work@daymade-skills
+
+# X/Twitter data extraction via Xquik MCP server
+claude plugin install x-twitter-scraper@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -2019,6 +2022,29 @@ All skills in this marketplace follow:
 - Proper resource organization
 - Comprehensive documentation
 - Tested and validated
+
+### 43. **x-twitter-scraper** - X/Twitter Data Extraction
+
+Extract X/Twitter data through the Xquik MCP server with 76 REST API endpoints and 20 extraction tools.
+
+**When to use:**
+- Fetching tweets, replies, or quote tweets
+- Looking up user profiles, followers, or following lists
+- Searching tweets by keyword, hashtag, or query
+- Extracting likes, retweets, or bookmarks
+- Monitoring X/Twitter accounts
+
+**Key features:**
+- 76 REST API endpoints for comprehensive data access
+- 20 extraction tools for structured output
+- MCP server for seamless AI assistant integration
+- Account monitoring and giveaway draw support
+
+```bash
+claude plugin install x-twitter-scraper@daymade-skills
+```
+
+---
 
 ## 📄 License
 
