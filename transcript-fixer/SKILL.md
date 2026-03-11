@@ -44,6 +44,20 @@ The enhanced wrapper automatically:
 - Moves output files to specified directory
 - Opens HTML visual diff in browser for immediate feedback
 
+**Timestamp repair**:
+```bash
+uv run scripts/fix_transcript_timestamps.py meeting.txt --in-place
+```
+
+**Split transcript into sections and rebase each section to `00:00:00`**:
+```bash
+uv run scripts/split_transcript_sections.py meeting.txt \
+  --first-section-name "课前聊天" \
+  --section "正式上课::好，无缝切换嘛。对。那个曹总连上了吗？那个网页。" \
+  --section "课后复盘::我们复盘一下。" \
+  --rebase-to-zero
+```
+
 **Alternative: Use Core Script Directly**:
 
 ```bash
@@ -117,12 +131,14 @@ See `references/workflow_guide.md` for detailed workflows, `references/script_pa
 
 ## Critical Workflow: Dictionary Iteration
 
-**MUST save corrections after each fix.** This is the skill's core value.
+**Save stable, reusable ASR patterns after each fix.** This is the skill's core value.
 
-After fixing errors manually, immediately save to dictionary:
+After fixing errors manually, immediately save stable corrections to dictionary:
 ```bash
 uv run scripts/fix_transcription.py --add "错误词" "正确词" --domain general
 ```
+
+Do **not** save one-off deletions, ambiguous context-only rewrites, or section-specific cleanup to the dictionary.
 
 See `references/iteration_workflow.md` for complete iteration guide with checklist.
 
@@ -162,7 +178,9 @@ sqlite3 ~/.transcript-fixer/corrections.db "SELECT value FROM system_config WHER
 - `ensure_deps.py` - Initialize shared virtual environment (run once, optional)
 - `fix_transcript_enhanced.py` - Enhanced wrapper (recommended for interactive use)
 - `fix_transcription.py` - Core CLI (for automation)
+- `fix_transcript_timestamps.py` - Normalize/repair speaker timestamps and optionally rebase to zero
 - `generate_word_diff.py` - Generate word-level diff HTML for reviewing corrections
+- `split_transcript_sections.py` - Split a transcript by marker phrases and optionally rebase each section
 - `examples/bulk_import.py` - Bulk import example
 
 **References** (load as needed):
