@@ -2,13 +2,37 @@
 
 Complete checklist for creating high-quality pull requests.
 
-## Before Starting
+# PR Quality Checklist
+
+Complete checklist for creating high-quality pull requests based on successful contributions to major open-source projects.
+
+## Investigation Phase (Before Coding)
 
 - [ ] Read CONTRIBUTING.md thoroughly
 - [ ] Check for existing PRs addressing same issue
 - [ ] Comment on issue to express interest
-- [ ] Wait for maintainer acknowledgment (if required)
-- [ ] Understand project's code style
+- [ ] Reproduce bug with original version
+- [ ] Trace git history for context (`git log --all --grep="keyword"`)
+- [ ] Identify root cause with code references
+- [ ] Post detailed investigation to issue (not PR)
+- [ ] Link all related issues/PRs
+
+### Investigation Template (Post to Issue)
+
+```markdown
+## Investigation
+
+I traced this through the codebase history:
+
+1. [Date]: #[PR] introduced [feature]
+2. [Date]: #[PR] added [workaround] because [reason]
+3. [Date]: #[PR] changed [parameter]
+4. Now: Safe to [fix] because [explanation]
+
+[Detailed evidence with code references]
+```
+
+## Before Starting
 
 ## Environment Setup
 
@@ -28,11 +52,27 @@ refactor/extract-validation-logic
 
 ## During Development
 
-- [ ] Make small, focused commits
+- [ ] Make minimal, focused changes (only what's necessary)
+- [ ] Add regression test to prevent future breakage
+- [ ] Update CHANGELOG if project uses it
 - [ ] Follow project's commit message format
-- [ ] Add tests for new functionality
-- [ ] Update documentation if needed
 - [ ] Run linter/formatter before committing
+- [ ] Don't refactor unrelated code
+- [ ] Don't add "improvements" beyond the fix
+
+### What to Change
+
+✅ **Do change**:
+- Code directly related to the fix
+- Tests for the fix
+- CHANGELOG entry
+- Relevant documentation
+
+❌ **Don't change**:
+- Surrounding code (refactoring)
+- Unrelated files
+- Code style of existing code
+- Add features beyond the fix
 
 ## Before Submitting
 
@@ -46,10 +86,25 @@ refactor/extract-validation-logic
 
 ### Evidence Loop
 
-- [ ] Reproduce the failure with one command and capture baseline output
+- [ ] Test with original version and capture failure output
 - [ ] Apply the fix
-- [ ] Rerun the exact same command and capture passing output
-- [ ] Add baseline vs fixed vs reference comparison
+- [ ] Test with fixed version and capture success output
+- [ ] Document both tests with timestamps, exit codes, PIDs
+- [ ] Compare baseline vs fixed behavior
+
+### Testing Commands
+
+```bash
+# Test 1: Reproduce bug with original version
+npm install -g package@original-version
+[command that triggers bug]
+# Capture: error messages, exit codes, timestamps
+
+# Test 2: Validate fix with patched version
+npm install -g package@fixed-version
+[same command]
+# Capture: success output, normal exit codes
+```
 
 ### Redaction Gate
 
@@ -67,15 +122,32 @@ refactor/extract-validation-logic
 
 ### PR Description
 
-- [ ] Clear, descriptive title
-- [ ] Summary of changes
-- [ ] Motivation/context
-- [ ] Testing approach
-- [ ] Screenshots (for UI changes)
+- [ ] Clear, descriptive title (conventional commit format)
+- [ ] Focused description (~50 lines, not >100)
+- [ ] Summary (1-2 sentences)
+- [ ] Root cause (technical, with code refs)
+- [ ] Changes (bullet list)
+- [ ] Why it's safe
+- [ ] Testing validation
 - [ ] Related issues linked
-- [ ] Sources/Attribution section added
-- [ ] Risks section added
-- [ ] Rollback Plan section added
+- [ ] No detailed timeline (move to issue)
+- [ ] No internal tooling mentions
+- [ ] No speculation or uncertainty
+
+### PR Description Length Guide
+
+✅ **Good**: ~50 lines
+- Summary: 2 lines
+- Root cause: 5 lines
+- Changes: 5 lines
+- Why safe: 5 lines
+- Testing: 20 lines
+- Related: 3 lines
+
+❌ **Too long**: >100 lines
+- Move detailed investigation to issue
+- Move timeline analysis to issue
+- Keep PR focused on the fix
 
 ## PR Title Format
 
@@ -96,81 +168,50 @@ chore(deps): update lodash to 4.17.21
 ````markdown
 ## Summary
 
-Brief description of what this PR does.
+[1-2 sentences: what this fixes and why]
 
-## Motivation
+## Root Cause
 
-Why is this change needed? Link to issue if applicable.
-
-Closes #123
+[Technical explanation with code references]
 
 ## Changes
 
-- Change 1
-- Change 2
-- Change 3
+- [Actual code changes]
+- [Tests added]
+- [Docs updated]
 
-## Evidence Loop
+## Why This Is Safe
 
-Command:
-```bash
-# Baseline (before fix)
-[command]
-
-# Fixed (after fix, same command)
-[command]
-```
-
-Raw output:
-```text
-[baseline output]
-```
-
-```text
-[fixed output]
-```
-
-## Comparison (Baseline vs Fixed vs Reference)
-
-| Case | Command / Scenario | Result | Evidence |
-|------|--------------------|--------|----------|
-| Baseline | `[same command]` | Fail | [raw output block] |
-| Fixed | `[same command]` | Pass | [raw output block] |
-| Reference | [spec, issue, or main behavior] | Expected | [link or note] |
-
-## Sources/Attribution
-
-- [Issue, docs, benchmark source, or code reference]
-
-## Risks
-
-- [Risk and impact]
-
-## Rollback Plan
-
-- Revert commit(s): [hash]
-- Restore previous behavior with: [command]
+[Explain why it won't break anything]
 
 ## Testing
 
-How did you test this change?
+### Test 1: Reproduce Bug (Original Version)
+Command: `[command]`
+Result:
+```text
+[failure output with timestamps, exit codes]
+```
 
-- [ ] Unit tests added/updated
-- [ ] Manual testing performed
-- [ ] Integration tests pass
+### Test 2: Validate Fix (Patched Version)
+Command: `[same command]`
+Result:
+```text
+[success output with timestamps, exit codes]
+```
 
-## Screenshots (if applicable)
+## Related
 
-| Before | After |
-|--------|-------|
-| image  | image |
-
-## Checklist
-
-- [ ] Tests pass
-- [ ] Documentation updated
-- [ ] Code follows project style
+- Fixes #[issue]
+- Related: #[other issues/PRs]
 ````
+
+**What NOT to include**:
+- ❌ Detailed timeline analysis (put in issue)
+- ❌ Historical context (put in issue)
+- ❌ Internal tooling mentions
+- ❌ Speculation or uncertainty
+- ❌ Walls of text (>100 lines)
 
 ## Comparison Table Template
 
@@ -185,10 +226,34 @@ How did you test this change?
 ## After Submitting
 
 - [ ] Monitor for CI results
-- [ ] Respond to review comments promptly
+- [ ] Respond to review comments within 24 hours
 - [ ] Make requested changes quickly
 - [ ] Thank reviewers for their time
 - [ ] Don't force push after review starts (unless asked)
+- [ ] Add new commits during review (don't amend)
+- [ ] Explain what changed in follow-up comments
+- [ ] Re-request review when ready
+
+## Separation of Concerns
+
+### Issue Comments (Detailed Investigation)
+- Timeline analysis
+- Historical context
+- Related PRs/issues
+- Root cause deep dive
+- 100-300 lines OK
+
+### PR Description (Focused on Fix)
+- Summary (1-2 sentences)
+- Root cause (technical)
+- Changes (bullet list)
+- Testing validation
+- ~50 lines total
+
+### Separate Test Comment (End-to-End Validation)
+- Test with original version
+- Test with fixed version
+- Full logs with timestamps
 
 ## Review Response Etiquette
 
