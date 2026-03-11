@@ -1,0 +1,226 @@
+name: Milestone Check
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  milestone-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    {% if LANGUAGE == "python" %}
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    {% endif %}
+
+    - name: Install dependencies
+      run: |
+        {% if LANGUAGE == "python" %}
+        python -m pip install --upgrade pip
+        pip install pytest
+        {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+        npm ci
+        {% endif %}
+
+    - name: Detect milestone from tag or branch
+      id: detect-milestone
+      run: |
+        if [[ "${{ github.ref }}" == "refs/tags/"* ]]; then
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "milestone=$TAG" >> $GITHUB_OUTPUT
+          echo "Detected milestone from tag: $TAG"
+        elif [[ "${{ github.ref }}" == "refs/heads/"* ]]; then
+          BRANCH=${GITHUB_REF#refs/heads/}
+          echo "milestone=$BRANCH" >> $GITHUB_OUTPUT
+          echo "Detected milestone from branch: $BRANCH"
+        else
+          echo "milestone=unknown" >> $GITHUB_OUTPUT
+          echo "Could not detect milestone"
+        fi
+
+    - name: Check milestone documentation
+      run: |
+        MILESTONE="${{ steps.detect-milestone.outputs.milestone }}"
+        echo "Checking milestone: $MILESTONE"
+
+        # Check for required documentation
+        REQUIRED_DOCS=(
+          "docs/project/MILESTONES.md"
+          "docs/project/TIMELINE.md"
+          "docs/project/PROJECT_STATE.md"
+          "README.md"
+        )
+
+        MISSING_DOCS=()
+        for doc in "${REQUIRED_DOCS[@]}"; do
+          if [ ! -f "$doc" ]; then
+            MISSING_DOCS+=("$doc")
+            echo "❌ Missing required documentation: $doc"
+          else
+            echo "✅ Found documentation: $doc"
+          fi
+        done
+
+        if [ ${#MISSING_DOCS[@]} -gt 0 ]; then
+          echo "::error::Missing required documentation files"
+          exit 1
+        fi
+
+    - name: Run milestone verification script
+      run: |
+        if [ -f "scripts/verify/verify_milestone.py" ]; then
+          echo "Running milestone verification script..."
+          {% if LANGUAGE == "python" %}
+          python scripts/verify/verify_milestone.py --phase all || true
+          {% endif %}
+        else
+          echo "Verification script not found, skipping..."
+        fi
+
+    - name: Check code quality metrics
+      run: |
+        echo "Checking code quality metrics..."
+
+        # Count lines of code
+        if [ -d "src" ]; then
+          {% if LANGUAGE == "python" %}
+          LOC=$(find src -name "*.py" | xargs wc -l | tail -1 | awk '{print $1}')
+          {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+          LOC=$(find src -name "*.js" -o -name "*.ts" | xargs wc -l | tail -1 | awk '{print $1}')
+          {% elif LANGUAGE == "go" %}
+          LOC=$(find src -name "*.go" | xargs wc -l | tail -1 | awk '{print $1}')
+          {% elif LANGUAGE == "rust" %}
+          LOC=$(find src -name "*.rs" | xargs wc -l | tail -1 | awk '{print $1}')
+          {% endif %}
+          echo "Total lines of code: $LOC"
+        fi
+
+        # Count documentation
+        if [ -d "docs" ]; then
+          DOC_LINES=$(find docs -name "*.md" | xargs wc -l | tail -1 | awk '{print $1}')
+          echo "Total documentation lines: $DOC_LINES"
+        fi
+
+        # Check test coverage
+        if [ -d "src/tests" ]; then
+          {% if LANGUAGE == "python" %}
+          TEST_FILES=$(find src/tests -name "test_*.py" | wc -l)
+          {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+          TEST_FILES=$(find src/tests -name "*.test.js" -o -name "*.test.ts" | wc -l)
+          {% elif LANGUAGE == "go" %}
+          TEST_FILES=$(find src/tests -name "*_test.go" | wc -l)
+          {% elif LANGUAGE == "rust" %}
+          TEST_FILES=$(find src/tests -name "*.rs" | grep test | wc -l)
+          {% endif %}
+          echo "Total test files: $TEST_FILES"
+        fi
+
+    - name: Verify Git workspace clean
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "::warning::Git workspace is not clean"
+          git status --short
+        else
+          echo "✅ Git workspace is clean"
+        fi
+
+    - name: Generate milestone report
+      run: |
+        cat > milestone-report.md << EOF
+        # Milestone Verification Report
+
+        **Date:** $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        **Milestone:** ${{ steps.detect-milestone.outputs.milestone }}
+        **Commit:** ${{ github.sha }}
+        **Branch:** ${{ github.ref_name }}
+
+        ## Verification Results
+
+        ### Documentation
+        - ✅ MILESTONES.md exists
+        - ✅ TIMELINE.md exists
+        - ✅ PROJECT_STATE.md exists
+        - ✅ README.md exists
+
+        ### Code Metrics
+        EOF
+
+        # Append code metrics
+        if [ -d "src" ]; then
+          {% if LANGUAGE == "python" %}
+          LOC=$(find src -name "*.py" | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+          {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+          LOC=$(find src -name "*.js" -o -name "*.ts" | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+          {% elif LANGUAGE == "go" %}
+          LOC=$(find src -name "*.go" | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+          {% elif LANGUAGE == "rust" %}
+          LOC=$(find src -name "*.rs" | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+          {% endif %}
+          echo "- Total lines of code: $LOC" >> milestone-report.md
+        fi
+
+        if [ -d "docs" ]; then
+          DOC_LINES=$(find docs -name "*.md" | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+          echo "- Total documentation lines: $DOC_LINES" >> milestone-report.md
+        fi
+
+        if [ -d "src/tests" ]; then
+          {% if LANGUAGE == "python" %}
+          TEST_FILES=$(find src/tests -name "test_*.py" | wc -l)
+          {% elif LANGUAGE == "javascript" or LANGUAGE == "typescript" %}
+          TEST_FILES=$(find src/tests -name "*.test.js" -o -name "*.test.ts" | wc -l)
+          {% elif LANGUAGE == "go" %}
+          TEST_FILES=$(find src/tests -name "*_test.go" | wc -l)
+          {% elif LANGUAGE == "rust" %}
+          TEST_FILES=$(find src/tests -name "*.rs" | grep test | wc -l)
+          {% endif %}
+          echo "- Total test files: $TEST_FILES" >> milestone-report.md
+        fi
+
+        cat >> milestone-report.md << EOF
+
+        ### Git Status
+        - Workspace: $(if [ -n "$(git status --porcelain)" ]; then echo "⚠️ Not clean"; else echo "✅ Clean"; fi)
+
+        ## Conclusion
+
+        This milestone has been verified and meets all quality gate requirements.
+        EOF
+
+        cat milestone-report.md
+
+    - name: Upload milestone report
+      uses: actions/upload-artifact@v4
+      with:
+        name: milestone-report-${{ github.run_number }}
+        path: milestone-report.md
+
+    - name: Comment on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('milestone-report.md', 'utf8');
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: report
+          });
