@@ -17,6 +17,7 @@ Detailed step-by-step workflows for transcript correction and management.
   - [5. Stage-by-Stage Execution](#5-stage-by-stage-execution)
   - [6. Context-Aware Rules](#6-context-aware-rules)
   - [7. Diff Report Generation](#7-diff-report-generation)
+  - [8. Workshop Transcript Split + Timestamp Rebase](#8-workshop-transcript-split--timestamp-rebase)
 - [Batch Processing](#batch-processing)
   - [Process Multiple Files](#process-multiple-files)
   - [Parallel Processing](#parallel-processing)
@@ -399,6 +400,30 @@ See `file_formats.md` for context_rules schema.
 - Side-by-side comparison
 
 See `script_parameters.md` for advanced diff options.
+
+### 8. Workshop Transcript Split + Timestamp Rebase
+
+**Goal**: Split a long workshop transcript into sections such as setup chat, class, and debrief, then make each section start from `00:00:00`.
+
+**Steps**:
+
+1. **Correct transcript text first** (dictionary + AI/manual review)
+2. **Pick marker phrases** for each section boundary
+3. **Split and rebase**:
+
+```bash
+uv run scripts/split_transcript_sections.py workshop.txt \
+  --first-section-name "课前聊天" \
+  --section "正式上课::好，无缝切换嘛。对。那个曹总连上了吗？那个网页。" \
+  --section "课后复盘::我们复盘一下。" \
+  --rebase-to-zero
+```
+
+4. **If you already split the files**, rebase a single file directly:
+
+```bash
+uv run scripts/fix_transcript_timestamps.py class.txt --in-place --rebase-to-zero
+```
 
 ## Batch Processing
 
