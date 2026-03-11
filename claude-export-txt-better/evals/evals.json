@@ -1,0 +1,32 @@
+{
+  "skill_name": "fixing-claude-export-conversations",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Fix this exported conversation file: <export.txt> — it was exported from Claude Code and has broken line wrapping everywhere. Output the fixed version next to the original.",
+      "expected_output": "A *-fixed.txt file with correct line wrapping, intact table borders, matching marker counts, and fewer total lines than the input.",
+      "files": [],
+      "assertions": [
+        {"name": "output_file_exists", "description": "The fixed output file was created successfully"},
+        {"name": "line_count_reduced", "description": "Output has fewer lines than input. Reasonable reduction is 10-25%."},
+        {"name": "marker_counts_match", "description": "The count of ❯, ●, ✻, ⎿, and … characters in output matches input exactly"},
+        {"name": "no_broken_table_borders", "description": "Every line starting with ┌/├/└ also contains the matching right border on the same line"},
+        {"name": "no_runaway_joins", "description": "No output line exceeds 500 display-width characters"}
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "我从 Claude Code 导出了一个对话记录 <export.txt>，表格和段落的换行全部乱了。帮我修复一下，顺便看看统计数据——修了多少行？",
+      "expected_output": "Fixed file created with --stats output showing join counts per content type. Tables should be properly reconstructed with correct column padding.",
+      "files": [],
+      "assertions": [
+        {"name": "output_file_exists", "description": "The fixed output file was created successfully"},
+        {"name": "line_count_reduced", "description": "Output has fewer lines than input. Reasonable reduction is 10-25%."},
+        {"name": "marker_counts_match", "description": "The count of ❯, ●, ✻, ⎿, and … characters in output matches input exactly"},
+        {"name": "no_broken_table_borders", "description": "Every line starting with ┌/├/└ also contains the matching right border on the same line"},
+        {"name": "no_runaway_joins", "description": "No output line exceeds 500 display-width characters"},
+        {"name": "stats_output_present", "description": "The run log contains statistics output with join counts (e.g., 'Table rows merged', 'Tool results fixed')"}
+      ]
+    }
+  ]
+}
