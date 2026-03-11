@@ -1,6 +1,6 @@
 ---
 name: mermaid-tools
-description: Extracts Mermaid diagrams from markdown files and generates high-quality PNG images using bundled scripts. Activates when working with Mermaid diagrams, converting diagrams to PNG, extracting diagrams from markdown, or processing markdown files with embedded Mermaid code.
+description: Extracts Mermaid diagrams from markdown files and generates high-quality PNG images using bundled scripts. Supports macOS and WSL2/Linux. Activates when working with Mermaid diagrams, converting diagrams to PNG, extracting diagrams from markdown, or processing markdown files with embedded Mermaid code.
 ---
 
 # Mermaid Tools
@@ -109,8 +109,10 @@ Running the script without changing to the scripts directory first may fail due 
 Before running the script, verify dependencies are installed:
 
 1. **mermaid-cli**: `mmdc --version`
-2. **Google Chrome**: `google-chrome-stable --version`
-3. **Python 3**: `python3 --version`
+2. **Python 3**: `python3 --version`
+3. **Google Chrome**:
+   - macOS: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+   - WSL/Linux: `google-chrome-stable --version`
 
 If any are missing, consult `references/setup_and_troubleshooting.md` for installation instructions.
 
@@ -146,9 +148,10 @@ Verify all WSL2 dependencies are installed (see references for full list).
 
 This skill bundles all necessary scripts for Mermaid diagram generation:
 
-- **extract-and-generate.sh** - Main script that orchestrates extraction and PNG generation
+- **extract-and-generate.sh** - Main script that orchestrates extraction and PNG generation (auto-detects macOS vs WSL/Linux)
 - **extract_diagrams.py** - Python script for extracting Mermaid code blocks from markdown
-- **puppeteer-config.json** - Chrome/Puppeteer configuration for WSL2 environment
+- **puppeteer-config.json** - Chrome/Puppeteer configuration for WSL2/Linux (includes `--no-sandbox` for container environments)
+- **puppeteer-config-macos.json** - Chrome/Puppeteer configuration for macOS (full sandbox enabled, no `--no-sandbox`)
 
 All scripts must be run from the `scripts/` directory to properly locate dependencies.
 

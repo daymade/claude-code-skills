@@ -1,6 +1,7 @@
 #!/bin/bash
 # Enhanced Mermaid diagram extraction and PNG generation script
 # Extracts diagrams from markdown and numbers them sequentially
+# Supports: macOS and WSL2/Linux
 #
 # Usage: ./extract-and-generate.sh <markdown_file> [output_directory]
 # Example: ./extract-and-generate.sh "~/workspace/document.md" "~/workspace/diagrams"
@@ -8,7 +9,6 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_FILE="$SCRIPT_DIR/puppeteer-config.json"
 EXTRACTOR_SCRIPT="$SCRIPT_DIR/extract_diagrams.py"
 
 # Parse arguments
@@ -21,10 +21,30 @@ fi
 MARKDOWN_FILE="$1"
 OUTPUT_DIR="${2:-$(dirname "$MARKDOWN_FILE")/diagrams}"
 
+# ── OS 检测 ──────────────────────────────────────────────────────────────────
+OS_TYPE="$(uname -s)"
+IS_MACOS=false
+
+if [ "$OS_TYPE" = "Darwin" ]; then
+    IS_MACOS=true
+    CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    CONFIG_FILE="$SCRIPT_DIR/puppeteer-config-macos.json"
+    ENV_DESC="macOS"
+else
+    # Linux / WSL
+    if grep -qEi "microsoft|wsl" /proc/version 2>/dev/null; then
+        ENV_DESC="WSL2 Ubuntu"
+    else
+        ENV_DESC="Linux"
+    fi
+    CHROME_PATH="/usr/bin/google-chrome-stable"
+    CONFIG_FILE="$SCRIPT_DIR/puppeteer-config.json"
+fi
+
 echo "=== Enhanced Mermaid Diagram Processor ==="
-echo "Source markdown: $MARKDOWN_FILE" 
+echo "Source markdown: $MARKDOWN_FILE"
 echo "Output directory: $OUTPUT_DIR"
-echo "Environment: WSL2 Ubuntu with Chrome dependencies"
+echo "Environment: $ENV_DESC"
 echo
 
 # Validate inputs
@@ -36,9 +56,6 @@ fi
 # Create output directory if it doesn't exist
 mkdir -p "$OUTPUT_DIR"
 
-# Configuration
-CHROME_PATH="/usr/bin/google-chrome-stable"
-
 # Check dependencies
 echo "Checking dependencies..."
 if ! command -v mmdc &> /dev/null; then
@@ -48,8 +65,12 @@ if ! command -v mmdc &> /dev/null; then
 fi
 
 if [ ! -f "$CHROME_PATH" ]; then
-    echo "ERROR: Google Chrome not found at $CHROME_PATH"
-    echo "Install Chrome and dependencies with the setup commands"
+    echo "ERROR: Google Chrome not found at: $CHROME_PATH"
+    if $IS_MACOS; then
+        echo "Please install Google Chrome from https://www.google.com/chrome/"
+    else
+        echo "Install Chrome and dependencies with the setup commands"
+    fi
     exit 1
 fi
 
@@ -63,7 +84,7 @@ if [ ! -f "$EXTRACTOR_SCRIPT" ]; then
     exit 1
 fi
 
-echo "✅ Dependencies verified"
+echo "✅ Dependencies verified (Chrome: $CHROME_PATH)"
 echo
 
 # Extract Mermaid diagrams from markdown
@@ -143,9 +164,13 @@ for mmd_file in "${mmd_files[@]}"; do
         continue
     fi
     
-    # Validate PNG
+    # Validate PNG — 跨平台兼容的 stat 命令
     if test -s "$diagram.png" && file "$diagram.png" | grep -q "PNG image"; then
-        size=$(stat -c%s "$diagram.png")
+        if $IS_MACOS; then
+            size=$(stat -f%z "$diagram.png")
+        else
+            size=$(stat -c%s "$diagram.png")
+        fi
         dimensions_actual=$(identify -format "%wx%h" "$diagram.png" 2>/dev/null || echo "unknown")
         echo "  ✅ Validated PNG (${size} bytes, ${dimensions_actual})"
     else
