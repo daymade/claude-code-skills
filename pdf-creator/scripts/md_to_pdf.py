@@ -19,6 +19,7 @@ Requirements:
 
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -146,15 +147,44 @@ blockquote {
 """
 
 
+def _ensure_list_spacing(text: str) -> str:
+    """Ensure blank lines before list items for proper markdown parsing.
+
+    Both Python markdown library and pandoc require a blank line before a list
+    when it follows a paragraph. Without it, list items render as plain text.
+
+    This preprocessor adds blank lines before list items when needed, without
+    modifying the user's original markdown file.
+    """
+    lines = text.split('\n')
+    result = []
+    list_re = re.compile(r'^(\s*)([-*+]|\d+\.)\s')
+    for i, line in enumerate(lines):
+        if i > 0 and list_re.match(line):
+            prev = lines[i - 1]
+            if prev.strip() and not list_re.match(prev):
+                result.append('')
+        result.append(line)
+    return '\n'.join(result)
+
+
 def _md_to_html(md_file: str) -> str:
-    """Convert markdown to HTML using pandoc."""
+    """Convert markdown to HTML using pandoc with list spacing preprocessing.
+
+    Reads the markdown file, preprocesses it to ensure proper list spacing,
+    then passes the content to pandoc via stdin. The original file is not modified.
+    """
     if not shutil.which('pandoc'):
         print("Error: pandoc not found. Install with: brew install pandoc", file=sys.stderr)
         sys.exit(1)
 
+    # Read and preprocess markdown to ensure list spacing
+    md_content = Path(md_file).read_text(encoding='utf-8')
+    md_content = _ensure_list_spacing(md_content)
+
     result = subprocess.run(
-        ['pandoc', md_file, '-f', 'markdown', '-t', 'html'],
-        capture_output=True, text=True,
+        ['pandoc', '-f', 'markdown', '-t', 'html'],
+        input=md_content, capture_output=True, text=True,
     )
     if result.returncode != 0:
         print(f"Error: pandoc failed: {result.stderr}", file=sys.stderr)
