@@ -9,6 +9,8 @@ Detailed command-line parameters and usage examples for transcript-fixer Python 
   - [Correction Management](#correction-management)
   - [Correction Workflow](#correction-workflow)
   - [Learning Commands](#learning-commands)
+- [fix_transcript_timestamps.py](#fix_transcript_timestampspy) - Normalize/repair speaker timestamps
+- [split_transcript_sections.py](#split_transcript_sectionspy) - Split transcript into named sections
 - [diff_generator.py](#diffgeneratorpy) - Generate comparison reports
 - [Common Workflows](#common-workflows)
 - [Exit Codes](#exit-codes)
@@ -73,6 +75,59 @@ python scripts/fix_transcription.py --input meeting.md --stage 3 --output ./corr
 - `1` - Missing required parameters or file not found
 - `2` - GLM_API_KEY environment variable not set (Stage 2 or 3 only)
 - `3` - API request failed
+
+## fix_transcript_timestamps.py
+
+Normalize speaker timestamp lines such as `天生 00:21` or `Speaker 7 01:31:10`.
+
+### Syntax
+
+```bash
+python scripts/fix_transcript_timestamps.py <file> [--output FILE | --in-place | --check]
+```
+
+### Key Parameters
+
+- `--format {hhmmss,preserve}`: output timestamp style
+- `--rebase-to-zero`: reset the first detected speaker timestamp to `00:00:00`
+- `--rollover-backjump-seconds`: threshold for treating `59:58 -> 00:05` as a new hour
+- `--jitter-seconds`: tolerated small backward jitter before flagging anomaly
+
+### Usage Examples
+
+```bash
+# Normalize mixed MM:SS / HH:MM:SS
+python scripts/fix_transcript_timestamps.py meeting.txt --in-place
+
+# Rebase a split transcript so it starts at 00:00:00
+python scripts/fix_transcript_timestamps.py workshop-class.txt --in-place --rebase-to-zero
+
+# Only inspect anomalies, do not write
+python scripts/fix_transcript_timestamps.py meeting.txt --check
+```
+
+## split_transcript_sections.py
+
+Split a transcript into named sections using marker phrases. Useful for workshop transcripts that include setup chat, class, and debrief in one file.
+
+### Syntax
+
+```bash
+python scripts/split_transcript_sections.py <file> \
+  --first-section-name <name> \
+  --section "Name::Marker" \
+  --section "Name::Marker"
+```
+
+### Usage Example
+
+```bash
+python scripts/split_transcript_sections.py workshop.txt \
+  --first-section-name "课前聊天" \
+  --section "正式上课::好，无缝切换嘛。对。那个曹总连上了吗？那个网页。" \
+  --section "课后复盘::我们复盘一下。" \
+  --rebase-to-zero
+```
 
 ## generate_diff_report.py
 

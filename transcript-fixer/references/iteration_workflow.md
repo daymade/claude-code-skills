@@ -16,7 +16,7 @@ The core value of transcript-fixer is building a personalized correction diction
 └─────────────────────────────────────────────────┘
 ```
 
-**Key principle**: Every correction you make should be saved to the dictionary. This transforms one-time work into permanent value.
+**Key principle**: Every stable, reusable ASR correction you make should be saved to the dictionary. This transforms one-time work into permanent value without polluting the database.
 
 ## Workflow Checklist
 
@@ -34,7 +34,7 @@ Correction Progress:
 
 ## Save Corrections Immediately
 
-After fixing any transcript, save corrections:
+After fixing any transcript, save stable corrections:
 
 ```bash
 # Single correction
@@ -122,3 +122,12 @@ Patterns appearing ≥3 times at ≥80% confidence are suggested for review.
 3. **Use domains**: Organize corrections by topic for better precision
 4. **Verify**: Always run --list to confirm saves
 5. **Review suggestions**: Periodically check --review-learned for auto-detected patterns
+
+## What NOT to Save to Dictionary
+
+Do **not** save these as reusable dictionary entries:
+
+- Full-sentence deletions
+- One-off section headers or meeting-specific boilerplate
+- Context-only disambiguations such as `cloud -> Claude` when `cloud` can also be legitimate
+- File-local cleanup after section splitting or timestamp rebasing
