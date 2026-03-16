@@ -631,6 +631,14 @@ Take `best_description` from the JSON output and update the skill's SKILL.md fro
 
 When creating or updating a skill, follow these steps in order. Skip steps only when clearly not applicable.
 
+### Step 0: Prerequisites Check
+
+Before starting any skill work, auto-detect all dependencies and proactively install anything missing. Discovering a missing tool mid-workflow (e.g., gitleaks at packaging time, PyYAML at validation) wastes time and breaks flow.
+
+Run the quick check from [references/prerequisites.md](references/prerequisites.md), auto-install what you can, and present the user a summary checklist. Only proceed when all blocking dependencies are satisfied.
+
+Key blockers: Python 3, PyYAML (validation/packaging), gitleaks (security scan), claude CLI (evals). All scripts must be invoked via `python3 -m scripts.<name>` from the skill-creator root directory — direct `python3 scripts/<name>.py` fails due to relative imports.
+
 ### Step 1: Understanding the Skill with Concrete Examples
 
 Skip this step only when the skill's usage patterns are already clearly understood.
