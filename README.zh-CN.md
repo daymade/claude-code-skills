@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-42-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.38.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-43-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.39.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 42 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 43 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -243,6 +243,9 @@ claude plugin install capture-screen@daymade-skills
 
 # 基于本地会话产物续做中断的 Claude 工作
 claude plugin install continue-claude-work@daymade-skills
+
+# Scrapling CLI 抽取与故障排查
+claude plugin install scrapling-skill@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -1829,6 +1832,44 @@ claude plugin install continue-claude-work@daymade-skills
 
 ---
 
+### 43. **scrapling-skill** - 可靠的 Scrapling CLI 工作流
+
+围绕 Scrapling CLI 提供经过验证的安装、排障与网页抽取工作流，用于从网页输出 HTML、Markdown 或纯文本。内置诊断脚本，可检查 extras 安装问题、Playwright 浏览器运行时，以及真实 URL 的烟测结果。
+
+**使用场景：**
+- 用户提到 Scrapling、`uv tool install scrapling` 或 `scrapling extract`
+- 需要判断应该使用静态抓取还是浏览器抓取
+- 需要从微信公众号页面（`mp.weixin.qq.com`）提取正文
+- Scrapling 安装看似成功，但在 extras、浏览器运行时或 TLS 校验上失败
+
+**主要功能：**
+- 内置 `diagnose_scrapling.py`，检查 CLI、浏览器运行时与真实 URL 烟测
+- 经过验证的默认路径：先用 `extract get`，只有必要时再升级到 `extract fetch`
+- 针对微信公众号文章的 `#js_content` 提取模式
+- 覆盖缺少 `click`、Playwright 运行时缺失、`curl: (60)` 证书问题等真实故障
+- 用文件大小和内容验证结果，而不是只看退出码
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install scrapling-skill@daymade-skills
+
+# 然后让 Claude 代你跑 Scrapling
+"安装 Scrapling CLI 并验证配置"
+"用 Scrapling 把这篇微信公众号文章提取成 Markdown"
+"判断这个页面应不应该走浏览器抓取"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [scrapling-skill/SKILL.md](./scrapling-skill/SKILL.md) 和 [scrapling-skill/references/troubleshooting.md](./scrapling-skill/references/troubleshooting.md)。
+
+**要求**：Python 3.6+、`uv`、Scrapling CLI；如需浏览器抓取，还需要 Playwright 浏览器运行时。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -1894,6 +1935,9 @@ claude plugin install continue-claude-work@daymade-skills
 
 ### 续做中断的 Claude 会话
 使用 **continue-claude-work** 从本地 `~/.claude` 产物中恢复最后一个可执行请求，并在不重新打开原始会话的情况下继续实现。若还需要跨会话搜索、统计分析或恢复已删除文件，可与 **claude-code-history-files-finder** 配合使用。
+
+### 网页提取与微信公众号文章
+使用 **scrapling-skill** 安装并验证 Scrapling CLI，判断应使用静态抓取还是浏览器抓取，并从 `mp.weixin.qq.com` 等页面提取干净的 Markdown。可与 **deep-research** 配合，将抓取内容整理为结构化报告，或与 **docs-cleaner** 配合清理抽取后的文章内容。
 
 ### 文档维护
 使用 **docs-cleaner** 在保留有价值内容的同时整合冗余文档。非常适合在快速开发阶段后清理文档扩散或将重叠的文档合并为权威来源。
@@ -1983,6 +2027,7 @@ claude plugin install continue-claude-work@daymade-skills
 - **excel-automation**：参见 `excel-automation/SKILL.md` 了解创建/解析/控制工作流，参见 `excel-automation/references/formatting-reference.md` 了解格式规范
 - **capture-screen**：参见 `capture-screen/SKILL.md` 了解基于 CGWindowID 的 macOS 截图流程
 - **continue-claude-work**：参见 `continue-claude-work/SKILL.md` 了解本地会话产物恢复、漂移检查与续做流程
+- **scrapling-skill**：参见 `scrapling-skill/SKILL.md` 了解 CLI 工作流，参见 `scrapling-skill/references/troubleshooting.md` 了解已验证的 Scrapling 故障模式
 
 ## 🛠️ 系统要求
 
@@ -2006,6 +2051,7 @@ claude plugin install continue-claude-work@daymade-skills
 - **uv + openpyxl**（用于 excel-automation）：`uv run --with openpyxl ...`
 - **macOS**（用于 capture-screen 与 excel-automation 的 AppleScript 控制流程）
 - **Python 3.8+**（用于 continue-claude-work）：内置脚本进行会话提取（无外部依赖）
+- **uv + Scrapling CLI**（用于 scrapling-skill）：`uv tool install 'scrapling[shell]'`，浏览器抓取前运行 `scrapling install`
 
 ## ❓ 常见问题
 

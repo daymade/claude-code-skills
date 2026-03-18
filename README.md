@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-42-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.38.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-43-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.39.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 42 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 43 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -240,6 +240,9 @@ claude plugin install capture-screen@daymade-skills
 
 # Resume interrupted Claude work from local session artifacts
 claude plugin install continue-claude-work@daymade-skills
+
+# Scrapling CLI extraction and troubleshooting
+claude plugin install scrapling-skill@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -1787,6 +1790,44 @@ claude plugin install continue-claude-work@daymade-skills
 
 ---
 
+### 43. **scrapling-skill** - Reliable Scrapling CLI Workflows
+
+Install, troubleshoot, and use Scrapling CLI with a verified static-first workflow for extracting HTML, Markdown, or text from webpages. Includes a diagnostic script for broken extras installs, Playwright browser runtime checks, and smoke tests against real URLs.
+
+**When to use:**
+- Users mention Scrapling, `uv tool install scrapling`, or `scrapling extract`
+- You need to choose between static and browser-backed fetching
+- You need to extract article bodies from WeChat public pages (`mp.weixin.qq.com`)
+- A Scrapling install works partially but fails on missing extras, browser runtime, or TLS verification
+
+**Key features:**
+- Bundled `diagnose_scrapling.py` script for CLI, browser runtime, and live URL smoke tests
+- Verified default path: start with `extract get`, escalate to `extract fetch` only when needed
+- WeChat extraction pattern using `#js_content` for clean article Markdown
+- Troubleshooting guidance for missing `click`, Playwright runtime setup, and `curl: (60)` trust-store failures
+- Output validation workflow using file size and content checks instead of exit-code assumptions
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install scrapling-skill@daymade-skills
+
+# Then ask Claude to work through Scrapling for you
+"Install Scrapling CLI and verify the setup"
+"Extract this WeChat article into Markdown with Scrapling"
+"Decide whether this page needs static or browser-backed fetching"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [scrapling-skill/SKILL.md](./scrapling-skill/SKILL.md) and [scrapling-skill/references/troubleshooting.md](./scrapling-skill/references/troubleshooting.md).
+
+**Requirements**: Python 3.6+, `uv`, Scrapling CLI, and Playwright browser runtime for browser-backed fetches.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1852,6 +1893,9 @@ Use **claude-code-history-files-finder** to recover deleted files from previous 
 
 ### For Resuming Interrupted Claude Sessions
 Use **continue-claude-work** to recover the last actionable request from local `~/.claude` artifacts and continue implementation without reopening the original session. Combine with **claude-code-history-files-finder** when you need broader cross-session search, statistics, or deleted-file recovery.
+
+### For Web Extraction & WeChat Articles
+Use **scrapling-skill** to install and validate Scrapling CLI, choose between static and browser-backed fetching, and extract clean Markdown from sites like `mp.weixin.qq.com`. Combine with **deep-research** to turn extracted sources into structured reports or with **docs-cleaner** to normalize captured article content.
 
 ### For Documentation Maintenance
 Use **docs-cleaner** to consolidate redundant documentation while preserving valuable content. Perfect for cleaning up documentation sprawl after rapid development phases or merging overlapping docs into authoritative sources.
@@ -1941,6 +1985,7 @@ Each skill includes:
 - **excel-automation**: See `excel-automation/SKILL.md` for create/parse/control workflows and `excel-automation/references/formatting-reference.md` for formatting standards
 - **capture-screen**: See `capture-screen/SKILL.md` for CGWindowID-based screenshot workflows on macOS
 - **continue-claude-work**: See `continue-claude-work/SKILL.md` for local artifact recovery, drift checks, and resume workflow
+- **scrapling-skill**: See `scrapling-skill/SKILL.md` for the CLI workflow and `scrapling-skill/references/troubleshooting.md` for verified Scrapling failure modes
 
 ## 🛠️ Requirements
 
@@ -1967,6 +2012,7 @@ Each skill includes:
 - **uv + openpyxl** (for excel-automation): `uv run --with openpyxl ...`
 - **macOS** (for capture-screen and excel-automation AppleScript control workflows)
 - **Python 3.8+** (for continue-claude-work): bundled script for session extraction (no external dependencies)
+- **uv + Scrapling CLI** (for scrapling-skill): `uv tool install 'scrapling[shell]'` and `scrapling install` for browser-backed fetches
 
 ## ❓ FAQ
 
