@@ -1,0 +1,17 @@
+{
+  "name": "nestjs-interceptors-skill",
+  "owner": {
+    "id": "diegoleteliers10",
+    "type": "user"
+  },
+  "metadata": {
+    "pluginRoot": "."
+  },
+  "plugins": [
+    {
+      "name": "nestjs-interceptors",
+      "source": "nestjs-interceptors",
+      "skills": ["./skill"]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "nestjs-interceptors",
+  "description": "An AI agent skill for creating professional NestJS interceptors with logging, transformation, error handling, timeout, caching, and metrics.",
+  "version": "1.0.0",
+  "repository": "https://github.com/diegoleteliers10/nestjs-interceptors-skill",
+  "skills": [
+    {
+      "name": "nestjs-interceptors",
+      "description": "Create NestJS interceptors for logging, transformation, error handling, timeout, caching, and metrics",
+      "instructions": "./extension/references/instructions.md"
+    }
+  ],
+  "references": [
+    {
+      "path": "./extension/references/interceptors.md"
+    },
+    {
+      "path": "./extension/references/logging.md"
+    },
+    {
+      "path": "./extension/references/transform.md"
+    },
+    {
+      "path": "./extension/references/error-handling.md"
+    },
+    {
+      "path": "./extension/references/cache.md"
+    },
+    {
+      "path": "./extension/references/metrics.md"
+    }
+  ]
+}

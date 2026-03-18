@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-42-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.38.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-43-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.39.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 42 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 43 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -1782,6 +1782,45 @@ claude plugin install continue-claude-work@daymade-skills
 ```
 
 📚 **Documentation**: See [continue-claude-work/SKILL.md](./continue-claude-work/SKILL.md).
+
+---
+
+### 43. **nestjs-interceptors** - NestJS Interceptors Generator
+
+Crea interceptors NestJS limpios y bien estructurados para logging, transformación de respuestas, formato de errores, timeout, cache y métricas. Usa Logger de @nestjs/common para logs nativos con colores automáticos.
+
+**When to use:**
+- Agregar interceptors a una API NestJS
+- Necesita logging de requests/responses en formato nativo NestJS
+- Quiere estandarizar formato de respuestas API
+- Necesita manejo de errores consistente
+- Quiere timeout para requests lentos
+- Necesita cache de respuestas
+- Quiere métricas de rendimiento
+
+**Key features:**
+- Logging interceptor con wide events
+- Transform interceptor para estandarizar respuestas
+- Error Format interceptor para manejo de errores
+- Timeout interceptor para cancelar requests lentos
+- Cache interceptor con CacheModule de NestJS
+- Metrics interceptor con Timer y Contador
+- Integración automática en InterceptorsModule
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install nestjs-interceptors@daymade-skills
+
+# Then ask to create interceptors
+"crea un logging interceptor para mi API NestJS"
+"agrega cache a las respuestas del usuario"
+"quiero un interceptor que mide el tiempo de ejecución"
+```
+
+📚 **Documentation**: See [nestjs-interceptors/SKILL.md](./nestjs-interceptors/SKILL.md).
+
+**Requirements**: NestJS, @nestjs/common, @nestjs/core
 
 **Requirements**: Python 3.8+, `git` for workspace reconciliation.
 
