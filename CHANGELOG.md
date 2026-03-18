@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - None
 
+## [1.39.0] - 2026-03-18
+
+### Added
+- **New Skill**: scrapling-skill v1.0.0 - Reliable Scrapling CLI installation, troubleshooting, and extraction workflows for HTML, Markdown, and text output
+  - Bundled `diagnose_scrapling.py` script to verify CLI health, detect missing extras, inspect Playwright browser runtime, and run real smoke tests
+  - Static-first workflow for choosing between `extract get`, `extract fetch`, and `stealthy-fetch`
+  - Verified WeChat public article extraction pattern using `#js_content`
+  - Verified recovery path for local TLS trust-store failures via `--no-verify`
+  - Bundled troubleshooting reference covering extras, browser runtime, and output validation
+
+### Changed
+- **skill-creator** v1.5.0 → v1.5.1: Fixed `scripts/package_skill.py` so it works when invoked directly from the repository root instead of only via `python -m`
+- **continue-claude-work** v1.1.0 → v1.1.1: Replaced newer Python-only type syntax in `extract_resume_context.py` so the script runs under the local `python3` environment
+- Updated marketplace skills/plugins count from 42 to 43
+- Updated marketplace version from 1.38.0 to 1.39.0
+- Updated marketplace metadata description to include Scrapling CLI extraction workflows
+- Updated README.md and README.zh-CN.md badges, installation commands, skill listings, use cases, quick links, and requirements
+- Updated CLAUDE.md counts, version reference, and Available Skills list (added #43)
+
 ## [1.38.0] - 2026-03-07
 
 ### Added

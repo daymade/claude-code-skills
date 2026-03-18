@@ -15,6 +15,13 @@ import re
 import sys
 import zipfile
 from pathlib import Path
+from typing import Optional, Tuple
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+PACKAGE_ROOT = SCRIPT_DIR.parent
+if str(PACKAGE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PACKAGE_ROOT))
+
 from scripts.quick_validate import validate_skill
 from scripts.security_scan import calculate_skill_hash
 
@@ -41,7 +48,7 @@ def should_exclude(rel_path: Path) -> bool:
     return any(fnmatch.fnmatch(name, pat) for pat in EXCLUDE_GLOBS)
 
 
-def validate_security_marker(skill_path: Path) -> tuple[bool, str]:
+def validate_security_marker(skill_path: Path) -> Tuple[bool, str]:
     """
     Validate security marker file exists and hash matches current content
 
