@@ -37,6 +37,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Dict, List, Optional
 
 CLAUDE_DIR = Path.home() / ".claude"
 PROJECTS_DIR = CLAUDE_DIR / "projects"
@@ -59,7 +60,7 @@ def normalize_path(project_path: str) -> str:
     return project_path.replace("/", "-")
 
 
-def find_project_dir(project_path: str) -> Path | None:
+def find_project_dir(project_path: str) -> Optional[Path]:
     """Find the Claude projects directory for a given project path."""
     abs_path = os.path.abspath(project_path)
 
@@ -85,7 +86,7 @@ def find_project_dir(project_path: str) -> Path | None:
     return None
 
 
-def load_sessions_index(project_dir: Path) -> list[dict]:
+def load_sessions_index(project_dir: Path) -> List[Dict]:
     """Load and parse sessions-index.json, sorted by modified desc."""
     index_file = project_dir / "sessions-index.json"
     if not index_file.exists():
@@ -97,7 +98,7 @@ def load_sessions_index(project_dir: Path) -> list[dict]:
     return entries
 
 
-def search_sessions(entries: list[dict], query: str) -> list[dict]:
+def search_sessions(entries: List[Dict], query: str) -> List[Dict]:
     """Search sessions by keyword in firstPrompt and summary."""
     query_lower = query.lower()
     results = []
@@ -109,7 +110,7 @@ def search_sessions(entries: list[dict], query: str) -> list[dict]:
     return results
 
 
-def format_session_entry(entry: dict, file_exists: bool = True) -> str:
+def format_session_entry(entry: Dict, file_exists: bool = True) -> str:
     """Format a session index entry for display."""
     sid = entry.get("sessionId", "?")
     modified = entry.get("modified", "?")
@@ -123,7 +124,7 @@ def format_session_entry(entry: dict, file_exists: bool = True) -> str:
 # ── Session file parsing ────────────────────────────────────────────
 
 
-def parse_session_structure(session_file: Path) -> dict:
+def parse_session_structure(session_file: Path) -> Dict:
     """Parse a session JSONL file and return structured data."""
     file_size = session_file.stat().st_size
     total_lines = 0
@@ -276,8 +277,8 @@ def parse_session_structure(session_file: Path) -> dict:
 
 
 def _detect_end_reason(
-    last_role: str | None,
-    unresolved: dict,
+    last_role: Optional[str],
+    unresolved: Dict,
     error_count: int,
 ) -> str:
     """Detect why the session ended."""
@@ -300,7 +301,7 @@ def _is_noise_user_text(text: str) -> bool:
     return False
 
 
-def extract_user_text(messages: list[dict], limit: int = 5) -> list[str]:
+def extract_user_text(messages: List[Dict], limit: int = 5) -> List[str]:
     """Extract the last N user text messages (not tool results or system noise)."""
     user_texts = []
     for msg_obj in reversed(messages):
@@ -329,7 +330,7 @@ def extract_user_text(messages: list[dict], limit: int = 5) -> list[str]:
     return user_texts
 
 
-def extract_assistant_text(messages: list[dict], limit: int = 3) -> list[str]:
+def extract_assistant_text(messages: List[Dict], limit: int = 3) -> List[str]:
     """Extract the last N assistant text responses (no thinking/tool_use)."""
     assistant_texts = []
     for msg_obj in reversed(messages):
@@ -355,7 +356,7 @@ def extract_assistant_text(messages: list[dict], limit: int = 3) -> list[str]:
 # ── Subagent extraction ──────────────────────────────────────────────
 
 
-def extract_subagent_context(session_file: Path) -> list[dict]:
+def extract_subagent_context(session_file: Path) -> List[Dict]:
     """Extract subagent summaries from session subdirectories.
 
     Returns list of {name, type, status, last_text, is_interrupted}.
@@ -457,7 +458,8 @@ def get_git_state(project_path: str) -> str:
     try:
         branch = subprocess.run(
             ["git", "branch", "--show-current"],
-            capture_output=True, text=True, cwd=project_path, timeout=5,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True, cwd=project_path, timeout=5,
         )
         if branch.stdout.strip():
             parts.append(f"**Current branch**: `{branch.stdout.strip()}`")
@@ -467,7 +469,8 @@ def get_git_state(project_path: str) -> str:
     try:
         status = subprocess.run(
             ["git", "status", "--short"],
-            capture_output=True, text=True, cwd=project_path, timeout=10,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True, cwd=project_path, timeout=10,
         )
         if status.stdout.strip():
             parts.append(f"### git status\n```\n{status.stdout.strip()}\n```")
@@ -479,7 +482,8 @@ def get_git_state(project_path: str) -> str:
     try:
         log = subprocess.run(
             ["git", "log", "--oneline", "-5"],
-            capture_output=True, text=True, cwd=project_path, timeout=10,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            universal_newlines=True, cwd=project_path, timeout=10,
         )
         if log.stdout.strip():
             parts.append(f"### git log (last 5)\n```\n{log.stdout.strip()}\n```")
@@ -489,7 +493,7 @@ def get_git_state(project_path: str) -> str:
     return "\n\n".join(parts)
 
 
-def get_memory_md(project_dir: Path) -> str | None:
+def get_memory_md(project_dir: Path) -> Optional[str]:
     """Read MEMORY.md if it exists in the project's memory directory."""
     memory_dir = project_dir / "memory"
     memory_file = memory_dir / "MEMORY.md"
@@ -500,7 +504,7 @@ def get_memory_md(project_dir: Path) -> str | None:
     return None
 
 
-def get_session_memory(session_file: Path) -> str | None:
+def get_session_memory(session_file: Path) -> Optional[str]:
     """Read session-memory/summary.md if it exists (newer CC versions)."""
     session_dir = session_file.parent / session_file.stem
     summary = session_dir / "session-memory" / "summary.md"
@@ -524,8 +528,8 @@ END_REASON_LABELS = {
 
 
 def build_briefing(
-    session_entry: dict | None,
-    parsed: dict,
+    session_entry: Optional[Dict],
+    parsed: Dict,
     project_path: str,
     project_dir: Path,
     session_file: Path,
@@ -658,7 +662,7 @@ def build_briefing(
 # ── CLI ──────────────────────────────────────────────────────────────
 
 
-def _check_session_files(entries: list[dict], project_dir: Path) -> dict[str, bool]:
+def _check_session_files(entries: List[Dict], project_dir: Path) -> Dict[str, bool]:
     """Check which index entries have actual files on disk."""
     status = {}
     for entry in entries:

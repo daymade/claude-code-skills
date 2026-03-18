@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, local Claude session continuation from `.claude` artifacts, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, multi-path parallel product analysis with cross-model test-time compute scaling, real financial data collection for US equities with validation and yfinance pitfall handling, advanced Excel automation for formatted workbook generation and complex xlsm parsing, and macOS programmatic window screenshot capture workflows",
-    "version": "1.38.0",
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, local Claude session continuation from `.claude` artifacts, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, multi-path parallel product analysis with cross-model test-time compute scaling, real financial data collection for US equities with validation and yfinance pitfall handling, advanced Excel automation for formatted workbook generation and complex xlsm parsing, macOS programmatic window screenshot capture workflows, and verified Scrapling CLI installation and web extraction workflows",
+    "version": "1.39.0",
     "homepage": "https://github.com/daymade/claude-code-skills"
   },
   "plugins": [
@@ -15,7 +15,7 @@
       "description": "Essential meta-skill for creating effective Claude Code skills with initialization scripts, validation, packaging, marketplace registration, and privacy best practices",
       "source": "./",
       "strict": false,
-      "version": "1.5.0",
+      "version": "1.5.1",
       "category": "developer-tools",
       "keywords": [
         "skill-creation",
@@ -500,7 +500,7 @@
       "description": "Develops iOS applications with XcodeGen, SwiftUI, and SPM. Use when configuring XcodeGen project.yml, resolving SPM dependency issues, deploying to devices, handling code signing, debugging camera/AVFoundation, iOS version compatibility issues, or fixing Library not loaded @rpath framework errors. Includes state machine testing patterns for @MainActor classes",
       "source": "./",
       "strict": false,
-      "version": "1.1.1",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "ios",
@@ -565,7 +565,7 @@
       "description": "Intelligent macOS disk space analysis and cleanup with safety-first philosophy. Use when users report disk space issues, need to clean their Mac, or want to understand storage consumption. Analyzes system caches, application remnants, large files, and development environments (Docker, Homebrew, npm, pip) with risk categorization (Safe/Caution/Keep) and requires explicit user confirmation before any deletions. Includes Mole visual tool integration for hybrid workflow",
       "source": "./",
       "strict": false,
-      "version": "1.1.1",
+      "version": "1.1.0",
       "category": "utilities",
       "keywords": [
         "macos",
@@ -882,7 +882,7 @@
       "description": "Recover actionable context from local `.claude` session artifacts and continue interrupted work without running `claude --resume`. Extracts compact boundary summaries, subagent workflow state, session end reason, and workspace drift via bundled Python script. Use when a user provides a Claude session ID, asks to continue prior work from local history, or wants to inspect `.claude` files before resuming implementation",
       "source": "./",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.1.1",
       "category": "developer-tools",
       "keywords": [
         "claude-code",
@@ -897,6 +897,27 @@
       ],
       "skills": [
         "./continue-claude-work"
+      ]
+    },
+    {
+      "name": "scrapling-skill",
+      "description": "Install, troubleshoot, and use Scrapling CLI for extracting HTML, Markdown, or text from webpages. Diagnoses missing extras, Playwright browser runtime issues, TLS verification failures, and WeChat public article extraction patterns. Use when users mention Scrapling, `scrapling extract`, `uv tool install scrapling`, or need to decide between static and browser-backed fetching",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "scrapling",
+        "web-scraping",
+        "html",
+        "markdown",
+        "playwright",
+        "wechat",
+        "extraction",
+        "cli"
+      ],
+      "skills": [
+        "./scrapling-skill"
       ]
     }
   ]
