@@ -43,7 +43,7 @@ def mask_secret(secret: str, visible_chars: int = 4) -> str:
         Masked string like "7fb3...DPRR"
 
     Examples:
-        >>> mask_secret("7fb3ab7b186242288fe93a27227b7149.bJCOEAsUfejvWDPR")
+        >>> mask_secret("example-fake-api-key-1234567890abcdef.test")
         '7fb3...DPRR'
 
         >>> mask_secret("short")
@@ -248,7 +248,7 @@ class SecretStr:
     Wrapper for secrets that prevents accidental logging.
 
     Usage:
-        api_key = SecretStr("7fb3ab7b186242288fe93a27227b7149.bJCOEAsUfejvWDPR")
+        api_key = SecretStr("example-fake-api-key-1234567890abcdef.test")
         print(api_key)  # Prints: SecretStr(7fb3...DPRR)
         print(api_key.get())  # Get actual value when needed
 
