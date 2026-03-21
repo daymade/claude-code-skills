@@ -68,6 +68,14 @@ NO_PROXY="<shadowrocket-ip>" curl -s -X POST "http://<shadowrocket-ip>:8080/api/
 curl --noproxy '*' -s --connect-timeout 2 "http://192.168.31.110:8080/api/read" | head -1
 ```
 
+**Port conflict warning**: Shadowrocket's config API listens on port 8080 by default, which may conflict with other services (e.g., whisper.cpp server, development proxies). If the API returns unexpected content (HTML, JSON from another service), verify what is actually listening on the port:
+
+```bash
+lsof -nP -iTCP:8080 | head -5
+```
+
+If another service owns port 8080, you need to either stop that service or access the Shadowrocket API from a different device on the same network.
+
 **Critical**: Use `--data-binary`, NOT `-d`. The `-d` flag URL-encodes the content, corrupting `#`, `=`, `&` and other characters in the config. This **destroys the entire configuration** — all rules, settings, and proxy groups are lost. The user must restore from backup.
 
 ```bash
@@ -87,6 +95,31 @@ tun-excluded-routes = 10.0.0.0/8, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 19
 ```
 
 Note: `100.64.0.0/10` is intentionally absent.
+
+### Complete Working Reference Config for Tailscale Compatibility
+
+This is a validated reference showing the correct relationship between `skip-proxy`, `tun-excluded-routes`, and `[Rule]` for Tailscale coexistence:
+
+```
+[General]
+# skip-proxy: bypass the HTTP proxy for these destinations (fixes browser 503)
+# 100.64.0.0/10 MUST be here for browser access to Tailscale IPs
+skip-proxy = 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 100.64.0.0/10, localhost, *.local, captive.apple.com
+
+# tun-excluded-routes: CIDRs excluded from TUN routing (sent directly via physical interface)
+# 100.64.0.0/10 must NOT be here — including it creates an en0 route that overrides Tailscale
+tun-excluded-routes = 10.0.0.0/8, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.0.2.0/24, 192.88.99.0/24, 192.168.0.0/16, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/4, 255.255.255.255/32
+
+[Rule]
+# Tailscale traffic enters TUN but is passed through without proxying
+IP-CIDR,100.64.0.0/10,DIRECT
+# ... other rules ...
+```
+
+**Key points**:
+- `skip-proxy` — YES, include `100.64.0.0/10` (browser bypass)
+- `tun-excluded-routes` — NO, never include `100.64.0.0/10` (would hijack routing)
+- `[Rule]` — YES, include `IP-CIDR,100.64.0.0/10,DIRECT` (TUN passthrough)
 
 ## Clash / ClashX Pro
 
@@ -151,12 +184,15 @@ export NO_PROXY=localhost,127.0.0.1,.ts.net,100.64.0.0/10,192.168.*,10.*,172.16.
 
 ### NO_PROXY Syntax Pitfalls
 
-| Syntax | curl | Python requests | Node.js | Meaning |
-|--------|------|-----------------|---------|---------|
-| `.ts.net` | ✅ | ✅ | ✅ | Domain suffix match (correct) |
-| `*.ts.net` | ❌ | ✅ | varies | Glob — curl does NOT support this |
-| `100.64.0.0/10` | ✅ 7.86+ | ✅ 2.25+ | ❌ native | CIDR notation |
-| `100.*` | ✅ | ✅ | ✅ | Too broad — covers public IPs `100.0-63.*` and `100.128-255.*` |
+| Syntax | curl | Python requests | Go `net/http` | Node.js | Meaning |
+|--------|------|-----------------|---------------|---------|---------|
+| `.ts.net` | ✅ | ✅ | ✅ | ✅ | Domain suffix match (correct) |
+| `*.ts.net` | ❌ | ✅ | ❌ | varies | Glob — curl and Go do NOT support this |
+| `100.64.0.0/10` | ✅ 7.86+ | ✅ 2.25+ | ❌ | ❌ native | CIDR notation — Go silently ignores it |
+| `100.*` | ✅ | ✅ | ❌ | ✅ | Too broad — covers public IPs `100.0-63.*` and `100.128-255.*` |
+| `workstation-name` | ✅ | ✅ | ✅ | ✅ | Exact hostname match (safest for Go) |
+
+**Go `net/http` warning**: Go's proxy bypass logic (`httpproxy.Config.ProxyFunc`) does not implement CIDR matching. `NO_PROXY=100.64.0.0/10` is silently ignored — Go programs will still route traffic through the proxy. Use MagicDNS hostnames (e.g., `workstation-4090-wsl`) or explicit IPs (e.g., `100.101.102.103`) instead of CIDR ranges when Go programs need to bypass the proxy.
 
 **Key rule**: Always use `.ts.net` (leading dot, no asterisk) for domain suffix matching. This is the most portable syntax across all HTTP clients.
 
@@ -282,9 +318,9 @@ Connection setup is slightly slower (~6s vs ~2s) because TUN routing has more ne
 
 ## General Principles
 
-### Four Conflict Layers
+### Five Conflict Layers
 
-Proxy tools create conflicts at four independent layers on macOS. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations through the same proxy infrastructure:
+Proxy tools create conflicts at five independent layers on macOS. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations; Layer 5 affects VM/container runtimes:
 
 | Layer | Setting | What it controls | Symptom when wrong |
 |-------|---------|------------------|--------------------|
@@ -292,6 +328,7 @@ Proxy tools create conflicts at four independent layers on macOS. Layers 1-3 aff
 | 2. HTTP env vars | `http_proxy` / `NO_PROXY` | CLI tools (curl, wget, Python, Node.js) | `curl` times out, SSH works, browser works |
 | 3. System proxy | `skip-proxy` | Browser and system HTTP clients | Browser 503, `curl` works (both with/without proxy), SSH works |
 | 4. SSH ProxyCommand | `ProxyCommand connect -H` | SSH git operations (push/pull/clone) | `ssh -T` works, `git push` fails intermittently with `failed to begin relaying via HTTP` |
+| 5. VM/Container proxy | Docker/OrbStack proxy config | `docker pull`, `docker build` | Host `curl` works, `docker pull` times out (TLS handshake timeout) |
 
 **Each layer is independent.** A fix at one layer doesn't help the others. You may need fixes at multiple layers simultaneously.
 
@@ -397,5 +434,7 @@ If a proxy config change breaks Tailscale connectivity:
 # Or manually delete a conflicting route:
 sudo route delete -net 100.64.0.0/10 <gateway-ip>
 ```
+
+**Important**: Manually deleting a bad `en0` route with `sudo route delete` is only a temporary fix. Shadowrocket will re-add the route when the VPN connection is next reconnected or toggled. The only permanent fix is modifying the Shadowrocket configuration to remove `100.64.0.0/10` from `tun-excluded-routes` (it should never be there).
 
 If `tun-excluded-routes` was modified, reverting it and restarting Shadowrocket will restore Tailscale's routing immediately.

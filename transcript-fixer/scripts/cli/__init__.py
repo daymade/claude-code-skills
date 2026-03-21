@@ -9,6 +9,7 @@ This module contains command handlers and argument parsing:
 from .commands import (
     cmd_init,
     cmd_add_correction,
+    cmd_audit,
     cmd_list_corrections,
     cmd_run_correction,
     cmd_review_learned,
@@ -25,6 +26,7 @@ from .argument_parser import create_argument_parser
 __all__ = [
     'cmd_init',
     'cmd_add_correction',
+    'cmd_audit',
     'cmd_list_corrections',
     'cmd_run_correction',
     'cmd_review_learned',

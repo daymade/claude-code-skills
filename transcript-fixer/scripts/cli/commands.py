@@ -43,14 +43,83 @@ def cmd_init(args: argparse.Namespace) -> None:
 
 
 def cmd_add_correction(args: argparse.Namespace) -> None:
-    """Add a single correction"""
+    """Add a single correction with safety checks"""
     service = _get_service()
+    force = getattr(args, 'force', False)
     try:
-        service.add_correction(args.from_text, args.to_text, args.domain)
-        print(f"✅ Added: '{args.from_text}' → '{args.to_text}' (domain: {args.domain})")
+        service.add_correction(
+            args.from_text, args.to_text, args.domain, force=force,
+        )
+        print(f"Added: '{args.from_text}' -> '{args.to_text}' (domain: {args.domain})")
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def cmd_audit(args: argparse.Namespace) -> None:
+    """Audit all active corrections for false positive risks"""
+    service = _get_service()
+    domain = getattr(args, 'domain', None)
+
+    print(f"\nAuditing corrections" + (f" (domain: {domain})" if domain else " (all domains)") + "...")
+    print("=" * 70)
+
+    issues = service.audit_dictionary(domain)
+
+    if not issues:
+        corrections = service.get_corrections(domain)
+        print(f"\nAll {len(corrections)} corrections passed safety checks.")
+        return
+
+    # Categorize
+    error_count = 0
+    warning_count = 0
+    for from_text, warnings in issues.items():
+        for w in warnings:
+            if w.level == "error":
+                error_count += 1
+            else:
+                warning_count += 1
+
+    corrections = service.get_corrections(domain)
+    print(f"\nScanned {len(corrections)} corrections. "
+          f"Found issues in {len(issues)} rules:")
+    print(f"  Errors: {error_count} (should be removed or converted to context rules)")
+    print(f"  Warnings: {warning_count} (review recommended)")
+    print()
+
+    # Print details grouped by severity
+    for severity in ["error", "warning"]:
+        label = "ERRORS" if severity == "error" else "WARNINGS"
+        relevant = {
+            ft: [w for w in ws if w.level == severity]
+            for ft, ws in issues.items()
+        }
+        relevant = {ft: ws for ft, ws in relevant.items() if ws}
+
+        if not relevant:
+            continue
+
+        print(f"--- {label} ({len(relevant)} rules) ---")
+        for from_text, warnings in sorted(relevant.items()):
+            to_text = corrections.get(from_text, "?")
+            print(f"\n  '{from_text}' -> '{to_text}'")
+            for w in warnings:
+                print(f"    [{w.category}] {w.message}")
+                print(f"    Suggestion: {w.suggestion}")
+        print()
+
+    if error_count > 0:
+        print(
+            f"ACTION REQUIRED: {error_count} error(s) found. These rules are "
+            f"actively causing false positives and should be removed or "
+            f"converted to context rules."
+        )
+        print(
+            f"To remove a rule: "
+            f"sqlite3 ~/.transcript-fixer/corrections.db "
+            f"\"UPDATE corrections SET is_active=0 WHERE from_text='...';\""
+        )
 
 
 def cmd_list_corrections(args: argparse.Namespace) -> None:
