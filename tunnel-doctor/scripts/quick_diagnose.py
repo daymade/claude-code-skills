@@ -167,6 +167,32 @@ def strict_tls_check(url: str, timeout: int) -> Dict[str, object]:
     }
 
 
+def find_tailscale_utun() -> Optional[str]:
+    """Find which utun interface belongs to Tailscale (has a 100.x.x.x IP)."""
+    code, stdout, _ = run(["ifconfig"])
+    if code != 0:
+        return None
+    current_iface = ""
+    for line in stdout.splitlines():
+        # Interface header line (e.g., "utun7: flags=...")
+        m = re.match(r"^(\w+):", line)
+        if m:
+            current_iface = m.group(1)
+        # Look for Tailscale CGNAT IP on a utun interface
+        if current_iface.startswith("utun") and "inet 100." in line:
+            return current_iface
+    return None
+
+
+def get_iface_mtu(iface: str) -> Optional[int]:
+    """Get MTU of a network interface."""
+    code, stdout, _ = run(["ifconfig", iface])
+    if code != 0:
+        return None
+    m = re.search(r"mtu\s+(\d+)", stdout)
+    return int(m.group(1)) if m else None
+
+
 def route_check(tailscale_ip: str) -> Dict[str, object]:
     code, stdout, stderr = run(["route", "-n", "get", tailscale_ip])
     if code != 0:
@@ -181,10 +207,24 @@ def route_check(tailscale_ip: str) -> Dict[str, object]:
         if line.startswith("gateway:"):
             gateway = line.split(":", 1)[1].strip()
 
+    # Identify which utun is Tailscale's and whether the route points to it
+    tailscale_utun = find_tailscale_utun()
+    route_mtu = get_iface_mtu(interface) if interface else None
+    is_tailscale_iface = (interface == tailscale_utun) if tailscale_utun else None
+    wrong_utun = (
+        interface.startswith("utun")
+        and tailscale_utun is not None
+        and interface != tailscale_utun
+    )
+
     return {
         "ok": True,
         "interface": interface,
         "gateway": gateway,
+        "tailscale_utun": tailscale_utun or "",
+        "route_iface_mtu": route_mtu,
+        "is_tailscale_iface": is_tailscale_iface,
+        "wrong_utun": wrong_utun,
         "raw": stdout,
     }
 
@@ -300,6 +340,10 @@ def build_report(
     route_info = route_check(tailscale_ip) if tailscale_ip else None
     if route_info and route_info["ok"]:
         iface = str(route_info["interface"])
+        ts_utun = str(route_info.get("tailscale_utun", ""))
+        route_mtu = route_info.get("route_iface_mtu")
+        wrong_utun = route_info.get("wrong_utun", False)
+
         if iface.startswith("en"):
             findings.append(
                 {
@@ -308,6 +352,23 @@ def build_report(
                     "detail": f"route -n get {tailscale_ip} resolved to {iface}, not utun*.",
                     "fix": (
                         "Check proxy TUN excluded-routes. Do not exclude 100.64.0.0/10 from TUN route table."
+                    ),
+                }
+            )
+        elif wrong_utun:
+            mtu_hint = f" (MTU {route_mtu})" if route_mtu else ""
+            findings.append(
+                {
+                    "level": "error",
+                    "title": "Route points to wrong utun interface",
+                    "detail": (
+                        f"route -n get {tailscale_ip} resolved to {iface}{mtu_hint}, "
+                        f"but Tailscale is on {ts_utun}. "
+                        f"Likely hitting Shadowrocket/VPN TUN (MTU 4064) instead of Tailscale (MTU 1280)."
+                    ),
+                    "fix": (
+                        "Check proxy TUN excluded-routes and rule ordering. "
+                        "Ensure IP-CIDR,100.64.0.0/10,DIRECT is in proxy rules."
                     ),
                 }
             )
@@ -373,8 +434,21 @@ def print_human(report: Dict[str, object]) -> int:
     if route:
         if route.get("ok"):
             print("Tailscale Route Check")
-            print(f"- interface: {route.get('interface') or 'N/A'}")
-            print(f"- gateway:   {route.get('gateway') or 'N/A'}")
+            print(f"- route interface: {route.get('interface') or 'N/A'}")
+            route_mtu = route.get("route_iface_mtu")
+            if route_mtu:
+                print(f"  route iface MTU: {route_mtu}")
+            print(f"- gateway:         {route.get('gateway') or 'N/A'}")
+            ts_utun = route.get("tailscale_utun")
+            if ts_utun:
+                print(f"- tailscale utun:  {ts_utun}")
+                is_ts = route.get("is_tailscale_iface")
+                if is_ts is True:
+                    print("  route → Tailscale utun: YES (correct)")
+                elif is_ts is False:
+                    print("  route → Tailscale utun: NO (MISMATCH — see findings)")
+            else:
+                print("- tailscale utun:  (not detected — is Tailscale running?)")
             print("")
         else:
             print("Tailscale Route Check")

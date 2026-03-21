@@ -31,6 +31,7 @@ from __future__ import annotations
 from cli import (
     cmd_init,
     cmd_add_correction,
+    cmd_audit,
     cmd_list_corrections,
     cmd_run_correction,
     cmd_review_learned,
@@ -89,6 +90,8 @@ def main() -> None:
     elif args.add_correction:
         args.from_text, args.to_text = args.add_correction
         cmd_add_correction(args)
+    elif getattr(args, 'audit_dictionary', False):
+        cmd_audit(args)
     elif args.list_corrections:
         cmd_list_corrections(args)
     elif args.review_learned:

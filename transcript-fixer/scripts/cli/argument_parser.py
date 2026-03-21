@@ -38,10 +38,22 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Add correction"
     )
     parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Force --add even when safety checks detect risks (common word, substring collision)"
+    )
+    parser.add_argument(
         "--list",
         action="store_true",
         dest="list_corrections",
         help="List all corrections"
+    )
+    parser.add_argument(
+        "--audit",
+        action="store_true",
+        dest="audit_dictionary",
+        help="Audit all active corrections for false positive risks (common words, short text, substring collisions)"
     )
 
     # Correction workflow
