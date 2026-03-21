@@ -37,6 +37,8 @@ Determine which scenario applies:
 - **`git clone` fails with `Connection closed by 198.18.x.x`** → TUN DNS hijack for SSH (Step 2H)
 - **SSH connects but `operation not permitted`** → Tailscale SSH config issue (Step 4)
 - **SSH connects but `be-child ssh` exits code 1** → WSL snap sandbox issue (Step 5)
+- **TCP port 22 reachable (`nc -z` succeeds) but SSH fails with `kex_exchange_identification: Connection closed`** → Tailscale SSH proxy intercept on WSL (Step 5A)
+- **`tailscale ssh` returns "not available on App Store builds"** → Wrong Tailscale distribution on macOS (Step 5B)
 
 **Key distinctions**:
 - SSH does NOT use `http_proxy`/`NO_PROXY` env vars. If SSH works but HTTP doesn't → Layer 2.
@@ -45,6 +47,8 @@ Determine which scenario applies:
 - If `ssh -T git@github.com` works but `git push` fails intermittently → Layer 4 (double tunnel).
 - If host `curl https://...` works but `docker pull` times out → Layer 5 (VM proxy propagation).
 - If DNS resolves to `198.18.x.x` virtual IPs → TUN DNS hijack (Step 2H).
+- If `nc -z` succeeds on port 22 but SSH gets no banner (`kex_exchange_identification`) → Tailscale SSH proxy intercept (Step 5A). Confirm with `tcpdump -i any port 22` on the remote — 0 packets means Tailscale intercepts above the kernel.
+- If `tailscale ssh` fails with "not available on App Store builds" → install Standalone Tailscale (Step 5B).
 
 ### Fast Path: Run Automated Checks
 
@@ -96,6 +100,18 @@ export NO_PROXY=localhost,127.0.0.1,.ts.net,100.64.0.0/10,192.168.*,10.*,172.16.
 
 **NO_PROXY syntax pitfalls** — see [references/proxy_conflict_reference.md](references/proxy_conflict_reference.md) for the compatibility matrix.
 
+**Go `net/http` CIDR caveat**: Go's standard `net/http` does NOT support CIDR notation in `NO_PROXY`. Setting `NO_PROXY=100.64.0.0/10` works for curl and Python, but Go programs (including Tailscale-adjacent tooling) will still send traffic through the proxy. The fix is to use MagicDNS hostnames (e.g., `workstation-4090-wsl`) instead of raw IPs, or add explicit hostnames to `NO_PROXY`:
+
+```bash
+# WRONG for Go programs — CIDR is silently ignored
+NO_PROXY=100.64.0.0/10 go-program http://100.101.102.103:8002/health  # → goes through proxy
+
+# CORRECT — use hostname (matched as suffix) or explicit IP
+export NO_PROXY=localhost,127.0.0.1,.ts.net,workstation-4090-wsl,100.101.102.103,192.168.*,10.*,172.16.*
+```
+
+This is especially relevant when accessing Tailscale services from Go-based tools (e.g., custom CLIs, Go test suites hitting remote APIs).
+
 Verify the fix:
 
 ```bash
@@ -126,6 +142,19 @@ destination: 100.64.0.0
 gateway: 192.168.x.1    # Default gateway
 interface: en0           # Physical interface, NOT Tailscale
 ```
+
+**Important**: Not all `utun` interfaces are Tailscale's. Verify which utun belongs to Tailscale before concluding the route is correct:
+
+```bash
+# Find Tailscale's utun interface (has a 100.x.x.x IP)
+ifconfig | grep -A2 'inet 100\.'
+```
+
+Quick indicators by MTU:
+- **MTU 1280** → typically Tailscale
+- **MTU 4064** → typically Shadowrocket TUN
+
+If `route -n get` shows traffic going to a utun with MTU 4064, it is hitting Shadowrocket's TUN, not Tailscale — this is still a route conflict even though the interface name starts with `utun`.
 
 Confirm with full route table:
 
@@ -508,13 +537,89 @@ sudo tailscale up --ssh
 
 **Important**: The new installation may assign a different Tailscale IP. Check with `tailscale status --self`.
 
+### Step 5A: Fix Tailscale SSH Proxy Silent Failure on WSL
+
+**Symptom**: TCP port 22 is reachable (`nc -z -w 5 <ip> 22` succeeds), but SSH fails immediately with:
+
+```
+kex_exchange_identification: Connection closed by remote host
+```
+
+No SSH banner is ever received. This happens even with apt-installed Tailscale (not snap).
+
+**Root cause**: When `tailscale up --ssh` is enabled on WSL, Tailscale intercepts port 22 connections at the application layer (above the kernel network stack). If Tailscale's built-in SSH proxy malfunctions, it accepts the TCP connection but immediately closes it before sending the SSH banner.
+
+**Key diagnostic** — on the WSL instance:
+
+```bash
+# This will show 0 packets even during active SSH attempts
+sudo tcpdump -i any port 22 -c 5 -w /dev/null 2>&1
+```
+
+Zero packets means Tailscale is intercepting connections before they reach the kernel network stack. The kernel's `sshd` never sees the connection.
+
+**Distinction from Step 5**: Step 5 covers snap sandbox issues where `be-child ssh` fails. This is a different problem — Tailscale's SSH proxy itself silently fails, regardless of installation method.
+
+**Fix** — disable Tailscale's SSH proxy and use regular sshd:
+
+```bash
+# On the WSL instance:
+sudo tailscale up --ssh=false
+
+# Verify sshd is running
+sudo service ssh status
+# If not running:
+sudo service ssh start
+
+# Verify from the client machine:
+ssh -o ConnectTimeout=10 <user>@<tailscale-ip> 'echo SSH_OK'
+```
+
+After disabling Tailscale SSH, connections go through the kernel network stack to `sshd` as normal. The Tailscale ACL `"action": "accept"` in Step 4 is no longer relevant — authentication is handled by `sshd` using SSH keys or passwords.
+
+**When to keep `--ssh` enabled**: Only if you specifically need Tailscale's SSH features (ACL-based access control, no SSH key management). If standard sshd works, prefer `--ssh=false` for reliability.
+
+### Step 5B: Fix App Store Tailscale on macOS (Missing `tailscale ssh`)
+
+**Symptom**: Running `tailscale ssh` returns:
+
+```
+The 'tailscale ssh' subcommand is not available on macOS builds
+distributed through the App Store or TestFlight.
+```
+
+**Root cause**: The App Store version of Tailscale for macOS is sandboxed and does not include the `tailscale ssh` subcommand.
+
+**Fix** — install the Standalone version:
+
+1. Uninstall the App Store version (delete from /Applications)
+2. Download the Standalone build from https://pkgs.tailscale.com/stable/#macos
+3. Install to /Applications
+
+**Post-install CLI setup**: The standalone `tailscale` CLI binary is embedded inside the app bundle. Add an alias to your shell config:
+
+```bash
+# ~/.zshrc
+alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+```
+
+Verify:
+
+```bash
+source ~/.zshrc
+tailscale version
+tailscale ssh <user>@<hostname>   # Should work now
+```
+
 ### Step 6: Verify End-to-End
 
 Run a complete connectivity test:
 
 ```bash
-# 1. Check route is correct
+# 1. Check route is correct (must show Tailscale's utun, not en0 or Shadowrocket's utun)
 route -n get <tailscale-ip>
+# Also confirm which utun is Tailscale's:
+ifconfig | grep -A2 'inet 100\.'
 
 # 2. Test TCP connectivity
 nc -z -w 5 <tailscale-ip> 22
@@ -523,7 +628,7 @@ nc -z -w 5 <tailscale-ip> 22
 ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no <user>@<tailscale-ip> 'echo SSH_OK && hostname && whoami'
 ```
 
-All three must pass. If step 1 fails, revisit Step 3. If step 2 fails, check WSL sshd or firewall. If step 3 fails, revisit Steps 4-5.
+All three must pass. If step 1 fails, revisit Step 3. If step 1 shows wrong utun (e.g., Shadowrocket's utun with MTU 4064 instead of Tailscale's with MTU 1280), that is also a route conflict. If step 2 passes but step 3 fails with `kex_exchange_identification`, revisit Step 5A (Tailscale SSH proxy intercept). If step 2 fails, check WSL sshd or firewall. If step 3 fails with other errors, revisit Steps 4-5.
 
 ## SOP: Remote Development via Tailscale
 
@@ -612,7 +717,13 @@ Each `-L` flag is independent. If one port is already bound locally, `ExitOnForw
 
 ### 4. SSH Non-Login Shell Setup
 
-SSH non-login shells don't load `~/.zshrc`, so nvm/Homebrew tools and proxy env vars are unavailable. Prefix all remote commands with `source ~/.zshrc 2>/dev/null;`. See [references/proxy_conflict_reference.md § SSH Non-Login Shell Pitfall](references/proxy_conflict_reference.md) for details and examples.
+**This is a frequent source of "it works interactively but fails in scripts" bugs.** SSH non-login shells don't load `~/.zshrc` (or `~/.bashrc` on Linux), so tools installed via nvm, Homebrew, uv, cargo, or any shell-level manager won't be in `$PATH`. Proxy env vars set in `~/.zshrc` also won't be loaded.
+
+This affects **all** remote commands run via `ssh user@host "command"`, including CI/CD pipelines, cron-triggered SSH, and Makefile remote targets. Prefix all remote commands with `source ~/.zshrc 2>/dev/null;` (macOS) or `source ~/.bashrc 2>/dev/null;` (Linux/WSL).
+
+**Common failure**: `ssh user@host "uv run ..."` or `ssh user@host "node ..."` returns `command not found` even though the command works in an interactive SSH session.
+
+See [references/proxy_conflict_reference.md § SSH Non-Login Shell Pitfall](references/proxy_conflict_reference.md) for details and examples.
 
 For Makefile targets that run remote commands:
 

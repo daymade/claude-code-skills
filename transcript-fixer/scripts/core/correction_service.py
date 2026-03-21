@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 import os
+import sys
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -22,6 +23,10 @@ from .correction_repository import (
     ValidationError,
     DatabaseError
 )
+
+# Import safety check for common words
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.common_words import check_correction_safety, audit_corrections, SafetyWarning
 
 logger = logging.getLogger(__name__)
 
@@ -178,10 +183,15 @@ class CorrectionService:
         domain: str = "general",
         source: str = "manual",
         confidence: float = 1.0,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
+        force: bool = False,
     ) -> int:
         """
-        Add a correction with full validation.
+        Add a correction with full validation and safety checks.
+
+        Safety checks detect common Chinese words and substring collision
+        risks that would cause false positives. Pass force=True to bypass
+        (errors become warnings printed to stderr).
 
         Args:
             from_text: Original (incorrect) text
@@ -190,12 +200,13 @@ class CorrectionService:
             source: Origin of correction
             confidence: Confidence score
             notes: Optional notes
+            force: If True, downgrade safety errors to warnings
 
         Returns:
             ID of inserted correction
 
         Raises:
-            ValidationError: If validation fails
+            ValidationError: If validation or safety check fails
         """
         # Comprehensive validation
         self.validate_correction_text(from_text, "from_text")
@@ -209,6 +220,34 @@ class CorrectionService:
             raise ValidationError(
                 f"from_text and to_text are identical: '{from_text}'"
             )
+
+        # Safety check: detect common words and substring collisions
+        safety_warnings = check_correction_safety(from_text, to_text, strict=True)
+
+        if safety_warnings:
+            errors = [w for w in safety_warnings if w.level == "error"]
+            warns = [w for w in safety_warnings if w.level == "warning"]
+
+            if errors and not force:
+                # Block the addition
+                msg_parts = []
+                for w in errors:
+                    msg_parts.append(f"[{w.category}] {w.message}")
+                    msg_parts.append(f"  Suggestion: {w.suggestion}")
+                raise ValidationError(
+                    f"Safety check BLOCKED adding '{from_text}' -> '{to_text}':\n"
+                    + "\n".join(msg_parts)
+                    + "\n\nUse --force to override (at your own risk)."
+                )
+
+            # Print warnings (errors downgraded by --force, or genuine warnings)
+            all_to_print = errors + warns if force else warns
+            if all_to_print:
+                for w in all_to_print:
+                    prefix = "FORCED" if w.level == "error" else "WARNING"
+                    logger.warning(
+                        f"[{prefix}] [{w.category}] {w.message} | {w.suggestion}"
+                    )
 
         # Get current user
         added_by = os.getenv("USER") or os.getenv("USERNAME") or "unknown"
@@ -430,6 +469,31 @@ class CorrectionService:
         logger.debug(f"Statistics for domain '{domain}': {stats}")
 
         return stats
+
+    # ==================== Audit Operations ====================
+
+    def audit_dictionary(
+        self,
+        domain: Optional[str] = None,
+    ) -> Dict[str, List[SafetyWarning]]:
+        """
+        Audit all active corrections for safety issues.
+
+        Scans every rule and flags:
+        - from_text that is a common Chinese word (false positive risk)
+        - from_text that is <= 2 characters (high collision risk)
+        - from_text that appears as substring in common words (collateral damage)
+        - Both from_text and to_text being common words (bidirectional risk)
+
+        Args:
+            domain: Optional domain filter (None = all domains)
+
+        Returns:
+            Dict mapping from_text to list of SafetyWarnings.
+            Only entries with issues are included.
+        """
+        corrections = self.get_corrections(domain)
+        return audit_corrections(corrections)
 
     # ==================== Helper Methods ====================
 
