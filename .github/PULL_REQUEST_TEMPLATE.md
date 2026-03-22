@@ -33,7 +33,7 @@ Which skills are affected by this PR?
 
 - [ ] skill-creator
 - [ ] github-ops
-- [ ] markdown-tools
+- [ ] doc-to-markdown
 - [ ] mermaid-tools
 - [ ] statusline-generator
 - [ ] teams-channel-post-writer

@@ -146,7 +146,7 @@ claude plugin install skill-creator@daymade-skills
 claude plugin install github-ops@daymade-skills
 
 # Document conversion
-claude plugin install markdown-tools@daymade-skills
+claude plugin install doc-to-markdown@daymade-skills
 
 # Diagram generation
 claude plugin install mermaid-tools@daymade-skills
@@ -294,7 +294,7 @@ Comprehensive GitHub operations using gh CLI and GitHub API.
 
 ---
 
-### 2. **markdown-tools** - Document Conversion Suite
+### 2. **doc-to-markdown** - Document Conversion Suite
 
 Converts documents to markdown with Windows/WSL path handling and PDF image extraction.
 
@@ -313,7 +313,7 @@ Converts documents to markdown with Windows/WSL path handling and PDF image extr
 
 **🎬 Live Demo**
 
-![Markdown Tools Demo](./demos/markdown-tools/convert-docs.gif)
+![Markdown Tools Demo](./demos/doc-to-markdown/convert-docs.gif)
 
 ---
 
@@ -1838,7 +1838,7 @@ Want to see all demos in one place with click-to-enlarge functionality? Check ou
 Use **github-ops** to streamline PR creation, issue management, and API operations.
 
 ### For Documentation
-Combine **markdown-tools** for document conversion and **mermaid-tools** for diagram generation to create comprehensive documentation. Use **llm-icon-finder** to add brand icons.
+Combine **doc-to-markdown** for document conversion and **mermaid-tools** for diagram generation to create comprehensive documentation. Use **llm-icon-finder** to add brand icons.
 
 ### For Research & Analysis
 Use **deep-research** to produce format-controlled research reports with evidence tables and citations. Combine with **fact-checker** to validate claims or with **twitter-reader** for social-source collection.
@@ -1916,7 +1916,7 @@ Use **iOS-APP-developer** to configure XcodeGen projects, resolve SPM dependency
 Use **macos-cleaner** to intelligently analyze and reclaim disk space on macOS with safety-first approach. Unlike one-click cleaners that blindly delete, macos-cleaner explains what each file is, categorizes by risk level (🟢/🟡/🔴), and requires explicit confirmation before any deletion. Perfect for developers dealing with Docker/Homebrew/npm/pip cache bloat, users wanting to understand storage consumption, or anyone who values transparency over automation. Combines script-based precision with optional Mole visual tool integration for hybrid workflow.
 
 ### For Twitter/X Content Research
-Use **twitter-reader** to fetch tweet content without JavaScript rendering or authentication. Perfect for documenting social media discussions, archiving threads, analyzing tweet content, or gathering reference material from Twitter/X. Combine with **markdown-tools** to convert fetched content into other formats, or with **repomix-safe-mixer** to package research collections securely.
+Use **twitter-reader** to fetch tweet content without JavaScript rendering or authentication. Perfect for documenting social media discussions, archiving threads, analyzing tweet content, or gathering reference material from Twitter/X. Combine with **doc-to-markdown** to convert fetched content into other formats, or with **repomix-safe-mixer** to package research collections securely.
 
 ### For Skill Quality & Open-Source Contributions
 Use **skill-reviewer** to validate your own skills against best practices before publishing, or to review and improve others' skill repositories. Combine with **github-contributor** to find high-impact open-source projects, create professional PRs, and build your contributor reputation. Perfect for developers who want to contribute to the Claude Code ecosystem or any GitHub project systematically.
@@ -1947,7 +1947,7 @@ Each skill includes:
 ### Quick Links
 
 - **github-ops**: See `github-ops/references/api_reference.md` for API documentation
-- **markdown-tools**: See `markdown-tools/references/conversion-examples.md` for conversion scenarios
+- **doc-to-markdown**: See `doc-to-markdown/references/conversion-examples.md` for conversion scenarios
 - **mermaid-tools**: See `mermaid-tools/references/setup_and_troubleshooting.md` for setup guide
 - **statusline-generator**: See `statusline-generator/references/color_codes.md` for customization
 - **teams-channel-post-writer**: See `teams-channel-post-writer/references/writing-guidelines.md` for quality standards
@@ -1992,7 +1992,7 @@ Each skill includes:
 - **Claude Code** 2.0.13 or higher
 - **Python 3.6+** (for scripts in multiple skills)
 - **gh CLI** (for github-ops)
-- **markitdown** (for markdown-tools)
+- **markitdown** (for doc-to-markdown)
 - **mermaid-cli** (for mermaid-tools)
 - **yt-dlp** (for youtube-downloader): `brew install yt-dlp` or `pip install yt-dlp`
 - **FFmpeg/FFprobe** (for video-comparer): `brew install ffmpeg`, `apt install ffmpeg`, or `winget install ffmpeg`

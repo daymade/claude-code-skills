@@ -146,7 +146,7 @@ claude plugin install skill-creator@daymade-skills
 claude plugin install github-ops@daymade-skills
 
 # 文档转换
-claude plugin install markdown-tools@daymade-skills
+claude plugin install doc-to-markdown@daymade-skills
 
 # 图表生成
 claude plugin install mermaid-tools@daymade-skills
@@ -319,7 +319,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### 2. **markdown-tools** - 文档转换套件
+### 2. **doc-to-markdown** - 文档转换套件
 
 将文档转换为 markdown，支持 Windows/WSL 路径处理和 PDF 图片提取。
 
@@ -338,7 +338,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 **🎬 实时演示**
 
-![Markdown 工具演示](./demos/markdown-tools/convert-docs.gif)
+![Markdown 工具演示](./demos/doc-to-markdown/convert-docs.gif)
 
 ---
 
@@ -1880,7 +1880,7 @@ claude plugin install scrapling-skill@daymade-skills
 使用 **github-ops** 简化 PR 创建、问题管理和 API 操作。
 
 ### 文档处理
-结合 **markdown-tools** 进行文档转换和 **mermaid-tools** 进行图表生成，创建全面的文档。使用 **llm-icon-finder** 添加品牌图标。
+结合 **doc-to-markdown** 进行文档转换和 **mermaid-tools** 进行图表生成，创建全面的文档。使用 **llm-icon-finder** 添加品牌图标。
 
 ### 调研与分析
 使用 **deep-research** 生成格式可控的调研报告，包含证据表与引用。与 **fact-checker** 结合用于验证关键结论，或与 **twitter-reader** 结合收集社媒资料。
@@ -1952,7 +1952,7 @@ claude plugin install scrapling-skill@daymade-skills
 使用 **iOS-APP-developer** 配置 XcodeGen 项目，处理 SPM 依赖、签名与部署问题。
 
 ### Twitter/X 内容研究
-使用 **twitter-reader** 无需 JavaScript 渲染或身份验证即可获取推文内容。非常适合记录社交媒体讨论、归档话题、分析推文内容或从 Twitter/X 收集参考资料。与 **markdown-tools** 结合可将获取的内容转换为其他格式，或与 **repomix-safe-mixer** 结合安全地打包研究集合。
+使用 **twitter-reader** 无需 JavaScript 渲染或身份验证即可获取推文内容。非常适合记录社交媒体讨论、归档话题、分析推文内容或从 Twitter/X 收集参考资料。与 **doc-to-markdown** 结合可将获取的内容转换为其他格式，或与 **repomix-safe-mixer** 结合安全地打包研究集合。
 
 ### macOS 系统维护与磁盘空间恢复
 使用 **macos-cleaner** 以安全优先的方式智能分析和恢复 macOS 上的磁盘空间。与盲目删除的一键清理工具不同，macos-cleaner 解释每个文件是什么、按风险级别分类（🟢/🟡/🔴），并在任何删除前需要明确确认。非常适合处理 Docker/Homebrew/npm/pip 缓存膨胀的开发者、希望了解存储空间消耗的用户，或任何重视透明度而非自动化的人。结合基于脚本的精度和可选的 Mole 可视化工具集成以实现混合工作流。
@@ -1989,7 +1989,7 @@ claude plugin install scrapling-skill@daymade-skills
 ### 快速链接
 
 - **github-ops**：参见 `github-ops/references/api_reference.md` 了解 API 文档
-- **markdown-tools**：参见 `markdown-tools/references/conversion-examples.md` 了解转换场景
+- **doc-to-markdown**：参见 `doc-to-markdown/references/conversion-examples.md` 了解转换场景
 - **mermaid-tools**：参见 `mermaid-tools/references/setup_and_troubleshooting.md` 了解设置指南
 - **statusline-generator**：参见 `statusline-generator/references/color_codes.md` 了解自定义
 - **teams-channel-post-writer**：参见 `teams-channel-post-writer/references/writing-guidelines.md` 了解质量标准
@@ -2034,7 +2034,7 @@ claude plugin install scrapling-skill@daymade-skills
 - **Claude Code** 2.0.13 或更高版本
 - **Python 3.6+**（用于多个技能中的脚本）
 - **gh CLI**（用于 github-ops）
-- **markitdown**（用于 markdown-tools）
+- **markitdown**（用于 doc-to-markdown）
 - **mermaid-cli**（用于 mermaid-tools）
 - **VHS**（用于 cli-demo-generator）：`brew install vhs`
 - **asciinema**（可选，用于 cli-demo-generator 交互式录制）

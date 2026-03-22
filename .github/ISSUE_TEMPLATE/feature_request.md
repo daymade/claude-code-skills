@@ -20,7 +20,7 @@ Which skill would this enhance?
 
 - [ ] skill-creator
 - [ ] github-ops
-- [ ] markdown-tools
+- [ ] doc-to-markdown
 - [ ] mermaid-tools
 - [ ] statusline-generator
 - [ ] teams-channel-post-writer

@@ -122,7 +122,7 @@ claude plugin marketplace add https://github.com/daymade/claude-code-skills
 # 在 Claude Code 内使用 `/plugin ...`，在终端中使用 `claude plugin ...`
 # 步骤 2：安装你需要的技能
 claude plugin install github-ops@daymade-skills
-claude plugin install markdown-tools@daymade-skills
+claude plugin install doc-to-markdown@daymade-skills
 # ... 根据需要添加更多
 
 # 步骤 3：重启 Claude Code
@@ -136,7 +136,7 @@ claude plugin install markdown-tools@daymade-skills
 |-------|-------------|-------------|
 | **skill-creator** ⭐ | 创建你自己的技能 | 构建自定义工作流 |
 | **github-ops** | GitHub 操作 | 管理 PR、问题、工作流 |
-| **markdown-tools** | 文档转换 | 将文档转换为 markdown |
+| **doc-to-markdown** | 文档转换 | 将文档转换为 markdown |
 | **mermaid-tools** | 图表生成 | 创建 PNG 图表 |
 | **statusline-generator** | 状态栏定制 | 自定义 Claude Code UI |
 | **teams-channel-post-writer** | Teams 通信 | 编写专业帖子 |

@@ -26,6 +26,7 @@ Dependencies:
 """
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -478,10 +479,19 @@ def _fix_code_blocks(text: str, stats: PostProcessStats) -> str:
 
                 # Decide: code block vs blockquote
                 if has_lang_hint or _is_code_content(cleaned):
-                    # Code block
+                    # Code block — try to pretty-print JSON
+                    code_lines = cleaned
+                    if lang_hint == "json":
+                        try:
+                            raw = "\n".join(cleaned)
+                            parsed = json.loads(raw)
+                            code_lines = json.dumps(parsed, indent=2, ensure_ascii=False).split("\n")
+                        except (json.JSONDecodeError, ValueError):
+                            pass  # Keep original if not valid JSON
+
                     result.append("")
                     result.append(f"```{lang_hint}")
-                    result.extend(cleaned)
+                    result.extend(code_lines)
                     result.append("```")
                     result.append("")
                 else:
@@ -529,29 +539,40 @@ def _fix_double_bracket_links(text: str, stats: PostProcessStats) -> str:
 
 
 def _fix_cjk_bold_spacing(text: str) -> str:
-    """Add space between **bold** markers and adjacent CJK characters.
+    """Add space around **bold** spans that contain CJK characters.
 
     DOCX uses run-level styling for bold — no spaces between runs in CJK text.
     Markdown renderers need whitespace around ** to recognize bold boundaries.
-    We find each **content** span, check the character before/after, and insert
-    a space only when the adjacent character is CJK (avoiding double spaces).
+
+    Rule: if a **content** span contains any CJK character, ensure both sides
+    have a space (unless already spaced or at line boundary). This handles:
+    - CJK directly touching **: 打开**飞书** → 打开 **飞书**
+    - Emoji touching **: **密码】**➡️ → **密码】** ➡️
+    - Already spaced: 已有 **粗体** → unchanged
+    - English bold: English **bold** text → unchanged
     """
     result = []
     last_end = 0
 
     for m in _RE_BOLD_PAIR.finditer(text):
         start, end = m.start(), m.end()
+        content = m.group(1)
+
         result.append(text[last_end:start])
 
-        # Space before opening ** if preceded by CJK
-        if start > 0 and _RE_CJK_PUNCT.match(text[start - 1]):
-            result.append(' ')
+        # Only add spaces for bold spans containing CJK
+        if _RE_CJK_PUNCT.search(content):
+            # Space before ** if previous char is not whitespace
+            if start > 0 and text[start - 1] not in (' ', '\t', '\n'):
+                result.append(' ')
 
-        result.append(m.group(0))
+            result.append(m.group(0))
 
-        # Space after closing ** if followed by CJK
-        if end < len(text) and _RE_CJK_PUNCT.match(text[end]):
-            result.append(' ')
+            # Space after ** if next char is not whitespace
+            if end < len(text) and text[end] not in (' ', '\t', '\n'):
+                result.append(' ')
+        else:
+            result.append(m.group(0))
 
         last_end = end
 
