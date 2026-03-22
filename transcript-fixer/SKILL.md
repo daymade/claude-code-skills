@@ -29,20 +29,36 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 ## Quick Start
 
-**Recommended: Use Enhanced Wrapper** (auto-detects API key, opens HTML diff):
+**Default: Native AI Correction (no API key needed)**
+
+When invoked from Claude Code, the skill uses a two-phase approach:
+1. **Dictionary phase** (script): Apply 700+ learned correction rules instantly
+2. **AI phase** (Claude native): Claude reads the text directly and fixes ASR errors, adds paragraph breaks, removes filler words
 
 ```bash
 # First time: Initialize database
 uv run scripts/fix_transcription.py --init
 
-# Process transcript with enhanced UX
-uv run scripts/fix_transcript_enhanced.py input.md --output ./corrected
+# Phase 1: Dictionary corrections (instant, free)
+uv run scripts/fix_transcription.py --input meeting.md --stage 1
 ```
 
-The enhanced wrapper automatically:
-- Detects GLM API key from shell configs (checks lines near `ANTHROPIC_BASE_URL`)
-- Moves output files to specified directory
-- Opens HTML visual diff in browser for immediate feedback
+After Stage 1, Claude should:
+1. Read the Stage 1 output in ~3000-char chunks
+2. Identify ASR errors (homophones, technical terms, broken sentences)
+3. Present corrections in a table for user review (high/medium confidence)
+4. Apply confirmed corrections and save stable patterns to dictionary
+5. Optionally: add paragraph breaks and remove excessive filler words
+
+**Alternative: API-Based Batch Processing** (for automation or large volumes):
+
+```bash
+# Set API key for automated AI corrections
+export GLM_API_KEY="<api-key>"  # From https://open.bigmodel.cn/
+
+# Run full pipeline (dict + API AI + diff report)
+uv run scripts/fix_transcript_enhanced.py input.md --output ./corrected
+```
 
 **Timestamp repair**:
 ```bash
@@ -58,25 +74,9 @@ uv run scripts/split_transcript_sections.py meeting.txt \
   --rebase-to-zero
 ```
 
-**Alternative: Use Core Script Directly**:
-
-```bash
-# 1. Set API key (if not auto-detected)
-export GLM_API_KEY="<api-key>"  # From https://open.bigmodel.cn/
-
-# 2. Add common corrections (5-10 terms)
-uv run scripts/fix_transcription.py --add "错误词" "正确词" --domain general
-
-# 3. Run full correction pipeline
-uv run scripts/fix_transcription.py --input meeting.md --stage 3
-
-# 4. Review learned patterns after 3-5 runs
-uv run scripts/fix_transcription.py --review-learned
-```
-
 **Output files**:
 - `*_stage1.md` - Dictionary corrections applied
-- `*_stage2.md` - AI corrections applied (final version)
+- `*_corrected.txt` - Final version (native mode) or `*_stage2.md` (API mode)
 - `*_对比.html` - Visual diff (open in browser for best experience)
 
 **Generate word-level diff** (recommended for reviewing corrections):
@@ -116,14 +116,15 @@ This creates an HTML file showing word-by-word differences with clear highlighti
 
 ## Core Workflow
 
-Three-stage pipeline stores corrections in `~/.transcript-fixer/corrections.db`:
+Two-phase pipeline stores corrections in `~/.transcript-fixer/corrections.db`:
 
 1. **Initialize** (first time): `uv run scripts/fix_transcription.py --init`
 2. **Add domain corrections**: `--add "错误词" "正确词" --domain <domain>`
-3. **Process transcript**: `--input file.md --stage 3`
-4. **Review learned patterns**: `--review-learned` and `--approve` high-confidence suggestions
+3. **Phase 1 — Dictionary**: `--input file.md --stage 1` (instant, free)
+4. **Phase 2 — AI Correction**: Claude reads output and fixes ASR errors natively (default), or use `--stage 3` with `GLM_API_KEY` for API mode
+5. **Save stable patterns**: `--add "错误词" "正确词"` after each fix session
+6. **Review learned patterns**: `--review-learned` and `--approve` high-confidence suggestions
 
-**Stages**: Dictionary (instant, free) → AI via GLM API (parallel) → Full pipeline
 **Domains**: `general`, `embodied_ai`, `finance`, `medical`, or custom names including Chinese (e.g., `火星加速器`, `具身智能`)
 **Learning**: Patterns appearing ≥3 times at ≥80% confidence move from AI to dictionary
 
@@ -182,14 +183,45 @@ If you understand the risks and still want to add a flagged rule:
 uv run scripts/fix_transcription.py --add "仿佛" "反复" --domain general --force
 ```
 
-## AI Fallback Strategy
+## Native AI Correction (Default Mode)
 
-When GLM API is unavailable (503, network issues), the script outputs `[CLAUDE_FALLBACK]` marker.
+**Claude IS the AI.** When running inside Claude Code, use Claude's own language understanding for Stage 2 corrections instead of calling an external API. This is the default behavior — no API key needed.
 
-Claude Code should then:
-1. Analyze the text directly for ASR errors
-2. Fix using Edit tool
-3. **MUST save corrections to dictionary** with `--add`
+### Workflow
+
+1. **Run Stage 1** (dictionary): `uv run scripts/fix_transcription.py --input file.md --stage 1`
+2. **Read the text** in ~3000-character chunks (use `cut -c<start>-<end>` for single-line files)
+3. **Identify ASR errors** — look for:
+   - Homophone errors (同音字): "上海文" → "上下文", "扩种" → "扩充"
+   - Broken sentence boundaries: "很大程。路上" → "很大程度上"
+   - Technical terms: "Web coding" → "Vibe Coding"
+   - Missing/extra characters: "沉沉默" → "沉默"
+4. **Present corrections** in a table with confidence levels before applying:
+   - High confidence: clear ASR errors with unambiguous corrections
+   - Medium confidence: context-dependent, need user confirmation
+5. **Apply corrections** to a copy of the file (never modify the original)
+6. **Save stable patterns** to dictionary: `--add "错误词" "正确词" --domain general`
+7. **Generate word diff**: `uv run scripts/generate_word_diff.py original.md corrected.md diff.html`
+
+### Enhanced AI Capabilities (Native Mode Only)
+
+Native mode can do things the API mode cannot:
+
+- **Intelligent paragraph breaks**: Add `\n\n` at logical topic transitions in continuous text
+- **Filler word reduction**: Remove excessive repetition (这个这个这个 → 这个, 都都都都 → 都)
+- **Interactive review**: Present corrections for user confirmation before applying
+- **Context-aware judgment**: Use full document context to resolve ambiguous errors
+
+### When to Use API Mode Instead
+
+Use `GLM_API_KEY` + Stage 3 for:
+- Batch processing multiple files in automation
+- When Claude Code is not available (standalone script usage)
+- Consistent reproducible processing without interactive review
+
+### Legacy Fallback Marker
+
+When the script outputs `[CLAUDE_FALLBACK]` (GLM API error), switch to native mode automatically.
 
 ## Database Operations
 
@@ -209,8 +241,8 @@ sqlite3 ~/.transcript-fixer/corrections.db "SELECT value FROM system_config WHER
 | Stage | Description | Speed | Cost |
 |-------|-------------|-------|------|
 | 1 | Dictionary only | Instant | Free |
-| 2 | AI only | ~10s | API calls |
-| 3 | Full pipeline | ~10s | API calls |
+| 1 + Native | Dictionary + Claude AI (default) | ~1min | Free |
+| 3 | Dictionary + API AI + diff report | ~10s | API calls |
 
 ## Bundled Resources
 
