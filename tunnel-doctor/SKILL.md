@@ -33,7 +33,10 @@ Determine which scenario applies:
 - **Remote dev server auth redirects to `localhost` → browser can't follow** → SSH tunnel needed (Step 2D)
 - **`make status` / scripts curl to localhost fail with proxy** → localhost proxy interception (Step 2E)
 - **`git push/pull` fails with `FATAL: failed to begin relaying via HTTP`** → SSH double tunnel (Step 2F)
-- **`docker pull` fails with `TLS handshake timeout` or `docker build` can't fetch base images** → VM/container proxy propagation (Step 2G)
+- **`docker build` `RUN apk/apt` fails with `Connection refused` instantly** → OrbStack transparent proxy + TUN conflict (Step 2G-1, fix: `--network host`)
+- **`docker pull` fails with `TLS handshake timeout`** → VM proxy misconfiguration (Step 2G-2, fix: `docker.json` with `host.internal`)
+- **Container healthcheck `(unhealthy)` but app runs fine** → Lowercase proxy env var leak (Step 2G-4, fix: clear `http_proxy`+`HTTP_PROXY`)
+- **`docker build` can't fetch base images** → VM/container proxy propagation (Step 2G)
 - **`git clone` fails with `Connection closed by 198.18.x.x`** → TUN DNS hijack for SSH (Step 2H)
 - **SSH connects but `operation not permitted`** → Tailscale SSH config issue (Step 4)
 - **SSH connects but `be-child ssh` exits code 1** → WSL snap sandbox issue (Step 5)
@@ -46,6 +49,8 @@ Determine which scenario applies:
 - If `tailscale ping` works but regular `ping` doesn't → Layer 1 (route table corrupted).
 - If `ssh -T git@github.com` works but `git push` fails intermittently → Layer 4 (double tunnel).
 - If host `curl https://...` works but `docker pull` times out → Layer 5 (VM proxy propagation).
+- If `docker pull` works but `docker build` `RUN apk add` fails instantly with `Connection refused` → OrbStack transparent proxy broken by TUN (Step 2G-1).
+- If container healthcheck shows `(unhealthy)` but app works → lowercase `http_proxy` leaked into container (Step 2G-4).
 - If DNS resolves to `198.18.x.x` virtual IPs → TUN DNS hijack (Step 2H).
 - If `nc -z` succeeds on port 22 but SSH gets no banner (`kex_exchange_identification`) → Tailscale SSH proxy intercept (Step 5A). Confirm with `tcpdump -i any port 22` on the remote — 0 packets means Tailscale intercepts above the kernel.
 - If `tailscale ssh` fails with "not available on App Store builds" → install Standalone Tailscale (Step 5B).
@@ -318,7 +323,7 @@ GIT_SSH_COMMAND="ssh -o ProxyCommand=none" git push origin main
 
 ### Step 2G: Fix VM/Container Runtime Proxy Propagation (Docker pull/build failures)
 
-**Symptom**: `docker pull` or `docker build` fails with `net/http: TLS handshake timeout` or `Internal Server Error` from `auth.docker.io`, while host `curl` to the same URLs works fine.
+**Symptom**: `docker pull` or `docker build` fails with `net/http: TLS handshake timeout`, `Connection refused` from Alpine/Debian repos, or `Internal Server Error` from `auth.docker.io`, while host `curl` to the same URLs works fine.
 
 **Applies to**: OrbStack, Docker Desktop, or any VM-based Docker runtime on macOS with Shadowrocket/Clash TUN active.
 
@@ -331,66 +336,160 @@ VM process (Docker):   Docker daemon → VM bridge → host network → TUN → 
 
 The TUN handles host-originated traffic correctly but may drop or delay VM-bridged traffic (different TCP stack, MTU, keepalive behavior).
 
-**Three sub-problems and their fixes**:
+**Critical distinction: `docker pull` vs `docker build` use different proxy paths**:
 
-#### 2G-1: OrbStack auto-detects and caches proxy (most common)
+| Operation | Proxy source | What controls it |
+|-----------|-------------|------------------|
+| `docker pull` | Docker daemon config | `~/.orbstack/config/docker.json` or `docker info` |
+| `docker build` (`RUN apt/apk`) | Build container env | `--build-arg http_proxy=...` or `--network host` |
+| `docker run` | Container env | `-e http_proxy=...` or inherited from daemon |
 
-OrbStack's `network_proxy: auto` reads `http_proxy` from the shell environment and writes it to `~/.orbstack/config/docker.json`. **Crucially**, `orbctl config set network_proxy none` does NOT clean up `docker.json` — the cached proxy persists.
+Fixing `docker.json` alone will NOT fix `docker build` — the `RUN` commands inside the build container don't inherit daemon proxy settings.
+
+**Diagnosis** — identify which sub-problem:
+
+```bash
+# 1. Can the Docker daemon pull images?
+docker pull --quiet alpine:latest 2>&1
+
+# 2. Can a RUN command inside a build reach the internet?
+docker build --no-cache - <<'EOF' 2>&1
+FROM alpine:latest
+RUN apk update && echo "APK OK"
+EOF
+
+# 3. Can a running container reach the internet?
+docker run --rm alpine:latest sh -c "apk update 2>&1 | head -3"
+```
+
+**Four sub-problems and their fixes**:
+
+#### 2G-1: `docker build` fails but host works (most common with OrbStack + Shadowrocket)
+
+**Symptom**: `RUN apk add` or `RUN apt-get install` inside `docker build` fails with `Connection refused` instantly (< 0.2s), even though host `curl` to the same URL works.
+
+**Root cause**: OrbStack's `network_proxy: auto` creates a transparent proxy inside the VM that intercepts all HTTPS traffic. When Shadowrocket TUN is also active, the transparent proxy's upstream connection breaks — it redirects HTTPS to `127.0.0.1` inside the VM, which has nothing listening.
 
 **Diagnosis**:
 
 ```bash
-# OrbStack config says "none" but Docker still shows proxy
-orbctl config get network_proxy     # → "none"
-docker info | grep -i proxy         # → HTTP Proxy: http://127.0.0.1:1082  ← stale!
+# Verify: inside the container, HTTPS goes to 127.0.0.1 (broken transparent proxy)
+docker run --rm alpine:latest sh -c "wget -q --timeout=5 -O /dev/null https://dl-cdn.alpinelinux.org/ 2>&1"
+# → "wget: can't connect to remote host (127.0.0.1): Connection refused"
+#                                        ^^^^^^^^^^^^ This is the smoking gun
 
-# The real source of truth:
-cat ~/.orbstack/config/docker.json
-# → {"proxies": {"http-proxy": "http://127.0.0.1:1082", ...}}  ← cached!
+# Verify: --network host bypasses the VM bridge and works
+docker run --rm --network host alpine:latest sh -c "apk update 2>&1 | head -3"
+# → "v3.23.x ... OK: 27431 distinct packages available"  ← Works!
 ```
 
-**Fix** — DON'T remove the proxy. Instead, add precise `no-proxy` to prevent localhost interception while keeping the proxy as the VM's outbound channel:
+**Fix** — use `--network host` for docker build:
 
 ```bash
-# Write corrected config (keeps proxy, adds no-proxy for local traffic)
+docker build --network host -f Dockerfile -t myimage .
+```
+
+This bypasses OrbStack's VM network bridge entirely. The build container uses the host's network stack directly, where Shadowrocket TUN correctly handles traffic.
+
+**Trade-off**: `--network host` disables build-time network isolation. For CI/CD, prefer fixing the proxy config (2G-2). For local development, `--network host` is the pragmatic fix.
+
+**Permanent fix** — if all your builds need this, add to `~/.docker/daemon.json` or use a shell alias:
+
+```bash
+# Shell alias (add to ~/.zshrc)
+alias docker-build='docker build --network host'
+```
+
+#### 2G-2: OrbStack auto-detects and caches proxy config
+
+OrbStack's `network_proxy: auto` reads `http_proxy` from the shell environment and configures the Docker daemon. The config is stored in `~/.orbstack/config/docker.json`.
+
+**Key behaviors**:
+- `network_proxy: auto` — OrbStack reads host env, creates transparent proxy in VM
+- `network_proxy: none` — Disables transparent proxy, but VM bridge traffic still routes through TUN (may timeout)
+- `docker.json` — Controls `docker pull` proxy, NOT `docker build` RUN commands
+
+**Diagnosis**:
+
+```bash
+# Check all three layers
+echo "=== OrbStack config ==="
+orbctl config get network_proxy
+
+echo "=== docker.json (daemon proxy) ==="
+cat ~/.orbstack/config/docker.json
+
+echo "=== Docker info (effective proxy) ==="
+docker info | grep -iE "proxy|No Proxy"
+```
+
+**Fix** — configure `docker.json` with `host.internal` (OrbStack resolves this to the host IP):
+
+```bash
 python3 -c "
-import json
+import json, os
 config = {
     'proxies': {
-        'http-proxy': 'http://127.0.0.1:1082',
-        'https-proxy': 'http://127.0.0.1:1082',
+        'http-proxy': 'http://host.internal:1082',
+        'https-proxy': 'http://host.internal:1082',
         'no-proxy': 'localhost,127.0.0.1,::1,192.168.128.0/24,100.64.0.0/10,host.internal,*.local'
     }
 }
-json.dump(config, open('$HOME/.orbstack/config/docker.json', 'w'), indent=2)
+path = os.path.expanduser('~/.orbstack/config/docker.json')
+json.dump(config, open(path, 'w'), indent=2)
+print('Written:', path)
 "
 
-# Full restart (not just docker engine)
+# Full restart required
 orbctl stop && sleep 3 && orbctl start
 ```
 
-**Why NOT remove the proxy**: When TUN is active, removing the Docker proxy means VM traffic goes directly through the bridge → TUN path, which causes TLS handshake timeouts. The proxy provides a working outbound channel because OrbStack maps host `127.0.0.1` into the VM.
+**Important**: Use `host.internal` (OrbStack-specific), NOT `127.0.0.1` (points to VM loopback) and NOT `host.docker.internal` (may not resolve in all contexts).
 
-#### 2G-2: Removing proxy makes Docker worse (counter-intuitive)
+**Why NOT remove the proxy**: When TUN is active, removing the Docker proxy means VM traffic goes directly through the bridge → TUN path, which causes TLS handshake timeouts. The proxy provides a working outbound channel.
+
+#### 2G-3: Removing proxy makes Docker worse (counter-intuitive)
 
 | Docker config | Traffic path | Result |
 |---------------|-------------|--------|
-| Proxy ON, no `no-proxy` | Docker → proxy → TUN → internet | Docker Hub ✅, localhost probes ❌ |
-| Proxy OFF | Docker → VM bridge → host → TUN → internet | TLS timeout ❌ |
-| **Proxy ON + `no-proxy`** | **External: Docker → proxy → internet ✅; Local: Docker → direct ✅** | **Both work ✅** |
+| Proxy ON (`127.0.0.1`), no `no-proxy` | Docker → VM proxy → ??? | `docker pull` may work, localhost probes ❌ |
+| Proxy ON (`host.internal`), + `no-proxy` | External: Docker → host proxy → internet; Local: direct | **Both work ✅** |
+| Proxy OFF (`network_proxy: none`) | Docker → VM bridge → host → TUN → internet | TLS timeout ❌ |
+| **`--network host` (build only)** | **Build container → host network → TUN → internet** | **Build works ✅** |
 
-#### 2G-3: Deploy scripts probe localhost through proxy
+**Decision tree**:
+- `docker pull` broken → Fix `docker.json` with `host.internal` proxy (2G-2)
+- `docker build` broken → Use `--network host` (2G-1) OR pass `--build-arg http_proxy=http://host.internal:1082`
+- Both broken → Fix both: `docker.json` + `--network host`
 
-Deploy scripts that `curl localhost` inside the Docker environment will route through the proxy. Fix by adding `NO_PROXY` at the script level:
+#### 2G-4: Deploy scripts and container healthchecks probe localhost through proxy
+
+Deploy scripts that `curl localhost` inside containers or Docker healthchecks that use `wget http://localhost` will route through the proxy if env vars leak into the container.
+
+**Common symptoms**:
+- Container healthcheck shows `(unhealthy)` but the app inside is running fine
+- `wget: can't connect to remote host (127.0.0.1): Connection refused` in healthcheck logs (proxy port, not app port)
+
+**Root cause**: Docker inherits uppercase AND lowercase proxy env vars from the host. Many tools only clear uppercase (`HTTP_PROXY=`) but forget lowercase (`http_proxy=http://127.0.0.1:1082`). The healthcheck `wget` uses lowercase.
+
+**Fix in docker-compose.yml** — clear BOTH cases:
+
+```yaml
+environment:
+  # Must clear both uppercase and lowercase — wget/curl check different vars
+  - HTTP_PROXY=
+  - HTTPS_PROXY=
+  - http_proxy=
+  - https_proxy=
+  - NO_PROXY=*
+  - no_proxy=*
+```
+
+**Fix in deploy scripts**:
 
 ```bash
-# In deploy.sh or similar scripts:
 _local_bypass="localhost,127.0.0.1,::1"
-if [[ -n "${NO_PROXY:-}" ]]; then
-    export NO_PROXY="${_local_bypass},${NO_PROXY}"
-else
-    export NO_PROXY="${_local_bypass}"
-fi
+export NO_PROXY="${_local_bypass}${NO_PROXY:+,${NO_PROXY}}"
 export no_proxy="$NO_PROXY"
 
 # Use 127.0.0.1 instead of localhost in probe URLs (some proxy implementations
@@ -408,8 +507,15 @@ docker info | grep -iE "proxy|No Proxy"
 # Pull test
 docker pull --quiet hello-world
 
-# Local probe test
-curl -s http://127.0.0.1:3001/health
+# Build test (the real verification)
+docker build --network host --no-cache - <<'EOF'
+FROM alpine:latest
+RUN apk update && echo "BUILD OK"
+EOF
+
+# Container env check (no proxy leak)
+docker exec <container> env | grep -i proxy
+# Expected: all empty or not set
 ```
 
 ### Step 2H: Fix TUN DNS Hijack for SSH/Git (198.18.x.x virtual IPs)
