@@ -16,7 +16,7 @@ Which skill is affected?
 
 - [ ] skill-creator
 - [ ] github-ops
-- [ ] markdown-tools
+- [ ] doc-to-markdown
 - [ ] mermaid-tools
 - [ ] statusline-generator
 - [ ] teams-channel-post-writer

@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- None
+### Changed
+- **Renamed**: `markdown-tools` → `doc-to-markdown` — clearer name for DOCX/PDF/PPTX → Markdown conversion
+- **doc-to-markdown**: Added 8 DOCX post-processing fixes (grid tables, simple tables, CJK bold spacing, JSON pretty-print, image path flattening, pandoc attribute cleanup, code block detection, bracket fixes)
+- **doc-to-markdown**: Added 31 unit tests (`test_convert.py`)
+- **doc-to-markdown**: Added 5-tool benchmark report (`references/benchmark-2026-03-22.md`)
 
 ## [1.39.0] - 2026-03-18
 

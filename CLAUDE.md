@@ -179,7 +179,7 @@ This applies when you change ANY file under a skill directory:
 
 1. **skill-creator** ⭐ - **Essential meta-skill** for creating your own skills (with init/validate/package scripts)
 2. **github-ops** - GitHub operations via gh CLI and API
-3. **markdown-tools** - Document conversion with WSL path handling
+3. **doc-to-markdown** - DOCX/PDF/PPTX → Markdown conversion with CJK post-processing
 4. **mermaid-tools** - Diagram extraction and PNG generation
 5. **statusline-generator** - Claude Code statusline customization
 6. **teams-channel-post-writer** - Teams communication templates

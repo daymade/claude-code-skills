@@ -668,7 +668,7 @@
     },
     {
       "name": "meeting-minutes-taker",
-      "description": "Transform meeting transcripts into high-fidelity, structured meeting minutes with iterative review. Features speaker identification via feature analysis (word count, speaking style, topic focus) with context.md team directory mapping, intelligent file naming from content, integration with markdown-tools and transcript-fixer for pre-processing, evidence-based recording with speaker quotes, Mermaid diagrams for architecture discussions, and multi-turn parallel generation with UNION merge",
+      "description": "Transform meeting transcripts into high-fidelity, structured meeting minutes with iterative review. Features speaker identification via feature analysis (word count, speaking style, topic focus) with context.md team directory mapping, intelligent file naming from content, integration with doc-to-markdown and transcript-fixer for pre-processing, evidence-based recording with speaker quotes, Mermaid diagrams for architecture discussions, and multi-turn parallel generation with UNION merge",
       "source": "./",
       "strict": false,
       "version": "1.1.0",
