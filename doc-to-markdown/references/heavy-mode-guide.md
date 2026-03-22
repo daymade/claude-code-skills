@@ -1,6 +1,6 @@
 # Heavy Mode Guide
 
-Detailed documentation for markdown-tools Heavy Mode conversion.
+Detailed documentation for doc-to-markdown Heavy Mode conversion.
 
 ## Overview
 

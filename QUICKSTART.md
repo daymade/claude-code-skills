@@ -122,7 +122,7 @@ claude plugin marketplace add https://github.com/daymade/claude-code-skills
 # In Claude Code use `/plugin ...`; in your terminal use `claude plugin ...`
 # Step 2: Install skills you need
 claude plugin install github-ops@daymade-skills
-claude plugin install markdown-tools@daymade-skills
+claude plugin install doc-to-markdown@daymade-skills
 # ... add more as needed
 
 # Step 3: Restart Claude Code
@@ -136,7 +136,7 @@ This table is a quick starter list. See [README.md](./README.md) for the full ca
 |-------|-------------|-------------|
 | **skill-creator** ⭐ | Create your own skills | Building custom workflows |
 | **github-ops** | GitHub operations | Managing PRs, issues, workflows |
-| **markdown-tools** | Document conversion | Converting docs to markdown |
+| **doc-to-markdown** | Document conversion | Converting docs to markdown |
 | **mermaid-tools** | Diagram generation | Creating PNG diagrams |
 | **statusline-generator** | Statusline customization | Customizing Claude Code UI |
 | **teams-channel-post-writer** | Teams communication | Writing professional posts |

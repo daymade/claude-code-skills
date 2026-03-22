@@ -1,75 +1,68 @@
 ---
 name: doc-to-markdown
-description: Converts DOCX/PDF/PPTX to high-quality Markdown with automatic post-processing. Fixes pandoc grid tables, image paths, attribute noise, and code blocks. Supports Quick Mode (fast, single tool) and Heavy Mode (best quality, multi-tool merge). Trigger on "convert document", "docx to markdown", "parse word", "doc to markdown", "extract images from document".
+description: Converts DOCX/PDF/PPTX to high-quality Markdown with automatic post-processing. Fixes pandoc grid tables, simple tables, image paths, CJK bold spacing, attribute noise, and code blocks. Benchmarked best-in-class (7.6/10) against Docling, MarkItDown, Pandoc raw, and Mammoth. Trigger on "convert document", "docx to markdown", "parse word", "doc to markdown", "解析word", "转换文档".
 ---
 
 # Doc to Markdown
 
 Convert documents to high-quality markdown with intelligent multi-tool orchestration and automatic DOCX post-processing.
 
-## Dual Mode Architecture
+**Architecture**: Pandoc (best-in-class extraction) + 8 post-processing fixes (our value-add).
+
+## Quick Start
+
+```bash
+# DOCX → Markdown (one command, zero manual fixes)
+uv run --with pymupdf4llm --with markitdown scripts/convert.py document.docx -o output.md --assets-dir ./media
+
+# PDF → Markdown
+uv run --with pymupdf4llm --with markitdown scripts/convert.py document.pdf -o output.md
+
+# Run tests
+uv run --with pytest pytest scripts/test_convert.py -v
+```
+
+## Dual Mode
 
 | Mode | Speed | Quality | Use Case |
 |------|-------|---------|----------|
 | **Quick** (default) | Fast | Good | Drafts, simple documents |
 | **Heavy** | Slower | Best | Final documents, complex layouts |
 
-## Quick Start
+## Tool Selection
 
-### Installation
-
-```bash
-# Required: PDF/DOCX/PPTX support
-uv tool install "markitdown[pdf]"
-pip install pymupdf4llm
-brew install pandoc
-```
-
-### Basic Conversion
-
-```bash
-# Quick Mode (default) - fast, single best tool
-uv run --with pymupdf4llm --with markitdown scripts/convert.py document.pdf -o output.md
-
-# Heavy Mode - multi-tool parallel execution with merge
-uv run --with pymupdf4llm --with markitdown scripts/convert.py document.pdf -o output.md --heavy
-
-# DOCX with deep python-docx parsing (experimental)
-uv run --with pymupdf4llm --with markitdown --with python-docx scripts/convert.py document.docx -o output.md --docx-deep
-
-# Check available tools
-uv run scripts/convert.py --list-tools
-```
-
-## Tool Selection Matrix
-
-| Format | Quick Mode Tool | Heavy Mode Tools |
-|--------|----------------|------------------|
+| Format | Quick Mode | Heavy Mode |
+|--------|-----------|------------|
 | PDF | pymupdf4llm | pymupdf4llm + markitdown |
 | DOCX | pandoc + post-processing | pandoc + markitdown |
 | PPTX | markitdown | markitdown + pandoc |
 | XLSX | markitdown | markitdown |
 
-### Tool Characteristics
-
-- **pymupdf4llm**: LLM-optimized PDF conversion with native table detection and image extraction
-- **markitdown**: Microsoft's universal converter, good for Office formats
-- **pandoc**: Excellent structure preservation for DOCX/PPTX
-
 ## DOCX Post-Processing (automatic)
 
-When converting DOCX files via pandoc, the following cleanups are applied automatically:
+When converting DOCX via pandoc, 8 cleanups are applied automatically:
 
-| Problem | Fix |
-|---------|-----|
-| Grid tables (`+:---+` syntax) | Single-column -> blockquote, multi-column -> split images |
-| Image double path (`media/media/`) | Flatten to `media/` |
-| Pandoc attributes (`{width="..." height="..."}`) | Removed |
-| Inline classes (`{.underline}`, `{.mark}`) | Removed |
-| Indented dashed code blocks | Converted to fenced code blocks (```) |
-| Escaped brackets (`\[...\]`) | Unescaped to `[...]` |
-| Double-bracket links (`[[text]{...}](url)`) | Simplified to `[text](url)` |
-| Escaped quotes in code (`\"`) | Fixed to `"` |
+| Problem | Fix | Test coverage |
+|---------|-----|---------------|
+| Grid tables (`+:---+`) | Single-column → blockquote, multi-column → pipe table | `TestPostprocessPipeline` |
+| Simple tables (`  ---- ----`) | Multi-column images → pipe table with captions | `TestSimpleTable` |
+| Image path nesting (`media/media/`) | Flatten to `media/`, absolute → relative | `test_stats_tracking` |
+| Pandoc attributes (`{width="..."}`) | Removed | `test_pandoc_attributes_removed` |
+| CJK bold spacing (`**粗体**中文`) | Add space around `**` for CJK bold spans | `TestCjkBoldSpacing` (15 cases) |
+| Indented dashed code blocks | → fenced ``` with language detection | `test_code_block_with_language` |
+| Escaped brackets (`\[...\]`) | → `[...]` | `test_escaped_brackets_fixed` |
+| Double-bracket links (`[[text]](url)`) | → `[text](url)` | `test_double_bracket_links_fixed` |
+
+### CJK Bold Spacing — why and how
+
+DOCX uses run-level styling (no spaces between bold/normal runs in CJK text). Markdown renderers need whitespace around `**` to recognize bold boundaries.
+
+**Rule**: if a `**content**` span contains any CJK character, ensure both sides have a space — unless already spaced or at line boundary. This handles CJK punctuation, emoji adjacency, and mixed content.
+
+```
+Before: 打开**飞书**，就可以    → some renderers fail to bold
+After:  打开 **飞书** ，就可以  → universally renders correctly
+```
 
 ## Heavy Mode Workflow
 
@@ -166,6 +159,7 @@ brew install pandoc
 | Script | Purpose |
 |--------|---------|
 | `convert.py` | Main orchestrator with Quick/Heavy mode + DOCX post-processing |
+| `test_convert.py` | 31 tests covering all post-processing functions |
 | `merge_outputs.py` | Merge multiple markdown outputs |
 | `validate_output.py` | Quality validation with HTML report |
 | `extract_pdf_images.py` | PDF image extraction with metadata |
@@ -173,6 +167,7 @@ brew install pandoc
 
 ## References
 
+- `references/benchmark-2026-03-22.md` - 5-tool benchmark (Docling/MarkItDown/Pandoc/Mammoth/ours)
 - `references/heavy-mode-guide.md` - Detailed Heavy Mode documentation
 - `references/tool-comparison.md` - Tool capabilities comparison
 - `references/conversion-examples.md` - Batch operation examples

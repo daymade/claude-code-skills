@@ -14,7 +14,7 @@ demos/
 │   └── package-skill.tape        # Package for distribution
 ├── github-ops/
 │   └── create-pr.tape            # Create pull requests
-├── markdown-tools/
+├── doc-to-markdown/
 │   └── convert-docs.tape         # Convert documents
 └── generate_all_demos.sh         # Generate all GIFs
 ```
