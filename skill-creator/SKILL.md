@@ -41,6 +41,23 @@ So please pay attention to context cues to understand how to phrase your communi
 
 It's OK to briefly explain terms if you're in doubt, and feel free to clarify terms with a short definition if you're unsure if the user will get it.
 
+### Using AskUserQuestion (Critical — Read This)
+
+**Use the AskUserQuestion tool aggressively at every decision point.** Do not ask open-ended text questions in conversation when structured choices exist. This is the single biggest UX improvement you can make — users juggle multiple windows and may not have looked at this conversation in 20 minutes.
+
+**Every AskUserQuestion MUST follow this structure:**
+
+1. **Re-ground**: State the skill name, current phase, and what just happened (1-2 sentences). The user may have context-switched away.
+2. **Simplify**: Explain the decision in plain language. No function names or internal jargon. Say what it DOES, not what it's called.
+3. **Recommend**: Lead with your recommendation and a one-line reason why. If options involve effort, show both scales: `(human: ~X min / Claude: ~Y min)`.
+4. **Options**: Provide 2-4 concrete, lettered choices. Each option should be a clear action, not an abstract concept.
+
+**Rules:**
+- One decision per question — never batch unrelated choices
+- Provide an escape hatch ("Other" is always implicit in AskUserQuestion)
+- Accept the user's choice — nudge on tradeoffs but never refuse to proceed
+- Skip the question if there's an obvious answer with no tradeoffs (just state what you'll do)
+
 ---
 
 ## Creating a skill
@@ -52,7 +69,83 @@ Start by understanding the user's intent. The current conversation might already
 1. What should this skill enable Claude to do?
 2. When should this skill trigger? (what user phrases/contexts)
 3. What's the expected output format?
-4. Should we set up test cases to verify the skill works? Skills with objectively verifiable outputs (file transforms, data extraction, code generation, fixed workflow steps) benefit from test cases. Skills with subjective outputs (writing style, art) often don't need them. Suggest the appropriate default based on the skill type, but let the user decide.
+4. Should we set up test cases to verify the skill works?
+
+After extracting answers from conversation history (or asking questions 1-3), use **AskUserQuestion** to confirm the skill type and testing strategy:
+
+```
+Creating skill "[name]" — here's what I understand so far:
+- Purpose: [1-sentence summary]
+- Triggers on: [key phrases]
+- Output: [format]
+
+RECOMMENDATION: [Objective/Subjective/Hybrid] skill → [suggested testing approach]
+
+Options:
+A) Objective output (files, code, data) — set up automated test cases (Recommended if output is verifiable)
+B) Subjective output (writing, design) — qualitative human review only
+C) Hybrid — automated checks for structure, human review for quality
+D) Skip testing for now — just build the skill and iterate by feel
+```
+
+This upfront classification drives the entire evaluation strategy downstream. Get it right here to avoid wasted effort later.
+
+### Prior Art Research (Do Not Skip)
+
+The user's private methodology — their domain rules, workflow decisions, competitive edge — is what makes a skill valuable. No public repo can provide that. But the user shouldn't waste time reinventing infrastructure (API clients, auth flows, rate limiting) when mature tools exist. Prior art research finds building blocks for the infrastructure layer so the skill can focus on encoding the user's unique methodology.
+
+**Search these channels in order** (use subagents for 4-8 in parallel):
+
+| Priority | Channel | What to search | How |
+|----------|---------|---------------|-----|
+| 1 | **Conversation history** | User's proven workflows, verified API patterns, corrections made during debugging | Grep recent conversations for the service/API name |
+| 2 | **Local documents & SOPs** | User's private methodology, runbooks, existing skills | Search project directory, `~/.claude/CLAUDE.md`, `~/.claude/references/` |
+| 3 | **Installed plugins & MCPs** | Already-integrated tools | Check `~/.claude/plugins/`, parse `installed_plugins.json`; check `~/.claude.json` for configured MCP servers |
+| 4 | **skills.sh** | Community skills | `WebFetch https://skills.sh/?q=<keyword>` |
+| 5 | **Anthropic official plugins** | Official/partner plugins | `WebFetch https://github.com/anthropics/claude-plugins-official/tree/main/plugins` and `external_plugins` directory |
+| 6 | **MCP servers on GitHub** | Existing MCP servers for the same API | `WebSearch "<service-name> MCP server site:github.com"` |
+| 7 | **Official API docs** | The target service's own documentation | `WebSearch "<service-name> API documentation"` or `WebFetch` the docs URL |
+| 8 | **npm / PyPI** | SDK or CLI packages | `npm search <keyword>` or `curl https://pypi.org/pypi/<name>/json` |
+
+Channels 1-3 surface the user's own proven patterns and existing integrations. Channels 4-8 find public infrastructure. The user's private SOP always takes precedence — public tools are building blocks, not replacements. In competitive domains (finance, trading, proprietary operations), the valuable methodology will never be public.
+
+**If a public MCP server or skill is found, clone it and verify — don't trust the README:**
+
+1. **Read the actual source code** — many projects have polished READMEs on hollow codebases
+2. **Verify auth method** — does it match how the API actually authenticates? (X-Api-Key headers vs Bearer vs OAuth — many get this wrong)
+3. **Check test coverage** — zero tests = prototype, not production-grade
+4. **Check maintenance** — last commit date, open issue count, response to bug reports
+5. **Check environment compatibility** — proxy/network assumptions, hardcoded DNS/IPs, region locks
+6. **Check license** — MIT/Apache is fine; GPL/SSPL may conflict with proprietary use
+7. **Check dependency weight** — huge dependency trees create conflict and security surface
+
+**Decision matrix:**
+
+| Finding | Action |
+|---------|--------|
+| Mature MCP/SDK handles the infrastructure | **Adopt it, build on top** — install the MCP, then build the skill as a workflow layer encoding the user's methodology |
+| Partial MCP or SDK exists | **Extend** — use for infrastructure, fill gaps in the skill |
+| Public skill covers the same domain | **Use for structural inspiration only** — public skills in competitive domains are generic by definition. The user's edge is their private SOP |
+| Nothing public exists | **Build from scratch** — validate API access patterns work (auth, endpoints, proxy) before writing the full skill |
+| Integration cost > build cost | **Build it** — a 2-hour custom implementation you own beats a "mature" tool with integration friction and upstream risk |
+
+After research completes, present findings via **AskUserQuestion**:
+
+```
+Research complete for "[skill-name]". Here's what I found:
+
+[1-2 sentence summary of what exists publicly]
+
+RECOMMENDATION: [ADOPT / EXTEND / BUILD] because [one-line reason]
+
+Options:
+A) Adopt [tool/MCP X] for infrastructure, build methodology layer on top (Recommended)
+B) Extend [partial tool Y] — use what works, fill gaps in the skill
+C) Build from scratch — nothing found matches well enough
+D) Show me the detailed findings before I decide
+```
+
+When in doubt, bias toward adopting mature infrastructure for the plumbing layer and building custom logic for the methodology layer — that's where the value lives.
 
 ### Interview and Research
 
@@ -342,7 +435,26 @@ Anthropic has wrote skill authoring best practices, you SHOULD retrieve it befor
 
 ### Test Cases
 
-After writing the skill draft, come up with 2-3 realistic test prompts — the kind of thing a real user would actually say. Share them with the user: [you don't have to use this exact language] "Here are a few test cases I'd like to try. Do these look right, or do you want to add more?" Then run them.
+After writing the skill draft, come up with 2-3 realistic test prompts — the kind of thing a real user would actually say. Present them via **AskUserQuestion**:
+
+```
+Skill draft is ready. Here are [N] test cases I'd like to run:
+
+1. "[test prompt 1]" — tests [what aspect]
+2. "[test prompt 2]" — tests [what aspect]
+3. "[test prompt 3]" — tests [what aspect]
+
+Each test runs the skill + a baseline (no skill) for comparison.
+Estimated time: ~[X] minutes total.
+
+RECOMMENDATION: Run all [N] test cases now.
+
+Options:
+A) Run all test cases (Recommended)
+B) Run test cases, but let me modify them first
+C) Add more test cases before running
+D) Skip testing — the skill looks good enough to ship
+```
 
 Save test cases to `evals/evals.json`. Don't write assertions yet — just the prompts. You'll draft assertions in the next step while the runs are in progress.
 
@@ -450,7 +562,22 @@ Put each with_skill version before its baseline counterpart.
 
 Note: please use generate_review.py to create the viewer; there's no need to write custom HTML.
 
-5. **Tell the user** something like: "I've opened the results in your browser. There are two tabs — 'Outputs' lets you click through each test case and leave feedback, 'Benchmark' shows the quantitative comparison. When you're done, come back here and let me know."
+5. **Tell the user** via **AskUserQuestion**:
+
+```
+Results are ready! I've opened the eval viewer in your browser.
+
+- "Outputs" tab: click through each test case, leave feedback in the textbox
+- "Benchmark" tab: quantitative comparison (pass rates, timing, tokens)
+
+Take your time reviewing. When you're done, come back here.
+
+Options:
+A) I've finished reviewing — read my feedback and improve the skill
+B) I have questions about the results before giving feedback
+C) Results look good enough — skip iteration, let's package the skill
+D) Results need major rework — let's discuss before iterating
+```
 
 ### What the user sees in the viewer
 
@@ -507,6 +634,24 @@ This is the heart of the loop. You've run the test cases, the user has reviewed 
 
 This task is pretty important (we are trying to create billions a year in economic value here!) and your thinking time is not the blocker; take your time and really mull things over. I'd suggest writing a draft revision and then looking at it anew and making improvements. Really do your best to get into the head of the user and understand what they want and need.
 
+After analyzing feedback, present your improvement plan via **AskUserQuestion**:
+
+```
+I've read the feedback from [N] test cases. [X] had specific complaints, [Y] looked good.
+
+Key issues:
+- [Issue 1]: [plain-language summary]
+- [Issue 2]: [plain-language summary]
+
+RECOMMENDATION: [strategy] because [reason]
+
+Options:
+A) Iterative refinement — targeted fixes for the specific issues above (Recommended)
+B) Structural redesign — the core approach needs rethinking
+C) Bundle a script — I noticed all test runs independently wrote similar code for [X]
+D) Expand test set first — add [N] more test cases to avoid overfitting to these examples
+```
+
 ### The iteration loop
 
 After improving the skill:
@@ -516,6 +661,18 @@ After improving the skill:
 3. Launch the reviewer with `--previous-workspace` pointing at the previous iteration
 4. Wait for the user to review and tell you they're done
 5. Read the new feedback, improve again, repeat
+
+At the end of each iteration, use **AskUserQuestion** as a checkpoint:
+
+```
+Iteration [N] complete. Results: [pass_rate]% assertions passing, [delta vs previous].
+
+Options:
+A) Continue iterating — I see more room for improvement
+B) Accept this version — it's good enough, let's move to packaging
+C) Revert to previous iteration — this round made things worse
+D) Run blind comparison — rigorously compare this version vs the previous one
+```
 
 Keep going until:
 - The user says they're happy
@@ -686,7 +843,20 @@ When editing, remember that the skill is being created for another instance of C
 
 ### Step 5: Sanitization Review (Optional)
 
-**Ask the user before executing this step:** "This skill appears to be extracted from a business project. Would you like me to perform a sanitization review to remove business-specific content before public distribution?"
+Use **AskUserQuestion** before executing this step:
+
+```
+This skill appears to contain content from a real project.
+Before distribution, I should check for business-specific details
+(company names, internal paths, product names) that shouldn't be public.
+
+RECOMMENDATION: Run selective sanitization — review each finding before removing.
+
+Options:
+A) Full sanitization — automatically remove all business-specific content
+B) Selective sanitization — show me each finding and let me decide (Recommended)
+C) Skip — this is for internal use only, no sanitization needed
+```
 
 Skip if: skill was created from scratch for public use, user declines, or skill is for internal use.
 
@@ -729,6 +899,21 @@ brew install gitleaks
 - `2` - Critical issues (MUST fix before distribution)
 - `3` - gitleaks not installed
 - `4` - Scan error
+
+**If issues are found**, present them via **AskUserQuestion**:
+
+```
+Security scan found [N] issues in "[skill-name]":
+- [SEVERITY] [file]: [description]
+- ...
+
+RECOMMENDATION: Fix automatically — these look like [accidental leaks / false positives].
+
+Options:
+A) Fix all issues automatically (Recommended)
+B) Review each finding — let me decide per-item (some may be intentional)
+C) Override and proceed — I accept the risk for internal distribution
+```
 
 ### Step 7: Packaging a Skill
 
@@ -773,7 +958,19 @@ After packaging, update the marketplace registry to include the new or updated s
 
 **For updated skills**, bump the version in `plugins[].version` following semver.
 
-### Step 9: Iterate
+### Step 9: Ship or Iterate
+
+After completing the skill, use **AskUserQuestion** to determine next steps:
+
+```
+Skill "[name]" is complete. Security scan passed, marketplace updated.
+
+Options:
+A) Package and export as .skill file for distribution
+B) Run description optimization — improve auto-triggering accuracy (~5 min)
+C) Expand test set and iterate more — add edge cases before shipping
+D) Done for now — I'll test it manually and come back if needed
+```
 
 After testing the skill, users may request improvements. Often this happens right after using the skill, with fresh context of how the skill performed.
 
