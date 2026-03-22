@@ -1,11 +1,11 @@
 ---
-name: markdown-tools
-description: Converts documents to markdown with multi-tool orchestration for best quality. Supports Quick Mode (fast, single tool) and Heavy Mode (best quality, multi-tool merge). Use when converting PDF/DOCX/PPTX files to markdown, extracting images from documents, validating conversion quality, or needing LLM-optimized document output.
+name: doc-to-markdown
+description: Converts DOCX/PDF/PPTX to high-quality Markdown with automatic post-processing. Fixes pandoc grid tables, image paths, attribute noise, and code blocks. Supports Quick Mode (fast, single tool) and Heavy Mode (best quality, multi-tool merge). Trigger on "convert document", "docx to markdown", "parse word", "doc to markdown", "extract images from document".
 ---
 
-# Markdown Tools
+# Doc to Markdown
 
-Convert documents to high-quality markdown with intelligent multi-tool orchestration.
+Convert documents to high-quality markdown with intelligent multi-tool orchestration and automatic DOCX post-processing.
 
 ## Dual Mode Architecture
 
@@ -34,6 +34,9 @@ uv run --with pymupdf4llm --with markitdown scripts/convert.py document.pdf -o o
 # Heavy Mode - multi-tool parallel execution with merge
 uv run --with pymupdf4llm --with markitdown scripts/convert.py document.pdf -o output.md --heavy
 
+# DOCX with deep python-docx parsing (experimental)
+uv run --with pymupdf4llm --with markitdown --with python-docx scripts/convert.py document.docx -o output.md --docx-deep
+
 # Check available tools
 uv run scripts/convert.py --list-tools
 ```
@@ -43,7 +46,7 @@ uv run scripts/convert.py --list-tools
 | Format | Quick Mode Tool | Heavy Mode Tools |
 |--------|----------------|------------------|
 | PDF | pymupdf4llm | pymupdf4llm + markitdown |
-| DOCX | pandoc | pandoc + markitdown |
+| DOCX | pandoc + post-processing | pandoc + markitdown |
 | PPTX | markitdown | markitdown + pandoc |
 | XLSX | markitdown | markitdown |
 
@@ -52,6 +55,21 @@ uv run scripts/convert.py --list-tools
 - **pymupdf4llm**: LLM-optimized PDF conversion with native table detection and image extraction
 - **markitdown**: Microsoft's universal converter, good for Office formats
 - **pandoc**: Excellent structure preservation for DOCX/PPTX
+
+## DOCX Post-Processing (automatic)
+
+When converting DOCX files via pandoc, the following cleanups are applied automatically:
+
+| Problem | Fix |
+|---------|-----|
+| Grid tables (`+:---+` syntax) | Single-column -> blockquote, multi-column -> split images |
+| Image double path (`media/media/`) | Flatten to `media/` |
+| Pandoc attributes (`{width="..." height="..."}`) | Removed |
+| Inline classes (`{.underline}`, `{.mark}`) | Removed |
+| Indented dashed code blocks | Converted to fenced code blocks (```) |
+| Escaped brackets (`\[...\]`) | Unescaped to `[...]` |
+| Double-bracket links (`[[text]{...}](url)`) | Simplified to `[text](url)` |
+| Escaped quotes in code (`\"`) | Fixed to `"` |
 
 ## Heavy Mode Workflow
 
@@ -117,7 +135,7 @@ python scripts/merge_outputs.py output1.md output2.md -o merged.md --verbose
 ## Path Conversion (Windows/WSL)
 
 ```bash
-# Windows → WSL conversion
+# Windows to WSL conversion
 python scripts/convert_path.py "C:\Users\name\Documents\file.pdf"
 # Output: /mnt/c/Users/name/Documents/file.pdf
 ```
@@ -147,7 +165,7 @@ brew install pandoc
 
 | Script | Purpose |
 |--------|---------|
-| `convert.py` | Main orchestrator with Quick/Heavy mode |
+| `convert.py` | Main orchestrator with Quick/Heavy mode + DOCX post-processing |
 | `merge_outputs.py` | Merge multiple markdown outputs |
 | `validate_output.py` | Quality validation with HTML report |
 | `extract_pdf_images.py` | PDF image extraction with metadata |

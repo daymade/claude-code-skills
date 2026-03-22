@@ -50,25 +50,23 @@
       ]
     },
     {
-      "name": "markdown-tools",
-      "description": "Convert documents (PDFs, Word, PowerPoint) to high-quality markdown with multi-tool orchestration. Supports Quick Mode (fast, single tool) and Heavy Mode (best quality, multi-tool merge with segment-level selection). Features PyMuPDF4LLM for LLM-optimized PDF conversion, pandoc for DOCX/PPTX structure preservation, quality validation with HTML reports, and image extraction with metadata",
+      "name": "doc-to-markdown",
+      "description": "Converts DOCX/PDF/PPTX to high-quality Markdown with automatic post-processing. Fixes pandoc grid tables, image paths, attribute noise, and code blocks. Supports Quick Mode (fast, single tool) and Heavy Mode (best quality, multi-tool merge). Trigger on \"convert document\", \"docx to markdown\", \"parse word\", \"doc to markdown\", \"extract images from document\".",
       "source": "./",
       "strict": false,
-      "version": "1.2.0",
+      "version": "2.0.0",
       "category": "document-conversion",
       "keywords": [
         "markdown",
-        "pdf",
         "docx",
+        "pdf",
         "pptx",
-        "pymupdf4llm",
+        "converter",
         "pandoc",
-        "markitdown",
-        "heavy-mode",
-        "quality-validation"
+        "document"
       ],
       "skills": [
-        "./markdown-tools"
+        "./doc-to-markdown"
       ]
     },
     {
