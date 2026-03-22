@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-43-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-44-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.39.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -14,7 +14,7 @@
 
 </div>
 
-Professional Claude Code skills marketplace featuring 43 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 44 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -1825,6 +1825,34 @@ claude plugin install scrapling-skill@daymade-skills
 📚 **Documentation**: See [scrapling-skill/SKILL.md](./scrapling-skill/SKILL.md) and [scrapling-skill/references/troubleshooting.md](./scrapling-skill/references/troubleshooting.md).
 
 **Requirements**: Python 3.6+, `uv`, Scrapling CLI, and Playwright browser runtime for browser-backed fetches.
+
+---
+
+### 44. **qr-bridge** - QR Code Decoding & Link Tracing
+
+Decode QR codes, trace redirect chains, detect WeChat/WeCom/Taobao/Douyin/Xiaohongshu gates, and explain why links fail. macOS native (CoreImage), zero dependencies, ~10ms.
+
+**When to use:**
+- Decoding QR codes from image files or screenshots
+- Tracing redirect chains behind short URLs or QR payloads
+- Detecting platform-specific gates (WeChat, WeCom, Taobao, Douyin, Xiaohongshu)
+- Diagnosing why a scanned link fails or redirects unexpectedly
+
+**Key features:**
+- macOS native QR decoding via CoreImage (no external dependencies)
+- Full redirect-chain tracing with hop-by-hop output
+- Platform gate detection for major Chinese apps
+- Human-readable failure explanations
+- Ultra-fast (~10ms) decoding
+
+**Install:**
+```bash
+claude install-skill https://github.com/Vicky-v7/qr-bridge
+```
+
+📚 **Documentation**: [github.com/Vicky-v7/qr-bridge](https://github.com/Vicky-v7/qr-bridge)
+
+**Requirements**: macOS (CoreImage framework).
 
 ---
 
