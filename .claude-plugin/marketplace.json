@@ -51,10 +51,10 @@
     },
     {
       "name": "doc-to-markdown",
-      "description": "Converts DOCX/PDF/PPTX to high-quality Markdown with automatic post-processing. Fixes pandoc grid tables, image paths, attribute noise, and code blocks. Supports Quick Mode (fast, single tool) and Heavy Mode (best quality, multi-tool merge). Trigger on \"convert document\", \"docx to markdown\", \"parse word\", \"doc to markdown\", \"extract images from document\".",
+      "description": "Converts DOCX/PDF/PPTX to high-quality Markdown. Pandoc engine + 8 post-processing fixes: grid/simple tables to pipe tables, CJK bold spacing, JSON pretty-print, image path flattening, pandoc attribute cleanup, code block detection, bracket fixes. Benchmarked 7.6/10 (best-in-class vs Docling/MarkItDown/Mammoth). 31 unit tests. Trigger on \"convert document\", \"docx to markdown\", \"parse word\", \"doc to markdown\", \"解析word\", \"转换文档\".",
       "source": "./",
       "strict": false,
-      "version": "2.0.0",
+      "version": "2.1.0",
       "category": "document-conversion",
       "keywords": [
         "markdown",
@@ -63,7 +63,9 @@
         "pptx",
         "converter",
         "pandoc",
-        "document"
+        "document",
+        "cjk",
+        "chinese"
       ],
       "skills": [
         "./doc-to-markdown"
