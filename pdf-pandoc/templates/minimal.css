@@ -1,0 +1,177 @@
+/* Minimal Template — Clean PDF Output */
+
+@page {
+  size: A4;
+  margin: 20mm;
+
+  @bottom-right {
+    content: counter(page);
+    font-size: 8px;
+    color: #bbb;
+    font-family: -apple-system, "Helvetica Neue", sans-serif;
+  }
+}
+
+/* Base */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei",
+    sans-serif;
+  font-size: 11pt;
+  line-height: 1.6;
+  color: #333;
+  max-width: 100%;
+}
+
+/* Headings */
+h1 {
+  font-size: 20pt;
+  font-weight: 700;
+  color: #111;
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+h2 {
+  font-size: 15pt;
+  font-weight: 600;
+  color: #222;
+  margin-top: 24px;
+  margin-bottom: 10px;
+  page-break-after: avoid;
+}
+
+h3 {
+  font-size: 12pt;
+  font-weight: 600;
+  color: #333;
+  margin-top: 18px;
+  margin-bottom: 8px;
+  page-break-after: avoid;
+}
+
+h4 {
+  font-size: 11pt;
+  font-weight: 600;
+  color: #444;
+  margin-top: 14px;
+  margin-bottom: 6px;
+}
+
+/* Paragraphs */
+p {
+  margin: 6px 0;
+  orphans: 3;
+  widows: 3;
+}
+
+/* Links */
+a {
+  color: #0366d6;
+  text-decoration: none;
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+  font-size: 10pt;
+  page-break-inside: auto;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tr {
+  page-break-inside: avoid;
+}
+
+th {
+  background-color: #f6f8fa;
+  font-weight: 600;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  font-size: 9.5pt;
+}
+
+td {
+  padding: 7px 10px;
+  border: 1px solid #ddd;
+  vertical-align: top;
+}
+
+/* Code */
+code {
+  font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
+  background-color: #f6f8fa;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 9.5pt;
+}
+
+pre {
+  background-color: #f6f8fa;
+  border: 1px solid #e1e4e8;
+  border-radius: 4px;
+  padding: 12px 16px;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  font-size: 9pt;
+  line-height: 1.45;
+  margin: 10px 0;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+/* Blockquotes */
+blockquote {
+  border-left: 3px solid #ddd;
+  margin: 10px 0;
+  padding: 6px 14px;
+  color: #666;
+  font-size: 10.5pt;
+}
+
+blockquote p {
+  margin: 4px 0;
+}
+
+/* Lists */
+ul, ol {
+  margin: 6px 0;
+  padding-left: 24px;
+}
+
+li {
+  margin: 3px 0;
+}
+
+/* Horizontal rules */
+hr {
+  border: none;
+  border-top: 1px solid #eee;
+  margin: 16px 0;
+}
+
+/* Hide pandoc title block (prevents duplicate title when MD already has # heading) */
+#title-block-header {
+  display: none;
+}
+
+/* Print-specific */
+@media print {
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+
+  table, pre, blockquote {
+    page-break-inside: avoid;
+  }
+}

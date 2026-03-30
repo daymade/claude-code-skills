@@ -1,0 +1,224 @@
+/* visiAI Branded Report Template — Example Customization */
+/* Copy and modify this for your own branded PDF output */
+
+@page {
+  size: A4;
+  margin: 25mm 20mm 25mm 20mm;
+
+  @bottom-center {
+    content: "visiAI — Confidential";
+    font-size: 9px;
+    color: #999;
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  @bottom-right {
+    content: counter(page);
+    font-size: 9px;
+    color: #999;
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+}
+
+@page :first {
+  margin-top: 30mm;
+}
+
+/* Base */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei",
+    sans-serif;
+  font-size: 11pt;
+  line-height: 1.65;
+  color: #2c3e50;
+  max-width: 100%;
+}
+
+/* Headings */
+h1 {
+  font-size: 22pt;
+  font-weight: 700;
+  color: #1a1a2e;
+  border-bottom: 3px solid #1a1a2e;
+  padding-bottom: 8px;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+h2 {
+  font-size: 16pt;
+  font-weight: 600;
+  color: #16213e;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 6px;
+  margin-top: 28px;
+  margin-bottom: 12px;
+  page-break-after: avoid;
+}
+
+h3 {
+  font-size: 13pt;
+  font-weight: 600;
+  color: #0f3460;
+  margin-top: 20px;
+  margin-bottom: 8px;
+  page-break-after: avoid;
+}
+
+h4 {
+  font-size: 11pt;
+  font-weight: 600;
+  color: #333;
+  margin-top: 16px;
+  margin-bottom: 6px;
+}
+
+/* Paragraphs */
+p {
+  margin: 8px 0;
+  orphans: 3;
+  widows: 3;
+}
+
+/* Strong / Bold */
+strong {
+  color: #1a1a2e;
+}
+
+/* Links */
+a {
+  color: #2980b9;
+  text-decoration: none;
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+  font-size: 10pt;
+  page-break-inside: auto;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tr {
+  page-break-inside: avoid;
+  page-break-after: auto;
+}
+
+th {
+  background-color: #1a1a2e;
+  color: #fff;
+  font-weight: 600;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 9.5pt;
+  border: 1px solid #1a1a2e;
+}
+
+td {
+  padding: 7px 10px;
+  border: 1px solid #ddd;
+  vertical-align: top;
+}
+
+/* Zebra striping */
+tbody tr:nth-child(even) {
+  background-color: #f8f9fa;
+}
+
+tbody tr:hover {
+  background-color: #eef2f7;
+}
+
+/* Code */
+code {
+  font-family: "SF Mono", "Menlo", "Monaco", "Courier New", monospace;
+  background-color: #f0f2f5;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 9.5pt;
+  color: #c0392b;
+}
+
+pre {
+  background-color: #f8f8f8;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 12px 16px;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  font-size: 9pt;
+  line-height: 1.5;
+  margin: 12px 0;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+/* Blockquotes */
+blockquote {
+  border-left: 4px solid #1a1a2e;
+  margin: 12px 0;
+  padding: 8px 16px;
+  background-color: #f8f9fa;
+  color: #555;
+  font-size: 10.5pt;
+}
+
+blockquote p {
+  margin: 4px 0;
+}
+
+/* Lists */
+ul, ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+li {
+  margin: 4px 0;
+}
+
+/* Horizontal rules */
+hr {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 20px 0;
+}
+
+/* Metadata block (bold key-value pairs at top) */
+p > strong:first-child {
+  color: #555;
+}
+
+/* Hide pandoc title block (prevents duplicate title when MD already has # heading) */
+#title-block-header {
+  display: none;
+}
+
+/* Print-specific */
+@media print {
+  body {
+    color: #000;
+  }
+
+  a {
+    color: #2980b9;
+  }
+
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+
+  table, pre, blockquote {
+    page-break-inside: avoid;
+  }
+}
