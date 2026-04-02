@@ -1,0 +1,88 @@
+/*
+ * Default — PDF theme for formal documents
+ *
+ * Color palette: black/grey, no accent color
+ * Font: Songti SC (body) + Heiti SC (headings)
+ * Best for: legal documents, trademark filings, contracts, formal reports
+ *
+ * This is the original built-in theme from md_to_pdf.py, extracted for reference.
+ */
+
+@page {
+    size: A4;
+    margin: 2.5cm 2cm;
+}
+
+body {
+    font-family: 'Songti SC', 'SimSun', 'STSong', 'Noto Serif CJK SC', serif;
+    font-size: 12pt;
+    line-height: 1.8;
+    color: #000;
+    width: 100%;
+}
+
+h1 {
+    font-family: 'Heiti SC', 'SimHei', 'STHeiti', 'Noto Sans CJK SC', sans-serif;
+    font-size: 18pt;
+    font-weight: bold;
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 1.5em;
+}
+
+h2 {
+    font-family: 'Heiti SC', 'SimHei', 'STHeiti', 'Noto Sans CJK SC', sans-serif;
+    font-size: 14pt;
+    font-weight: bold;
+    margin-top: 1.5em;
+    margin-bottom: 0.8em;
+}
+
+h3 {
+    font-family: 'Heiti SC', 'SimHei', 'STHeiti', 'Noto Sans CJK SC', sans-serif;
+    font-size: 12pt;
+    font-weight: bold;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+}
+
+p {
+    margin: 0.8em 0;
+    text-align: justify;
+}
+
+ul, ol {
+    margin: 0.8em 0;
+    padding-left: 2em;
+}
+
+li {
+    margin: 0.4em 0;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1em 0;
+    font-size: 10pt;
+    table-layout: fixed;
+}
+
+th, td {
+    border: 1px solid #666;
+    padding: 8px 6px;
+    text-align: left;
+    overflow-wrap: break-word;
+    word-break: normal;
+}
+
+th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid #ccc;
+    margin: 1.5em 0;
+}
