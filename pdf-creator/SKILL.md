@@ -1,55 +1,60 @@
 ---
 name: pdf-creator
-description: Create PDF documents from markdown with proper Chinese font support using weasyprint. This skill should be used when converting markdown to PDF, generating formal documents (legal, trademark filings, reports), or when Chinese typography is required. Triggers include "convert to PDF", "generate PDF", "markdown to PDF", or any request for creating printable documents.
+description: Create PDF documents from markdown with proper Chinese font support. Supports theme system (default for formal docs, warm-terra for training materials) and dual backend (weasyprint or Chrome). Triggers include "convert to PDF", "generate PDF", "markdown to PDF", or any request for creating printable documents.
 ---
 
 # PDF Creator
 
-Create professional PDF documents from markdown with proper Chinese font support.
+Create professional PDF documents from markdown with Chinese font support and theme system.
 
 ## Quick Start
 
-Convert a single markdown file:
-
 ```bash
-cd /Users/tiansheng/Workspace/python/claude-code-skills/pdf-creator
-uv run --with weasyprint --with markdown scripts/md_to_pdf.py input.md output.pdf
+# Default theme (formal: Songti SC + black/grey)
+uv run --with weasyprint scripts/md_to_pdf.py input.md output.pdf
+
+# Warm theme (training: PingFang SC + terra cotta)
+uv run --with weasyprint scripts/md_to_pdf.py input.md --theme warm-terra
+
+# No weasyprint? Use Chrome backend (auto-detected if weasyprint unavailable)
+python scripts/md_to_pdf.py input.md --theme warm-terra --backend chrome
+
+# List available themes
+python scripts/md_to_pdf.py --list-themes dummy.md
 ```
 
-Batch convert multiple files:
+## Themes
+
+Stored in `themes/*.css`. Each theme is a standalone CSS file.
+
+| Theme | Font | Color | Best for |
+|-------|------|-------|----------|
+| `default` | Songti SC + Heiti SC | Black/grey | Legal docs, contracts, formal reports |
+| `warm-terra` | PingFang SC | Terra cotta (#d97756) + warm neutrals | Course outlines, training materials, workshops |
+
+To create a new theme: copy `themes/default.css`, modify, save as `themes/your-theme.css`.
+
+## Backends
+
+The script auto-detects the best available backend:
+
+| Backend | Install | Pros | Cons |
+|---------|---------|------|------|
+| `weasyprint` | `pip install weasyprint` | Precise CSS rendering, no browser needed | Requires system libs (cairo, pango) |
+| `chrome` | Google Chrome installed | Zero Python deps, great CJK support | Larger binary, slightly less CSS control |
+
+Override with `--backend chrome` or `--backend weasyprint`.
+
+## Batch Convert
 
 ```bash
-uv run --with weasyprint --with markdown scripts/batch_convert.py *.md --output-dir ./pdfs
+uv run --with weasyprint scripts/batch_convert.py *.md --output-dir ./pdfs
 ```
-
-macOS ARM (Homebrew) 的 `DYLD_LIBRARY_PATH` 会自动检测配置，无需手动设置。
-
-## Font Configuration
-
-The scripts use these Chinese fonts (with fallbacks):
-
-| Font Type | Primary | Fallbacks |
-|-----------|---------|-----------|
-| Body text | Songti SC | SimSun, STSong, Noto Serif CJK SC |
-| Headings | Heiti SC | SimHei, STHeiti, Noto Sans CJK SC |
-
-## Output Specifications
-
-- **Page size**: A4
-- **Margins**: 2.5cm top/bottom, 2cm left/right
-- **Body font**: 12pt, 1.8 line height
-- **Max file size**: Designed to stay under 2MB for form submissions
-
-## Common Use Cases
-
-1. **Legal documents**: Trademark filings, contracts, evidence lists
-2. **Reports**: Business reports, technical documentation
-3. **Formal letters**: Official correspondence requiring print format
 
 ## Troubleshooting
 
-**Problem**: Chinese characters display as boxes
-**Solution**: Ensure Songti SC or other Chinese fonts are installed on the system
+**Chinese characters display as boxes**: Ensure Chinese fonts are installed (Songti SC, PingFang SC, etc.)
 
-**Problem**: `weasyprint` import error
-**Solution**: Run with `uv run --with weasyprint --with markdown` to ensure dependencies
+**weasyprint import error**: Run with `uv run --with weasyprint` or use `--backend chrome` instead.
+
+**Chrome header/footer appearing**: The script passes `--no-pdf-header-footer`. If it still appears, your Chrome version may not support this flag — update Chrome.

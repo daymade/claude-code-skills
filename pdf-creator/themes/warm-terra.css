@@ -1,0 +1,121 @@
+/*
+ * Warm Terra — PDF theme for workshop/training documents
+ *
+ * Color palette: terra cotta (#d97756) + warm neutrals
+ * Font: PingFang SC (macOS) / Microsoft YaHei (Windows)
+ * Best for: course outlines, training materials, workshop agendas
+ *
+ * Usage with md_to_pdf.py:
+ *   python md_to_pdf.py input.md output.pdf --theme warm-terra
+ *
+ * Usage with pandoc + Chrome (fallback):
+ *   pandoc input.md -o /tmp/out.html --standalone -H <(cat this-file.css wrapped in <style>)
+ *   chrome --headless --no-pdf-header-footer --print-to-pdf=out.pdf /tmp/out.html
+ */
+
+@page {
+    size: A4;
+    margin: 12mm;
+}
+
+body {
+    font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 0 10px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #1f1b17;
+}
+
+h1 {
+    font-size: 22px;
+    font-weight: 800;
+    border-bottom: 2px solid #d97756;
+    padding-bottom: 8px;
+    margin-top: 0;
+    margin-bottom: 1em;
+}
+
+h2 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #d97756;
+    margin-top: 24px;
+    margin-bottom: 0.6em;
+}
+
+h3 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 18px;
+    margin-bottom: 0.5em;
+}
+
+p {
+    margin: 0.6em 0;
+}
+
+ul, ol {
+    padding-left: 20px;
+    margin: 0.6em 0;
+}
+
+li {
+    margin-bottom: 3px;
+    word-break: break-word;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+    font-size: 12px;
+}
+
+th, td {
+    border: 1px solid #e2d6c8;
+    padding: 5px 8px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+/* Last column wraps (usually the description/content column) */
+td:last-child {
+    white-space: normal;
+}
+
+th {
+    background: #faf5f0;
+    font-weight: 700;
+}
+
+blockquote {
+    border-left: 3px solid #d97756;
+    padding-left: 12px;
+    color: #6c6158;
+    margin: 10px 0;
+    font-size: 13px;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid #e2d6c8;
+    margin: 16px 0;
+}
+
+/* Hide pandoc-generated header/date */
+header, .date {
+    display: none !important;
+}
+
+code {
+    background: #faf5f0;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+strong {
+    color: #1f1b17;
+}
