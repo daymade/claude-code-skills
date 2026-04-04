@@ -59,6 +59,7 @@ Thumbs.db
 *.tgz
 *.rar
 *.7z
+*.skill
 
 # Build artifacts
 *.o
