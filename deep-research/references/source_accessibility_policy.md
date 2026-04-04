@@ -7,10 +7,10 @@
 
 ## The Problem
 
-In the "深度推理" case study, we made a **methodology error**:
+In the "字节跳动" case study, we made a **methodology error**:
 
 **What happened**:
-1. User asked to research **their own company**: "深度推理（上海）科技有限公司"
+1. User asked to research **their own company**: "字节跳动某子公司"
 2. We accessed user's **own Spaceship account** (their private registrar)
 3. Found 25 domains **the user already owned**
 4. Reported back: "The company owns these 25 domains"
@@ -60,7 +60,7 @@ When researching **third parties** (competitors, markets, investments):
 ## The Distinction
 
 ```
-Research Target: 深度推理（上海）科技有限公司
+Research Target: 字节跳动某子公司
 ├─ Is this the user's own company? → YES
 ├─ Can we use user's private data about it? → NO (circular)
 └─ Must rely on: Public sources only
@@ -80,7 +80,7 @@ Research Target: 竞争对手公司 X
 **Approach**: External investigator perspective
 
 ```
-User: "Research my company 深度推理"
+User: "Research my company 字节跳动子公司"
 
 CORRECT RESPONSE:
 1. Search public sources (WHOIS, web, news)

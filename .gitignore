@@ -82,3 +82,13 @@ INSTALLATION.md
 seo-expert/
 video-creator/
 /jsonl-viewer/
+
+# Research output (may contain sensitive data)
+deep-research-output/
+recovered_deep_research/
+
+# OpenCLI cache
+.opencli/
+
+# Work-in-progress skills
+douban-skill/
