@@ -693,10 +693,10 @@
     },
     {
       "name": "deep-research",
-      "description": "Generate format-controlled research reports with evidence tracking, citations, and iterative review. Use when users request research reports, literature reviews, market or industry analysis, competitive landscapes, policy or technical briefs, or strict report templates and section formatting",
+      "description": "Generate format-controlled research reports with evidence tracking, source governance, and multi-pass synthesis. V6.1 adds: source accessibility (circular verification forbidden, exclusive advantage encouraged). Enterprise Research Mode: six-dimension data collection, SWOT/barrier/risk frameworks, and three-level quality control for company research",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "2.4.0",
       "category": "documentation",
       "keywords": [
         "research",
@@ -706,7 +706,10 @@
         "market-research",
         "citations",
         "evidence",
-        "deepresearch"
+        "deepresearch",
+        "enterprise",
+        "company-research",
+        "due-diligence"
       ],
       "skills": [
         "./deep-research"
