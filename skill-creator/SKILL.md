@@ -318,13 +318,11 @@ argument-hint: [scope] [--with-codex] [--docker] [--verbose]
 
 Skills use a three-level loading system:
 1. **Metadata** (name + description) - Always in context (~100 words)
-2. **SKILL.md body** - In context whenever skill triggers (<500 lines ideal)
+2. **SKILL.md body** - In context whenever skill triggers
 3. **Bundled resources** - As needed (unlimited, scripts can execute without loading)
 
-These word counts are approximate and you can feel free to go longer if needed.
-
 **Key patterns:**
-- Keep SKILL.md under 500 lines; if you're approaching this limit, add an additional layer of hierarchy along with clear pointers about where the model using the skill should go next to follow up.
+- SKILL.md length should be driven by **information density**, not a line count target. A 600-line skill with no filler is better than a 200-line skill that omits critical knowledge and forces the model to guess. If the skill is getting long, ask: "Is every section earning its keep?" If yes, keep it. If sections are padded or explain things Claude already knows, trim those — not the useful content. When a skill genuinely covers many domains, split into references by domain rather than artificially cramming everything into a short main file.
 - Reference files clearly from SKILL.md with guidance on when to read them
 - For large reference files (>300 lines), include a table of contents
 
@@ -368,6 +366,17 @@ Output: feat(auth): implement JWT-based authentication
 ### Writing Style
 
 Try to explain to the model why things are important in lieu of heavy-handed musty MUSTs. Use theory of mind and try to make the skill general and not super-narrow to specific examples. Start by writing a draft and then look at it with fresh eyes and improve it.
+
+### Dates and Version References
+
+**Keep factual dates — they tell readers when information was verified.** A skill about Suno v5.5 should say "Suno v5.5 (March 2026)" because without the date, future readers can't judge if the information is still current. Removing dates makes things worse, not better.
+
+What to avoid is **conditional logic based on dates** ("if before August 2025, use the old API") — that becomes wrong the moment the date passes and nobody updates it.
+
+Rules:
+- **Release dates, "last verified" dates**: Keep them. They're reference points, not expiration dates
+- **Pricing, rankings, legal status**: Include but mark as volatile ("~$0.035/gen as of last check") so readers know to re-verify
+- **"Before X date do Y, after X date do Z"**: Don't write this. Pick the current method and optionally document the old one in a collapsed/deprecated section
 
 #### Bundled Resources
 
