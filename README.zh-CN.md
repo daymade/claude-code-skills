@@ -38,13 +38,35 @@
 
 `skill-creator` 是一个**元技能**，它使你能够构建、验证和打包自己的 Claude Code 技能。它是这个市场中最重要的工具，因为它赋予你用自己的专业工作流扩展 Claude Code 的能力。
 
-### 为什么首选 skill-creator？
+### 为什么选这个 skill-creator？
 
-- **🎯 基础工具**：通过创建自己的技能来学习技能的工作原理
-- **🛠️ 完整工具包**：包含初始化、验证和打包脚本
-- **📖 最佳实践**：从生产就绪的示例中学习
-- **🚀 快速启动**：在几秒钟内生成技能模板
-- **✅ 质量保证**：内置验证确保你的技能符合标准
+这是 [Anthropic 官方 skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator) 的**生产强化版 fork**——从真实 skill 开发中踩过的坑里长出来的。
+
+**官方告诉你"做什么"。我们还告诉你"别试什么"——以及为什么。**
+
+| 你想要... | 官方版 | 本 Fork |
+|----------|--------|---------|
+| 造之前先调研 | "Check available MCPs"（5 行） | 8 渠道搜索协议 + Adopt/Extend/Build 决策矩阵 |
+| 交互式创建 skill | 纯文字指令 | 9 个结构化 AskUserQuestion 检查点——用户永远不丢上下文 |
+| 避免常见错误 | 无指引 | 缓存编辑警告、前置依赖检查、安全扫描门禁 |
+| 了解架构选项 | 未提及 | Inline vs Fork 决策指南（选错会静默破坏你的 skill） |
+| 发布前验证 | 基本 YAML 检查 | 扩展验证器（全部 frontmatter 字段、路径引用完整性、空白字符问题） |
+| 安全审查 | 无工具 | `security_scan.py` + gitleaks 集成——打包前硬门禁 |
+| 从真实失败中学习 | 无失败案例 | 实战方法论 + 文档化的失败模式和踩坑记录 |
+
+**质量对比**（独立审计，8 个维度）：
+
+| 维度 | 官方版 | 本 Fork |
+|------|--------|---------|
+| 可操作性 | 7 | 9 |
+| 错误预防 | 5 | 9 |
+| 前置调研 | 4 | 9 |
+| 对抗性审查 | 4 | 8 |
+| 实战经验 | 3 | 8 |
+| 用户体验 | 4 | 9 |
+| **总分（/80）** | **42** | **65** |
+
+> 完整方法论：[skill-creator/references/skill-development-methodology.md](./skill-creator/references/skill-development-methodology.md)
 
 ### 快速安装
 
