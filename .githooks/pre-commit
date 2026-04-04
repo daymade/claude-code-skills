@@ -1,0 +1,53 @@
+#!/bin/bash
+# Pre-commit hook: scan staged changes for sensitive data
+# Install: git config core.hooksPath .githooks
+
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo "🔍 Scanning staged changes for sensitive data..."
+
+FAILED=0
+
+# Layer 1: gitleaks (if available)
+if command -v gitleaks &>/dev/null; then
+  if ! gitleaks protect --staged --config .gitleaks.toml --no-banner 2>/dev/null; then
+    echo -e "${RED}❌ gitleaks found secrets in staged changes${NC}"
+    FAILED=1
+  fi
+else
+  echo -e "${YELLOW}⚠ gitleaks not installed (brew install gitleaks), falling back to pattern scan${NC}"
+fi
+
+# Layer 2: fast regex scan (always runs, catches what gitleaks config might miss)
+STAGED_DIFF=$(git diff --cached --diff-filter=ACDMR)
+
+PATTERNS=(
+  '/Users/[a-zA-Z][a-zA-Z0-9_-]+/'
+  '/home/[a-zA-Z][a-zA-Z0-9_-]+/'
+  'C:\\Users\\[a-zA-Z]'
+  'songtiansheng'
+  'tiansheng'
+  '15366[0-9]+'
+)
+
+for pattern in "${PATTERNS[@]}"; do
+  MATCHES=$(echo "$STAGED_DIFF" | grep -nE "^\+" | grep -E "$pattern" | grep -v "^+++\|\.gitleaks\.toml\|\.githooks/\|\.gitignore\|placeholder\|example\|CLAUDE\.md" || true)
+  if [ -n "$MATCHES" ]; then
+    echo -e "${RED}❌ Found sensitive pattern '${pattern}':${NC}"
+    echo "$MATCHES" | head -5
+    FAILED=1
+  fi
+done
+
+if [ $FAILED -eq 1 ]; then
+  echo ""
+  echo -e "${RED}Commit blocked. Fix the issues above, or use --no-verify to bypass (not recommended).${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}✅ No sensitive data found in staged changes.${NC}"
