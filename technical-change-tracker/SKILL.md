@@ -1,6 +1,9 @@
 ---
 name: technical-change-tracker
-description: Track code changes with structured JSON records and accessible HTML output for AI session continuity. When a bot session expires, the next one picks up exactly where it left off. Features state machine enforcement, test cases with evidence, append-only revision history, and WCAG AA+ accessible dark-theme HTML dashboard.
+description: |
+  Track code changes with structured JSON records and accessible HTML output for AI session continuity. Use when user says /tc, /tc init, /tc create, /tc update, /tc status, /tc resume, /tc close, /tc export, /tc dashboard, or /tc retro.
+user-invocable: true
+tools: Read, Write, Edit, Glob, Grep, Bash
 ---
 
 # Technical Change (TC) Tracker
@@ -26,6 +29,7 @@ git clone https://github.com/Elkidogz/technical-change-skill.git
 | `/tc close <tc-id>` | Deploy and close a TC |
 | `/tc export` | Regenerate all HTML from JSON |
 | `/tc dashboard` | Regenerate dashboard |
+| `/tc retro <changelog.json>` | Batch-create TCs from project history |
 
 ## Features
 
@@ -33,6 +37,8 @@ git clone https://github.com/Elkidogz/technical-change-skill.git
 - **State machine**: Planned > In Progress > Blocked > Implemented > Tested > Deployed
 - **Test cases** with log snippet evidence and manual approval
 - **AI session handoff**: progress, next steps, blockers, key context, decisions
+- **Non-blocking**: TC bookkeeping runs as background subagent, never interrupts coding
+- **Retroactive**: `/tc retro` batch-creates TCs from existing project history
 - **WCAG AA+ HTML**: dark theme, rem-based fonts, CSS-only dashboard filters
 - **Zero dependencies**: Python stdlib only
 
