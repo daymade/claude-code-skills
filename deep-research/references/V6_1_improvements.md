@@ -2,7 +2,7 @@
 
 **Date**: 2026-04-03  
 **Version**: 2.3.0 → 2.4.0  
-**Based on**: User feedback and "深度推理" case study
+**Based on**: User feedback and "字节跳动" case study
 
 ---
 
@@ -18,7 +18,7 @@ The problem is not using user's private information—it's **circular verificati
 
 **Example of the Error**:
 ```
-User: "Research my company 深度推理"
+User: "Research my company 字节跳动子公司"
 ❌ WRONG: Access user's Spaceship → "You own 25 domains"
    → This is circular: user already knows they own these domains
 

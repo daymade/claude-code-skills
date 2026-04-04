@@ -320,7 +320,7 @@ Report: `[P3 complete] {approved}/{total} sources. {N} domains. Official share: 
 
 ### Handling Information Black Box
 
-When researching entities with no public footprint (like the "深度推理" example):
+When researching entities with no public footprint (like the "字节跳动子公司" example):
 
 **What an external researcher would find:**
 - WHOIS: Privacy protected → No owner info
