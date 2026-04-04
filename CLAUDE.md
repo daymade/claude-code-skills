@@ -115,13 +115,22 @@ description: Clear description with activation triggers. This skill should be us
 ---
 ```
 
-### Privacy and Path Guidelines
+### Privacy and Path Guidelines (Enforced by Pre-commit Hook)
 
 Skills for public distribution must NOT contain:
 - Absolute paths to user directories (`/home/username/`, `/Users/username/`)
 - Personal usernames, company names, product names
+- Phone numbers, personal email addresses
 - OneDrive paths or environment-specific absolute paths
-- Use relative paths within skill bundle or standard placeholders
+- Use relative paths within skill bundle or standard placeholders (`~/workspace/`, `<user_id>`)
+
+**Three-layer defense system:**
+1. **CLAUDE.md rules** (this section) — Claude avoids generating sensitive content
+2. **Pre-commit hook** (`.githooks/pre-commit`) — blocks commits with sensitive patterns
+3. **gitleaks** (`.gitleaks.toml`) — deep scan with custom rules for this repo
+
+The pre-commit hook is auto-activated via `git config core.hooksPath .githooks`.
+If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 
 ### Content Organization
 
