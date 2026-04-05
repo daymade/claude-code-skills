@@ -378,7 +378,7 @@
       "description": "Find and recover content from Claude Code session history files. Use when searching for deleted files, tracking changes across sessions, analyzing conversation history, or recovering code/documents from previous Claude interactions. Triggers include mentions of session history, recover deleted, find in history, previous conversation, or .claude/projects",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "developer-tools",
       "keywords": [
         "session-history",
