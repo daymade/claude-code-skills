@@ -288,6 +288,47 @@ competitors-analysis (fork, specialist)
 3. Each skill has a single responsibility — don't mix orchestration with execution
 4. Share methodology via references (e.g., checklists, templates), not by duplicating code
 
+##### Pipeline Handoff (Sequential Skill Chaining)
+
+Beyond orchestrator/specialist composition, skills often form **sequential pipelines** where one skill's output is the next skill's input. Each skill should proactively suggest the logical next step after completing its work.
+
+**Pattern: "Next Step" section at the end of SKILL.md**
+
+```markdown
+## Next Step: [Action Description]
+
+After [this skill completes], suggest the natural next skill:
+
+\```
+[Summary of what was just accomplished].
+
+Options:
+A) [Next skill] — [one-line reason] (Recommended)
+B) [Alternative skill] — [when this is better]
+C) No thanks — [the current output is sufficient]
+\```
+```
+
+**Real-world pipeline examples:**
+
+```
+youtube-downloader → asr-transcribe-to-text → transcript-fixer → meeting-minutes-taker → pdf-creator
+deep-research → fact-checker → ppt-creator
+doc-to-markdown → docs-cleaner
+claude-code-history-files-finder → continue-claude-work
+```
+
+**Rules for pipeline handoff:**
+1. Every handoff is **opt-in** via AskUserQuestion — never auto-invoke the next skill without asking
+2. Suggest only when the output naturally feeds into another skill — don't force connections
+3. Include a "No thanks" option — the user may not need the full pipeline
+4. The suggestion should explain **why** the next step helps (e.g., "ASR output typically contains recognition errors")
+5. Keep it to 1-2 recommendations max — too many choices cause decision fatigue
+
+**When to add a handoff:** Ask "does this skill's output commonly become another skill's input?" If yes, add a "Next Step" section. If the connection is rare or forced, don't add one.
+
+**Anti-pattern:** Chaining skills that don't share a natural data flow. `pdf-creator → youtube-downloader` makes no sense. The pipeline must follow the user's actual workflow.
+
 ##### Auto-Detection Over Manual Flags
 
 **Never add manual flags for capabilities that can be auto-detected.** Instead of requiring users to pass `--with-codex` or `--verbose`, detect capabilities at runtime:
@@ -853,6 +894,8 @@ The script creates a template skill directory with proper frontmatter, resource 
 When editing, remember that the skill is being created for another instance of Claude to use. Focus on information that would be beneficial and non-obvious to Claude.
 
 **When updating an existing skill**: Scan all existing reference files to check if they need corresponding updates.
+
+**Pipeline check**: Consider whether this skill's output naturally feeds into another skill. If so, add a "Next Step" handoff section (see "Pipeline Handoff" in the Skill Writing Guide). Also check if any existing skill should chain *into* this one.
 
 ### Step 5: Sanitization Review (Optional)
 

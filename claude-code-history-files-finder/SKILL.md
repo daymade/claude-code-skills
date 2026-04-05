@@ -209,3 +209,15 @@ grep -i "api_key\|password\|token" recovered_content/*
 ### Safe Storage
 
 Recovered content inherits sensitivity from original sessions. Store securely and follow organizational policies for handling session data.
+
+## Next Step: Resume Interrupted Work
+
+After finding relevant session history, suggest continuing the work:
+
+```
+Found [N] relevant sessions with recoverable context.
+
+Options:
+A) Resume work — run /continue-claude-work to pick up where you left off (Recommended)
+B) Just show me the content — I'll decide what to do with it
+```
