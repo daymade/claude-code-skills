@@ -40,8 +40,9 @@ python3 scripts/recover_content.py session1.jsonl -k componentName -o ./v1/
 python3 scripts/recover_content.py session2.jsonl -k componentName -o ./v2/
 python3 scripts/recover_content.py session3.jsonl -k componentName -o ./v3/
 
-# 4. Compare versions
-diff ./v1/componentName.jsx ./v2/componentName.jsx
+# 4. Compare versions (files retain original directory structure)
+# Use find to locate the file in subdirectories, or reference the recovery_report.txt
+find ./v1/ -name "componentName.jsx" -exec diff {} ./v2/{} \;
 ```
 
 ## Find Session with Specific Implementation
