@@ -58,7 +58,7 @@ Extract files from session history:
 python3 scripts/recover_content.py /path/to/session.jsonl
 ```
 
-Extracts all Write tool calls and saves files to `./recovered_content/`.
+Extracts all Write tool calls and saves files to `./recovered_content/`, preserving the original directory structure.
 
 **Filtering by keywords**:
 
@@ -125,14 +125,14 @@ python3 scripts/recover_content.py session.jsonl -o ./feature_xy_history/
 After recovery, always verify content:
 
 ```bash
-# Check file list
-ls -lh ./recovered_content/
+# Check directory structure (files preserved in subdirectories)
+find ./recovered_content/ -type f
 
-# Read recovery report
+# Read recovery report (shows full output paths)
 cat ./recovered_content/recovery_report.txt
 
-# Spot-check content
-head -20 ./recovered_content/ImportantFile.jsx
+# Spot-check content (use actual path from report)
+head -20 ./recovered_content/src/components/ImportantFile.jsx
 ```
 
 ## Limitations
