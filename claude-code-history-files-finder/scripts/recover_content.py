@@ -120,7 +120,7 @@ class SessionContentRecovery:
         self, write_calls: List[Dict[str, Any]], keywords: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Save recovered files to disk.
+        Save recovered files to disk, preserving original directory structure.
 
         Args:
             write_calls: List of Write tool calls
@@ -152,18 +152,43 @@ class SessionContentRecovery:
         # Save files
         for file_path, call in files_by_path.items():
             try:
-                filename = Path(file_path).name
-                if not filename:
+                if not file_path:
                     continue
 
-                output_file = self.output_dir / filename
+                # Preserve original directory structure
+                # Convert absolute path to relative path within output directory
+                original_path = Path(file_path)
+
+                # Handle absolute paths: extract meaningful relative path
+                # e.g., /Users/username/project/src/file.py -> src/file.py
+                # e.g., /home/user/workspace/project/lib/module.py -> lib/module.py
+                path_parts = original_path.parts
+                if len(path_parts) > 1 and path_parts[0] == "/":
+                    # For absolute paths, try to find a project-like directory
+                    # Skip leading /, Users/username, home/username patterns
+                    start_idx = 1  # Skip leading "/"
+                    if len(path_parts) > 2 and path_parts[1].lower() in ("users", "home", "user"):
+                        start_idx = 3  # Skip /Users/username or /home/user
+                    relative_parts = path_parts[start_idx:]
+                else:
+                    relative_parts = path_parts
+
+                # Construct output path preserving structure
+                if relative_parts:
+                    output_file = self.output_dir.joinpath(*relative_parts)
+                else:
+                    # Fallback to filename only if path is too shallow
+                    output_file = self.output_dir / original_path.name
+
+                # Create parent directories
+                output_file.parent.mkdir(parents=True, exist_ok=True)
 
                 with open(output_file, "w") as f:
                     f.write(call["content"])
 
                 saved.append(
                     {
-                        "file": filename,
+                        "file": output_file.name,
                         "original_path": file_path,
                         "size": len(call["content"]),
                         "lines": call["content"].count("\n") + 1,
