@@ -36,13 +36,13 @@ class SessionAnalyzer:
         Find all session files for a specific project.
 
         Args:
-            project_path: Project path (e.g., /Users/user/Workspace/js/myproject)
+            project_path: Project path (e.g., ~/Workspace/js/myproject)
 
         Returns:
             List of session file paths
         """
         # Convert project path to Claude's directory naming
-        # Example: /Users/user/Workspace/js/myproject -> -Users-user-Workspace-js-myproject
+        # Example: ~/Workspace/js/myproject -> -Users-<username>-Workspace-js-myproject
         normalized = project_path.replace("/", "-")
         project_dir = self.projects_dir / normalized
 
