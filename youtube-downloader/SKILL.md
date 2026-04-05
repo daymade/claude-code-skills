@@ -492,3 +492,17 @@ ffmpeg -i video.mp4 -i audio.m4a -c copy merged.mp4
 - **PO Token Setup**: See `references/po-token-setup.md` for detailed installation and troubleshooting
 - **yt-dlp Documentation**: https://github.com/yt-dlp/yt-dlp
 - **Format Selection Guide**: https://github.com/yt-dlp/yt-dlp#format-selection
+
+## Next Step: Transcribe Downloaded Audio/Video
+
+After downloading, if the user's goal involves getting text from the video (transcription, subtitles, meeting notes), proactively suggest:
+
+```
+Download complete: [filename]
+
+If you need the spoken content as text, I can transcribe it for you.
+
+Options:
+A) Transcribe with /asr-transcribe-to-text (Recommended for speech-to-text)
+B) No thanks — I just needed the video file
+```

@@ -643,3 +643,16 @@ Round 4: Update to use "Annotation" instead of "Note"
 - ❌ **Creating non-existent links** - Do NOT create markdown links to files that don't exist in the repo (e.g., `[doc.md](reviewed-document)`); use plain text for external/local documents not in the repository
 - ❌ **Losing content during consolidation** - When moving or consolidating sections, verify ALL bullet points and details are preserved; never summarize away specific details like "supports batch operations" or "button triggers auto-save"
 - ❌ **Appending domain details to role titles** - Use ONLY the Role column from Team Directory for speaker attribution (e.g., "Backend", "Frontend", "TPM"); do NOT append specializations like "Backend, Infrastructure" or "Backend, Business Logic" - all team members with the same role should have identical attribution
+
+## Next Step: Export to Deliverable Format
+
+After structuring meeting minutes, suggest exporting:
+
+```
+Meeting minutes complete: [N] decisions, [M] action items captured.
+
+Options:
+A) Export as PDF — run /pdf-creator (Recommended for sharing)
+B) Export as slides — run /ppt-creator (for presentation)
+C) No thanks — the markdown is sufficient
+```
