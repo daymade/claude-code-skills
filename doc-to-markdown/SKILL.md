@@ -171,3 +171,16 @@ brew install pandoc
 - `references/heavy-mode-guide.md` - Detailed Heavy Mode documentation
 - `references/tool-comparison.md` - Tool capabilities comparison
 - `references/conversion-examples.md` - Batch operation examples
+
+## Next Step: Clean Up Converted Content
+
+After converting documents to markdown, suggest cleanup:
+
+```
+Conversion complete: [N] files converted to markdown.
+
+Options:
+A) Clean up docs — run /docs-cleaner to consolidate redundant content (Recommended if multiple files)
+B) Check facts — run /fact-checker to verify claims in the converted content
+C) No thanks — the markdown conversion is sufficient
+```

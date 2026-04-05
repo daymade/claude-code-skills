@@ -1,49 +1,84 @@
 ---
 name: asr-transcribe-to-text
-description: Transcribe audio and video files to text using a remote ASR service (Qwen3-ASR or OpenAI-compatible endpoint). Extracts audio from video, sends to configurable ASR endpoint, outputs clean text. Use when the user wants to transcribe recordings, convert audio/video to text, do speech-to-text, or mentions ASR, Qwen ASR, 转录, 语音转文字, 录音转文字, or has a meeting recording, lecture, interview, or screen recording to transcribe.
-argument-hint: [audio-or-video-file-path]
+description: Transcribes audio and video files to text using Qwen3-ASR. Supports two modes — local MLX inference on macOS Apple Silicon (no API key, 15-27x realtime) and remote API via vLLM/OpenAI-compatible endpoints. Auto-detects platform and recommends the best path. Triggers when the user wants to transcribe recordings, convert audio/video to text, do speech-to-text, or mentions ASR, Qwen ASR, 转录, 语音转文字, 录音转文字. Also triggers for meeting recordings, lectures, interviews, podcasts, screen recordings, or any audio/video file the user wants converted to text.
+argument-hint: [audio-or-video-file-path ...]
 ---
 
 # ASR Transcribe to Text
 
-Transcribe audio/video files to text using a configurable ASR endpoint (default: Qwen3-ASR-1.7B via vLLM). Configuration persists across sessions in `${CLAUDE_PLUGIN_DATA}/config.json`.
+Transcribe audio/video files to text using Qwen3-ASR. Two inference paths:
 
-## Step 0: Load or Initialize Configuration
+| Mode | When | Speed | Cost |
+|------|------|-------|------|
+| **Local MLX** | macOS Apple Silicon | 15-27x realtime | Free |
+| **Remote API** | Any platform, or when local unavailable | Depends on GPU | API/self-hosted |
+
+Configuration persists in `${CLAUDE_PLUGIN_DATA}/config.json`.
+
+## Step 0: Detect Platform and Load Config
 
 ```bash
 cat "${CLAUDE_PLUGIN_DATA}/config.json" 2>/dev/null
 ```
 
-**If config exists**, read the values and proceed to Step 1.
+**If config exists**, read values and proceed to Step 1.
 
-**If config does not exist** (first run), use **AskUserQuestion**:
+**If config does not exist**, auto-detect platform first:
 
+```bash
+python3 -c "
+import sys, platform
+is_mac_arm = sys.platform == 'darwin' and platform.machine() in ('arm64', 'aarch64')
+print(f'Platform: {sys.platform} {platform.machine()}')
+print(f'Apple Silicon: {is_mac_arm}')
+if is_mac_arm:
+    print('RECOMMEND: local-mlx')
+else:
+    print('RECOMMEND: remote-api')
+"
 ```
-First-time setup for ASR transcription.
-I need to know where your ASR service is running so I can send audio to it.
 
-RECOMMENDATION: Use the defaults below if you have Qwen3-ASR on a 4090 via Tailscale.
+Then use **AskUserQuestion** with platform-aware defaults:
+
+For **macOS Apple Silicon** (recommended: local):
+```
+ASR setup — your Mac has Apple Silicon, so local transcription is recommended.
+
+Q1: Transcription mode?
+  A) Local MLX — runs on your Mac's GPU, no API key needed, 15-27x realtime (Recommended)
+  B) Remote API — send audio to a server (vLLM, Tailscale workstation, etc.)
+
+Q2: Does your network have an HTTP proxy that might intercept traffic?
+  A) Yes — bypass proxy for ASR traffic (Recommended if using Shadowrocket/Clash)
+  B) No — direct connection
+```
+
+For **other platforms** (recommended: remote):
+```
+ASR setup — local MLX requires macOS Apple Silicon. Using remote API mode.
 
 Q1: ASR Endpoint URL?
-  A) http://workstation-4090-wsl:8002/v1/audio/transcriptions (Default — Qwen3-ASR vLLM via Tailscale)
-  B) http://localhost:8002/v1/audio/transcriptions (Local machine)
-  C) Let me enter a custom URL
+  A) http://workstation-4090-wsl:8002/v1/audio/transcriptions (Qwen3-ASR vLLM via Tailscale)
+  B) http://localhost:8002/v1/audio/transcriptions (Local server)
+  C) Custom URL
 
-Q2: Does your network have an HTTP proxy that might intercept LAN/Tailscale traffic?
-  A) Yes — add --noproxy to bypass it (Recommended if you use Shadowrocket/Clash/corporate proxy)
-  B) No — direct connection is fine
+Q2: Proxy bypass needed?
+  A) Yes (Recommended for Shadowrocket/Clash/corporate proxy)
+  B) No
 ```
 
-Save the config:
+Save config:
 ```bash
 mkdir -p "${CLAUDE_PLUGIN_DATA}"
 python3 -c "
 import json
 config = {
-    'endpoint': 'USER_PROVIDED_ENDPOINT',
-    'model': 'USER_PROVIDED_MODEL_OR_DEFAULT',
-    'noproxy': True,  # or False based on user answer
-    'max_timeout': 900
+    'mode': 'MODE',           # 'local-mlx' or 'remote-api'
+    'model': 'MODEL_ID',      # local: 'mlx-community/Qwen3-ASR-1.7B-8bit', remote: 'Qwen/Qwen3-ASR-1.7B'
+    'max_tokens': 200000,     # local only, critical for long audio
+    'endpoint': 'URL',        # remote only
+    'noproxy': True,
+    'max_timeout': 900        # remote only
 }
 with open('${CLAUDE_PLUGIN_DATA}/config.json', 'w') as f:
     json.dump(config, f, indent=2)
@@ -51,10 +86,40 @@ print('Config saved.')
 "
 ```
 
-## Step 1: Validate Input and Check Service Health
+## Step 1: Extract Audio (if input is video)
 
-Read config and health-check in a single command (shell variables don't persist across Bash calls):
+For video files (mp4, mov, mkv, avi, webm), extract as 16kHz mono WAV:
 
+```bash
+ffmpeg -i INPUT_VIDEO -vn -acodec pcm_s16le -ar 16000 -ac 1 OUTPUT.wav -y
+```
+
+Audio files (wav, mp3, m4a, flac, ogg) can be used directly. Get duration:
+```bash
+ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 INPUT_FILE
+```
+
+**Cleanup**: After transcription succeeds, delete extracted WAV files to save disk space.
+
+## Step 2: Transcribe
+
+### Path A: Local MLX (macOS Apple Silicon)
+
+Use the bundled script — it handles model loading, chunking, and the critical `max_tokens` parameter:
+
+```bash
+uv run ${CLAUDE_PLUGIN_ROOT}/scripts/transcribe_local_mlx.py \
+  INPUT_AUDIO [INPUT_AUDIO2 ...] \
+  --output-dir OUTPUT_DIR
+```
+
+The script loads the model once and transcribes all files sequentially (no GPU contention). For details on performance, model compatibility, and the max_tokens truncation issue, see `references/local_mlx_guide.md`.
+
+**Critical**: The upstream `mlx-audio` default `max_tokens=8192` silently truncates audio longer than ~40 minutes. The bundled script defaults to `200000`. If calling `model.generate()` directly, always pass `max_tokens=200000`.
+
+### Path B: Remote API
+
+**Health check first** (skip if already verified this session):
 ```bash
 python3 -c "
 import json, subprocess, sys
@@ -67,54 +132,13 @@ result = subprocess.run(
     capture_output=True, text=True
 )
 if result.returncode != 0 or not result.stdout.strip():
-    print(f'HEALTH CHECK FAILED', file=sys.stderr)
-    print(f'Endpoint: {base}/models', file=sys.stderr)
-    print(f'stdout: {result.stdout[:200]}', file=sys.stderr)
-    print(f'stderr: {result.stderr[:200]}', file=sys.stderr)
+    print(f'HEALTH CHECK FAILED: {base}/models', file=sys.stderr)
     sys.exit(1)
-else:
-    print(f'Service healthy: {base}')
-    print(f'Model: {cfg[\"model\"]}')
+print(f'Service healthy: {base}')
 "
 ```
 
-**If health check fails**, use **AskUserQuestion**:
-
-```
-ASR service at [endpoint] is not responding.
-
-Options:
-A) Diagnose — check network, Tailscale, and service status step by step
-B) Reconfigure — the endpoint URL might be wrong, let me re-enter it
-C) Try anyway — send the transcription request and see what happens
-D) Abort — I'll fix the service manually and come back later
-```
-
-For option A, diagnose in order:
-1. Network: `ping -c 1 HOST` or `tailscale status | grep HOST`
-2. Service: `tailscale ssh USER@HOST "curl -s localhost:PORT/v1/models"`
-3. Proxy: retry with `--noproxy '*'` toggled
-
-## Step 2: Extract Audio (if input is video)
-
-For video files (mp4, mov, mkv, avi, webm), extract audio as 16kHz mono MP3:
-
-```bash
-ffmpeg -i INPUT_VIDEO -vn -acodec libmp3lame -q:a 4 -ar 16000 -ac 1 OUTPUT.mp3 -y
-```
-
-For audio files (mp3, wav, m4a, flac, ogg), use directly — no conversion needed.
-
-Get duration for progress estimation:
-```bash
-ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 INPUT_FILE
-```
-
-## Step 3: Transcribe — Single Request First
-
-**Always try full-length single request first.** Chunking causes sentence truncation at every split boundary — the model forces the last sentence to close and loses words. Single request = zero truncation + fastest speed.
-
-The Qwen3-ASR paper's "20-minute limit" is a training benchmark, not an inference hard limit. Empirically verified: 55 minutes transcribed in a single 76-second request on 4090 24GB.
+Read config and send via curl:
 
 ```bash
 python3 -c "
@@ -123,7 +147,7 @@ with open('${CLAUDE_PLUGIN_DATA}/config.json') as f:
     cfg = json.load(f)
 noproxy = ['--noproxy', '*'] if cfg.get('noproxy', True) else []
 timeout = str(cfg.get('max_timeout', 900))
-audio_file = 'AUDIO_FILE_PATH'  # replace with actual path
+audio_file = 'AUDIO_FILE_PATH'
 output_json = tempfile.mktemp(suffix='.json', prefix='asr_')
 
 result = subprocess.run(
@@ -141,42 +165,43 @@ if 'text' not in data:
     print(f'ERROR: {json.dumps(data)[:300]}', file=sys.stderr)
     sys.exit(1)
 text = data['text']
-duration = data.get('usage', {}).get('seconds', 0)
-print(f'Transcribed: {len(text)} chars, {duration}s audio', file=sys.stderr)
+print(f'Transcribed: {len(text)} chars', file=sys.stderr)
 print(text)
 os.unlink(output_json)
 " > OUTPUT.txt
 ```
 
-**Performance reference**: ~400 characters per minute for Chinese speech; rates vary by language. Qwen3-ASR supports 52 languages including Chinese dialects, English, Japanese, Korean, and more.
+**If remote health check fails**, diagnose in order:
+1. Network: `ping -c 1 HOST` or `tailscale status | grep HOST`
+2. Service: `tailscale ssh USER@HOST "curl -s localhost:PORT/v1/models"`
+3. Proxy: retry with `--noproxy '*'` toggled
 
-## Step 4: Verify and Confirm Output
+## Step 3: Verify Output
 
-After transcription, verify quality:
-1. Confirm the response contains a `text` field (not an error message)
-2. Check character count is plausible for the audio duration (~400 chars/min for Chinese)
-3. Show the user the first ~200 characters as a preview
+After transcription, check for truncation — the most common failure mode:
 
-If the output looks wrong (empty, garbled, or error), use **AskUserQuestion**:
+1. Confirm output is not empty
+2. Check character count is plausible (~400 chars/min for Chinese, ~200 words/min for English)
+3. Check the **ending** — does it trail off mid-sentence? If so, `max_tokens` was exhausted
+4. Show user the first and last ~200 characters as preview
 
+If truncated or wrong, use **AskUserQuestion**:
 ```
-Transcription may have an issue:
+Transcription may be truncated:
 - Expected: ~[N] chars for [M] minutes of audio
-- Got: [actual chars] chars
-- Preview: "[first 100 chars...]"
+- Got: [actual] chars ([pct]% of expected)
+- Last line: "[last 100 chars...]"
 
 Options:
-A) Save as-is — the output looks fine to me
-B) Retry with fallback — split into chunks and merge (handles long audio / OOM)
-C) Reconfigure — try a different model or endpoint
-D) Abort — something is wrong with the service
+A) Retry with higher max_tokens (current: [N], try: [N*2])
+B) Switch mode — try [local/remote] instead
+C) Save as-is — the output looks complete to me
+D) Abort
 ```
 
-If output is good, save as `.txt` alongside the original file or to user-specified location.
+## Step 4: Fallback — Overlap-Merge (Remote API Only)
 
-## Step 5: Fallback — Overlap-Merge for Very Long Audio
-
-If single request fails (timeout, OOM, HTTP error), fall back to chunked transcription with overlap merging:
+If single remote request fails (timeout, OOM), fall back to chunked transcription:
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/overlap_merge_transcribe.py \
@@ -184,14 +209,42 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/overlap_merge_transcribe.py \
   INPUT_AUDIO OUTPUT.txt
 ```
 
-This splits into 18-minute chunks with 2-minute overlap, then merges using punctuation-stripped fuzzy matching. See [references/overlap_merge_strategy.md](references/overlap_merge_strategy.md) for the algorithm details.
+Splits into 18-minute chunks with 2-minute overlap, merges using punctuation-stripped fuzzy matching. See `references/overlap_merge_strategy.md` for algorithm details.
+
+For local MLX mode, overlap-merge is unnecessary — the bundled script handles chunking internally with `max_tokens=200000`.
+
+## Step 5: Recommend Transcript Correction
+
+ASR output always contains recognition errors — homophones, garbled technical terms, broken sentences. After successful transcription, **proactively suggest** running the `transcript-fixer` skill on the output:
+
+```
+Transcription complete: [N] chars saved to [output_path].
+
+ASR output typically contains recognition errors (homophones, garbled terms, broken sentences).
+Would you like me to run /transcript-fixer to clean up the text?
+
+Options:
+A) Yes — run transcript-fixer on the output now (Recommended)
+B) No — the raw transcription is good enough for my needs
+C) Later — I'll run it myself when ready
+```
+
+If the user chooses A, invoke the `transcript-fixer` skill with the output file path. The two skills form a natural pipeline: **transcribe → correct → review**.
 
 ## Reconfigure
-
-To change the ASR endpoint, model, or proxy settings:
 
 ```bash
 rm "${CLAUDE_PLUGIN_DATA}/config.json"
 ```
 
-Then re-run Step 0 to collect new values via AskUserQuestion.
+Then re-run Step 0.
+
+## Bundled Resources
+
+**Scripts:**
+- `transcribe_local_mlx.py` — Local MLX transcription (macOS ARM64, PEP 723 deps)
+- `overlap_merge_transcribe.py` — Chunked transcription with overlap merge (remote API fallback)
+
+**References:**
+- `local_mlx_guide.md` — Performance benchmarks, max_tokens truncation, model compatibility
+- `overlap_merge_strategy.md` — Why naive chunking fails, fuzzy merge algorithm
