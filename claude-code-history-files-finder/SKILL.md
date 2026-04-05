@@ -200,7 +200,7 @@ Always sanitize before sharing:
 
 ```bash
 # Remove absolute paths
-sed -i '' 's|/Users/[^/]*/|/Users/username/|g' file.js
+sed -i '' 's|~/|<home>/|g' file.js
 
 # Verify no credentials
 grep -i "api_key\|password\|token" recovered_content/*

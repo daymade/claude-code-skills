@@ -15,8 +15,8 @@ Claude Code stores conversation history in JSONL (JSON Lines) format, where each
 **Path normalization**: Project paths are converted by replacing `/` with `-`
 
 Example:
-- Project: `/Users/username/Workspace/js/myproject`
-- Directory: `~/.claude/projects/-Users-username-Workspace-js-myproject/`
+- Project: `~/Workspace/js/myproject`
+- Directory: `~/.claude/projects/-Users-<username>-Workspace-js-myproject/`
 
 ### File Types
 
