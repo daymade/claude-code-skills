@@ -1,13 +1,15 @@
 ---
 name: marketplace-dev
 description: |
-  Convert any Claude Code skills repository into an official plugin marketplace.
-  Creates .claude-plugin/marketplace.json conforming to the Anthropic spec, validates
-  it, tests installation, and creates a PR to the upstream repo.
-  Use this skill when the user says: "make this a marketplace", "add plugin support",
-  "convert to plugin", "one-click install", "marketplace.json", or wants their skills
-  repo installable via `claude plugin install`. Also trigger when the user has a
-  skills repo and mentions distribution, installation, or auto-update.
+  Converts any Claude Code skills repository into an official plugin marketplace.
+  Analyzes existing skills, generates .claude-plugin/marketplace.json conforming to
+  the Anthropic spec, validates with `claude plugin validate`, tests real installation,
+  and creates a PR to the upstream repo. Encodes hard-won anti-patterns from real
+  marketplace development (schema traps, version semantics, description pitfalls).
+  Use when the user mentions: marketplace, plugin support, one-click install,
+  marketplace.json, plugin distribution, auto-update, or wants a skills repo
+  installable via `claude plugin install`. Also trigger when the user has a skills
+  repo and asks about packaging, distribution, or making it installable.
 argument-hint: [repo-path]
 ---
 
@@ -119,6 +121,19 @@ Choose a name that is:
 - If the repo's audience is Chinese, keep descriptions in Chinese
 - If bilingual, use the first language in the SKILL.md description field
 - The `metadata.description` at marketplace level can be a new summary
+
+## Maintaining an existing marketplace
+
+When adding a new plugin to an existing marketplace.json:
+
+1. **Bump `metadata.version`** — this is the marketplace catalog version.
+   Follow semver: new plugin = minor bump, breaking change = major bump.
+2. **Update `metadata.description`** — append the new skill's summary.
+3. **Set new plugin `version` to `"1.0.0"`** — it's new to the marketplace.
+4. **Bump existing plugin `version`** when its SKILL.md content changes.
+   Claude Code uses version to detect updates — same version = skip update.
+5. **Audit `metadata` for invalid fields** — `metadata.homepage` is a common
+   mistake (not in spec, silently ignored). Remove if found.
 
 ## Phase 3: Validate
 
