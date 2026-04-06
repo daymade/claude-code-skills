@@ -183,6 +183,59 @@ claude plugin uninstall <plugin-name>@<marketplace-name>
 claude plugin marketplace remove <marketplace-name>
 ```
 
+## Pre-flight Checklist (MUST pass before proceeding to PR)
+
+Run this checklist after every marketplace.json change. Do not skip items.
+
+### Sync check: skills ↔ marketplace.json
+
+```bash
+# List all skill directories on disk
+DISK_SKILLS=$(find skills -maxdepth 1 -mindepth 1 -type d -exec basename {} \; | sort)
+
+# List all skills registered in marketplace.json
+JSON_SKILLS=$(python3 -c "
+import json
+with open('.claude-plugin/marketplace.json') as f:
+    data = json.load(f)
+for p in data['plugins']:
+    for s in p.get('skills', []):
+        print(s.split('/')[-1])
+" | sort)
+
+# Compare — must match
+diff <(echo "$DISK_SKILLS") <(echo "$JSON_SKILLS")
+```
+
+If diff shows output, skills are out of sync. Fix before proceeding.
+
+### Metadata check
+
+Verify these by reading marketplace.json:
+
+- [ ] `metadata.version` bumped from previous version
+- [ ] `metadata.description` mentions all skill categories
+- [ ] No `metadata.homepage` (not in spec, silently ignored)
+- [ ] No `$schema` field (rejected by validator)
+
+### Per-plugin check
+
+For each plugin entry:
+
+- [ ] `description` matches SKILL.md frontmatter EXACTLY (not rewritten)
+- [ ] `version` is `"1.0.0"` for new plugins, bumped for changed plugins
+- [ ] `source` is `"./"` and `skills` path starts with `"./"`
+- [ ] `strict` is `false` (no plugin.json in repo)
+- [ ] `name` is kebab-case, unique across all entries
+
+### Final validation
+
+```bash
+claude plugin validate .
+```
+
+Must show `✔ Validation passed` before creating PR.
+
 ## Phase 4: Create PR
 
 ### Principles
