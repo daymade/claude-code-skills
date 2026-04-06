@@ -1,346 +1,233 @@
 ---
 name: cli-demo-generator
-description: This skill should be used when users want to create animated CLI demos, terminal recordings, or command-line demonstration GIFs. It supports both manual tape file creation and automated demo generation from command descriptions. Use when users mention creating demos, recording terminal sessions, or generating animated GIFs of CLI workflows.
+description: Generates professional animated CLI demos as GIFs using VHS terminal recordings. Handles tape file creation, self-bootstrapping demos with hidden setup, output noise filtering, post-processing speed-up, and frame-level verification. Use when users want to create terminal demos, record CLI workflows as GIFs, generate animated documentation, build demo tapes for README files, or need to showcase any command-line tool visually. Also triggers on "record terminal", "VHS tape", "demo GIF", "animate my CLI", or any request to visually demonstrate shell commands.
 ---
 
 # CLI Demo Generator
 
-Generate professional animated CLI demos with ease. This skill supports both automated generation from command descriptions and manual control for custom demos.
+Create professional animated CLI demos. Four approaches, from fully automated to pixel-precise manual control.
 
-## When to Use This Skill
+## Quick Start
 
-Trigger this skill when users request:
-- "Create a demo showing how to install my package"
-- "Generate a CLI demo of these commands"
-- "Make an animated GIF of my terminal workflow"
-- "Record a terminal session and convert to GIF"
-- "Batch generate demos from this config"
-- "Create an interactive typing demo"
+**Simplest path** — give commands, get GIF:
 
-## Core Capabilities
-
-### 1. Automated Demo Generation (Recommended)
-
-Use the `auto_generate_demo.py` script for quick, automated demo creation. This is the easiest and most common approach.
-
-**Basic Usage:**
 ```bash
-scripts/auto_generate_demo.py \
+python3 ${CLAUDE_SKILL_DIR}/scripts/auto_generate_demo.py \
   -c "npm install my-package" \
   -c "npm run build" \
   -o demo.gif
 ```
 
-**With Options:**
+**Self-bootstrapping demo** — for repeatable recordings that clean their own state:
+
 ```bash
-scripts/auto_generate_demo.py \
-  -c "command1" \
-  -c "command2" \
+python3 ${CLAUDE_SKILL_DIR}/scripts/auto_generate_demo.py \
+  -c "npm install my-package" \
+  -c "npm run build" \
+  -o demo.gif \
+  --bootstrap "npm uninstall my-package 2>/dev/null" \
+  --speed 2
+```
+
+## Critical: VHS Parser Limitations
+
+VHS `Type` strings cannot contain `$`, `\"`, or backticks. These cause parse errors:
+
+```tape
+# FAILS — VHS parser rejects special chars
+Type "echo \"hello $USER\""
+Type "claude() { command claude \"$@\"; }"
+```
+
+**Workaround: base64 encode the command**, decode at runtime:
+
+```bash
+# 1. Encode your complex command
+echo 'claude() { command claude "$@" 2>&1 | grep -v "noise"; }' | base64
+# Output: Y2xhdWRlKCkgey4uLn0K
+
+# 2. Use in tape
+Type "echo Y2xhdWRlKCkgey4uLn0K | base64 -d > /tmp/wrapper.sh && source /tmp/wrapper.sh"
+```
+
+This pattern is essential for output filtering, function definitions, and any command with shell special characters.
+
+## Approaches
+
+### 1. Automated Generation (Recommended)
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/auto_generate_demo.py \
+  -c "command1" -c "command2" \
   -o output.gif \
-  --title "Installation Demo" \
-  --theme "Dracula" \
-  --width 1400 \
-  --height 700
+  --title "My Demo" \
+  --theme "Catppuccin Latte" \
+  --font-size 24 \
+  --width 1400 --height 600
 ```
 
-**Script Parameters:**
-- `-c, --command`: Command to include (can be specified multiple times)
-- `-o, --output`: Output GIF file path (required)
-- `--title`: Demo title (optional, shown at start)
-- `--theme`: VHS theme (default: Dracula)
-- `--font-size`: Font size (default: 16)
-- `--width`: Terminal width (default: 1400)
-- `--height`: Terminal height (default: 700)
-- `--no-execute`: Generate tape file only, don't execute VHS
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-c` | required | Command to include (repeatable) |
+| `-o` | required | Output GIF path |
+| `--title` | none | Title shown at start |
+| `--theme` | Dracula | VHS theme name |
+| `--font-size` | 16 | Font size in pt |
+| `--width` | 1400 | Terminal width px |
+| `--height` | 700 | Terminal height px |
+| `--bootstrap` | none | Hidden setup command (repeatable) |
+| `--filter` | none | Regex pattern to filter from output |
+| `--speed` | 1 | Playback speed multiplier (uses gifsicle) |
+| `--no-execute` | false | Generate .tape only |
 
-**Smart Features:**
-- Automatic timing based on command complexity
-- Optimized sleep durations (1-3s depending on operation)
-- Proper spacing between commands
-- Professional defaults
+Smart timing: `install`/`build`/`test`/`deploy` → 3s, `ls`/`pwd`/`echo` → 1s, others → 2s.
 
-### 2. Batch Demo Generation
+### 2. Batch Generation
 
-Use `batch_generate.py` for creating multiple demos from a configuration file.
+Create multiple demos from one config:
 
-**Configuration File (YAML):**
 ```yaml
+# demos.yaml
 demos:
-  - name: "Install Demo"
+  - name: "Install"
     output: "install.gif"
-    title: "Installation"
-    theme: "Dracula"
-    commands:
-      - "npm install my-package"
-      - "npm run build"
-
-  - name: "Usage Demo"
+    commands: ["npm install my-package"]
+  - name: "Usage"
     output: "usage.gif"
-    commands:
-      - "my-package --help"
-      - "my-package run"
+    commands: ["my-package --help", "my-package run"]
 ```
 
-**Usage:**
 ```bash
-scripts/batch_generate.py config.yaml --output-dir ./demos
+python3 ${CLAUDE_SKILL_DIR}/scripts/batch_generate.py demos.yaml --output-dir ./gifs
 ```
-
-**When to Use Batch Generation:**
-- Creating a suite of related demos
-- Documenting multiple features
-- Generating demos for tutorials or documentation
-- Maintaining consistent demo series
 
 ### 3. Interactive Recording
 
-Use `record_interactive.sh` for recording live terminal sessions.
-
-**Usage:**
-```bash
-scripts/record_interactive.sh output.gif \
-  --theme "Dracula" \
-  --width 1400
-```
-
-**Recording Process:**
-1. Script starts asciinema recording
-2. Type commands naturally in your terminal
-3. Press Ctrl+D when finished
-4. Script auto-converts to GIF via VHS
-
-**When to Use Interactive Recording:**
-- Demonstrating complex workflows
-- Showing real command output
-- Capturing live interactions
-- Recording debugging sessions
-
-### 4. Manual Tape File Creation
-
-For maximum control, create VHS tape files manually using templates.
-
-**Available Templates:**
-- `assets/templates/basic.tape` - Simple command demo
-- `assets/templates/interactive.tape` - Typing simulation
-
-**Example Workflow:**
-1. Copy template: `cp assets/templates/basic.tape my-demo.tape`
-2. Edit commands and timing
-3. Generate GIF: `vhs < my-demo.tape`
-
-Consult `references/vhs_syntax.md` for complete VHS syntax reference.
-
-## Workflow Guidance
-
-### For Simple Demos (1-3 commands)
-
-Use automated generation for quick results:
+Record a live terminal session:
 
 ```bash
-scripts/auto_generate_demo.py \
-  -c "echo 'Hello World'" \
-  -c "ls -la" \
-  -o hello-demo.gif \
-  --title "Hello Demo"
+bash ${CLAUDE_SKILL_DIR}/scripts/record_interactive.sh output.gif --theme "Catppuccin Latte"
+# Type commands naturally, Ctrl+D when done
 ```
 
-### For Multiple Related Demos
+Requires asciinema (`brew install asciinema`).
 
-Create a batch configuration file and use batch generation:
+### 4. Manual Tape File
 
-1. Create `demos-config.yaml` with all demo definitions
-2. Run: `scripts/batch_generate.py demos-config.yaml --output-dir ./output`
-3. All demos generate automatically with consistent settings
+For maximum control, write a tape directly. Templates in `assets/templates/`:
 
-### For Interactive/Complex Workflows
+- `basic.tape` — simple command sequence
+- `interactive.tape` — typing simulation
+- `self-bootstrap.tape` — **self-cleaning demo with hidden setup** (recommended for repeatable demos)
 
-Use interactive recording to capture real behavior:
+## Advanced Patterns
+
+These patterns come from production use. See `references/advanced_patterns.md` for full details.
+
+### Self-Bootstrapping Demos
+
+Demos that clean previous state, set up environment, and hide all of it from the viewer:
+
+```tape
+Hide
+Type "cleanup-previous-state 2>/dev/null"
+Enter
+Sleep 2s
+Type "clear"
+Enter
+Sleep 500ms
+Show
+
+Type "the-command-users-see"
+Enter
+Sleep 3s
+```
+
+The `Hide` → commands → `clear` → `Show` sequence is critical. `clear` wipes the terminal buffer so hidden commands don't leak into the GIF.
+
+### Output Noise Filtering
+
+Filter noisy progress lines from commands that produce verbose output:
+
+```tape
+# Hidden: create a wrapper function that filters noise
+Hide
+Type "echo <base64-encoded-wrapper> | base64 -d > /tmp/w.sh && source /tmp/w.sh"
+Enter
+Sleep 500ms
+Type "clear"
+Enter
+Sleep 500ms
+Show
+
+# Visible: clean command, filtered output
+Type "my-noisy-command"
+Enter
+Sleep 3s
+```
+
+### Frame Verification
+
+After recording, verify GIF content by extracting key frames:
 
 ```bash
-scripts/record_interactive.sh my-workflow.gif
-# Type commands naturally
-# Ctrl+D when done
+# Extract frames at specific positions
+ffmpeg -i demo.gif -vf "select=eq(n\,100)" -frames:v 1 /tmp/frame.png -y 2>/dev/null
+
+# View the frame (Claude can read images)
+# Use Read tool on /tmp/frame.png to verify content
 ```
 
-### For Custom Timing/Layout
+### Post-Processing Speed-Up
 
-Create manual tape file with precise control:
+Use gifsicle to speed up recordings without re-recording:
 
-1. Start with template or generate base tape with `--no-execute`
-2. Edit timing, add comments, customize layout
-3. Generate: `vhs < custom-demo.tape`
+```bash
+# 2x speed (halve frame delay)
+gifsicle -d2 original.gif "#0-" > fast.gif
 
-## Best Practices
+# 1.5x speed
+gifsicle -d4 original.gif "#0-" > faster.gif
+```
 
-Refer to `references/best_practices.md` for comprehensive guidelines. Key recommendations:
+### Template Placeholder Pattern
 
-**Timing:**
-- Quick commands (ls, pwd): 1s sleep
-- Standard commands (grep, cat): 2s sleep
-- Heavy operations (install, build): 3s+ sleep
+Keep tape files generic with placeholders, replace at build time:
 
-**Sizing:**
-- Standard: 1400x700 (recommended)
-- Compact: 1200x600
-- Presentations: 1800x900
+```tape
+# In tape file
+Type "claude plugin marketplace add MARKETPLACE_REPO"
 
-**Themes:**
-- Documentation: Nord, GitHub Dark
-- Code demos: Dracula, Monokai
-- Presentations: High-contrast themes
+# In build script
+sed "s|MARKETPLACE_REPO|$DETECTED_REPO|g" template.tape > rendered.tape
+vhs rendered.tape
+```
 
-**Duration:**
-- Target: 15-30 seconds
-- Maximum: 60 seconds
-- Create series for complex topics
+## Timing & Sizing Reference
+
+| Context | Width | Height | Font | Duration |
+|---------|-------|--------|------|----------|
+| README/docs | 1400 | 600 | 16-20 | 10-20s |
+| Presentation | 1800 | 900 | 24 | 15-30s |
+| Compact embed | 1200 | 600 | 14-16 | 10-15s |
+| Wide output | 1600 | 800 | 16 | 15-30s |
+
+See `references/best_practices.md` for detailed guidelines.
 
 ## Troubleshooting
 
-### VHS Not Installed
-
-```bash
-# macOS
-brew install vhs
-
-# Linux (via Go)
-go install github.com/charmbracelet/vhs@latest
-```
-
-### Asciinema Not Installed
-
-```bash
-# macOS
-brew install asciinema
-
-# Linux
-sudo apt install asciinema
-```
-
-### Demo File Too Large
-
-**Solutions:**
-1. Reduce duration (shorter sleep times)
-2. Use smaller dimensions (1200x600)
-3. Consider MP4 format: `Output demo.mp4`
-4. Split into multiple shorter demos
-
-### Output Not Readable
-
-**Solutions:**
-1. Increase font size: `--font-size 18`
-2. Use wider terminal: `--width 1600`
-3. Choose high-contrast theme: `--theme "Dracula"`
-4. Test on target display device
-
-## Examples
-
-### Example 1: Quick Install Demo
-
-User request: "Create a demo showing npm install"
-
-```bash
-scripts/auto_generate_demo.py \
-  -c "npm install my-package" \
-  -o install-demo.gif \
-  --title "Package Installation"
-```
-
-### Example 2: Multi-Step Tutorial
-
-User request: "Create a demo showing project setup with git clone, install, and run"
-
-```bash
-scripts/auto_generate_demo.py \
-  -c "git clone https://github.com/user/repo.git" \
-  -c "cd repo" \
-  -c "npm install" \
-  -c "npm start" \
-  -o setup-demo.gif \
-  --title "Project Setup" \
-  --theme "Nord"
-```
-
-### Example 3: Batch Generation
-
-User request: "Generate demos for all my CLI tool features"
-
-1. Create `features-demos.yaml`:
-```yaml
-demos:
-  - name: "Help Command"
-    output: "help.gif"
-    commands: ["my-tool --help"]
-
-  - name: "Init Command"
-    output: "init.gif"
-    commands: ["my-tool init", "ls -la"]
-
-  - name: "Run Command"
-    output: "run.gif"
-    commands: ["my-tool run --verbose"]
-```
-
-2. Generate all:
-```bash
-scripts/batch_generate.py features-demos.yaml --output-dir ./demos
-```
-
-### Example 4: Interactive Session
-
-User request: "Record me using my CLI tool interactively"
-
-```bash
-scripts/record_interactive.sh my-session.gif --theme "Tokyo Night"
-# User types commands naturally
-# Ctrl+D to finish
-```
-
-## Bundled Resources
-
-### scripts/
-- **`auto_generate_demo.py`** - Automated demo generation from command lists
-- **`batch_generate.py`** - Generate multiple demos from YAML/JSON config
-- **`record_interactive.sh`** - Record and convert interactive terminal sessions
-
-### references/
-- **`vhs_syntax.md`** - Complete VHS tape file syntax reference
-- **`best_practices.md`** - Demo creation guidelines and best practices
-
-### assets/
-- **`templates/basic.tape`** - Basic command demo template
-- **`templates/interactive.tape`** - Interactive typing demo template
-- **`examples/batch-config.yaml`** - Example batch configuration file
+| Problem | Solution |
+|---------|----------|
+| VHS not installed | `brew install charmbracelet/tap/vhs` |
+| gifsicle not installed | `brew install gifsicle` |
+| GIF too large | Reduce dimensions, sleep times, or use `--speed 2` |
+| Text wraps/breaks | Increase `--width` or decrease `--font-size` |
+| VHS parse error on `$` or `\"` | Use base64 encoding (see Critical section above) |
+| Hidden commands leak into GIF | Add `clear` + `Sleep 500ms` before `Show` |
+| Commands execute before previous finishes | Increase `Sleep` duration |
 
 ## Dependencies
 
-**Required:**
-- VHS (https://github.com/charmbracelet/vhs)
+**Required:** VHS (`brew install charmbracelet/tap/vhs`)
 
-**Optional:**
-- asciinema (for interactive recording)
-- PyYAML (for batch YAML configs): `pip install pyyaml`
-
-## Output Formats
-
-VHS supports multiple output formats:
-
-```tape
-Output demo.gif     # GIF (default, best for documentation)
-Output demo.mp4     # MP4 (better compression for long demos)
-Output demo.webm    # WebM (smaller file size)
-```
-
-Choose based on use case:
-- **GIF**: Documentation, README files, easy embedding
-- **MP4**: Longer demos, better quality, smaller size
-- **WebM**: Web-optimized, smallest file size
-
-## Summary
-
-This skill provides three main approaches:
-
-1. **Automated** (`auto_generate_demo.py`) - Quick, easy, smart defaults
-2. **Batch** (`batch_generate.py`) - Multiple demos, consistent settings
-3. **Interactive** (`record_interactive.sh`) - Live recording, real output
-
-Choose the approach that best fits the user's needs. For most cases, automated generation is the fastest and most convenient option.
+**Optional:** gifsicle (speed-up), asciinema (interactive recording), ffmpeg (frame verification), PyYAML (batch YAML configs)
