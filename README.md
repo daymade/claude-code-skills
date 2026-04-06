@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-43-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.39.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-44-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.41.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 43 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 44 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -265,6 +265,9 @@ claude plugin install continue-claude-work@daymade-skills
 
 # Scrapling CLI extraction and troubleshooting
 claude plugin install scrapling-skill@daymade-skills
+
+# X/Twitter automation
+claude plugin install x-twitter-scraper@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -1850,6 +1853,33 @@ claude plugin install scrapling-skill@daymade-skills
 
 ---
 
+### 44. **x-twitter-scraper** - X (Twitter) Automation & Data Extraction
+
+Automate X (Twitter) operations via the Xquik REST API with 121 endpoints, 23 bulk extraction tools, an MCP server, and HMAC webhooks.
+
+**When to Use:**
+- Users need to search tweets, look up users, or extract follower/following lists
+- Users want to post tweets, send DMs, or manage their X account programmatically
+- Users need bulk data extraction (replies, quotes, retweets, community members, etc.)
+- Users want real-time account monitoring with webhook delivery
+- Users want AI-assisted tweet composition with algorithm scoring
+
+**Key Features:**
+- 121 REST API endpoints across 12 categories
+- 23 bulk extraction tools with estimate-before-extract workflow
+- MCP server (2 tools: explore + xquik) for AI agent integration
+- Giveaway draws with customizable filters
+- HMAC-SHA256 signed webhooks
+- 10 bundled reference files for progressive disclosure
+
+```bash
+claude plugin install x-twitter-scraper@daymade-skills
+```
+
+📚 **Documentation**: See [x-twitter-scraper/SKILL.md](./x-twitter-scraper/SKILL.md) and [docs.xquik.com](https://docs.xquik.com) for full API reference.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1940,6 +1970,9 @@ Use **macos-cleaner** to intelligently analyze and reclaim disk space on macOS w
 ### For Twitter/X Content Research
 Use **twitter-reader** to fetch tweet content without JavaScript rendering or authentication. Perfect for documenting social media discussions, archiving threads, analyzing tweet content, or gathering reference material from Twitter/X. Combine with **doc-to-markdown** to convert fetched content into other formats, or with **repomix-safe-mixer** to package research collections securely.
 
+### For X (Twitter) Automation at Scale
+Use **x-twitter-scraper** to automate X (Twitter) at scale — search tweets, extract followers, run giveaway draws, monitor accounts in real time, and post programmatically via the Xquik REST API. Combine with **deep-research** to build social media analysis pipelines, or with **excel-automation** to export extraction results into formatted spreadsheets.
+
 ### For Skill Quality & Open-Source Contributions
 Use **skill-reviewer** to validate your own skills against best practices before publishing, or to review and improve others' skill repositories. Combine with **github-contributor** to find high-impact open-source projects, create professional PRs, and build your contributor reputation. Perfect for developers who want to contribute to the Claude Code ecosystem or any GitHub project systematically.
 
@@ -1995,6 +2028,7 @@ Each skill includes:
 - **promptfoo-evaluation**: See `promptfoo-evaluation/references/promptfoo_api.md` for evaluation patterns
 - **iOS-APP-developer**: See `iOS-APP-developer/references/xcodegen-full.md` for XcodeGen options and project.yml details
 - **twitter-reader**: See `twitter-reader/SKILL.md` for API key setup and URL format support
+- **x-twitter-scraper**: See `x-twitter-scraper/SKILL.md` for API setup, and [docs.xquik.com](https://docs.xquik.com) for full reference
 - **macos-cleaner**: See `macos-cleaner/references/cleanup_targets.md` for detailed cleanup target explanations, `macos-cleaner/references/mole_integration.md` for Mole visual tool integration, and `macos-cleaner/references/safety_rules.md` for comprehensive safety guidelines
 - **skill-reviewer**: See `skill-reviewer/references/evaluation_checklist.md` for complete evaluation criteria, `skill-reviewer/references/pr_template.md` for PR templates, and `skill-reviewer/references/marketplace_template.json` for marketplace configuration
 - **github-contributor**: See `github-contributor/references/pr_checklist.md` for PR quality checklist, `github-contributor/references/project_evaluation.md` for project evaluation criteria, and `github-contributor/references/communication_templates.md` for issue/PR templates
@@ -2021,6 +2055,7 @@ Each skill includes:
 - **weasyprint, markdown** (for pdf-creator)
 - **VHS** (for cli-demo-generator): `brew install vhs`
 - **Jina.ai API key** (for twitter-reader): Free tier available at https://jina.ai/
+- **Xquik API key** (for x-twitter-scraper): Get from [xquik.com](https://xquik.com) dashboard
 - **asciinema** (optional, for cli-demo-generator interactive recording)
 - **ccusage** (optional, for statusline cost tracking)
 - **pandas & matplotlib** (optional, for ppt-creator chart generation)

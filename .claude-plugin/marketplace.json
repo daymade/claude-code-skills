@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, local Claude session continuation from `.claude` artifacts, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, multi-path parallel product analysis with cross-model test-time compute scaling, real financial data collection for US equities with validation and yfinance pitfall handling, advanced Excel automation for formatted workbook generation and complex xlsm parsing, macOS programmatic window screenshot capture workflows, and verified Scrapling CLI installation and web extraction workflows, and plugin marketplace development for converting skills repos into official Claude Code marketplaces",
-    "version": "1.40.1"
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, local Claude session continuation from `.claude` artifacts, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, multi-path parallel product analysis with cross-model test-time compute scaling, real financial data collection for US equities with validation and yfinance pitfall handling, advanced Excel automation for formatted workbook generation and complex xlsm parsing, macOS programmatic window screenshot capture workflows, and verified Scrapling CLI installation and web extraction workflows, and plugin marketplace development for converting skills repos into official Claude Code marketplaces, and X (Twitter) automation and data extraction via Xquik REST API with 121 endpoints, 23 extraction tools, MCP server, and HMAC webhooks",
+    "version": "1.41.0"
   },
   "plugins": [
     {
@@ -986,6 +986,27 @@
           }
         ]
       }
+    },
+    {
+      "name": "x-twitter-scraper",
+      "description": "Full X (Twitter) automation and data extraction via Xquik REST API. 121 endpoints across 12 categories: tweet search, user lookup, bulk extractions (23 tools), giveaway draws, account monitoring, webhooks, AI composition, write actions, and MCP server. Trigger on \"twitter\", \"tweet\", \"X API\", \"scrape tweets\", \"follower analysis\", \"social media automation\".",
+      "source": "./",
+      "strict": false,
+      "version": "2.0.2",
+      "category": "data-extraction",
+      "keywords": [
+        "twitter",
+        "x",
+        "social-media",
+        "scraping",
+        "api",
+        "extraction",
+        "automation",
+        "mcp"
+      ],
+      "skills": [
+        "./x-twitter-scraper"
+      ]
     }
   ]
 }
