@@ -542,10 +542,10 @@
     },
     {
       "name": "twitter-reader",
-      "description": "Fetch Twitter/X post content by URL using jina.ai API to bypass JavaScript restrictions. Use when Claude needs to retrieve tweet content including author, timestamp, post text, images, and thread replies. Supports individual posts or batch fetching from x.com or twitter.com URLs",
+      "description": "Fetch Twitter/X post content including long-form Articles with full images and metadata. Use when Claude needs to retrieve tweet/article content, author info, engagement metrics (likes, retweets, bookmarks), and embedded media. Supports individual posts and X Articles (long-form content). Automatically downloads all images to local attachments folder and generates complete Markdown with proper image references. Preferred over Jina for X Articles with images.",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "utilities",
       "keywords": [
         "twitter",
@@ -555,7 +555,10 @@
         "content-fetching",
         "api",
         "scraping",
-        "threads"
+        "threads",
+        "images",
+        "attachments",
+        "markdown"
       ],
       "skills": [
         "./twitter-reader"
