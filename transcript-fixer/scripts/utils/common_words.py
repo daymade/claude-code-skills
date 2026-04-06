@@ -64,6 +64,10 @@ COMMON_WORDS_2CHAR: Set[str] = {
     "明确", "清晰", "具体", "详细", "准确", "完整", "稳定", "灵活",
     # --- Domain terms that look like ASR errors but are valid ---
     "线数", "曲线", "分母", "正面", "旗号", "无果", "演技",
+    # --- Common verb+一 patterns (打一个/来一个/做一下 etc.) ---
+    # "打一" caused production false positive: "打一个锚" → "答疑个锚" (2026-04)
+    "打一", "来一", "做一", "写一", "给一", "拉一", "开一", "看一",
+    "跑一", "找一", "选一", "试一", "走一", "问一", "搞一", "聊一",
 }
 
 # Common 3+ character words that should also be protected.
@@ -88,6 +92,14 @@ COMMON_WORDS_3PLUS: Set[str] = {
     "保健品", "保健操", "医疗保健",
     "文化内涵",
     "无果而终",
+    # --- Common verb+一+量词 patterns (防止"打一"→X 类误纠) ---
+    "打一个", "打一针", "打一下", "打一次", "打一把",
+    "来一个", "来一下", "来一次", "来一杯",
+    "做一个", "做一下", "做一次",
+    "写一个", "写一下", "写一篇",
+    "给一个", "看一下", "看一看", "看一遍",
+    "跑一下", "跑一遍", "跑一次",
+    "试一下", "试一试", "试一次",
     # --- Common Chinese idioms/phrases containing short words ---
     # These are needed to prevent idiom corruption
     "正面临", "正面对",
@@ -132,6 +144,8 @@ SUBSTRING_COLLISION_MAP: dict[str, list[str]] = {
     "保健": ["保健品", "保健操", "医疗保健"],
     # "内涵" common in compound words
     "内涵": ["内涵段子", "文化内涵"],
+    # "打一" common in verb+一+量词 (2026-04 production false positive)
+    "打一": ["打一个", "打一针", "打一下", "打一次", "打一把"],
 }
 
 ALL_COMMON_WORDS: Set[str] = COMMON_WORDS_2CHAR | COMMON_WORDS_3PLUS

@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "httpx>=0.24.0",
+#     "filelock>=3.13.0",
+# ]
+# ///
 """
 Transcript Fixer - Main Entry Point
 
