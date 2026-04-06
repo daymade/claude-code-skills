@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
 """Normalize and repair speaker timestamp lines in ASR transcripts.
 
 This script targets transcript lines shaped like:
