@@ -2,10 +2,14 @@
 """
 Auto-generate CLI demos from command descriptions.
 
-This script creates VHS tape files and generates GIF demos automatically.
+Creates VHS tape files and generates GIF demos with support for:
+- Hidden bootstrap commands (self-cleaning state)
+- Output noise filtering via base64-encoded wrapper
+- Post-processing speed-up via gifsicle
 """
 
 import argparse
+import base64
 import subprocess
 import sys
 from pathlib import Path
@@ -21,21 +25,54 @@ def create_tape_file(
     width: int = 1400,
     height: int = 700,
     padding: int = 20,
+    bootstrap: Optional[List[str]] = None,
+    filter_pattern: Optional[str] = None,
 ) -> str:
     """Generate a VHS tape file from commands."""
 
     tape_lines = [
         f'Output {output_gif}',
-        '',
+        f'Set Theme "{theme}"',
         f'Set FontSize {font_size}',
         f'Set Width {width}',
         f'Set Height {height}',
-        f'Set Theme "{theme}"',
         f'Set Padding {padding}',
+        'Set TypingSpeed 10ms',
+        'Set Shell zsh',
         '',
     ]
 
-    # Add title if provided
+    # Hidden bootstrap: cleanup + optional output filter
+    has_hidden = bootstrap or filter_pattern
+    if has_hidden:
+        tape_lines.append('Hide')
+
+        if bootstrap:
+            # Combine all bootstrap commands with semicolons
+            combined = "; ".join(
+                cmd if "2>/dev/null" in cmd else f"{cmd} 2>/dev/null"
+                for cmd in bootstrap
+            )
+            tape_lines.append(f'Type "{combined}"')
+            tape_lines.append('Enter')
+            tape_lines.append('Sleep 3s')
+
+        if filter_pattern:
+            # Create a wrapper function that filters noisy output
+            wrapper = f'_wrap() {{ "$@" 2>&1 | grep -v -E "{filter_pattern}"; }}'
+            encoded = base64.b64encode(wrapper.encode()).decode()
+            tape_lines.append(f'Type "echo {encoded} | base64 -d > /tmp/cw.sh && source /tmp/cw.sh"')
+            tape_lines.append('Enter')
+            tape_lines.append('Sleep 500ms')
+
+        # Clear screen before Show to prevent hidden text from leaking
+        tape_lines.append('Type "clear"')
+        tape_lines.append('Enter')
+        tape_lines.append('Sleep 500ms')
+        tape_lines.append('Show')
+        tape_lines.append('')
+
+    # Title
     if title:
         tape_lines.extend([
             f'Type "# {title}" Sleep 500ms Enter',
@@ -43,27 +80,53 @@ def create_tape_file(
             '',
         ])
 
-    # Add commands with smart timing
+    # Commands with smart timing
     for i, cmd in enumerate(commands, 1):
-        # Type the command
-        tape_lines.append(f'Type "{cmd}" Sleep 500ms')
+        # If filter is active, prefix with _wrap
+        if filter_pattern:
+            tape_lines.append(f'Type "_wrap {cmd}"')
+        else:
+            tape_lines.append(f'Type "{cmd}"')
         tape_lines.append('Enter')
 
         # Smart sleep based on command complexity
-        if any(keyword in cmd.lower() for keyword in ['install', 'build', 'test', 'deploy']):
+        if any(kw in cmd.lower() for kw in ['install', 'build', 'test', 'deploy', 'marketplace']):
             sleep_time = '3s'
-        elif any(keyword in cmd.lower() for keyword in ['ls', 'pwd', 'echo', 'cat']):
+        elif any(kw in cmd.lower() for kw in ['ls', 'pwd', 'echo', 'cat', 'grep']):
             sleep_time = '1s'
         else:
             sleep_time = '2s'
 
         tape_lines.append(f'Sleep {sleep_time}')
 
-        # Add spacing between commands
+        # Empty line between stages for readability
         if i < len(commands):
+            tape_lines.append('Enter')
+            tape_lines.append('Sleep 300ms')
             tape_lines.append('')
 
+    tape_lines.append('')
+    tape_lines.append('Sleep 1s')
     return '\n'.join(tape_lines)
+
+
+def speed_up_gif(gif_path: str, speed: int) -> bool:
+    """Speed up GIF using gifsicle. Returns True on success."""
+    try:
+        subprocess.run(['gifsicle', '--version'], capture_output=True, check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("⚠ gifsicle not found, skipping speed-up. Install: brew install gifsicle", file=sys.stderr)
+        return False
+
+    # delay = 10 / speed (10 = normal, 5 = 2x, 3 = ~3x)
+    delay = max(1, 10 // speed)
+    tmp = f"/tmp/demo_raw_{Path(gif_path).stem}.gif"
+
+    subprocess.run(['cp', gif_path, tmp], check=True)
+    with open(gif_path, 'wb') as out:
+        subprocess.run(['gifsicle', f'-d{delay}', tmp, '#0-'], stdout=out, check=True)
+    Path(tmp).unlink(missing_ok=True)
+    return True
 
 
 def main():
@@ -72,39 +135,39 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 Examples:
-  # Generate demo from single command
+  # Simple demo
   %(prog)s -c "npm install" -o demo.gif
 
-  # Generate demo with multiple commands
-  %(prog)s -c "git clone repo" -c "cd repo" -c "npm install" -o setup.gif
+  # With hidden bootstrap (self-cleaning)
+  %(prog)s -c "my-tool run" -o demo.gif \\
+    --bootstrap "my-tool reset" --speed 2
 
-  # Custom theme and size
-  %(prog)s -c "ls -la" -o demo.gif --theme Monokai --width 1200
-
-  # With title
-  %(prog)s -c "echo Hello" -o demo.gif --title "My Demo"
+  # With output noise filtering
+  %(prog)s -c "deploy-tool push" -o demo.gif \\
+    --filter "cache|progress|downloading"
         '''
     )
 
     parser.add_argument('-c', '--command', action='append', required=True,
-                        help='Command to include in demo (can be specified multiple times)')
+                        help='Command to include (repeatable)')
     parser.add_argument('-o', '--output', required=True,
                         help='Output GIF file path')
-    parser.add_argument('--title', help='Demo title (optional)')
-    parser.add_argument('--theme', default='Dracula',
-                        help='VHS theme (default: Dracula)')
-    parser.add_argument('--font-size', type=int, default=16,
-                        help='Font size (default: 16)')
-    parser.add_argument('--width', type=int, default=1400,
-                        help='Terminal width (default: 1400)')
-    parser.add_argument('--height', type=int, default=700,
-                        help='Terminal height (default: 700)')
+    parser.add_argument('--title', help='Demo title')
+    parser.add_argument('--theme', default='Dracula', help='VHS theme (default: Dracula)')
+    parser.add_argument('--font-size', type=int, default=16, help='Font size (default: 16)')
+    parser.add_argument('--width', type=int, default=1400, help='Terminal width (default: 1400)')
+    parser.add_argument('--height', type=int, default=700, help='Terminal height (default: 700)')
+    parser.add_argument('--bootstrap', action='append',
+                        help='Hidden setup command run before demo (repeatable)')
+    parser.add_argument('--filter',
+                        help='Regex pattern to filter from command output')
+    parser.add_argument('--speed', type=int, default=1,
+                        help='Playback speed multiplier (default: 1, uses gifsicle)')
     parser.add_argument('--no-execute', action='store_true',
-                        help='Generate tape file only, do not execute VHS')
+                        help='Generate tape file only')
 
     args = parser.parse_args()
 
-    # Generate tape file content
     tape_content = create_tape_file(
         commands=args.command,
         output_gif=args.output,
@@ -113,36 +176,37 @@ Examples:
         font_size=args.font_size,
         width=args.width,
         height=args.height,
+        bootstrap=args.bootstrap,
+        filter_pattern=args.filter,
     )
 
-    # Write tape file
     output_path = Path(args.output)
     tape_file = output_path.with_suffix('.tape')
-
-    with open(tape_file, 'w') as f:
-        f.write(tape_content)
-
+    tape_file.write_text(tape_content)
     print(f"✓ Generated tape file: {tape_file}")
 
     if not args.no_execute:
-        # Check if VHS is installed
         try:
             subprocess.run(['vhs', '--version'], capture_output=True, check=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
-            print("✗ VHS is not installed!", file=sys.stderr)
-            print("Install it with: brew install vhs", file=sys.stderr)
-            print(f"✓ You can manually run: vhs < {tape_file}", file=sys.stderr)
+            print("✗ VHS not installed. Install: brew install charmbracelet/tap/vhs", file=sys.stderr)
+            print(f"✓ Run manually: vhs {tape_file}", file=sys.stderr)
             return 1
 
-        # Execute VHS
-        print(f"Generating GIF: {args.output}")
+        print(f"Recording: {args.output}")
         try:
             subprocess.run(['vhs', str(tape_file)], check=True)
-            print(f"✓ Demo generated: {args.output}")
-            print(f"  Size: {output_path.stat().st_size / 1024:.1f} KB")
         except subprocess.CalledProcessError as e:
-            print(f"✗ VHS execution failed: {e}", file=sys.stderr)
+            print(f"✗ VHS failed: {e}", file=sys.stderr)
             return 1
+
+        # Post-processing speed-up
+        if args.speed > 1:
+            print(f"Speeding up {args.speed}x...")
+            speed_up_gif(args.output, args.speed)
+
+        size_kb = output_path.stat().st_size / 1024
+        print(f"✓ Done: {args.output} ({size_kb:.0f} KB)")
 
     return 0
 
