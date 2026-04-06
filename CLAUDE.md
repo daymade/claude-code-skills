@@ -259,6 +259,8 @@ This applies when you change ANY file under a skill directory:
 60. **pdf-to-html** - Converts a PDF into one self-contained, readable HTML file preserving images, tables, charts, and reading order, optionally translating it into another language while keeping every figure
 61. **terminal-screenshot** - Render a terminal CLI program's colored output to a PNG so Claude can see the real visual result (color contrast, alignment, background blocks) instead of raw ANSI codes — for verifying delta/bat/starship/lazygit color config
 
+62. **x-twitter-scraper** - Xquik X/Twitter API skill for tweet search, user lookup, media download, follower checks, bulk extractions, MCP setup, HMAC webhooks, and confirmation-gated actions. Uses an Xquik API key and never asks for X login material.
+
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
 ## YouTube Downloader SOP (Internal)
