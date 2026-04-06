@@ -2100,6 +2100,16 @@ If you find these skills useful, please:
 - 💡 Suggest improvements
 - 📢 Share with your team
 
+## 🌐 Community Skills
+
+Skills from the community that complement this marketplace:
+
+| Skill | Description | Install |
+|-------|-------------|---------|
+| [confluence-to-agent-knowledge-base](https://github.com/miningstore/confluence-to-agent-knowledge-base) | Turn any Confluence Cloud instance into a private, searchable AI knowledge base on GitHub with access-tiered repos. Interactive 6-phase walkthrough using the Atlassian MCP connector (no API tokens needed). | `claude skill add miningstore/confluence-to-agent-knowledge-base` |
+
+> Have a skill to add? See [CONTRIBUTING.md](./CONTRIBUTING.md) for submission guidelines.
+
 ## 🔗 Related Resources
 
 - [Claude Code Documentation](https://docs.claude.com/en/docs/claude-code)
