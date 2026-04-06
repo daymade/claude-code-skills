@@ -291,7 +291,7 @@
       "description": "Corrects speech-to-text (ASR/STT) transcription errors using dictionary rules and native Claude AI corrections (no API key needed by default). Supports intelligent paragraph breaks, filler word reduction, interactive review, Chinese domain names, and iterative dictionary building. Use when users mention transcript correction, ASR errors, speech-to-text mistakes, homophone errors, or working with transcription files",
       "source": "./",
       "strict": false,
-      "version": "1.3.1",
+      "version": "1.4.0",
       "category": "productivity",
       "keywords": [
         "transcription",
@@ -971,7 +971,7 @@
             "hooks": [
               {
                 "type": "command",
-                "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post_edit_validate.sh"
+                "command": "${CLAUDE_PLUGIN_ROOT}/marketplace-dev/scripts/post_edit_validate.sh"
               }
             ]
           },
@@ -980,7 +980,7 @@
             "hooks": [
               {
                 "type": "command",
-                "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post_edit_sync_check.sh"
+                "command": "${CLAUDE_PLUGIN_ROOT}/marketplace-dev/scripts/post_edit_sync_check.sh"
               }
             ]
           }

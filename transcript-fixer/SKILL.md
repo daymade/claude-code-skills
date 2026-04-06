@@ -17,15 +17,21 @@ All scripts use PEP 723 inline metadata — `uv run` auto-installs dependencies.
 # First time: Initialize database
 uv run scripts/fix_transcription.py --init
 
-# Phase 1: Dictionary corrections (instant, free)
+# Single file
 uv run scripts/fix_transcription.py --input meeting.md --stage 1
+
+# Batch: multiple files in parallel (use shell loop)
+for f in /path/to/*.txt; do
+  uv run scripts/fix_transcription.py --input "$f" --stage 1
+done
 ```
 
 After Stage 1, Claude reads the output and fixes remaining ASR errors natively (no API key needed):
-1. Read Stage 1 output in ~200-line chunks using the Read tool
-2. Identify ASR errors — homophones, garbled terms, broken sentences
-3. Present corrections in a table for user review before applying
-4. Save stable patterns to dictionary for future reuse
+1. Read all Stage 1 outputs — read **entire** transcript before proposing corrections (later context disambiguates earlier errors)
+2. Identify ASR errors — compile all corrections across files
+3. Apply fixes with sed in batch, verify each with diff
+4. Finalize: rename `_stage1.md` → `.md`, delete original `.txt`
+5. Save stable patterns to dictionary for future reuse
 
 See `references/example_session.md` for a concrete input/output walkthrough.
 
@@ -51,6 +57,25 @@ Two-phase pipeline with persistent learning:
 
 **After fixing, always save reusable corrections to dictionary.** This is the skill's core value — see `references/iteration_workflow.md` for the complete checklist.
 
+### Dictionary Addition After Fixing
+
+After native AI correction, review all applied fixes and decide which to save. Use this decision matrix:
+
+| Pattern type | Example | Action |
+|-------------|---------|--------|
+| Non-word → correct term | 克劳锐→Claude, cloucode→Claude Code | ✅ Add (zero false positive risk) |
+| Rare word → correct term | 潜彩→前采, 维星→韦青 | ✅ Add (verify it's not a real word first) |
+| Person/company name ASR error | 宋天航→宋天生, 策马攀山→策马看山 | ✅ Add (stable, unique) |
+| Common word → context word | 争→蒸, 钱财→前采, 报纸→标品 | ❌ Skip (high false positive risk) |
+| Real brand → different brand | Xcode→Claude Code, Clover→Claude | ❌ Skip (real words in other contexts) |
+
+Batch add multiple corrections in one session:
+```bash
+uv run scripts/fix_transcription.py --add "错误1" "正确1" --domain tech
+uv run scripts/fix_transcription.py --add "错误2" "正确2" --domain business
+# Chain with && for efficiency
+```
+
 ## False Positive Prevention
 
 Adding wrong dictionary rules silently corrupts future transcripts. **Read `references/false_positive_guide.md` before adding any correction rule**, especially for short words (≤2 chars) or common Chinese words that appear correctly in normal text.
@@ -59,20 +84,45 @@ Adding wrong dictionary rules silently corrupts future transcripts. **Read `refe
 
 When running inside Claude Code, use Claude's own language understanding for Phase 2:
 
-1. Run Stage 1 (dictionary): `--input file.md --stage 1`
+1. Run Stage 1 (dictionary) on all files (parallel if multiple)
 2. Verify Stage 1 — diff original vs output. If dictionary introduced false positives, work from the **original** file
-3. Read the full text in ~200-line chunks. Read the entire transcript before proposing corrections — later context often disambiguates earlier errors
-4. Identify ASR errors:
-   - Product/tool names: "close code" → "Claude Code", "get Hub" → "GitHub"
-   - Technical terms: "Web coding" → "Vibe Coding", "happy pass" → "happy path"
-   - Homophone errors: "上海文" → "上下文", "分值" → "分支"
-   - English ASR garbling: "Pre top" → "prototype", "rapper" → "repo"
-   - Broken sentences: "很大程。路上" → "很大程度上"
-5. Present corrections in high/medium confidence tables with line numbers
-6. Apply with sed on a copy, verify with diff, replace original
-7. Generate word diff: `uv run scripts/generate_word_diff.py original.md corrected.md diff.html`
-8. Save stable patterns to dictionary
+3. Read **all** Stage 1 outputs fully before proposing any corrections — later context often disambiguates earlier errors. For large files (>10k tokens), read in chunks but finish the entire file before identifying errors
+4. Identify ASR errors per file — classify by confidence:
+   - **High confidence** (apply directly): non-words, obvious garbling, product name variants
+   - **Medium confidence** (present for review): context-dependent homophones, person names
+5. Apply fixes efficiently:
+   - **Global replacements** (unique non-words like "克劳锐"→"Claude"): use `sed -i ''` with `-e` flags, multiple patterns in one command
+   - **Context-dependent** (common words like "争"→"蒸" only in distillation context): use sed with longer context phrases for uniqueness, or Edit tool
+6. Verify with diff: `diff original.txt corrected_stage1.md`
+7. Finalize files: rename `*_stage1.md` → `*.md`, delete original `.txt`
+8. Save stable patterns to dictionary (see "Dictionary Addition" below)
 9. Remove false positives if Stage 1 had any
+
+### Common ASR Error Patterns
+
+AI product names are frequently garbled. These patterns recur across transcripts:
+
+| Correct term | Common ASR variants |
+|-------------|-------------------|
+| Claude | cloud, Clou, calloc, 克劳锐, Clover, color |
+| Claude Code | cloud code, Xcode, call code, cloucode, cloudcode, color code |
+| Claude Agent SDK | cloud agent SDK |
+| Opus | Opaas |
+| Vibe Coding | web coding, Web coding |
+| GitHub | get Hub, Git Hub |
+| prototype | Pre top |
+
+Person names and company names also produce consistent ASR errors across sessions — always add confirmed name corrections to the dictionary.
+
+### Efficient Batch Fix Strategy
+
+When fixing multiple files (e.g., 5 transcripts from one day):
+
+1. **Stage 1 in parallel**: run all files through dictionary at once
+2. **Read all files first**: build a mental model of speakers, topics, and recurring terms before fixing anything
+3. **Compile a global correction list**: many errors repeat across files from the same session (same speakers, same topics)
+4. **Apply global corrections first** (sed with multiple `-e` flags), then per-file context-dependent fixes
+5. **Verify all diffs**, finalize all files, then do one dictionary addition pass
 
 ### Enhanced Capabilities (Native Mode Only)
 
