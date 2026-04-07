@@ -1850,6 +1850,41 @@ claude plugin install scrapling-skill@daymade-skills
 
 ---
 
+### 44. **vulnetix** - Vulnerability Intelligence Suite
+
+7 security skills for exploit analysis, fix proposals, scoring, exploits, and package security assessment via the Vulnetix VDB API.
+
+**When to use:**
+- Investigating a CVE or security advisory
+- Assessing whether a vulnerability affects your project
+- Planning dependency upgrades with security context
+- Searching for known exploits before deploying
+- Generating remediation plans with verification steps
+
+**Key features:**
+- Vulnerability lookup by ID (CVE/GHSA) or by package
+- Exploit intelligence with CWSS priority scoring
+- Fix intelligence with Safe Harbour confidence scores and upgrade paths
+- Context-aware remediation plans with CrowdSec threat intelligence
+- Package security risk assessment before adding dependencies
+- Dashboard for tracking vulnerability status
+
+**Example usage:**
+```bash
+# Look up a specific CVE
+/vulnetix:vuln CVE-2024-1234
+
+# Search for exploits in the npm ecosystem
+/vulnetix:exploits-search --ecosystem npm --severity critical
+
+# Get a remediation plan for a vulnerability
+/vulnetix:remediation CVE-2024-1234
+```
+
+📚 **Documentation**: See [vulnetix/SKILL.md](./vulnetix/SKILL.md) and [Vulnetix Claude Code Plugin](https://github.com/Vulnetix/claude-code-plugin).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
