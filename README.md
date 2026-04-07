@@ -1852,7 +1852,7 @@ claude plugin install scrapling-skill@daymade-skills
 
 ### 44. **vulnetix** - Vulnerability Intelligence Suite
 
-7 security skills for exploit analysis, fix proposals, CWSS scoring, threat modeling, and package security assessment via the Vulnetix VDB API.
+7 security skills for exploit analysis, fix proposals, scoring, exploits, and package security assessment via the Vulnetix VDB API.
 
 **When to use:**
 - Investigating a CVE or security advisory
