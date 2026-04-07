@@ -1958,6 +1958,9 @@ Use **windows-remote-desktop-connection-doctor** to diagnose Azure Virtual Deskt
 ### For Plugin & Skill Troubleshooting
 Use **claude-skills-troubleshooting** to diagnose and resolve Claude Code plugin and skill configuration issues. Debug why plugins appear installed but don't show in available skills, understand the installed_plugins.json vs settings.json enabledPlugins architecture, and batch-enable missing plugins from a marketplace. Essential for marketplace maintainers debugging installation issues, developers troubleshooting skill activation, or anyone confused by the GitHub #17832 auto-enable bug.
 
+### For Terminal Gaming & Team Building
+Use **[data-barrens](https://github.com/hilberthiggs-hash/data-barrens)** to play an async PvP RPG inside Claude Code. Fight real players, loot their equipment, collect set bonuses (Flame/Shadow/Frost/Guardian/Chaos), and climb the ELO ladder — all from your terminal. Features 24 auto-equipped skills, 30 equipment templates x 5 rarities, smart set-aware auto-equip, multilingual support (EN/ZH), and self-hostable via Docker. Install: `mkdir -p ~/.claude/skills/barren && curl -sL https://raw.githubusercontent.com/hilberthiggs-hash/data-barrens/main/skill/SKILL.md -o ~/.claude/skills/barren/SKILL.md`
+
 ## 📚 Documentation
 
 Each skill includes:
