@@ -125,6 +125,35 @@ def _ensure_list_spacing(text: str) -> str:
     return "\n".join(result)
 
 
+_CJK_RANGE = re.compile(
+    r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff"
+    r"\U00020000-\U0002a6df\U0002a700-\U0002ebef"
+    r"\u3000-\u303f\uff00-\uffef]"
+)
+
+
+def _fix_cjk_code_blocks(html: str) -> str:
+    """Replace <pre><code> blocks containing CJK with styled divs.
+
+    weasyprint renders <pre> blocks using monospace fonts that lack CJK glyphs,
+    causing garbled output. This converts CJK-heavy code blocks to styled divs
+    that use the document's CJK font stack instead.
+    """
+
+    def _replace_if_cjk(match: re.Match) -> str:
+        content = match.group(1)
+        if _CJK_RANGE.search(content):
+            return f'<div class="cjk-code-block">{content}</div>'
+        return match.group(0)
+
+    return re.sub(
+        r"<pre><code(?:\s[^>]*)?>(.+?)</code></pre>",
+        _replace_if_cjk,
+        html,
+        flags=re.DOTALL,
+    )
+
+
 def _md_to_html(md_file: str) -> str:
     """Convert markdown to HTML using pandoc with list spacing preprocessing."""
     if not shutil.which("pandoc"):
@@ -147,7 +176,9 @@ def _md_to_html(md_file: str) -> str:
         print(f"Error: pandoc failed: {result.stderr}", file=sys.stderr)
         sys.exit(1)
 
-    return result.stdout
+    html = result.stdout
+    html = _fix_cjk_code_blocks(html)
+    return html
 
 
 def _build_full_html(html_content: str, css: str, title: str) -> str:
