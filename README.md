@@ -1850,6 +1850,37 @@ claude plugin install scrapling-skill@daymade-skills
 
 ---
 
+### 44. **mindbreak** - Work Health Break Reminder
+
+Tracks how long you've been working with Claude Code and inserts natural break reminders into responses. Uses a lightweight hook that logs timestamps on every message, calculates continuous work duration, and triggers reminders when thresholds are met — no external dependencies required.
+
+**When to use:**
+- You want Claude to remind you to take breaks during long coding sessions
+- You tend to skip meals or work late without realizing
+- You want unobtrusive, context-aware health nudges without interrupting workflow
+
+**Key features:**
+- Hook-based activity tracking with automatic segment detection (15-min gap = new session)
+- Three reminder types: light break (45+ min), meal-time (11:30/17:30), late-night (21:00+)
+- Smart cooldown: 30-min minimum between reminders, max 3 per work segment
+- Self-contained prompt output with `<IMPORTANT>` tags for reliable activation in long contexts
+- Reminders appear as the last paragraph of Claude's response — never interrupts main content
+- Say "不用提醒" or "stop reminding" to disable for the session
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install mindbreak@daymade-skills
+
+# Then just work normally — reminders appear automatically when needed
+```
+
+📚 **Documentation**: See [mindbreak/SKILL.md](./mindbreak/SKILL.md).
+
+**Requirements**: Bash shell. No external dependencies.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
