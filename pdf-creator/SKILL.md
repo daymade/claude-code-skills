@@ -57,4 +57,6 @@ uv run --with weasyprint scripts/batch_convert.py *.md --output-dir ./pdfs
 
 **weasyprint import error**: Run with `uv run --with weasyprint` or use `--backend chrome` instead.
 
+**CJK text in code blocks garbled (weasyprint)**: The script auto-detects code blocks containing Chinese/Japanese/Korean characters and converts them to styled divs with CJK-capable fonts. If you still see issues, use `--backend chrome` which has native CJK support. Alternatively, convert code blocks to markdown tables before generating the PDF.
+
 **Chrome header/footer appearing**: The script passes `--no-pdf-header-footer`. If it still appears, your Chrome version may not support this flag — update Chrome.

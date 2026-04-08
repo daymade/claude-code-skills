@@ -86,3 +86,46 @@ hr {
     border-top: 1px solid #ccc;
     margin: 1.5em 0;
 }
+
+code {
+    font-family: 'Menlo', 'PingFang SC', 'Heiti SC', 'Noto Sans CJK SC', monospace;
+    background: #f5f5f5;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 10pt;
+}
+
+pre {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px 16px;
+    margin: 1em 0;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+pre code {
+    font-family: 'Menlo', 'PingFang SC', 'Heiti SC', 'Noto Sans CJK SC', monospace;
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    font-size: 9pt;
+    line-height: 1.6;
+}
+
+/* CJK code blocks converted to styled divs by preprocessor.
+   Uses inherit to reuse body's CJK font (weasyprint may not find PingFang SC). */
+.cjk-code-block {
+    font-family: inherit;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px 16px;
+    margin: 1em 0;
+    font-size: 10pt;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
