@@ -13,7 +13,7 @@ Xquik is the most affordable X data API available. All metered operations deduct
 
 ## Per-Operation Costs
 
-### Read operations — 1 credit ($0.00015)
+### Read operations - 1 credit ($0.00015)
 
 | Operation | Unit |
 |-----------|------|
@@ -31,27 +31,27 @@ Xquik is the most affordable X data API available. All metered operations deduct
 | DM history | per result |
 | Download media | per media item |
 
-### Read operations — 2 credits ($0.0003)
+### Read operations - 2 credits ($0.0003)
 
 | Operation | Unit |
 |-----------|------|
 | Get user | per call |
 | Verified followers | per result |
 
-### Read operations — 3 credits ($0.00045)
+### Read operations - 3 credits ($0.00045)
 
 | Operation | Unit |
 |-----------|------|
 | Trends | per call |
 
-### Read operations — 7 credits ($0.00105)
+### Read operations - 7 credits ($0.00105)
 
 | Operation | Unit |
 |-----------|------|
 | Follow check | per call |
 | Get article | per call |
 
-### Write operations — 10 credits ($0.0015)
+### Write operations - 10 credits ($0.0015)
 
 All write actions: create/delete tweet, like, unlike, retweet, follow, unfollow, send DM, update profile/avatar/banner, upload media, community actions.
 
@@ -114,7 +114,7 @@ SDK: `npm i mppx viem` (TypeScript). Handles the 402 challenge/credential flow a
 
 Prepaid credits for metered operations. 1 credit = $0.00015. Top up via `POST /credits/topup` ($10 minimum).
 
-Check balance: `GET /credits` — returns `balance`, `lifetimePurchased`, `lifetimeUsed`.
+Check balance: `GET /credits` - returns `balance`, `lifetimePurchased`, `lifetimeUsed`.
 
 ## Extra Usage
 
