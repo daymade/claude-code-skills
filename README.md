@@ -1971,7 +1971,7 @@ Use **macos-cleaner** to intelligently analyze and reclaim disk space on macOS w
 Use **twitter-reader** to fetch tweet content without JavaScript rendering or authentication. Perfect for documenting social media discussions, archiving threads, analyzing tweet content, or gathering reference material from Twitter/X. Combine with **doc-to-markdown** to convert fetched content into other formats, or with **repomix-safe-mixer** to package research collections securely.
 
 ### For X (Twitter) Automation at Scale
-Use **x-twitter-scraper** to automate X (Twitter) at scale — search tweets, extract followers, run giveaway draws, monitor accounts in real time, and post programmatically via the Xquik REST API. Combine with **deep-research** to build social media analysis pipelines, or with **excel-automation** to export extraction results into formatted spreadsheets.
+Use **x-twitter-scraper** to automate X (Twitter) at scale - search tweets, extract followers, run giveaway draws, monitor accounts in real time, and post programmatically via the Xquik REST API. Combine with **deep-research** to build social media analysis pipelines, or with **excel-automation** to export extraction results into formatted spreadsheets.
 
 ### For Skill Quality & Open-Source Contributions
 Use **skill-reviewer** to validate your own skills against best practices before publishing, or to review and improve others' skill repositories. Combine with **github-contributor** to find high-impact open-source projects, create professional PRs, and build your contributor reputation. Perfect for developers who want to contribute to the Claude Code ecosystem or any GitHub project systematically.

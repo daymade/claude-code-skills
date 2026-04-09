@@ -2007,7 +2007,7 @@ claude plugin install x-twitter-scraper@daymade-skills
 使用 **twitter-reader** 无需 JavaScript 渲染或身份验证即可获取推文内容。非常适合记录社交媒体讨论、归档话题、分析推文内容或从 Twitter/X 收集参考资料。与 **doc-to-markdown** 结合可将获取的内容转换为其他格式，或与 **repomix-safe-mixer** 结合安全地打包研究集合。
 
 ### X (Twitter) 大规模自动化
-使用 **x-twitter-scraper** 大规模自动化 X (Twitter) 操作——搜索推文、提取关注者、运行抽奖、实时监控账户，并通过 Xquik REST API 程序化发布。与 **deep-research** 结合构建社交媒体分析流水线，或与 **excel-automation** 结合将提取结果导出为格式化电子表格。
+使用 **x-twitter-scraper** 大规模自动化 X (Twitter) 操作--搜索推文、提取关注者、运行抽奖、实时监控账户，并通过 Xquik REST API 程序化发布。与 **deep-research** 结合构建社交媒体分析流水线，或与 **excel-automation** 结合将提取结果导出为格式化电子表格。
 
 ### macOS 系统维护与磁盘空间恢复
 使用 **macos-cleaner** 以安全优先的方式智能分析和恢复 macOS 上的磁盘空间。与盲目删除的一键清理工具不同，macos-cleaner 解释每个文件是什么、按风险级别分类（🟢/🟡/🔴），并在任何删除前需要明确确认。非常适合处理 Docker/Homebrew/npm/pip 缓存膨胀的开发者、希望了解存储空间消耗的用户，或任何重视透明度而非自动化的人。结合基于脚本的精度和可选的 Mole 可视化工具集成以实现混合工作流。
