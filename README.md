@@ -935,14 +935,15 @@ Create professional PDF documents from markdown with proper Chinese typography u
 - Ensuring correct Chinese font rendering
 
 **Key features:**
-- WeasyPrint + Markdown conversion pipeline
-- Built-in Chinese font fallbacks
+- pandoc + WeasyPrint conversion pipeline (dual backend: WeasyPrint or headless Chrome)
+- Built-in Chinese/Japanese/Korean (CJK) font fallbacks with auto CJK code-block rendering
+- Theme system (default for formal docs, warm-terra for training materials)
 - A4 layout defaults with print-friendly margins
 - Batch conversion scripts
 
 **Example usage:**
 ```bash
-uv run --with weasyprint --with markdown scripts/md_to_pdf.py input.md output.pdf
+uv run --with weasyprint scripts/md_to_pdf.py input.md output.pdf
 ```
 
 **🎬 Live Demo**
@@ -951,7 +952,7 @@ uv run --with weasyprint --with markdown scripts/md_to_pdf.py input.md output.pd
 
 📚 **Documentation**: See [pdf-creator/SKILL.md](./pdf-creator/SKILL.md) for setup and workflow details.
 
-**Requirements**: Python 3.8+, `weasyprint`, `markdown`
+**Requirements**: Python 3.8+, `pandoc` (system install), `weasyprint` (or Chrome as fallback backend)
 
 ---
 
@@ -2018,7 +2019,7 @@ Each skill includes:
 - **mermaid-cli** (for mermaid-tools)
 - **yt-dlp** (for youtube-downloader): `brew install yt-dlp` or `pip install yt-dlp`
 - **FFmpeg/FFprobe** (for video-comparer): `brew install ffmpeg`, `apt install ffmpeg`, or `winget install ffmpeg`
-- **weasyprint, markdown** (for pdf-creator)
+- **pandoc + weasyprint** (for pdf-creator): `brew install pandoc` + `pip install weasyprint` (or use Chrome as backend)
 - **VHS** (for cli-demo-generator): `brew install vhs`
 - **Jina.ai API key** (for twitter-reader): Free tier available at https://jina.ai/
 - **asciinema** (optional, for cli-demo-generator interactive recording)
