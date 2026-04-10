@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **doc-to-markdown**: Added 31 unit tests (`test_convert.py`)
 - **doc-to-markdown**: Added 5-tool benchmark report (`references/benchmark-2026-03-22.md`)
 
+## [1.41.0] - 2026-04-06
+
+### Added
+- **New Skill**: x-twitter-scraper v2.0.2 - Full X (Twitter) automation via Xquik REST API with 121 endpoints, 23 bulk extraction tools, MCP server, giveaway draws, account monitoring, HMAC webhooks, and AI composition
+  - 12 API categories: tweets, users, search, extractions, draws, monitors, events, webhooks, compose, styles, drafts, write actions
+  - Decision trees for data retrieval, bulk extraction, write actions, monitoring, and AI composition
+  - 10 bundled reference files covering API endpoints, pricing, workflows, extractions, draws, webhooks, MCP setup, MCP tools, Python examples, and TypeScript types
+  - Security guidelines for untrusted X content and billing/write action confirmation
+
+### Changed
+- Updated marketplace version from 1.40.1 to 1.41.0
+- Updated marketplace metadata description to include X (Twitter) automation
+
 ## [1.39.0] - 2026-03-18
 
 ### Added
