@@ -126,9 +126,23 @@ def _ensure_list_spacing(text: str) -> str:
 
 
 _CJK_RANGE = re.compile(
+    # Chinese: CJK Unified Ideographs + Extension A + Compatibility + Extensions B-F
     r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff"
     r"\U00020000-\U0002a6df\U0002a700-\U0002ebef"
-    r"\u3000-\u303f\uff00-\uffef]"
+    # CJK Symbols and Punctuation + Halfwidth/Fullwidth Forms
+    r"\u3000-\u303f\uff00-\uffef"
+    # Japanese: Hiragana + Katakana + Katakana Phonetic Extensions
+    r"\u3040-\u309f\u30a0-\u30ff\u31f0-\u31ff"
+    # Korean: Hangul Syllables + Hangul Jamo + Hangul Compatibility Jamo
+    r"\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]"
+)
+
+# Match <pre><code>…</code></pre> allowing attributes on both tags.
+# Also handles pandoc's <div class="sourceCode"><pre class="..."><code class="...">
+# syntax highlighting wrapper, by matching the inner <pre><code> structure.
+_PRE_CODE_RE = re.compile(
+    r"<pre[^>]*>\s*<code[^>]*>(.+?)</code>\s*</pre>",
+    flags=re.DOTALL,
 )
 
 
@@ -138,20 +152,23 @@ def _fix_cjk_code_blocks(html: str) -> str:
     weasyprint renders <pre> blocks using monospace fonts that lack CJK glyphs,
     causing garbled output. This converts CJK-heavy code blocks to styled divs
     that use the document's CJK font stack instead.
+
+    Pure-ASCII code blocks (including pandoc-highlighted ones with language
+    identifiers) are left untouched so syntax highlighting and monospace
+    rendering are preserved.
     """
 
     def _replace_if_cjk(match: re.Match) -> str:
         content = match.group(1)
         if _CJK_RANGE.search(content):
-            return f'<div class="cjk-code-block">{content}</div>'
+            # Strip pandoc's <span> syntax-highlighting wrappers so the
+            # content renders as plain text in the inherited body font.
+            cleaned = re.sub(r"<span[^>]*>", "", content)
+            cleaned = cleaned.replace("</span>", "")
+            return f'<div class="cjk-code-block">{cleaned}</div>'
         return match.group(0)
 
-    return re.sub(
-        r"<pre><code(?:\s[^>]*)?>(.+?)</code></pre>",
-        _replace_if_cjk,
-        html,
-        flags=re.DOTALL,
-    )
+    return _PRE_CODE_RE.sub(_replace_if_cjk, html)
 
 
 def _md_to_html(md_file: str) -> str:
