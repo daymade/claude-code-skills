@@ -10,7 +10,7 @@
 - 多格式导出
 
 作者: Claude Code
-版本: 2.1.0
+版本: 3.0.0
 """
 
 import sys
@@ -38,6 +38,18 @@ class ArticleResult:
     source_account: str  # 公众号名称
     publish_time: Optional[str] = None
     is_temporary_url: bool = True  # 搜狗链接有过期时间
+
+
+@dataclass
+class AccountResult:
+    """搜索结果公众号账号"""
+    name: str  # 公众号名称
+    wechat_id: str  # 微信号 (如: gh_xxx 或自定义ID)
+    description: str  # 公众号简介
+    recent_article_title: Optional[str] = None  # 最近一篇文章标题
+    recent_article_url: Optional[str] = None  # 最近一篇文章链接
+    verification: Optional[str] = None  # 认证信息
+    is_official: bool = False  # 是否官方认证
 
 
 # 增强的 User-Agent 池（从竞品分析整合，但验证有效性存疑）
@@ -178,13 +190,154 @@ class SogouWechatSearch:
 
         return results[:num_results]
 
+    def search_accounts(
+        self,
+        keyword: str,
+        num_results: int = 10
+    ) -> List[AccountResult]:
+        """
+        搜索微信公众号账号（而非文章）
+
+        使用搜狗微信搜索的公众号搜索功能 (type=1)
+
+        Args:
+            keyword: 公众号名称或关键词
+            num_results: 需要的结果数量
+
+        Returns:
+            List[AccountResult]: 公众号账号列表
+        """
+        results = []
+        page = 1
+
+        while len(results) < num_results:
+            page_results = self._search_accounts_page(keyword, page)
+
+            if not page_results:
+                break
+
+            for r in page_results:
+                if not self._is_account_duplicate(r.name, r.wechat_id):
+                    results.append(r)
+
+            if len(page_results) < 10:
+                break
+
+            page += 1
+            time.sleep(self.delay)
+
+        return results[:num_results]
+
+    def _search_accounts_page(
+        self,
+        keyword: str,
+        page: int = 1
+    ) -> List[AccountResult]:
+        """搜索单页公众号结果"""
+        import requests
+        from bs4 import BeautifulSoup
+
+        params = {
+            'type': '1',  # 1=公众号搜索
+            'query': keyword,
+            'page': page,
+        }
+
+        try:
+            session = self._get_session()
+            resp = session.get(
+                self.BASE_URL,
+                params=params,
+                timeout=15
+            )
+            resp.raise_for_status()
+
+            if '请输入验证码' in resp.text:
+                logger.warning("触发搜狗验证码", file=sys.stderr)
+                return []
+
+            return self._parse_account_results(resp.text)
+
+        except Exception as e:
+            logger.error(f"搜索公众号失败: {e}", file=sys.stderr)
+            return []
+
+    def _parse_account_results(self, html: str) -> List[AccountResult]:
+        """解析公众号搜索结果 HTML"""
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(html, 'lxml')
+        results = []
+
+        # 公众号搜索结果的容器
+        items = soup.select('.news-list li') or soup.select('.results .result-item')
+
+        for li in items:
+            try:
+                # 公众号名称
+                name_tag = li.select_one('.tit a') or li.select_one('h3 a') or li.select_one('.account-name')
+                if not name_tag:
+                    continue
+
+                name = name_tag.get_text(strip=True)
+
+                # 微信号
+                wechat_id_tag = li.select_one('.info') or li.select_one('.wechat-id') or li.select_one('.wx-id')
+                wechat_id = wechat_id_tag.get_text(strip=True) if wechat_id_tag else ""
+                # 清理微信号（通常格式: 微信号: xxx）
+                wechat_id = re.sub(r'^微信号[：:]\s*', '', wechat_id)
+
+                # 简介
+                desc_tag = li.select_one('.s-p') or li.select_one('.description') or li.select_one('.abstract')
+                description = desc_tag.get_text(strip=True) if desc_tag else ""
+
+                # 最近一篇文章
+                recent_title = None
+                recent_url = None
+                article_tag = li.select_one('.tit a') or li.select_one('a[href*="/link?url="]')
+                if article_tag:
+                    recent_title = article_tag.get_text(strip=True)
+                    href = article_tag.get('href', '')
+                    recent_url = self._resolve_wechat_url(href)
+
+                # 认证信息
+                verify_tag = li.select_one('.s-p .sp') or li.select_one('.verification')
+                verification = verify_tag.get_text(strip=True) if verify_tag else ""
+
+                # 是否官方认证（根据认证信息判断）
+                is_official = bool(verification and ('认证' in verification or '官方' in verification))
+
+                if name:
+                    results.append(AccountResult(
+                        name=name,
+                        wechat_id=wechat_id,
+                        description=description,
+                        recent_article_title=recent_title,
+                        recent_article_url=recent_url,
+                        verification=verification,
+                        is_official=is_official
+                    ))
+
+            except Exception as e:
+                continue
+
+        return results
+
+    def _is_account_duplicate(self, name: str, wechat_id: str) -> bool:
+        """检查公众号是否重复"""
+        key = (name.lower().strip(), wechat_id.lower().strip())
+        if key in self._seen_results:
+            return True
+        self._seen_results.add(key)
+        return False
+
     def _search_page(
         self,
         keyword: str,
         page: int = 1,
         time_filter: Optional[str] = None
     ) -> List[ArticleResult]:
-        """搜索单页结果"""
+        """搜索单页文章结果"""
         import requests
         from bs4 import BeautifulSoup
 
@@ -643,18 +796,76 @@ def format_output(results: List[ArticleResult], fmt: str = 'table') -> str:
         return '\n'.join(lines)
 
 
+def format_account_output(results: List[AccountResult], fmt: str = 'table') -> str:
+    """格式化输出公众号搜索结果"""
+
+    if fmt == 'json':
+        return json.dumps([asdict(r) for r in results], ensure_ascii=False, indent=2)
+
+    elif fmt == 'csv':
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output, lineterminator='\n')
+        writer.writerow(['公众号名称', '微信号', '认证信息', '简介', '最近文章', '最近文章链接'])
+        for r in results:
+            writer.writerow([
+                r.name,
+                r.wechat_id,
+                r.verification or '',
+                r.description,
+                r.recent_article_title or '',
+                r.recent_article_url or ''
+            ])
+        return output.getvalue()
+
+    elif fmt == 'markdown':
+        lines = ['# 微信公众号搜索结果\n']
+        for i, r in enumerate(results, 1):
+            lines.append(f"## {i}. {r.name}")
+            if r.wechat_id:
+                lines.append(f"**微信号**: {r.wechat_id}")
+            if r.verification:
+                lines.append(f"**认证**: {r.verification}")
+            lines.append(f"\n{r.description}\n")
+            if r.recent_article_title:
+                lines.append(f"**最近文章**: [{r.recent_article_title}]({r.recent_article_url or ''})")
+            lines.append('')
+        return '\n'.join(lines)
+
+    else:  # table
+        lines = ['公众号搜索结果:', '-' * 80]
+        for i, r in enumerate(results, 1):
+            lines.append(f"{i}. {r.name} {'✓' if r.is_official else ''}")
+            if r.wechat_id:
+                lines.append(f"   微信号: {r.wechat_id}")
+            if r.verification:
+                lines.append(f"   认证: {r.verification}")
+            lines.append(f"   简介: {r.description[:100]}...")
+            if r.recent_article_title:
+                lines.append(f"   最近文章: {r.recent_article_title}")
+            lines.append('')
+        return '\n'.join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description='微信公众号文章搜索 v2.2 - 支持搜狗 + miku-ai 双源',
+        description='微信公众号/文章搜索 v3.0 - 支持账号搜索和文章搜索',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
+  # 搜索文章（默认）
   %(prog)s "人工智能" -n 20
   %(prog)s "新能源汽车" -t week -f markdown
-  %(prog)s "大模型" --resolve-urls  # 解析真实微信链接
+
+  # 搜索公众号账号
+  %(prog)s "量子位" --accounts -n 10
+  %(prog)s "腾讯" --accounts -f json
+
+  # 解析真实微信链接
+  %(prog)s "大模型" --resolve-urls
   %(prog)s "大模型" --no-fallback  # 禁用 miku-ai 备选
 
-时间筛选仅搜狗支持，miku-ai 会忽略此参数。
+时间筛选仅对文章搜索有效。
 """
     )
     parser.add_argument(
@@ -670,7 +881,7 @@ def main():
     parser.add_argument(
         '-t', '--time',
         choices=['day', 'week', 'month', 'year'],
-        help='时间筛选: day=一天内, week=一周内, month=一月内, year=一年内'
+        help='时间筛选: day=一天内, week=一周内, month=一月内, year=一年内（仅文章搜索）'
     )
     parser.add_argument(
         '-f', '--format',
@@ -698,31 +909,51 @@ def main():
         action='store_true',
         help='解析搜狗链接为真实微信链接（需要额外请求）'
     )
+    parser.add_argument(
+        '--accounts',
+        action='store_true',
+        help='搜索公众号账号（而非文章）'
+    )
 
     args = parser.parse_args()
-
-    logger.info(f"搜索: {args.keyword}", file=sys.stderr)
 
     searcher = SogouWechatSearch(
         delay=args.delay,
         enable_fallback=not args.no_fallback
     )
-    results = searcher.search(
-        keyword=args.keyword,
-        num_results=args.num,
-        time_filter=args.time
-    )
 
-    if not results:
-        logger.warning("未找到结果", file=sys.stderr)
-        sys.exit(1)
+    if args.accounts:
+        # 搜索公众号账号
+        logger.info(f"搜索公众号: {args.keyword}", file=sys.stderr)
+        results = searcher.search_accounts(
+            keyword=args.keyword,
+            num_results=args.num
+        )
 
-    # 解析真实链接（如果启用）
-    if args.resolve_urls:
-        logger.info("开始解析真实微信链接...", file=sys.stderr)
-        results = resolve_all_urls(results, searcher, delay=0.5)
+        if not results:
+            logger.warning("未找到公众号", file=sys.stderr)
+            sys.exit(1)
 
-    output = format_output(results, args.format)
+        output = format_account_output(results, args.format)
+    else:
+        # 搜索文章
+        logger.info(f"搜索文章: {args.keyword}", file=sys.stderr)
+        results = searcher.search(
+            keyword=args.keyword,
+            num_results=args.num,
+            time_filter=args.time
+        )
+
+        if not results:
+            logger.warning("未找到结果", file=sys.stderr)
+            sys.exit(1)
+
+        # 解析真实链接（如果启用）
+        if args.resolve_urls:
+            logger.info("开始解析真实微信链接...", file=sys.stderr)
+            results = resolve_all_urls(results, searcher, delay=0.5)
+
+        output = format_output(results, args.format)
 
     if args.output:
         with open(args.output, 'w', encoding='utf-8') as f:
