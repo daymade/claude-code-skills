@@ -43,6 +43,25 @@
           "check": "contains(login instruction)"
         }
       ]
+    },
+    {
+      "id": 3,
+      "eval_name": "video-extraction",
+      "prompt": "抓取包含视频的微信文章，导出为 HTML 格式",
+      "expected_output": "HTML 文件中包含 video 标签，可播放视频",
+      "files": [],
+      "assertions": [
+        {
+          "name": "video_tag_present",
+          "description": "HTML 包含 video 标签",
+          "check": "contains('<video')"
+        },
+        {
+          "name": "video_has_poster",
+          "description": "视频有 poster 封面图",
+          "check": "contains('poster=')"
+        }
+      ]
     }
   ]
 }
