@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, local Claude session continuation from `.claude` artifacts, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, multi-path parallel product analysis with cross-model test-time compute scaling, real financial data collection for US equities with validation and yfinance pitfall handling, advanced Excel automation for formatted workbook generation and complex xlsm parsing, macOS programmatic window screenshot capture workflows, verified Scrapling CLI installation and web extraction workflows, plugin marketplace development for converting skills repos into official Claude Code marketplaces, Tencent IMA knowledge base companion with zero-config installation across Claude Code/Codex/OpenClaw, upstream bug detection and runtime repair, personalized fan-out search with priority-based knowledge base boosting, and suite plugins that expose related skills under shared namespaces for combined installation workflows",
-    "version": "1.45.1"
+    "version": "1.45.2"
   },
   "plugins": [
     {
@@ -978,10 +978,10 @@
     },
     {
       "name": "marketplace-dev",
-      "description": "Convert any Claude Code skills repository into an official plugin marketplace. Creates .claude-plugin/marketplace.json conforming to the Anthropic spec, validates it, tests installation, and creates a PR. Includes anti-patterns from real development experience.",
+      "description": "Converts any Claude Code skills repository into an official plugin marketplace. Analyzes existing skills, generates .claude-plugin/marketplace.json conforming to the Anthropic spec, validates with claude plugin validate, runs one-shot check_marketplace.sh (schema + resolution + reverse sync), tests real installation, and creates a PR. Encodes hard-won anti-patterns from real marketplace development.",
       "source": "./",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": [
         "marketplace",
@@ -999,7 +999,7 @@
             "hooks": [
               {
                 "type": "command",
-                "command": "${CLAUDE_PLUGIN_ROOT}/marketplace-dev/scripts/post_edit_validate.sh"
+                "command": "${CLAUDE_PLUGIN_ROOT}/marketplace-dev/hooks/post_edit_validate.sh"
               }
             ]
           },
@@ -1008,7 +1008,7 @@
             "hooks": [
               {
                 "type": "command",
-                "command": "${CLAUDE_PLUGIN_ROOT}/marketplace-dev/scripts/post_edit_sync_check.sh"
+                "command": "${CLAUDE_PLUGIN_ROOT}/marketplace-dev/hooks/post_edit_sync_check.sh"
               }
             ]
           }
@@ -1037,6 +1037,89 @@
       ],
       "skills": [
         "./ima-copilot"
+      ]
+    },
+    {
+      "name": "gangtise-copilot",
+      "description": "One-stop installer and companion for the full Gangtise (岗底斯投研) OpenAPI skill suite — 19 official skills covering data retrieval (OHLC 行情, 财务, 估值, 研报, 首席观点, 会议纪要, 调研纪要), research workflows (个股研究 L1-L4, 观点 PK 对抗性分析, 主题研究, 事件复盘), and utility (股票池管理, 公开网页搜索). Zero-config install to Claude Code / OpenClaw / Codex with 4 preset modes (full / workshop / minimal / custom), guides accessKey + secretAccessKey setup with a live validation call against open.gangtise.com, and ships a read-only diagnostic script. Use this skill whenever the user mentions Gangtise, 岗底斯, gangtise-data-client, gangtise-kb-client, gangtise-file-client, gangtise-stock-research, gangtise-opinion-pk, installing any gangtise-* skill, configuring its credentials, or reports errors like 'token is invalid', '接口地址错误', 'the uri can't be accessed'. This is a wrapper around Gangtise's official skills — it installs and orchestrates them rather than replacing them.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "gangtise",
+        "岗底斯",
+        "investment-research",
+        "financial-data",
+        "ohlc",
+        "research-report",
+        "installer",
+        "wrapper",
+        "claude-code",
+        "openclaw",
+        "codex"
+      ],
+      "skills": [
+        "./gangtise-copilot"
+      ]
+    },
+    {
+      "name": "claude-export-txt-better",
+      "description": "Fixes broken line wrapping in Claude Code exported conversation files (.txt), reconstructing tables, paragraphs, paths, and tool calls that were hard-wrapped at fixed column widths. Includes an automated validation suite (generic, file-agnostic checks). Triggers when the user has a Claude Code export file with broken formatting, mentions \"fix export\", \"fix conversation\", \"exported conversation\", \"make export readable\", references a file matching YYYY-MM-DD-HHMMSS-*.txt, or has a .txt file with broken tables, split paths, or mangled tool output from Claude Code.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "utilities",
+      "keywords": [
+        "claude-code",
+        "export",
+        "txt",
+        "fix",
+        "line-wrapping",
+        "formatting"
+      ],
+      "skills": [
+        "./claude-export-txt-better"
+      ]
+    },
+    {
+      "name": "douban-skill",
+      "description": "Export and sync Douban (豆瓣) book/movie/music/game collections to local CSV files via Frodo API. Supports full export (all history) and RSS incremental sync (recent items). Use when the user wants to export Douban reading/watching/listening/gaming history, back up their Douban data, set up incremental sync, or mentions 豆瓣/douban collections. Triggers on: 豆瓣, douban, 读书记录, 观影记录, 书影音, 导出豆瓣, export, backup, sync, collection.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "douban",
+        "豆瓣",
+        "csv",
+        "export",
+        "backup",
+        "rss",
+        "frodo"
+      ],
+      "skills": [
+        "./douban-skill"
+      ]
+    },
+    {
+      "name": "terraform-skill",
+      "description": "Operational traps for Terraform provisioners, multi-environment isolation, and zero-to-deployment reliability. Covers provisioner timing races, SSH connection conflicts, DNS record duplication, volume permissions, database bootstrap gaps, snapshot cross-contamination, Cloudflare credential format errors, hardcoded domains in Caddyfiles/compose, and init-data-only-on-first-boot pitfalls. Activate when writing null_resource provisioners, creating multi-environment Terraform setups, debugging containers that are Restarting/unhealthy after terraform apply, setting up fresh instances with cloud-init, or any IaC code that SSHs into remote hosts. Also activate when the user mentions terraform plan/apply errors, provisioner failures, infrastructure drift, TLS certificate errors, or Caddy/gateway configuration.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "terraform",
+        "iac",
+        "provisioner",
+        "devops",
+        "infrastructure",
+        "cloud-init",
+        "cloudflare"
+      ],
+      "skills": [
+        "./terraform-skill"
       ]
     }
   ]

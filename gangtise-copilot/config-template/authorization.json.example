@@ -1,0 +1,10 @@
+{
+  "_comment_accessKey": "Your Gangtise accessKey. Get from your Gangtise account administrator or the Gangtise OpenAPI portal. REPLACE the placeholder value below with your real accessKey before use.",
+  "accessKey": "REPLACE_WITH_YOUR_ACCESS_KEY",
+
+  "_comment_secretAccessKey": "Your Gangtise secretAccessKey. This is a private credential — treat it like a password. REPLACE the placeholder value below with your real secretAccessKey before use.",
+  "secretAccessKey": "REPLACE_WITH_YOUR_SECRET_KEY",
+
+  "_comment_long-term-token_alt_shape": "Alternative shape — if you have a pre-generated long-lived Bearer token from a different part of the Gangtise infrastructure, you can use this shape instead of accessKey+secretAccessKey. In that case REMOVE accessKey and secretAccessKey above and keep only the long-term-token field below. Otherwise leave this commented-out example alone.",
+  "_example_long-term-token": "Bearer REPLACE_WITH_YOUR_TOKEN"
+}
