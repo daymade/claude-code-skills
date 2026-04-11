@@ -1851,6 +1851,41 @@ claude plugin install scrapling-skill@daymade-skills
 
 ---
 
+### 44. **nanobananas-api-guide** - AI Image & Video Generation API
+
+Complete guide for NanoBananas.AI API — generate images and videos using state-of-the-art AI models with pricing reference and ready-to-use code examples.
+
+**When to use:**
+- Building apps with NanoBananas.AI image/video generation API
+- Checking model pricing and capabilities
+- Generating images with Nano Banana, Nano Banana 2, Nano Banana Pro, or GPT-4o
+- Generating videos with Veo 3, Seedance, or Sora 2
+- Troubleshooting API errors or authentication issues
+
+**Key features:**
+- 5 image models with detailed pricing and aspect ratio support
+- 4 video models (Veo 3, Seedance 1.0/1.5/2.0, Sora 2) with resolution/duration options
+- Sync and async image generation endpoints
+- Code examples in Python, Node.js, and cURL
+- Complete error code reference and rate limit handling
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install nanobananas-api-guide@daymade-skills
+
+# Then ask Claude
+"Generate an image using NanoBananas API with the Pro model"
+"What's the cheapest way to generate a 10s video?"
+"Write a Python script to batch generate images with NanoBananas API"
+```
+
+📚 **Documentation**: See [nanobananas-api-guide/SKILL.md](./nanobananas-api-guide/SKILL.md).
+
+**Requirements**: NanoBananas.AI Advanced subscription ($29.90/month) for API access.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
