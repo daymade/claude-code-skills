@@ -267,39 +267,70 @@ class Exporter:
         return html_template
 
     def _sanitize_html(self, html_content: str) -> str:
-        """清理 HTML 内容中的潜在 XSS"""
+        """清理 HTML 内容中的潜在 XSS（强化版本）"""
         import re
-        # 移除危险标签
-        dangerous_tags = ['script', 'iframe', 'object', 'embed', 'form', 'input']
+
+        # 限制输入长度，防止 ReDoS 攻击
+        max_length = 10 * 1024 * 1024  # 10MB 上限
+        if len(html_content) > max_length:
+            html_content = html_content[:max_length]
+
+        # 移除危险标签（非贪婪匹配）
+        dangerous_tags = ['script', 'iframe', 'object', 'embed', 'form', 'input', 'textarea', 'select']
         for tag in dangerous_tags:
-            # 移除开始标签
+            # 移除开始标签（非贪婪匹配）
             html_content = re.sub(
-                rf'<{tag}[^>]*>',
+                rf'<{tag}\b[^>]*?>',
                 f'&lt;{tag}&gt;',
                 html_content,
                 flags=re.IGNORECASE
             )
             # 移除结束标签
             html_content = re.sub(
-                rf'</{tag}>',
+                rf'</{tag}\s*>',
                 f'&lt;/{tag}&gt;',
                 html_content,
                 flags=re.IGNORECASE
             )
-        # 移除事件处理器
+
+        # 移除事件处理器（非贪婪匹配）
         html_content = re.sub(
-            r'\son\w+\s*=\s*["\'][^"\']*["\']',
+            r'\son\w+\s*=\s*["\'][^"\']*?["\']',
             '',
             html_content,
             flags=re.IGNORECASE
         )
-        # 移除 javascript: 伪协议
+
+        # 移除 javascript: 和 data: 伪协议
         html_content = re.sub(
-            r'href\s*=\s*["\']javascript:[^"\']*["\']',
-            'href="#"',
+            r'(href|src|action)\s*=\s*["\']\s*(?:javascript|data):[^"\']*?["\']',
+            r'\1="#"',
             html_content,
             flags=re.IGNORECASE
         )
+
+        # 移除 CSS expression（IE 特有的 XSS 攻击向量）
+        html_content = re.sub(
+            r'expression\s*\(',
+            'expression_removed(',
+            html_content,
+            flags=re.IGNORECASE
+        )
+
+        # 移除 style 标签中的 @import 和 behavior
+        html_content = re.sub(
+            r'@import\s+["\']',
+            '@import_removed "',
+            html_content,
+            flags=re.IGNORECASE
+        )
+        html_content = re.sub(
+            r'behavior\s*:',
+            'behavior_removed:',
+            html_content,
+            flags=re.IGNORECASE
+        )
+
         return html_content
 
     def save(self, data: Dict[str, Any], format: str, filename: Optional[str] = None) -> str:

@@ -103,7 +103,7 @@ class ImageDownloader:
         return True
 
     def _generate_filename(self, url: str, index: int) -> str:
-        """生成本地文件名"""
+        """生成本地文件名（安全版本，防止路径遍历）"""
         # 尝试从 URL 提取扩展名
         parsed = urlparse(url)
         path = unquote(parsed.path)
@@ -118,7 +118,12 @@ class ImageDownloader:
         # 使用 hash 确保唯一性
         url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
 
-        return f"img-{index:03d}-{url_hash}{ext}"
+        # 安全文件名：移除路径分隔符，防止路径遍历攻击
+        filename = f"img-{index:03d}-{url_hash}{ext}"
+        # 清理任何潜在的路径分隔符
+        filename = filename.replace('/', '_').replace('\\', '_').replace('..', '_')
+
+        return filename
 
     def _validate_safe_path(self, filepath: Path) -> bool:
         """

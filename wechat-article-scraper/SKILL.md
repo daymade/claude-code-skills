@@ -70,16 +70,37 @@ pip install requests beautifulsoup4 lxml
 ### CLI 用法
 
 ```bash
-# 基础用法
+# 基础用法（默认输出到当前目录）
 python3 scripts/scraper.py "<url>"
 
-# 完整参数
+# 下载图片到本地
+python3 scripts/scraper.py "<url>" --download-images
+
+# 指定策略和输出格式
 python3 scripts/scraper.py "<url>" \
     --strategy reliable \
     --format markdown \
     --output ./articles \
     --download-images
+
+# 搜索公众号文章
+python3 scripts/search.py "关键词" -n 10 --format markdown
 ```
+
+### 策略选择指南
+
+| 策略 | 适用场景 | 前置要求 | 可靠性 |
+|------|---------|---------|--------|
+| **fast** | 快速抓取公开文章 | requests + BeautifulSoup | 中（可能被拦截） |
+| **stable** | 需要稳定抓取 | 安装 Playwright | 高 |
+| **reliable** | 需要完整抓取（**推荐**） | Chrome 登录态 | 最高 |
+
+**默认策略**：系统按 `fast → stable → reliable` 顺序自动尝试，优先使用最快成功的策略。
+
+**何时指定策略？**
+- 抓取重要文章 → 指定 `-s reliable`
+- 批量快速抓取 → 指定 `-s fast`
+- 遇到验证码频繁 → 指定 `-s stable` 或 `-s reliable`
 
 ### 在 Claude Code 中使用
 
@@ -294,7 +315,7 @@ exported_at: 2026-04-12T10:30:00
 
 ```bash
 #!/bin/bash
-# 批量抓取脚本
+# 批量抓取脚本 (batch_scrape.sh)
 
 URLS_FILE="urls.txt"
 OUTPUT_DIR="./articles"
@@ -302,20 +323,28 @@ mkdir -p "$OUTPUT_DIR"
 
 count=0
 while IFS= read -r url; do
+    [[ -z "$url" ]] && continue
     count=$((count + 1))
     echo "[$count] 抓取: $url"
-    
+
     python3 scripts/scraper.py "$url" \
         --strategy reliable \
         --output "$OUTPUT_DIR" \
         --download-images
-    
+
     # 间隔 3 秒避免风控
     sleep 3
 done < "$URLS_FILE"
 
 echo "完成: 共抓取 $count 篇文章"
 ```
+
+**批量抓取最佳实践**：
+1. 使用 `reliable` 策略确保成功率
+2. 间隔 3-5 秒避免触发风控
+3. 单批次建议不超过 50 篇
+4. 使用 `--download-images` 避免图片 URL 过期
+5. 准备 URL 列表文件，每行一个链接
 
 ## 版本历史
 

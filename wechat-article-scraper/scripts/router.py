@@ -75,6 +75,11 @@ class StrategyRouter:
         except Exception:
             return False
 
+    def _validate_url(self, url: str) -> bool:
+        """验证 URL 是否是允许的微信域名"""
+        allowed_domains = ['mp.weixin.qq.com', 'weixin.qq.com']
+        return any(domain in url for domain in allowed_domains)
+
     def route(self, url: str, prefer_strategy: Optional[Strategy] = None) -> StrategyResult:
         """
         路由到最佳策略
@@ -86,6 +91,14 @@ class StrategyRouter:
         Returns:
             StrategyResult: 执行结果
         """
+        # 验证 URL
+        if not self._validate_url(url):
+            return StrategyResult(
+                strategy=Strategy.FAILED,
+                success=False,
+                error="不支持的 URL: 必须是微信文章链接 (mp.weixin.qq.com)"
+            )
+
         strategies = self.detect_available_strategies()
 
         # 如果有优先策略且可用，优先使用

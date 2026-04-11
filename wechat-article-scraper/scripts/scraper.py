@@ -118,10 +118,19 @@ def scrape_article(
 
 def _prepare_url(url: str) -> str:
     """
-    准备 URL：添加 ?scene=1 参数绕过反爬
+    准备 URL：验证并添加 ?scene=1 参数绕过反爬
 
     这是关键技巧：scene=1 参数可以显著降低触发验证码的概率
     """
+    # 验证 URL 格式
+    if not url or not isinstance(url, str):
+        raise ValueError("URL 必须是非空字符串")
+
+    # 验证是否是微信文章 URL（安全校验）
+    allowed_domains = ['mp.weixin.qq.com', 'weixin.qq.com']
+    if not any(domain in url for domain in allowed_domains):
+        raise ValueError(f"不支持的 URL: 必须是微信文章链接 ({', '.join(allowed_domains)})")
+
     # 移除可能的跟踪参数
     url = url.split('#')[0]  # 移除 hash
 
