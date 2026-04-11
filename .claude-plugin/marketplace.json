@@ -1124,8 +1124,8 @@
     },
     {
       "name": "wechat-article-scraper",
-      "version": "3.20.0",
-      "description": "World-class WeChat article extraction with 6-level strategy routing (fast→adaptive→stable→reliable→zero_dep→jina_ai), OG metadata fallback, image-paragraph association, lazy loading handling, local image download, and Sogou search discovery. Supports Markdown/JSON/HTML/PDF export, SQLite persistence with FTS5 search, batch task queues, and a modern React+TypeScript web dashboard, RSS feed generation, comment extraction, MCP server, and subscription monitoring, AI summarization, and webhook notifications, and third-party platform exports (Notion/Airtable/Google Sheets). Activate when users need to scrape WeChat public account articles, batch archive content, or extract article metadata and images.",
+      "version": "3.21.0",
+      "description": "World-class WeChat article extraction with 6-level strategy routing (fast→adaptive→stable→reliable→zero_dep→jina_ai), OG metadata fallback, image-paragraph association, lazy loading handling, local image download, and Sogou search discovery. Supports Markdown/JSON/HTML/PDF export, SQLite persistence with FTS5 search, batch task queues, a modern React+TypeScript web dashboard, native CLI with single-file executable build, Chrome/Firefox browser extensions, RSS feed generation, comment extraction, MCP server, subscription monitoring, AI summarization, webhook notifications, and third-party platform exports (Notion/Airtable/Google Sheets). Activate when users need to scrape WeChat public account articles, batch archive content, or extract article metadata and images.",
       "source": "./",
       "strict": false,
       "category": "content-tools",
@@ -1143,7 +1143,12 @@
         "react",
         "web-ui",
         "full-text-search",
-        "batch-queue"
+        "batch-queue",
+        "cli",
+        "command-line",
+        "browser-extension",
+        "chrome-extension",
+        "firefox-addon"
       ],
       "skills": [
         "./wechat-article-scraper"
