@@ -89,14 +89,17 @@ def scrape(
     download_images: bool = typer.Option(False, "--images", "-i", help="下载图片"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="输出文件路径"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="详细输出"),
+    auth: Optional[str] = typer.Option(None, "--auth", "-a", help="使用已保存的微信登录态"),
 ):
     """抓取单篇微信文章"""
+    auth_status = f"[green]{auth}[/]" if auth else "[dim]未使用[/]"
     console.print(Panel.fit(
         f"[bold blue]开始抓取文章[/]\n"
         f"URL: {url}\n"
         f"策略: [green]{strategy.value}[/] | "
         f"格式: [green]{format.value}[/] | "
-        f"下载图片: [green]{'是' if download_images else '否'}[/]",
+        f"下载图片: [green]{'是' if download_images else '否'}[/] | "
+        f"登录态: {auth_status}",
         title="wechat-scraper",
         border_style="blue"
     ))
@@ -110,23 +113,46 @@ def scrape(
 
         # Import and run scraper
         try:
-            from export import WeChatArticleScraper, ScrapingStrategy
+            from router import StrategyRouter, Strategy as RouterStrategy
 
             strategy_map = {
                 Strategy.auto: None,
-                Strategy.fast: ScrapingStrategy.FAST,
-                Strategy.adaptive: ScrapingStrategy.ADAPTIVE,
-                Strategy.stable: ScrapingStrategy.STABLE,
-                Strategy.reliable: ScrapingStrategy.RELIABLE,
+                Strategy.fast: RouterStrategy.FAST,
+                Strategy.adaptive: RouterStrategy.ADAPTIVE,
+                Strategy.stable: RouterStrategy.STABLE,
+                Strategy.reliable: RouterStrategy.RELIABLE,
             }
 
-            scraper = WeChatArticleScraper(
-                strategy=strategy_map.get(strategy, None),
-                download_images=download_images,
-                verbose=verbose
-            )
+            router = StrategyRouter()
+            router_strategy = strategy_map.get(strategy)
 
-            result = scraper.scrape(url)
+            # 如果使用 stable 策略且有登录态，使用 playwright_scraper 直接抓取
+            if auth and router_strategy == RouterStrategy.STABLE:
+                import subprocess
+                cmd = [
+                    sys.executable,
+                    str(Path(__file__).parent.parent / "scripts" / "playwright_scraper.py"),
+                    url,
+                    "--auth", auth,
+                    "--auth-dir", "./data/auth"
+                ]
+                if verbose:
+                    cmd.append("--verbose")
+
+                result_json = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                ).stdout
+
+                result = json.loads(result_json) if result_json else None
+            else:
+                # 使用 router 抓取
+                route_result = router.route(url, prefer_strategy=router_strategy)
+                result = route_result.data if route_result.success else None
+                if not route_result.success:
+                    raise Exception(route_result.error)
 
             progress.update(task, completed=True)
 
@@ -140,12 +166,43 @@ def scrape(
         table.add_column("字段", style="cyan")
         table.add_column("值", style="green")
 
+        # 基本信息
         table.add_row("标题", result.get("title", "N/A"))
         table.add_row("作者", result.get("author", "N/A"))
-        table.add_row("发布时间", result.get("publish_time", "N/A"))
-        table.add_row("阅读量", str(result.get("read_count", "N/A")))
-        table.add_row("点赞数", str(result.get("like_count", "N/A")))
-        table.add_row("字数", str(len(result.get("content", ""))))
+        table.add_row("发布时间", result.get("publishTime", result.get("publish_time", "N/A")))
+
+        # 互动数据（如果存在）
+        engagement = result.get("engagement", {})
+        if engagement:
+            read_count = engagement.get("readCount", "N/A")
+            like_count = engagement.get("likeCount", "N/A")
+            watch_count = engagement.get("watchCount", "N/A")  # 在看数
+            comment_count = engagement.get("commentCount", "N/A")
+
+            table.add_row("阅读量", str(read_count) if read_count else "[dim]需登录[/]")
+            table.add_row("点赞数", str(like_count) if like_count else "[dim]需登录[/]")
+            if watch_count:
+                table.add_row("在看数", str(watch_count))
+            if comment_count:
+                table.add_row("评论数", str(comment_count))
+
+            # 显示 WCI 指数（如果有）
+            wci = result.get("wci_score")
+            if wci:
+                table.add_row("WCI 指数", f"[bold cyan]{wci}[/]")
+        else:
+            # 兼容旧格式
+            table.add_row("阅读量", str(result.get("read_count", "N/A")))
+            table.add_row("点赞数", str(result.get("like_count", "N/A")))
+
+        # 内容统计
+        content = result.get("content", "")
+        table.add_row("字数", str(len(content)))
+        images = result.get("images", [])
+        table.add_row("图片数", str(len(images)))
+        videos = result.get("videos", [])
+        if videos:
+            table.add_row("视频数", str(len(videos)))
 
         console.print(table)
 
@@ -257,6 +314,105 @@ def search(
             console.print(f"\n[green]已保存到: {output_path}[/]")
     else:
         console.print("[yellow]未找到结果[/]")
+
+
+@app.command("auth")
+def auth(
+    action: str = typer.Argument(..., help="操作: login/list/verify/delete"),
+    account: Optional[str] = typer.Argument(None, help="账号标识"),
+    headless: bool = typer.Option(False, "--headless", help="无头模式登录"),
+):
+    """管理微信登录态（用于抓取阅读/点赞数）"""
+    from wechat_auth import WeChatAuthManager
+
+    auth_dir = Path("./data/auth")
+    auth_manager = WeChatAuthManager(str(auth_dir))
+
+    if action == "list":
+        accounts = auth_manager.list_accounts()
+        if not accounts:
+            console.print("[yellow]没有保存的登录态[/]")
+            console.print("[dim]使用 'w auth login <账号名>' 添加登录态[/]")
+        else:
+            table = Table(title="已保存的微信登录态", box=box.ROUNDED)
+            table.add_column("账号", style="cyan")
+            table.add_column("状态", style="green")
+            table.add_column("创建时间", style="dim")
+            table.add_column("最后使用", style="dim")
+
+            for acc in accounts:
+                status = "[green]✓ 有效[/]" if acc['is_valid'] else "[red]✗ 无效[/]"
+                table.add_row(
+                    acc['name'],
+                    status,
+                    acc['created_at'][:10],
+                    acc['last_used_at'][:10]
+                )
+            console.print(table)
+
+    elif action == "login":
+        if not account:
+            console.print("[red]请提供账号标识，例如: w auth login 个人号[/]")
+            raise typer.Exit(1)
+
+        console.print(Panel.fit(
+            f"[bold blue]微信登录[/]\n"
+            f"账号: [cyan]{account}[/]\n"
+            f"模式: [{'无头' if headless else '可视化'}]\n\n"
+            "[yellow]请使用微信扫描浏览器中显示的二维码[/]",
+            title="wechat-auth"
+        ))
+
+        try:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                progress.add_task(description="等待登录完成...", total=None)
+                session = auth_manager.login_with_qrcode(
+                    account,
+                    headless=headless,
+                    timeout=120
+                )
+
+            console.print(f"[green]✓ 登录成功: {session.account_name}[/]")
+            console.print(f"[dim]过期时间: {session.expires_at[:10]}[/]")
+
+        except TimeoutError:
+            console.print("[red]✗ 登录超时，请重试[/]")
+            raise typer.Exit(1)
+        except Exception as e:
+            console.print(f"[red]✗ 登录失败: {e}[/]")
+            raise typer.Exit(1)
+
+    elif action == "verify":
+        if not account:
+            console.print("[red]请提供账号标识[/]")
+            raise typer.Exit(1)
+
+        console.print(f"正在验证 [cyan]{account}[/]...")
+        is_valid = auth_manager.verify_session(account)
+
+        if is_valid:
+            console.print(f"[green]✓ 登录态有效: {account}[/]")
+        else:
+            console.print(f"[red]✗ 登录态无效或已过期: {account}[/]")
+            console.print("[dim]请重新登录: w auth login {account}[/]")
+
+    elif action == "delete":
+        if not account:
+            console.print("[red]请提供账号标识[/]")
+            raise typer.Exit(1)
+
+        if auth_manager.delete_session(account):
+            console.print(f"[green]✓ 已删除: {account}[/]")
+        else:
+            console.print(f"[yellow]账号不存在: {account}[/]")
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+        console.print("[dim]可用操作: login, list, verify, delete[/]")
 
 
 @app.command("config")
