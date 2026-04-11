@@ -442,6 +442,7 @@ echo "完成: 共抓取 $count 篇文章"
 ### v3.0.1 (当前)
 - ✨ **新增**: Fast 策略支持 HTTP 代理配置
   - StrategyRouter 支持 proxy 参数
+  - CLI 添加 `--proxy` 参数
   - 适配需要通过代理访问网络的环境
 
 ### v3.0.0

@@ -67,7 +67,8 @@ def scrape_article(
     output_dir: Optional[str] = None,
     enable_og_fallback: bool = True,
     max_retries: int = 3,
-    screenshot: bool = False
+    screenshot: bool = False,
+    proxy: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     抓取单篇文章
@@ -113,7 +114,7 @@ def scrape_article(
         prefer = strategy_map.get(strategy)
 
     # 路由到最佳策略
-    router = StrategyRouter(max_retries=max_retries)
+    router = StrategyRouter(max_retries=max_retries, proxy=proxy)
     result = router.route(url, prefer_strategy=prefer, enable_og_fallback=enable_og_fallback)
 
     if not result.success:
@@ -392,6 +393,10 @@ Content Status:
         action='store_true',
         help='禁用 OG 元数据备选提取'
     )
+    parser.add_argument(
+        '--proxy',
+        help='HTTP 代理地址 (例如: http://127.0.0.1:1082)'
+    )
 
     args = parser.parse_args()
 
@@ -437,7 +442,8 @@ Content Status:
         output_format=args.format,
         output_dir=args.output,
         enable_og_fallback=not args.no_og_fallback,
-        max_retries=args.max_retries
+        max_retries=args.max_retries,
+        proxy=args.proxy
     )
 
     # 输出结果
