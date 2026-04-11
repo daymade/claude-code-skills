@@ -24,7 +24,7 @@ This workflow was abstracted from a real session that produced [`ima-copilot`](h
 
 ## Step 1 — Confirm scope with the user
 
-Before scanning, check with the user (via **AskUserQuestion** if necessary):
+Before scanning, check with the user (via **AskUserQuestion** — see fallback note below if that tool is unavailable):
 
 1. **What is the tool we're wrapping?** (exact name, distribution URL if known)
 2. **What should the wrapper skill be called?** Suggest `<tool-name>-copilot` or `<tool-name>-companion` as defaults. Let the user override.
@@ -33,9 +33,39 @@ Before scanning, check with the user (via **AskUserQuestion** if necessary):
 
 Confirm in one sentence before mining. If the user hasn't given you enough context to fill these in, ask — don't guess.
 
+### AskUserQuestion fallback
+
+This workflow references `AskUserQuestion` repeatedly — it is the Claude Code tool that renders a multi-choice prompt with labeled options and lets the user pick one, returning a structured answer. It is the best possible affordance for decisions that have more than one right answer (like "which repair strategy should I apply?").
+
+**Not every harness exposes this tool.** Codex does not have it. Older Claude Code versions do not have it. Custom agent builds may not have it. **The consent requirement is not the tool — it is the explicit user choice.** If `AskUserQuestion` is unavailable, fall back to printing the options inline in plain text with numbered labels and then stop, waiting for the user's reply before continuing. Example:
+
+```
+I need your consent before touching upstream files. Pick one:
+
+ 1) Strategy A — rename notes/SKILL.md → notes/MODULE.md and patch root references (recommended, smaller footprint)
+ 2) Strategy B — prepend minimal frontmatter to the submodule files (minimal diff, creates two sub-skill names)
+ 3) Skip — leave it broken for now
+
+Reply with 1, 2, or 3.
+```
+
+After the user replies, continue with the chosen strategy's exact commands. The requirement is that the user makes an informed choice before any upstream-file modification happens — `AskUserQuestion` is the preferred rendering, not the definition.
+
 ## Step 2 — Mine the conversation history
 
 This is the most important step. Scan the conversation from its beginning to the point where this workflow was triggered. Extract concrete, literal snippets for each category below. Do not paraphrase error messages or commands — copy them verbatim.
+
+### How to access the conversation
+
+Where the history lives depends on whether you are in the same session that produced the debugging work or in a follow-up session:
+
+- **Same session (most common)**: scroll your own message history upward. Start from the most recent messages and walk back until you find the first mention of the tool being installed. Everything between that point and now is your source material. You already have this in context — you do not need any tool to "fetch" it.
+
+- **Follow-up session (the user came back later)**: use the `claude-code-history-files-finder` skill if it is installed, or read the session JSONL directly from `~/.claude/projects/<escaped-cwd>/<session-id>.jsonl`. The escaped cwd is the working directory with `/` replaced by `-` (e.g., `~/workspace/md/claude-code-skills` becomes `-Users-<username>-workspace-md-claude-code-skills`). Grep the JSONL for literal error fragments (`"error"`, `"Traceback"`, shell prompt characters), extracted shell commands, and file paths the user edited. The JSONL is newline-delimited JSON with one record per message.
+
+- **Neither available**: stop the workflow and tell the user. Do **not** proceed by inventing plausible install commands or plausible bug fixes — that violates the workflow's entire reason to exist. Say "I cannot find the session history this workflow needs. Can you paste the relevant install log, error messages, and fix commands directly into this conversation so I can work from them?" and wait. Fabricated content is worse than no wrapper skill.
+
+The rules that follow (2a-2e) apply regardless of which source you used.
 
 ### 2a — The working install flow
 

@@ -189,10 +189,19 @@ echo "--- Known upstream issues ---"
 #   1 — broken (file exists but lacks frontmatter)
 #   2 — submodule not present at all (legitimate for a future upstream layout change)
 #   3 — Strategy A applied (renamed to MODULE.md)
+#   4 — conflicted: both SKILL.md and MODULE.md exist simultaneously
+#       (happens if a user switched repair strategies mid-session or
+#       restored a partial backup — the agent needs to pick a winning state)
 check_submodule() {
   local dir="$1"
   local skill_md="$dir/SKILL.md"
   local module_md="$dir/MODULE.md"
+
+  # Check dual-state first — if both files exist, the install is in a
+  # conflicted state that neither Strategy A nor Strategy B can claim cleanly.
+  if [ -f "$skill_md" ] && [ -f "$module_md" ]; then
+    return 4
+  fi
 
   if [ -f "$skill_md" ]; then
     local first_line
@@ -221,6 +230,7 @@ scan_issue_001() {
     case "$rc" in
       0) status_ok   "ISSUE-001 clear ($agent: $sub/SKILL.md has frontmatter)" ;;
       3) status_ok   "ISSUE-001 clear ($agent: $sub/MODULE.md — Strategy A applied)" ;;
+      4) status_warn "ISSUE-001 CONFLICTED ($agent: both $sub/SKILL.md and $sub/MODULE.md exist — pick one; see known_issues.md)" ;;
       2) echo "ℹ️  $agent: $sub submodule not present (post-upstream-layout-change?)" ;;
       *) status_warn "ISSUE-001 TRIGGERED ($agent: $sub/SKILL.md missing YAML frontmatter)" ;;
     esac

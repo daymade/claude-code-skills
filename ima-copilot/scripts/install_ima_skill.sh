@@ -85,6 +85,18 @@ for tool in curl unzip npx; do
   fi
 done
 
+# Require Node.js >= 18 — `npx -y skills add` from vercel-labs/skills needs
+# a modern Node runtime. The error is otherwise opaque if it fires on an
+# ancient Node version.
+if command -v node >/dev/null 2>&1; then
+  node_major=$(node --version 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/')
+  if [ -n "$node_major" ] && [ "$node_major" -lt 18 ] 2>/dev/null; then
+    echo "✗ Node.js 18+ required for 'npx skills add' — found: $(node --version)" >&2
+    echo "  Upgrade via your package manager (brew/apt/nvm) and retry." >&2
+    exit 1
+  fi
+fi
+
 echo "▶ Staging upstream ima-skill v${IMA_VERSION}"
 mkdir -p "$STAGING_DIR"
 

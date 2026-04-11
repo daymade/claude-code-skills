@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **doc-to-markdown**: Added 31 unit tests (`test_convert.py`)
 - **doc-to-markdown**: Added 5-tool benchmark report (`references/benchmark-2026-03-22.md`)
 
+## [1.43.0] - 2026-04-11
+
+### Fixed
+- **ima-copilot** v1.0.0 → v1.0.1: Contract compliance and dogfood-driven fixes
+  - `SKILL.md`, `references/known_issues.md`, `references/installation_flow.md`: removed hardcoded references to upstream version `1.1.2`. Install script keeps the version as an overridable default which is explicitly allowed by the architecture contract. Fixes a principle 6 (independent evolution) violation that would have forced a skill version bump on every upstream release.
+  - `references/known_issues.md`: added `command` prefix to the `sed -i.bak` and `rm -f` commands in Strategy A repair block and to the `rm -f` command in Strategy A rollback, matching the contract's alias-safe requirement. Previously, a user shell with `alias rm='rm -i'` or `alias sed='sed -i'` would hang the repair on an interactive prompt.
+  - `scripts/install_ima_skill.sh`: added a Node.js ≥18 preflight check. The `npx skills add` distribution path needs a modern Node runtime and the failure message on old Node is opaque.
+  - `scripts/diagnose.sh`: `check_submodule` now recognizes and explicitly warns on the dual-state where both `SKILL.md` and `MODULE.md` exist simultaneously (can happen when a user switched repair strategies mid-session or restored a partial backup). Previously this reported clean while the install was in a conflicted state.
+  - `scripts/search_fanout.py`: `rank_groups` now sorts tied hit counts by KB name for deterministic byte-identical output. Previously the tie-break depended on `concurrent.futures.ThreadPoolExecutor.map` completion order, which varied with network timing.
+- **skill-creator** v1.7.0 → v1.7.1: Wrapper-skill workflow hardening from counter-review findings
+  - `workflows/wrapper-skill/workflow.md` Step 2: added a "How to access the conversation" subsection with concrete guidance for three cases (same session / follow-up session / neither available) and an explicit "do not fabricate content" rule for the last case. Fresh agents were previously left to guess.
+  - `workflows/wrapper-skill/workflow.md` Step 1: added an "AskUserQuestion fallback" subsection explaining that the consent requirement is the explicit user choice, not the specific tool name, and showing a plain-text fallback pattern for harnesses without `AskUserQuestion`.
+  - `workflows/wrapper-skill/patterns.md`: added a new "Runtime-logic patterns shared across wrappers" section with three generalizable insights distilled from ima-copilot's `search_fanout.py` — **capability partitioning** (enumerate vs operate permission asymmetry with four-way result bucketing), **undocumented limit detection** (silent truncation heuristics for APIs that cap results without emitting pagination tokens), and **scoped liveness checks** (probe the lowest-privilege operation the skill actually performs, not the easiest API call). Each pattern includes example code, real-world examples across multiple APIs (GitHub, Slack, Notion, Google Drive), and a cross-reference to the ima-copilot implementation.
+  - `workflows/wrapper-skill/verification_protocol.md`: restructured into Track 1 (session cross-reference for literal transcriptions) and Track 2 (smoke test / unit test for runtime logic). The previous "verification is not dogfood" dogma was too strict — it correctly applied to Track 1 files but wrongly exempted Track 2 runtime code from end-to-end testing. Track 2 files like `search_fanout.py` now have an explicit mandatory-smoke-test rule.
+
+### Changed
+- Updated marketplace version from 1.42.0 to 1.43.0
+
 ## [1.42.0] - 2026-04-11
 
 ### Added
