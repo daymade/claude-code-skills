@@ -1,0 +1,55 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output (will be mounted)
+output/
+*.md
+*.json
+*.html
+*.pdf
+
+# Cache (will be mounted)
+cache/
+*.db
+
+# Test
+.pytest_cache
+.coverage
+htmlcov/
+
+# Documentation (not needed in image)
+*.md
+!SKILL.md
+
+# CI/CD
+.github/
+.claude/
+
+# Temp files
+*.log
+*.tmp
+temp/
