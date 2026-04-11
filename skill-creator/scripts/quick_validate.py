@@ -6,8 +6,22 @@ Quick validation script for skills - minimal version
 import sys
 import os
 import re
-import yaml
 from pathlib import Path
+
+try:
+    import yaml
+except ModuleNotFoundError:
+    print(
+        "Missing dependency: PyYAML.\n"
+        "Run validation with an explicit dependency declaration:\n"
+        "  uv run --with PyYAML python skill-creator/scripts/quick_validate.py <skill_directory>\n"
+        "Or from the skill-creator directory:\n"
+        "  uv run --with PyYAML python -m scripts.quick_validate <skill_directory>\n"
+        "For packaging from the skill-creator directory:\n"
+        "  uv run --with PyYAML python -m scripts.package_skill <skill_directory>",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
 
 def find_invalid_frontmatter_indentation(frontmatter: str) -> list[tuple[int, str]]:

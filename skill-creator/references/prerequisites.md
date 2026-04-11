@@ -8,24 +8,24 @@ Run all checks in one go:
 
 ```bash
 echo "=== Skill Creator Prerequisites ==="
-echo -n "Python 3: "; python3 --version 2>/dev/null || echo "MISSING"
-echo -n "PyYAML: "; python3 -c "import yaml; print('OK')" 2>/dev/null || echo "MISSING"
+echo -n "uv: "; uv --version 2>/dev/null || echo "MISSING"
+echo -n "Python: "; uv run python --version 2>/dev/null || echo "MISSING"
+echo -n "PyYAML: "; uv run --with PyYAML python -c "import yaml; print('OK')" 2>/dev/null || echo "MISSING"
 echo -n "gitleaks: "; gitleaks version 2>/dev/null || echo "MISSING"
 echo -n "claude CLI: "; which claude 2>/dev/null || echo "MISSING"
-echo -n "anthropic SDK: "; python3 -c "import anthropic; print('OK')" 2>/dev/null || echo "MISSING (optional)"
-echo -n "uv: "; uv --version 2>/dev/null || echo "MISSING (optional)"
+echo -n "anthropic SDK: "; uv run --with anthropic python -c "import anthropic; print('OK')" 2>/dev/null || echo "MISSING (optional)"
 ```
 
 ## Dependencies by Phase
 
 | Dependency | Required For | Phase | Severity |
 |-----------|-------------|-------|----------|
+| uv | Python runtime and dependency declaration | All Python phases | **Blocking** |
 | Python 3.7+ | All scripts | All | **Blocking** |
 | PyYAML | `quick_validate.py`, `package_skill.py` | Validation, Packaging | **Blocking** |
 | gitleaks | `security_scan.py` | Security Review (Step 6) | **Blocking for packaging** |
 | claude CLI | `run_eval.py`, `run_loop.py` | Testing, Description Optimization | **Blocking for evals** |
 | anthropic SDK | `improve_description.py`, `run_loop.py` | Description Optimization | Optional (only for desc optimization) |
-| uv | Skills that bundle Python scripts | Export/Runtime | Optional (skill-specific) |
 | webbrowser | `generate_review.py` (viewer) | Eval Review | Optional (can use `--static` fallback) |
 
 ## Auto-Installation
@@ -33,14 +33,11 @@ echo -n "uv: "; uv --version 2>/dev/null || echo "MISSING (optional)"
 ### PyYAML (required)
 
 ```bash
-# Preferred: via uv
-uv pip install --system pyyaml
+# Preferred: declare it at the call site
+uv run --with PyYAML python -c "import yaml; print(yaml.__version__)"
 
-# Alternative: via pip
-pip3 install pyyaml
-
-# Verify
-python3 -c "import yaml; print(yaml.__version__)"
+# Validation
+uv run --with PyYAML python -m scripts.quick_validate <skill-path>
 ```
 
 ### gitleaks (required for packaging)
@@ -60,14 +57,7 @@ gitleaks version
 ### anthropic SDK (optional, for description optimization)
 
 ```bash
-# Preferred: via uv
-uv pip install --system anthropic
-
-# Alternative: via pip
-pip3 install anthropic
-
-# Verify
-python3 -c "import anthropic; print('OK')"
+uv run --with anthropic python -c "import anthropic; print('OK')"
 ```
 
 Also requires `ANTHROPIC_API_KEY` environment variable to be set.
@@ -85,20 +75,22 @@ If missing, the user needs to install Claude Code from https://claude.ai/claude-
 
 ## Script Invocation
 
-All scripts must be run from the skill-creator root directory using module syntax:
+Run scripts from the skill-creator root directory. Use `uv run --with ...` when a script has Python dependencies:
 
 ```bash
 # CORRECT — run from skill-creator directory
 cd <skill-creator-path>
-python3 -m scripts.package_skill <skill-path>
-python3 -m scripts.security_scan <skill-path>
-python3 -m scripts.aggregate_benchmark <workspace-path> --skill-name <name>
+uv run --with PyYAML python -m scripts.quick_validate <skill-path>
+uv run --with PyYAML python -m scripts.package_skill <skill-path>
+uv run python -m scripts.security_scan <skill-path>
+uv run python -m scripts.aggregate_benchmark <workspace-path> --skill-name <name>
 
-# WRONG — direct invocation fails with ModuleNotFoundError
-python3 scripts/package_skill.py <skill-path>  # ImportError: No module named 'scripts'
+# WRONG — bare Python depends on ambient site packages
+python3 scripts/package_skill.py <skill-path>  # Can fail: No module named 'yaml'
+python3 -m scripts.quick_validate <skill-path>  # Can fail: No module named 'yaml'
 ```
 
-This is because the scripts use relative imports (`from scripts.quick_validate import ...`).
+This avoids relying on machine-global Python packages and keeps validation/packaging reproducible.
 
 ## Presenting Results to User
 

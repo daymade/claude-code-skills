@@ -14,7 +14,7 @@
       "description": "Essential meta-skill for creating effective Claude Code skills with initialization scripts, validation, packaging, marketplace registration, and privacy best practices. Includes a specialized wrapper-skill workflow for retrospectively distilling an install-and-debug session into a reusable companion skill for a third-party CLI tool.",
       "source": "./",
       "strict": false,
-      "version": "1.7.2",
+      "version": "1.7.3",
       "category": "developer-tools",
       "keywords": [
         "skill-creation",
