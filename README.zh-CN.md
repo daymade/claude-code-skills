@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-44-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.45.1-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-47-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.46.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 44 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 47 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -289,6 +289,15 @@ claude plugin install scrapling-skill@daymade-skills
 
 # 腾讯 IMA 知识库伴侣与安装器
 claude plugin install ima-copilot@daymade-skills
+
+# 修复 Claude Code 导出 .txt 文件的断行问题
+claude plugin install claude-export-txt-better@daymade-skills
+
+# 导出豆瓣书影音游戏收藏到 CSV
+claude plugin install douban-skill@daymade-skills
+
+# Terraform 实操陷阱与多环境可靠性模式
+claude plugin install terraform-skill@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -1954,6 +1963,116 @@ claude plugin install ima-copilot@daymade-skills
 
 ---
 
+### 45. **claude-export-txt-better** - 修复 Claude Code 导出文件的断行
+
+重建 Claude Code 导出的 `.txt` 对话文件中被硬换行切坏的表格、段落、路径和工具调用输出。附带 53 项自动校验套件（文件无关，能捕捉 over-/under-merge 回归）。
+
+**使用场景：**
+- 用户的 Claude Code 导出文件被固定列宽换行搞坏了表格、路径或工具输出
+- 用户提到"修复导出""修复对话""让导出可读"
+- 用户有匹配 `YYYY-MM-DD-HHMMSS-*.txt` 的文件
+- 用户想在分享或归档前后处理 `/export` 的输出
+
+**主要功能：**
+- 确定性的 Python 脚本（`fix-claude-export.py`），带 `--stats` 模式查看前后指标
+- 53 项自动校验器（`validate-claude-export-fix.py`），捕捉回归
+- evals 目录带真实 fixture 案例
+- 零外部依赖，只需 `uv` 和 Python 3.8+
+
+**示例用法：**
+```bash
+# 修复并显示统计
+uv run claude-export-txt-better/scripts/fix-claude-export.py broken.txt --stats
+
+# 自定义输出路径
+uv run claude-export-txt-better/scripts/fix-claude-export.py broken.txt -o fixed.txt
+
+# 校验修复结果
+uv run claude-export-txt-better/scripts/validate-claude-export-fix.py broken.txt fixed.txt
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [claude-export-txt-better/SKILL.md](./claude-export-txt-better/SKILL.md) 和打包在内的 `evals/` fixture。
+
+**要求**：Python 3.8+、`uv` 包管理器。
+
+---
+
+### 46. **douban-skill** - 豆瓣收藏导出与同步
+
+通过逆向的 Frodo API 导出和同步豆瓣书影音游戏收藏到本地 CSV 文件。全量导出覆盖所有历史，RSS 增量同步保持每日更新。无需登录、无需 cookies、无需浏览器——只要一个用户 ID 就能跑通。
+
+**使用场景：**
+- 用户想备份自己的豆瓣读书/观影/听歌/游戏历史
+- 用户提到 豆瓣、douban、读书记录、观影记录、书影音
+- 用户需要增量同步最近的豆瓣动态
+- 用户想要 Excel 兼容的 CSV 输出（UTF-8 BOM）
+
+**主要功能：**
+- 全量导出全部 4 类（书/影/音/游）通过 Frodo API
+- RSS 增量同步每日更新（每个 feed 最近约 10 条）
+- 预检查用户 ID 有效性（错误 ID 立刻失败）
+- UTF-8 BOM CSV 输出，Excel 兼容，跨平台
+- 内置故障日志，记录 7 种被测试过的抓取方案以及每种为什么失败（豆瓣的 PoW 挑战封锁所有网页抓取——只有 Frodo API 可行）
+- `.gitleaks.toml` allowlist 处理公开的 Android APK 凭据
+
+**示例用法：**
+```bash
+# 全量导出用户收藏
+uv run douban-skill/scripts/douban-frodo-export.py <douban-user-id>
+
+# RSS 增量同步（每类最近 10 条左右）
+uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [douban-skill/SKILL.md](./douban-skill/SKILL.md) 和 [douban-skill/references/troubleshooting.md](./douban-skill/references/troubleshooting.md) 查看所有被拒方案的完整故障日志。
+
+**要求**：Python 3.8+、`uv` 包管理器。无需登录或 cookies。
+
+---
+
+### 47. **terraform-skill** - Terraform 实操陷阱
+
+来自真实 Terraform 部署的失败模式——每一条都对应一次真实事故。组织为*确切报错 → 根本原因 → 复制粘贴修复*。覆盖 provisioner 时序竞争、SSH 连接冲突、多环境隔离、DNS 记录重复、数据卷权限、数据库 bootstrap 缺口、快照跨环境污染、Cloudflare 凭据格式错误、Caddyfile/compose 里的硬编码域名，以及 init-data-only-on-first-boot 陷阱。
+
+**使用场景：**
+- 写 `null_resource` provisioner 或 `remote-exec` SSH 到新实例
+- 做多环境（prod/staging/dev）Terraform + 共享模块
+- 调试 `terraform apply` 后一直 Restarting/unhealthy 的容器
+- 遇到 remote-exec 的 "docker: not found"、local-exec 的 rsync connection drops、或 TLS 证书错误
+- 重跑时遇到 drift 或 provisioner 失败
+- 配置 Caddy/网关资源和 Cloudflare 凭据
+
+**主要功能：**
+- 每个陷阱都有可复制粘贴的 `.hcl` 片段，不是抽象建议
+- 覆盖 cloud-init、Docker、file provisioner、DNS、TLS、快照、跨环境污染
+- 每个模式都标了确切症状，方便 grep 快速定位
+
+**示例用法：**
+```bash
+# 在 Terraform 工作中自然触发这个 skill
+"我的 null_resource provisioner apply 后报 'docker: not found'"
+"我的 rsync local-exec 报 'connection unexpectedly closed'"
+"帮我写一个多环境 Terraform setup，避免快照跨环境污染"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [terraform-skill/SKILL.md](./terraform-skill/SKILL.md) 和打包在内的 `references/` 查看详细修复模式。
+
+**要求**：无（只需要 Terraform 相关知识；无运行时依赖）。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -2065,6 +2184,15 @@ claude plugin install ima-copilot@daymade-skills
 ### 腾讯 IMA 知识库工作流
 使用 **ima-copilot** 把官方腾讯 IMA skill 一键装到 Claude Code / Codex / OpenClaw 三个平台，引导配置 API 凭据，在用户授权下检测与修复上游已知问题，并在所有 IMA 知识库上跑带优先级置顶的个人化扇出搜索。因为整个架构是包装层而不是 fork，上游升级永远不会和你的修复冲突——每一次修复都是运行时指令，不是 shipped patch。特别适合同时使用多个 coding agent 的 IMA 重度用户，或遇到过 "Skipped loading skill(s) due to invalid SKILL.md" 告警的人。
 
+### Claude Code 导出后处理
+使用 **claude-export-txt-better** 在归档或分享前清理 `/export` 的输出。默认导出格式在固定列宽硬换行，表格、路径、工具调用块一打开就散架。这个 skill 重建原始结构，并用 53 项自动校验立刻抓到回归。
+
+### 个人数据备份（豆瓣）
+使用 **douban-skill** 把豆瓣书影音历史备份到 CSV。豆瓣没有官方导出——2018 年公共 API 就关停了，所有网页抓取都被 PoW 挑战卡住。这个 skill 用官方 Android app 同一套 Frodo API，不需要登录也不需要 cookies。内置 7 个被拒方案的完整故障日志，省掉你几个小时的弯路。
+
+### Terraform 与 IaC 故障排查
+使用 **terraform-skill** 当 `terraform apply` 在 provisioner 步骤失败、新实例遇到 "docker: not found"、或多环境 setup 意外共享快照时。Skill 里每一条都是*确切报错 → 根本原因 → 复制粘贴修复*三元组，来自真实事故。特别适合曾经被 cloud-init 的时序竞争、local-exec 里 rsync 连接断开、或者 Caddyfile 里硬编码域名搞掉一个周末的人。
+
 ## 📚 文档
 
 每个技能包括：
@@ -2116,6 +2244,9 @@ claude plugin install ima-copilot@daymade-skills
 - **continue-claude-work**：参见 `continue-claude-work/SKILL.md` 了解本地会话产物恢复、漂移检查与续做流程
 - **scrapling-skill**：参见 `scrapling-skill/SKILL.md` 了解 CLI 工作流，参见 `scrapling-skill/references/troubleshooting.md` 了解已验证的 Scrapling 故障模式
 - **ima-copilot**：参见 `ima-copilot/SKILL.md` 了解包装层架构与路由规则，参见 `ima-copilot/references/installation_flow.md` 了解安装流程细节，参见 `ima-copilot/references/known_issues.md` 了解已知问题清单与修复命令，参见 `ima-copilot/references/search_best_practices.md` 了解扇出搜索策略与 100 条截断处理
+- **claude-export-txt-better**：参见 `claude-export-txt-better/SKILL.md` 了解工作流，参见 `claude-export-txt-better/scripts/fix-claude-export.py` 了解重建算法，参见 `claude-export-txt-better/evals/` 查看真实回归 fixture
+- **douban-skill**：参见 `douban-skill/SKILL.md` 了解导出工作流，参见 `douban-skill/references/troubleshooting.md` 查看 7 种被测抓取方案及失败原因的完整日志
+- **terraform-skill**：参见 `terraform-skill/SKILL.md` 查看按确切报错 → 根本原因 → 复制粘贴修复组织的实操陷阱完整目录
 
 ## 🛠️ 系统要求
 
@@ -2223,4 +2354,4 @@ claude plugin install skill-name@daymade-skills
 
 **使用 skill-creator 技能为 Claude Code 精心打造 ❤️**
 
-最后更新：2026-04-11 | 市场版本 1.45.1
+最后更新：2026-04-11 | 市场版本 1.46.0
