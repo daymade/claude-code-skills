@@ -106,14 +106,16 @@ def scrape_with_playwright(url: str, screenshot_path: str = None) -> dict:
                         || document.querySelector('#publish-time')?.innerText
                         || '';
 
-                    // 提取图片和段落
+                    // 提取图片、视频和段落
                     const images = [];
+                    const videos = []; // 新增：视频提取
                     const paragraphs = [];
                     let currentParagraphIndex = 0;
 
-                    const allElements = contentEl.querySelectorAll('p, section, img');
+                    const allElements = contentEl.querySelectorAll('p, section, img, video, mpvideosrc');
                     allElements.forEach((el) => {
-                        if (el.tagName.toLowerCase() === 'img') {
+                        const tagName = el.tagName.toLowerCase();
+                        if (tagName === 'img') {
                             // 吸取精华：支持 data-backsrc，过滤 op_res
                             const realSrc = el.getAttribute('data-src') ||
                                             el.getAttribute('data-backsrc') ||
@@ -143,6 +145,22 @@ def scrape_with_playwright(url: str, screenshot_path: str = None) -> dict:
                                     isContentImage: width > 200 || height > 200
                                 });
                             }
+                        } else if (tagName === 'video' || tagName === 'mpvideosrc') {
+                            // 新增：视频提取
+                            const videoData = {
+                                index: videos.length,
+                                src: el.getAttribute('data-src') || el.src || '',
+                                poster: el.getAttribute('data-poster') || el.poster || '',
+                                duration: el.getAttribute('data-duration') || ''
+                            };
+                            const parent = el.parentElement;
+                            if (parent) {
+                                const titleEl = parent.querySelector('.video_title, .video-title');
+                                if (titleEl) videoData.title = titleEl.innerText?.trim();
+                            }
+                            if (videoData.src || videoData.poster) {
+                                videos.push(videoData);
+                            }
                         } else {
                             const text = el.innerText?.trim();
                             if (text && text.length > 5) {
@@ -163,6 +181,7 @@ def scrape_with_playwright(url: str, screenshot_path: str = None) -> dict:
                         content: contentEl.innerText,
                         paragraphs: paragraphs,
                         images: images,
+                        videos: videos,  // 新增：视频列表
                         html: contentEl.innerHTML,
                         imageParagraphMap: images
                             .filter(img => img.paragraphIndex >= 0)

@@ -438,6 +438,17 @@ class StrategyRouter:
                         'alt': alt
                     })
 
+            # 提取视频（新增）
+            videos = []
+            for video in content_div.find_all(['video', 'mpvideosrc']):
+                video_data = {
+                    'src': video.get('data-src') or video.get('src', ''),
+                    'poster': video.get('data-poster') or video.get('poster', ''),
+                    'duration': video.get('data-duration', ''),
+                }
+                if video_data['src'] or video_data['poster']:
+                    videos.append(video_data)
+
             # 吸取 camofox 精华：过滤噪音文本
             content_text = content_div.get_text(separator='\n', strip=True)
             lines = content_text.split('\n')
@@ -471,6 +482,7 @@ class StrategyRouter:
                     'publish_time': publish_time,
                     'content': content_text,
                     'images': images,
+                    'videos': videos,  # 新增：视频提取
                     'html': str(content_div),
                     'og_meta': og_meta,
                 }
@@ -559,6 +571,17 @@ class StrategyRouter:
                         'alt': alt
                     })
 
+            # 提取视频（新增）
+            videos = []
+            for video in content_div.find_all(['video', 'mpvideosrc']):
+                video_data = {
+                    'src': video.get('data-src') or video.get('src', ''),
+                    'poster': video.get('data-poster') or video.get('poster', ''),
+                    'duration': video.get('data-duration', ''),
+                }
+                if video_data['src'] or video_data['poster']:
+                    videos.append(video_data)
+
             # 吸取 camofox 精华：过滤噪音文本
             content_text = content_div.get_text(separator='\n', strip=True)
             lines = content_text.split('\n')
@@ -590,6 +613,7 @@ class StrategyRouter:
                     'publish_time': publish_time,
                     'content': content_text,
                     'images': images,
+                    'videos': videos,  # 新增：视频提取
                     'html': str(content_div),
                     'og_meta': og_meta,
                 }
