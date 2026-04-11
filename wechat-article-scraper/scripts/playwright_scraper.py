@@ -41,7 +41,12 @@ def _extract_og_meta(page) -> dict:
     }''')
 
 
-def scrape_with_playwright(url: str, screenshot_path: str = None) -> dict:
+def scrape_with_playwright(
+    url: str,
+    screenshot_path: str = None,
+    auth_account: str = None,
+    auth_storage_dir: str = './data/auth'
+) -> dict:
     """
     使用 Playwright 抓取微信文章
 
@@ -51,18 +56,34 @@ def scrape_with_playwright(url: str, screenshot_path: str = None) -> dict:
     - 图片段落关联
     - 装饰性图片过滤
     - 页面截图（可选）
+    - 登录态抓取互动数据（可选）
 
     Args:
         url: 微信文章 URL
         screenshot_path: 截图保存路径（可选）
+        auth_account: 微信登录账号标识（可选，用于抓取阅读/点赞数）
+        auth_storage_dir: 登录态存储目录
     """
     # 验证 URL
     if not _validate_url(url):
         return {'error': f'不支持的 URL: 必须是微信文章链接'}
 
     browser = None
+    auth_manager = None
+    session = None
+
     try:
         from playwright.sync_api import sync_playwright
+        from wechat_auth import WeChatAuthManager, WeChatSession
+
+        # 初始化认证管理器
+        if auth_account:
+            auth_manager = WeChatAuthManager(auth_storage_dir)
+            session = auth_manager.load_session(auth_account)
+            if session:
+                logger.info(f"使用登录态: {auth_account}")
+            else:
+                logger.warning(f"未找到登录态: {auth_account}")
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -70,7 +91,35 @@ def scrape_with_playwright(url: str, screenshot_path: str = None) -> dict:
                 context = browser.new_context(
                     user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
                 )
+
+                # 应用登录态
+                if session and session.cookies:
+                    context.add_cookies(session.cookies)
+                    logger.info(f"已应用 {len(session.cookies)} 个 cookies")
+
                 page = context.new_page()
+
+                # 设置 localStorage 和 sessionStorage（登录态的一部分）
+                if session:
+                    if session.local_storage or session.session_storage:
+                        page.goto('about:blank')
+                        if session.local_storage:
+                            for key, value in session.local_storage.items():
+                                try:
+                                    page.evaluate(f'''
+                                        () => {{ localStorage.setItem("{key}", {json.dumps(value)}); }}
+                                    ''')
+                                except:
+                                    pass
+                        if session.session_storage:
+                            for key, value in session.session_storage.items():
+                                try:
+                                    page.evaluate(f'''
+                                        () => {{ sessionStorage.setItem("{key}", {json.dumps(value)}); }}
+                                    ''')
+                                except:
+                                    pass
+                        logger.info("已应用 localStorage/sessionStorage")
 
                 # 导航到文章
                 page.goto(url, wait_until='networkidle', timeout=30000)
@@ -183,24 +232,82 @@ def scrape_with_playwright(url: str, screenshot_path: str = None) -> dict:
                         }
                     });
 
-                    // 提取互动数据
+                    // 提取互动数据（登录后可见）
                     const engagement = {};
                     try {
-                        const readCountEl = document.querySelector('#js_read_num3') ||
-                                            document.querySelector('#readNum') ||
-                                            document.querySelector('.read-num');
-                        if (readCountEl) engagement.readCount = readCountEl.textContent?.trim();
+                        // 阅读数 - 多种选择器尝试
+                        const readSelectors = [
+                            '#js_read_num3', '#readNum', '.read-num',
+                            '#read_num', '.read_num', '[data-read-num]'
+                        ];
+                        for (const sel of readSelectors) {
+                            const el = document.querySelector(sel);
+                            if (el && el.textContent) {
+                                engagement.readCount = el.textContent.trim();
+                                break;
+                            }
+                        }
 
-                        const likeCountEl = document.querySelector('#js_like_num') ||
-                                            document.querySelector('#likeNum') ||
-                                            document.querySelector('.like-num');
-                        if (likeCountEl) engagement.likeCount = likeCountEl.textContent?.trim();
+                        // 点赞数/在看数
+                        const likeSelectors = [
+                            '#js_like_num', '#likeNum', '.like-num',
+                            '#like_num', '.like_num', '[data-like-num]'
+                        ];
+                        for (const sel of likeSelectors) {
+                            const el = document.querySelector(sel);
+                            if (el && el.textContent) {
+                                engagement.likeCount = el.textContent.trim();
+                                break;
+                            }
+                        }
 
-                        const watchCountEl = document.querySelector('#js_watched_num') ||
-                                             document.querySelector('.watched-num');
-                        if (watchCountEl) engagement.watchCount = watchCountEl.textContent?.trim();
+                        // 在看数（微信特有）
+                        const watchSelectors = [
+                            '#js_watched_num', '.watched-num', '#watched_num',
+                            '.watched_num', '[data-watched-num]'
+                        ];
+                        for (const sel of watchSelectors) {
+                            const el = document.querySelector(sel);
+                            if (el && el.textContent) {
+                                engagement.watchCount = el.textContent.trim();
+                                break;
+                            }
+                        }
+
+                        // 评论数
+                        const commentSelectors = [
+                            '#js_comment_num', '.comment-num', '#comment_num',
+                            '.js_comment_num', '[data-comment-num]'
+                        ];
+                        for (const sel of commentSelectors) {
+                            const el = document.querySelector(sel);
+                            if (el && el.textContent) {
+                                engagement.commentCount = el.textContent.trim();
+                                break;
+                            }
+                        }
+
+                        // 分享数（某些文章可见）
+                        const shareSelectors = [
+                            '#js_share_num', '.share-num', '[data-share-num]'
+                        ];
+                        for (const sel of shareSelectors) {
+                            const el = document.querySelector(sel);
+                            if (el && el.textContent) {
+                                engagement.shareCount = el.textContent.trim();
+                                break;
+                            }
+                        }
+
+                        // 检查是否有"登录后查看阅读量"提示
+                        const loginPrompt = document.querySelector('.login-tips, .need-login, .login-required');
+                        if (loginPrompt) {
+                            engagement._loginRequired = true;
+                        }
+
                     } catch (e) {
                         // 互动数据提取失败不影响主流程
+                        console.error('互动数据提取失败:', e);
                     }
 
                     return {
@@ -254,25 +361,33 @@ def scrape_with_playwright(url: str, screenshot_path: str = None) -> dict:
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        logger.error('用法: python3 playwright_scraper.py <url> [--screenshot]')
-        sys.exit(1)
+    import argparse
 
-    url = sys.argv[1]
-    screenshot = '--screenshot' in sys.argv
+    parser = argparse.ArgumentParser(description='微信文章 Playwright 抓取')
+    parser.add_argument('url', help='文章 URL')
+    parser.add_argument('--screenshot', action='store_true', help='保存截图')
+    parser.add_argument('--auth', help='使用已保存的登录态账号')
+    parser.add_argument('--auth-dir', default='./data/auth', help='登录态存储目录')
+
+    args = parser.parse_args()
 
     # 生成截图路径
     screenshot_path = None
-    if screenshot:
+    if args.screenshot:
         from datetime import datetime
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         screenshot_path = f'/tmp/wechat_screenshot_{timestamp}.png'
 
-    result = scrape_with_playwright(url, screenshot_path)
+    result = scrape_with_playwright(
+        args.url,
+        screenshot_path=screenshot_path,
+        auth_account=args.auth,
+        auth_storage_dir=args.auth_dir
+    )
 
     if 'error' in result:
         logger.error(result.get('message', result['error']))
         sys.exit(1)
 
-    print(json.dumps(result, ensure_ascii=False))
+    print(json.dumps(result, ensure_ascii=False, indent=2))
     sys.exit(0)
