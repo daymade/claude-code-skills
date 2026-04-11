@@ -987,6 +987,24 @@
           }
         ]
       }
+    },
+    {
+      "name": "nanobananas-api-guide",
+      "description": "Complete guide for NanoBananas.AI API — image generation (5 models), video generation (4 models), pricing, authentication, and code examples in Python/Node.js/cURL.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "api-integration",
+      "keywords": [
+        "api",
+        "image-generation",
+        "video-generation",
+        "ai",
+        "nanobananas"
+      ],
+      "skills": [
+        "./nanobananas-api-guide"
+      ]
     }
   ]
 }
