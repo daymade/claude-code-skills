@@ -318,7 +318,7 @@ def version():
     console.print(Panel.fit(
         "[bold cyan]微信文章抓取助手[/]\n"
         "[dim]WeChat Article Scraper CLI[/]\n\n"
-        "版本: [green]3.20.0[/]\n"
+        "版本: [green]3.21.0[/]\n"
         "策略: [blue]6-level routing[/]\n"
         "作者: [yellow]Claude Code[/]",
         border_style="cyan"

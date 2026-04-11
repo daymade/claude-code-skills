@@ -573,6 +573,81 @@ Chrome/Firefox 浏览器扩展，一键抓取当前微信文章：
 
 ```
 用户请求
+
+### 命令行工具 (CLI)
+
+原生命令行工具，支持单文件可执行程序分发：
+
+```bash
+# 进入 CLI 目录
+cd cli
+
+# 方式一：pip 安装
+pip install -e .
+
+# 方式二：单文件可执行程序（无需 Python 环境）
+./build.sh
+# 输出: dist/w (约 21MB，独立可执行)
+```
+
+**使用方式**:
+
+```bash
+# 抓取单篇文章
+w scrape "https://mp.weixin.qq.com/s/xxxxx"
+
+# 指定格式和策略
+w scrape "https://mp.weixin.qq.com/s/xxxxx" -f json -s adaptive
+
+# 下载图片
+w scrape "https://mp.weixin.qq.com/s/xxxxx" --images -o ./article.md
+
+# 批量抓取
+w batch urls.txt -o ./output --workers 5
+
+# 搜狗搜索
+w search "人工智能" --limit 20 -o results.json
+
+# 监控管理
+w monitor add MzI5NjA0MTIxMA== --interval 3600
+w monitor list
+
+# 配置管理
+w config --show
+w config --edit
+```
+
+**命令列表**:
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `scrape` | 抓取单篇文章 | `w scrape <url>` |
+| `batch` | 批量抓取 | `w batch urls.txt` |
+| `search` | 搜狗搜索 | `w search <keyword>` |
+| `monitor` | 监控管理 | `w monitor add <biz_id>` |
+| `config` | 配置管理 | `w config --show` |
+| `version` | 版本信息 | `w version` |
+
+**构建单文件可执行程序**:
+
+```bash
+cd cli
+
+# 一键构建
+./build.sh
+
+# 或手动构建
+uv venv
+source .venv/bin/activate
+uv pip install pyinstaller typer rich ...
+pyinstaller w.spec --clean
+
+# 输出: dist/w (macOS/Linux/Windows)
+# 约 21MB，无需 Python 环境，下载即用
+```
+
+**竞品对比**: **没有任何竞品提供原生 CLI 工具**，竞品仅提供 Python 脚本。
+
     │
     ├─ 指定策略？
     │  ├─ 是 → 优先使用该策略

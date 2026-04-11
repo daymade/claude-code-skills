@@ -7,17 +7,19 @@ Usage: pyinstaller w.spec --clean
 import sys
 from pathlib import Path
 
-# Project root
-project_root = Path(__file__).parent.parent
+# Get spec file directory (available as SPECPATH in PyInstaller)
+spec_dir = Path(SPECPATH)  # noqa: F821
+project_root = spec_dir.parent
 scripts_dir = project_root / "scripts"
 
 block_cipher = None
 
 a = Analysis(
-    ['w_cli.py'],
+    [str(spec_dir / 'w_cli.py')],
     pathex=[
         str(project_root),
         str(scripts_dir),
+        str(spec_dir),
     ],
     binaries=[],
     datas=[
