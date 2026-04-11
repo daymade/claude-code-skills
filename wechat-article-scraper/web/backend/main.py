@@ -300,6 +300,75 @@ async def scrape_article(request: ScrapeRequest):
             status_code=400, detail=result.get("error", "抓取失败"))
 
 
+# RSS Feeds
+
+@app.get("/api/rss/{feed_name}")
+async def get_rss_feed(
+    feed_name: str,
+    author: Optional[str] = None,
+    category: Optional[str] = None,
+    limit: int = 50
+):
+    """获取 RSS Feed"""
+    try:
+        sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+        from rss_generator import RSSGenerator
+
+        db_path = Path(__file__).parent.parent / "wechat_articles.db"
+        base_url = "http://localhost:8000"
+
+        generator = RSSGenerator(str(db_path), base_url)
+
+        # 构建标题
+        title = "微信公众号文章"
+        if author:
+            title = f"{author} - 微信公众号文章"
+        elif category:
+            title = f"{category} - 微信公众号文章"
+
+        feed_path = generator.generate_feed(
+            feed_name=feed_name,
+            title=title,
+            author=author,
+            category=category,
+            limit=limit,
+            full_text=True
+        )
+
+        # 读取并返回 XML
+        xml_content = Path(feed_path).read_text(encoding='utf-8')
+        from fastapi.responses import Response
+        return Response(
+            content=xml_content,
+            media_type="application/rss+xml; charset=utf-8"
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"生成 RSS 失败: {str(e)}")
+
+
+@app.get("/api/rss")
+async def list_rss_feeds():
+    """列出所有可用的 RSS Feeds"""
+    try:
+        feed_dir = Path(__file__).parent.parent / "feeds"
+        feeds = []
+
+        if feed_dir.exists():
+            for f in feed_dir.glob("*.xml"):
+                feeds.append({
+                    "name": f.stem,
+                    "url": f"/api/rss/{f.stem}",
+                    "size": f.stat().st_size,
+                    "updated": datetime.fromtimestamp(f.stat().st_mtime).isoformat()
+                })
+
+        return {"success": True, "data": feeds}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # WebSocket for real-time updates
 
 

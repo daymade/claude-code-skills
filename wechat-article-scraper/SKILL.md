@@ -3,7 +3,7 @@ name: wechat-article-scraper
 description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（HTTP/Scrapling/Playwright/Chrome DevTools）、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai] [--download-images] [--format markdown|json|html|pdf]
 metadata:
-  version: "3.16.0"
+  version: "3.17.0"
   openclaw:
     emoji: "📰"
     requires:
@@ -249,6 +249,138 @@ cd web/frontend && npm run dev
 - **前端**: React 18 + TypeScript + Vite + Tailwind CSS + TanStack Query + Recharts
 - **后端**: FastAPI + SQLite + WebSocket
 
+## 高级功能
+
+### 评论采集
+
+采集微信公众号文章评论（需文章开启评论功能）：
+
+```bash
+# 采集单篇文章的评论
+python3 scripts/comments.py "https://mp.weixin.qq.com/s/xxxxx"
+
+# 保存为 JSON
+python3 scripts/comments.py "https://mp.weixin.qq.com/s/xxxxx" --format json --output comments.json
+
+# 只显示热评
+python3 scripts/comments.py "https://mp.weixin.qq.com/s/xxxxx" --top 10
+```
+
+**竞品对比**: wcplusPro 等工具很少支持评论采集，这是我们独有的功能。
+
+### RSS Feed 生成
+
+为抓取的文章生成 RSS 订阅源，支持 RSS 阅读器订阅：
+
+```bash
+# 生成主 RSS feed（包含所有文章）
+python3 scripts/rss_generator.py --db wechat_articles.db
+
+# 生成特定作者的 RSS
+python3 scripts/rss_generator.py --author "差评" --name "pingwest-feed"
+
+# 生成特定分类的 RSS
+python3 scripts/rss_generator.py --category "科技" --name "tech-feed"
+
+# 为所有作者生成单独的 feed
+python3 scripts/rss_generator.py --all-authors
+
+# 为所有分类生成单独的 feed
+python3 scripts/rss_generator.py --all-categories
+
+# 输出摘要而非全文
+python3 scripts/rss_generator.py --summary --limit 100
+```
+
+**Web API**:
+```
+GET /api/rss/wechat-articles          # 获取主 RSS feed
+GET /api/rss/wechat-articles?author=xxx   # 按作者筛选
+GET /api/rss/wechat-articles?category=xxx # 按分类筛选
+GET /api/rss                          # 列出所有可用 feeds
+```
+
+**竞品对比**: 只有极少数竞品支持 RSS 导出，且功能简陋。
+
+### MCP 服务器
+
+作为 MCP (Model Context Protocol) 服务器运行，供 Claude Desktop 等客户端调用：
+
+```bash
+# 启动 MCP 服务器
+python3 scripts/mcp_server.py
+
+# 配置 Claude Desktop config.json:
+{
+  "mcpServers": {
+    "wechat-scraper": {
+      "command": "python3",
+      "args": ["/path/to/scripts/mcp_server.py"]
+    }
+  }
+}
+```
+
+**提供工具**:
+- `read_wechat_article`: 读取微信文章内容
+- `search_wechat_articles`: 搜索微信公众号文章
+- `search_wechat_accounts`: 搜索公众号账号
+
+**竞品对比**: 这是**独有的 MCP 集成**，没有任何竞品支持。
+
+### 公众号监控订阅
+
+订阅公众号，自动监控新文章发布：
+
+```bash
+# 添加订阅
+python3 scripts/monitor.py add "差评" --wechat-id "chaping321"
+
+# 列出所有订阅
+python3 scripts/monitor.py list
+
+# 手动检查更新
+python3 scripts/monitor.py check
+
+# 生成 RSS feed
+python3 scripts/monitor.py rss
+
+# 删除订阅
+python3 scripts/monitor.py remove "差评"
+```
+
+**自动化** (添加到 crontab):
+```bash
+# 每 30 分钟检查一次
+*/30 * * * * cd /path/to/wechat-article-scraper && python3 scripts/monitor.py check --notify
+```
+
+**竞品对比**: wcplusPro 等工具不提供监控订阅功能。
+
+### 内容质量评分
+
+自动评估抓取结果的质量：
+
+```python
+from quality import ContentValidator
+
+validator = ContentValidator()
+score = validator.validate(article_data)
+
+print(f"总分: {score.total_score}")  # 0-100
+print(f"等级: {score.grade}")        # excellent/good/fair/poor/invalid
+print(f"问题: {score.issues}")
+print(f"警告: {score.warnings}")
+```
+
+**评分维度**:
+- 标题分 (0-25): 长度、完整性
+- 内容分 (0-50): 长度、噪声比例、重复内容
+- 元数据分 (0-15): 作者、时间、链接
+- 图片分 (0-10): 数量、有效性
+
+**竞品对比**: 没有任何竞品提供自动质量评分。
+
 ## 策略详解
 
 ### 策略对比
@@ -380,6 +512,12 @@ wechat-article-scraper/
 │   ├── classifier.py          # 文章自动分类（10类）
 │   ├── storage.py             # SQLite 持久化存储（增量更新+全文搜索+统计分析）
 │   ├── queue.py               # 批量任务队列（断点续传+失败重试+并发控制）
+│   ├── comments.py            # 评论采集（热评、回复、点赞数）
+│   ├── rss_generator.py       # RSS Feed 生成器（支持全文/摘要）
+│   ├── mcp_server.py          # MCP 服务器（Claude Desktop 集成）
+│   ├── monitor.py             # 公众号监控订阅（自动检测新文章）
+│   ├── quality.py             # 内容质量评分系统
+│   ├── cache.py               # 缓存系统（提高性能）
 │   ├── extract.js             # Chrome DevTools 提取脚本（OG备选+段落关联）
 │   └── playwright_scraper.py  # Playwright 抓取
 ├── web/                        # Web 管理界面
@@ -525,7 +663,15 @@ echo "完成: 共抓取 $count 篇文章"
 
 ## 版本历史
 
-### v3.2.0 (当前)
+### v3.3.0 (当前)
+- ✨ **新增**: RSS Feed 生成器
+  - 为抓取的文章生成 RSS 2.0 订阅源
+  - 支持按作者、分类筛选生成独立 feed
+  - 支持全文输出或摘要输出
+  - Web API 集成：`GET /api/rss/wechat-articles`
+  - 竞品几乎不支持 RSS 导出
+
+### v3.2.0
 - ✨ **新增**: 现代化 Web 管理界面
   - React 18 + TypeScript + Tailwind CSS 前端
   - FastAPI + SQLite + WebSocket 后端
@@ -667,6 +813,11 @@ echo "完成: 共抓取 $count 篇文章"
 | **全文搜索** | ✅ FTS5 | ❌ | **领先** |
 | **任务队列** | ✅ 暂停/恢复/停止 | ❌ | **领先** |
 | **自动分类** | ✅ 10 类 | ❌ | **领先** |
+| **评论采集** | ✅ 热评/回复/点赞 | ❌ | **领先** |
+| **RSS 生成** | ✅ 全文/摘要/多 feed | ❌ | **领先** |
+| **MCP 服务器** | ✅ Claude Desktop 集成 | ❌ | **独有** |
+| **监控订阅** | ✅ 自动检测新文章 | ❌ | **领先** |
+| **质量评分** | ✅ 多维度自动评分 | ❌ | **独有** |
 
 **核心差异化**：
 1. **唯一支持 6 级策略路由的方案**（fast → adaptive → stable → reliable → zero_dep → jina_ai）
@@ -691,7 +842,12 @@ echo "完成: 共抓取 $count 篇文章"
 20. **唯一支持数据持久化的方案** (增量更新 + 变更检测)
 21. **唯一支持可视化任务队列的方案** (暂停/恢复/停止控制)
 22. **唯一支持文章自动分类的方案** (10 类别智能分类)
+23. **唯一支持评论采集的方案** (热评、回复、点赞数)
+24. **唯一支持 RSS Feed 生成的方案** (全文/摘要/多 feed)
+25. **唯一支持 MCP 服务器的方案** (Claude Desktop 原生集成)
+26. **唯一支持公众号监控订阅的方案** (自动检测新文章)
+27. **唯一支持内容质量评分的方案** (多维度自动评分)
 
 ---
 
-*本文档由 wechat-article-scraper v3.2.0 生成*
+*本文档由 wechat-article-scraper v3.3.0 生成*
