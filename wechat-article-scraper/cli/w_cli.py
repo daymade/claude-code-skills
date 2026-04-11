@@ -444,29 +444,180 @@ def config(
 
 @app.command("monitor")
 def monitor(
-    action: str = typer.Argument(..., help="操作: add/list/remove"),
-    biz_id: Optional[str] = typer.Argument(None, help="公众号 biz ID"),
+    action: str = typer.Argument(..., help="操作: add/list/remove/check/watch/stats"),
+    name: Optional[str] = typer.Argument(None, help="公众号名称或标识"),
     interval: int = typer.Option(3600, "--interval", "-i", help="检查间隔(秒)"),
 ):
-    """管理公众号监控订阅"""
+    """管理公众号监控订阅 (v1.0 基础版)"""
+    from monitor import SubscriptionManager
+
+    manager = SubscriptionManager()
+
     if action == "list":
-        console.print("[dim]监控列表功能开发中...[/]")
+        subs = manager.list_subscriptions()
+        if not subs:
+            console.print("[yellow]暂无订阅[/]")
+            return
+
+        table = Table(title="公众号监控订阅", box=box.ROUNDED)
+        table.add_column("公众号", style="cyan")
+        table.add_column("微信号", style="dim")
+        table.add_column("最后检查", style="yellow")
+        table.add_column("最新文章", style="green", max_width=30)
+
+        for s in subs:
+            table.add_row(
+                s.account_name,
+                s.wechat_id or "-",
+                s.last_check[:10] if s.last_check else "从未",
+                (s.last_article_title or "-")[:30]
+            )
+        console.print(table)
 
     elif action == "add":
-        if not biz_id:
-            console.print("[red]请提供公众号 biz ID[/]")
+        if not name:
+            console.print("[red]请提供公众号名称[/]")
             raise typer.Exit(1)
-        console.print(f"[green]添加监控: {biz_id}, 间隔: {interval}秒[/]")
+        if manager.add_subscription(name):
+            console.print(f"[green]✓ 已添加订阅: {name}[/]")
+        else:
+            console.print(f"[yellow]已存在订阅: {name}[/]")
 
     elif action == "remove":
-        if not biz_id:
-            console.print("[red]请提供公众号 biz ID[/]")
+        if not name:
+            console.print("[red]请提供公众号名称[/]")
             raise typer.Exit(1)
-        console.print(f"[green]移除监控: {biz_id}[/]")
+        if manager.remove_subscription(name):
+            console.print(f"[green]✓ 已移除订阅: {name}[/]")
+        else:
+            console.print(f"[yellow]未找到订阅: {name}[/]")
+
+    elif action == "check":
+        console.print("[blue]正在检查更新...[/]")
+        new_articles = manager.check_updates()
+        if new_articles:
+            console.print(f"[green]发现 {len(new_articles)} 篇新文章:[/]")
+            for a in new_articles:
+                console.print(f"  • [{a['account_name']}] {a['title'][:40]}")
+        else:
+            console.print("[dim]暂无新文章[/]")
+
+    elif action == "watch":
+        console.print(Panel.fit(
+            f"[bold blue]持续监控模式[/]\n"
+            f"间隔: [green]{interval}[/] 秒\n"
+            "按 Ctrl+C 停止",
+            border_style="blue"
+        ))
+        import time
+        try:
+            while True:
+                now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                console.print(f"[{now}] 检查更新...", end=" ")
+                new_articles = manager.check_updates()
+                if new_articles:
+                    console.print(f"[green]发现 {len(new_articles)} 篇[/]")
+                    for a in new_articles:
+                        console.print(f"  • [{a['account_name']}] {a['title'][:40]}")
+                else:
+                    console.print("[dim]无更新[/]")
+                time.sleep(interval)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]监控已停止[/]")
+
+    elif action == "stats":
+        subs = manager.list_subscriptions()
+        console.print(Panel.fit(
+            f"订阅数: [cyan]{len(subs)}[/]\n"
+            f"数据目录: [dim]{manager.data_dir}[/]",
+            title="监控统计",
+            border_style="blue"
+        ))
 
     else:
         console.print(f"[red]未知操作: {action}[/]")
-        console.print("[dim]可用操作: add, list, remove[/]")
+        console.print("[dim]可用操作: add, list, remove, check, watch, stats[/]")
+
+
+@app.command("smart-monitor")
+def smart_monitor(
+    action: str = typer.Argument(..., help="操作: process/stats/keywords/flush-batch"),
+    keyword: Optional[str] = typer.Argument(None, help="关键词（用于 keyword-add/remove）"),
+):
+    """智能监控与告警系统 v2.0 - 高级监控功能"""
+    from smart_monitor import SmartMonitor, Priority
+
+    monitor = SmartMonitor()
+
+    if action == "stats":
+        stats = monitor.get_stats()
+        console.print(Panel.fit(
+            f"[bold cyan]智能监控 v2.0 统计[/]\n\n"
+            f"文章指纹库: [green]{stats['fingerprints_count']}[/] 条\n"
+            f"待批处理: [yellow]{stats['pending_batch_count']}[/] 篇\n"
+            f"关键词规则: [blue]{stats['keyword_rules_count']}[/] 个\n\n"
+            f"[dim]功能开关:[/]\n"
+            f"  智能去重: {'[green]✓[/]' if stats['config']['dedup_enabled'] else '[red]✗[/]'}\n"
+            f"  智能批处理: {'[green]✓[/]' if stats['config']['batch_enabled'] else '[red]✗[/]'}\n"
+            f"  静默时段: {'[green]✓[/]' if stats['config']['quiet_hours_enabled'] else '[red]✗[/]'}\n"
+            f"  速率限制: {'[green]✓[/]' if stats['config']['rate_limit_enabled'] else '[red]✗[/]'}",
+            title="Smart Monitor v2.0",
+            border_style="cyan"
+        ))
+
+    elif action == "keywords":
+        rules = monitor.list_keyword_rules()
+        if not rules:
+            console.print("[yellow]暂无关键词规则[/]")
+            console.print("[dim]使用 'w smart-monitor keyword-add <关键词>' 添加[/]")
+        else:
+            table = Table(title="高优先级关键词规则", box=box.ROUNDED)
+            table.add_column("关键词", style="cyan")
+            table.add_column("权重", style="yellow")
+            table.add_column("优先级提升", style="green")
+
+            for r in rules:
+                table.add_row(r.keyword, str(r.weight), r.priority_boost)
+            console.print(table)
+
+    elif action == "keyword-add":
+        if not keyword:
+            console.print("[red]请提供关键词[/]")
+            raise typer.Exit(1)
+        monitor.add_keyword_rule(keyword, weight=1.0, priority_boost="high")
+        console.print(f"[green]✓ 已添加关键词规则: {keyword}[/]")
+
+    elif action == "keyword-remove":
+        if not keyword:
+            console.print("[red]请提供关键词[/]")
+            raise typer.Exit(1)
+        monitor.remove_keyword_rule(keyword)
+        console.print(f"[green]✓ 已移除关键词规则: {keyword}[/]")
+
+    elif action == "flush-batch":
+        summary = monitor.check_and_flush_batch()
+        if summary:
+            console.print(Panel.fit(
+                f"[bold green]批量摘要已发送[/]\n\n"
+                f"文章数: [cyan]{summary['total_articles']}[/] 篇\n"
+                f"高优先级: [yellow]{summary['high_priority_count']}[/] 篇\n"
+                f"涉及账号: [blue]{', '.join(summary['accounts'][:5])}[/]\n"
+                f"通知渠道: [green]{summary.get('channels_sent', 0)}[/] 个",
+                title="批量摘要",
+                border_style="green"
+            ))
+
+            if summary['articles']:
+                console.print("\n[dim]文章列表:[/]")
+                for a in summary['articles'][:5]:
+                    emoji = "🔥" if a['priority'] == 'high' else "•"
+                    console.print(f"  {emoji} [{a['account']}] {a['title'][:40]}")
+        else:
+            console.print("[dim]暂无可发送的批量摘要[/]")
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+        console.print("[dim]可用操作: stats, keywords, keyword-add, keyword-remove, flush-batch[/]")
 
 
 @app.command("history")
@@ -651,7 +802,7 @@ def version():
     console.print(Panel.fit(
         "[bold cyan]微信文章抓取助手[/]\n"
         "[dim]WeChat Article Scraper CLI[/]\n\n"
-        "版本: [green]3.21.0[/]\n"
+        "版本: [green]3.22.0[/]\n"
         "策略: [blue]6-level routing[/]\n"
         "作者: [yellow]Claude Code[/]",
         border_style="cyan"
