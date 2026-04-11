@@ -1124,7 +1124,7 @@
     },
     {
       "name": "wechat-article-scraper",
-      "version": "3.4.0",
+      "version": "3.5.0",
       "description": "World-class WeChat article extraction with 6-level strategy routing (fast→adaptive→stable→reliable→zero_dep→jina_ai), OG metadata fallback, image-paragraph association, lazy loading handling, local image download, and Sogou search discovery. Supports Markdown/JSON/HTML/PDF export. Activate when users need to scrape WeChat public account articles, batch archive content, or extract article metadata and images.",
       "source": "./",
       "strict": false,
