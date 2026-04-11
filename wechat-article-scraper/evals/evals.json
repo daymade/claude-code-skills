@@ -1,0 +1,48 @@
+{
+  "skill_name": "wechat-article-scraper",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "single-article-extraction",
+      "prompt": "抓取这篇微信公众号文章：https://mp.weixin.qq.com/s/zSlEte2L5Jlp_lvP_o7T1Q，保存为 Markdown 文件",
+      "expected_output": "包含完整正文、图片 URL、标题、作者、发布时间的 Markdown 文件",
+      "files": [],
+      "assertions": [
+        {
+          "name": "title_extracted",
+          "description": "文章标题被正确提取",
+          "check": "file_contains(title)"
+        },
+        {
+          "name": "author_extracted",
+          "description": "公众号名称被正确提取",
+          "check": "file_contains(author)"
+        },
+        {
+          "name": "images_are_real_urls",
+          "description": "图片 URL 是真实地址而非占位符",
+          "check": "no_placeholder_images"
+        },
+        {
+          "name": "content_length",
+          "description": "正文内容大于 1000 字",
+          "check": "content_length > 1000"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "login-error-handling",
+      "prompt": "抓取这篇文章（未登录状态下）：https://mp.weixin.qq.com/s/zSlEte2L5Jlp_lvP_o7T1Q",
+      "expected_output": "清晰的错误提示，告知用户需要先登录微信",
+      "files": [],
+      "assertions": [
+        {
+          "name": "login_prompt_shown",
+          "description": "提示用户需要先在 Chrome 中登录微信",
+          "check": "contains(login instruction)"
+        }
+      ]
+    }
+  ]
+}
