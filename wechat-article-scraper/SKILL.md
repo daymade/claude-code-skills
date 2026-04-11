@@ -3,7 +3,7 @@ name: wechat-article-scraper
 description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（HTTP/Scrapling/Playwright/Chrome DevTools）、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai] [--download-images] [--format markdown|json|html|pdf]
 metadata:
-  version: "2.9.0"
+  version: "2.9.1"
   openclaw:
     emoji: "📰"
     requires:
@@ -330,7 +330,7 @@ wechat-article-scraper/
 ### 无法抓取的情况
 - 文章被删除或违规下架
 - 需要付费阅读的内容（只能抓取预览部分）
-- 文章包含视频（只能提取封面，视频需单独处理）
+- 视频只能提取 URL 和封面，无法下载视频文件
 
 ### 图片处理限制
 - 图片 URL 有时效性（默认 30 天），长期保存建议开启 `--download-images`
@@ -439,7 +439,14 @@ echo "完成: 共抓取 $count 篇文章"
 
 ## 版本历史
 
-### v2.9.0 (当前)
+### v2.9.1 (当前)
+- ✨ **新增**: 视频提取功能
+  - 自动识别 `<video>` 标签和 `mpvideosrc` 标签
+  - 提取视频 URL、封面图、时长、标题
+  - 视频按原文顺序插入 Markdown 内容
+  - 导出独立的视频列表章节
+
+### v2.9.0
 - ✨ **新增**: 吸取 wechat-article-camofox 精华
   - 详细的 STOP_MARKERS 噪音标记（40+ 条规则）
   - SKIP_SUBSTRINGS 跳过子串列表
@@ -542,7 +549,8 @@ echo "完成: 共抓取 $count 篇文章"
 13. **唯一支持正文日期正则提取发布时间的方案** (吸取 camofox 精华)
 14. **唯一支持图片按原文顺序插入正文的方案** (吸取 camofox 精华)
 15. **唯一支持表格结构保留的方案** (markdownify 转换 table/thead/tbody/tr/th/td)
+16. **唯一支持视频提取的方案** (提取视频 URL、封面、时长、标题)
 
 ---
 
-*本文档由 wechat-article-scraper v2.9.0 生成*
+*本文档由 wechat-article-scraper v2.9.1 生成*

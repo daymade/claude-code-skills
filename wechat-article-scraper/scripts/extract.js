@@ -148,6 +148,7 @@ async function extractWechatArticle(options = {}) {
 
   // 5. 提取内容 - 吸取 camofox 精华：图片按原文顺序插入
   const images = [];
+  const videos = []; // 新增：视频提取
   const paragraphs = [];
   const contentBlocks = []; // 按原文顺序的内容块
 
@@ -173,6 +174,35 @@ async function extractWechatArticle(options = {}) {
 
     if (node.nodeType === Node.ELEMENT_NODE) {
       const tagName = node.tagName.toLowerCase();
+
+      // 处理视频 - 新增功能
+      if (tagName === 'video' || tagName === 'mpvideosrc') {
+        const videoData = {
+          index: videos.length,
+          src: node.getAttribute('data-src') || node.src || '',
+          poster: node.getAttribute('data-poster') || node.poster || '',
+          duration: node.getAttribute('data-duration') || '',
+        };
+
+        // 尝试从父元素获取更多视频信息
+        const parent = node.parentElement;
+        if (parent) {
+          const titleEl = parent.querySelector('.video_title, .video-title');
+          if (titleEl) {
+            videoData.title = titleEl.textContent?.trim();
+          }
+        }
+
+        if (videoData.src || videoData.poster) {
+          videos.push(videoData);
+          contentBlocks.push({
+            type: 'video',
+            videoIndex: videoData.index,
+            ...videoData
+          });
+        }
+        return paragraphIndex;
+      }
 
       // 处理图片
       if (tagName === 'img') {
@@ -289,6 +319,11 @@ async function extractWechatArticle(options = {}) {
     } else if (block.type === 'image') {
       markdownContent += `![${block.alt || 'image'}](${block.src})\n\n`;
       prevType = 'image';
+    } else if (block.type === 'video') {
+      // 新增：视频 Markdown 表示
+      const videoTitle = block.title ? `[${block.title}]` : '[视频]';
+      markdownContent += `${videoTitle}(${block.src || block.poster})\n\n`;
+      prevType = 'video';
     }
   }
 
@@ -300,15 +335,17 @@ async function extractWechatArticle(options = {}) {
       publishTime,
       url: window.location.href,
       extractedAt: new Date().toISOString(),
-      extractor: 'wechat-article-scraper-v2.8'
+      extractor: 'wechat-article-scraper-v2.9'
     },
     content: {
       textLength: contentEl.innerText.length,
       paragraphCount: paragraphs.length,
       imageCount: images.length,
+      videoCount: videos.length, // 新增：视频数量
       text: contentEl.innerText,
       paragraphs,
       images,
+      videos, // 新增：视频列表
       contentBlocks, // 按原文顺序的内容块
       markdownContent, // 预生成的 Markdown
       html: contentEl.innerHTML

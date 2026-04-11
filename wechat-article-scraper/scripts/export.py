@@ -137,6 +137,19 @@ class Exporter:
                 lines.append(f"{i}. ![{alt}]({src})")
             lines.append("")
 
+        # 视频列表 - 新增功能
+        if data.get('videos'):
+            lines.append("## 视频列表")
+            lines.append("")
+            for i, video in enumerate(data['videos'], 1):
+                src = video.get('src', '')
+                poster = video.get('poster', '')
+                title = video.get('title', '')
+                duration = video.get('duration', '')
+                info = f"{title} ({duration})" if title and duration else (title or '视频')
+                lines.append(f"{i}. [{info}]({src or poster})")
+            lines.append("")
+
         # 页脚
         lines.append(f"*本文档由 wechat-article-scraper 于 {datetime.now().strftime('%Y-%m-%d %H:%M')} 生成*")
 
