@@ -80,7 +80,8 @@ def scrape_article(
     screenshot: bool = False,
     proxy: Optional[str] = None,
     use_cache: bool = True,
-    cache_ttl_days: int = 30
+    cache_ttl_days: int = 30,
+    include_sidecar: bool = False
 ) -> Dict[str, Any]:
     """
     抓取单篇文章
@@ -96,6 +97,7 @@ def scrape_article(
         screenshot: 是否保存页面截图（仅 Playwright 策略）
         use_cache: 是否使用缓存
         cache_ttl_days: 缓存过期时间（天）
+        include_sidecar: 是否生成元数据 sidecar 文件
 
     Returns:
         dict: 抓取结果，包含 content_status 状态码
@@ -235,7 +237,7 @@ def scrape_article(
         safe_title = f"wechat_article_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     try:
-        output_path = exporter.save(data, format=output_format, filename=safe_title)
+        output_path = exporter.save(data, format=output_format, filename=safe_title, include_sidecar=include_sidecar)
 
         # 缓存成功抓取的数据
         if use_cache and cache:
@@ -315,6 +317,7 @@ def batch_scrape(
         proxy: HTTP 代理地址
         use_cache: 是否使用缓存
         cache_ttl_days: 缓存过期时间（天）
+        include_sidecar: 是否生成元数据 sidecar 文件
 
     Returns:
         dict: 批量抓取结果统计
@@ -346,7 +349,8 @@ def batch_scrape(
             output_dir=output_dir,
             proxy=proxy,
             use_cache=use_cache,
-            cache_ttl_days=cache_ttl_days
+            cache_ttl_days=cache_ttl_days,
+            include_sidecar=args.sidecar
         )
 
         results['articles'].append({
@@ -479,6 +483,11 @@ Content Status:
         help='缓存过期时间（天，默认: 30）'
     )
 
+    parser.add_argument(
+        '--sidecar',
+        action='store_true',
+        help='同时生成元数据 sidecar 文件 (.meta.json)'
+    )
     args = parser.parse_args()
 
     # 批量模式
@@ -529,7 +538,8 @@ Content Status:
         max_retries=args.max_retries,
         proxy=args.proxy,
         use_cache=not args.no_cache,
-        cache_ttl_days=args.cache_ttl
+        cache_ttl_days=args.cache_ttl,
+        include_sidecar=args.sidecar
     )
 
     # 输出结果

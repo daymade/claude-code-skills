@@ -9,7 +9,7 @@
 - HTML (带图片)
 
 作者: Claude Code
-版本: 2.1.0
+版本: 2.2.0
 """
 
 import sys
@@ -25,6 +25,50 @@ from datetime import datetime
 
 # 配置日志
 logger = logging.getLogger('wechat-exporter')
+
+
+def _estimate_reading_time(text: str, wpm: int = 300) -> int:
+    """
+    估算阅读时间（分钟）
+
+    Args:
+        text: 文本内容
+        wpm: 每分钟阅读字数（中文默认 300 字/分钟）
+
+    Returns:
+        int: 预计阅读分钟数（至少 1 分钟）
+    """
+    if not text:
+        return 1
+    # 中文字符计数
+    chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', text))
+    # 英文单词计数（近似）
+    english_words = len(re.findall(r'[a-zA-Z]+', text))
+    # 总字数 = 中文字符 + 英文单词
+    total_words = chinese_chars + english_words
+    minutes = max(1, round(total_words / wpm))
+    return minutes
+
+
+def _calculate_content_hash(data: Dict[str, Any]) -> str:
+    """
+    计算内容哈希，用于变更检测
+
+    基于标题、作者、正文内容计算 SHA256 哈希
+    """
+    import hashlib
+
+    # 提取关键字段
+    title = data.get('title', '')
+    author = data.get('author', '')
+    content = data.get('content', '') or data.get('text', '')
+    publish_time = data.get('publishTime', '')
+
+    # 组合关键内容
+    key_content = f"{title}|{author}|{publish_time}|{content[:5000]}"
+
+    # 计算 SHA256
+    return hashlib.sha256(key_content.encode('utf-8')).hexdigest()[:32]
 
 
 def _clean_text(text: str) -> str:
@@ -93,6 +137,10 @@ class Exporter:
         source_url = data.get('source_url', '')
         description = _clean_text(data.get('description', ''))
 
+        # 计算阅读时间
+        content_for_reading = data.get('content', '') or data.get('text', '')
+        reading_time = _estimate_reading_time(content_for_reading)
+
         # YAML Front Matter
         if include_meta:
             lines.append("---")
@@ -103,6 +151,7 @@ class Exporter:
             if source_url:
                 lines.append(f"source_url: {source_url}")
             lines.append(f"exported_at: {datetime.now().isoformat()}")
+            lines.append(f"reading_time: {reading_time} 分钟")
             if description:
                 lines.append(f"description: {description}")
             lines.append("---")
@@ -116,6 +165,8 @@ class Exporter:
         lines.append("**作者**: {}".format(author))
         if publish_time:
             lines.append("**发布时间**: {}".format(publish_time))
+        # 新增：阅读时间
+        lines.append("**阅读时间**: 约 {} 分钟".format(reading_time))
         # 新增：互动数据
         engagement = data.get('engagement', {})
         if engagement:
@@ -227,6 +278,90 @@ class Exporter:
         # 简单策略：在内容末尾添加图片
         # 更复杂的策略需要解析 HTML 结构
         return content
+
+    def export_meta_sidecar(self, data: Dict[str, Any]) -> str:
+        """
+        导出元数据 sidecar 文件 (.meta.json)
+
+        包含丰富的文章元数据，便于后续分析和索引：
+        - 文章基本信息（标题、作者、发布时间）
+        - 内容统计（字数、阅读时间）
+        - 媒体资源统计（图片数、视频数）
+        - 内容指纹（用于变更检测）
+        - 抓取信息（策略、时间、状态）
+        - 互动数据（阅读量、点赞数等）
+
+        Args:
+            data: 文章数据字典
+
+        Returns:
+            str: JSON 格式的元数据内容
+        """
+        content = data.get('content', '') or data.get('text', '')
+
+        # 统计中文字符
+        chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', content))
+        english_words = len(re.findall(r'[a-zA-Z]+', content))
+
+        # 计算阅读时间
+        reading_time = _estimate_reading_time(content)
+
+        # 计算内容哈希
+        content_hash = _calculate_content_hash(data)
+
+        # 图片统计
+        images = data.get('images', [])
+        image_stats = {
+            'total': len(images),
+            'with_alt': sum(1 for img in images if img.get('alt')),
+            'local_paths': [img.get('local_path') for img in images if img.get('local_path')]
+        }
+
+        # 视频统计
+        videos = data.get('videos', [])
+        video_stats = {
+            'total': len(videos),
+            'durations': [v.get('duration') for v in videos if v.get('duration')]
+        }
+
+        # 互动数据
+        engagement = data.get('engagement', {})
+
+        meta = {
+            'article': {
+                'title': data.get('title', ''),
+                'author': data.get('author', ''),
+                'publish_time': data.get('publishTime', ''),
+                'source_url': data.get('source_url', ''),
+                'description': data.get('description', ''),
+            },
+            'content': {
+                'hash': content_hash,
+                'chinese_chars': chinese_chars,
+                'english_words': english_words,
+                'total_words': chinese_chars + english_words,
+                'reading_time_minutes': reading_time,
+                'paragraphs': len(data.get('paragraphs', [])),
+            },
+            'media': {
+                'images': image_stats,
+                'videos': video_stats,
+            },
+            'engagement': engagement if engagement else None,
+            'extraction': {
+                'strategy': data.get('strategy', 'unknown'),
+                'status': data.get('content_status', 'unknown'),
+                'quality_score': data.get('quality_score'),
+                'extracted_at': datetime.now().isoformat(),
+                'version': '3.5.0',
+            },
+            'export': {
+                'format': 'meta_sidecar',
+                'exported_at': datetime.now().isoformat(),
+            }
+        }
+
+        return json.dumps(meta, ensure_ascii=False, indent=2)
 
     def export_pdf(self, data: Dict[str, Any], output_file: str) -> str:
         """
@@ -479,7 +614,8 @@ class Exporter:
         data: Dict[str, Any],
         format: str,
         filename: Optional[str] = None,
-        converter: str = 'default'
+        converter: str = 'default',
+        include_sidecar: bool = False
     ) -> str:
         """
         保存文章到文件
@@ -489,6 +625,7 @@ class Exporter:
             format: 格式 (markdown, pdf, json, html)
             filename: 文件名（不含扩展名）
             converter: Markdown 转换器选择（'default'/'markdownify'/'html2text'）
+            include_sidecar: 是否同时生成元数据 sidecar 文件 (.meta.json)
 
         Returns:
             str: 保存的文件路径
@@ -526,6 +663,13 @@ class Exporter:
             content = method(data)
             output_path.write_text(content, encoding='utf-8')
 
+        # 生成元数据 sidecar 文件
+        if include_sidecar:
+            sidecar_path = self.output_dir / f"{filename}.meta.json"
+            sidecar_content = self.export_meta_sidecar(data)
+            sidecar_path.write_text(sidecar_content, encoding='utf-8')
+            logger.info(f"元数据 sidecar 已保存: {sidecar_path}")
+
         return str(output_path)
 
 
@@ -552,6 +696,16 @@ def main():
         default='.',
         help='输出目录'
     )
+    parser.add_argument(
+        '--sidecar',
+        action='store_true',
+        help='同时生成元数据 sidecar 文件 (.meta.json)'
+    )
+    parser.add_argument(
+        '--meta-only',
+        action='store_true',
+        help='仅生成元数据 sidecar 文件'
+    )
 
     args = parser.parse_args()
 
@@ -567,12 +721,26 @@ def main():
     exporter = Exporter(output_dir=args.dir)
 
     try:
-        output_path = exporter.save(
-            data,
-            format=args.format,
-            filename=args.output
-        )
-        print(f"导出成功: {output_path}")
+        if args.meta_only:
+            # 仅生成元数据 sidecar
+            if not args.output:
+                title = data.get('title', 'untitled')
+                args.output = re.sub(r'[<>"/\\|?*]', '', title)[:50]
+            sidecar_path = exporter.output_dir / f"{args.output}.meta.json"
+            sidecar_content = exporter.export_meta_sidecar(data)
+            sidecar_path.write_text(sidecar_content, encoding='utf-8')
+            print(f"元数据 sidecar 导出成功: {sidecar_path}")
+        else:
+            output_path = exporter.save(
+                data,
+                format=args.format,
+                filename=args.output,
+                include_sidecar=args.sidecar
+            )
+            print(f"导出成功: {output_path}")
+            if args.sidecar:
+                sidecar_path = exporter.output_dir / f"{Path(output_path).stem}.meta.json"
+                print(f"元数据 sidecar: {sidecar_path}")
     except Exception as e:
         print(f"导出失败: {e}", file=sys.stderr)
         sys.exit(1)
