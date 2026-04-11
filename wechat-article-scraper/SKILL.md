@@ -29,6 +29,18 @@ metadata:
 # 导出为 Excel (多 sheet 工作簿：文章列表、互动数据、分类统计、媒体资源)
 /wechat-article-scraper "https://mp.weixin.qq.com/s/xxxxx" --format excel
 
+# 保存文章到 SQLite 数据库（自动检测重复和变更）
+python3 scripts/storage.py save article.json
+
+# 查看数据库统计（作者分布、分类分布、WCI 分布）
+python3 scripts/storage.py stats
+
+# 全文搜索文章
+python3 scripts/storage.py search "人工智能"
+
+# 列出某作者的所有文章
+python3 scripts/storage.py list --author "差评" --limit 50
+
 # 搜索公众号文章
 python3 scripts/search.py "人工智能投资" -n 10
 
@@ -310,6 +322,7 @@ wechat-article-scraper/
 │   ├── images.py              # 图片下载（支持段落关联）
 │   ├── search.py              # 搜狗搜索（支持链接解析）
 │   ├── export.py              # 多格式导出（Excel/PDF/HTML/JSON/Markdown，多sheet工作簿）
+│   ├── storage.py             # SQLite 持久化存储（增量更新+全文搜索+统计分析）
 │   ├── extract.js             # Chrome DevTools 提取脚本（OG备选+段落关联）
 │   └── playwright_scraper.py  # Playwright 抓取
 ├── references/
