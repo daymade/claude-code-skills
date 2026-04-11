@@ -7,9 +7,10 @@
 - PDF (带样式)
 - JSON (结构化数据)
 - HTML (带图片)
+- Excel (数据分析，多 sheet 工作簿)
 
 作者: Claude Code
-版本: 2.3.0
+版本: 2.4.0
 """
 
 import sys
@@ -784,6 +785,291 @@ class Exporter:
 
         return html_content
 
+    def export_excel(self, articles: list, output_file: str) -> str:
+        """
+        导出为 Excel (多 sheet 工作簿)
+
+        吸取竞品 wcplusPro 精华：数据分析师需要结构化表格数据
+
+        Sheet 结构:
+        1. 文章列表 - 批量文章的元数据概览
+        2. 互动数据 - 阅读量、点赞数、在看数、WCI 指数
+        3. 分类统计 - 自动分类结果汇总
+        4. 媒体资源 - 图片、视频统计
+        5. 详细数据 - 单篇文章的完整信息（如果只有一篇）
+
+        Args:
+            articles: 文章数据列表，每个元素是文章字典
+            output_file: 输出文件路径
+
+        Returns:
+            str: 输出文件路径
+
+        Raises:
+            ImportError: 如果 openpyxl 未安装
+        """
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            logger.error("导出 Excel 需要安装 openpyxl")
+            logger.error("运行: pip install openpyxl")
+            raise
+
+        # 确保 articles 是列表
+        if isinstance(articles, dict):
+            articles = [articles]
+
+        wb = openpyxl.Workbook()
+
+        # 定义样式
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell_alignment = Alignment(vertical="top", wrap_text=True)
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        def style_header(ws, row_num=1):
+            """为表头行应用样式"""
+            for cell in ws[row_num]:
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = header_alignment
+                cell.border = border
+
+        def auto_column_width(ws):
+            """自动调整列宽"""
+            for column in ws.columns:
+                max_length = 0
+                column_letter = get_column_letter(column[0].column)
+                for cell in column:
+                    try:
+                        if cell.value:
+                            cell_length = len(str(cell.value))
+                            if cell_length > max_length:
+                                max_length = min(cell_length, 50)  # 最大50字符
+                    except:
+                        pass
+                adjusted_width = max(10, min(max_length + 2, 60))
+                ws.column_dimensions[column_letter].width = adjusted_width
+
+        # ==================== Sheet 1: 文章列表 ====================
+        ws1 = wb.active
+        ws1.title = "文章列表"
+
+        headers1 = ["序号", "标题", "作者", "发布时间", "字数", "阅读时间(分)", "图片数", "视频数", "原文链接"]
+        ws1.append(headers1)
+
+        for idx, article in enumerate(articles, 1):
+            content = article.get('content', '') or article.get('text', '')
+            chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', content))
+            english_words = len(re.findall(r'[a-zA-Z]+', content))
+            total_words = chinese_chars + english_words
+            reading_time = _estimate_reading_time(content)
+
+            row = [
+                idx,
+                article.get('title', ''),
+                article.get('author', ''),
+                article.get('publishTime', ''),
+                total_words,
+                reading_time,
+                len(article.get('images', [])),
+                len(article.get('videos', [])),
+                article.get('source_url', '')
+            ]
+            ws1.append(row)
+
+        style_header(ws1)
+        auto_column_width(ws1)
+
+        # ==================== Sheet 2: 互动数据 ====================
+        ws2 = wb.create_sheet("互动数据")
+
+        headers2 = ["序号", "标题", "作者", "阅读量", "点赞数", "在看数", "评论数", "WCI指数", "互动率%", "传播等级"]
+        ws2.append(headers2)
+
+        for idx, article in enumerate(articles, 1):
+            engagement = article.get('engagement', {})
+
+            # 解析互动数据
+            def parse_count(val):
+                if val is None:
+                    return 0
+                if isinstance(val, (int, float)):
+                    return int(val)
+                if isinstance(val, str):
+                    if '万' in val:
+                        try:
+                            return int(float(val.replace('万', '')) * 10000)
+                        except:
+                            return 0
+                    try:
+                        return int(val)
+                    except:
+                        return 0
+                return 0
+
+            read_count = parse_count(engagement.get('readCount'))
+            like_count = parse_count(engagement.get('likeCount'))
+            watch_count = parse_count(engagement.get('watchCount'))
+            comment_count = parse_count(engagement.get('commentCount'))
+
+            # 计算 WCI
+            wci = _calculate_wci(engagement)
+
+            # 计算互动率
+            engagement_rate = 0
+            if read_count > 0:
+                engagement_rate = round(((like_count + watch_count + comment_count) / read_count) * 100, 2)
+
+            # 传播等级
+            if wci:
+                level = "🔥爆款" if wci >= 800 else ("📈热门" if wci >= 500 else ("📊良好" if wci >= 300 else "📉普通"))
+            else:
+                level = "未知"
+
+            row = [
+                idx,
+                article.get('title', ''),
+                article.get('author', ''),
+                read_count if read_count > 0 else "-",
+                like_count if like_count > 0 else "-",
+                watch_count if watch_count > 0 else "-",
+                comment_count if comment_count > 0 else "-",
+                wci if wci else "-",
+                f"{engagement_rate}%" if read_count > 0 else "-",
+                level
+            ]
+            ws2.append(row)
+
+        style_header(ws2)
+        auto_column_width(ws2)
+
+        # ==================== Sheet 3: 分类统计 ====================
+        ws3 = wb.create_sheet("分类统计")
+
+        # 统计分类分布
+        categories = {}
+        for article in articles:
+            cat = article.get('category', '未分类')
+            if isinstance(cat, dict):
+                cat = cat.get('primary_category', '未分类')
+            if cat not in categories:
+                categories[cat] = {'count': 0, 'articles': []}
+            categories[cat]['count'] += 1
+            categories[cat]['articles'].append(article.get('title', ''))
+
+        headers3 = ["分类", "文章数量", "占比%", "文章列表"]
+        ws3.append(headers3)
+
+        total = len(articles)
+        for cat, data in sorted(categories.items(), key=lambda x: x[1]['count'], reverse=True):
+            percentage = round(data['count'] / total * 100, 2) if total > 0 else 0
+            article_list = "; ".join(data['articles'][:5])
+            if len(data['articles']) > 5:
+                article_list += f"; ...等{data['count'] - 5}篇"
+
+            ws3.append([cat, data['count'], percentage, article_list])
+
+        style_header(ws3)
+        auto_column_width(ws3)
+
+        # ==================== Sheet 4: 媒体资源 ====================
+        ws4 = wb.create_sheet("媒体资源")
+
+        headers4 = ["序号", "标题", "图片数量", "视频数量", "图片URL列表", "视频信息"]
+        ws4.append(headers4)
+
+        for idx, article in enumerate(articles, 1):
+            images = article.get('images', [])
+            videos = article.get('videos', [])
+
+            # 图片 URL 列表（前5个）
+            image_urls = [img.get('src', '') for img in images[:5]]
+            image_str = "; ".join(image_urls)
+            if len(images) > 5:
+                image_str += f"; ...等{len(images) - 5}张"
+
+            # 视频信息
+            video_info = []
+            for v in videos[:3]:
+                title = v.get('title', '')
+                duration = v.get('duration', '')
+                info = f"{title}({duration})" if title and duration else (title or '未命名')
+                video_info.append(info)
+            video_str = "; ".join(video_info)
+            if len(videos) > 3:
+                video_str += f"; ...等{len(videos) - 3}个"
+
+            ws4.append([
+                idx,
+                article.get('title', ''),
+                len(images),
+                len(videos),
+                image_str,
+                video_str
+            ])
+
+        style_header(ws4)
+        auto_column_width(ws4)
+
+        # ==================== Sheet 5: 详细数据（仅单篇文章） ====================
+        if len(articles) == 1:
+            ws5 = wb.create_sheet("详细数据")
+            article = articles[0]
+            content = article.get('content', '') or article.get('text', '')
+
+            # 基本信息
+            ws5.append(["字段", "值"])
+            ws5.append(["标题", article.get('title', '')])
+            ws5.append(["作者", article.get('author', '')])
+            ws5.append(["发布时间", article.get('publishTime', '')])
+            ws5.append(["原文链接", article.get('source_url', '')])
+            ws5.append([])
+
+            # 内容统计
+            chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', content))
+            english_words = len(re.findall(r'[a-zA-Z]+', content))
+            ws5.append(["中文字符数", chinese_chars])
+            ws5.append(["英文单词数", english_words])
+            ws5.append(["总字数", chinese_chars + english_words])
+            ws5.append(["预计阅读时间(分钟)", _estimate_reading_time(content)])
+            ws5.append(["段落数", len(article.get('paragraphs', []))])
+            ws5.append([])
+
+            # 互动数据
+            engagement = article.get('engagement', {})
+            ws5.append(["阅读量", engagement.get('readCount', '-')])
+            ws5.append(["点赞数", engagement.get('likeCount', '-')])
+            ws5.append(["在看数", engagement.get('watchCount', '-')])
+            ws5.append(["评论数", engagement.get('commentCount', '-')])
+            wci = _calculate_wci(engagement)
+            ws5.append(["WCI传播指数", wci if wci else '-'])
+            ws5.append([])
+
+            # 正文内容（限制长度）
+            ws5.append(["正文内容", content[:3000] + "..." if len(content) > 3000 else content])
+
+            # 样式
+            ws5['A1'].font = Font(bold=True)
+            ws5['A1'].fill = header_fill
+            ws5['B1'].font = Font(bold=True)
+            ws5['B1'].fill = header_fill
+            ws5.column_dimensions['A'].width = 20
+            ws5.column_dimensions['B'].width = 80
+
+        # 保存文件
+        wb.save(output_file)
+        logger.info(f"Excel 导出成功: {output_file}")
+        return output_file
+
     def save(
         self,
         data: Dict[str, Any],
@@ -818,6 +1104,8 @@ class Exporter:
             'json': (self.export_json, 'json'),
             'html': (self.export_html, 'html'),
             'pdf': (self.export_pdf, 'pdf'),
+            'excel': (self.export_excel, 'xlsx'),
+            'xlsx': (self.export_excel, 'xlsx'),
         }
 
         if format not in format_methods:
@@ -825,10 +1113,10 @@ class Exporter:
 
         method, ext = format_methods[format]
 
-        # PDF 需要特殊处理
-        if format == 'pdf':
-            output_path = self.output_dir / f"{filename}.pdf"
-            method(data, str(output_path))
+        # Excel 和 PDF 需要特殊处理
+        if format in ('pdf', 'excel', 'xlsx'):
+            output_path = self.output_dir / f"{filename}.{ext}"
+            method(data if format == 'pdf' else ([data] if isinstance(data, dict) else data), str(output_path))
         elif format in ('markdown', 'md'):
             output_path = self.output_dir / f"{filename}.{ext}"
             content = method(data, converter=converter)
@@ -858,7 +1146,7 @@ def main():
     )
     parser.add_argument(
         '-f', '--format',
-        choices=['markdown', 'md', 'json', 'html', 'pdf'],
+        choices=['markdown', 'md', 'json', 'html', 'pdf', 'excel', 'xlsx'],
         default='markdown',
         help='输出格式 (默认: markdown)'
     )

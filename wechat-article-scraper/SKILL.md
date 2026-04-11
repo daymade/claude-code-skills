@@ -26,6 +26,9 @@ metadata:
 # 导出为 PDF
 /wechat-article-scraper "https://mp.weixin.qq.com/s/xxxxx" --format pdf
 
+# 导出为 Excel (多 sheet 工作簿：文章列表、互动数据、分类统计、媒体资源)
+/wechat-article-scraper "https://mp.weixin.qq.com/s/xxxxx" --format excel
+
 # 搜索公众号文章
 python3 scripts/search.py "人工智能投资" -n 10
 
@@ -306,7 +309,7 @@ wechat-article-scraper/
 │   ├── router.py              # 策略路由器（4级策略+OG备选）
 │   ├── images.py              # 图片下载（支持段落关联）
 │   ├── search.py              # 搜狗搜索（支持链接解析）
-│   ├── export.py              # 多格式导出（PDF/HTML/JSON/Markdown）
+│   ├── export.py              # 多格式导出（Excel/PDF/HTML/JSON/Markdown，多sheet工作簿）
 │   ├── extract.js             # Chrome DevTools 提取脚本（OG备选+段落关联）
 │   └── playwright_scraper.py  # Playwright 抓取
 ├── references/
@@ -530,7 +533,7 @@ echo "完成: 共抓取 $count 篇文章"
 - ✨ 智能策略路由器，自动选择最佳抓取策略
 - ✨ 图片下载模块，支持并行下载和本地存储
 - ✨ 搜狗搜索集成，通过关键词发现文章
-- ✨ 多格式导出（Markdown/JSON/HTML/PDF）
+- ✨ 多格式导出（Excel/Markdown/JSON/HTML/PDF，多sheet工作簿）
 - ✨ 装饰性图片智能过滤
 
 ### v1.0.0
