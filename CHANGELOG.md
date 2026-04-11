@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **doc-to-markdown**: Added 31 unit tests (`test_convert.py`)
 - **doc-to-markdown**: Added 5-tool benchmark report (`references/benchmark-2026-03-22.md`)
 
+## [1.44.0] - 2026-04-11
+
+### Added
+- **skill-creator** v1.7.1 → v1.7.2: Completeness pass for the `workflows/wrapper-skill/` methodology within its scope (zip-archive skill packages distributed via `npx skills add`). A fifth adversarial agent review audited the wrapper-skill workflow docs against the canonical `ima-copilot` implementation and surfaced 13 on-scope lessons that were implicit in the reference code but not elevated to named patterns in the workflow. This release lands all 13.
+  - `patterns.md` install template: replaced the `<download and extract>` placeholder with a concrete defensive block covering `curl --fail` with HTTP-code branching, `wc -c` download-size sanity check rejecting suspiciously small archives before extraction, Node.js ≥18 numeric check (separate from `command -v node`), and a documented zero-agents-detected fallback policy (abort vs silent-skip vs default-to-claude-code, with the session's chosen answer named). Every defensive pattern has an accompanying "Lessons baked into this template" bullet explaining *why* it's there.
+  - `patterns.md` known_issues template: added `**Why upstream probably hasn't fixed it**` as a required field (the field that keeps repair blocks load-bearing across upstream upgrades), added `Strategy skip` as a first-class documented third option (users on tolerant platforms may legitimately not want the repair and naming the skip path explicit prevents the "did I forget?" failure mode), and added detailed notes on the `[ -f ... ] && \` guard rationale, `sed -i.bak ... && command rm -f *.bak` BSD/GNU portability dance, and backup directory naming convention.
+  - `patterns.md` diagnose template: added a new "Detection function return-code contract" subsection spelling out the required return codes for every post-repair state (untouched-good, untouched-broken, not-present, each Strategy-applied state, and the dual-state conflicted code). The dual-state code is the single hardest lesson from the ima-copilot session — a detection function that doesn't recognize it silently passes conflicted installs as healthy.
+  - `patterns.md` diagnose template: added variadic `find_install` rationale explaining that agents whose home-directory layout has not stabilized (like OpenClaw) should be probed against an ordered list of candidate paths, and that designing the helper as variadic from day one avoids a painful refactor when a second candidate path becomes necessary.
+  - `patterns.md` SKILL.md template: added explicit checklist for the description field (literal error strings from the session, tool name in every language the session used, self-disambiguation clause naming the upstream package to prevent wrapper-vs-upstream trigger fighting, symptoms that triggered the original session), plus a reference to the enforced 1024-character cap in `quick_validate.py:184`. Added "when in doubt → diagnose" as a recommended routing table default since diagnose is the only read-only entry point.
+  - `patterns.md` credentials section: added explicit guidance that liveness checks must match on **response-body shape**, not just HTTP status. Many APIs return 200 OK with an error JSON body, and a naive `curl --fail` check will pass a credential that fails the first real operation.
+  - `workflow.md` Step 5: expanded the install-script bullet list with prerequisite-check discipline (curl/unzip/npx loop plus separate Node.js ≥18 parse), download integrity defense in depth (HTTP code branching + size sanity), and the zero-agents fallback policy.
+  - `workflow.md` Step 6: expanded the known_issues schema to include the `Why upstream probably hasn't fixed it` field and the `Strategy skip` branch, and documented the `sed -i.bak` cross-BSD/GNU portability rule alongside the existing `command cp/mv` guidance.
+  - `workflow.md` Step 7: replaced the "returns OK / TRIGGERED / N/A / post-fix-state" shorthand with an explicit enumeration of the return-code contract, and added the variadic `find_install` guidance for agents with unstabilized layouts.
+
+### Changed
+- Updated marketplace version from 1.43.0 to 1.44.0
+
 ## [1.43.0] - 2026-04-11
 
 ### Fixed
