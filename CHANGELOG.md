@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.47.0] - 2026-04-12
+
+### Added
+- **wechat-article-scraper** v2.9.0: World-class WeChat article extraction with 6-level strategy routing (fast→adaptive→stable→reliable→zero_dep→jina_ai), OG metadata fallback, image-paragraph association, lazy loading handling, local image download, and Sogou search discovery. Supports Markdown/JSON/HTML/PDF export. Includes 15 unique/leading features surpassing all competitors.
+
+### Changed
+- Updated marketplace skills count from 47 to 48
+- Updated marketplace version from 1.46.0 to 1.47.0
+
 ### Added
 - **gangtise-copilot** v1.0.0: One-stop installer and companion for the full Gangtise (岗底斯投研) OpenAPI skill suite — 19 official skills covering data retrieval (OHLC 行情, 财务, 估值, 研报, 首席观点, 会议纪要, 调研纪要), research workflows (个股研究 L1-L4, 观点 PK 对抗性分析, 主题研究, 事件复盘, 公告摘要), and utility (股票池管理, 公开网页搜索). Distilled from a 5-round discovery session that reverse-engineered the complete Gangtise skill catalog — the Gangtise OBS bucket has LIST permission disabled, so the full 19-skill inventory is not discoverable from any public manifest. Ships with 4 preset install modes (full / workshop / minimal / custom), zero-config multi-agent distribution to Claude Code / OpenClaw / Codex via symlink from a single canonical install location, shared XDG credential file at `~/.config/gangtise/authorization.json` that rotates all 19 skills in one edit, and a read-only diagnostic script with scoped liveness checks (`auth` scope + `rag` scope). Ships: `scripts/install_gangtise.sh` (408 lines), `scripts/configure_auth.sh` (310 lines), `scripts/diagnose.sh` (320 lines), and 5 reference docs covering installation flow, credentials setup, the complete 19-skill registry with per-script capability matrix, known ecosystem traps (parallel product lines, bundle-only hidden skills, double-Bearer token bug, admin endpoint 1009 errors), and workshop best practices. Target use case: the 2026 Q2 investor Workshop series where students need to install a large skill suite quickly without reverse-engineering the catalog themselves.
 
