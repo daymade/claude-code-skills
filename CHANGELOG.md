@@ -7,12 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **gangtise-copilot** v1.0.0: One-stop installer and companion for the full Gangtise (岗底斯投研) OpenAPI skill suite — 19 official skills covering data retrieval (OHLC 行情, 财务, 估值, 研报, 首席观点, 会议纪要, 调研纪要), research workflows (个股研究 L1-L4, 观点 PK 对抗性分析, 主题研究, 事件复盘, 公告摘要), and utility (股票池管理, 公开网页搜索). Distilled from a 5-round discovery session that reverse-engineered the complete Gangtise skill catalog — the Gangtise OBS bucket has LIST permission disabled, so the full 19-skill inventory is not discoverable from any public manifest. Ships with 4 preset install modes (full / workshop / minimal / custom), zero-config multi-agent distribution to Claude Code / OpenClaw / Codex via symlink from a single canonical install location, shared XDG credential file at `~/.config/gangtise/authorization.json` that rotates all 19 skills in one edit, and a read-only diagnostic script with scoped liveness checks (`auth` scope + `rag` scope). Ships: `scripts/install_gangtise.sh` (408 lines), `scripts/configure_auth.sh` (310 lines), `scripts/diagnose.sh` (320 lines), and 5 reference docs covering installation flow, credentials setup, the complete 19-skill registry with per-script capability matrix, known ecosystem traps (parallel product lines, bundle-only hidden skills, double-Bearer token bug, admin endpoint 1009 errors), and workshop best practices. Target use case: the 2026 Q2 investor Workshop series where students need to install a large skill suite quickly without reverse-engineering the catalog themselves.
+
 ### Changed
 - **Renamed**: `markdown-tools` → `doc-to-markdown` — clearer name for DOCX/PDF/PPTX → Markdown conversion
 - **doc-to-markdown**: Added 8 DOCX post-processing fixes (grid tables, simple tables, CJK bold spacing, JSON pretty-print, image path flattening, pandoc attribute cleanup, code block detection, bracket fixes)
 - **doc-to-markdown**: Added 31 unit tests (`test_convert.py`)
 - **doc-to-markdown**: Added 5-tool benchmark report (`references/benchmark-2026-03-22.md`)
 - **marketplace-dev** v1.0.0 → v1.1.0: Added evidence intake from Claude Code history, plugin boundary decision guidance, source/cache patterns for single-skill and suite plugins, source+skills resolution validation, and cache footprint testing based on real marketplace debugging sessions.
+- **marketplace-dev** v1.1.0 → v1.2.0: Refined against Anthropic's official skill-authoring best practices. Extracted the inline Node.js resolution check and diff pipeline into `scripts/check_marketplace.sh` — a one-shot validator that runs JSON syntax → `claude plugin validate` → source+skills resolution → reverse sync (disk SKILL.md → manifest) in a single command. Moved the two PostToolUse hook scripts from `scripts/` to `hooks/` for semantic clarity (scripts execute during skill workflow, hooks guard the editor) and updated the plugin manifest's hook paths accordingly. Added tables of contents to `anti_patterns.md` and `cache_and_source_patterns.md` (both >100 lines, per best practices). Corrected Phase 0 subagent history-mining paths to `<session-id>/subagents/agent-*.jsonl`. Documented the auto-activated hook behaviour in a new "Bundled hooks" section.
+
+## [1.46.0] - 2026-04-11
+
+### Added
+- **claude-export-txt-better** v1.0.0: Fixes broken line wrapping in Claude Code exported `.txt` conversation files. Reconstructs tables, paragraphs, paths, and tool calls that were hard-wrapped at fixed column widths. Ships with an automated validation suite of 53 generic, file-agnostic checks. Triggers on export files with broken formatting or when the user mentions "fix export" / "fix conversation" / references a `YYYY-MM-DD-HHMMSS-*.txt` file. Bundled: `scripts/fix-claude-export.py`, `scripts/validate-claude-export-fix.py`, `evals/`.
+- **douban-skill** v1.0.0: Exports and syncs Douban (豆瓣) book / movie / music / game collections to local CSV files via the reverse-engineered Frodo API. Supports full export and RSS incremental sync. No login, no cookies, no browser. Pre-flight user-ID validation and CSV output with UTF-8 BOM (Excel-compatible). Ships with a complete troubleshooting log of 7 tested scraping approaches and why each failed. Bundled: `scripts/douban-frodo-export.py`, `scripts/douban-rss-sync.py`, `references/troubleshooting.md`, `.gitleaks.toml` (allowlisting the public APK credentials).
+- **terraform-skill** v1.0.0: Operational traps for Terraform provisioners, multi-environment isolation, and zero-to-deployment reliability. Every failure pattern documented caused a real incident. Covers provisioner timing races, SSH connection conflicts, DNS record duplication, volume permissions, database bootstrap gaps, snapshot cross-contamination, Cloudflare credential format errors, hardcoded domains in Caddyfiles/compose, and init-data-only-on-first-boot pitfalls. Organised as *exact error → root cause → copy-paste fix*. Bundled: `references/` with detailed remediation patterns.
+
+### Changed
+- Updated marketplace skills count from 44 to 47
+- Updated marketplace version from 1.45.1 to 1.46.0
+- Updated marketplace plugin entries from 47 to 50
+- Updated README.md badges and skill listings (English and Chinese)
+- Updated CLAUDE.md skill count (44 → 47) and plugin entry count (47 → 50)
 
 ## [1.45.1] - 2026-04-11
 
