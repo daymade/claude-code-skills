@@ -981,7 +981,7 @@
       "description": "Convert any Claude Code skills repository into an official plugin marketplace. Creates .claude-plugin/marketplace.json conforming to the Anthropic spec, validates it, tests installation, and creates a PR. Includes anti-patterns from real development experience.",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "marketplace",
