@@ -245,4 +245,3 @@ uv run --with pandas --with matplotlib generate_charts.py
 - Source citation: Add footnote to chart (e.g., "数据来源: IRENA 2024")
 
 ---
-

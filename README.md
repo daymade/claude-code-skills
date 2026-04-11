@@ -7,7 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Skills](https://img.shields.io/badge/skills-44-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.45.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.45.1-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -178,7 +178,7 @@ This suite exposes related skills under one namespace, including:
 /daymade-docs:meeting-minutes-taker
 ```
 
-Single-skill plugins remain available for narrower installs and independent updates.
+Single-skill plugins remain available for narrower installs and independent updates. Documentation skills live under `suites/daymade-docs/`, so both the suite and the individual documentation plugins install from the same canonical source while keeping plugin caches narrow.
 
 **Install Other Skills:**
 ```bash
@@ -971,7 +971,7 @@ uv run --with weasyprint scripts/md_to_pdf.py input.md output.pdf
 
 *Coming soon*
 
-📚 **Documentation**: See [pdf-creator/SKILL.md](./pdf-creator/SKILL.md) for setup and workflow details.
+📚 **Documentation**: See [suites/daymade-docs/pdf-creator/SKILL.md](./suites/daymade-docs/pdf-creator/SKILL.md) for setup and workflow details.
 
 **Requirements**: Python 3.8+, `pandoc` (system install), `weasyprint` (or Chrome as fallback backend)
 
@@ -1487,7 +1487,7 @@ claude plugin install meeting-minutes-taker@daymade-skills
 
 *Coming soon*
 
-📚 **Documentation**: See [meeting-minutes-taker/SKILL.md](./meeting-minutes-taker/SKILL.md) for complete workflow and template guidance.
+📚 **Documentation**: See [suites/daymade-docs/meeting-minutes-taker/SKILL.md](./suites/daymade-docs/meeting-minutes-taker/SKILL.md) for complete workflow and template guidance.
 
 **Requirements**: None
 
@@ -2035,8 +2035,8 @@ Each skill includes:
 ### Quick Links
 
 - **github-ops**: See `github-ops/references/api_reference.md` for API documentation
-- **doc-to-markdown**: See `doc-to-markdown/references/conversion-examples.md` for conversion scenarios
-- **mermaid-tools**: See `mermaid-tools/references/setup_and_troubleshooting.md` for setup guide
+- **doc-to-markdown**: See `suites/daymade-docs/doc-to-markdown/references/conversion-examples.md` for conversion scenarios
+- **mermaid-tools**: See `suites/daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` for setup guide
 - **statusline-generator**: See `statusline-generator/references/color_codes.md` for customization
 - **teams-channel-post-writer**: See `teams-channel-post-writer/references/writing-guidelines.md` for quality standards
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
@@ -2045,7 +2045,7 @@ Each skill includes:
 - **cli-demo-generator**: See `cli-demo-generator/references/vhs_syntax.md` for VHS syntax and `cli-demo-generator/references/best_practices.md` for demo guidelines
 - **cloudflare-troubleshooting**: See `cloudflare-troubleshooting/references/api_overview.md` for API documentation
 - **ui-designer**: See `ui-designer/SKILL.md` for design system extraction workflow
-- **ppt-creator**: See `ppt-creator/references/WORKFLOW.md` for 9-stage creation process and `ppt-creator/references/ORCHESTRATION_OVERVIEW.md` for automation
+- **ppt-creator**: See `suites/daymade-docs/ppt-creator/references/WORKFLOW.md` for 9-stage creation process and `suites/daymade-docs/ppt-creator/references/ORCHESTRATION_OVERVIEW.md` for automation
 - **youtube-downloader**: See `youtube-downloader/SKILL.md` for usage examples and troubleshooting
 - **repomix-safe-mixer**: See `repomix-safe-mixer/references/common_secrets.md` for detected credential patterns
 - **video-comparer**: See `video-comparer/references/video_metrics.md` for quality metrics interpretation and `video-comparer/references/configuration.md` for customization options
@@ -2053,9 +2053,9 @@ Each skill includes:
 - **qa-expert**: See `qa-expert/references/master_qa_prompt.md` for autonomous execution (100x speedup) and `qa-expert/references/google_testing_standards.md` for AAA pattern and OWASP testing
 - **prompt-optimizer**: See `prompt-optimizer/references/ears_syntax.md` for EARS transformation patterns, `prompt-optimizer/references/domain_theories.md` for theory catalog, and `prompt-optimizer/references/examples.md` for complete transformations
 - **claude-code-history-files-finder**: See `claude-code-history-files-finder/references/session_file_format.md` for JSONL structure and `claude-code-history-files-finder/references/workflow_examples.md` for recovery workflows
-- **docs-cleaner**: See `docs-cleaner/SKILL.md` for consolidation workflows
+- **docs-cleaner**: See `suites/daymade-docs/docs-cleaner/SKILL.md` for consolidation workflows
 - **deep-research**: See `deep-research/references/research_report_template.md` for report structure and `deep-research/references/source_quality_rubric.md` for source triage
-- **pdf-creator**: See `pdf-creator/SKILL.md` for PDF conversion and font setup
+- **pdf-creator**: See `suites/daymade-docs/pdf-creator/SKILL.md` for PDF conversion and font setup
 - **claude-md-progressive-disclosurer**: See `claude-md-progressive-disclosurer/SKILL.md` for CLAUDE.md optimization workflow
 - **skills-search**: See `skills-search/SKILL.md` for CCPM CLI commands and registry operations
 - **promptfoo-evaluation**: See `promptfoo-evaluation/references/promptfoo_api.md` for evaluation patterns
@@ -2185,4 +2185,4 @@ If you find these skills useful, please:
 
 **Built with ❤️ using the skill-creator skill for Claude Code**
 
-Last updated: 2026-04-11 | Marketplace version 1.45.0
+Last updated: 2026-04-11 | Marketplace version 1.45.1

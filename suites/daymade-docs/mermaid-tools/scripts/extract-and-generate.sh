@@ -22,7 +22,7 @@ MARKDOWN_FILE="$1"
 OUTPUT_DIR="${2:-$(dirname "$MARKDOWN_FILE")/diagrams}"
 
 echo "=== Enhanced Mermaid Diagram Processor ==="
-echo "Source markdown: $MARKDOWN_FILE" 
+echo "Source markdown: $MARKDOWN_FILE"
 echo "Output directory: $OUTPUT_DIR"
 echo "Environment: WSL2 Ubuntu with Chrome dependencies"
 echo
@@ -81,7 +81,7 @@ echo
 echo "Generating PNG files..."
 cd "$OUTPUT_DIR"
 
-# Default dimensions - can be overridden with environment variables  
+# Default dimensions - can be overridden with environment variables
 DEFAULT_WIDTH="${MERMAID_WIDTH:-1200}"
 DEFAULT_HEIGHT="${MERMAID_HEIGHT:-800}"
 SCALE_FACTOR="${MERMAID_SCALE:-2}"
@@ -104,14 +104,14 @@ for mmd_file in "${mmd_files[@]}"; do
     if [ ! -f "$mmd_file" ]; then
         continue
     fi
-    
+
     # Extract filename without extension
     diagram="${mmd_file%.mmd}"
-    
+
     # Use smart defaults based on diagram content or filename patterns
     width="$DEFAULT_WIDTH"
     height="$DEFAULT_HEIGHT"
-    
+
     # Smart sizing based on filename patterns
     if [[ "$diagram" =~ timeline|gantt ]]; then
         width=$((DEFAULT_WIDTH * 2))  # Wider for timelines
@@ -126,7 +126,7 @@ for mmd_file in "${mmd_files[@]}"; do
         width=$((DEFAULT_WIDTH * 2))  # Wider for workflows and sequences
         height="$DEFAULT_HEIGHT"
     fi
-    
+
     echo "Generating $diagram.png (${width}x${height}, scale: ${SCALE_FACTOR}x)..."
     PUPPETEER_EXECUTABLE_PATH="$CHROME_PATH" mmdc \
         -i "$mmd_file" \
@@ -135,14 +135,14 @@ for mmd_file in "${mmd_files[@]}"; do
         -w "$width" \
         -H "$height" \
         -s "$SCALE_FACTOR"
-    
+
     if [ $? -eq 0 ]; then
         echo "  ✅ Generated successfully"
     else
         echo "  ❌ Generation failed"
         continue
     fi
-    
+
     # Validate PNG
     if test -s "$diagram.png" && file "$diagram.png" | grep -q "PNG image"; then
         size=$(stat -c%s "$diagram.png")

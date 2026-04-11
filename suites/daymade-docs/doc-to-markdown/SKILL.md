@@ -87,15 +87,15 @@ Heavy Mode runs multiple tools in parallel and selects the best segments:
 
 ```bash
 # Extract images with metadata
-uv run --with pymupdf scripts/extract_pdf_images.py document.pdf -o ./assets
+uv run --with pymupdf scripts/extract_pdf_images.py document.pdf -o ./extracted-images
 
 # Generate markdown references file
 uv run --with pymupdf scripts/extract_pdf_images.py document.pdf --markdown refs.md
 ```
 
 Output:
-- Images: `assets/img_page1_1.png`, `assets/img_page2_1.jpg`
-- Metadata: `assets/images_metadata.json` (page, position, dimensions)
+- Images: `extracted-images/img_page1_1.png`, `extracted-images/img_page2_1.jpg`
+- Metadata: `extracted-images/images_metadata.json` (page, position, dimensions)
 
 ## Quality Validation
 
@@ -129,8 +129,8 @@ python scripts/merge_outputs.py output1.md output2.md -o merged.md --verbose
 
 ```bash
 # Windows to WSL conversion
-python scripts/convert_path.py "C:\Users\name\Documents\file.pdf"
-# Output: /mnt/c/Users/name/Documents/file.pdf
+python scripts/convert_path.py "C:\Users\<windows-user>\Documents\file.pdf"
+# Output: /mnt/c/Users/<windows-user>/Documents/file.pdf
 ```
 
 ## Common Issues

@@ -3,10 +3,10 @@
 Convert Windows paths to WSL format.
 
 Usage:
-    python convert_path.py "C:\\Users\\username\\Downloads\\file.doc"
+    python convert_path.py "C:\\Users\\<windows-user>\\Downloads\\file.doc"
 
 Output:
-    /mnt/c/Users/username/Downloads/file.doc
+    /mnt/c/Users/<windows-user>/Downloads/file.doc
 """
 
 import sys
@@ -18,10 +18,10 @@ def convert_windows_to_wsl(windows_path: str) -> str:
     Convert a Windows path to WSL format.
 
     Args:
-        windows_path: Windows path (e.g., "C:\\Users\\username\\file.doc")
+        windows_path: Windows path (e.g., "C:\\Users\\<windows-user>\\file.doc")
 
     Returns:
-        WSL path (e.g., "/mnt/c/Users/username/file.doc")
+        WSL path (e.g., "/mnt/c/Users/<windows-user>/file.doc")
     """
     # Remove quotes if present
     path = windows_path.strip('"').strip("'")
@@ -49,7 +49,7 @@ def convert_windows_to_wsl(windows_path: str) -> str:
 def main():
     if len(sys.argv) < 2:
         print("Usage: python convert_path.py <windows_path>")
-        print('Example: python convert_path.py "C:\\Users\\username\\Downloads\\file.doc"')
+        print('Example: python convert_path.py "C:\\Users\\<windows-user>\\Downloads\\file.doc"')
         sys.exit(1)
 
     windows_path = sys.argv[1]

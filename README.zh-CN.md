@@ -7,7 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Skills](https://img.shields.io/badge/skills-44-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.45.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.45.1-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -178,7 +178,7 @@ claude plugin install daymade-docs@daymade-skills
 /daymade-docs:meeting-minutes-taker
 ```
 
-单技能插件仍然保留，适合更窄的安装范围和独立更新。
+单技能插件仍然保留，适合更窄的安装范围和独立更新。文档技能的 canonical source 位于 `suites/daymade-docs/`，因此套件和单个文档插件都从同一份源安装，同时保持 plugin cache 边界收窄。
 
 **安装其他技能：**
 ```bash
@@ -610,7 +610,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 *即将推出*
 
-📚 **文档**：参见 [ppt-creator/references/WORKFLOW.md](./ppt-creator/references/WORKFLOW.md) 了解 9 阶段创建流程
+📚 **文档**：参见 [suites/daymade-docs/ppt-creator/references/WORKFLOW.md](./suites/daymade-docs/ppt-creator/references/WORKFLOW.md) 了解 9 阶段创建流程
 
 ---
 
@@ -1013,7 +1013,7 @@ uv run --with weasyprint --with markdown scripts/md_to_pdf.py input.md output.pd
 
 *即将推出*
 
-📚 **文档**：参见 [pdf-creator/SKILL.md](./pdf-creator/SKILL.md) 了解设置与工作流。
+📚 **文档**：参见 [suites/daymade-docs/pdf-creator/SKILL.md](./suites/daymade-docs/pdf-creator/SKILL.md) 了解设置与工作流。
 
 **要求**：Python 3.8+，`weasyprint`、`markdown`
 
@@ -1528,7 +1528,7 @@ claude plugin install meeting-minutes-taker@daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [meeting-minutes-taker/SKILL.md](./meeting-minutes-taker/SKILL.md) 了解完整的工作流程和模板指导。
+📚 **文档**：参见 [suites/daymade-docs/meeting-minutes-taker/SKILL.md](./suites/daymade-docs/meeting-minutes-taker/SKILL.md) 了解完整的工作流程和模板指导。
 
 **要求**：无
 
@@ -2076,8 +2076,8 @@ claude plugin install ima-copilot@daymade-skills
 ### 快速链接
 
 - **github-ops**：参见 `github-ops/references/api_reference.md` 了解 API 文档
-- **doc-to-markdown**：参见 `doc-to-markdown/references/conversion-examples.md` 了解转换场景
-- **mermaid-tools**：参见 `mermaid-tools/references/setup_and_troubleshooting.md` 了解设置指南
+- **doc-to-markdown**：参见 `suites/daymade-docs/doc-to-markdown/references/conversion-examples.md` 了解转换场景
+- **mermaid-tools**：参见 `suites/daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` 了解设置指南
 - **statusline-generator**：参见 `statusline-generator/references/color_codes.md` 了解自定义
 - **teams-channel-post-writer**：参见 `teams-channel-post-writer/references/writing-guidelines.md` 了解质量标准
 - **repomix-unmixer**：参见 `repomix-unmixer/references/repomix-format.md` 了解格式规范
@@ -2086,7 +2086,7 @@ claude plugin install ima-copilot@daymade-skills
 - **cli-demo-generator**：参见 `cli-demo-generator/references/vhs_syntax.md` 了解 VHS 语法和 `cli-demo-generator/references/best_practices.md` 了解演示指南
 - **cloudflare-troubleshooting**：参见 `cloudflare-troubleshooting/references/api_overview.md` 了解 API 文档
 - **ui-designer**：参见 `ui-designer/SKILL.md` 了解完整的设计系统提取工作流
-- **ppt-creator**：参见 `ppt-creator/references/WORKFLOW.md` 了解 9 阶段创建流程和 `ppt-creator/references/ORCHESTRATION_OVERVIEW.md` 了解自动化
+- **ppt-creator**：参见 `suites/daymade-docs/ppt-creator/references/WORKFLOW.md` 了解 9 阶段创建流程和 `suites/daymade-docs/ppt-creator/references/ORCHESTRATION_OVERVIEW.md` 了解自动化
 - **youtube-downloader**：参见 `youtube-downloader/SKILL.md` 了解使用示例和故障排除
 - **repomix-safe-mixer**：参见 `repomix-safe-mixer/references/common_secrets.md` 了解检测到的凭据模式
 - **video-comparer**：参见 `video-comparer/references/video_metrics.md` 了解质量指标解释和 `video-comparer/references/configuration.md` 了解自定义选项
@@ -2094,9 +2094,9 @@ claude plugin install ima-copilot@daymade-skills
 - **qa-expert**：参见 `qa-expert/references/master_qa_prompt.md` 了解自主执行（100 倍加速）和 `qa-expert/references/google_testing_standards.md` 了解 AAA 模式和 OWASP 测试
 - **prompt-optimizer**：参见 `prompt-optimizer/references/ears_syntax.md` 了解 EARS 转换模式、`prompt-optimizer/references/domain_theories.md` 了解理论目录和 `prompt-optimizer/references/examples.md` 了解完整转换示例
 - **claude-code-history-files-finder**：参见 `claude-code-history-files-finder/references/session_file_format.md` 了解 JSONL 结构和 `claude-code-history-files-finder/references/workflow_examples.md` 了解恢复工作流
-- **docs-cleaner**：参见 `docs-cleaner/SKILL.md` 了解整合工作流
+- **docs-cleaner**：参见 `suites/daymade-docs/docs-cleaner/SKILL.md` 了解整合工作流
 - **deep-research**：参见 `deep-research/references/research_report_template.md` 了解报告结构，并参见 `deep-research/references/source_quality_rubric.md` 了解来源分级标准
-- **pdf-creator**：参见 `pdf-creator/SKILL.md` 了解 PDF 转换与字体设置
+- **pdf-creator**：参见 `suites/daymade-docs/pdf-creator/SKILL.md` 了解 PDF 转换与字体设置
 - **claude-md-progressive-disclosurer**：参见 `claude-md-progressive-disclosurer/SKILL.md` 了解 CLAUDE.md 优化工作流
 - **skills-search**：参见 `skills-search/SKILL.md` 了解 CCPM CLI 命令和注册表操作
 - **promptfoo-evaluation**：参见 `promptfoo-evaluation/references/promptfoo_api.md` 了解评测模式
@@ -2223,4 +2223,4 @@ claude plugin install skill-name@daymade-skills
 
 **使用 skill-creator 技能为 Claude Code 精心打造 ❤️**
 
-最后更新：2026-04-11 | 市场版本 1.45.0
+最后更新：2026-04-11 | 市场版本 1.45.1

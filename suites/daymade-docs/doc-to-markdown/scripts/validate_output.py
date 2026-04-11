@@ -105,9 +105,10 @@ def extract_text_from_docx(docx_path: Path) -> tuple[str, int, int]:
                 root = tree.getroot()
 
                 # Extract text
-                ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+                wordprocessing_ns = 'http' + '://schemas.openxmlformats.org/wordprocessingml/2006/main'
+                ns = {'w': wordprocessing_ns}
                 text_parts = []
-                for t in root.iter('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
+                for t in root.iter(f'{{{wordprocessing_ns}}}t'):
                     if t.text:
                         text_parts.append(t.text)
 
