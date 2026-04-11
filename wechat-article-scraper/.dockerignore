@@ -10,13 +10,21 @@ __pycache__
 .Python
 *.so
 *.egg
-*.egg-info
-dist
-build
+*.egg-info/
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
 
 # IDE
-.vscode
-.idea
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
@@ -25,31 +33,52 @@ build
 .DS_Store
 Thumbs.db
 
-# Output (will be mounted)
+# Data (will be mounted as volume)
+data/
 output/
-*.md
-*.json
-*.html
-*.pdf
-
-# Cache (will be mounted)
 cache/
 *.db
+*.sqlite
+*.sqlite3
 
-# Test
-.pytest_cache
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
 .coverage
 htmlcov/
+tests/
+test/
 
-# Documentation (not needed in image)
+# Documentation (keep references)
+docs/
 *.md
-!SKILL.md
+!references/
+
+# Node modules (web)
+node_modules/
+web/node_modules/
+web/dist/
+web/.cache/
+
+# Build artifacts
+*.spec
+build/
+dist/
+*.tar.gz
+*.zip
 
 # CI/CD
 .github/
-.claude/
+.gitlab-ci.yml
+.travis.yml
+azure-pipelines.yml
 
-# Temp files
-*.log
-*.tmp
-temp/
+# Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key

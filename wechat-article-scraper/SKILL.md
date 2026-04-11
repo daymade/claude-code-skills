@@ -648,6 +648,62 @@ pyinstaller w.spec --clean
 
 **竞品对比**: **没有任何竞品提供原生 CLI 工具**，竞品仅提供 Python 脚本。
 
+
+### Docker 部署
+
+完整的 Docker 容器化支持，一键启动 Web 服务：
+
+```bash
+# 方式一：docker-compose 一键启动（推荐）
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down
+
+# 方式二：Docker 命令行
+docker build -t wechat-scraper .
+docker run -d -p 8000:8000 -v ./data:/data wechat-scraper
+```
+
+**Docker 运行模式**:
+
+```bash
+# 启动 Web 仪表盘（默认）
+docker run -p 8000:8000 wechat-scraper web
+
+# 运行 CLI 命令
+docker run wechat-scraper scrape "https://mp.weixin.qq.com/s/xxx"
+
+# 批量抓取
+docker run -v ./data:/data wechat-scraper batch /data/urls.txt
+
+# 进入交互式 Shell
+docker run -it wechat-scraper shell
+```
+
+**数据持久化**:
+
+```yaml
+# docker-compose.yml 已配置
+volumes:
+  - ./data:/data          # 数据目录
+  - ./data/articles:/data/articles  # 文章存储
+  - ./data/db:/data/db    # SQLite 数据库
+```
+
+**镜像特性**:
+- 基于 `python:3.12-slim`，多阶段构建
+- 镜像大小: ~150MB
+- 支持 CLI + Web 仪表盘
+- 数据卷持久化
+- 健康检查
+- 自动重启
+
+**竞品对比**: **wechat-spider 支持 Docker**，我们已追上；**wcplusPro 等商业软件无 Docker 支持**，我们领先。
+
     │
     ├─ 指定策略？
     │  ├─ 是 → 优先使用该策略
@@ -1037,6 +1093,7 @@ echo "完成: 共抓取 $count 篇文章"
 - ✨ **新增**: 原生 CLI 工具 (Typer + Rich)
 - ✨ **新增**: 命令: scrape, batch, search, monitor, config
 - ✨ **新增**: PyInstaller 单文件可执行程序构建
+- ✨ **新增**: Docker 完整支持 (多阶段构建，~150MB)
 - ✨ **新增**: Shell 补全支持 (bash/zsh/fish)
 
 ### v3.6.0
@@ -1127,6 +1184,7 @@ echo "完成: 共抓取 $count 篇文章"
 | **Webhook 通知** | ✅ 6 大平台推送 | ❌ | **独有** |
 | **第三方导出** | ✅ Notion/Airtable/Sheets | ❌ | **独有** |
 | **浏览器扩展** | ✅ Chrome/Firefox | ❌ | **独有** |
+| **Docker 部署** | ✅ 完整容器化 | ❌ 仅 wechat-spider | **领先** |
 | **原生 CLI** | ✅ 完整命令行接口 | ❌ 仅脚本 | **独有** |
 
 **核心差异化**：
@@ -1163,6 +1221,7 @@ echo "完成: 共抓取 $count 篇文章"
 31. **唯一支持浏览器扩展的方案** (Chrome/Firefox 一键抓取)
 32. **唯一提供原生 CLI 的方案** (Typer + Rich，支持单文件分发)
 
+33. **唯一支持 Docker 完整容器化的方案** (Web + CLI，docker-compose 一键启动)
 ---
 
 *本文档由 wechat-article-scraper v3.21.0 生成*

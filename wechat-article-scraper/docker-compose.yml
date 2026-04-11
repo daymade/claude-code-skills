@@ -1,54 +1,94 @@
-# WeChat Article Scraper - Docker Compose
-# 一键启动完整抓取环境
+# 微信文章抓取助手 - Docker Compose 配置
+# World-class WeChat Article Scraper
+#
+# 一键启动完整服务:
+#   docker-compose up -d
+#
+# 查看日志:
+#   docker-compose logs -f
+#
+# 数据持久化在 ./data 目录
 
-version: '3.8'
+version: "3.8"
 
 services:
-  scraper:
-    build: .
+  wechat-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: wechat-article-scraper:latest
     container_name: wechat-scraper
-    volumes:
-      # 输出目录挂载
-      - ./output:/app/output
-      # 缓存目录持久化
-      - cache-data:/app/cache
-      # 批量抓取URL列表
-      - ./urls.txt:/app/urls.txt:ro
-    environment:
-      # 日志级别
-      - PYTHONUNBUFFERED=1
-      # 缓存配置
-      - WECHAT_CACHE_TTL=30
-      # 代理配置（可选）
-      # - HTTP_PROXY=http://proxy:1082
-      # - HTTPS_PROXY=http://proxy:1082
-    command: --help
 
-  # 定时抓取服务（可选）
-  scheduler:
-    build: .
-    image: wechat-article-scraper:latest
-    container_name: wechat-scheduler
+    # 端口映射
+    ports:
+      - "8000:8000"
+
+    # 数据持久化
     volumes:
-      - ./output:/app/output
-      - cache-data:/app/cache
-      - ./urls.txt:/app/urls.txt:ro
-      - ./scripts/scheduler.py:/app/scheduler.py:ro
+      # 数据目录
+      - ./data:/data
+      # 可选: 挂载配置文件
+      # - ./config.yaml:/data/config/config.yaml:ro
+
+    # 环境变量
     environment:
+      - WECHAT_DATA_DIR=/data
+      - WECHAT_CONFIG_DIR=/data/config
       - PYTHONUNBUFFERED=1
-    # 每小时运行一次批量抓取
-    command: >
-      sh -c "while true; do
-        echo \"Starting scheduled scrape at $$(date)\";
-        python3 scripts/scraper.py --batch /app/urls.txt -o /app/output --delay 5 || true;
-        echo \"Finished at $$(date), sleeping for 1 hour...\";
-        sleep 3600;
-      done"
-    profiles:
-      - scheduler
+      # 可选: API keys
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # 重启策略
     restart: unless-stopped
 
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # 网络
+    networks:
+      - wechat-scraper-network
+
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # 可选: 使用已有的 MongoDB 或 PostgreSQL
+  # 如需外部数据库，取消注释并配置
+
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: wechat-scraper-redis
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - wechat-scraper-network
+
+networks:
+  wechat-scraper-network:
+    driver: bridge
+
 volumes:
-  cache-data:
+  data:
     driver: local
+  # redis_data:
+  #   driver: local
