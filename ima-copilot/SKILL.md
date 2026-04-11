@@ -9,7 +9,7 @@ One-command installer, troubleshooter, and personalization layer for the officia
 
 ## Overview
 
-The official Tencent IMA skill (ima-skill) exposes a powerful OpenAPI for notes and knowledge base operations, but its installation flow is designed for a specific proprietary agent and its 1.1.2 package ships with a known frontmatter bug that breaks loading on several popular agents. IMA Copilot solves both problems:
+The official Tencent IMA skill (ima-skill) exposes a powerful OpenAPI for notes and knowledge base operations, but its installation flow is designed for a specific proprietary agent and recent releases have shipped submodule files that fail strict SKILL.md loaders. IMA Copilot solves both problems:
 
 1. Installs ima-skill to Claude Code, Codex, and OpenClaw in a single command via the [vercel-labs/skills](https://github.com/vercel-labs/skills) open installer.
 2. Walks the user through API key setup with a live validation call.

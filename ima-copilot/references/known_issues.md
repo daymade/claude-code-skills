@@ -16,7 +16,7 @@ When `scripts/diagnose.sh` reports a `⚠️` line that mentions `ISSUE-<NNN>`, 
 
 ### ISSUE-001 — Submodule SKILL.md files missing YAML frontmatter
 
-**Status**: Open in upstream v1.1.2. No public issue tracker for the upstream package, so there's no link to watch.
+**Status**: Observed on recent upstream releases. No public issue tracker for the upstream package, so there's no link to watch. When the `diagnose.sh` scanner stops flagging this issue against a freshly-installed upstream release, it has been fixed upstream and this entry can be closed.
 
 **Symptom**: Running an ima-skill-enabled session on Codex produces:
 
@@ -87,12 +87,15 @@ echo "backup saved to: $BACKUP"
 [ -f "<install>/knowledge-base/SKILL.md" ] && \
   command mv "<install>/knowledge-base/SKILL.md" "<install>/knowledge-base/MODULE.md"
 
-# 3. Patch root SKILL.md references (idempotent — no-op if already patched)
-sed -i.bak \
+# 3. Patch root SKILL.md references (idempotent — no-op if already patched).
+# `command sed` and `command rm` bypass any user-defined shell aliases like
+# `alias sed='sed -i'` or `alias rm='rm -i'` that would otherwise hang the
+# script on a prompt or misinterpret the -i flag.
+command sed -i.bak \
   -e 's|notes/SKILL\.md|notes/MODULE.md|g' \
   -e 's|knowledge-base/SKILL\.md|knowledge-base/MODULE.md|g' \
   "<install>/SKILL.md"
-rm -f "<install>/SKILL.md.bak"
+command rm -f "<install>/SKILL.md.bak"
 ```
 
 **Rollback** (if the user later wants to undo):
@@ -101,7 +104,7 @@ rm -f "<install>/SKILL.md.bak"
 command cp "$BACKUP/SKILL.md"                   "<install>/SKILL.md"
 command cp "$BACKUP/notes-SKILL.md"             "<install>/notes/SKILL.md"
 command cp "$BACKUP/knowledge-base-SKILL.md"    "<install>/knowledge-base/SKILL.md"
-rm -f "<install>/notes/MODULE.md" "<install>/knowledge-base/MODULE.md"
+command rm -f "<install>/notes/MODULE.md" "<install>/knowledge-base/MODULE.md"
 ```
 
 **Pros**: Honors the upstream author's original design. Minimizes the total set of files in the skill namespace. No risk of loader collision between the root skill and the two submodule "sub-skills".
