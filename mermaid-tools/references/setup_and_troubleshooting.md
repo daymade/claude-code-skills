@@ -53,9 +53,9 @@ python3 --version
 ## Script Locations
 
 The mermaid diagram tools are bundled with this skill in the `scripts/` directory:
-- Main script: `~/.claude/skills/mermaid-tools/scripts/extract-and-generate.sh`
-- Python extractor: `~/.claude/skills/mermaid-tools/scripts/extract_diagrams.py`
-- Puppeteer config: `~/.claude/skills/mermaid-tools/scripts/puppeteer-config.json`
+- Main script: `${CLAUDE_SKILL_DIR}/scripts/extract-and-generate.sh`
+- Python extractor: `${CLAUDE_SKILL_DIR}/scripts/extract_diagrams.py`
+- Puppeteer config: `${CLAUDE_SKILL_DIR}/scripts/puppeteer-config.json`
 
 All scripts should be run from the `scripts/` directory to properly locate dependencies.
 
@@ -119,7 +119,7 @@ MERMAID_SCALE=5 ./extract-and-generate.sh "file.md" "output_dir"
 
 **Solution**:
 ```bash
-chmod +x ~/.claude/skills/mermaid-tools/scripts/extract-and-generate.sh
+chmod +x "${CLAUDE_SKILL_DIR}/scripts/extract-and-generate.sh"
 ```
 
 ### No Diagrams Found

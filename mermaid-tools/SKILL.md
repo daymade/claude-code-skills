@@ -16,7 +16,7 @@ This skill enables extraction of Mermaid diagrams from markdown files and genera
 Extract Mermaid diagrams from a markdown file and generate PNG images using the bundled `extract-and-generate.sh` script:
 
 ```bash
-cd ~/.claude/skills/mermaid-tools/scripts
+cd "${CLAUDE_SKILL_DIR}/scripts"
 ./extract-and-generate.sh "<markdown_file>" "<output_directory>"
 ```
 
@@ -26,8 +26,8 @@ cd ~/.claude/skills/mermaid-tools/scripts
 
 **Example:**
 ```bash
-cd ~/.claude/skills/mermaid-tools/scripts
-./extract-and-generate.sh "/path/to/document.md" "/path/to/output"
+cd "${CLAUDE_SKILL_DIR}/scripts"
+./extract-and-generate.sh "<markdown_file>" "<output_directory>"
 ```
 
 ### What the Script Does
@@ -53,7 +53,7 @@ The numbering ensures diagrams maintain their order from the source document.
 Override default dimensions using environment variables:
 
 ```bash
-cd ~/.claude/skills/mermaid-tools/scripts
+cd "${CLAUDE_SKILL_DIR}/scripts"
 MERMAID_WIDTH=1600 MERMAID_HEIGHT=1200 ./extract-and-generate.sh "<markdown_file>" "<output_directory>"
 ```
 
@@ -65,14 +65,14 @@ MERMAID_WIDTH=1600 MERMAID_HEIGHT=1200 ./extract-and-generate.sh "<markdown_file
 ### High-Resolution Output for Presentations
 
 ```bash
-cd ~/.claude/skills/mermaid-tools/scripts
+cd "${CLAUDE_SKILL_DIR}/scripts"
 MERMAID_WIDTH=2400 MERMAID_HEIGHT=1800 MERMAID_SCALE=4 ./extract-and-generate.sh "<markdown_file>" "<output_directory>"
 ```
 
 ### Print-Quality Output
 
 ```bash
-cd ~/.claude/skills/mermaid-tools/scripts
+cd "${CLAUDE_SKILL_DIR}/scripts"
 MERMAID_SCALE=5 ./extract-and-generate.sh "<markdown_file>" "<output_directory>"
 ```
 
@@ -98,7 +98,7 @@ Context-aware naming in the extraction process helps trigger appropriate smart s
 Run the script from its own directory to properly locate dependencies (`extract_diagrams.py` and `puppeteer-config.json`):
 
 ```bash
-cd ~/.claude/skills/mermaid-tools/scripts
+cd "${CLAUDE_SKILL_DIR}/scripts"
 ./extract-and-generate.sh "<markdown_file>" "<output_directory>"
 ```
 
@@ -129,7 +129,7 @@ Quick fixes for common issues:
 
 **Permission denied:**
 ```bash
-chmod +x ~/.claude/skills/mermaid-tools/scripts/extract-and-generate.sh
+chmod +x "${CLAUDE_SKILL_DIR}/scripts/extract-and-generate.sh"
 ```
 
 **Low quality output:**
