@@ -177,7 +177,7 @@ class CacheManager:
                 return None
 
             # 检查是否过期
-            expires_at = row[15]
+            expires_at = row[14]
             if expires_at and datetime.now().isoformat() > expires_at:
                 logger.debug(f"缓存已过期: {url[:60]}...")
                 return None
