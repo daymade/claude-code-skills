@@ -55,8 +55,9 @@ Run the repo's standard validation from the repo root. Use the `git rev-parse --
 
 ```bash
 REPO_ROOT=$(git -C . rev-parse --show-toplevel)
-python3 "$REPO_ROOT/skill-creator/scripts/quick_validate.py" "$REPO_ROOT/<wrapper-skill-name>"
-python3 "$REPO_ROOT/skill-creator/scripts/security_scan.py" "$REPO_ROOT/<wrapper-skill-name>"
+cd "$REPO_ROOT/skill-creator"
+uv run --with PyYAML python -m scripts.quick_validate "$REPO_ROOT/<wrapper-skill-name>"
+uv run python -m scripts.security_scan "$REPO_ROOT/<wrapper-skill-name>"
 ```
 
 Both should pass. `quick_validate` enforces SKILL.md frontmatter shape, the 1024-char description cap, and path reference integrity. `security_scan` catches committed credentials, personal directories, and company names.

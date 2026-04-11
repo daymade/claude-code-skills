@@ -19,13 +19,13 @@
 ### 1. Refine the Skill (if needed)
 ```bash
 cd skill-creator
-python3 scripts/security_scan.py ../skill-name --verbose
+uv run python -m scripts.security_scan ../skill-name --verbose
 ```
 
 ### 2. Package the Skill
 ```bash
 cd skill-creator
-python3 scripts/package_skill.py ../skill-name
+uv run --with PyYAML python -m scripts.package_skill ../skill-name
 ```
 
 ### 3. Update CHANGELOG.md
@@ -227,13 +227,14 @@ Before committing, verify:
 
 ```bash
 # 1. Refine and validate skill
-cd skill-creator && python3 scripts/security_scan.py ../skill-name --verbose
+cd skill-creator
+uv run python -m scripts.security_scan ../skill-name --verbose
 
 # 2. Package skill
-python3 scripts/package_skill.py ../skill-name
+uv run --with PyYAML python -m scripts.package_skill ../skill-name
 
 # 3. Validate marketplace.json
-cd .. && python3 -m json.tool .claude-plugin/marketplace.json > /dev/null && echo "✅ Valid"
+cd .. && uv run python -m json.tool .claude-plugin/marketplace.json > /dev/null && echo "✅ Valid"
 
 # 4. Verify Chinese documentation is in sync
 grep "skills-[0-9]*" README.md README.zh-CN.md
