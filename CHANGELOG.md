@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **doc-to-markdown**: Added 31 unit tests (`test_convert.py`)
 - **doc-to-markdown**: Added 5-tool benchmark report (`references/benchmark-2026-03-22.md`)
 
+## [1.45.1] - 2026-04-11
+
+### Fixed
+- **daymade-docs** v1.0.0 → v1.0.1: Narrowed the suite plugin source to `suites/daymade-docs/` so the installed cache contains only the documentation skills in the suite instead of a full repository snapshot.
+- Moved the daymade-docs member skills under `suites/daymade-docs/` as their canonical source and repointed the corresponding single-skill plugin entries to those same directories.
+- **doc-to-markdown** v2.1.0 → v2.1.1, **mermaid-tools** v1.0.1 → v1.0.2, **ppt-creator** v1.0.0 → v1.0.1, **pdf-creator** v1.3.1 → v1.3.2, **docs-cleaner** v1.0.0 → v1.0.1, and **meeting-minutes-taker** v1.1.0 → v1.1.1 now install from their suite canonical source paths.
+
+### Changed
+- Updated marketplace version from 1.45.0 to 1.45.1
+
 ## [1.45.0] - 2026-04-11
 
 ### Added

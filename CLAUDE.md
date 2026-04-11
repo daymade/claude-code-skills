@@ -146,6 +146,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 - Contains 47 plugin entries: most map to one skill, while suite plugins map to multiple related skills
 - Each plugin has: name, description, version, category, keywords, skills array
 - Marketplace metadata: name, owner, version, homepage
+- Suite plugins use `suites/<suite-name>/` as the canonical source for their member skills so suite caches contain only those skills. Single-skill plugin entries for suite members should point to the same canonical subdirectories.
 
 ### Versioning Architecture
 
@@ -153,7 +154,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
    - Tracks the marketplace catalog as a whole
-   - Current: v1.45.0
+   - Current: v1.45.1
    - Bump when: Adding/removing skills, adding/removing suite plugins, major marketplace restructuring
    - Semantic versioning: MAJOR.MINOR.PATCH
 

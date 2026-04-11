@@ -327,7 +327,7 @@ Final Review:
   - **Flowcharts** for process/workflow decisions
   - **State diagrams** for state machine discussions
   - Diagrams make minutes significantly easier for humans to review and understand
-- **Context-first document structure** - Place all reviewed artifacts (UI mockups, API docs, design images) at the TOP of the document (after metadata, before Executive Summary) to establish context before decisions; copy images to `assets/<meeting-name>/` folder and embed inline using `![description](assets/...)` syntax; include brief descriptions with the visuals - this creates "next level" human-readable minutes where readers understand what was discussed before reading the discussion
+- **Context-first document structure** - Place all reviewed artifacts (UI mockups, API docs, design images) at the TOP of the document (after metadata, before Executive Summary) to establish context before decisions; copy images to `meeting-media/<meeting-name>/` folder and embed inline using `![description](meeting-media/...)` syntax; include brief descriptions with the visuals - this creates "next level" human-readable minutes where readers understand what was discussed before reading the discussion
 - **Speaker attribution** - Correctly attribute decisions to speakers
 
 #### Key Rules
