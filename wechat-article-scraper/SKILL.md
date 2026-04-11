@@ -3,7 +3,7 @@ name: wechat-article-scraper
 description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（HTTP/Scrapling/Playwright/Chrome DevTools）、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai] [--download-images] [--format markdown|json|html|pdf]
 metadata:
-  version: "3.18.0"
+  version: "3.19.0"
   openclaw:
     emoji: "📰"
     requires:
@@ -472,6 +472,60 @@ for article in new_articles:
 
 **竞品对比**: **没有任何竞品支持多平台 webhook 通知**。
 
+### 第三方平台导出
+
+导出文章到 Notion / Airtable / Google Sheets：
+
+```bash
+# ========== Notion 导出 ==========
+# 1. 创建 Notion 数据库
+export NOTION_API_KEY="secret_xxx"
+python3 scripts/exporters.py notion --create --page-id "your-page-id"
+
+# 2. 导出文章到 Notion
+python3 scripts/exporters.py notion --target-id "database-id" --limit 50
+
+# ========== Airtable 导出 ==========
+# 1. 在 Airtable 中手动创建表格
+export AIRTABLE_API_KEY="keyxxx"
+export AIRTABLE_BASE_ID="appxxx"
+python3 scripts/exporters.py airtable --target-id "微信文章" --limit 100
+
+# ========== Google Sheets 导出 ==========
+# 1. 创建 Sheets 文档
+export GOOGLE_CREDENTIALS_FILE="credentials.json"
+python3 scripts/exporters.py google_sheets --create
+
+# 2. 导出文章
+python3 scripts/exporters.py google_sheets --target-id "spreadsheet-id"
+
+# ========== 筛选导出 ==========
+# 按作者导出
+python3 scripts/exporters.py notion --target-id "xxx" --author "差评"
+
+# 按分类导出
+python3 scripts/exporters.py notion --target-id "xxx" --category "科技"
+```
+
+**Notion 字段映射**:
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| 标题 | Title | 文章标题 |
+| 作者 | Rich Text | 公众号名称 |
+| 分类 | Select | 10个预设分类 |
+| 发布时间 | Date | 原文发布时间 |
+| URL | URL | 原文链接 |
+| WCI 指数 | Number | 传播指数 |
+| 阅读量 | Number | 阅读数 |
+| 点赞数 | Number | 点赞数 |
+| 标签 | Multi-Select | AI 生成的标签 |
+| 摘要 | Rich Text | AI 摘要 |
+| 内容 | Rich Text | 正文内容 |
+| 导入时间 | Created Time | 自动记录 |
+| 同步状态 | Select | 已同步/待同步/失败 |
+
+**竞品对比**: **没有任何竞品支持第三方平台导出**。
+
 ## 策略详解
 
 ### 策略对比
@@ -611,6 +665,7 @@ wechat-article-scraper/
 │   ├── cache.py               # 缓存系统（提高性能）
 │   ├── summarizer.py          # AI 智能摘要（LLM 驱动）
 │   ├── notifier.py            # Webhook 通知系统（多平台）
+│   ├── exporters.py           # 第三方平台导出（Notion/Airtable/Google Sheets）
 │   ├── extract.js             # Chrome DevTools 提取脚本（OG备选+段落关联）
 │   └── playwright_scraper.py  # Playwright 抓取
 ├── web/                        # Web 管理界面
@@ -756,7 +811,15 @@ echo "完成: 共抓取 $count 篇文章"
 
 ## 版本历史
 
-### v3.4.0 (当前)
+### v3.5.0 (当前)
+- ✨ **新增**: 第三方平台导出器
+  - Notion 数据库集成（自动创建数据库、字段映射）
+  - Airtable 表格同步
+  - Google Sheets 导出
+  - 支持增量导出、按作者/分类筛选
+  - 竞品完全无此功能
+
+### v3.4.0
 - ✨ **新增**: AI 智能摘要生成器
   - 使用 LLM (Claude/OpenAI/DeepSeek/通义千问) 生成文章摘要
   - 提取关键要点、标签、情感分析
@@ -928,6 +991,7 @@ echo "完成: 共抓取 $count 篇文章"
 | **质量评分** | ✅ 多维度自动评分 | ❌ | **独有** |
 | **AI 摘要** | ✅ LLM 智能摘要 | ❌ | **独有** |
 | **Webhook 通知** | ✅ 6 大平台推送 | ❌ | **独有** |
+| **第三方导出** | ✅ Notion/Airtable/Sheets | ❌ | **独有** |
 
 **核心差异化**：
 1. **唯一支持 6 级策略路由的方案**（fast → adaptive → stable → reliable → zero_dep → jina_ai）
@@ -959,7 +1023,8 @@ echo "完成: 共抓取 $count 篇文章"
 27. **唯一支持内容质量评分的方案** (多维度自动评分)
 28. **唯一支持 AI 智能摘要的方案** (LLM 驱动，多提供商支持)
 29. **唯一支持 Webhook 通知系统的方案** (6 大平台自动推送)
+30. **唯一支持第三方平台导出的方案** (Notion/Airtable/Google Sheets)
 
 ---
 
-*本文档由 wechat-article-scraper v3.4.0 生成*
+*本文档由 wechat-article-scraper v3.5.0 生成*
