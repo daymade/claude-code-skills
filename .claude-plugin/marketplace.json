@@ -75,9 +75,9 @@
     {
       "name": "mermaid-tools",
       "description": "Generate Mermaid diagrams from markdown with automatic PNG/SVG rendering and extraction from documents",
-      "source": "./",
+      "source": "./mermaid-tools",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "documentation",
       "keywords": [
         "mermaid",
@@ -87,7 +87,7 @@
         "sequence"
       ],
       "skills": [
-        "./mermaid-tools"
+        "./"
       ]
     },
     {
