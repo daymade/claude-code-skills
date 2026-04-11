@@ -18,6 +18,7 @@ import random
 import time
 import re
 import logging
+import urllib.parse
 from enum import Enum
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
@@ -34,11 +35,12 @@ logger = logging.getLogger('wechat-router')
 class Strategy(Enum):
     """抓取策略枚举"""
     FAST = "fast"           # HTTP + BS4
-    ADAPTIVE = "adaptive"   # Scrapling (新增)
+    ADAPTIVE = "adaptive"   # Scrapling (自适应反爬)
     STABLE = "stable"       # Playwright
     RELIABLE = "reliable"   # Chrome DevTools MCP (配合 ?scene=1 可绕过登录)
     ZERO_DEP = "zero_dep"   # 纯标准库模式
     JINA_AI = "jina_ai"     # jina.ai 服务（最后的fallback）
+    HISTORY = "history"     # 公众号历史文章批量抓取 (新增 v3.22.0)
     FAILED = "failed"       # 所有策略都失败
 
 
@@ -292,6 +294,8 @@ class StrategyRouter:
                 result = self._execute_zero_dep(url)
             elif strategy == Strategy.JINA_AI:
                 result = self._execute_jina_ai(url)
+            elif strategy == Strategy.HISTORY:
+                result = self._execute_history(url)
             else:
                 result = StrategyResult(
                     strategy,
@@ -910,6 +914,99 @@ class StrategyRouter:
                 error=f"jina.ai 服务失败: {str(e)}"
             )
 
+    def _execute_history(self, url: str) -> StrategyResult:
+        """
+        执行 History 策略 - 公众号历史文章批量抓取
+
+        注意：此策略需要特殊的 URL 格式：
+        history://<account_name>?biz=<biz>&token=<token>&cookie=<cookie>
+        """
+        try:
+            from history_crawler import HistoryCrawler
+
+            # 解析 URL 参数
+            parsed = urllib.parse.urlparse(url)
+
+            if parsed.scheme != 'history':
+                return StrategyResult(
+                    strategy=Strategy.HISTORY,
+                    success=False,
+                    content_status=ContentStatus.NO_MP_URL,
+                    error="HISTORY 策略需要 history:// 协议 URL"
+                )
+
+            # 提取参数
+            query = urllib.parse.parse_qs(parsed.query)
+            account_name = parsed.netloc
+            biz = query.get('biz', [''])[0]
+            token = query.get('token', [''])[0]
+            cookie = query.get('cookie', [''])[0]
+            max_articles = int(query.get('max', ['0'])[0])
+
+            if not all([biz, token]):
+                return StrategyResult(
+                    strategy=Strategy.HISTORY,
+                    success=False,
+                    content_status=ContentStatus.FETCH_ERROR,
+                    error="缺少必要参数: biz 和 token 必须提供"
+                )
+
+            logger.info(f"开始抓取公众号历史: {account_name}, biz={biz[:20]}...")
+
+            # 创建抓取器
+            crawler = HistoryCrawler(
+                biz=biz,
+                appmsg_token=token,
+                cookie=cookie
+            )
+
+            # 抓取文章列表
+            articles = []
+            for article in crawler.crawl_history(
+                account_name=account_name,
+                max_articles=max_articles
+            ):
+                articles.append({
+                    'aid': article.aid,
+                    'title': article.title,
+                    'link': article.link,
+                    'publish_time': article.publish_time,
+                    'cover_image': article.cover_image,
+                    'digest': article.digest,
+                    'is_top': article.is_top,
+                    'position': article.position
+                })
+
+            return StrategyResult(
+                strategy=Strategy.HISTORY,
+                success=True,
+                content_status=ContentStatus.OK,
+                data={
+                    'account_name': account_name,
+                    'biz': biz,
+                    'article_count': len(articles),
+                    'articles': articles,
+                    'mode': 'history_list',
+                    'note': '历史文章列表，需要进一步抓取每篇文章内容'
+                }
+            )
+
+        except ImportError as e:
+            return StrategyResult(
+                strategy=Strategy.HISTORY,
+                success=False,
+                content_status=ContentStatus.FETCH_ERROR,
+                error=f"缺少依赖: {str(e)}"
+            )
+
+        except Exception as e:
+            return StrategyResult(
+                strategy=Strategy.HISTORY,
+                success=False,
+                content_status=ContentStatus.FETCH_ERROR,
+                error=f"历史抓取失败: {str(e)}"
+            )
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -927,6 +1024,7 @@ if __name__ == "__main__":
             "reliable": Strategy.RELIABLE,
             "zero_dep": Strategy.ZERO_DEP,
             "jina_ai": Strategy.JINA_AI,
+            "history": Strategy.HISTORY,
         }
         prefer = prefer_map.get(sys.argv[2])
 

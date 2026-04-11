@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional, List
 from enum import Enum
+from datetime import datetime
 
 import typer
 from rich.console import Console
@@ -466,6 +467,182 @@ def monitor(
     else:
         console.print(f"[red]未知操作: {action}[/]")
         console.print("[dim]可用操作: add, list, remove[/]")
+
+
+@app.command("history")
+def history(
+    action: str = typer.Argument(..., help="操作: crawl/list/progress"),
+    account_name: Optional[str] = typer.Argument(None, help="公众号名称"),
+    biz: Optional[str] = typer.Option(None, "--biz", help="公众号 biz 参数"),
+    token: Optional[str] = typer.Option(None, "--token", help="appmsg_token"),
+    cookie: Optional[str] = typer.Option(None, "--cookie", help="Cookie"),
+    max_articles: int = typer.Option(0, "--max", "-m", help="最大抓取数量（0=无限制）"),
+    no_resume: bool = typer.Option(False, "--no-resume", help="不续传，从头开始"),
+):
+    """公众号历史文章批量抓取"""
+    from history_crawler import HistoryCrawler, CrawlProgress
+
+    progress_dir = Path("./data/progress")
+    progress_dir.mkdir(parents=True, exist_ok=True)
+
+    if action == "list":
+        # 列出所有进度文件
+        progress_files = list(progress_dir.glob("*.json"))
+        if not progress_files:
+            console.print("[yellow]没有保存的抓取进度[/]")
+            return
+
+        table = Table(title="公众号抓取进度", box=box.ROUNDED)
+        table.add_column("公众号", style="cyan")
+        table.add_column("状态", style="green")
+        table.add_column("已抓取", style="yellow")
+        table.add_column("总数", style="blue")
+        table.add_column("最后更新", style="dim")
+
+        for pf in progress_files:
+            try:
+                import json
+                with open(pf, 'r') as f:
+                    data = json.load(f)
+
+                status = "[green]✓ 完成[/]" if data.get('is_complete') else "[yellow]⟳ 进行中[/]"
+                if data.get('error_message'):
+                    status = "[red]✗ 失败[/]"
+
+                table.add_row(
+                    data.get('account_name', pf.stem),
+                    status,
+                    str(data.get('crawled_count', 0)),
+                    str(data.get('total_count', '?')),
+                    data.get('last_crawl_time', '')[:10]
+                )
+            except:
+                pass
+
+        console.print(table)
+
+    elif action == "progress":
+        if not account_name:
+            console.print("[red]请提供公众号名称[/]")
+            raise typer.Exit(1)
+
+        progress_file = progress_dir / f"{account_name}.json"
+        if not progress_file.exists():
+            console.print(f"[yellow]未找到进度: {account_name}[/]")
+            return
+
+        try:
+            with open(progress_file, 'r') as f:
+                data = json.load(f)
+
+            console.print(Panel.fit(
+                f"[bold cyan]{data.get('account_name', account_name)}[/]\n\n"
+                f"状态: {'[green]✓ 完成[/]' if data.get('is_complete') else '[yellow]⟳ 进行中[/]'}\n"
+                f"已抓取: [green]{data.get('crawled_count', 0)}[/] 篇\n"
+                f"总数: [blue]{data.get('total_count', '?')}[/] 篇\n"
+                f"最后偏移: {data.get('last_offset', 0)}\n"
+                f"最后更新: {data.get('last_crawl_time', '')[:19]}\n"
+                + (f"[red]错误: {data.get('error_message', '')}[/]" if data.get('error_message') else ""),
+                title="抓取进度",
+                border_style="blue"
+            ))
+        except Exception as e:
+            console.print(f"[red]读取进度失败: {e}[/]")
+
+    elif action == "crawl":
+        if not all([account_name, biz, token]):
+            console.print("[red]缺少必要参数: account_name, --biz, --token 必须提供[/]")
+            console.print("\n[dim]用法示例:[/]")
+            console.print("  w history crawl 公众号名称 --biz=MzI5... --token=xxx")
+            raise typer.Exit(1)
+
+        console.print(Panel.fit(
+            f"[bold blue]公众号历史文章抓取[/]\n"
+            f"公众号: [cyan]{account_name}[/]\n"
+            f"biz: [dim]{biz[:30]}...[/]\n"
+            f"token: [dim]{token[:20]}...[/]\n"
+            f"最大数量: [{'无限制' if max_articles == 0 else max_articles}][/",
+            title="wechat-history",
+            border_style="blue"
+        ))
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("正在抓取...", total=None)
+
+            try:
+                crawler = HistoryCrawler(
+                    biz=biz,
+                    appmsg_token=token,
+                    cookie=cookie or "",
+                    progress_dir=str(progress_dir)
+                )
+
+                articles = []
+                count = 0
+                for article in crawler.crawl_history(
+                    account_name=account_name,
+                    max_articles=max_articles,
+                    resume=not no_resume
+                ):
+                    count += 1
+                    articles.append({
+                        'title': article.title,
+                        'link': article.link,
+                        'publish_time': article.publish_time,
+                        'is_top': article.is_top
+                    })
+                    progress.update(task, description=f"已抓取 {count} 篇...")
+
+                progress.update(task, completed=True)
+
+            except Exception as e:
+                console.print(f"[red]抓取失败: {e}[/]")
+                raise typer.Exit(1)
+
+        # 显示结果
+        console.print(f"\n[green]✓ 抓取完成！共 {count} 篇文章[/]")
+
+        if articles:
+            table = Table(title="抓取结果预览", box=box.ROUNDED)
+            table.add_column("#", style="dim", width=4)
+            table.add_column("类型", style="cyan", width=6)
+            table.add_column("标题", style="green", max_width=40)
+            table.add_column("发布时间", style="yellow")
+
+            for i, article in enumerate(articles[:10], 1):
+                top_mark = "头条" if article['is_top'] else "次条"
+                title = article['title'][:40] if article['title'] else 'N/A'
+                pub_time = article['publish_time'][:10] if article['publish_time'] else ''
+                table.add_row(str(i), top_mark, title, pub_time)
+
+            if len(articles) > 10:
+                table.add_row("...", "", f"还有 {len(articles) - 10} 篇", "")
+
+            console.print(table)
+
+            # 保存到文件
+            output_dir = Path("./data/history")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            output_file = output_dir / f"{account_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump({
+                    'account_name': account_name,
+                    'biz': biz,
+                    'crawl_time': datetime.now().isoformat(),
+                    'article_count': len(articles),
+                    'articles': articles
+                }, f, ensure_ascii=False, indent=2)
+
+            console.print(f"\n[dim]结果已保存: {output_file}[/]")
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+        console.print("[dim]可用操作: crawl, list, progress[/]")
 
 
 @app.command("version")
