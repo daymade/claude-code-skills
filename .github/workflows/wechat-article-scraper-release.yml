@@ -38,7 +38,7 @@ jobs:
           # macOS x64 (Intel)
           - os: macos
             arch: x64
-            runner: macos-13
+            runner: macos-12
             target: x86_64-apple-darwin
             ext: ''
           # Linux x64
