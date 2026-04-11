@@ -21,6 +21,27 @@ can install skills via `claude plugin marketplace add` and get auto-updates.
 **Input**: a repo with `skills/` directories containing SKILL.md files.
 **Output**: `.claude-plugin/marketplace.json` + validated + installation-tested + PR-ready.
 
+## Phase 0: Evidence Intake
+
+Before editing an existing marketplace, collect evidence instead of relying on the
+default template:
+
+1. Read the current `.claude-plugin/marketplace.json`.
+2. Read this repo's marketplace rules (`CLAUDE.md`, README install section, changelog).
+3. Read official docs for marketplace/plugin path semantics.
+4. If refining from prior failures, mine local Claude Code history under
+   `~/.claude/projects/<escaped-cwd>/` and relevant `subagents/*.jsonl`.
+
+Useful history search patterns:
+
+```bash
+rg -n "marketplace-dev|marketplace.json|source|skills|plugin cache|claude plugin validate|claude plugin install|claude plugin update" ~/.claude/projects -g "*.jsonl"
+rg -n "counter-review|subagent|teammate-message|Path not found|Plugin not found|No manifest found" ~/.claude/projects -g "*.jsonl"
+```
+
+Extract lessons as evidence-backed rules: command attempted, observed output, root
+cause, final working command/config. Do not encode guesses from memory.
+
 ## Phase 1: Analyze the Target Repo
 
 ### Step 1: Discover all skills
@@ -49,6 +70,29 @@ Group skills by function. Categories are freeform strings. Good patterns:
 
 Ask the user to confirm categories if grouping is ambiguous.
 
+### Step 4: Choose plugin boundaries
+
+Claude Code has three separate levels:
+
+```text
+marketplace -> plugin -> skill
+```
+
+- Marketplace name is used for install identity: `plugin@marketplace`.
+- Plugin name is the slash namespace: `/plugin-name:skill-name`.
+- Skill name comes from `SKILL.md` frontmatter when the skill path points to a
+  directory containing `SKILL.md` directly.
+
+Choose each plugin boundary by installation/update/cache intent:
+
+- **Single-skill plugin**: use when the skill should install, update, and roll back
+  independently with a narrow cache.
+- **Suite plugin**: use when related skills should share one namespace and one
+  install command, for example `/daymade-docs:mermaid-tools`.
+
+For detailed source/cache patterns and pitfalls, read
+`references/cache_and_source_patterns.md` before changing `source` or `skills`.
+
 ## Phase 2: Create marketplace.json
 
 ### The official schema (memorize this)
@@ -65,7 +109,11 @@ Key rules that are NOT obvious from the docs:
 5. **`strict: false`** is required when there's no `plugin.json` in the repo.
    With `strict: false`, the marketplace entry IS the entire plugin definition.
    Having BOTH `strict: false` AND a `plugin.json` with components causes a load failure.
-6. **`source: "./"` with `skills: ["./skills/<name>"]`** is the pattern for skills in the same repo.
+6. **`source` defines the installed plugin root**. All `skills` paths are relative
+   to that root. Use `source: "./"` only when a full repo snapshot is intended.
+   Use `source: "./path/to/skill"` + `skills: ["./"]` for a single-skill narrow
+   cache. Use `source: "./suites/<suite>"` for suite plugins whose cache should
+   contain only the suite members.
 7. **Reserved marketplace names** that CANNOT be used: `claude-code-marketplace`,
    `claude-code-plugins`, `claude-plugins-official`, `anthropic-marketplace`,
    `anthropic-plugins`, `agent-skills`, `knowledge-work-plugins`, `life-sciences`.
@@ -132,7 +180,9 @@ When adding a new plugin to an existing marketplace.json:
 3. **Set new plugin `version` to `"1.0.0"`** — it's new to the marketplace.
 4. **Bump existing plugin `version`** when its SKILL.md content changes.
    Claude Code uses version to detect updates — same version = skip update.
-5. **Audit `metadata` for invalid fields** — `metadata.homepage` is a common
+5. **Bump existing plugin `version`** when its `source` or `skills` changes.
+   The installed cache path and component resolution changed even if SKILL.md did not.
+6. **Audit `metadata` for invalid fields** — `metadata.homepage` is a common
    mistake (not in spec, silently ignored). Remove if found.
 
 ## Phase 3: Validate
@@ -147,8 +197,38 @@ This catches schema errors. Common failures and fixes:
 - `Unrecognized key: "$schema"` → remove the `$schema` field
 - `Duplicate plugin name` → ensure all names are unique
 - `Path contains ".."` → use `./` relative paths only
+- `No manifest found in directory` when validating an installed cache path → validate
+  the marketplace manifest or plugin source, not a strict:false cache directory.
 
-### Step 2: Installation test
+### Step 2: Source + skills resolution check
+
+Schema validation alone is not enough. Verify every marketplace entry resolves
+to real skill directories after combining `source` and `skills`:
+
+```bash
+node - <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const data = JSON.parse(fs.readFileSync('.claude-plugin/marketplace.json', 'utf8'));
+let ok = true;
+for (const p of data.plugins || []) {
+  if (typeof p.source !== 'string' || !p.source.startsWith('./')) continue;
+  const root = p.source.replace(/^\.\//, '').replace(/\/$/, '') || '.';
+  for (const s of p.skills || []) {
+    const rel = s.replace(/^\.\//, '').replace(/\/$/, '') || '.';
+    const skillPath = path.join(root, rel, 'SKILL.md');
+    if (!fs.existsSync(skillPath)) {
+      ok = false;
+      console.log(`MISSING ${p.name}: source=${p.source} skill=${s} -> ${skillPath}`);
+    }
+  }
+}
+if (!ok) process.exit(1);
+console.log('All marketplace skill paths exist');
+NODE
+```
+
+### Step 3: Installation test
 
 ```bash
 # Add as local marketplace
@@ -168,7 +248,29 @@ claude plugin uninstall <plugin-name>@<marketplace-name>
 claude plugin marketplace remove <marketplace-name>
 ```
 
-### Step 3: GitHub installation test (if pushed)
+### Step 4: Cache footprint test
+
+After installation or update, inspect the actual cache. This is the only way to
+confirm `source` produced the intended snapshot:
+
+```bash
+PLUGIN=<plugin-name>
+MARKET=<marketplace-name>
+CACHE=$(jq -r --arg id "$PLUGIN@$MARKET" '.plugins[$id][0].installPath' ~/.claude/plugins/installed_plugins.json)
+find "$CACHE" -maxdepth 1 -mindepth 1 -exec basename {} \; | sort
+```
+
+Expected results:
+
+- Single-skill plugin cache: `SKILL.md` plus its own `scripts/`, `references/`,
+  `assets/` as applicable.
+- Suite plugin cache: only the suite member skill directories and suite-scoped
+  resources.
+- If unrelated skill directories appear, `source` is too broad.
+- If cache entries are symlinks, the plugin is not self-contained; use canonical
+  source directories instead of symlink farms.
+
+### Step 5: GitHub installation test (if pushed)
 
 ```bash
 # Test from GitHub (requires the branch to be pushed)
@@ -224,7 +326,9 @@ For each plugin entry:
 
 - [ ] `description` matches SKILL.md frontmatter EXACTLY (not rewritten)
 - [ ] `version` is `"1.0.0"` for new plugins, bumped for changed plugins
-- [ ] `source` is `"./"` and `skills` path starts with `"./"`
+- [ ] `source` starts with `"./"` and intentionally matches the plugin cache boundary
+- [ ] Every `skills` path starts with `"./"` and resolves relative to `source`
+- [ ] If `source` points directly at a skill root, `skills` is `["./"]`
 - [ ] `strict` is `false` (no plugin.json in repo)
 - [ ] `name` is kebab-case, unique across all entries
 
@@ -232,9 +336,10 @@ For each plugin entry:
 
 ```bash
 claude plugin validate .
+node <source-skills-resolution-check>
 ```
 
-Must show `✔ Validation passed` before creating PR.
+Both checks must pass before creating PR.
 
 ## Phase 4: Create PR
 

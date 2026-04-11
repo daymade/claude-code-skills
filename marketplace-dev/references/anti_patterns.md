@@ -36,6 +36,39 @@ Not theoretical — each cost debugging time.
 - **Fix**: Claude Code uses version to detect updates. Same version = skip.
   Bump the plugin `version` in marketplace.json when you change skill content.
 
+### Changing source/skills without bumping plugin version
+- **Symptom**: Marketplace cache updates, but installed users stay on an old cache
+  layout because `claude plugin update` sees the same plugin version.
+- **Fix**: Treat `source` and `skills` changes as plugin behavior changes. Bump the
+  plugin version even if SKILL.md content is unchanged.
+
+## Source and Cache Errors
+
+### Using full repo source for a narrow plugin
+- **Symptom**: Installing a single plugin creates a cache containing many unrelated
+  skill directories.
+- **Fix**: Point `source` at the intended plugin root and make `skills` relative to
+  that root. For a skill whose `SKILL.md` is directly in the source root, use
+  `skills: ["./"]`.
+
+### Assuming marketplace name controls slash namespace
+- **Symptom**: Expecting `/daymade-skills:mermaid-tools` after installing
+  `mermaid-tools@daymade-skills`.
+- **Fix**: The plugin name controls the slash namespace. Use a suite plugin like
+  `daymade-docs` when you want `/daymade-docs:mermaid-tools`.
+
+### Building suite sources with symlinks
+- **Symptom**: Installed cache contains symlinks pointing back to a marketplace
+  working copy.
+- **Fix**: Use real canonical suite source directories. Do not use symlink farms for
+  plugin cache boundaries.
+
+### Validating a strict:false cache directory as a plugin manifest
+- **Symptom**: `claude plugin validate ~/.claude/plugins/cache/...` reports
+  `No manifest found in directory`.
+- **Fix**: Validate the marketplace manifest or source repo. Then validate installed
+  cache footprint with `find`, not `claude plugin validate` on the cache.
+
 ## Description Errors
 
 ### Rewriting or translating SKILL.md descriptions

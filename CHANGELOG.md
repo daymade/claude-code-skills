@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **doc-to-markdown**: Added 8 DOCX post-processing fixes (grid tables, simple tables, CJK bold spacing, JSON pretty-print, image path flattening, pandoc attribute cleanup, code block detection, bracket fixes)
 - **doc-to-markdown**: Added 31 unit tests (`test_convert.py`)
 - **doc-to-markdown**: Added 5-tool benchmark report (`references/benchmark-2026-03-22.md`)
+- **marketplace-dev** v1.0.0 → v1.1.0: Added evidence intake from Claude Code history, plugin boundary decision guidance, source/cache patterns for single-skill and suite plugins, source+skills resolution validation, and cache footprint testing based on real marketplace debugging sessions.
 
 ## [1.45.1] - 2026-04-11
 
