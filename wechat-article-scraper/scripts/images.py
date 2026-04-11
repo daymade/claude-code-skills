@@ -18,6 +18,8 @@ import re
 import json
 import hashlib
 import argparse
+import tempfile
+import shutil
 from pathlib import Path
 from urllib.parse import urlparse, unquote
 from typing import List, Dict, Optional, Tuple
@@ -118,8 +120,27 @@ class ImageDownloader:
 
         return f"img-{index:03d}-{url_hash}{ext}"
 
+    def _validate_safe_path(self, filepath: Path) -> bool:
+        """
+        验证文件路径是否在输出目录内，防止路径遍历攻击
+
+        Args:
+            filepath: 要验证的文件路径
+
+        Returns:
+            bool: 路径是否安全
+        """
+        try:
+            # 获取绝对路径并解析符号链接
+            target = filepath.resolve()
+            output = self.output_dir.resolve()
+            # 检查目标路径是否以输出目录开头
+            return str(target).startswith(str(output))
+        except (OSError, ValueError):
+            return False
+
     def _download_single(self, img_info: ImageInfo) -> ImageInfo:
-        """下载单张图片"""
+        """下载单张图片（使用原子写入防止文件损坏）"""
         try:
             import requests
 
@@ -135,11 +156,45 @@ class ImageDownloader:
             content_type = resp.headers.get('content-type', '')
             img_info.content_type = content_type
 
-            # 保存文件
+            # 构建目标路径并验证安全性
             local_path = self.output_dir / img_info.filename
-            with open(local_path, 'wb') as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
+            if not self._validate_safe_path(local_path):
+                raise ValueError(f"非法文件路径: {img_info.filename}")
+
+            # 使用原子写入：先写入临时文件，再移动到目标位置
+            # 防止下载中断导致文件损坏
+            temp_fd = None
+            temp_path = None
+            try:
+                # 在同一文件系统创建临时文件（确保 rename 是原子的）
+                temp_fd, temp_path = tempfile.mkstemp(
+                    dir=self.output_dir,
+                    prefix='.download_',
+                    suffix='.tmp'
+                )
+
+                # 写入临时文件
+                with os.fdopen(temp_fd, 'wb') as f:
+                    temp_fd = None  # 防止重复关闭
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        f.write(chunk)
+
+                # 原子移动到目标位置
+                shutil.move(temp_path, local_path)
+                temp_path = None  # 防止重复删除
+
+            finally:
+                # 清理临时文件
+                if temp_fd is not None:
+                    try:
+                        os.close(temp_fd)
+                    except OSError:
+                        pass
+                if temp_path is not None and os.path.exists(temp_path):
+                    try:
+                        os.unlink(temp_path)
+                    except OSError:
+                        pass
 
             # 获取文件大小
             img_info.size_bytes = local_path.stat().st_size

@@ -16,6 +16,7 @@
 
 import sys
 import re
+import csv
 import json
 import time
 import urllib.parse
@@ -276,14 +277,22 @@ def format_output(results: List[ArticleResult], fmt: str = 'table') -> str:
         return json.dumps([asdict(r) for r in results], ensure_ascii=False, indent=2)
 
     elif fmt == 'csv':
-        lines = ['标题,公众号,发布时间,链接,摘要']
+        # 使用 csv 模块正确处理转义和注入攻击
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output, lineterminator='\n')
+        # 写入表头
+        writer.writerow(['标题', '公众号', '发布时间', '链接', '摘要'])
+        # 写入数据行
         for r in results:
-            title = r.title.replace(',', '，')
-            account = r.source_account.replace(',', '，')
-            abstract = r.abstract.replace(',', '，').replace('\n', ' ')
-            time = r.publish_time or ''
-            lines.append(f'"{title}","{account}","{time}","{r.url}","{abstract}"')
-        return '\n'.join(lines)
+            writer.writerow([
+                r.title,
+                r.source_account,
+                r.publish_time or '',
+                r.url,
+                r.abstract
+            ])
+        return output.getvalue()
 
     elif fmt == 'markdown':
         lines = ['# 微信文章搜索结果\n']

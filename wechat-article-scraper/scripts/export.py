@@ -17,6 +17,7 @@ import os
 import json
 import re
 import argparse
+import html
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
@@ -166,13 +167,24 @@ class Exporter:
 
     def export_html(self, data: Dict[str, Any]) -> str:
         """导出为 HTML"""
-        title = data.get('title', '无标题')
-        author = data.get('author', '未知')
+        # 使用 html.escape() 对所有用户输入进行转义，防止 XSS
+        title = html.escape(data.get('title', '无标题'))
+        author = html.escape(data.get('author', '未知'))
         content = data.get('html', '') or data.get('content', '') or data.get('text', '')
+        source_url = html.escape(data.get('source_url', '#'))
+        publish_time = html.escape(data.get('publishTime', ''))
 
         # 如果没有 HTML，将文本转换为简单 HTML
         if not content.startswith('<'):
+            # 先转义文本内容，再替换换行符
+            content = html.escape(content)
             content = f"<p>{content.replace(chr(10), '</p><p>')}</p>"
+        else:
+            # 如果已有 HTML，清理潜在的 XSS
+            content = self._sanitize_html(content)
+
+        # 时间标签 HTML（已转义）
+        time_span = f'<span>&#128197; {publish_time}</span>' if publish_time else ''
 
         html_template = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -238,14 +250,14 @@ class Exporter:
     <div class="container">
         <h1>{title}</h1>
         <div class="meta">
-            <span>👤 {author}</span>
-            {'<span>📅 ' + data.get('publishTime', '') + '</span>' if data.get('publishTime') else ''}
+            <span>&#128100; {author}</span>
+            {time_span}
         </div>
         <div class="content">
             {content}
         </div>
         <div class="footer">
-            原文链接: <a href="{data.get('source_url', '#')}" target="_blank">{data.get('source_url', 'N/A')}</a><br>
+            原文链接: <a href="{source_url}" target="_blank">{source_url}</a><br>
             导出时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         </div>
     </div>
@@ -253,6 +265,42 @@ class Exporter:
 </html>"""
 
         return html_template
+
+    def _sanitize_html(self, html_content: str) -> str:
+        """清理 HTML 内容中的潜在 XSS"""
+        import re
+        # 移除危险标签
+        dangerous_tags = ['script', 'iframe', 'object', 'embed', 'form', 'input']
+        for tag in dangerous_tags:
+            # 移除开始标签
+            html_content = re.sub(
+                rf'<{tag}[^>]*>',
+                f'&lt;{tag}&gt;',
+                html_content,
+                flags=re.IGNORECASE
+            )
+            # 移除结束标签
+            html_content = re.sub(
+                rf'</{tag}>',
+                f'&lt;/{tag}&gt;',
+                html_content,
+                flags=re.IGNORECASE
+            )
+        # 移除事件处理器
+        html_content = re.sub(
+            r'\son\w+\s*=\s*["\'][^"\']*["\']',
+            '',
+            html_content,
+            flags=re.IGNORECASE
+        )
+        # 移除 javascript: 伪协议
+        html_content = re.sub(
+            r'href\s*=\s*["\']javascript:[^"\']*["\']',
+            'href="#"',
+            html_content,
+            flags=re.IGNORECASE
+        )
+        return html_content
 
     def save(self, data: Dict[str, Any], format: str, filename: Optional[str] = None) -> str:
         """
