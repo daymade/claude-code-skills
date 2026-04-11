@@ -1,9 +1,9 @@
 ---
 name: wechat-article-scraper
-description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（HTTP/Scrapling/Playwright/Chrome DevTools）、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
-argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai] [--download-images] [--format markdown|json|html|pdf]
+description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（fast/adaptive/stable/reliable/zero_dep/jina_ai/history）、公众号全历史文章批量抓取、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、互动数据提取（阅读/点赞/在看数）、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
+argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai|history] [--download-images] [--format markdown|json|html|pdf|excel]
 metadata:
-  version: "3.21.0"
+  version: "3.22.0"
   openclaw:
     emoji: "📰"
     requires:
@@ -63,13 +63,42 @@ cd web/frontend && npm run dev
 
 # 搜索并解析真实微信链接（避免搜狗链接过期）
 python3 scripts/search.py "人工智能投资" -n 10 --resolve-urls
+
+# ===== 公众号历史批量抓取（v3.22.0 新增）=====
+
+# 第1步：微信扫码登录（保存登录态）
+w auth login 个人号
+
+# 第2步：抓取公众号全历史文章
+# 需要从公众号主页 URL 提取 biz 和 token 参数
+w history crawl 公众号名称 \
+  --biz=MzI5NjUyMDk0MA== \
+  --token=xxx \
+  --max 100  # 最多抓取100篇（0=无限制）
+
+# 查看抓取进度
+w history list
+w history progress 公众号名称
+
+# 从断点续传（自动支持）
+w history crawl 公众号名称 --biz=xxx --token=xxx
+
+# 使用脚本直接抓取
+python3 scripts/history_crawler.py \
+  --biz=MzI5NjUyMDk0MA== \
+  --token=xxx \
+  --account-name="公众号名称" \
+  --max-articles 100
 ```
 
 ## 核心能力
 
 | 能力 | 说明 | 竞品对比 |
 |------|------|----------|
-| **智能策略路由** | 自动选择最佳抓取策略，四级降级 | **独有** |
+| **智能策略路由** | 自动选择最佳抓取策略，7级降级 | **独有** |
+| **公众号历史抓取** | 批量抓取公众号全历史文章，支持断点续传 | 仅 wcplusPro 商业版支持 |
+| **互动数据提取** | 阅读/点赞/在看/评论数抓取（需登录态） | 仅 1/12 竞品支持 |
+| **微信登录态管理** | QR 码登录，持久化存储，多账号支持 | **独有** |
 | **OG 元数据备选** | 当微信选择器失败时自动使用 Open Graph | **独有** |
 | **图片段落关联** | 智能识别图片与文本段落的关系 | **独有** |
 | **Content Status** | 清晰的状态码系统 (ok/blocked/parse_empty) | **独有** |
