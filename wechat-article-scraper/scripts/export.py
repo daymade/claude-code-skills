@@ -289,6 +289,30 @@ class Exporter:
         # 时间标签 HTML（已转义）
         time_span = f'<span>&#128197; {publish_time}</span>' if publish_time else ''
 
+        # 视频部分 HTML（新增）
+        video_section = ''
+        if data.get('videos'):
+            video_items = []
+            for video in data['videos']:
+                src = html.escape(video.get('src', ''))
+                poster = html.escape(video.get('poster', ''))
+                title = html.escape(video.get('title', '视频'))
+                duration = html.escape(video.get('duration', ''))
+
+                # 使用 video 标签或链接
+                if src:
+                    video_html = f'<video controls preload="metadata" poster="{poster}" style="max-width:100%;margin:20px 0;"><source src="{src}"></video>'
+                elif poster:
+                    video_html = f'<div style="margin:20px 0;"><img src="{poster}" style="max-width:100%;" alt="{title}"><p>{title} (视频)</p></div>'
+                else:
+                    continue
+
+                info = f"{title} ({duration})" if duration else title
+                video_items.append(f'<div style="margin:20px 0;"><p><strong>{info}</strong></p>{video_html}</div>')
+
+            if video_items:
+                video_section = f'<div class="videos" style="margin-top:40px;padding-top:20px;border-top:1px solid #eee;"><h2>视频列表</h2>{"".join(video_items)}</div>'
+
         html_template = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -359,6 +383,7 @@ class Exporter:
         <div class="content">
             {content}
         </div>
+        {video_section}
         <div class="footer">
             原文链接: <a href="{source_url}" target="_blank">{source_url}</a><br>
             导出时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}

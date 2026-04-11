@@ -439,7 +439,13 @@ echo "完成: 共抓取 $count 篇文章"
 
 ## 版本历史
 
-### v2.9.2 (当前)
+### v2.9.3 (当前)
+- ✨ **改进**: HTML 导出支持视频嵌入
+  - 使用 `<video>` 标签嵌入视频播放器
+  - 支持 poster 封面图预览
+  - 视频列表独立章节展示
+
+### v2.9.2
 - ✨ **改进**: 所有 6 个策略统一支持视频提取
   - Fast/Adaptive/Stable/Reliable/ZeroDep/JinaAI 全部支持
   - 统一视频数据格式：src, poster, duration, title
