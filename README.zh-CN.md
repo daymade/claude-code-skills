@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-43-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-44-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.39.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -14,7 +14,7 @@
 
 </div>
 
-专业的 Claude Code 技能市场，提供 43 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 44 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -268,6 +268,9 @@ claude plugin install continue-claude-work@daymade-skills
 
 # Scrapling CLI 抽取与故障排查
 claude plugin install scrapling-skill@daymade-skills
+
+# 腾讯 IMA 知识库伴侣与安装器
+claude plugin install ima-copilot@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -1892,6 +1895,47 @@ claude plugin install scrapling-skill@daymade-skills
 
 ---
 
+### 44. **ima-copilot** - 腾讯 IMA 伴侣与安装器
+
+围绕官方腾讯 IMA skill（`ima.qq.com`）的一站式包装层。通过 `npx skills add` 把官方 `ima-skill` 一键安装到 Claude Code、Codex、OpenClaw 三个平台；引导用户配置 API 凭据；在用户授权下检测并修复上游已知问题；提供按知识库置顶的个人化扇出搜索策略。
+
+**使用场景：**
+- 用户提到 IMA、腾讯 IMA、ima.qq.com，或需要安装官方 ima-skill
+- 用户遇到 `Skipped loading skill(s) due to invalid SKILL.md` 这类 ima-skill 加载告警
+- 需要跨 IMA 知识库搜索并把某些精选库置顶
+- 需要配置或轮换 IMA API 凭据
+- 上游 ima-skill 发布了带 bug 的新版（例如子模块 SKILL.md 缺少 YAML frontmatter）
+
+**主要功能：**
+- 通过 [vercel-labs/skills](https://github.com/vercel-labs/skills) 实现对 Claude Code / Codex / OpenClaw 三个目标的零配置安装，自动探测已安装的 agent，默认走 symlink 模式——修一次或升级一次，所有共享同一 canonical install 的 agent 自动同步
+- 凭据管理走 XDG 风格：`~/.config/ima/{client_id, api_key}`，同时支持 `IMA_OPENAPI_CLIENTID` / `IMA_OPENAPI_APIKEY` 环境变量兜底
+- 内置只读诊断脚本 `scripts/diagnose.sh`，用结构化 `✅/⚠️/❌` 报告覆盖安装状态、凭据 liveness、以及所有已知上游问题
+- 内置 `scripts/search_fanout.py`，实现客户端跨知识库扇出搜索，支持优先库置顶、子集库过滤、100 条静默截断检测，以及订阅只读库的权限差异分组
+- 严格的包装层架构：永不 vendor 上游文件，永不 fork，每一次修复都是运行时指令 + 明确用户授权 + 自动带时间戳的 `/tmp` 备份
+- 针对 frontmatter 缺失问题提供两种可选修复策略：A 策略（把子模块改名为 `MODULE.md` 并 patch 根 SKILL.md 引用，尊重上游设计意图）或 B 策略（仅追加最小 frontmatter，最小化差异）
+- 个人化偏好通过 `~/.config/ima/copilot.json` 声明，仓库只提供示例模板 `config-template/copilot.json.example`，不预设任何真实知识库名
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install ima-copilot@daymade-skills
+
+# 然后让 Claude 代你跑完整个流程
+"装一下 ima-skill 并配置我的 IMA API key"
+"对我的 ima-skill 做一次诊断，有问题就修"
+"在我的 IMA 知识库里搜 embedding 模型对比，精选库置顶"
+```
+
+**🎬 实时演示**
+
+*即将推出*
+
+📚 **文档**：参见 [ima-copilot/SKILL.md](./ima-copilot/SKILL.md) 和 [ima-copilot/references/known_issues.md](./ima-copilot/references/known_issues.md)。
+
+**要求**：Node.js 18+（`npx skills` 在按需拉取）、`curl`、`unzip`、Python 3.6+；从 [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface) 获取 IMA OpenAPI 凭据。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -2000,6 +2044,9 @@ claude plugin install scrapling-skill@daymade-skills
 ### 插件与技能故障排除
 使用 **claude-skills-troubleshooting** 诊断和解决 Claude Code 插件和技能配置问题。调试为什么插件显示已安装但未显示在可用技能列表中、了解 installed_plugins.json 与 settings.json enabledPlugins 架构，以及批量启用市场中缺失的插件。非常适合市场维护者调试安装问题、开发者调试技能激活，或任何对 GitHub #17832 自动启用 bug 感到困惑的人。
 
+### 腾讯 IMA 知识库工作流
+使用 **ima-copilot** 把官方腾讯 IMA skill 一键装到 Claude Code / Codex / OpenClaw 三个平台，引导配置 API 凭据，在用户授权下检测与修复上游已知问题，并在所有 IMA 知识库上跑带优先级置顶的个人化扇出搜索。因为整个架构是包装层而不是 fork，上游升级永远不会和你的修复冲突——每一次修复都是运行时指令，不是 shipped patch。特别适合同时使用多个 coding agent 的 IMA 重度用户，或遇到过 "Skipped loading skill(s) due to invalid SKILL.md" 告警的人。
+
 ## 📚 文档
 
 每个技能包括：
@@ -2050,6 +2097,7 @@ claude plugin install scrapling-skill@daymade-skills
 - **capture-screen**：参见 `capture-screen/SKILL.md` 了解基于 CGWindowID 的 macOS 截图流程
 - **continue-claude-work**：参见 `continue-claude-work/SKILL.md` 了解本地会话产物恢复、漂移检查与续做流程
 - **scrapling-skill**：参见 `scrapling-skill/SKILL.md` 了解 CLI 工作流，参见 `scrapling-skill/references/troubleshooting.md` 了解已验证的 Scrapling 故障模式
+- **ima-copilot**：参见 `ima-copilot/SKILL.md` 了解包装层架构与路由规则，参见 `ima-copilot/references/installation_flow.md` 了解安装流程细节，参见 `ima-copilot/references/known_issues.md` 了解已知问题清单与修复命令，参见 `ima-copilot/references/search_best_practices.md` 了解扇出搜索策略与 100 条截断处理
 
 ## 🛠️ 系统要求
 
@@ -2074,6 +2122,7 @@ claude plugin install scrapling-skill@daymade-skills
 - **macOS**（用于 capture-screen 与 excel-automation 的 AppleScript 控制流程）
 - **Python 3.8+**（用于 continue-claude-work）：内置脚本进行会话提取（无外部依赖）
 - **uv + Scrapling CLI**（用于 scrapling-skill）：`uv tool install 'scrapling[shell]'`，浏览器抓取前运行 `scrapling install`
+- **Node.js 18+ + curl + unzip**（用于 ima-copilot）：`npx skills` 按需从 npm registry 拉取；IMA OpenAPI 凭据从 [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface) 获取
 
 ## ❓ 常见问题
 

@@ -13,6 +13,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **doc-to-markdown**: Added 31 unit tests (`test_convert.py`)
 - **doc-to-markdown**: Added 5-tool benchmark report (`references/benchmark-2026-03-22.md`)
 
+## [1.41.0] - 2026-04-11
+
+### Added
+- **New Skill**: ima-copilot v1.0.0 — One-stop companion and installer for the official Tencent IMA skill (ima.qq.com), with wrapper-layer architecture that never vendors upstream files
+  - Zero-config installation to Claude Code, Codex, and OpenClaw via `npx skills add` ([vercel-labs/skills](https://github.com/vercel-labs/skills)) with auto-detection of installed agents and default symlink mode, so that a repair or upgrade applied once propagates automatically to every agent that shares the canonical install
+  - XDG-style credential management at `~/.config/ima/{client_id, api_key}` with env-var fallback (`IMA_OPENAPI_CLIENTID` / `IMA_OPENAPI_APIKEY`)
+  - Bundled `scripts/diagnose.sh` for read-only health check covering install presence, credential liveness, and known upstream issues with structured `✅/⚠️/❌` report
+  - Bundled `scripts/install_ima_skill.sh` with version override via `--version` flag or `IMA_VERSION` env var
+  - Bundled `scripts/search_fanout.py` for client-side cross-knowledge-base search with priority-based KB boosting, skip-list filtering, 100-result silent-truncation detection, and permission-denied KB partitioning (typical for subscribed KBs)
+  - Detects and repairs ISSUE-001 (submodule SKILL.md files missing YAML frontmatter in upstream v1.1.2) with two user-selectable strategies: Strategy A (rename to `MODULE.md` and patch root references — respects upstream design intent) or Strategy B (prepend minimal frontmatter — smallest diff)
+  - All repair commands are idempotent, reversible (with automatic timestamped backups to `/tmp/ima-copilot-backups/`), and use `command cp`/`command mv` to bypass interactive shell aliases
+  - Personalization via `~/.config/ima/copilot.json` with `priority_kbs` and `skip_kbs` lists — template at `config-template/copilot.json.example` uses illustrative-only values so the skill ships with zero real KB names
+  - Comprehensive reference documentation in `references/` covering installation flow, API key setup, known issues (source of truth for repairs), and search best practices
+  - Never vendors, forks, or mirrors upstream files — every repair is a runtime instruction executed with explicit user consent
+
+### Changed
+- Updated marketplace skills/plugins count from 43 to 44
+- Updated marketplace version from 1.40.1 to 1.41.0
+
 ## [1.39.0] - 2026-03-18
 
 ### Added
