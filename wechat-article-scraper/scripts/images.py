@@ -103,17 +103,36 @@ class ImageDownloader:
         return True
 
     def _generate_filename(self, url: str, index: int) -> str:
-        """生成本地文件名（安全版本，防止路径遍历）"""
+        """生成本地文件名（安全版本，防止路径遍历）
+
+        吸取 wechat-article-full-reader 精华：
+        - 从 wx_fmt 参数提取正确的图片格式
+        - 支持 png, gif, webp 等格式自动识别
+        """
         # 尝试从 URL 提取扩展名
         parsed = urlparse(url)
         path = unquote(parsed.path)
+        query = parsed.query
 
-        # 提取扩展名
+        # 提取扩展名 - 优先从 wx_fmt 参数（微信图片格式参数）
         ext = '.jpg'  # 默认
+
+        # 从 URL 路径提取
         for e in ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp']:
             if path.lower().endswith(e):
                 ext = e
                 break
+
+        # 吸取精华：从 wx_fmt 参数提取（微信图片特有）
+        # 微信图片 URL: https://mmbiz.qpic.cn/xxx?wx_fmt=png&wxfrom=5
+        if 'wx_fmt=png' in query:
+            ext = '.png'
+        elif 'wx_fmt=gif' in query:
+            ext = '.gif'
+        elif 'wx_fmt=webp' in query:
+            ext = '.webp'
+        elif 'wx_fmt=jpg' in query or 'wx_fmt=jpeg' in query:
+            ext = '.jpg'
 
         # 使用 hash 确保唯一性
         url_hash = hashlib.md5(url.encode()).hexdigest()[:8]

@@ -9,7 +9,7 @@
 - HTML (带图片)
 
 作者: Claude Code
-版本: 2.0.0
+版本: 2.1.0
 """
 
 import sys
@@ -23,6 +23,23 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 
 
+def _clean_text(text: str) -> str:
+    """
+    清理文本内容
+
+    吸取 wechat-article-browseruse 精华：
+    - 处理 \xa0 非断空格（微信文章常见）
+    - 规范化空白字符
+    """
+    if not text:
+        return ""
+    # 替换非断空格为普通空格
+    text = text.replace("\xa0", " ")
+    # 规范化空白字符
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
 class Exporter:
     """文章导出器"""
 
@@ -34,7 +51,8 @@ class Exporter:
         self,
         data: Dict[str, Any],
         include_images: bool = True,
-        include_meta: bool = True
+        include_meta: bool = True,
+        converter: str = 'default'
     ) -> str:
         """
         导出为 Markdown
@@ -43,44 +61,62 @@ class Exporter:
             data: 文章数据字典
             include_images: 是否包含图片
             include_meta: 是否包含元数据头部
+            converter: HTML 转换器选择
+                - 'default': 使用原始内容
+                - 'markdownify': 使用 markdownify 库
+                - 'html2text': 使用 html2text 库（更轻量）
 
         Returns:
             str: Markdown 内容
         """
+        # 根据 converter 选择转换方式
+        if data.get('html'):
+            if converter == 'markdownify':
+                content = self._html_to_markdown_with_markdownify(data['html'])
+            elif converter == 'html2text':
+                content = self._html_to_markdown_with_html2text(data['html'])
+            else:
+                content = data.get('content', '') or data.get('text', '')
+        else:
+            content = data.get('content', '') or data.get('text', '')
+
         lines = []
+
+        # 清理文本字段 - 吸取精华：处理 \xa0 非断空格
+        title = _clean_text(data.get('title', '无标题'))
+        author = _clean_text(data.get('author', '未知'))
+        publish_time = _clean_text(data.get('publishTime', ''))
+        source_url = data.get('source_url', '')
+        description = _clean_text(data.get('description', ''))
 
         # YAML Front Matter
         if include_meta:
             lines.append("---")
-            lines.append(f"title: {data.get('title', '无标题')}")
-            lines.append(f"author: {data.get('author', '未知')}")
-            if data.get('publishTime'):
-                lines.append(f"publish_time: {data.get('publishTime')}")
-            if data.get('source_url'):
-                lines.append(f"source_url: {data.get('source_url')}")
+            lines.append(f"title: {title}")
+            lines.append(f"author: {author}")
+            if publish_time:
+                lines.append(f"publish_time: {publish_time}")
+            if source_url:
+                lines.append(f"source_url: {source_url}")
             lines.append(f"exported_at: {datetime.now().isoformat()}")
-            if data.get('description'):
-                lines.append(f"description: {data.get('description')}")
+            if description:
+                lines.append(f"description: {description}")
             lines.append("---")
             lines.append("")
 
         # 标题
-        title = data.get('title', '无标题')
         lines.append(f"# {title}")
         lines.append("")
 
         # 元数据表格
-        lines.append("**作者**: {}".format(data.get('author', '未知')))
-        if data.get('publishTime'):
-            lines.append("**发布时间**: {}".format(data.get('publishTime')))
+        lines.append("**作者**: {}".format(author))
+        if publish_time:
+            lines.append("**发布时间**: {}".format(publish_time))
         if data.get('source_url'):
             lines.append("**原文链接**: {}".format(data.get('source_url')))
         lines.append("")
         lines.append("---")
         lines.append("")
-
-        # 正文
-        content = data.get('content', '') or data.get('text', '')
 
         # 处理内容中的图片
         if include_images and data.get('images'):
@@ -102,9 +138,63 @@ class Exporter:
             lines.append("")
 
         # 页脚
-        lines.append(f"*本文档由 wechat-article-scraper 于 {datetime.now().strftime("%Y-%m-%d %H:%M")} 生成*")
+        lines.append(f"*本文档由 wechat-article-scraper 于 {datetime.now().strftime('%Y-%m-%d %H:%M')} 生成*")
 
         return '\n'.join(lines)
+
+    def _html_to_markdown_with_markdownify(self, html: str) -> str:
+        """
+        使用 markdownify 将 HTML 转换为 Markdown
+
+        竞品推荐此库，但以下问题需要验证:
+        1. 中文排版支持是否更好
+        2. 图片处理是否符合微信文章特征
+        3. 性能 overhead 是否可接受
+        """
+        try:
+            import markdownify
+
+            # 微信特定的转换配置
+            md = markdownify.markdownify(
+                html,
+                heading_style="ATX",  # # 样式的标题
+                bullets="-",          # 统一使用 - 作为列表标记
+                strip=['script', 'style', 'nav', 'header', 'footer'],
+                convert=['b', 'i', 'strong', 'em', 'a', 'img', 'p', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td']
+            )
+
+            # 后处理: 清理多余空行
+            md = re.sub(r'\n{3,}', '\n\n', md)
+
+            return md
+
+        except ImportError:
+            print("警告: markdownify 未安装，使用默认转换", file=sys.stderr)
+            # 简单 fallback
+            return html
+
+    def _html_to_markdown_with_html2text(self, html: str) -> str:
+        """
+        使用 html2text 将 HTML 转换为 Markdown
+
+        竞品 fetch-wx-article 使用此库，特点:
+        1. 纯 Python 实现，更轻量
+        2. 无额外依赖
+        3. 转换速度快
+        """
+        try:
+            import html2text
+
+            h = html2text.HTML2Text()
+            h.ignore_links = False  # 保留链接
+            h.ignore_images = False  # 保留图片
+            h.body_width = 0  # 不限制行宽
+
+            return h.handle(html)
+
+        except ImportError:
+            print("警告: html2text 未安装，使用默认转换", file=sys.stderr)
+            return html
 
     def _insert_images_to_content(self, content: str, images: list) -> str:
         """将图片插入到内容合适位置"""
@@ -158,7 +248,7 @@ class Exporter:
         export_data = {
             **data,
             '_export_meta': {
-                'version': '2.0.0',
+                'version': '2.1.0',
                 'exported_at': datetime.now().isoformat(),
                 'exporter': 'wechat-article-scraper'
             }
@@ -333,7 +423,13 @@ class Exporter:
 
         return html_content
 
-    def save(self, data: Dict[str, Any], format: str, filename: Optional[str] = None) -> str:
+    def save(
+        self,
+        data: Dict[str, Any],
+        format: str,
+        filename: Optional[str] = None,
+        converter: str = 'default'
+    ) -> str:
         """
         保存文章到文件
 
@@ -341,6 +437,7 @@ class Exporter:
             data: 文章数据
             format: 格式 (markdown, pdf, json, html)
             filename: 文件名（不含扩展名）
+            converter: Markdown 转换器选择（'default'/'markdownify'/'html2text'）
 
         Returns:
             str: 保存的文件路径
@@ -349,7 +446,7 @@ class Exporter:
         if not filename:
             title = data.get('title', 'untitled')
             # 清理文件名中的非法字符
-            filename = re.sub(r'[<>:"/\\|?*]', '', title)[:50]
+            filename = re.sub(r'[<>"/\\|?*]', '', title)[:50]
 
         # 根据格式选择导出方法
         format_methods = {
@@ -369,6 +466,10 @@ class Exporter:
         if format == 'pdf':
             output_path = self.output_dir / f"{filename}.pdf"
             method(data, str(output_path))
+        elif format in ('markdown', 'md'):
+            output_path = self.output_dir / f"{filename}.{ext}"
+            content = method(data, converter=converter)
+            output_path.write_text(content, encoding='utf-8')
         else:
             output_path = self.output_dir / f"{filename}.{ext}"
             content = method(data)

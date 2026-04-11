@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 47 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
+This is a Claude Code skills marketplace containing 48 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -236,6 +236,7 @@ This applies when you change ANY file under a skill directory:
 44. **ima-copilot** - One-stop companion and installer for the official Tencent IMA skill with zero-config three-agent installation via vercel-labs/skills, XDG credential management, read-only diagnostic, known-issue auto-repair under user consent, and personalized fan-out search with priority-based knowledge base boosting
 45. **claude-export-txt-better** - Fixes broken line wrapping in Claude Code exported `.txt` conversation files; reconstructs tables, paragraphs, paths, and tool calls hard-wrapped at fixed column widths; ships with a 53-check automated validation suite
 46. **douban-skill** - Exports and syncs Douban (豆瓣) book/movie/music/game collections to local CSV files via the reverse-engineered Frodo API; supports full export and RSS incremental sync with no login, cookies, or browser required
+48. **wechat-article-scraper** - World-class WeChat article extraction with 6-level strategy routing, OG metadata fallback, image-paragraph association, and Sogou search discovery; supports Markdown/JSON/HTML/PDF export
 47. **terraform-skill** - Operational traps for Terraform provisioners, multi-environment isolation, and zero-to-deployment reliability; covers provisioner timing races, SSH connection conflicts, DNS record duplication, volume permissions, database bootstrap gaps, Cloudflare credential errors, and init-data-only-on-first-boot pitfalls
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
