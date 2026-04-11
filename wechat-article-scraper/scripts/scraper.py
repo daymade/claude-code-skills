@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-微信公众号文章抓取工具 - 世界级微信文章抓取方案 v2.1
+微信公众号文章抓取工具 - 世界级微信文章抓取方案 v3.1
 
 整合策略路由、OG元数据备选、图片与段落关联、多格式导出等完整功能。
-支持四种策略：fast → adaptive → stable → reliable 自动降级
+支持六种策略：fast → adaptive → stable → reliable → zero_dep → jina_ai 自动降级
 
 特性：
 - 智能策略路由：自动选择最佳抓取策略
+- SQLite 缓存系统：避免重复请求，支持内容指纹去重
 - OG 元数据备选：当微信特定选择器失败时使用 Open Graph
 - 图片段落关联：智能识别图片与文本段落的关系
 - Content Status：清晰的状态码系统
@@ -14,7 +15,7 @@
 - 反爬绕过：使用 ?scene=1 参数可绕过登录验证
 
 作者: Claude Code
-版本: 2.1.0
+版本: 3.1.0
 """
 
 import sys
@@ -77,7 +78,9 @@ def scrape_article(
     enable_og_fallback: bool = True,
     max_retries: int = 3,
     screenshot: bool = False,
-    proxy: Optional[str] = None
+    proxy: Optional[str] = None,
+    use_cache: bool = True,
+    cache_ttl_days: int = 30
 ) -> Dict[str, Any]:
     """
     抓取单篇文章
@@ -91,6 +94,8 @@ def scrape_article(
         enable_og_fallback: 启用 OG 元数据备选提取
         max_retries: 最大重试次数
         screenshot: 是否保存页面截图（仅 Playwright 策略）
+        use_cache: 是否使用缓存
+        cache_ttl_days: 缓存过期时间（天）
 
     Returns:
         dict: 抓取结果，包含 content_status 状态码
@@ -108,6 +113,26 @@ def scrape_article(
     # 确定输出目录
     if output_dir is None:
         output_dir = get_default_output_dir()
+
+    # 检查缓存
+    cache = None
+    if use_cache:
+        from cache import CacheManager
+        cache = CacheManager(ttl_days=cache_ttl_days)
+        cached = cache.get(url)
+        if cached:
+            logger.info(f"💾 使用缓存: {url[:60]}...")
+            return {
+                'success': True,
+                'output_path': None,  # 缓存不返回文件路径
+                'strategy': cached.get('strategy', 'cached'),
+                'content_status': 'cached',
+                'title': cached.get('title'),
+                'author': cached.get('author'),
+                'image_count': len(cached.get('images', [])),
+                'cached': True,
+                'data': cached,
+            }
 
     # 选择策略
     prefer = None
@@ -199,6 +224,10 @@ def scrape_article(
     try:
         output_path = exporter.save(data, format=output_format, filename=safe_title)
 
+        # 缓存成功抓取的数据
+        if use_cache and cache:
+            cache.set(url, data, strategy=result.strategy.value)
+
         return {
             'success': True,
             'output_path': output_path,
@@ -253,7 +282,9 @@ def batch_scrape(
     strategy: Optional[str] = None,
     download_images: bool = False,
     delay: float = 3.0,
-    proxy: Optional[str] = None
+    proxy: Optional[str] = None,
+    use_cache: bool = True,
+    cache_ttl_days: int = 30
 ) -> Dict[str, Any]:
     """
     批量抓取文章
@@ -265,6 +296,8 @@ def batch_scrape(
         download_images: 是否下载图片
         delay: 请求间隔（秒）
         proxy: HTTP 代理地址
+        use_cache: 是否使用缓存
+        cache_ttl_days: 缓存过期时间（天）
 
     Returns:
         dict: 批量抓取结果统计
@@ -294,7 +327,9 @@ def batch_scrape(
             strategy=strategy,
             download_images=download_images,
             output_dir=output_dir,
-            proxy=proxy
+            proxy=proxy,
+            use_cache=use_cache,
+            cache_ttl_days=cache_ttl_days
         )
 
         results['articles'].append({
@@ -326,7 +361,7 @@ def batch_scrape(
 
 def main():
     parser = argparse.ArgumentParser(
-        description='微信公众号文章抓取工具 v2.1 - 世界级微信文章抓取方案',
+        description='微信公众号文章抓取工具 v3.1 - 世界级微信文章抓取方案',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
@@ -345,11 +380,17 @@ def main():
 
 Content Status:
   ok            - 抓取成功
+  cached        - 使用本地缓存
   blocked       - 被风控拦截
   no_mp_url     - 无效的微信文章链接
   fetch_error   - 网络请求失败
   parse_empty   - 解析结果为空
   need_mcp      - 需要 MCP 模式
+
+缓存管理:
+  python3 scripts/cache.py --stats     # 查看缓存统计
+  python3 scripts/cache.py --list      # 列出缓存文章
+  python3 scripts/cache.py --clear-expired  # 清理过期缓存
         """
     )
 
@@ -409,6 +450,17 @@ Content Status:
         '--proxy',
         help='HTTP 代理地址 (例如: http://127.0.0.1:1082)'
     )
+    parser.add_argument(
+        '--no-cache',
+        action='store_true',
+        help='禁用本地缓存'
+    )
+    parser.add_argument(
+        '--cache-ttl',
+        type=int,
+        default=30,
+        help='缓存过期时间（天，默认: 30）'
+    )
 
     args = parser.parse_args()
 
@@ -425,7 +477,9 @@ Content Status:
             strategy=args.strategy,
             download_images=args.download_images,
             delay=args.delay,
-            proxy=args.proxy
+            proxy=args.proxy,
+            use_cache=not args.no_cache,
+            cache_ttl_days=args.cache_ttl
         )
 
         if args.json_output:
@@ -456,7 +510,9 @@ Content Status:
         output_dir=args.output,
         enable_og_fallback=not args.no_og_fallback,
         max_retries=args.max_retries,
-        proxy=args.proxy
+        proxy=args.proxy,
+        use_cache=not args.no_cache,
+        cache_ttl_days=args.cache_ttl
     )
 
     # 输出结果
