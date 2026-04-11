@@ -1,0 +1,14 @@
+{
+  "_comment_priority_kbs": "KB names whose hits should be floated to the top of every search, in the order listed. Names must match the KB name exactly (Unicode-sensitive). Leave empty for no priority groups.",
+  "priority_kbs": [
+    "your-curated-kb-name"
+  ],
+
+  "_comment_skip_kbs": "KB names to exclude from fan-out entirely. Use this for strict subsets (e.g. a smaller KB whose contents are all duplicated in a larger one) or for KBs that never contain anything relevant to your searches. Leave empty to search everything you have access to.",
+  "skip_kbs": [
+    "your-subset-kb-name"
+  ],
+
+  "_comment_fanout_strategy": "Reserved for future search strategy modes. Only 'parallel-then-merge' is currently implemented.",
+  "fanout_strategy": "parallel-then-merge"
+}
