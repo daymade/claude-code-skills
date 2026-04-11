@@ -210,6 +210,19 @@ def scrape_article(
         report = downloader.generate_report(results)
         data['download_report'] = report
 
+    # 质量验证
+    from quality import ContentValidator, QualityGrade
+    validator = ContentValidator()
+    quality_score = validator.validate(data)
+    data['quality'] = validator.generate_report(quality_score)
+
+    # 低质量警告
+    if quality_score.grade in (QualityGrade.POOR, QualityGrade.INVALID):
+        logger.warning(f"⚠️ 内容质量较低 ({quality_score.grade.value}, {quality_score.total_score}/100)")
+        if quality_score.issues:
+            for issue in quality_score.issues[:3]:  # 只显示前3个问题
+                logger.warning(f"   - {issue}")
+
     # 导出
     from export import Exporter
 
@@ -237,6 +250,10 @@ def scrape_article(
             'author': data.get('author'),
             'image_count': len(data.get('images', [])),
             'duration_ms': result.duration_ms,
+            'quality': {
+                'score': quality_score.total_score,
+                'grade': quality_score.grade.value,
+            },
         }
     except Exception as e:
         return {
@@ -527,6 +544,12 @@ Content Status:
             print(f"   标题: {result['title']}")
             if result.get('image_count', 0) > 0:
                 print(f"   图片: {result['image_count']} 张")
+            # 显示质量评分
+            if 'quality' in result:
+                q = result['quality']
+                grade_emoji = {'excellent': '🌟', 'good': '✨', 'fair': '⚡', 'poor': '⚠️', 'invalid': '❌'}
+                emoji = grade_emoji.get(q['grade'], '•')
+                print(f"   质量: {emoji} {q['score']}/100 ({q['grade']})")
         else:
             print(f"❌ 抓取失败: {result['error']}", file=sys.stderr)
             print(f"   策略: {result.get('strategy', 'unknown')}", file=sys.stderr)
