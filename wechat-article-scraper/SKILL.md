@@ -41,6 +41,18 @@ python3 scripts/storage.py search "人工智能"
 # 列出某作者的所有文章
 python3 scripts/storage.py list --author "差评" --limit 50
 
+# 创建批量任务队列
+python3 scripts/queue.py create my-batch-job --workers 3 --delay 2
+
+# 添加 URL 到队列
+python3 scripts/queue.py add-urls queue_20260112_120000_my-batch-job   "https://mp.weixin.qq.com/s/xxx1"   "https://mp.weixin.qq.com/s/xxx2"   "https://mp.weixin.qq.com/s/xxx3"
+
+# 启动队列（支持暂停/恢复/停止）
+python3 scripts/queue.py start queue_20260112_120000_my-batch-job
+
+# 查看队列状态和进度
+python3 scripts/queue.py status queue_20260112_120000_my-batch-job
+
 # 搜索公众号文章
 python3 scripts/search.py "人工智能投资" -n 10
 
@@ -323,6 +335,7 @@ wechat-article-scraper/
 │   ├── search.py              # 搜狗搜索（支持链接解析）
 │   ├── export.py              # 多格式导出（Excel/PDF/HTML/JSON/Markdown，多sheet工作簿）
 │   ├── storage.py             # SQLite 持久化存储（增量更新+全文搜索+统计分析）
+│   ├── queue.py               # 批量任务队列（断点续传+失败重试+并发控制）
 │   ├── extract.js             # Chrome DevTools 提取脚本（OG备选+段落关联）
 │   └── playwright_scraper.py  # Playwright 抓取
 ├── references/
