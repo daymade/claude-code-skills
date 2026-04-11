@@ -243,7 +243,8 @@ def batch_scrape(
     output_dir: str,
     strategy: Optional[str] = None,
     download_images: bool = False,
-    delay: float = 3.0
+    delay: float = 3.0,
+    proxy: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     批量抓取文章
@@ -254,6 +255,7 @@ def batch_scrape(
         strategy: 优先策略
         download_images: 是否下载图片
         delay: 请求间隔（秒）
+        proxy: HTTP 代理地址
 
     Returns:
         dict: 批量抓取结果统计
@@ -282,7 +284,8 @@ def batch_scrape(
             url=url,
             strategy=strategy,
             download_images=download_images,
-            output_dir=output_dir
+            output_dir=output_dir,
+            proxy=proxy
         )
 
         results['articles'].append({
@@ -412,7 +415,8 @@ Content Status:
             output_dir=output_dir,
             strategy=args.strategy,
             download_images=args.download_images,
-            delay=args.delay
+            delay=args.delay,
+            proxy=args.proxy
         )
 
         if args.json_output:
