@@ -174,10 +174,31 @@ def scrape_with_playwright(url: str, screenshot_path: str = None) -> dict:
                         }
                     });
 
+                    // 提取互动数据
+                    const engagement = {};
+                    try {
+                        const readCountEl = document.querySelector('#js_read_num3') ||
+                                            document.querySelector('#readNum') ||
+                                            document.querySelector('.read-num');
+                        if (readCountEl) engagement.readCount = readCountEl.textContent?.trim();
+
+                        const likeCountEl = document.querySelector('#js_like_num') ||
+                                            document.querySelector('#likeNum') ||
+                                            document.querySelector('.like-num');
+                        if (likeCountEl) engagement.likeCount = likeCountEl.textContent?.trim();
+
+                        const watchCountEl = document.querySelector('#js_watched_num') ||
+                                             document.querySelector('.watched-num');
+                        if (watchCountEl) engagement.watchCount = watchCountEl.textContent?.trim();
+                    } catch (e) {
+                        // 互动数据提取失败不影响主流程
+                    }
+
                     return {
                         title: title,
                         author: author,
                         publishTime: publishTime,
+                        engagement: engagement,  // 新增：互动数据
                         content: contentEl.innerText,
                         paragraphs: paragraphs,
                         images: images,

@@ -443,7 +443,7 @@ echo "完成: 共抓取 $count 篇文章"
 - ✨ **新增**: 互动数据提取
   - 阅读量、点赞数、在看数提取
   - Markdown 导出显示互动数据
-  - 仅 Chrome DevTools 策略支持（需要页面渲染）
+  - Chrome DevTools + Playwright 策略支持（需要页面渲染）
 
 ### v2.9.3
 - ✨ **改进**: HTML 导出支持视频嵌入
