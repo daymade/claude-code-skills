@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-43-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-44-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.39.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -14,7 +14,7 @@
 
 </div>
 
-Professional Claude Code skills marketplace featuring 43 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 44 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -265,6 +265,9 @@ claude plugin install continue-claude-work@daymade-skills
 
 # Scrapling CLI extraction and troubleshooting
 claude plugin install scrapling-skill@daymade-skills
+
+# Tencent IMA knowledge base companion and installer
+claude plugin install ima-copilot@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -1851,6 +1854,47 @@ claude plugin install scrapling-skill@daymade-skills
 
 ---
 
+### 44. **ima-copilot** - Tencent IMA Companion & Installer
+
+One-stop wrapper for the official Tencent IMA skill (`ima.qq.com`). Installs upstream `ima-skill` to Claude Code, Codex, and OpenClaw via `npx skills add`, guides API key setup, detects and repairs known upstream issues under user consent, and implements a personalized fan-out search strategy that floats priority knowledge bases to the top.
+
+**When to use:**
+- Users mention IMA, 腾讯 IMA, ima.qq.com, or need to install the official ima-skill
+- Users report `Skipped loading skill(s) due to invalid SKILL.md` warnings related to ima-skill
+- You need to search across IMA knowledge bases with KB-priority boosting
+- You need to configure or rotate IMA API credentials
+- Upstream ima-skill ships a known issue (e.g., missing YAML frontmatter in submodule files)
+
+**Key features:**
+- Zero-config installation to Claude Code / Codex / OpenClaw via [vercel-labs/skills](https://github.com/vercel-labs/skills) with auto-detection and default symlink mode (fix or upgrade once, every agent sees it)
+- XDG-style credential management at `~/.config/ima/{client_id, api_key}` with env-var fallback
+- `scripts/diagnose.sh` read-only health check (install presence, credential liveness, known issues)
+- `scripts/search_fanout.py` client-side cross-KB search with priority lists, subset-skip lists, and 100-hit silent-truncation detection
+- Wrapper-only architecture: never vendors upstream files, never forks — every repair is a runtime instruction executed with explicit consent and automatic timestamped backups
+- Two user-selectable repair strategies for the frontmatter issue (rename to `MODULE.md` or prepend minimal frontmatter)
+- Personalization via `~/.config/ima/copilot.json` with illustrative-only template values
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install ima-copilot@daymade-skills
+
+# Then ask Claude to drive the flow
+"Install ima-skill and configure my IMA API key"
+"Run diagnose on my ima-skill and fix whatever is broken"
+"Search my IMA knowledge bases for embedding model comparisons, priority to my curated KB"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [ima-copilot/SKILL.md](./ima-copilot/SKILL.md) and [ima-copilot/references/known_issues.md](./ima-copilot/references/known_issues.md).
+
+**Requirements**: Node.js 18+ (for `npx skills`), `curl`, `unzip`, Python 3.6+. IMA OpenAPI credentials from [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -1959,6 +2003,9 @@ Use **windows-remote-desktop-connection-doctor** to diagnose Azure Virtual Deskt
 ### For Plugin & Skill Troubleshooting
 Use **claude-skills-troubleshooting** to diagnose and resolve Claude Code plugin and skill configuration issues. Debug why plugins appear installed but don't show in available skills, understand the installed_plugins.json vs settings.json enabledPlugins architecture, and batch-enable missing plugins from a marketplace. Essential for marketplace maintainers debugging installation issues, developers troubleshooting skill activation, or anyone confused by the GitHub #17832 auto-enable bug.
 
+### For Tencent IMA Knowledge Base Workflows
+Use **ima-copilot** to install the official Tencent IMA skill across Claude Code / Codex / OpenClaw, configure API credentials, detect and repair known upstream issues, and run personalized fan-out searches across all your IMA knowledge bases with priority-based boosting. The wrapper architecture means upstream upgrades never collide with your fixes — every repair is a runtime instruction, not a shipped patch. Perfect for IMA power users who switch between multiple coding agents, or for anyone who has hit the "Skipped loading skill(s) due to invalid SKILL.md" warning.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -2009,6 +2056,7 @@ Each skill includes:
 - **capture-screen**: See `capture-screen/SKILL.md` for CGWindowID-based screenshot workflows on macOS
 - **continue-claude-work**: See `continue-claude-work/SKILL.md` for local artifact recovery, drift checks, and resume workflow
 - **scrapling-skill**: See `scrapling-skill/SKILL.md` for the CLI workflow and `scrapling-skill/references/troubleshooting.md` for verified Scrapling failure modes
+- **ima-copilot**: See `ima-copilot/SKILL.md` for the wrapper architecture and routing, `ima-copilot/references/installation_flow.md` for the install deep dive, `ima-copilot/references/known_issues.md` for the issue registry and repair commands, and `ima-copilot/references/search_best_practices.md` for the fan-out strategy and 100-result truncation details
 
 ## 🛠️ Requirements
 
@@ -2036,6 +2084,7 @@ Each skill includes:
 - **macOS** (for capture-screen and excel-automation AppleScript control workflows)
 - **Python 3.8+** (for continue-claude-work): bundled script for session extraction (no external dependencies)
 - **uv + Scrapling CLI** (for scrapling-skill): `uv tool install 'scrapling[shell]'` and `scrapling install` for browser-backed fetches
+- **Node.js 18+ + curl + unzip** (for ima-copilot): `npx skills` is fetched on demand from the npm registry; IMA OpenAPI credentials from [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface)
 
 ## ❓ FAQ
 
