@@ -1,18 +1,18 @@
 ---
 name: wechat-article-scraper
-description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（HTTP/Scrapling/Playwright/Chrome DevTools）、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料时使用。
+description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（HTTP/Scrapling/Playwright/Chrome DevTools）、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai] [--download-images] [--format markdown|json|html|pdf]
 metadata:
-  version: "3.14.0"
+  version: "3.16.0"
   openclaw:
     emoji: "📰"
     requires:
       bins: ["python3"]
 ---
 
-# 微信公众号文章抓取 v2.9
+# 微信公众号文章抓取 v3.2
 
-**世界级微信文章抓取方案** — 整合 12 个竞品的精华，具备智能策略路由、OG元数据备选、图片段落关联、懒加载处理、图片下载、搜索发现、多格式导出等完整功能。
+**世界级微信文章抓取方案** — 整合 12 个竞品的精华，具备智能策略路由、OG元数据备选、图片段落关联、懒加载处理、图片下载、搜索发现、多格式导出、**现代化 Web 管理界面**等完整功能。
 
 ## 快速开始
 
@@ -56,6 +56,11 @@ python3 scripts/queue.py status queue_20260112_120000_my-batch-job
 # 搜索公众号文章
 python3 scripts/search.py "人工智能投资" -n 10
 
+# 启动 Web 管理界面（现代化 React + TypeScript 仪表盘）
+cd web/backend && python main.py &
+cd web/frontend && npm run dev
+# 访问 http://localhost:3000 查看仪表盘
+
 # 搜索并解析真实微信链接（避免搜狗链接过期）
 python3 scripts/search.py "人工智能投资" -n 10 --resolve-urls
 ```
@@ -75,6 +80,10 @@ python3 scripts/search.py "人工智能投资" -n 10 --resolve-urls
 | **图片下载** | 并行下载图片到本地，避免 URL 过期 | 仅 2/12 竞品支持 |
 | **搜狗搜索** | 通过关键词发现微信公众号文章 | 仅 1/12 竞品支持 |
 | **多格式导出** | Markdown / JSON / HTML / PDF | 仅 3/12 竞品支持 |
+| **Web 管理界面** | React + TypeScript + Tailwind 仪表盘 | **独有** |
+| **全文搜索** | SQLite FTS5 全文搜索引擎 | **独有** |
+| **数据持久化** | SQLite 存储，增量更新检测 | **独有** |
+| **任务队列** | 批量抓取队列，支持暂停/恢复/停止 | **独有** |
 
 ## 前置要求
 
@@ -206,6 +215,40 @@ python3 scripts/search.py "关键词" -n 5 -r
 python3 scripts/images.py "文章.md" --output ./article-images/
 ```
 
+## Web 管理界面（React + TypeScript）
+
+现代化 Web 仪表盘，媲美竞品 wcplusPro 的 Vue.js 界面。
+
+### 启动 Web 界面
+
+```bash
+# 1. 安装依赖
+cd web/frontend && npm install
+cd ../backend && pip install fastapi uvicorn
+
+# 2. 启动后端
+cd web/backend && python main.py
+
+# 3. 启动前端（新终端）
+cd web/frontend && npm run dev
+
+# 4. 访问 http://localhost:3000
+```
+
+### Web 界面功能
+
+| 功能 | 说明 |
+|------|------|
+| **仪表盘** | 文章统计、WCI 分布、分类分布、最新文章 |
+| **文章管理** | 列表浏览、详情查看、筛选搜索 |
+| **全文搜索** | SQLite FTS5 全文搜索，实时结果 |
+| **任务队列** | 创建队列、批量抓取、进度监控、暂停/恢复/停止 |
+
+### 技术栈
+
+- **前端**: React 18 + TypeScript + Vite + Tailwind CSS + TanStack Query + Recharts
+- **后端**: FastAPI + SQLite + WebSocket
+
 ## 策略详解
 
 ### 策略对比
@@ -330,14 +373,28 @@ wechat-article-scraper/
 ├── SKILL.md                    # 本文档
 ├── scripts/
 │   ├── scraper.py             # 主入口（支持批量模式）
-│   ├── router.py              # 策略路由器（4级策略+OG备选）
+│   ├── router.py              # 策略路由器（6级策略+OG备选）
 │   ├── images.py              # 图片下载（支持段落关联）
 │   ├── search.py              # 搜狗搜索（支持链接解析）
 │   ├── export.py              # 多格式导出（Excel/PDF/HTML/JSON/Markdown，多sheet工作簿）
+│   ├── classifier.py          # 文章自动分类（10类）
 │   ├── storage.py             # SQLite 持久化存储（增量更新+全文搜索+统计分析）
 │   ├── queue.py               # 批量任务队列（断点续传+失败重试+并发控制）
 │   ├── extract.js             # Chrome DevTools 提取脚本（OG备选+段落关联）
 │   └── playwright_scraper.py  # Playwright 抓取
+├── web/                        # Web 管理界面
+│   ├── backend/
+│   │   └── main.py            # FastAPI 后端（REST API + WebSocket）
+│   ├── frontend/              # React + TypeScript + Tailwind
+│   │   ├── src/
+│   │   │   ├── api/           # API 客户端
+│   │   │   ├── components/    # UI 组件
+│   │   │   ├── pages/         # 页面（Dashboard/Articles/Queues/Search）
+│   │   │   ├── types/         # TypeScript 类型
+│   │   │   └── lib/           # 工具函数
+│   │   ├── package.json
+│   │   └── vite.config.ts
+│   └── README.md
 ├── references/
 │   └── failed-approaches.md   # 失败方案记录
 └── evals/
@@ -468,7 +525,22 @@ echo "完成: 共抓取 $count 篇文章"
 
 ## 版本历史
 
-### v3.0.2 (当前)
+### v3.2.0 (当前)
+- ✨ **新增**: 现代化 Web 管理界面
+  - React 18 + TypeScript + Tailwind CSS 前端
+  - FastAPI + SQLite + WebSocket 后端
+  - 仪表盘：文章统计、WCI 分布、分类分布图表
+  - 文章管理：列表浏览、详情查看、全文搜索
+  - 任务队列：可视化队列管理、实时进度监控、暂停/恢复/停止控制
+  - 吸取竞品 wcplusPro Vue.js 界面精华，技术栈领先
+
+### v3.1.0
+- ✨ **新增**: 文章自动分类
+  - 10 类别分类器（科技、财经、汽车、医疗、教育、娱乐、生活、职场、时事、文化）
+  - 基于标题、作者、内容关键词的分类算法
+  - WCI 传播指数计算（WeChat Communication Index）
+
+### v3.0.2
 - ✨ **改进**: 批量抓取模式支持代理配置
   - `batch_scrape()` 函数支持 proxy 参数
   - 批量 CLI 模式支持 `--proxy` 参数
@@ -590,6 +662,11 @@ echo "完成: 共抓取 $count 篇文章"
 | 搜索发现 | ✅ | 少数 | **持平** |
 | 多格式导出 | ✅ | 少数 | **持平** |
 | 反爬绕过 | ✅ | 少数 | **持平** |
+| **Web GUI** | ✅ **React+TS+Tailwind** | ✅ Vue.js (wcplusPro) | **技术领先** |
+| **SQLite 持久化** | ✅ | ❌ | **领先** |
+| **全文搜索** | ✅ FTS5 | ❌ | **领先** |
+| **任务队列** | ✅ 暂停/恢复/停止 | ❌ | **领先** |
+| **自动分类** | ✅ 10 类 | ❌ | **领先** |
 
 **核心差异化**：
 1. **唯一支持 6 级策略路由的方案**（fast → adaptive → stable → reliable → zero_dep → jina_ai）
@@ -609,7 +686,12 @@ echo "完成: 共抓取 $count 篇文章"
 15. **唯一支持表格结构保留的方案** (markdownify 转换 table/thead/tbody/tr/th/td)
 16. **唯一支持视频提取的方案** (所有 6 个策略均支持，提取视频 URL、封面、时长、标题)
 17. **唯一支持互动数据提取的方案** (阅读量、点赞数、在看数)
+18. **唯一支持现代化 Web GUI 的方案** (React + TypeScript + Tailwind + FastAPI)
+19. **唯一支持 SQLite 全文搜索的方案** (FTS5 搜索引擎)
+20. **唯一支持数据持久化的方案** (增量更新 + 变更检测)
+21. **唯一支持可视化任务队列的方案** (暂停/恢复/停止控制)
+22. **唯一支持文章自动分类的方案** (10 类别智能分类)
 
 ---
 
-*本文档由 wechat-article-scraper v3.0.2 生成*
+*本文档由 wechat-article-scraper v3.2.0 生成*
