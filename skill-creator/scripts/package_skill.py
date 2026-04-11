@@ -3,11 +3,11 @@
 Skill Packager - Creates a distributable .skill file of a skill folder
 
 Usage:
-    python utils/package_skill.py <path/to/skill-folder> [output-directory]
+    uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder> [output-directory]
 
 Example:
-    python utils/package_skill.py skills/public/my-skill
-    python utils/package_skill.py skills/public/my-skill ./dist
+    uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill
+    uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill ./dist
 """
 
 import fnmatch
@@ -171,10 +171,10 @@ def package_skill(skill_path, output_dir=None):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python utils/package_skill.py <path/to/skill-folder> [output-directory]")
+        print("Usage: uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder> [output-directory]")
         print("\nExample:")
-        print("  python utils/package_skill.py skills/public/my-skill")
-        print("  python utils/package_skill.py skills/public/my-skill ./dist")
+        print("  uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill")
+        print("  uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill ./dist")
         sys.exit(1)
 
     skill_path = sys.argv[1]

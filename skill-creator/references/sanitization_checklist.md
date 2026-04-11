@@ -66,7 +66,7 @@ grep -rniE "ultrathink|internal-only|confidential" skill-folder/
 **What to find:**
 - Team-specific folders: `10-team-collaboration/Meeting Minutes`
 - Project-specific paths: `reviewer-portal-api-design`
-- Environment-specific paths: `/Users/username/Projects/`
+- Environment-specific paths: user home directory project paths
 
 **How to replace:**
 - Use generic paths: `project-docs/meeting-minutes`

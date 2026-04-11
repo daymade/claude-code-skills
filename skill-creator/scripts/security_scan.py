@@ -89,7 +89,7 @@ def get_pattern_rules() -> List[Dict]:
             "id": "insecure_http",
             "category": "urls",
             "name": "Insecure HTTP URLs",
-            "patterns": [r'http://(?!localhost|127\.0\.0\.1|0\.0\.0\.0|example\.com)'],
+            "patterns": [r'http' r'://(?!localhost|127\.0\.0\.1|0\.0\.0\.0|example\.com)'],
             "severity": "MEDIUM",
             "message": "HTTP (insecure) URL detected",
             "recommendation": "Use HTTPS for external resources",

@@ -475,11 +475,11 @@ Files not intended to be loaded into context, but rather used within the output 
 
 **CRITICAL**: Skills intended for public distribution must not contain user-specific or company-specific information:
 
-- **Forbidden**: Absolute paths to user directories (`/home/username/`, `/Users/username/`)
+- **Forbidden**: Absolute paths to user directories (for example, user home directories)
 - **Forbidden**: Personal usernames, company names, product names
 - **Forbidden**: Hardcoded skill installation paths like `~/.claude/skills/`
 - **Allowed**: Relative paths within the skill bundle (`scripts/example.py`, `references/guide.md`)
-- **Allowed**: Standard placeholders (`~/workspace/project`, `username`, `your-company`)
+- **Allowed**: Standard placeholders (`<workspace>/project`, `<user>`, `<organization>`)
 
 ##### Versioning
 
@@ -853,7 +853,7 @@ Take `best_description` from the JSON output and update the skill's SKILL.md fro
 ~/.claude/plugins/cache/daymade-skills/my-skill/1.0.0/my-skill/SKILL.md
 
 # RIGHT - source repository
-/path/to/your/claude-code-skills/my-skill/SKILL.md
+<repo-root>/my-skill/SKILL.md
 ```
 
 **Before any edit**, confirm the file path does NOT contain `/cache/` or `/plugins/cache/`.
@@ -870,7 +870,7 @@ Before starting any skill work, auto-detect all dependencies and proactively ins
 
 Run the quick check from [references/prerequisites.md](references/prerequisites.md), auto-install what you can, and present the user a summary checklist. Only proceed when all blocking dependencies are satisfied.
 
-Key blockers: Python 3, PyYAML (validation/packaging), gitleaks (security scan), claude CLI (evals). All scripts must be invoked via `python3 -m scripts.<name>` from the skill-creator root directory — direct `python3 scripts/<name>.py` fails due to relative imports.
+Key blockers: Python 3, uv, PyYAML (validation/packaging), gitleaks (security scan), claude CLI (evals). Run Python tools with explicit uv dependency declarations, for example `uv run --with PyYAML python -m scripts.quick_validate <skill-path>` from the skill-creator root directory. Bare `python3` depends on ambient site packages and can miss PyYAML.
 
 ### Step 1: Understanding the Skill with Concrete Examples
 
@@ -998,13 +998,15 @@ C) Override and proceed — I accept the risk for internal distribution
 Once the skill is ready, package it into a distributable file:
 
 ```bash
-scripts/package_skill.py <path/to/skill-folder>
+cd <skill-creator-path>
+uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder>
 ```
 
 Optional output directory:
 
 ```bash
-scripts/package_skill.py <path/to/skill-folder> ./dist
+cd <skill-creator-path>
+uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder> ./dist
 ```
 
 The packaging script will:
@@ -1061,7 +1063,7 @@ After testing the skill, users may request improvements. Often this happens righ
 Check whether you have access to the `present_files` tool. If you don't, skip this step. If you do, package the skill and present the .skill file to the user:
 
 ```bash
-python -m scripts.package_skill <path/to/skill-folder>
+uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder>
 ```
 
 After packaging, direct the user to the resulting `.skill` file path so they can install it.

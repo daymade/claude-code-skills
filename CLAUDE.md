@@ -61,13 +61,13 @@ claude plugin install skill-creator@daymade-skills
 
 ```bash
 # Quick validation of a skill
-skill-creator/scripts/quick_validate.py /path/to/skill
+cd skill-creator && uv run --with PyYAML python -m scripts.quick_validate ../skill-name
 
 # Package a skill (includes automatic validation)
-skill-creator/scripts/package_skill.py /path/to/skill [output-dir]
+cd skill-creator && uv run --with PyYAML python -m scripts.package_skill ../skill-name [output-dir]
 
 # Initialize a new skill from template
-skill-creator/scripts/init_skill.py <skill-name> --path <output-directory>
+uv run python skill-creator/scripts/init_skill.py <skill-name> --path <output-directory>
 ```
 
 ### Testing Skills Locally
@@ -122,7 +122,7 @@ Skills for public distribution must NOT contain:
 - Personal usernames, company names, product names
 - Phone numbers, personal email addresses
 - OneDrive paths or environment-specific absolute paths
-- Use relative paths within skill bundle or standard placeholders (`~/workspace/`, `<user_id>`)
+- Use relative paths within skill bundle or standard placeholders (`<workspace>/`, `<user_id>`)
 
 **Three-layer defense system:**
 1. **CLAUDE.md rules** (this section) — Claude avoids generating sensitive content
@@ -285,13 +285,14 @@ For the full step-by-step guide with templates and examples, see [references/new
 **Quick workflow**:
 ```bash
 # 1. Validate & package
-cd skill-creator && python3 scripts/security_scan.py ../skill-name --verbose
-python3 scripts/package_skill.py ../skill-name
+cd skill-creator
+uv run python -m scripts.security_scan ../skill-name --verbose
+uv run --with PyYAML python -m scripts.package_skill ../skill-name
 
 # 2. Update all files listed above (see references/new-skill-guide.md for details)
 
 # 3. Validate, commit, push, release
-cd .. && python3 -m json.tool .claude-plugin/marketplace.json > /dev/null
+cd .. && uv run python -m json.tool .claude-plugin/marketplace.json > /dev/null
 git add -A && git commit -m "Release vX.Y.0: Add skill-name"
 git push
 gh release create vX.Y.0 --title "Release vX.Y.0: Add skill-name" --notes "..."
