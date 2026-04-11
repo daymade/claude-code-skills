@@ -3,7 +3,7 @@ name: wechat-article-scraper
 description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（HTTP/Scrapling/Playwright/Chrome DevTools）、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai] [--download-images] [--format markdown|json|html|pdf]
 metadata:
-  version: "3.19.0"
+  version: "3.20.0"
   openclaw:
     emoji: "📰"
     requires:
@@ -526,6 +526,36 @@ python3 scripts/exporters.py notion --target-id "xxx" --category "科技"
 
 **竞品对比**: **没有任何竞品支持第三方平台导出**。
 
+### 浏览器扩展
+
+Chrome/Firefox 浏览器扩展，一键抓取当前微信文章：
+
+```bash
+# 安装扩展
+# 1. Chrome: 打开 chrome://extensions/，开启开发者模式，加载 extension/chrome 文件夹
+# 2. Firefox: 打开 about:debugging，加载 extension/firefox/manifest.json
+```
+
+**使用方式**:
+
+1. **点击扩展图标**: 在微信文章页面点击工具栏扩展图标
+2. **快捷键**: `Ctrl+Shift+S` 快速抓取当前文章
+3. **右键菜单**: 在文章页面右键 → "📰 抓取此微信文章"
+
+**功能特性**:
+- 一键抓取当前页面文章
+- 支持 Markdown/HTML/JSON 格式
+- 可选下载图片
+- 自动上传到 Web 仪表盘
+- 文章信息预览
+
+**扩展设置**:
+- 保存到本地: 自动下载文章文件
+- 上传到服务器: 发送到本地 Web 后端
+- 自动分类: 使用 AI 分类文章
+
+**竞品对比**: **没有任何竞品提供浏览器扩展**。
+
 ## 策略详解
 
 ### 策略对比
@@ -681,6 +711,14 @@ wechat-article-scraper/
 │   │   ├── package.json
 │   │   └── vite.config.ts
 │   └── README.md
+├── extension/                  # 浏览器扩展 (Chrome/Firefox)
+│   ├── chrome/                # Chrome 扩展
+│   ├── firefox/               # Firefox 扩展
+│   ├── shared/                # 共用代码
+│   │   ├── popup/             # 弹出窗口
+│   │   ├── content/           # 内容脚本
+│   │   └── background/        # 后台脚本
+│   └── README.md
 ├── references/
 │   └── failed-approaches.md   # 失败方案记录
 └── evals/
@@ -811,7 +849,16 @@ echo "完成: 共抓取 $count 篇文章"
 
 ## 版本历史
 
-### v3.5.0 (当前)
+### v3.6.0 (当前)
+- ✨ **新增**: Chrome/Firefox 浏览器扩展
+  - 一键抓取当前微信文章
+  - 支持 Markdown/HTML/JSON 格式
+  - 快捷键 `Ctrl+Shift+S` 快速抓取
+  - 右键菜单集成
+  - 与 Web 仪表盘无缝集成
+  - 竞品完全无此功能
+
+### v3.5.0
 - ✨ **新增**: 第三方平台导出器
   - Notion 数据库集成（自动创建数据库、字段映射）
   - Airtable 表格同步
@@ -911,6 +958,12 @@ echo "完成: 共抓取 $count 篇文章"
   - antispider 风控链接检测与过滤
   - 搜索模块新增 `-r/--resolve-urls` 参数，支持批量解析搜索结果的真实链接
 
+### v3.6.0
+- ✨ **新增**: 浏览器扩展 (Chrome/Firefox)，支持一键抓取
+- ✨ **新增**: 右键菜单集成，快捷键支持 (Ctrl+Shift+S)
+- ✨ **新增**: 浮动抓取按钮，页面内快速操作
+- 🔧 **修正**: 优化 content script 注入逻辑
+
 ### v2.7.0
 - ✨ **改进**: 吸取 wechat-article-full-reader 精华
   - 图片下载支持从 `wx_fmt` URL 参数提取正确扩展名（png/gif/webp）
@@ -992,6 +1045,7 @@ echo "完成: 共抓取 $count 篇文章"
 | **AI 摘要** | ✅ LLM 智能摘要 | ❌ | **独有** |
 | **Webhook 通知** | ✅ 6 大平台推送 | ❌ | **独有** |
 | **第三方导出** | ✅ Notion/Airtable/Sheets | ❌ | **独有** |
+| **浏览器扩展** | ✅ Chrome/Firefox | ❌ | **独有** |
 
 **核心差异化**：
 1. **唯一支持 6 级策略路由的方案**（fast → adaptive → stable → reliable → zero_dep → jina_ai）
@@ -1024,7 +1078,8 @@ echo "完成: 共抓取 $count 篇文章"
 28. **唯一支持 AI 智能摘要的方案** (LLM 驱动，多提供商支持)
 29. **唯一支持 Webhook 通知系统的方案** (6 大平台自动推送)
 30. **唯一支持第三方平台导出的方案** (Notion/Airtable/Google Sheets)
+31. **唯一支持浏览器扩展的方案** (Chrome/Firefox 一键抓取)
 
 ---
 
-*本文档由 wechat-article-scraper v3.5.0 生成*
+*本文档由 wechat-article-scraper v3.20.0 生成*
