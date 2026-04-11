@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **doc-to-markdown**: Added 31 unit tests (`test_convert.py`)
 - **doc-to-markdown**: Added 5-tool benchmark report (`references/benchmark-2026-03-22.md`)
 
+## [1.45.0] - 2026-04-11
+
+### Added
+- **daymade-docs** v1.0.0: Documentation suite plugin that exposes `doc-to-markdown`, `mermaid-tools`, `pdf-creator`, `ppt-creator`, `docs-cleaner`, and `meeting-minutes-taker` under one namespace. This keeps the existing single-skill plugins available while providing `/daymade-docs:<skill-name>` slash commands for users who want a combined documentation workflow install.
+
+### Changed
+- Updated marketplace version from 1.44.0 to 1.45.0
+- Updated README.md, README.zh-CN.md, and CLAUDE.md to document suite plugin architecture while preserving the existing single-skill plugin model.
+
 ## [1.44.0] - 2026-04-11
 
 ### Added
