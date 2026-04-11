@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "wechat-article-scraper": {
+      "command": "python3",
+      "args": ["/path/to/wechat-article-scraper/scripts/mcp_server.py"],
+      "description": "微信公众号文章抓取 MCP 服务器"
+    }
+  }
+}
