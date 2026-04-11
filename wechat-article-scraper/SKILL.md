@@ -3,7 +3,7 @@ name: wechat-article-scraper
 description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（HTTP/Scrapling/Playwright/Chrome DevTools）、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai] [--download-images] [--format markdown|json|html|pdf]
 metadata:
-  version: "3.20.0"
+  version: "3.21.0"
   openclaw:
     emoji: "📰"
     requires:
@@ -958,6 +958,12 @@ echo "完成: 共抓取 $count 篇文章"
   - antispider 风控链接检测与过滤
   - 搜索模块新增 `-r/--resolve-urls` 参数，支持批量解析搜索结果的真实链接
 
+### v3.21.0
+- ✨ **新增**: 原生 CLI 工具 (Typer + Rich)
+- ✨ **新增**: 命令: scrape, batch, search, monitor, config
+- ✨ **新增**: PyInstaller 单文件可执行程序构建
+- ✨ **新增**: Shell 补全支持 (bash/zsh/fish)
+
 ### v3.6.0
 - ✨ **新增**: 浏览器扩展 (Chrome/Firefox)，支持一键抓取
 - ✨ **新增**: 右键菜单集成，快捷键支持 (Ctrl+Shift+S)
@@ -1046,6 +1052,7 @@ echo "完成: 共抓取 $count 篇文章"
 | **Webhook 通知** | ✅ 6 大平台推送 | ❌ | **独有** |
 | **第三方导出** | ✅ Notion/Airtable/Sheets | ❌ | **独有** |
 | **浏览器扩展** | ✅ Chrome/Firefox | ❌ | **独有** |
+| **原生 CLI** | ✅ 完整命令行接口 | ❌ 仅脚本 | **独有** |
 
 **核心差异化**：
 1. **唯一支持 6 级策略路由的方案**（fast → adaptive → stable → reliable → zero_dep → jina_ai）
@@ -1079,7 +1086,8 @@ echo "完成: 共抓取 $count 篇文章"
 29. **唯一支持 Webhook 通知系统的方案** (6 大平台自动推送)
 30. **唯一支持第三方平台导出的方案** (Notion/Airtable/Google Sheets)
 31. **唯一支持浏览器扩展的方案** (Chrome/Firefox 一键抓取)
+32. **唯一提供原生 CLI 的方案** (Typer + Rich，支持单文件分发)
 
 ---
 
-*本文档由 wechat-article-scraper v3.20.0 生成*
+*本文档由 wechat-article-scraper v3.21.0 生成*
