@@ -58,10 +58,10 @@ The installer hard-codes a known-good version for the default case. To pin a spe
 
 ```bash
 # via flag
-bash scripts/install_ima_skill.sh --version 1.1.2
+bash scripts/install_ima_skill.sh --version x.y.z
 
 # via environment variable
-IMA_VERSION=1.1.2 bash scripts/install_ima_skill.sh
+IMA_VERSION=x.y.z bash scripts/install_ima_skill.sh
 ```
 
 If the upstream URL 404s (most commonly because the version hasn't been released yet or has been yanked), the installer exits with a hint to try the next known version. The upstream release pattern from observation is `ima-skills-<major>.<minor>.<patch>.zip` — check `https://ima.qq.com/agent-interface` for the current version when in doubt.
@@ -87,7 +87,7 @@ After a successful install, the target directories contain the original upstream
 ~/.claude/skills/ima-skill/
 ├── SKILL.md                         # root entry point
 ├── notes/
-│   ├── SKILL.md                     # note operations (known ISSUE-001 in v1.1.2)
+│   ├── SKILL.md                     # note operations (may trigger ISSUE-001)
 │   └── references/
 │       └── api.md
 └── knowledge-base/

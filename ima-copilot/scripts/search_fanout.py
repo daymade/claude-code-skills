@@ -212,7 +212,13 @@ def rank_groups(results, priority_kbs, skip_kbs):
         else:
             empty.append(r)
 
-    others.sort(key=lambda r: len(r["hits"]), reverse=True)
+    # Sort primarily by hit count descending, secondarily by KB name ascending
+    # for stable deterministic output. Without the secondary key, tied KBs
+    # would be ordered by the concurrent.futures.ThreadPoolExecutor.map
+    # completion order, which depends on network timing and is not reproducible
+    # across runs. The kb_name tiebreaker makes the output byte-identical for
+    # identical query + identical KB set regardless of network timing.
+    others.sort(key=lambda r: (-len(r["hits"]), r["kb"]["kb_name"]))
     return priority, others, denied, empty
 
 

@@ -461,9 +461,138 @@ For `references/credentials_setup.md`, the pattern is:
 
 1. **XDG-style paths** (`~/.config/<tool>/{client_id, api_key}`) with mode `600`.
 2. **Env var fallback** (`<TOOL>_OPENAPI_CLIENTID` / `<TOOL>_OPENAPI_APIKEY`) documented as "env vars win over files when both are set".
-3. **Liveness check** documented with the exact request (URL + method + body) and the success indicator (response field to look for).
+3. **Scoped liveness check** — see the next section. The liveness call must probe the lowest-privilege operation the skill actually performs, not the easiest API call to make.
 4. **Rotation procedure** showing `printf '%s' "<new value>" > ~/.config/<tool>/client_id` followed by a re-run of the liveness check.
 
 Do not make the template literal — credential setup varies a lot by tool. Use the pattern as a checklist when writing `credentials_setup.md` for your specific wrapper, not as a copy-paste target.
 
 **Concrete version**: `ima-copilot/references/api_key_setup.md`.
+
+## Runtime-logic patterns shared across wrappers
+
+The install / diagnose / known_issues templates above are what make a wrapper *installable*. They are necessary but not sufficient. The three patterns in this section are what make a wrapper *correct at runtime* when it fans out operations across a third-party API, and they are frequently the most transferable insights a wrapper discovers — more transferable than any specific bug fix, because they are structural properties of the class of API the wrapper is talking to.
+
+Every one of these patterns was discovered during the ima-copilot session, lived inside `search_fanout.py`, and applies to a far wider class of tools than IMA. Consider whether your tool has the same failure mode before claiming "this only applies to the reference implementation".
+
+### Capability partitioning — enumerate vs operate
+
+**The problem**: many third-party APIs have a permission model where the set of entities the credential can *list* is strictly larger than the set it can *act on*. A wrapper that fans out an operation across "all listable entities" will hit authorization errors on a large fraction of them, and if those errors are mixed into the primary result, they will drown out the actual successes.
+
+**Examples by tool**:
+
+- **IMA**: `search_knowledge_base` enumerates every KB the user can read, including subscribed public KBs. `search_knowledge` on a subscribed KB returns `code: 220030, msg: 没有权限` because search permission requires ownership. A 12-KB account may have only 2 searchable KBs.
+- **GitHub**: `GET /user/repos` lists every repo you can see, including private repos you're a collaborator on. Admin actions (`DELETE /repos/{owner}/{repo}`, `PATCH /repos/.../archive`) require repo-owner privilege and return 403 on collaborators-only entries.
+- **Slack**: `conversations.list` returns every channel you're in. `chat.postMessage` can be rejected on channels where the bot lacks the `chat:write` scope or the channel has posting-locked.
+- **Aliyun RAM**: RAM users can list resources in an account (`ECS DescribeInstances`) but can't operate on resources outside their policy scope — you see the inventory, you can't touch most of it.
+- **Linear**: `workspaces` are viewable; mutation API (issue create/edit) is gated per-workspace on your role.
+
+**The pattern**: partition the fan-out result into four buckets, not one:
+
+```
+succeeded — operation returned real output you can render
+denied    — entity enumerated fine, but the operation was rejected with
+            a permission/scope/role error (NOT a tool bug — an entitlement
+            gap in the credential). Collect these for an informational
+            footer, do not render them alongside successes.
+errored   — a transient/unexpected failure (timeout, 5xx, malformed
+            response). These are bugs or service incidents and deserve a
+            retry or a loud warning, not silent inclusion in the footer.
+empty     — the operation succeeded but returned no output for this
+            entity. Silence entirely unless the user asked "why no results".
+```
+
+The core idea: **enumerate-ability is not operate-ability**, and the wrapper must surface the gap as a distinct result category so the user can understand why "I have 12 knowledge bases but only 2 searches landed."
+
+**Implementation template** (adapt to your API's error codes):
+
+```python
+PERMISSION_DENIED_MARKERS = ["220030", "no_permission", "Forbidden", "403"]
+
+def is_permission_denied(result):
+    if result.get("error") is None:
+        return False
+    err = str(result["error"])
+    return any(m in err for m in PERMISSION_DENIED_MARKERS)
+
+def partition(results):
+    succeeded, denied, errored, empty = [], [], [], []
+    for r in results:
+        if is_permission_denied(r):
+            denied.append(r)
+        elif r["error"]:
+            errored.append(r)
+        elif r["output"]:
+            succeeded.append(r)
+        else:
+            empty.append(r)
+    return succeeded, denied, errored, empty
+```
+
+**Render rule**: show successes first, then any `errored` entries with a ⚠️ prefix (user should care), then `denied` entries in a collapsible `ℹ️ N entities returned 'no permission'` footer. Do not show `empty` entries unless the user asked for the full list.
+
+**Concrete reference**: `ima-copilot/scripts/search_fanout.py` lines around the `rank_groups` / `is_permission_denied` functions, and `ima-copilot/references/search_best_practices.md` "Permission model" section.
+
+### Undocumented limit detection
+
+**The problem**: many third-party APIs have undocumented hard limits — a request that says "return all results" actually returns a truncated subset, and the response contains no `is_end`, `next_cursor`, `has_more`, or equivalent signal to tell you the truncation happened. A naive wrapper will silently show the first N results as if they were the complete set, and the user will make decisions based on a lie.
+
+**Examples by tool**:
+
+- **IMA**: `search_knowledge` returns exactly 100 hits per KB on high-frequency queries with no pagination token in the response body. The 100-hit cap is not documented anywhere; the only way to know is to send a query you know matches more than 100 items and observe the exact-100 count.
+- **GitHub Search**: `/search/code` caps total results at 1000 but the `total_count` field may report 12000. Without the cap awareness, a wrapper shows "page 10 of 120" and blows up when page 11 returns empty.
+- **Notion**: databases with > 100 pages return `has_more: true` correctly for up to ~1000 iterations but silently stop returning new pages around item 2000 on some plans.
+- **Google Drive**: `files.list` with a broad query caps at 1000 results per page regardless of `pageSize` parameter, and the `nextPageToken` is omitted — you have to detect the hit-at-1000 as the signal.
+- **Confluence / Jira**: `/search` endpoints have per-tenant "result ceiling" configurations that aren't exposed anywhere in the API — you discover them by hitting the wall.
+
+**The pattern**: detect truncation heuristically and surface it as a prominent warning. The detection rule is usually "result count equals a round number like 50, 100, 500, or 1000, AND no pagination signal in the response" — because legit result sets do not coincidentally round to powers of ten.
+
+**Implementation template**:
+
+```python
+SUSPICIOUS_ROUND_CAPS = {50, 100, 500, 1000, 10000}
+
+def looks_truncated(response, results):
+    """Return True if this response smells like a silent truncation."""
+    n = len(results)
+    # Did we hit a suspicious round cap?
+    if n not in SUSPICIOUS_ROUND_CAPS:
+        return False
+    # Is there any pagination signal? If yes, we can page through, not a silent cap.
+    for key in ("is_end", "next_cursor", "has_more", "nextPageToken", "next"):
+        if response.get(key) not in (None, False, "", 0):
+            return False
+    return True
+```
+
+**Render rule**: when `looks_truncated` fires on any branch of the fan-out, append a `⚠️ N entity/entities may have been silently truncated at K results; try a narrower query to see more` block after the results. Do not swallow the signal — the entire point of this pattern is to tell the user about the lie.
+
+**Concrete reference**: `ima-copilot/scripts/search_fanout.py` `HARD_HIT_CAP` constant and the `truncated` flag propagation, and `ima-copilot/references/search_best_practices.md` "Silent 100-result truncation" section.
+
+### Scoped liveness checks
+
+**The problem**: a wrapper's credential-liveness probe usually tests "can I make any authenticated call at all?" — but the credential may have scopes that pass the easy probe and fail the actual operation the skill performs. The user then gets a false ✅ on `diagnose.sh` and a confusing failure later when they try to use the skill's main capability.
+
+**The ima-copilot case**: `diagnose.sh` probes `search_knowledge_base` with empty query, which needs only `list` scope on any one KB. This passes. But `search_fanout.py` actually needs `search` scope, which is a different tier of permission. A user with `list`-only credentials would see diagnose report everything as healthy and then hit 220030 on every single KB when they tried to run a search. (This is latent in the shipped version and is its own small bug.)
+
+**The rule**: the liveness check must probe the **lowest-privilege operation the skill actually performs**, not the first API the credential can hit. If the skill has multiple capabilities with different permission tiers, the check must probe the most restrictive tier. If probing the lowest tier would have side effects (e.g., the lowest-privilege operation in the tool is "create a resource"), use the narrowest read equivalent you can find that still requires the target scope.
+
+**Rule of thumb**:
+
+```
+For each capability the skill exposes:
+  identify the minimum scope needed for that capability's main API call
+  pick the union of all required scopes
+  design a liveness probe that requires all scopes in that union
+  if no single call requires all scopes, make multiple probes and require them all to pass
+```
+
+**Render rule**: `diagnose.sh` should name the scope each probe checks in its output so the user can see which capability is verified. For example:
+
+```
+✅ Credentials present
+✅ Liveness (scope: list) — can enumerate KBs
+✅ Liveness (scope: search) — can search the smallest KB
+⚠️  Liveness (scope: write) — tried to add a test note and failed; Capability 4 (note creation) will not work until you regenerate credentials with write scope
+```
+
+**Concrete reference**: the corrected scoped-liveness behavior is a future fix for `ima-copilot/scripts/diagnose.sh` (currently only probes `list` scope, known limitation filed as a follow-up).
