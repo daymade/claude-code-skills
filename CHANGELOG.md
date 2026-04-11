@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **doc-to-markdown**: Added 31 unit tests (`test_convert.py`)
 - **doc-to-markdown**: Added 5-tool benchmark report (`references/benchmark-2026-03-22.md`)
 
+## [1.42.0] - 2026-04-11
+
+### Added
+- **skill-creator** v1.6.0 → v1.7.0: New `workflows/wrapper-skill/` specialized workflow for retrospectively distilling an install-and-debug session into a reusable companion skill for a third-party CLI tool
+  - `workflows/wrapper-skill/workflow.md` — the retrospective distillation workflow with Step 2 conversation mining at its core (install flow, credential setup, bugs encountered and resolved, design decisions made, noise to discard)
+  - `workflows/wrapper-skill/architecture_contract.md` — seven non-negotiable principles that every generated wrapper skill must follow (never vendor upstream, runtime repair over ship-time patches, explicit user consent for any upstream file modification, idempotent/reversible/alias-safe repair commands, teaching agents over humans, independent evolution from upstream, private preferences stay private)
+  - `workflows/wrapper-skill/patterns.md` — copy-pasteable templates for SKILL.md, install script, diagnose script, known_issues registry, and credential setup, each annotated with the lessons baked in and cross-referenced to the canonical ima-copilot implementation
+  - `workflows/wrapper-skill/verification_protocol.md` — post-generation verification focused on cross-referencing generated artifacts against the source conversation rather than re-running the full install (the install already ran in the source session)
+  - `workflows/wrapper-skill/scripts/init_wrapper_skill.py` — bootstrap scaffold that creates the wrapper skill directory layout with placeholder markers pointing back at specific steps in the workflow
+  - `SKILL.md` root entry now includes a "Specialized Workflow: Wrapper Skills for Third-Party CLI Tools" routing section between Capture Intent and Prior Art Research that redirects agents to the wrapper workflow when the signals apply
+  - Canonical reference implementation: [`ima-copilot`](./ima-copilot) — the Tencent IMA wrapper that was the first product of this methodology, distilled during a real session whose lessons (shell alias bypass, root SKILL.md detection, realpath-based symlink dedup, idempotent reversible repairs) were captured in the patterns and propagated into this workflow
+
+### Changed
+- Updated marketplace version from 1.41.0 to 1.42.0
+
 ## [1.41.0] - 2026-04-11
 
 ### Added
