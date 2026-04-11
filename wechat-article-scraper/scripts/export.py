@@ -9,7 +9,7 @@
 - HTML (带图片)
 
 作者: Claude Code
-版本: 2.2.0
+版本: 2.3.0
 """
 
 import sys
@@ -69,6 +69,141 @@ def _calculate_content_hash(data: Dict[str, Any]) -> str:
 
     # 计算 SHA256
     return hashlib.sha256(key_content.encode('utf-8')).hexdigest()[:32]
+
+
+def _calculate_wci(engagement: Dict[str, Any]) -> Optional[float]:
+    """
+    计算 WCI (WeChat Communication Index) 微信传播指数
+
+    WCI 是衡量微信公众号文章传播力的指标，基于以下数据加权计算：
+    - 阅读量 (R): 权重 50%
+    - 点赞数 (L): 权重 20%
+    - 在看数 (W): 权重 20%
+    - 评论数 (C): 权重 10%
+
+    公式参考: WCI = 0.5*ln(R+1) + 0.2*ln(L+1) + 0.2*ln(W+1) + 0.1*ln(C+1)
+    然后归一化到 0-1000 范围
+
+    Args:
+        engagement: 互动数据字典，包含 readCount, likeCount, watchCount, commentCount
+
+    Returns:
+        Optional[float]: WCI 指数 (0-1000)，如果数据不足则返回 None
+    """
+    import math
+
+    if not engagement:
+        return None
+
+    # 提取数值（处理字符串和 None）
+    def parse_count(value) -> int:
+        if value is None:
+            return 0
+        if isinstance(value, (int, float)):
+            return int(value)
+        # 处理 "1.2万" 格式
+        if isinstance(value, str):
+            value = value.strip()
+            if '万' in value:
+                try:
+                    return int(float(value.replace('万', '')) * 10000)
+                except ValueError:
+                    return 0
+            try:
+                return int(value)
+            except ValueError:
+                return 0
+        return 0
+
+    read_count = parse_count(engagement.get('readCount'))
+    like_count = parse_count(engagement.get('likeCount'))
+    watch_count = parse_count(engagement.get('watchCount'))
+    comment_count = parse_count(engagement.get('commentCount'))
+
+    # 至少需要阅读量才能计算
+    if read_count == 0:
+        return None
+
+    # 计算 WCI（对数加权）
+    wci_raw = (
+        0.5 * math.log(read_count + 1) +
+        0.2 * math.log(like_count + 1) +
+        0.2 * math.log(watch_count + 1) +
+        0.1 * math.log(comment_count + 1)
+    )
+
+    # 归一化到 0-1000 范围（基于典型值调整）
+    # ln(100000) ≈ 11.5，我们希望 10万阅读的文章 WCI 约 800-900
+    wci_normalized = min(1000, round(wci_raw * 70))
+
+    return wci_normalized
+
+
+def _generate_summary(content: str, max_length: int = 200) -> str:
+    """
+    生成文章内容摘要
+
+    使用简单的提取式摘要：
+    1. 优先提取第一段有意义的文字
+    2. 如果没有好的第一段，提取前 max_length 个字符
+    3. 避免提取标题、作者信息、广告等噪音
+
+    Args:
+        content: 文章正文内容
+        max_length: 摘要最大长度
+
+    Returns:
+        str: 文章摘要
+    """
+    if not content:
+        return ""
+
+    # 清理内容
+    content = content.strip()
+
+    # 按段落分割
+    paragraphs = [p.strip() for p in content.split('\n') if p.strip()]
+
+    # 噪音标记（避免作为摘要的段落开头）
+    noise_prefixes = [
+        '作者', '编辑', '来源', '转自', '公众号', '点击', '关注',
+        '扫码', '二维码', '推荐阅读', '相关阅读', '往期回顾',
+        '声明', '版权', '转载', '如有侵权', '商务合作',
+        '👆', '↑', '↓', '【', '](http', '!['
+    ]
+
+    # 寻找合适的段落作为摘要
+    for para in paragraphs[:5]:  # 只在前5段中找
+        # 跳过太短的段落
+        if len(para) < 30:
+            continue
+
+        # 跳过包含噪音标记的段落
+        if any(para.startswith(prefix) for prefix in noise_prefixes):
+            continue
+
+        # 跳过主要是特殊字符的段落
+        chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', para))
+        if chinese_chars < 10:  # 中文字符太少
+            continue
+
+        # 找到合适的段落，截取前 max_length 字符
+        if len(para) <= max_length:
+            return para
+        else:
+            # 在 max_length 附近找句号、问号或感叹号截断
+            truncate_pos = max_length
+            for punct in ['。', '？', '！', '.', '?', '!']:
+                pos = para.rfind(punct, max_length // 2, max_length)
+                if pos > 0:
+                    truncate_pos = pos + 1
+                    break
+            return para[:truncate_pos]
+
+    # 如果没有找到合适的段落，直接截取开头
+    if len(content) <= max_length:
+        return content
+    return content[:max_length] + "..."
 
 
 def _clean_text(text: str) -> str:
@@ -161,14 +296,21 @@ class Exporter:
         lines.append(f"# {title}")
         lines.append("")
 
+        # 计算 WCI
+        engagement = data.get('engagement', {})
+        wci_score = _calculate_wci(engagement)
+
         # 元数据表格
         lines.append("**作者**: {}".format(author))
         if publish_time:
             lines.append("**发布时间**: {}".format(publish_time))
         # 新增：阅读时间
         lines.append("**阅读时间**: 约 {} 分钟".format(reading_time))
+        # 新增：WCI 传播指数
+        if wci_score:
+            wci_level = "🔥爆款" if wci_score >= 800 else ("📈热门" if wci_score >= 500 else "📊普通")
+            lines.append("**WCI传播指数**: {} ({})".format(wci_score, wci_level))
         # 新增：互动数据
-        engagement = data.get('engagement', {})
         if engagement:
             if engagement.get('readCount'):
                 lines.append("**阅读量**: {}".format(engagement['readCount']))
@@ -327,6 +469,34 @@ class Exporter:
         # 互动数据
         engagement = data.get('engagement', {})
 
+        # 计算 WCI (WeChat Communication Index)
+        wci_score = _calculate_wci(engagement)
+
+        # 生成摘要
+        summary = _generate_summary(content)
+
+        # 计算互动率（如果可能）
+        engagement_rate = None
+        if engagement and 'readCount' in engagement:
+            read_count = 0
+            rc = engagement.get('readCount')
+            if isinstance(rc, (int, float)):
+                read_count = int(rc)
+            elif isinstance(rc, str) and '万' in rc:
+                try:
+                    read_count = int(float(rc.replace('万', '')) * 10000)
+                except ValueError:
+                    pass
+
+            total_interactions = sum([
+                int(engagement.get('likeCount', 0) or 0),
+                int(engagement.get('watchCount', 0) or 0),
+                int(engagement.get('commentCount', 0) or 0),
+            ])
+
+            if read_count > 0:
+                engagement_rate = round((total_interactions / read_count) * 100, 2)
+
         meta = {
             'article': {
                 'title': data.get('title', ''),
@@ -334,6 +504,7 @@ class Exporter:
                 'publish_time': data.get('publishTime', ''),
                 'source_url': data.get('source_url', ''),
                 'description': data.get('description', ''),
+                'summary': summary,
             },
             'content': {
                 'hash': content_hash,
@@ -347,13 +518,17 @@ class Exporter:
                 'images': image_stats,
                 'videos': video_stats,
             },
-            'engagement': engagement if engagement else None,
+            'engagement': {
+                'data': engagement if engagement else None,
+                'wci_score': wci_score,  # WeChat Communication Index
+                'engagement_rate': engagement_rate,  # 互动率 %
+            },
             'extraction': {
                 'strategy': data.get('strategy', 'unknown'),
                 'status': data.get('content_status', 'unknown'),
                 'quality_score': data.get('quality_score'),
                 'extracted_at': datetime.now().isoformat(),
-                'version': '3.5.0',
+                'version': '3.8.0',
             },
             'export': {
                 'format': 'meta_sidecar',
