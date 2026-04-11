@@ -220,23 +220,37 @@ Before committing, verify:
 3. **Inconsistent version numbers** - CHANGELOG, README badges (both EN and ZH), CLAUDE.md, and marketplace.json must all match
 4. **Inconsistent skill counts** - README description (both EN and ZH), badges, CLAUDE.md must all have same count
 5. **Missing skill number in README** - Skills must be numbered sequentially in both EN and ZH versions
-6. **Invalid JSON syntax** - Always validate marketplace.json after editing
-7. **Forgetting to push** - Local changes are invisible until pushed to GitHub
+6. **Relying on JSON syntax check alone** - `python -m json.tool` only catches malformed JSON. It will NOT catch missing plugin entries, broken source+skills resolution, or orphan SKILL.md files on disk. Use `bash marketplace-dev/scripts/check_marketplace.sh` for the full 4-check validation.
+7. **Leaving orphan SKILL.md directories** - A tracked skill directory with no plugin entry in marketplace.json is invisible to `claude plugin install`. The reverse-sync check in `check_marketplace.sh` emits a WARN for each orphan. Treat every WARN as a real signal: register it or delete it.
+8. **Using `git add -A` or `git add .`** - When multiple sessions/agents edit the repo in parallel, a blanket stage can piggyback another agent's unstaged changes into your commit. Always stage files by name.
+9. **Forgetting to push** - Local changes are invisible until pushed to GitHub
 
 ## Quick Reference Commands
 
 ```bash
-# 1. Refine and validate skill
+# 1. Scan the skill itself for secrets and PII
 cd skill-creator
 uv run python -m scripts.security_scan ../skill-name --verbose
 
-# 2. Package skill
+# 2. Package the skill (auto-validates SKILL.md structure)
 uv run --with PyYAML python -m scripts.package_skill ../skill-name
 
-# 3. Validate marketplace.json
-cd .. && uv run python -m json.tool .claude-plugin/marketplace.json > /dev/null && echo "✅ Valid"
+# 3. Full marketplace validation — the single source of truth for "is this shippable?"
+cd .. && bash marketplace-dev/scripts/check_marketplace.sh
+# Runs 4 checks in sequence:
+#   [1/4] JSON syntax of .claude-plugin/marketplace.json
+#   [2/4] claude plugin validate .         (schema-level, skipped if CLI missing)
+#   [3/4] source+skills resolution         (every plugin entry points to a real SKILL.md)
+#   [4/4] reverse sync (disk → manifest)   (WARN-only: orphan SKILL.md detection)
 
-# 4. Verify Chinese documentation is in sync
-grep "skills-[0-9]*" README.md README.zh-CN.md
-grep "version-[0-9.]*" README.md README.zh-CN.md
+# 4. Verify counts/versions are in sync across English and Chinese docs
+grep "skills-[0-9]*"       README.md README.zh-CN.md
+grep "version-[0-9.]*"     README.md README.zh-CN.md
+
+# 5. Stage by name (never -A), commit, push, release
+git add .claude-plugin/marketplace.json CHANGELOG.md README.md README.zh-CN.md \
+        CLAUDE.md skill-name/
+git commit -m "Release vX.Y.0: Add skill-name"
+git push
+gh release create vX.Y.0 --title "Release vX.Y.0: Add skill-name" --notes "..."
 ```

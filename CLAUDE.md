@@ -89,10 +89,13 @@ In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude 
 
 ### Git Operations
 
-This repository uses standard git workflow:
+This repository uses standard git workflow, but **always stage files by name**,
+never `git add -A` / `git add .`. Multiple agents may have unstaged changes in
+the same worktree — a blanket stage piggybacks their work into your commit:
+
 ```bash
 git status
-git add .
+git add path/to/file1 path/to/file2   # specific files only
 git commit -m "message"
 git push
 ```
@@ -288,21 +291,33 @@ For the full step-by-step guide with templates and examples, see [references/new
 
 **Quick workflow**:
 ```bash
-# 1. Validate & package
+# 1. Validate & package the skill itself
 cd skill-creator
 uv run python -m scripts.security_scan ../skill-name --verbose
 uv run --with PyYAML python -m scripts.package_skill ../skill-name
 
-# 2. Update all files listed above (see references/new-skill-guide.md for details)
+# 2. Update all files listed above (see references/new-skill-guide.md for the
+#    detailed step-by-step, including 7 README locations and 3 CLAUDE.md spots)
 
-# 3. Validate, commit, push, release
-cd .. && uv run python -m json.tool .claude-plugin/marketplace.json > /dev/null
-git add -A && git commit -m "Release vX.Y.0: Add skill-name"
+# 3. One-shot marketplace validation (ships with marketplace-dev skill)
+cd .. && bash marketplace-dev/scripts/check_marketplace.sh
+# Runs: JSON syntax → claude plugin validate → source+skills resolution →
+# reverse sync (warns when a disk SKILL.md is not registered). A WARN on
+# reverse sync is the canary for orphan skills — register them or delete them.
+
+# 4. Stage specific files by name, never `git add -A` or `git add .`
+#    (a parallel agent once piggybacked another session's unstaged changes
+#    into its commit via `git add -A`; the fix is to stage explicitly)
+git add .claude-plugin/marketplace.json CHANGELOG.md README.md README.zh-CN.md \
+        CLAUDE.md skill-name/
+git commit -m "Release vX.Y.0: Add skill-name"
 git push
+
+# 5. Release
 gh release create vX.Y.0 --title "Release vX.Y.0: Add skill-name" --notes "..."
 ```
 
-**Top mistakes**: Forgetting to push to GitHub, forgetting README.zh-CN.md, inconsistent version numbers across files.
+**Top mistakes**: Forgetting to push to GitHub, forgetting README.zh-CN.md, inconsistent version numbers across files, leaving an orphan SKILL.md on disk unregistered (caught by `check_marketplace.sh` reverse sync), using `git add -A` in a repo where multiple agents may have unstaged changes.
 
 ## Chinese User Support
 
