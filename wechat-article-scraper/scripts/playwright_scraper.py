@@ -8,6 +8,15 @@ Playwright 抓取脚本 - 用于 stable 策略
 
 import sys
 import json
+import logging
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger('wechat-playwright')
 
 
 def _validate_url(url: str) -> bool:
@@ -246,7 +255,7 @@ def scrape_with_playwright(url: str, screenshot_path: str = None) -> dict:
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print('用法: python3 playwright_scraper.py <url> [--screenshot]', file=sys.stderr)
+        logger.error('用法: python3 playwright_scraper.py <url> [--screenshot]')
         sys.exit(1)
 
     url = sys.argv[1]
@@ -262,7 +271,7 @@ if __name__ == '__main__':
     result = scrape_with_playwright(url, screenshot_path)
 
     if 'error' in result:
-        print(result.get('message', result['error']), file=sys.stderr)
+        logger.error(result.get('message', result['error']))
         sys.exit(1)
 
     print(json.dumps(result, ensure_ascii=False))

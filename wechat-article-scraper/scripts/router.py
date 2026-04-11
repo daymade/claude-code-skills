@@ -17,9 +17,18 @@ import json
 import random
 import time
 import re
+import logging
 from enum import Enum
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger('wechat-router')
 
 
 class Strategy(Enum):
@@ -206,15 +215,15 @@ class StrategyRouter:
         # 按顺序尝试每种策略
         last_error = None
         for strategy in strategies:
-            print(f"🔄 尝试策略: {strategy.value}...", file=sys.stderr)
+            logger.info(f"🔄 尝试策略: {strategy.value}...")
 
             result = self._execute_with_retry(strategy, url, enable_og_fallback)
 
             if result.success:
-                print(f"✅ 策略 {strategy.value} 成功", file=sys.stderr)
+                logger.info(f"✅ 策略 {strategy.value} 成功")
                 return result
             else:
-                print(f"❌ 策略 {strategy.value} 失败: {result.error}", file=sys.stderr)
+                logger.warning(f"❌ 策略 {strategy.value} 失败: {result.error}")
                 last_error = result.error
 
         # 所有策略都失败
@@ -236,7 +245,7 @@ class StrategyRouter:
 
         for attempt in range(self.max_retries):
             if attempt > 0:
-                print(f"   重试 {attempt}/{self.max_retries}...", file=sys.stderr)
+                logger.info(f"   重试 {attempt}/{self.max_retries}...")
                 time.sleep(self.retry_delay * (attempt + 1))  # 指数退避
 
             result = self._execute_strategy(strategy, url, enable_og_fallback)
@@ -355,7 +364,7 @@ class StrategyRouter:
             resp = requests.get(url, headers=headers, timeout=15, proxies=proxies)
             resp.raise_for_status()
 
-            print(f"   [Fast] HTTP {resp.status_code}, 内容长度 {len(resp.text)} bytes", file=sys.stderr)
+            logger.info(f"   [Fast] HTTP {resp.status_code}, 内容长度 {len(resp.text)} bytes")
 
             # 检查是否被拦截
             if '环境异常' in resp.text or 'verify' in resp.text.lower():
@@ -731,7 +740,7 @@ class StrategyRouter:
                 return ' '.join(self.text)
 
         try:
-            print("   [Zero-Dep] 使用纯标准库模式...", file=sys.stderr)
+            logger.info("   [Zero-Dep] 使用纯标准库模式...")
 
             # 添加scene=1参数
             if '?' not in url:
@@ -820,7 +829,7 @@ class StrategyRouter:
             import urllib.request
             import json
 
-            print("   [Jina AI] 尝试使用 jina.ai 服务...", file=sys.stderr)
+            logger.info("   [Jina AI] 尝试使用 jina.ai 服务...")
 
             jina_url = f"https://r.jina.ai/{url}"
             headers = {
@@ -904,7 +913,7 @@ class StrategyRouter:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("用法: python3 router.py <微信文章URL> [fast|adaptive|stable|reliable|zero_dep|jina_ai]", file=sys.stderr)
+        logger.error("用法: python3 router.py <微信文章URL> [fast|adaptive|stable|reliable|zero_dep|jina_ai]")
         sys.exit(1)
 
     url = sys.argv[1]

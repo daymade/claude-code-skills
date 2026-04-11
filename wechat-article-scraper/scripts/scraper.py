@@ -21,9 +21,18 @@ import sys
 import os
 import json
 import argparse
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger('wechat-scraper')
 
 # 将脚本目录加入路径
 scripts_dir = Path(__file__).parent
@@ -145,7 +154,7 @@ def scrape_article(
 
     # 下载图片
     if download_images and data.get('images'):
-        print("📥 下载图片中...", file=sys.stderr)
+        logger.info("📥 下载图片中...")
         from images import ImageDownloader
 
         img_dir = Path(output_dir) / "images"
@@ -267,7 +276,7 @@ def batch_scrape(
             if line and not line.startswith('#'):
                 urls.append(line)
 
-    print(f"批量抓取: 共 {len(urls)} 篇文章", file=sys.stderr)
+    logger.info(f"批量抓取: 共 {len(urls)} 篇文章")
 
     results = {
         'total': len(urls),
@@ -278,7 +287,7 @@ def batch_scrape(
     }
 
     for i, url in enumerate(urls, 1):
-        print(f"\n[{i}/{len(urls)}] 抓取: {url[:60]}...", file=sys.stderr)
+        logger.info(f"[{i}/{len(urls)}] 抓取: {url[:60]}...")
 
         result = scrape_article(
             url=url,
@@ -307,11 +316,11 @@ def batch_scrape(
 
         # 间隔避免风控
         if i < len(urls):
-            print(f"   等待 {delay}s...", file=sys.stderr)
+            logger.info(f"   等待 {delay}s...")
             import time
             time.sleep(delay)
 
-    print(f"\n批量抓取完成: 成功 {results['success']}/{results['total']}", file=sys.stderr)
+    logger.info(f"批量抓取完成: 成功 {results['success']}/{results['total']}")
     return results
 
 
@@ -406,7 +415,7 @@ Content Status:
     # 批量模式
     if args.batch:
         if not os.path.exists(args.batch):
-            print(f"错误: URL 列表文件不存在: {args.batch}", file=sys.stderr)
+            logger.error(f"URL 列表文件不存在: {args.batch}")
             sys.exit(1)
 
         output_dir = args.output or get_default_output_dir()
@@ -422,15 +431,15 @@ Content Status:
         if args.json_output:
             print(json.dumps(results, ensure_ascii=False, indent=2))
         else:
-            print(f"\n{'='*60}")
-            print(f"批量抓取报告")
-            print(f"{'='*60}")
-            print(f"总计: {results['total']}")
-            print(f"成功: {results['success']}")
-            print(f"失败: {results['failed']}")
-            print(f"状态分布:")
+            logger.info(f"\n{'='*60}")
+            logger.info(f"批量抓取报告")
+            logger.info(f"{'='*60}")
+            logger.info(f"总计: {results['total']}")
+            logger.info(f"成功: {results['success']}")
+            logger.info(f"失败: {results['failed']}")
+            logger.info(f"状态分布:")
             for status, count in results['by_status'].items():
-                print(f"  - {status}: {count}")
+                logger.info(f"  - {status}: {count}")
 
         sys.exit(0 if results['failed'] == 0 else 1)
 

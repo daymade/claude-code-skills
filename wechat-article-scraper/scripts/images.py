@@ -20,11 +20,15 @@ import hashlib
 import argparse
 import tempfile
 import shutil
+import logging
 from pathlib import Path
 from urllib.parse import urlparse, unquote
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, asdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# 配置日志
+logger = logging.getLogger('wechat-images')
 
 
 @dataclass
@@ -373,7 +377,7 @@ def download_from_markdown(md_file: str, output_dir: Optional[str] = None) -> st
     md_path = Path(md_file)
 
     if not md_path.exists():
-        print(f"错误: 文件不存在 {md_file}", file=sys.stderr)
+        logger.error(f"文件不存在 {md_file}")
         sys.exit(1)
 
     # 确定输出目录
@@ -398,34 +402,34 @@ def download_from_markdown(md_file: str, output_dir: Optional[str] = None) -> st
         images.append({'src': url, 'alt': ''})
 
     if not images:
-        print("未找到需要下载的图片")
+        logger.info("未找到需要下载的图片")
         return ""
 
-    print(f"发现 {len(images)} 张图片，开始下载...")
+    logger.info(f"发现 {len(images)} 张图片，开始下载...")
 
     # 下载
     downloader = ImageDownloader(str(output_dir))
 
     def progress(current, total, info):
         status = "✅" if info.status == "success" else "❌"
-        print(f"[{current}/{total}] {status} {info.filename}", file=sys.stderr)
+        logger.info(f"[{current}/{total}] {status} {info.filename}")
 
     results = downloader.download_images(images, progress_callback=progress)
 
     # 更新 Markdown
     updated_content = downloader.update_markdown_images(content, results)
     md_path.write_text(updated_content, encoding='utf-8')
-    print(f"已更新 Markdown 文件: {md_file}")
+    logger.info(f"已更新 Markdown 文件: {md_file}")
 
     # 生成报告
     report = downloader.generate_report(results)
     report_path = output_dir / "download-report.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2))
-    print(f"报告已保存: {report_path}")
+    logger.info(f"报告已保存: {report_path}")
 
     # 打印摘要
     summary = report["summary"]
-    print(f"\n下载完成: {summary['success']}/{summary['total']} 成功, "
+    logger.info(f"下载完成: {summary['success']}/{summary['total']} 成功, "
           f"总大小: {summary['total_size_mb']} MB")
 
     return str(report_path)

@@ -18,9 +18,13 @@ import json
 import re
 import argparse
 import html
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
+
+# 配置日志
+logger = logging.getLogger('wechat-exporter')
 
 
 def _clean_text(text: str) -> str:
@@ -191,7 +195,7 @@ class Exporter:
             return md
 
         except ImportError:
-            print("警告: markdownify 未安装，使用默认转换", file=sys.stderr)
+            logger.warning("markdownify 未安装，使用默认转换")
             # 简单 fallback
             return html
 
@@ -215,7 +219,7 @@ class Exporter:
             return h.handle(html)
 
         except ImportError:
-            print("警告: html2text 未安装，使用默认转换", file=sys.stderr)
+            logger.warning("html2text 未安装，使用默认转换")
             return html
 
     def _insert_images_to_content(self, content: str, images: list) -> str:
@@ -260,8 +264,8 @@ class Exporter:
             return output_file
 
         except ImportError:
-            print("错误: 导出 PDF 需要安装 playwright", file=sys.stderr)
-            print("运行: pip install playwright && playwright install chromium", file=sys.stderr)
+            logger.error("导出 PDF 需要安装 playwright")
+            logger.error("运行: pip install playwright && playwright install chromium")
             raise
 
     def export_json(self, data: Dict[str, Any]) -> str:
@@ -554,7 +558,7 @@ def main():
     # 读取输入
     input_path = Path(args.input)
     if not input_path.exists():
-        print(f"错误: 文件不存在 {args.input}", file=sys.stderr)
+        logger.error(f"文件不存在 {args.input}")
         sys.exit(1)
 
     data = json.loads(input_path.read_text(encoding='utf-8'))

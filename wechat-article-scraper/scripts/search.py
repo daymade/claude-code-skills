@@ -14,6 +14,10 @@
 """
 
 import sys
+import logging
+
+# 配置日志
+logger = logging.getLogger(wechat-search)
 import re
 import csv
 import json
@@ -170,7 +174,7 @@ class SogouWechatSearch:
                     seen_count += 1
 
         if seen_count > 0:
-            print(f"   去重过滤: {seen_count} 条重复结果", file=sys.stderr)
+            logger.info(f"   去重过滤: {seen_count} 条重复结果", file=sys.stderr)
 
         return results[:num_results]
 
@@ -212,13 +216,13 @@ class SogouWechatSearch:
 
             # 检查是否触发验证码
             if '请输入验证码' in resp.text or '验证码' in resp.text:
-                print("警告: 触发搜狗验证码，请稍后重试或使用浏览器模式", file=sys.stderr)
+                logger.warning("触发搜狗验证码，请稍后重试或使用浏览器模式", file=sys.stderr)
                 return []
 
             return self._parse_results(resp.text)
 
         except Exception as e:
-            print(f"搜索失败: {e}", file=sys.stderr)
+            logger.error(f"搜索失败: {e}", file=sys.stderr)
             return []
 
     def _parse_results(self, html: str) -> List[ArticleResult]:
@@ -426,7 +430,7 @@ class SogouWechatSearch:
                 return self._normalize_url(real)
 
         except Exception as e:
-            print(f"解析真实链接失败: {e}", file=sys.stderr)
+            logger.error(f"解析真实链接失败: {e}", file=sys.stderr)
 
         return None
 
@@ -551,7 +555,7 @@ class SogouWechatSearch:
                         ))
 
             if results:
-                print(f"   miku-ai 备选: 找到 {len(results)} 条结果", file=sys.stderr)
+                logger.info(f"   miku-ai 备选: 找到 {len(results)} 条结果", file=sys.stderr)
 
             return results
 
@@ -577,18 +581,18 @@ def resolve_all_urls(results: List[ArticleResult], searcher: SogouWechatSearch, 
     resolved_count = 0
     for i, r in enumerate(results):
         if r.is_temporary_url and 'weixin.sogou.com' in r.url:
-            print(f"   解析 [{i+1}/{len(results)}]: {r.url[:60]}...", file=sys.stderr)
+            logger.info(f"   解析 [{i+1}/{len(results)}]: {r.url[:60]}...", file=sys.stderr)
             real_url = searcher.resolve_real_url(r.url)
             if real_url and not searcher.is_antispider_url(real_url):
                 r.url = real_url
                 r.is_temporary_url = False
                 resolved_count += 1
             else:
-                print(f"      解析失败或触发风控，保留原链接", file=sys.stderr)
+                logger.warning(f"      解析失败或触发风控，保留原链接", file=sys.stderr)
             time.sleep(delay)
 
     if resolved_count > 0:
-        print(f"   成功解析 {resolved_count}/{len(results)} 条真实链接", file=sys.stderr)
+        logger.info(f"   成功解析 {resolved_count}/{len(results)} 条真实链接", file=sys.stderr)
 
     return results
 
@@ -697,7 +701,7 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"搜索: {args.keyword}", file=sys.stderr)
+    logger.info(f"搜索: {args.keyword}", file=sys.stderr)
 
     searcher = SogouWechatSearch(
         delay=args.delay,
@@ -710,12 +714,12 @@ def main():
     )
 
     if not results:
-        print("未找到结果", file=sys.stderr)
+        logger.warning("未找到结果", file=sys.stderr)
         sys.exit(1)
 
     # 解析真实链接（如果启用）
     if args.resolve_urls:
-        print("开始解析真实微信链接...", file=sys.stderr)
+        logger.info("开始解析真实微信链接...", file=sys.stderr)
         results = resolve_all_urls(results, searcher, delay=0.5)
 
     output = format_output(results, args.format)
@@ -723,7 +727,7 @@ def main():
     if args.output:
         with open(args.output, 'w', encoding='utf-8') as f:
             f.write(output)
-        print(f"结果已保存: {args.output}", file=sys.stderr)
+        logger.info(f"结果已保存: {args.output}", file=sys.stderr)
     else:
         print(output)
 
