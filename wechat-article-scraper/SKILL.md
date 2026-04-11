@@ -3,7 +3,7 @@ name: wechat-article-scraper
 description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（HTTP/Scrapling/Playwright/Chrome DevTools）、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai] [--download-images] [--format markdown|json|html|pdf]
 metadata:
-  version: "3.17.0"
+  version: "3.18.0"
   openclaw:
     emoji: "📰"
     requires:
@@ -381,6 +381,97 @@ print(f"警告: {score.warnings}")
 
 **竞品对比**: 没有任何竞品提供自动质量评分。
 
+### AI 智能摘要
+
+使用 LLM (Claude/OpenAI/DeepSeek/通义千问) 自动生成文章摘要：
+
+```bash
+# 设置 API Key（选择其中一个）
+export ANTHROPIC_API_KEY="your-key"      # Claude
+export OPENAI_API_KEY="your-key"         # OpenAI
+export DEEPSEEK_API_KEY="your-key"       # DeepSeek
+export DASHSCOPE_API_KEY="your-key"      # 通义千问
+
+# 生成单篇文章摘要
+python3 scripts/summarizer.py --title "文章标题" --content-file article.md
+
+# 从数据库读取文章并生成摘要
+python3 scripts/summarizer.py --db wechat_articles.db --article-id 123
+
+# 批量处理
+python3 scripts/summarizer.py --batch articles.json --delay 1.0
+
+# 输出为 Markdown 格式
+python3 scripts/summarizer.py --content-file article.md --format markdown
+
+# 指定提供商
+python3 scripts/summarizer.py --content-file article.md --provider deepseek
+```
+
+**输出示例**:
+```json
+{
+  "title": "文章标题",
+  "summary": "这是文章的3-5句话摘要...",
+  "key_points": ["要点1", "要点2", "要点3"],
+  "tags": ["人工智能", "投资", "科技"],
+  "sentiment": "positive",
+  "reading_time": 5,
+  "model": "deepseek/deepseek-chat"
+}
+```
+
+**竞品对比**: **没有任何竞品支持 AI 摘要生成**。
+
+### Webhook 通知系统
+
+新文章检测时自动发送通知到多个平台：
+
+```bash
+# 添加钉钉通知
+python3 scripts/notifier.py add dingtalk dingtalk "https://oapi.dingtalk.com/robot/send?access_token=xxx"
+
+# 添加飞书通知
+python3 scripts/notifier.py add lark lark "https://open.feishu.cn/open-apis/bot/v2/hook/xxx"
+
+# 添加企业微信通知
+python3 scripts/notifier.py add wecom wecom "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx"
+
+# 添加 Slack 通知
+python3 scripts/notifier.py add slack slack "https://hooks.slack.com/services/xxx"
+
+# 列出所有渠道
+python3 scripts/notifier.py list
+
+# 测试通知
+python3 scripts/notifier.py test --title "测试标题" --content "测试内容"
+```
+
+**与监控集成** (自动通知):
+```python
+from monitor import SubscriptionManager
+from notifier import NotificationManager
+
+# 监控配置自动发送通知
+manager = SubscriptionManager()
+notifier = NotificationManager()
+
+# 检测到新文章时
+new_articles = manager.check_updates()
+for article in new_articles:
+    notifier.notify_new_article(article)
+```
+
+**支持的渠道**:
+- 钉钉 (DingTalk)
+- 飞书 (Lark)
+- 企业微信 (WeCom)
+- Slack
+- Discord
+- Telegram
+
+**竞品对比**: **没有任何竞品支持多平台 webhook 通知**。
+
 ## 策略详解
 
 ### 策略对比
@@ -518,6 +609,8 @@ wechat-article-scraper/
 │   ├── monitor.py             # 公众号监控订阅（自动检测新文章）
 │   ├── quality.py             # 内容质量评分系统
 │   ├── cache.py               # 缓存系统（提高性能）
+│   ├── summarizer.py          # AI 智能摘要（LLM 驱动）
+│   ├── notifier.py            # Webhook 通知系统（多平台）
 │   ├── extract.js             # Chrome DevTools 提取脚本（OG备选+段落关联）
 │   └── playwright_scraper.py  # Playwright 抓取
 ├── web/                        # Web 管理界面
@@ -663,7 +756,22 @@ echo "完成: 共抓取 $count 篇文章"
 
 ## 版本历史
 
-### v3.3.0 (当前)
+### v3.4.0 (当前)
+- ✨ **新增**: AI 智能摘要生成器
+  - 使用 LLM (Claude/OpenAI/DeepSeek/通义千问) 生成文章摘要
+  - 提取关键要点、标签、情感分析
+  - 支持批量处理
+  - 与数据库集成保存摘要
+  - 竞品完全无此功能
+
+- ✨ **新增**: Webhook 通知系统
+  - 支持 6 大平台：钉钉、飞书、企业微信、Slack、Discord、Telegram
+  - 新文章检测时自动推送通知
+  - 支持 Markdown 卡片、按钮等丰富格式
+  - 与 monitor.py 监控模块无缝集成
+  - 竞品完全无此功能
+
+### v3.3.0
 - ✨ **新增**: RSS Feed 生成器
   - 为抓取的文章生成 RSS 2.0 订阅源
   - 支持按作者、分类筛选生成独立 feed
@@ -818,6 +926,8 @@ echo "完成: 共抓取 $count 篇文章"
 | **MCP 服务器** | ✅ Claude Desktop 集成 | ❌ | **独有** |
 | **监控订阅** | ✅ 自动检测新文章 | ❌ | **领先** |
 | **质量评分** | ✅ 多维度自动评分 | ❌ | **独有** |
+| **AI 摘要** | ✅ LLM 智能摘要 | ❌ | **独有** |
+| **Webhook 通知** | ✅ 6 大平台推送 | ❌ | **独有** |
 
 **核心差异化**：
 1. **唯一支持 6 级策略路由的方案**（fast → adaptive → stable → reliable → zero_dep → jina_ai）
@@ -847,7 +957,9 @@ echo "完成: 共抓取 $count 篇文章"
 25. **唯一支持 MCP 服务器的方案** (Claude Desktop 原生集成)
 26. **唯一支持公众号监控订阅的方案** (自动检测新文章)
 27. **唯一支持内容质量评分的方案** (多维度自动评分)
+28. **唯一支持 AI 智能摘要的方案** (LLM 驱动，多提供商支持)
+29. **唯一支持 Webhook 通知系统的方案** (6 大平台自动推送)
 
 ---
 
-*本文档由 wechat-article-scraper v3.3.0 生成*
+*本文档由 wechat-article-scraper v3.4.0 生成*
