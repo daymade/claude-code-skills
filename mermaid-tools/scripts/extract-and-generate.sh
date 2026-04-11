@@ -3,7 +3,7 @@
 # Extracts diagrams from markdown and numbers them sequentially
 #
 # Usage: ./extract-and-generate.sh <markdown_file> [output_directory]
-# Example: ./extract-and-generate.sh "~/workspace/document.md" "~/workspace/diagrams"
+# Example: ./extract-and-generate.sh <markdown_file> <output_directory>
 
 set -e
 
@@ -14,7 +14,7 @@ EXTRACTOR_SCRIPT="$SCRIPT_DIR/extract_diagrams.py"
 # Parse arguments
 if [ $# -lt 1 ]; then
     echo "Usage: $0 <markdown_file> [output_directory]"
-    echo "Example: $0 '~/workspace/document.md' '~/workspace/diagrams'"
+    echo "Example: $0 <markdown_file> <output_directory>"
     exit 1
 fi
 
