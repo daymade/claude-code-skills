@@ -7,7 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Skills](https://img.shields.io/badge/skills-44-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.39.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.45.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -161,6 +161,24 @@ In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude 
 ```bash
 claude plugin install skill-creator@daymade-skills
 ```
+
+**Documentation Suite** (shared namespace for document workflows):
+```bash
+claude plugin install daymade-docs@daymade-skills
+```
+
+This suite exposes related skills under one namespace, including:
+
+```text
+/daymade-docs:doc-to-markdown
+/daymade-docs:mermaid-tools
+/daymade-docs:pdf-creator
+/daymade-docs:ppt-creator
+/daymade-docs:docs-cleaner
+/daymade-docs:meeting-minutes-taker
+```
+
+Single-skill plugins remain available for narrower installs and independent updates.
 
 **Install Other Skills:**
 ```bash
@@ -2167,4 +2185,4 @@ If you find these skills useful, please:
 
 **Built with ❤️ using the skill-creator skill for Claude Code**
 
-Last updated: 2026-01-22 | Marketplace version 1.23.0
+Last updated: 2026-04-11 | Marketplace version 1.45.0

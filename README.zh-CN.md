@@ -7,7 +7,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Skills](https://img.shields.io/badge/skills-44-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.39.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.45.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -161,6 +161,24 @@ Marketplace 名称是 `daymade-skills`（来自 marketplace.json），安装插�
 ```bash
 claude plugin install skill-creator@daymade-skills
 ```
+
+**文档套件**（为文档工作流提供统一命名空间）：
+```bash
+claude plugin install daymade-docs@daymade-skills
+```
+
+这个套件会在同一个命名空间下暴露相关技能：
+
+```text
+/daymade-docs:doc-to-markdown
+/daymade-docs:mermaid-tools
+/daymade-docs:pdf-creator
+/daymade-docs:ppt-creator
+/daymade-docs:docs-cleaner
+/daymade-docs:meeting-minutes-taker
+```
+
+单技能插件仍然保留，适合更窄的安装范围和独立更新。
 
 **安装其他技能：**
 ```bash
@@ -2205,4 +2223,4 @@ claude plugin install skill-name@daymade-skills
 
 **使用 skill-creator 技能为 Claude Code 精心打造 ❤️**
 
-最后更新：2026-01-22 | 市场版本 1.23.0
+最后更新：2026-04-11 | 市场版本 1.45.0
