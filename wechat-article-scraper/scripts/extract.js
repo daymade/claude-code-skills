@@ -112,6 +112,35 @@ async function extractWechatArticle(options = {}) {
   author = authorEl?.innerText?.trim() || '';
   publishTime = timeEl?.innerText?.trim() || '';
 
+  // 新增：提取互动数据（阅读量、点赞数、在看数）
+  const engagement = {};
+  try {
+    // 阅读量 - 多种选择器尝试
+    const readCountEl = document.querySelector('#js_read_num3') ||
+                        document.querySelector('#readNum') ||
+                        document.querySelector('.read-num');
+    if (readCountEl) {
+      engagement.readCount = readCountEl.textContent?.trim();
+    }
+
+    // 点赞数
+    const likeCountEl = document.querySelector('#js_like_num') ||
+                        document.querySelector('#likeNum') ||
+                        document.querySelector('.like-num');
+    if (likeCountEl) {
+      engagement.likeCount = likeCountEl.textContent?.trim();
+    }
+
+    // 在看数
+    const watchCountEl = document.querySelector('#js_watched_num') ||
+                         document.querySelector('.watched-num');
+    if (watchCountEl) {
+      engagement.watchCount = watchCountEl.textContent?.trim();
+    }
+  } catch (e) {
+    // 互动数据提取失败不影响主流程
+  }
+
   // OG 元数据备选
   if (enableOgfallback) {
     const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content');
@@ -333,9 +362,10 @@ async function extractWechatArticle(options = {}) {
       title,
       author,
       publishTime,
+      engagement, // 新增：互动数据
       url: window.location.href,
       extractedAt: new Date().toISOString(),
-      extractor: 'wechat-article-scraper-v2.9'
+      extractor: 'wechat-article-scraper-v3.0'
     },
     content: {
       textLength: contentEl.innerText.length,

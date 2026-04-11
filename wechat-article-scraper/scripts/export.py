@@ -112,6 +112,15 @@ class Exporter:
         lines.append("**作者**: {}".format(author))
         if publish_time:
             lines.append("**发布时间**: {}".format(publish_time))
+        # 新增：互动数据
+        engagement = data.get('engagement', {})
+        if engagement:
+            if engagement.get('readCount'):
+                lines.append("**阅读量**: {}".format(engagement['readCount']))
+            if engagement.get('likeCount'):
+                lines.append("**点赞数**: {}".format(engagement['likeCount']))
+            if engagement.get('watchCount'):
+                lines.append("**在看数**: {}".format(engagement['watchCount']))
         if data.get('source_url'):
             lines.append("**原文链接**: {}".format(data.get('source_url')))
         lines.append("")
