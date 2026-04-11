@@ -3,6 +3,16 @@
 Every item below was encountered during real marketplace development.
 Not theoretical — each cost debugging time.
 
+## Contents
+
+- [Schema Errors](#schema-errors) — `$schema`, `metadata.homepage`, conflicting `strict: false` + `plugin.json`
+- [Version Confusion](#version-confusion) — marketplace vs plugin version, silent update skips, `source`/`skills` changes
+- [Source and Cache Errors](#source-and-cache-errors) — full-repo cache pollution, namespace surprises, symlink suites, cache-directory validation
+- [Description Errors](#description-errors) — rewriting SKILL.md descriptions, inventing features
+- [Installation Testing](#installation-testing) — GitHub push timing, test cleanup
+- [PR Best Practices](#pr-best-practices) — unrelated file diffs, commit squashing
+- [Discovery Misconceptions](#discovery-misconceptions) — what `keywords` and `tags` actually do
+
 ## Schema Errors
 
 ### Adding `$schema` field

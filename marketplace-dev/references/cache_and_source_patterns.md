@@ -4,6 +4,15 @@ This reference captures marketplace lessons from real Claude Code marketplace wo
 full-repo cache pollution, suite namespace design, symlink experiments, and version
 semantics.
 
+## Contents
+
+- [Mental Model](#mental-model) — the three-level marketplace → plugin → skill hierarchy
+- [Pattern: Single-Skill Narrow Cache](#pattern-single-skill-narrow-cache) — independent install/update for one skill
+- [Pattern: Suite Plugin](#pattern-suite-plugin) — shared namespace for related skills
+- [Canonical Source for Suite Members](#canonical-source-for-suite-members) — avoiding duplicate skill directories
+- [Anti-Patterns](#anti-patterns) — full-repo sources, symlink suites, broad text replacement
+- [Verification Commands](#verification-commands) — schema, resolution, and cache footprint checks
+
 ## Mental Model
 
 Claude Code marketplace distribution has three levels:
@@ -133,44 +142,33 @@ that intended to change only docs plugins also changed unrelated plugins like
 
 ## Verification Commands
 
-Validate schema:
+Schema + resolution + reverse sync in one shot (uses the bundled script):
 
 ```bash
-claude plugin validate .claude-plugin/marketplace.json
+bash scripts/check_marketplace.sh          # validate current repo
+bash scripts/check_marketplace.sh /path    # validate a target repo
 ```
 
-Validate source+skills resolution:
+`check_marketplace.sh` runs four checks:
 
-```bash
-node - <<'NODE'
-const fs = require('fs');
-const path = require('path');
-const data = JSON.parse(fs.readFileSync('.claude-plugin/marketplace.json', 'utf8'));
-let ok = true;
-for (const p of data.plugins || []) {
-  if (typeof p.source !== 'string' || !p.source.startsWith('./')) continue;
-  const root = p.source.replace(/^\.\//, '').replace(/\/$/, '') || '.';
-  for (const s of p.skills || []) {
-    const rel = s.replace(/^\.\//, '').replace(/\/$/, '') || '.';
-    const skillPath = path.join(root, rel, 'SKILL.md');
-    if (!fs.existsSync(skillPath)) {
-      ok = false;
-      console.log(`MISSING ${p.name}: ${skillPath}`);
-    }
-  }
-}
-if (!ok) process.exit(1);
-console.log('All marketplace skill paths exist');
-NODE
-```
+1. JSON syntax of `.claude-plugin/marketplace.json`
+2. `claude plugin validate .` (skipped if `claude` CLI is missing)
+3. source+skills resolution (every plugin path resolves to a real `SKILL.md`)
+4. Reverse sync (WARN-only when a disk `SKILL.md` is not registered)
 
-Validate installed cache:
+Inspect the installed cache footprint (cannot be done by the pre-flight script
+because it depends on what `claude plugin install` actually produced):
 
 ```bash
 PLUGIN=<plugin-name>
 MARKET=<marketplace-name>
-CACHE=$(jq -r --arg id "$PLUGIN@$MARKET" '.plugins[$id][0].installPath' ~/.claude/plugins/installed_plugins.json)
+CACHE=$(jq -r --arg id "$PLUGIN@$MARKET" \
+  '.plugins[$id][0].installPath' ~/.claude/plugins/installed_plugins.json)
 find "$CACHE" -maxdepth 1 -mindepth 1 -exec basename {} \; | sort
 find "$CACHE" -maxdepth 1 -type l -ls
 ```
+
+A symlink in the cache almost always means the plugin was built from a symlink
+suite and is not self-contained. Fix by pointing `source` at a real canonical
+directory.
 

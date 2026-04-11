@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-44-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.45.1-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-47-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.46.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 44 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 47 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -286,6 +286,15 @@ claude plugin install scrapling-skill@daymade-skills
 
 # Tencent IMA knowledge base companion and installer
 claude plugin install ima-copilot@daymade-skills
+
+# Fix broken line wrapping in Claude Code exported .txt conversations
+claude plugin install claude-export-txt-better@daymade-skills
+
+# Export Douban (豆瓣) book/movie/music/game collections to CSV
+claude plugin install douban-skill@daymade-skills
+
+# Terraform operational traps and multi-environment reliability patterns
+claude plugin install terraform-skill@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -1913,6 +1922,116 @@ claude plugin install ima-copilot@daymade-skills
 
 ---
 
+### 45. **claude-export-txt-better** - Fix Claude Code Export Formatting
+
+Reconstruct broken line wrapping in Claude Code exported `.txt` conversation files. Rebuilds tables, paragraphs, paths, and tool calls that were hard-wrapped at fixed column widths, and ships with an automated 53-check validation suite (file-agnostic, catches over- and under-merging regressions).
+
+**When to use:**
+- Users have a Claude Code export file where tables, paths, or tool output got mangled by line wrapping
+- Users mention "fix export", "fix conversation", "make export readable"
+- Users reference a file matching `YYYY-MM-DD-HHMMSS-*.txt`
+- Users want to post-process `/export` output before sharing or archiving it
+
+**Key features:**
+- Deterministic Python script (`fix-claude-export.py`) with `--stats` mode for before/after metrics
+- 53-check automated validator (`validate-claude-export-fix.py`) that catches regressions
+- Evals directory with real fixture cases
+- No external dependencies beyond `uv` and Python 3.8+
+
+**Example usage:**
+```bash
+# Fix and show stats
+uv run claude-export-txt-better/scripts/fix-claude-export.py broken.txt --stats
+
+# Custom output path
+uv run claude-export-txt-better/scripts/fix-claude-export.py broken.txt -o fixed.txt
+
+# Validate the fix
+uv run claude-export-txt-better/scripts/validate-claude-export-fix.py broken.txt fixed.txt
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [claude-export-txt-better/SKILL.md](./claude-export-txt-better/SKILL.md) and the bundled `evals/` fixtures.
+
+**Requirements**: Python 3.8+, `uv` package manager.
+
+---
+
+### 46. **douban-skill** - Douban Collection Export & Sync
+
+Export and sync Douban (豆瓣) book / movie / music / game collections to local CSV files via the reverse-engineered Frodo API. Full export covers all history; RSS incremental sync keeps daily updates current. No login, no cookies, no browser — just a user ID and it works.
+
+**When to use:**
+- Users want to back up their Douban reading/watching/listening/gaming history
+- Users mention 豆瓣, douban, 读书记录, 观影记录, 书影音
+- Users need incremental sync of recent Douban activity
+- Users want CSV output compatible with Excel (UTF-8 BOM)
+
+**Key features:**
+- Full export of all 4 categories (books/movies/music/games) via Frodo API
+- RSS incremental sync for daily updates (last ~10 items per feed)
+- Pre-flight user-ID validation (fail-fast on wrong ID)
+- UTF-8 BOM CSV output, Excel-compatible, cross-platform
+- Bundled troubleshooting log documenting 7 tested scraping approaches and why each failed (Douban PoW challenges block every web-scraping approach — only Frodo API works)
+- `.gitleaks.toml` allowlist for the public Android APK credentials
+
+**Example usage:**
+```bash
+# Full export of user's collections
+uv run douban-skill/scripts/douban-frodo-export.py <douban-user-id>
+
+# Incremental RSS sync (last ~10 items per category)
+uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [douban-skill/SKILL.md](./douban-skill/SKILL.md) and [douban-skill/references/troubleshooting.md](./douban-skill/references/troubleshooting.md) for the complete failure log of rejected approaches.
+
+**Requirements**: Python 3.8+, `uv` package manager. No login or cookies required.
+
+---
+
+### 47. **terraform-skill** - Terraform Operational Traps
+
+Failure patterns from real Terraform deployments — every item caused an actual incident. Organized as *exact error → root cause → copy-paste fix*. Covers provisioner timing races, SSH connection conflicts, multi-environment isolation, DNS record duplication, volume permissions, database bootstrap gaps, snapshot cross-contamination, Cloudflare credential format errors, hardcoded domains in Caddyfiles/compose, and init-data-only-on-first-boot pitfalls.
+
+**When to use:**
+- Writing `null_resource` provisioners or `remote-exec` blocks that SSH into fresh instances
+- Setting up multi-environment (prod/staging/dev) Terraform with shared modules
+- Debugging containers that are Restarting/unhealthy after `terraform apply`
+- Hitting "docker: not found" in remote-exec, rsync connection drops in local-exec, or TLS cert errors
+- Troubleshooting drift or provisioner failures during re-runs
+- Configuring Caddy/gateway resources with Cloudflare credentials
+
+**Key features:**
+- Copy-paste `.hcl` snippets for each trap, not abstract advice
+- Coverage spanning cloud-init, Docker, file provisioners, DNS, TLS, snapshots, and cross-env contamination
+- Every pattern tagged with the exact symptom so grep finds it fast
+
+**Example usage:**
+```bash
+# Trigger the skill naturally during Terraform work
+"I'm getting 'docker: not found' in my null_resource provisioner after apply"
+"My rsync local-exec is failing with 'connection unexpectedly closed'"
+"Help me write a multi-env Terraform setup without snapshot cross-contamination"
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [terraform-skill/SKILL.md](./terraform-skill/SKILL.md) and the bundled `references/` for detailed remediation patterns.
+
+**Requirements**: None (Terraform-adjacent knowledge only; no runtime dependencies).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -2024,6 +2143,15 @@ Use **claude-skills-troubleshooting** to diagnose and resolve Claude Code plugin
 ### For Tencent IMA Knowledge Base Workflows
 Use **ima-copilot** to install the official Tencent IMA skill across Claude Code / Codex / OpenClaw, configure API credentials, detect and repair known upstream issues, and run personalized fan-out searches across all your IMA knowledge bases with priority-based boosting. The wrapper architecture means upstream upgrades never collide with your fixes — every repair is a runtime instruction, not a shipped patch. Perfect for IMA power users who switch between multiple coding agents, or for anyone who has hit the "Skipped loading skill(s) due to invalid SKILL.md" warning.
 
+### For Post-Processing Claude Code Exports
+Use **claude-export-txt-better** to clean up `/export` output before archiving or sharing. The default export format hard-wraps tables, paths, and tool-call blocks at fixed column widths, which breaks readability in any viewer wider than 80 columns. The skill reconstructs the original structure and validates the fix with 53 automated checks so regressions are caught immediately.
+
+### For Personal Data Backup (Douban)
+Use **douban-skill** to back up your Douban 书影音 (book/movie/music/game) history to CSV. Douban has no official export — the public API was shut down in 2018 and all web scraping is blocked by PoW challenges. This skill uses the same Frodo API as the official Android app, so it just works without any login or cookies. Ships with a full failure log of 7 rejected scraping approaches, saving you hours of wasted effort.
+
+### For Terraform & IaC Troubleshooting
+Use **terraform-skill** when your `terraform apply` fails at a provisioner step, when fresh instances hit "docker: not found", or when multi-environment setups accidentally share snapshots. Every pattern in the skill is an *exact error → root cause → copy-paste fix* triple drawn from real incidents. Perfect for anyone who has lost a weekend to timing races in cloud-init, rsync connection drops in local-exec, or hardcoded domains in Caddyfiles.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -2075,6 +2203,9 @@ Each skill includes:
 - **continue-claude-work**: See `continue-claude-work/SKILL.md` for local artifact recovery, drift checks, and resume workflow
 - **scrapling-skill**: See `scrapling-skill/SKILL.md` for the CLI workflow and `scrapling-skill/references/troubleshooting.md` for verified Scrapling failure modes
 - **ima-copilot**: See `ima-copilot/SKILL.md` for the wrapper architecture and routing, `ima-copilot/references/installation_flow.md` for the install deep dive, `ima-copilot/references/known_issues.md` for the issue registry and repair commands, and `ima-copilot/references/search_best_practices.md` for the fan-out strategy and 100-result truncation details
+- **claude-export-txt-better**: See `claude-export-txt-better/SKILL.md` for the workflow, `claude-export-txt-better/scripts/fix-claude-export.py` for the reconstruction algorithm, and `claude-export-txt-better/evals/` for real regression fixtures
+- **douban-skill**: See `douban-skill/SKILL.md` for the export workflow and `douban-skill/references/troubleshooting.md` for the complete log of 7 tested scraping approaches and why each failed
+- **terraform-skill**: See `terraform-skill/SKILL.md` for the full catalogue of operational traps organised by exact error → root cause → copy-paste fix
 
 ## 🛠️ Requirements
 
@@ -2185,4 +2316,4 @@ If you find these skills useful, please:
 
 **Built with ❤️ using the skill-creator skill for Claude Code**
 
-Last updated: 2026-04-11 | Marketplace version 1.45.1
+Last updated: 2026-04-11 | Marketplace version 1.46.0
