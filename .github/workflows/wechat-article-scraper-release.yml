@@ -84,10 +84,20 @@ jobs:
         run: |
           uv pip install pyinstaller typer rich pyyaml requests beautifulsoup4 html2text markdownify openpyxl reportlab scrapling jinja2
 
-      - name: Build executable
+      - name: Build executable (Unix)
+        if: runner.os != 'Windows'
         working-directory: ./wechat-article-scraper/cli
         run: |
-          uv run pyinstaller w.spec --clean
+          source .venv/bin/activate
+          pyinstaller w.spec --clean
+
+      - name: Build executable (Windows)
+        if: runner.os == 'Windows'
+        working-directory: ./wechat-article-scraper/cli
+        shell: pwsh
+        run: |
+          .venv\Scripts\Activate.ps1
+          pyinstaller w.spec --clean
 
       - name: Rename artifact
         working-directory: ./wechat-article-scraper/cli/dist
