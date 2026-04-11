@@ -1,5 +1,5 @@
 /**
- * 微信公众号文章提取脚本 - 世界级版本 v3.0
+ * 微信公众号文章提取脚本 - 世界级版本 v3.1
  * 通过 Chrome DevTools Protocol 在页面上下文中执行
  *
  * 吸取 camofox 精华：
@@ -17,6 +17,10 @@
  * v3.0 新增：
  * - 视频提取支持
  * - 互动数据提取（阅读量、点赞数、在看数）
+ *
+ * v3.1 新增：
+ * - 评论参数提取（comment_id, __biz, appmsg_token 等）
+ * - 为评论采集提供必要的加密参数
  */
 
 async function extractWechatArticle(options = {}) {
@@ -143,6 +147,73 @@ async function extractWechatArticle(options = {}) {
     }
   } catch (e) {
     // 互动数据提取失败不影响主流程
+  }
+
+  // v3.1 新增：提取评论相关参数
+  const commentParams = {};
+  try {
+    // 方法1: 从页面脚本中提取 comment_id
+    const scripts = document.querySelectorAll('script');
+    for (const script of scripts) {
+      const text = script.textContent || '';
+
+      // 提取 comment_id
+      const commentIdMatch = text.match(/comment_id\s*=\s*["'](\d+)["']/);
+      if (commentIdMatch && !commentParams.commentId) {
+        commentParams.commentId = commentIdMatch[1];
+      }
+
+      // 提取 __biz
+      const bizMatch = text.match(/__biz\s*=\s*["']([^"']+)["']/);
+      if (bizMatch && !commentParams.biz) {
+        commentParams.biz = bizMatch[1];
+      }
+
+      // 提取 appmsg_token
+      const tokenMatch = text.match(/appmsg_token\s*=\s*["']([^"']+)["']/);
+      if (tokenMatch && !commentParams.appmsgToken) {
+        commentParams.appmsgToken = tokenMatch[1];
+      }
+
+      // 提取 pass_ticket
+      const ticketMatch = text.match(/pass_ticket\s*=\s*["']([^"']+)["']/);
+      if (ticketMatch && !commentParams.passTicket) {
+        commentParams.passTicket = ticketMatch[1];
+      }
+
+      // 提取 wxtoken
+      const wxTokenMatch = text.match(/wxtoken\s*=\s*["']([^"']+)["']/);
+      if (wxTokenMatch && !commentParams.wxToken) {
+        commentParams.wxToken = wxTokenMatch[1];
+      }
+    }
+
+    // 方法2: 从页面变量中获取（微信页面常将数据挂载到 window）
+    if (window.__biz && !commentParams.biz) {
+      commentParams.biz = window.__biz;
+    }
+    if (window.comment_id && !commentParams.commentId) {
+      commentParams.commentId = window.comment_id;
+    }
+    if (window.appmsg_token && !commentParams.appmsgToken) {
+      commentParams.appmsgToken = window.appmsg_token;
+    }
+
+    // 方法3: 从 URL 参数中提取
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!commentParams.biz) {
+      commentParams.biz = urlParams.get('__biz');
+    }
+    if (!commentParams.passTicket) {
+      commentParams.passTicket = urlParams.get('pass_ticket');
+    }
+
+    // 检查是否支持评论
+    commentParams.hasComments = !!commentParams.commentId;
+
+  } catch (e) {
+    // 评论参数提取失败不影响主流程
+    commentParams.error = e.message;
   }
 
   // OG 元数据备选
@@ -367,9 +438,10 @@ async function extractWechatArticle(options = {}) {
       author,
       publishTime,
       engagement, // 新增：互动数据
+      commentParams, // v3.1 新增：评论参数
       url: window.location.href,
       extractedAt: new Date().toISOString(),
-      extractor: 'wechat-article-scraper-v3.0'
+      extractor: 'wechat-article-scraper-v3.1'
     },
     content: {
       textLength: contentEl.innerText.length,
