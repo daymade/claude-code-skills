@@ -11,7 +11,7 @@ Comprehensive examples for converting various document formats to markdown.
 markitdown "document.pdf" > output.md
 
 # WSL path example
-markitdown "/mnt/c/Users/username/Documents/report.pdf" > report.md
+markitdown "/mnt/c/Users/<windows-user>/Documents/report.pdf" > report.md
 
 # With explicit output
 markitdown "slides.pdf" > "slides.md"
@@ -37,7 +37,7 @@ markitdown "/path/to/docs/file.docx" > "/path/to/output/file.md"
 markitdown "presentation.pptx" > slides.md
 
 # WSL path
-markitdown "/mnt/c/Users/username/Desktop/slides.pptx" > slides.md
+markitdown "/mnt/c/Users/<windows-user>/Desktop/slides.pptx" > slides.md
 ```
 
 ---
@@ -48,10 +48,10 @@ markitdown "/mnt/c/Users/username/Desktop/slides.pptx" > slides.md
 
 ```bash
 # Windows path
-C:\Users\username\Documents\file.doc
+C:\Users\<windows-user>\Documents\file.doc
 
 # WSL equivalent
-/mnt/c/Users/username/Documents/file.doc
+/mnt/c/Users/<windows-user>/Documents/file.doc
 ```
 
 ### Conversion Examples
@@ -62,12 +62,12 @@ C:\folder\file.txt
 → /mnt/c/folder/file.txt
 
 # Path with spaces (must use quotes)
-C:\Users\John Doe\Documents\report.pdf
-→ "/mnt/c/Users/John Doe/Documents/report.pdf"
+C:\Users\<windows-user>\Documents\report.pdf
+→ "/mnt/c/Users/<windows-user>/Documents/report.pdf"
 
 # OneDrive path
-C:\Users\username\OneDrive\Documents\file.doc
-→ "/mnt/c/Users/username/OneDrive/Documents/file.doc"
+C:\Users\<windows-user>\OneDrive\Documents\file.doc
+→ "/mnt/c/Users/<windows-user>/OneDrive/Documents/file.doc"
 
 # Different drive letters
 D:\Projects\document.docx
@@ -78,11 +78,11 @@ D:\Projects\document.docx
 
 ```bash
 # Automatic conversion
-python scripts/convert_path.py "C:\Users\username\Downloads\document.doc"
-# Output: /mnt/c/Users/username/Downloads/document.doc
+python scripts/convert_path.py "C:\Users\<windows-user>\Downloads\document.doc"
+# Output: /mnt/c/Users/<windows-user>/Downloads/document.doc
 
 # Use in conversion command
-wsl_path=$(python scripts/convert_path.py "C:\Users\username\file.docx")
+wsl_path=$(python scripts/convert_path.py "C:\Users\<windows-user>\file.docx")
 markitdown "$wsl_path" > output.md
 ```
 
@@ -161,7 +161,7 @@ iconv -f ISO-8859-1 -t UTF-8 input.md > output.md
 
 ```bash
 # Mirror directory structure
-src_dir="/mnt/c/Users/username/Documents"
+src_dir="/mnt/c/Users/<windows-user>/Documents"
 out_dir="/path/to/output"
 
 find "$src_dir" -name "*.docx" | while read file; do

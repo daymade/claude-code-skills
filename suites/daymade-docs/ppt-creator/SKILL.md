@@ -20,7 +20,7 @@ Use this skill when the user requests:
 
 1. **Gather Intent**: If critical information is missing, ask the **10 Minimal Questions** (references/INTAKE.md). If the user doesn't respond after 2 prompts, use the **safe default** for each item and clearly note assumptions in speaker notes.
 
-2. **Structure the Story**: Apply the **Pyramid Principle** to establish "one conclusion → 3-5 top-level reasons → supporting evidence." Each slide uses **assertion-style headings** (complete sentences), with body content providing evidence (charts/tables/diagrams/data points). Templates are in references/TEMPLATES.md.
+2. **Structure the Story**: Apply the **Pyramid Principle** to establish "one conclusion → 3-5 top-level reasons → supporting evidence." Each slide uses **assertion-style headings** (complete sentences), with body content providing evidence (charts/tables/diagrams/data points). Templates are in references/TEMPLATES.md
 
 3. **Choose Charts**: Use the **Chart Selection Dictionary** in references/VIS-GUIDE.md to pick the most appropriate visualization for each point. If the user provides data (tables/CSV), **optionally** call `scripts/chartkit.py` to generate PNG charts; otherwise, create placeholder diagrams with a list of required data fields.
 
@@ -28,7 +28,7 @@ Use this skill when the user requests:
 
 5. **Speaker Notes**: Generate 45-60 second speaker notes for each slide, structured as: opening → core assertion → evidence explanation → transition.
 
-6. **Self-Check & Score**: Use references/CHECKLIST.md for a pre-flight check, then score with references/RUBRIC.md. If total score < 75, identify the weakest 3 items and refine; repeat scoring (max 2 iterations).
+6. **Self-Check & Score**: Use references/CHECKLIST.md for a pre-flight check, then score with references/RUBRIC.md If total score < 75, identify the weakest 3 items and refine; repeat scoring (max 2 iterations).
 
 7. **Deliverables** (all saved to `/output/`):
    - `/output/slides.md`: Markdown slides (Marp/Reveal.js compatible), with assertion-style headings + bullet points/chart placeholders + notes
@@ -51,7 +51,7 @@ For orchestration details, see `references/ORCHESTRATION_OVERVIEW.md` (start her
 
 - **Information Organization**: Conclusion first, then evidence (Pyramid Principle). Each slide conveys **only 1 core idea**. Headings must be **testable assertion sentences**, not topic labels.
 - **Evidence-First**: Use charts/tables/evidence blocks instead of long paragraphs; limit to 3-5 bullet points per slide.
-- **Data Visualization**: Chart selection and labeling (axes/units/sources) must comply with references/VIS-GUIDE.md. If data is insufficient, provide "placeholder chart + list of missing fields."
+- **Data Visualization**: Chart selection and labeling (axes/units/sources) must comply with references/VIS-GUIDE.md If data is insufficient, provide "placeholder chart + list of missing fields."
 - **Accessibility**: Color and text contrast must meet AA standards (see STYLE-GUIDE). Provide alt/readable descriptions for charts and images.
 - **Reusability**: Use consistent naming, stable paths, reproducible output. Do not hard-code random numbers in code.
 - **Safety & Dependencies**: Do not scrape the web without permission. Only run scripts when user provides data. If `matplotlib/pandas` are unavailable, fall back to text + placeholder diagram instructions.
