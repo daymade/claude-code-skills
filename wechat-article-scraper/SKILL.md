@@ -3,7 +3,7 @@ name: wechat-article-scraper
 description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（HTTP/Scrapling/Playwright/Chrome DevTools）、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai] [--download-images] [--format markdown|json|html|pdf]
 metadata:
-  version: "3.0.0"
+  version: "3.0.1"
   openclaw:
     emoji: "📰"
     requires:
@@ -439,7 +439,12 @@ echo "完成: 共抓取 $count 篇文章"
 
 ## 版本历史
 
-### v3.0.0 (当前)
+### v3.0.1 (当前)
+- ✨ **新增**: Fast 策略支持 HTTP 代理配置
+  - StrategyRouter 支持 proxy 参数
+  - 适配需要通过代理访问网络的环境
+
+### v3.0.0
 - ✨ **新增**: 互动数据提取
   - 阅读量、点赞数、在看数提取
   - Markdown 导出显示互动数据
@@ -572,4 +577,4 @@ echo "完成: 共抓取 $count 篇文章"
 
 ---
 
-*本文档由 wechat-article-scraper v3.0.0 生成*
+*本文档由 wechat-article-scraper v3.0.1 生成*

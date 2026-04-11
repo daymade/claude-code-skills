@@ -99,9 +99,10 @@ class StrategyRouter:
     # 吸取 camofox 精华：日期正则
     DATE_RE = re.compile(r'\d{4}年\d{1,2}月\d{1,2}(?:\s+\d{1,2}:\d{2})?')
 
-    def __init__(self, max_retries: int = 3, retry_delay: float = 0.5):
+    def __init__(self, max_retries: int = 3, retry_delay: float = 0.5, proxy: str = None):
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        self.proxy = proxy  # 新增：代理配置
         self.strategy_order = [
             Strategy.FAST,       # 先尝试快速模式
             Strategy.ADAPTIVE,   # 再尝试自适应模式
@@ -349,7 +350,9 @@ class StrategyRouter:
                 'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
             }
 
-            resp = requests.get(url, headers=headers, timeout=15)
+            # 配置代理
+            proxies = {'http': self.proxy, 'https': self.proxy} if self.proxy else None
+            resp = requests.get(url, headers=headers, timeout=15, proxies=proxies)
             resp.raise_for_status()
 
             print(f"   [Fast] HTTP {resp.status_code}, 内容长度 {len(resp.text)} bytes", file=sys.stderr)

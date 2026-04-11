@@ -62,6 +62,44 @@
           "check": "contains('poster=')"
         }
       ]
+    },
+    {
+      "id": 4,
+      "eval_name": "engagement-extraction",
+      "prompt": "抓取微信文章并提取互动数据（阅读量、点赞数）",
+      "expected_output": "包含阅读量、点赞数、在看数的结构化数据",
+      "files": [],
+      "assertions": [
+        {
+          "name": "read_count_present",
+          "description": "包含阅读量数据",
+          "check": "has_key('readCount')"
+        },
+        {
+          "name": "like_count_present",
+          "description": "包含点赞数数据",
+          "check": "has_key('likeCount')"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "eval_name": "multi-format-export",
+      "prompt": "抓取微信文章并导出为 JSON 和 HTML 格式",
+      "expected_output": "正确格式的 JSON 和 HTML 文件",
+      "files": [],
+      "assertions": [
+        {
+          "name": "json_valid",
+          "description": "JSON 格式有效",
+          "check": "valid_json()"
+        },
+        {
+          "name": "html_has_content",
+          "description": "HTML 包含文章内容",
+          "check": "contains('<div class=\"content\">')"
+        }
+      ]
     }
   ]
 }
