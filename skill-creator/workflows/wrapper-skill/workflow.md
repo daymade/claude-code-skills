@@ -196,50 +196,72 @@ Include the patterns from `patterns.md` that are almost always needed:
 
 - `set -euo pipefail`
 - `trap cleanup EXIT` for staging
-- Agent auto-detection against known home directories
+- **Prerequisite checks**: `command -v` loop for `curl`, `unzip`, `npx`, plus a separate numeric Node.js ≥18 check (parsing `node --version`). The Node check is its own step because `command -v node` only verifies presence, and `npx skills add` fails opaquely on Node 16.
+- **Download integrity defense in depth**: `curl --fail -o <path> -w "%{http_code}"`, explicit `!= "200"` branch with a version-override hint, then a `wc -c` size sanity check rejecting archives below an absolute floor before extraction. The size check is what catches redirect-to-HTML-error-page failures that return a "success" status.
+- Agent auto-detection against known home directories, plus a documented **zero-agents-detected fallback policy** — default to claude-code after printing a "looked for: …" explanation, because aborting is hostile and silent-skip is mystifying.
 - Version override via `--version` flag and env var
-- `command` prefix on any `cp`/`mv` operations
+- `command` prefix on any `cp`/`mv`/`rm`/`sed` operations
 - Root-file search that prefers known layouts before falling back to depth-sorted search
 
 ## Step 6 — Fill known_issues.md
 
-Copy the known_issues format from `patterns.md`. For each bug from Step 2c, create one entry. The entry template is:
+Copy the known_issues format from `patterns.md`. For each bug from Step 2c, create one entry with the full schema:
 
 ```markdown
 ### ISSUE-<NNN> — <short title>
 
-**Status**: Open in upstream v<version>.
-**Symptom**: ...literal error message from session...
+**Status**: <Name the loader/runtime that exhibits the symptom. Prefer version-agnostic phrasing so the entry doesn't go stale — "Observed on recent upstream releases when loaded by X" beats "Open in upstream v1.1.2".>
+**Symptom**: ...literal error message from session, verbatim...
 **Root cause**: ...what was discovered...
 **Impact**: ...what the user sees if unfixed...
+**Why upstream probably hasn't fixed it**: <one-paragraph explanation. This field is non-optional — without it, future readers will assume the wrapper is out of date and remove the repair on the next upgrade.>
 **How to explain it to the user** (plain language): ...
+
 **Repair strategies**:
 
 #### Strategy A — <name>
-... exact commands ...
+... exact commands using `command cp` / `command mv` / `command rm` / `command sed` ...
 **Rollback**: ... exact commands ...
 **Pros**: ...
 **Cons**: ...
+
+#### Strategy B — <alternative>
+... if there's a real tradeoff ...
+
+#### Strategy skip — Leave the file alone
+<Every issue with more than one strategy should also document the "do nothing" branch and the conditions under which it's actually valid. Naming it as a first-class option makes it clear the user chose inaction rather than forgetting.>
 ```
 
 Every command in every strategy must be:
 
-- **Idempotent** — rerunning after the fix is applied is a safe no-op.
-- **Reversible** — it backs up originals to `/tmp/<skill-name>-backups/<timestamp>/` before modifying anything.
-- **Alias-safe** — uses `command cp` / `command mv`, never raw `cp` / `mv`, to dodge user shell aliases like `alias mv='mv -i'` that would hang the script on a prompt.
+- **Idempotent** — rerunning after the fix is applied is a safe no-op. Guard every backup `cp` with `[ -f "..." ] && \` so reruns don't print "file not found".
+- **Reversible** — it backs up originals to `/tmp/<wrapper-skill-name>-backups/$(date +%Y%m%d-%H%M%S)/` before modifying anything. The `%Y%m%d-%H%M%S` format sorts correctly and is human-readable.
+- **Alias-safe** — uses `command cp` / `command mv` / `command rm` / `command sed`, never the bare form, to dodge user shell aliases like `alias mv='mv -i'` that would hang the script on a prompt. `alias rm='rm -i'` is equally common and affects cleanup and rollback paths.
+- **Cross-platform portable for sed** — use `sed -i.bak ... && command rm -f "<file>.bak"` which works on both BSD sed (macOS) and GNU sed (Linux). Bare `-i` and `-i ''` are mutually incompatible.
 
-See `ima-copilot/references/known_issues.md` for a fully-fleshed example with two strategies (rename vs prepend frontmatter).
+See `ima-copilot/references/known_issues.md` for a fully-fleshed example with two strategies (rename vs prepend frontmatter) plus the skip branch.
 
 ## Step 7 — Fill diagnose.sh
 
-Copy the diagnose template from `patterns.md`. For each bug from Step 2c, add a detection check that returns OK / TRIGGERED / N/A / post-fix-state based on file contents. The detection logic mirrors the fix logic in reverse: if the fix renames `notes/SKILL.md` → `notes/MODULE.md`, the diagnose must recognize both states as "healthy" and anything else as "broken".
+Copy the diagnose template from `patterns.md`. For each bug from Step 2c, add a detection check that returns a **distinct code for every post-repair state** the wrapper can produce. Binary "OK / BROKEN" detection is not enough — see the "Detection function return-code contract" subsection of `patterns.md` for the full state list, but the short version is:
+
+- One code for "original untouched and already valid"
+- One code for "original untouched and still broken"
+- One code for "target file not present at all" (legitimately different from BROKEN)
+- One code per healthy post-repair state (one per Strategy A, B, …)
+- **One code for the dual-state conflicted case** where files from more than one strategy exist simultaneously
+
+The dual-state code is the single hardest lesson from the ima-copilot session and the single place a careless author will skip. It prevents the "I ran the repair, diagnose says clean, but my install is subtly broken" failure mode.
 
 diagnose.sh is **strictly read-only**. It never modifies files. It returns:
+
 - `0` — everything healthy
-- `1` — one or more issues need user action
+- `1` — one or more issues need user action (including CONFLICTED states that require manual cleanup)
 - `2` — diagnostic itself failed (e.g. network error on liveness check)
 
 If the tool installs to multiple agents via symlinks (common with `npx skills add` in its default mode), diagnose must recognize shared canonical installs via `realpath` and scan each underlying directory exactly once. Otherwise users see the same issue reported once per agent, which is confusing.
+
+`find_install` should take a *variadic list* of candidate paths per agent, not a single path. This matters most for agents whose home-directory layout has not stabilized (like OpenClaw), where multiple candidate paths need to be probed in order. Designing the helper as variadic from day one avoids a painful refactor when a second candidate path becomes necessary.
 
 ## Step 8 — Fill references
 
