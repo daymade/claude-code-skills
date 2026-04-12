@@ -1,0 +1,140 @@
+name: Scheduled Benchmark
+
+on:
+  schedule:
+    # Run every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================
+  # Job 1: Scrape Success Rate Benchmark
+  # ============================================
+  scrape-benchmark:
+    name: Scrape Success Rate Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd cloud
+          npm ci
+
+      - name: Run scrape benchmark
+        run: |
+          cd cloud
+          npm run test:benchmark:scrape
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrape-benchmark-results
+          path: cloud/tests/benchmark/scrape-benchmark-report.json
+
+      - name: Check success rate threshold
+        run: |
+          cd cloud
+          SUCCESS_RATE=$(jq -r '.summary.successRate' tests/benchmark/scrape-benchmark-report.json | tr -d '%')
+          if (( $(echo "$SUCCESS_RATE < 95" | bc -l) )); then
+            echo "❌ Scrape success rate $SUCCESS_RATE% is below target 95%"
+            exit 1
+          else
+            echo "✅ Scrape success rate $SUCCESS_RATE% meets target 95%"
+          fi
+
+  # ============================================
+  # Job 2: Annotation Accuracy Benchmark
+  # ============================================
+  annotation-benchmark:
+    name: Annotation Accuracy Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd cloud
+          npm ci
+
+      - name: Run annotation benchmark
+        run: |
+          cd cloud
+          npm run test:benchmark:annotation
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: annotation-benchmark-results
+          path: cloud/tests/benchmark/annotation-accuracy-report.json
+
+      - name: Check accuracy threshold
+        run: |
+          cd cloud
+          ACCURACY=$(jq -r '.summary.positionAccuracy' tests/benchmark/annotation-accuracy-report.json | tr -d '%')
+          if (( $(echo "$ACCURACY < 98" | bc -l) )); then
+            echo "❌ Annotation accuracy $ACCURACY% is below target 98%"
+            exit 1
+          else
+            echo "✅ Annotation accuracy $ACCURACY% meets target 98%"
+          fi
+
+  # ============================================
+  # Job 3: Update Dashboard
+  # ============================================
+  update-dashboard:
+    name: Update Benchmark Dashboard
+    runs-on: ubuntu-latest
+    needs: [scrape-benchmark, annotation-benchmark]
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate dashboard
+        run: |
+          node -e "
+          const fs = require('fs');
+          const scrape = JSON.parse(fs.readFileSync('artifacts/scrape-benchmark-results/scrape-benchmark-report.json'));
+          const annotation = JSON.parse(fs.readFileSync('artifacts/annotation-benchmark-results/annotation-accuracy-report.json'));
+
+          const dashboard = {
+            timestamp: new Date().toISOString(),
+            summary: {
+              scrapeSuccessRate: scrape.summary.successRate,
+              annotationAccuracy: annotation.summary.positionAccuracy,
+              meetsTargets: scrape.summary.meetsTarget && annotation.summary.meetsTarget
+            },
+            details: { scrape, annotation }
+          };
+
+          fs.writeFileSync('benchmark-dashboard.json', JSON.stringify(dashboard, null, 2));
+          console.log('Dashboard updated');
+          "
+
+      - name: Upload dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-dashboard
+          path: benchmark-dashboard.json
