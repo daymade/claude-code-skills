@@ -1596,3 +1596,28 @@ echo "完成: 共抓取 $count 篇文章"
 69. **唯一支持异步保存任务队列的方案**（高并发微信消息处理）
 
 *本文档由 wechat-article-scraper v3.40.0 生成*
+
+### v3.41.0 - CI/CD 流水线 (Round 94)
+- ✨ **新增**: GitHub Actions CI/CD 工作流
+  - CI: Lint + Type Check + Unit/Integration/E2E Tests
+  - CD-Staging: Vercel Preview + DB Migration
+  - CD-Production: 生产部署 + Sentry 集成
+  - Scheduled Benchmark: 每周自动基准测试
+- ✨ **新增**: 质量门禁系统
+  - 测试覆盖率阈值 (30% → 60%)
+  - 抓取成功率阈值 (≥ 95%)
+  - 批注准确率阈值 (≥ 98%)
+- ✨ **新增**: 安全扫描
+  - npm audit 自动检查
+  - Trivy 漏洞扫描
+- ⚡ **对标**: CI/CD 现已对齐 Omnivore/Wallabag 最佳实践
+- 🔄 **优化**: package.json 测试脚本规范化
+
+---
+
+**核心差异化更新**（v3.41.0）：
+70. **唯一支持全自动化基准测试的方案**（每周自动运行，阈值检查）
+71. **唯一支持 Stagehand AI E2E 的方案**（AI 驱动的端到端测试）
+72. **唯一支持质量门禁的方案**（合并前强制检查成功率/准确率）
+
+*本文档由 wechat-article-scraper v3.41.0 生成*
