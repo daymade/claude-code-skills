@@ -846,13 +846,125 @@ def dashboard(
         console.print("\n[yellow]Dashboard 已停止[/]")
 
 
+@app.command("analyze")
+def analyze(
+    action: str = typer.Argument(..., help="操作: article/batch/stats/keywords"),
+    url: Optional[str] = typer.Option(None, "--url", "-u", help="文章URL（用于article）"),
+    limit: int = typer.Option(100, "--limit", "-n", help="批量分析数量"),
+    provider: str = typer.Option("auto", "--provider", "-p", help="LLM提供商(auto/ollama/openai/deepseek)"),
+):
+    """AI智能分析 - 情感分析、关键词提取、智能摘要"""
+    from ai_analyzer import AIAnalyzer
+
+    analyzer = AIAnalyzer(llm_provider=provider)
+
+    if action == "article":
+        if not url:
+            console.print("[red]请提供文章URL: w analyze article --url <URL>[/]")
+            raise typer.Exit(1)
+
+        console.print(f"[blue]正在抓取并分析文章: {url}[/]")
+
+        # 先抓取文章
+        try:
+            from router import StrategyRouter
+            router = StrategyRouter()
+            result = router.route(url)
+
+            if not result.success:
+                console.print(f"[red]抓取失败: {result.error}[/]")
+                raise typer.Exit(1)
+
+            article_data = result.data
+
+            # AI分析
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                progress.add_task(description="AI分析中...", total=None)
+
+                analysis = analyzer.analyze_article(
+                    article_data.get('url', url),
+                    article_data.get('title', '无标题'),
+                    article_data.get('content', '')
+                )
+
+            # 显示结果
+            console.print(Panel.fit(
+                f"[bold cyan]{analysis.title}[/]\n\n"
+                f"[bold]情感分析:[/] {analysis.sentiment.sentiment} "
+                f"([yellow]{analysis.sentiment.confidence:.0%}[/] 置信度)\n"
+                f"[bold]关键词:[/] {', '.join(k.keyword for k in analysis.keywords[:5])}\n\n"
+                f"[bold]摘要:[/]\n{analysis.summary.summary[:300]}...\n\n"
+                f"[dim]模型: {analysis.model_used} | 预计阅读: {analysis.summary.reading_time}分钟[/]",
+                title="AI智能分析结果",
+                border_style="blue"
+            ))
+
+        except Exception as e:
+            console.print(f"[red]分析失败: {e}[/]")
+            raise typer.Exit(1)
+
+    elif action == "batch":
+        console.print(f"[blue]开始批量分析，最多 {limit} 篇...[/]")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task(description="AI分析中...", total=None)
+            results = analyzer.batch_analyze(limit=limit)
+            progress.update(task, completed=True)
+
+        console.print(f"[green]✓ 完成 {len(results)} 篇文章的AI分析[/]")
+
+        # 显示情感分布
+        sentiment_dist = {}
+        for r in results:
+            s = r.sentiment.sentiment
+            sentiment_dist[s] = sentiment_dist.get(s, 0) + 1
+
+        table = Table(title="情感分布统计", box=box.ROUNDED)
+        table.add_column("情感", style="cyan")
+        table.add_column("数量", style="green")
+        table.add_column("占比", style="yellow")
+
+        for sent, count in sentiment_dist.items():
+            emoji = {"positive": "😊", "negative": "😔", "neutral": "😐"}.get(sent, "")
+            pct = count / len(results) * 100 if results else 0
+            table.add_row(f"{emoji} {sent}", str(count), f"{pct:.1f}%")
+
+        console.print(table)
+
+    elif action == "stats":
+        stats = analyzer.get_sentiment_stats()
+        console.print(Panel.fit(
+            json.dumps(stats, ensure_ascii=False, indent=2),
+            title="情感分析统计",
+            border_style="blue"
+        ))
+
+    elif action == "keywords":
+        cloud = analyzer.get_keyword_cloud()
+        console.print("[bold]热门关键词云:[/]\n")
+        for kw in cloud[:20]:
+            console.print(f"  • {kw['text']}: {kw['value']}次")
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+        console.print("[dim]可用操作: article, batch, stats, keywords[/]")
+
+
 @app.command("version")
 def version():
     """显示版本信息"""
     console.print(Panel.fit(
         "[bold cyan]微信文章抓取助手[/]\n"
         "[dim]WeChat Article Scraper CLI[/]\n\n"
-        "版本: [green]3.23.0[/]\n"
+        "版本: [green]3.24.0[/]\n"
         "策略: [blue]6-level routing[/]\n"
         "作者: [yellow]Claude Code[/]",
         border_style="cyan"
