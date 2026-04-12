@@ -1912,6 +1912,102 @@ def analytics_cmd(
 
     else:
         console.print(f"[red]未知操作: {action}[/]")
+
+
+@app.command("writing")
+def writing_cmd(
+    action: str = typer.Argument(..., help="操作: title, summary, rewrite, analyze, material"),
+    content: str = typer.Option(None, "--content", "-c", help="内容或文件路径"),
+    style: str = typer.Option("professional", "--style", "-s", help="风格: professional/casual/marketing/story/academic/news/marketing/minimal"),
+    count: int = typer.Option(5, "--count", "-n", help="生成数量"),
+    material_type: str = typer.Option("text", "--type", "-t", help="素材类型: text/image/link"),
+    title: str = typer.Option(None, "--title", help="素材标题"),
+    tags: str = typer.Option(None, "--tags", help="标签(逗号分隔)"),
+):
+    """智能写作助手 - AI标题生成/摘要/改写/素材库"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+
+    if action == "title":
+        from writing_assistant import TitleGenerator
+        generator = TitleGenerator()
+        if not content:
+            console.print("[red]请提供内容: --content <text>[/]")
+            return
+        titles = generator.generate_titles(content, count)
+        console.print(f"\n[bold cyan]生成的标题 ({len(titles)}个):[/]\n")
+        for i, t in enumerate(titles, 1):
+            icon = "👑" if i == 1 else f"{i}."
+            console.print(f"{icon} [bold]{t.title}[/]")
+            console.print(f"   [dim]公式: {t.formula} | 预测CTR: {t.predicted_ctr:.0%} | 评分: {t.score}[/]")
+
+    elif action == "summary":
+        from writing_assistant import Summarizer
+        summarizer = Summarizer()
+        if not content:
+            console.print("[red]请提供内容: --content <text>[/]")
+            return
+        summary = summarizer.generate_summary(content, style, 200)
+        console.print(f"\n[bold cyan]{summary.style}摘要:[/]\n")
+        console.print(Panel(summary.text, border_style="cyan"))
+        console.print(f"[dim]长度: {summary.length}字[/]")
+
+    elif action == "rewrite":
+        from writing_assistant import ContentRewriter
+        rewriter = ContentRewriter()
+        if not content:
+            console.print("[red]请提供内容: --content <text>[/]")
+            return
+        result = rewriter.rewrite(content, style)
+        console.print(f"\n[bold cyan]改写结果 ({result.style})[/]\n")
+        console.print(Panel(result.text, border_style="green"))
+        console.print(f"[dim]可读性: {result.readability_score}/100[/]")
+
+    elif action == "analyze":
+        from writing_assistant import WritingAssistant
+        assistant = WritingAssistant()
+        if not content:
+            console.print("[red]请提供内容: --content <text>[/]")
+            return
+        result = assistant.full_analysis(content)
+        console.print(Panel.fit(
+            f"[bold cyan]内容分析报告[/]\n"
+            f"字数: {result['content_stats']['word_count']} | "
+            f"句子: {result['content_stats']['sentence_count']} | "
+            f"预计阅读: {result['content_stats']['reading_time_minutes']}分钟",
+            border_style="cyan"
+        ))
+        console.print("\n[bold]推荐标题:[/]")
+        for t in result['titles'][:3]:
+            console.print(f"  • {t['title']} (评分: {t['score']})")
+
+    elif action == "material":
+        from material_library import MaterialLibrary
+        library = MaterialLibrary()
+        if not content:
+            # 列出素材
+            materials = library.search_materials(limit=10)
+            console.print(f"\n[bold cyan]最近素材 ({len(materials)}个):[/]\n")
+            for m in materials:
+                icon = library.MATERIAL_TYPES.get(m.type, {}).get('icon', '📄')
+                title = m.title or m.content[:30] + "..."
+                console.print(f"{icon} [bold]{title}[/] [dim]({m.usage_count}次使用)[/]")
+        else:
+            # 添加素材
+            if not title:
+                title = content[:30] + "..."
+            material = library.add_material(
+                material_type=material_type,
+                content=content,
+                title=title,
+                tags=tags.split(',') if tags else []
+            )
+            console.print(f"[green]素材已添加: {material.id}[/]")
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+
+
 @app.command("extension")
 def extension_cmd(
     action: str = typer.Argument(..., help="操作: install, pack, check"),
