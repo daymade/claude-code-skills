@@ -1,0 +1,190 @@
+name: Benchmark Tests
+
+on:
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Test type to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - scrape
+          - annotation
+          - full
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  scrape-benchmark:
+    name: Scrape Success Rate Benchmark
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'scrape' || github.event.inputs.test_type == 'full'
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: cloud/package-lock.json
+
+      - name: Install dependencies
+        working-directory: cloud
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: cloud
+        run: npx playwright install --with-deps chromium
+
+      - name: Run scrape benchmark
+        working-directory: cloud
+        env:
+          JINA_AI_API_KEY: ${{ secrets.JINA_AI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          npx vitest run tests/benchmark/scrape-benchmark.ts --reporter=verbose 2>&1 | tee scrape-benchmark.log
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scrape-benchmark-results
+          path: |
+            cloud/tests/benchmark/scrape-benchmark-report.json
+            cloud/scrape-benchmark.log
+          retention-days: 30
+
+      - name: Check success rate threshold
+        working-directory: cloud
+        run: |
+          if [ -f tests/benchmark/scrape-benchmark-report.json ]; then
+            SUCCESS_RATE=$(jq -r '.summary.successRate' tests/benchmark/scrape-benchmark-report.json | sed 's/%//')
+            echo "Success Rate: ${SUCCESS_RATE}%"
+            if (( $(echo "$SUCCESS_RATE >= 95" | bc -l) )); then
+              echo "✅ SUCCESS: Meet target of 95%"
+              exit 0
+            else
+              echo "❌ FAILURE: Below target of 95%"
+              exit 1
+            fi
+          else
+            echo "Report not generated"
+            exit 1
+          fi
+
+  annotation-benchmark:
+    name: Annotation Accuracy Benchmark
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'annotation' || github.event.inputs.test_type == 'full'
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: cloud/package-lock.json
+
+      - name: Install dependencies
+        working-directory: cloud
+        run: npm ci
+
+      - name: Run annotation accuracy test
+        working-directory: cloud
+        run: |
+          npx vitest run tests/benchmark/annotation-accuracy.ts --reporter=verbose 2>&1 | tee annotation-accuracy.log
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: annotation-accuracy-results
+          path: |
+            cloud/tests/benchmark/annotation-accuracy-report.json
+            cloud/annotation-accuracy.log
+          retention-days: 30
+
+      - name: Check accuracy threshold
+        working-directory: cloud
+        run: |
+          if [ -f tests/benchmark/annotation-accuracy-report.json ]; then
+            ACCURACY=$(jq -r '.summary.positionAccuracy' tests/benchmark/annotation-accuracy-report.json | sed 's/%//')
+            echo "Position Accuracy: ${ACCURACY}%"
+            if (( $(echo "$ACCURACY >= 98" | bc -l) )); then
+              echo "✅ SUCCESS: Meet target of 98%"
+              exit 0
+            else
+              echo "❌ FAILURE: Below target of 98%"
+              exit 1
+            fi
+          else
+            echo "Report not generated"
+            exit 1
+          fi
+
+  full-benchmark:
+    name: Full Benchmark Suite
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'full'
+    needs: [scrape-benchmark, annotation-benchmark]
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Generate combined report
+        run: |
+          echo "# 📊 Full Benchmark Report" > benchmark-report.md
+          echo "" >> benchmark-report.md
+          echo "Generated at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> benchmark-report.md
+          echo "" >> benchmark-report.md
+
+          if [ -f scrape-benchmark-results/scrape-benchmark-report.json ]; then
+            echo "## Scraping Success Rate" >> benchmark-report.md
+            cat scrape-benchmark-results/scrape-benchmark-report.json | jq -r '.summary | to_entries[] | "- \(.key): \(.value)"' >> benchmark-report.md
+            echo "" >> benchmark-report.md
+          fi
+
+          if [ -f annotation-accuracy-results/annotation-accuracy-report.json ]; then
+            echo "## Annotation Accuracy" >> benchmark-report.md
+            cat annotation-accuracy-results/annotation-accuracy-report.json | jq -r '.summary | to_entries[] | "- \(.key): \(.value)"' >> benchmark-report.md
+          fi
+
+      - name: Upload combined report
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-benchmark-report
+          path: benchmark-report.md
+
+      - name: Create GitHub Issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `❌ Benchmark Failed - ${new Date().toISOString().split('T')[0]}`,
+              body: `Benchmark tests failed. Check the [Actions run](${context.payload.repository.html_url}/actions/runs/${context.runId}) for details.`,
+              labels: ['benchmark', 'automated']
+            });
