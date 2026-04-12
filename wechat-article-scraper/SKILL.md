@@ -3,14 +3,14 @@ name: wechat-article-scraper
 description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（fast/adaptive/stable/reliable/zero_dep/jina_ai/history）、公众号全历史文章批量抓取、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、互动数据提取（阅读/点赞/在看数）、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai|history] [--download-images] [--format markdown|json|html|pdf|excel]
 metadata:
-  version: "3.31.0"
+  version: "3.34.0"
   openclaw:
     emoji: "📰"
     requires:
       bins: ["python3"]
 ---
 
-# 微信公众号文章抓取 v3.33.0
+# 微信公众号文章抓取 v3.34.0
 
 **世界级微信文章抓取方案** — 整合 12 个竞品的精华，具备智能策略路由、OG元数据备选、图片段落关联、懒加载处理、图片下载、搜索发现、多格式导出、**现代化 Web 管理界面**等完整功能。
 
@@ -1009,7 +1009,7 @@ echo "完成: 共抓取 $count 篇文章"
 
 ## 版本历史
 
-### v3.6.0 (当前)
+### v3.6.0
 - ✨ **新增**: Chrome/Firefox 浏览器扩展
   - 一键抓取当前微信文章
   - 支持 Markdown/HTML/JSON 格式
@@ -1017,6 +1017,25 @@ echo "完成: 共抓取 $count 篇文章"
   - 右键菜单集成
   - 与 Web 仪表盘无缝集成
   - 竞品完全无此功能
+
+### v3.34.0 (2025-04-12)
+- **AI智能写作引擎 v2.0**: 真LLM驱动/多模型集成/成本追踪
+  - 多模型LLM集成: OpenAI GPT-4、Anthropic Claude、DeepSeek、百度文心、阿里通义
+  - Prompt优化引擎: 5种系统提示词模板、Few-shot学习、Chain-of-Thought
+  - 批量内容生成: 异步API调用、并发控制、批量标题/摘要生成
+  - 成本追踪系统: 按提供商/模型的token成本计算、使用统计、预算控制
+  - 质量评分算法: 基于内容结构、语义完整性、风格一致性(0-100分)
+  - CLI集成: `w ai-write` 命令统一入口
+  - 竞品核心付费功能 (wcplusPro/新榜AI写作)
+
+### v3.33.0 (2025-04-12)
+- **定时任务与自动化系统 v1.0**: Cron定时/自动采集/任务通知
+  - 任务调度器: Cron表达式解析、任务调度循环、多任务类型支持
+  - 执行日志: 执行记录、成功率统计、错误追踪、历史查询
+  - 通知系统: 邮件/SMTP、Webhook回调、5种通知模板、通知历史
+  - 内置任务: scrape/export/backup/cleanup/custom 5种类型
+  - CLI集成: `w scheduler` 命令(create/list/run/toggle/delete/history/stats/daemon)
+  - 竞品核心付费功能 (wcplusPro定时采集)
 
 ### v3.32.0 (2025-04-12)
 - **数据可视化与智能分析系统 v1.0**: 交互式图表与AI洞察
@@ -1448,4 +1467,4 @@ echo "完成: 共抓取 $count 篇文章"
   - `w extension install --browser chrome`: 显示安装指南
   - `w extension pack --browser firefox`: 打包扩展
 
-*本文档由 wechat-article-scraper v3.25.0 生成*
+*本文档由 wechat-article-scraper v3.34.0 生成*

@@ -2180,13 +2180,153 @@ def extension_cmd(
         console.print(f"[red]未知操作: {action}[/]")
 
 
+@app.command("ai-write")
+def ai_write_cmd(
+    action: str = typer.Argument(..., help="操作: title, summary, rewrite, batch, stats, config"),
+    content: str = typer.Option(None, "--content", "-c", help="内容或文件路径"),
+    provider: str = typer.Option("deepseek", "--provider", "-p", help="模型提供商: openai/anthropic/deepseek/baidu/alibaba"),
+    model: str = typer.Option(None, "--model", "-m", help="模型名称 (如 gpt-4, claude-3-opus, deepseek-chat)"),
+    style: str = typer.Option("professional", "--style", "-s", help="风格: professional/casual/marketing/news/minimal/story"),
+    count: int = typer.Option(3, "--count", "-n", help="生成数量"),
+    api_key: str = typer.Option(None, "--api-key", help="API Key (或设置环境变量)"),
+    file_list: str = typer.Option(None, "--files", "-f", help="批量处理文件列表(逗号分隔)"),
+):
+    """AI智能写作引擎 v2.0 - 真LLM驱动/多模型/成本追踪"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from ai_writer_engine import AIWriterEngine, ModelProvider
+
+    engine = AIWriterEngine()
+
+    # 设置API key (如果提供)
+    if api_key:
+        import os
+        provider_upper = provider.upper()
+        os.environ[f"{provider_upper}_API_KEY"] = api_key
+
+    if action == "title":
+        if not content:
+            console.print("[red]请提供内容: --content <text>[/]")
+            return
+        console.print(f"[blue]使用 {provider} 生成标题...[/]")
+        result = engine.generate_title(
+            content=content,
+            provider=ModelProvider(provider),
+            model=model,
+            style=style,
+            count=count
+        )
+        console.print(f"\n[bold cyan]生成的标题 ({len(result['titles'])}个):[/]\n")
+        for i, t in enumerate(result['titles'], 1):
+            icon = "👑" if i == 1 else f"{i}."
+            console.print(f"{icon} [bold]{t['title']}[/]")
+            console.print(f"   [dim]评分: {t['score']}/100 | 长度: {t['length']}字[/]")
+        console.print(f"\n[dim]总耗时: {result['metadata']['total_time']:.2f}s | "
+                     f"输入token: {result['metadata']['input_tokens']} | "
+                     f"输出token: {result['metadata']['output_tokens']} | "
+                     f"成本: ${result['metadata']['cost']:.4f}[/]")
+
+    elif action == "summary":
+        if not content:
+            console.print("[red]请提供内容: --content <text>[/]")
+            return
+        console.print(f"[blue]使用 {provider} 生成摘要...[/]")
+        result = engine.generate_summary(
+            content=content,
+            provider=ModelProvider(provider),
+            model=model,
+            style=style
+        )
+        console.print(f"\n[bold cyan]摘要 ({result['summary_style']}风格):[/]\n")
+        console.print(Panel(result['summary'], border_style="cyan"))
+        console.print(f"\n[dim]字数: {result['word_count']} | "
+                     f"原文压缩比: {result['compression_ratio']:.1%} | "
+                     f"质量评分: {result['quality_score']}/100[/]")
+        console.print(f"[dim]成本: ${result['metadata']['cost']:.4f}[/]")
+
+    elif action == "rewrite":
+        if not content:
+            console.print("[red]请提供内容: --content <text>[/]")
+            return
+        console.print(f"[blue]使用 {provider} 改写内容 ({style}风格)...[/]")
+        result = engine.rewrite_content(
+            content=content,
+            provider=ModelProvider(provider),
+            model=model,
+            target_style=style
+        )
+        console.print(f"\n[bold cyan]改写结果:[/]\n")
+        console.print(Panel(result['rewritten_content'], border_style="green"))
+        console.print(f"\n[dim]原文: {result['original_word_count']}字 | "
+                     f"改写: {result['rewritten_word_count']}字 | "
+                     f"保持率: {result['content_retention']:.1%}[/]")
+        console.print(f"[dim]成本: ${result['metadata']['cost']:.4f}[/]")
+
+    elif action == "batch":
+        if not file_list:
+            console.print("[red]请提供文件列表: --files 'file1.txt,file2.txt'[/]")
+            return
+        files = file_list.split(',')
+        console.print(f"[blue]批量处理 {len(files)} 个文件...[/]")
+        results = engine.batch_generate(
+            contents=files,
+            provider=ModelProvider(provider),
+            task_type="title"
+        )
+        console.print(f"\n[bold cyan]批量处理结果:[/]\n")
+        for i, r in enumerate(results, 1):
+            status = "✅" if 'titles' in r else "❌"
+            cost = r.get('metadata', {}).get('cost', 0)
+            console.print(f"{status} 文件{i}: 成本 ${cost:.4f}")
+        total_cost = sum(r.get('metadata', {}).get('cost', 0) for r in results if 'metadata' in r)
+        console.print(f"\n[dim]总成本: ${total_cost:.4f}[/]")
+
+    elif action == "stats":
+        stats = engine.get_usage_stats(days=30)
+        console.print(Panel.fit(
+            f"[bold cyan]AI写作引擎使用统计 (30天)[/]\n\n"
+            f"总请求: {stats['total_requests']}\n"
+            f"总token: {stats['total_tokens']:,}\n"
+            f"总成本: ${stats['total_cost']:.4f}\n"
+            f"平均质量: {stats['avg_quality_score']:.1f}/100\n"
+            f"成功率: {stats['success_rate']:.1f}%",
+            border_style="cyan"
+        ))
+        if stats.get('provider_stats'):
+            console.print("\n[bold]提供商统计:[/]")
+            for p, s in stats['provider_stats'].items():
+                console.print(f"  {p}: {s['requests']}次, ${s['cost']:.4f}")
+
+    elif action == "config":
+        console.print(Panel.fit(
+            "[bold cyan]AI写作引擎配置指南[/]\n\n"
+            "环境变量设置:\n"
+            "  OPENAI_API_KEY - OpenAI API密钥\n"
+            "  ANTHROPIC_API_KEY - Anthropic API密钥\n"
+            "  DEEPSEEK_API_KEY - DeepSeek API密钥\n"
+            "  BAIDU_API_KEY - 百度文心API密钥\n"
+            "  BAIDU_SECRET_KEY - 百度Secret Key\n"
+            "  ALIBABA_API_KEY - 阿里云通义API密钥\n\n"
+            "支持的模型:\n"
+            "  openai: gpt-4, gpt-4-turbo, gpt-3.5-turbo\n"
+            "  anthropic: claude-3-opus, claude-3-sonnet\n"
+            "  deepseek: deepseek-chat, deepseek-coder\n"
+            "  baidu: ernie-bot, ernie-bot-4\n"
+            "  alibaba: qwen-turbo, qwen-plus, qwen-max",
+            border_style="cyan"
+        ))
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+
+
 @app.command("version")
 def version():
     """显示版本信息"""
     console.print(Panel.fit(
         "[bold cyan]微信文章抓取助手[/]\n"
         "[dim]WeChat Article Scraper CLI[/]\n\n"
-        "版本: [green]3.25.0[/]\n"
+        "版本: [green]3.34.0[/]\n"
         "策略: [blue]6-level routing[/]\n"
         "作者: [yellow]Claude Code[/]",
         border_style="cyan"
