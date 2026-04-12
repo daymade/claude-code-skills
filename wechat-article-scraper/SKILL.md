@@ -1216,6 +1216,8 @@ echo "完成: 共抓取 $count 篇文章"
 | **AI情感分析** | ✅ LLM驱动 | ❌ | **独有** |
 | **AI关键词提取** | ✅ TF-IDF+LLM | ❌ | **独有** |
 | **AI智能摘要** | ✅ 自动生成 | ❌ | **独有** |
+| **语义搜索** | ✅ 向量检索 | ❌ | **独有** |
+| **相似文章推荐** | ✅ k-NN | ❌ | **独有** |
 | **质量评分** | ✅ 多维度自动评分 | ❌ | **独有** |
 | **AI 摘要** | ✅ LLM 智能摘要 | ❌ | **独有** |
 | **Webhook 通知** | ✅ 6 大平台推送 | ❌ | **独有** |
@@ -1267,6 +1269,9 @@ echo "完成: 共抓取 $count 篇文章"
 40. **唯一支持AI关键词提取的方案** (TF-IDF + LLM混合算法)
 41. **唯一支持AI智能摘要的方案** (自动生成文章摘要和关键要点)
 42. **唯一支持多LLM提供商的方案** (Ollama本地 + OpenAI/DeepSeek API)
+43. **唯一支持语义搜索的方案** (向量相似度检索，理解搜索意图)
+44. **唯一支持相似文章推荐的方案** (基于内容向量的k-NN推荐)
+45. **唯一支持向量存储的方案** (sqlite-vss / faiss，支持Embedding检索)
 ---
 
 ### v2.2.0 - Smart Monitor v2.0
@@ -1304,4 +1309,23 @@ echo "完成: 共抓取 $count 篇文章"
   - `w analyze keywords`: 关键词云
 - ✨ **新增**: AI分析结果持久化存储 (SQLite)
 
-*本文档由 wechat-article-scraper v3.24.0 生成*
+### v2.5.0 - 语义搜索与向量检索 v1.0
+- ✨ **新增**: 语义搜索引擎 (`semantic_search.py`)
+  - 向量数据库存储 (支持 sqlite-vss / faiss 备选)
+  - 文本向量化 (Ollama本地 / OpenAI API)
+  - 语义相似度搜索 (余弦相似度)
+  - 相似文章推荐 (k-NN检索)
+  - 内容聚类分析 (自动主题发现)
+- ✨ **新增**: 向量存储引擎 (`vector_store.py`)
+  - Embedding提供商统一管理
+  - 多模型支持 (Ollama nomic-embed-text / OpenAI ada-002)
+  - 智能降级: LLM → API → 规则embedding
+- ✨ **新增**: `w search --semantic` 语义搜索
+- ✨ **新增**: `w semantic` 命令组
+  - `w semantic index`: 索引文章到向量库
+  - `w semantic search -q '查询'`: 语义搜索
+  - `w semantic similar --id <ID>`: 相似文章推荐
+  - `w semantic cluster`: 内容聚类分析
+  - `w semantic stats`: 向量库统计
+
+*本文档由 wechat-article-scraper v3.25.0 生成*

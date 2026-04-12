@@ -265,56 +265,102 @@ def search(
     keyword: str = typer.Argument(..., help="搜索关键词"),
     limit: int = typer.Option(10, "--limit", "-n", help="结果数量"),
     output: Optional[Path] = typer.Option(None, "--output", "-o"),
+    semantic: bool = typer.Option(False, "--semantic", "-s", help="使用语义搜索"),
 ):
-    """通过搜狗搜索发现微信文章"""
-    console.print(f"[blue]搜索关键词: [bold]{keyword}[/][/]")
-    console.print(f"[dim]限制: {limit} 条结果[/]\n")
+    """搜索微信文章（支持语义搜索）"""
+    if semantic:
+        console.print(f"[blue]语义搜索: [bold]{keyword}[/][/]")
+        console.print(f"[dim]限制: {limit} 条结果 | 模式: [cyan]语义理解[/][/]\n")
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        task = progress.add_task("正在搜索...", total=None)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            progress.add_task(description="语义搜索中...", total=None)
 
-        try:
-            from export import search_articles_via_sogou
+            try:
+                from semantic_search import SemanticSearch
+                searcher = SemanticSearch()
+                results = searcher.search(keyword, top_k=limit)
+            except Exception as e:
+                console.print(f"[red]语义搜索失败: {e}[/]")
+                raise typer.Exit(1)
 
-            results = search_articles_via_sogou(keyword, limit=limit)
-            progress.update(task, completed=True)
+        if results:
+            table = Table(title=f"语义搜索结果: {keyword}", box=box.ROUNDED)
+            table.add_column("#", style="dim", width=3)
+            table.add_column("标题", style="cyan", max_width=35)
+            table.add_column("公众号", style="green")
+            table.add_column("相似度", style="magenta")
+            table.add_column("关键词", style="yellow", max_width=20)
 
-        except Exception as e:
-            console.print(f"[red]搜索失败: {e}[/]")
-            raise typer.Exit(1)
+            for i, r in enumerate(results, 1):
+                keywords = ", ".join(r.matched_keywords[:3]) if r.matched_keywords else "-"
+                table.add_row(
+                    str(i),
+                    r.title[:35],
+                    r.account_name,
+                    f"{r.similarity_score:.1%}",
+                    keywords
+                )
 
-    if results:
-        table = Table(title=f"搜索结果: {keyword}", box=box.ROUNDED)
-        table.add_column("#", style="dim", width=3)
-        table.add_column("标题", style="cyan", max_width=40)
-        table.add_column("公众号", style="green")
-        table.add_column("发布时间", style="yellow")
-        table.add_column("URL", style="dim", max_width=30)
+            console.print(table)
+            console.print(f"\n[dim]找到 {len(results)} 个语义相关结果[/]")
+        else:
+            console.print("[yellow]未找到相关结果[/]")
+            console.print("[dim]提示: 尝试先用 `w semantic index` 索引文章[/]")
 
-        for i, article in enumerate(results, 1):
-            table.add_row(
-                str(i),
-                article.get("title", "N/A")[:40],
-                article.get("author", "N/A"),
-                article.get("publish_time", ""),
-                article.get("url", "")[:30] + "..."
-            )
-
-        console.print(table)
-
-        if output:
-            output_path = Path(output).expanduser()
-            output_path.write_text(
-                json.dumps(results, ensure_ascii=False, indent=2),
-                encoding="utf-8"
-            )
-            console.print(f"\n[green]已保存到: {output_path}[/]")
     else:
-        console.print("[yellow]未找到结果[/]")
+        # 原有搜狗搜索逻辑
+        console.print(f"[blue]搜索关键词: [bold]{keyword}[/][/]")
+        console.print(f"[dim]限制: {limit} 条结果 | 模式: [cyan]关键词匹配[/][/]\n")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("正在搜索...", total=None)
+
+            try:
+                from export import search_articles_via_sogou
+
+                results = search_articles_via_sogou(keyword, limit=limit)
+                progress.update(task, completed=True)
+
+            except Exception as e:
+                console.print(f"[red]搜索失败: {e}[/]")
+                raise typer.Exit(1)
+
+        if results:
+            table = Table(title=f"搜索结果: {keyword}", box=box.ROUNDED)
+            table.add_column("#", style="dim", width=3)
+            table.add_column("标题", style="cyan", max_width=40)
+            table.add_column("公众号", style="green")
+            table.add_column("发布时间", style="yellow")
+            table.add_column("URL", style="dim", max_width=30)
+
+            for i, article in enumerate(results, 1):
+                table.add_row(
+                    str(i),
+                    article.get("title", "N/A")[:40],
+                    article.get("author", "N/A"),
+                    article.get("publish_time", ""),
+                    article.get("url", "")[:30] + "..."
+                )
+
+            console.print(table)
+
+            if output:
+                output_path = Path(output).expanduser()
+                output_path.write_text(
+                    json.dumps(results, ensure_ascii=False, indent=2),
+                    encoding="utf-8"
+                )
+                console.print(f"\n[green]已保存到: {output_path}[/]")
+        else:
+            console.print("[yellow]未找到结果[/]")
 
 
 @app.command("auth")
@@ -958,13 +1004,134 @@ def analyze(
         console.print("[dim]可用操作: article, batch, stats, keywords[/]")
 
 
+@app.command("semantic")
+def semantic(
+    action: str = typer.Argument(..., help="操作: index/search/similar/cluster/stats"),
+    query: Optional[str] = typer.Option(None, "--query", "-q", help="搜索查询"),
+    article_id: Optional[str] = typer.Option(None, "--id", help="文章ID（用于similar）"),
+    limit: int = typer.Option(10, "--limit", "-n", help="结果数量"),
+):
+    """语义搜索与向量检索 - 理解意图的智能搜索"""
+    from semantic_search import SemanticSearch
+
+    searcher = SemanticSearch()
+
+    if action == "index":
+        console.print(f"[blue]开始索引文章到向量数据库...[/]")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            progress.add_task(description="索引中...", total=None)
+            count = searcher.index_articles(limit=limit)
+
+        console.print(f"[green]✓ 成功索引 {count} 篇文章到向量数据库[/]")
+        console.print("[dim]现在可以使用 `w search <关键词> --semantic` 进行语义搜索[/]")
+
+    elif action == "search":
+        if not query:
+            console.print("[red]请提供搜索查询: w semantic search -q '查询内容'[/]")
+            raise typer.Exit(1)
+
+        console.print(f"[blue]语义搜索: [bold]{query}[/][/]\n")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            progress.add_task(description="语义搜索中...", total=None)
+            results = searcher.search(query, top_k=limit)
+
+        if results:
+            table = Table(title=f"语义搜索结果: {query}", box=box.ROUNDED)
+            table.add_column("#", style="dim", width=3)
+            table.add_column("相似度", style="magenta", width=8)
+            table.add_column("标题", style="cyan", max_width=35)
+            table.add_column("公众号", style="green")
+
+            for i, r in enumerate(results, 1):
+                table.add_row(
+                    str(i),
+                    f"{r.similarity_score:.0%}",
+                    r.title[:35],
+                    r.account_name
+                )
+
+            console.print(table)
+            console.print(f"\n[dim]找到 {len(results)} 个语义相关结果[/]")
+        else:
+            console.print("[yellow]未找到相关结果[/]")
+            console.print("[dim]提示: 先运行 `w semantic index` 索引文章[/]")
+
+    elif action == "similar":
+        if not article_id:
+            console.print("[red]请提供文章ID: w semantic similar --id <article_id>[/]")
+            raise typer.Exit(1)
+
+        console.print(f"[blue]查找与文章相似的内容...[/]\n")
+        results = searcher.find_similar_articles(article_id, top_k=limit)
+
+        if results:
+            table = Table(title="相似文章推荐", box=box.ROUNDED)
+            table.add_column("#", style="dim", width=3)
+            table.add_column("相似度", style="magenta", width=8)
+            table.add_column("标题", style="cyan", max_width=40)
+            table.add_column("公众号", style="green")
+
+            for i, r in enumerate(results, 1):
+                table.add_row(
+                    str(i),
+                    f"{r.similarity_score:.0%}",
+                    r.title[:40],
+                    r.account_name
+                )
+
+            console.print(table)
+        else:
+            console.print("[yellow]未找到相似文章[/]")
+
+    elif action == "cluster":
+        console.print("[blue]正在进行文章聚类分析...[/]\n")
+        clusters = searcher.cluster_articles(n_clusters=min(limit, 10))
+
+        if clusters:
+            for c in clusters:
+                console.print(Panel(
+                    f"[bold]{c.topic}[/]\n\n"
+                    f"文章数: [green]{c.article_count}[/]\n"
+                    f"示例: [dim]{', '.join(c.sample_articles[:2])}...[/]",
+                    title=f"主题 {c.cluster_id}",
+                    border_style="blue"
+                ))
+        else:
+            console.print("[yellow]聚类数据不足[/]")
+
+    elif action == "stats":
+        stats = searcher.vector_store.get_stats()
+        console.print(Panel.fit(
+            f"[bold cyan]向量数据库统计[/]\n\n"
+            f"文档总数: [green]{stats['total_documents']}[/]\n"
+            f"向量维度: [blue]{stats['dimension']}[/]\n"
+            f"VSS支持: {'[green]✓[/]' if stats['has_vss'] else '[yellow]✗ (使用备选)[/]'}\n"
+            f"Embedding: [dim]{stats['embedding_provider']}[/]",
+            border_style="cyan"
+        ))
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+        console.print("[dim]可用操作: index, search, similar, cluster, stats[/]")
+
+
 @app.command("version")
 def version():
     """显示版本信息"""
     console.print(Panel.fit(
         "[bold cyan]微信文章抓取助手[/]\n"
         "[dim]WeChat Article Scraper CLI[/]\n\n"
-        "版本: [green]3.24.0[/]\n"
+        "版本: [green]3.25.0[/]\n"
         "策略: [blue]6-level routing[/]\n"
         "作者: [yellow]Claude Code[/]",
         border_style="cyan"
