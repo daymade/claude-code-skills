@@ -13,6 +13,7 @@ import { ArrowLeft, ExternalLink, FileText, BarChart3, Sparkles, Headphones, Clo
 import { Link } from 'react-router-dom'
 import SummaryCard from '@/components/SummaryCard'
 import ImmersiveReader from '@/components/ImmersiveReader'
+import ReaderThemeSettings, { generateReaderStyles, loadReaderSettings, type ReaderSettings } from '@/components/ReaderThemeSettings'
 
 type TabType = 'content' | 'summary' | 'metadata'
 
@@ -193,6 +194,10 @@ export default function ArticleDetail() {
   // Export state
   const [isExporting, setIsExporting] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
+
+  // Reader settings state
+  const [readerSettings, setReaderSettings] = useState<ReaderSettings>(loadReaderSettings())
+  const readerStyles = generateReaderStyles(readerSettings)
 
   const { data: article, isLoading } = useQuery({
     queryKey: ['article', id],
@@ -584,9 +589,10 @@ export default function ArticleDetail() {
             <EdgeTTSPlayer text={data.content} />
           )}
 
-          {/* Immersive Reader Button */}
+          {/* Reader Controls */}
           {data.content && (
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <ReaderThemeSettings onSettingsChange={setReaderSettings} />
               <button
                 onClick={() => setShowImmersiveReader(true)}
                 className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
@@ -597,11 +603,17 @@ export default function ArticleDetail() {
             </div>
           )}
 
-          <Card>
-            <CardContent className="pt-6">
+          <Card style={readerStyles} className="transition-colors duration-300">
+            <CardContent className="pt-6" style={{ backgroundColor: 'var(--reader-bg)', color: 'var(--reader-text)' }}>
               <div
-                className="prose max-w-none"
+                className="prose max-w-none reader-content"
                 onMouseUp={handleTextSelection}
+                style={{
+                  fontFamily: 'var(--reader-font)',
+                  fontSize: 'var(--reader-font-size)',
+                  lineHeight: 'var(--reader-line-height)',
+                  letterSpacing: 'var(--reader-letter-spacing)',
+                }}
               >
                 {/* Priority: html_content > content */}
                 {data.html_content ? (
