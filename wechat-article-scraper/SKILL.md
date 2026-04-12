@@ -10,7 +10,7 @@ metadata:
       bins: ["python3"]
 ---
 
-# 微信公众号文章抓取 v3.2
+# 微信公众号文章抓取 v3.26.0
 
 **世界级微信文章抓取方案** — 整合 12 个竞品的精华，具备智能策略路由、OG元数据备选、图片段落关联、懒加载处理、图片下载、搜索发现、多格式导出、**现代化 Web 管理界面**等完整功能。
 
@@ -1018,6 +1018,13 @@ echo "完成: 共抓取 $count 篇文章"
   - 与 Web 仪表盘无缝集成
   - 竞品完全无此功能
 
+### v3.26.0 (2025-04-12)
+- **自动化工作流引擎 v1.0**: IFTTT风格的触发-动作系统
+  - 触发器系统: 新文章/热度阈值/关键词匹配/定时触发
+  - 动作执行器: Webhook/邮件/企业微信/飞书/本地脚本
+  - RESTful API + WebSocket 实时通知
+  - 工作流执行日志与统计
+
 ### v3.5.0
 - ✨ **新增**: 第三方平台导出器
   - Notion 数据库集成（自动创建数据库、字段映射）
@@ -1272,6 +1279,7 @@ echo "完成: 共抓取 $count 篇文章"
 43. **唯一支持语义搜索的方案** (向量相似度检索，理解搜索意图)
 44. **唯一支持相似文章推荐的方案** (基于内容向量的k-NN推荐)
 45. **唯一支持向量存储的方案** (sqlite-vss / faiss，支持Embedding检索)
+46. **唯一支持自动化工作流引擎的方案** (IFTTT风格触发-动作系统，支持Webhook/邮件/企业微信/飞书)
 ---
 
 ### v2.2.0 - Smart Monitor v2.0
@@ -1327,5 +1335,12 @@ echo "完成: 共抓取 $count 篇文章"
   - `w semantic similar --id <ID>`: 相似文章推荐
   - `w semantic cluster`: 内容聚类分析
   - `w semantic stats`: 向量库统计
+- ⚡ **新增**: `w workflow` 命令组 (IFTTT风格自动化工作流)
+  - `w workflow create --name <名称> --trigger <类型>`: 创建工作流
+  - `w workflow list`: 列出所有工作流
+  - `w workflow trigger --id <ID>`: 手动触发工作流
+  - `w workflow logs`: 查看执行日志
+  - `w workflow server --port 8080`: 启动API服务器
+  - `w workflow stats`: 工作流统计
 
 *本文档由 wechat-article-scraper v3.25.0 生成*

@@ -1125,6 +1125,132 @@ def semantic(
         console.print("[dim]可用操作: index, search, similar, cluster, stats[/]")
 
 
+
+
+@app.command("workflow")
+def workflow(
+    action: str = typer.Argument(..., help="操作: create, list, show, enable, disable, delete, trigger, logs, test, server, stats"),
+    workflow_id: Optional[str] = typer.Option(None, "--id", help="工作流ID"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="工作流名称"),
+    desc: Optional[str] = typer.Option(None, "--desc", "-d", help="工作流描述"),
+    trigger_type: str = typer.Option("new_article", "--trigger", "-t", help="触发器类型: new_article, heat_threshold, keyword_match"),
+    trigger_config: Optional[str] = typer.Option(None, "--trigger-config", help="触发器配置JSON"),
+    actions: Optional[str] = typer.Option(None, "--actions", "-a", help="动作列表JSON"),
+    event_data: Optional[str] = typer.Option(None, "--event", "-e", help="事件数据JSON"),
+    limit: int = typer.Option(20, "--limit", "-l", help="日志数量限制"),
+    port: int = typer.Option(8080, "--port", "-p", help="API服务器端口"),
+):
+    """自动化工作流引擎 - IFTTT风格的触发-动作系统"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from workflow_engine import WorkflowEngine, TriggerConfig, ActionConfig
+    try:
+        from workflow_server import app as workflow_app, HAS_FASTAPI
+    except:
+        HAS_FASTAPI = False
+        workflow_app = None
+
+    engine = WorkflowEngine()
+
+    if action == "create":
+        if not name:
+            console.print("[red]请提供工作流名称: --name <名称>[/]")
+            raise typer.Exit(1)
+
+        t_config = json.loads(trigger_config) if trigger_config else {}
+        if trigger_type == "new_article":
+            t_config.setdefault("account_name", None)
+        elif trigger_type == "heat_threshold":
+            t_config.setdefault("threshold", 1000)
+            t_config.setdefault("operator", ">=")
+        elif trigger_type == "keyword_match":
+            t_config.setdefault("keywords", [])
+            t_config.setdefault("match_mode", "any")
+
+        if actions:
+            actions_list = json.loads(actions)
+        else:
+            actions_list = [{"type": "webhook", "config": {"url": "http://localhost:8080/test", "method": "POST"}}]
+
+        trigger = TriggerConfig(type=trigger_type, config=t_config)
+        action_configs = [ActionConfig(type=a["type"], config=a.get("config", {})) for a in actions_list]
+
+        wf = engine.create_workflow(
+            name=name,
+            description=desc or f"{name} 工作流",
+            trigger=trigger,
+            actions=action_configs
+        )
+
+        console.print(Panel.fit(
+            f"[bold green]工作流创建成功![/]\n\n"
+            f"ID: [cyan]{wf.id}[/]\n"
+            f"名称: [blue]{wf.name}[/]\n"
+            f"触发器: [yellow]{trigger_type}[/]\n"
+            f"状态: [green]启用[/]",
+            border_style="green"
+        ))
+
+    elif action == "list":
+        workflows = engine.list_workflows()
+        if not workflows:
+            console.print("[yellow]暂无工作流[/]")
+            return
+
+        table = Table(title=f"工作流列表 ({len(workflows)}个)", box=box.ROUNDED)
+        table.add_column("ID", style="dim", width=12)
+        table.add_column("名称", style="cyan")
+        table.add_column("触发器", style="yellow")
+        table.add_column("状态", style="green")
+        table.add_column("触发次数", justify="right")
+
+        for wf in workflows:
+            status_icon = "[green]●[/]" if wf.status == "enabled" else "[red]●[/]"
+            table.add_row(wf.id[:12], wf.name[:20], wf.trigger.type, f"{status_icon} {wf.status}", str(wf.trigger_count))
+        console.print(table)
+
+    elif action == "trigger":
+        if not workflow_id:
+            console.print("[red]请提供工作流ID: --id <id>[/]")
+            raise typer.Exit(1)
+
+        event = json.loads(event_data) if event_data else {
+            "event_type": "manual", "title": "测试文章", "account_name": "测试公众号"
+        }
+
+        import asyncio
+        log = asyncio.run(engine.trigger_workflow(workflow_id, event, is_manual=True))
+        if log:
+            status_icon = "[green]✓[/]" if log.status == "success" else "[red]✗[/]"
+            console.print(f"{status_icon} 执行完成: {log.status}")
+        else:
+            console.print("[red]执行失败[/]")
+
+    elif action == "logs":
+        logs = engine.get_logs(workflow_id, limit)
+        if not logs:
+            console.print("[yellow]暂无执行记录[/]")
+            return
+        for log in logs:
+            status = "✓" if log.status == "success" else "✗"
+            console.print(f"[{status}] {log.started_at[:16]} {log.workflow_id[:8]}...")
+
+    elif action == "server":
+        if not HAS_FASTAPI:
+            console.print("[red]需要安装 FastAPI: pip install fastapi uvicorn[/]")
+            raise typer.Exit(1)
+        console.print(f"[green]启动 API 服务器: http://0.0.0.0:{port}[/]")
+        import uvicorn
+        uvicorn.run(workflow_app, host="0.0.0.0", port=port)
+
+    elif action == "stats":
+        stats = engine.get_stats()
+        console.print(f"工作流: {stats['total_workflows']} | 执行: {stats['total_executions']} | 成功率: {stats['success_rate']:.1f}%")
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+        console.print("[dim]可用: create, list, trigger, logs, server, stats[/]")
+
 @app.command("version")
 def version():
     """显示版本信息"""
