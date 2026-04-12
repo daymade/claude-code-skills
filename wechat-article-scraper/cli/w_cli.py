@@ -2320,13 +2320,96 @@ def ai_write_cmd(
         console.print(f"[red]未知操作: {action}[/]")
 
 
+@app.command("agent")
+def agent_cmd(
+    action: str = typer.Argument(..., help="操作: search, ask, recommend"),
+    query: str = typer.Option(None, "--query", "-q", help="搜索查询/问题"),
+    article_id: str = typer.Option(None, "--article", "-a", help="基于文章ID推荐"),
+    author: str = typer.Option(None, "--author", help="作者筛选/基于作者推荐"),
+    topic: str = typer.Option(None, "--topic", "-t", help="基于主题推荐"),
+    limit: int = typer.Option(5, "--limit", "-l", help="结果数量"),
+):
+    """智能Agent搜索 - 语义检索/问答/推荐 (需Node.js)"""
+    import subprocess
+    import shutil
+
+    # Check if Node.js is available
+    if not shutil.which("node"):
+        console.print("[red]错误: 需要 Node.js 环境来运行 Agent[/]")
+        console.print("[yellow]请安装 Node.js: https://nodejs.org/[/]")
+        return
+
+    agents_dir = Path(__file__).parent.parent / "agents"
+    cli_path = agents_dir / "dist" / "cli.js"
+
+    if not cli_path.exists():
+        console.print("[yellow]Agent 尚未编译，正在构建...[/]")
+        try:
+            result = subprocess.run(
+                ["npm", "install"],
+                cwd=agents_dir,
+                capture_output=True,
+                text=True
+            )
+            result = subprocess.run(
+                ["npx", "tsc"],
+                cwd=agents_dir,
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                console.print(f"[red]编译失败: {result.stderr}[/]")
+                return
+        except Exception as e:
+            console.print(f"[red]构建失败: {e}[/]")
+            return
+
+    # Build command
+    cmd = ["node", str(cli_path)]
+
+    if action == "search":
+        if not query:
+            console.print("[red]请提供搜索查询: --query <text>[/]")
+            return
+        cmd.extend(["search", query, "-l", str(limit)])
+        if author:
+            cmd.extend(["-a", author])
+
+    elif action == "ask":
+        if not query:
+            console.print("[red]请提供问题: --query <question>[/]")
+            return
+        cmd.extend(["ask", query, "-s", str(limit)])
+
+    elif action == "recommend":
+        cmd.append("recommend")
+        if article_id:
+            cmd.extend(["-a", article_id])
+        if author:
+            cmd.extend(["-A", author])
+        if topic:
+            cmd.extend(["-t", topic])
+        cmd.extend(["-l", str(limit)])
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+        return
+
+    # Execute
+    try:
+        console.print(f"[blue]运行 Agent: {action}...[/]\n")
+        result = subprocess.run(cmd, capture_output=False, text=True)
+    except Exception as e:
+        console.print(f"[red]执行失败: {e}[/]")
+
+
 @app.command("version")
 def version():
     """显示版本信息"""
     console.print(Panel.fit(
         "[bold cyan]微信文章抓取助手[/]\n"
         "[dim]WeChat Article Scraper CLI[/]\n\n"
-        "版本: [green]3.34.0[/]\n"
+        "版本: [green]3.35.0[/]\n"
         "策略: [blue]6-level routing[/]\n"
         "作者: [yellow]Claude Code[/]",
         border_style="cyan"
