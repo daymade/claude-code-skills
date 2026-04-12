@@ -17,6 +17,7 @@ CANONICAL_ROOT="${GANGTISE_COPILOT_HOME:-$HOME/.local/share/gangtise-copilot}"
 CANONICAL_SKILLS_DIR="${CANONICAL_ROOT}/skills"
 XDG_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gangtise"
 AUTH_FILE="${XDG_CONFIG_DIR}/authorization.json"
+RUNTIME_TOKEN_FILE="$HOME/.GTS_AUTHORIZATION"
 
 AUTH_ENDPOINT="https://open.gangtise.com/application/auth/oauth/open/loginV2"
 RAG_ENDPOINT="https://open.gangtise.com/application/open-data/ai/search/knowledge_base"
@@ -175,6 +176,32 @@ except Exception as e:
         ;;
     esac
   fi
+fi
+
+echo
+
+# ============================================================================
+# Runtime token file used by upstream CLI scripts
+# ============================================================================
+
+echo "--- Runtime token file ---"
+
+if [ -f "$RUNTIME_TOKEN_FILE" ]; then
+  mode=""
+  if stat -f '%Lp' "$RUNTIME_TOKEN_FILE" >/dev/null 2>&1; then
+    mode=$(stat -f '%Lp' "$RUNTIME_TOKEN_FILE")
+  else
+    mode=$(stat -c '%a' "$RUNTIME_TOKEN_FILE" 2>/dev/null || echo "?")
+  fi
+  if [ "$mode" = "600" ]; then
+    status_ok "Runtime token file present with mode 600: $RUNTIME_TOKEN_FILE"
+  else
+    status_warn "Runtime token file has mode $mode (expected 600): $RUNTIME_TOKEN_FILE"
+    status_info "Fix: chmod 600 $RUNTIME_TOKEN_FILE"
+  fi
+else
+  status_warn "Runtime token file missing: $RUNTIME_TOKEN_FILE"
+  status_info "Run: bash configure_auth.sh --verify-only"
 fi
 
 echo
