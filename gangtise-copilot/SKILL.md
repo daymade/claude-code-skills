@@ -18,6 +18,8 @@ Gangtise Copilot solves this in one command:
 3. Provides a read-only diagnostic script that reports which skills are installed, which credentials are valid, and which capability tiers are reachable.
 4. Exposes preset install modes so a workshop learner gets a 7-skill minimal install while a power user can get the full 19-skill catalog.
 
+**Runtime note from April 2026 usage**: after installing skills, run `configure_auth.sh` even if `~/.config/gangtise/authorization.json` already exists. Upstream CLI scripts also read `~/.GTS_AUTHORIZATION`, a bare runtime token file. The configurator refreshes both files.
+
 ## Architectural principles (do not violate)
 
 This skill is a **wrapper layer** around the Gangtise OpenAPI skill suite. The wrapper contract is non-negotiable:
@@ -134,8 +136,9 @@ It will:
 1. Prompt for accessKey and secretAccessKey (or read from the `GANGTISE_ACCESS_KEY` / `GANGTISE_SECRET_KEY` environment variables if set).
 2. Write to `~/.config/gangtise/authorization.json` with mode 600.
 3. Perform a **live authentication call** to `https://open.gangtise.com/application/auth/oauth/open/loginV2` to verify the credentials actually work.
-4. Create symlinks from every installed skill's local credential file to the shared XDG file.
-5. Report success with the uid + userName returned by the Gangtise auth server.
+4. Write `~/.GTS_AUTHORIZATION` with the bare runtime token required by upstream CLI scripts.
+5. Create symlinks from every installed skill's local credential file to the shared XDG file.
+6. Report success with the uid + userName returned by the Gangtise auth server.
 
 ### Credential rotation
 
@@ -247,4 +250,3 @@ gangtise-copilot/
 └── config-template/
     └── authorization.json.example   # Credential file template (placeholder values only)
 ```
-

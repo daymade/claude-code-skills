@@ -8,10 +8,11 @@
 #   1. Read accessKey + secretAccessKey (from env vars, from flag, or
 #      prompt interactively)
 #   2. Write to ~/.config/gangtise/authorization.json with mode 600
-#   3. Perform a live auth call against open.gangtise.com to verify
+#   3. Write ~/.GTS_AUTHORIZATION runtime token for upstream CLI scripts
+#   4. Perform a live auth call against open.gangtise.com to verify
 #      the credentials actually work (body-shape check, not just HTTP code)
-#   4. Scan the canonical install location for installed skills
-#   5. Create or refresh each skill's scripts/.authorization as a symlink to
+#   5. Scan the canonical install location for installed skills
+#   6. Create or refresh each skill's scripts/.authorization as a symlink to
 #      the shared XDG file
 #
 # Re-run safely — every step is idempotent.
@@ -20,6 +21,7 @@ set -euo pipefail
 
 XDG_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gangtise"
 AUTH_FILE="${XDG_CONFIG_DIR}/authorization.json"
+RUNTIME_TOKEN_FILE="$HOME/.GTS_AUTHORIZATION"
 CANONICAL_ROOT="${GANGTISE_COPILOT_HOME:-$HOME/.local/share/gangtise-copilot}"
 CANONICAL_SKILLS_DIR="${CANONICAL_ROOT}/skills"
 
@@ -50,6 +52,7 @@ Environment variables:
 
 Where credentials are stored:
   ~/.config/gangtise/authorization.json   (single source of truth, mode 600)
+  ~/.GTS_AUTHORIZATION                    (runtime token for upstream CLI scripts, mode 600)
   Each installed Gangtise skill has a symlink at
   <canonical>/scripts/.authorization → this file.
 
@@ -200,6 +203,7 @@ response=$(curl -sS -X POST "$AUTH_ENDPOINT" \
 success=0
 user_name=""
 uid=""
+access_token=""
 
 if echo "$response" | grep -q '"code":"000000"'; then
   success=1
@@ -217,6 +221,15 @@ import json, sys
 try:
     d = json.loads('''$response''')
     print(d.get('data',{}).get('uid',''))
+except Exception:
+    pass
+" 2>/dev/null || true)
+    access_token=$(python3 -c "
+import json, sys
+try:
+    d = json.loads('''$response''')
+    token = d.get('data',{}).get('accessToken','')
+    print(token.replace('Bearer ', '', 1))
 except Exception:
     pass
 " 2>/dev/null || true)
@@ -240,6 +253,20 @@ fi
 echo "✓ Authentication successful"
 [ -n "$user_name" ] && echo "  userName: $user_name"
 [ -n "$uid" ]       && echo "  uid:      $uid"
+
+# ============================================================================
+# Write the runtime token file expected by upstream CLI scripts
+# ============================================================================
+
+if [ -n "$access_token" ]; then
+  tmp_runtime=$(mktemp "${RUNTIME_TOKEN_FILE}.XXXXXX")
+  printf "%s" "$access_token" > "$tmp_runtime"
+  command mv "$tmp_runtime" "$RUNTIME_TOKEN_FILE"
+  chmod 600 "$RUNTIME_TOKEN_FILE"
+  echo "✓ Runtime token written to $RUNTIME_TOKEN_FILE (mode 600)"
+else
+  echo "⚠ Could not extract accessToken for $RUNTIME_TOKEN_FILE; CLI scripts may fail" >&2
+fi
 
 # ============================================================================
 # Write the shared credential file (mode 600, XDG location)

@@ -93,3 +93,4 @@ recovered_deep_research/
 
 # Eval workspaces (contain test data with personal info)
 douban-skill-workspace/
+.gstack/
