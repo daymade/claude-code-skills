@@ -2008,6 +2008,108 @@ def writing_cmd(
         console.print(f"[red]未知操作: {action}[/]")
 
 
+
+
+@app.command("scheduler")
+def scheduler_cmd(
+    action: str = typer.Argument(..., help="操作: create, list, run, toggle, delete, history, stats, daemon"),
+    name: str = typer.Option(None, "--name", "-n", help="任务名称"),
+    cron: str = typer.Option(None, "--cron", help="Cron表达式 (如 '0 9 * * *')"),
+    task_type: str = typer.Option("custom", "--type", "-t", help="类型: scrape/export/backup/cleanup/custom"),
+    command: str = typer.Option(None, "--cmd", "-c", help="自定义命令"),
+    task_id: str = typer.Option(None, "--id", help="任务ID"),
+    desc: str = typer.Option("", "--desc", "-d", help="描述"),
+):
+    """定时任务调度器 - Cron定时/自动采集/任务通知"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from task_scheduler import TaskScheduler
+
+    scheduler = TaskScheduler()
+
+    if action == "create":
+        if not name or not cron:
+            console.print("[red]请提供 --name 和 --cron[/]")
+            return
+        task = scheduler.create_task(
+            name=name,
+            task_type=task_type,
+            cron=cron,
+            command=command,
+            description=desc
+        )
+        console.print(f"[green]任务已创建: {task.id}[/]")
+        console.print(f"  下次执行: {task.next_run}")
+
+    elif action == "list":
+        tasks = scheduler.list_tasks()
+        console.print(f"\n[bold cyan]定时任务 ({len(tasks)}个)[/]\n")
+        for t in tasks:
+            status = "✅" if t.enabled else "🚫"
+            console.print(f"{status} [{t.id}] {t.name}")
+            console.print(f"   类型: {t.task_type} | Cron: {t.cron_expression}")
+            console.print(f"   下次: {t.next_run or 'N/A'} | 执行: {t.run_count}次成功")
+
+    elif action == "run":
+        if not task_id:
+            console.print("[red]请提供 --id[/]")
+            return
+        console.print(f"[blue]执行任务: {task_id}[/]")
+        execution = scheduler.run_task(task_id)
+        icon = "✅" if execution.status == "success" else "❌"
+        console.print(f"{icon} 结果: {execution.status} (耗时 {execution.duration_seconds:.2f}秒)")
+
+    elif action == "toggle":
+        if not task_id:
+            console.print("[red]请提供 --id[/]")
+            return
+        if scheduler.toggle_task(task_id):
+            task = scheduler.get_task(task_id)
+            status = "启用" if task.enabled else "禁用"
+            console.print(f"[green]任务已{status}: {task_id}[/]")
+
+    elif action == "delete":
+        if not task_id:
+            console.print("[red]请提供 --id[/]")
+            return
+        if scheduler.delete_task(task_id):
+            console.print(f"[green]任务已删除: {task_id}[/]")
+
+    elif action == "history":
+        history = scheduler.get_execution_history(task_id, 20)
+        console.print(f"\n[bold cyan]执行历史 ({len(history)}条)[/]\n")
+        for h in history[:10]:
+            icon = "✅" if h.status == "success" else "❌"
+            console.print(f"{icon} [{h.started_at[:19]}] {h.status} ({h.duration_seconds:.1f}s)")
+
+    elif action == "stats":
+        stats = scheduler.get_stats()
+        console.print(Panel.fit(
+            f"[bold cyan]调度器统计[/]\n\n"
+            f"总任务: {stats['total_tasks']}\n"
+            f"已启用: {stats['enabled_tasks']} | 已禁用: {stats['disabled_tasks']}\n"
+            f"总执行: {stats['total_runs']} | 成功率: {stats['success_rate']:.1f}%\n"
+            f"24小时: {stats['runs_24h']} 次执行\n"
+            f"平均耗时: {stats['avg_duration_seconds']:.2f}秒",
+            border_style="cyan"
+        ))
+
+    elif action == "daemon":
+        console.print("[yellow]启动调度器守护进程...[/]")
+        scheduler.start_scheduler()
+        console.print("[green]调度器运行中，按 Ctrl+C 停止[/]")
+        try:
+            import time
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]停止调度器...[/]")
+            scheduler.stop_scheduler()
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+
+
 @app.command("extension")
 def extension_cmd(
     action: str = typer.Argument(..., help="操作: install, pack, check"),
