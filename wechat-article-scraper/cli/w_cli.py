@@ -1788,6 +1788,130 @@ def sentiment_cmd(
         console.print(f"[red]未知操作: {action}[/]")
 
 
+
+
+@app.command("analytics")
+def analytics_cmd(
+    action: str = typer.Argument(..., help="操作: trends, top, metrics, report, heatmap, compare, insights, topics"),
+    account: str = typer.Option(None, "--account", "-a", help="指定公众号"),
+    days: int = typer.Option(30, "--days", "-d", help="分析天数"),
+    limit: int = typer.Option(10, "--limit", "-n", help="显示数量"),
+    accounts: str = typer.Option(None, "--accounts", help="对比账号列表(逗号分隔)"),
+    export: str = typer.Option(None, "--export", "-o", help="导出路径"),
+):
+    """数据可视化与智能分析 - 仪表盘/竞品分析/AI洞察/热点追踪"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+
+    if action == "trends":
+        from analytics_dashboard import AnalyticsDashboard
+        dashboard = AnalyticsDashboard()
+        trends = dashboard.get_reading_trends(days, account)
+        console.print(f"\n[bold cyan]阅读趋势 ({len(trends)}天)[/]\n")
+        for t in trends[-10:]:
+            change = f"({t.change_pct:+.1f}%)" if t.change_pct != 0 else ""
+            console.print(f"  {t.date}: {t.value:,} 阅读 {change}")
+
+    elif action == "top":
+        from analytics_dashboard import AnalyticsDashboard
+        dashboard = AnalyticsDashboard()
+        articles = dashboard.get_top_articles(limit, days=days)
+        console.print(f"\n[bold cyan]热门文章 Top {len(articles)}[/]\n")
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("排名", style="dim")
+        table.add_column("标题", style="cyan", max_width=40)
+        table.add_column("公众号", style="blue")
+        table.add_column("阅读", style="green", justify="right")
+        table.add_column("互动率", style="yellow")
+        for i, a in enumerate(articles, 1):
+            table.add_row(str(i), a.title[:40], a.account_name, f"{a.read_count:,}", f"{a.engagement_rate:.2f}%")
+        console.print(table)
+
+    elif action == "metrics":
+        from analytics_dashboard import AnalyticsDashboard
+        dashboard = AnalyticsDashboard()
+        metrics = dashboard.get_account_metrics()
+        console.print(f"\n[bold cyan]公众号指标 ({len(metrics)}个)[/]\n")
+        for m in metrics:
+            console.print(Panel.fit(
+                f"[bold]{m.account_name}[/]\n"
+                f"文章: {m.total_articles} | 总阅读: {m.total_reads:,}\n"
+                f"平均: {m.avg_reads:,} | 互动率: {m.engagement_rate:.2f}%\n"
+                f"健康度: [green]{m.health_score:.1f}/100[/] | 增长率: {m.growth_rate:+.1f}%",
+                border_style="cyan"
+            ))
+
+    elif action == "report":
+        from analytics_dashboard import AnalyticsDashboard
+        dashboard = AnalyticsDashboard()
+        report = dashboard.generate_report(days)
+        console.print(Panel.fit(
+            f"[bold cyan]数据分析报告[/]\n"
+            f"统计周期: {report.period}\n"
+            f"总阅读: [blue]{report.summary['total_reads']:,}[/]\n"
+            f"总文章: {report.summary['total_articles']}[/]\n"
+            f"活跃账号: {report.summary['active_accounts']}[/]\n"
+            f"平均互动率: {report.summary['avg_engagement_rate']:.2f}%",
+            border_style="cyan"
+        ))
+        console.print("\n[bold]数据洞察:[/]")
+        for insight in report.insights[:5]:
+            console.print(f"  • {insight}")
+
+    elif action == "heatmap":
+        from analytics_dashboard import AnalyticsDashboard
+        dashboard = AnalyticsDashboard()
+        heatmap = dashboard.get_publish_heatmap(days)
+        console.print(f"\n[bold cyan]发布时间热力图[/]\n")
+        # 简化热力图显示
+        console.print("[dim]小时: 0-23 (X轴) | 日期: 周一到周日 (Y轴)[/]")
+
+    elif action == "compare":
+        if not accounts:
+            console.print("[red]请指定对比账号: --accounts '账号1,账号2'[/]")
+            return
+        from competitor_analyzer import CompetitorAnalyzer
+        analyzer = CompetitorAnalyzer()
+        account_list = [a.strip() for a in accounts.split(',')]
+        scores = analyzer.calculate_competitive_scores(account_list, days)
+        console.print(f"\n[bold cyan]竞争力对比 ({len(scores)}个账号)[/]\n")
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("排名", style="dim")
+        table.add_column("账号", style="cyan")
+        table.add_column("综合得分", style="green")
+        table.add_column("影响力", style="blue")
+        table.add_column("互动", style="yellow")
+        for s in scores:
+            table.add_row(str(s.rank), s.account_name, f"{s.overall_score:.1f}", f"{s.reach_score:.1f}", f"{s.engagement_score:.1f}")
+        console.print(table)
+
+    elif action == "insights":
+        from ai_insights import AIInsightsGenerator
+        generator = AIInsightsGenerator()
+        report = generator.generate_report(days)
+        console.print(Panel.fit(
+            f"[bold cyan]AI智能洞察[/]\n"
+            f"健康评分: [{ 'green' if report.score >= 80 else 'yellow' if report.score >= 60 else 'red' }]{report.score}/100 ({report.health_status})[/]\n"
+            f"{report.summary}",
+            border_style="cyan"
+        ))
+        if report.recommendations:
+            console.print("\n[bold]AI建议:[/]")
+            for r in report.recommendations[:3]:
+                icon = "🔴" if r.priority == "high" else "🟡"
+                console.print(f"  {icon} [bold]{r.title}[/]: {r.description[:60]}...")
+
+    elif action == "topics":
+        from hot_topics import HotTopicsTracker
+        tracker = HotTopicsTracker()
+        topics = tracker.discover_hot_topics(days)
+        console.print(f"\n[bold cyan]热点话题 ({len(topics)}个)[/]\n")
+        for i, t in enumerate(topics[:10], 1):
+            status_emoji = {'emerging': '🌱', 'peaking': '🔥', 'stable': '📊', 'declining': '📉'}.get(t.status, '•')
+            console.print(f"{i}. {status_emoji} [bold]{t.name}[/] (热度: {t.heat_score:.1f}, 提及: {t.mention_count})")
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
 @app.command("extension")
 def extension_cmd(
     action: str = typer.Argument(..., help="操作: install, pack, check"),
