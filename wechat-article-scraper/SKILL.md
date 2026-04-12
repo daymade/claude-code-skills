@@ -10,7 +10,7 @@ metadata:
       bins: ["python3"]
 ---
 
-# 微信公众号文章抓取 v3.27.0
+# 微信公众号文章抓取 v3.28.0
 
 **世界级微信文章抓取方案** — 整合 12 个竞品的精华，具备智能策略路由、OG元数据备选、图片段落关联、懒加载处理、图片下载、搜索发现、多格式导出、**现代化 Web 管理界面**等完整功能。
 
@@ -1018,6 +1018,20 @@ echo "完成: 共抓取 $count 篇文章"
   - 与 Web 仪表盘无缝集成
   - 竞品完全无此功能
 
+### v3.28.0 (2025-04-12)
+- **多格式导出引擎 v1.0**: Excel/PDF/Word/Markdown/JSON/CSV
+  - Excel: 样式美化、多sheet、统计图表
+  - PDF: 中文支持、分页优化
+  - Word: 格式保持、目录生成
+  - 导出模板: 自定义字段、样式
+- **高级筛选系统 v1.0**: 多条件组合筛选
+  - 筛选条件: 时间/公众号/关键词/阅读量/标签
+  - 支持 AND/OR 逻辑组合
+  - 筛选模板保存/加载
+- **批量操作引擎 v1.0**: 批量导出/编辑/同步/删除
+  - 任务队列和进度追踪
+  - 批量同步到第三方平台
+
 ### v3.27.0 (2025-04-12)
 - **团队协作系统 v1.0**: 多用户、共享工作区、权限管理
   - RBAC 权限控制: admin/member/viewer 三级角色
@@ -1268,6 +1282,9 @@ echo "完成: 共抓取 $count 篇文章"
 21. **唯一支持可视化任务队列的方案** (暂停/恢复/停止控制)
 22. **唯一支持文章自动分类的方案** (10 类别智能分类)
 23. **唯一支持评论采集的方案** (热评、回复、点赞数)
+49. **唯一支持多格式导出的方案** (Excel/PDF/Word/Markdown/JSON/CSV，含样式模板)
+50. **唯一支持高级筛选的方案** (多条件组合AND/OR逻辑，筛选模板保存)
+51. **唯一支持批量操作引擎的方案** (批量导出/编辑/同步/删除，任务队列)
 24. **唯一支持 RSS Feed 生成的方案** (全文/摘要/多 feed)
 25. **唯一支持 MCP 服务器的方案** (Claude Desktop 原生集成)
 26. **唯一支持公众号监控订阅的方案** (自动检测新文章)
@@ -1367,5 +1384,21 @@ echo "完成: 共抓取 $count 篇文章"
   - `w sync add --name <名称> --provider notion --token <TOKEN>`: 添加集成
   - `w sync list`: 列出集成配置
   - `w sync test --name <名称>`: 测试同步
+- 📊 **新增**: `w export` 命令组 (多格式导出)
+  - `w export excel --ids <JSON> --output <路径>`: Excel导出
+  - `w export pdf --ids <JSON>`: PDF导出
+  - `w export word/markdown/json/csv`: 其他格式
+
+- 🔍 **新增**: `w filter` 命令组 (高级筛选)
+  - `w filter create --name <名称> --field <字段> --op <操作符>`: 创建筛选模板
+  - `w filter list`: 列出筛选模板
+  - `w filter apply --template <ID>`: 应用筛选
+  - `w filter delete --template <ID>`: 删除模板
+
+- ⚙️ **新增**: `w batch` 命令组 (批量操作)
+  - `w batch export --ids <JSON> --format <格式>`: 批量导出
+  - `w batch edit --ids <JSON> --tags <JSON>`: 批量编辑
+  - `w batch list`: 查看批量任务
+  - `w batch status --task <ID>`: 任务状态
 
 *本文档由 wechat-article-scraper v3.25.0 生成*

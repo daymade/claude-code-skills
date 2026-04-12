@@ -1425,6 +1425,251 @@ def sync(
         console.print(f"[red]未知操作: {action}[/]")
 
 
+
+
+@app.command("export")
+def export_cmd(
+    format: str = typer.Argument(..., help="格式: excel, pdf, word, markdown, json, csv"),
+    output: str = typer.Option("./export", "--output", "-o", help="输出路径"),
+    article_ids: Optional[str] = typer.Option(None, "--ids", help="文章ID列表(JSON数组)"),
+    query: Optional[str] = typer.Option(None, "--query", "-q", help="筛选查询"),
+):
+    """导出文章 - 支持Excel/PDF/Word/Markdown/JSON/CSV"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from export_engine import ExportEngine
+    from advanced_filter import AdvancedFilter
+
+    engine = ExportEngine()
+
+    # 获取文章数据
+    if article_ids:
+        import json
+        ids = json.loads(article_ids)
+        # 从数据库获取
+        articles = []
+        db_path = Path.home() / ".wechat-scraper" / "articles.db"
+        if db_path.exists():
+            import sqlite3
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            placeholders = ",".join(["?"] * len(ids))
+            cursor = conn.execute(f"SELECT * FROM articles WHERE id IN ({placeholders})", ids)
+            articles = [dict(row) for row in cursor.fetchall()]
+            conn.close()
+    else:
+        console.print("[yellow]请使用 --ids 指定要导出的文章ID[/]")
+        raise typer.Exit(1)
+
+    if not articles:
+        console.print("[red]没有找到文章[/]")
+        raise typer.Exit(1)
+
+    # 确保输出目录存在
+    output_path = Path(output)
+    if output_path.suffix == "":
+        output_path.mkdir(parents=True, exist_ok=True)
+        output_file = output_path / f"export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{format if format != 'excel' else 'xlsx'}"
+    else:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_file = output_path
+
+    def progress(current, total, message):
+        if current % 5 == 0 or current == total:
+            console.print(f"  [{current}/{total}] {message}")
+
+    console.print(f"[blue]正在导出 {len(articles)} 篇文章为 {format}...[/]")
+    success = engine.export(articles, format, str(output_file), progress_callback=progress)
+
+    if success:
+        console.print(f"[green]导出成功: {output_file}[/]")
+    else:
+        console.print("[red]导出失败[/]")
+
+
+@app.command("filter")
+def filter_cmd(
+    action: str = typer.Argument(..., help="操作: create, list, apply, delete"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="模板名称"),
+    field: Optional[str] = typer.Option(None, "--field", "-f", help="筛选字段"),
+    operator: Optional[str] = typer.Option(None, "--op", help="操作符: eq, gt, lt, contains, in"),
+    value: Optional[str] = typer.Option(None, "--value", "-v", help="筛选值"),
+    template_id: Optional[str] = typer.Option(None, "--template", "-t", help="模板ID"),
+):
+    """高级筛选 - 多条件组合筛选、模板保存"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from advanced_filter import AdvancedFilter, FilterCondition
+
+    engine = AdvancedFilter()
+
+    if action == "create":
+        if not all([name, field, operator, value]):
+            console.print("[red]请提供 --name, --field, --op, --value[/]")
+            raise typer.Exit(1)
+
+        condition = FilterCondition(field=field, operator=operator, value=value)
+        template = engine.create_template(name=name, description="", conditions=[condition])
+        console.print(f"[green]筛选模板已创建: {template.id}[/]")
+
+    elif action == "list":
+        templates = engine.list_templates()
+        if not templates:
+            console.print("[yellow]暂无筛选模板[/]")
+            return
+        table = Table(title=f"筛选模板 ({len(templates)}个)", box=box.ROUNDED)
+        table.add_column("ID", style="dim", width=12)
+        table.add_column("名称", style="cyan")
+        table.add_column("条件", style="yellow")
+        table.add_column("创建时间")
+        for t in templates:
+            conds = f"{len(t.conditions)}个条件"
+            table.add_row(t.id, t.name, conds, t.created_at[:10])
+        console.print(table)
+
+    elif action == "apply":
+        if not template_id:
+            console.print("[red]请提供 --template[/]")
+            raise typer.Exit(1)
+
+        template = engine.get_template(template_id)
+        if not template:
+            console.print(f"[red]模板不存在: {template_id}[/]")
+            raise typer.Exit(1)
+
+        db_path = Path.home() / ".wechat-scraper" / "articles.db"
+        if not db_path.exists():
+            console.print("[red]数据库不存在[/]")
+            raise typer.Exit(1)
+
+        results = engine.filter_from_db(
+            str(db_path), template.conditions,
+            template.sort_by, template.sort_order, template.limit
+        )
+
+        stats = engine.get_stats(results)
+        console.print(Panel.fit(
+            f"[bold cyan]筛选结果[/]\n\n"
+            f"匹配文章: [green]{stats['total']}[/]\n"
+            f"涉及公众号: [blue]{stats['accounts']}[/]\n"
+            f"时间范围: [yellow]{stats['date_range']}[/]\n"
+            f"总阅读量: [magenta]{stats['total_reads']:,}[/]\n"
+            f"平均阅读: [dim]{stats['avg_reads']:,}[/]",
+            border_style="cyan"
+        ))
+
+        if results:
+            table = Table(title="筛选结果预览", box=box.ROUNDED)
+            table.add_column("标题", style="cyan", max_width=40)
+            table.add_column("公众号", style="green")
+            table.add_column("阅读", justify="right")
+            for r in results[:10]:
+                table.add_row(r.get('title', '')[:40], r.get('account_name', ''), str(r.get('read_count', 0)))
+            console.print(table)
+            if len(results) > 10:
+                console.print(f"[dim]... 还有 {len(results) - 10} 篇 ...[/]")
+
+    elif action == "delete":
+        if not template_id:
+            console.print("[red]请提供 --template[/]")
+            raise typer.Exit(1)
+        if engine.delete_template(template_id):
+            console.print(f"[green]模板已删除[/]")
+        else:
+            console.print(f"[red]模板不存在[/]")
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+
+
+@app.command("batch")
+def batch_cmd(
+    action: str = typer.Argument(..., help="操作: export, edit, sync, status, list"),
+    article_ids: Optional[str] = typer.Option(None, "--ids", help="文章ID列表(JSON数组)"),
+    format: Optional[str] = typer.Option(None, "--format", "-f", help="导出格式"),
+    tags: Optional[str] = typer.Option(None, "--tags", help="设置标签(JSON数组)"),
+    task_id: Optional[str] = typer.Option(None, "--task", "-t", help="任务ID"),
+):
+    """批量操作 - 批量导出/编辑/同步/删除"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from batch_operations import BatchOperationEngine
+    import json
+
+    engine = BatchOperationEngine()
+
+    if action == "export":
+        if not article_ids or not format:
+            console.print("[red]请提供 --ids 和 --format[/]")
+            raise typer.Exit(1)
+        ids = json.loads(article_ids)
+        output_dir = str(Path.home() / ".wechat-scraper" / "exports")
+        task = engine.create_task("export", ids, {"format": format, "output_dir": output_dir})
+        console.print(f"[green]批量导出任务已创建: {task.id}[/]")
+        console.print(f"  格式: {format}")
+        console.print(f"  数量: {len(ids)} 篇文章")
+        console.print(f"[dim]使用 `w batch status --task {task.id}` 查看进度[/]")
+
+    elif action == "edit":
+        if not article_ids:
+            console.print("[red]请提供 --ids[/]")
+            raise typer.Exit(1)
+        ids = json.loads(article_ids)
+        edits = {}
+        if tags:
+            edits["tags"] = json.loads(tags)
+        if not edits:
+            console.print("[red]请提供至少一个编辑字段，如 --tags[/]")
+            raise typer.Exit(1)
+        task = engine.create_task("edit", ids, {"edits": edits})
+        console.print(f"[green]批量编辑任务已创建: {task.id}[/]")
+
+    elif action == "list":
+        tasks = engine.list_tasks(limit=20)
+        if not tasks:
+            console.print("[yellow]暂无批量任务[/]")
+            return
+        table = Table(title="批量任务", box=box.ROUNDED)
+        table.add_column("ID", style="dim", width=12)
+        table.add_column("类型", style="cyan")
+        table.add_column("状态", style="green")
+        table.add_column("进度", justify="right")
+        for t in tasks:
+            status_color = {
+                "completed": "[green]",
+                "failed": "[red]",
+                "running": "[yellow]",
+                "pending": "[dim]"
+            }.get(t.status, "[white]")
+            progress = f"{t.completed}/{t.total}" if t.total > 0 else "-"
+            table.add_row(t.id[:12], t.operation_type, f"{status_color}{t.status}[/]", progress)
+        console.print(table)
+
+    elif action == "status":
+        if not task_id:
+            console.print("[red]请提供 --task[/]")
+            raise typer.Exit(1)
+        task = engine.get_task(task_id)
+        if not task:
+            console.print(f"[red]任务不存在[/]")
+            raise typer.Exit(1)
+        console.print(Panel.fit(
+            f"[bold cyan]任务详情: {task.id[:12]}[/]\n\n"
+            f"类型: [blue]{task.operation_type}[/]\n"
+            f"状态: [{'green' if task.status == 'completed' else 'yellow' if task.status == 'running' else 'red'}]{task.status}[/]\n"
+            f"进度: [green]{task.completed}[/]/[blue]{task.total}[/] ([red]{task.failed}[/] 失败)\n"
+            f"创建: [dim]{task.created_at[:16]}[/]",
+            border_style="cyan"
+        ))
+        if task.errors:
+            console.print(f"[red]错误 ({len(task.errors)}个):[/]")
+            for e in task.errors[:5]:
+                console.print(f"  [dim]- {e}[/]")
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+
+
 @app.command("version")
 def version():
     """显示版本信息"""
