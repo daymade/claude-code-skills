@@ -1,0 +1,50 @@
+{
+  "extName": {
+    "message": "微信文章助手",
+    "description": "Extension name"
+  },
+  "extDescription": {
+    "message": "一键保存微信公众号文章，支持标注、笔记和阅读进度同步",
+    "description": "Extension description"
+  },
+  "savePage": {
+    "message": "保存当前页面",
+    "description": "Save current page"
+  },
+  "saveCurrentPage": {
+    "message": "保存当前页面",
+    "description": "Save current page menu item"
+  },
+  "saveLink": {
+    "message": "保存链接",
+    "description": "Save link menu item"
+  },
+  "saveSelection": {
+    "message": "保存选中内容",
+    "description": "Save selection menu item"
+  },
+  "saveToWeChatScraper": {
+    "message": "保存到微信文章助手",
+    "description": "Context menu parent title"
+  },
+  "quickAnnotate": {
+    "message": "快速标注",
+    "description": "Quick annotate menu item"
+  },
+  "savingArticle": {
+    "message": "正在保存文章...",
+    "description": "Saving article notification"
+  },
+  "articleSaved": {
+    "message": "文章已保存: $1",
+    "description": "Article saved notification"
+  },
+  "saveFailed": {
+    "message": "保存失败: $1",
+    "description": "Save failed notification"
+  },
+  "clipSaved": {
+    "message": "内容片段已保存",
+    "description": "Clip saved notification"
+  }
+}

@@ -1,0 +1,168 @@
+/* WeChat Article Scraper - Content Script Styles */
+
+/* Floating Button */
+#wcs-floating-btn {
+  position: fixed !important;
+  right: 20px !important;
+  bottom: 100px !important;
+  z-index: 9999 !important;
+}
+
+.wcs-btn-main {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.wcs-btn-main:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.5);
+}
+
+.wcs-btn-main.wcs-loading {
+  animation: wcs-spin 1s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes wcs-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Dropdown Menu */
+.wcs-btn-menu {
+  position: absolute;
+  bottom: 64px;
+  right: 0;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  min-width: 160px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: all 0.2s ease;
+}
+
+.wcs-btn-menu.wcs-show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.wcs-menu-item {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 14px;
+  white-space: nowrap;
+  color: #374151;
+}
+
+.wcs-menu-item:hover {
+  background: #f3f4f6;
+}
+
+/* Progress Bar */
+#wcs-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.1);
+  z-index: 10000;
+}
+
+.wcs-progress-fill {
+  height: 100%;
+  background: #0ea5e9;
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+/* Annotation Highlights */
+.wcs-highlight {
+  padding: 2px 0;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.wcs-highlight:hover {
+  opacity: 0.8;
+}
+
+.wcs-highlight-yellow { background: #fef3c7; }
+.wcs-highlight-green { background: #d1fae5; }
+.wcs-highlight-blue { background: #dbeafe; }
+.wcs-highlight-pink { background: #fce7f3; }
+
+/* Annotation Toolbar */
+#wcs-annotate-toolbar {
+  animation: wcs-toolbar-in 0.2s ease;
+}
+
+@keyframes wcs-toolbar-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Toast Notifications */
+.wcs-toast {
+  animation: wcs-toast-in 0.3s ease;
+}
+
+@keyframes wcs-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Annotate Mode */
+.wcs-annotate-mode {
+  user-select: text !important;
+}
+
+.wcs-annotate-mode ::selection {
+  background: rgba(14, 165, 233, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  #wcs-floating-btn {
+    right: 16px !important;
+    bottom: 80px !important;
+  }
+
+  .wcs-btn-main {
+    width: 48px;
+    height: 48px;
+  }
+}
