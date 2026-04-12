@@ -1672,6 +1672,122 @@ def batch_cmd(
 
 
 
+@app.command("sentiment")
+def sentiment_cmd(
+    action: str = typer.Argument(..., help="操作: word, brand, alert, trend, stats, scan"),
+    name: str = typer.Option(None, "--name", "-n", help="敏感词/品牌名"),
+    category: str = typer.Option(None, "--category", "-c", help="类别: political, porn, violence, gambling, drugs, fraud, custom"),
+    level: str = typer.Option("warning", "--level", "-l", help="预警级别: critical, warning, info"),
+    content: str = typer.Option(None, "--content", help="要扫描的内容/文章ID"),
+    db: str = typer.Option(None, "--db", help="文章数据库路径"),
+):
+    """舆情监控 - 敏感词检测、品牌追踪、危机预警"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from sentiment_monitor import SentimentMonitor
+
+    monitor = SentimentMonitor()
+
+    if action == "word":
+        if name:
+            # 添加敏感词
+            monitor.add_sensitive_word(name, category or "custom")
+            console.print(f"[green]已添加敏感词: {name} ({category or 'custom'})[/]")
+        else:
+            # 列出敏感词
+            words = monitor.list_sensitive_words()
+            table = Table(title=f"敏感词列表 ({len(words)}个)")
+            table.add_column("词汇", style="cyan")
+            table.add_column("类别", style="blue")
+            table.add_column("风险级别", style="yellow")
+            for w in words[:50]:
+                risk_color = {"high": "red", "medium": "yellow", "low": "green"}.get(w.risk_level, "white")
+                table.add_row(w.word, w.category, f"[{risk_color}]{w.risk_level}[/{risk_color}]")
+            console.print(table)
+
+    elif action == "brand":
+        if name:
+            # 添加品牌追踪
+            monitor.add_brand_keyword(name)
+            console.print(f"[green]已添加品牌追踪: {name}[/]")
+        else:
+            # 列出品牌追踪
+            brands = monitor.list_brand_keywords()
+            table = Table(title=f"品牌追踪 ({len(brands)}个)")
+            table.add_column("品牌", style="cyan")
+            table.add_column("提及次数", style="blue")
+            table.add_column("最后提及", style="dim")
+            for b in brands:
+                table.add_row(b.keyword, str(b.mention_count), b.last_mention[:16] if b.last_mention else "-")
+            console.print(table)
+
+    elif action == "alert":
+        # 查看预警
+        alerts = monitor.get_active_alerts(min_level=level)
+        if not alerts:
+            console.print("[green]当前无活跃预警[/]")
+        else:
+            table = Table(title=f"活跃预警 ({len(alerts)}个)")
+            table.add_column("级别", style="red")
+            table.add_column("类型", style="cyan")
+            table.add_column("描述", style="white")
+            table.add_column("时间", style="dim")
+            for a in alerts:
+                level_color = {"critical": "red", "warning": "yellow", "info": "blue"}.get(a.level, "white")
+                table.add_row(
+                    f"[{level_color}]{a.level}[/{level_color}]",
+                    a.alert_type,
+                    a.description[:50],
+                    a.created_at[:16]
+                )
+            console.print(table)
+
+    elif action == "trend":
+        # 情感趋势
+        if db:
+            articles = monitor._get_recent_articles(db, days=7)
+            trend = monitor.analyze_sentiment_trend(articles)
+            console.print(Panel.fit(
+                f"[bold cyan]情感趋势分析 (最近7天)[/]\n\n"
+                f"总文章: [blue]{trend.total_articles}[/]\n"
+                f"正面: [green]{trend.positive_count} ({trend.positive_pct:.1f}%)[/]\n"
+                f"中性: [white]{trend.neutral_count} ({trend.neutral_pct:.1f}%)[/]\n"
+                f"负面: [red]{trend.negative_count} ({trend.negative_pct:.1f}%)[/]\n\n"
+                f"趋势: [{'green' if trend.sentiment_score > 0 else 'red'}]{trend.trend}[/{'green' if trend.sentiment_score > 0 else 'red'}]\n"
+                f"情感得分: {trend.sentiment_score:+.2f}",
+                border_style="cyan"
+            ))
+        else:
+            console.print("[yellow]请指定数据库路径: --db <path>[/]")
+
+    elif action == "stats":
+        stats = monitor.get_monitor_stats()
+        console.print(Panel.fit(
+            f"[bold cyan]舆情监控统计[/]\n\n"
+            f"敏感词: [blue]{stats['sensitive_words']}[/]\n"
+            f"品牌追踪: [blue]{stats['brand_keywords']}[/]\n"
+            f"活跃预警: [red]{stats['active_alerts']}[/]\n"
+            f"总预警: [dim]{stats['total_alerts']}[/]\n"
+            f"扫描文章: [green]{stats['scanned_articles']}[/]",
+            border_style="cyan"
+        ))
+
+    elif action == "scan":
+        if not content:
+            console.print("[red]请指定要扫描的内容: --content <text>[/]")
+            return
+        result = monitor.scan_content(content)
+        if result["has_sensitive"]:
+            console.print(f"[red]检测到 {len(result['matches'])} 个敏感词:[/]")
+            for m in result['matches']:
+                console.print(f"  - {m['word']} ({m['category']}, 风险: {m['risk_level']})")
+        else:
+            console.print(f"[green]未检测到敏感词 (情感: {result['sentiment']})[/]")
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+
+
 @app.command("extension")
 def extension_cmd(
     action: str = typer.Argument(..., help="操作: install, pack, check"),

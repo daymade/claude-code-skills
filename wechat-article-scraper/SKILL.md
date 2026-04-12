@@ -3,14 +3,14 @@ name: wechat-article-scraper
 description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（fast/adaptive/stable/reliable/zero_dep/jina_ai/history）、公众号全历史文章批量抓取、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、互动数据提取（阅读/点赞/在看数）、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai|history] [--download-images] [--format markdown|json|html|pdf|excel]
 metadata:
-  version: "3.22.0"
+  version: "3.30.0"
   openclaw:
     emoji: "📰"
     requires:
       bins: ["python3"]
 ---
 
-# 微信公众号文章抓取 v3.29.0
+# 微信公众号文章抓取 v3.30.0
 
 **世界级微信文章抓取方案** — 整合 12 个竞品的精华，具备智能策略路由、OG元数据备选、图片段落关联、懒加载处理、图片下载、搜索发现、多格式导出、**现代化 Web 管理界面**等完整功能。
 
@@ -1018,6 +1018,15 @@ echo "完成: 共抓取 $count 篇文章"
   - 与 Web 仪表盘无缝集成
   - 竞品完全无此功能
 
+### v3.30.0 (2025-04-12)
+- **舆情监控系统 v1.0**: 专业级舆情监控与危机预警
+  - 敏感词检测: 实时扫描敏感内容 (政治/色情/暴力/赌博/毒品/诈骗)
+  - 品牌提及追踪: 追踪品牌/关键词在文章中的提及
+  - 情感趋势分析: 正面/中性/负面情绪监控
+  - 危机预警系统: 异常传播速度检测、敏感内容预警
+  - CLI 集成: `w sentiment` 命令管理监控
+  - 竞品完全无此功能
+
 ### v3.29.0 (2025-04-12)
 - **浏览器扩展 v2.0**: Chrome/Firefox 插件完善
   - Content Script: 页面内容提取、一键采集
@@ -1286,6 +1295,7 @@ echo "完成: 共抓取 $count 篇文章"
 17. **唯一支持互动数据提取的方案** (阅读量、点赞数、在看数)
 18. **唯一支持现代化 Web GUI 的方案** (React + TypeScript + Tailwind + FastAPI)
 52. **唯一支持浏览器扩展的方案** (Chrome/Firefox插件，一键抓取，快捷键支持)
+53. **唯一支持舆情监控的方案** (敏感词检测、品牌追踪、情感分析、危机预警)
 19. **唯一支持 SQLite 全文搜索的方案** (FTS5 搜索引擎)
 20. **唯一支持数据持久化的方案** (增量更新 + 变更检测)
 21. **唯一支持可视化任务队列的方案** (暂停/恢复/停止控制)
