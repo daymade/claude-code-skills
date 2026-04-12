@@ -3,14 +3,14 @@ name: wechat-article-scraper
 description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（fast/adaptive/stable/reliable/zero_dep/jina_ai/history）、公众号全历史文章批量抓取、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、互动数据提取（阅读/点赞/在看数）、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai|history] [--download-images] [--format markdown|json|html|pdf|excel]
 metadata:
-  version: "3.35.0"
+  version: "3.36.0"
   openclaw:
     emoji: "📰"
     requires:
       bins: ["python3"]
 ---
 
-# 微信公众号文章抓取 v3.35.0
+# 微信公众号文章抓取 v3.36.0
 
 **世界级微信文章抓取方案** — 整合 12 个竞品的精华，具备智能策略路由、OG元数据备选、图片段落关联、懒加载处理、图片下载、搜索发现、多格式导出、**现代化 Web 管理界面**等完整功能。
 
@@ -1018,6 +1018,15 @@ echo "完成: 共抓取 $count 篇文章"
   - 与 Web 仪表盘无缝集成
   - 竞品完全无此功能
 
+### v3.36.0 (2025-04-12)
+- **知识图谱与智能洞察系统 v1.0**: 实体关系/网络分析/趋势报告
+  - 知识图谱引擎: Neo4j图数据库、实体关系建模、内容聚类
+  - 实体抽取Agent: LLM自动抽取人/组织/主题/关键词、共现关系
+  - 网络分析: 作者网络、主题演进、内容聚类发现
+  - 智能洞察报告: 趋势分析、作者画像、行业报告、对比分析
+  - CLI集成: `w kg` 命令 (extract/network/topics/clusters/trend/author/industry)
+  - 竞品完全无此功能
+
 ### v3.35.0 (2025-04-12)
 - **智能Agent搜索系统 v1.0**: 语义检索/知识问答/智能推荐
   - Agent架构: 基于Claude Agent SDK (JS/TS) + Kimi API构建
@@ -1476,4 +1485,4 @@ echo "完成: 共抓取 $count 篇文章"
   - `w extension install --browser chrome`: 显示安装指南
   - `w extension pack --browser firefox`: 打包扩展
 
-*本文档由 wechat-article-scraper v3.35.0 生成*
+*本文档由 wechat-article-scraper v3.36.0 生成*

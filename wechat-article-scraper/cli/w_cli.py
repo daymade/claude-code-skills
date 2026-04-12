@@ -2403,13 +2403,66 @@ def agent_cmd(
         console.print(f"[red]执行失败: {e}[/]")
 
 
+@app.command("kg")
+def kg_cmd(
+    action: str = typer.Argument(..., help="操作: extract, network, topics, clusters, trend, author, industry"),
+    target: str = typer.Option(None, "--target", "-t", help="目标(作者/主题/行业)"),
+    target2: str = typer.Option(None, "--target2", help="对比目标"),
+    author: str = typer.Option(None, "--author", "-a", help="作者名称"),
+    topic: str = typer.Option(None, "--topic", help="主题名称"),
+):
+    """知识图谱与智能洞察 - 实体抽取/网络分析/趋势报告 (需Node.js + Neo4j)"""
+    import subprocess
+    import shutil
+
+    if not shutil.which("node"):
+        console.print("[red]错误: 需要 Node.js 环境[/]")
+        return
+
+    agents_dir = Path(__file__).parent.parent / "agents"
+    cli_path = agents_dir / "dist" / "cli.js"
+
+    if not cli_path.exists():
+        console.print("[yellow]Agent 尚未编译，正在构建...[/]")
+        try:
+            subprocess.run(["npm", "install"], cwd=agents_dir, capture_output=True)
+            subprocess.run(["npx", "tsc"], cwd=agents_dir, capture_output=True)
+        except Exception as e:
+            console.print(f"[red]构建失败: {e}[/]")
+            return
+
+    cmd = ["node", str(cli_path)]
+
+    if action in ["extract", "network", "topics", "clusters"]:
+        cmd.extend(["graph", action])
+        if author:
+            cmd.extend(["-A", author])
+        if topic:
+            cmd.extend(["-t", topic])
+    elif action in ["trend", "author", "industry", "compare"]:
+        cmd.extend(["insight", action])
+        if target:
+            cmd.extend(["-t", target])
+        if target2:
+            cmd.extend(["-t2", target2])
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+        return
+
+    try:
+        console.print(f"[blue]运行知识图谱: {action}...[/]\n")
+        subprocess.run(cmd)
+    except Exception as e:
+        console.print(f"[red]执行失败: {e}[/]")
+
+
 @app.command("version")
 def version():
     """显示版本信息"""
     console.print(Panel.fit(
         "[bold cyan]微信文章抓取助手[/]\n"
         "[dim]WeChat Article Scraper CLI[/]\n\n"
-        "版本: [green]3.35.0[/]\n"
+        "版本: [green]3.36.0[/]\n"
         "策略: [blue]6-level routing[/]\n"
         "作者: [yellow]Claude Code[/]",
         border_style="cyan"
