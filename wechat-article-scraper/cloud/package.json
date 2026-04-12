@@ -1,0 +1,38 @@
+{
+  "name": "wechat-scraper-cloud",
+  "version": "1.0.0",
+  "description": "WeChat Article Scraper - Cloud Deployment",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "deploy": "vercel --prod",
+    "db:migrate": "supabase db push",
+    "db:types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/types/supabase.ts"
+  },
+  "dependencies": {
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "@supabase/realtime-js": "^2.9.0",
+    "socket.io": "^4.7.0",
+    "socket.io-client": "^4.7.0",
+    "yjs": "^13.6.0",
+    "y-websocket": "^1.5.0",
+    "y-protocols": "^1.0.6",
+    "zustand": "^4.4.0",
+    "tailwindcss": "^3.4.0",
+    "@headlessui/react": "^1.7.0",
+    "lucide-react": "^0.300.0",
+    "date-fns": "^3.0.0",
+    "react-query": "^3.39.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "typescript": "^5.3.0",
+    "vercel": "^33.0.0",
+    "supabase": "^1.127.0"
+  }
+}

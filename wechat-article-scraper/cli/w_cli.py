@@ -2456,13 +2456,140 @@ def kg_cmd(
         console.print(f"[red]执行失败: {e}[/]")
 
 
+@app.command("cloud")
+def cloud_cmd(
+    action: str = typer.Argument(..., help="操作: init, deploy, logs, status"),
+    env: str = typer.Option("production", "--env", "-e", help="部署环境"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="详细输出"),
+):
+    """云端部署管理 - Vercel + Supabase 一键部署 (需Node.js + Git)"""
+    import subprocess
+    import shutil
+    import os
+
+    cloud_dir = Path(__file__).parent.parent / "cloud"
+    deploy_script = cloud_dir / "scripts" / "deploy.sh"
+
+    if action == "init":
+        console.print(Panel.fit(
+            "[bold cyan]☁️ 云端部署初始化[/]\n\n"
+            "1. 确保你已安装:\n"
+            "   - Node.js 18+ (npx vercel)\n"
+            "   - Git\n"
+            "   - Vercel CLI: npm i -g vercel\n\n"
+            "2. 在 cloud/ 目录创建 .env.local:\n"
+            "   NEXT_PUBLIC_SUPABASE_URL=your_url\n"
+            "   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_key\n"
+            "   SUPABASE_SERVICE_ROLE_KEY=your_key\n"
+            "   NEXT_PUBLIC_WS_URL=wss://your-ws-server.com\n\n"
+            "3. 运行: w cloud deploy",
+            border_style="cyan"
+        ))
+
+        # Create env template if not exists
+        env_template = cloud_dir / ".env.local.template"
+        if not env_template.exists() and cloud_dir.exists():
+            env_template.write_text("""# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# WebSocket Server (for real-time collaboration)
+NEXT_PUBLIC_WS_URL=wss://your-ws-server.com
+
+# Optional: Analytics
+NEXT_PUBLIC_GA_ID=
+""")
+            console.print(f"[green]已创建模板: {env_template}[/]")
+
+    elif action == "deploy":
+        if not cloud_dir.exists():
+            console.print(f"[red]错误: cloud/ 目录不存在于 {cloud_dir.parent}[/]")
+            console.print("[yellow]请确保已下载完整项目[/]")
+            return
+
+        if not shutil.which("vercel"):
+            console.print("[yellow]未找到 Vercel CLI，尝试安装...[/]")
+            try:
+                subprocess.run(["npm", "install", "-g", "vercel"], check=True)
+            except Exception as e:
+                console.print(f"[red]安装失败: {e}[/]")
+                console.print("[yellow]请手动运行: npm install -g vercel[/]")
+                return
+
+        # Check env file
+        env_file = cloud_dir / ".env.local"
+        if not env_file.exists():
+            console.print("[red]错误: 缺少 .env.local 文件[/]")
+            console.print(f"[yellow]请复制模板并配置: cp {cloud_dir}/.env.local.template {env_file}[/]")
+            return
+
+        console.print("[bold cyan]🚀 开始部署到 Vercel...[/]")
+        try:
+            # Deploy to Vercel
+            result = subprocess.run(
+                ["vercel", "--prod"] if env == "production" else ["vercel"],
+                cwd=cloud_dir,
+                capture_output=not verbose,
+                text=True
+            )
+            if result.returncode == 0:
+                console.print("[green]✅ 部署成功![/]")
+                if not verbose and result.stdout:
+                    console.print(result.stdout)
+            else:
+                console.print(f"[red]❌ 部署失败: {result.stderr}[/]")
+        except Exception as e:
+            console.print(f"[red]部署错误: {e}[/]")
+
+    elif action == "logs":
+        try:
+            result = subprocess.run(
+                ["vercel", "logs", "--follow"] if verbose else ["vercel", "logs"],
+                cwd=cloud_dir,
+                capture_output=False,
+                text=True
+            )
+        except Exception as e:
+            console.print(f"[red]查看日志失败: {e}[/]")
+
+    elif action == "status":
+        console.print(Panel.fit(
+            "[bold cyan]☁️ 云服务状态[/]\n\n"
+            f"Cloud目录: {'✅' if cloud_dir.exists() else '❌'} {cloud_dir}\n"
+            f"Vercel CLI: {'✅' if shutil.which('vercel') else '❌'}\n"
+            f"Node.js: {'✅' if shutil.which('node') else '❌'}\n"
+            f"Git: {'✅' if shutil.which('git') else '❌'}\n",
+            border_style="cyan"
+        ))
+
+        # Try to get Vercel project info
+        if shutil.which("vercel") and cloud_dir.exists():
+            try:
+                result = subprocess.run(
+                    ["vercel", "list"],
+                    cwd=cloud_dir,
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    console.print("\n[bold]部署列表:[/]")
+                    console.print(result.stdout)
+            except:
+                pass
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+        console.print("[yellow]可用操作: init, deploy, logs, status[/]")
+
+
 @app.command("version")
 def version():
     """显示版本信息"""
     console.print(Panel.fit(
         "[bold cyan]微信文章抓取助手[/]\n"
         "[dim]WeChat Article Scraper CLI[/]\n\n"
-        "版本: [green]3.36.0[/]\n"
+        "版本: [green]3.38.0[/]\n"
         "策略: [blue]6-level routing[/]\n"
         "作者: [yellow]Claude Code[/]",
         border_style="cyan"

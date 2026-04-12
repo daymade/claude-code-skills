@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "buildCommand": "next build",
+  "devCommand": "next dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["hkg1", "sin1", "sfo1"],
+  "env": {
+    "NEXT_PUBLIC_SUPABASE_URL": "@supabase-url",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@supabase-anon-key",
+    "SUPABASE_SERVICE_ROLE_KEY": "@supabase-service-role",
+    "OPENAI_API_KEY": "@openai-api-key"
+  },
+  "functions": {
+    "src/app/api/socket/route.ts": {
+      "maxDuration": 300
+    }
+  }
+}
