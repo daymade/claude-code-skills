@@ -1,0 +1,72 @@
+{
+  "manifest_version": 2,
+  "name": "微信文章抓取助手",
+  "version": "2.0.0",
+  "description": "一键抓取微信公众号文章内容，保存为 Markdown/HTML/PDF",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "downloads",
+    "contextMenus",
+    "https://mp.weixin.qq.com/*",
+    "http://localhost:8000/*"
+  ],
+  "browser_action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "微信文章抓取助手"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://mp.weixin.qq.com/s*"
+      ],
+      "js": [
+        "../shared/content/content.js"
+      ],
+      "css": [
+        "../shared/content/content.css"
+      ],
+      "run_at": "document_end"
+    }
+  ],
+  "background": {
+    "scripts": [
+      "../shared/background/background.js"
+    ],
+    "persistent": false
+  },
+  "web_accessible_resources": [
+    "../shared/inject.js"
+  ],
+  "commands": {
+    "_execute_browser_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+W",
+        "mac": "Command+Shift+W"
+      },
+      "description": "打开微信文章抓取助手"
+    },
+    "quick-scrape": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "快速抓取当前文章"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "wechat-scraper@example.com"
+    }
+  }
+}

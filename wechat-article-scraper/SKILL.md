@@ -10,7 +10,7 @@ metadata:
       bins: ["python3"]
 ---
 
-# 微信公众号文章抓取 v3.28.0
+# 微信公众号文章抓取 v3.29.0
 
 **世界级微信文章抓取方案** — 整合 12 个竞品的精华，具备智能策略路由、OG元数据备选、图片段落关联、懒加载处理、图片下载、搜索发现、多格式导出、**现代化 Web 管理界面**等完整功能。
 
@@ -1018,6 +1018,14 @@ echo "完成: 共抓取 $count 篇文章"
   - 与 Web 仪表盘无缝集成
   - 竞品完全无此功能
 
+### v3.29.0 (2025-04-12)
+- **浏览器扩展 v2.0**: Chrome/Firefox 插件完善
+  - Content Script: 页面内容提取、一键采集
+  - Background Script: 右键菜单、快捷键、自动下载
+  - Popup UI: 格式选择、进度显示、结果操作
+  - 支持 Markdown/HTML/JSON 格式导出
+  - 快捷键: Ctrl+Shift+S 快速抓取
+
 ### v3.28.0 (2025-04-12)
 - **多格式导出引擎 v1.0**: Excel/PDF/Word/Markdown/JSON/CSV
   - Excel: 样式美化、多sheet、统计图表
@@ -1277,6 +1285,7 @@ echo "完成: 共抓取 $count 篇文章"
 16. **唯一支持视频提取的方案** (所有 6 个策略均支持，提取视频 URL、封面、时长、标题)
 17. **唯一支持互动数据提取的方案** (阅读量、点赞数、在看数)
 18. **唯一支持现代化 Web GUI 的方案** (React + TypeScript + Tailwind + FastAPI)
+52. **唯一支持浏览器扩展的方案** (Chrome/Firefox插件，一键抓取，快捷键支持)
 19. **唯一支持 SQLite 全文搜索的方案** (FTS5 搜索引擎)
 20. **唯一支持数据持久化的方案** (增量更新 + 变更检测)
 21. **唯一支持可视化任务队列的方案** (暂停/恢复/停止控制)
@@ -1400,5 +1409,13 @@ echo "完成: 共抓取 $count 篇文章"
   - `w batch edit --ids <JSON> --tags <JSON>`: 批量编辑
   - `w batch list`: 查看批量任务
   - `w batch status --task <ID>`: 任务状态
+- 🔌 **浏览器扩展**: Chrome/Firefox 插件
+  - 一键抓取当前微信文章
+  - 支持 Markdown/HTML/JSON 格式
+  - 快捷键: `Ctrl+Shift+S` 快速抓取
+  - 右键菜单快捷操作
+  - 与 CLI 服务自动同步
+  - `w extension install --browser chrome`: 显示安装指南
+  - `w extension pack --browser firefox`: 打包扩展
 
 *本文档由 wechat-article-scraper v3.25.0 生成*

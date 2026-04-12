@@ -1670,6 +1670,78 @@ def batch_cmd(
         console.print(f"[red]未知操作: {action}[/]")
 
 
+
+
+@app.command("extension")
+def extension_cmd(
+    action: str = typer.Argument(..., help="操作: install, pack, check"),
+    browser: str = typer.Option("chrome", "--browser", "-b", help="浏览器: chrome, firefox"),
+):
+    """浏览器扩展管理 - Chrome/Firefox 插件"""
+    ext_dir = Path(__file__).parent.parent / "extension"
+
+    if action == "install":
+        if browser == "chrome":
+            chrome_ext = ext_dir / "chrome"
+            console.print(Panel.fit(
+                f"[bold cyan]Chrome 扩展安装指南[/]\n\n"
+                f"1. 打开 Chrome 浏览器\n"
+                f"2. 访问: [blue]chrome://extensions/[/]\n"
+                f"3. 开启 [yellow]开发者模式[/]\n"
+                f"4. 点击 [yellow]加载已解压的扩展程序[/]\n"
+                f"5. 选择目录: [green]{chrome_ext}[/]\n\n"
+                f"快捷键: [bold]Ctrl+Shift+S[/] 快速抓取",
+                border_style="cyan"
+            ))
+        else:
+            firefox_ext = ext_dir / "firefox"
+            console.print(Panel.fit(
+                f"[bold orange3]Firefox 扩展安装指南[/]\n\n"
+                f"1. 打开 Firefox 浏览器\n"
+                f"2. 访问: [blue]about:debugging[/]\n"
+                f"3. 点击 [yellow]此 Firefox[/]\n"
+                f"4. 点击 [yellow]临时载入附加组件[/]\n"
+                f"5. 选择文件: [green]{firefox_ext / 'manifest.json'}[/]\n\n"
+                f"快捷键: [bold]Ctrl+Shift+S[/] 快速抓取",
+                border_style="orange3"
+            ))
+
+    elif action == "pack":
+        console.print(f"[blue]打包 {browser} 扩展...[/]")
+        import shutil
+        import zipfile
+
+        src_dir = ext_dir / browser
+        if not src_dir.exists():
+            console.print(f"[red]扩展目录不存在: {src_dir}[/]")
+            raise typer.Exit(1)
+
+        output_file = ext_dir / f"wechat-scraper-{browser}-v2.0.0.zip"
+
+        with zipfile.ZipFile(output_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for file_path in src_dir.rglob('*'):
+                if file_path.is_file() and '__pycache__' not in str(file_path):
+                    arc_name = file_path.relative_to(src_dir)
+                    zf.write(file_path, arc_name)
+
+        console.print(f"[green]扩展已打包: {output_file}[/]")
+
+    elif action == "check":
+        chrome_ok = (ext_dir / "chrome" / "manifest.json").exists()
+        firefox_ok = (ext_dir / "firefox" / "manifest.json").exists()
+
+        console.print(Panel.fit(
+            f"[bold cyan]扩展文件检查[/]\n\n"
+            f"Chrome 扩展: [{'green' if chrome_ok else 'red'}]{'✓' if chrome_ok else '✗'}[/]\n"
+            f"Firefox 扩展: [{'green' if firefox_ok else 'red'}]{'✓' if firefox_ok else '✗'}[/]\n\n"
+            f"共享资源: [green]✓[/]",
+            border_style="cyan"
+        ))
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+
+
 @app.command("version")
 def version():
     """显示版本信息"""

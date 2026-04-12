@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>微信文章抓取助手</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 360px;
+      min-height: 400px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 16px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+
+    .status.is-wechat {
+      background: #e6f7e6;
+      color: #52c41a;
+    }
+
+    .status.not-wechat {
+      background: #fff1f0;
+      color: #ff4d4f;
+    }
+
+    .status-icon {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .is-wechat .status-icon {
+      background: #52c41a;
+    }
+
+    .not-wechat .status-icon {
+      background: #ff4d4f;
+    }
+
+    .article-info {
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+
+    .article-info h3 {
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 8px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .article-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .format-select {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .format-option {
+      flex: 1;
+      padding: 8px;
+      text-align: center;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .format-option:hover {
+      border-color: #667eea;
+    }
+
+    .format-option.active {
+      border-color: #667eea;
+      background: #f0f2ff;
+      color: #667eea;
+    }
+
+    .settings {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .setting-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .setting-item label {
+      font-size: 13px;
+      color: #555;
+    }
+
+    .toggle {
+      width: 44px;
+      height: 24px;
+      background: #ccc;
+      border-radius: 12px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle.active {
+      background: #667eea;
+    }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s;
+    }
+
+    .toggle.active::after {
+      transform: translateX(20px);
+    }
+
+    .progress {
+      display: none;
+      margin-top: 16px;
+      padding: 12px;
+      background: #f0f2ff;
+      border-radius: 8px;
+    }
+
+    .progress.show {
+      display: block;
+    }
+
+    .progress-bar {
+      height: 4px;
+      background: #e0e0e0;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .progress-text {
+      font-size: 12px;
+      color: #667eea;
+    }
+
+    .result {
+      display: none;
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 8px;
+    }
+
+    .result.show {
+      display: block;
+    }
+
+    .result.success {
+      background: #e6f7e6;
+      color: #52c41a;
+    }
+
+    .result.error {
+      background: #fff1f0;
+      color: #ff4d4f;
+    }
+
+    .result-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .result-actions .btn {
+      flex: 1;
+      padding: 8px;
+      font-size: 12px;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .footer a {
+      font-size: 12px;
+      color: #667eea;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📰 微信文章抓取助手</h1>
+      <p>v1.0.0 - 一键抓取，永久保存</p>
+    </div>
+
+    <div id="status" class="status not-wechat">
+      <span class="status-icon"></span>
+      <span id="statusText">请在微信文章页面使用</span>
+    </div>
+
+    <div id="articleInfo" class="article-info" style="display: none;">
+      <h3 id="articleTitle">-</h3>
+      <div class="article-meta">
+        <span id="articleAuthor">-</span>
+        <span id="articleDate">-</span>
+      </div>
+    </div>
+
+    <div class="format-select">
+      <div class="format-option active" data-format="markdown">Markdown</div>
+      <div class="format-option" data-format="html">HTML</div>
+      <div class="format-option" data-format="json">JSON</div>
+    </div>
+
+    <div class="actions">
+      <button id="scrapeBtn" class="btn btn-primary" disabled>
+        <span>🚀</span> 抓取当前文章
+      </button>
+      <button id="scrapeWithImagesBtn" class="btn btn-secondary" disabled>
+        <span>🖼️</span> 抓取并下载图片
+      </button>
+    </div>
+
+    <div class="settings">
+      <div class="setting-item">
+        <label>保存到本地</label>
+        <div class="toggle active" id="saveLocalToggle"></div>
+      </div>
+      <div class="setting-item">
+        <label>上传到服务器</label>
+        <div class="toggle" id="uploadServerToggle"></div>
+      </div>
+      <div class="setting-item">
+        <label>自动分类</label>
+        <div class="toggle active" id="autoClassifyToggle"></div>
+      </div>
+    </div>
+
+    <div id="progress" class="progress">
+      <div class="progress-text" id="progressText">正在抓取...</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <div id="result" class="result">
+      <div id="resultText"></div>
+      <div class="result-actions">
+        <button class="btn btn-secondary" id="viewBtn">查看</button>
+        <button class="btn btn-secondary" id="downloadBtn">下载</button>
+        <button class="btn btn-secondary" id="copyBtn">复制</button>
+      </div>
+    </div>
+
+    <div class="footer">
+      <a href="#" id="openDashboard">打开 Web 仪表盘</a> |
+      <a href="#" id="settingsLink">设置</a>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
