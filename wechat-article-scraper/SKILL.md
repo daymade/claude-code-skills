@@ -3,14 +3,14 @@ name: wechat-article-scraper
 description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（fast/adaptive/stable/reliable/zero_dep/jina_ai/history）、公众号全历史文章批量抓取、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、互动数据提取（阅读/点赞/在看数）、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai|history] [--download-images] [--format markdown|json|html|pdf|excel]
 metadata:
-  version: "3.38.0"
+  version: "3.39.0"
   openclaw:
     emoji: "📰"
     requires:
       bins: ["python3"]
 ---
 
-# 微信公众号文章抓取 v3.38.0
+# 微信公众号文章抓取 v3.39.0
 
 **世界级微信文章抓取方案** — 整合 12 个竞品的精华，具备智能策略路由、OG元数据备选、图片段落关联、懒加载处理、图片下载、搜索发现、多格式导出、**现代化 Web 管理界面**等完整功能。
 
@@ -1019,6 +1019,15 @@ echo "完成: 共抓取 $count 篇文章"
   - 竞品完全无此功能
 
 
+### v3.39.0 (2025-04-12)
+- **PWA移动端体验优化 v1.0**: 可安装Web应用、离线访问、推送通知
+  - Service Worker: 多级缓存策略(静态/动态/网络优先)、后台同步、定期后台更新
+  - Web App Manifest: 可添加到主屏幕、多尺寸图标适配、快捷操作入口
+  - 移动端UI: 底部导航栏、卡片布局、触摸目标优化、刘海屏安全区域适配
+  - 推送通知: Web Push API集成、抓取完成提醒、通知交互处理
+  - 离线支持: 离线状态检测、缓存优先读取、后台文章同步
+  - 竞品对比: wcplusPro需下载安装原生App, 我们PWA即开即用、自动更新、无需审核
+
 ### v3.38.0 (2025-04-12)
 - **云端部署与实时协作系统 v1.0**: Vercel + Supabase + Yjs 完整SaaS架构
   - 云端部署: Next.js + Vercel Serverless, Supabase托管数据库, 一键部署脚本
@@ -1486,4 +1495,4 @@ echo "完成: 共抓取 $count 篇文章"
   - `w extension install --browser chrome`: 显示安装指南
   - `w extension pack --browser firefox`: 打包扩展
 
-*本文档由 wechat-article-scraper v3.38.0 生成*
+*本文档由 wechat-article-scraper v3.39.0 生成*
