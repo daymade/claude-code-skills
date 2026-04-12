@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微信公众号文章 Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .card-gradient { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card-gradient-2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .card-gradient-3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .card-gradient-4 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="mb-8">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">
+                        <i class="fas fa-chart-line text-blue-600 mr-2"></i>
+                        微信公众号文章 Dashboard
+                    </h1>
+                    <p class="text-gray-600 mt-1">数据可视化分析平台 v1.0</p>
+                </div>
+                <div class="flex gap-4">
+                    <select id="daysSelector" class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="7">近7天</option>
+                        <option value="30" selected>近30天</option>
+                        <option value="90">近90天</option>
+                    </select>
+                    <button onclick="refreshData()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                        <i class="fas fa-sync-alt mr-2"></i>刷新
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Core Metrics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="card-gradient rounded-xl p-6 text-white shadow-lg">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-white/80 text-sm">文章总数</p>
+                        <h3 class="text-3xl font-bold mt-1" id="totalArticles">-</h3>
+                    </div>
+                    <i class="fas fa-file-alt text-3xl text-white/50"></i>
+                </div>
+                <p class="text-white/70 text-sm mt-2">统计周期内</p>
+            </div>
+
+            <div class="card-gradient-2 rounded-xl p-6 text-white shadow-lg">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-white/80 text-sm">总阅读量</p>
+                        <h3 class="text-3xl font-bold mt-1" id="totalReads">-</h3>
+                    </div>
+                    <i class="fas fa-eye text-3xl text-white/50"></i>
+                </div>
+                <p class="text-white/70 text-sm mt-2">平均 <span id="avgReads">-</span>/篇</p>
+            </div>
+
+            <div class="card-gradient-3 rounded-xl p-6 text-white shadow-lg">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-white/80 text-sm">总点赞数</p>
+                        <h3 class="text-3xl font-bold mt-1" id="totalLikes">-</h3>
+                    </div>
+                    <i class="fas fa-thumbs-up text-3xl text-white/50"></i>
+                </div>
+                <p class="text-white/70 text-sm mt-2">平均 <span id="avgLikes">-</span>/篇</p>
+            </div>
+
+            <div class="card-gradient-4 rounded-xl p-6 text-white shadow-lg">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-white/80 text-sm">平均 WCI</p>
+                        <h3 class="text-3xl font-bold mt-1" id="avgWci">-</h3>
+                    </div>
+                    <i class="fas fa-chart-bar text-3xl text-white/50"></i>
+                </div>
+                <p class="text-white/70 text-sm mt-2">传播影响力指数</p>
+            </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">
+                        <i class="fas fa-chart-area text-blue-600 mr-2"></i>
+                        阅读量趋势
+                    </h3>
+                    <select id="trendMetric" class="text-sm border rounded px-2 py-1">
+                        <option value="reads">阅读量</option>
+                        <option value="likes">点赞量</option>
+                        <option value="wci">WCI指数</option>
+                    </select>
+                </div>
+                <canvas id="trendChart" height="200"></canvas>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                    <i class="fas fa-clock text-purple-600 mr-2"></i>
+                    发布时间分布
+                </h3>
+                <canvas id="hourlyChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- Charts Row 2 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                    <i class="fas fa-pie-chart text-green-600 mr-2"></i>
+                    内容分类占比
+                </h3>
+                <canvas id="categoryChart" height="200"></canvas>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                    <i class="fas fa-star text-yellow-600 mr-2"></i>
+                    质量评分分布
+                </h3>
+                <canvas id="qualityChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- Top Articles Table -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">
+                    <i class="fas fa-trophy text-yellow-600 mr-2"></i>
+                    热门文章排行
+                </h3>
+                <select id="topBy" class="text-sm border rounded px-2 py-1" onchange="loadTopArticles()">
+                    <option value="reads">按阅读量</option>
+                    <option value="likes">按点赞量</option>
+                    <option value="wci">按WCI</option>
+                </select>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">排名</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">标题</th>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">公众号</th>
+                            <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">阅读量</th>
+                            <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">点赞量</th>
+                            <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">WCI</th>
+                        </tr>
+                    </thead>
+                    <tbody id="topArticlesTable" class="divide-y divide-gray-100">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Account Stats -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                <i class="fas fa-users text-blue-600 mr-2"></i>
+                账号统计
+            </h3>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">公众号</th>
+                            <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">文章数</th>
+                            <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">总阅读量</th>
+                            <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">总点赞量</th>
+                            <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">平均WCI</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accountStatsTable" class="divide-y divide-gray-100">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let trendChart, hourlyChart, categoryChart, qualityChart;
+
+        function formatNumber(num) {
+            if (num >= 10000) {
+                return (num / 10000).toFixed(1) + '万';
+            }
+            return num.toLocaleString();
+        }
+
+        function createElement(tag, className, textContent) {
+            const el = document.createElement(tag);
+            if (className) el.className = className;
+            if (textContent !== undefined) el.textContent = textContent;
+            return el;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshData();
+            document.getElementById('daysSelector').addEventListener('change', refreshData);
+            document.getElementById('trendMetric').addEventListener('change', loadTrendData);
+        });
+
+        async function refreshData() {
+            const days = document.getElementById('daysSelector').value;
+            await Promise.all([
+                loadMetrics(days),
+                loadTrendData(),
+                loadHourlyDistribution(days),
+                loadCategories(days),
+                loadQualityDistribution(days),
+                loadTopArticles(),
+                loadAccountStats(days)
+            ]);
+        }
+
+        async function loadMetrics(days) {
+            try {
+                const response = await fetch(`${API_BASE}/metrics?days=${days}`);
+                const data = await response.json();
+
+                document.getElementById('totalArticles').textContent = formatNumber(data.total_articles);
+                document.getElementById('totalReads').textContent = formatNumber(data.total_reads);
+                document.getElementById('totalLikes').textContent = formatNumber(data.total_likes);
+                document.getElementById('avgReads').textContent = formatNumber(data.avg_reads);
+                document.getElementById('avgLikes').textContent = formatNumber(data.avg_likes);
+                document.getElementById('avgWci').textContent = data.avg_wci.toFixed(1);
+            } catch (error) {
+                console.error('Error loading metrics:', error);
+            }
+        }
+
+        async function loadTrendData() {
+            try {
+                const days = document.getElementById('daysSelector').value;
+                const metric = document.getElementById('trendMetric').value;
+
+                const response = await fetch(`${API_BASE}/trend?metric=${metric}&days=${days}`);
+                const data = await response.json();
+
+                const labels = data.map(d => d.date.slice(5));
+                const values = data.map(d => d.value);
+
+                const ctx = document.getElementById('trendChart').getContext('2d');
+                if (trendChart) trendChart.destroy();
+
+                const colors = {
+                    reads: { border: 'rgb(59, 130, 246)', bg: 'rgba(59, 130, 246, 0.1)' },
+                    likes: { border: 'rgb(239, 68, 68)', bg: 'rgba(239, 68, 68, 0.1)' },
+                    wci: { border: 'rgb(16, 185, 129)', bg: 'rgba(16, 185, 129, 0.1)' }
+                };
+
+                trendChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: metric === 'reads' ? '阅读量' : metric === 'likes' ? '点赞量' : 'WCI',
+                            data: values,
+                            borderColor: colors[metric].border,
+                            backgroundColor: colors[metric].bg,
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading trend:', error);
+            }
+        }
+
+        async function loadHourlyDistribution(days) {
+            try {
+                const response = await fetch(`${API_BASE}/hourly?days=${days}`);
+                const data = await response.json();
+
+                const labels = data.map(d => `${d.hour}:00`);
+                const values = data.map(d => d.count);
+
+                const ctx = document.getElementById('hourlyChart').getContext('2d');
+                if (hourlyChart) hourlyChart.destroy();
+
+                hourlyChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '发布数量',
+                            data: values,
+                            backgroundColor: 'rgba(139, 92, 246, 0.8)',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading hourly:', error);
+            }
+        }
+
+        async function loadCategories(days) {
+            try {
+                const response = await fetch(`${API_BASE}/categories?days=${days}`);
+                const data = await response.json();
+
+                const labels = data.map(d => d.category);
+                const values = data.map(d => d.count);
+
+                const ctx = document.getElementById('categoryChart').getContext('2d');
+                if (categoryChart) categoryChart.destroy();
+
+                categoryChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: [
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(16, 185, 129, 0.8)',
+                                'rgba(245, 158, 11, 0.8)',
+                                'rgba(239, 68, 68, 0.8)',
+                                'rgba(139, 92, 246, 0.8)',
+                                'rgba(236, 72, 153, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'right' } }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading categories:', error);
+            }
+        }
+
+        async function loadQualityDistribution(days) {
+            try {
+                const response = await fetch(`${API_BASE}/quality?days=${days}`);
+                const data = await response.json();
+
+                const ctx = document.getElementById('qualityChart').getContext('2d');
+                if (qualityChart) qualityChart.destroy();
+
+                qualityChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['优秀', '良好', '一般', '较差'],
+                        datasets: [{
+                            label: '文章数量',
+                            data: [data['\u4f18\u79c0'], data['\u826f\u597d'], data['\u4e00\u822c'], data['\u8f83\u5dee']],
+                            backgroundColor: [
+                                'rgba(16, 185, 129, 0.8)',
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(245, 158, 11, 0.8)',
+                                'rgba(239, 68, 68, 0.8)'
+                            ],
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading quality:', error);
+            }
+        }
+
+        async function loadTopArticles() {
+            try {
+                const days = document.getElementById('daysSelector').value;
+                const by = document.getElementById('topBy').value;
+
+                const response = await fetch(`${API_BASE}/top-articles?by=${by}&limit=10&days=${days}`);
+                const data = await response.json();
+
+                const tbody = document.getElementById('topArticlesTable');
+                tbody.innerHTML = '';
+
+                data.forEach((article, index) => {
+                    const tr = createElement('tr', 'hover:bg-gray-50');
+
+                    const rankTd = createElement('td', 'px-4 py-3');
+                    const rankSpan = createElement('span', `inline-flex items-center justify-center w-6 h-6 rounded-full ${index < 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'} text-sm font-bold`, article.rank);
+                    rankTd.appendChild(rankSpan);
+
+                    const titleTd = createElement('td', 'px-4 py-3');
+                    const titleLink = createElement('a', 'text-blue-600 hover:underline line-clamp-1');
+                    titleLink.href = article.url;
+                    titleLink.target = '_blank';
+                    titleLink.title = article.title;
+                    titleLink.textContent = article.title;
+                    titleTd.appendChild(titleLink);
+
+                    const accountTd = createElement('td', 'px-4 py-3 text-sm text-gray-600', article.account_name);
+                    const readsTd = createElement('td', 'px-4 py-3 text-right text-sm', formatNumber(article.reads));
+                    const likesTd = createElement('td', 'px-4 py-3 text-right text-sm', formatNumber(article.likes));
+                    const wciTd = createElement('td', 'px-4 py-3 text-right text-sm font-medium', article.wci.toFixed(1));
+
+                    tr.appendChild(rankTd);
+                    tr.appendChild(titleTd);
+                    tr.appendChild(accountTd);
+                    tr.appendChild(readsTd);
+                    tr.appendChild(likesTd);
+                    tr.appendChild(wciTd);
+
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('Error loading top articles:', error);
+            }
+        }
+
+        async function loadAccountStats(days) {
+            try {
+                const response = await fetch(`${API_BASE}/accounts?days=${days}`);
+                const data = await response.json();
+
+                const tbody = document.getElementById('accountStatsTable');
+                tbody.innerHTML = '';
+
+                data.forEach(account => {
+                    const tr = createElement('tr', 'hover:bg-gray-50');
+
+                    tr.appendChild(createElement('td', 'px-4 py-3 font-medium text-gray-800', account.account_name));
+                    tr.appendChild(createElement('td', 'px-4 py-3 text-right', account.article_count));
+                    tr.appendChild(createElement('td', 'px-4 py-3 text-right', formatNumber(account.total_reads)));
+                    tr.appendChild(createElement('td', 'px-4 py-3 text-right', formatNumber(account.total_likes)));
+                    tr.appendChild(createElement('td', 'px-4 py-3 text-right font-medium', account.avg_wci.toFixed(1)));
+
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('Error loading account stats:', error);
+            }
+        }
+    </script>
+</body>
+</html>

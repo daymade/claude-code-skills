@@ -796,13 +796,63 @@ def history(
         console.print("[dim]可用操作: crawl, list, progress[/]")
 
 
+@app.command("dashboard")
+def dashboard(
+    port: int = typer.Option(8080, "--port", "-p", help="服务端口"),
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="绑定地址"),
+    no_browser: bool = typer.Option(False, "--no-browser", help="不自动打开浏览器"),
+):
+    """启动数据可视化仪表盘 (Dashboard v1.0)"""
+    dashboard_dir = Path(__file__).parent.parent / "dashboard"
+
+    if not dashboard_dir.exists():
+        console.print("[red]Dashboard 目录不存在[/]")
+        raise typer.Exit(1)
+
+    console.print(Panel.fit(
+        f"[bold cyan]数据可视化仪表盘 v1.0[/]\n\n"
+        f"地址: [blue]http://{host}:{port}[/]\n"
+        f"API文档: [blue]http://{host}:{port}/docs[/]\n\n"
+        "[dim]按 Ctrl+C 停止服务[/]",
+        title="wechat-dashboard",
+        border_style="cyan"
+    ))
+
+    # 导入并启动服务
+    import subprocess
+    import sys
+
+    main_py = dashboard_dir / "main.py"
+
+    if not no_browser:
+        # 延迟打开浏览器
+        import threading
+        import webbrowser
+        import time
+
+        def open_browser():
+            time.sleep(2)
+            webbrowser.open(f"http://{host}:{port}")
+
+        threading.Thread(target=open_browser, daemon=True).start()
+
+    try:
+        subprocess.run([
+            sys.executable, str(main_py),
+            "--host", host,
+            "--port", str(port)
+        ], cwd=str(dashboard_dir))
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Dashboard 已停止[/]")
+
+
 @app.command("version")
 def version():
     """显示版本信息"""
     console.print(Panel.fit(
         "[bold cyan]微信文章抓取助手[/]\n"
         "[dim]WeChat Article Scraper CLI[/]\n\n"
-        "版本: [green]3.22.0[/]\n"
+        "版本: [green]3.23.0[/]\n"
         "策略: [blue]6-level routing[/]\n"
         "作者: [yellow]Claude Code[/]",
         border_style="cyan"
