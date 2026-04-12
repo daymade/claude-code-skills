@@ -1251,6 +1251,180 @@ def workflow(
         console.print(f"[red]未知操作: {action}[/]")
         console.print("[dim]可用: create, list, trigger, logs, server, stats[/]")
 
+
+
+@app.command("team")
+def team(
+    action: str = typer.Argument(..., help="操作: create, list, join, members, invite, collections, stats"),
+    team_id: Optional[str] = typer.Option(None, "--id", help="团队ID"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="名称"),
+    desc: Optional[str] = typer.Option(None, "--desc", "-d", help="描述"),
+    email: Optional[str] = typer.Option(None, "--email", "-e", help="邮箱"),
+    invite_code: Optional[str] = typer.Option(None, "--code", "-c", help="邀请码"),
+    user_id: Optional[str] = typer.Option(None, "--user", "-u", help="用户ID"),
+):
+    """团队协作系统 - 多用户、共享工作区"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from team_system import TeamSystem
+
+    engine = TeamSystem()
+
+    if action == "create":
+        if not name or not user_id:
+            console.print("[red]请提供 --name 和 --user[/]")
+            raise typer.Exit(1)
+        team = engine.create_team(name, desc or "", user_id)
+        console.print(Panel.fit(
+            f"[bold green]团队创建成功![/]\n\n"
+            f"ID: [cyan]{team.id}[/]\n"
+            f"名称: [blue]{team.name}[/]\n"
+            f"邀请码: [yellow]{team.invite_code}[/]",
+            border_style="green"
+        ))
+
+    elif action == "list":
+        if not user_id:
+            console.print("[red]请提供 --user[/]")
+            raise typer.Exit(1)
+        teams = engine.list_user_teams(user_id)
+        if not teams:
+            console.print("[yellow]暂无团队[/]")
+            return
+        table = Table(title=f"我的团队 ({len(teams)}个)", box=box.ROUNDED)
+        table.add_column("ID", style="dim", width=12)
+        table.add_column("名称", style="cyan")
+        table.add_column("成员", justify="right")
+        table.add_column("文章", justify="right")
+        for t in teams:
+            table.add_row(t.id[:12], t.name, str(t.member_count), str(t.article_count))
+        console.print(table)
+
+    elif action == "join":
+        if not invite_code or not user_id:
+            console.print("[red]请提供 --code 和 --user[/]")
+            raise typer.Exit(1)
+        member = engine.join_team(invite_code, user_id)
+        if member:
+            console.print(f"[green]成功加入团队，角色: {member.role}[/]")
+        else:
+            console.print("[red]邀请码无效[/]")
+
+    elif action == "members":
+        if not team_id:
+            console.print("[red]请提供 --id[/]")
+            raise typer.Exit(1)
+        members = engine.list_team_members(team_id)
+        table = Table(title=f"团队成员 ({len(members)}人)", box=box.ROUNDED)
+        table.add_column("角色", style="yellow")
+        table.add_column("姓名", style="cyan")
+        table.add_column("邮箱")
+        for m in members:
+            role_icon = "👑" if m['role'] == 'admin' else "👤"
+            table.add_row(f"{role_icon} {m['role']}", m['name'], m['email'])
+        console.print(table)
+
+    elif action == "collections":
+        if not team_id:
+            console.print("[red]请提供 --id[/]")
+            raise typer.Exit(1)
+        colls = engine.list_team_collections(team_id)
+        table = Table(title=f"共享收藏夹 ({len(colls)}个)", box=box.ROUNDED)
+        table.add_column("名称", style="cyan")
+        table.add_column("文章数", justify="right")
+        table.add_column("描述")
+        for c in colls:
+            table.add_row(c.name, str(c.article_count), c.description[:30])
+        console.print(table)
+
+    elif action == "stats":
+        if not team_id:
+            console.print("[red]请提供 --id[/]")
+            raise typer.Exit(1)
+        stats = engine.get_team_stats(team_id)
+        console.print(Panel.fit(
+            f"[bold cyan]团队统计[/]\n\n"
+            f"成员数: [green]{stats['member_count']}[/]\n"
+            f"收藏夹: [blue]{stats['collection_count']}[/]\n"
+            f"收藏文章: [yellow]{stats['collected_articles']}[/]\n"
+            f"评论数: [magenta]{stats['comment_count']}[/]",
+            border_style="cyan"
+        ))
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+
+
+@app.command("sync")
+def sync(
+    action: str = typer.Argument(..., help="操作: add, list, test, notion, yuque"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="配置名称"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help="提供商: notion, yuque, airtable"),
+    token: Optional[str] = typer.Option(None, "--token", "-t", help="API Token"),
+    database: Optional[str] = typer.Option(None, "--database", help="Notion Database ID"),
+    repo: Optional[str] = typer.Option(None, "--repo", help="语雀仓库 slug"),
+    article_id: Optional[str] = typer.Option(None, "--article", help="文章ID"),
+):
+    """第三方集成 - Notion/语雀/Airtable 同步"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from integrations import IntegrationManager
+    import asyncio
+
+    manager = IntegrationManager()
+
+    if action == "add":
+        if not name or not provider or not token:
+            console.print("[red]请提供 --name, --provider, --token[/]")
+            raise typer.Exit(1)
+        config = {"token": token}
+        if database:
+            config["database_id"] = database
+        if repo:
+            config["repo_slug"] = repo
+        manager.add_config(name, provider, config)
+        console.print(f"[green]集成配置已添加: {name}[/]")
+
+    elif action == "list":
+        configs = manager.list_configs()
+        if not configs:
+            console.print("[yellow]暂无集成配置[/]")
+            return
+        table = Table(title=f"集成配置 ({len(configs)}个)", box=box.ROUNDED)
+        table.add_column("名称", style="cyan")
+        table.add_column("提供商", style="yellow")
+        table.add_column("状态")
+        table.add_column("同步次数", justify="right")
+        for c in configs:
+            status = "[green]✓[/]" if c['enabled'] else "[red]✗[/]"
+            table.add_row(c['name'], c['provider'], status, str(c['sync_count']))
+        console.print(table)
+
+    elif action == "test":
+        if not name:
+            console.print("[red]请提供 --name[/]")
+            raise typer.Exit(1)
+        test_article = {
+            "title": "测试文章",
+            "account_name": "测试公众号",
+            "url": "https://mp.weixin.qq.com/s/test",
+            "publish_time": "2025-04-12T10:00:00",
+            "read_count": 1000,
+            "like_count": 50,
+            "tags": ["测试"],
+            "content": "测试内容",
+            "summary": "测试摘要"
+        }
+        result = asyncio.run(manager.sync_article(name, test_article))
+        if result.get('success'):
+            console.print(f"[green]同步测试成功![/]")
+        else:
+            console.print(f"[red]同步失败: {result.get('error')}[/]")
+
+    else:
+        console.print(f"[red]未知操作: {action}[/]")
+
+
 @app.command("version")
 def version():
     """显示版本信息"""
