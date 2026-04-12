@@ -1,0 +1,2162 @@
+{
+  "metadata": {
+    "name": "WeChat Article Scraper Benchmark Dataset v1.0",
+    "created_at": "2026-04-12T13:24:09.871002",
+    "total_articles": 100,
+    "categories": [
+      "tech",
+      "business",
+      "lifestyle",
+      "news",
+      "education",
+      "entertainment",
+      "health",
+      "finance"
+    ],
+    "complexity_levels": [
+      "simple",
+      "medium",
+      "complex"
+    ],
+    "years": [
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "note": "This is a synthetic dataset for testing purposes. In production, replace with real accessible URLs."
+  },
+  "articles": [
+    {
+      "id": "test-001",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA5NjEyMDUyMA==&mid=2247032098&idx=1&sn=i0y6dp",
+      "title": "商业模式分析 - 简读",
+      "category": "business",
+      "complexity": "simple",
+      "year": 2025,
+      "account_type": "机构号",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-002",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI5NjQ1MjIxMA==&mid=2247184674&idx=1&sn=hxthv3",
+      "title": "时事热点分析 - 简读",
+      "category": "news",
+      "complexity": "simple",
+      "year": 2024,
+      "account_type": "大V",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-003",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDk5NzA0Mw==&mid=2247250443&idx=1&sn=8mdd4v",
+      "title": "健康饮食指南",
+      "category": "health",
+      "complexity": "medium",
+      "year": 2022,
+      "account_type": "媒体号",
+      "features": [
+        "text",
+        "code",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-004",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU5NjA1MTcyNw==&mid=2247415730&idx=1&sn=w5uzbi",
+      "title": "企业管理经验",
+      "category": "business",
+      "complexity": "medium",
+      "year": 2020,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-005",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA3MzI4MjgzMw==&mid=2247503873&idx=1&sn=wnnhj7",
+      "title": "政策解读报告 - 简读",
+      "category": "news",
+      "complexity": "simple",
+      "year": 2023,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "images",
+        "emoji"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-006",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzAxMjE4MTg2Nw==&mid=2247576972&idx=1&sn=qj7yhl",
+      "title": "旅行攻略分享 - 深度版",
+      "category": "lifestyle",
+      "complexity": "complex",
+      "year": 2025,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "images",
+        "gallery",
+        "blockquote"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-007",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI0MjM2MTQyMw==&mid=2247675341&idx=1&sn=h75lxo",
+      "title": "Kubernetes入门",
+      "category": "tech",
+      "complexity": "medium",
+      "year": 2023,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "images",
+        "tables"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "tables"
+      ]
+    },
+    {
+      "id": "test-008",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI1ODIyNjE1NQ==&mid=2247875689&idx=1&sn=v6oh9s",
+      "title": "考试备考攻略 - 简读",
+      "category": "education",
+      "complexity": "simple",
+      "year": 2021,
+      "account_type": "机构号",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-009",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU2NjIzNDA1Nw==&mid=2247978080&idx=1&sn=pcn9t8",
+      "title": "商业模式分析 - 简读",
+      "category": "business",
+      "complexity": "simple",
+      "year": 2025,
+      "account_type": "媒体号",
+      "features": [
+        "text",
+        "images",
+        "emoji"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-010",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU3NDQ1NDY0MQ==&mid=2248084011&idx=1&sn=mkfazz",
+      "title": "增长黑客方法 - 深度版",
+      "category": "business",
+      "complexity": "complex",
+      "year": 2024,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "images",
+        "gallery",
+        "blockquote"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-011",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA0MzI0NTc0Nw==&mid=2248131142&idx=1&sn=nf877v",
+      "title": "竞品分析报告 - 深度版",
+      "category": "business",
+      "complexity": "complex",
+      "year": 2022,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "images",
+        "tables",
+        "charts"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "tables",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-012",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzIwMzQ2MTK4MQ==&mid=2248229813&idx=1&sn=iuc039",
+      "title": "增长黑客方法",
+      "category": "business",
+      "complexity": "medium",
+      "year": 2022,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "images",
+        "tables"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "tables"
+      ]
+    },
+    {
+      "id": "test-013",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI1NDMyMjQ3Mw==&mid=2248368073&idx=1&sn=sv871y",
+      "title": "护肤心得分享 - 深度版",
+      "category": "lifestyle",
+      "complexity": "complex",
+      "year": 2023,
+      "account_type": "媒体号",
+      "features": [
+        "text",
+        "svg",
+        "animation"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-014",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzUyNjE3MjEwOA==&mid=2248460303&idx=1&sn=icatva",
+      "title": "电影影评分享",
+      "category": "entertainment",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "设计号",
+      "features": [
+        "text",
+        "images",
+        "tables"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "tables"
+      ]
+    },
+    {
+      "id": "test-015",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI4NzY1NDMyMQ==&mid=2248622945&idx=1&sn=iyhe7u",
+      "title": "竞品分析报告 - 简读",
+      "category": "business",
+      "complexity": "simple",
+      "year": 2022,
+      "account_type": "企业号",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-016",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA5ODc2NTQzMg==&mid=2248679369&idx=1&sn=xmo5bx",
+      "title": "股票投资分析",
+      "category": "finance",
+      "complexity": "medium",
+      "year": 2021,
+      "account_type": "企业号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-017",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzM1NDMyMTA5Nw==&mid=2248810367&idx=1&sn=gtfgq5",
+      "title": "运动健身计划 - 深度版",
+      "category": "health",
+      "complexity": "complex",
+      "year": 2022,
+      "account_type": "企业号",
+      "features": [
+        "text",
+        "svg",
+        "animation"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-018",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI3NjU0MzIxMA==&mid=2248901111&idx=1&sn=74frho",
+      "title": "商业模式分析 - 简读",
+      "category": "business",
+      "complexity": "simple",
+      "year": 2025,
+      "account_type": "大V",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-019",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA0MzIxMDk4Nw==&mid=2249059636&idx=1&sn=kz02xr",
+      "title": "疾病预防知识 - 简读",
+      "category": "health",
+      "complexity": "simple",
+      "year": 2023,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-020",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI5ODc2NTQzMA==&mid=2249209147&idx=1&sn=lbr7tc",
+      "title": "教育改革探讨 - 简读",
+      "category": "news",
+      "complexity": "simple",
+      "year": 2024,
+      "account_type": "大V",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-021",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA5NjEyMDUyMA==&mid=2249310721&idx=1&sn=5o7uub",
+      "title": "美食探店推荐 - 简读",
+      "category": "lifestyle",
+      "complexity": "simple",
+      "year": 2024,
+      "account_type": "企业号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-022",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI5NjQ1MjIxMA==&mid=2249364616&idx=1&sn=jexq77",
+      "title": "电影影评分享",
+      "category": "entertainment",
+      "complexity": "medium",
+      "year": 2021,
+      "account_type": "小号",
+      "features": [
+        "text",
+        "code",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-023",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDk5NzA0Mw==&mid=2249510749&idx=1&sn=j755nf",
+      "title": "增长黑客方法 - 简读",
+      "category": "business",
+      "complexity": "simple",
+      "year": 2024,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "images",
+        "emoji"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-024",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU5NjA1MTcyNw==&mid=2249643091&idx=1&sn=3kx7ee",
+      "title": "考试备考攻略 - 深度版",
+      "category": "education",
+      "complexity": "complex",
+      "year": 2025,
+      "account_type": "大V",
+      "features": [
+        "text",
+        "images",
+        "product_cards"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-025",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA3MzI4MjgzMw==&mid=2249760722&idx=1&sn=my4sj6",
+      "title": "旅行攻略分享",
+      "category": "lifestyle",
+      "complexity": "medium",
+      "year": 2022,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-026",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzAxMjE4MTg2Nw==&mid=2249821494&idx=1&sn=1wj0tp",
+      "title": "健康饮食指南",
+      "category": "health",
+      "complexity": "medium",
+      "year": 2020,
+      "account_type": "大V",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-027",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI0MjM2MTQyMw==&mid=2249937279&idx=1&sn=ufel62",
+      "title": "商业模式分析 - 深度版",
+      "category": "business",
+      "complexity": "complex",
+      "year": 2021,
+      "account_type": "大V",
+      "features": [
+        "text",
+        "images",
+        "lazy_load"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-028",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI1ODIyNjE1NQ==&mid=2250046354&idx=1&sn=25owf7",
+      "title": "社会现象观察 - 深度版",
+      "category": "news",
+      "complexity": "complex",
+      "year": 2021,
+      "account_type": "企业号",
+      "features": [
+        "text",
+        "images",
+        "gallery",
+        "blockquote"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-029",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU2NjIzNDA1Nw==&mid=2250165072&idx=1&sn=253j2d",
+      "title": "健康饮食指南 - 简读",
+      "category": "health",
+      "complexity": "simple",
+      "year": 2021,
+      "account_type": "小号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-030",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU3NDQ1NDY0MQ==&mid=2250262220&idx=1&sn=35ixok",
+      "title": "政策解读报告 - 简读",
+      "category": "news",
+      "complexity": "simple",
+      "year": 2023,
+      "account_type": "小号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-031",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA0MzI0NTc0Nw==&mid=2250422395&idx=1&sn=9t7e8g",
+      "title": "明星动态追踪 - 深度版",
+      "category": "entertainment",
+      "complexity": "complex",
+      "year": 2024,
+      "account_type": "电商号",
+      "features": [
+        "text",
+        "images",
+        "tables",
+        "charts"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "tables",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-032",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzIwMzQ2MTK4MQ==&mid=2250539932&idx=1&sn=2p9e6g",
+      "title": "商业模式分析 - 深度版",
+      "category": "business",
+      "complexity": "complex",
+      "year": 2023,
+      "account_type": "小号",
+      "features": [
+        "text",
+        "svg",
+        "animation"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-033",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI1NDMyMjQ3Mw==&mid=2250603291&idx=1&sn=p87wxe",
+      "title": "Python编程技巧 - 深度版",
+      "category": "tech",
+      "complexity": "complex",
+      "year": 2024,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "images",
+        "product_cards"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-034",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzUyNjE3MjEwOA==&mid=2250719406&idx=1&sn=ztgxn0",
+      "title": "语言学习技巧 - 深度版",
+      "category": "education",
+      "complexity": "complex",
+      "year": 2023,
+      "account_type": "小号",
+      "features": [
+        "text",
+        "images",
+        "product_cards"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-035",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI4NzY1NDMyMQ==&mid=2250817603&idx=1&sn=kpuxqp",
+      "title": "专业技能培训",
+      "category": "education",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "大V",
+      "features": [
+        "text",
+        "audio"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "audio_url"
+      ]
+    },
+    {
+      "id": "test-036",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA5ODc2NTQzMg==&mid=2250926081&idx=1&sn=swm31y",
+      "title": "保险选购指南 - 深度版",
+      "category": "finance",
+      "complexity": "complex",
+      "year": 2021,
+      "account_type": "企业号",
+      "features": [
+        "text",
+        "images",
+        "gallery",
+        "blockquote"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-037",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzM1NDMyMTA5Nw==&mid=2251062273&idx=1&sn=w1q5uz",
+      "title": "摄影技巧教程 - 简读",
+      "category": "lifestyle",
+      "complexity": "simple",
+      "year": 2020,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-038",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI3NjU0MzIxMA==&mid=2251209537&idx=1&sn=452h2z",
+      "title": "营养补充建议 - 简读",
+      "category": "health",
+      "complexity": "simple",
+      "year": 2021,
+      "account_type": "大V",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-039",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA0MzIxMDk4Nw==&mid=2251283119&idx=1&sn=y9v86w",
+      "title": "教育改革探讨 - 简读",
+      "category": "news",
+      "complexity": "simple",
+      "year": 2023,
+      "account_type": "媒体号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-040",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI5ODc2NTQzMA==&mid=2251392320&idx=1&sn=jiw1sw",
+      "title": "房产投资建议 - 简读",
+      "category": "finance",
+      "complexity": "simple",
+      "year": 2025,
+      "account_type": "设计号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-041",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA5NjEyMDUyMA==&mid=2251480054&idx=1&sn=m6cfnf",
+      "title": "品牌营销策略 - 深度版",
+      "category": "business",
+      "complexity": "complex",
+      "year": 2022,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "images",
+        "tables",
+        "charts"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "tables",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-042",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI5NjQ1MjIxMA==&mid=2251610047&idx=1&sn=c3o18a",
+      "title": "急救知识普及",
+      "category": "health",
+      "complexity": "medium",
+      "year": 2022,
+      "account_type": "设计号",
+      "features": [
+        "text",
+        "code",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-043",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDk5NzA0Mw==&mid=2251765421&idx=1&sn=o64t02",
+      "title": "保险选购指南 - 简读",
+      "category": "finance",
+      "complexity": "simple",
+      "year": 2022,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-044",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU5NjA1MTcyNw==&mid=2251781577&idx=1&sn=ny2047",
+      "title": "医疗进展分享",
+      "category": "news",
+      "complexity": "medium",
+      "year": 2023,
+      "account_type": "设计号",
+      "features": [
+        "text",
+        "audio"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "audio_url"
+      ]
+    },
+    {
+      "id": "test-045",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA3MzI4MjgzMw==&mid=2251899887&idx=1&sn=xeqbnh",
+      "title": "微服务架构设计",
+      "category": "tech",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "大V",
+      "features": [
+        "text",
+        "video"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "video_url"
+      ]
+    },
+    {
+      "id": "test-046",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzAxMjE4MTg2Nw==&mid=2252010730&idx=1&sn=q0b8ic",
+      "title": "健康饮食指南",
+      "category": "health",
+      "complexity": "medium",
+      "year": 2023,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-047",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI0MjM2MTQyMw==&mid=2252142372&idx=1&sn=eyuhz1",
+      "title": "社会现象观察 - 简读",
+      "category": "news",
+      "complexity": "simple",
+      "year": 2020,
+      "account_type": "媒体号",
+      "features": [
+        "text",
+        "images",
+        "emoji"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-048",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI1ODIyNjE1NQ==&mid=2252298066&idx=1&sn=aly8oz",
+      "title": "创业公司案例 - 简读",
+      "category": "business",
+      "complexity": "simple",
+      "year": 2022,
+      "account_type": "企业号",
+      "features": [
+        "text",
+        "images",
+        "emoji"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-049",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU2NjIzNDA1Nw==&mid=2252423015&idx=1&sn=ve92mp",
+      "title": "经济数据分析 - 简读",
+      "category": "news",
+      "complexity": "simple",
+      "year": 2025,
+      "account_type": "机构号",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-050",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU3NDQ1NDY0MQ==&mid=2252458272&idx=1&sn=pn6qfg",
+      "title": "短视频创作 - 简读",
+      "category": "entertainment",
+      "complexity": "simple",
+      "year": 2023,
+      "account_type": "设计号",
+      "features": [
+        "text",
+        "images",
+        "emoji"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-051",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA0MzI0NTc0Nw==&mid=2252616481&idx=1&sn=p0j43d",
+      "title": "思维导图应用 - 深度版",
+      "category": "education",
+      "complexity": "complex",
+      "year": 2024,
+      "account_type": "设计号",
+      "features": [
+        "text",
+        "images",
+        "gallery",
+        "blockquote"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-052",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzIwMzQ2MTK4MQ==&mid=2252710753&idx=1&sn=b4gh2m",
+      "title": "财务自由路径 - 深度版",
+      "category": "finance",
+      "complexity": "complex",
+      "year": 2024,
+      "account_type": "电商号",
+      "features": [
+        "text",
+        "images",
+        "lazy_load"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-053",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI1NDMyMjQ3Mw==&mid=2252809407&idx=1&sn=zr1yxr",
+      "title": "AI技术深度解析 - 深度版",
+      "category": "tech",
+      "complexity": "complex",
+      "year": 2021,
+      "account_type": "企业号",
+      "features": [
+        "text",
+        "images",
+        "tables",
+        "charts"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "tables",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-054",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzUyNjE3MjEwOA==&mid=2252929018&idx=1&sn=xntm9t",
+      "title": "在线教育趋势 - 简读",
+      "category": "education",
+      "complexity": "simple",
+      "year": 2023,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "images",
+        "emoji"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-055",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI4NzY1NDMyMQ==&mid=2253030211&idx=1&sn=eget1g",
+      "title": "保险选购指南",
+      "category": "finance",
+      "complexity": "medium",
+      "year": 2022,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "code",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-056",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA5ODc2NTQzMg==&mid=2253124281&idx=1&sn=3kmkze",
+      "title": "学习方法总结 - 深度版",
+      "category": "education",
+      "complexity": "complex",
+      "year": 2024,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "images",
+        "tables",
+        "charts"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "tables",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-057",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzM1NDMyMTA5Nw==&mid=2253235662&idx=1&sn=5uqpgb",
+      "title": "思维导图应用 - 深度版",
+      "category": "education",
+      "complexity": "complex",
+      "year": 2021,
+      "account_type": "设计号",
+      "features": [
+        "text",
+        "images",
+        "tables",
+        "charts"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "tables",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-058",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI3NjU0MzIxMA==&mid=2253408958&idx=1&sn=wbfuk9",
+      "title": "创业公司案例",
+      "category": "business",
+      "complexity": "medium",
+      "year": 2023,
+      "account_type": "企业号",
+      "features": [
+        "text",
+        "audio"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "audio_url"
+      ]
+    },
+    {
+      "id": "test-059",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA0MzIxMDk4Nw==&mid=2253512932&idx=1&sn=n6kvpu",
+      "title": "健康饮食指南 - 深度版",
+      "category": "health",
+      "complexity": "complex",
+      "year": 2024,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "images",
+        "product_cards"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-060",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI5ODc2NTQzMA==&mid=2253590236&idx=1&sn=xfgcaq",
+      "title": "用户运营策略 - 简读",
+      "category": "business",
+      "complexity": "simple",
+      "year": 2025,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-061",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA5NjEyMDUyMA==&mid=2253759322&idx=1&sn=k4cij2",
+      "title": "阅读习惯养成 - 简读",
+      "category": "education",
+      "complexity": "simple",
+      "year": 2021,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "images",
+        "emoji"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-062",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI5NjQ1MjIxMA==&mid=2253862657&idx=1&sn=fjfc2v",
+      "title": "医疗进展分享",
+      "category": "news",
+      "complexity": "medium",
+      "year": 2020,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "video"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "video_url"
+      ]
+    },
+    {
+      "id": "test-063",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDk5NzA0Mw==&mid=2253980597&idx=1&sn=ojtpv6",
+      "title": "税收政策解读 - 简读",
+      "category": "finance",
+      "complexity": "simple",
+      "year": 2023,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "images",
+        "emoji"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-064",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU5NjA1MTcyNw==&mid=2254088374&idx=1&sn=4u89yj",
+      "title": "学习方法总结 - 简读",
+      "category": "education",
+      "complexity": "simple",
+      "year": 2020,
+      "account_type": "个人号",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-065",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA3MzI4MjgzMw==&mid=2254147562&idx=1&sn=gvwrdm",
+      "title": "税收政策解读 - 深度版",
+      "category": "finance",
+      "complexity": "complex",
+      "year": 2025,
+      "account_type": "设计号",
+      "features": [
+        "text",
+        "images",
+        "lazy_load"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-066",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzAxMjE4MTg2Nw==&mid=2254313136&idx=1&sn=rxo1bd",
+      "title": "企业管理经验 - 简读",
+      "category": "business",
+      "complexity": "simple",
+      "year": 2022,
+      "account_type": "电商号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-067",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI0MjM2MTQyMw==&mid=2254419526&idx=1&sn=5qbswr",
+      "title": "竞品分析报告",
+      "category": "business",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "大V",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-068",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI1ODIyNjE1NQ==&mid=2254482189&idx=1&sn=pze9vi",
+      "title": "社会现象观察",
+      "category": "news",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "媒体号",
+      "features": [
+        "text",
+        "video"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "video_url"
+      ]
+    },
+    {
+      "id": "test-069",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU2NjIzNDA1Nw==&mid=2254584999&idx=1&sn=96qe3r",
+      "title": "Python编程技巧 - 深度版",
+      "category": "tech",
+      "complexity": "complex",
+      "year": 2023,
+      "account_type": "企业号",
+      "features": [
+        "text",
+        "images",
+        "product_cards"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-070",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU3NDQ1NDY0MQ==&mid=2254698605&idx=1&sn=qfgv0e",
+      "title": "考试备考攻略",
+      "category": "education",
+      "complexity": "medium",
+      "year": 2023,
+      "account_type": "设计号",
+      "features": [
+        "text",
+        "video"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "video_url"
+      ]
+    },
+    {
+      "id": "test-071",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA0MzI0NTc0Nw==&mid=2254778106&idx=1&sn=kkv9rf",
+      "title": "体检报告解读",
+      "category": "health",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "code",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-072",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzIwMzQ2MTK4MQ==&mid=2254948563&idx=1&sn=759in4",
+      "title": "艺术作品赏析",
+      "category": "entertainment",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "电商号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-073",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI1NDMyMjQ3Mw==&mid=2255050596&idx=1&sn=92xf8e",
+      "title": "动漫文化分享 - 深度版",
+      "category": "entertainment",
+      "complexity": "complex",
+      "year": 2023,
+      "account_type": "电商号",
+      "features": [
+        "text",
+        "images",
+        "lazy_load"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-074",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzUyNjE3MjEwOA==&mid=2255113114&idx=1&sn=0oxfq8",
+      "title": "投资逻辑分享",
+      "category": "business",
+      "complexity": "medium",
+      "year": 2020,
+      "account_type": "设计号",
+      "features": [
+        "text",
+        "audio"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "audio_url"
+      ]
+    },
+    {
+      "id": "test-075",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI4NzY1NDMyMQ==&mid=2255310603&idx=1&sn=4nlz15",
+      "title": "健康饮食指南 - 深度版",
+      "category": "health",
+      "complexity": "complex",
+      "year": 2020,
+      "account_type": "小号",
+      "features": [
+        "text",
+        "images",
+        "product_cards"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-076",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA5ODc2NTQzMg==&mid=2255363142&idx=1&sn=0pdw5p",
+      "title": "企业管理经验 - 简读",
+      "category": "business",
+      "complexity": "simple",
+      "year": 2025,
+      "account_type": "机构号",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-077",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzM1NDMyMTA5Nw==&mid=2255491420&idx=1&sn=nftu2g",
+      "title": "前端框架对比",
+      "category": "tech",
+      "complexity": "medium",
+      "year": 2020,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "audio"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "audio_url"
+      ]
+    },
+    {
+      "id": "test-078",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI3NjU0MzIxMA==&mid=2255620777&idx=1&sn=6fqjja",
+      "title": "营养补充建议 - 深度版",
+      "category": "health",
+      "complexity": "complex",
+      "year": 2025,
+      "account_type": "个人号",
+      "features": [
+        "text",
+        "images",
+        "lazy_load"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-079",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA0MzIxMDk4Nw==&mid=2255743672&idx=1&sn=k8yqk9",
+      "title": "读书心得分享 - 简读",
+      "category": "lifestyle",
+      "complexity": "simple",
+      "year": 2023,
+      "account_type": "小号",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-080",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI5ODc2NTQzMA==&mid=2255853110&idx=1&sn=kza3oa",
+      "title": "时事热点分析",
+      "category": "news",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "小号",
+      "features": [
+        "text",
+        "audio"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "audio_url"
+      ]
+    },
+    {
+      "id": "test-081",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA5NjEyMDUyMA==&mid=2255917585&idx=1&sn=wwyzx4",
+      "title": "股票投资分析",
+      "category": "finance",
+      "complexity": "medium",
+      "year": 2021,
+      "account_type": "小号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-082",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI5NjQ1MjIxMA==&mid=2256095982&idx=1&sn=e6loh2",
+      "title": "在线教育趋势",
+      "category": "education",
+      "complexity": "medium",
+      "year": 2020,
+      "account_type": "小号",
+      "features": [
+        "text",
+        "audio"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "audio_url"
+      ]
+    },
+    {
+      "id": "test-083",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDk5NzA0Mw==&mid=2256149786&idx=1&sn=0me8f8",
+      "title": "知识管理方法 - 简读",
+      "category": "education",
+      "complexity": "simple",
+      "year": 2022,
+      "account_type": "设计号",
+      "features": [
+        "text",
+        "images",
+        "emoji"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-084",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU5NjA1MTcyNw==&mid=2256256876&idx=1&sn=tqyyv3",
+      "title": "文学作品解读 - 简读",
+      "category": "entertainment",
+      "complexity": "simple",
+      "year": 2023,
+      "account_type": "大V",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-085",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA3MzI4MjgzMw==&mid=2256413288&idx=1&sn=hc36ko",
+      "title": "社会现象观察",
+      "category": "news",
+      "complexity": "medium",
+      "year": 2020,
+      "account_type": "小号",
+      "features": [
+        "text",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-086",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzAxMjE4MTg2Nw==&mid=2256457174&idx=1&sn=itnn8z",
+      "title": "大模型应用开发",
+      "category": "tech",
+      "complexity": "medium",
+      "year": 2023,
+      "account_type": "企业号",
+      "features": [
+        "text",
+        "code",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-087",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI0MjM2MTQyMw==&mid=2256619685&idx=1&sn=w7kyhq",
+      "title": "穿搭时尚趋势",
+      "category": "lifestyle",
+      "complexity": "medium",
+      "year": 2025,
+      "account_type": "企业号",
+      "features": [
+        "text",
+        "video"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "video_url"
+      ]
+    },
+    {
+      "id": "test-088",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI1ODIyNjE1NQ==&mid=2256674593&idx=1&sn=oge4qx",
+      "title": "用户运营策略 - 深度版",
+      "category": "business",
+      "complexity": "complex",
+      "year": 2022,
+      "account_type": "小号",
+      "features": [
+        "text",
+        "images",
+        "tables",
+        "charts"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "tables",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-089",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU2NjIzNDA1Nw==&mid=2256851768&idx=1&sn=h3tv3i",
+      "title": "云计算发展趋势",
+      "category": "tech",
+      "complexity": "medium",
+      "year": 2021,
+      "account_type": "媒体号",
+      "features": [
+        "text",
+        "audio"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "audio_url"
+      ]
+    },
+    {
+      "id": "test-090",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU3NDQ1NDY0MQ==&mid=2256959686&idx=1&sn=jgxaa2",
+      "title": "区块链应用实践",
+      "category": "tech",
+      "complexity": "medium",
+      "year": 2021,
+      "account_type": "媒体号",
+      "features": [
+        "text",
+        "audio"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "audio_url"
+      ]
+    },
+    {
+      "id": "test-091",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA0MzI0NTc0Nw==&mid=2257006858&idx=1&sn=epecqn",
+      "title": "动漫文化分享 - 简读",
+      "category": "entertainment",
+      "complexity": "simple",
+      "year": 2021,
+      "account_type": "机构号",
+      "features": [
+        "text"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content"
+      ]
+    },
+    {
+      "id": "test-092",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzIwMzQ2MTK4MQ==&mid=2257206422&idx=1&sn=25sq8c",
+      "title": "消费观念分享 - 深度版",
+      "category": "finance",
+      "complexity": "complex",
+      "year": 2021,
+      "account_type": "大V",
+      "features": [
+        "text",
+        "svg",
+        "animation"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-093",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI1NDMyMjQ3Mw==&mid=2257315587&idx=1&sn=6ccvcj",
+      "title": "急救知识普及 - 深度版",
+      "category": "health",
+      "complexity": "complex",
+      "year": 2020,
+      "account_type": "设计号",
+      "features": [
+        "text",
+        "images",
+        "product_cards"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-094",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzUyNjE3MjEwOA==&mid=2257392792&idx=1&sn=sp2ex5",
+      "title": "短视频创作",
+      "category": "entertainment",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "images",
+        "tables"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "tables"
+      ]
+    },
+    {
+      "id": "test-095",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI4NzY1NDMyMQ==&mid=2257488858&idx=1&sn=3o0llj",
+      "title": "心理健康维护",
+      "category": "health",
+      "complexity": "medium",
+      "year": 2021,
+      "account_type": "电商号",
+      "features": [
+        "text",
+        "code",
+        "images"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-096",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA5ODc2NTQzMg==&mid=2257612151&idx=1&sn=d03uvu",
+      "title": "投资逻辑分享 - 简读",
+      "category": "business",
+      "complexity": "simple",
+      "year": 2020,
+      "account_type": "企业号",
+      "features": [
+        "text",
+        "images",
+        "emoji"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    },
+    {
+      "id": "test-097",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzM1NDMyMTA5Nw==&mid=2257761166&idx=1&sn=bkldsf",
+      "title": "竞品分析报告",
+      "category": "business",
+      "complexity": "medium",
+      "year": 2022,
+      "account_type": "电商号",
+      "features": [
+        "text",
+        "images",
+        "tables"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images",
+        "tables"
+      ]
+    },
+    {
+      "id": "test-098",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI3NjU0MzIxMA==&mid=2257792825&idx=1&sn=1u3493",
+      "title": "用户运营策略",
+      "category": "business",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "小号",
+      "features": [
+        "text",
+        "audio"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "audio_url"
+      ]
+    },
+    {
+      "id": "test-099",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA0MzIxMDk4Nw==&mid=2257892672&idx=1&sn=gzlma5",
+      "title": "Rust语言特性 - 深度版",
+      "category": "tech",
+      "complexity": "complex",
+      "year": 2025,
+      "account_type": "机构号",
+      "features": [
+        "text",
+        "svg",
+        "animation"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "read_count",
+        "like_count"
+      ]
+    },
+    {
+      "id": "test-100",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI5ODc2NTQzMA==&mid=2258012015&idx=1&sn=0hpmnz",
+      "title": "用户运营策略 - 简读",
+      "category": "business",
+      "complexity": "simple",
+      "year": 2025,
+      "account_type": "大V",
+      "features": [
+        "text",
+        "images",
+        "emoji"
+      ],
+      "expected_fields": [
+        "title",
+        "author",
+        "publish_time",
+        "content",
+        "images"
+      ]
+    }
+  ],
+  "statistics": {
+    "by_complexity": {
+      "simple": 35,
+      "medium": 36,
+      "complex": 29
+    },
+    "by_category": {
+      "tech": 10,
+      "business": 24,
+      "lifestyle": 7,
+      "news": 13,
+      "education": 13,
+      "entertainment": 9,
+      "health": 14,
+      "finance": 10
+    },
+    "by_year": {
+      "2020": 13,
+      "2021": 17,
+      "2022": 15,
+      "2023": 20,
+      "2024": 21,
+      "2025": 14
+    }
+  }
+}

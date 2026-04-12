@@ -1,0 +1,178 @@
+{
+  "metadata": {
+    "name": "WeChat Article Scraper Benchmark Dataset v1.0",
+    "created_at": "2025-04-12",
+    "total_articles": 100,
+    "categories": ["tech", "business", "lifestyle", "news", "education", "entertainment", "health", "finance"],
+    "complexity_levels": ["simple", "medium", "complex"],
+    "years": [2020, 2021, 2022, 2023, 2024, 2025]
+  },
+  "articles": [
+    {
+      "id": "test-001",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA5NjEyMDUyMA==&mid=2655711234&idx=1&sn=abc123",
+      "title": "示例科技文章 - 简单排版",
+      "category": "tech",
+      "complexity": "simple",
+      "year": 2024,
+      "account_type": "大V",
+      "features": ["text", "images"],
+      "expected_fields": ["title", "author", "publish_time", "content", "images", "read_count", "like_count"]
+    },
+    {
+      "id": "test-002",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI5NjQ1MjIxMA==&mid=2247487654&idx=1&sn=def456",
+      "title": "示例商业分析 - 表格",
+      "category": "business",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "企业号",
+      "features": ["text", "images", "tables"],
+      "expected_fields": ["title", "author", "publish_time", "content", "images", "tables"]
+    },
+    {
+      "id": "test-003",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI2NDk5NzA0Mw==&mid=2247498765&idx=1&sn=ghi789",
+      "title": "示例视频文章",
+      "category": "entertainment",
+      "complexity": "medium",
+      "year": 2023,
+      "account_type": "媒体号",
+      "features": ["text", "video"],
+      "expected_fields": ["title", "author", "publish_time", "content", "video_url"]
+    },
+    {
+      "id": "test-004",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU5NjA1MTcyNw==&mid=2247523456&idx=1&sn=jkl012",
+      "title": "复杂排版 - 多图混排",
+      "category": "lifestyle",
+      "complexity": "complex",
+      "year": 2024,
+      "account_type": "大V",
+      "features": ["text", "images", "gallery", "blockquote"],
+      "expected_fields": ["title", "author", "publish_time", "content", "images", "image_paragraph_mapping"]
+    },
+    {
+      "id": "test-005",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA3MzI4MjgzMw==&mid=2650987654&idx=1&sn=mno345",
+      "title": "早期文章 - 2020",
+      "category": "news",
+      "complexity": "simple",
+      "year": 2020,
+      "account_type": "小号",
+      "features": ["text"],
+      "expected_fields": ["title", "author", "publish_time", "content"]
+    },
+    {
+      "id": "test-006",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzAxMjE4MTg2Nw==&mid=2651234567&idx=1&sn=pqr678",
+      "title": "健康科普 - 图文混排",
+      "category": "health",
+      "complexity": "medium",
+      "year": 2023,
+      "account_type": "机构号",
+      "features": ["text", "images", "diagrams"],
+      "expected_fields": ["title", "author", "publish_time", "content", "images"]
+    },
+    {
+      "id": "test-007",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI4MjM2MTQyMw==&mid=2247654321&idx=1&sn=stu901",
+      "title": "金融分析 - 数据图表",
+      "category": "finance",
+      "complexity": "complex",
+      "year": 2024,
+      "account_type": "企业号",
+      "features": ["text", "images", "tables", "charts"],
+      "expected_fields": ["title", "author", "publish_time", "content", "images", "tables"]
+    },
+    {
+      "id": "test-008",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI1ODIyNjE1NQ==&mid=2650981234&idx=1&sn=vwx234",
+      "title": "教育教程 - 代码块",
+      "category": "education",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "个人号",
+      "features": ["text", "code", "images"],
+      "expected_fields": ["title", "author", "publish_time", "content", "images"]
+    },
+    {
+      "id": "test-009",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU2NjIzNDA5Nw==&mid=2247012345&idx=1&sn=yza567",
+      "title": "纯文字文章 - 无图",
+      "category": "news",
+      "complexity": "simple",
+      "year": 2022,
+      "account_type": "小号",
+      "features": ["text"],
+      "expected_fields": ["title", "author", "publish_time", "content"]
+    },
+    {
+      "id": "test-010",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzU3NDQ1NDY0MQ==&mid=2247123456&idx=1&sn=bcd890",
+      "title": "超长文章 - 深度分析",
+      "category": "business",
+      "complexity": "complex",
+      "year": 2024,
+      "account_type": "大V",
+      "features": ["text", "images", "tables", "blockquote"],
+      "expected_fields": ["title", "author", "publish_time", "content", "images", "word_count"]
+    },
+    {
+      "id": "test-011",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA4MzI0NTc0Nw==&mid=2650890123&idx=1&sn=efg123",
+      "title": "SVG图文 - 交互元素",
+      "category": "tech",
+      "complexity": "complex",
+      "year": 2024,
+      "account_type": "设计号",
+      "features": ["text", "svg", "animation"],
+      "expected_fields": ["title", "author", "publish_time", "content", "images"]
+    },
+    {
+      "id": "test-012",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzIwMzQ2MTk4MQ==&mid=2247234567&idx=1&sn=hij456",
+      "title": "音频文章 - 播客",
+      "category": "entertainment",
+      "complexity": "simple",
+      "year": 2023,
+      "account_type": "媒体号",
+      "features": ["text", "audio"],
+      "expected_fields": ["title", "author", "publish_time", "content", "audio_url"]
+    },
+    {
+      "id": "test-013",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzI1NDMyMjQ3Mw==&mid=2650898765&idx=1&sn=klm789",
+      "title": "动态加载 - 分页内容",
+      "category": "lifestyle",
+      "complexity": "complex",
+      "year": 2024,
+      "account_type": "大V",
+      "features": ["text", "images", "lazy_load"],
+      "expected_fields": ["title", "author", "publish_time", "content", "images"]
+    },
+    {
+      "id": "test-014",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzUyNjE3MjEwOA==&mid=2247345678&idx=1&sn=nop012",
+      "title": "商品卡片 - 电商文",
+      "category": "business",
+      "complexity": "medium",
+      "year": 2024,
+      "account_type": "电商号",
+      "features": ["text", "images", "product_cards"],
+      "expected_fields": ["title", "author", "publish_time", "content", "images"]
+    },
+    {
+      "id": "test-015",
+      "url": "https://mp.weixin.qq.com/s?__biz=MzA5NjEyMDUyMA==&mid=2655712345&idx=1&sn=qrs345",
+      "title": "特殊字符测试 - emoji",
+      "category": "tech",
+      "complexity": "simple",
+      "year": 2024,
+      "account_type": "个人号",
+      "features": ["text", "emoji", "special_chars"],
+      "expected_fields": ["title", "author", "publish_time", "content"]
+    }
+  ],
+  "note": "This is a partial dataset with 15 articles for testing. Full 100-article dataset would include URLs from various WeChat public accounts across different categories and years. In production, these should be real, accessible URLs."
+}
