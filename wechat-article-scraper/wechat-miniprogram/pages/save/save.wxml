@@ -1,0 +1,73 @@
+<view class="container">
+  <view class="header">
+    <image class="logo" src="/assets/logo.png" mode="aspectFit" />
+    <text class="title">文章收藏助手</text>
+  </view>
+
+  <!-- Input Section -->
+  <view class="input-section" wx:if="{{!saving && !saveResult}}">
+    <view class="input-group">
+      <text class="label">文章链接</text>
+      <input
+        class="input"
+        type="text"
+        placeholder="粘贴微信公众号文章链接"
+        value="{{url}}"
+        bindinput="onUrlInput"
+      />
+    </view>
+
+    <view class="input-group">
+      <text class="label">文章标题（可选）</text>
+      <input
+        class="input"
+        type="text"
+        placeholder="自动识别"
+        value="{{title}}"
+        bindinput="onTitleInput"
+      />
+    </view>
+
+    <button class="save-btn" bindtap="saveArticle" type="primary">
+      保存文章
+    </button>
+  </view>
+
+  <!-- Loading State -->
+  <view class="loading-section" wx:if="{{saving}}">
+    <view class="spinner"></view>
+    <text class="loading-text">正在保存文章...</text>
+    <view class="progress-bar">
+      <view class="progress-fill" style="width: {{progress}}%"></view>
+    </view>
+    <text class="progress-text">{{progress}}%</text>
+  </view>
+
+  <!-- Success State -->
+  <view class="success-section" wx:if="{{saveResult && !saving}}">
+    <image class="success-icon" src="/assets/success.png" />
+    <text class="success-title">保存成功</text>
+    <text class="success-desc" wx:if="{{saveResult.title}}">{{saveResult.title}}</text>
+    <text class="success-desc" wx:else>文章已添加到您的收藏</text>
+
+    <button class="action-btn" bindtap="goToList" type="primary">
+      查看收藏
+    </button>
+  </view>
+
+  <!-- Error State -->
+  <view class="error-section" wx:if="{{error}}">
+    <image class="error-icon" src="/assets/error.png" />
+    <text class="error-title">保存失败</text>
+    <text class="error-desc">{{error}}</text>
+
+    <button class="action-btn" bindtap="retry" type="primary">
+      重试
+    </button>
+  </view>
+
+  <!-- Tips -->
+  <view class="tips">
+    <text class="tip-text">💡 提示：在微信文章页面点击「...」→「转发给朋友」→选择「文章收藏助手」可一键保存</text>
+  </view>
+</view>

@@ -212,6 +212,78 @@ ln -sfn $HOME/.config/gangtise/authorization.json \
 
 This installs the new skill manually; on the next `gangtise-copilot` upgrade the wrapper will take over management of it automatically (or the manual install will coexist harmlessly).
 
+---
+
+### ISSUE-006 — CLI scripts fail after configure because `~/.GTS_AUTHORIZATION` is missing
+
+**Status**: Observed on 2026-04-12 while running the investor Workshop Demo 2 pipeline.
+
+**Symptom**: `diagnose.sh` passes OAuth + RAG checks, but direct upstream CLI script calls fail at import time. Typical failure:
+
+```text
+ImportError: cannot import name 'GTS_AUTHORIZATION' from 'utils'
+```
+
+This was reproduced with:
+
+```bash
+python3 gangtise-data-client/scripts/quote.py --securities 宁德时代 -sd 2026-04-01 -ed 2026-04-10
+python3 gangtise-file-client/scripts/report.py -k 宁德时代 -l 5
+python3 gangtise-kb-client/scripts/kb.py -q "宁德时代" -l 5
+```
+
+**Root cause**: Many upstream scripts read a bare token from `~/.GTS_AUTHORIZATION` at module import time. The wrapper originally wrote only `~/.config/gangtise/authorization.json` and per-skill `.authorization` symlinks. That is enough for OAuth verification, but not enough for scripts whose `utils.py` expects `~/.GTS_AUTHORIZATION`.
+
+**Impact**: A wrapper install can look healthy while the first real data call fails in a workshop.
+
+**Repair strategy**: Run the configurator after install. It now writes both:
+
+- `~/.config/gangtise/authorization.json` — durable accessKey + secretAccessKey config
+- `~/.GTS_AUTHORIZATION` — short-lived bare runtime token for upstream CLI scripts
+
+```bash
+bash scripts/configure_auth.sh --verify-only
+bash scripts/diagnose.sh
+```
+
+The runtime token is refreshed every time `configure_auth.sh` succeeds.
+
+---
+
+### ISSUE-007 — `-client` scripts default to `skills-backend`, which regular OpenAPI accounts may not access
+
+**Status**: Observed on 2026-04-12 while running Demo 2. Needs future wrapper follow-up.
+
+**Symptom**: After `~/.GTS_AUTHORIZATION` exists and credentials are valid, the `-client` scripts start but every data/file/kb call returns:
+
+```json
+{"code":"0000001009","status":false,"msg":"the uri can't be accessed"}
+```
+
+**Root cause**: `gangtise-data-client`, `gangtise-file-client`, and `gangtise-kb-client` default `GANGTISE_DOMAIN` to `https://open.gangtise.com/application/skills-backend`. Regular OpenAPI credentials can authenticate and may have RAG/data/file scope, but are not allowed to call this `skills-backend` route. The legacy openapi skills use public endpoints such as `open-data` and `open-quote`, and worked for the same account.
+
+**Impact**: For live workshop work, `--preset full` is safer than `--preset workshop`: the full preset installs both `-client` and legacy openapi variants. If the client line is blocked by `skills-backend`, use the legacy line.
+
+**Observed working commands**:
+
+```bash
+python3 ~/.local/share/gangtise-copilot/skills/gangtise-data/scripts/quote.py \
+  --securities 300750.SZ -sd 2026-03-13 -ed 2026-04-11 --limit 100
+
+python3 ~/.local/share/gangtise-copilot/skills/gangtise-file/scripts/report.py \
+  -k 宁德时代 --securities 300750.SZ -sd 2026-03-13 -ed 2026-04-11 -l 8 --rank_type 2
+
+python3 ~/.local/share/gangtise-copilot/skills/gangtise-kb/scripts/kb.py \
+  -q "宁德时代 近30天 研报 共识 分歧" -sd 2026-03-13 -ed 2026-04-11 \
+  --file-types 研究报告,公司公告,会议纪要,调研纪要,首席观点 -l 8
+```
+
+**Repair strategy**:
+
+- For now: install `--preset full`, then prefer legacy `gangtise-data/file/kb` scripts when `-client` scripts return `0000001009`.
+- Do not patch upstream scripts silently. A future wrapper revision may add a compatibility runner or detect this condition in `diagnose.sh`.
+- Record this fallback in demo `run-log.md` so a future agent does not waste time debugging valid credentials.
+
 ## Adding new issues to this file
 
 When you discover a new issue worth capturing:

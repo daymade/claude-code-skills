@@ -1,0 +1,52 @@
+<view class="container">
+  <!-- Search Bar -->
+  <view class="search-bar" bindtap="onSearch">
+    <icon type="search" size="16" />
+    <text class="search-placeholder">搜索文章...</text>
+  </view>
+
+  <!-- Article List -->
+  <view class="article-list" wx:if="{{articles.length > 0}}">
+    <view
+      class="article-card"
+      wx:for="{{articles}}"
+      wx:key="id"
+      data-id="{{item.id}}"
+      bindtap="openArticle"
+    >
+      <view class="article-content">
+        <text class="article-title">{{item.title}}</text>
+        <view class="article-meta">
+          <text class="article-author" wx:if="{{item.author}}">{{item.author}}</text>
+          <text class="article-date">{{item.created_at}}</text>
+        </view>
+      </view>
+      <image
+        wx:if="{{item.cover_image}}"
+        class="article-cover"
+        src="{{item.cover_image}}"
+        mode="aspectFill"
+      />
+    </view>
+  </view>
+
+  <!-- Empty State -->
+  <view class="empty-state" wx:if="{{!loading && articles.length === 0}}">
+    <image class="empty-icon" src="/assets/empty.png" />
+    <text class="empty-title">暂无收藏文章</text>
+    <text class="empty-desc">从微信转发文章到这里开始收藏</text>
+    <button class="save-btn" bindtap="goToSave" type="primary">
+      去保存文章
+    </button>
+  </view>
+
+  <!-- Loading -->
+  <view class="loading-footer" wx:if="{{loading}}">
+    <text>加载中...</text>
+  </view>
+
+  <!-- No More -->
+  <view class="no-more" wx:if="{{!hasMore && articles.length > 0}}">
+    <text>没有更多文章了</text>
+  </view>
+</view>

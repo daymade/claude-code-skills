@@ -10,6 +10,7 @@ import {
   ReadingProgressTracker,
 } from '@/lib/annotation-engine';
 import { Article } from '@/types/supabase';
+import { InsightExtractor } from './InsightExtractor';
 
 interface ReaderProps {
   article: Article;
@@ -474,6 +475,22 @@ export function Reader({ article, userId, onExit }: ReaderProps) {
             </div>
 
             <div className="p-4 space-y-4">
+              {/* AI Insight Extractor - Core Feature */}
+              <InsightExtractor
+                annotations={annotations}
+                article={{
+                  id: article.id,
+                  title: article.title,
+                  author: article.author,
+                  content: article.content,
+                }}
+                onExport={(format) => {
+                  console.log('Exported to:', format);
+                }}
+              />
+
+              <hr className="border-gray-200" />
+
               {activeAnnotation ? (
                 <div className="space-y-4">
                   <div

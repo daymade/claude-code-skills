@@ -3,7 +3,7 @@ name: wechat-article-scraper
 description: 抓取微信公众号文章内容，提取正文、图片和元数据，输出为 Markdown 或 JSON。支持智能策略路由（fast/adaptive/stable/reliable/zero_dep/jina_ai/history）、公众号全历史文章批量抓取、OG元数据备选、懒加载图片提取、本地图片下载、图片段落关联、搜狗搜索发现、互动数据提取（阅读/点赞/在看数）、现代化 Web 管理界面等功能。当用户需要下载/保存微信文章、批量归档公众号内容、提取微信图文资料或需要可视化仪表盘时使用。
 argument-hint: <article-url> [--strategy fast|adaptive|stable|reliable|zero_dep|jina_ai|history] [--download-images] [--format markdown|json|html|pdf|excel]
 metadata:
-  version: "3.39.0"
+  version: "3.48.0"
   openclaw:
     emoji: "📰"
     requires:
@@ -1007,6 +1007,42 @@ echo "完成: 共抓取 $count 篇文章"
 4. 使用 `--download-images` 避免图片 URL 过期
 5. 准备 URL 列表文件，每行一个链接
 
+
+### v3.38.0 (2025-04-12)
+- **云端部署与实时协作系统 v1.0**: Vercel + Supabase + Yjs 完整SaaS架构
+  - 云端部署: Next.js + Vercel Serverless, Supabase托管数据库, 一键部署脚本
+  - 实时协作: Yjs CRDT冲突自动解决, WebSocket多人协同编辑, 光标/选区同步
+  - 多租户架构: Workspace隔离, 基于RLS的权限控制, 团队成员管理
+  - 协作功能: 文章实时协作编辑, 评论批注系统, 团队成员在线状态
+  - CLI集成: `w cloud` 命令 (init/deploy/logs/status)
+  - 竞品对比: wcplusPro仅限本地, 我们提供完整云端SaaS体验
+
+### v3.42.0 (2026-04-12) - Agent SDK 阅读助手
+
+**核心价值: 打穿"标注→洞察→应用"闭环**
+
+- 🤖 **重构**: 使用 Claude Agent SDK (JS/TS) 重写阅读助手
+  - 配置: Base URL https://api.kimi.com/coding/, Model kimi-for-coding
+  - 工具定义: extract_insights, generate_reading_notes, find_connections, suggest_actions
+  - Agent Loop: ReAct pattern with streaming support
+  - 状态管理: AgentState with checkpoint/restore
+
+- 🧠 **InsightExtractor 组件**: 打通闭环的核心 UI
+  - 一键提取标注洞察 (4种类型: concept/method/case_study/evidence)
+  - 智能推荐行动项 (按优先级分类)
+  - 选择性导出: 用户可选择高价值洞察
+  - 支持导出到: Notion / Obsidian / Markdown
+
+- 📚 **竞品分析精华吸取**:
+  - Sync: 学习 RxDB replication, PowerSync SQLite, Electric CRDT
+  - Agent: 采用 Anthropic SDK Session/Event Loop 模式
+  - 抛弃: LangChain 过度抽象, LlamaIndex 复杂 DSL
+
+**架构改进**:
+```
+标注 (Reader) → Agent SDK (提取洞察) → InsightExtractor (选择导出) → 工作流 (Notion/Obsidian)
+```
+
 ## 版本历史
 
 ### v3.6.0
@@ -1028,6 +1064,16 @@ echo "完成: 共抓取 $count 篇文章"
   - 离线支持: 离线状态检测、缓存优先读取、后台文章同步
   - 竞品对比: wcplusPro需下载安装原生App, 我们PWA即开即用、自动更新、无需审核
 
+### v3.41.0 (2025-04-12)
+- **浏览器扩展 + 内容发现 v1.0**: 补齐工作流最后缺口，实现"看到即保存"
+  - Chrome Extension Manifest V3: Service Worker后台处理、内容脚本注入
+  - 悬浮操作按钮: 右下角一键保存、下拉菜单、阅读进度条
+  - 页面内标注: 5色高亮、即时批注、选中即标
+  - Popup面板: 当前页面状态、最近保存、快捷操作
+  - 快捷键支持: Ctrl+Shift+S保存、Ctrl+Shift+A标注
+  - 右键菜单: 保存页面/链接/选中内容
+  - 竞品对比: Readwise核心优势就是浏览器扩展，现在我们对齐
+
 ### v3.40.0 (2025-04-12)
 - **阅读标注工作流 v1.0**: 从功能堆砌到价值闭环的重新设计
   - 核心价值转变: 从"抓取文章"到"让微信内容研究效率提升10倍"
@@ -1038,12 +1084,21 @@ echo "完成: 共抓取 $count 篇文章"
   - 导出集成: Readwise兼容格式、Markdown/Obsidian/Notion多格式导出
   - 完整用户旅程: 发现→抓取→阅读→标注→提取→产出, 真正打透闭环
 
-### v3.40.0 (2025-04-12)
+### v3.39.0 (2025-04-12)
+- **PWA移动端体验优化 v1.0**: 可安装Web应用、离线访问、推送通知
+  - Service Worker: 多级缓存策略(静态/动态/网络优先)、后台同步、定期后台更新
+  - Web App Manifest: 可添加到主屏幕、多尺寸图标适配、快捷操作入口
+  - 移动端UI: 底部导航栏、卡片布局、触摸目标优化、刘海屏安全区域适配
+  - 推送通知: Web Push API集成、抓取完成提醒、通知交互处理
+  - 离线支持: 离线状态检测、缓存优先读取、后台文章同步
+  - 竞品对比: wcplusPro需下载安装原生App, 我们PWA即开即用、自动更新、无需审核
+
+### v3.38.0 (2025-04-12)
 - **云端部署与实时协作系统 v1.0**: Vercel + Supabase + Yjs 完整SaaS架构
   - 云端部署: Next.js + Vercel Serverless, Supabase托管数据库, 一键部署脚本
   - 实时协作: Yjs CRDT冲突自动解决, WebSocket多人协同编辑, 光标/选区同步
   - 多租户架构: Workspace隔离, 基于RLS的权限控制, 团队成员管理
-  - 协作功能: 文章实时协作编辑, 评论批注系统, 团队成员在线状态
+  - 协作功能: 文章实时协作编辑, 评论批注系统、团队成员在线状态
   - CLI集成: `w cloud` 命令 (init/deploy/logs/status)
   - 竞品对比: wcplusPro仅限本地, 我们提供完整云端SaaS体验
 
@@ -1506,3 +1561,38 @@ echo "完成: 共抓取 $count 篇文章"
   - `w extension pack --browser firefox`: 打包扩展
 
 *本文档由 wechat-article-scraper v3.39.0 生成*
+
+### v3.40.0 - 微信生态深度集成 (Round 92)
+- ✨ **新增**: 微信小程序（"一键转发即收藏"体验）
+  - 支持微信文章转发到小程序自动保存
+  - 实时保存进度显示
+  - 已保存文章列表浏览
+  - 微信登录自动创建账户
+- ✨ **新增**: 微信公众号消息集成（备用路径）
+  - 发送文章链接到公众号自动保存
+  - 自动回复保存状态和阅读链接
+  - 重复文章检测提示
+  - 账号绑定系统
+- ✨ **新增**: WeChat OpenID 用户绑定系统
+  - 小程序/公众号用户自动映射到内部账户
+  - UnionID 跨应用识别
+  - 异步抓取任务队列
+  - 消息日志记录与调试
+- ✨ **新增**: 双轨保存策略
+  - MiniApp (推荐): 转发 → 小程序 → 自动保存 → 阅读
+  - Official Account (备用): 复制链接 → 发送到公众号 → 自动保存
+- ⚡ **竞品对标**: 实现 Cubox/Matter 级别的"微信转发即收藏"体验
+  - 从 3 步操作（复制→粘贴→保存）简化到 1 步（转发）
+  - 保存转化率目标: >80%
+  - 平均保存时间目标: <5秒
+
+---
+
+**核心差异化更新**（v3.40.0）：
+65. **唯一支持微信小程序的方案**（一键转发保存，媲美 Cubox）
+66. **唯一支持微信公众号消息的方案**（备用路径，无需审核）
+67. **唯一支持微信生态双轨集成的方案**（小程序+公众号互补）
+68. **唯一支持 OpenID 自动用户映射的方案**（无缝账户绑定）
+69. **唯一支持异步保存任务队列的方案**（高并发微信消息处理）
+
+*本文档由 wechat-article-scraper v3.40.0 生成*
