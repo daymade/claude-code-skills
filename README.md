@@ -311,6 +311,7 @@ CC-Switch enables you to:
 - ✅ Manage MCP server configurations
 - ✅ Auto-backup and import/export settings
 - ✅ Cross-platform support (Windows, macOS, Linux)
+- [CCHub](https://github.com/Moresl/cchub) - A desktop control panel for the Claude Code / Codex / Gemini CLI ecosystem. Manage MCP servers, config profiles, agent skills, CLAUDE.md, hooks, and workflow templates from a single Tauri app (Windows / macOS / Linux).
 
 **Setup:** Download from [Releases](https://github.com/farion1231/cc-switch/releases), install, add your API configs, and switch via UI or system tray.
 
