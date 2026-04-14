@@ -1,0 +1,34 @@
+minimum_pre_commit_version: "3.2.0"
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+default_stages:
+  - pre-commit
+  - pre-push
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args:
+          - --maxkb=1500
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+        stages:
+          - pre-commit
+
+  - repo: local
+    hooks:
+      - id: repo-path-guard
+        name: repo path guard
+        entry: python3 scripts/repo_path_guard.py
+        language: system
+        pass_filenames: true
+        stages:
+          - pre-commit
+          - pre-push

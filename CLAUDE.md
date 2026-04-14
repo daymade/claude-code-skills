@@ -127,12 +127,18 @@ Skills for public distribution must NOT contain:
 - OneDrive paths or environment-specific absolute paths
 - Use relative paths within skill bundle or standard placeholders (`<workspace>/`, `<user_id>`)
 
-**Three-layer defense system:**
+**Four-layer defense system:**
 1. **CLAUDE.md rules** (this section) — Claude avoids generating sensitive content
-2. **Pre-commit hook** (`.githooks/pre-commit`) — blocks commits with sensitive patterns
-3. **gitleaks** (`.gitleaks.toml`) — deep scan with custom rules for this repo
+2. **Global PII Guard pre-commit hook** (`~/scripts/git-pii-guard/pre-commit`) — blocks staged PII/secrets and generated/local artifact paths
+3. **Global PII Guard pre-push hook** (`~/scripts/git-pii-guard/pre-push`) — scans commits about to be pushed, catching bad local history before it hits GitHub
+4. **gitleaks** (`.gitleaks.toml`) — deep scan with custom rules for this repo
 
-The pre-commit hook is auto-activated via `git config core.hooksPath .githooks`.
+PII Guard is enabled via `~/scripts/git-pii-guard/manage.sh enable <repo-path>`, which sets `core.hooksPath` to `~/scripts/git-pii-guard`.
+For repo-specific additions:
+- `.pii-patterns` — extra content regexes
+- `.pii-path-patterns` — extra forbidden path regexes
+- `.pii-allowpaths` — explicit path allowlist exceptions
+- `.pre-commit-config.yaml` — optional repo-local runner that wires `pre-commit` framework to the same path/content rules for contributors who prefer managed hooks
 If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 
 ### Content Organization
