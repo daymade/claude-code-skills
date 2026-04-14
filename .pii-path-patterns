@@ -1,0 +1,6 @@
+# Repo-specific local/generated artifact paths that must never be committed
+(^|/)coverage(/|$)
+(^|/)node_modules(/|$)
+(^|/).*\.db$
+(^|/)wechat-article-scraper/web/backend/storage/images(/|$)
+(^|/)wechat-article-scraper/web/feeds(/|$)
