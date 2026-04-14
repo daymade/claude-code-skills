@@ -1121,41 +1121,6 @@
       "skills": [
         "./terraform-skill"
       ]
-    },
-    {
-      "name": "wechat-article-scraper",
-      "version": "3.35.2",
-      "description": "World-class WeChat article extraction with 6-level strategy routing (fast→adaptive→stable→reliable→zero_dep→jina_ai), OG metadata fallback, image-paragraph association, lazy loading handling, local image download, and Sogou search discovery. Supports Markdown/JSON/HTML/PDF export, SQLite persistence with FTS5 search, batch task queues, a modern React+TypeScript web dashboard, native CLI with single-file executable build, Docker containerization with docker-compose, Chrome/Firefox browser extensions, RSS feed generation, comment extraction, MCP server, subscription monitoring, AI summarization, webhook notifications, and third-party platform exports (Notion/Airtable/Google Sheets). Activate when users need to scrape WeChat public account articles, batch archive content, or extract article metadata and images.",
-      "source": "./",
-      "strict": false,
-      "category": "content-tools",
-      "keywords": [
-        "wechat",
-        "article",
-        "scraper",
-        "mp.weixin.qq.com",
-        "markdown",
-        "extraction",
-        "archiving",
-        "sogou",
-        "sqlite",
-        "dashboard",
-        "react",
-        "web-ui",
-        "full-text-search",
-        "batch-queue",
-        "cli",
-        "command-line",
-        "browser-extension",
-        "chrome-extension",
-        "firefox-addon",
-        "docker",
-        "docker-compose",
-        "container"
-      ],
-      "skills": [
-        "./wechat-article-scraper"
-      ]
     }
   ]
 }
