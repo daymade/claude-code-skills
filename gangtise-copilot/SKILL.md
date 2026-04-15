@@ -7,9 +7,125 @@ description: One-stop installer and companion for the full Gangtise (岗底斯�
 
 One-command installer, credential configurator, and diagnostic layer for the full Gangtise (岗底斯投研) OpenAPI skill suite.
 
+---
+
+## 🚀 One-shot installation (complete flow)
+
+This is the **only section you need to read** to go from zero to fully working Gangtise. Follow steps in order.
+
+### Step 1 — Download this skill to your agent's skills directory
+
+**Primary method** (git clone):
+```bash
+git clone --depth 1 https://github.com/daymade/claude-code-skills.git /tmp/gangtise-repo
+cp -r /tmp/gangtise-repo/gangtise-copilot <your-agent-skills-dir>/
+```
+
+**Fallback method** (when git clone times out or is unavailable — use GitHub API directly):
+```python
+# Python one-liner to download and write any file from GitHub:
+import urllib.request, json, base64, os
+def fetch_github_file(repo_path, local_path):
+    url = f"https://api.github.com/repos/daymade/claude-code-skills/contents/{repo_path}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    d = json.loads(urllib.request.urlopen(req, timeout=20).read())
+    content = base64.b64decode(d["content"]).decode("utf-8")
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    open(local_path, "w").write(content)
+    return len(content)
+
+# Download all files:
+for path, local in [
+    ("gangtise-copilot/SKILL.md",                         "<skills-dir>/gangtise-copilot/SKILL.md"),
+    ("gangtise-copilot/scripts/install_gangtise.sh",      "<skills-dir>/gangtise-copilot/scripts/install_gangtise.sh"),
+    ("gangtise-copilot/scripts/configure_auth.sh",        "<skills-dir>/gangtise-copilot/scripts/configure_auth.sh"),
+    ("gangtise-copilot/scripts/diagnose.sh",              "<skills-dir>/gangtise-copilot/scripts/diagnose.sh"),
+    ("gangtise-copilot/references/installation_flow.md",   "<skills-dir>/gangtise-copilot/references/installation_flow.md"),
+    ("gangtise-copilot/references/credentials_setup.md",    "<skills-dir>/gangtise-copilot/references/credentials_setup.md"),
+    ("gangtise-copilot/references/skill_registry.md",       "<skills-dir>/gangtise-copilot/references/skill_registry.md"),
+    ("gangtise-copilot/references/known_issues.md",         "<skills-dir>/gangtise-copilot/references/known_issues.md"),
+    ("gangtise-copilot/references/best_practices.md",       "<skills-dir>/gangtise-copilot/references/best_practices.md"),
+    ("gangtise-copilot/config-template/authorization.json.example", "<skills-dir>/gangtise-copilot/config-template/authorization.json.example"),
+]:
+    size = fetch_github_file(path, local)
+    print(f"OK {path} → {local} ({size} bytes)")
+```
+
+> **Important**: Network to GitHub may be unstable. If any file fails, retry the specific file up to 3 times with a 2-second delay between attempts. Do NOT abort the whole process for a single file failure.
+
+### Step 2 — Register this skill with your agent
+
+For **OpenClaw**: create a symlink in the agent's skills directory and enable it in gateway config:
+```bash
+# Find the OpenClaw skills directory
+ls ~/workspace/agent/skills/     # or ls ~/.openclaw/skills/
+
+# Symlink this skill
+ln -sf <gangtise-copilot-source-dir> <openclaw-skills-dir>/gangtise-copilot
+
+# Enable in OpenClaw gateway config (if the agent supports skill entries in config)
+# Run: openclaw config set 'skills.entries.gangtise-copilot' '{}'
+# Then restart the gateway: sh scripts/restart.sh
+```
+
+### Step 3 — Install all 19 Gangtise official skills
+
+```bash
+bash <gangtise-copilot-dir>/scripts/install_gangtise.sh --preset full
+```
+
+**What it does**: Downloads 4 ZIP bundles from the official Huawei Cloud OBS bucket, extracts 19 skill directories, and symlinks them into detected agent skills directories (`~/.openclaw/skills/`, `~/.claude/skills/`, etc.).
+
+**Known agent skills directory paths** (if auto-detection misses yours):
+
+| Agent | Skills directory |
+|---|---|
+| Claude Code | `~/.claude/skills/` |
+| Codex | `~/.agents/skills/` |
+| OpenClaw | `~/.openclaw/skills/` or `<agent-workspace>/skills/` |
+
+If install fails, check `references/installation_flow.md`.
+
+### Step 4 — Configure credentials
+
+```bash
+bash <gangtise-copilot-dir>/scripts/configure_auth.sh \
+  --access-key <your-accessKey> \
+  --secret-key <your-secretAccessKey>
+```
+
+**What it does**:
+1. Writes `~/.config/gangtise/authorization.json` (mode 600)
+2. Performs live auth call to verify credentials work
+3. Writes `~/.GTS_AUTHORIZATION` runtime token
+4. **Creates symlinks** from every installed skill's `scripts/.authorization` to the shared credential file
+
+> ⚠️ **Critical**: After Step 3, `diagnose.sh` may report "19 skill(s) missing .authorization" even if credentials exist. Run Step 4 even when `~/.config/gangtise/authorization.json` already exists — `configure_auth.sh` creates the missing symlinks.
+
+### Step 5 — Verify installation
+
+```bash
+bash <gangtise-copilot-dir>/scripts/diagnose.sh
+```
+
+Expected output: **9 pass ✅, 0 fail ❌** — all 19 skills present, credentials valid, RAG reachable.
+
+If any ❌ or ⚠️ remains, cross-reference with `references/known_issues.md`.
+
+### Step 6 — Test with a real query
+
+```bash
+# Example: query latest research report for 宁德时代
+# Use gangtise-file-client with its report runner:
+cd <gangtise-copilot-dir>/references/
+# See skill_registry.md for the exact command per skill
+```
+
+---
+
 ## Overview
 
-Gangtise is a Chinese professional investment-research data platform. It publishes an OpenAPI that covers research reports, company announcements, meeting summaries, chief analyst opinions, financial statements, valuation metrics, OHLC market data, shareholder data, industry indicators, and a catalog of pre-built research workflow skills (individual stock research, adversarial opinion analysis, thematic research, etc.). The underlying API is well-designed, but the skill ecosystem is **not discoverable**: there is no public manifest listing the 19 skills that exist, the skills are distributed as independent ZIP files on a Huawei Cloud OBS bucket with listing permission disabled, and the skills live in two parallel naming conventions (`gangtise-<name>` for the minimal line, `gangtise-<name>-client` for the full-capability line) that carry different feature sets. A first-time user has to reverse-engineer the complete skill inventory before they can install it.
+Gangtise is a Chinese professional investment-research data platform. It publishes an OpenAPI that covers research reports, company announcements, meeting summaries, chief analyst opinions, financial statements, valuation metrics, OHLC market data, shareholder data, industry indicators, and a catalog of pre-built research workflow skills. The underlying API is well-designed, but the skill ecosystem is **not discoverable**: there is no public manifest listing the 19 skills, the skills are distributed as independent ZIP files on a Huawei Cloud OBS bucket with listing permission disabled, and the skills live in two parallel naming conventions (`gangtise-<name>` for the minimal line, `gangtise-<name>-client` for the full-capability line) that carry different feature sets. A first-time user has to reverse-engineer the complete skill inventory before they can install it.
 
 Gangtise Copilot solves this in one command:
 
@@ -44,13 +160,13 @@ When this skill is triggered, classify the user's intent and jump to the corresp
 
 | User says something like… | Go to |
 |---|---|
-| "装 gangtise"、"install gangtise"、"我想用 gangtise 的数据"、"把 gangtise 的 skill 都装上" | **Capability 1** |
+| "装 gangtise"、"install gangtise"、"我想用 gangtise 的数据"、"把 gangtise 的 skill 都装上" | **One-shot installation (Step 1–5 above)** |
 | "配 gangtise 的 key"、"configure gangtise credentials"、"gangtise accessKey"、"secretAccessKey" | **Capability 2** |
 | "gangtise 报错"、"token is invalid"、"接口地址错误"、"gangtise skill 加载失败"、"我的 gangtise 装得不对" | **Capability 3** |
 | "宁德时代的研报"、"过去 30 天的首席观点"、"OHLC 蜡烛图"、"个股研究报告 L2"、"对宁德时代做观点 PK" | **Capability 4** → skill registry → invoke the matching upstream skill |
-| "帮我从头跑一遍 gangtise" | 1 → 2 → 3 → 4 in sequence |
+| "帮我从头跑一遍 gangtise" | One-shot installation (Step 1–5 in sequence) |
 
-When in doubt, start with Capability 3 (diagnose) — it is the only read-only entry point and it surfaces exactly which installs and credentials are currently blocked. Running it never has a destructive side effect.
+When in doubt, start with **Capability 3** (`diagnose.sh`) — it is the only read-only entry point and it surfaces exactly which installs and credentials are currently blocked. Running it never has a destructive side effect.
 
 ## Capability 1: Install Gangtise skills
 
