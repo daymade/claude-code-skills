@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.49.0] - 2026-04-19
+
+### Added
+- **slides-creator** v1.0.0: Narrative-first slide deck creation. Guides users through structured narrative design (ABCDEFG model), then delegates visual generation to baoyu-slide-deck. Focuses on what machines can't do — narrative co-design with humans. Six-phase workflow: source collection → narrative discussion → content structuring → prompt generation → image generation → post-processing with directory reorganization and speaker notes extraction. Triggers on "create slides", "make a presentation", "generate deck", "slide deck", "PPT", or when user needs to turn content into visual slides.
+
+### Changed
+- Updated marketplace skills count from 48 to 49
+- Updated marketplace plugin entries from 52 to 53
+- Updated marketplace version from 1.48.0 to 1.49.0
+- Updated README.md badges, skill listings, use cases, and documentation quick links
+- Updated README.zh-CN.md badges, skill listings, use cases, and documentation quick links
+- Updated CLAUDE.md skill count (48 → 49), plugin entry count (52 → 53), and Available Skills list
+
 ## [1.48.0] - 2026-04-19
 
 ### Added
