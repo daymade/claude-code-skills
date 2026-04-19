@@ -95,6 +95,10 @@ recovered_deep_research/
 douban-skill-workspace/
 .gstack/
 
+# Claude Code local settings
+.claude/settings.local.json
+.claude/archive/
+
 # Generated artifacts
 coverage/
 node_modules/
