@@ -1,0 +1,52 @@
+Create a presentation slide image following these guidelines:
+
+## Image Specifications
+
+- **Type**: Presentation slide
+- **Aspect Ratio**: 16:9 (landscape)
+- **Style**: {{style_name}}
+
+## Core Principles
+
+- Flat cartoon style throughout - NO realistic or photographic elements
+- NO slide numbers, page numbers, footers, headers, or logos
+- Clean, uncluttered layouts with clear visual hierarchy
+- Each slide conveys ONE clear message
+
+## Text Style (CRITICAL)
+
+- **ALL text MUST match the designated style exactly**
+- Title text: Large, bold, immediately readable
+- Body text: Clear, legible, appropriate sizing
+- Max 3-4 text elements per slide
+
+## Language
+
+- All text in {{language}}
+- Write in direct, confident language
+
+---
+
+<STYLE_INSTRUCTIONS>
+{{style_instructions}}
+</STYLE_INSTRUCTIONS>
+
+---
+
+## SLIDE CONTENT
+
+**Slide {{slide_number}} of {{total_slides}} — Cover**
+**Filename**: {{slide_number}}-slide-cover.png
+
+// NARRATIVE GOAL
+{{narrative_goal}}
+
+// KEY CONTENT
+Headline: {{headline}}
+Sub-headline: {{sub_headline}}
+
+// VISUAL
+{{visual_description}}
+
+// LAYOUT
+Layout: title-hero. Headline centered at top. Sub-headline below. Hero visual composition centered in the lower 60% of the slide.
