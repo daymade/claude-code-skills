@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-48-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.47.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-49-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.49.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 48 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 49 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2051,6 +2051,34 @@ Failure patterns from real Terraform deployments — every item caused an actual
 
 ---
 
+### 48. **slides-creator** - Narrative-First Slide Deck Creation
+
+Guides users through structured narrative design (ABCDEFG model), then delegates visual generation to `baoyu-slide-deck`. Focuses on what machines can't do — narrative co-design with humans.
+
+**When to use:**
+- Creating presentations, slide decks, or PPTs from user content
+- Turning articles, transcripts, or notes into visual slides
+- Designing narrative arcs for talks and workshops
+
+**Key features:**
+- Phase 0: Source material collection (user's own words first)
+- Phase 1: Narrative structure discussion using ABCDEFG model
+- Phase 2: Content structuring for machine-readable input
+- Phase 3-5: Delegates visual generation to baoyu-slide-deck
+- Phase 6: Post-processing with directory reorganization and speaker notes extraction
+
+**Example usage:**
+```bash
+# Trigger the skill naturally
+"Help me turn my article into a slide deck"
+"Create a presentation from my talk transcript"
+"I need a 20-minute deck for a workshop"
+```
+
+**Requirements**: baoyu-slide-deck skill for visual generation.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -2082,7 +2110,7 @@ Use **repomix-unmixer** to extract and validate repomix-packed skills or reposit
 Use **skill-creator** (see [Essential Skill](#-essential-skill-skill-creator) section above) to build, validate, and package your own Claude Code skills following best practices.
 
 ### For Presentations & Business Communication
-Use **ppt-creator** to generate professional slide decks with data visualizations, structured storytelling, and complete PPTX output for pitches, reviews, and keynotes.
+Use **ppt-creator** to generate professional slide decks with data visualizations, structured storytelling, and complete PPTX output for pitches, reviews, and keynotes. Use **slides-creator** for narrative-first slide design — it guides you through the ABCDEFG storytelling framework, collects your original content first, then delegates visual generation to baoyu-slide-deck. Perfect when you have existing articles, transcripts, or talks that need to become visual slides.
 
 ### For Video Quality Analysis
 Use **video-comparer** to analyze compression results, evaluate codec performance, and generate interactive comparison reports. Combine with **youtube-downloader** to compare different quality downloads.
@@ -2225,6 +2253,7 @@ Each skill includes:
 - **claude-export-txt-better**: See `suites/daymade-claude-code/claude-export-txt-better/SKILL.md` for the workflow, `suites/daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py` for the reconstruction algorithm, and `suites/daymade-claude-code/claude-export-txt-better/evals/` for real regression fixtures
 - **douban-skill**: See `douban-skill/SKILL.md` for the export workflow and `douban-skill/references/troubleshooting.md` for the complete log of 7 tested scraping approaches and why each failed
 - **terraform-skill**: See `terraform-skill/SKILL.md` for the full catalogue of operational traps organised by exact error → root cause → copy-paste fix
+- **slides-creator**: See `slides-creator/SKILL.md` for the narrative-first workflow, `slides-creator/references/narrative-design-guide.md` for the ABCDEFG model, and `slides-creator/references/content-creation-first-law.md` for the universal content creation principle
 
 ## 🛠️ Requirements
 
