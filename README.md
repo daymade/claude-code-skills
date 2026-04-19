@@ -180,6 +180,25 @@ This suite exposes related skills under one namespace, including:
 
 Single-skill plugins remain available for narrower installs and independent updates. Documentation skills live under `suites/daymade-docs/`, so both the suite and the individual documentation plugins install from the same canonical source while keeping plugin caches narrow.
 
+**Claude Code Operations Suite** (shared namespace for Claude Code power-user workflows):
+```bash
+claude plugin install daymade-claude-code@daymade-skills
+```
+
+This suite bundles the skills that extend Claude Code itself — session recovery, CLAUDE.md tuning, troubleshooting, statusline configuration, export repair, and marketplace development:
+
+```text
+/daymade-claude-code:claude-code-history-files-finder
+/daymade-claude-code:continue-claude-work
+/daymade-claude-code:claude-skills-troubleshooting
+/daymade-claude-code:claude-md-progressive-disclosurer
+/daymade-claude-code:statusline-generator
+/daymade-claude-code:claude-export-txt-better
+/daymade-claude-code:marketplace-dev
+```
+
+Installed names render as `daymade-claude-code:<skill>` instead of the repeating `<skill>:<skill>` form you get from the individual single-skill plugins.
+
 **Install Other Skills:**
 ```bash
 # GitHub operations
@@ -878,7 +897,7 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 
 *Coming soon*
 
-📚 **Documentation**: See [claude-code-history-files-finder/references/](./claude-code-history-files-finder/references/) for:
+📚 **Documentation**: See [suites/daymade-claude-code/claude-code-history-files-finder/references/](./suites/daymade-claude-code/claude-code-history-files-finder/references/) for:
 - `session_file_format.md` - JSONL structure and extraction patterns
 - `workflow_examples.md` - Detailed recovery and analysis workflows
 
@@ -1010,7 +1029,7 @@ Optimize user CLAUDE.md files using progressive disclosure to reduce context blo
 
 *Coming soon*
 
-📚 **Documentation**: See [claude-md-progressive-disclosurer/SKILL.md](./claude-md-progressive-disclosurer/SKILL.md).
+📚 **Documentation**: See [claude-md-progressive-disclosurer/SKILL.md](./suites/daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md).
 
 ---
 
@@ -1461,7 +1480,7 @@ python3 scripts/enable_all_plugins.py daymade-skills
 
 *Coming soon*
 
-📚 **Documentation**: See [claude-skills-troubleshooting/SKILL.md](./claude-skills-troubleshooting/SKILL.md) for complete troubleshooting workflow and architecture guidance.
+📚 **Documentation**: See [claude-skills-troubleshooting/SKILL.md](./suites/daymade-claude-code/claude-skills-troubleshooting/SKILL.md) for complete troubleshooting workflow and architecture guidance.
 
 **Requirements**: None (uses Claude Code built-in Python)
 
@@ -1837,7 +1856,7 @@ claude plugin install continue-claude-work@daymade-skills
 "check what I was working on in the last session and keep going"
 ```
 
-📚 **Documentation**: See [continue-claude-work/SKILL.md](./continue-claude-work/SKILL.md).
+📚 **Documentation**: See [continue-claude-work/SKILL.md](./suites/daymade-claude-code/continue-claude-work/SKILL.md).
 
 **Requirements**: Python 3.8+, `git` for workspace reconciliation.
 
@@ -1941,20 +1960,20 @@ Reconstruct broken line wrapping in Claude Code exported `.txt` conversation fil
 **Example usage:**
 ```bash
 # Fix and show stats
-uv run claude-export-txt-better/scripts/fix-claude-export.py broken.txt --stats
+uv run suites/daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py broken.txt --stats
 
 # Custom output path
-uv run claude-export-txt-better/scripts/fix-claude-export.py broken.txt -o fixed.txt
+uv run suites/daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py broken.txt -o fixed.txt
 
 # Validate the fix
-uv run claude-export-txt-better/scripts/validate-claude-export-fix.py broken.txt fixed.txt
+uv run suites/daymade-claude-code/claude-export-txt-better/scripts/validate-claude-export-fix.py broken.txt fixed.txt
 ```
 
 **🎬 Live Demo**
 
 *Coming soon*
 
-📚 **Documentation**: See [claude-export-txt-better/SKILL.md](./claude-export-txt-better/SKILL.md) and the bundled `evals/` fixtures.
+📚 **Documentation**: See [claude-export-txt-better/SKILL.md](./suites/daymade-claude-code/claude-export-txt-better/SKILL.md) and the bundled `evals/` fixtures.
 
 **Requirements**: Python 3.8+, `uv` package manager.
 
@@ -2165,7 +2184,7 @@ Each skill includes:
 - **github-ops**: See `github-ops/references/api_reference.md` for API documentation
 - **doc-to-markdown**: See `suites/daymade-docs/doc-to-markdown/references/conversion-examples.md` for conversion scenarios
 - **mermaid-tools**: See `suites/daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` for setup guide
-- **statusline-generator**: See `statusline-generator/references/color_codes.md` for customization
+- **statusline-generator**: See `suites/daymade-claude-code/statusline-generator/references/color_codes.md` for customization
 - **teams-channel-post-writer**: See `teams-channel-post-writer/references/writing-guidelines.md` for quality standards
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
 - **skill-creator**: See `skill-creator/SKILL.md` for complete skill creation workflow
@@ -2180,11 +2199,11 @@ Each skill includes:
 - **transcript-fixer**: See `transcript-fixer/references/workflow_guide.md` for step-by-step workflows and `transcript-fixer/references/team_collaboration.md` for collaboration patterns
 - **qa-expert**: See `qa-expert/references/master_qa_prompt.md` for autonomous execution (100x speedup) and `qa-expert/references/google_testing_standards.md` for AAA pattern and OWASP testing
 - **prompt-optimizer**: See `prompt-optimizer/references/ears_syntax.md` for EARS transformation patterns, `prompt-optimizer/references/domain_theories.md` for theory catalog, and `prompt-optimizer/references/examples.md` for complete transformations
-- **claude-code-history-files-finder**: See `claude-code-history-files-finder/references/session_file_format.md` for JSONL structure and `claude-code-history-files-finder/references/workflow_examples.md` for recovery workflows
+- **claude-code-history-files-finder**: See `suites/daymade-claude-code/suites/daymade-claude-code/claude-code-history-files-finder/references/session_file_format.md` for JSONL structure and `suites/daymade-claude-code/suites/daymade-claude-code/claude-code-history-files-finder/references/workflow_examples.md` for recovery workflows
 - **docs-cleaner**: See `suites/daymade-docs/docs-cleaner/SKILL.md` for consolidation workflows
 - **deep-research**: See `deep-research/references/research_report_template.md` for report structure and `deep-research/references/source_quality_rubric.md` for source triage
 - **pdf-creator**: See `suites/daymade-docs/pdf-creator/SKILL.md` for PDF conversion and font setup
-- **claude-md-progressive-disclosurer**: See `claude-md-progressive-disclosurer/SKILL.md` for CLAUDE.md optimization workflow
+- **claude-md-progressive-disclosurer**: See `suites/daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md` for CLAUDE.md optimization workflow
 - **skills-search**: See `skills-search/SKILL.md` for CCPM CLI commands and registry operations
 - **promptfoo-evaluation**: See `promptfoo-evaluation/references/promptfoo_api.md` for evaluation patterns
 - **iOS-APP-developer**: See `iOS-APP-developer/references/xcodegen-full.md` for XcodeGen options and project.yml details
@@ -2193,17 +2212,17 @@ Each skill includes:
 - **skill-reviewer**: See `skill-reviewer/references/evaluation_checklist.md` for complete evaluation criteria, `skill-reviewer/references/pr_template.md` for PR templates, and `skill-reviewer/references/marketplace_template.json` for marketplace configuration
 - **github-contributor**: See `github-contributor/references/pr_checklist.md` for PR quality checklist, `github-contributor/references/project_evaluation.md` for project evaluation criteria, and `github-contributor/references/communication_templates.md` for issue/PR templates
 - **i18n-expert**: See `i18n-expert/SKILL.md` for complete i18n setup workflow, key architecture guidance, and audit procedures
-- **claude-skills-troubleshooting**: See `claude-skills-troubleshooting/SKILL.md` for plugin troubleshooting workflow and architecture
+- **claude-skills-troubleshooting**: See `suites/daymade-claude-code/claude-skills-troubleshooting/SKILL.md` for plugin troubleshooting workflow and architecture
 - **fact-checker**: See `fact-checker/SKILL.md` for fact-checking workflow and claim verification process
 - **competitors-analysis**: See `competitors-analysis/SKILL.md` for evidence-based analysis workflow and `competitors-analysis/references/profile_template.md` for competitor profile template
 - **windows-remote-desktop-connection-doctor**: See `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` for log parsing patterns and `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` for transport protocol details
 - **product-analysis**: See `product-analysis/SKILL.md` for workflow and `product-analysis/references/synthesis_methodology.md` for cross-agent weighting and recommendation logic
 - **excel-automation**: See `excel-automation/SKILL.md` for create/parse/control workflows and `excel-automation/references/formatting-reference.md` for formatting standards
 - **capture-screen**: See `capture-screen/SKILL.md` for CGWindowID-based screenshot workflows on macOS
-- **continue-claude-work**: See `continue-claude-work/SKILL.md` for local artifact recovery, drift checks, and resume workflow
+- **continue-claude-work**: See `suites/daymade-claude-code/continue-claude-work/SKILL.md` for local artifact recovery, drift checks, and resume workflow
 - **scrapling-skill**: See `scrapling-skill/SKILL.md` for the CLI workflow and `scrapling-skill/references/troubleshooting.md` for verified Scrapling failure modes
 - **ima-copilot**: See `ima-copilot/SKILL.md` for the wrapper architecture and routing, `ima-copilot/references/installation_flow.md` for the install deep dive, `ima-copilot/references/known_issues.md` for the issue registry and repair commands, and `ima-copilot/references/search_best_practices.md` for the fan-out strategy and 100-result truncation details
-- **claude-export-txt-better**: See `claude-export-txt-better/SKILL.md` for the workflow, `claude-export-txt-better/scripts/fix-claude-export.py` for the reconstruction algorithm, and `claude-export-txt-better/evals/` for real regression fixtures
+- **claude-export-txt-better**: See `suites/daymade-claude-code/claude-export-txt-better/SKILL.md` for the workflow, `suites/daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py` for the reconstruction algorithm, and `suites/daymade-claude-code/claude-export-txt-better/evals/` for real regression fixtures
 - **douban-skill**: See `douban-skill/SKILL.md` for the export workflow and `douban-skill/references/troubleshooting.md` for the complete log of 7 tested scraping approaches and why each failed
 - **terraform-skill**: See `terraform-skill/SKILL.md` for the full catalogue of operational traps organised by exact error → root cause → copy-paste fix
 

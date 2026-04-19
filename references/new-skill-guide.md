@@ -220,7 +220,7 @@ Before committing, verify:
 3. **Inconsistent version numbers** - CHANGELOG, README badges (both EN and ZH), CLAUDE.md, and marketplace.json must all match
 4. **Inconsistent skill counts** - README description (both EN and ZH), badges, CLAUDE.md must all have same count
 5. **Missing skill number in README** - Skills must be numbered sequentially in both EN and ZH versions
-6. **Relying on JSON syntax check alone** - `python -m json.tool` only catches malformed JSON. It will NOT catch missing plugin entries, broken source+skills resolution, or orphan SKILL.md files on disk. Use `bash marketplace-dev/scripts/check_marketplace.sh` for the full 4-check validation.
+6. **Relying on JSON syntax check alone** - `python -m json.tool` only catches malformed JSON. It will NOT catch missing plugin entries, broken source+skills resolution, or orphan SKILL.md files on disk. Use `bash suites/daymade-claude-code/marketplace-dev/scripts/check_marketplace.sh` for the full 4-check validation.
 7. **Leaving orphan SKILL.md directories** - A tracked skill directory with no plugin entry in marketplace.json is invisible to `claude plugin install`. The reverse-sync check in `check_marketplace.sh` emits a WARN for each orphan. Treat every WARN as a real signal: register it or delete it.
 8. **Using `git add -A` or `git add .`** - When multiple sessions/agents edit the repo in parallel, a blanket stage can piggyback another agent's unstaged changes into your commit. Always stage files by name.
 9. **Forgetting to push** - Local changes are invisible until pushed to GitHub
@@ -236,7 +236,7 @@ uv run python -m scripts.security_scan ../skill-name --verbose
 uv run --with PyYAML python -m scripts.package_skill ../skill-name
 
 # 3. Full marketplace validation — the single source of truth for "is this shippable?"
-cd .. && bash marketplace-dev/scripts/check_marketplace.sh
+cd .. && bash suites/daymade-claude-code/marketplace-dev/scripts/check_marketplace.sh
 # Runs 4 checks in sequence:
 #   [1/4] JSON syntax of .claude-plugin/marketplace.json
 #   [2/4] claude plugin validate .         (schema-level, skipped if CLI missing)
