@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-48-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.47.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-49-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.49.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 48 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 49 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2092,6 +2092,34 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
+### 48. **slides-creator** - 叙事优先的幻灯片创建
+
+引导用户完成结构化叙事设计（ABCDEFG 模型），然后将视觉生成委托给 `baoyu-slide-deck`。专注于机器做不到的事——与人类的叙事共创。
+
+**使用场景：**
+- 从用户内容创建演示文稿、幻灯片或 PPT
+- 将文章、转录稿或笔记转化为视觉幻灯片
+- 为演讲和工作坊设计叙事弧线
+
+**主要功能：**
+- Phase 0：源材料收集（优先使用用户自己的文字）
+- Phase 1：使用 ABCDEFG 模型进行叙事结构讨论
+- Phase 2：机器可读输入的内容结构化
+- Phase 3-5：将视觉生成委托给 baoyu-slide-deck
+- Phase 6：目录重组和讲者备注提取的后处理
+
+**示例用法：**
+```bash
+# 自然触发 skill
+"帮我把我的文章做成幻灯片"
+"从我的演讲转录稿创建演示文稿"
+"我需要一个 20 分钟的工作坊演示"
+```
+
+**要求**：需要 baoyu-slide-deck skill 进行视觉生成。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -2123,7 +2151,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 使用 **skill-creator**（参见上面的[必备技能](#-必备技能skill-creator)部分）构建、验证和打包你自己的 Claude Code 技能，遵循最佳实践。
 
 ### 演示文稿与商务沟通
-使用 **ppt-creator** 生成具有数据可视化、结构化叙事和完整 PPTX 输出的专业幻灯片，用于推介、评审和主题演讲。
+使用 **ppt-creator** 生成具有数据可视化、结构化叙事和完整 PPTX 输出的专业幻灯片，用于推介、评审和主题演讲。使用 **slides-creator** 进行叙事优先的幻灯片设计——它引导你完成 ABCDEFG 叙事框架，优先收集你的原始内容，然后将视觉生成委托给 baoyu-slide-deck。非常适合需要将现有文章、转录稿或演讲转化为视觉幻灯片的场景。
 
 ### 视频质量分析
 使用 **video-comparer** 分析压缩结果、评估编解码器性能并生成交互式比较报告。与 **youtube-downloader** 结合使用以比较不同质量的下载。
@@ -2266,6 +2294,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **claude-export-txt-better**：参见 `suites/daymade-claude-code/claude-export-txt-better/SKILL.md` 了解工作流，参见 `suites/daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py` 了解重建算法，参见 `suites/daymade-claude-code/claude-export-txt-better/evals/` 查看真实回归 fixture
 - **douban-skill**：参见 `douban-skill/SKILL.md` 了解导出工作流，参见 `douban-skill/references/troubleshooting.md` 查看 7 种被测抓取方案及失败原因的完整日志
 - **terraform-skill**：参见 `terraform-skill/SKILL.md` 查看按确切报错 → 根本原因 → 复制粘贴修复组织的实操陷阱完整目录
+- **slides-creator**：参见 `slides-creator/SKILL.md` 了解叙事优先工作流，参见 `slides-creator/references/narrative-design-guide.md` 了解 ABCDEFG 模型，参见 `slides-creator/references/content-creation-first-law.md` 了解通用内容创作原则
 
 ## 🛠️ 系统要求
 
