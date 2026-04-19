@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.48.0] - 2026-04-19
+
+### Added
+- **daymade-claude-code** suite v1.0.0: Claude Code operations suite bundling 7 power-user skills (`claude-code-history-files-finder`, `continue-claude-work`, `claude-skills-troubleshooting`, `claude-md-progressive-disclosurer`, `statusline-generator`, `claude-export-txt-better`, `marketplace-dev`) under one shared namespace. One command gets the full Claude Code toolkit and invocations render as `daymade-claude-code:<skill>` instead of the redundant `<skill>:<skill>` form.
+
+### Changed
+- **Canonical source migration**: The 7 Claude Code-related skills were physically moved from the repo root into `suites/daymade-claude-code/<skill>/`, mirroring the `daymade-docs` suite pattern. Both the suite and the 7 individual single-skill plugins now install from the same canonical location, keeping plugin caches narrow (only the suite's own files, not the whole repo). Transparent to existing users: plugin names and invocation remain identical; `claude plugin update` fetches from the new path automatically.
+- Patch bumps for the 7 migrated skills to reflect the manifest/source change:
+  - `claude-code-history-files-finder` 1.0.2 → 1.0.3
+  - `continue-claude-work` 1.1.1 → 1.1.2
+  - `claude-skills-troubleshooting` 1.0.0 → 1.0.1
+  - `claude-md-progressive-disclosurer` 1.2.0 → 1.2.1
+  - `statusline-generator` 1.0.0 → 1.0.1
+  - `claude-export-txt-better` 1.0.0 → 1.0.1
+  - `marketplace-dev` 1.2.0 → 1.2.1 (also simplified hook paths from `${CLAUDE_PLUGIN_ROOT}/marketplace-dev/hooks/...` to `${CLAUDE_PLUGIN_ROOT}/hooks/...` now that the cache root is the skill dir itself)
+- Updated marketplace version from 1.47.0 to 1.48.0
+- Updated marketplace plugin entries from 51 to 52
+- README / README.zh-CN / CLAUDE.md / references/new-skill-guide.md: all doc links to these 7 skills now point to `suites/daymade-claude-code/<skill>/`
+
 ## [1.47.0] - 2026-04-12
 
 ### Added

@@ -152,7 +152,7 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 50 plugin entries: most map to one skill, while suite plugins map to multiple related skills
+- Contains 52 plugin entries: most map to one skill, while suite plugins (`daymade-docs`, `daymade-claude-code`) map to multiple related skills
 - Each plugin has: name, description, version, category, keywords, skills array
 - Marketplace metadata: name, owner, version, homepage
 - Suite plugins use `suites/<suite-name>/` as the canonical source for their member skills so suite caches contain only those skills. Single-skill plugin entries for suite members should point to the same canonical subdirectories.
@@ -307,7 +307,7 @@ uv run --with PyYAML python -m scripts.package_skill ../skill-name
 #    detailed step-by-step, including 7 README locations and 3 CLAUDE.md spots)
 
 # 3. One-shot marketplace validation (ships with marketplace-dev skill)
-cd .. && bash marketplace-dev/scripts/check_marketplace.sh
+cd .. && bash suites/daymade-claude-code/marketplace-dev/scripts/check_marketplace.sh
 # Runs: JSON syntax → claude plugin validate → source+skills resolution →
 # reverse sync (warns when a disk SKILL.md is not registered). A WARN on
 # reverse sync is the canary for orphan skills — register them or delete them.
