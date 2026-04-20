@@ -141,8 +141,17 @@ async function connectAndListen() {
             } catch (err) {
                 // On any failure we fall through and still emit the event,
                 // just without a trigger payload — better to over-notify
-                // than to swallow an update silently.
-                emit({ event: "filter_error", uri, message: err?.message ?? String(err) });
+                // than to swallow an update silently. Diagnostics go to
+                // STDERR so they don't turn into Monitor notifications on
+                // non-cnvs servers where parse/read routinely fails (the
+                // SKILL.md documents the filter as a silent no-op there;
+                // stdout must stay clean to honor that contract).
+                process.stderr.write(JSON.stringify({
+                    ts: new Date().toISOString(),
+                    event: "filter_error",
+                    uri,
+                    message: err?.message ?? String(err),
+                }) + "\n");
             }
         }
         emit({ event: "resource_updated", uri, trigger });

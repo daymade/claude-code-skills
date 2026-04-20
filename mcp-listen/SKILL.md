@@ -5,7 +5,7 @@ compatibility: Requires Node.js 18+ and npm (run `npm install` inside the skill 
 license: MIT
 metadata:
   author: cnvs.app
-  version: "0.1.0"
+  version: "0.2.0"
   homepage: https://cnvs.app/mcp-listen/
 ---
 
