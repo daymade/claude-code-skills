@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.51.0] - 2026-04-26
+
+### Added
+- **debugging-network-issues** v1.0.0: Evidence-driven, falsification-first methodology for network, streaming, and protocol-layer bugs where the obvious cause is probably wrong. Built from a real 5-hour production case (SSE RST_STREAM at exactly 130s, traced to a CGNAT idle timeout). Provides layered-isolation experiments (run the same logical request through 3+ paths differing by one hop), env-gated runtime instrumentation patterns, and a counter-review four-question filter to challenge single-cause assumptions before shipping a fix. Bundles probe scripts (`layered-isolation-probe.sh`, `mock-idle-upstream.py`) and reference docs covering counter-review, packet-capture recipes, instrumentation patterns, and cognitive traps. Triggers on `ECONNRESET`, HTTP/2 `RST_STREAM`, `INTERNAL_ERROR`, fixed-time SSE drops, CDN/proxy/CGNAT idle timeouts, and "works sometimes / fails after N seconds" patterns.
+- **stepfun-tts** v1.0.0: Generate Chinese/Japanese speech with `stepaudio-2.5-tts` and transcribe long audio with `stepaudio-2.5-asr` (SSE endpoint, 32K context, ~100x RTF, up to 30-minute single call). Encapsulates the three non-obvious StepAudio 2.5 pitfalls that cost hours: `voice_label` removal (replaced by `instruction` + inline `()` prosody), `/v1/audio/asr/sse` endpoint mismatch (returns misleading `model not supported` error otherwise), and stricter censorship rules. Bundled scripts: `tts_generate.py` (with `--batch <jsonl>`), `asr_transcribe.py`, `ab_compare.sh`. API key resolution: `$STEPFUN_API_KEY` → `${CLAUDE_PLUGIN_DATA}/config.json` fallback. Reference docs cover migration from `step-tts-2`, the censorship rewrite list, and the verified-on-2026-04-23 known-issues registry.
+
+### Changed
+- Marketplace skill count: 49 → 51
+- Marketplace plugin entry count: 53 → 55
+- Marketplace version: 1.50.0 → 1.51.0
+- README.md, README.zh-CN.md: badges, descriptions, skill sections (#49 + #50), Use Cases entries, Documentation Quick Links, Requirements
+- CLAUDE.md: overview count, marketplace plugin count, Available Skills list
+
+### Note
+Plugin entries for these two skills were inadvertently committed in v1.50.0's path-rewrite operation (the entries existed as uncommitted draft modifications in `marketplace.json` and were carried along when that file was rewritten). v1.51.0 completes the registration that v1.50.0 left half-done by landing the skill directories themselves and synchronizing all documentation surfaces.
+
 ## [1.50.0] - 2026-04-26
 
 ### Changed
