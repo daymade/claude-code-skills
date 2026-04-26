@@ -8,6 +8,25 @@
  * This is the original built-in theme from md_to_pdf.py, extracted for reference.
  */
 
+/* Restrict 'Menlo' to Latin/ASCII range so CJK characters in inline code
+ * don't get marked as Menlo (which has no CJK glyphs). Without this, the
+ * generated PDF references Menlo for CJK chars, and strict PDF readers
+ * (macOS Preview, some print drivers) show blanks instead of falling back.
+ * Chrome falls back automatically; Preview does not. The unicode-range
+ * trick forces weasyprint to skip Menlo for CJK and use the next font in
+ * the chain (PingFang SC → Heiti SC → Songti SC) which has CJK glyphs. */
+@font-face {
+    font-family: 'Menlo';
+    src: local('Menlo');
+    unicode-range: U+0020-007F, U+00A0-00FF, U+2000-206F, U+2070-209F, U+20A0-20CF, U+2100-214F;
+}
+@font-face {
+    font-family: 'Menlo';
+    src: local('Menlo Bold');
+    font-weight: bold;
+    unicode-range: U+0020-007F, U+00A0-00FF, U+2000-206F, U+2070-209F, U+20A0-20CF, U+2100-214F;
+}
+
 @page {
     size: A4;
     margin: 2.5cm 2cm 2cm 2cm;
