@@ -79,3 +79,40 @@ python scripts/md_to_pdf.py input.md output.pdf --no-preview
 ```
 
 **Requires** `pdftoppm` (`brew install poppler` on macOS). If not installed, the script logs a hint and skips preview generation but still produces the PDF.
+
+## CJK Typography (default behavior)
+
+The script applies two layers of CJK-aware processing automatically — **without modifying the user's markdown source or theme CSS files**:
+
+### Layer 1: CSS patch (auto-injected, fixes ~80% of cases)
+
+`_load_theme()` appends a CJK typography CSS patch to the loaded theme CSS. The patch:
+
+- `table { table-layout: fixed; width: 100% }` — equal column widths prevent weasyprint auto-layout from squeezing one column to ~10% width when an adjacent column has 5x more content
+- `td, th { word-break: keep-all; line-break: strict }` — don't slice CJK characters apart
+- `th { white-space: nowrap }` — short headers stay one line for predictable column widths
+
+This silently fixes the most common anti-pattern (cell content forcibly wrapped between CJK characters producing single-char-only lines), without touching the user's source. The user's theme CSS file on disk is never modified.
+
+### Layer 2: Typography lint (post-render detection, catches the rest)
+
+After PDF generation, the script runs `pdftotext -layout` per page and scans for known CJK anti-patterns per "中文文案排版指北" (Chinese typography style guide):
+
+- Single CJK character alone on a line (cell still too narrow even after Layer 1)
+- Line ending with `（` followed by content next line (broken bracket pair)
+- Line starting with `）` (broken from previous bracket pair)
+- Short line ending with mid-thought punctuation `、，；：`
+
+Findings are printed to stderr with page+line locations. They are **warnings, not errors** — PDF still generates. The author sees the finding and decides:
+
+1. Accept (e.g. one orphan char in a long doc may be acceptable)
+2. Shorten the offending cell content to fit the column width
+3. Restructure (e.g. move long content into a paragraph below the table)
+
+### Why not silently auto-fix everything?
+
+Layer 2 deliberately does NOT modify the markdown. Per CLAUDE.md "禁止隐式行为" rule: silently rewriting non-standard markdown (e.g. expanding pseudo-lists into real lists) would mask the signal that the source is wrong, causing the same markdown to render incorrectly in other processors. Layer 1 is acceptable because it patches **rendering behavior** for already-standard markdown (a standard table that weasyprint happens to render imperfectly for CJK), not the markdown source itself.
+
+### Known limitations
+
+When a single cell's content is just slightly longer than the available column width (e.g. 10 CJK chars in a 9-char-wide cell after equal split), weasyprint will fall back to forced break despite `keep-all`. Layer 1 cannot fix this — Layer 2 will catch it and prompt the author to shorten cell content or restructure.

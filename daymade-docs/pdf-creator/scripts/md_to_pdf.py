@@ -87,8 +87,71 @@ def _detect_backend() -> str:
     sys.exit(1)
 
 
+# ---------------- CJK typography patch (auto-injected, no source mutation) ----
+#
+# Design principle: the user's markdown stays untouched, the user's theme CSS
+# files stay untouched. We only patch the CSS string at load time (intermediate
+# state), so the same .md + the same theme.css render correctly without the
+# author having to know about CJK line-break engine quirks.
+#
+# Why needed: weasyprint's default `word-break: normal` treats every CJK
+# character as a break opportunity. In narrow table cells this produces
+# single-char-only lines and broken bracket pairs — anti-patterns per the
+# well-known "中文文案排版指北" Chinese typography guide.
+#
+# Strategy (CJK-safe break rules, scoped to table cells only so body text
+# behaves normally):
+#   - `word-break: keep-all` — don't break inside CJK runs
+#   - `overflow-wrap: break-word` — but allow break at word/punctuation
+#     boundaries when content exceeds cell width
+#   - `line-break: strict` — apply strict CJK rules (no break before
+#     closing 」』）, no break after opening 「『（, no break around 、，；：)
+_TYPOGRAPHY_CSS_PATCH = """
+/* ===== md_to_pdf auto-injected: CJK typography for table cells =====
+ *
+ * Three-layer fix for the most common CJK rendering anti-patterns:
+ *
+ *   1. table-layout: fixed + equal column widths — prevents weasyprint
+ *      auto-layout from squeezing one column to 10% width when an
+ *      adjacent column has 5x more content (the root cause of "single
+ *      CJK char alone on a line" in narrow cells).
+ *
+ *   2. CJK break rules at cell level — don't slice CJK characters apart;
+ *      break only at word/punctuation boundaries.
+ *
+ *   3. Header nowrap — short headers stay one line; combined with fixed
+ *      layout, column widths are predictable.
+ *
+ * Trade-off: tables now distribute width equally across columns instead
+ * of content-aware. This may give "wider than needed" columns to short-
+ * content cells, but eliminates the "single CJK char per line" bug.
+ */
+table {
+    table-layout: fixed;
+    width: 100%;
+}
+table td, table th {
+    word-break: keep-all;
+    /* `overflow-wrap: normal` instead of break-word: when keep-all says
+     * "don't break inside CJK" and cell is too narrow for the content,
+     * prefer letting content overflow slightly rather than fallback to
+     * mid-token breaks (which produce single-CJK-char-per-line). */
+    overflow-wrap: normal;
+    line-break: strict;
+}
+table th {
+    white-space: nowrap;
+}
+/* =================================================================== */
+"""
+
+
 def _load_theme(theme_name: str) -> str:
-    """Load CSS from themes directory."""
+    """Load CSS from themes directory and append CJK typography patch.
+
+    The patch is appended AFTER the user theme so it wins the cascade for
+    table cells. The user's theme CSS file on disk is never modified.
+    """
     theme_file = THEMES_DIR / f"{theme_name}.css"
     if not theme_file.exists():
         available = [f.stem for f in THEMES_DIR.glob("*.css")]
@@ -97,7 +160,7 @@ def _load_theme(theme_name: str) -> str:
             file=sys.stderr,
         )
         sys.exit(1)
-    return theme_file.read_text(encoding="utf-8")
+    return theme_file.read_text(encoding="utf-8") + _TYPOGRAPHY_CSS_PATCH
 
 
 def _list_themes() -> list[str]:
