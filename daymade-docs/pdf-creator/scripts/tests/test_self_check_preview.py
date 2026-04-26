@@ -36,13 +36,20 @@ A short test for self-check preview generation.
 """
 
 
-def run_md_to_pdf(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
-    script = cwd.parent / "md_to_pdf.py"
+def run_md_to_pdf(args: list[str], scripts_dir: Path) -> subprocess.CompletedProcess:
+    """Run md_to_pdf.py with the given CLI args.
+
+    scripts_dir: path to the pdf-creator/scripts/ directory. The script
+                 lives at scripts_dir/md_to_pdf.py; we run the subprocess
+                 with cwd=scripts_dir.parent (the pdf-creator/ root) so
+                 the script's relative themes/ lookup resolves correctly.
+    """
+    script = scripts_dir / "md_to_pdf.py"
     return subprocess.run(
         ["uv", "run", "--with", "weasyprint", str(script)] + args,
         capture_output=True,
         text=True,
-        cwd=cwd.parent,
+        cwd=scripts_dir.parent,
     )
 
 
