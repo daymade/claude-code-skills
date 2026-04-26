@@ -178,7 +178,7 @@ claude plugin install daymade-docs@daymade-skills
 /daymade-docs:meeting-minutes-taker
 ```
 
-单技能插件仍然保留，适合更窄的安装范围和独立更新。文档技能的 canonical source 位于 `suites/daymade-docs/`，因此套件和单个文档插件都从同一份源安装，同时保持 plugin cache 边界收窄。
+单技能插件仍然保留，适合更窄的安装范围和独立更新。文档技能的 canonical source 位于 `daymade-docs/`，因此套件和单个文档插件都从同一份源安装，同时保持 plugin cache 边界收窄。
 
 **Claude Code 操作套件**（为 Claude Code 本体扩展工作流提供统一命名空间）：
 ```bash
@@ -638,7 +638,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 *即将推出*
 
-📚 **文档**：参见 [suites/daymade-docs/ppt-creator/references/WORKFLOW.md](./suites/daymade-docs/ppt-creator/references/WORKFLOW.md) 了解 9 阶段创建流程
+📚 **文档**：参见 [daymade-docs/ppt-creator/references/WORKFLOW.md](./daymade-docs/ppt-creator/references/WORKFLOW.md) 了解 9 阶段创建流程
 
 ---
 
@@ -940,7 +940,7 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 
 *即将推出*
 
-📚 **文档**：参见 [suites/daymade-claude-code/claude-code-history-files-finder/references/](./suites/daymade-claude-code/claude-code-history-files-finder/references/)：
+📚 **文档**：参见 [daymade-claude-code/claude-code-history-files-finder/references/](./daymade-claude-code/claude-code-history-files-finder/references/)：
 - `session_file_format.md` - JSONL 结构和提取模式
 - `workflow_examples.md` - 详细的恢复和分析工作流
 
@@ -1041,7 +1041,7 @@ uv run --with weasyprint --with markdown scripts/md_to_pdf.py input.md output.pd
 
 *即将推出*
 
-📚 **文档**：参见 [suites/daymade-docs/pdf-creator/SKILL.md](./suites/daymade-docs/pdf-creator/SKILL.md) 了解设置与工作流。
+📚 **文档**：参见 [daymade-docs/pdf-creator/SKILL.md](./daymade-docs/pdf-creator/SKILL.md) 了解设置与工作流。
 
 **要求**：Python 3.8+，`weasyprint`、`markdown`
 
@@ -1070,7 +1070,7 @@ uv run --with weasyprint --with markdown scripts/md_to_pdf.py input.md output.pd
 
 *即将推出*
 
-📚 **文档**：参见 [claude-md-progressive-disclosurer/SKILL.md](./suites/daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md)。
+📚 **文档**：参见 [claude-md-progressive-disclosurer/SKILL.md](./daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md)。
 
 ---
 
@@ -1521,7 +1521,7 @@ python3 scripts/enable_all_plugins.py daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [claude-skills-troubleshooting/SKILL.md](./suites/daymade-claude-code/claude-skills-troubleshooting/SKILL.md) 了解完整的故障排除工作流程和架构指导。
+📚 **文档**：参见 [claude-skills-troubleshooting/SKILL.md](./daymade-claude-code/claude-skills-troubleshooting/SKILL.md) 了解完整的故障排除工作流程和架构指导。
 
 **要求**：无（使用 Claude Code 内置 Python）
 
@@ -1556,7 +1556,7 @@ claude plugin install meeting-minutes-taker@daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [suites/daymade-docs/meeting-minutes-taker/SKILL.md](./suites/daymade-docs/meeting-minutes-taker/SKILL.md) 了解完整的工作流程和模板指导。
+📚 **文档**：参见 [daymade-docs/meeting-minutes-taker/SKILL.md](./daymade-docs/meeting-minutes-taker/SKILL.md) 了解完整的工作流程和模板指导。
 
 **要求**：无
 
@@ -1897,7 +1897,7 @@ claude plugin install continue-claude-work@daymade-skills
 "查看上次会话做了什么，然后继续"
 ```
 
-📚 **文档**：参见 [continue-claude-work/SKILL.md](./suites/daymade-claude-code/continue-claude-work/SKILL.md)。
+📚 **文档**：参见 [continue-claude-work/SKILL.md](./daymade-claude-code/continue-claude-work/SKILL.md)。
 
 **要求**：Python 3.8+，用于工作区核对的 `git`。
 
@@ -2001,20 +2001,20 @@ claude plugin install ima-copilot@daymade-skills
 **示例用法：**
 ```bash
 # 修复并显示统计
-uv run suites/daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py broken.txt --stats
+uv run daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py broken.txt --stats
 
 # 自定义输出路径
-uv run suites/daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py broken.txt -o fixed.txt
+uv run daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py broken.txt -o fixed.txt
 
 # 校验修复结果
-uv run suites/daymade-claude-code/claude-export-txt-better/scripts/validate-claude-export-fix.py broken.txt fixed.txt
+uv run daymade-claude-code/claude-export-txt-better/scripts/validate-claude-export-fix.py broken.txt fixed.txt
 ```
 
 **🎬 实时演示**
 
 *即将推出*
 
-📚 **文档**：参见 [claude-export-txt-better/SKILL.md](./suites/daymade-claude-code/claude-export-txt-better/SKILL.md) 和打包在内的 `evals/` fixture。
+📚 **文档**：参见 [claude-export-txt-better/SKILL.md](./daymade-claude-code/claude-export-txt-better/SKILL.md) 和打包在内的 `evals/` fixture。
 
 **要求**：Python 3.8+、`uv` 包管理器。
 
@@ -2251,9 +2251,9 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 ### 快速链接
 
 - **github-ops**：参见 `github-ops/references/api_reference.md` 了解 API 文档
-- **doc-to-markdown**：参见 `suites/daymade-docs/doc-to-markdown/references/conversion-examples.md` 了解转换场景
-- **mermaid-tools**：参见 `suites/daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` 了解设置指南
-- **statusline-generator**：参见 `suites/daymade-claude-code/statusline-generator/references/color_codes.md` 了解自定义
+- **doc-to-markdown**：参见 `daymade-docs/doc-to-markdown/references/conversion-examples.md` 了解转换场景
+- **mermaid-tools**：参见 `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` 了解设置指南
+- **statusline-generator**：参见 `daymade-claude-code/statusline-generator/references/color_codes.md` 了解自定义
 - **teams-channel-post-writer**：参见 `teams-channel-post-writer/references/writing-guidelines.md` 了解质量标准
 - **repomix-unmixer**：参见 `repomix-unmixer/references/repomix-format.md` 了解格式规范
 - **skill-creator**：参见 `skill-creator/SKILL.md` 了解完整的技能创建工作流
@@ -2261,18 +2261,18 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **cli-demo-generator**：参见 `cli-demo-generator/references/vhs_syntax.md` 了解 VHS 语法和 `cli-demo-generator/references/best_practices.md` 了解演示指南
 - **cloudflare-troubleshooting**：参见 `cloudflare-troubleshooting/references/api_overview.md` 了解 API 文档
 - **ui-designer**：参见 `ui-designer/SKILL.md` 了解完整的设计系统提取工作流
-- **ppt-creator**：参见 `suites/daymade-docs/ppt-creator/references/WORKFLOW.md` 了解 9 阶段创建流程和 `suites/daymade-docs/ppt-creator/references/ORCHESTRATION_OVERVIEW.md` 了解自动化
+- **ppt-creator**：参见 `daymade-docs/ppt-creator/references/WORKFLOW.md` 了解 9 阶段创建流程和 `daymade-docs/ppt-creator/references/ORCHESTRATION_OVERVIEW.md` 了解自动化
 - **youtube-downloader**：参见 `youtube-downloader/SKILL.md` 了解使用示例和故障排除
 - **repomix-safe-mixer**：参见 `repomix-safe-mixer/references/common_secrets.md` 了解检测到的凭据模式
 - **video-comparer**：参见 `video-comparer/references/video_metrics.md` 了解质量指标解释和 `video-comparer/references/configuration.md` 了解自定义选项
 - **transcript-fixer**：参见 `transcript-fixer/references/workflow_guide.md` 了解分步工作流和 `transcript-fixer/references/team_collaboration.md` 了解协作模式
 - **qa-expert**：参见 `qa-expert/references/master_qa_prompt.md` 了解自主执行（100 倍加速）和 `qa-expert/references/google_testing_standards.md` 了解 AAA 模式和 OWASP 测试
 - **prompt-optimizer**：参见 `prompt-optimizer/references/ears_syntax.md` 了解 EARS 转换模式、`prompt-optimizer/references/domain_theories.md` 了解理论目录和 `prompt-optimizer/references/examples.md` 了解完整转换示例
-- **claude-code-history-files-finder**：参见 `suites/daymade-claude-code/suites/daymade-claude-code/claude-code-history-files-finder/references/session_file_format.md` 了解 JSONL 结构和 `suites/daymade-claude-code/suites/daymade-claude-code/claude-code-history-files-finder/references/workflow_examples.md` 了解恢复工作流
-- **docs-cleaner**：参见 `suites/daymade-docs/docs-cleaner/SKILL.md` 了解整合工作流
+- **claude-code-history-files-finder**：参见 `daymade-claude-code/claude-code-history-files-finder/references/session_file_format.md` 了解 JSONL 结构和 `daymade-claude-code/claude-code-history-files-finder/references/workflow_examples.md` 了解恢复工作流
+- **docs-cleaner**：参见 `daymade-docs/docs-cleaner/SKILL.md` 了解整合工作流
 - **deep-research**：参见 `deep-research/references/research_report_template.md` 了解报告结构，并参见 `deep-research/references/source_quality_rubric.md` 了解来源分级标准
-- **pdf-creator**：参见 `suites/daymade-docs/pdf-creator/SKILL.md` 了解 PDF 转换与字体设置
-- **claude-md-progressive-disclosurer**：参见 `suites/daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md` 了解 CLAUDE.md 优化工作流
+- **pdf-creator**：参见 `daymade-docs/pdf-creator/SKILL.md` 了解 PDF 转换与字体设置
+- **claude-md-progressive-disclosurer**：参见 `daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md` 了解 CLAUDE.md 优化工作流
 - **skills-search**：参见 `skills-search/SKILL.md` 了解 CCPM CLI 命令和注册表操作
 - **promptfoo-evaluation**：参见 `promptfoo-evaluation/references/promptfoo_api.md` 了解评测模式
 - **iOS-APP-developer**：参见 `iOS-APP-developer/references/xcodegen-full.md` 了解 XcodeGen 选项与 project.yml 细节
@@ -2281,17 +2281,17 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **skill-reviewer**：参见 `skill-reviewer/references/evaluation_checklist.md` 了解完整评估标准、`skill-reviewer/references/pr_template.md` 了解 PR 模板、`skill-reviewer/references/marketplace_template.json` 了解 marketplace 配置
 - **github-contributor**：参见 `github-contributor/references/pr_checklist.md` 了解 PR 质量清单、`github-contributor/references/project_evaluation.md` 了解项目评估标准、`github-contributor/references/communication_templates.md` 了解 issue/PR 沟通模板
 - **i18n-expert**：参见 `i18n-expert/SKILL.md` 了解完整的 i18n 设置工作流程、键架构指导和审计程序
-- **claude-skills-troubleshooting**：参见 `suites/daymade-claude-code/claude-skills-troubleshooting/SKILL.md` 了解插件故障排除工作流程和架构
+- **claude-skills-troubleshooting**：参见 `daymade-claude-code/claude-skills-troubleshooting/SKILL.md` 了解插件故障排除工作流程和架构
 - **fact-checker**：参见 `fact-checker/SKILL.md` 了解事实核查工作流程和声明验证过程
 - **competitors-analysis**：参见 `competitors-analysis/SKILL.md` 了解证据驱动的分析工作流程和 `competitors-analysis/references/profile_template.md` 了解竞品档案模板
 - **windows-remote-desktop-connection-doctor**：参见 `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` 了解日志解析模式和 `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` 了解传输协议详情
 - **product-analysis**：参见 `product-analysis/SKILL.md` 了解工作流，参见 `product-analysis/references/synthesis_methodology.md` 了解跨代理加权与推荐逻辑
 - **excel-automation**：参见 `excel-automation/SKILL.md` 了解创建/解析/控制工作流，参见 `excel-automation/references/formatting-reference.md` 了解格式规范
 - **capture-screen**：参见 `capture-screen/SKILL.md` 了解基于 CGWindowID 的 macOS 截图流程
-- **continue-claude-work**：参见 `suites/daymade-claude-code/continue-claude-work/SKILL.md` 了解本地会话产物恢复、漂移检查与续做流程
+- **continue-claude-work**：参见 `daymade-claude-code/continue-claude-work/SKILL.md` 了解本地会话产物恢复、漂移检查与续做流程
 - **scrapling-skill**：参见 `scrapling-skill/SKILL.md` 了解 CLI 工作流，参见 `scrapling-skill/references/troubleshooting.md` 了解已验证的 Scrapling 故障模式
 - **ima-copilot**：参见 `ima-copilot/SKILL.md` 了解包装层架构与路由规则，参见 `ima-copilot/references/installation_flow.md` 了解安装流程细节，参见 `ima-copilot/references/known_issues.md` 了解已知问题清单与修复命令，参见 `ima-copilot/references/search_best_practices.md` 了解扇出搜索策略与 100 条截断处理
-- **claude-export-txt-better**：参见 `suites/daymade-claude-code/claude-export-txt-better/SKILL.md` 了解工作流，参见 `suites/daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py` 了解重建算法，参见 `suites/daymade-claude-code/claude-export-txt-better/evals/` 查看真实回归 fixture
+- **claude-export-txt-better**：参见 `daymade-claude-code/claude-export-txt-better/SKILL.md` 了解工作流，参见 `daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py` 了解重建算法，参见 `daymade-claude-code/claude-export-txt-better/evals/` 查看真实回归 fixture
 - **douban-skill**：参见 `douban-skill/SKILL.md` 了解导出工作流，参见 `douban-skill/references/troubleshooting.md` 查看 7 种被测抓取方案及失败原因的完整日志
 - **terraform-skill**：参见 `terraform-skill/SKILL.md` 查看按确切报错 → 根本原因 → 复制粘贴修复组织的实操陷阱完整目录
 - **slides-creator**：参见 `slides-creator/SKILL.md` 了解叙事优先工作流，参见 `slides-creator/references/narrative-design-guide.md` 了解 ABCDEFG 模型，参见 `slides-creator/references/content-creation-first-law.md` 了解通用内容创作原则

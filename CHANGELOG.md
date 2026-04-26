@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.50.0] - 2026-04-26
+
+### Changed
+- **Suite directory flattening**: Moved both suite directories from `suites/<suite-name>/` to the repo root: `suites/daymade-docs/` → `daymade-docs/` and `suites/daymade-claude-code/` → `daymade-claude-code/`. The `suites/` intermediate directory has been removed. Plugin names, install commands, and skill invocations are unchanged for end users — only the on-disk layout and the `source` paths in `marketplace.json` (and doc links) were affected. `claude plugin update` will re-fetch from the new paths automatically.
+- Updated all 15 `source` entries in `.claude-plugin/marketplace.json` from `./suites/<suite>/...` to `./<suite>/...`.
+- Updated documentation references in `CLAUDE.md`, `README.md`, `README.zh-CN.md`, `references/new-skill-guide.md`, `daymade-claude-code/marketplace-dev/SKILL.md`, and `daymade-claude-code/marketplace-dev/references/cache_and_source_patterns.md`.
+- Fixed pre-existing double-prefix typo (`suites/daymade-claude-code/suites/daymade-claude-code/...`) in two README locations during the path rewrite.
+
 ## [1.49.0] - 2026-04-19
 
 ### Added
