@@ -170,7 +170,7 @@ hr {
 }
 
 code {
-    font-family: 'Menlo', 'PingFang SC', 'Heiti SC', 'Noto Sans CJK SC', 'Songti SC', 'SimSun', monospace;
+    font-family: 'Menlo', 'Songti SC', 'Heiti SC', 'SimSun', 'PingFang SC', 'Noto Sans CJK SC', monospace;
     background: #f5f5f5;
     padding: 1px 4px;
     border-radius: 3px;
@@ -189,7 +189,7 @@ pre {
 }
 
 pre code {
-    font-family: 'Menlo', 'PingFang SC', 'Heiti SC', 'Noto Sans CJK SC', 'Songti SC', 'SimSun', monospace;
+    font-family: 'Menlo', 'Songti SC', 'Heiti SC', 'SimSun', 'PingFang SC', 'Noto Sans CJK SC', monospace;
     background: none;
     padding: 0;
     border-radius: 0;
