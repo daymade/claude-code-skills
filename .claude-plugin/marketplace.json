@@ -6,211 +6,129 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, local Claude session continuation from `.claude` artifacts, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, multi-path parallel product analysis with cross-model test-time compute scaling, real financial data collection for US equities with validation and yfinance pitfall handling, advanced Excel automation for formatted workbook generation and complex xlsm parsing, macOS programmatic window screenshot capture workflows, verified Scrapling CLI installation and web extraction workflows, plugin marketplace development for converting skills repos into official Claude Code marketplaces, Tencent IMA knowledge base companion with zero-config installation across Claude Code/Codex/OpenClaw, upstream bug detection and runtime repair, personalized fan-out search with priority-based knowledge base boosting, and suite plugins that expose related skills under shared namespaces for combined installation workflows — including a dedicated Claude Code operations suite (daymade-claude-code) bundling session recovery, CLAUDE.md optimization, troubleshooting, statusline configuration, export repair, and marketplace development skills under one namespace",
-    "version": "1.49.0"
+    "version": "1.50.0"
   },
   "plugins": [
     {
-      "name": "skill-creator",
-      "description": "Essential meta-skill for creating effective Claude Code skills with initialization scripts, validation, packaging, marketplace registration, and privacy best practices. Includes a specialized wrapper-skill workflow for retrospectively distilling an install-and-debug session into a reusable companion skill for a third-party CLI tool.",
-      "source": "./",
-      "strict": false,
-      "version": "1.7.3",
-      "category": "developer-tools",
-      "keywords": [
-        "skill-creation",
-        "claude-code",
-        "development",
-        "tooling",
-        "workflow",
-        "meta-skill",
-        "wrapper-skill",
-        "cli-wrapper",
-        "essential"
-      ],
-      "skills": [
-        "./skill-creator"
-      ]
-    },
-    {
-      "name": "github-ops",
-      "description": "Comprehensive GitHub operations using gh CLI and GitHub API for pull requests, issues, repositories, workflows, and API interactions",
+      "name": "asr-transcribe-to-text",
+      "description": "Transcribe audio and video files to text using a remote ASR service (Qwen3-ASR or OpenAI-compatible endpoint). Extracts audio from video, sends to configurable ASR endpoint, outputs clean text. Use when the user wants to transcribe recordings, convert audio/video to text, do speech-to-text, or mentions ASR, Qwen ASR, 转录, 语音转文字, 录音转文字, or has a meeting recording, lecture, interview, or screen recording to transcribe.",
       "source": "./",
       "strict": false,
       "version": "1.0.0",
-      "category": "developer-tools",
+      "category": "productivity",
       "keywords": [
-        "github",
-        "gh-cli",
-        "pull-request",
-        "issues",
-        "workflows",
-        "api"
+        "asr",
+        "transcription",
+        "speech-to-text",
+        "qwen",
+        "audio",
+        "video",
+        "vllm",
+        "ffmpeg"
       ],
       "skills": [
-        "./github-ops"
+        "./asr-transcribe-to-text"
       ]
     },
     {
-      "name": "doc-to-markdown",
-      "description": "Converts DOCX/PDF/PPTX to high-quality Markdown. Pandoc engine + 8 post-processing fixes: grid/simple tables to pipe tables, CJK bold spacing, JSON pretty-print, image path flattening, pandoc attribute cleanup, code block detection, bracket fixes. Benchmarked 7.6/10 (best-in-class vs Docling/MarkItDown/Mammoth). 31 unit tests. Trigger on \"convert document\", \"docx to markdown\", \"parse word\", \"doc to markdown\", \"解析word\", \"转换文档\".",
-      "source": "./suites/daymade-docs/doc-to-markdown",
-      "strict": false,
-      "version": "2.1.1",
-      "category": "document-conversion",
-      "keywords": [
-        "markdown",
-        "docx",
-        "pdf",
-        "pptx",
-        "converter",
-        "pandoc",
-        "document",
-        "cjk",
-        "chinese"
-      ],
-      "skills": [
-        "./"
-      ]
-    },
-    {
-      "name": "mermaid-tools",
-      "description": "Generate Mermaid diagrams from markdown with automatic PNG/SVG rendering and extraction from documents",
-      "source": "./suites/daymade-docs/mermaid-tools",
-      "strict": false,
-      "version": "1.0.2",
-      "category": "documentation",
-      "keywords": [
-        "mermaid",
-        "diagrams",
-        "visualization",
-        "flowchart",
-        "sequence"
-      ],
-      "skills": [
-        "./"
-      ]
-    },
-    {
-      "name": "daymade-docs",
-      "description": "Documentation suite plugin that exposes document conversion, Mermaid diagram generation, PDF/PPT creation, documentation cleanup, and meeting minutes skills under one shared namespace",
-      "source": "./suites/daymade-docs",
+      "name": "capture-screen",
+      "description": "Programmatic screenshot capture on macOS. Get window IDs via Swift CGWindowListCopyWindowInfo, capture specific windows with screencapture -l, and control application windows via AppleScript. Supports multi-shot workflows for capturing different sections of the same window. Use when taking automated screenshots, capturing application windows, or creating visual documentation",
+      "source": "./",
       "strict": false,
       "version": "1.0.1",
-      "category": "suite",
-      "keywords": [
-        "suite",
-        "documentation",
-        "markdown",
-        "mermaid",
-        "pdf",
-        "pptx",
-        "meeting-minutes"
-      ],
-      "skills": [
-        "./doc-to-markdown",
-        "./mermaid-tools",
-        "./pdf-creator",
-        "./ppt-creator",
-        "./docs-cleaner",
-        "./meeting-minutes-taker"
-      ]
-    },
-    {
-      "name": "daymade-claude-code",
-      "description": "Claude Code operations suite that bundles session history recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, and plugin marketplace development under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
-      "source": "./suites/daymade-claude-code",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "suite",
-      "keywords": [
-        "suite",
-        "claude-code",
-        "session-recovery",
-        "claude-md",
-        "statusline",
-        "troubleshooting",
-        "marketplace-dev"
-      ],
-      "skills": [
-        "./claude-code-history-files-finder",
-        "./continue-claude-work",
-        "./claude-skills-troubleshooting",
-        "./claude-md-progressive-disclosurer",
-        "./statusline-generator",
-        "./claude-export-txt-better",
-        "./marketplace-dev"
-      ]
-    },
-    {
-      "name": "statusline-generator",
-      "description": "Configure Claude Code statuslines with multi-line layouts, cost tracking via ccusage, git status, and customizable colors",
-      "source": "./suites/daymade-claude-code/statusline-generator",
-      "strict": false,
-      "version": "1.0.1",
-      "category": "customization",
-      "keywords": [
-        "statusline",
-        "ccusage",
-        "git-status",
-        "customization",
-        "prompt"
-      ],
-      "skills": [
-        "./"
-      ]
-    },
-    {
-      "name": "teams-channel-post-writer",
-      "description": "Create professional Microsoft Teams channel posts with Adaptive Cards, formatted announcements, and corporate communication standards",
-      "source": "./",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "communication",
-      "keywords": [
-        "teams",
-        "microsoft",
-        "adaptive-cards",
-        "communication",
-        "announcements"
-      ],
-      "skills": [
-        "./teams-channel-post-writer"
-      ]
-    },
-    {
-      "name": "repomix-unmixer",
-      "description": "Extract files from repomix packaged formats (XML, Markdown, JSON) with automatic format detection and validation",
-      "source": "./",
-      "strict": false,
-      "version": "1.0.0",
       "category": "utilities",
       "keywords": [
-        "repomix",
-        "unmix",
-        "extract",
-        "xml",
-        "conversion"
+        "screenshot",
+        "screencapture",
+        "macos",
+        "window-capture",
+        "swift",
+        "applescript",
+        "automation",
+        "visual-documentation"
       ],
       "skills": [
-        "./repomix-unmixer"
+        "./capture-screen"
       ]
     },
     {
-      "name": "llm-icon-finder",
-      "description": "Find and access AI/LLM model brand icons from lobe-icons library in SVG/PNG/WEBP formats",
-      "source": "./",
+      "name": "claude-code-history-files-finder",
+      "description": "Find and recover content from Claude Code session history files. Use when searching for deleted files, tracking changes across sessions, analyzing conversation history, or recovering code/documents from previous Claude interactions. Triggers include mentions of session history, recover deleted, find in history, previous conversation, or .claude/projects",
+      "source": "./daymade-claude-code/claude-code-history-files-finder",
       "strict": false,
-      "version": "1.0.0",
-      "category": "assets",
+      "version": "1.0.3",
+      "category": "developer-tools",
       "keywords": [
-        "icons",
-        "ai-models",
-        "llm",
-        "branding",
-        "lobe-icons"
+        "session-history",
+        "recovery",
+        "deleted-files",
+        "conversation-history",
+        "file-tracking",
+        "claude-code",
+        "history-analysis"
       ],
       "skills": [
-        "./llm-icon-finder"
+        "./"
+      ]
+    },
+    {
+      "name": "claude-export-txt-better",
+      "description": "Fixes broken line wrapping in Claude Code exported conversation files (.txt), reconstructing tables, paragraphs, paths, and tool calls that were hard-wrapped at fixed column widths. Includes an automated validation suite (generic, file-agnostic checks). Triggers when the user has a Claude Code export file with broken formatting, mentions \"fix export\", \"fix conversation\", \"exported conversation\", \"make export readable\", references a file matching YYYY-MM-DD-HHMMSS-*.txt, or has a .txt file with broken tables, split paths, or mangled tool output from Claude Code.",
+      "source": "./daymade-claude-code/claude-export-txt-better",
+      "strict": false,
+      "version": "1.0.1",
+      "category": "utilities",
+      "keywords": [
+        "claude-code",
+        "export",
+        "txt",
+        "fix",
+        "line-wrapping",
+        "formatting"
+      ],
+      "skills": [
+        "./"
+      ]
+    },
+    {
+      "name": "claude-md-progressive-disclosurer",
+      "description": "Optimize user CLAUDE.md files by applying progressive disclosure principles. This skill should be used when users want to reduce CLAUDE.md bloat, move detailed content to references, extract reusable patterns into skills, or improve context efficiency. Triggers include optimize CLAUDE.md, reduce CLAUDE.md size, apply progressive disclosure, or complaints about CLAUDE.md being too long",
+      "source": "./daymade-claude-code/claude-md-progressive-disclosurer",
+      "strict": false,
+      "version": "1.2.1",
+      "category": "productivity",
+      "keywords": [
+        "claude-md",
+        "progressive-disclosure",
+        "optimization",
+        "context-efficiency",
+        "configuration",
+        "token-savings"
+      ],
+      "skills": [
+        "./"
+      ]
+    },
+    {
+      "name": "claude-skills-troubleshooting",
+      "description": "Diagnose and resolve Claude Code plugin and skill configuration issues. Debug plugin installation, enablement, and activation problems with systematic workflows. Use when plugins are installed but not showing in available skills list, skills are not activating as expected, troubleshooting enabledPlugins configuration in settings.json, debugging 'plugin not working' or 'skill not showing' issues, or understanding plugin state architecture and lifecycle",
+      "source": "./daymade-claude-code/claude-skills-troubleshooting",
+      "strict": false,
+      "version": "1.0.1",
+      "category": "utilities",
+      "keywords": [
+        "troubleshooting",
+        "debugging",
+        "plugins",
+        "skills",
+        "diagnostics",
+        "configuration",
+        "enabledPlugins",
+        "settings",
+        "marketplace"
+      ],
+      "skills": [
+        "./"
       ]
     },
     {
@@ -255,496 +173,96 @@
       ]
     },
     {
-      "name": "ui-designer",
-      "description": "Extract design systems from reference UI images and generate implementation-ready UI design prompts. Use when users provide UI screenshots/mockups and want to create consistent designs",
+      "name": "competitors-analysis",
+      "description": "Analyze competitor repositories with evidence-based approach. Use when tracking competitors, creating competitor profiles, or generating competitive analysis. All analysis must be based on actual cloned code, never assumptions. Triggers include analyze competitor, add competitor, competitive analysis, or 竞品分析",
       "source": "./",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "design",
-      "keywords": [
-        "ui",
-        "design-system",
-        "mockup",
-        "screenshot",
-        "design-extraction",
-        "mvp"
-      ],
-      "skills": [
-        "./ui-designer"
-      ]
-    },
-    {
-      "name": "ppt-creator",
-      "description": "Create professional slide decks from topics or documents. Generates structured content with data-driven charts, speaker notes, and complete PPTX files. Applies persuasive storytelling principles (Pyramid Principle, assertion-evidence). Supports multiple formats (Marp, PowerPoint). Use for presentations, pitches, slide decks, or keynotes",
-      "source": "./suites/daymade-docs/ppt-creator",
       "strict": false,
       "version": "1.0.1",
       "category": "productivity",
       "keywords": [
-        "presentation",
-        "powerpoint",
-        "pptx",
-        "slides",
-        "marp",
-        "charts",
-        "data-visualization",
-        "pyramid-principle"
+        "competitors",
+        "competitive-analysis",
+        "competitor-tracking",
+        "evidence-based",
+        "market-research",
+        "竞品分析",
+        "code-analysis"
       ],
       "skills": [
-        "./"
+        "./competitors-analysis"
       ]
     },
     {
-      "name": "youtube-downloader",
-      "description": "Download YouTube videos and HLS streams (m3u8) from platforms like Mux, Vimeo, etc. using yt-dlp and ffmpeg. Use when users request downloading videos, extracting audio, handling protected streams with authentication headers, or troubleshooting download issues like nsig extraction failures, 403 errors, or cookie extraction problems",
-      "source": "./",
+      "name": "continue-claude-work",
+      "description": "Recover actionable context from local `.claude` session artifacts and continue interrupted work without running `claude --resume`. Extracts compact boundary summaries, subagent workflow state, session end reason, and workspace drift via bundled Python script. Use when a user provides a Claude session ID, asks to continue prior work from local history, or wants to inspect `.claude` files before resuming implementation",
+      "source": "./daymade-claude-code/continue-claude-work",
       "strict": false,
-      "version": "1.1.0",
-      "category": "utilities",
-      "keywords": [
-        "youtube",
-        "yt-dlp",
-        "video-download",
-        "audio-extraction",
-        "mp3",
-        "download",
-        "hls",
-        "m3u8",
-        "ffmpeg",
-        "streaming",
-        "mux",
-        "vimeo"
-      ],
-      "skills": [
-        "./youtube-downloader"
-      ]
-    },
-    {
-      "name": "repomix-safe-mixer",
-      "description": "Safely package codebases with repomix by automatically detecting and removing hardcoded credentials before packing. Use when packaging code for distribution, creating reference packages, or when the user mentions security concerns about sharing code with repomix",
-      "source": "./",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "security",
-      "keywords": [
-        "repomix",
-        "security",
-        "credentials",
-        "secrets-scanning",
-        "safe-packaging",
-        "secret-detection",
-        "code-security"
-      ],
-      "skills": [
-        "./repomix-safe-mixer"
-      ]
-    },
-    {
-      "name": "transcript-fixer",
-      "description": "Corrects speech-to-text (ASR/STT) transcription errors using dictionary rules and native Claude AI corrections (no API key needed by default). Supports intelligent paragraph breaks, filler word reduction, interactive review, Chinese domain names, and iterative dictionary building. Use when users mention transcript correction, ASR errors, speech-to-text mistakes, homophone errors, or working with transcription files",
-      "source": "./",
-      "strict": false,
-      "version": "1.4.0",
-      "category": "productivity",
-      "keywords": [
-        "transcription",
-        "asr",
-        "stt",
-        "speech-to-text",
-        "correction",
-        "ai",
-        "meeting-notes",
-        "nlp"
-      ],
-      "skills": [
-        "./transcript-fixer"
-      ]
-    },
-    {
-      "name": "video-comparer",
-      "description": "Compare two videos and generate interactive HTML reports with quality metrics (PSNR, SSIM) and frame-by-frame visual comparisons. Use when analyzing compression results, evaluating codec performance, or assessing video quality differences",
-      "source": "./",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "media",
-      "keywords": [
-        "video",
-        "comparison",
-        "quality-analysis",
-        "psnr",
-        "ssim",
-        "compression",
-        "ffmpeg",
-        "codec"
-      ],
-      "skills": [
-        "./video-comparer"
-      ]
-    },
-    {
-      "name": "qa-expert",
-      "description": "Comprehensive QA testing infrastructure with autonomous LLM execution, Google Testing Standards (AAA pattern), and OWASP security testing. Use when establishing QA processes, writing test cases, executing test plans, tracking bugs with P0-P4 classification, calculating quality metrics, enforcing quality gates, or preparing third-party QA handoffs. Enables 100x faster test execution via master prompts",
-      "source": "./",
-      "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.2",
       "category": "developer-tools",
       "keywords": [
-        "qa",
-        "testing",
-        "test-cases",
-        "bug-tracking",
-        "google-standards",
-        "owasp",
-        "security",
-        "automation",
-        "quality-gates",
-        "metrics"
-      ],
-      "skills": [
-        "./qa-expert"
-      ]
-    },
-    {
-      "name": "prompt-optimizer",
-      "description": "Transform vague prompts into precise, well-structured specifications using EARS (Easy Approach to Requirements Syntax) methodology. Use when users provide loose requirements, ambiguous feature descriptions, need to enhance prompts for AI-generated code/products/documents, request prompt optimization, or want to improve requirements engineering. Applies domain theories (GTD, BJ Fogg, Gestalt, AIDA, Zero Trust) and structured Role/Skills/Workflows/Examples/Formats framework",
-      "source": "./",
-      "strict": false,
-      "version": "1.1.0",
-      "category": "productivity",
-      "keywords": [
-        "prompt-engineering",
-        "ears",
-        "requirements",
-        "specifications",
-        "optimization",
-        "domain-theory",
-        "prompt-enhancement",
-        "ai-prompting"
-      ],
-      "skills": [
-        "./prompt-optimizer"
-      ]
-    },
-    {
-      "name": "claude-code-history-files-finder",
-      "description": "Find and recover content from Claude Code session history files. Use when searching for deleted files, tracking changes across sessions, analyzing conversation history, or recovering code/documents from previous Claude interactions. Triggers include mentions of session history, recover deleted, find in history, previous conversation, or .claude/projects",
-      "source": "./suites/daymade-claude-code/claude-code-history-files-finder",
-      "strict": false,
-      "version": "1.0.3",
-      "category": "developer-tools",
-      "keywords": [
-        "session-history",
-        "recovery",
-        "deleted-files",
-        "conversation-history",
-        "file-tracking",
         "claude-code",
-        "history-analysis"
+        "session-resume",
+        "context-recovery",
+        "jsonl",
+        "compaction",
+        "subagent",
+        "history",
+        "workflow-continuation",
+        "local-artifacts"
       ],
       "skills": [
         "./"
       ]
     },
     {
-      "name": "docs-cleaner",
-      "description": "Consolidates redundant documentation while preserving all valuable content. Use when cleaning up documentation bloat, merging redundant docs, reducing documentation sprawl, or consolidating multiple files covering the same topic",
-      "source": "./suites/daymade-docs/docs-cleaner",
+      "name": "daymade-claude-code",
+      "description": "Claude Code operations suite that bundles session history recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, and plugin marketplace development under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
+      "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.0.1",
-      "category": "productivity",
+      "version": "1.0.0",
+      "category": "suite",
       "keywords": [
-        "documentation",
-        "cleanup",
-        "consolidation",
-        "redundancy",
-        "merge",
-        "docs"
-      ],
-      "skills": [
-        "./"
-      ]
-    },
-    {
-      "name": "pdf-creator",
-      "description": "Create PDF documents from markdown with Chinese font support. Supports theme system (default for formal docs, warm-terra for training materials) and dual backend (weasyprint or Chrome). Triggers include convert to PDF, generate PDF, markdown to PDF, or printable documents",
-      "source": "./suites/daymade-docs/pdf-creator",
-      "strict": false,
-      "version": "1.3.2",
-      "category": "document-conversion",
-      "keywords": [
-        "pdf",
-        "markdown",
-        "weasyprint",
-        "chrome",
-        "themes",
-        "chinese-fonts",
-        "cjk",
-        "document-generation",
-        "legal",
-        "reports",
-        "typography"
-      ],
-      "skills": [
-        "./"
-      ]
-    },
-    {
-      "name": "claude-md-progressive-disclosurer",
-      "description": "Optimize user CLAUDE.md files by applying progressive disclosure principles. This skill should be used when users want to reduce CLAUDE.md bloat, move detailed content to references, extract reusable patterns into skills, or improve context efficiency. Triggers include optimize CLAUDE.md, reduce CLAUDE.md size, apply progressive disclosure, or complaints about CLAUDE.md being too long",
-      "source": "./suites/daymade-claude-code/claude-md-progressive-disclosurer",
-      "strict": false,
-      "version": "1.2.1",
-      "category": "productivity",
-      "keywords": [
+        "suite",
+        "claude-code",
+        "session-recovery",
         "claude-md",
-        "progressive-disclosure",
-        "optimization",
-        "context-efficiency",
-        "configuration",
-        "token-savings"
+        "statusline",
+        "troubleshooting",
+        "marketplace-dev"
       ],
       "skills": [
-        "./"
+        "./claude-code-history-files-finder",
+        "./continue-claude-work",
+        "./claude-skills-troubleshooting",
+        "./claude-md-progressive-disclosurer",
+        "./statusline-generator",
+        "./claude-export-txt-better",
+        "./marketplace-dev"
       ]
     },
     {
-      "name": "skills-search",
-      "description": "Search, discover, install, and manage Claude Code skills from the CCPM registry. Use when users want to find skills for specific tasks, install skills by name, list installed skills, get skill details, or manage their Claude Code skill collection. Triggers include find skills, search for plugins, install skill, list installed skills, or any CCPM registry operations",
-      "source": "./",
-      "strict": false,
-      "version": "1.1.0",
-      "category": "developer-tools",
-      "keywords": [
-        "ccpm",
-        "skills",
-        "search",
-        "install",
-        "registry",
-        "plugin",
-        "marketplace",
-        "discovery",
-        "skill-management"
-      ],
-      "skills": [
-        "./skills-search"
-      ]
-    },
-    {
-      "name": "promptfoo-evaluation",
-      "description": "Configures and runs LLM evaluation using Promptfoo framework. Use when setting up prompt testing, creating evaluation configs (promptfooconfig.yaml), writing Python custom assertions, implementing llm-rubric for LLM-as-judge, or managing few-shot examples in prompts. Triggers on keywords like promptfoo, eval, LLM evaluation, prompt testing, or model comparison",
-      "source": "./",
-      "strict": false,
-      "version": "1.1.0",
-      "category": "developer-tools",
-      "keywords": [
-        "promptfoo",
-        "evaluation",
-        "llm-testing",
-        "prompt-testing",
-        "assertions",
-        "llm-rubric",
-        "few-shot",
-        "model-comparison"
-      ],
-      "skills": [
-        "./promptfoo-evaluation"
-      ]
-    },
-    {
-      "name": "iOS-APP-developer",
-      "description": "Develops iOS applications with XcodeGen, SwiftUI, and SPM. Use when configuring XcodeGen project.yml, resolving SPM dependency issues, deploying to devices, handling code signing, debugging camera/AVFoundation, iOS version compatibility issues, or fixing Library not loaded @rpath framework errors. Includes state machine testing patterns for @MainActor classes",
-      "source": "./",
-      "strict": false,
-      "version": "1.1.0",
-      "category": "developer-tools",
-      "keywords": [
-        "ios",
-        "xcodegen",
-        "swiftui",
-        "spm",
-        "avfoundation",
-        "camera",
-        "code-signing",
-        "device-deployment",
-        "swift",
-        "xcode",
-        "testing"
-      ],
-      "skills": [
-        "./iOS-APP-developer"
-      ]
-    },
-    {
-      "name": "fact-checker",
-      "description": "Verifies factual claims in documents using web search and official sources, then proposes corrections with user confirmation. Use when the user asks to fact-check, verify information, validate claims, check accuracy, or update outdated information in documents. Supports AI model specs, technical documentation, statistics, and general factual statements",
-      "source": "./",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "productivity",
-      "keywords": [
-        "fact-checking",
-        "verification",
-        "accuracy",
-        "sources",
-        "validation",
-        "corrections",
-        "web-search"
-      ],
-      "skills": [
-        "./fact-checker"
-      ]
-    },
-    {
-      "name": "twitter-reader",
-      "description": "Fetch Twitter/X post content including long-form Articles with full images and metadata. Use when Claude needs to retrieve tweet/article content, author info, engagement metrics (likes, retweets, bookmarks), and embedded media. Supports individual posts and X Articles (long-form content). Automatically downloads all images to local attachments folder and generates complete Markdown with proper image references. Preferred over Jina for X Articles with images.",
-      "source": "./",
-      "strict": false,
-      "version": "1.1.0",
-      "category": "utilities",
-      "keywords": [
-        "twitter",
-        "x",
-        "social-media",
-        "jina",
-        "content-fetching",
-        "api",
-        "scraping",
-        "threads",
-        "images",
-        "attachments",
-        "markdown"
-      ],
-      "skills": [
-        "./twitter-reader"
-      ]
-    },
-    {
-      "name": "macos-cleaner",
-      "description": "Intelligent macOS disk space analysis and cleanup with safety-first philosophy. Use when users report disk space issues, need to clean their Mac, or want to understand storage consumption. Analyzes system caches, application remnants, large files, and development environments (Docker, Homebrew, npm, pip) with risk categorization (Safe/Caution/Keep) and requires explicit user confirmation before any deletions. Includes Mole visual tool integration for hybrid workflow",
-      "source": "./",
-      "strict": false,
-      "version": "1.1.0",
-      "category": "utilities",
-      "keywords": [
-        "macos",
-        "disk-space",
-        "cleanup",
-        "cache",
-        "storage",
-        "developer-tools",
-        "docker",
-        "homebrew",
-        "system-maintenance",
-        "safety"
-      ],
-      "skills": [
-        "./macos-cleaner"
-      ]
-    },
-    {
-      "name": "skill-reviewer",
-      "description": "Reviews and improves Claude Code skills against official best practices. Supports three modes - self-review (validate your own skills), external review (evaluate others' skills), and auto-PR (fork, improve, submit). Use when checking skill quality, reviewing skill repositories, or contributing improvements to open-source skills",
-      "source": "./",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "developer-tools",
-      "keywords": [
-        "skill-review",
-        "best-practices",
-        "claude-code",
-        "quality-assurance",
-        "open-source",
-        "contribution",
-        "auto-pr"
-      ],
-      "skills": [
-        "./skill-reviewer"
-      ]
-    },
-    {
-      "name": "github-contributor",
-      "description": "Strategic guide for becoming an effective GitHub contributor. Covers opportunity discovery, project selection, high-quality PR creation, and reputation building. Use when looking to contribute to open-source projects, building GitHub presence, or learning contribution best practices",
-      "source": "./",
-      "strict": false,
-      "version": "1.0.3",
-      "category": "developer-tools",
-      "keywords": [
-        "github",
-        "open-source",
-        "contribution",
-        "pull-request",
-        "reputation",
-        "contributor",
-        "oss"
-      ],
-      "skills": [
-        "./github-contributor"
-      ]
-    },
-    {
-      "name": "i18n-expert",
-      "description": "Complete internationalization/localization setup and auditing for UI codebases. Configure i18n frameworks, replace hard-coded strings with translation keys, ensure locale parity between en-US and zh-CN, and validate pluralization and formatting. Use when setting up i18n for React/Next.js/Vue apps, auditing existing implementations, replacing hard-coded strings, ensuring proper error code mapping, or validating pluralization and date/time/number formatting across locales",
-      "source": "./",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "developer-tools",
-      "keywords": [
-        "i18n",
-        "internationalization",
-        "localization",
-        "translation",
-        "react-i18next",
-        "next-intl",
-        "vue-i18n",
-        "locale",
-        "multilingual",
-        "globalization"
-      ],
-      "skills": [
-        "./i18n-expert"
-      ]
-    },
-    {
-      "name": "claude-skills-troubleshooting",
-      "description": "Diagnose and resolve Claude Code plugin and skill configuration issues. Debug plugin installation, enablement, and activation problems with systematic workflows. Use when plugins are installed but not showing in available skills list, skills are not activating as expected, troubleshooting enabledPlugins configuration in settings.json, debugging 'plugin not working' or 'skill not showing' issues, or understanding plugin state architecture and lifecycle",
-      "source": "./suites/daymade-claude-code/claude-skills-troubleshooting",
+      "name": "daymade-docs",
+      "description": "Documentation suite plugin that exposes document conversion, Mermaid diagram generation, PDF/PPT creation, documentation cleanup, and meeting minutes skills under one shared namespace",
+      "source": "./daymade-docs",
       "strict": false,
       "version": "1.0.1",
-      "category": "utilities",
+      "category": "suite",
       "keywords": [
-        "troubleshooting",
-        "debugging",
-        "plugins",
-        "skills",
-        "diagnostics",
-        "configuration",
-        "enabledPlugins",
-        "settings",
-        "marketplace"
-      ],
-      "skills": [
-        "./"
-      ]
-    },
-    {
-      "name": "meeting-minutes-taker",
-      "description": "Transform meeting transcripts into high-fidelity, structured meeting minutes with iterative review. Features speaker identification via feature analysis (word count, speaking style, topic focus) with context.md team directory mapping, intelligent file naming from content, integration with doc-to-markdown and transcript-fixer for pre-processing, evidence-based recording with speaker quotes, Mermaid diagrams for architecture discussions, and multi-turn parallel generation with UNION merge",
-      "source": "./suites/daymade-docs/meeting-minutes-taker",
-      "strict": false,
-      "version": "1.1.1",
-      "category": "productivity",
-      "keywords": [
-        "meeting",
-        "minutes",
-        "transcript",
-        "notes",
-        "speaker-identification",
+        "suite",
+        "documentation",
+        "markdown",
         "mermaid",
-        "quotes",
-        "action-items"
+        "pdf",
+        "pptx",
+        "meeting-minutes"
       ],
       "skills": [
-        "./"
+        "./doc-to-markdown",
+        "./mermaid-tools",
+        "./pdf-creator",
+        "./ppt-creator",
+        "./docs-cleaner",
+        "./meeting-minutes-taker"
       ]
     },
     {
@@ -772,104 +290,64 @@
       ]
     },
     {
-      "name": "competitors-analysis",
-      "description": "Analyze competitor repositories with evidence-based approach. Use when tracking competitors, creating competitor profiles, or generating competitive analysis. All analysis must be based on actual cloned code, never assumptions. Triggers include analyze competitor, add competitor, competitive analysis, or 竞品分析",
-      "source": "./",
+      "name": "doc-to-markdown",
+      "description": "Converts DOCX/PDF/PPTX to high-quality Markdown. Pandoc engine + 8 post-processing fixes: grid/simple tables to pipe tables, CJK bold spacing, JSON pretty-print, image path flattening, pandoc attribute cleanup, code block detection, bracket fixes. Benchmarked 7.6/10 (best-in-class vs Docling/MarkItDown/Mammoth). 31 unit tests. Trigger on \"convert document\", \"docx to markdown\", \"parse word\", \"doc to markdown\", \"解析word\", \"转换文档\".",
+      "source": "./daymade-docs/doc-to-markdown",
+      "strict": false,
+      "version": "2.1.1",
+      "category": "document-conversion",
+      "keywords": [
+        "markdown",
+        "docx",
+        "pdf",
+        "pptx",
+        "converter",
+        "pandoc",
+        "document",
+        "cjk",
+        "chinese"
+      ],
+      "skills": [
+        "./"
+      ]
+    },
+    {
+      "name": "docs-cleaner",
+      "description": "Consolidates redundant documentation while preserving all valuable content. Use when cleaning up documentation bloat, merging redundant docs, reducing documentation sprawl, or consolidating multiple files covering the same topic",
+      "source": "./daymade-docs/docs-cleaner",
       "strict": false,
       "version": "1.0.1",
       "category": "productivity",
       "keywords": [
-        "competitors",
-        "competitive-analysis",
-        "competitor-tracking",
-        "evidence-based",
-        "market-research",
-        "竞品分析",
-        "code-analysis"
+        "documentation",
+        "cleanup",
+        "consolidation",
+        "redundancy",
+        "merge",
+        "docs"
       ],
       "skills": [
-        "./competitors-analysis"
+        "./"
       ]
     },
     {
-      "name": "tunnel-doctor",
-      "description": "Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers five conflict layers: route hijacking, HTTP proxy env var interception, system proxy bypass, SSH ProxyCommand double tunneling, and VM/container proxy propagation. Includes an automated quick-diagnose script plus SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when local vanity domains fail behind proxy, when git push fails with failed to begin relaying via HTTP, when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, or when bootstrapping remote dev environments over Tailscale",
-      "source": "./",
-      "strict": false,
-      "version": "1.4.0",
-      "category": "developer-tools",
-      "keywords": [
-        "tailscale",
-        "vpn",
-        "shadowrocket",
-        "clash",
-        "surge",
-        "route-conflict",
-        "wsl",
-        "ssh",
-        "ssh-tunnel",
-        "autossh",
-        "proxy",
-        "proxycommand",
-        "git-push",
-        "networking",
-        "macos",
-        "makefile",
-        "remote-development",
-        "local-domain"
-      ],
-      "skills": [
-        "./tunnel-doctor"
-      ]
-    },
-    {
-      "name": "windows-remote-desktop-connection-doctor",
-      "description": "Diagnose Windows App (Microsoft Remote Desktop / Azure Virtual Desktop / W365) connection quality issues on macOS. Analyze transport protocol selection (UDP Shortpath vs WebSocket), detect VPN/proxy interference with STUN/TURN negotiation, and parse Windows App logs for Shortpath failures. This skill should be used when VDI connections are slow, when transport shows WebSocket instead of UDP, when RDP Shortpath fails to establish, or when RTT is unexpectedly high.",
+      "name": "douban-skill",
+      "description": "Export and sync Douban (豆瓣) book/movie/music/game collections to local CSV files via Frodo API. Supports full export (all history) and RSS incremental sync (recent items). Use when the user wants to export Douban reading/watching/listening/gaming history, back up their Douban data, set up incremental sync, or mentions 豆瓣/douban collections. Triggers on: 豆瓣, douban, 读书记录, 观影记录, 书影音, 导出豆瓣, export, backup, sync, collection.",
       "source": "./",
       "strict": false,
       "version": "1.0.0",
-      "category": "developer-tools",
-      "keywords": [
-        "rdp",
-        "avd",
-        "wvd",
-        "w365",
-        "windows-app",
-        "remote-desktop",
-        "shortpath",
-        "udp",
-        "websocket",
-        "stun",
-        "turn",
-        "vpn",
-        "macos",
-        "networking"
-      ],
-      "skills": [
-        "./windows-remote-desktop-connection-doctor"
-      ]
-    },
-    {
-      "name": "product-analysis",
-      "description": "Multi-path parallel product analysis with cross-model test-time compute scaling. Spawns parallel agents (Claude Code + Codex CLI) for multi-perspective exploration, then synthesizes findings into actionable optimization plans. Supports self-audit, UX audit, API audit, architecture review, and competitive benchmarking via competitors-analysis skill",
-      "source": "./",
-      "strict": false,
-      "version": "1.0.1",
       "category": "productivity",
       "keywords": [
-        "product-analysis",
-        "self-review",
-        "ux-audit",
-        "parallel-agents",
-        "cross-model",
-        "test-time-compute",
-        "codex",
-        "synthesis",
-        "product-audit",
-        "information-architecture"
+        "douban",
+        "豆瓣",
+        "csv",
+        "export",
+        "backup",
+        "rss",
+        "frodo"
       ],
       "skills": [
-        "./product-analysis"
+        "./douban-skill"
       ]
     },
     {
@@ -896,24 +374,23 @@
       ]
     },
     {
-      "name": "capture-screen",
-      "description": "Programmatic screenshot capture on macOS. Get window IDs via Swift CGWindowListCopyWindowInfo, capture specific windows with screencapture -l, and control application windows via AppleScript. Supports multi-shot workflows for capturing different sections of the same window. Use when taking automated screenshots, capturing application windows, or creating visual documentation",
+      "name": "fact-checker",
+      "description": "Verifies factual claims in documents using web search and official sources, then proposes corrections with user confirmation. Use when the user asks to fact-check, verify information, validate claims, check accuracy, or update outdated information in documents. Supports AI model specs, technical documentation, statistics, and general factual statements",
       "source": "./",
       "strict": false,
-      "version": "1.0.1",
-      "category": "utilities",
+      "version": "1.0.0",
+      "category": "productivity",
       "keywords": [
-        "screenshot",
-        "screencapture",
-        "macos",
-        "window-capture",
-        "swift",
-        "applescript",
-        "automation",
-        "visual-documentation"
+        "fact-checking",
+        "verification",
+        "accuracy",
+        "sources",
+        "validation",
+        "corrections",
+        "web-search"
       ],
       "skills": [
-        "./capture-screen"
+        "./fact-checker"
       ]
     },
     {
@@ -939,73 +416,184 @@
       ]
     },
     {
-      "name": "continue-claude-work",
-      "description": "Recover actionable context from local `.claude` session artifacts and continue interrupted work without running `claude --resume`. Extracts compact boundary summaries, subagent workflow state, session end reason, and workspace drift via bundled Python script. Use when a user provides a Claude session ID, asks to continue prior work from local history, or wants to inspect `.claude` files before resuming implementation",
-      "source": "./suites/daymade-claude-code/continue-claude-work",
+      "name": "gangtise-copilot",
+      "description": "One-stop installer and companion for the full Gangtise (岗底斯投研) OpenAPI skill suite — 19 official skills covering data retrieval (OHLC 行情, 财务, 估值, 研报, 首席观点, 会议纪要, 调研纪要), research workflows (个股研究 L1-L4, 观点 PK 对抗性分析, 主题研究, 事件复盘), and utility (股票池管理, 公开网页搜索). Zero-config install to Claude Code / OpenClaw / Codex with 4 preset modes (full / workshop / minimal / custom), guides accessKey + secretAccessKey setup with a live validation call against open.gangtise.com, and ships a read-only diagnostic script. Use this skill whenever the user mentions Gangtise, 岗底斯, gangtise-data-client, gangtise-kb-client, gangtise-file-client, gangtise-stock-research, gangtise-opinion-pk, installing any gangtise-* skill, configuring its credentials, or reports errors like 'token is invalid', '接口地址错误', 'the uri can't be accessed'. This is a wrapper around Gangtise's official skills — it installs and orchestrates them rather than replacing them.",
+      "source": "./",
       "strict": false,
-      "version": "1.1.2",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
+        "gangtise",
+        "岗底斯",
+        "investment-research",
+        "financial-data",
+        "ohlc",
+        "research-report",
+        "installer",
+        "wrapper",
         "claude-code",
-        "session-resume",
-        "context-recovery",
-        "jsonl",
-        "compaction",
-        "subagent",
-        "history",
-        "workflow-continuation",
-        "local-artifacts"
+        "openclaw",
+        "codex"
       ],
       "skills": [
-        "./"
+        "./gangtise-copilot"
       ]
     },
     {
-      "name": "scrapling-skill",
-      "description": "Install, troubleshoot, and use Scrapling CLI for extracting HTML, Markdown, or text from webpages. Diagnoses missing extras, Playwright browser runtime issues, TLS verification failures, and WeChat public article extraction patterns. Use when users mention Scrapling, `scrapling extract`, `uv tool install scrapling`, or need to decide between static and browser-backed fetching",
+      "name": "github-contributor",
+      "description": "Strategic guide for becoming an effective GitHub contributor. Covers opportunity discovery, project selection, high-quality PR creation, and reputation building. Use when looking to contribute to open-source projects, building GitHub presence, or learning contribution best practices",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.3",
+      "category": "developer-tools",
+      "keywords": [
+        "github",
+        "open-source",
+        "contribution",
+        "pull-request",
+        "reputation",
+        "contributor",
+        "oss"
+      ],
+      "skills": [
+        "./github-contributor"
+      ]
+    },
+    {
+      "name": "github-ops",
+      "description": "Comprehensive GitHub operations using gh CLI and GitHub API for pull requests, issues, repositories, workflows, and API interactions",
       "source": "./",
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
       "keywords": [
-        "scrapling",
-        "web-scraping",
-        "html",
-        "markdown",
-        "playwright",
-        "wechat",
-        "extraction",
-        "cli"
+        "github",
+        "gh-cli",
+        "pull-request",
+        "issues",
+        "workflows",
+        "api"
       ],
       "skills": [
-        "./scrapling-skill"
+        "./github-ops"
       ]
     },
     {
-      "name": "asr-transcribe-to-text",
-      "description": "Transcribe audio and video files to text using a remote ASR service (Qwen3-ASR or OpenAI-compatible endpoint). Extracts audio from video, sends to configurable ASR endpoint, outputs clean text. Use when the user wants to transcribe recordings, convert audio/video to text, do speech-to-text, or mentions ASR, Qwen ASR, 转录, 语音转文字, 录音转文字, or has a meeting recording, lecture, interview, or screen recording to transcribe.",
+      "name": "i18n-expert",
+      "description": "Complete internationalization/localization setup and auditing for UI codebases. Configure i18n frameworks, replace hard-coded strings with translation keys, ensure locale parity between en-US and zh-CN, and validate pluralization and formatting. Use when setting up i18n for React/Next.js/Vue apps, auditing existing implementations, replacing hard-coded strings, ensuring proper error code mapping, or validating pluralization and date/time/number formatting across locales",
       "source": "./",
       "strict": false,
       "version": "1.0.0",
-      "category": "productivity",
+      "category": "developer-tools",
       "keywords": [
-        "asr",
-        "transcription",
-        "speech-to-text",
-        "qwen",
-        "audio",
-        "video",
-        "vllm",
-        "ffmpeg"
+        "i18n",
+        "internationalization",
+        "localization",
+        "translation",
+        "react-i18next",
+        "next-intl",
+        "vue-i18n",
+        "locale",
+        "multilingual",
+        "globalization"
       ],
       "skills": [
-        "./asr-transcribe-to-text"
+        "./i18n-expert"
+      ]
+    },
+    {
+      "name": "iOS-APP-developer",
+      "description": "Develops iOS applications with XcodeGen, SwiftUI, and SPM. Use when configuring XcodeGen project.yml, resolving SPM dependency issues, deploying to devices, handling code signing, debugging camera/AVFoundation, iOS version compatibility issues, or fixing Library not loaded @rpath framework errors. Includes state machine testing patterns for @MainActor classes",
+      "source": "./",
+      "strict": false,
+      "version": "1.1.0",
+      "category": "developer-tools",
+      "keywords": [
+        "ios",
+        "xcodegen",
+        "swiftui",
+        "spm",
+        "avfoundation",
+        "camera",
+        "code-signing",
+        "device-deployment",
+        "swift",
+        "xcode",
+        "testing"
+      ],
+      "skills": [
+        "./iOS-APP-developer"
+      ]
+    },
+    {
+      "name": "ima-copilot",
+      "description": "One-stop companion and installer for the official Tencent IMA skill (ima.qq.com). Installs upstream ima-skill to Claude Code/Codex/OpenClaw via npx skills add, guides API key setup, detects and fixes known issues (including the missing-YAML-frontmatter bug in submodule SKILL.md files) with user consent, and implements a personalized fan-out search strategy with priority-based knowledge base boosting and silent truncation detection",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.1",
+      "category": "developer-tools",
+      "keywords": [
+        "ima",
+        "tencent-ima",
+        "knowledge-base",
+        "note-search",
+        "fan-out-search",
+        "installer",
+        "wrapper",
+        "upstream-fix",
+        "claude-code",
+        "codex",
+        "openclaw"
+      ],
+      "skills": [
+        "./ima-copilot"
+      ]
+    },
+    {
+      "name": "llm-icon-finder",
+      "description": "Find and access AI/LLM model brand icons from lobe-icons library in SVG/PNG/WEBP formats",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "assets",
+      "keywords": [
+        "icons",
+        "ai-models",
+        "llm",
+        "branding",
+        "lobe-icons"
+      ],
+      "skills": [
+        "./llm-icon-finder"
+      ]
+    },
+    {
+      "name": "macos-cleaner",
+      "description": "Intelligent macOS disk space analysis and cleanup with safety-first philosophy. Use when users report disk space issues, need to clean their Mac, or want to understand storage consumption. Analyzes system caches, application remnants, large files, and development environments (Docker, Homebrew, npm, pip) with risk categorization (Safe/Caution/Keep) and requires explicit user confirmation before any deletions. Includes Mole visual tool integration for hybrid workflow",
+      "source": "./",
+      "strict": false,
+      "version": "1.1.0",
+      "category": "utilities",
+      "keywords": [
+        "macos",
+        "disk-space",
+        "cleanup",
+        "cache",
+        "storage",
+        "developer-tools",
+        "docker",
+        "homebrew",
+        "system-maintenance",
+        "safety"
+      ],
+      "skills": [
+        "./macos-cleaner"
       ]
     },
     {
       "name": "marketplace-dev",
       "description": "Converts any Claude Code skills repository into an official plugin marketplace. Analyzes existing skills, generates .claude-plugin/marketplace.json conforming to the Anthropic spec, validates with claude plugin validate, runs one-shot check_marketplace.sh (schema + resolution + reverse sync), tests real installation, and creates a PR. Encodes hard-won anti-patterns from real marketplace development.",
-      "source": "./suites/daymade-claude-code/marketplace-dev",
+      "source": "./daymade-claude-code/marketplace-dev",
       "strict": false,
       "version": "1.2.1",
       "category": "developer-tools",
@@ -1042,90 +630,377 @@
       }
     },
     {
-      "name": "ima-copilot",
-      "description": "One-stop companion and installer for the official Tencent IMA skill (ima.qq.com). Installs upstream ima-skill to Claude Code/Codex/OpenClaw via npx skills add, guides API key setup, detects and fixes known issues (including the missing-YAML-frontmatter bug in submodule SKILL.md files) with user consent, and implements a personalized fan-out search strategy with priority-based knowledge base boosting and silent truncation detection",
-      "source": "./",
+      "name": "meeting-minutes-taker",
+      "description": "Transform meeting transcripts into high-fidelity, structured meeting minutes with iterative review. Features speaker identification via feature analysis (word count, speaking style, topic focus) with context.md team directory mapping, intelligent file naming from content, integration with doc-to-markdown and transcript-fixer for pre-processing, evidence-based recording with speaker quotes, Mermaid diagrams for architecture discussions, and multi-turn parallel generation with UNION merge",
+      "source": "./daymade-docs/meeting-minutes-taker",
       "strict": false,
-      "version": "1.0.1",
-      "category": "developer-tools",
+      "version": "1.1.1",
+      "category": "productivity",
       "keywords": [
-        "ima",
-        "tencent-ima",
-        "knowledge-base",
-        "note-search",
-        "fan-out-search",
-        "installer",
-        "wrapper",
-        "upstream-fix",
-        "claude-code",
-        "codex",
-        "openclaw"
-      ],
-      "skills": [
-        "./ima-copilot"
-      ]
-    },
-    {
-      "name": "gangtise-copilot",
-      "description": "One-stop installer and companion for the full Gangtise (岗底斯投研) OpenAPI skill suite — 19 official skills covering data retrieval (OHLC 行情, 财务, 估值, 研报, 首席观点, 会议纪要, 调研纪要), research workflows (个股研究 L1-L4, 观点 PK 对抗性分析, 主题研究, 事件复盘), and utility (股票池管理, 公开网页搜索). Zero-config install to Claude Code / OpenClaw / Codex with 4 preset modes (full / workshop / minimal / custom), guides accessKey + secretAccessKey setup with a live validation call against open.gangtise.com, and ships a read-only diagnostic script. Use this skill whenever the user mentions Gangtise, 岗底斯, gangtise-data-client, gangtise-kb-client, gangtise-file-client, gangtise-stock-research, gangtise-opinion-pk, installing any gangtise-* skill, configuring its credentials, or reports errors like 'token is invalid', '接口地址错误', 'the uri can't be accessed'. This is a wrapper around Gangtise's official skills — it installs and orchestrates them rather than replacing them.",
-      "source": "./",
-      "strict": false,
-      "version": "1.1.0",
-      "category": "developer-tools",
-      "keywords": [
-        "gangtise",
-        "岗底斯",
-        "investment-research",
-        "financial-data",
-        "ohlc",
-        "research-report",
-        "installer",
-        "wrapper",
-        "claude-code",
-        "openclaw",
-        "codex"
-      ],
-      "skills": [
-        "./gangtise-copilot"
-      ]
-    },
-    {
-      "name": "claude-export-txt-better",
-      "description": "Fixes broken line wrapping in Claude Code exported conversation files (.txt), reconstructing tables, paragraphs, paths, and tool calls that were hard-wrapped at fixed column widths. Includes an automated validation suite (generic, file-agnostic checks). Triggers when the user has a Claude Code export file with broken formatting, mentions \"fix export\", \"fix conversation\", \"exported conversation\", \"make export readable\", references a file matching YYYY-MM-DD-HHMMSS-*.txt, or has a .txt file with broken tables, split paths, or mangled tool output from Claude Code.",
-      "source": "./suites/daymade-claude-code/claude-export-txt-better",
-      "strict": false,
-      "version": "1.0.1",
-      "category": "utilities",
-      "keywords": [
-        "claude-code",
-        "export",
-        "txt",
-        "fix",
-        "line-wrapping",
-        "formatting"
+        "meeting",
+        "minutes",
+        "transcript",
+        "notes",
+        "speaker-identification",
+        "mermaid",
+        "quotes",
+        "action-items"
       ],
       "skills": [
         "./"
       ]
     },
     {
-      "name": "douban-skill",
-      "description": "Export and sync Douban (豆瓣) book/movie/music/game collections to local CSV files via Frodo API. Supports full export (all history) and RSS incremental sync (recent items). Use when the user wants to export Douban reading/watching/listening/gaming history, back up their Douban data, set up incremental sync, or mentions 豆瓣/douban collections. Triggers on: 豆瓣, douban, 读书记录, 观影记录, 书影音, 导出豆瓣, export, backup, sync, collection.",
+      "name": "mermaid-tools",
+      "description": "Generate Mermaid diagrams from markdown with automatic PNG/SVG rendering and extraction from documents",
+      "source": "./daymade-docs/mermaid-tools",
+      "strict": false,
+      "version": "1.0.2",
+      "category": "documentation",
+      "keywords": [
+        "mermaid",
+        "diagrams",
+        "visualization",
+        "flowchart",
+        "sequence"
+      ],
+      "skills": [
+        "./"
+      ]
+    },
+    {
+      "name": "pdf-creator",
+      "description": "Create PDF documents from markdown with Chinese font support. Supports theme system (default for formal docs, warm-terra for training materials) and dual backend (weasyprint or Chrome). Triggers include convert to PDF, generate PDF, markdown to PDF, or printable documents",
+      "source": "./daymade-docs/pdf-creator",
+      "strict": false,
+      "version": "1.3.2",
+      "category": "document-conversion",
+      "keywords": [
+        "pdf",
+        "markdown",
+        "weasyprint",
+        "chrome",
+        "themes",
+        "chinese-fonts",
+        "cjk",
+        "document-generation",
+        "legal",
+        "reports",
+        "typography"
+      ],
+      "skills": [
+        "./"
+      ]
+    },
+    {
+      "name": "ppt-creator",
+      "description": "Create professional slide decks from topics or documents. Generates structured content with data-driven charts, speaker notes, and complete PPTX files. Applies persuasive storytelling principles (Pyramid Principle, assertion-evidence). Supports multiple formats (Marp, PowerPoint). Use for presentations, pitches, slide decks, or keynotes",
+      "source": "./daymade-docs/ppt-creator",
+      "strict": false,
+      "version": "1.0.1",
+      "category": "productivity",
+      "keywords": [
+        "presentation",
+        "powerpoint",
+        "pptx",
+        "slides",
+        "marp",
+        "charts",
+        "data-visualization",
+        "pyramid-principle"
+      ],
+      "skills": [
+        "./"
+      ]
+    },
+    {
+      "name": "product-analysis",
+      "description": "Multi-path parallel product analysis with cross-model test-time compute scaling. Spawns parallel agents (Claude Code + Codex CLI) for multi-perspective exploration, then synthesizes findings into actionable optimization plans. Supports self-audit, UX audit, API audit, architecture review, and competitive benchmarking via competitors-analysis skill",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.1",
+      "category": "productivity",
+      "keywords": [
+        "product-analysis",
+        "self-review",
+        "ux-audit",
+        "parallel-agents",
+        "cross-model",
+        "test-time-compute",
+        "codex",
+        "synthesis",
+        "product-audit",
+        "information-architecture"
+      ],
+      "skills": [
+        "./product-analysis"
+      ]
+    },
+    {
+      "name": "prompt-optimizer",
+      "description": "Transform vague prompts into precise, well-structured specifications using EARS (Easy Approach to Requirements Syntax) methodology. Use when users provide loose requirements, ambiguous feature descriptions, need to enhance prompts for AI-generated code/products/documents, request prompt optimization, or want to improve requirements engineering. Applies domain theories (GTD, BJ Fogg, Gestalt, AIDA, Zero Trust) and structured Role/Skills/Workflows/Examples/Formats framework",
+      "source": "./",
+      "strict": false,
+      "version": "1.1.0",
+      "category": "productivity",
+      "keywords": [
+        "prompt-engineering",
+        "ears",
+        "requirements",
+        "specifications",
+        "optimization",
+        "domain-theory",
+        "prompt-enhancement",
+        "ai-prompting"
+      ],
+      "skills": [
+        "./prompt-optimizer"
+      ]
+    },
+    {
+      "name": "promptfoo-evaluation",
+      "description": "Configures and runs LLM evaluation using Promptfoo framework. Use when setting up prompt testing, creating evaluation configs (promptfooconfig.yaml), writing Python custom assertions, implementing llm-rubric for LLM-as-judge, or managing few-shot examples in prompts. Triggers on keywords like promptfoo, eval, LLM evaluation, prompt testing, or model comparison",
+      "source": "./",
+      "strict": false,
+      "version": "1.1.0",
+      "category": "developer-tools",
+      "keywords": [
+        "promptfoo",
+        "evaluation",
+        "llm-testing",
+        "prompt-testing",
+        "assertions",
+        "llm-rubric",
+        "few-shot",
+        "model-comparison"
+      ],
+      "skills": [
+        "./promptfoo-evaluation"
+      ]
+    },
+    {
+      "name": "qa-expert",
+      "description": "Comprehensive QA testing infrastructure with autonomous LLM execution, Google Testing Standards (AAA pattern), and OWASP security testing. Use when establishing QA processes, writing test cases, executing test plans, tracking bugs with P0-P4 classification, calculating quality metrics, enforcing quality gates, or preparing third-party QA handoffs. Enables 100x faster test execution via master prompts",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "qa",
+        "testing",
+        "test-cases",
+        "bug-tracking",
+        "google-standards",
+        "owasp",
+        "security",
+        "automation",
+        "quality-gates",
+        "metrics"
+      ],
+      "skills": [
+        "./qa-expert"
+      ]
+    },
+    {
+      "name": "repomix-safe-mixer",
+      "description": "Safely package codebases with repomix by automatically detecting and removing hardcoded credentials before packing. Use when packaging code for distribution, creating reference packages, or when the user mentions security concerns about sharing code with repomix",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "security",
+      "keywords": [
+        "repomix",
+        "security",
+        "credentials",
+        "secrets-scanning",
+        "safe-packaging",
+        "secret-detection",
+        "code-security"
+      ],
+      "skills": [
+        "./repomix-safe-mixer"
+      ]
+    },
+    {
+      "name": "repomix-unmixer",
+      "description": "Extract files from repomix packaged formats (XML, Markdown, JSON) with automatic format detection and validation",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "utilities",
+      "keywords": [
+        "repomix",
+        "unmix",
+        "extract",
+        "xml",
+        "conversion"
+      ],
+      "skills": [
+        "./repomix-unmixer"
+      ]
+    },
+    {
+      "name": "scrapling-skill",
+      "description": "Install, troubleshoot, and use Scrapling CLI for extracting HTML, Markdown, or text from webpages. Diagnoses missing extras, Playwright browser runtime issues, TLS verification failures, and WeChat public article extraction patterns. Use when users mention Scrapling, `scrapling extract`, `uv tool install scrapling`, or need to decide between static and browser-backed fetching",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "scrapling",
+        "web-scraping",
+        "html",
+        "markdown",
+        "playwright",
+        "wechat",
+        "extraction",
+        "cli"
+      ],
+      "skills": [
+        "./scrapling-skill"
+      ]
+    },
+    {
+      "name": "skill-creator",
+      "description": "Essential meta-skill for creating effective Claude Code skills with initialization scripts, validation, packaging, marketplace registration, and privacy best practices. Includes a specialized wrapper-skill workflow for retrospectively distilling an install-and-debug session into a reusable companion skill for a third-party CLI tool.",
+      "source": "./",
+      "strict": false,
+      "version": "1.7.3",
+      "category": "developer-tools",
+      "keywords": [
+        "skill-creation",
+        "claude-code",
+        "development",
+        "tooling",
+        "workflow",
+        "meta-skill",
+        "wrapper-skill",
+        "cli-wrapper",
+        "essential"
+      ],
+      "skills": [
+        "./skill-creator"
+      ]
+    },
+    {
+      "name": "skill-reviewer",
+      "description": "Reviews and improves Claude Code skills against official best practices. Supports three modes - self-review (validate your own skills), external review (evaluate others' skills), and auto-PR (fork, improve, submit). Use when checking skill quality, reviewing skill repositories, or contributing improvements to open-source skills",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "skill-review",
+        "best-practices",
+        "claude-code",
+        "quality-assurance",
+        "open-source",
+        "contribution",
+        "auto-pr"
+      ],
+      "skills": [
+        "./skill-reviewer"
+      ]
+    },
+    {
+      "name": "skills-search",
+      "description": "Search, discover, install, and manage Claude Code skills from the CCPM registry. Use when users want to find skills for specific tasks, install skills by name, list installed skills, get skill details, or manage their Claude Code skill collection. Triggers include find skills, search for plugins, install skill, list installed skills, or any CCPM registry operations",
+      "source": "./",
+      "strict": false,
+      "version": "1.1.0",
+      "category": "developer-tools",
+      "keywords": [
+        "ccpm",
+        "skills",
+        "search",
+        "install",
+        "registry",
+        "plugin",
+        "marketplace",
+        "discovery",
+        "skill-management"
+      ],
+      "skills": [
+        "./skills-search"
+      ]
+    },
+    {
+      "name": "slides-creator",
+      "description": "Narrative-first slide deck creation. Guides users through structured narrative design (ABCDEFG model), then delegates visual generation to baoyu-slide-deck. Triggers on create slides, make a presentation, generate deck, slide deck, PPT, or when user needs to turn content into visual slides.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "content-creation",
+      "keywords": [
+        "slides",
+        "presentation",
+        "ppt",
+        "deck",
+        "narrative",
+        "storytelling",
+        "ABCDEFG"
+      ],
+      "skills": [
+        "./slides-creator"
+      ]
+    },
+    {
+      "name": "statusline-generator",
+      "description": "Configure Claude Code statuslines with multi-line layouts, cost tracking via ccusage, git status, and customizable colors",
+      "source": "./daymade-claude-code/statusline-generator",
+      "strict": false,
+      "version": "1.0.1",
+      "category": "customization",
+      "keywords": [
+        "statusline",
+        "ccusage",
+        "git-status",
+        "customization",
+        "prompt"
+      ],
+      "skills": [
+        "./"
+      ]
+    },
+    {
+      "name": "stepfun-tts",
+      "description": "Generate speech and transcribe audio using StepFun's StepAudio 2.5 family — stepaudio-2.5-tts (Contextual TTS with instruction + inline parentheses) and stepaudio-2.5-asr (SSE endpoint, 32K context, ~100x RTF, handles up to 30-minute audio in a single call). Use when the user wants Chinese/Japanese TTS with emotional/prosody control, needs to transcribe long audio, migrates from step-tts-2 to stepaudio-2.5-tts (voice_label → instruction breaking change), or hits StepFun censorship / endpoint errors. Also triggers for 阶跃 TTS, StepAudio 合成, 语音合成, 配音, StepFun ASR, 转录, 语音识别.",
       "source": "./",
       "strict": false,
       "version": "1.0.0",
       "category": "productivity",
       "keywords": [
-        "douban",
-        "豆瓣",
-        "csv",
-        "export",
-        "backup",
-        "rss",
-        "frodo"
+        "tts",
+        "asr",
+        "stepfun",
+        "stepaudio",
+        "stepaudio-2.5",
+        "阶跃",
+        "chinese-tts",
+        "voice-synthesis",
+        "speech-to-text",
+        "contextual-tts"
       ],
       "skills": [
-        "./douban-skill"
+        "./stepfun-tts"
+      ]
+    },
+    {
+      "name": "teams-channel-post-writer",
+      "description": "Create professional Microsoft Teams channel posts with Adaptive Cards, formatted announcements, and corporate communication standards",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "communication",
+      "keywords": [
+        "teams",
+        "microsoft",
+        "adaptive-cards",
+        "communication",
+        "announcements"
+      ],
+      "skills": [
+        "./teams-channel-post-writer"
       ]
     },
     {
@@ -1149,23 +1024,194 @@
       ]
     },
     {
-      "name": "slides-creator",
-      "description": "Narrative-first slide deck creation. Guides users through structured narrative design (ABCDEFG model), then delegates visual generation to baoyu-slide-deck. Triggers on create slides, make a presentation, generate deck, slide deck, PPT, or when user needs to turn content into visual slides.",
+      "name": "transcript-fixer",
+      "description": "Corrects speech-to-text (ASR/STT) transcription errors using dictionary rules and native Claude AI corrections (no API key needed by default). Supports intelligent paragraph breaks, filler word reduction, interactive review, Chinese domain names, and iterative dictionary building. Use when users mention transcript correction, ASR errors, speech-to-text mistakes, homophone errors, or working with transcription files",
+      "source": "./",
+      "strict": false,
+      "version": "1.4.0",
+      "category": "productivity",
+      "keywords": [
+        "transcription",
+        "asr",
+        "stt",
+        "speech-to-text",
+        "correction",
+        "ai",
+        "meeting-notes",
+        "nlp"
+      ],
+      "skills": [
+        "./transcript-fixer"
+      ]
+    },
+    {
+      "name": "tunnel-doctor",
+      "description": "Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers five conflict layers: route hijacking, HTTP proxy env var interception, system proxy bypass, SSH ProxyCommand double tunneling, and VM/container proxy propagation. Includes an automated quick-diagnose script plus SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when local vanity domains fail behind proxy, when git push fails with failed to begin relaying via HTTP, when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, or when bootstrapping remote dev environments over Tailscale",
+      "source": "./",
+      "strict": false,
+      "version": "1.4.0",
+      "category": "developer-tools",
+      "keywords": [
+        "tailscale",
+        "vpn",
+        "shadowrocket",
+        "clash",
+        "surge",
+        "route-conflict",
+        "wsl",
+        "ssh",
+        "ssh-tunnel",
+        "autossh",
+        "proxy",
+        "proxycommand",
+        "git-push",
+        "networking",
+        "macos",
+        "makefile",
+        "remote-development",
+        "local-domain"
+      ],
+      "skills": [
+        "./tunnel-doctor"
+      ]
+    },
+    {
+      "name": "twitter-reader",
+      "description": "Fetch Twitter/X post content including long-form Articles with full images and metadata. Use when Claude needs to retrieve tweet/article content, author info, engagement metrics (likes, retweets, bookmarks), and embedded media. Supports individual posts and X Articles (long-form content). Automatically downloads all images to local attachments folder and generates complete Markdown with proper image references. Preferred over Jina for X Articles with images.",
+      "source": "./",
+      "strict": false,
+      "version": "1.1.0",
+      "category": "utilities",
+      "keywords": [
+        "twitter",
+        "x",
+        "social-media",
+        "jina",
+        "content-fetching",
+        "api",
+        "scraping",
+        "threads",
+        "images",
+        "attachments",
+        "markdown"
+      ],
+      "skills": [
+        "./twitter-reader"
+      ]
+    },
+    {
+      "name": "ui-designer",
+      "description": "Extract design systems from reference UI images and generate implementation-ready UI design prompts. Use when users provide UI screenshots/mockups and want to create consistent designs",
       "source": "./",
       "strict": false,
       "version": "1.0.0",
-      "category": "content-creation",
+      "category": "design",
       "keywords": [
-        "slides",
-        "presentation",
-        "ppt",
-        "deck",
-        "narrative",
-        "storytelling",
-        "ABCDEFG"
+        "ui",
+        "design-system",
+        "mockup",
+        "screenshot",
+        "design-extraction",
+        "mvp"
       ],
       "skills": [
-        "./slides-creator"
+        "./ui-designer"
+      ]
+    },
+    {
+      "name": "video-comparer",
+      "description": "Compare two videos and generate interactive HTML reports with quality metrics (PSNR, SSIM) and frame-by-frame visual comparisons. Use when analyzing compression results, evaluating codec performance, or assessing video quality differences",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "media",
+      "keywords": [
+        "video",
+        "comparison",
+        "quality-analysis",
+        "psnr",
+        "ssim",
+        "compression",
+        "ffmpeg",
+        "codec"
+      ],
+      "skills": [
+        "./video-comparer"
+      ]
+    },
+    {
+      "name": "windows-remote-desktop-connection-doctor",
+      "description": "Diagnose Windows App (Microsoft Remote Desktop / Azure Virtual Desktop / W365) connection quality issues on macOS. Analyze transport protocol selection (UDP Shortpath vs WebSocket), detect VPN/proxy interference with STUN/TURN negotiation, and parse Windows App logs for Shortpath failures. This skill should be used when VDI connections are slow, when transport shows WebSocket instead of UDP, when RDP Shortpath fails to establish, or when RTT is unexpectedly high.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "rdp",
+        "avd",
+        "wvd",
+        "w365",
+        "windows-app",
+        "remote-desktop",
+        "shortpath",
+        "udp",
+        "websocket",
+        "stun",
+        "turn",
+        "vpn",
+        "macos",
+        "networking"
+      ],
+      "skills": [
+        "./windows-remote-desktop-connection-doctor"
+      ]
+    },
+    {
+      "name": "youtube-downloader",
+      "description": "Download YouTube videos and HLS streams (m3u8) from platforms like Mux, Vimeo, etc. using yt-dlp and ffmpeg. Use when users request downloading videos, extracting audio, handling protected streams with authentication headers, or troubleshooting download issues like nsig extraction failures, 403 errors, or cookie extraction problems",
+      "source": "./",
+      "strict": false,
+      "version": "1.1.0",
+      "category": "utilities",
+      "keywords": [
+        "youtube",
+        "yt-dlp",
+        "video-download",
+        "audio-extraction",
+        "mp3",
+        "download",
+        "hls",
+        "m3u8",
+        "ffmpeg",
+        "streaming",
+        "mux",
+        "vimeo"
+      ],
+      "skills": [
+        "./youtube-downloader"
+      ]
+    },
+    {
+      "name": "debugging-network-issues",
+      "description": "Evidence-driven investigation for network, streaming, and protocol-layer bugs. Use when debugging connection resets, SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, or any incident where symptoms do not match the obvious cause. Applies falsification-first methodology with layered isolation experiments, env-gated runtime instrumentation, and counter-review agent teams.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "debugging",
+        "network",
+        "sse",
+        "http2",
+        "rst",
+        "econnreset",
+        "cloudflare",
+        "streaming",
+        "troubleshooting",
+        "methodology"
+      ],
+      "skills": [
+        "./debugging-network-issues"
       ]
     }
   ]

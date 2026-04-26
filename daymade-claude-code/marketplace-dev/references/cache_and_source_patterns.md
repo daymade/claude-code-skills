@@ -35,7 +35,7 @@ Use this when a skill should install and update independently:
 ```json
 {
   "name": "mermaid-tools",
-  "source": "./suites/daymade-docs/mermaid-tools",
+  "source": "./daymade-docs/mermaid-tools",
   "strict": false,
   "version": "1.0.2",
   "skills": ["./"]
@@ -61,7 +61,7 @@ Use this when related skills should share one namespace:
 ```json
 {
   "name": "daymade-docs",
-  "source": "./suites/daymade-docs",
+  "source": "./daymade-docs",
   "strict": false,
   "version": "1.0.1",
   "skills": [
@@ -102,7 +102,7 @@ plugin entries at the same canonical subdirectories:
 ```json
 {
   "name": "pdf-creator",
-  "source": "./suites/daymade-docs/pdf-creator",
+  "source": "./daymade-docs/pdf-creator",
   "strict": false,
   "version": "1.3.2",
   "skills": ["./"]
