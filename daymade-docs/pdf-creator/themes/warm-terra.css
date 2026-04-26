@@ -15,7 +15,13 @@
 
 @page {
     size: A4;
-    margin: 12mm;
+    margin: 12mm 12mm 16mm 12mm;
+    @bottom-center {
+        content: counter(page) " / " counter(pages);
+        font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+        font-size: 9pt;
+        color: #8a7460;
+    }
 }
 
 body {
@@ -50,6 +56,33 @@ h3 {
     font-weight: 700;
     margin-top: 18px;
     margin-bottom: 0.5em;
+}
+
+/* h4/h5/h6 must remain visually distinct from body text — never smaller than
+ * body. Use bold + slight color shift instead of size shrinking. */
+h4 {
+    font-size: 13.5px;
+    font-weight: 700;
+    margin-top: 14px;
+    margin-bottom: 0.4em;
+    color: #1f1b17;
+}
+
+h5 {
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 12px;
+    margin-bottom: 0.3em;
+    color: #2a2521;
+}
+
+h6 {
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 10px;
+    margin-bottom: 0.2em;
+    color: #4a3f33;
+    font-style: italic;
 }
 
 p {

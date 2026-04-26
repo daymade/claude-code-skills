@@ -10,7 +10,13 @@
 
 @page {
     size: A4;
-    margin: 2.5cm 2cm;
+    margin: 2.5cm 2cm 2cm 2cm;
+    @bottom-center {
+        content: counter(page) " / " counter(pages);
+        font-family: 'Songti SC', 'SimSun', 'STSong', 'Noto Serif CJK SC', serif;
+        font-size: 9pt;
+        color: #666;
+    }
 }
 
 body {
@@ -30,20 +36,60 @@ h1 {
     margin-bottom: 1.5em;
 }
 
+/* Heading scale: each level visibly larger than body (12pt) AND visually
+ * distinct from adjacent levels. Font fallback chain widened to include
+ * PingFang SC and system-ui in case 'Heiti SC' is not registered with
+ * fontconfig (common on weasyprint installs).
+ */
 h2 {
-    font-family: 'Heiti SC', 'SimHei', 'STHeiti', 'Noto Sans CJK SC', sans-serif;
-    font-size: 14pt;
+    font-family: 'Heiti SC', 'PingFang SC', 'SimHei', 'STHeiti', 'Noto Sans CJK SC', system-ui, sans-serif;
+    font-size: 16pt;
     font-weight: bold;
     margin-top: 1.5em;
     margin-bottom: 0.8em;
+    color: #000;
 }
 
 h3 {
-    font-family: 'Heiti SC', 'SimHei', 'STHeiti', 'Noto Sans CJK SC', sans-serif;
-    font-size: 12pt;
+    font-family: 'Heiti SC', 'PingFang SC', 'SimHei', 'STHeiti', 'Noto Sans CJK SC', system-ui, sans-serif;
+    font-size: 14pt;
+    font-weight: bold;
+    margin-top: 1.3em;
+    margin-bottom: 0.5em;
+    color: #000;
+}
+
+h4 {
+    font-family: 'Heiti SC', 'PingFang SC', 'SimHei', 'STHeiti', 'Noto Sans CJK SC', system-ui, sans-serif;
+    font-size: 13pt;
+    font-weight: bold;
+    margin-top: 1.1em;
+    margin-bottom: 0.4em;
+    color: #1a1a1a;
+}
+
+/* h5: still distinct from body. Combine size bump (+1pt) with left border
+ * so the heading visually jumps out even when the size delta is subtle.
+ */
+h5 {
+    font-family: 'Heiti SC', 'PingFang SC', 'SimHei', 'STHeiti', 'Noto Sans CJK SC', system-ui, sans-serif;
+    font-size: 13pt;
     font-weight: bold;
     margin-top: 1em;
-    margin-bottom: 0.5em;
+    margin-bottom: 0.35em;
+    padding-left: 0.5em;
+    border-left: 3px solid #888;
+    color: #1a1a1a;
+}
+
+h6 {
+    font-family: 'Heiti SC', 'PingFang SC', 'SimHei', 'STHeiti', 'Noto Sans CJK SC', system-ui, sans-serif;
+    font-size: 12pt;
+    font-weight: bold;
+    margin-top: 0.8em;
+    margin-bottom: 0.25em;
+    color: #444;
+    font-style: italic;
 }
 
 p {
