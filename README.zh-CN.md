@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-49-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.49.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-51-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.51.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 49 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 51 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2120,6 +2120,49 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
+### 49. **debugging-network-issues** - 证据驱动的网络问题排查
+
+针对网络、流式、协议层 bug 的"先证伪、再下结论"方法论。源自一次真实的 5 小时 SSE 生产事故——堆假设浪费的几个小时，10 分钟分层实验就能解决。
+
+**使用场景：**
+- 连接重置（`ECONNRESET`、HTTP/2 `RST_STREAM`、`INTERNAL_ERROR`）
+- SSE / 长轮询挂起或定时断开（60s、100s、130s）
+- CDN / 代理 / CGNAT 空闲超时事件
+- "时灵时不灵 / N 秒后必断"模式
+- 多跳系统（client → CDN → LB → reverse proxy → app → upstream）症状可能来自多层
+
+**主要功能：**
+- 分层隔离实验：让同一逻辑请求走三条以上、每条仅差一跳的路径
+- 环境变量门控的运行时埋点（不污染生产代码）
+- 反审查四问过滤器，挑战单因果假设
+- 内置探针脚本（`layered-isolation-probe.sh`、`mock-idle-upstream.py`）
+- 真实案例：CGNAT 130s 空闲超时导致的 SSE RST_STREAM
+
+**要求**：无（方法论 + 可移植的 shell/Python 探针）。
+
+---
+
+### 50. **stepfun-tts** - 阶跃 StepAudio 2.5 TTS + ASR
+
+用 StepFun 阶跃的 StepAudio 2.5 系列做中文 / 日语语音合成与长音频转写。封装了三个会浪费时间的非显然坑：`voice_label` 移除、`/v1/audio/asr/sse` 端点、更严的审查。
+
+**使用场景：**
+- 带情感和韵律控制的中 / 日语 TTS
+- 长音频转写（单次最长 ~30 分钟、32K context、~100x RTF）
+- 从 `step-tts-2` 迁移到 `stepaudio-2.5-tts`（`voice_label` → `instruction` 是破坏性变更）
+- 遇到 StepFun 审查拦截或端点错误
+
+**主要功能：**
+- `stepaudio-2.5-tts`：用 `instruction`（≤200 字自然语言情绪）+ 文中 `()` 行内韵律
+- `stepaudio-2.5-asr`：SSE 流式 + base64 音频（避开误导性的 "model not supported" 错误）
+- 内置 `tts_generate.py`（含 `--batch <jsonl>`）、`asr_transcribe.py`、`ab_compare.sh`
+- API key 解析顺序：`$STEPFUN_API_KEY` → `${CLAUDE_PLUGIN_DATA}/config.json` 兜底
+- `references/migration_from_v2.md` 给出审查拦截的改写策略
+
+**要求**：StepFun API key（https://platform.stepfun.com/）。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -2240,6 +2283,12 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 ### Terraform 与 IaC 故障排查
 使用 **terraform-skill** 当 `terraform apply` 在 provisioner 步骤失败、新实例遇到 "docker: not found"、或多环境 setup 意外共享快照时。Skill 里每一条都是*确切报错 → 根本原因 → 复制粘贴修复*三元组，来自真实事故。特别适合曾经被 cloud-init 的时序竞争、local-exec 里 rsync 连接断开、或者 Caddyfile 里硬编码域名搞掉一个周末的人。
 
+### 网络、流式与协议层调试
+使用 **debugging-network-issues** 应对症状和"显然原因"对不上的场景：HTTP/2 `RST_STREAM`、SSE 在 60s/100s/130s 整点卡死、"时灵时不灵"故障、或 CDN / 代理 / CGNAT 链路上的空闲超时事件。Skill 用**分层隔离实验**（同一逻辑请求走三条以上、每条仅差一跳的路径）替代假设堆叠，再加一套反审查模式——只在假设被**证伪**而不是单纯被"证实"之后才上 fix。
+
+### 中文 TTS 与长音频转写（StepFun 阶跃）
+使用 **stepfun-tts** 进行中 / 日语语音合成（通过 `instruction` + 行内 `()` 控制情绪与韵律），或单次最长 30 分钟的长音频转写（32K context、~100x RTF）。封装了让 StepAudio 2.5 新用户必踩的三个破坏性变更：`voice_label` 移除、`/v1/audio/asr/sse` 端点错位、更严的审查规则。可与 **transcript-fixer** 组合做 ASR 后处理，或与 **meeting-minutes-taker** 把长录音变成结构化纪要。
+
 ## 📚 文档
 
 每个技能包括：
@@ -2295,6 +2344,8 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **douban-skill**：参见 `douban-skill/SKILL.md` 了解导出工作流，参见 `douban-skill/references/troubleshooting.md` 查看 7 种被测抓取方案及失败原因的完整日志
 - **terraform-skill**：参见 `terraform-skill/SKILL.md` 查看按确切报错 → 根本原因 → 复制粘贴修复组织的实操陷阱完整目录
 - **slides-creator**：参见 `slides-creator/SKILL.md` 了解叙事优先工作流，参见 `slides-creator/references/narrative-design-guide.md` 了解 ABCDEFG 模型，参见 `slides-creator/references/content-creation-first-law.md` 了解通用内容创作原则
+- **debugging-network-issues**：参见 `debugging-network-issues/SKILL.md` 了解证伪优先工作流，参见 `debugging-network-issues/references/layered-isolation-experiment.md` 了解多跳隔离模式，参见 `debugging-network-issues/references/case-sse-rst-130s.md` 查看真实生产案例
+- **stepfun-tts**：参见 `stepfun-tts/SKILL.md` 了解 TTS+ASR 决策树，参见 `stepfun-tts/references/migration_from_v2.md` 查看 `voice_label` → `instruction` 迁移手册和审查改写清单
 
 ## 🛠️ 系统要求
 
@@ -2320,6 +2371,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **Python 3.8+**（用于 continue-claude-work）：内置脚本进行会话提取（无外部依赖）
 - **uv + Scrapling CLI**（用于 scrapling-skill）：`uv tool install 'scrapling[shell]'`，浏览器抓取前运行 `scrapling install`
 - **Node.js 18+ + curl + unzip**（用于 ima-copilot）：`npx skills` 按需从 npm registry 拉取；IMA OpenAPI 凭据从 [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface) 获取
+- **StepFun API key**（用于 stepfun-tts）：在 [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys 获取
 
 ## ❓ 常见问题
 

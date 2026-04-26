@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-49-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.49.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-51-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.51.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 49 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 51 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2079,6 +2079,49 @@ Guides users through structured narrative design (ABCDEFG model), then delegates
 
 ---
 
+### 49. **debugging-network-issues** - Evidence-Driven Network Investigation
+
+Falsification-first methodology for network, streaming, and protocol-layer bugs where the obvious cause is probably wrong. Built from a real 5-hour SSE incident where assumption-stacking wasted hours that a 10-minute layered experiment would have resolved.
+
+**When to use:**
+- Connection resets (`ECONNRESET`, HTTP/2 `RST_STREAM`, `INTERNAL_ERROR`)
+- SSE / long-polling stalls or fixed-time drops (60s, 100s, 130s)
+- CDN / proxy / CGNAT idle-timeout incidents
+- Any "works sometimes / fails after N seconds" pattern
+- Multi-hop systems (client → CDN → LB → reverse proxy → app → upstream) where a symptom could plausibly come from several layers
+
+**Key features:**
+- Layered isolation experiments: run the same logical request through three or more paths differing by exactly one hop
+- Env-gated runtime instrumentation patterns (no production-code mutation)
+- Counter-review four-question filter to challenge single-cause assumptions
+- Bundled probe scripts (`layered-isolation-probe.sh`, `mock-idle-upstream.py`)
+- Real case study: SSE RST_STREAM at 130s caused by CGNAT idle timeout
+
+**Requirements**: None (methodology + portable shell/Python probes).
+
+---
+
+### 50. **stepfun-tts** - StepFun StepAudio 2.5 TTS + ASR
+
+Generate Chinese / Japanese speech and transcribe long audio with StepFun's StepAudio 2.5 family. Captures the three non-obvious pitfalls that cost hours otherwise: `voice_label` removal, the `/v1/audio/asr/sse` endpoint, and stricter censorship.
+
+**When to use:**
+- Chinese / Japanese TTS with emotional and prosody control
+- Long audio transcription (up to ~30 minutes single-call, 32K context, ~100x RTF)
+- Migration from `step-tts-2` to `stepaudio-2.5-tts` (`voice_label` → `instruction` breaking change)
+- Hitting StepFun censorship blocks or endpoint mismatches
+
+**Key features:**
+- `stepaudio-2.5-tts` with `instruction` (≤200 chars natural-language mood) + inline `()` prosody
+- `stepaudio-2.5-asr` SSE streaming with base64 audio (avoids the misleading "model not supported" error)
+- Bundled `tts_generate.py` (with `--batch <jsonl>`), `asr_transcribe.py`, `ab_compare.sh`
+- API key resolution: `$STEPFUN_API_KEY` → `${CLAUDE_PLUGIN_DATA}/config.json` fallback
+- Censorship rewrite playbook in `references/migration_from_v2.md`
+
+**Requirements**: StepFun API key (https://platform.stepfun.com/).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -2199,6 +2242,12 @@ Use **douban-skill** to back up your Douban 书影音 (book/movie/music/game) hi
 ### For Terraform & IaC Troubleshooting
 Use **terraform-skill** when your `terraform apply` fails at a provisioner step, when fresh instances hit "docker: not found", or when multi-environment setups accidentally share snapshots. Every pattern in the skill is an *exact error → root cause → copy-paste fix* triple drawn from real incidents. Perfect for anyone who has lost a weekend to timing races in cloud-init, rsync connection drops in local-exec, or hardcoded domains in Caddyfiles.
 
+### For Network, Streaming & Protocol-Layer Debugging
+Use **debugging-network-issues** when symptoms do not match the obvious cause: HTTP/2 `RST_STREAM`, SSE stalls at exactly 60s/100s/130s, "works sometimes but not always" failures, or anything that looks like an idle-timeout incident through CDN / proxy / CGNAT chains. The skill replaces assumption-stacking with **layered isolation experiments** — running the same logical request through three or more paths that differ by one hop — plus a counter-review pattern for shipping fixes only after the hypothesis has been falsified, not just confirmed.
+
+### For Chinese TTS & Long-Audio Transcription (StepFun)
+Use **stepfun-tts** for Chinese / Japanese voice synthesis with emotional control via `instruction` + inline `()` prosody, or for transcribing up to 30-minute audio in a single call (32K context, ~100x RTF). Captures the three breaking changes that ambush new StepAudio 2.5 users: `voice_label` removal, the `/v1/audio/asr/sse` endpoint mismatch, and stricter censorship rules. Combine with **transcript-fixer** for ASR post-processing or with **meeting-minutes-taker** to turn long recordings into structured minutes.
+
 ## 📚 Documentation
 
 Each skill includes:
@@ -2254,6 +2303,8 @@ Each skill includes:
 - **douban-skill**: See `douban-skill/SKILL.md` for the export workflow and `douban-skill/references/troubleshooting.md` for the complete log of 7 tested scraping approaches and why each failed
 - **terraform-skill**: See `terraform-skill/SKILL.md` for the full catalogue of operational traps organised by exact error → root cause → copy-paste fix
 - **slides-creator**: See `slides-creator/SKILL.md` for the narrative-first workflow, `slides-creator/references/narrative-design-guide.md` for the ABCDEFG model, and `slides-creator/references/content-creation-first-law.md` for the universal content creation principle
+- **debugging-network-issues**: See `debugging-network-issues/SKILL.md` for the falsification-first workflow, `debugging-network-issues/references/layered-isolation-experiment.md` for the multi-hop isolation pattern, and `debugging-network-issues/references/case-sse-rst-130s.md` for the real production case study
+- **stepfun-tts**: See `stepfun-tts/SKILL.md` for the TTS+ASR decision tree and `stepfun-tts/references/migration_from_v2.md` for the `voice_label` → `instruction` migration playbook plus the censorship rewrite list
 
 ## 🛠️ Requirements
 
@@ -2282,6 +2333,7 @@ Each skill includes:
 - **Python 3.8+** (for continue-claude-work): bundled script for session extraction (no external dependencies)
 - **uv + Scrapling CLI** (for scrapling-skill): `uv tool install 'scrapling[shell]'` and `scrapling install` for browser-backed fetches
 - **Node.js 18+ + curl + unzip** (for ima-copilot): `npx skills` is fetched on demand from the npm registry; IMA OpenAPI credentials from [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface)
+- **StepFun API key** (for stepfun-tts): Available at [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys
 
 ## ❓ FAQ
 
