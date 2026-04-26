@@ -345,6 +345,8 @@ CC-Switch 的主要功能：
 3. 添加你的 API 配置
 4. 通过界面或系统托盘切换配置
 
+**Skills宝** 也适合中文用户用来发现和安装更多 skills：https://skilery.com
+
 **系统要求：** Windows 10+、macOS 10.15+ 或 Linux (Ubuntu 22.04+)
 
 ### 常见的中国 API 提供商
