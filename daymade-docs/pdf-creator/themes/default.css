@@ -163,6 +163,21 @@ th {
     font-weight: bold;
 }
 
+/* Neutralize pandoc's auto-emitted <col style="width:X%"> based on dash counts
+ * in the markdown separator row. Pandoc treats `| ----- | --- |` as a column-
+ * width hint and inlines `style="width: 17%"` etc on each <col>. Inline styles
+ * beat external stylesheets at equal specificity, so without `!important` no
+ * `td:first-child { width: ... }` rule can recover. With this neutralizer
+ * weasyprint falls back to `table-layout: fixed` equal width allocation,
+ * which for typical 4-col tables gives 25% per column — enough for short
+ * CJK labels like `4/28（周二）下午` to render on one line.
+ *
+ * Authors who really want explicit widths can still write raw HTML
+ * `<colgroup>` directly in markdown — that overrides this rule when needed. */
+table colgroup col {
+    width: auto !important;
+}
+
 hr {
     border: none;
     border-top: 1px solid #ccc;
