@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 49 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
+This is a Claude Code skills marketplace containing 51 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -152,7 +152,7 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 53 plugin entries: most map to one skill, while suite plugins (`daymade-docs`, `daymade-claude-code`) map to multiple related skills
+- Contains 55 plugin entries: most map to one skill, while suite plugins (`daymade-docs`, `daymade-claude-code`) map to multiple related skills
 - Each plugin has: name, description, version, category, keywords, skills array
 - Marketplace metadata: name, owner, version, homepage
 - Suite plugins use `<suite-name>/` (a top-level directory at the repo root) as the canonical source for their member skills so suite caches contain only those skills. Single-skill plugin entries for suite members should point to the same canonical subdirectories.
@@ -245,6 +245,8 @@ This applies when you change ANY file under a skill directory:
 47. **wechat-article-scraper** - World-class WeChat article extraction with 6-level strategy routing, OG metadata fallback, image-paragraph association, and Sogou search discovery; supports Markdown/JSON/HTML/PDF export
 48. **terraform-skill** - Operational traps for Terraform provisioners, multi-environment isolation, and zero-to-deployment reliability; covers provisioner timing races, SSH connection conflicts, DNS record duplication, volume permissions, database bootstrap gaps, Cloudflare credential errors, and init-data-only-on-first-boot pitfalls
 49. **slides-creator** - Narrative-first slide deck creation guiding users through structured narrative design (ABCDEFG model), then delegating visual generation to baoyu-slide-deck. Triggers on create slides, make a presentation, generate deck, slide deck, PPT, or when user needs to turn content into visual slides
+50. **debugging-network-issues** - Evidence-driven, falsification-first methodology for network/streaming/protocol-layer bugs (HTTP/2 RST_STREAM, SSE stalls, fixed-time drops, CDN/proxy/CGNAT idle timeouts). Layered isolation experiments + counter-review filter, with bundled probe scripts and a real SSE 130s case study
+51. **stepfun-tts** - StepFun StepAudio 2.5 family: stepaudio-2.5-tts (Contextual TTS via instruction + inline parentheses) and stepaudio-2.5-asr (SSE endpoint, 32K context, ~100x RTF, 30-min single-call). Captures the three breaking changes from step-tts-2 (voice_label removal, /v1/audio/asr/sse endpoint, stricter censorship) with migration playbook
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 

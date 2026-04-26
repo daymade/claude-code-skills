@@ -1,0 +1,62 @@
+{
+  "skill_name": "debugging-network-issues",
+  "evals": [
+    {
+      "id": 1,
+      "name": "cross-domain-websocket-fixed-time-close",
+      "prompt": "我们的实时推送服务有个怪问题。用户 Alice 的客户端每次 WebSocket 连上之后，精确在 87 秒左右被断开，控制台报 `WebSocket is already in CLOSING or CLOSED state`。但同事 Bob 用相同的客户端代码没问题。服务端 nginx 日志没看到明显 error，upstream Go 服务也没记录异常。我们的架构是：浏览器 → Cloudflare → nginx → WebSocket server (Go)。Alice 现在开发被卡住，我应该怎么排查？",
+      "expected_behavior": [
+        "推荐先收集直接证据（CLI/浏览器 DevTools Network、server logs、tcpdump）而不是直接建议 nginx 配置调整",
+        "提出至少 3 个候选根因并附带各自的 falsifier（能证伪的观测）",
+        "建议分层隔离实验——至少绕开 CF 的一条路径对比",
+        "识别 87 秒这个固定时长可能对应某个中间层的 idle timeout（而不是客户端代码 bug）",
+        "推荐 env-gated instrumentation 或 tcpdump 过滤 RST 来定位 close 来源",
+        "不盲目推荐 'restart nginx' 或 'upgrade client library' 这类无证据动作"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "batch-job-intermittent-no-restart-shortcut",
+      "prompt": "我们的凌晨批处理 job 最近一周有 3 天失败了（4/20, 4/21, 4/22），每次都是 `connection reset by peer`，成功和失败的几天我看不出配置或代码有什么不同。SRE 同事说 'restart 一下就好'，但我想搞清楚根因——这种间歇性问题之前发生过，每次 restart 完就不管了，过几周又复发。你能帮我规划一个系统性调查方法吗？",
+      "expected_behavior": [
+        "明确反对 'restart 了事'，说明为什么浅层 workaround 会让问题复发",
+        "建议先扩展时间窗口收集证据：失败当天前后的 metrics/logs（不局限在 job 报错时间点）",
+        "建议加 instrumentation——至少在上游连接层加时间戳日志，以便下次复现时直接看到证据",
+        "提出至少 3 个候选根因并写出各自的 falsifier",
+        "建议差异对比：成功的日子 vs 失败的日子有什么变化（负载、其他 job、外部依赖）",
+        "指出 'connection reset by peer' 是 OS 层事件，谁 reset 需要 tcpdump 或上游日志证实"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "keepalive-patch-counter-review",
+      "prompt": "我写了一个 SSE keepalive 补丁准备上生产，目的是 upstream idle > 15s 时主动塞 `: keepalive\\n\\n` 防止被中间层 RST。代码大概是：\n```js\nlet lastChunk = Date.now();\nconst timer = setInterval(() => {\n  if (Date.now() - lastChunk > 15000 && !res.writableEnded) {\n    res.write(': keepalive\\n\\n');\n  }\n}, 10000);\nproxyRes.on('data', chunk => { lastChunk = Date.now(); /* existing forwarding */ });\nproxyRes.on('end', () => clearInterval(timer));\n```\n你能帮我审查一下有没有风险？我打算 canary 5% 流量后 24 小时内全量。",
+      "expected_behavior": [
+        "识别 timer 启动后立刻可能 fire（如果 upstream 还没响应 headers），在 res.writeHead 之前 res.write 会触发 Node 隐式 header 发送 → 后续 writeHead 会抛 ERR_HTTP_HEADERS_SENT",
+        "检查 clearInterval 是否覆盖所有 exit path（proxyReq.on('error')、proxyRes.on('aborted')、res.on('close') 等）",
+        "至少提 1 个关于非流式响应被误伤的风险（non-streaming JSON 场景不应该加 keepalive）",
+        "建议 canary 前先做更精确的 gate（env flag / response-type check）",
+        "提到 SSE comment 帧的 client 兼容性（Anthropic SDK / OpenAI SDK / 浏览器 EventSource 都忽略 `:` 前缀，这点 OK）",
+        "应用 4-question filter 或类似批判性框架——不是盲目列所有 'theoretical' 风险"
+      ],
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "db-pool-exhaustion-generalization",
+      "prompt": "我们生产应用最近一周每天下午 3-4 点期间，API 错误率会从 0.1% 飙到 2% 左右，持续 30-60 分钟然后自己恢复。logs 里主要是 `Error: pool is at capacity` from 我们的 DB driver (pg-pool)。DB 那边 CPU/mem 看起来 OK，慢查询日志也没明显异常。运维同事说 \"pool 加大就好\"，我们的 config 已经从 20 连接加到 50 然后到 100 了，每次加大都撑一阵子又开始触发。这个模式让我怀疑根因不是 pool 大小本身。你帮我设计下调查计划？",
+      "expected_behavior": [
+        "Verifies the premise: asks for direct evidence (metrics, logs) that 3-4pm spike is real pool error vs generic 5xx",
+        "Rejects \"scale pool larger\" as surface-level; explains why each upsize buys time but does not fix root cause",
+        "Proposes at least 3 falsifiable hypotheses (e.g., upstream dep latency spike, cron workload overlap, lock contention, query plan regression)",
+        "Uses threat-model framing: each proposed fix names which layer boundary it operates on (pool size = app-local; query slowness = DB-side; workload = upstream)",
+        "Recommends differential analysis: compare 3-4pm window vs other times (traffic pattern, other jobs, external deps)",
+        "Recommends instrumentation BEFORE next recurrence (pool-wait metrics, query timing histogram, lock wait time)",
+        "Does NOT over-apply network-specific tools (tcpdump / layered isolation) where they do not fit — methodology should adapt to DB domain"
+      ],
+      "files": []
+    }
+  ]
+}
