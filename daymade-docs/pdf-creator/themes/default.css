@@ -117,6 +117,20 @@ table {
     table-layout: fixed;
 }
 
+/* Keep table rows intact when paginating: prevents a single <tr> from being
+ * split across page boundaries (cell content cut mid-line, no header repeat).
+ * Trade-off: short rows that don't fit at page bottom get pushed to next page,
+ * leaving some white space at the bottom — readability > compactness. */
+tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+/* Repeat <thead> on each page when a table spans multiple pages. */
+thead {
+    display: table-header-group;
+}
+
 th, td {
     border: 1px solid #666;
     padding: 8px 6px;
