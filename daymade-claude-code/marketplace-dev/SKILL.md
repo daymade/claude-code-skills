@@ -118,7 +118,7 @@ Key rules that are NOT obvious from the docs:
 6. **`source` defines the installed plugin root**. All `skills` paths are relative
    to that root. Use `source: "./"` only when a full repo snapshot is intended.
    Use `source: "./path/to/skill"` + `skills: ["./"]` for a single-skill narrow
-   cache. Use `source: "./suites/<suite>"` for suite plugins whose cache should
+   cache. Use `source: "./<suite>"` for suite plugins whose cache should
    contain only the suite members.
 7. **Reserved marketplace names** that CANNOT be used: `claude-code-marketplace`,
    `claude-code-plugins`, `claude-plugins-official`, `anthropic-marketplace`,
