@@ -61,6 +61,10 @@ uv run --with weasyprint scripts/batch_convert.py *.md --output-dir ./pdfs
 
 **Chrome header/footer appearing**: The script passes `--no-pdf-header-footer`. If it still appears, your Chrome version may not support this flag — update Chrome.
 
+**Inline code with mixed CJK + ASCII shows blanks in macOS Preview** (e.g. `` `Terminal/终端` `` renders only `Terminal/` with the CJK part missing): weasyprint subset-embeds PingFang SC as **OpenType (CID Type 0C)**, which strict PDF readers (macOS Preview / Adobe Reader) fail to render. Chrome's PDF viewer falls back automatically and hides the bug. Fix is in the default theme: code font-family chain prioritizes **CID TrueType** CJK fonts (Songti SC / Heiti SC) before OpenType ones (PingFang SC). To verify: `pdfplumber` + check `font['fontname']` of CJK chars — if any references `PingFang-SC` (CID Type 0C OT), readers will likely fail. Reorder font chain to put CID TrueType first.
+
+**Table column 1 with short label gets mid-broken** (e.g. `4/28（周|二）下|午`): pandoc auto-emits `<colgroup><col style="width:X%">` from dash counts in the markdown separator row. For `| ----- | --- | --- | -------- |` (uneven dash widths), pandoc allocates col 1 ~17% — too narrow for a 9-char CJK label. Inline `style=""` beats external CSS at equal specificity, so `td:first-child { width:... }` is silently shadowed. Fix is in default theme: `table colgroup col { width: auto !important }` neutralizes pandoc's hint, letting `table-layout: fixed` distribute equally (25% per column for a 4-col table). To verify: `pandoc input.md -t html | grep colgroup` — if it shows `<col style="width:X%">`, the bug applies.
+
 ## Visual Self-Check (default behavior)
 
 After every PDF generation, the script automatically:
