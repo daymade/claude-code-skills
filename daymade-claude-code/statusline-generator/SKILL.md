@@ -1,6 +1,6 @@
 ---
 name: statusline-generator
-description: Configures and customizes Claude Code statuslines with multi-line layouts, cost tracking via ccusage, git status indicators, and customizable colors. Activates for statusline setup, installation, configuration, customization, color changes, cost display, git status integration, or troubleshooting statusline issues.
+description: Configures and customizes Claude Code statuslines with context window display (actual token counts), multi-line layouts, cost tracking via ccusage, git status indicators, human-readable formatting, and customizable colors. Activates for statusline setup, installation, configuration, customization, context window display, color changes, cost display, git status integration, or troubleshooting statusline issues.
 ---
 
 # Statusline Generator
@@ -19,6 +19,22 @@ This skill activates for:
 - Statusline display or cost tracking issues
 - Git status or path shortening features
 
+## Dependencies
+
+The statusline script needs to parse JSON from stdin. It auto-detects the available parser:
+
+| Priority | Tool | Availability |
+|----------|------|-------------|
+| 1 (preferred) | `jq` | macOS/Linux: `brew install jq` / `apt install jq`; Windows: `choco install jq` or `scoop install jq` |
+| 2 (fallback) | `python3` | Pre-installed on macOS and most Linux distros; Windows: `winget install python3` or python.org |
+
+If neither is available, context window and cost display will be skipped — git branch and path still work.
+
+Other requirements:
+- `git` — for branch status (optional; gracefully skips outside repos)
+- `awk` — for number formatting (installed on macOS/Linux by default; Git Bash on Windows includes it)
+- `ccusage` — for session/daily cost tracking (optional; gracefully skips if missing)
+
 ## Quick Start
 
 ### Basic Installation
@@ -33,7 +49,7 @@ Install the default multi-line statusline:
 2. Restart Claude Code to see the statusline
 
 The default statusline displays:
-- **Line 1**: `username (model) [session_cost/daily_cost]`
+- **Line 1**: `username (model) [session_cost/daily_cost]  ctx: 89.5K/1.0M (9%)`
 - **Line 2**: `current_path`
 - **Line 3**: `[git:branch*+]`
 
@@ -61,7 +77,7 @@ Alternatively, manually install by:
 The statusline uses a 3-line layout optimized for portrait screens:
 
 ```
-username (Sonnet 4.5 [1M]) [$0.26/$25.93]
+username (Sonnet 4.5 [1M]) [$0.26/$25.93]  ctx: 89.5K/1.0M (9%)
 ~/workspace/java/ready-together-svc
 [git:feature/branch-name*+]
 ```
@@ -89,6 +105,26 @@ Model names are automatically shortened:
 - `"Opus 4.1 (with 500K token context)"` → `"Opus 4.1 [500K]"`
 
 This saves horizontal space while preserving key information.
+
+### Context Window Display
+
+The statusline can show actual context window usage with human-readable token counts — not just a percentage. This is the most important statusline feature for long sessions.
+
+Format:
+```
+ctx: 88.9K/1.0M (9%)
+```
+
+Components:
+- **Used tokens**: `current_usage.input_tokens + cache_read_input_tokens + cache_creation_input_tokens`
+- **Total capacity**: `context_window_size` from the input JSON
+- **Percentage**: Shown in parentheses as secondary info
+- **Human-readable**: `<1000` → raw, `≥1000` → `X.XK`, `≥1M` → `X.XM`
+- **Color-coded**: Green (≤50%), Yellow (51–80%), Red (>80%)
+
+**Important**: Use `current_usage.*` fields to compute actual context usage. `total_input_tokens` is the session-cumulative count and can exceed the context window size.
+
+Full statusline input JSON schema (all available fields): `references/context-window-schema.md`.
 
 ### Git Status Indicators
 
@@ -140,9 +176,10 @@ Convert to single-line layout by modifying the final `printf`:
 printf '\033[01;32m%s\033[00m \033[01;36m(%s)\033[00m%s\n\033[01;37m%s\033[00m\n%s' \
     "$username" "$model" "$cost_info" "$short_path" "$git_info"
 
-# With:
-printf '\033[01;32m%s\033[00m \033[01;36m(%s)\033[00m:\033[01;37m%s\033[00m%s%s' \
-    "$username" "$model" "$short_path" "$git_info" "$cost_info"
+# With single-line + context:
+printf '\033[01;36m[%s]\033[00m \033[01;35m%s\033[00m%s | %bctx: %s/%s (%s%%)\033[00m | \033[01;32m$%s\033[00m' \
+    "$model" "$short_dir" "$git_info" "$ctx_color" "$ctx_used_h" "$ctx_size_h" "$ctx_used_pct" "$cost"
+# Output: [Sonnet 4.5 [1M]] project (main*) | ctx: 89.5K/1M (9%) | $0.42
 ```
 
 ### Disabling Cost Tracking
@@ -201,10 +238,13 @@ printf '\033[01;32m%s@%s\033[00m \033[01;36m(%s)\033[00m%s [%s]\n...' \
 ## Resources
 
 ### scripts/generate_statusline.sh
-Main statusline script with all features (multi-line, ccusage, git, colors). Copy this to `~/.claude/statusline.sh` for use.
+Main statusline script with all features (context window, multi-line, ccusage, git, colors). Copy to `~/.claude/statusline.sh` for use.
 
 ### scripts/install_statusline.sh
 Automated installation script that copies the statusline script and updates settings.json.
+
+### references/context-window-schema.md
+Complete statusline input JSON schema. Documents all fields under `context_window`, `cost`, `model`, `workspace`. Load for context window display implementation or debugging.
 
 ### references/color_codes.md
 Complete ANSI color code reference for customizing statusline colors. Load when users request color customization.
