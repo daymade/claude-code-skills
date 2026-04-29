@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.88.0",
+    "@anthropic-ai/sdk": "^0.91.1",
     "@tanstack/react-virtual": "^3.13.23",
     "@types/node": "^25.6.0",
     "commander": "^14.0.3",
