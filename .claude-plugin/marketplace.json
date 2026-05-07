@@ -266,6 +266,25 @@
       ]
     },
     {
+      "name": "daymade-skills",
+      "description": "Daymade skills core suite. Bundles skill creation, quality review, search, and marketplace development tooling under one shared namespace.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "suite",
+      "keywords": [
+        "suite",
+        "skill-creation",
+        "skill-review",
+        "marketplace-dev",
+        "development",
+        "tooling"
+      ],
+      "skills": [
+        "./skill-creator"
+      ]
+    },
+    {
       "name": "deep-research",
       "description": "Generate format-controlled research reports with evidence tracking, source governance, and multi-pass synthesis. V6.1 adds: source accessibility (circular verification forbidden, exclusive advantage encouraged). Enterprise Research Mode: six-dimension data collection, SWOT/barrier/risk frameworks, and three-level quality control for company research",
       "source": "./",
@@ -858,28 +877,6 @@
       ],
       "skills": [
         "./scrapling-skill"
-      ]
-    },
-    {
-      "name": "skill-creator",
-      "description": "Essential meta-skill for creating effective Claude Code skills with initialization scripts, validation, packaging, marketplace registration, and privacy best practices. Includes a specialized wrapper-skill workflow for retrospectively distilling an install-and-debug session into a reusable companion skill for a third-party CLI tool.",
-      "source": "./",
-      "strict": false,
-      "version": "1.7.3",
-      "category": "developer-tools",
-      "keywords": [
-        "skill-creation",
-        "claude-code",
-        "development",
-        "tooling",
-        "workflow",
-        "meta-skill",
-        "wrapper-skill",
-        "cli-wrapper",
-        "essential"
-      ],
-      "skills": [
-        "./skill-creator"
       ]
     },
     {
