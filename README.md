@@ -66,7 +66,7 @@ This is a **production-hardened fork** of [Anthropic's official skill-creator](h
 | User Experience | 4 | 9 |
 | **Total (out of 80)** | **42** | **65** |
 
-> Full methodology: [skill-creator/references/skill-development-methodology.md](./skill-creator/references/skill-development-methodology.md)
+> Full methodology: [skill-creator/references/skill-development-methodology.md](./daymade-skill/skill-creator/references/skill-development-methodology.md)
 
 ### Quick Install
 
@@ -102,7 +102,7 @@ After installing skill-creator, simply ask Claude Code:
 
 Claude Code, with skill-creator loaded, will guide you through the entire skill creation process - from understanding your requirements to packaging the final skill.
 
-📚 **Full documentation**: [skill-creator/SKILL.md](./skill-creator/SKILL.md)
+📚 **Full documentation**: [daymade-skill/skill-creator/SKILL.md](./daymade-skill/daymade-skill/skill-creator/SKILL.md)
 
 ### Live Demos
 
@@ -968,7 +968,7 @@ ccpm install-bundle web-dev  # Install web development skills bundle
 
 *Coming soon*
 
-📚 **Documentation**: See [skills-search/SKILL.md](./skills-search/SKILL.md) for complete command reference
+📚 **Documentation**: See [daymade-skill/skills-search/SKILL.md](./daymade-skill/daymade-skill/skills-search/SKILL.md) for complete command reference
 
 **Requirements**: CCPM CLI (`npm install -g @daymade/ccpm`)
 
@@ -1329,7 +1329,7 @@ claude plugin install skill-reviewer@daymade-skills
 
 *Coming soon*
 
-📚 **Documentation**: See [skill-reviewer/references/](./skill-reviewer/references/) for:
+📚 **Documentation**: See [daymade-skill/skill-reviewer/references/](./daymade-skill/daymade-skill/skill-reviewer/references/) for:
 - `evaluation_checklist.md` - Complete skill evaluation criteria
 - `pr_template.md` - Professional PR description template
 - `marketplace_template.json` - Marketplace configuration template
@@ -2264,7 +2264,7 @@ Each skill includes:
 - **statusline-generator**: See `daymade-claude-code/statusline-generator/references/color_codes.md` for customization
 - **teams-channel-post-writer**: See `teams-channel-post-writer/references/writing-guidelines.md` for quality standards
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
-- **skill-creator**: See `skill-creator/SKILL.md` for complete skill creation workflow
+- **skill-creator**: See `daymade-skill/skill-creator/SKILL.md` for complete skill creation workflow
 - **llm-icon-finder**: See `llm-icon-finder/references/icons-list.md` for available icons
 - **cli-demo-generator**: See `cli-demo-generator/references/vhs_syntax.md` for VHS syntax and `cli-demo-generator/references/best_practices.md` for demo guidelines
 - **cloudflare-troubleshooting**: See `cloudflare-troubleshooting/references/api_overview.md` for API documentation
@@ -2281,12 +2281,12 @@ Each skill includes:
 - **deep-research**: See `deep-research/references/research_report_template.md` for report structure and `deep-research/references/source_quality_rubric.md` for source triage
 - **pdf-creator**: See `daymade-docs/pdf-creator/SKILL.md` for PDF conversion and font setup
 - **claude-md-progressive-disclosurer**: See `daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md` for CLAUDE.md optimization workflow
-- **skills-search**: See `skills-search/SKILL.md` for CCPM CLI commands and registry operations
+- **skills-search**: See `daymade-skill/skills-search/SKILL.md` for CCPM CLI commands and registry operations
 - **promptfoo-evaluation**: See `promptfoo-evaluation/references/promptfoo_api.md` for evaluation patterns
 - **iOS-APP-developer**: See `iOS-APP-developer/references/xcodegen-full.md` for XcodeGen options and project.yml details
 - **twitter-reader**: See `twitter-reader/SKILL.md` for API key setup and URL format support
 - **macos-cleaner**: See `macos-cleaner/references/cleanup_targets.md` for detailed cleanup target explanations, `macos-cleaner/references/mole_integration.md` for Mole visual tool integration, and `macos-cleaner/references/safety_rules.md` for comprehensive safety guidelines
-- **skill-reviewer**: See `skill-reviewer/references/evaluation_checklist.md` for complete evaluation criteria, `skill-reviewer/references/pr_template.md` for PR templates, and `skill-reviewer/references/marketplace_template.json` for marketplace configuration
+- **skill-reviewer**: See `daymade-skill/skill-reviewer/references/evaluation_checklist.md` for complete evaluation criteria, `daymade-skill/skill-reviewer/references/pr_template.md` for PR templates, and `daymade-skill/skill-reviewer/references/marketplace_template.json` for marketplace configuration
 - **github-contributor**: See `github-contributor/references/pr_checklist.md` for PR quality checklist, `github-contributor/references/project_evaluation.md` for project evaluation criteria, and `github-contributor/references/communication_templates.md` for issue/PR templates
 - **i18n-expert**: See `i18n-expert/SKILL.md` for complete i18n setup workflow, key architecture guidance, and audit procedures
 - **claude-skills-troubleshooting**: See `daymade-claude-code/claude-skills-troubleshooting/SKILL.md` for plugin troubleshooting workflow and architecture
