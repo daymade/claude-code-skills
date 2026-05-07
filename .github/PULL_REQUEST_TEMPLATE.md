@@ -70,8 +70,8 @@ How has this been tested?
 - [ ] Scripts are executable (chmod +x)
 - [ ] No absolute paths or user-specific information
 - [ ] Tested in actual Claude Code session
-- [ ] Passed validation: `skill-creator/scripts/quick_validate.py`
-- [ ] Successfully packages: `skill-creator/scripts/package_skill.py`
+- [ ] Passed validation: `daymade-skill/skill-creator/scripts/quick_validate.py`
+- [ ] Successfully packages: `daymade-skill/skill-creator/scripts/package_skill.py`
 
 ### For All PRs
 

@@ -66,7 +66,7 @@
 | 用户体验 | 4 | 9 |
 | **总分（/80）** | **42** | **65** |
 
-> 完整方法论：[skill-creator/references/skill-development-methodology.md](./skill-creator/references/skill-development-methodology.md)
+> 完整方法论：[skill-creator/references/skill-development-methodology.md](./daymade-skill/skill-creator/references/skill-development-methodology.md)
 
 ### 快速安装
 
@@ -102,7 +102,7 @@ claude plugin install skill-creator@daymade-skills
 
 加载了 skill-creator 的 Claude Code 将引导你完成整个技能创建过程——从理解你的需求到打包最终技能。
 
-📚 **完整文档**：[skill-creator/SKILL.md](./skill-creator/SKILL.md)
+📚 **完整文档**：[daymade-skill/skill-creator/SKILL.md](./daymade-skill/daymade-skill/skill-creator/SKILL.md)
 
 ### 实时演示
 
@@ -1011,7 +1011,7 @@ ccpm install-bundle web-dev  # 安装 Web 开发技能包
 
 *即将推出*
 
-📚 **文档**：参见 [skills-search/SKILL.md](./skills-search/SKILL.md) 了解完整的命令参考
+📚 **文档**：参见 [daymade-skill/skills-search/SKILL.md](./daymade-skill/daymade-skill/skills-search/SKILL.md) 了解完整的命令参考
 
 **要求**：CCPM CLI（`npm install -g @daymade/ccpm`）
 
@@ -1370,7 +1370,7 @@ claude plugin install skill-reviewer@daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [skill-reviewer/references/](./skill-reviewer/references/) 了解：
+📚 **文档**：参见 [daymade-skill/skill-reviewer/references/](./daymade-skill/daymade-skill/skill-reviewer/references/) 了解：
 - `evaluation_checklist.md` - 完整的技能评估标准
 - `pr_template.md` - 专业 PR 描述模板
 - `marketplace_template.json` - marketplace 配置模板
@@ -2305,7 +2305,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **statusline-generator**：参见 `daymade-claude-code/statusline-generator/references/color_codes.md` 了解自定义
 - **teams-channel-post-writer**：参见 `teams-channel-post-writer/references/writing-guidelines.md` 了解质量标准
 - **repomix-unmixer**：参见 `repomix-unmixer/references/repomix-format.md` 了解格式规范
-- **skill-creator**：参见 `skill-creator/SKILL.md` 了解完整的技能创建工作流
+- **skill-creator**：参见 `daymade-skill/skill-creator/SKILL.md` 了解完整的技能创建工作流
 - **llm-icon-finder**：参见 `llm-icon-finder/references/icons-list.md` 了解可用图标
 - **cli-demo-generator**：参见 `cli-demo-generator/references/vhs_syntax.md` 了解 VHS 语法和 `cli-demo-generator/references/best_practices.md` 了解演示指南
 - **cloudflare-troubleshooting**：参见 `cloudflare-troubleshooting/references/api_overview.md` 了解 API 文档
@@ -2322,12 +2322,12 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **deep-research**：参见 `deep-research/references/research_report_template.md` 了解报告结构，并参见 `deep-research/references/source_quality_rubric.md` 了解来源分级标准
 - **pdf-creator**：参见 `daymade-docs/pdf-creator/SKILL.md` 了解 PDF 转换与字体设置
 - **claude-md-progressive-disclosurer**：参见 `daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md` 了解 CLAUDE.md 优化工作流
-- **skills-search**：参见 `skills-search/SKILL.md` 了解 CCPM CLI 命令和注册表操作
+- **skills-search**：参见 `daymade-skill/skills-search/SKILL.md` 了解 CCPM CLI 命令和注册表操作
 - **promptfoo-evaluation**：参见 `promptfoo-evaluation/references/promptfoo_api.md` 了解评测模式
 - **iOS-APP-developer**：参见 `iOS-APP-developer/references/xcodegen-full.md` 了解 XcodeGen 选项与 project.yml 细节
 - **twitter-reader**：参见 `twitter-reader/SKILL.md` 了解 API 密钥设置和 URL 格式支持
 - **macos-cleaner**：参见 `macos-cleaner/references/cleanup_targets.md` 了解详细清理目标说明、`macos-cleaner/references/mole_integration.md` 了解 Mole 可视化工具集成、`macos-cleaner/references/safety_rules.md` 了解全面安全指南
-- **skill-reviewer**：参见 `skill-reviewer/references/evaluation_checklist.md` 了解完整评估标准、`skill-reviewer/references/pr_template.md` 了解 PR 模板、`skill-reviewer/references/marketplace_template.json` 了解 marketplace 配置
+- **skill-reviewer**：参见 `daymade-skill/skill-reviewer/references/evaluation_checklist.md` 了解完整评估标准、`daymade-skill/skill-reviewer/references/pr_template.md` 了解 PR 模板、`daymade-skill/skill-reviewer/references/marketplace_template.json` 了解 marketplace 配置
 - **github-contributor**：参见 `github-contributor/references/pr_checklist.md` 了解 PR 质量清单、`github-contributor/references/project_evaluation.md` 了解项目评估标准、`github-contributor/references/communication_templates.md` 了解 issue/PR 沟通模板
 - **i18n-expert**：参见 `i18n-expert/SKILL.md` 了解完整的 i18n 设置工作流程、键架构指导和审计程序
 - **claude-skills-troubleshooting**：参见 `daymade-claude-code/claude-skills-troubleshooting/SKILL.md` 了解插件故障排除工作流程和架构
