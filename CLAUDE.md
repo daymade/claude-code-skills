@@ -61,13 +61,13 @@ claude plugin install skill-creator@daymade-skills
 
 ```bash
 # Quick validation of a skill
-cd skill-creator && uv run --with PyYAML python -m scripts.quick_validate ../skill-name
+cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.quick_validate ../skill-name
 
 # Package a skill (includes automatic validation)
-cd skill-creator && uv run --with PyYAML python -m scripts.package_skill ../skill-name [output-dir]
+cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.package_skill ../skill-name [output-dir]
 
 # Initialize a new skill from template
-uv run python skill-creator/scripts/init_skill.py <skill-name> --path <output-directory>
+uv run python daymade-skill/skill-creator/scripts/init_skill.py <skill-name> --path <output-directory>
 ```
 
 ### Testing Skills Locally
@@ -302,7 +302,7 @@ For the full step-by-step guide with templates and examples, see [references/new
 **Quick workflow**:
 ```bash
 # 1. Validate & package the skill itself
-cd skill-creator
+cd daymade-skill/skill-creator
 uv run python -m scripts.security_scan ../skill-name --verbose
 uv run --with PyYAML python -m scripts.package_skill ../skill-name
 

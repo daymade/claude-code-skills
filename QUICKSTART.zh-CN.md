@@ -33,7 +33,7 @@ claude plugin install skill-creator@daymade-skills
 
 ```bash
 # 从模板创建一个新技能
-skill-creator/scripts/init_skill.py my-first-skill --path ~/my-skills
+daymade-skill/skill-creator/scripts/init_skill.py my-first-skill --path ~/my-skills
 ```
 
 这将生成：
@@ -61,7 +61,7 @@ skill-creator/scripts/init_skill.py my-first-skill --path ~/my-skills
 
 ```bash
 # 检查你的技能是否符合质量标准
-skill-creator/scripts/quick_validate.py ~/my-skills/my-first-skill
+daymade-skill/skill-creator/scripts/quick_validate.py ~/my-skills/my-first-skill
 ```
 
 修复报告的任何错误，然后再次验证。
@@ -70,7 +70,7 @@ skill-creator/scripts/quick_validate.py ~/my-skills/my-first-skill
 
 ```bash
 # 创建可分发的 .zip 文件
-skill-creator/scripts/package_skill.py ~/my-skills/my-first-skill
+daymade-skill/skill-creator/scripts/package_skill.py ~/my-skills/my-first-skill
 ```
 
 这将创建 `my-first-skill.zip`，可以分享了！
@@ -87,7 +87,7 @@ cp -r ~/my-skills/my-first-skill ~/.claude/skills/
 
 ### 下一步
 
-- 📖 阅读 [skill-creator/SKILL.md](./skill-creator/SKILL.md) 获取全面指导
+- 📖 阅读 [skill-creator/SKILL.md](./daymade-skill/skill-creator/SKILL.md) 获取全面指导
 - 🔍 研究此市场中的现有技能以获取示例
 - 💡 查看 [CONTRIBUTING.md](./CONTRIBUTING.md) 以分享你的技能
 

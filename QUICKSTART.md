@@ -33,7 +33,7 @@ claude plugin install skill-creator@daymade-skills
 
 ```bash
 # Create a new skill from template
-skill-creator/scripts/init_skill.py my-first-skill --path ~/my-skills
+daymade-skill/skill-creator/scripts/init_skill.py my-first-skill --path ~/my-skills
 ```
 
 This generates:
@@ -61,7 +61,7 @@ Edit `~/my-skills/my-first-skill/SKILL.md`:
 
 ```bash
 # Check if your skill meets quality standards
-skill-creator/scripts/quick_validate.py ~/my-skills/my-first-skill
+daymade-skill/skill-creator/scripts/quick_validate.py ~/my-skills/my-first-skill
 ```
 
 Fix any errors reported, then validate again.
@@ -70,7 +70,7 @@ Fix any errors reported, then validate again.
 
 ```bash
 # Create a distributable .zip file
-skill-creator/scripts/package_skill.py ~/my-skills/my-first-skill
+daymade-skill/skill-creator/scripts/package_skill.py ~/my-skills/my-first-skill
 ```
 
 This creates `my-first-skill.zip` ready to share!
@@ -87,7 +87,7 @@ cp -r ~/my-skills/my-first-skill ~/.claude/skills/
 
 ### Next Steps
 
-- 📖 Read [skill-creator/SKILL.md](./skill-creator/SKILL.md) for comprehensive guidance
+- 📖 Read [skill-creator/SKILL.md](./daymade-skill/skill-creator/SKILL.md) for comprehensive guidance
 - 🔍 Study existing skills in this marketplace for examples
 - 💡 Check [CONTRIBUTING.md](./CONTRIBUTING.md) to share your skill
 
