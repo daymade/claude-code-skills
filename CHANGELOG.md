@@ -10,7 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.53.2] - 2026-05-10
 
 ### Fixed
-- Remove `skills: ["./"]` from 13 plugin entries that triggered Claude Code 2.1.x path-escape validator error (`skills path "./" escapes plugin root`). Affected plugins: claude-code-history-files-finder, claude-export-txt-better, claude-md-progressive-disclosurer, claude-skills-troubleshooting, continue-claude-work, doc-to-markdown, docs-cleaner, marketplace-dev, meeting-minutes-taker, mermaid-tools, pdf-creator, ppt-creator, statusline-generator. These are all suite member plugins whose `source` already points to the correct skill directory — the explicit `skills` field was redundant and is now omitted. Fixes [#64](https://github.com/daymade/claude-code-skills/issues/64).
+- Remove `skills: ["./"]` from 13 suite member plugin entries that triggered Claude Code 2.1.x path-escape validator error (`skills path "./" escapes plugin root`). Fixes [#64](https://github.com/daymade/claude-code-skills/issues/64).
+
+### Changed
+- Align all 52 single-skill plugins with official Anthropic marketplace pattern: `source` points directly to the skill directory (e.g., `"./tunnel-doctor"`), `skills` field omitted (auto-discovery). Previously used `source: "./"` with `skills: ["./skill-name"]`. The 3 suite plugins (`daymade-claude-code`, `daymade-docs`, `daymade-skill`) retain explicit `skills` arrays for multi-skill routing. Matches the pattern used by 167 of 168 plugins in `anthropics/claude-plugins-official`.
 
 ## [1.52.0] - 2026-04-30
 
