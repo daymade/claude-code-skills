@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, local Claude session continuation from `.claude` artifacts, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, multi-path parallel product analysis with cross-model test-time compute scaling, real financial data collection for US equities with validation and yfinance pitfall handling, advanced Excel automation for formatted workbook generation and complex xlsm parsing, macOS programmatic window screenshot capture workflows, verified Scrapling CLI installation and web extraction workflows, plugin marketplace development for converting skills repos into official Claude Code marketplaces, Tencent IMA knowledge base companion with zero-config installation across Claude Code/Codex/OpenClaw, upstream bug detection and runtime repair, personalized fan-out search with priority-based knowledge base boosting, and suite plugins that expose related skills under shared namespaces for combined installation workflows — including a dedicated Claude Code operations suite (daymade-claude-code) bundling session recovery, CLAUDE.md optimization, troubleshooting, statusline configuration, export repair, and marketplace development skills under one namespace",
-    "version": "1.46.1"
+    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, local Claude session continuation from `.claude` artifacts, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, multi-path parallel product analysis with cross-model test-time compute scaling, real financial data collection for US equities with validation and yfinance pitfall handling, advanced Excel automation for formatted workbook generation and complex xlsm parsing, macOS programmatic window screenshot capture workflows, verified Scrapling CLI installation and web extraction workflows, plugin marketplace development for converting skills repos into official Claude Code marketplaces, Tencent IMA knowledge base companion with zero-config installation across Claude Code/Codex/OpenClaw, upstream bug detection and runtime repair, personalized fan-out search with priority-based knowledge base boosting, and suite plugins that expose related skills under shared namespaces for combined installation workflows — including a dedicated Claude Code operations suite (daymade-claude-code) bundling session recovery, CLAUDE.md optimization, troubleshooting, statusline configuration, export repair, and marketplace development skills under one namespace, and the StepFun StepAudio 2.5 audio family (stepfun-tts for Contextual TTS with instruction + inline parentheses, stepfun-asr for the SSE endpoint that handles 30-minute audio in a single call)",
+    "version": "1.53.2"
   },
   "plugins": [
     {
@@ -66,9 +66,6 @@
         "file-tracking",
         "claude-code",
         "history-analysis"
-      ],
-      "skills": [
-        "./"
       ]
     },
     {
@@ -85,9 +82,6 @@
         "fix",
         "line-wrapping",
         "formatting"
-      ],
-      "skills": [
-        "./"
       ]
     },
     {
@@ -104,9 +98,6 @@
         "context-efficiency",
         "configuration",
         "token-savings"
-      ],
-      "skills": [
-        "./"
       ]
     },
     {
@@ -126,9 +117,6 @@
         "enabledPlugins",
         "settings",
         "marketplace"
-      ],
-      "skills": [
-        "./"
       ]
     },
     {
@@ -209,9 +197,6 @@
         "history",
         "workflow-continuation",
         "local-artifacts"
-      ],
-      "skills": [
-        "./"
       ]
     },
     {
@@ -327,9 +312,6 @@
         "document",
         "cjk",
         "chinese"
-      ],
-      "skills": [
-        "./"
       ]
     },
     {
@@ -346,9 +328,6 @@
         "redundancy",
         "merge",
         "docs"
-      ],
-      "skills": [
-        "./"
       ]
     },
     {
@@ -412,6 +391,27 @@
       ],
       "skills": [
         "./fact-checker"
+      ]
+    },
+    {
+      "name": "feishu-doc-scraper",
+      "description": "Save Feishu Docs and Feishu Wiki pages as clean Markdown from a live authenticated browser session. Uses TOC-driven section capture and coverage verification, and explicitly avoids relying on Web Clipper for virtual-scroll pages. Use when users ask to save, export, scrape, or archive a Feishu doc/wiki to Markdown, or when a Feishu page already open in Chrome needs to be turned into a local note.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "feishu",
+        "lark",
+        "markdown",
+        "wiki",
+        "document",
+        "scraping",
+        "browser",
+        "archival"
+      ],
+      "skills": [
+        "./feishu-doc-scraper"
       ]
     },
     {
@@ -624,9 +624,6 @@
         "distribution",
         "packaging"
       ],
-      "skills": [
-        "./"
-      ],
       "hooks": {
         "PostToolUse": [
           {
@@ -666,9 +663,6 @@
         "mermaid",
         "quotes",
         "action-items"
-      ],
-      "skills": [
-        "./"
       ]
     },
     {
@@ -684,9 +678,6 @@
         "visualization",
         "flowchart",
         "sequence"
-      ],
-      "skills": [
-        "./"
       ]
     },
     {
@@ -708,9 +699,6 @@
         "legal",
         "reports",
         "typography"
-      ],
-      "skills": [
-        "./"
       ]
     },
     {
@@ -729,9 +717,6 @@
         "charts",
         "data-visualization",
         "pyramid-principle"
-      ],
-      "skills": [
-        "./"
       ]
     },
     {
@@ -915,32 +900,50 @@
         "git-status",
         "customization",
         "prompt"
-      ],
-      "skills": [
-        "./"
       ]
     },
     {
       "name": "stepfun-tts",
-      "description": "Generate speech and transcribe audio using StepFun's StepAudio 2.5 family — stepaudio-2.5-tts (Contextual TTS with instruction + inline parentheses) and stepaudio-2.5-asr (SSE endpoint, 32K context, ~100x RTF, handles up to 30-minute audio in a single call). Use when the user wants Chinese/Japanese TTS with emotional/prosody control, needs to transcribe long audio, migrates from step-tts-2 to stepaudio-2.5-tts (voice_label → instruction breaking change), or hits StepFun censorship / endpoint errors. Also triggers for 阶跃 TTS, StepAudio 合成, 语音合成, 配音, StepFun ASR, 转录, 语音识别.",
+      "description": "Generate Chinese / Japanese speech with StepFun's stepaudio-2.5-tts — Contextual TTS that replaces step-tts-2's `voice_label` with natural-language `instruction` (≤200 chars) plus inline `()` parentheses for句内 prosody. Use when the user wants emotional / prosody control over voice synthesis (whisper, pause, stress, mood pivot mid-sentence), batch-generates game / app voice lines, migrates from `step-tts-2` (the `voice_label → instruction` breaking change), or hits StepFun's stricter 2.5-era censorship (死/消失/political terms). Triggers on 阶跃 TTS, StepAudio 合成, 语音合成, 配音, 文本转语音, TTS 升级, 迁移 step-tts-2. For transcription with the sibling stepaudio-2.5-asr model, use the stepfun-asr skill instead.",
       "source": "./",
       "strict": false,
-      "version": "1.0.0",
+      "version": "2.0.0",
       "category": "productivity",
       "keywords": [
         "tts",
-        "asr",
         "stepfun",
         "stepaudio",
         "stepaudio-2.5",
         "阶跃",
         "chinese-tts",
         "voice-synthesis",
-        "speech-to-text",
         "contextual-tts"
       ],
       "skills": [
         "./stepfun-tts"
+      ]
+    },
+    {
+      "name": "stepfun-asr",
+      "description": "Transcribe audio with StepFun's stepaudio-2.5-asr — an SSE endpoint (NOT /v1/audio/transcriptions) with 32K context, ~85-101x RTF on long audio, and a single-call ceiling around 30 minutes (no client-side chunking). Use when transcribing Chinese / English audio with StepFun, when long-form recordings (5-30 min) need to land in one request, when migrating from step-asr / step-asr-1.1, or when hitting the misleading `model stepaudio-2.5-asr not supported` error (which actually means wrong endpoint). Triggers on 阶跃 ASR, StepFun ASR, stepaudio-2.5-asr, 转录, 语音识别, 长音频转写, 语音转文字. For TTS with the sibling stepaudio-2.5-tts model, use the stepfun-tts skill instead.",
+      "source": "./",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "asr",
+        "stepfun",
+        "stepaudio",
+        "stepaudio-2.5-asr",
+        "阶跃",
+        "chinese-asr",
+        "speech-to-text",
+        "transcription",
+        "long-audio",
+        "sse"
+      ],
+      "skills": [
+        "./stepfun-asr"
       ]
     },
     {
@@ -1004,10 +1007,10 @@
     },
     {
       "name": "tunnel-doctor",
-      "description": "Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers five conflict layers: route hijacking, HTTP proxy env var interception, system proxy bypass, SSH ProxyCommand double tunneling, and VM/container proxy propagation. Includes an automated quick-diagnose script plus SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when local vanity domains fail behind proxy, when git push fails with failed to begin relaying via HTTP, when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, or when bootstrapping remote dev environments over Tailscale",
+      "description": "Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers six conflict layers: route hijacking, HTTP proxy env var interception, system proxy bypass, SSH ProxyCommand double tunneling, VM/container proxy propagation, and stalled DNS resolver in macOS getaddrinfo chain (dead VPN daemon leaves zombie utun + DNS injection). Includes an automated quick-diagnose script plus SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when local vanity domains fail behind proxy, when git push fails with failed to begin relaying via HTTP, when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, when bootstrapping remote dev environments over Tailscale, or when ssh/curl/git hang ~60s before resolving a hostname while nslookup returns instantly",
       "source": "./",
       "strict": false,
-      "version": "1.4.0",
+      "version": "1.5.0",
       "category": "developer-tools",
       "keywords": [
         "tailscale",

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.53.2] - 2026-05-10
+
+### Fixed
+- Remove `skills: ["./"]` from 13 plugin entries that triggered Claude Code 2.1.x path-escape validator error (`skills path "./" escapes plugin root`). Affected plugins: claude-code-history-files-finder, claude-export-txt-better, claude-md-progressive-disclosurer, claude-skills-troubleshooting, continue-claude-work, doc-to-markdown, docs-cleaner, marketplace-dev, meeting-minutes-taker, mermaid-tools, pdf-creator, ppt-creator, statusline-generator. These are all suite member plugins whose `source` already points to the correct skill directory — the explicit `skills` field was redundant and is now omitted. Fixes [#64](https://github.com/daymade/claude-code-skills/issues/64).
+
+## [1.52.0] - 2026-04-30
+
+### Added
+- **stepfun-asr** v1.0.0: Transcribe audio with StepFun's `stepaudio-2.5-asr` — an SSE endpoint (NOT `/v1/audio/transcriptions`) with 32K context, ~85-101× RTF on long audio, and a single-call ceiling around 30 minutes (no client-side chunking). Split out from `stepfun-tts` so the ASR-specific traps (wrong-endpoint misleading error, Plan vs Normal key silent failure, SSE `error` event handling, repetition-hallucination edge case) live next to the `asr_transcribe.py` script that handles them. Bundled `scripts/asr_transcribe.py` (pure-stdlib CLI: env → `${CLAUDE_PLUGIN_DATA}/config.json` key resolution, base64 + nested JSON body, SSE parsing, censorship + transport error distinction). References cover the full SSE event contract, the legacy-vs-2.5 endpoint comparison table, and the "Plan key cannot call audio" gotcha. Suggests `transcript-fixer` / `meeting-minutes-taker` as natural downstream skills.
+
+### Changed
+- **stepfun-tts** v1.0.0 → v2.0.0 (BREAKING): ASR functionality removed and split into the new `stepfun-asr` skill. The remaining skill focuses purely on Contextual TTS (`stepaudio-2.5-tts`) — `instruction` natural-language tone + inline `()` parentheses + the `voice_label` migration story from `step-tts-2`. SKILL.md, `references/api_reference.md`, and `references/known_issues.md` all stripped of ASR sections; description and keywords updated to TTS-only. `scripts/asr_transcribe.py` removed from this skill (now lives in `stepfun-asr`).
+- Marketplace skill count: 51 → 52 (effective listed count; suite member skills not double-counted)
+- Marketplace plugin entry count: 55 → 56
+- Marketplace version: 1.51.0 → 1.52.0
+- README.md, README.zh-CN.md: badges, descriptions, skill section #50 (stepfun-tts retitled "TTS only" + description rewritten), new skill section #52 (stepfun-asr), Use Cases entries (split into two), Documentation Quick Links, Requirements (StepFun key applies to both)
+- CLAUDE.md: overview count, marketplace plugin count, Available Skills list (entry #50 description rewritten + new entry #52)
+
+### Note
+This release also reconciles a versioning drift: commits `b2003d6` (statusline-generator → v1.1.0) and `ec7c313` (pdf-creator → v1.4.0) bumped their respective `plugins[].version` fields without bumping `metadata.version` and without adding CHANGELOG entries — a violation of the "any commit modifying a skill must bump that skill's version AND the marketplace metadata version" rule from `CLAUDE.md`. Those commits remain in history; v1.52.0 picks up the marketplace catalog version where it should have been after both, then adds the stepfun split on top. CHANGELOG entries for those individual skill bumps will not be retroactively backfilled — the version numbers in `marketplace.json` are authoritative and discoverable via `git log -- <skill-path>`.
+
 ## [1.51.0] - 2026-04-26
 
 ### Added
