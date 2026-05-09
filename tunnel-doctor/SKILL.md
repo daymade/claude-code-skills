@@ -1,6 +1,6 @@
 ---
 name: tunnel-doctor
-description: Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers five conflict layers - (1) route hijacking, (2) HTTP proxy env var interception, (3) system proxy bypass, (4) SSH ProxyCommand double tunneling, and (5) VM/container runtime proxy propagation (OrbStack/Docker). Includes SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when git push fails with "failed to begin relaying via HTTP", when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, or when bootstrapping remote dev environments over Tailscale.
+description: Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers six conflict layers - (1) route hijacking, (2) HTTP proxy env var interception, (3) system proxy bypass, (4) SSH ProxyCommand double tunneling, (5) VM/container runtime proxy propagation (OrbStack/Docker), and (6) stalled DNS resolver in macOS getaddrinfo chain (dead VPN daemon leaving zombie utun + DNS injection). Includes SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when git push fails with "failed to begin relaying via HTTP", when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, when bootstrapping remote dev environments over Tailscale, when ssh/curl/git hang ~60 seconds before resolving a hostname while nslookup returns instantly, when ping to a resolver IP works but dig to the same IP times out, or when ssh -vvv freezes at "debug2: resolving" without ever reaching "debug1: connect".
 allowed-tools: Read, Grep, Edit, Bash
 ---
 
@@ -42,6 +42,7 @@ Determine which scenario applies:
 - **SSH connects but `be-child ssh` exits code 1** → WSL snap sandbox issue (Step 5)
 - **TCP port 22 reachable (`nc -z` succeeds) but SSH fails with `kex_exchange_identification: Connection closed`** → Tailscale SSH proxy intercept on WSL (Step 5A)
 - **`tailscale ssh` returns "not available on App Store builds"** → Wrong Tailscale distribution on macOS (Step 5B)
+- **Any tool using system DNS (`ssh`, `curl`, `git`) hangs ~60s before resolving, but `nslookup` returns instantly** → Stalled resolver in `getaddrinfo` chain (Step 2I)
 
 **Key distinctions**:
 - SSH does NOT use `http_proxy`/`NO_PROXY` env vars. If SSH works but HTTP doesn't → Layer 2.
@@ -54,6 +55,25 @@ Determine which scenario applies:
 - If DNS resolves to `198.18.x.x` virtual IPs → TUN DNS hijack (Step 2H).
 - If `nc -z` succeeds on port 22 but SSH gets no banner (`kex_exchange_identification`) → Tailscale SSH proxy intercept (Step 5A). Confirm with `tcpdump -i any port 22` on the remote — 0 packets means Tailscale intercepts above the kernel.
 - If `tailscale ssh` fails with "not available on App Store builds" → install Standalone Tailscale (Step 5B).
+- If `nslookup <host>` is fast (<0.1s) but `dscacheutil -q host -a name <host>` takes 60s+ → a supplemental resolver in `scutil --dns` is dead (Step 2I).
+- If `ping <resolver-ip>` succeeds but `dig @<resolver-ip>` times out → daemon dead, `utun` interface zombied. ICMP is answered by the interface; the actual port-53 service is gone (Step 2I).
+- If `ssh -vvv` hangs immediately after `debug2: resolving "<host>" port <port>` and never reaches `debug1: connect to address` → DNS resolution stage, not network connect stage. This is Step 2I, not Step 2B/2H.
+
+### Diagnosis Discipline (Read Before Committing to a Hypothesis)
+
+When symptoms point at a component (proxy, VPN, route table, DNS), **don't commit to a hypothesis from circumstantial evidence — verify with that component's own health endpoint first.** Each component has a one-line health check faster and more reliable than ruling out neighbors:
+
+| Suspected component | Authoritative health check (run this first) |
+|---------------------|---------------------------------------------|
+| HTTP proxy (Shadowrocket / Clash / Surge) | `curl -x http://127.0.0.1:<port> -m 10 https://api.github.com` returns 200 |
+| Tailscale daemon | `tailscale status` returns peer list (not connection error) |
+| A specific DNS resolver | `dig @<nameserver-ip> +tries=1 +timeout=3 example.com` <100ms |
+| Routing for an IP | `route -n get <ip>` shows expected interface |
+| Per-resolver bisection (when DNS is suspect) | The `for ns in ...; do dig @$ns ...` loop in Step 2I |
+
+**Why this matters**: A symptom that matches the description of Step 2X does not, by itself, prove component X is the problem. Multiple layers can produce overlapping symptoms (a 60-second hang during `git push` could be proxy node death, fakeip route corruption, or DNS resolver stall — all plausible from the user-visible symptom alone). Reaching for the most specific verification first avoids committing to a wrong layer and chasing it down a dead end.
+
+If the failing operation involves DNS at all, **run the per-nameserver bisection from Step 2I before suspecting proxy or routing**. It rules in/out the largest single class of macOS-on-China-network failures in under 15 seconds.
 
 ### Fast Path: Run Automated Checks
 
@@ -569,6 +589,108 @@ IP-CIDR,192.30.252.0/22,DIRECT
 
 This is more robust but requires proxy tool config access.
 
+### Step 2I: Fix Stalled DNS Resolver in `getaddrinfo` Chain
+
+**Symptom**: `ssh`, `curl` (no `-x`), `git`, and any other tool using system DNS hangs ~60 seconds before resolving. `ssh -vvv` freezes immediately after:
+
+```
+debug2: resolving "<host>" port <port>
+debug3: resolve_host: lookup <host>:<port>
+```
+
+…and never reaches `debug1: connect to address`. After the wait it eventually succeeds — but every new connection pays the same penalty. `nslookup <host>` returns instantly (~10ms) but `dscacheutil -q host -a name <host>` takes 60s+.
+
+**Root cause**: macOS `getaddrinfo` consults every entry in `scutil --dns` whose `domain` filter matches (or has no filter at all). If one resolver's nameserver is unreachable but its interface is still in the routing table, `getaddrinfo` waits the full UDP retry timeout (typically 30-60s) before falling through to the next resolver. The most common real-world trigger is a tunneling daemon (Tailscale, Cisco AnyConnect, Pulse Secure) that crashed without unwinding its `utun` and DNS injection.
+
+**Why `nslookup` lies**: `nslookup` reads only `/etc/resolv.conf` (one nameserver). `dscacheutil` and `getaddrinfo` go through DirectoryService, which queries the whole resolver chain in `scutil --dns`. A divergence between these two is the smoking gun.
+
+**The "ping ok but DNS dead" trap**: `ping <resolver-ip>` may answer in <1ms even when port 53 is dead, because the `utun` interface still claims the IP and replies to ICMP locally. Don't infer resolver health from `ping`. Test the actual service: `dig @<ip> +tries=1 +timeout=3 example.com`.
+
+#### Diagnosis: Bisect by Nameserver
+
+Find the dead resolver in under 15 seconds:
+
+```bash
+# 1. Read every resolver's nameserver, interface, and matching scope
+scutil --dns | grep -E "^resolver|nameserver|domain :|search domain|if_index"
+
+# 2. Time each nameserver in isolation (3-second cap)
+for ns in <each_unique_nameserver_from_step_1>; do
+  printf "  %s: " "$ns"
+  /usr/bin/time -p dig @$ns +tries=1 +timeout=3 +short example.com 2>&1 | tr '\n' ' '
+  echo
+done
+```
+
+Healthy nameservers respond in <0.1s. The dead one returns `connection timed out; no servers could be reached` after exactly 3.01s.
+
+For IPv6 resolvers, run the same `dig @<ipv6>` test — Tailscale and several VPNs inject both v4 and v6 addresses, and either side dying produces the same symptom.
+
+#### Read Resolver Attributes — Determines Blast Radius
+
+Each `scutil --dns` resolver has attributes that decide which queries it participates in:
+
+| Attribute | Matches | Stall radius if this resolver dies |
+|-----------|---------|------------------------------------|
+| `domain : foo.com` | Only `*.foo.com` queries | Bounded — only `foo.com` lookups stall |
+| `search domain : foo` | All queries (search suffix appended) | Unbounded — every lookup stalls |
+| No `domain` field at all | All queries (default participation) | Unbounded — every lookup stalls |
+
+A dead resolver with a `domain` filter is annoying but localized. A dead resolver with no `domain` filter (very common with VPN-injected DNS like Tailscale's `100.100.100.100`) tanks every system lookup until you fix it.
+
+#### Confirm the Suspect Component
+
+Once the bisection identifies the dead nameserver, identify which app injected it (interface name in `if_index` is the strongest hint — `utun*` interfaces usually trace back to a VPN daemon).
+
+For Tailscale specifically:
+
+```bash
+tailscale status
+# Healthy: lists peers
+# Dead:    failed to connect to local Tailscale service; is Tailscale running?
+```
+
+The "failed to connect" error means the daemon process is gone but the network configuration it injected (utun interface + DNS resolver entry) hasn't been cleaned up. The same pattern applies to any VPN/tunneling tool.
+
+#### Fix
+
+Restart the responsible app at the application level so its cleanup hooks run and remove the stale interface:
+
+**Tailscale (App Store and Standalone macOS builds)**:
+
+```bash
+osascript -e 'quit app "Tailscale"' && sleep 3 && open -a Tailscale
+```
+
+For other VPN/tunneling tools, prefer a clean app-level quit (menu bar → Quit, or `osascript -e 'quit app "<name>"'`) over `kill -9`. Forced kill skips cleanup and can leave the same dead-interface state. Only escalate to `pkill -9 <name>` if the app refuses to exit normally.
+
+**Why "restart the app" beats "flush DNS cache"**: `sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder` flushes cached results, but the resolver chain in `scutil --dns` is rebuilt from network configuration, not from the cache. The dead resolver is still there after a flush. The fix has to come from the app that registered the resolver in the first place.
+
+#### Verify End-to-End (4 Dimensions)
+
+A DNS-resolver fix is easy to half-verify. All four must pass before declaring the system path healed:
+
+```bash
+# 1. The owning daemon is back (not just its UI)
+tailscale status | head -3
+
+# 2. The previously-dead nameserver responds fast
+dig @<previously-dead-ns> +tries=1 +timeout=3 +short example.com
+# Expected: <0.1s, returns IP
+
+# 3. macOS system path is unblocked (proves getaddrinfo recovered)
+/usr/bin/time -p dscacheutil -q host -a name example.com
+# Expected: <0.1s, returns IP
+
+# 4. The original failing command works WITHOUT any workaround
+ssh -o "ProxyCommand=none" -T git@github.com
+# Expected: "Hi <user>! You've successfully authenticated..."
+```
+
+The fourth dimension is the one that matters most. If you applied a workaround during diagnosis (a `ProxyCommand` that delegates DNS to a SOCKS5 proxy, a `/etc/hosts` entry, a hardcoded IP), running the original command with the workaround disabled (`ProxyCommand=none`) is the only way to know you actually healed the system DNS path rather than just routed around it.
+
+See [references/dns_resolver_chain_stall.md](references/dns_resolver_chain_stall.md) for the full mental model of macOS resolver ordering, the IPv4-vs-IPv6 split, and a worked example walking through every diagnostic command and its real output.
+
 ### Step 3: Fix Proxy Tool Configuration
 
 Identify the proxy tool and apply the appropriate fix. See [references/proxy_conflict_reference.md](references/proxy_conflict_reference.md) for detailed instructions per tool.
@@ -735,6 +857,8 @@ ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no <user>@<tailscale-ip> 'echo
 ```
 
 All three must pass. If step 1 fails, revisit Step 3. If step 1 shows wrong utun (e.g., Shadowrocket's utun with MTU 4064 instead of Tailscale's with MTU 1280), that is also a route conflict. If step 2 passes but step 3 fails with `kex_exchange_identification`, revisit Step 5A (Tailscale SSH proxy intercept). If step 2 fails, check WSL sshd or firewall. If step 3 fails with other errors, revisit Steps 4-5.
+
+**For DNS-related fixes (Step 2I)**, the three steps above are not sufficient — they don't cover system-DNS recovery. Use the four-dimensional verification at the end of Step 2I instead: daemon health, per-resolver `dig`, `dscacheutil`, and the original failing command run **without** any workaround.
 
 ## SOP: Remote Development via Tailscale
 
