@@ -62,8 +62,8 @@ The statusline script receives a JSON object on stdin. This reference documents 
 | `context_window_size` | number | Model's total context window in tokens (e.g., 1000000 = 1M) |
 | `used_percentage` | number | Current context usage as percentage (0-100, may have decimals) |
 | `remaining_percentage` | number | Remaining context capacity as percentage |
-| `total_input_tokens` | number | **Session-cumulative** input tokens (not current context state) |
-| `total_output_tokens` | number | **Session-cumulative** output tokens |
+| `total_input_tokens` | number | Tokens currently in the context window (sum of `input_tokens` + `cache_creation_input_tokens` + `cache_read_input_tokens`). **Before Claude Code v2.1.132 this was session-cumulative and could exceed `context_window_size`.** |
+| `total_output_tokens` | number | Output tokens from the most recent response. **Before v2.1.132 this was session-cumulative.** |
 | `current_usage.input_tokens` | number | Current turn uncached input tokens |
 | `current_usage.output_tokens` | number | Current turn output tokens |
 | `current_usage.cache_creation_input_tokens` | number | Tokens written to prompt cache this turn |
@@ -80,7 +80,11 @@ current_context_used = current_usage.input_tokens
 
 This sum should approximately equal `context_window_size * used_percentage / 100`.
 
-**Do NOT use `total_input_tokens`** — it's the session-level cumulative total, which can exceed the context window size (e.g., 150K total_input_tokens in a 100K context window is normal because old content gets evicted).
+**Prefer `current_usage.*` summed.** It is correct on every Claude Code version
+(0 at session start, never null, never cumulative). `total_input_tokens` is
+equivalent on v2.1.132 and later but was session-cumulative before that and
+could exceed `context_window_size`. If you need to support older Claude Code
+versions, use `current_usage`.
 
 ### Model Context Window Sizes (Reference)
 

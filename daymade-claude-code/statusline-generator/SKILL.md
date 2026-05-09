@@ -1,253 +1,174 @@
 ---
 name: statusline-generator
-description: Configures and customizes Claude Code statuslines with context window display (actual token counts), multi-line layouts, cost tracking via ccusage, git status indicators, human-readable formatting, and customizable colors. Activates for statusline setup, installation, configuration, customization, context window display, color changes, cost display, git status integration, or troubleshooting statusline issues.
+description: Install, configure, customize, or troubleshoot the Claude Code statusline (the line above the prompt with cwd, model, and token counts). Use when the user wants to set up or change the statusline, switch between minimal and full layouts, show absolute token counts (e.g. ctx 108K / 1M) instead of a percentage, add cost via ccusage or git status, or fix a statusline that is blank, silent, stuck, shows "permission denied", or stopped updating after a script edit (commonly a missing chmod +x). Also covers debug-dumping the stdin JSON Claude Code passes the script. Trigger phrases include "configure statusline", "statusline blank", "status line not showing", "statusline broken", "show token count in statusline", 状态栏, 状态栏不显示, 状态栏空白, 显示工作目录, 显示 token 数.
 ---
 
 # Statusline Generator
 
-## Overview
+A single-source-of-truth statusline for Claude Code. One script, two layouts,
+end-to-end self-verification.
 
-This skill provides tools and guidance for creating and customizing Claude Code statuslines. It generates multi-line statuslines optimized for portrait screens, integrates with `ccusage` for session/daily cost tracking, displays git branch status, and supports color customization.
+## Quick health check (start here when something is wrong)
 
-## When to Use This Skill
+Run this first whenever the statusline misbehaves. It catches the silent failures
+that account for most "configured but not working" reports:
 
-This skill activates for:
-- Statusline configuration requests for Claude Code
-- Cost information display (session/daily costs)
-- Multi-line layouts for portrait or narrow screens
-- Statusline color or format customization
-- Statusline display or cost tracking issues
-- Git status or path shortening features
-
-## Dependencies
-
-The statusline script needs to parse JSON from stdin. It auto-detects the available parser:
-
-| Priority | Tool | Availability |
-|----------|------|-------------|
-| 1 (preferred) | `jq` | macOS/Linux: `brew install jq` / `apt install jq`; Windows: `choco install jq` or `scoop install jq` |
-| 2 (fallback) | `python3` | Pre-installed on macOS and most Linux distros; Windows: `winget install python3` or python.org |
-
-If neither is available, context window and cost display will be skipped — git branch and path still work.
-
-Other requirements:
-- `git` — for branch status (optional; gracefully skips outside repos)
-- `awk` — for number formatting (installed on macOS/Linux by default; Git Bash on Windows includes it)
-- `ccusage` — for session/daily cost tracking (optional; gracefully skips if missing)
-
-## Quick Start
-
-### Basic Installation
-
-Install the default multi-line statusline:
-
-1. Run the installation script:
-   ```bash
-   bash scripts/install_statusline.sh
-   ```
-
-2. Restart Claude Code to see the statusline
-
-The default statusline displays:
-- **Line 1**: `username (model) [session_cost/daily_cost]  ctx: 89.5K/1.0M (9%)`
-- **Line 2**: `current_path`
-- **Line 3**: `[git:branch*+]`
-
-### Manual Installation
-
-Alternatively, manually install by:
-
-1. Copy `scripts/generate_statusline.sh` to `~/.claude/statusline.sh`
-2. Make it executable: `chmod +x ~/.claude/statusline.sh`
-3. Update `~/.claude/settings.json`:
-   ```json
-   {
-     "statusLine": {
-       "type": "command",
-       "command": "bash /home/username/.claude/statusline.sh",
-       "padding": 0
-     }
-   }
-   ```
-
-## Statusline Features
-
-### Multi-Line Layout
-
-The statusline uses a 3-line layout optimized for portrait screens:
-
-```
-username (Sonnet 4.5 [1M]) [$0.26/$25.93]  ctx: 89.5K/1.0M (9%)
-~/workspace/java/ready-together-svc
-[git:feature/branch-name*+]
+```bash
+bash scripts/health_check.sh
 ```
 
-**Benefits:**
-- Shorter lines fit narrow screens
-- Clear visual separation of information types
-- No horizontal scrolling needed
+It validates four layers:
+1. `~/.claude/statusline.sh` exists and is executable. **Missing `chmod +x` is
+   the single most common silent-failure cause** — Claude Code runs the script,
+   `exec` fails, statusline goes blank.
+2. `~/.claude/settings.json` has a valid `statusLine` block pointing at the script.
+3. Mock stdin tests covering complete data, zero tokens, missing fields,
+   and `$HOME` path shortening.
+4. Real stdin replay from `/tmp/.claude-statusline-last-stdin.json` if you
+   previously ran with `CLAUDE_STATUSLINE_DEBUG=1`.
 
-### Cost Tracking Integration
+Each failure prints a one-line fix command — you don't have to read documentation
+to recover.
 
-Cost tracking via `ccusage`:
-- **Session Cost**: Current conversation cost
-- **Daily Cost**: Total cost for today
-- **Format**: `[$session/$daily]` in magenta
-- **Caching**: 2-minute cache to avoid performance impact
-- **Background Fetch**: First run loads costs asynchronously
+## Quick install
 
-**Requirements:** `ccusage` must be installed and in PATH. See `references/ccusage_integration.md` for installation and troubleshooting.
-
-### Model Name Shortening
-
-Model names are automatically shortened:
-- `"Sonnet 4.5 (with 1M token context)"` → `"Sonnet 4.5 [1M]"`
-- `"Opus 4.1 (with 500K token context)"` → `"Opus 4.1 [500K]"`
-
-This saves horizontal space while preserving key information.
-
-### Context Window Display
-
-The statusline can show actual context window usage with human-readable token counts — not just a percentage. This is the most important statusline feature for long sessions.
-
-Format:
-```
-ctx: 88.9K/1.0M (9%)
+```bash
+bash scripts/install_statusline.sh
 ```
 
-Components:
-- **Used tokens**: `current_usage.input_tokens + cache_read_input_tokens + cache_creation_input_tokens`
-- **Total capacity**: `context_window_size` from the input JSON
-- **Percentage**: Shown in parentheses as secondary info
-- **Human-readable**: `<1000` → raw, `≥1000` → `X.XK`, `≥1M` → `X.XM`
-- **Color-coded**: Green (≤50%), Yellow (51–80%), Red (>80%)
+This script:
+- Backs up any existing `~/.claude/statusline.sh` and `settings.json`.
+- Copies `generate_statusline.sh` to `~/.claude/statusline.sh` and `chmod +x`s it.
+- Updates `settings.json` `statusLine` block via `jq` (preserves other settings).
+- **Mandatorily runs `health_check.sh` and shows the result** — installation
+  is not "complete" until verification passes.
 
-**Important**: Use `current_usage.*` fields to compute actual context usage. `total_input_tokens` is the session-cumulative count and can exceed the context window size.
+Restart Claude Code (or send any new message) to see the statusline update.
 
-Full statusline input JSON schema (all available fields): `references/context-window-schema.md`.
+## What you get
 
-### Git Status Indicators
+### Default — minimal one-line layout
 
-Git branch status shows:
-- **Yellow**: Clean branch (no changes)
-- **Red**: Dirty branch (uncommitted changes)
-- **Indicators**:
-  - `*` - Modified or staged files
-  - `+` - Untracked files
-  - Example: `[git:main*+]` - Modified files and untracked files
+```
+~/code/myproject  Opus 4.7 (1M context)  ctx: 108K / 1M
+```
 
-### Path Shortening
+Just the essentials: short path, model name, absolute token counts. No colors,
+no git, no cost, no percentage. Designed for users who want signal without noise.
 
-Paths are shortened:
-- Home directory replaced with `~`
-- Example: `/home/username/workspace/project` → `~/workspace/project`
+### Full — multi-line with cost and git
 
-### Color Scheme
+Set `CLAUDE_STATUSLINE_LAYOUT=full` in your shell profile to enable:
 
-Default colors optimized for visibility:
-- **Username**: Bright Green (`\033[01;32m`)
-- **Model**: Bright Cyan (`\033[01;36m`)
-- **Costs**: Bright Magenta (`\033[01;35m`)
-- **Path**: Bright White (`\033[01;37m`)
-- **Git (clean)**: Bright Yellow (`\033[01;33m`)
-- **Git (dirty)**: Bright Red (`\033[01;31m`)
+```
+alex (Sonnet 4.6) [$0.42/$25.93]  ctx: 108K/1M (11%)
+~/code/myproject
+[git:main*+]
+```
+
+- Line 1: user, model, ccusage session/daily costs, color-coded ctx (green ≤50%,
+  yellow 51–80%, red >80%).
+- Line 2: short path.
+- Line 3: git branch with `*` for modified, `+` for untracked.
+
+## Layouts: how to switch
+
+The script reads layout from environment, not flags (Claude Code passes JSON on stdin,
+so flags would conflict). Set in `~/.zshrc` or `~/.bashrc`:
+
+```bash
+# Minimal (default — same as not setting it)
+export CLAUDE_STATUSLINE_LAYOUT=minimal
+
+# Full
+export CLAUDE_STATUSLINE_LAYOUT=full
+```
+
+Restart your shell (or `source` the rc file) so Claude Code inherits the change,
+then send a message — statusline refreshes within 300ms.
+
+## Debug stdin capture
+
+To see exactly what JSON Claude Code sends your script:
+
+```bash
+export CLAUDE_STATUSLINE_DEBUG=1
+```
+
+Each invocation writes its stdin to `/tmp/.claude-statusline-last-stdin.json`
+(overwriting on every refresh). Inspect with `jq .`. Useful for:
+
+- Diagnosing why a field doesn't render the way you expect.
+- Re-running the script against real input: `cat /tmp/.claude-statusline-last-stdin.json | ~/.claude/statusline.sh`.
+- Filing bug reports — paste the dump as ground truth.
+
+## Authoring rules (why this skill is shaped this way)
+
+Two production failure modes drove the current design. Both are sealed in code,
+not just docs:
+
+### Rule 1 — Always `chmod +x`, always verify by running
+
+The single biggest silent-failure cause of any statusline is a script without
+the executable bit: Claude Code's `exec` fails silently and the bar goes blank
+with no error. `install_statusline.sh` always `chmod +x`s; `health_check.sh`
+flags the bit if missing. **If you hand-write or hand-edit a statusline script,
+mock-test it before declaring done:** `echo '{}' | bash your-script.sh`.
+
+### Rule 2 — "Configuration complete" is meaningless without evidence
+
+"Wrote the file and updated settings.json" is not the same as "the script runs
+and produces the expected output." `install_statusline.sh` therefore always
+runs `health_check.sh` at the end and exits non-zero if any check fails.
+Treat any "complete!" report from any agent that lacks evidence as suspect.
+
+For field-level traps (`used_percentage` null at session start, `total_input_tokens`
+semantics across Claude Code versions, hardcoded `context_window_size`), see
+[`references/context-window-schema.md`](references/context-window-schema.md).
 
 ## Customization
 
-### Changing Colors
+For colors, custom segments (hostname, time, etc.), and disabling cost tracking,
+see [`references/customization.md`](references/customization.md).
 
-Customize colors by editing `~/.claude/statusline.sh` and modifying the ANSI color codes in the final `printf` statement. See `references/color_codes.md` for available colors.
+## Dependencies
 
-**Example: Change username to blue**
-```bash
-# Find this line:
-printf '\033[01;32m%s\033[00m \033[01;36m(%s)\033[00m%s\n\033[01;37m%s\033[00m\n%s' \
+The script auto-detects available tools and degrades gracefully:
 
-# Change \033[01;32m (green) to \033[01;34m (blue):
-printf '\033[01;34m%s\033[00m \033[01;36m(%s)\033[00m%s\n\033[01;37m%s\033[00m\n%s' \
-```
+| Tool | Required for | Fallback |
+|------|-------------|----------|
+| `jq` | JSON parsing (preferred) | falls back to `python3` |
+| `python3` | JSON parsing fallback | bare `cwd` only |
+| `awk` | token K/M formatting | required by both layouts |
+| `git` | git status (full layout) | silent skip if missing or not in repo |
+| `ccusage` | cost (full layout) | silent skip if missing |
 
-### Single-Line Layout
-
-Convert to single-line layout by modifying the final `printf`:
-
-```bash
-# Replace:
-printf '\033[01;32m%s\033[00m \033[01;36m(%s)\033[00m%s\n\033[01;37m%s\033[00m\n%s' \
-    "$username" "$model" "$cost_info" "$short_path" "$git_info"
-
-# With single-line + context:
-printf '\033[01;36m[%s]\033[00m \033[01;35m%s\033[00m%s | %bctx: %s/%s (%s%%)\033[00m | \033[01;32m$%s\033[00m' \
-    "$model" "$short_dir" "$git_info" "$ctx_color" "$ctx_used_h" "$ctx_size_h" "$ctx_used_pct" "$cost"
-# Output: [Sonnet 4.5 [1M]] project (main*) | ctx: 89.5K/1M (9%) | $0.42
-```
-
-### Disabling Cost Tracking
-
-If `ccusage` is unavailable or not desired:
-
-1. Comment out the cost section in the script (lines ~47-73)
-2. Remove `%s` for `$cost_info` from the final `printf`
-
-See `references/ccusage_integration.md` for details.
-
-### Adding Custom Elements
-
-Add custom information (e.g., hostname, time):
-
-```bash
-# Add variable before final printf:
-hostname=$(hostname -s)
-current_time=$(date +%H:%M)
-
-# Update printf to include new elements:
-printf '\033[01;32m%s@%s\033[00m \033[01;36m(%s)\033[00m%s [%s]\n...' \
-    "$username" "$hostname" "$model" "$cost_info" "$current_time" ...
-```
+Install on macOS: `brew install jq`. On Debian/Ubuntu: `apt install jq`.
 
 ## Troubleshooting
 
-### Costs Not Showing
+For symptom-by-symptom diagnostics, see
+[`references/troubleshooting-decision-tree.md`](references/troubleshooting-decision-tree.md).
+It walks through:
 
-**Check:**
-1. Is `ccusage` installed? Run `which ccusage`
-2. Test `ccusage` manually: `ccusage session --json --offline -o desc`
-3. Wait 5-10 seconds after first display (background fetch)
-4. Check cache: `ls -lh /tmp/claude_cost_cache_*.txt`
-
-**Solution:** See `references/ccusage_integration.md` for detailed troubleshooting.
-
-### Colors Hard to Read
-
-**Solution:** Adjust colors for your terminal background using `references/color_codes.md`. Bright colors (`01;3X`) are generally more visible than regular (`00;3X`).
-
-### Statusline Not Updating
-
-**Check:**
-1. Verify settings.json points to correct script path
-2. Ensure script is executable: `chmod +x ~/.claude/statusline.sh`
-3. Restart Claude Code
-
-### Git Status Not Showing
-
-**Check:**
-1. Are you in a git repository?
-2. Test git commands: `git branch --show-current`
-3. Check git permissions in the directory
+1. Statusline blank or never updates (chmod cause)
+2. ctx segment missing or wrong (field traps)
+3. Want token counts not percentages (layout switch)
+4. Colors render as raw escape codes (terminal compatibility)
+5. Git segment missing (full layout)
+6. Cost segment missing (ccusage / cache)
+7. Edits have no effect (path mismatch)
+8. Slow refresh (jq vs python3)
 
 ## Resources
 
-### scripts/generate_statusline.sh
-Main statusline script with all features (context window, multi-line, ccusage, git, colors). Copy to `~/.claude/statusline.sh` for use.
-
-### scripts/install_statusline.sh
-Automated installation script that copies the statusline script and updates settings.json.
-
-### references/context-window-schema.md
-Complete statusline input JSON schema. Documents all fields under `context_window`, `cost`, `model`, `workspace`. Load for context window display implementation or debugging.
-
-### references/color_codes.md
-Complete ANSI color code reference for customizing statusline colors. Load when users request color customization.
-
-### references/ccusage_integration.md
-Detailed explanation of ccusage integration, caching strategy, JSON structure, and troubleshooting. Load when users experience cost tracking issues or want to understand how it works.
+| File | Purpose |
+|------|---------|
+| `scripts/generate_statusline.sh` | The statusline script. Single source of truth. Two layouts via `CLAUDE_STATUSLINE_LAYOUT`. |
+| `scripts/install_statusline.sh` | Idempotent installer. Backs up, copies, chmods, wires `settings.json`, runs health check. |
+| `scripts/health_check.sh` | Four-layer verification: file perms, settings.json wiring, mock stdin tests, real stdin replay. |
+| `references/troubleshooting-decision-tree.md` | Symptom-driven diagnostic flowchart. Load when statusline misbehaves. |
+| `references/customization.md` | Color changes, custom segments, threshold tuning, single-line full layout. Load when user wants to modify how the statusline looks. |
+| `references/context-window-schema.md` | Claude Code statusline JSON schema. Documents every field plus `current_usage` vs `total_input_tokens` semantics across versions. |
+| `references/color_codes.md` | ANSI color codes reference. Load for color customization. |
+| `references/ccusage_integration.md` | ccusage integration deep-dive: caching, JSON shape, troubleshooting. Load for cost-related issues. |
