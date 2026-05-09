@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.54.0] - 2026-05-10
+
+### Added
+- **daymade-audio** suite v1.0.0: Audio processing suite covering the full speech pipeline — ASR transcription (Qwen3, StepFun), transcript error correction, structured meeting minutes generation, and TTS voice synthesis. Bundles 5 skills: `asr-transcribe-to-text`, `stepfun-asr`, `transcript-fixer`, `meeting-minutes-taker`, `stepfun-tts`.
+
+### Changed
+- Move `meeting-minutes-taker` from `daymade-docs` to `daymade-audio` — its core capability is semantic analysis of meeting transcripts, not document format processing.
+- Move `asr-transcribe-to-text`, `stepfun-asr`, `stepfun-tts`, `transcript-fixer` from repo root into `daymade-audio/` suite directory.
+- Marketplace plugin count: 55 → 56 (4 suites now: `daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`).
+
 ## [1.53.2] - 2026-05-10
 
 ### Fixed
