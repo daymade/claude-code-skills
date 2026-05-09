@@ -88,16 +88,16 @@ cat .claude-plugin/marketplace.json | jq '.plugins[] | select(.name == "skill-na
 
 **Common mistakes**:
 ```json
-// ❌ Wrong: name mismatch
+// ❌ Wrong: name vs source mismatch
 {
   "name": "macos_cleaner",  // Underscore
-  "skills": ["./macos-cleaner"]  // Dash
+  "source": "./macos-cleaner"  // Dash
 }
 
 // ✅ Correct: consistent naming
 {
   "name": "macos-cleaner",
-  "skills": ["./macos-cleaner"]
+  "source": "./macos-cleaner"
 }
 ```
 
@@ -326,7 +326,7 @@ claude plugin install new-plugin@my-marketplace  # ✅ Works
 // marketplace.json
 {
   "name": "my_plugin",  // Underscore
-  "skills": ["./my-plugin"]  // Dash - will cause confusion
+  "source": "./my-plugin"  // Dash - will cause confusion
 }
 ```
 

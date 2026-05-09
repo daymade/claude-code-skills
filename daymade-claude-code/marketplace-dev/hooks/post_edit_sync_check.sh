@@ -46,15 +46,17 @@ skill_name = '$SKILL_NAME'
 found = False
 for p in data.get('plugins', []):
     skills = p.get('skills', [])
-    for s in skills:
-        if s.rstrip('/').split('/')[-1] == skill_name:
-            found = True
-            version = p.get('version', 'unknown')
-            print(json.dumps({
-                'result': f'SKILL.md for \"{skill_name}\" was modified. Remember to bump its version in marketplace.json (currently {version}). Users on the old version won\\'t receive this update otherwise.'
-            }))
-            break
-    if found:
+    source = p.get('source', '')
+    # Match via skills array (suite plugins) or source path (single-skill plugins)
+    matched = any(s.rstrip('/').split('/')[-1] == skill_name for s in skills)
+    if not matched and isinstance(source, str):
+        matched = source.rstrip('/').split('/')[-1] == skill_name
+    if matched:
+        found = True
+        version = p.get('version', 'unknown')
+        print(json.dumps({
+            'result': f'SKILL.md for \"{skill_name}\" was modified. Remember to bump its version in marketplace.json (currently {version}). Users on the old version won\\'t receive this update otherwise.'
+        }))
         break
 
 if not found:

@@ -115,11 +115,13 @@ Key rules that are NOT obvious from the docs:
 5. **`strict: false`** is required when there's no `plugin.json` in the repo.
    With `strict: false`, the marketplace entry IS the entire plugin definition.
    Having BOTH `strict: false` AND a `plugin.json` with components causes a load failure.
-6. **`source` defines the installed plugin root**. All `skills` paths are relative
-   to that root. Use `source: "./"` only when a full repo snapshot is intended.
-   Use `source: "./path/to/skill"` + `skills: ["./"]` for a single-skill narrow
-   cache. Use `source: "./<suite>"` for suite plugins whose cache should
-   contain only the suite members.
+6. **`source` defines the installed plugin root**. For single-skill plugins, point
+   `source` directly at the skill directory (e.g., `"./tunnel-doctor"`) and omit
+   `skills` entirely — this is the official pattern used by 167/168 plugins in
+   `anthropics/claude-plugins-official`. For suite plugins, use
+   `source: "./<suite>"` with explicit `skills` array listing subdirectories.
+   Avoid `source: "./"` (installs full repo as cache) and `skills: ["./"]`
+   (rejected by Claude Code 2.1.x path-escape validator).
 7. **Reserved marketplace names** that CANNOT be used: `claude-code-marketplace`,
    `claude-code-plugins`, `claude-plugins-official`, `anthropic-marketplace`,
    `anthropic-plugins`, `agent-skills`, `knowledge-work-plugins`, `life-sciences`.
@@ -147,12 +149,11 @@ Use this template, filling in from the analysis:
     {
       "name": "<skill-name>",
       "description": "<EXACT text from SKILL.md frontmatter, do NOT rewrite>",
-      "source": "./",
+      "source": "./<skill-name>",
       "strict": false,
       "version": "1.0.0",
       "category": "<category>",
-      "keywords": ["<relevant>", "<keywords>"],
-      "skills": ["./skills/<skill-name>"]
+      "keywords": ["<relevant>", "<keywords>"]
     }
   ]
 }
@@ -305,9 +306,9 @@ For each plugin entry:
 
 - [ ] `description` matches SKILL.md frontmatter EXACTLY (not rewritten)
 - [ ] `version` is `"1.0.0"` for new plugins, bumped for changed plugins
-- [ ] `source` starts with `"./"` and intentionally matches the plugin cache boundary
-- [ ] Every `skills` path starts with `"./"` and resolves relative to `source`
-- [ ] If `source` points directly at a skill root, `skills` is `["./"]`
+- [ ] `source` points directly at the skill directory (e.g., `"./skill-name"`)
+- [ ] Single-skill plugins omit the `skills` field (auto-discovery from `source`)
+- [ ] Suite plugins list `skills` paths relative to `source`
 - [ ] `strict` is `false` (no plugin.json in repo)
 - [ ] `name` is kebab-case, unique across all entries
 

@@ -145,8 +145,8 @@
     {
       "name": "plugin-name",
       "description": "...",
-      "version": "1.0.0",
-      "skills": ["./skill-directory"]
+      "source": "./skill-directory",
+      "version": "1.0.0"
     }
   ]
 }

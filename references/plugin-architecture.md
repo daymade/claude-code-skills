@@ -48,18 +48,31 @@ Plugin (marketplace.json entry)
 ```
 
 **Configuration** (in `.claude-plugin/marketplace.json`):
+
+Single-skill plugin (official pattern — `source` points to skill directory, no `skills` field):
 ```json
 {
   "name": "my-plugin",
   "description": "Use when...",
+  "source": "./my-plugin",
   "version": "1.0.0",
   "category": "utilities",
-  "keywords": ["keyword1", "keyword2"],
+  "keywords": ["keyword1", "keyword2"]
+}
+```
+
+Suite plugin (multiple skills under one namespace — `skills` required):
+```json
+{
+  "name": "my-suite",
+  "description": "Suite description",
+  "source": "./my-suite",
+  "version": "1.0.0",
   "skills": ["./skill-1", "./skill-2"]
 }
 ```
 
-**Example**: The `skill-creator` plugin contains one skill (`./skill-creator`), while a hypothetical `developer-tools` plugin might contain multiple skills like `./git-helper`, `./code-reviewer`, `./test-runner`.
+**Example**: The `skill-creator` plugin contains one skill (`source: "./daymade-skill/skill-creator"`), while the `daymade-docs` suite plugin bundles multiple skills like `doc-to-markdown`, `pdf-creator`, `mermaid-tools`.
 
 ### 3. Agents (Subagents)
 
@@ -139,8 +152,8 @@ claude plugin install macos-cleaner@daymade-skills
   "plugins": [
     {
       "name": "macos-cleaner",
-      "version": "1.0.0",
-      "skills": ["./macos-cleaner"]
+      "source": "./macos-cleaner",
+      "version": "1.0.0"
     }
   ]
 }

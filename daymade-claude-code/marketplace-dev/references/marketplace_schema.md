@@ -75,7 +75,7 @@ manifest schema, plus marketplace-specific fields.
 
 | Source | Format | Example |
 |--------|--------|---------|
-| Relative path | string `"./"` | `"source": "./"` |
+| Relative path | string `"./<dir>"` | `"source": "./my-skill"` |
 | GitHub | object | `{"source": "github", "repo": "owner/repo"}` |
 | Git URL | object | `{"source": "url", "url": "https://..."}` |
 | Git subdirectory | object | `{"source": "git-subdir", "url": "...", "path": "..."}` |
