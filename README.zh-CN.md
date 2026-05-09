@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-51-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.51.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-52-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.52.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 51 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 52 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2142,24 +2142,44 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
-### 50. **stepfun-tts** - 阶跃 StepAudio 2.5 TTS + ASR
+### 50. **stepfun-tts** - 阶跃 StepAudio 2.5 Contextual TTS
 
-用 StepFun 阶跃的 StepAudio 2.5 系列做中文 / 日语语音合成与长音频转写。封装了三个会浪费时间的非显然坑：`voice_label` 移除、`/v1/audio/asr/sse` 端点、更严的审查。
+用 `stepaudio-2.5-tts` 做中文 / 日语语音合成。封装了 TTS 部分两个会浪费时间的非显然坑：`voice_label` 被移除（改用自然语言 `instruction`）以及 2.5 时代更严格的审查（死/消失/政治敏感词）。
 
 **使用场景：**
-- 带情感和韵律控制的中 / 日语 TTS
-- 长音频转写（单次最长 ~30 分钟、32K context、~100x RTF）
+- 带情感和韵律控制的中 / 日语 TTS（耳语、停顿、加重、句中情绪转折）
+- 批量生成游戏 / 应用语音条目，每条单独处理 `censorship_block` 兜底
 - 从 `step-tts-2` 迁移到 `stepaudio-2.5-tts`（`voice_label` → `instruction` 是破坏性变更）
-- 遇到 StepFun 审查拦截或端点错误
+- 之前能合成的内容现在被审查拦截
 
 **主要功能：**
 - `stepaudio-2.5-tts`：用 `instruction`（≤200 字自然语言情绪）+ 文中 `()` 行内韵律
-- `stepaudio-2.5-asr`：SSE 流式 + base64 音频（避开误导性的 "model not supported" 错误）
-- 内置 `tts_generate.py`（含 `--batch <jsonl>`）、`asr_transcribe.py`、`ab_compare.sh`
+- 内置 `tts_generate.py`（含 `--batch <jsonl>`）、`ab_compare.sh`
 - API key 解析顺序：`$STEPFUN_API_KEY` → `${CLAUDE_PLUGIN_DATA}/config.json` 兜底
 - `references/migration_from_v2.md` 给出审查拦截的改写策略
 
-**要求**：StepFun API key（https://platform.stepfun.com/）。
+**要求**：StepFun API key 的 "Normal" 等级（https://platform.stepfun.com/）。如需 ASR / 转写，使用下方的姊妹技能 `stepfun-asr`。
+
+---
+
+### 52. **stepfun-asr** - 阶跃 StepAudio 2.5 ASR（SSE 端点）
+
+用 `stepaudio-2.5-asr` 转写中 / 英文音频。封装 2.5 ASR 系列最坑的一点：模型**不在** `/v1/audio/transcriptions`——错端点返回的 `model stepaudio-2.5-asr not supported` 看起来跟权限被拒一模一样，会让人浪费几小时排查。
+
+**使用场景：**
+- 长音频转写（单次最长 ~30 分钟、32K context、~85-101× RTF、无需客户端切片）
+- 从 `step-asr` / `step-asr-1.1` 迁移（端点不同、请求体不同、响应是 SSE 流）
+- 遇到误导性的 `model stepaudio-2.5-asr not supported` 错误（= 端点用错了，不是权限问题）
+- 调音频端点遭遇无声 4xx 鉴权失败（= 用了 "Plan" key 而不是 "Normal" key）
+
+**主要功能：**
+- `/v1/audio/asr/sse` SSE 流 + base64 音频 + 嵌套 JSON 请求体（脚本一并处理四个坑）
+- 内置 `asr_transcribe.py`——纯 stdlib CLI，按扩展名自动识别 mp3/wav/ogg/opus/pcm
+- 处理 SSE `error` 事件（审查在 ASR 端也会触发——罕见但真实存在）
+- API key 解析顺序：`$STEPFUN_API_KEY` → `${CLAUDE_PLUGIN_DATA}/config.json` 兜底
+- 推荐 `transcript-fixer`（ASR 纠错）和 `meeting-minutes-taker`（结构化纪要）作为下游技能
+
+**要求**：StepFun API key 的 "Normal" 等级（https://platform.stepfun.com/）。Plan key 调不通音频端点。
 
 ---
 
@@ -2286,8 +2306,11 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 ### 网络、流式与协议层调试
 使用 **debugging-network-issues** 应对症状和"显然原因"对不上的场景：HTTP/2 `RST_STREAM`、SSE 在 60s/100s/130s 整点卡死、"时灵时不灵"故障、或 CDN / 代理 / CGNAT 链路上的空闲超时事件。Skill 用**分层隔离实验**（同一逻辑请求走三条以上、每条仅差一跳的路径）替代假设堆叠，再加一套反审查模式——只在假设被**证伪**而不是单纯被"证实"之后才上 fix。
 
-### 中文 TTS 与长音频转写（StepFun 阶跃）
-使用 **stepfun-tts** 进行中 / 日语语音合成（通过 `instruction` + 行内 `()` 控制情绪与韵律），或单次最长 30 分钟的长音频转写（32K context、~100x RTF）。封装了让 StepAudio 2.5 新用户必踩的三个破坏性变更：`voice_label` 移除、`/v1/audio/asr/sse` 端点错位、更严的审查规则。可与 **transcript-fixer** 组合做 ASR 后处理，或与 **meeting-minutes-taker** 把长录音变成结构化纪要。
+### 中文 TTS（StepFun 阶跃 StepAudio 2.5）
+使用 **stepfun-tts** 进行中 / 日语语音合成（通过 `instruction` + 行内 `()` 控制情绪与韵律）。封装了让 StepAudio 2.5 新用户必踩的两个 TTS 破坏性变更：`voice_label` 移除和 2.5 时代更严的审查规则。可把 `step-tts-2` 作为单条审查兜底来组合使用。
+
+### 长音频转写（StepFun 阶跃 StepAudio 2.5）
+使用 **stepfun-asr** 单次 SSE 调用转写最长 30 分钟的中 / 英文音频（32K context、~85-101× RTF、无需客户端切片）。封装了 #1 大坑——模型**不在** `/v1/audio/transcriptions`，错端点返回误导性的 "model not supported" 错误。可与 **transcript-fixer** 组合做 ASR 纠错，或与 **meeting-minutes-taker** 把长录音变成结构化纪要。
 
 ## 📚 文档
 
@@ -2345,7 +2368,8 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **terraform-skill**：参见 `terraform-skill/SKILL.md` 查看按确切报错 → 根本原因 → 复制粘贴修复组织的实操陷阱完整目录
 - **slides-creator**：参见 `slides-creator/SKILL.md` 了解叙事优先工作流，参见 `slides-creator/references/narrative-design-guide.md` 了解 ABCDEFG 模型，参见 `slides-creator/references/content-creation-first-law.md` 了解通用内容创作原则
 - **debugging-network-issues**：参见 `debugging-network-issues/SKILL.md` 了解证伪优先工作流，参见 `debugging-network-issues/references/layered-isolation-experiment.md` 了解多跳隔离模式，参见 `debugging-network-issues/references/case-sse-rst-130s.md` 查看真实生产案例
-- **stepfun-tts**：参见 `stepfun-tts/SKILL.md` 了解 TTS+ASR 决策树，参见 `stepfun-tts/references/migration_from_v2.md` 查看 `voice_label` → `instruction` 迁移手册和审查改写清单
+- **stepfun-tts**：参见 `stepfun-tts/SKILL.md` 了解 Contextual TTS 决策树，参见 `stepfun-tts/references/migration_from_v2.md` 查看 `voice_label` → `instruction` 迁移手册和审查改写清单
+- **stepfun-asr**：参见 `stepfun-asr/SKILL.md` 了解 SSE 端点工作流和 ASR 侧四个坑（错端点、Plan vs Normal key、重复幻觉、SSE `error` 事件）。`stepfun-asr/references/api_reference.md` 给出原始 HTTP 集成所需的 JSON 请求体和 SSE 事件契约
 
 ## 🛠️ 系统要求
 
@@ -2371,7 +2395,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **Python 3.8+**（用于 continue-claude-work）：内置脚本进行会话提取（无外部依赖）
 - **uv + Scrapling CLI**（用于 scrapling-skill）：`uv tool install 'scrapling[shell]'`，浏览器抓取前运行 `scrapling install`
 - **Node.js 18+ + curl + unzip**（用于 ima-copilot）：`npx skills` 按需从 npm registry 拉取；IMA OpenAPI 凭据从 [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface) 获取
-- **StepFun API key**（用于 stepfun-tts）：在 [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys 获取
+- **StepFun API key**（用于 stepfun-tts 和 stepfun-asr——必须是 "Normal" 等级，Plan key 调音频端点会无声失败）：在 [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys 获取
 
 ## ❓ 常见问题
 
