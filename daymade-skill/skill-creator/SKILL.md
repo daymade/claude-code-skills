@@ -1027,12 +1027,11 @@ After packaging, update the marketplace registry to include the new or updated s
 {
   "name": "skill-name",
   "description": "Copy from SKILL.md frontmatter description",
-  "source": "./",
+  "source": "./skill-name",
   "strict": false,
   "version": "1.0.0",
   "category": "developer-tools",
-  "keywords": ["relevant", "keywords"],
-  "skills": ["./skill-name"]
+  "keywords": ["relevant", "keywords"]
 }
 ```
 
