@@ -57,9 +57,9 @@ Not theoretical — each cost debugging time.
 ### Using full repo source for a narrow plugin
 - **Symptom**: Installing a single plugin creates a cache containing many unrelated
   skill directories.
-- **Fix**: Point `source` at the intended plugin root and make `skills` relative to
-  that root. For a skill whose `SKILL.md` is directly in the source root, use
-  `skills: ["./"]`.
+- **Fix**: Point `source` directly at the skill directory (e.g., `"./my-skill"`)
+  and omit the `skills` field. Do not use `skills: ["./"]` — it is rejected by
+  Claude Code 2.1.x path-escape validator.
 
 ### Assuming marketplace name controls slash namespace
 - **Symptom**: Expecting `/daymade-skills:mermaid-tools` after installing
