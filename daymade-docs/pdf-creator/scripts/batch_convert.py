@@ -34,6 +34,24 @@ def main():
         default=None,
         help='Output directory for PDFs (default: same as input)'
     )
+    parser.add_argument(
+        '--theme', '-t',
+        type=str,
+        default='default',
+        help='CSS theme name (default: default). Available themes depend on what is in themes/'
+    )
+    parser.add_argument(
+        '--backend', '-b',
+        type=str,
+        default=None,
+        choices=['weasyprint', 'chrome'],
+        help='PDF rendering backend (default: auto-detect)'
+    )
+    parser.add_argument(
+        '--no-preview',
+        action='store_true',
+        help='Skip per-page PNG preview generation (faster for batch runs)'
+    )
 
     args = parser.parse_args()
 
@@ -64,8 +82,14 @@ def main():
             pdf_file = str(md_path.with_suffix('.pdf'))
 
         try:
-            print(f"Converting: {md_file} -> {pdf_file}")
-            markdown_to_pdf(str(md_path), pdf_file)
+            print(f"Converting: {md_file} -> {pdf_file} (theme={args.theme})")
+            markdown_to_pdf(
+                str(md_path),
+                pdf_file,
+                theme=args.theme,
+                backend=args.backend,
+                previews=not args.no_preview,
+            )
             success += 1
         except Exception as e:
             print(f"[ERROR] Failed to convert {md_file}: {e}")
