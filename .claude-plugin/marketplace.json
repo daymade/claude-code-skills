@@ -12,7 +12,7 @@
     {
       "name": "asr-transcribe-to-text",
       "description": "Transcribe audio and video files to text using a remote ASR service (Qwen3-ASR or OpenAI-compatible endpoint). Extracts audio from video, sends to configurable ASR endpoint, outputs clean text. Use when the user wants to transcribe recordings, convert audio/video to text, do speech-to-text, or mentions ASR, Qwen ASR, 转录, 语音转文字, 录音转文字, or has a meeting recording, lecture, interview, or screen recording to transcribe.",
-      "source": "./",
+      "source": "./asr-transcribe-to-text",
       "strict": false,
       "version": "1.0.0",
       "category": "productivity",
@@ -25,15 +25,12 @@
         "video",
         "vllm",
         "ffmpeg"
-      ],
-      "skills": [
-        "./asr-transcribe-to-text"
       ]
     },
     {
       "name": "capture-screen",
       "description": "Programmatic screenshot capture on macOS. Get window IDs via Swift CGWindowListCopyWindowInfo, capture specific windows with screencapture -l, and control application windows via AppleScript. Supports multi-shot workflows for capturing different sections of the same window. Use when taking automated screenshots, capturing application windows, or creating visual documentation",
-      "source": "./",
+      "source": "./capture-screen",
       "strict": false,
       "version": "1.0.1",
       "category": "utilities",
@@ -46,9 +43,6 @@
         "applescript",
         "automation",
         "visual-documentation"
-      ],
-      "skills": [
-        "./capture-screen"
       ]
     },
     {
@@ -122,7 +116,7 @@
     {
       "name": "cli-demo-generator",
       "description": "Generate professional animated CLI demos and terminal recordings with VHS. Supports automated generation, batch processing, and interactive recording for documentation and tutorials",
-      "source": "./",
+      "source": "./cli-demo-generator",
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
@@ -135,15 +129,12 @@
         "recording",
         "animation",
         "documentation"
-      ],
-      "skills": [
-        "./cli-demo-generator"
       ]
     },
     {
       "name": "cloudflare-troubleshooting",
       "description": "Investigate and resolve Cloudflare configuration issues using API-driven evidence gathering. Use when troubleshooting ERR_TOO_MANY_REDIRECTS, SSL errors, DNS issues, or any Cloudflare-related problems",
-      "source": "./",
+      "source": "./cloudflare-troubleshooting",
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
@@ -155,15 +146,12 @@
         "api",
         "debugging",
         "devops"
-      ],
-      "skills": [
-        "./cloudflare-troubleshooting"
       ]
     },
     {
       "name": "competitors-analysis",
       "description": "Analyze competitor repositories with evidence-based approach. Use when tracking competitors, creating competitor profiles, or generating competitive analysis. All analysis must be based on actual cloned code, never assumptions. Triggers include analyze competitor, add competitor, competitive analysis, or 竞品分析",
-      "source": "./",
+      "source": "./competitors-analysis",
       "strict": false,
       "version": "1.0.1",
       "category": "productivity",
@@ -175,9 +163,6 @@
         "market-research",
         "竞品分析",
         "code-analysis"
-      ],
-      "skills": [
-        "./competitors-analysis"
       ]
     },
     {
@@ -274,7 +259,7 @@
     {
       "name": "deep-research",
       "description": "Generate format-controlled research reports with evidence tracking, source governance, and multi-pass synthesis. V6.1 adds: source accessibility (circular verification forbidden, exclusive advantage encouraged). Enterprise Research Mode: six-dimension data collection, SWOT/barrier/risk frameworks, and three-level quality control for company research",
-      "source": "./",
+      "source": "./deep-research",
       "strict": false,
       "version": "2.4.0",
       "category": "documentation",
@@ -290,9 +275,6 @@
         "enterprise",
         "company-research",
         "due-diligence"
-      ],
-      "skills": [
-        "./deep-research"
       ]
     },
     {
@@ -333,7 +315,7 @@
     {
       "name": "douban-skill",
       "description": "Export and sync Douban (豆瓣) book/movie/music/game collections to local CSV files via Frodo API. Supports full export (all history) and RSS incremental sync (recent items). Use when the user wants to export Douban reading/watching/listening/gaming history, back up their Douban data, set up incremental sync, or mentions 豆瓣/douban collections. Triggers on: 豆瓣, douban, 读书记录, 观影记录, 书影音, 导出豆瓣, export, backup, sync, collection.",
-      "source": "./",
+      "source": "./douban-skill",
       "strict": false,
       "version": "1.0.0",
       "category": "productivity",
@@ -345,15 +327,12 @@
         "backup",
         "rss",
         "frodo"
-      ],
-      "skills": [
-        "./douban-skill"
       ]
     },
     {
       "name": "excel-automation",
       "description": "Create, parse, and control Excel files on macOS. Professional formatting with openpyxl (font colors, fills, borders, conditional formatting), complex xlsm parsing with stdlib zipfile+xml for investment bank financial models, and Excel window control via AppleScript (zoom, scroll, select). Use when creating formatted Excel reports, parsing financial models, or automating Excel on macOS",
-      "source": "./",
+      "source": "./excel-automation",
       "strict": false,
       "version": "1.0.0",
       "category": "productivity",
@@ -368,15 +347,12 @@
         "macos",
         "dcf",
         "investment-banking"
-      ],
-      "skills": [
-        "./excel-automation"
       ]
     },
     {
       "name": "fact-checker",
       "description": "Verifies factual claims in documents using web search and official sources, then proposes corrections with user confirmation. Use when the user asks to fact-check, verify information, validate claims, check accuracy, or update outdated information in documents. Supports AI model specs, technical documentation, statistics, and general factual statements",
-      "source": "./",
+      "source": "./fact-checker",
       "strict": false,
       "version": "1.0.0",
       "category": "productivity",
@@ -388,15 +364,12 @@
         "validation",
         "corrections",
         "web-search"
-      ],
-      "skills": [
-        "./fact-checker"
       ]
     },
     {
       "name": "feishu-doc-scraper",
       "description": "Save Feishu Docs and Feishu Wiki pages as clean Markdown from a live authenticated browser session. Uses TOC-driven section capture and coverage verification, and explicitly avoids relying on Web Clipper for virtual-scroll pages. Use when users ask to save, export, scrape, or archive a Feishu doc/wiki to Markdown, or when a Feishu page already open in Chrome needs to be turned into a local note.",
-      "source": "./",
+      "source": "./feishu-doc-scraper",
       "strict": false,
       "version": "1.0.0",
       "category": "productivity",
@@ -409,15 +382,12 @@
         "scraping",
         "browser",
         "archival"
-      ],
-      "skills": [
-        "./feishu-doc-scraper"
       ]
     },
     {
       "name": "financial-data-collector",
       "description": "Collect real financial data for any US publicly traded company from free public sources (yfinance). Output structured JSON with market data, historical financials, WACC inputs, and analyst estimates. Handles NaN year detection, CapEx sign preservation, and FCF definition mismatches. Use when users request company financials, stock data, DCF inputs, or financial data collection for any US equity ticker",
-      "source": "./",
+      "source": "./financial-data-collector",
       "strict": false,
       "version": "1.0.0",
       "category": "productivity",
@@ -431,15 +401,12 @@
         "market-data",
         "investment-research",
         "sec-filings"
-      ],
-      "skills": [
-        "./financial-data-collector"
       ]
     },
     {
       "name": "gangtise-copilot",
       "description": "One-stop installer and companion for the full Gangtise (岗底斯投研) OpenAPI skill suite — 19 official skills covering data retrieval (OHLC 行情, 财务, 估值, 研报, 首席观点, 会议纪要, 调研纪要), research workflows (个股研究 L1-L4, 观点 PK 对抗性分析, 主题研究, 事件复盘), and utility (股票池管理, 公开网页搜索). Zero-config install to Claude Code / OpenClaw / Codex with 4 preset modes (full / workshop / minimal / custom), guides accessKey + secretAccessKey setup with a live validation call against open.gangtise.com, and ships a read-only diagnostic script. Use this skill whenever the user mentions Gangtise, 岗底斯, gangtise-data-client, gangtise-kb-client, gangtise-file-client, gangtise-stock-research, gangtise-opinion-pk, installing any gangtise-* skill, configuring its credentials, or reports errors like 'token is invalid', '接口地址错误', 'the uri can't be accessed'. This is a wrapper around Gangtise's official skills — it installs and orchestrates them rather than replacing them.",
-      "source": "./",
+      "source": "./gangtise-copilot",
       "strict": false,
       "version": "1.1.0",
       "category": "developer-tools",
@@ -455,15 +422,12 @@
         "claude-code",
         "openclaw",
         "codex"
-      ],
-      "skills": [
-        "./gangtise-copilot"
       ]
     },
     {
       "name": "github-contributor",
       "description": "Strategic guide for becoming an effective GitHub contributor. Covers opportunity discovery, project selection, high-quality PR creation, and reputation building. Use when looking to contribute to open-source projects, building GitHub presence, or learning contribution best practices",
-      "source": "./",
+      "source": "./github-contributor",
       "strict": false,
       "version": "1.0.3",
       "category": "developer-tools",
@@ -475,15 +439,12 @@
         "reputation",
         "contributor",
         "oss"
-      ],
-      "skills": [
-        "./github-contributor"
       ]
     },
     {
       "name": "github-ops",
       "description": "Comprehensive GitHub operations using gh CLI and GitHub API for pull requests, issues, repositories, workflows, and API interactions",
-      "source": "./",
+      "source": "./github-ops",
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
@@ -494,15 +455,12 @@
         "issues",
         "workflows",
         "api"
-      ],
-      "skills": [
-        "./github-ops"
       ]
     },
     {
       "name": "i18n-expert",
       "description": "Complete internationalization/localization setup and auditing for UI codebases. Configure i18n frameworks, replace hard-coded strings with translation keys, ensure locale parity between en-US and zh-CN, and validate pluralization and formatting. Use when setting up i18n for React/Next.js/Vue apps, auditing existing implementations, replacing hard-coded strings, ensuring proper error code mapping, or validating pluralization and date/time/number formatting across locales",
-      "source": "./",
+      "source": "./i18n-expert",
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
@@ -517,15 +475,12 @@
         "locale",
         "multilingual",
         "globalization"
-      ],
-      "skills": [
-        "./i18n-expert"
       ]
     },
     {
       "name": "iOS-APP-developer",
       "description": "Develops iOS applications with XcodeGen, SwiftUI, and SPM. Use when configuring XcodeGen project.yml, resolving SPM dependency issues, deploying to devices, handling code signing, debugging camera/AVFoundation, iOS version compatibility issues, or fixing Library not loaded @rpath framework errors. Includes state machine testing patterns for @MainActor classes",
-      "source": "./",
+      "source": "./iOS-APP-developer",
       "strict": false,
       "version": "1.1.0",
       "category": "developer-tools",
@@ -541,15 +496,12 @@
         "swift",
         "xcode",
         "testing"
-      ],
-      "skills": [
-        "./iOS-APP-developer"
       ]
     },
     {
       "name": "ima-copilot",
       "description": "One-stop companion and installer for the official Tencent IMA skill (ima.qq.com). Installs upstream ima-skill to Claude Code/Codex/OpenClaw via npx skills add, guides API key setup, detects and fixes known issues (including the missing-YAML-frontmatter bug in submodule SKILL.md files) with user consent, and implements a personalized fan-out search strategy with priority-based knowledge base boosting and silent truncation detection",
-      "source": "./",
+      "source": "./ima-copilot",
       "strict": false,
       "version": "1.0.1",
       "category": "developer-tools",
@@ -565,15 +517,12 @@
         "claude-code",
         "codex",
         "openclaw"
-      ],
-      "skills": [
-        "./ima-copilot"
       ]
     },
     {
       "name": "llm-icon-finder",
       "description": "Find and access AI/LLM model brand icons from lobe-icons library in SVG/PNG/WEBP formats",
-      "source": "./",
+      "source": "./llm-icon-finder",
       "strict": false,
       "version": "1.0.0",
       "category": "assets",
@@ -583,15 +532,12 @@
         "llm",
         "branding",
         "lobe-icons"
-      ],
-      "skills": [
-        "./llm-icon-finder"
       ]
     },
     {
       "name": "macos-cleaner",
       "description": "Intelligent macOS disk space analysis and cleanup with safety-first philosophy. Use when users report disk space issues, need to clean their Mac, or want to understand storage consumption. Analyzes system caches, application remnants, large files, and development environments (Docker, Homebrew, npm, pip) with risk categorization (Safe/Caution/Keep) and requires explicit user confirmation before any deletions. Includes Mole visual tool integration for hybrid workflow",
-      "source": "./",
+      "source": "./macos-cleaner",
       "strict": false,
       "version": "1.1.0",
       "category": "utilities",
@@ -606,9 +552,6 @@
         "homebrew",
         "system-maintenance",
         "safety"
-      ],
-      "skills": [
-        "./macos-cleaner"
       ]
     },
     {
@@ -722,7 +665,7 @@
     {
       "name": "product-analysis",
       "description": "Multi-path parallel product analysis with cross-model test-time compute scaling. Spawns parallel agents (Claude Code + Codex CLI) for multi-perspective exploration, then synthesizes findings into actionable optimization plans. Supports self-audit, UX audit, API audit, architecture review, and competitive benchmarking via competitors-analysis skill",
-      "source": "./",
+      "source": "./product-analysis",
       "strict": false,
       "version": "1.0.1",
       "category": "productivity",
@@ -737,15 +680,12 @@
         "synthesis",
         "product-audit",
         "information-architecture"
-      ],
-      "skills": [
-        "./product-analysis"
       ]
     },
     {
       "name": "prompt-optimizer",
       "description": "Transform vague prompts into precise, well-structured specifications using EARS (Easy Approach to Requirements Syntax) methodology. Use when users provide loose requirements, ambiguous feature descriptions, need to enhance prompts for AI-generated code/products/documents, request prompt optimization, or want to improve requirements engineering. Applies domain theories (GTD, BJ Fogg, Gestalt, AIDA, Zero Trust) and structured Role/Skills/Workflows/Examples/Formats framework",
-      "source": "./",
+      "source": "./prompt-optimizer",
       "strict": false,
       "version": "1.1.0",
       "category": "productivity",
@@ -758,15 +698,12 @@
         "domain-theory",
         "prompt-enhancement",
         "ai-prompting"
-      ],
-      "skills": [
-        "./prompt-optimizer"
       ]
     },
     {
       "name": "promptfoo-evaluation",
       "description": "Configures and runs LLM evaluation using Promptfoo framework. Use when setting up prompt testing, creating evaluation configs (promptfooconfig.yaml), writing Python custom assertions, implementing llm-rubric for LLM-as-judge, or managing few-shot examples in prompts. Triggers on keywords like promptfoo, eval, LLM evaluation, prompt testing, or model comparison",
-      "source": "./",
+      "source": "./promptfoo-evaluation",
       "strict": false,
       "version": "1.1.0",
       "category": "developer-tools",
@@ -779,15 +716,12 @@
         "llm-rubric",
         "few-shot",
         "model-comparison"
-      ],
-      "skills": [
-        "./promptfoo-evaluation"
       ]
     },
     {
       "name": "qa-expert",
       "description": "Comprehensive QA testing infrastructure with autonomous LLM execution, Google Testing Standards (AAA pattern), and OWASP security testing. Use when establishing QA processes, writing test cases, executing test plans, tracking bugs with P0-P4 classification, calculating quality metrics, enforcing quality gates, or preparing third-party QA handoffs. Enables 100x faster test execution via master prompts",
-      "source": "./",
+      "source": "./qa-expert",
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
@@ -802,15 +736,12 @@
         "automation",
         "quality-gates",
         "metrics"
-      ],
-      "skills": [
-        "./qa-expert"
       ]
     },
     {
       "name": "repomix-safe-mixer",
       "description": "Safely package codebases with repomix by automatically detecting and removing hardcoded credentials before packing. Use when packaging code for distribution, creating reference packages, or when the user mentions security concerns about sharing code with repomix",
-      "source": "./",
+      "source": "./repomix-safe-mixer",
       "strict": false,
       "version": "1.0.0",
       "category": "security",
@@ -822,15 +753,12 @@
         "safe-packaging",
         "secret-detection",
         "code-security"
-      ],
-      "skills": [
-        "./repomix-safe-mixer"
       ]
     },
     {
       "name": "repomix-unmixer",
       "description": "Extract files from repomix packaged formats (XML, Markdown, JSON) with automatic format detection and validation",
-      "source": "./",
+      "source": "./repomix-unmixer",
       "strict": false,
       "version": "1.0.0",
       "category": "utilities",
@@ -840,15 +768,12 @@
         "extract",
         "xml",
         "conversion"
-      ],
-      "skills": [
-        "./repomix-unmixer"
       ]
     },
     {
       "name": "scrapling-skill",
       "description": "Install, troubleshoot, and use Scrapling CLI for extracting HTML, Markdown, or text from webpages. Diagnoses missing extras, Playwright browser runtime issues, TLS verification failures, and WeChat public article extraction patterns. Use when users mention Scrapling, `scrapling extract`, `uv tool install scrapling`, or need to decide between static and browser-backed fetching",
-      "source": "./",
+      "source": "./scrapling-skill",
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
@@ -861,15 +786,12 @@
         "wechat",
         "extraction",
         "cli"
-      ],
-      "skills": [
-        "./scrapling-skill"
       ]
     },
     {
       "name": "slides-creator",
       "description": "Narrative-first slide deck creation. Guides users through structured narrative design (ABCDEFG model), then delegates visual generation to baoyu-slide-deck. Triggers on create slides, make a presentation, generate deck, slide deck, PPT, or when user needs to turn content into visual slides.",
-      "source": "./",
+      "source": "./slides-creator",
       "strict": false,
       "version": "1.0.0",
       "category": "content-creation",
@@ -881,9 +803,6 @@
         "narrative",
         "storytelling",
         "ABCDEFG"
-      ],
-      "skills": [
-        "./slides-creator"
       ]
     },
     {
@@ -905,7 +824,7 @@
     {
       "name": "stepfun-tts",
       "description": "Generate Chinese / Japanese speech with StepFun's stepaudio-2.5-tts — Contextual TTS that replaces step-tts-2's `voice_label` with natural-language `instruction` (≤200 chars) plus inline `()` parentheses for句内 prosody. Use when the user wants emotional / prosody control over voice synthesis (whisper, pause, stress, mood pivot mid-sentence), batch-generates game / app voice lines, migrates from `step-tts-2` (the `voice_label → instruction` breaking change), or hits StepFun's stricter 2.5-era censorship (死/消失/political terms). Triggers on 阶跃 TTS, StepAudio 合成, 语音合成, 配音, 文本转语音, TTS 升级, 迁移 step-tts-2. For transcription with the sibling stepaudio-2.5-asr model, use the stepfun-asr skill instead.",
-      "source": "./",
+      "source": "./stepfun-tts",
       "strict": false,
       "version": "2.0.0",
       "category": "productivity",
@@ -918,15 +837,12 @@
         "chinese-tts",
         "voice-synthesis",
         "contextual-tts"
-      ],
-      "skills": [
-        "./stepfun-tts"
       ]
     },
     {
       "name": "stepfun-asr",
       "description": "Transcribe audio with StepFun's stepaudio-2.5-asr — an SSE endpoint (NOT /v1/audio/transcriptions) with 32K context, ~85-101x RTF on long audio, and a single-call ceiling around 30 minutes (no client-side chunking). Use when transcribing Chinese / English audio with StepFun, when long-form recordings (5-30 min) need to land in one request, when migrating from step-asr / step-asr-1.1, or when hitting the misleading `model stepaudio-2.5-asr not supported` error (which actually means wrong endpoint). Triggers on 阶跃 ASR, StepFun ASR, stepaudio-2.5-asr, 转录, 语音识别, 长音频转写, 语音转文字. For TTS with the sibling stepaudio-2.5-tts model, use the stepfun-tts skill instead.",
-      "source": "./",
+      "source": "./stepfun-asr",
       "strict": false,
       "version": "1.0.0",
       "category": "productivity",
@@ -941,15 +857,12 @@
         "transcription",
         "long-audio",
         "sse"
-      ],
-      "skills": [
-        "./stepfun-asr"
       ]
     },
     {
       "name": "teams-channel-post-writer",
       "description": "Create professional Microsoft Teams channel posts with Adaptive Cards, formatted announcements, and corporate communication standards",
-      "source": "./",
+      "source": "./teams-channel-post-writer",
       "strict": false,
       "version": "1.0.0",
       "category": "communication",
@@ -959,15 +872,12 @@
         "adaptive-cards",
         "communication",
         "announcements"
-      ],
-      "skills": [
-        "./teams-channel-post-writer"
       ]
     },
     {
       "name": "terraform-skill",
       "description": "Operational traps for Terraform provisioners, multi-environment isolation, and zero-to-deployment reliability. Covers provisioner timing races, SSH connection conflicts, DNS record duplication, volume permissions, database bootstrap gaps, snapshot cross-contamination, Cloudflare credential format errors, hardcoded domains in Caddyfiles/compose, and init-data-only-on-first-boot pitfalls. Activate when writing null_resource provisioners, creating multi-environment Terraform setups, debugging containers that are Restarting/unhealthy after terraform apply, setting up fresh instances with cloud-init, or any IaC code that SSHs into remote hosts. Also activate when the user mentions terraform plan/apply errors, provisioner failures, infrastructure drift, TLS certificate errors, or Caddy/gateway configuration.",
-      "source": "./",
+      "source": "./terraform-skill",
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
@@ -979,15 +889,12 @@
         "infrastructure",
         "cloud-init",
         "cloudflare"
-      ],
-      "skills": [
-        "./terraform-skill"
       ]
     },
     {
       "name": "transcript-fixer",
       "description": "Corrects speech-to-text (ASR/STT) transcription errors using dictionary rules and native Claude AI corrections (no API key needed by default). Supports intelligent paragraph breaks, filler word reduction, interactive review, Chinese domain names, and iterative dictionary building. Use when users mention transcript correction, ASR errors, speech-to-text mistakes, homophone errors, or working with transcription files",
-      "source": "./",
+      "source": "./transcript-fixer",
       "strict": false,
       "version": "1.4.0",
       "category": "productivity",
@@ -1000,15 +907,12 @@
         "ai",
         "meeting-notes",
         "nlp"
-      ],
-      "skills": [
-        "./transcript-fixer"
       ]
     },
     {
       "name": "tunnel-doctor",
       "description": "Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers six conflict layers: route hijacking, HTTP proxy env var interception, system proxy bypass, SSH ProxyCommand double tunneling, VM/container proxy propagation, and stalled DNS resolver in macOS getaddrinfo chain (dead VPN daemon leaves zombie utun + DNS injection). Includes an automated quick-diagnose script plus SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when local vanity domains fail behind proxy, when git push fails with failed to begin relaying via HTTP, when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, when bootstrapping remote dev environments over Tailscale, or when ssh/curl/git hang ~60s before resolving a hostname while nslookup returns instantly",
-      "source": "./",
+      "source": "./tunnel-doctor",
       "strict": false,
       "version": "1.5.0",
       "category": "developer-tools",
@@ -1031,15 +935,12 @@
         "makefile",
         "remote-development",
         "local-domain"
-      ],
-      "skills": [
-        "./tunnel-doctor"
       ]
     },
     {
       "name": "twitter-reader",
       "description": "Fetch Twitter/X post content including long-form Articles with full images and metadata. Use when Claude needs to retrieve tweet/article content, author info, engagement metrics (likes, retweets, bookmarks), and embedded media. Supports individual posts and X Articles (long-form content). Automatically downloads all images to local attachments folder and generates complete Markdown with proper image references. Preferred over Jina for X Articles with images.",
-      "source": "./",
+      "source": "./twitter-reader",
       "strict": false,
       "version": "1.1.0",
       "category": "utilities",
@@ -1055,15 +956,12 @@
         "images",
         "attachments",
         "markdown"
-      ],
-      "skills": [
-        "./twitter-reader"
       ]
     },
     {
       "name": "ui-designer",
       "description": "Extract design systems from reference UI images and generate implementation-ready UI design prompts. Use when users provide UI screenshots/mockups and want to create consistent designs",
-      "source": "./",
+      "source": "./ui-designer",
       "strict": false,
       "version": "1.0.0",
       "category": "design",
@@ -1074,15 +972,12 @@
         "screenshot",
         "design-extraction",
         "mvp"
-      ],
-      "skills": [
-        "./ui-designer"
       ]
     },
     {
       "name": "video-comparer",
       "description": "Compare two videos and generate interactive HTML reports with quality metrics (PSNR, SSIM) and frame-by-frame visual comparisons. Use when analyzing compression results, evaluating codec performance, or assessing video quality differences",
-      "source": "./",
+      "source": "./video-comparer",
       "strict": false,
       "version": "1.0.0",
       "category": "media",
@@ -1095,15 +990,12 @@
         "compression",
         "ffmpeg",
         "codec"
-      ],
-      "skills": [
-        "./video-comparer"
       ]
     },
     {
       "name": "windows-remote-desktop-connection-doctor",
       "description": "Diagnose Windows App (Microsoft Remote Desktop / Azure Virtual Desktop / W365) connection quality issues on macOS. Analyze transport protocol selection (UDP Shortpath vs WebSocket), detect VPN/proxy interference with STUN/TURN negotiation, and parse Windows App logs for Shortpath failures. This skill should be used when VDI connections are slow, when transport shows WebSocket instead of UDP, when RDP Shortpath fails to establish, or when RTT is unexpectedly high.",
-      "source": "./",
+      "source": "./windows-remote-desktop-connection-doctor",
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
@@ -1122,15 +1014,12 @@
         "vpn",
         "macos",
         "networking"
-      ],
-      "skills": [
-        "./windows-remote-desktop-connection-doctor"
       ]
     },
     {
       "name": "youtube-downloader",
       "description": "Download YouTube videos and HLS streams (m3u8) from platforms like Mux, Vimeo, etc. using yt-dlp and ffmpeg. Use when users request downloading videos, extracting audio, handling protected streams with authentication headers, or troubleshooting download issues like nsig extraction failures, 403 errors, or cookie extraction problems",
-      "source": "./",
+      "source": "./youtube-downloader",
       "strict": false,
       "version": "1.1.0",
       "category": "utilities",
@@ -1147,15 +1036,12 @@
         "streaming",
         "mux",
         "vimeo"
-      ],
-      "skills": [
-        "./youtube-downloader"
       ]
     },
     {
       "name": "debugging-network-issues",
       "description": "Evidence-driven investigation for network, streaming, and protocol-layer bugs. Use when debugging connection resets, SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, or any incident where symptoms do not match the obvious cause. Applies falsification-first methodology with layered isolation experiments, env-gated runtime instrumentation, and counter-review agent teams.",
-      "source": "./",
+      "source": "./debugging-network-issues",
       "strict": false,
       "version": "1.0.0",
       "category": "developer-tools",
@@ -1170,9 +1056,6 @@
         "streaming",
         "troubleshooting",
         "methodology"
-      ],
-      "skills": [
-        "./debugging-network-issues"
       ]
     }
   ]
