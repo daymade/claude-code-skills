@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-51-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.51.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-52-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.52.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 51 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 52 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2101,24 +2101,44 @@ Falsification-first methodology for network, streaming, and protocol-layer bugs 
 
 ---
 
-### 50. **stepfun-tts** - StepFun StepAudio 2.5 TTS + ASR
+### 50. **stepfun-tts** - StepFun StepAudio 2.5 Contextual TTS
 
-Generate Chinese / Japanese speech and transcribe long audio with StepFun's StepAudio 2.5 family. Captures the three non-obvious pitfalls that cost hours otherwise: `voice_label` removal, the `/v1/audio/asr/sse` endpoint, and stricter censorship.
+Generate Chinese / Japanese speech with `stepaudio-2.5-tts`. Captures the two non-obvious TTS pitfalls that cost hours otherwise: `voice_label` removal (replaced by natural-language `instruction`) and stricter 2.5-era censorship (死/消失/political terms).
 
 **When to use:**
-- Chinese / Japanese TTS with emotional and prosody control
-- Long audio transcription (up to ~30 minutes single-call, 32K context, ~100x RTF)
+- Chinese / Japanese TTS with emotional and prosody control (whisper, pause, stress, mid-sentence pivot)
+- Batch-generating game / app voice lines with per-line `censorship_block` fallback
 - Migration from `step-tts-2` to `stepaudio-2.5-tts` (`voice_label` → `instruction` breaking change)
-- Hitting StepFun censorship blocks or endpoint mismatches
+- Hitting StepFun censorship blocks on previously-fine content
 
 **Key features:**
 - `stepaudio-2.5-tts` with `instruction` (≤200 chars natural-language mood) + inline `()` prosody
-- `stepaudio-2.5-asr` SSE streaming with base64 audio (avoids the misleading "model not supported" error)
-- Bundled `tts_generate.py` (with `--batch <jsonl>`), `asr_transcribe.py`, `ab_compare.sh`
+- Bundled `tts_generate.py` (with `--batch <jsonl>`) and `ab_compare.sh`
 - API key resolution: `$STEPFUN_API_KEY` → `${CLAUDE_PLUGIN_DATA}/config.json` fallback
 - Censorship rewrite playbook in `references/migration_from_v2.md`
 
-**Requirements**: StepFun API key (https://platform.stepfun.com/).
+**Requirements**: StepFun API key, "Normal" tier (https://platform.stepfun.com/). For ASR / transcription, use the sibling `stepfun-asr` skill below.
+
+---
+
+### 52. **stepfun-asr** - StepFun StepAudio 2.5 ASR (SSE Endpoint)
+
+Transcribe Chinese / English audio with `stepaudio-2.5-asr`. Hides the #1 trap of the 2.5 ASR family: it does NOT live on `/v1/audio/transcriptions` — the wrong endpoint returns a misleading `model stepaudio-2.5-asr not supported` error that looks identical to a permission/whitelist failure.
+
+**When to use:**
+- Long audio transcription (up to ~30 minutes single-call, 32K context, ~85-101× RTF — no client-side chunking)
+- Migration from `step-asr` / `step-asr-1.1` (different endpoint, different body shape, SSE response)
+- Hitting the misleading `model stepaudio-2.5-asr not supported` error (= wrong endpoint, not permission)
+- Silent 4xx auth failures on audio endpoints (= using a "Plan" key instead of a "Normal" key)
+
+**Key features:**
+- `/v1/audio/asr/sse` SSE streaming with base64 audio + nested JSON body (the script handles all four traps)
+- Bundled `asr_transcribe.py` — pure-stdlib CLI, auto-detects mp3/wav/ogg/opus/pcm by extension
+- Handles SSE `error` events (censorship can fire on ASR side too — rare but real)
+- API key resolution: `$STEPFUN_API_KEY` → `${CLAUDE_PLUGIN_DATA}/config.json` fallback
+- Suggests `transcript-fixer` (ASR error correction) and `meeting-minutes-taker` (structured minutes) as natural downstream skills
+
+**Requirements**: StepFun API key, "Normal" tier (https://platform.stepfun.com/). Plan keys cannot call audio endpoints.
 
 ---
 
@@ -2245,8 +2265,11 @@ Use **terraform-skill** when your `terraform apply` fails at a provisioner step,
 ### For Network, Streaming & Protocol-Layer Debugging
 Use **debugging-network-issues** when symptoms do not match the obvious cause: HTTP/2 `RST_STREAM`, SSE stalls at exactly 60s/100s/130s, "works sometimes but not always" failures, or anything that looks like an idle-timeout incident through CDN / proxy / CGNAT chains. The skill replaces assumption-stacking with **layered isolation experiments** — running the same logical request through three or more paths that differ by one hop — plus a counter-review pattern for shipping fixes only after the hypothesis has been falsified, not just confirmed.
 
-### For Chinese TTS & Long-Audio Transcription (StepFun)
-Use **stepfun-tts** for Chinese / Japanese voice synthesis with emotional control via `instruction` + inline `()` prosody, or for transcribing up to 30-minute audio in a single call (32K context, ~100x RTF). Captures the three breaking changes that ambush new StepAudio 2.5 users: `voice_label` removal, the `/v1/audio/asr/sse` endpoint mismatch, and stricter censorship rules. Combine with **transcript-fixer** for ASR post-processing or with **meeting-minutes-taker** to turn long recordings into structured minutes.
+### For Chinese TTS (StepFun StepAudio 2.5)
+Use **stepfun-tts** for Chinese / Japanese voice synthesis with emotional control via `instruction` + inline `()` prosody. Captures the two breaking changes that ambush new StepAudio 2.5 users: `voice_label` removal and stricter 2.5-era censorship rules. Pair with `step-tts-2` as a per-line fallback for content that triggers censorship.
+
+### For Long-Audio Transcription (StepFun StepAudio 2.5)
+Use **stepfun-asr** for transcribing up to 30-minute Chinese / English audio in a single SSE call (32K context, ~85-101× RTF, no client-side chunking). Hides the #1 trap — the model does NOT live on `/v1/audio/transcriptions`; the wrong endpoint returns a misleading "model not supported" error. Combine with **transcript-fixer** for ASR error correction or with **meeting-minutes-taker** to turn long recordings into structured minutes.
 
 ## 📚 Documentation
 
@@ -2304,7 +2327,8 @@ Each skill includes:
 - **terraform-skill**: See `terraform-skill/SKILL.md` for the full catalogue of operational traps organised by exact error → root cause → copy-paste fix
 - **slides-creator**: See `slides-creator/SKILL.md` for the narrative-first workflow, `slides-creator/references/narrative-design-guide.md` for the ABCDEFG model, and `slides-creator/references/content-creation-first-law.md` for the universal content creation principle
 - **debugging-network-issues**: See `debugging-network-issues/SKILL.md` for the falsification-first workflow, `debugging-network-issues/references/layered-isolation-experiment.md` for the multi-hop isolation pattern, and `debugging-network-issues/references/case-sse-rst-130s.md` for the real production case study
-- **stepfun-tts**: See `stepfun-tts/SKILL.md` for the TTS+ASR decision tree and `stepfun-tts/references/migration_from_v2.md` for the `voice_label` → `instruction` migration playbook plus the censorship rewrite list
+- **stepfun-tts**: See `stepfun-tts/SKILL.md` for the Contextual TTS decision tree and `stepfun-tts/references/migration_from_v2.md` for the `voice_label` → `instruction` migration playbook plus the censorship rewrite list
+- **stepfun-asr**: See `stepfun-asr/SKILL.md` for the SSE-endpoint workflow and the four ASR-side traps (wrong endpoint, Plan-vs-Normal key, repetition hallucination, SSE `error` event). `stepfun-asr/references/api_reference.md` documents the exact JSON request body and SSE event contract for raw HTTP integration
 
 ## 🛠️ Requirements
 
@@ -2333,7 +2357,7 @@ Each skill includes:
 - **Python 3.8+** (for continue-claude-work): bundled script for session extraction (no external dependencies)
 - **uv + Scrapling CLI** (for scrapling-skill): `uv tool install 'scrapling[shell]'` and `scrapling install` for browser-backed fetches
 - **Node.js 18+ + curl + unzip** (for ima-copilot): `npx skills` is fetched on demand from the npm registry; IMA OpenAPI credentials from [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface)
-- **StepFun API key** (for stepfun-tts): Available at [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys
+- **StepFun API key** (for stepfun-tts and stepfun-asr — must be "Normal" tier, Plan keys silently fail on audio endpoints): Available at [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys
 
 ## ❓ FAQ
 
