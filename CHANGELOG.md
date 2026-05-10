@@ -7,11 +7,217 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.54.0] - 2026-05-10
+
+### Added
+- **daymade-audio** suite v1.0.0: Audio processing suite covering the full speech pipeline — ASR transcription (Qwen3, StepFun), transcript error correction, structured meeting minutes generation, and TTS voice synthesis. Bundles 5 skills: `asr-transcribe-to-text`, `stepfun-asr`, `transcript-fixer`, `meeting-minutes-taker`, `stepfun-tts`.
+
+### Changed
+- Move `meeting-minutes-taker` from `daymade-docs` to `daymade-audio` — its core capability is semantic analysis of meeting transcripts, not document format processing.
+- Move `asr-transcribe-to-text`, `stepfun-asr`, `stepfun-tts`, `transcript-fixer` from repo root into `daymade-audio/` suite directory.
+- Marketplace plugin count: 55 → 56 (4 suites now: `daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`).
+
+## [1.53.2] - 2026-05-10
+
+### Fixed
+- Remove `skills: ["./"]` from 13 suite member plugin entries that triggered Claude Code 2.1.x path-escape validator error (`skills path "./" escapes plugin root`). Fixes [#64](https://github.com/daymade/claude-code-skills/issues/64).
+
+### Changed
+- Align all 52 single-skill plugins with official Anthropic marketplace pattern: `source` points directly to the skill directory (e.g., `"./tunnel-doctor"`), `skills` field omitted (auto-discovery). Previously used `source: "./"` with `skills: ["./skill-name"]`. The 3 suite plugins (`daymade-claude-code`, `daymade-docs`, `daymade-skill`) retain explicit `skills` arrays for multi-skill routing. Matches the pattern used by 167 of 168 plugins in `anthropics/claude-plugins-official`.
+
+## [1.52.0] - 2026-04-30
+
+### Added
+- **stepfun-asr** v1.0.0: Transcribe audio with StepFun's `stepaudio-2.5-asr` — an SSE endpoint (NOT `/v1/audio/transcriptions`) with 32K context, ~85-101× RTF on long audio, and a single-call ceiling around 30 minutes (no client-side chunking). Split out from `stepfun-tts` so the ASR-specific traps (wrong-endpoint misleading error, Plan vs Normal key silent failure, SSE `error` event handling, repetition-hallucination edge case) live next to the `asr_transcribe.py` script that handles them. Bundled `scripts/asr_transcribe.py` (pure-stdlib CLI: env → `${CLAUDE_PLUGIN_DATA}/config.json` key resolution, base64 + nested JSON body, SSE parsing, censorship + transport error distinction). References cover the full SSE event contract, the legacy-vs-2.5 endpoint comparison table, and the "Plan key cannot call audio" gotcha. Suggests `transcript-fixer` / `meeting-minutes-taker` as natural downstream skills.
+
+### Changed
+- **stepfun-tts** v1.0.0 → v2.0.0 (BREAKING): ASR functionality removed and split into the new `stepfun-asr` skill. The remaining skill focuses purely on Contextual TTS (`stepaudio-2.5-tts`) — `instruction` natural-language tone + inline `()` parentheses + the `voice_label` migration story from `step-tts-2`. SKILL.md, `references/api_reference.md`, and `references/known_issues.md` all stripped of ASR sections; description and keywords updated to TTS-only. `scripts/asr_transcribe.py` removed from this skill (now lives in `stepfun-asr`).
+- Marketplace skill count: 51 → 52 (effective listed count; suite member skills not double-counted)
+- Marketplace plugin entry count: 55 → 56
+- Marketplace version: 1.51.0 → 1.52.0
+- README.md, README.zh-CN.md: badges, descriptions, skill section #50 (stepfun-tts retitled "TTS only" + description rewritten), new skill section #52 (stepfun-asr), Use Cases entries (split into two), Documentation Quick Links, Requirements (StepFun key applies to both)
+- CLAUDE.md: overview count, marketplace plugin count, Available Skills list (entry #50 description rewritten + new entry #52)
+
+### Note
+This release also reconciles a versioning drift: commits `b2003d6` (statusline-generator → v1.1.0) and `ec7c313` (pdf-creator → v1.4.0) bumped their respective `plugins[].version` fields without bumping `metadata.version` and without adding CHANGELOG entries — a violation of the "any commit modifying a skill must bump that skill's version AND the marketplace metadata version" rule from `CLAUDE.md`. Those commits remain in history; v1.52.0 picks up the marketplace catalog version where it should have been after both, then adds the stepfun split on top. CHANGELOG entries for those individual skill bumps will not be retroactively backfilled — the version numbers in `marketplace.json` are authoritative and discoverable via `git log -- <skill-path>`.
+
+## [1.51.0] - 2026-04-26
+
+### Added
+- **debugging-network-issues** v1.0.0: Evidence-driven, falsification-first methodology for network, streaming, and protocol-layer bugs where the obvious cause is probably wrong. Built from a real 5-hour production case (SSE RST_STREAM at exactly 130s, traced to a CGNAT idle timeout). Provides layered-isolation experiments (run the same logical request through 3+ paths differing by one hop), env-gated runtime instrumentation patterns, and a counter-review four-question filter to challenge single-cause assumptions before shipping a fix. Bundles probe scripts (`layered-isolation-probe.sh`, `mock-idle-upstream.py`) and reference docs covering counter-review, packet-capture recipes, instrumentation patterns, and cognitive traps. Triggers on `ECONNRESET`, HTTP/2 `RST_STREAM`, `INTERNAL_ERROR`, fixed-time SSE drops, CDN/proxy/CGNAT idle timeouts, and "works sometimes / fails after N seconds" patterns.
+- **stepfun-tts** v1.0.0: Generate Chinese/Japanese speech with `stepaudio-2.5-tts` and transcribe long audio with `stepaudio-2.5-asr` (SSE endpoint, 32K context, ~100x RTF, up to 30-minute single call). Encapsulates the three non-obvious StepAudio 2.5 pitfalls that cost hours: `voice_label` removal (replaced by `instruction` + inline `()` prosody), `/v1/audio/asr/sse` endpoint mismatch (returns misleading `model not supported` error otherwise), and stricter censorship rules. Bundled scripts: `tts_generate.py` (with `--batch <jsonl>`), `asr_transcribe.py`, `ab_compare.sh`. API key resolution: `$STEPFUN_API_KEY` → `${CLAUDE_PLUGIN_DATA}/config.json` fallback. Reference docs cover migration from `step-tts-2`, the censorship rewrite list, and the verified-on-2026-04-23 known-issues registry.
+
+### Changed
+- Marketplace skill count: 49 → 51
+- Marketplace plugin entry count: 53 → 55
+- Marketplace version: 1.50.0 → 1.51.0
+- README.md, README.zh-CN.md: badges, descriptions, skill sections (#49 + #50), Use Cases entries, Documentation Quick Links, Requirements
+- CLAUDE.md: overview count, marketplace plugin count, Available Skills list
+
+### Note
+Plugin entries for these two skills were inadvertently committed in v1.50.0's path-rewrite operation (the entries existed as uncommitted draft modifications in `marketplace.json` and were carried along when that file was rewritten). v1.51.0 completes the registration that v1.50.0 left half-done by landing the skill directories themselves and synchronizing all documentation surfaces.
+
+## [1.50.0] - 2026-04-26
+
+### Changed
+- **Suite directory flattening**: Moved both suite directories from `suites/<suite-name>/` to the repo root: `suites/daymade-docs/` → `daymade-docs/` and `suites/daymade-claude-code/` → `daymade-claude-code/`. The `suites/` intermediate directory has been removed. Plugin names, install commands, and skill invocations are unchanged for end users — only the on-disk layout and the `source` paths in `marketplace.json` (and doc links) were affected. `claude plugin update` will re-fetch from the new paths automatically.
+- Updated all 15 `source` entries in `.claude-plugin/marketplace.json` from `./suites/<suite>/...` to `./<suite>/...`.
+- Updated documentation references in `CLAUDE.md`, `README.md`, `README.zh-CN.md`, `references/new-skill-guide.md`, `daymade-claude-code/marketplace-dev/SKILL.md`, and `daymade-claude-code/marketplace-dev/references/cache_and_source_patterns.md`.
+- Fixed pre-existing double-prefix typo (`suites/daymade-claude-code/suites/daymade-claude-code/...`) in two README locations during the path rewrite.
+
+## [1.49.0] - 2026-04-19
+
+### Added
+- **slides-creator** v1.0.0: Narrative-first slide deck creation. Guides users through structured narrative design (ABCDEFG model), then delegates visual generation to baoyu-slide-deck. Focuses on what machines can't do — narrative co-design with humans. Six-phase workflow: source collection → narrative discussion → content structuring → prompt generation → image generation → post-processing with directory reorganization and speaker notes extraction. Triggers on "create slides", "make a presentation", "generate deck", "slide deck", "PPT", or when user needs to turn content into visual slides.
+
+### Changed
+- Updated marketplace skills count from 48 to 49
+- Updated marketplace plugin entries from 52 to 53
+- Updated marketplace version from 1.48.0 to 1.49.0
+- Updated README.md badges, skill listings, use cases, and documentation quick links
+- Updated README.zh-CN.md badges, skill listings, use cases, and documentation quick links
+- Updated CLAUDE.md skill count (48 → 49), plugin entry count (52 → 53), and Available Skills list
+
+## [1.48.0] - 2026-04-19
+
+### Added
+- **daymade-claude-code** suite v1.0.0: Claude Code operations suite bundling 7 power-user skills (`claude-code-history-files-finder`, `continue-claude-work`, `claude-skills-troubleshooting`, `claude-md-progressive-disclosurer`, `statusline-generator`, `claude-export-txt-better`, `marketplace-dev`) under one shared namespace. One command gets the full Claude Code toolkit and invocations render as `daymade-claude-code:<skill>` instead of the redundant `<skill>:<skill>` form.
+
+### Changed
+- **Canonical source migration**: The 7 Claude Code-related skills were physically moved from the repo root into `suites/daymade-claude-code/<skill>/`, mirroring the `daymade-docs` suite pattern. Both the suite and the 7 individual single-skill plugins now install from the same canonical location, keeping plugin caches narrow (only the suite's own files, not the whole repo). Transparent to existing users: plugin names and invocation remain identical; `claude plugin update` fetches from the new path automatically.
+- Patch bumps for the 7 migrated skills to reflect the manifest/source change:
+  - `claude-code-history-files-finder` 1.0.2 → 1.0.3
+  - `continue-claude-work` 1.1.1 → 1.1.2
+  - `claude-skills-troubleshooting` 1.0.0 → 1.0.1
+  - `claude-md-progressive-disclosurer` 1.2.0 → 1.2.1
+  - `statusline-generator` 1.0.0 → 1.0.1
+  - `claude-export-txt-better` 1.0.0 → 1.0.1
+  - `marketplace-dev` 1.2.0 → 1.2.1 (also simplified hook paths from `${CLAUDE_PLUGIN_ROOT}/marketplace-dev/hooks/...` to `${CLAUDE_PLUGIN_ROOT}/hooks/...` now that the cache root is the skill dir itself)
+- Updated marketplace version from 1.47.0 to 1.48.0
+- Updated marketplace plugin entries from 51 to 52
+- README / README.zh-CN / CLAUDE.md / references/new-skill-guide.md: all doc links to these 7 skills now point to `suites/daymade-claude-code/<skill>/`
+
+## [1.47.0] - 2026-04-12
+
+### Added
+- **wechat-article-scraper** v2.9.0: World-class WeChat article extraction with 6-level strategy routing (fast→adaptive→stable→reliable→zero_dep→jina_ai), OG metadata fallback, image-paragraph association, lazy loading handling, local image download, and Sogou search discovery. Supports Markdown/JSON/HTML/PDF export. Includes 15 unique/leading features surpassing all competitors.
+
+### Changed
+- Updated marketplace skills count from 47 to 48
+- Updated marketplace version from 1.46.0 to 1.47.0
+
+### Added
+- **gangtise-copilot** v1.0.0: One-stop installer and companion for the full Gangtise (岗底斯投研) OpenAPI skill suite — 19 official skills covering data retrieval (OHLC 行情, 财务, 估值, 研报, 首席观点, 会议纪要, 调研纪要), research workflows (个股研究 L1-L4, 观点 PK 对抗性分析, 主题研究, 事件复盘, 公告摘要), and utility (股票池管理, 公开网页搜索). Distilled from a 5-round discovery session that reverse-engineered the complete Gangtise skill catalog — the Gangtise OBS bucket has LIST permission disabled, so the full 19-skill inventory is not discoverable from any public manifest. Ships with 4 preset install modes (full / workshop / minimal / custom), zero-config multi-agent distribution to Claude Code / OpenClaw / Codex via symlink from a single canonical install location, shared XDG credential file at `~/.config/gangtise/authorization.json` that rotates all 19 skills in one edit, and a read-only diagnostic script with scoped liveness checks (`auth` scope + `rag` scope). Ships: `scripts/install_gangtise.sh` (408 lines), `scripts/configure_auth.sh` (310 lines), `scripts/diagnose.sh` (320 lines), and 5 reference docs covering installation flow, credentials setup, the complete 19-skill registry with per-script capability matrix, known ecosystem traps (parallel product lines, bundle-only hidden skills, double-Bearer token bug, admin endpoint 1009 errors), and workshop best practices. Target use case: the 2026 Q2 investor Workshop series where students need to install a large skill suite quickly without reverse-engineering the catalog themselves.
+
 ### Changed
 - **Renamed**: `markdown-tools` → `doc-to-markdown` — clearer name for DOCX/PDF/PPTX → Markdown conversion
 - **doc-to-markdown**: Added 8 DOCX post-processing fixes (grid tables, simple tables, CJK bold spacing, JSON pretty-print, image path flattening, pandoc attribute cleanup, code block detection, bracket fixes)
 - **doc-to-markdown**: Added 31 unit tests (`test_convert.py`)
 - **doc-to-markdown**: Added 5-tool benchmark report (`references/benchmark-2026-03-22.md`)
+- **marketplace-dev** v1.0.0 → v1.1.0: Added evidence intake from Claude Code history, plugin boundary decision guidance, source/cache patterns for single-skill and suite plugins, source+skills resolution validation, and cache footprint testing based on real marketplace debugging sessions.
+- **marketplace-dev** v1.1.0 → v1.2.0: Refined against Anthropic's official skill-authoring best practices. Extracted the inline Node.js resolution check and diff pipeline into `scripts/check_marketplace.sh` — a one-shot validator that runs JSON syntax → `claude plugin validate` → source+skills resolution → reverse sync (disk SKILL.md → manifest) in a single command. Moved the two PostToolUse hook scripts from `scripts/` to `hooks/` for semantic clarity (scripts execute during skill workflow, hooks guard the editor) and updated the plugin manifest's hook paths accordingly. Added tables of contents to `anti_patterns.md` and `cache_and_source_patterns.md` (both >100 lines, per best practices). Corrected Phase 0 subagent history-mining paths to `<session-id>/subagents/agent-*.jsonl`. Documented the auto-activated hook behaviour in a new "Bundled hooks" section.
+
+## [1.46.0] - 2026-04-11
+
+### Added
+- **claude-export-txt-better** v1.0.0: Fixes broken line wrapping in Claude Code exported `.txt` conversation files. Reconstructs tables, paragraphs, paths, and tool calls that were hard-wrapped at fixed column widths. Ships with an automated validation suite of 53 generic, file-agnostic checks. Triggers on export files with broken formatting or when the user mentions "fix export" / "fix conversation" / references a `YYYY-MM-DD-HHMMSS-*.txt` file. Bundled: `scripts/fix-claude-export.py`, `scripts/validate-claude-export-fix.py`, `evals/`.
+- **douban-skill** v1.0.0: Exports and syncs Douban (豆瓣) book / movie / music / game collections to local CSV files via the reverse-engineered Frodo API. Supports full export and RSS incremental sync. No login, no cookies, no browser. Pre-flight user-ID validation and CSV output with UTF-8 BOM (Excel-compatible). Ships with a complete troubleshooting log of 7 tested scraping approaches and why each failed. Bundled: `scripts/douban-frodo-export.py`, `scripts/douban-rss-sync.py`, `references/troubleshooting.md`, `.gitleaks.toml` (allowlisting the public APK credentials).
+- **terraform-skill** v1.0.0: Operational traps for Terraform provisioners, multi-environment isolation, and zero-to-deployment reliability. Every failure pattern documented caused a real incident. Covers provisioner timing races, SSH connection conflicts, DNS record duplication, volume permissions, database bootstrap gaps, snapshot cross-contamination, Cloudflare credential format errors, hardcoded domains in Caddyfiles/compose, and init-data-only-on-first-boot pitfalls. Organised as *exact error → root cause → copy-paste fix*. Bundled: `references/` with detailed remediation patterns.
+
+### Changed
+- Updated marketplace skills count from 44 to 47
+- Updated marketplace version from 1.45.1 to 1.46.0
+- Updated marketplace plugin entries from 47 to 50
+- Updated README.md badges and skill listings (English and Chinese)
+- Updated CLAUDE.md skill count (44 → 47) and plugin entry count (47 → 50)
+
+## [1.45.1] - 2026-04-11
+
+### Fixed
+- **daymade-docs** v1.0.0 → v1.0.1: Narrowed the suite plugin source to `suites/daymade-docs/` so the installed cache contains only the documentation skills in the suite instead of a full repository snapshot.
+- Moved the daymade-docs member skills under `suites/daymade-docs/` as their canonical source and repointed the corresponding single-skill plugin entries to those same directories.
+- **doc-to-markdown** v2.1.0 → v2.1.1, **mermaid-tools** v1.0.1 → v1.0.2, **ppt-creator** v1.0.0 → v1.0.1, **pdf-creator** v1.3.1 → v1.3.2, **docs-cleaner** v1.0.0 → v1.0.1, and **meeting-minutes-taker** v1.1.0 → v1.1.1 now install from their suite canonical source paths.
+
+### Changed
+- Updated marketplace version from 1.45.0 to 1.45.1
+
+## [1.45.0] - 2026-04-11
+
+### Added
+- **daymade-docs** v1.0.0: Documentation suite plugin that exposes `doc-to-markdown`, `mermaid-tools`, `pdf-creator`, `ppt-creator`, `docs-cleaner`, and `meeting-minutes-taker` under one namespace. This keeps the existing single-skill plugins available while providing `/daymade-docs:<skill-name>` slash commands for users who want a combined documentation workflow install.
+
+### Changed
+- Updated marketplace version from 1.44.0 to 1.45.0
+- Updated README.md, README.zh-CN.md, and CLAUDE.md to document suite plugin architecture while preserving the existing single-skill plugin model.
+
+## [1.44.0] - 2026-04-11
+
+### Added
+- **skill-creator** v1.7.1 → v1.7.2: Completeness pass for the `workflows/wrapper-skill/` methodology within its scope (zip-archive skill packages distributed via `npx skills add`). A fifth adversarial agent review audited the wrapper-skill workflow docs against the canonical `ima-copilot` implementation and surfaced 13 on-scope lessons that were implicit in the reference code but not elevated to named patterns in the workflow. This release lands all 13.
+  - `patterns.md` install template: replaced the `<download and extract>` placeholder with a concrete defensive block covering `curl --fail` with HTTP-code branching, `wc -c` download-size sanity check rejecting suspiciously small archives before extraction, Node.js ≥18 numeric check (separate from `command -v node`), and a documented zero-agents-detected fallback policy (abort vs silent-skip vs default-to-claude-code, with the session's chosen answer named). Every defensive pattern has an accompanying "Lessons baked into this template" bullet explaining *why* it's there.
+  - `patterns.md` known_issues template: added `**Why upstream probably hasn't fixed it**` as a required field (the field that keeps repair blocks load-bearing across upstream upgrades), added `Strategy skip` as a first-class documented third option (users on tolerant platforms may legitimately not want the repair and naming the skip path explicit prevents the "did I forget?" failure mode), and added detailed notes on the `[ -f ... ] && \` guard rationale, `sed -i.bak ... && command rm -f *.bak` BSD/GNU portability dance, and backup directory naming convention.
+  - `patterns.md` diagnose template: added a new "Detection function return-code contract" subsection spelling out the required return codes for every post-repair state (untouched-good, untouched-broken, not-present, each Strategy-applied state, and the dual-state conflicted code). The dual-state code is the single hardest lesson from the ima-copilot session — a detection function that doesn't recognize it silently passes conflicted installs as healthy.
+  - `patterns.md` diagnose template: added variadic `find_install` rationale explaining that agents whose home-directory layout has not stabilized (like OpenClaw) should be probed against an ordered list of candidate paths, and that designing the helper as variadic from day one avoids a painful refactor when a second candidate path becomes necessary.
+  - `patterns.md` SKILL.md template: added explicit checklist for the description field (literal error strings from the session, tool name in every language the session used, self-disambiguation clause naming the upstream package to prevent wrapper-vs-upstream trigger fighting, symptoms that triggered the original session), plus a reference to the enforced 1024-character cap in `quick_validate.py:184`. Added "when in doubt → diagnose" as a recommended routing table default since diagnose is the only read-only entry point.
+  - `patterns.md` credentials section: added explicit guidance that liveness checks must match on **response-body shape**, not just HTTP status. Many APIs return 200 OK with an error JSON body, and a naive `curl --fail` check will pass a credential that fails the first real operation.
+  - `workflow.md` Step 5: expanded the install-script bullet list with prerequisite-check discipline (curl/unzip/npx loop plus separate Node.js ≥18 parse), download integrity defense in depth (HTTP code branching + size sanity), and the zero-agents fallback policy.
+  - `workflow.md` Step 6: expanded the known_issues schema to include the `Why upstream probably hasn't fixed it` field and the `Strategy skip` branch, and documented the `sed -i.bak` cross-BSD/GNU portability rule alongside the existing `command cp/mv` guidance.
+  - `workflow.md` Step 7: replaced the "returns OK / TRIGGERED / N/A / post-fix-state" shorthand with an explicit enumeration of the return-code contract, and added the variadic `find_install` guidance for agents with unstabilized layouts.
+
+### Changed
+- Updated marketplace version from 1.43.0 to 1.44.0
+
+## [1.43.0] - 2026-04-11
+
+### Fixed
+- **ima-copilot** v1.0.0 → v1.0.1: Contract compliance and dogfood-driven fixes
+  - `SKILL.md`, `references/known_issues.md`, `references/installation_flow.md`: removed hardcoded references to upstream version `1.1.2`. Install script keeps the version as an overridable default which is explicitly allowed by the architecture contract. Fixes a principle 6 (independent evolution) violation that would have forced a skill version bump on every upstream release.
+  - `references/known_issues.md`: added `command` prefix to the `sed -i.bak` and `rm -f` commands in Strategy A repair block and to the `rm -f` command in Strategy A rollback, matching the contract's alias-safe requirement. Previously, a user shell with `alias rm='rm -i'` or `alias sed='sed -i'` would hang the repair on an interactive prompt.
+  - `scripts/install_ima_skill.sh`: added a Node.js ≥18 preflight check. The `npx skills add` distribution path needs a modern Node runtime and the failure message on old Node is opaque.
+  - `scripts/diagnose.sh`: `check_submodule` now recognizes and explicitly warns on the dual-state where both `SKILL.md` and `MODULE.md` exist simultaneously (can happen when a user switched repair strategies mid-session or restored a partial backup). Previously this reported clean while the install was in a conflicted state.
+  - `scripts/search_fanout.py`: `rank_groups` now sorts tied hit counts by KB name for deterministic byte-identical output. Previously the tie-break depended on `concurrent.futures.ThreadPoolExecutor.map` completion order, which varied with network timing.
+- **skill-creator** v1.7.0 → v1.7.1: Wrapper-skill workflow hardening from counter-review findings
+  - `workflows/wrapper-skill/workflow.md` Step 2: added a "How to access the conversation" subsection with concrete guidance for three cases (same session / follow-up session / neither available) and an explicit "do not fabricate content" rule for the last case. Fresh agents were previously left to guess.
+  - `workflows/wrapper-skill/workflow.md` Step 1: added an "AskUserQuestion fallback" subsection explaining that the consent requirement is the explicit user choice, not the specific tool name, and showing a plain-text fallback pattern for harnesses without `AskUserQuestion`.
+  - `workflows/wrapper-skill/patterns.md`: added a new "Runtime-logic patterns shared across wrappers" section with three generalizable insights distilled from ima-copilot's `search_fanout.py` — **capability partitioning** (enumerate vs operate permission asymmetry with four-way result bucketing), **undocumented limit detection** (silent truncation heuristics for APIs that cap results without emitting pagination tokens), and **scoped liveness checks** (probe the lowest-privilege operation the skill actually performs, not the easiest API call). Each pattern includes example code, real-world examples across multiple APIs (GitHub, Slack, Notion, Google Drive), and a cross-reference to the ima-copilot implementation.
+  - `workflows/wrapper-skill/verification_protocol.md`: restructured into Track 1 (session cross-reference for literal transcriptions) and Track 2 (smoke test / unit test for runtime logic). The previous "verification is not dogfood" dogma was too strict — it correctly applied to Track 1 files but wrongly exempted Track 2 runtime code from end-to-end testing. Track 2 files like `search_fanout.py` now have an explicit mandatory-smoke-test rule.
+
+### Changed
+- Updated marketplace version from 1.42.0 to 1.43.0
+
+## [1.42.0] - 2026-04-11
+
+### Added
+- **skill-creator** v1.6.0 → v1.7.0: New `workflows/wrapper-skill/` specialized workflow for retrospectively distilling an install-and-debug session into a reusable companion skill for a third-party CLI tool
+  - `workflows/wrapper-skill/workflow.md` — the retrospective distillation workflow with Step 2 conversation mining at its core (install flow, credential setup, bugs encountered and resolved, design decisions made, noise to discard)
+  - `workflows/wrapper-skill/architecture_contract.md` — seven non-negotiable principles that every generated wrapper skill must follow (never vendor upstream, runtime repair over ship-time patches, explicit user consent for any upstream file modification, idempotent/reversible/alias-safe repair commands, teaching agents over humans, independent evolution from upstream, private preferences stay private)
+  - `workflows/wrapper-skill/patterns.md` — copy-pasteable templates for SKILL.md, install script, diagnose script, known_issues registry, and credential setup, each annotated with the lessons baked in and cross-referenced to the canonical ima-copilot implementation
+  - `workflows/wrapper-skill/verification_protocol.md` — post-generation verification focused on cross-referencing generated artifacts against the source conversation rather than re-running the full install (the install already ran in the source session)
+  - `workflows/wrapper-skill/scripts/init_wrapper_skill.py` — bootstrap scaffold that creates the wrapper skill directory layout with placeholder markers pointing back at specific steps in the workflow
+  - `SKILL.md` root entry now includes a "Specialized Workflow: Wrapper Skills for Third-Party CLI Tools" routing section between Capture Intent and Prior Art Research that redirects agents to the wrapper workflow when the signals apply
+  - Canonical reference implementation: [`ima-copilot`](./ima-copilot) — the Tencent IMA wrapper that was the first product of this methodology, distilled during a real session whose lessons (shell alias bypass, root SKILL.md detection, realpath-based symlink dedup, idempotent reversible repairs) were captured in the patterns and propagated into this workflow
+
+### Changed
+- Updated marketplace version from 1.41.0 to 1.42.0
+
+## [1.41.0] - 2026-04-11
+
+### Added
+- **New Skill**: ima-copilot v1.0.0 — One-stop companion and installer for the official Tencent IMA skill (ima.qq.com), with wrapper-layer architecture that never vendors upstream files
+  - Zero-config installation to Claude Code, Codex, and OpenClaw via `npx skills add` ([vercel-labs/skills](https://github.com/vercel-labs/skills)) with auto-detection of installed agents and default symlink mode, so that a repair or upgrade applied once propagates automatically to every agent that shares the canonical install
+  - XDG-style credential management at `~/.config/ima/{client_id, api_key}` with env-var fallback (`IMA_OPENAPI_CLIENTID` / `IMA_OPENAPI_APIKEY`)
+  - Bundled `scripts/diagnose.sh` for read-only health check covering install presence, credential liveness, and known upstream issues with structured `✅/⚠️/❌` report
+  - Bundled `scripts/install_ima_skill.sh` with version override via `--version` flag or `IMA_VERSION` env var
+  - Bundled `scripts/search_fanout.py` for client-side cross-knowledge-base search with priority-based KB boosting, skip-list filtering, 100-result silent-truncation detection, and permission-denied KB partitioning (typical for subscribed KBs)
+  - Detects and repairs ISSUE-001 (submodule SKILL.md files missing YAML frontmatter in upstream v1.1.2) with two user-selectable strategies: Strategy A (rename to `MODULE.md` and patch root references — respects upstream design intent) or Strategy B (prepend minimal frontmatter — smallest diff)
+  - All repair commands are idempotent, reversible (with automatic timestamped backups to `/tmp/ima-copilot-backups/`), and use `command cp`/`command mv` to bypass interactive shell aliases
+  - Personalization via `~/.config/ima/copilot.json` with `priority_kbs` and `skip_kbs` lists — template at `config-template/copilot.json.example` uses illustrative-only values so the skill ships with zero real KB names
+  - Comprehensive reference documentation in `references/` covering installation flow, API key setup, known issues (source of truth for repairs), and search best practices
+  - Never vendors, forks, or mirrors upstream files — every repair is a runtime instruction executed with explicit user consent
+
+### Changed
+- Updated marketplace skills/plugins count from 43 to 44
+- Updated marketplace version from 1.40.1 to 1.41.0
 
 ## [1.39.0] - 2026-03-18
 

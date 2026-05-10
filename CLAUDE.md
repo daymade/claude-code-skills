@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 43 production-ready skills organized in a plugin marketplace structure. Each skill is a self-contained package that extends Claude's capabilities with specialized knowledge, workflows, and bundled resources.
+This is a Claude Code skills marketplace containing 53 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -61,13 +61,13 @@ claude plugin install skill-creator@daymade-skills
 
 ```bash
 # Quick validation of a skill
-skill-creator/scripts/quick_validate.py /path/to/skill
+cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.quick_validate ../skill-name
 
 # Package a skill (includes automatic validation)
-skill-creator/scripts/package_skill.py /path/to/skill [output-dir]
+cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.package_skill ../skill-name [output-dir]
 
 # Initialize a new skill from template
-skill-creator/scripts/init_skill.py <skill-name> --path <output-directory>
+uv run python daymade-skill/skill-creator/scripts/init_skill.py <skill-name> --path <output-directory>
 ```
 
 ### Testing Skills Locally
@@ -89,10 +89,13 @@ In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude 
 
 ### Git Operations
 
-This repository uses standard git workflow:
+This repository uses standard git workflow, but **always stage files by name**,
+never `git add -A` / `git add .`. Multiple agents may have unstaged changes in
+the same worktree — a blanket stage piggybacks their work into your commit:
+
 ```bash
 git status
-git add .
+git add path/to/file1 path/to/file2   # specific files only
 git commit -m "message"
 git push
 ```
@@ -122,14 +125,20 @@ Skills for public distribution must NOT contain:
 - Personal usernames, company names, product names
 - Phone numbers, personal email addresses
 - OneDrive paths or environment-specific absolute paths
-- Use relative paths within skill bundle or standard placeholders (`~/workspace/`, `<user_id>`)
+- Use relative paths within skill bundle or standard placeholders (`<workspace>/`, `<user_id>`)
 
-**Three-layer defense system:**
+**Four-layer defense system:**
 1. **CLAUDE.md rules** (this section) — Claude avoids generating sensitive content
-2. **Pre-commit hook** (`.githooks/pre-commit`) — blocks commits with sensitive patterns
-3. **gitleaks** (`.gitleaks.toml`) — deep scan with custom rules for this repo
+2. **Global PII Guard pre-commit hook** (`~/scripts/git-pii-guard/pre-commit`) — blocks staged PII/secrets and generated/local artifact paths
+3. **Global PII Guard pre-push hook** (`~/scripts/git-pii-guard/pre-push`) — scans commits about to be pushed, catching bad local history before it hits GitHub
+4. **gitleaks** (`.gitleaks.toml`) — deep scan with custom rules for this repo
 
-The pre-commit hook is auto-activated via `git config core.hooksPath .githooks`.
+PII Guard is enabled via `~/scripts/git-pii-guard/manage.sh enable <repo-path>`, which sets `core.hooksPath` to `~/scripts/git-pii-guard`.
+For repo-specific additions:
+- `.pii-patterns` — extra content regexes
+- `.pii-path-patterns` — extra forbidden path regexes
+- `.pii-allowpaths` — explicit path allowlist exceptions
+- `.pre-commit-config.yaml` — optional repo-local runner that wires `pre-commit` framework to the same path/content rules for contributors who prefer managed hooks
 If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 
 ### Content Organization
@@ -143,9 +152,10 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 43 plugins, each mapping to one skill
-- Each plugin has: name, description, version, category, keywords, skills array
-- Marketplace metadata: name, owner, version, homepage
+- Contains 56 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
+- Each plugin has: name, description, source, version, category, keywords
+- Marketplace metadata: name, owner, version
+- Single-skill plugins follow the official pattern (167/168 plugins in `anthropics/claude-plugins-official`): `source` points to skill directory, `skills` omitted
 
 ### Versioning Architecture
 
@@ -153,8 +163,8 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
    - Tracks the marketplace catalog as a whole
-   - Current: v1.39.0
-   - Bump when: Adding/removing skills, major marketplace restructuring
+   - Current: v1.53.0
+   - Bump when: Adding/removing skills, adding/removing suite plugins, major marketplace restructuring
    - Semantic versioning: MAJOR.MINOR.PATCH
 
 2. **Individual Skill Versions** (`.claude-plugin/marketplace.json` → `plugins[].version`)
@@ -229,6 +239,16 @@ This applies when you change ANY file under a skill directory:
 41. **capture-screen** - Programmatically capture macOS application windows using Swift window ID discovery and screencapture workflows
 42. **continue-claude-work** - Recover local `.claude` session context via compact-boundary extraction, subagent workflow recovery, and session end reason detection, then continue interrupted work without `claude --resume`
 43. **scrapling-skill** - Install, troubleshoot, and use Scrapling CLI for static/dynamic web extraction, WeChat article capture, and verified output validation
+44. **ima-copilot** - One-stop companion and installer for the official Tencent IMA skill with zero-config three-agent installation via vercel-labs/skills, XDG credential management, read-only diagnostic, known-issue auto-repair under user consent, and personalized fan-out search with priority-based knowledge base boosting
+45. **claude-export-txt-better** - Fixes broken line wrapping in Claude Code exported `.txt` conversation files; reconstructs tables, paragraphs, paths, and tool calls hard-wrapped at fixed column widths; ships with a 53-check automated validation suite
+46. **douban-skill** - Exports and syncs Douban (豆瓣) book/movie/music/game collections to local CSV files via the reverse-engineered Frodo API; supports full export and RSS incremental sync with no login, cookies, or browser required
+47. **wechat-article-scraper** - World-class WeChat article extraction with 6-level strategy routing, OG metadata fallback, image-paragraph association, and Sogou search discovery; supports Markdown/JSON/HTML/PDF export
+48. **terraform-skill** - Operational traps for Terraform provisioners, multi-environment isolation, and zero-to-deployment reliability; covers provisioner timing races, SSH connection conflicts, DNS record duplication, volume permissions, database bootstrap gaps, Cloudflare credential errors, and init-data-only-on-first-boot pitfalls
+49. **slides-creator** - Narrative-first slide deck creation guiding users through structured narrative design (ABCDEFG model), then delegating visual generation to baoyu-slide-deck. Triggers on create slides, make a presentation, generate deck, slide deck, PPT, or when user needs to turn content into visual slides
+50. **debugging-network-issues** - Evidence-driven, falsification-first methodology for network/streaming/protocol-layer bugs (HTTP/2 RST_STREAM, SSE stalls, fixed-time drops, CDN/proxy/CGNAT idle timeouts). Layered isolation experiments + counter-review filter, with bundled probe scripts and a real SSE 130s case study
+51. **stepfun-tts** - StepFun stepaudio-2.5-tts (Contextual TTS): natural-language `instruction` (≤200 chars) + inline `()` parentheses for句内 prosody. Captures the two TTS-side breaking changes from step-tts-2 (voice_label removal + stricter 2.5-era censorship) with migration playbook
+52. **stepfun-asr** - StepFun stepaudio-2.5-asr (SSE endpoint, 32K context, ~85-101× RTF, 30-min single-call). Hides the #1 trap of the 2.5 ASR family: it does NOT live on `/v1/audio/transcriptions` — the wrong endpoint returns a misleading `model not supported` error. Bundled stdlib CLI handles base64 + nested JSON body + SSE parsing including `error` events
+53. **feishu-doc-scraper** - Save Feishu Docs and Feishu Wiki pages as clean Markdown from a live authenticated browser session with TOC-driven section capture, UI-noise removal, and explicit rejection of Web Clipper as the primary path on virtual-scroll pages
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
@@ -283,20 +303,33 @@ For the full step-by-step guide with templates and examples, see [references/new
 
 **Quick workflow**:
 ```bash
-# 1. Validate & package
-cd skill-creator && python3 scripts/security_scan.py ../skill-name --verbose
-python3 scripts/package_skill.py ../skill-name
+# 1. Validate & package the skill itself
+cd daymade-skill/skill-creator
+uv run python -m scripts.security_scan ../skill-name --verbose
+uv run --with PyYAML python -m scripts.package_skill ../skill-name
 
-# 2. Update all files listed above (see references/new-skill-guide.md for details)
+# 2. Update all files listed above (see references/new-skill-guide.md for the
+#    detailed step-by-step, including 7 README locations and 3 CLAUDE.md spots)
 
-# 3. Validate, commit, push, release
-cd .. && python3 -m json.tool .claude-plugin/marketplace.json > /dev/null
-git add -A && git commit -m "Release vX.Y.0: Add skill-name"
+# 3. One-shot marketplace validation (ships with marketplace-dev skill)
+cd .. && bash daymade-claude-code/marketplace-dev/scripts/check_marketplace.sh
+# Runs: JSON syntax → claude plugin validate → source+skills resolution →
+# reverse sync (warns when a disk SKILL.md is not registered). A WARN on
+# reverse sync is the canary for orphan skills — register them or delete them.
+
+# 4. Stage specific files by name, never `git add -A` or `git add .`
+#    (a parallel agent once piggybacked another session's unstaged changes
+#    into its commit via `git add -A`; the fix is to stage explicitly)
+git add .claude-plugin/marketplace.json CHANGELOG.md README.md README.zh-CN.md \
+        CLAUDE.md skill-name/
+git commit -m "Release vX.Y.0: Add skill-name"
 git push
+
+# 5. Release
 gh release create vX.Y.0 --title "Release vX.Y.0: Add skill-name" --notes "..."
 ```
 
-**Top mistakes**: Forgetting to push to GitHub, forgetting README.zh-CN.md, inconsistent version numbers across files.
+**Top mistakes**: Forgetting to push to GitHub, forgetting README.zh-CN.md, inconsistent version numbers across files, leaving an orphan SKILL.md on disk unregistered (caught by `check_marketplace.sh` reverse sync), using `git add -A` in a repo where multiple agents may have unstaged changes.
 
 ## Chinese User Support
 
