@@ -47,13 +47,13 @@ Both lines are actively maintained. Their Last-Modified timestamps on the OBS bu
 
 **How to explain it to the user** (plain language):
 
-> Gangtise has two versions of every data skill: a short-name version (`gangtise-data`) that's for batch CSV work and requires strict stock codes, and a long-name version (`gangtise-data-client`) that's for interactive research and accepts Chinese names. Unless you know you specifically want the batch-CSV version, use the `-client` version. Our installer defaults to installing both so you can see the difference, but for workshop use we only recommend the `-client` skills.
+> Gangtise has two versions of every data skill: a short-name version (`gangtise-data`) that's for batch CSV work and requires strict stock codes, and a long-name version (`gangtise-data-client`) that's for interactive research and accepts Chinese names. Each line targets a different upstream service (`open-*` vs `skills-backend/*`), and **your account may not have access to both** — see ISSUE-007. The installer ships three presets (`minimal` / `workshop` / `full`) so you can pick whichever subset matches your account's actual access level.
 
 **Repair strategy** (already baked into the installer):
 
-- `--preset full` installs **both** lines so users can compare them and understand the difference firsthand.
-- `--preset workshop` installs **only** `-client` variants (the recommended interactive line for investor workshops).
-- `--preset minimal` installs **only** the legacy minimal line (for users who explicitly want it).
+- `--preset minimal` (default) installs **only** the 3 legacy `open-*` skills (`gangtise-data`, `gangtise-file`, `gangtise-kb`) — the conservative default that works on every account that can authenticate.
+- `--preset workshop` is an **alias for `minimal`** — same 3 skills. The historical workshop bundle of 7 `-client`-heavy skills was a footgun on accounts blocked by ISSUE-007.
+- `--preset full` installs **both lines** (all 19 skills) so users can compare them and understand the difference firsthand. Most `-client` skills will fail at runtime if your account lacks `skills-backend/*` ACL.
 
 No runtime file modification is needed. The wrapper's choice is at install-preset level.
 
@@ -216,7 +216,7 @@ This installs the new skill manually; on the next `gangtise-copilot` upgrade the
 
 ### ISSUE-006 — CLI scripts fail after configure because `~/.GTS_AUTHORIZATION` is missing
 
-**Status**: Observed on 2026-04-12 while running the investor Workshop Demo 2 pipeline.
+**Status**: Observed on 2026-04-12 while running a downstream data pipeline that imported `-client` scripts.
 
 **Symptom**: `diagnose.sh` passes OAuth + RAG checks, but direct upstream CLI script calls fail at import time. Typical failure:
 
@@ -234,7 +234,7 @@ python3 gangtise-kb-client/scripts/kb.py -q "宁德时代" -l 5
 
 **Root cause**: Many upstream scripts read a bare token from `~/.GTS_AUTHORIZATION` at module import time. The wrapper originally wrote only `~/.config/gangtise/authorization.json` and per-skill `.authorization` symlinks. That is enough for OAuth verification, but not enough for scripts whose `utils.py` expects `~/.GTS_AUTHORIZATION`.
 
-**Impact**: A wrapper install can look healthy while the first real data call fails in a workshop.
+**Impact**: A wrapper install can look healthy while the first real data call fails at runtime.
 
 **Repair strategy**: Run the configurator after install. It now writes both:
 
@@ -250,9 +250,9 @@ The runtime token is refreshed every time `configure_auth.sh` succeeds.
 
 ---
 
-### ISSUE-007 — `-client` scripts default to `skills-backend`, which regular OpenAPI accounts may not access
+### ISSUE-007 — `-client` scripts default to `skills-backend`, which many OpenAPI accounts cannot access
 
-**Status**: Observed on 2026-04-12 while running Demo 2. Needs future wrapper follow-up.
+**Status**: Observed 2026-04-12. **Re-verified 2026-05-11**: still reproducible. Confirmed not a token expiry / wiring issue — a freshly-minted OAuth token from `loginV2` hits the same wall. The gateway-level ACL split appears permanent for accounts at certain license tiers; `skills-backend/*` likely requires a higher-tier license than the public `open-*` endpoints.
 
 **Symptom**: After `~/.GTS_AUTHORIZATION` exists and credentials are valid, the `-client` scripts start but every data/file/kb call returns:
 
@@ -260,9 +260,11 @@ The runtime token is refreshed every time `configure_auth.sh` succeeds.
 {"code":"0000001009","status":false,"msg":"the uri can't be accessed"}
 ```
 
-**Root cause**: `gangtise-data-client`, `gangtise-file-client`, and `gangtise-kb-client` default `GANGTISE_DOMAIN` to `https://open.gangtise.com/application/skills-backend`. Regular OpenAPI credentials can authenticate and may have RAG/data/file scope, but are not allowed to call this `skills-backend` route. The legacy openapi skills use public endpoints such as `open-data` and `open-quote`, and worked for the same account.
+Note: Error code is `1009` (uri ACL rejection), **not** `1008` (token invalid). If you see `1008`, your token is genuinely expired — refresh via `configure_auth.sh` first. Only after seeing a fresh `1009` should you suspect this issue.
 
-**Impact**: For live workshop work, `--preset full` is safer than `--preset workshop`: the full preset installs both `-client` and legacy openapi variants. If the client line is blocked by `skills-backend`, use the legacy line.
+**Root cause**: `gangtise-data-client`, `gangtise-file-client`, `gangtise-kb-client`, `gangtise-file-client-no-download`, `gangtise-stockpool-client`, and `gangtise-web-client` all default `GANGTISE_DOMAIN` to `https://open.gangtise.com/application/skills-backend`. Regular OpenAPI credentials can authenticate (OAuth `loginV2` returns a valid token) and may have RAG/data/file scope, but are blocked at the gateway from calling this `skills-backend` route — confirmed by the fact that a freshly-minted OAuth token still returns `1009`. The legacy openapi skills (`gangtise-data`, `gangtise-file`, `gangtise-kb`) use public endpoints such as `open-data`, `open-quote`, `open-fundamental`, and **work on the same account with the same credentials**.
+
+**Impact**: Affected accounts cannot use any of the 6 `-client` skills or the 9 workflow skills that wrap them — 16 of the 19 skills in the catalog become non-functional. The 3 legacy `open-*` skills (`gangtise-data`, `gangtise-file`, `gangtise-kb`) still work and form the realistic working surface. `--preset minimal` (now the default) installs exactly these 3.
 
 **Observed working commands**:
 
@@ -278,11 +280,37 @@ python3 ~/.local/share/gangtise-copilot/skills/gangtise-kb/scripts/kb.py \
   --file-types 研究报告,公司公告,会议纪要,调研纪要,首席观点 -l 8
 ```
 
+**How to confirm this is your symptom (vs. a token problem)**:
+
+```bash
+# 1. Get a fresh OAuth token directly
+FRESH=$(curl -sS -X POST "https://open.gangtise.com/application/auth/oauth/open/loginV2" \
+  -H "Content-Type: application/json" \
+  -d "{\"accessKey\":\"$AK\",\"secretAccessKey\":\"$SK\"}" \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['data']['accessToken'])")
+
+# 2. Hit a skills-backend endpoint with the fresh token
+curl -sS -X POST "https://open.gangtise.com/application/skills-backend/search/quote" \
+  -H "Authorization: $FRESH" -H "Content-Type: application/json" -d '{}'
+# Expect: {"code":"0000001009","msg":"the uri can't be accessed"} → confirms ACL block
+
+# 3. Hit a public endpoint with the SAME fresh token
+curl -sS -X POST "https://open.gangtise.com/application/open-quote/kline/daily" \
+  -H "Authorization: $FRESH" -H "Content-Type: application/json" \
+  -d '{"securityList":["600519.SH"],"startDate":"2026-05-01","endDate":"2026-05-09"}'
+# Expect: real K-line data → confirms token is valid, only the route is blocked
+```
+
+If step 2 returns `1009` AND step 3 returns real data, you have ISSUE-007. Workaround below.
+
 **Repair strategy**:
 
-- For now: install `--preset full`, then prefer legacy `gangtise-data/file/kb` scripts when `-client` scripts return `0000001009`.
-- Do not patch upstream scripts silently. A future wrapper revision may add a compatibility runner or detect this condition in `diagnose.sh`.
-- Record this fallback in demo `run-log.md` so a future agent does not waste time debugging valid credentials.
+- **If you confirmed ISSUE-007 with the diagnostic above, the default `--preset minimal` is what you want.** It installs only the 3 legacy skills (`gangtise-data`, `gangtise-file`, `gangtise-kb`), which together cover OHLC + financials + announcements + foreign reports + RAG retrieval. This is the realistic working surface for accounts blocked at `skills-backend/*`. (`--preset workshop` is an alias for `minimal` and installs the same 3 skills.)
+- **Avoid `--preset full`** if you're affected — it works (it includes the 3 legacy skills) but pollutes the install with 16 skills that error on every call.
+- Workflow skills that wrap `-client` (e.g. `gangtise-stock-research`, `gangtise-opinion-pk`, `gangtise-event-review`) are **also blocked** because they invoke `-client` scripts internally. The only workflow that bypasses `skills-backend` at the code level is `gangtise-announcement-digest` — but it requires a separate `gangtise_token` credential, and the route it calls (`application/investReport/api/queryClueListBySecurity`) is also `1009`-blocked for affected accounts (confirmed with a fresh OAuth token).
+- `diagnose.sh` showing `OAuth liveness ✅` + `RAG liveness ✅` is **misleading** for ISSUE-007 — those checks only validate the public RAG endpoint (`open-data/ai/search/knowledge_base`), not any `-client` skill code path. A user can see all green diagnostics yet have 16/19 skills blocked at runtime.
+- Do not patch upstream scripts silently. A future wrapper revision may add a `client-liveness` check that probes `skills-backend/*` directly and emits a clear ISSUE-007 verdict in `diagnose.sh`.
+- Record this fallback in any deployment runbook so a future agent does not waste time debugging valid credentials.
 
 ## Adding new issues to this file
 
