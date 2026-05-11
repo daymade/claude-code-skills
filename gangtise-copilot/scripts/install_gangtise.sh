@@ -53,9 +53,13 @@ BUNDLES=(
 # Presets — which skills each mode installs
 PRESET_FULL="gangtise-data-client gangtise-file-client gangtise-file-client-no-download gangtise-kb-client gangtise-stockpool-client gangtise-announcement-digest gangtise-data-processor gangtise-event-review gangtise-interview-outline gangtise-opinion-pk gangtise-opinion-summarizer gangtise-stock-research gangtise-stock-selector gangtise-thematic-research gangtise-wechat-summary gangtise-data gangtise-file gangtise-kb gangtise-web-client"
 
-PRESET_WORKSHOP="gangtise-data-client gangtise-kb-client gangtise-file-client gangtise-web-client gangtise-stock-research gangtise-opinion-pk gangtise-announcement-digest"
-
 PRESET_MINIMAL="gangtise-data gangtise-file gangtise-kb"
+
+# `workshop` is intentionally an alias for `minimal`. The historical workshop preset
+# bundled 7 -client-heavy skills, but those are blocked by ISSUE-007 on most accounts,
+# making them a footgun in live demos. The 3 legacy minimal skills are the realistic
+# working surface for any live workshop, so the preset now points at the same set.
+PRESET_WORKSHOP="$PRESET_MINIMAL"
 
 # ============================================================================
 # Cleanup trap
@@ -79,10 +83,18 @@ Usage: install_gangtise.sh [OPTIONS]
 Install the Gangtise OpenAPI skill suite to detected local agents.
 
 Options:
-  --preset MODE       Install preset: full (default) | workshop | minimal
-                        full     — all 19 skills
-                        workshop — 7 skills for investor Workshop Demo 1+2
-                        minimal  — 3 skills from the legacy minimal line
+  --preset MODE       Install preset: minimal (default) | workshop | full
+                        minimal  — 3 legacy skills (data, file, kb) using public
+                                   open-* endpoints. Works on every account that
+                                   can authenticate. Recommended default — see
+                                   ISSUE-007 in references/known_issues.md for
+                                   why this is the safe choice.
+                        workshop — Alias for minimal. The historical -client-heavy
+                                   workshop preset is a footgun on accounts blocked
+                                   by ISSUE-007; it now installs the same 3 skills.
+                        full     — all 19 skills (mix of both lines). Most -client
+                                   skills will fail at runtime if your account
+                                   lacks skills-backend/* ACL.
   --only LIST         Comma-separated list of skill names to install (overrides
                       --preset). Example: --only gangtise-data-client,gangtise-kb-client
   --target AGENT      Force a single target agent: claude-code | openclaw | codex
@@ -92,8 +104,9 @@ Options:
   -h, --help          Show this help and exit.
 
 Examples:
-  bash install_gangtise.sh                           # Full install, all detected agents
-  bash install_gangtise.sh --preset workshop          # Workshop 7 skills
+  bash install_gangtise.sh                           # Default minimal (3 skills)
+  bash install_gangtise.sh --preset workshop         # alias for minimal (same 3 skills)
+  bash install_gangtise.sh --preset full             # All 19 skills
   bash install_gangtise.sh --only gangtise-data-client,gangtise-kb-client
   bash install_gangtise.sh --target claude-code      # Only Claude Code
 EOF
@@ -103,7 +116,7 @@ EOF
 # Parse flags
 # ============================================================================
 
-PRESET="full"
+PRESET="minimal"
 ONLY_LIST=""
 FORCE_TARGET=""
 SKIP_OPENCLAW=0

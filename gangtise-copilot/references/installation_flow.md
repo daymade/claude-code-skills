@@ -38,7 +38,7 @@ Each skill also exists as a standalone `gangtise-<skill-name>.zip` on the same O
 
 3. **Bundles are the canonical distribution unit.** Gangtise itself maintains `gangtise-skills-client.zip`, `gangtise-research.zip`, and `gangtise-skills.zip` as official aggregate archives. Using them directly means the wrapper never fights with upstream over which-skill-is-in-which-archive — if Gangtise rebalances the bundle contents in a future release, the wrapper picks it up automatically.
 
-The installer computes the minimum bundle set needed to satisfy the `--preset` or `--only` list. A `--preset minimal` install downloads only `gangtise-skills.zip` (3 skills, ~118 KB); a `--preset workshop` install downloads 3 bundles; a full install downloads all 4.
+The installer computes the minimum bundle set needed to satisfy the `--preset` or `--only` list. A `--preset minimal` install downloads only `gangtise-skills.zip` (3 skills, ~118 KB); `--preset workshop` is an alias for `minimal` and downloads the same single bundle; `--preset full` downloads all 4 bundles.
 
 ## Target agent detection
 
@@ -94,9 +94,9 @@ GANGTISE_COPILOT_HOME=/tmp/gangtise-test bash install_gangtise.sh
 
 | Preset | Skills | Bundles downloaded | Use case |
 |---|---|---|---|
-| `full` (default) | All 19 skills (data layer + web + stockpool + file-no-download + 10 research workflows + 3 minimal) | All 4 bundles | Power users, complete catalog demos, future-proof installs |
-| `workshop` | data-client, kb-client, file-client, web-client, stock-research, opinion-pk, announcement-digest (7) | skills-client, research, web-client | 2026 Q2 Investor Workshop — Demo 1 (岗底斯日报机器人) + Demo 2 (宁德时代研报时间轴验证) |
-| `minimal` | data, file, kb (3, legacy minimal line) | skills | Users who want the smaller footprint and don't need the client-variant's extended capabilities |
+| `minimal` (default) | data, file, kb (3, legacy minimal line via public `open-*` endpoints) | skills | Conservative install that works on every account that can authenticate. Immune to ISSUE-007 (`skills-backend/*` ACL). Covers OHLC + financials + announcements + foreign reports + RAG. |
+| `workshop` | (alias for `minimal` — same 3 skills) | skills | Historical preset bundled 7 `-client`-heavy skills (data-client + kb-client + file-client + web-client + stock-research + opinion-pk + announcement-digest), but those are blocked by ISSUE-007 on most accounts. The preset now points at the same 3 skills as `minimal` to avoid footgunning live demos. |
+| `full` | All 19 skills (data layer + web + stockpool + file-no-download + 10 research workflows + 3 minimal) | All 4 bundles | Both lines side-by-side. **Most `-client` skills will fail at runtime if your account lacks `skills-backend/*` ACL** — verify per ISSUE-007. |
 
 Override with `--only` for a custom subset:
 
@@ -110,7 +110,7 @@ The `--only` list is taken literally — the installer downloads whichever bundl
 
 | Flag | Purpose | Default |
 |---|---|---|
-| `--preset <mode>` | Install preset: `full`, `workshop`, `minimal` | `full` |
+| `--preset <mode>` | Install preset: `minimal`, `workshop` (alias for `minimal`), `full` | `minimal` |
 | `--only <list>` | Comma-separated skill names. Overrides `--preset`. | none |
 | `--target <agent>` | Force single target: `claude-code`, `openclaw`, `codex` | auto-detect all |
 | `--no-openclaw` | Skip OpenClaw even if detected | include all detected |

@@ -181,7 +181,7 @@ Market event post-mortem — 800-1000 word professional investment-research styl
 
 Company-meeting interview outline generator. 3-step workflow: information gathering → topic classification → question list. Used before a site visit or management meeting.
 
-### `gangtise-announcement-digest` v1.1.2 ⭐ RECOMMENDED FOR DEMO 1
+### `gangtise-announcement-digest` v1.1.2 ⭐ RECOMMENDED FOR DAILY DIGEST USE CASES
 
 Announcement tracking + digest. Takes a stock pool (Excel / CSV / code list) as input and produces a daily digest with two sections: (1) announcements relevant to your pool in the past 3 days, and (2) market-wide important announcements with type breakdown. Output is structured, conclusion-first, with drill-down links.
 
@@ -203,10 +203,10 @@ Meta-skill — provides methodology guidance for designing custom data-processin
 
 The real power of the catalog comes from combining skills. Here are three concrete compositions:
 
-### Composition 1: Flagship workshop demo (Demo 2 in the 2026 Q2 Investor Workshop)
+### Composition 1: Single-stock institutional research
 
 ```
-User: "Research 宁德时代 at L2 depth"
+User: "Research <SECURITY> at L2 depth"
  └── gangtise-stock-research (workflow)
       ├── gangtise-data-client/security.py
       ├── gangtise-data-client/financial.py
@@ -220,25 +220,25 @@ User: "Research 宁德时代 at L2 depth"
       ├── gangtise-file-client/opinion.py
       ├── gangtise-file-client/summary.py
       └── gangtise-file-client/announcement.py
- └── Output: 宁德时代_研究_2026-04-11.md + 宁德时代_研究_2026-04-11.html
+ └── Output: <SECURITY>_研究_<DATE>.md + <SECURITY>_研究_<DATE>.html
 ```
 
-### Composition 2: Adversarial review of your own thesis (Demo 2 extension)
+### Composition 2: Adversarial review of your own thesis
 
 ```
-User: "I'm long 宁德时代 because of CapEx discipline. Find risks."
+User: "I'm long <SECURITY> because of <THESIS>. Find risks."
  └── gangtise-opinion-pk (workflow)
-      ├── Parse: entity=宁德时代, type=STOCK, sentiment=POSITIVE, strategy=FIND_RISKS
+      ├── Parse: entity=<SECURITY>, type=STOCK, sentiment=POSITIVE, strategy=FIND_RISKS
       ├── Generate 10 risk-focused queries
       ├── gangtise-data-client/security.py + financial.py + valuation.py + quote.py
       ├── gangtise-kb-client/kb.py (for each of 10 queries, file-types=研究报告,首席观点,会议纪要)
       ├── gangtise-file-client/report.py + opinion.py
       └── gangtise-web-client/web.py (for public-web counterpoints)
- └── Output: 宁德时代_观点PK_2026-04-11.md + 宁德时代_观点PK_2026-04-11.html
+ └── Output: <SECURITY>_观点PK_<DATE>.md + <SECURITY>_观点PK_<DATE>.html
              (with risk signals, timeline, stress tests, core contradiction)
 ```
 
-### Composition 3: Daily digest machine (Demo 1 in the 2026 Q2 Investor Workshop)
+### Composition 3: Daily digest machine
 
 ```
 User: "Watch my portfolio daily"
@@ -247,7 +247,7 @@ User: "Watch my portfolio daily"
       ├── gangtise-file-client/announcement.py (×N stocks, past 3 days)
       ├── Classify announcements by importance
       └── Generate daily digest MD + HTML
- └── Output pushed to Feishu Bot via webhook (not part of Gangtise itself — wire up via a separate flow)
+ └── Output: pipe to a chat bot / email / wiki via your own webhook (downstream wiring is out of scope)
 ```
 
 ## Compliance notes

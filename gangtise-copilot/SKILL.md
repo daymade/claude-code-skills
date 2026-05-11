@@ -1,6 +1,6 @@
 ---
 name: gangtise-copilot
-description: One-stop installer and companion for the full Gangtise (岗底斯投研) OpenAPI skill suite — 19 official skills covering data retrieval (OHLC 行情, 财务, 估值, 研报, 首席观点, 会议纪要, 调研纪要), research workflows (个股研究 L1-L4, 观点 PK 对抗性分析, 主题研究, 事件复盘), and utility (股票池管理, 公开网页搜索). Zero-config install to Claude Code / OpenClaw / Codex with 4 preset modes (full / workshop / minimal / custom), guides accessKey + secretAccessKey setup with a live validation call against open.gangtise.com, and ships a read-only diagnostic script. Use this skill whenever the user mentions Gangtise, 岗底斯, gangtise-data, gangtise-kb, gangtise-file, gangtise-data-client, gangtise-kb-client, gangtise-file-client, gangtise-stock-research, gangtise-opinion-pk, installing any gangtise-* skill, configuring its credentials, or reports errors like 'token is invalid', '接口地址错误', 'the uri can't be accessed'. This is a wrapper around Gangtise's official skills — it installs and orchestrates them rather than replacing them.
+description: One-stop installer and companion for the full Gangtise (岗底斯投研) OpenAPI skill suite — 19 official skills covering data retrieval (OHLC 行情, 财务, 估值, 研报, 首席观点, 会议纪要, 调研纪要), research workflows (个股研究 L1-L4, 观点 PK 对抗性分析, 主题研究, 事件复盘), and utility (股票池管理, 公开网页搜索). Zero-config install to Claude Code / OpenClaw / Codex with 3 preset modes (minimal default / workshop alias / full) plus `--only` for custom subsets, guides accessKey + secretAccessKey setup with a live validation call against open.gangtise.com, and ships a read-only diagnostic script. Use this skill whenever the user mentions Gangtise, 岗底斯, gangtise-data, gangtise-kb, gangtise-file, gangtise-data-client, gangtise-kb-client, gangtise-file-client, gangtise-stock-research, gangtise-opinion-pk, installing any gangtise-* skill, configuring its credentials, or reports errors like 'token is invalid', '接口地址错误', 'the uri can't be accessed'. This is a wrapper around Gangtise's official skills — it installs and orchestrates them rather than replacing them.
 ---
 
 # Gangtise Copilot
@@ -132,7 +132,7 @@ Gangtise Copilot solves this in one command:
 1. Installs all 19 official Gangtise skills to Claude Code, OpenClaw, and Codex via a single bundled-download + distribute pipeline.
 2. Walks the user through accessKey + secretAccessKey setup with a live authentication call against `open.gangtise.com/application/auth/oauth/open/loginV2`.
 3. Provides a read-only diagnostic script that reports which skills are installed, which credentials are valid, and which capability tiers are reachable.
-4. Exposes preset install modes so a workshop learner gets a 7-skill minimal install while a power user can get the full 19-skill catalog.
+4. Exposes preset install modes (`minimal` / `workshop` / `full`) so users can match the install size to what their account license actually permits — see ISSUE-007 in `references/known_issues.md` for why "biggest install" is not the safe default.
 
 **Runtime note from April 2026 usage**: after installing skills, run `configure_auth.sh` even if `~/.config/gangtise/authorization.json` already exists. Upstream CLI scripts also read `~/.GTS_AUTHORIZATION`, a bare runtime token file. The configurator refreshes both files.
 
@@ -149,7 +149,7 @@ This skill is a **wrapper layer** around the Gangtise OpenAPI skill suite. The w
 
 | Capability | Entry point | Detail |
 |---|---|---|
-| 1. Install Gangtise skills (full / workshop / minimal / custom) | `scripts/install_gangtise.sh` | See `references/installation_flow.md` |
+| 1. Install Gangtise skills (minimal default, workshop alias, full, or `--only` custom) | `scripts/install_gangtise.sh` | See `references/installation_flow.md` |
 | 2. Configure accessKey + secretAccessKey credentials | `scripts/configure_auth.sh` | See `references/credentials_setup.md` |
 | 3. Diagnose install state, credential validity, and capability tiers | `scripts/diagnose.sh` | See `references/known_issues.md` |
 | 4. Look up which Gangtise skill answers a specific data question | Skill registry below + `references/skill_registry.md` | — |
@@ -204,9 +204,9 @@ bash scripts/install_gangtise.sh
 Flags:
 
 ```bash
-bash scripts/install_gangtise.sh --preset workshop   # 7 skills for investor Workshop (Demo 1+2)
-bash scripts/install_gangtise.sh --preset minimal    # 3 skills (legacy kb/file/data only)
-bash scripts/install_gangtise.sh --preset full       # all 19 skills (default)
+bash scripts/install_gangtise.sh --preset minimal    # default — 3 skills via public open-* endpoints
+bash scripts/install_gangtise.sh --preset workshop   # alias for minimal (same 3 skills)
+bash scripts/install_gangtise.sh --preset full       # all 19 skills (most -client will fail without skills-backend ACL)
 bash scripts/install_gangtise.sh --only data-client,kb-client,file-client  # custom subset
 bash scripts/install_gangtise.sh --no-openclaw       # skip OpenClaw even if detected
 bash scripts/install_gangtise.sh --target claude-code  # force single target
@@ -216,9 +216,9 @@ bash scripts/install_gangtise.sh --target claude-code  # force single target
 
 | Preset | Skills | Intended for |
 |---|---|---|
-| **full** (default) | All 19 skills | Power users, workshops demonstrating the complete catalog, future-proof installs |
-| **workshop** | data-client, kb-client, file-client, web-client, stock-research, opinion-pk, announcement-digest | 2026 Q2 investor Workshop — covers Demo 1 (岗底斯日报机器人) + Demo 2 (宁德时代研报时间轴验证) |
-| **minimal** | data, file, kb | Legacy minimal line — only install this if the user explicitly wants the smaller footprint with reduced feature set |
+| **minimal** (default) | `gangtise-data`, `gangtise-file`, `gangtise-kb` | Conservative install that works on any account that can authenticate. Uses public `open-*` endpoints only — immune to ISSUE-007. Covers OHLC, financials, announcements, foreign reports, RAG retrieval. |
+| **workshop** | (alias for `minimal` — same 3 skills) | Historical preset bundled 7 `-client`-heavy skills, but those are blocked by ISSUE-007 on most accounts and produce a broken live demo. The preset now points at the same 3 skills as `minimal` so it can no longer footgun a workshop. |
+| **full** | All 19 skills | Both lines side-by-side. Useful for exploring the full Gangtise catalog. **Most `-client` skills will fail at runtime if your account lacks `skills-backend/*` ACL** — confirm with the diagnostic in ISSUE-007 first. |
 
 ## Capability 2: Configure credentials
 
