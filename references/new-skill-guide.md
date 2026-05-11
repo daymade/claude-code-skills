@@ -121,12 +121,11 @@ Use **skill-name** to [describe primary use case]. Combine with **other-skill** 
 {
   "name": "skill-name",
   "description": "Clear description with trigger conditions. Use when [scenarios]",
-  "source": "./",
+  "source": "./skill-name",
   "strict": false,
   "version": "1.0.0",
   "category": "appropriate-category",
-  "keywords": ["keyword1", "keyword2", "keyword3"],
-  "skills": ["./skill-name"]
+  "keywords": ["keyword1", "keyword2", "keyword3"]
 }
 ```
 

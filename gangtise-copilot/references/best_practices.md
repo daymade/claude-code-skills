@@ -6,9 +6,9 @@ Non-obvious patterns for getting the most value out of the Gangtise skill catalo
 
 Gangtise's 19 skills are organized into two layers that you should think of differently:
 
-1. **Data-layer skills (gangtise-data-client, gangtise-kb-client, gangtise-file-client, gangtise-web-client, gangtise-stockpool-client)** — primitive operations. Each script returns a specific data structure (CSV, file list, text chunks). Don't call them directly in a workshop demo unless you're teaching the primitive; they're building blocks, not finished products.
+1. **Data-layer skills (gangtise-data-client, gangtise-kb-client, gangtise-file-client, gangtise-web-client, gangtise-stockpool-client)** — primitive operations. Each script returns a specific data structure (CSV, file list, text chunks). Don't call them directly in a live demo unless you're teaching the primitive; they're building blocks, not finished products.
 
-2. **Workflow-layer skills (the 10 `gangtise-*` in the research bundle)** — finished research deliverables. Each one encodes a full professional workflow — data retrieval, analysis, writing, formatting — and outputs an MD + HTML report. Call these in workshop demos because they produce something the audience can *see*.
+2. **Workflow-layer skills (the 10 `gangtise-*` in the research bundle)** — finished research deliverables. Each one encodes a full professional workflow — data retrieval, analysis, writing, formatting — and outputs an MD + HTML report. Call these in live demos because they produce something the audience can *see*.
 
 **The mistake a new user makes**: invoking `gangtise-data-client/quote.py` directly, getting back a CSV of 252 rows of OHLC data, and thinking "now what?" The workflow-layer skill `gangtise-stock-research` L2 answers "now what" — it wraps the same quote data into a research narrative.
 
@@ -96,7 +96,7 @@ If you run a local HTTP proxy (Shadowrocket, Clash, Surge, v2ray, etc.) that int
 
 - **Corrupt download responses** (proxy truncates or re-encodes HTTPS bodies) — the installer's size sanity check catches this, but only after a failure.
 - **Fail auth calls** (proxy terminates TLS and Gangtise rejects the resulting cert chain).
-- **Add 500-2000 ms latency** to every API call, making workshop demos feel sluggish.
+- **Add 500-2000 ms latency** to every API call, making live demos feel sluggish.
 
 The fix:
 
@@ -107,9 +107,9 @@ export no_proxy="open.gangtise.com,gts-download.obs.myhuaweicloud.com,$no_proxy"
 
 Or add these to your shell init (`~/.zshrc`, `~/.bashrc`). `gangtise-copilot`'s scripts do NOT set this for you — setting NO_PROXY globally is a user-level decision.
 
-## Workshop timing reference (from the 2026 Q2 Investor Workshop design)
+## Performance reference
 
-Approximate timings for live workshop demos of each workflow skill (based on staging tests, your mileage will vary with query complexity and account quota):
+Approximate wall-clock timings for live invocations of each workflow skill (based on staging tests; will vary with query complexity, account quota, and network):
 
 | Skill | Typical wall time | What the audience sees |
 |---|---|---|
@@ -124,12 +124,12 @@ Approximate timings for live workshop demos of each workflow skill (based on sta
 
 **Demo tip**: Use `gangtise-stock-research` L1 for "hello world" because it's fast enough to not break audience attention, and use L2 for the "wow" moment because the output is institutional-grade but doesn't take so long that you lose the room.
 
-## What NOT to do in a workshop demo
+## What NOT to do in a live demo
 
 - **Don't call 18 data-layer scripts in a row.** The audience will see 18 CSV files and think "I could have done this in Excel." Always wrap data calls in a workflow-layer skill.
 - **Don't claim the workflow skills are making investment recommendations.** They explicitly avoid this (the compliance guardrails in their templates forbid "买入 / 卖出 / 目标价"). Calling the output a "recommendation" in front of an audience defeats the purpose of the guardrails and puts you at compliance risk.
-- **Don't use the legacy minimal skills (`gangtise-data`, `gangtise-file`, `gangtise-kb`) for workshop demos.** They're missing 5-9 capabilities compared to the client variants. Save them for batch pipelines where their strict input style is a feature.
-- **Don't pair `gangtise-stock-research` with a stock that has sparse coverage.** The workflow needs at least 20 recent research reports + opinions to produce a good L2 output. Pick large-cap Chinese stocks (宁德时代, 比亚迪, 贵州茅台, 宁德 sector peers) for guaranteed data density.
+- **Don't pick `-client` skills before verifying your account has `skills-backend/*` ACL.** If you're affected by ISSUE-007, the `-client` line will fail with `0000001009` mid-demo. Run the diagnostic in `references/known_issues.md` ISSUE-007 first; if you're affected, the legacy minimal line (`gangtise-data`, `gangtise-file`, `gangtise-kb`) is the working surface and they cover the most common queries (OHLC, financials, announcements, RAG retrieval).
+- **Don't pair `gangtise-stock-research` with a stock that has sparse coverage.** The workflow needs at least 20 recent research reports + opinions to produce a good L2 output. Pick large-cap A-share names with active analyst coverage for guaranteed data density.
 - **Don't demonstrate the `opinion-pk` adversarial analysis on a stock the audience has strong personal opinions about.** It produces a devil's-advocate view by design, which can read as an attack on whoever recommended the stock. Stay with neutral or unfamiliar names.
 
 ## What TO do after install

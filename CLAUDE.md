@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 52 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
+This is a Claude Code skills marketplace containing 54 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -152,10 +152,10 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 54 plugin entries: most map to one skill, while suite plugins (`daymade-docs`, `daymade-claude-code`) map to multiple related skills
-- Each plugin has: name, description, version, category, keywords, skills array
-- Marketplace metadata: name, owner, version, homepage
-- Suite plugins use `<suite-name>/` (a top-level directory at the repo root) as the canonical source for their member skills so suite caches contain only those skills. Single-skill plugin entries for suite members should point to the same canonical subdirectories.
+- Contains 57 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
+- Each plugin has: name, description, source, version, category, keywords
+- Marketplace metadata: name, owner, version
+- Single-skill plugins follow the official pattern (167/168 plugins in `anthropics/claude-plugins-official`): `source` points to skill directory, `skills` omitted
 
 ### Versioning Architecture
 
@@ -163,7 +163,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
    - Tracks the marketplace catalog as a whole
-   - Current: v1.52.0
+   - Current: v1.55.0
    - Bump when: Adding/removing skills, adding/removing suite plugins, major marketplace restructuring
    - Semantic versioning: MAJOR.MINOR.PATCH
 
@@ -246,8 +246,10 @@ This applies when you change ANY file under a skill directory:
 48. **terraform-skill** - Operational traps for Terraform provisioners, multi-environment isolation, and zero-to-deployment reliability; covers provisioner timing races, SSH connection conflicts, DNS record duplication, volume permissions, database bootstrap gaps, Cloudflare credential errors, and init-data-only-on-first-boot pitfalls
 49. **slides-creator** - Narrative-first slide deck creation guiding users through structured narrative design (ABCDEFG model), then delegating visual generation to baoyu-slide-deck. Triggers on create slides, make a presentation, generate deck, slide deck, PPT, or when user needs to turn content into visual slides
 50. **debugging-network-issues** - Evidence-driven, falsification-first methodology for network/streaming/protocol-layer bugs (HTTP/2 RST_STREAM, SSE stalls, fixed-time drops, CDN/proxy/CGNAT idle timeouts). Layered isolation experiments + counter-review filter, with bundled probe scripts and a real SSE 130s case study
-51. **stepfun-tts** - StepFun StepAudio 2.5 family: stepaudio-2.5-tts (Contextual TTS via instruction + inline parentheses) and stepaudio-2.5-asr (SSE endpoint, 32K context, ~100x RTF, 30-min single-call). Captures the three breaking changes from step-tts-2 (voice_label removal, /v1/audio/asr/sse endpoint, stricter censorship) with migration playbook
-52. **x-twitter-scraper** - Full X (Twitter) automation via Xquik REST API with 121 endpoints, 23 extraction tools, MCP server, draws, monitoring, webhooks, and AI composition
+51. **stepfun-tts** - StepFun stepaudio-2.5-tts (Contextual TTS): natural-language `instruction` (≤200 chars) + inline `()` parentheses for句内 prosody. Captures the two TTS-side breaking changes from step-tts-2 (voice_label removal + stricter 2.5-era censorship) with migration playbook
+52. **stepfun-asr** - StepFun stepaudio-2.5-asr (SSE endpoint, 32K context, ~85-101× RTF, 30-min single-call). Hides the #1 trap of the 2.5 ASR family: it does NOT live on `/v1/audio/transcriptions` — the wrong endpoint returns a misleading `model not supported` error. Bundled stdlib CLI handles base64 + nested JSON body + SSE parsing including `error` events
+53. **feishu-doc-scraper** - Save Feishu Docs and Feishu Wiki pages as clean Markdown from a live authenticated browser session with TOC-driven section capture, UI-noise removal, and explicit rejection of Web Clipper as the primary path on virtual-scroll pages
+54. **x-twitter-scraper** - Full X (Twitter) automation via Xquik REST API with 121 endpoints, 23 extraction tools, MCP server, draws, monitoring, webhooks, and AI composition
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 

@@ -28,17 +28,17 @@ marketplace -> plugin -> skill
 `source` defines the installed plugin root. `skills` paths are resolved relative
 to that root.
 
-## Pattern: Single-Skill Narrow Cache
+## Pattern: Single-Skill Plugin
 
-Use this when a skill should install and update independently:
+Use this when a skill should install and update independently. Point `source`
+directly at the skill directory and omit `skills` (auto-discovery):
 
 ```json
 {
   "name": "mermaid-tools",
   "source": "./daymade-docs/mermaid-tools",
   "strict": false,
-  "version": "1.0.2",
-  "skills": ["./"]
+  "version": "1.0.2"
 }
 ```
 
@@ -53,6 +53,9 @@ scripts/
 The slash command remains `/mermaid-tools:mermaid-tools` because the plugin and
 skill have the same name. This is acceptable when independence matters more than
 namespace aesthetics.
+
+This is the official pattern used by 167 of 168 plugins in
+`anthropics/claude-plugins-official`.
 
 ## Pattern: Suite Plugin
 
@@ -97,15 +100,14 @@ ppt-creator/
 ## Canonical Source for Suite Members
 
 If users also need single-skill installs for suite members, point the individual
-plugin entries at the same canonical subdirectories:
+plugin entries at the same canonical subdirectories and omit `skills`:
 
 ```json
 {
   "name": "pdf-creator",
   "source": "./daymade-docs/pdf-creator",
   "strict": false,
-  "version": "1.3.2",
-  "skills": ["./"]
+  "version": "1.3.2"
 }
 ```
 
@@ -119,13 +121,27 @@ creates drift and makes version bumps ambiguous.
 ```json
 {
   "name": "mermaid-tools",
-  "source": "./",
-  "skills": ["./mermaid-tools"]
+  "source": "./"
 }
 ```
 
-This loads correctly but installs a full repository cache for one plugin. The cache
-will contain unrelated skills and can confuse debugging.
+This installs a full repository cache for one plugin. The cache will contain
+unrelated skills and can confuse debugging. Use `source: "./mermaid-tools"`
+instead.
+
+### Using `skills: ["./"]`
+
+```json
+{
+  "name": "pdf-creator",
+  "source": "./daymade-docs/pdf-creator",
+  "skills": ["./"]
+}
+```
+
+Rejected by Claude Code 2.1.x path-escape validator with `skills path "./"
+escapes plugin root`. Omit the `skills` field — auto-discovery finds SKILL.md
+in the `source` directory.
 
 ### Symlink suite directories
 

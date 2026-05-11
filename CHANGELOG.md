@@ -7,17 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.52.0] - 2026-05-09
+## [1.55.0] - 2026-05-11
 
 ### Added
 - **x-twitter-scraper** v2.0.2: Full X (Twitter) automation via Xquik REST API with 121 endpoints, 23 bulk extraction tools, MCP server, giveaway draws, account monitoring, HMAC webhooks, and AI composition.
 
 ### Changed
-- Marketplace skill count: 51 → 52
-- Marketplace plugin entry count: 53 → 54
-- Marketplace version: 1.51.0 → 1.52.0
+- Marketplace skill count: 53 → 54
+- Marketplace plugin entry count: 56 → 57
+- Marketplace version: 1.54.0 → 1.55.0
 - README.md, README.zh-CN.md: badges, install command, skill section, Use Cases entry, Documentation Quick Link, Requirements
 - CLAUDE.md: overview count, marketplace plugin count, version reference, Available Skills list
+
+## [1.54.0] - 2026-05-10
+
+### Added
+- **daymade-audio** suite v1.0.0: Audio processing suite covering the full speech pipeline — ASR transcription (Qwen3, StepFun), transcript error correction, structured meeting minutes generation, and TTS voice synthesis. Bundles 5 skills: `asr-transcribe-to-text`, `stepfun-asr`, `transcript-fixer`, `meeting-minutes-taker`, `stepfun-tts`.
+
+### Changed
+- Move `meeting-minutes-taker` from `daymade-docs` to `daymade-audio` — its core capability is semantic analysis of meeting transcripts, not document format processing.
+- Move `asr-transcribe-to-text`, `stepfun-asr`, `stepfun-tts`, `transcript-fixer` from repo root into `daymade-audio/` suite directory.
+- Marketplace plugin count: 55 → 56 (4 suites now: `daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`).
+
+## [1.53.2] - 2026-05-10
+
+### Fixed
+- Remove `skills: ["./"]` from 13 suite member plugin entries that triggered Claude Code 2.1.x path-escape validator error (`skills path "./" escapes plugin root`). Fixes [#64](https://github.com/daymade/claude-code-skills/issues/64).
+
+### Changed
+- Align all 52 single-skill plugins with official Anthropic marketplace pattern: `source` points directly to the skill directory (e.g., `"./tunnel-doctor"`), `skills` field omitted (auto-discovery). Previously used `source: "./"` with `skills: ["./skill-name"]`. The 3 suite plugins (`daymade-claude-code`, `daymade-docs`, `daymade-skill`) retain explicit `skills` arrays for multi-skill routing. Matches the pattern used by 167 of 168 plugins in `anthropics/claude-plugins-official`.
+
+## [1.52.0] - 2026-04-30
+
+### Added
+- **stepfun-asr** v1.0.0: Transcribe audio with StepFun's `stepaudio-2.5-asr` — an SSE endpoint (NOT `/v1/audio/transcriptions`) with 32K context, ~85-101× RTF on long audio, and a single-call ceiling around 30 minutes (no client-side chunking). Split out from `stepfun-tts` so the ASR-specific traps (wrong-endpoint misleading error, Plan vs Normal key silent failure, SSE `error` event handling, repetition-hallucination edge case) live next to the `asr_transcribe.py` script that handles them. Bundled `scripts/asr_transcribe.py` (pure-stdlib CLI: env → `${CLAUDE_PLUGIN_DATA}/config.json` key resolution, base64 + nested JSON body, SSE parsing, censorship + transport error distinction). References cover the full SSE event contract, the legacy-vs-2.5 endpoint comparison table, and the "Plan key cannot call audio" gotcha. Suggests `transcript-fixer` / `meeting-minutes-taker` as natural downstream skills.
+
+### Changed
+- **stepfun-tts** v1.0.0 → v2.0.0 (BREAKING): ASR functionality removed and split into the new `stepfun-asr` skill. The remaining skill focuses purely on Contextual TTS (`stepaudio-2.5-tts`) — `instruction` natural-language tone + inline `()` parentheses + the `voice_label` migration story from `step-tts-2`. SKILL.md, `references/api_reference.md`, and `references/known_issues.md` all stripped of ASR sections; description and keywords updated to TTS-only. `scripts/asr_transcribe.py` removed from this skill (now lives in `stepfun-asr`).
+- Marketplace skill count: 51 → 52 (effective listed count; suite member skills not double-counted)
+- Marketplace plugin entry count: 55 → 56
+- Marketplace version: 1.51.0 → 1.52.0
+- README.md, README.zh-CN.md: badges, descriptions, skill section #50 (stepfun-tts retitled "TTS only" + description rewritten), new skill section #52 (stepfun-asr), Use Cases entries (split into two), Documentation Quick Links, Requirements (StepFun key applies to both)
+- CLAUDE.md: overview count, marketplace plugin count, Available Skills list (entry #50 description rewritten + new entry #52)
+
+### Note
+This release also reconciles a versioning drift: commits `b2003d6` (statusline-generator → v1.1.0) and `ec7c313` (pdf-creator → v1.4.0) bumped their respective `plugins[].version` fields without bumping `metadata.version` and without adding CHANGELOG entries — a violation of the "any commit modifying a skill must bump that skill's version AND the marketplace metadata version" rule from `CLAUDE.md`. Those commits remain in history; v1.52.0 picks up the marketplace catalog version where it should have been after both, then adds the stepfun split on top. CHANGELOG entries for those individual skill bumps will not be retroactively backfilled — the version numbers in `marketplace.json` are authoritative and discoverable via `git log -- <skill-path>`.
 
 ## [1.51.0] - 2026-04-26
 
