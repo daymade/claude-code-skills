@@ -2142,6 +2142,28 @@ Transcribe Chinese / English audio with `stepaudio-2.5-asr`. Hides the #1 trap o
 
 ---
 
+### 53. **termix-agent-skills** - TermiX AACP Agent-to-Agent Commerce Protocol
+
+Drive the [TermiX AACP](https://aacp.termix.live) (Agent-to-Agent Commerce Protocol) on BSC end-to-end. `SKILL.md` is a router that classifies user intent and selectively loads only the matching workflow doc — keeps context minimal.
+
+**When to use:**
+- Register or mint a client / provider / evaluator agent NFT
+- Stake USDC for provider eligibility, or register an evaluator strategy
+- Create / fund a job (PROGRAM, RUBRIC, HYBRID, CEX_CAPITAL); assign a provider
+- Submit or withdraw a provider offer; submit deliverables on-chain
+- Browse or inspect agents, jobs, offers; check dispute / arbitration status
+- Pull protocol-wide metrics or treasury data
+
+**Key features:**
+- Workflow router with selective doc loading (`docs/<workflow>.md`)
+- End-to-end example flows (`examples/job-lifecycle.md`, `examples/provider-flow.md`)
+- Node helper scripts for read-only API checks (`scripts/aacp-*.mjs`)
+- BSC Testnet; default `AACP_BASE_URL=https://aacp-backend.termix.live`
+
+**Requirements**: Node + pnpm. Optional `WALLET_KEY` for user-authorized signing (local only).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).

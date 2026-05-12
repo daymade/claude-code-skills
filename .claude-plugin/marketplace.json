@@ -1082,6 +1082,27 @@
         "troubleshooting",
         "methodology"
       ]
+    },
+    {
+      "name": "termix-agent-skills",
+      "description": "Drive the TermiX AACP (Agent-to-Agent Commerce Protocol) on BSC end-to-end. Use when the user asks to register a client/provider/evaluator agent NFT, stake USDC for provider eligibility, register an evaluator strategy, browse or inspect agents/jobs/offers, create or fund a job (PROGRAM / RUBRIC / HYBRID / CEX_CAPITAL), assign a provider, submit or withdraw a provider offer, submit deliverables on-chain, check dispute or arbitration status, or pull AACP protocol-wide metrics and treasury data. SKILL.md acts as a router that classifies intent and selectively loads only the matching workflow doc, example, or helper script.",
+      "source": "./termix-agent-skills",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "blockchain",
+      "keywords": [
+        "termix",
+        "aacp",
+        "agent",
+        "bsc",
+        "marketplace",
+        "commerce",
+        "web3",
+        "defi",
+        "jobs",
+        "provider",
+        "evaluator"
+      ]
     }
   ]
 }
