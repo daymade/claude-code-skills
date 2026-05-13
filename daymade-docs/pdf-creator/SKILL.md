@@ -36,6 +36,7 @@ Stored in `themes/*.css`. Each theme is a standalone CSS file.
 | Theme | Page Size | Font | Color | Best for |
 |-------|-----------|------|-------|----------|
 | `default` | A4 | Songti SC + Heiti SC | Black/grey | Legal docs, contracts, formal reports |
+| `cjk-auto` | A4 | Songti SC + Heiti SC | Black/grey | Tables with uneven column content (course schedules, itemized lists) |
 | `warm-terra` | A4 | PingFang SC | Terra cotta (#d97756) + warm neutrals | Course outlines, training materials, workshops |
 | `mobile` | 148mm × 210mm | PingFang SC | Terra cotta + warm neutrals | Phone reading, WeChat sharing, on-the-go reference |
 
