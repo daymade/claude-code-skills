@@ -81,6 +81,19 @@ Do not use these as the main capture path on Feishu docs:
 - clipboard copy after a copy restriction warning
 - one-shot "read the whole page" attempts without TOC coverage checking
 
+## Do NOT Attempt (Known Failure Paths)
+
+These paths have been verified to fail in this environment. Do not waste time trying them:
+
+| Path | Failure Mode | Root Cause |
+|------|-------------|------------|
+| **AppleScript `executeJavaScript`** | `"Executing JavaScript through AppleScript is turned off"` | Chrome disables JS-from-AppleEvents by default; `defaults write` + restart does not enable it in this environment |
+| **JXA `executeJavaScript` with async/Promise** | `Can't convert types. (-1700)` | JXA cannot convert JavaScript Promise objects to AppleScript types; only fully synchronous code works |
+| **JXA with `ObjC.import`, shebang, or `includeStandardAdditions`** | Syntax errors (`-2741`) | JXA runtime in Chrome context does not support these patterns |
+| **Chrome DevTools CDP on port 9222** | `curl http://127.0.0.1:9222/json/list` returns `[]` or 404 | CDP endpoints are empty even with `--remote-debugging-port=9222`; likely blocked by enterprise policy or Chrome profile configuration |
+
+**When any of the above fail, immediately fall back to the SSR HTTP extraction path (see §3f in SKILL.md) or Browser Use / Computer Use instead of retrying the failed path.**
+
 ## Acceptance Signal
 
 Accept the scrape only when all of these are true:

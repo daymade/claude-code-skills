@@ -1,7 +1,7 @@
 ---
 name: feishu-doc-scraper
 description: Save Feishu Docs and Feishu Wiki pages as clean Markdown from a live authenticated browser session. This skill should be used when the user asks to "save this Feishu doc as markdown", "scrape/export a Feishu wiki", "导出飞书文档", "保存飞书到 markdown", "把 Chrome 里的飞书页面存成 md", or wants a Feishu page archived locally with high fidelity. Use it proactively whenever the source is a Feishu document and correctness matters, even if the user only says clipping, archiving, or converting the page.
-compatibility: Requires at least one browser automation surface with access to an authenticated local browser session. Prefer Browser Use or Chrome DevTools MCP. Use Computer Use when DOM-native tooling cannot reach the content.
+compatibility: Requires at least one browser automation surface with access to an authenticated local browser session. Prefer Browser Use or Chrome DevTools MCP. Use Computer Use when DOM-native tooling cannot reach the content. For image-only extraction when browser automation is unavailable, Python with `browser_cookie3` and `requests` can extract image URLs from SSR HTML directly.
 argument-hint: [feishu-url-or-output-path]
 ---
 
@@ -303,7 +303,109 @@ Store in the manifest as Markdown table lines:
 
 **Preserve table structure as-is.** Do not split or rearrange table rows based on content heuristics. If the source document contains a single table, the output must contain a single Markdown table.
 
-#### 3e. Fallback when TOC is missing or empty
+#### 3e. Injectable capture script
+
+Instead of re-implementing the capture logic each time, inject `scripts/feishu_dom_capture.js` into the page. It provides the full pipeline as a single callable:
+
+```javascript
+// 1. Read the script content and inject via evaluate_script
+// 2. Run the pipeline:
+const result = await window.__feishuCapture.run({
+  title: 'Document Title',
+  docName: 'optional-short-name-for-image-files',  // used for per-document image naming
+  tags: ['tag1', 'tag2']
+});
+// result: { totalCaptured, afterClean, sections, images, imagesOk }
+// 3. Access: window.__feishuCapture.manifest (JSON for build_feishu_markdown.py)
+//            window.__feishuCapture.cleanedBlocks (for custom rendering)
+```
+
+The script handles: TOC-driven capture, nested bullets, tables, code blocks, inline markdown, image download via `fetch` + session cookie (with per-document naming), noise stripping, aggregation artifact removal, deduplication, and `data-block-id` sorting.
+
+#### 3f. Image download (critical)
+
+Feishu image `src` URLs point to `internal-api-drive-stream.larkoffice.com` — an authenticated internal API. These URLs require the user's session cookie and will 404/403 after the session expires. **Images must be downloaded during capture, not deferred.**
+
+**Primary path: browser fetch + clipboard bridge**
+
+The injectable script (`scripts/feishu_dom_capture.js`) handles this automatically via `downloadImages()`. For manual capture:
+
+```javascript
+// For each image block, fetch with credentials while session is alive
+const resp = await fetch(imgSrc, { credentials: 'include' });
+const blob = await resp.blob();
+const reader = new FileReader();
+const dataUrl = await new Promise(resolve => {
+  reader.onloadend = () => resolve(reader.result);
+  reader.readAsDataURL(blob);
+});
+// dataUrl is "data:image/png;base64,..." — transport via clipboard bridge
+```
+
+Transport each image to local filesystem:
+1. `navigator.clipboard.writeText(base64Data)` in the browser
+2. `pbpaste | base64 -d > assets/{doc-name}-N.png` in the local shell
+
+**Fallback path: SSR HTTP extraction (when browser automation fails)**
+
+When AppleScript, JXA, or Chrome DevTools are unavailable (see [references/tooling-matrix.md](references/tooling-matrix.md) "Do NOT Attempt"), use the bundled script:
+
+```bash
+python3 scripts/download_feishu_images.py \
+  --url "https://my.feishu.cn/wiki/..." \
+  --doc-name "my-document" \
+  --output-dir "assets/"
+```
+
+Or for batch processing many documents:
+
+```bash
+python3 scripts/download_feishu_images.py \
+  --batch-file urls.txt \
+  --output-dir "assets/"
+```
+
+The `urls.txt` format:
+```
+my-document|https://my.feishu.cn/wiki/...
+another-doc|https://my.feishu.cn/wiki/...
+```
+
+The script extracts authenticated image URLs directly from the SSR HTML using `browser_cookie3` + `requests`, then downloads them with session cookies. It prints markdown image references to stdout for easy pasting into the final document.
+
+For manual implementation, the core pattern is:
+
+```python
+import browser_cookie3, requests, re
+
+cj = browser_cookie3.chrome()
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+}
+resp = requests.get(url, cookies=cj, headers=headers, timeout=30)
+image_urls = re.findall(
+    r'https?://internal-api-drive-stream[^\s"\'<>]+',
+    resp.text
+)
+# Download each with session cookies + Referer
+for i, img_url in enumerate(image_urls):
+    img_resp = requests.get(
+        img_url, cookies=cj,
+        headers={'Referer': 'https://my.feishu.cn/'},
+        timeout=30
+    )
+```
+
+**Image naming convention:**
+
+Use per-document names: `assets/{sanitized-doc-name}-{index}.{ext}`. **Never use generic `img-0.png` across multiple documents** — names collide in shared `assets/` directories.
+
+**`[图片: Feishu Docs - Image]` placeholders:**
+
+When a Feishu document is copy-pasted into markdown and the image cannot be resolved, Feishu produces the placeholder `[图片: Feishu Docs - Image]`. **This is not invalid markdown — it indicates a real image existed in the original document but was lost during copy-paste.** Do not delete these placeholders as noise; recover the actual images using one of the paths above.
+
+#### 3g. Fallback when TOC is missing or empty
 
 If there is no TOC:
 
@@ -432,15 +534,39 @@ Read [references/history-derived-rules.md](references/history-derived-rules.md) 
 - **blocks inside tables must be skipped** or they pollute the output as duplicate text
 - **`data-block-id` numeric ordering** is more reliable than DOM order for reconstructing document sequence
 
+### Do NOT attempt these paths
+
+These automation paths have been verified to fail in this environment. Do not waste time retrying them:
+
+| Path | Failure Mode | Immediate Fallback |
+|------|-------------|-------------------|
+| **AppleScript `executeJavaScript`** | Chrome: "Executing JavaScript through AppleScript is turned off" | Use Browser Use, Computer Use, or SSR HTTP extraction |
+| **JXA with async/Promise** | `Can't convert types. (-1700)` | Rewrite as fully synchronous code, or switch to SSR HTTP extraction |
+| **JXA with `ObjC.import` or shebang** | Syntax error `-2741` | Pure JXA only; if still failing, switch to Python + requests |
+| **Chrome CDP port 9222** | `curl` returns `[]` or 404 | Browser Use or Computer Use instead |
+
+When any browser-automation path fails, **immediately fall back to SSR HTTP extraction** for images (see §3f) or Browser Use / Computer Use for full document text.
+- **image URLs are authenticated streams** — they break after session expires; download during capture (Rule 12)
+- **first few text blocks are aggregation artifacts** — page-main container innerText lumps; drop text blocks > 350 chars (Rule 13)
+- **callout blocks drift to tail** when sorted by `data-block-id`; mark as appendix or re-parent (Rule 14)
+- **code blocks contain UI noise lines** — strip "Copy", "Code block", bare language names (Rule 15)
+- **clipboard bridge** (`navigator.clipboard.writeText` + `pbpaste`) is the most reliable large-text transport (Rule 16)
+- **SSR HTML contains all image URLs** — no browser automation needed for image recovery; regex extract from initial HTTP response (Rule 17)
+- **images must be named per-document** — `{doc-name}-{index}.png`, never generic `img-0.png` shared across docs (Rule 18)
+- **`[图片: Feishu Docs - Image]` is a real image placeholder** — do not delete as noise; recover actual images (Rule 19)
+
 ## Output Contract
 
 Deliver:
 
 - one clean Markdown file
+- **images saved locally** with relative paths in the markdown (no remote `internal-api-drive-stream` URLs)
+- **images named per-document**: `assets/{doc-name}-{index}.png` — never generic `img-0.png` shared across multiple documents
 - the original source URL in frontmatter
 - headings that cover the document body
 - no UI noise
 - a verified coverage result
+- **no `[图片: Feishu Docs - Image]` placeholders** — these indicate lost images that must be recovered
 
 If the user asks for local archival only, stop there. If they also want a repo note integrated into a larger knowledge system, place it in the repo-appropriate clipping or reference location after the Markdown is verified.
 
@@ -449,5 +575,7 @@ If the user asks for local archival only, stop there. If they also want a repo n
 - [references/tooling-matrix.md](references/tooling-matrix.md): tool selection and fallback ladder
 - [references/capture-manifest.md](references/capture-manifest.md): manifest shape for structured rendering
 - [references/history-derived-rules.md](references/history-derived-rules.md): battle-tested rules distilled from local Feishu scraping sessions
+- `scripts/feishu_dom_capture.js`: injectable end-to-end DOM capture + clean + image download script (inject, then call `window.__feishuCapture.run()`)
+- `scripts/download_feishu_images.py`: SSR-based image extraction when browser automation is unavailable (`browser_cookie3` + `requests`)
 - `scripts/build_feishu_markdown.py`: render a structured capture manifest into final Markdown
 - `scripts/check_heading_coverage.py`: verify TOC heading coverage and detect common UI noise

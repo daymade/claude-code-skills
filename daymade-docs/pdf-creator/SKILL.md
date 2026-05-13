@@ -1,6 +1,6 @@
 ---
 name: pdf-creator
-description: Convert markdown files to professional PDF documents with proper Chinese font support, theme system, and visual self-check. Use whenever the user asks to create PDFs, convert markdown to PDF, generate printable documents, or needs documents formatted for print or mobile reading. This skill MUST be used instead of manual pandoc/Chrome invocations — it handles CJK typography, Chrome header/footer suppression, and mandatory visual verification that manual approaches miss.
+description: Convert markdown files to professional PDF documents with proper Chinese font support, theme system, and visual self-check. Use whenever the user asks to create PDFs, convert markdown to PDF, generate printable documents, or needs documents formatted for print or mobile reading. This skill MUST be used instead of manual pandoc/Chrome invocations — it handles CJK typography, Chrome header/footer suppression, and mandatory visual verification that manual approaches miss. **Scope: markdown → PDF only.** For Word (.docx) output use `minimax-docx`; this skill does not produce docx and the two pipelines are intentionally orthogonal.
 ---
 
 # PDF Creator
@@ -36,6 +36,7 @@ Stored in `themes/*.css`. Each theme is a standalone CSS file.
 | Theme | Page Size | Font | Color | Best for |
 |-------|-----------|------|-------|----------|
 | `default` | A4 | Songti SC + Heiti SC | Black/grey | Legal docs, contracts, formal reports |
+| `cjk-auto` | A4 | Songti SC + Heiti SC | Black/grey | Tables with uneven column content (course schedules, itemized lists) |
 | `warm-terra` | A4 | PingFang SC | Terra cotta (#d97756) + warm neutrals | Course outlines, training materials, workshops |
 | `mobile` | 148mm × 210mm | PingFang SC | Terra cotta + warm neutrals | Phone reading, WeChat sharing, on-the-go reference |
 
@@ -102,7 +103,7 @@ uv run --with weasyprint scripts/batch_convert.py *.md --theme mobile --output-d
 
 **Inline code with mixed CJK + ASCII shows blanks in macOS Preview** (e.g. `` `Terminal/终端` `` renders only `Terminal/` with the CJK part missing): weasyprint subset-embeds PingFang SC as **OpenType (CID Type 0C)**, which strict PDF readers (macOS Preview / Adobe Reader) fail to render. Chrome's PDF viewer falls back automatically and hides the bug. Fix is in the default theme: code font-family chain prioritizes **CID TrueType** CJK fonts (Songti SC / Heiti SC) before OpenType ones (PingFang SC). To verify: `pdfplumber` + check `font['fontname']` of CJK chars — if any references `PingFang-SC` (CID Type 0C OT), readers will likely fail. Reorder font chain to put CID TrueType first.
 
-**Table column 1 with short label gets mid-broken** (e.g. `4/28（周|二）下|午`): pandoc auto-emits `<colgroup><col style="width:X%">` from dash counts in the markdown separator row. For `| ----- | --- | --- | -------- |` (uneven dash widths), pandoc allocates col 1 ~17% — too narrow for a 9-char CJK label. Inline `style=""` beats external CSS at equal specificity, so `td:first-child { width:... }` is silently shadowed. Fix is in default theme: `table colgroup col { width: auto !important }` neutralizes pandoc's hint, letting `table-layout: fixed` distribute equally (25% per column for a 4-col table). To verify: `pandoc input.md -t html | grep colgroup` — if it shows `<col style="width:X%">`, the bug applies.
+**Table column 1 with short label gets mid-broken** (e.g. `4/28（周|二）下|午`): pandoc auto-emits `<colgroup><col style="width:X%">` from dash counts in the markdown separator row. For `| ----- | --- | --- | -------- |` (uneven dash widths), pandoc allocates col 1 ~17% — too narrow for a 9-char CJK label. Inline `style=""` beats external CSS at equal specificity, so `td:first-child { width:... }` is silently shadowed. Fix is in default theme: `table colgroup col { width: auto !important }` neutralizes pandoc's hint, letting `table-layout: fixed` distribute equally (25% per column for a 4-col table). To verify: `pandoc input.md -t html | grep colgroup` — if it shows `<col style="width:X%">`, the bug applies. **Scope:** the neutralizer lives only in `default.css`; `warm-terra` and `mobile` themes use different strategies (nowrap on th/td with last-child wrap, and full-flow wrap respectively) and intentionally omit it. The neutralizer is locked in by `scripts/tests/test_cjk_tables.py::test_default_theme_neutralizes_pandoc_colgroup_hint`.
 
 ## Visual Self-Check (MANDATORY — Do Not Skip)
 
@@ -138,7 +139,7 @@ The script applies two layers of CJK-aware processing automatically — **withou
 `_load_theme()` appends a CJK typography CSS patch to the loaded theme CSS. The patch:
 
 - `table { table-layout: fixed; width: 100% }` — equal column widths prevent weasyprint auto-layout from squeezing one column to ~10% width when an adjacent column has 5x more content
-- `td, th { word-break: keep-all; line-break: strict }` — don't slice CJK characters apart
+- `td, th { word-break: keep-all; overflow-wrap: normal; line-break: strict }` — don't slice CJK characters apart. The deliberate trade-off encoded by `overflow-wrap: normal` (not `break-word`) is to let content overflow slightly rather than fall back to mid-token breaks — rationale documented in `md_to_pdf.py` L109-146 inline comments and locked in by `scripts/tests/test_cjk_tables.py`
 - `th { white-space: nowrap }` — short headers stay one line for predictable column widths
 
 This silently fixes the most common anti-pattern (cell content forcibly wrapped between CJK characters producing single-char-only lines), without touching the user's source. The user's theme CSS file on disk is never modified.
