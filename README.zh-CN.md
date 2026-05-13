@@ -1029,6 +1029,7 @@ ccpm install-bundle web-dev  # 安装 Web 开发技能包
 **主要功能：**
 - WeasyPrint + Markdown 转换管道
 - 内置中文字体回退
+- 主题系统（default 正式文档、cjk-auto 内容自适应表格、warm-terra 培训材料、mobile 手机阅读）
 - A4 版式与打印友好边距
 - 批量转换脚本
 

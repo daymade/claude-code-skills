@@ -986,7 +986,7 @@ Create professional PDF documents from markdown with proper Chinese typography u
 **Key features:**
 - pandoc + WeasyPrint conversion pipeline (dual backend: WeasyPrint or headless Chrome)
 - Built-in Chinese/Japanese/Korean (CJK) font fallbacks with auto CJK code-block rendering
-- Theme system (default for formal docs, warm-terra for training materials)
+- Theme system (default for formal docs, cjk-auto for content-driven tables, warm-terra for training materials, mobile for phone reading)
 - A4 layout defaults with print-friendly margins
 - Batch conversion scripts
 
