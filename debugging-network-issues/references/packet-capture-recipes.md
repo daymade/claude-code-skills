@@ -89,7 +89,7 @@ tcpdump -i any -w /tmp/cap-%Y%m%d-%H%M%S.pcap -G 60 -W 10 'host <target>'
 A key trap: HTTP/2 has its own RST mechanism at the stream level (`RST_STREAM` frame) that is unrelated to TCP-level RST. The two failure modes look different:
 
 | Failure | TCP layer shows | HTTP/2 layer shows | curl reports |
-|---------|----------------|--------------------|--------------|
+|---------|----------------|--------------------|--------------| 
 | TCP RST (connection-level reset) | RST packet | N/A (connection dies) | `Recv failure: Connection reset by peer` |
 | HTTP/2 RST_STREAM frame | (no RST packet — connection stays alive) | `RST_STREAM` frame with error code | `HTTP/2 stream N was not closed cleanly: INTERNAL_ERROR (err 2)` |
 

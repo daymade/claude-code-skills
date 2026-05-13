@@ -187,3 +187,4 @@ find "$CACHE" -maxdepth 1 -type l -ls
 A symlink in the cache almost always means the plugin was built from a symlink
 suite and is not self-contained. Fix by pointing `source` at a real canonical
 directory.
+

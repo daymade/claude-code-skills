@@ -45,12 +45,12 @@ Extend `render_full()` to add hostname, time, weather, or anything else.
 ```bash
 render_full() {
     # ... existing code ...
-
+    
     # Your new segment
     local hostname segment_color
     hostname=$(hostname -s)
     segment_color="\033[01;34m"   # blue
-
+    
     # Add to the existing printf format string
     printf '\033[01;32m%s@%s\033[00m \033[01;36m(%s)\033[00m%s%s\n...' \
         "$username" "$hostname" "$model" "$cost_info" "$ctx_display"

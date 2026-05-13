@@ -210,25 +210,25 @@ Feishu renders nested lists as a parent `.docx-bullet-block` containing child `.
 ```javascript
 function extractBullets(el, depth = 0) {
   const results = [];
-
+  
   // Extract parent text from .list-content or .ace-line
   const listContent = el.querySelector('.list-content, .ace-line');
   if (listContent) {
     const text = inlineMarkdown(listContent).replace(/^[•◦]\s*/, '').trim();
     if (text) results.push({depth, text});
   }
-
+  
   // Find direct child bullet blocks (descendants whose closest bullet ancestor is el itself)
   const allNested = el.querySelectorAll('.docx-bullet-block, .docx-list-block');
   const directChildren = Array.from(allNested).filter(b => {
     const parent = b.parentElement?.closest('.docx-bullet-block, .docx-list-block');
     return b !== el && parent === el;
   });
-
+  
   directChildren.forEach(child => {
     results.push(...extractBullets(child, depth + 1));
   });
-
+  
   return results;
 }
 ```
@@ -263,14 +263,14 @@ Extract table structure explicitly:
 ```javascript
 function extractTable(tableBlock) {
   const rows = [];
-
+  
   tableBlock.querySelectorAll('tr, .docx-table-tr').forEach(rowEl => {
     const cells = Array.from(rowEl.querySelectorAll('td, .table-cell-block, .docx-table_cell-block'))
       .map(cell => cell.innerText?.trim()?.replace(/[​\n]/g, '') || '')
       .filter(c => c !== '');
     if (cells.length > 0) rows.push(cells);
   });
-
+  
   return rows;
 }
 ```
