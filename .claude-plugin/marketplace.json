@@ -653,7 +653,7 @@
       "description": "Create PDF documents from markdown with Chinese font support. Supports theme system (default for formal docs, warm-terra for training materials) and dual backend (weasyprint or Chrome). Triggers include convert to PDF, generate PDF, markdown to PDF, or printable documents",
       "source": "./daymade-docs/pdf-creator",
       "strict": false,
-      "version": "1.4.0",
+      "version": "1.5.0",
       "category": "document-conversion",
       "keywords": [
         "pdf",
