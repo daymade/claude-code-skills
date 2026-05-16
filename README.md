@@ -2441,3 +2441,5 @@ If you find these skills useful, please:
 **Built with ❤️ using the skill-creator skill for Claude Code**
 
 Last updated: 2026-04-11 | Marketplace version 1.46.0
+
+- **[sequenzy-email-marketing](sequenzy-email-marketing/)** - Create, manage, and analyze Sequenzy lifecycle email campaigns and subscriber workflows.
