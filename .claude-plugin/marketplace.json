@@ -83,7 +83,7 @@
       "description": "Optimize user CLAUDE.md files by applying progressive disclosure principles. This skill should be used when users want to reduce CLAUDE.md bloat, move detailed content to references, extract reusable patterns into skills, or improve context efficiency. Triggers include optimize CLAUDE.md, reduce CLAUDE.md size, apply progressive disclosure, or complaints about CLAUDE.md being too long",
       "source": "./daymade-claude-code/claude-md-progressive-disclosurer",
       "strict": false,
-      "version": "1.2.1",
+      "version": "1.3.1",
       "category": "productivity",
       "keywords": [
         "claude-md",
@@ -393,17 +393,22 @@
     },
     {
       "name": "feishu-doc-scraper",
-      "description": "Save Feishu Docs and Feishu Wiki pages as clean Markdown from a live authenticated browser session. Uses TOC-driven section capture and coverage verification, and explicitly avoids relying on Web Clipper for virtual-scroll pages. Use when users ask to save, export, scrape, or archive a Feishu doc/wiki to Markdown, or when a Feishu page already open in Chrome needs to be turned into a local note.",
+      "description": "Extract Feishu (Lark) Docs, Wiki pages, Wiki collections/hubs, spreadsheets, and Minutes (妙记) transcripts into clean high-fidelity local Markdown. The primary path is the lark-cli API — programmatic extraction with no LLM rewriting of the body — which recursively follows a collection's reference graph (mention-doc / sheet / cross-tenant links) and uses error codes to resolve permission boundaries precisely; a browser-DOM path is the fallback only when lark-cli cannot reach the content. Use this whenever the source is a Feishu/Lark URL and fidelity matters — including 导出飞书文档/合集/妙记转写, 把飞书 wiki/知识库转 markdown, scraping or archiving a Feishu collection, exporting a Feishu Minutes/妙记 transcript, or saving a Feishu page locally — even if the user only says clipping, archiving, converting, or \"save this\". Also covers the permission-denied path (owner-exported .docx → faithful Markdown with heading/highlight restoration).",
       "source": "./feishu-doc-scraper",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.2.0",
       "category": "productivity",
       "keywords": [
         "feishu",
         "lark",
+        "lark-cli",
         "markdown",
         "wiki",
-        "document",
+        "minutes",
+        "transcript",
+        "collection",
+        "api",
+        "docx",
         "scraping",
         "browser",
         "archival"
@@ -433,7 +438,7 @@
       "description": "One-stop installer and companion for the full Gangtise (岗底斯投研) OpenAPI skill suite — 19 official skills covering data retrieval (OHLC 行情, 财务, 估值, 研报, 首席观点, 会议纪要, 调研纪要), research workflows (个股研究 L1-L4, 观点 PK 对抗性分析, 主题研究, 事件复盘), and utility (股票池管理, 公开网页搜索). Zero-config install to Claude Code / OpenClaw / Codex with 4 preset modes (full / workshop / minimal / custom), guides accessKey + secretAccessKey setup with a live validation call against open.gangtise.com, and ships a read-only diagnostic script. Use this skill whenever the user mentions Gangtise, 岗底斯, gangtise-data-client, gangtise-kb-client, gangtise-file-client, gangtise-stock-research, gangtise-opinion-pk, installing any gangtise-* skill, configuring its credentials, or reports errors like 'token is invalid', '接口地址错误', 'the uri can't be accessed'. This is a wrapper around Gangtise's official skills — it installs and orchestrates them rather than replacing them.",
       "source": "./gangtise-copilot",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": [
         "gangtise",
@@ -454,7 +459,7 @@
       "description": "Strategic guide for becoming an effective GitHub contributor. Covers opportunity discovery, project selection, high-quality PR creation, and reputation building. Use when looking to contribute to open-source projects, building GitHub presence, or learning contribution best practices",
       "source": "./github-contributor",
       "strict": false,
-      "version": "1.0.3",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "github",
