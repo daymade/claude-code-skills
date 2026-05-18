@@ -55,12 +55,15 @@ To create a new theme: copy `themes/default.css`, modify, save as `themes/your-t
 
 ## Backends
 
-The script auto-detects the best available backend:
+The script auto-detects the best available backend **based on content**:
+
+- **CJK content detected** → auto-selects **Chrome** (weasyprint subset-embeds PingFang SC as CID Type 0C OpenType, which macOS Preview / Adobe Reader fail to render — appears as garbled text on recipient devices even though it looks fine in Chrome's PDF viewer)
+- **Non-CJK content** → auto-selects **weasyprint** (faster, no browser startup)
 
 | Backend | Install | Pros | Cons |
 |---------|---------|------|------|
-| `weasyprint` | `pip install weasyprint` | Precise CSS rendering, no browser needed | Requires system libs (cairo, pango) |
-| `chrome` | Google Chrome installed | Zero Python deps, great CJK support | Larger binary, slightly less CSS control |
+| `weasyprint` | `pip install weasyprint` | Precise CSS rendering, no browser needed | CJK font embedding bug on some readers |
+| `chrome` | Google Chrome installed | Zero Python deps, reliable CJK rendering | Larger binary, slightly less CSS control |
 
 Override with `--backend chrome` or `--backend weasyprint`.
 
