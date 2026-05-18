@@ -73,8 +73,30 @@ def _has_weasyprint() -> bool:
         return False
 
 
-def _detect_backend() -> str:
-    """Auto-detect best available backend: weasyprint > chrome."""
+def _has_cjk_content(md_file: str) -> bool:
+    """Check if markdown file contains CJK characters."""
+    try:
+        text = Path(md_file).read_text(encoding="utf-8")
+        cjk_re = re.compile(
+            r"[一-鿿㐀-䶿豈-﫿"
+            r"　-〿＀-￯"
+            r"぀-ゟ゠-ヿ"
+            r"가-힯]"
+        )
+        return bool(cjk_re.search(text))
+    except Exception:
+        return False
+
+
+def _detect_backend(md_file: str | None = None) -> str:
+    """Auto-detect best available backend.
+
+    CJK content → prefer Chrome (weasyprint subset-embeds PingFang SC as
+    CID Type 0C OpenType, which macOS Preview / Adobe Reader fail to render).
+    Non-CJK content → prefer weasyprint (faster, no browser needed).
+    """
+    if md_file and _has_cjk_content(md_file) and _find_chrome():
+        return "chrome"
     if _has_weasyprint():
         return "weasyprint"
     if _find_chrome():
@@ -598,7 +620,7 @@ def markdown_to_pdf(
         pdf_file = str(md_path.with_suffix(".pdf"))
 
     if backend is None:
-        backend = _detect_backend()
+        backend = _detect_backend(md_file)
 
     css = _load_theme(theme)
     html_content = _md_to_html(md_file)
