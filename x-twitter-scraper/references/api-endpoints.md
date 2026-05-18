@@ -1032,7 +1032,7 @@ Returns a checkout URL for subscribing or managing the subscription. If already 
 **Response:**
 ```json
 {
-  "url": "https://checkout.xquik.com/..."
+  "url": "<checkout-or-billing-portal-url>"
 }
 ```
 

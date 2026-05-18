@@ -988,7 +988,7 @@
       "description": "Full X (Twitter) automation and data extraction via Xquik REST API. 121 endpoints across 12 categories: tweet search, user lookup, bulk extractions (23 tools), giveaway draws, account monitoring, webhooks, AI composition, write actions, and MCP server. Trigger on \"twitter\", \"tweet\", \"X API\", \"scrape tweets\", \"follower analysis\", \"social media automation\".",
       "source": "./x-twitter-scraper",
       "strict": false,
-      "version": "2.0.2",
+      "version": "2.0.3",
       "category": "data-extraction",
       "keywords": [
         "twitter",
