@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-52-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.52.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-54-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.55.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 52 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 54 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -275,6 +275,9 @@ claude plugin install iOS-APP-developer@daymade-skills
 
 # Twitter/X 内容获取
 claude plugin install twitter-reader@daymade-skills
+
+# X/Twitter 自动化
+claude plugin install x-twitter-scraper@daymade-skills
 
 # macOS 磁盘空间清理
 claude plugin install macos-cleaner@daymade-skills
@@ -2184,6 +2187,35 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
+### 54. **x-twitter-scraper** - X (Twitter) 自动化与数据提取
+
+通过 Xquik REST API 自动化 X (Twitter) 操作，提供 121 个端点、23 个批量提取工具、MCP 服务器和 HMAC 签名 Webhook。
+
+**使用场景：**
+- 需要搜索推文、查询用户或提取关注者/关注列表
+- 需要通过程序发布推文、发送私信或管理 X 账户
+- 需要批量提取回复、引用、转推或社区成员
+- 需要实时账户监控与 Webhook 事件推送
+- 需要 AI 辅助推文撰写与算法评分
+
+**主要功能：**
+- 121 个 REST API 端点，覆盖 12 个类别
+- 23 个批量提取工具，支持预估后提取工作流
+- MCP 服务器用于 AI 代理集成
+- 抽奖功能，支持自定义筛选条件
+- HMAC-SHA256 签名 Webhook
+- 10 个参考文件，按需加载
+
+```bash
+claude plugin install x-twitter-scraper@daymade-skills
+```
+
+📚 **文档**：参见 [x-twitter-scraper/SKILL.md](./x-twitter-scraper/SKILL.md) 和 [docs.xquik.com](https://docs.xquik.com) 了解完整 API 参考。
+
+**要求**：Xquik API key，来自 [xquik.com](https://xquik.com) 控制台。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -2268,6 +2300,9 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 ### Twitter/X 内容研究
 使用 **twitter-reader** 无需 JavaScript 渲染或身份验证即可获取推文内容。非常适合记录社交媒体讨论、归档话题、分析推文内容或从 Twitter/X 收集参考资料。与 **doc-to-markdown** 结合可将获取的内容转换为其他格式，或与 **repomix-safe-mixer** 结合安全地打包研究集合。
 
+### X (Twitter) 规模化自动化
+使用 **x-twitter-scraper** 规模化自动化 X (Twitter) 操作 - 搜索推文、提取关注者、运行抽奖、实时监控账户，并通过 Xquik REST API 程序化发布。与 **deep-research** 结合可构建社交媒体分析流水线，或与 **excel-automation** 结合将提取结果导出为格式化电子表格。
+
 ### macOS 系统维护与磁盘空间恢复
 使用 **macos-cleaner** 以安全优先的方式智能分析和恢复 macOS 上的磁盘空间。与盲目删除的一键清理工具不同，macos-cleaner 解释每个文件是什么、按风险级别分类（🟢/🟡/🔴），并在任何删除前需要明确确认。非常适合处理 Docker/Homebrew/npm/pip 缓存膨胀的开发者、希望了解存储空间消耗的用户，或任何重视透明度而非自动化的人。结合基于脚本的精度和可选的 Mole 可视化工具集成以实现混合工作流。
 
@@ -2350,6 +2385,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **promptfoo-evaluation**：参见 `promptfoo-evaluation/references/promptfoo_api.md` 了解评测模式
 - **iOS-APP-developer**：参见 `iOS-APP-developer/references/xcodegen-full.md` 了解 XcodeGen 选项与 project.yml 细节
 - **twitter-reader**：参见 `twitter-reader/SKILL.md` 了解 API 密钥设置和 URL 格式支持
+- **x-twitter-scraper**：参见 `x-twitter-scraper/SKILL.md` 了解 API 设置，[docs.xquik.com](https://docs.xquik.com) 查看完整参考
 - **macos-cleaner**：参见 `macos-cleaner/references/cleanup_targets.md` 了解详细清理目标说明、`macos-cleaner/references/mole_integration.md` 了解 Mole 可视化工具集成、`macos-cleaner/references/safety_rules.md` 了解全面安全指南
 - **skill-reviewer**：参见 `daymade-skill/skill-reviewer/references/evaluation_checklist.md` 了解完整评估标准、`daymade-skill/skill-reviewer/references/pr_template.md` 了解 PR 模板、`daymade-skill/skill-reviewer/references/marketplace_template.json` 了解 marketplace 配置
 - **github-contributor**：参见 `github-contributor/references/pr_checklist.md` 了解 PR 质量清单、`github-contributor/references/project_evaluation.md` 了解项目评估标准、`github-contributor/references/communication_templates.md` 了解 issue/PR 沟通模板
@@ -2389,6 +2425,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **Promptfoo**（用于 promptfoo-evaluation）：`npx promptfoo@latest`
 - **macOS + Xcode、XcodeGen**（用于 iOS-APP-developer）
 - **Jina.ai API 密钥**（用于 twitter-reader）：https://jina.ai/ 提供免费套餐
+- **Xquik API 密钥**（用于 x-twitter-scraper）：从 [xquik.com](https://xquik.com) 控制台获取
 - **Codex CLI**（可选，用于 product-analysis 多模型并行模式）
 - **Mole**（可选，用于 macos-cleaner 可视化清理）：从 https://github.com/tw93/Mole 下载
 - **uv + openpyxl**（用于 excel-automation）：`uv run --with openpyxl ...`

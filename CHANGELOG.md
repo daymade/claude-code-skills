@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **pdf-creator** v1.6.0: Add `cjk-auto` theme for content-driven table layouts. Based on `default` theme but uses `table-layout: auto` so column widths adapt to actual cell content rather than equal distribution. Best for tables with highly uneven column lengths (course schedules, itemized lists) where fixed equal-width would force CJK mid-breaks. Previously only existed in local cache; now bundled in version control so skill upgrades no longer lose it.
 
+## [1.55.0] - 2026-05-11
+
+### Added
+- **x-twitter-scraper** v2.0.2: Full X (Twitter) automation via Xquik REST API with 121 endpoints, 23 bulk extraction tools, MCP server, giveaway draws, account monitoring, HMAC webhooks, and AI composition.
+
+### Changed
+- Marketplace skill count: 53 → 54
+- Marketplace plugin entry count: 56 → 57
+- Marketplace version: 1.54.0 → 1.55.0
+- README.md, README.zh-CN.md: badges, install command, skill section, Use Cases entry, Documentation Quick Link, Requirements
+- CLAUDE.md: overview count, marketplace plugin count, version reference, Available Skills list
+
 ## [1.54.0] - 2026-05-10
 
 ### Added
