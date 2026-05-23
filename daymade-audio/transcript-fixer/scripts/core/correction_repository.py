@@ -298,25 +298,25 @@ class CorrectionRepository:
                     cursor = conn.execute("""
                         SELECT * FROM corrections
                         WHERE domain = ? AND is_active = 1
-                        ORDER BY from_text
+                        ORDER BY LENGTH(from_text) DESC, from_text
                     """, (domain,))
                 else:
                     cursor = conn.execute("""
                         SELECT * FROM corrections
                         WHERE domain = ?
-                        ORDER BY from_text
+                        ORDER BY LENGTH(from_text) DESC, from_text
                     """, (domain,))
             else:
                 if active_only:
                     cursor = conn.execute("""
                         SELECT * FROM corrections
                         WHERE is_active = 1
-                        ORDER BY domain, from_text
+                        ORDER BY domain, LENGTH(from_text) DESC, from_text
                     """)
                 else:
                     cursor = conn.execute("""
                         SELECT * FROM corrections
-                        ORDER BY domain, from_text
+                        ORDER BY domain, LENGTH(from_text) DESC, from_text
                     """)
 
             return [self._row_to_correction(row) for row in cursor.fetchall()]
