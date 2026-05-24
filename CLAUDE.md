@@ -152,10 +152,11 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 56 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
+- Contains 39 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
 - Each plugin has: name, description, source, version, category, keywords
 - Marketplace metadata: name, owner, version
 - Single-skill plugins follow the official pattern (167/168 plugins in `anthropics/claude-plugins-official`): `source` points to skill directory, `skills` omitted
+- **All 4 suites are suite-only.** `daymade-audio`, `daymade-claude-code`, `daymade-docs`, and `daymade-skill` do NOT register their member skills as standalone plugins. Users install the suite (e.g., `daymade-audio@daymade-skills`) and invoke skills as `<suite>:<skill>` (e.g., `daymade-audio:transcript-fixer`, `daymade-claude-code:statusline-generator`). When adding a new skill that belongs to a suite, only update the suite entry's `skills` array — do NOT create a parallel standalone plugin entry.
 
 ### Versioning Architecture
 
@@ -163,7 +164,6 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
    - Tracks the marketplace catalog as a whole
-   - Current: v1.53.0
    - Bump when: Adding/removing skills, adding/removing suite plugins, major marketplace restructuring
    - Semantic versioning: MAJOR.MINOR.PATCH
 

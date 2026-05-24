@@ -290,7 +290,7 @@ After fact-checking, suggest exporting the verified document:
 Fact-check complete: [N] claims verified, [M] corrections proposed.
 
 Options:
-A) Export as PDF — run /pdf-creator (Recommended for formal documents)
-B) Create slides — run /ppt-creator from verified content
+A) Export as PDF — run /daymade-docs:pdf-creator (Recommended for formal documents)
+B) Create slides — run /daymade-docs:ppt-creator from verified content
 C) No thanks — I'll use the corrected document directly
 ```

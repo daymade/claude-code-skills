@@ -6,27 +6,9 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, local Claude session continuation from `.claude` artifacts, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, multi-path parallel product analysis with cross-model test-time compute scaling, real financial data collection for US equities with validation and yfinance pitfall handling, advanced Excel automation for formatted workbook generation and complex xlsm parsing, macOS programmatic window screenshot capture workflows, verified Scrapling CLI installation and web extraction workflows, plugin marketplace development for converting skills repos into official Claude Code marketplaces, Tencent IMA knowledge base companion with zero-config installation across Claude Code/Codex/OpenClaw, upstream bug detection and runtime repair, personalized fan-out search with priority-based knowledge base boosting, and suite plugins that expose related skills under shared namespaces for combined installation workflows — including a dedicated Claude Code operations suite (daymade-claude-code) bundling session recovery, CLAUDE.md optimization, troubleshooting, statusline configuration, export repair, and marketplace development skills under one namespace, and the StepFun StepAudio 2.5 audio family (stepfun-tts for Contextual TTS with instruction + inline parentheses, stepfun-asr for the SSE endpoint that handles 30-minute audio in a single call)",
-    "version": "1.55.0"
+    "version": "1.56.0"
   },
   "plugins": [
-    {
-      "name": "asr-transcribe-to-text",
-      "description": "Transcribe audio and video files to text using a remote ASR service (Qwen3-ASR or OpenAI-compatible endpoint). Extracts audio from video, sends to configurable ASR endpoint, outputs clean text. Use when the user wants to transcribe recordings, convert audio/video to text, do speech-to-text, or mentions ASR, Qwen ASR, 转录, 语音转文字, 录音转文字, or has a meeting recording, lecture, interview, or screen recording to transcribe.",
-      "source": "./daymade-audio/asr-transcribe-to-text",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "productivity",
-      "keywords": [
-        "asr",
-        "transcription",
-        "speech-to-text",
-        "qwen",
-        "audio",
-        "video",
-        "vllm",
-        "ffmpeg"
-      ]
-    },
     {
       "name": "capture-screen",
       "description": "Programmatic screenshot capture on macOS. Get window IDs via Swift CGWindowListCopyWindowInfo, capture specific windows with screencapture -l, and control application windows via AppleScript. Supports multi-shot workflows for capturing different sections of the same window. Use when taking automated screenshots, capturing application windows, or creating visual documentation",
@@ -43,74 +25,6 @@
         "applescript",
         "automation",
         "visual-documentation"
-      ]
-    },
-    {
-      "name": "claude-code-history-files-finder",
-      "description": "Find and recover content from Claude Code session history files. Use when searching for deleted files, tracking changes across sessions, analyzing conversation history, or recovering code/documents from previous Claude interactions. Triggers include mentions of session history, recover deleted, find in history, previous conversation, or .claude/projects",
-      "source": "./daymade-claude-code/claude-code-history-files-finder",
-      "strict": false,
-      "version": "1.0.3",
-      "category": "developer-tools",
-      "keywords": [
-        "session-history",
-        "recovery",
-        "deleted-files",
-        "conversation-history",
-        "file-tracking",
-        "claude-code",
-        "history-analysis"
-      ]
-    },
-    {
-      "name": "claude-export-txt-better",
-      "description": "Fixes broken line wrapping in Claude Code exported conversation files (.txt), reconstructing tables, paragraphs, paths, and tool calls that were hard-wrapped at fixed column widths. Includes an automated validation suite (generic, file-agnostic checks). Triggers when the user has a Claude Code export file with broken formatting, mentions \"fix export\", \"fix conversation\", \"exported conversation\", \"make export readable\", references a file matching YYYY-MM-DD-HHMMSS-*.txt, or has a .txt file with broken tables, split paths, or mangled tool output from Claude Code.",
-      "source": "./daymade-claude-code/claude-export-txt-better",
-      "strict": false,
-      "version": "1.0.1",
-      "category": "utilities",
-      "keywords": [
-        "claude-code",
-        "export",
-        "txt",
-        "fix",
-        "line-wrapping",
-        "formatting"
-      ]
-    },
-    {
-      "name": "claude-md-progressive-disclosurer",
-      "description": "Optimize user CLAUDE.md files by applying progressive disclosure principles. This skill should be used when users want to reduce CLAUDE.md bloat, move detailed content to references, extract reusable patterns into skills, or improve context efficiency. Triggers include optimize CLAUDE.md, reduce CLAUDE.md size, apply progressive disclosure, or complaints about CLAUDE.md being too long",
-      "source": "./daymade-claude-code/claude-md-progressive-disclosurer",
-      "strict": false,
-      "version": "1.3.1",
-      "category": "productivity",
-      "keywords": [
-        "claude-md",
-        "progressive-disclosure",
-        "optimization",
-        "context-efficiency",
-        "configuration",
-        "token-savings"
-      ]
-    },
-    {
-      "name": "claude-skills-troubleshooting",
-      "description": "Diagnose and resolve Claude Code plugin and skill configuration issues. Debug plugin installation, enablement, and activation problems with systematic workflows. Use when plugins are installed but not showing in available skills list, skills are not activating as expected, troubleshooting enabledPlugins configuration in settings.json, debugging 'plugin not working' or 'skill not showing' issues, or understanding plugin state architecture and lifecycle",
-      "source": "./daymade-claude-code/claude-skills-troubleshooting",
-      "strict": false,
-      "version": "1.0.1",
-      "category": "utilities",
-      "keywords": [
-        "troubleshooting",
-        "debugging",
-        "plugins",
-        "skills",
-        "diagnostics",
-        "configuration",
-        "enabledPlugins",
-        "settings",
-        "marketplace"
       ]
     },
     {
@@ -163,25 +77,6 @@
         "market-research",
         "竞品分析",
         "code-analysis"
-      ]
-    },
-    {
-      "name": "continue-claude-work",
-      "description": "Recover actionable context from local `.claude` session artifacts and continue interrupted work without running `claude --resume`. Extracts compact boundary summaries, subagent workflow state, session end reason, and workspace drift via bundled Python script. Use when a user provides a Claude session ID, asks to continue prior work from local history, or wants to inspect `.claude` files before resuming implementation",
-      "source": "./daymade-claude-code/continue-claude-work",
-      "strict": false,
-      "version": "1.1.2",
-      "category": "developer-tools",
-      "keywords": [
-        "claude-code",
-        "session-resume",
-        "context-recovery",
-        "jsonl",
-        "compaction",
-        "subagent",
-        "history",
-        "workflow-continuation",
-        "local-artifacts"
       ]
     },
     {
@@ -300,41 +195,6 @@
         "enterprise",
         "company-research",
         "due-diligence"
-      ]
-    },
-    {
-      "name": "doc-to-markdown",
-      "description": "Converts DOCX/PDF/PPTX to high-quality Markdown. Pandoc engine + 8 post-processing fixes: grid/simple tables to pipe tables, CJK bold spacing, JSON pretty-print, image path flattening, pandoc attribute cleanup, code block detection, bracket fixes. Benchmarked 7.6/10 (best-in-class vs Docling/MarkItDown/Mammoth). 31 unit tests. Trigger on \"convert document\", \"docx to markdown\", \"parse word\", \"doc to markdown\", \"解析word\", \"转换文档\".",
-      "source": "./daymade-docs/doc-to-markdown",
-      "strict": false,
-      "version": "2.1.1",
-      "category": "document-conversion",
-      "keywords": [
-        "markdown",
-        "docx",
-        "pdf",
-        "pptx",
-        "converter",
-        "pandoc",
-        "document",
-        "cjk",
-        "chinese"
-      ]
-    },
-    {
-      "name": "docs-cleaner",
-      "description": "Consolidates redundant documentation while preserving all valuable content. Use when cleaning up documentation bloat, merging redundant docs, reducing documentation sprawl, or consolidating multiple files covering the same topic",
-      "source": "./daymade-docs/docs-cleaner",
-      "strict": false,
-      "version": "1.0.1",
-      "category": "productivity",
-      "keywords": [
-        "documentation",
-        "cleanup",
-        "consolidation",
-        "redundancy",
-        "merge",
-        "docs"
       ]
     },
     {
@@ -585,114 +445,6 @@
       ]
     },
     {
-      "name": "marketplace-dev",
-      "description": "Converts any Claude Code skills repository into an official plugin marketplace. Analyzes existing skills, generates .claude-plugin/marketplace.json conforming to the Anthropic spec, validates with claude plugin validate, runs one-shot check_marketplace.sh (schema + resolution + reverse sync), tests real installation, and creates a PR. Encodes hard-won anti-patterns from real marketplace development.",
-      "source": "./daymade-claude-code/marketplace-dev",
-      "strict": false,
-      "version": "1.2.1",
-      "category": "developer-tools",
-      "keywords": [
-        "marketplace",
-        "plugin",
-        "distribution",
-        "packaging"
-      ],
-      "hooks": {
-        "PostToolUse": [
-          {
-            "matcher": "Write|Edit",
-            "hooks": [
-              {
-                "type": "command",
-                "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post_edit_validate.sh"
-              }
-            ]
-          },
-          {
-            "matcher": "Write|Edit",
-            "hooks": [
-              {
-                "type": "command",
-                "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post_edit_sync_check.sh"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "name": "meeting-minutes-taker",
-      "description": "Transform meeting transcripts into high-fidelity, structured meeting minutes with iterative review. Features speaker identification via feature analysis (word count, speaking style, topic focus) with context.md team directory mapping, intelligent file naming from content, integration with doc-to-markdown and transcript-fixer for pre-processing, evidence-based recording with speaker quotes, Mermaid diagrams for architecture discussions, and multi-turn parallel generation with UNION merge",
-      "source": "./daymade-audio/meeting-minutes-taker",
-      "strict": false,
-      "version": "1.1.1",
-      "category": "productivity",
-      "keywords": [
-        "meeting",
-        "minutes",
-        "transcript",
-        "notes",
-        "speaker-identification",
-        "mermaid",
-        "quotes",
-        "action-items"
-      ]
-    },
-    {
-      "name": "mermaid-tools",
-      "description": "Generate Mermaid diagrams from markdown with automatic PNG/SVG rendering and extraction from documents",
-      "source": "./daymade-docs/mermaid-tools",
-      "strict": false,
-      "version": "1.0.2",
-      "category": "documentation",
-      "keywords": [
-        "mermaid",
-        "diagrams",
-        "visualization",
-        "flowchart",
-        "sequence"
-      ]
-    },
-    {
-      "name": "pdf-creator",
-      "description": "Create PDF documents from markdown with Chinese font support. Supports theme system (default for formal docs, cjk-auto for content-driven tables, warm-terra for training materials, mobile for phone reading) and dual backend (weasyprint or Chrome). Triggers include convert to PDF, generate PDF, markdown to PDF, or printable documents",
-      "source": "./daymade-docs/pdf-creator",
-      "strict": false,
-      "version": "1.6.0",
-      "category": "document-conversion",
-      "keywords": [
-        "pdf",
-        "markdown",
-        "weasyprint",
-        "chrome",
-        "themes",
-        "chinese-fonts",
-        "cjk",
-        "document-generation",
-        "legal",
-        "reports",
-        "typography"
-      ]
-    },
-    {
-      "name": "ppt-creator",
-      "description": "Create professional slide decks from topics or documents. Generates structured content with data-driven charts, speaker notes, and complete PPTX files. Applies persuasive storytelling principles (Pyramid Principle, assertion-evidence). Supports multiple formats (Marp, PowerPoint). Use for presentations, pitches, slide decks, or keynotes",
-      "source": "./daymade-docs/ppt-creator",
-      "strict": false,
-      "version": "1.0.1",
-      "category": "productivity",
-      "keywords": [
-        "presentation",
-        "powerpoint",
-        "pptx",
-        "slides",
-        "marp",
-        "charts",
-        "data-visualization",
-        "pyramid-principle"
-      ]
-    },
-    {
       "name": "product-analysis",
       "description": "Multi-path parallel product analysis with cross-model test-time compute scaling. Spawns parallel agents (Claude Code + Codex CLI) for multi-perspective exploration, then synthesizes findings into actionable optimization plans. Supports self-audit, UX audit, API audit, architecture review, and competitive benchmarking via competitors-analysis skill",
       "source": "./product-analysis",
@@ -836,60 +588,6 @@
       ]
     },
     {
-      "name": "statusline-generator",
-      "description": "Configure Claude Code statuslines with context window display (actual token counts), multi-line layouts, cost tracking via ccusage, git status, human-readable formatting, and customizable colors",
-      "source": "./daymade-claude-code/statusline-generator",
-      "strict": false,
-      "version": "1.1.0",
-      "category": "customization",
-      "keywords": [
-        "statusline",
-        "context-window",
-        "ccusage",
-        "git-status",
-        "customization",
-        "prompt"
-      ]
-    },
-    {
-      "name": "stepfun-tts",
-      "description": "Generate Chinese / Japanese speech with StepFun's stepaudio-2.5-tts — Contextual TTS that replaces step-tts-2's `voice_label` with natural-language `instruction` (≤200 chars) plus inline `()` parentheses for句内 prosody. Use when the user wants emotional / prosody control over voice synthesis (whisper, pause, stress, mood pivot mid-sentence), batch-generates game / app voice lines, migrates from `step-tts-2` (the `voice_label → instruction` breaking change), or hits StepFun's stricter 2.5-era censorship (死/消失/political terms). Triggers on 阶跃 TTS, StepAudio 合成, 语音合成, 配音, 文本转语音, TTS 升级, 迁移 step-tts-2. For transcription with the sibling stepaudio-2.5-asr model, use the stepfun-asr skill instead.",
-      "source": "./daymade-audio/stepfun-tts",
-      "strict": false,
-      "version": "2.0.0",
-      "category": "productivity",
-      "keywords": [
-        "tts",
-        "stepfun",
-        "stepaudio",
-        "stepaudio-2.5",
-        "阶跃",
-        "chinese-tts",
-        "voice-synthesis",
-        "contextual-tts"
-      ]
-    },
-    {
-      "name": "stepfun-asr",
-      "description": "Transcribe audio with StepFun's stepaudio-2.5-asr — an SSE endpoint (NOT /v1/audio/transcriptions) with 32K context, ~85-101x RTF on long audio, and a single-call ceiling around 30 minutes (no client-side chunking). Use when transcribing Chinese / English audio with StepFun, when long-form recordings (5-30 min) need to land in one request, when migrating from step-asr / step-asr-1.1, or when hitting the misleading `model stepaudio-2.5-asr not supported` error (which actually means wrong endpoint). Triggers on 阶跃 ASR, StepFun ASR, stepaudio-2.5-asr, 转录, 语音识别, 长音频转写, 语音转文字. For TTS with the sibling stepaudio-2.5-tts model, use the stepfun-tts skill instead.",
-      "source": "./daymade-audio/stepfun-asr",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "productivity",
-      "keywords": [
-        "asr",
-        "stepfun",
-        "stepaudio",
-        "stepaudio-2.5-asr",
-        "阶跃",
-        "chinese-asr",
-        "speech-to-text",
-        "transcription",
-        "long-audio",
-        "sse"
-      ]
-    },
-    {
       "name": "teams-channel-post-writer",
       "description": "Create professional Microsoft Teams channel posts with Adaptive Cards, formatted announcements, and corporate communication standards",
       "source": "./teams-channel-post-writer",
@@ -919,24 +617,6 @@
         "infrastructure",
         "cloud-init",
         "cloudflare"
-      ]
-    },
-    {
-      "name": "transcript-fixer",
-      "description": "Corrects speech-to-text (ASR/STT) transcription errors using dictionary rules and native Claude AI corrections (no API key needed by default). Supports intelligent paragraph breaks, filler word reduction, interactive review, Chinese domain names, and iterative dictionary building. Use when users mention transcript correction, ASR errors, speech-to-text mistakes, homophone errors, or working with transcription files",
-      "source": "./daymade-audio/transcript-fixer",
-      "strict": false,
-      "version": "1.4.0",
-      "category": "productivity",
-      "keywords": [
-        "transcription",
-        "asr",
-        "stt",
-        "speech-to-text",
-        "correction",
-        "ai",
-        "meeting-notes",
-        "nlp"
       ]
     },
     {

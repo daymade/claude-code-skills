@@ -149,6 +149,6 @@ Extraction complete: [N] sources → faithful Markdown ([M] permission/image gap
 
 Options:
 A) Hand off to your PKM/organizing workflow — file & index these (Recommended if part of a vault)
-B) Run docs-cleaner — consolidate redundant content across the extracted files
+B) Run /daymade-docs:docs-cleaner — consolidate redundant content across the extracted files
 C) Stop here — the faithful Markdown is the deliverable
 ```
