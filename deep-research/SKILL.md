@@ -538,7 +538,7 @@ Research report complete: [N] sources cited, [M] claims made.
 
 Options:
 A) Verify facts — run /fact-checker on the report (Recommended)
-B) Create slides — run /ppt-creator from the findings
-C) Export as PDF — run /pdf-creator for formal delivery
+B) Create slides — run /daymade-docs:ppt-creator from the findings
+C) Export as PDF — run /daymade-docs:pdf-creator for formal delivery
 D) No thanks — the report is ready as-is
 ```

@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **pdf-creator** v1.6.0: Add `cjk-auto` theme for content-driven table layouts. Based on `default` theme but uses `table-layout: auto` so column widths adapt to actual cell content rather than equal distribution. Best for tables with highly uneven column lengths (course schedules, itemized lists) where fixed equal-width would force CJK mid-breaks. Previously only existed in local cache; now bundled in version control so skill upgrades no longer lose it.
 
+## [1.56.0] - 2026-05-24
+
+### Changed
+- **All 4 suites are now suite-only.** Removed 17 standalone plugin entries from `marketplace.json` so suite member skills are reachable **only** via their suite. This unifies `daymade-audio`, `daymade-claude-code`, and `daymade-docs` with `daymade-skill` (which has been suite-only since inception). Each skill keeps its own SKILL.md, version, and bundled scripts unchanged on disk under `<suite>/<skill>/`.
+  - `daymade-audio` (5 removed): `asr-transcribe-to-text`, `stepfun-asr`, `stepfun-tts`, `transcript-fixer`, `meeting-minutes-taker`
+  - `daymade-claude-code` (7 removed): `claude-code-history-files-finder`, `continue-claude-work`, `claude-skills-troubleshooting`, `claude-md-progressive-disclosurer`, `statusline-generator`, `claude-export-txt-better`, `marketplace-dev`
+  - `daymade-docs` (5 removed): `doc-to-markdown`, `mermaid-tools`, `pdf-creator`, `ppt-creator`, `docs-cleaner`
+- Marketplace plugin entry count: 56 → 39 (17 standalone entries dropped; all 4 suite entries preserved).
+- README.md / README.zh-CN.md: removed standalone `claude plugin install <skill>@daymade-skills` commands for the 17 affected skills (suite install commands at the top of "Quick Start" remain authoritative); rewrote three "Single-skill plugins remain available" / "instead of the repeating `<skill>:<skill>` form" sentences that became false after the unification; repaired broken doc links `./transcript-fixer/references/…` and `./daymade-docs/meeting-minutes-taker/SKILL.md` (leftovers from the 1.54.0 suite migration) to `./daymade-audio/…`; removed stale `/daymade-docs:meeting-minutes-taker` listing (meeting-minutes-taker moved to `daymade-audio` in 1.54.0 but the docs suite namespace listing was not updated).
+- CLAUDE.md: plugin entry count 56 → 39; replaced "Suite-only members" partial list with an all-suite policy statement plus guidance to NOT create parallel standalone entries when adding new suite member skills.
+
+### Migration
+- **Existing users** of any of the 17 affected standalone plugins (`transcript-fixer@daymade-skills`, `statusline-generator@daymade-skills`, `pdf-creator@daymade-skills`, `ppt-creator@daymade-skills`, `doc-to-markdown@daymade-skills`, `mermaid-tools@daymade-skills`, `docs-cleaner@daymade-skills`, `claude-code-history-files-finder@daymade-skills`, `continue-claude-work@daymade-skills`, `claude-skills-troubleshooting@daymade-skills`, `claude-md-progressive-disclosurer@daymade-skills`, `claude-export-txt-better@daymade-skills`, `marketplace-dev@daymade-skills`, `asr-transcribe-to-text@daymade-skills`, `stepfun-asr@daymade-skills`, `stepfun-tts@daymade-skills`, `meeting-minutes-taker@daymade-skills`) should:
+  1. Run `claude plugin marketplace update daymade-skills`
+  2. Install the corresponding suite: `claude plugin install daymade-audio@daymade-skills`, `claude plugin install daymade-claude-code@daymade-skills`, or `claude plugin install daymade-docs@daymade-skills`
+  3. Update any scripts / docs that invoke skills by namespace: `<skill>:<skill>` → `<suite>:<skill>` (e.g., `transcript-fixer:transcript-fixer` → `daymade-audio:transcript-fixer`)
+- **Personal data is safe.** Skills that persist user data write to `$HOME` (e.g., `transcript-fixer` dictionary lives at `~/.transcript-fixer/corrections.db`); reinstalling or switching plugin namespaces does not touch user state.
+- **`skill-creator` and other single-skill plugins are unaffected.** Only the 17 listed skills (members of the 3 newly-unified suites) need the migration.
+
 ## [1.54.0] - 2026-05-10
 
 ### Added

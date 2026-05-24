@@ -175,10 +175,9 @@ This suite exposes related skills under one namespace, including:
 /daymade-docs:pdf-creator
 /daymade-docs:ppt-creator
 /daymade-docs:docs-cleaner
-/daymade-docs:meeting-minutes-taker
 ```
 
-Single-skill plugins remain available for narrower installs and independent updates. Documentation skills live under `daymade-docs/`, so both the suite and the individual documentation plugins install from the same canonical source while keeping plugin caches narrow.
+These skills ship as a bundle — there are no separate single-skill plugins. All documentation skills live under `daymade-docs/` and install together from the suite.
 
 **Claude Code Operations Suite** (shared namespace for Claude Code power-user workflows):
 ```bash
@@ -197,21 +196,12 @@ This suite bundles the skills that extend Claude Code itself — session recover
 /daymade-claude-code:marketplace-dev
 ```
 
-Installed names render as `daymade-claude-code:<skill>` instead of the repeating `<skill>:<skill>` form you get from the individual single-skill plugins.
+Installed names render as `daymade-claude-code:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all seven.
 
 **Install Other Skills:**
 ```bash
 # GitHub operations
 claude plugin install github-ops@daymade-skills
-
-# Document conversion
-claude plugin install doc-to-markdown@daymade-skills
-
-# Diagram generation
-claude plugin install mermaid-tools@daymade-skills
-
-# Statusline customization
-claude plugin install statusline-generator@daymade-skills
 
 # Teams communication
 claude plugin install teams-channel-post-writer@daymade-skills
@@ -231,17 +221,14 @@ claude plugin install cloudflare-troubleshooting@daymade-skills
 # UI design system extraction
 claude plugin install ui-designer@daymade-skills
 
-# Presentation creation
-claude plugin install ppt-creator@daymade-skills
-
 # YouTube video/audio downloading
 claude plugin install youtube-downloader@daymade-skills
 
 # Secure repomix packaging
 claude plugin install repomix-safe-mixer@daymade-skills
 
-# ASR transcript correction
-claude plugin install transcript-fixer@daymade-skills
+# Full audio suite (ASR + transcript correction + meeting minutes + TTS)
+claude plugin install daymade-audio@daymade-skills
 
 # Video comparison and quality analysis
 claude plugin install video-comparer@daymade-skills
@@ -251,18 +238,6 @@ claude plugin install qa-expert@daymade-skills
 
 # Prompt optimization using EARS methodology
 claude plugin install prompt-optimizer@daymade-skills
-
-# Session history recovery
-claude plugin install claude-code-history-files-finder@daymade-skills
-
-# Documentation consolidation
-claude plugin install docs-cleaner@daymade-skills
-
-# PDF generation with Chinese font support
-claude plugin install pdf-creator@daymade-skills
-
-# CLAUDE.md progressive disclosure optimization
-claude plugin install claude-md-progressive-disclosurer@daymade-skills
 
 # CCPM skill registry search and management
 claude plugin install skills-search@daymade-skills
@@ -297,17 +272,11 @@ claude plugin install excel-automation@daymade-skills
 # Programmatic macOS screenshot capture workflows
 claude plugin install capture-screen@daymade-skills
 
-# Resume interrupted Claude work from local session artifacts
-claude plugin install continue-claude-work@daymade-skills
-
 # Scrapling CLI extraction and troubleshooting
 claude plugin install scrapling-skill@daymade-skills
 
 # Tencent IMA knowledge base companion and installer
 claude plugin install ima-copilot@daymade-skills
-
-# Fix broken line wrapping in Claude Code exported .txt conversations
-claude plugin install claude-export-txt-better@daymade-skills
 
 # Export Douban (豆瓣) book/movie/music/game collections to CSV
 claude plugin install douban-skill@daymade-skills
@@ -367,6 +336,8 @@ Comprehensive GitHub operations using gh CLI and GitHub API.
 
 ### 2. **doc-to-markdown** - Document Conversion Suite
 
+> **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:doc-to-markdown`)
+
 Converts documents to markdown with Windows/WSL path handling and PDF image extraction.
 
 **When to use:**
@@ -390,6 +361,8 @@ Converts documents to markdown with Windows/WSL path handling and PDF image extr
 
 ### 3. **mermaid-tools** - Diagram Generation
 
+> **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:mermaid-tools`)
+
 Extracts Mermaid diagrams from markdown and generates high-quality PNG images.
 
 **When to use:**
@@ -412,6 +385,8 @@ Extracts Mermaid diagrams from markdown and generates high-quality PNG images.
 ---
 
 ### 4. **statusline-generator** - Statusline Customization
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:statusline-generator`)
 
 Configures Claude Code statuslines with multi-line layouts and cost tracking.
 
@@ -582,6 +557,8 @@ Extract design systems from reference UI images and generate implementation-read
 
 ### 11. **ppt-creator** - Professional Presentation Creation
 
+> **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:ppt-creator`)
+
 Create persuasive, audience-ready slide decks from topics or documents with data-driven charts and dual-format PPTX output.
 
 **When to use:**
@@ -658,6 +635,8 @@ Safely package codebases with repomix by automatically detecting and removing ha
 
 ### 14. **transcript-fixer** - ASR Transcription Correction
 
+> **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:transcript-fixer`)
+
 Correct speech-to-text (ASR/STT) transcription errors through dictionary-based rules and AI-powered corrections with automatic pattern learning.
 
 **When to use:**
@@ -693,7 +672,7 @@ uv run scripts/fix_transcription.py --review-learned
 
 *Coming soon*
 
-📚 **Documentation**: See [transcript-fixer/references/](./transcript-fixer/references/) for workflow guides, SQL queries, troubleshooting, best practices, team collaboration, and API setup.
+📚 **Documentation**: See [daymade-audio/transcript-fixer/references/](./daymade-audio/transcript-fixer/references/) for workflow guides, SQL queries, troubleshooting, best practices, team collaboration, and API setup.
 
 **Requirements**: Python 3.6+, uv package manager, GLM API key (get from https://open.bigmodel.cn/)
 
@@ -863,6 +842,8 @@ Transform vague prompts into precise, well-structured specifications using EARS 
 
 ### 18. **claude-code-history-files-finder** - Session History Recovery
 
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-code-history-files-finder`)
+
 Find and recover content from Claude Code session history files stored in `~/.claude/projects/`.
 
 **When to use:**
@@ -904,6 +885,8 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 ---
 
 ### 19. **docs-cleaner** - Documentation Consolidation
+
+> **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:docs-cleaner`)
 
 Consolidate redundant documentation while preserving all valuable content.
 
@@ -976,6 +959,8 @@ ccpm install-bundle web-dev  # Install web development skills bundle
 
 ### 21. **pdf-creator** - PDF Creation with Chinese Font Support
 
+> **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:pdf-creator`)
+
 Create professional PDF documents from markdown with proper Chinese typography using WeasyPrint.
 
 **When to use:**
@@ -1006,6 +991,8 @@ uv run --with weasyprint scripts/md_to_pdf.py input.md output.pdf
 ---
 
 ### 22. **claude-md-progressive-disclosurer** - CLAUDE.md Optimization
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-md-progressive-disclosurer`)
 
 Optimize user CLAUDE.md files using progressive disclosure to reduce context bloat while preserving critical rules.
 
@@ -1446,6 +1433,8 @@ claude plugin install i18n-expert@daymade-skills
 
 ### 32. **claude-skills-troubleshooting** - Plugin & Skill Troubleshooting
 
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-skills-troubleshooting`)
+
 Diagnose and resolve Claude Code plugin and skill configuration issues. Debug plugin installation, enablement, and activation problems with systematic workflows.
 
 **When to use:**
@@ -1466,9 +1455,6 @@ Diagnose and resolve Claude Code plugin and skill configuration issues. Debug pl
 
 **Example usage:**
 ```bash
-# Install the skill
-claude plugin install claude-skills-troubleshooting@daymade-skills
-
 # Run diagnostic
 python3 scripts/diagnose_plugins.py
 
@@ -1488,6 +1474,8 @@ python3 scripts/enable_all_plugins.py daymade-skills
 
 ### 33. **meeting-minutes-taker** - Meeting Minutes Generator
 
+> **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:meeting-minutes-taker`)
+
 Transform meeting transcripts into high-fidelity, structured meeting minutes with iterative human review.
 
 **When to use:**
@@ -1505,8 +1493,8 @@ Transform meeting transcripts into high-fidelity, structured meeting minutes wit
 
 **Example usage:**
 ```bash
-# Install the skill
-claude plugin install meeting-minutes-taker@daymade-skills
+# Install the full audio suite (includes meeting-minutes-taker)
+claude plugin install daymade-audio@daymade-skills
 
 # Then provide a meeting transcript and request minutes
 ```
@@ -1515,7 +1503,7 @@ claude plugin install meeting-minutes-taker@daymade-skills
 
 *Coming soon*
 
-📚 **Documentation**: See [daymade-docs/meeting-minutes-taker/SKILL.md](./daymade-docs/meeting-minutes-taker/SKILL.md) for complete workflow and template guidance.
+📚 **Documentation**: See [daymade-audio/meeting-minutes-taker/SKILL.md](./daymade-audio/meeting-minutes-taker/SKILL.md) for complete workflow and template guidance.
 
 **Requirements**: None
 
@@ -1829,6 +1817,8 @@ claude plugin install capture-screen@daymade-skills
 
 ### 42. **continue-claude-work** - Resume Interrupted Claude Work
 
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:continue-claude-work`)
+
 Recover actionable context from local `~/.claude` session artifacts and continue implementation without reopening the old interactive session. Uses a bundled Python script for intelligent context extraction.
 
 **When to use:**
@@ -1847,9 +1837,6 @@ Recover actionable context from local `~/.claude` session artifacts and continue
 
 **Example usage:**
 ```bash
-# Install the skill
-claude plugin install continue-claude-work@daymade-skills
-
 # Then ask Claude to resume from local artifacts
 "continue work from session 123e4567-e89b-12d3-a456-426614174000"
 "don't resume, just read the .claude files and continue"
@@ -1942,6 +1929,8 @@ claude plugin install ima-copilot@daymade-skills
 ---
 
 ### 45. **claude-export-txt-better** - Fix Claude Code Export Formatting
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-export-txt-better`)
 
 Reconstruct broken line wrapping in Claude Code exported `.txt` conversation files. Rebuilds tables, paragraphs, paths, and tool calls that were hard-wrapped at fixed column widths, and ships with an automated 53-check validation suite (file-agnostic, catches over- and under-merging regressions).
 
@@ -2103,6 +2092,8 @@ Falsification-first methodology for network, streaming, and protocol-layer bugs 
 
 ### 50. **stepfun-tts** - StepFun StepAudio 2.5 Contextual TTS
 
+> **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:stepfun-tts`)
+
 Generate Chinese / Japanese speech with `stepaudio-2.5-tts`. Captures the two non-obvious TTS pitfalls that cost hours otherwise: `voice_label` removal (replaced by natural-language `instruction`) and stricter 2.5-era censorship (死/消失/political terms).
 
 **When to use:**
@@ -2122,6 +2113,8 @@ Generate Chinese / Japanese speech with `stepaudio-2.5-tts`. Captures the two no
 ---
 
 ### 52. **stepfun-asr** - StepFun StepAudio 2.5 ASR (SSE Endpoint)
+
+> **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:stepfun-asr`)
 
 Transcribe Chinese / English audio with `stepaudio-2.5-asr`. Hides the #1 trap of the 2.5 ASR family: it does NOT live on `/v1/audio/transcriptions` — the wrong endpoint returns a misleading `model stepaudio-2.5-asr not supported` error that looks identical to a permission/whitelist failure.
 
@@ -2296,7 +2289,7 @@ Each skill includes:
 - **youtube-downloader**: See `youtube-downloader/SKILL.md` for usage examples and troubleshooting
 - **repomix-safe-mixer**: See `repomix-safe-mixer/references/common_secrets.md` for detected credential patterns
 - **video-comparer**: See `video-comparer/references/video_metrics.md` for quality metrics interpretation and `video-comparer/references/configuration.md` for customization options
-- **transcript-fixer**: See `transcript-fixer/references/workflow_guide.md` for step-by-step workflows and `transcript-fixer/references/team_collaboration.md` for collaboration patterns
+- **transcript-fixer**: See `daymade-audio/transcript-fixer/references/workflow_guide.md` for step-by-step workflows and `daymade-audio/transcript-fixer/references/team_collaboration.md` for collaboration patterns
 - **qa-expert**: See `qa-expert/references/master_qa_prompt.md` for autonomous execution (100x speedup) and `qa-expert/references/google_testing_standards.md` for AAA pattern and OWASP testing
 - **prompt-optimizer**: See `prompt-optimizer/references/ears_syntax.md` for EARS transformation patterns, `prompt-optimizer/references/domain_theories.md` for theory catalog, and `prompt-optimizer/references/examples.md` for complete transformations
 - **claude-code-history-files-finder**: See `daymade-claude-code/claude-code-history-files-finder/references/session_file_format.md` for JSONL structure and `daymade-claude-code/claude-code-history-files-finder/references/workflow_examples.md` for recovery workflows

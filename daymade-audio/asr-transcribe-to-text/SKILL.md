@@ -221,10 +221,10 @@ ASR output always contains recognition errors — homophones, garbled technical 
 Transcription complete: [N] chars saved to [output_path].
 
 ASR output typically contains recognition errors (homophones, garbled terms, broken sentences).
-Would you like me to run /transcript-fixer to clean up the text?
+Would you like me to run /daymade-audio:transcript-fixer to clean up the text?
 
 Options:
-A) Yes — run transcript-fixer on the output now (Recommended)
+A) Yes — run daymade-audio:transcript-fixer on the output now (Recommended)
 B) No — the raw transcription is good enough for my needs
 C) Later — I'll run it myself when ready
 ```

@@ -652,7 +652,7 @@ After structuring meeting minutes, suggest exporting:
 Meeting minutes complete: [N] decisions, [M] action items captured.
 
 Options:
-A) Export as PDF — run /pdf-creator (Recommended for sharing)
-B) Export as slides — run /ppt-creator (for presentation)
+A) Export as PDF — run /daymade-docs:pdf-creator (Recommended for sharing)
+B) Export as slides — run /daymade-docs:ppt-creator (for presentation)
 C) No thanks — the markdown is sufficient
 ```

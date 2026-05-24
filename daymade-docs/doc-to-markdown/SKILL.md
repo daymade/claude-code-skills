@@ -180,7 +180,7 @@ After converting documents to markdown, suggest cleanup:
 Conversion complete: [N] files converted to markdown.
 
 Options:
-A) Clean up docs — run /docs-cleaner to consolidate redundant content (Recommended if multiple files)
+A) Clean up docs — run /daymade-docs:docs-cleaner to consolidate redundant content (Recommended if multiple files)
 B) Check facts — run /fact-checker to verify claims in the converted content
 C) No thanks — the markdown conversion is sufficient
 ```
