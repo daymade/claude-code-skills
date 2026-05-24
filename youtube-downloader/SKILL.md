@@ -503,6 +503,6 @@ Download complete: [filename]
 If you need the spoken content as text, I can transcribe it for you.
 
 Options:
-A) Transcribe with /asr-transcribe-to-text (Recommended for speech-to-text)
+A) Transcribe with /daymade-audio:asr-transcribe-to-text (Recommended for speech-to-text)
 B) No thanks — I just needed the video file
 ```

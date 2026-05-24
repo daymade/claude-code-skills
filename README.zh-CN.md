@@ -175,10 +175,9 @@ claude plugin install daymade-docs@daymade-skills
 /daymade-docs:pdf-creator
 /daymade-docs:ppt-creator
 /daymade-docs:docs-cleaner
-/daymade-docs:meeting-minutes-taker
 ```
 
-单技能插件仍然保留，适合更窄的安装范围和独立更新。文档技能的 canonical source 位于 `daymade-docs/`，因此套件和单个文档插件都从同一份源安装，同时保持 plugin cache 边界收窄。
+这些技能以套件形式整体发布，不再提供单独的单技能插件。所有文档技能都在 `daymade-docs/` 下，随套件一起安装。
 
 **Claude Code 操作套件**（为 Claude Code 本体扩展工作流提供统一命名空间）：
 ```bash
@@ -197,21 +196,12 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:marketplace-dev
 ```
 
-安装后调用显示为 `daymade-claude-code:<skill>`，避免了单技能插件 `<skill>:<skill>` 的重复形式。
+安装后调用统一显示为 `daymade-claude-code:<skill>`，共享同一命名空间。这些技能仅作为套件发布——安装套件即可获得全部 7 个技能。
 
 **安装其他技能：**
 ```bash
 # GitHub 操作
 claude plugin install github-ops@daymade-skills
-
-# 文档转换
-claude plugin install doc-to-markdown@daymade-skills
-
-# 图表生成
-claude plugin install mermaid-tools@daymade-skills
-
-# 状态栏定制
-claude plugin install statusline-generator@daymade-skills
 
 # Teams 通信
 claude plugin install teams-channel-post-writer@daymade-skills
@@ -231,17 +221,14 @@ claude plugin install cloudflare-troubleshooting@daymade-skills
 # UI 设计系统提取
 claude plugin install ui-designer@daymade-skills
 
-# 演示文稿创建
-claude plugin install ppt-creator@daymade-skills
-
 # YouTube 视频/音频下载
 claude plugin install youtube-downloader@daymade-skills
 
 # 安全 Repomix 打包
 claude plugin install repomix-safe-mixer@daymade-skills
 
-# ASR 转录校正
-claude plugin install transcript-fixer@daymade-skills
+# 完整语音套件（ASR + 转录校正 + 会议纪要 + TTS）
+claude plugin install daymade-audio@daymade-skills
 
 # 视频比较和质量分析
 claude plugin install video-comparer@daymade-skills
@@ -251,18 +238,6 @@ claude plugin install qa-expert@daymade-skills
 
 # 使用 EARS 方法论优化提示词
 claude plugin install prompt-optimizer@daymade-skills
-
-# 会话历史恢复
-claude plugin install claude-code-history-files-finder@daymade-skills
-
-# 文档整合
-claude plugin install docs-cleaner@daymade-skills
-
-# PDF 生成（含中文字体支持）
-claude plugin install pdf-creator@daymade-skills
-
-# CLAUDE.md 渐进式披露优化
-claude plugin install claude-md-progressive-disclosurer@daymade-skills
 
 # CCPM 技能注册表搜索和管理
 claude plugin install skills-search@daymade-skills
@@ -300,17 +275,11 @@ claude plugin install excel-automation@daymade-skills
 # macOS 程序化窗口截图工作流
 claude plugin install capture-screen@daymade-skills
 
-# 基于本地会话产物续做中断的 Claude 工作
-claude plugin install continue-claude-work@daymade-skills
-
 # Scrapling CLI 抽取与故障排查
 claude plugin install scrapling-skill@daymade-skills
 
 # 腾讯 IMA 知识库伴侣与安装器
 claude plugin install ima-copilot@daymade-skills
-
-# 修复 Claude Code 导出 .txt 文件的断行问题
-claude plugin install claude-export-txt-better@daymade-skills
 
 # 导出豆瓣书影音游戏收藏到 CSV
 claude plugin install douban-skill@daymade-skills
@@ -392,6 +361,8 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ### 2. **doc-to-markdown** - 文档转换套件
 
+> **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:doc-to-markdown`）
+
 将文档转换为 markdown，支持 Windows/WSL 路径处理和 PDF 图片提取。
 
 **使用场景：**
@@ -415,6 +386,8 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ### 3. **mermaid-tools** - 图表生成
 
+> **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:mermaid-tools`）
+
 从 markdown 中提取 Mermaid 图表并生成高质量的 PNG 图像。
 
 **使用场景：**
@@ -437,6 +410,8 @@ CC-Switch 支持以下中国 AI 服务提供商：
 ---
 
 ### 4. **statusline-generator** - 状态栏定制
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:statusline-generator`）
 
 配置 Claude Code 状态栏，支持多行布局和成本跟踪。
 
@@ -607,6 +582,8 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ### 11. **ppt-creator** - 专业演示文稿创建
 
+> **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:ppt-creator`）
+
 使用金字塔原理和断言-证据框架创建专业幻灯片。
 
 **使用场景：**
@@ -714,6 +691,8 @@ python3 scripts/safe_mix.py /path/to/codebase
 
 ### 14. **transcript-fixer** - ASR 转录校正
 
+> **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:transcript-fixer`）
+
 通过基于字典的规则和 AI 驱动的校正来纠正语音转文本（ASR/STT）转录错误。
 
 **使用场景：**
@@ -743,7 +722,7 @@ python3 scripts/fix_transcript.py transcript.txt --dictionary custom_dict.json
 
 *即将推出*
 
-📚 **文档**：参见 [transcript-fixer/references/workflow_guide.md](./transcript-fixer/references/workflow_guide.md) 了解分步工作流
+📚 **文档**：参见 [daymade-audio/transcript-fixer/references/workflow_guide.md](./daymade-audio/transcript-fixer/references/workflow_guide.md) 了解分步工作流
 
 **要求**：Python 3.8+
 
@@ -906,6 +885,8 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 
 ### 18. **claude-code-history-files-finder** - 会话历史恢复
 
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-code-history-files-finder`）
+
 从存储在 `~/.claude/projects/` 的 Claude Code 会话历史文件中查找和恢复内容。
 
 **使用场景：**
@@ -947,6 +928,8 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 ---
 
 ### 19. **docs-cleaner** - 文档整合
+
+> **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:docs-cleaner`）
 
 整合冗余文档的同时保留所有有价值的内容。
 
@@ -1019,6 +1002,8 @@ ccpm install-bundle web-dev  # 安装 Web 开发技能包
 
 ### 21. **pdf-creator** - PDF 生成（中文字体支持）
 
+> **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:pdf-creator`）
+
 使用 WeasyPrint 将 markdown 转换为专业 PDF，并提供完善的中文字体支持。
 
 **使用场景：**
@@ -1049,6 +1034,8 @@ uv run --with weasyprint --with markdown scripts/md_to_pdf.py input.md output.pd
 ---
 
 ### 22. **claude-md-progressive-disclosurer** - CLAUDE.md 优化
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-md-progressive-disclosurer`）
 
 使用渐进式披露原则优化 CLAUDE.md，减少上下文负担但保留关键规则。
 
@@ -1488,6 +1475,8 @@ claude plugin install i18n-expert@daymade-skills
 
 ### 32. **claude-skills-troubleshooting** - 插件与技能故障排除
 
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-skills-troubleshooting`）
+
 诊断和解决 Claude Code 插件和技能配置问题。通过系统化工作流程调试插件安装、启用和激活问题。
 
 **使用场景：**
@@ -1508,9 +1497,6 @@ claude plugin install i18n-expert@daymade-skills
 
 **示例用法：**
 ```bash
-# 安装技能
-claude plugin install claude-skills-troubleshooting@daymade-skills
-
 # 运行诊断
 python3 scripts/diagnose_plugins.py
 
@@ -1530,6 +1516,8 @@ python3 scripts/enable_all_plugins.py daymade-skills
 
 ### 33. **meeting-minutes-taker** - 会议纪要生成器
 
+> **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:meeting-minutes-taker`）
+
 将会议录音转写稿转换为高保真、结构化的会议纪要，支持迭代式人工审核。
 
 **使用场景：**
@@ -1547,8 +1535,8 @@ python3 scripts/enable_all_plugins.py daymade-skills
 
 **示例用法：**
 ```bash
-# 安装技能
-claude plugin install meeting-minutes-taker@daymade-skills
+# 安装完整语音套件（包含 meeting-minutes-taker）
+claude plugin install daymade-audio@daymade-skills
 
 # 然后提供会议转写稿并请求生成纪要
 ```
@@ -1557,7 +1545,7 @@ claude plugin install meeting-minutes-taker@daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [daymade-docs/meeting-minutes-taker/SKILL.md](./daymade-docs/meeting-minutes-taker/SKILL.md) 了解完整的工作流程和模板指导。
+📚 **文档**：参见 [daymade-audio/meeting-minutes-taker/SKILL.md](./daymade-audio/meeting-minutes-taker/SKILL.md) 了解完整的工作流程和模板指导。
 
 **要求**：无
 
@@ -1871,6 +1859,8 @@ claude plugin install capture-screen@daymade-skills
 
 ### 42. **continue-claude-work** - 续做中断的 Claude 工作
 
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:continue-claude-work`）
+
 从本地 `~/.claude` 会话产物中恢复可执行上下文，并在不重新打开旧交互会话的前提下继续实现工作。内置 Python 脚本实现智能上下文提取。
 
 **使用场景：**
@@ -1889,9 +1879,6 @@ claude plugin install capture-screen@daymade-skills
 
 **示例用法：**
 ```bash
-# 安装技能
-claude plugin install continue-claude-work@daymade-skills
-
 # 然后让 Claude 基于本地产物续做
 "continue work from session 123e4567-e89b-12d3-a456-426614174000"
 "不用真的 resume，去 .claude 里找上下文继续做"
@@ -1984,6 +1971,8 @@ claude plugin install ima-copilot@daymade-skills
 ---
 
 ### 45. **claude-export-txt-better** - 修复 Claude Code 导出文件的断行
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-export-txt-better`）
 
 重建 Claude Code 导出的 `.txt` 对话文件中被硬换行切坏的表格、段落、路径和工具调用输出。附带 53 项自动校验套件（文件无关，能捕捉 over-/under-merge 回归）。
 
@@ -2145,6 +2134,8 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ### 50. **stepfun-tts** - 阶跃 StepAudio 2.5 Contextual TTS
 
+> **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:stepfun-tts`）
+
 用 `stepaudio-2.5-tts` 做中文 / 日语语音合成。封装了 TTS 部分两个会浪费时间的非显然坑：`voice_label` 被移除（改用自然语言 `instruction`）以及 2.5 时代更严格的审查（死/消失/政治敏感词）。
 
 **使用场景：**
@@ -2164,6 +2155,8 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 ---
 
 ### 52. **stepfun-asr** - 阶跃 StepAudio 2.5 ASR（SSE 端点）
+
+> **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:stepfun-asr`）
 
 用 `stepaudio-2.5-asr` 转写中 / 英文音频。封装 2.5 ASR 系列最坑的一点：模型**不在** `/v1/audio/transcriptions`——错端点返回的 `model stepaudio-2.5-asr not supported` 看起来跟权限被拒一模一样，会让人浪费几小时排查。
 
@@ -2338,7 +2331,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **youtube-downloader**：参见 `youtube-downloader/SKILL.md` 了解使用示例和故障排除
 - **repomix-safe-mixer**：参见 `repomix-safe-mixer/references/common_secrets.md` 了解检测到的凭据模式
 - **video-comparer**：参见 `video-comparer/references/video_metrics.md` 了解质量指标解释和 `video-comparer/references/configuration.md` 了解自定义选项
-- **transcript-fixer**：参见 `transcript-fixer/references/workflow_guide.md` 了解分步工作流和 `transcript-fixer/references/team_collaboration.md` 了解协作模式
+- **transcript-fixer**：参见 `daymade-audio/transcript-fixer/references/workflow_guide.md` 了解分步工作流和 `daymade-audio/transcript-fixer/references/team_collaboration.md` 了解协作模式
 - **qa-expert**：参见 `qa-expert/references/master_qa_prompt.md` 了解自主执行（100 倍加速）和 `qa-expert/references/google_testing_standards.md` 了解 AAA 模式和 OWASP 测试
 - **prompt-optimizer**：参见 `prompt-optimizer/references/ears_syntax.md` 了解 EARS 转换模式、`prompt-optimizer/references/domain_theories.md` 了解理论目录和 `prompt-optimizer/references/examples.md` 了解完整转换示例
 - **claude-code-history-files-finder**：参见 `daymade-claude-code/claude-code-history-files-finder/references/session_file_format.md` 了解 JSONL 结构和 `daymade-claude-code/claude-code-history-files-finder/references/workflow_examples.md` 了解恢复工作流

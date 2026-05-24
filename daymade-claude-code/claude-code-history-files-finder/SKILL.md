@@ -218,6 +218,6 @@ After finding relevant session history, suggest continuing the work:
 Found [N] relevant sessions with recoverable context.
 
 Options:
-A) Resume work — run /continue-claude-work to pick up where you left off (Recommended)
+A) Resume work — run /daymade-claude-code:continue-claude-work to pick up where you left off (Recommended)
 B) Just show me the content — I'll decide what to do with it
 ```

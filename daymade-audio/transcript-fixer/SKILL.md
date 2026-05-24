@@ -212,7 +212,7 @@ Transcript corrected: [N] errors fixed, saved to [output_path].
 Want to turn this into structured meeting minutes with decisions and action items?
 
 Options:
-A) Yes — run /meeting-minutes-taker (Recommended for meetings/lectures)
-B) Export as PDF — run /pdf-creator on the corrected text
+A) Yes — run /daymade-audio:meeting-minutes-taker (Recommended for meetings/lectures)
+B) Export as PDF — run /daymade-docs:pdf-creator on the corrected text
 C) No thanks — the corrected transcript is all I need
 ```
