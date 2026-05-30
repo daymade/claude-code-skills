@@ -88,7 +88,7 @@ Identifier-bearing endpoints use `{"identifier": {"type": "rp_entity_id",
 | `revenue_geographic_segments(id, *, period, limit)` | `v1/company-revenue-geographic-segments/query` | revenue by region (REGION_SEGMENTS nested) | **L4** |
 | `revenue_product_segments(id, *, period, limit)` | `v1/company-revenue-product-segments/query` | revenue by product (PRODUCT_SEGMENTS nested) | **L4** |
 | `entity_sentiment(id, *, start_date, end_date)` | `v1/entity-sentiment/` ⚠️ trailing slash | daily sentiment series (daily_sentiment/sentiment_pressure/abnormal_media_attention) | **L4** |
-| `connected_entities(id, *, entity_categories, limit)` | `v1/search/co-mentions/entities` | co-mention graph by category (total_chunks/headlines) — **chunk-billed** | **L4** |
+| `connected_entities(id, *, date_range, limit)` | `v1/search/co-mentions/entities` | co-mention graph grouped by category (total_chunks/headlines); optional `date_range` → `query.filters.timestamp` — **chunk-billed** | **L4** |
 | `BatchSearch.create_job()` / `.get_status(id)` / `.upload_input` / `.download_results` | `v1/search/batches` (+ `/{id}`) | batch search **50% off**; create/status L4, upload/download wired but end-to-end unverified | **L4 / L3** |
 | `fetch_reporting_period_raw(payload)` | `cqs/query-chunks` | raw `stories[].reportingPeriod` the SDK model drops — **chunk-billed** | **L4** |
 
