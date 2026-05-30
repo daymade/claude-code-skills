@@ -6,8 +6,8 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-52-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.52.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-53-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.53.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -2135,6 +2135,43 @@ Transcribe Chinese / English audio with `stepaudio-2.5-asr`. Hides the #1 trap o
 
 ---
 
+### 53. **longbridge** - Longbridge Securities Financial Market Skills
+
+> **Install**: `claude plugin marketplace add longbridge/skills`
+
+125+ Agent skills for Longbridge Securities covering HK, US, A-share (SH/SZ), and Singapore markets. Trilingual (Simplified Chinese / Traditional Chinese / English). Includes real-time quotes, candlestick charts, fundamentals, portfolio analytics, options chains, watchlist management, sector screening, earnings analysis, and more.
+
+**When to use:**
+- Getting live stock prices, index quotes, or market data for HK/US/A-share/SG
+- Running fundamental analysis (PE/PB/DCF/earnings) on any listed security
+- Managing Longbridge watchlists, positions, or account portfolio analytics
+- Options chain and derivatives analysis (IV, Greeks, strategy selection)
+- Sector screening, capital flow analysis, or macro calendar lookups
+
+**Key features:**
+- 125+ skills with trilingual triggers: 股价/股價/stock price, 盘口/盤口/orderbook, 财报/財報/earnings, etc.
+- Supports NVDA.US, 700.HK, 600519.SH, and SG-listed symbols
+- CLI-first: calls `longbridge` binary directly; falls back to MCP if binary not installed
+- Covers the full investment workflow: screening → analysis → order review → post-trade monitoring
+- Notable skills: DCF valuation, Elliott wave, ARK analysis, pairs trading, DeFi yield, tax-loss harvesting
+
+**Example usage:**
+```bash
+# Install via Claude Code marketplace
+/plugin marketplace add longbridge/skills
+
+# Then ask Claude
+"NVDA 现在多少钱"
+"Give me a company tearsheet for 700.HK"
+"What's the earnings calendar for next week?"
+```
+
+📚 **Documentation**: See [longbridge/skills on GitHub](https://github.com/longbridge/skills) for full skill list and install guide.
+
+**Requirements**: [Longbridge Terminal](https://longbridge.com) for CLI mode; or Longbridge MCP server configured.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -2179,6 +2216,8 @@ Use **transcript-fixer** to correct speech-to-text errors in meeting notes, lect
 
 ### For Financial Data & Investment Research
 Use **financial-data-collector** to pull structured financial data for any US public company, then feed the JSON output into DCF modeling, comps analysis, or earnings review workflows.
+
+Use **longbridge** for live market data, real-time quotes, earnings, options, and portfolio analytics across HK/US/A-share/SG markets via Longbridge Securities. 125+ trilingual skills — ask in Chinese or English.
 
 ### For Excel & Financial Modeling Automation
 Use **excel-automation** to create formatted workbooks, parse complex `.xlsm` models, and automate Excel window controls for repetitive analyst workflows.
