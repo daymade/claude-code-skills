@@ -8,6 +8,8 @@ allowed-tools: Read, Grep, Bash
 
 Diagnose and fix Windows App (AVD/WVD/W365) connection quality issues on macOS, with focus on transport protocol optimization.
 
+> **Methodology base:** the general evidence-driven diagnosis discipline lives in the **debugging-network-issues** skill. This skill is the Windows-App / AVD transport *domain* layer — it leans toward connection-quality optimization more than root-cause falsification, so the methodology overlap is lighter.
+
 ## Background
 
 Azure Virtual Desktop transport priority: **UDP Shortpath > TCP > WebSocket**. UDP Shortpath provides the best experience (lowest latency, supports UDP Multicast). When it fails, the client falls back to WebSocket over TCP 443 through the gateway, adding significant latency overhead.

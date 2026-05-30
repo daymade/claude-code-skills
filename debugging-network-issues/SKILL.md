@@ -9,6 +9,18 @@ Evidence-driven investigation methodology for incidents where the obvious cause 
 
 Apply this skill when the user reports a network/streaming/protocol symptom and the investigator feels tempted to diagnose from one log line or one circumstantial data point. The skill's job is to slow that reflex down.
 
+## Triage first — is this a known domain?
+
+Before applying the general methodology below, check whether the symptom points at a stack that already has a dedicated skill in this repo. Those carry the domain-specific symptom→cause→fix tables this skill deliberately stays general about — start there, and come back here for methodology if the root cause turns out to be elsewhere.
+
+| If the symptom is… | Start with |
+|---|---|
+| macOS Tailscale ⨯ proxy/VPN conflict (Shadowrocket / Clash / Surge): `tailscale ping` works but SSH/curl/git fails, `Connection closed by 198.18.x.x`, TUN DNS hijack, ~60s `getaddrinfo` resolver stall | **tunnel-doctor** |
+| Cloudflare config: `ERR_TOO_MANY_REDIRECTS`, SSL-mode mismatch, DNS / proxy-status issues behind the orange cloud | **cloudflare-troubleshooting** |
+| Windows App / AVD / W365 RDP connection quality: WebSocket instead of UDP Shortpath, high RTT, STUN/TURN interference | **windows-remote-desktop-connection-doctor** |
+
+If none match — or you tried a domain skill and the evidence points elsewhere — continue below. The methodology generalizes to any multi-layer system.
+
 ## Core principles
 
 ### 1. Evidence over assumption

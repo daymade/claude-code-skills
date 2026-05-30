@@ -8,6 +8,8 @@ allowed-tools: Read, Grep, Edit, Bash
 
 Diagnose and fix conflicts when Tailscale coexists with proxy/VPN tools on macOS, with specific guidance for SSH access to WSL instances.
 
+> **Methodology base:** the general diagnostic discipline this skill builds on — evidence over assumption, falsification over confirmation, layered isolation, counter-review — lives in the **debugging-network-issues** skill. This skill is the macOS Tailscale⨯proxy *domain* layer on top of it; reach for the base skill when the symptom is *not* a known Tailscale/proxy conflict.
+
 ## Five Conflict Layers
 
 Proxy/VPN tools on macOS create conflicts at five independent layers. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations; Layer 5 affects VM/container runtimes:
