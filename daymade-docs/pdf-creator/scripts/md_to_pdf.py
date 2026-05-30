@@ -366,8 +366,13 @@ def _generate_pdf_previews(pdf_file: str, dpi: int = 130) -> list[Path]:
         return []
 
     pdf_path = Path(pdf_file).resolve()
-    preview_dir = pdf_path.parent / f"{pdf_path.stem}-preview"
-    preview_dir.mkdir(exist_ok=True)
+    # Previews are a throwaway self-check artifact, NOT a deliverable. Write them
+    # under the system temp dir (NOT next to the PDF) so they never linger in the
+    # user's working tree / git repo: the self-check happens out-of-process (the
+    # caller Reads the PNGs), so the script can't know when inspection is done and
+    # must not drop PNGs into the repo in the first place. Honors $TMPDIR.
+    preview_dir = Path(tempfile.gettempdir()) / "pdf-creator-previews" / pdf_path.stem
+    preview_dir.mkdir(parents=True, exist_ok=True)
     # Clean stale previews so old/extra pages don't linger after a shorter rerun
     for old in preview_dir.glob("page-*.png"):
         old.unlink()
@@ -608,9 +613,10 @@ def markdown_to_pdf(
         pdf_file: Path to output PDF (optional, defaults to same name as input)
         theme: Theme name (from themes/ directory)
         backend: 'weasyprint', 'chrome', or None (auto-detect)
-        previews: If True (default), auto-generate per-page PNG previews next
-                  to the PDF and print a visual self-check checklist. Disable
-                  with --no-preview for batch / non-interactive runs.
+        previews: If True (default), auto-generate per-page PNG previews under
+                  the system temp dir (NOT next to the PDF, so they never linger
+                  in the repo) and print a visual self-check checklist with their
+                  path. Disable with --no-preview for batch / non-interactive runs.
 
     Returns:
         Path to generated PDF file
