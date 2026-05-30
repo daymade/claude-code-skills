@@ -5,6 +5,8 @@ description: Investigate and resolve Cloudflare configuration issues using API-d
 
 # Cloudflare Troubleshooting
 
+> **Methodology base:** the general evidence-driven network-diagnosis discipline (falsification, layered isolation, counter-review) lives in the **debugging-network-issues** skill. This skill is the Cloudflare *domain* layer on top of it.
+
 ## Core Principle
 
 **Investigate with evidence, not assumptions.** Always query Cloudflare API to examine actual configuration before diagnosing issues. The skill's value is the systematic investigation methodology, not predetermined solutions.
