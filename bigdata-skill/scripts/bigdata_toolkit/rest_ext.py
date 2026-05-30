@@ -7,17 +7,15 @@ KG / chat / watchlists / uploads。一整套 RavenPack 遗留的 ``/v1/*``
 ``client.http.post(endpoint, json)`` 直打这些 endpoint，复用 SDK 的
 JWT 认证 + 代理。
 
-覆盖的 endpoint（运行时坐实可达，POST /v1/<resource>/query 形态）
-----------------------------------------------------------------
-| 方法                         | endpoint                          | 能力           | 验证等级 |
-|------------------------------|-----------------------------------|----------------|----------|
-| events_calendar              | v1/events-calendar/query          | 前瞻财报/电话会日历 | L4 实打 |
-| analyst_estimates            | v1/analyst-estimates/query        | 前瞻一致预期    | L4 实打 |
-| latest_surprise              | v1/latest-surprise/query          | 最近一期财报 surprise | L4 实打 |
-| analyst_ratings              | v1/analyst-ratings/query          | 买卖评级一致    | L4 实打 |
-| price_target                 | v1/price/target/query             | 目标价 consensus | L4 实打 |
-| company_screener             | v1/company-screener/query         | universe 构建   | L4 endpoint 可达 |
-| reporting_period（特殊，见下）| cqs/query-chunks                  | 命中文档财季标签 | L4 实打 |
+覆盖的 endpoint（概览）
+----------------------
+本模块用 ``client.http.post`` 直打 SDK 没封的 ``/v1/*`` 结构化金融数据：前瞻
+（estimates / events-calendar / surprise / ratings / target）、财报三表 + TTM
+指标比率、公司画像、行情、分红、分部营收、entity-sentiment、co-mention、
+company-screener，加 reporting_period 回填（``cqs/query-chunks``，特殊、按 chunk
+计费）。**完整方法清单 + 精确签名 + 验证等级（L3/L4）以
+``references/verified_api_signatures.md`` 为单一权威**——此处只给覆盖范围,不复述
+具体路径与等级（避免改一处漏同步,本周期就因这张复制表漏改过 ratings/target 的等级）。
 
 关键修正（推翻早期 "Bigdata 中文/A股一刀切失效" 结论）
 ------------------------------------------------------
