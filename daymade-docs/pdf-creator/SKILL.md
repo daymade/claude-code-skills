@@ -112,7 +112,7 @@ uv run --with weasyprint scripts/batch_convert.py *.md --theme mobile --output-d
 
 **This is not optional.** After every PDF generation, the script automatically:
 
-1. Converts each page to PNG via `pdftoppm` (poppler-utils) into a `<pdf-name>-preview/` directory next to the PDF
+1. Converts each page to PNG via `pdftoppm` (poppler-utils) into a `<pdf-name>/` subdirectory under the **system temp dir** (NOT next to the PDF — previews are a throwaway self-check artifact and must never linger in your working tree / git repo). The exact path is printed after the run as `Previews: <path>/page-NN.png`
 2. Prints a structured self-check checklist reminding the caller to visually inspect each page
 3. Runs typography lint to detect CJK line-break anti-patterns
 
@@ -123,7 +123,7 @@ uv run --with weasyprint scripts/batch_convert.py *.md --theme mobile --output-d
 - Code block garbling
 - Chrome default headers/footers (if bypassed this skill)
 
-**Workflow**: After running the script, `Read` each `page-NN.png` and verify against the markdown source. If anything renders differently from intent, **fix the markdown** (use `- ` real lists instead of pseudo-lists, insert blank lines, restructure tables) and rerun. The script does NOT silently "fix" non-standard markdown — that would mask the signal that the source is wrong, causing the same markdown to render incorrectly in other processors (Obsidian, GitHub, VS Code preview).
+**Workflow**: After running the script, `Read` each `page-NN.png` at the printed `Previews:` path and verify against the markdown source. If anything renders differently from intent, **fix the markdown** (use `- ` real lists instead of pseudo-lists, insert blank lines, restructure tables) and rerun. The script does NOT silently "fix" non-standard markdown — that would mask the signal that the source is wrong, causing the same markdown to render incorrectly in other processors (Obsidian, GitHub, VS Code preview).
 
 **Disable** with `--no-preview` for batch / non-interactive runs:
 
