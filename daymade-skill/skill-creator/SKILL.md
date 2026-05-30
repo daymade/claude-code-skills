@@ -919,31 +919,29 @@ When editing, remember that the skill is being created for another instance of C
 
 **Pipeline check**: Consider whether this skill's output naturally feeds into another skill. If so, add a "Next Step" handoff section (see "Pipeline Handoff" in the Skill Writing Guide). Also check if any existing skill should chain *into* this one.
 
-### Step 5: Sanitization Review (Optional)
+### Step 5: Sanitization Review (mandatory for any public skill)
 
-Use **AskUserQuestion** before executing this step:
+**Not optional for a skill going to a public repo.** Private content leaks into public skills all the time, and the leaks a scanner misses are the dangerous ones — a real name in a non-English language, a verbatim line from a real transcript, a real example dropped into an illustration. Skip only if the skill is genuinely internal-only.
+
+Use **AskUserQuestion** to confirm the depth (not whether to do it):
 
 ```
-This skill appears to contain content from a real project.
-Before distribution, I should check for business-specific details
-(company names, internal paths, product names) that shouldn't be public.
-
-RECOMMENDATION: Run selective sanitization — review each finding before removing.
+This skill will be public. I'll do a sanitization pass — the core of it is
+me reading the whole skill and judging each name/example/snippet, because
+scanners miss real content that has no keyword to match.
 
 Options:
-A) Full sanitization — automatically remove all business-specific content
-B) Selective sanitization — show me each finding and let me decide (Recommended)
-C) Skip — this is for internal use only, no sanitization needed
+A) Full — I replace everything that looks lifted from a real project/person
+B) Selective — I show you each finding and you decide (Recommended)
+C) This skill is genuinely internal-only — skip
 ```
 
-Skip if: skill was created from scratch for public use, user declines, or skill is for internal use.
+**Sanitization process — the read-through is the method, the scan is a helper:**
 
-**Sanitization process:**
-
-1. **Load the checklist**: Read [references/sanitization_checklist.md](references/sanitization_checklist.md) for detailed guidance
-2. **Run automated scans** to identify potential sensitive content
-3. **Review and replace** each category (product names, person names, entity names, paths, jargon)
-4. **Verify completeness**: Re-run patterns, read through skill, confirm functionality
+1. **Read the entire skill yourself and judge semantically** (this is the real check): SKILL.md + every reference + every example. For each concrete noun / example / snippet ask "generic-placeholder-or-public-entity, or lifted-from-a-real-project/person/transcript?" Replace the latter — even if no scanner flagged it. This is the only thing that catches no-keyword leaks. Full guidance + the semantic question in [references/sanitization_checklist.md](references/sanitization_checklist.md).
+2. **Run scanners as a cheap first pass**: the checklist's grep patterns + `security_scan.py` (Step 6). They catch obvious secrets / paths / known names fast — but "no matches" is not a pass.
+3. **Replace** each finding with a generic equivalent that keeps the teaching point (real name → public figure or `<placeholder>`, real snippet → `<placeholder>`).
+4. **Verify by re-reading, not by re-grepping**: re-read the changed sections and confirm no broken references.
 
 ### Step 6: Security Review
 
@@ -961,6 +959,8 @@ python scripts/security_scan.py <path/to/skill-folder> --verbose
 - Hardcoded secrets (API keys, passwords, tokens) via gitleaks
 - Personal information (usernames, emails, company names) in verbose mode
 - Unsafe code patterns (command injection risks) in verbose mode
+
+**What it does NOT cover** — why Step 5's read-through is still required: gitleaks and the regex rules only match *known secret formats and patterns you listed*. They are structurally blind to private content with no keyword — a real person/project name in a non-English language, a verbatim line from a real transcript, a real example lifted from your own work. A green `security_scan` means "no known-format secret was found", **not** "the skill is sanitized". Never treat it as the latter.
 
 **First-time setup:** Install gitleaks if not present:
 
