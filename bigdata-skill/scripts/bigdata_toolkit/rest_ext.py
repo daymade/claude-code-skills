@@ -14,8 +14,8 @@ JWT 认证 + 代理。
 | events_calendar              | v1/events-calendar/query          | 前瞻财报/电话会日历 | L4 实打 |
 | analyst_estimates            | v1/analyst-estimates/query        | 前瞻一致预期    | L4 实打 |
 | latest_surprise              | v1/latest-surprise/query          | 最近一期财报 surprise | L4 实打 |
-| analyst_ratings              | v1/analyst-ratings/query          | 买卖评级一致    | L3 文档证实 |
-| price_target                 | v1/price/target/query             | 目标价 consensus | L3 文档证实 |
+| analyst_ratings              | v1/analyst-ratings/query          | 买卖评级一致    | L4 实打 |
+| price_target                 | v1/price/target/query             | 目标价 consensus | L4 实打 |
 | company_screener             | v1/company-screener/query         | universe 构建   | L4 endpoint 可达 |
 | reporting_period（特殊，见下）| cqs/query-chunks                  | 命中文档财季标签 | L4 实打 |
 
