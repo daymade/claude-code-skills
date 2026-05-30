@@ -431,25 +431,36 @@ class StructuredDataREST:
         self,
         rp_entity_id: str,
         *,
-        entity_categories: Optional[list[str]] = None,
+        date_range: Optional[dict] = None,
         limit: int = 10,
     ) -> Any:
         """实体共现（co-mention）关系图。``POST v1/search/co-mentions/entities``。
 
         ``results`` 按类别（places / companies / organizations / people /
-        products）分组,每个实体含 ``total_chunks_count`` / ``total_headlines_count``
-        （按共现量排序）—— 用于建供应链 / 竞品 / 客户共现网络。
+        products / concepts）分组,每个实体含 ``total_chunks_count`` /
+        ``total_headlines_count``（按共现量排序）—— 用于建供应链 / 竞品 / 客户
+        共现网络。**要某一类就直接读对应分组**（结果本就按类分好）。
+
+        Parameters
+        ----------
+        date_range:
+            可选,``{"start": "2024-01-01T00:00:00Z", "end": "2024-12-31T23:59:59Z"}``
+            （ANSI date-time + UTC,**带时分秒,非 YYYY-MM-DD**）→ 透传到
+            ``query.filters.timestamp``,看某时间窗内的共现（关系随时间演化）。
 
         ⚠️ **本方法按 chunk 计费**（响应含 ``usage.api_query_units``）,与
-        financials / market-data 那批免费 endpoint 不同。默认 limit 小,
-        contract-tested 2026-05-30（limit=5 一次 ≈ 1 query_unit / 10 chunks）。
+        financials / market-data 那批免费 endpoint 不同,默认 limit 小。
+
+        Notes
+        -----
+        co-mentions/entities 的 body **没有 ``entity_categories`` 参数**（OpenAPI
+        spec 确认；早期版本曾透传它做类别过滤,实测无效、已移除——按类别就直接读
+        返回的分组）。``date_range`` 走 ``query.filters.timestamp``,contract-tested。
         """
-        body: dict[str, Any] = {
-            "query": {"filters": {"entity": {"any_of": [rp_entity_id]}}},
-            "limit": limit,
-        }
-        if entity_categories is not None:
-            body["entity_categories"] = entity_categories
+        filters: dict[str, Any] = {"entity": {"any_of": [rp_entity_id]}}
+        if date_range is not None:
+            filters["timestamp"] = date_range
+        body = {"query": {"filters": filters}, "limit": limit}
         return self.http.post("v1/search/co-mentions/entities", body)
 
     # ================================================================== #
