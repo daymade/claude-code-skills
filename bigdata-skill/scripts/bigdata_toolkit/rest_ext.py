@@ -234,8 +234,7 @@ class StructuredDataREST:
         """买卖评级一致。``POST v1/analyst-ratings/query``。
 
         文档：返回 strong_buy/buy/hold/sell/strong_sell + consensus。
-        ⚠️ 验证等级 L3（llms.txt 索引 + schema 确认存在，受预算未实打活数据）。
-        endpoint 路径以文档为准，若 404 查 docs.bigdata.com/llms.txt。
+        验证等级 L4（2026-05-31 实跑确认返回 ``{results}``，升自 L3）。
         identifier 形态同 analyst_estimates（spec 确认的 identifier 对象）。
         """
         body = {"identifier": {"type": "rp_entity_id", "value": rp_entity_id}}
@@ -250,7 +249,7 @@ class StructuredDataREST:
         文档：返回 target high/low/consensus/median + currency。
         ⚠️ A 股有空洞：部分 A 股只返回 entity 无 target 数值（美股如 AAPL
         则完整返回 target high/low/consensus 数值）。
-        ⚠️ 验证等级 L3。identifier 形态同 analyst_estimates（spec 确认的 identifier 对象）。
+        验证等级 L4（2026-05-31 实跑，升自 L3）。identifier 形态同 analyst_estimates（spec 确认的 identifier 对象）。
         """
         body = {"identifier": {"type": "rp_entity_id", "value": rp_entity_id}}
         return self.http.post("v1/price/target/query", body)
