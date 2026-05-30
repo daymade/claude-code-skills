@@ -127,11 +127,12 @@ Skills for public distribution must NOT contain:
 - OneDrive paths or environment-specific absolute paths
 - Use relative paths within skill bundle or standard placeholders (`<workspace>/`, `<user_id>`)
 
-**Four-layer defense system:**
+**Five-layer defense system:**
 1. **CLAUDE.md rules** (this section) — Claude avoids generating sensitive content
 2. **Global PII Guard pre-commit hook** (`~/scripts/git-pii-guard/pre-commit`) — blocks staged PII/secrets and generated/local artifact paths
 3. **Global PII Guard pre-push hook** (`~/scripts/git-pii-guard/pre-push`) — scans commits about to be pushed, catching bad local history before it hits GitHub
 4. **gitleaks** (`.gitleaks.toml`) — deep scan with custom rules for this repo
+5. **AI semantic read-through** (the gate the other four structurally cannot be) — layers 1-4 are keyword/regex/gitleaks: they only match patterns someone listed, and are blind to private content with **no keyword** — a real name in another language (gitleaks doesn't cover CJK), a verbatim line from a real transcript, a real example dropped into an illustration. Before publishing, **read the whole skill yourself and judge each concrete name/example/snippet semantically** ("generic placeholder / public entity, or lifted from a real project / person / transcript?"). A green scan is **not** a clean bill of health; "grep found nothing" only means your word list didn't fire. Method: [`daymade-skill/skill-creator/references/sanitization_checklist.md`](./daymade-skill/skill-creator/references/sanitization_checklist.md).
 
 PII Guard is enabled via `~/scripts/git-pii-guard/manage.sh enable <repo-path>`, which sets `core.hooksPath` to `~/scripts/git-pii-guard`.
 For repo-specific additions:
