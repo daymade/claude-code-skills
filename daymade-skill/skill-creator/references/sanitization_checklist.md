@@ -2,16 +2,28 @@
 
 When extracting a skill from a business project for public distribution, systematically remove all business-specific content to make it generic and reusable.
 
+## The rule that matters most: read it yourself, don't just grep
+
+Scanners — gitleaks, the grep patterns below, `security_scan.py` — only match what you **thought to list**: known secret formats, a name list you wrote, specific path shapes. They are blind to the most dangerous leak of all: **real content with no proper noun to catch.** A verbatim spoken line from a real transcript (a casual aside with no name in it), a specific real-world example dropped into an illustration, a real meeting or project mentioned in passing, a codename you simply forgot to add to the word list — none of these have a keyword for grep to hit, so every scanner sails right past them.
+
+The primary sanitization method is therefore **you reading the entire skill** — SKILL.md, every reference file, every example, every bundled doc — and judging each concrete noun, example, and snippet semantically:
+
+> "Does this read like a generic placeholder or a public entity (Claude, GitHub, LangChain, `<project>`), or like it was lifted from a real project / person / transcript?"
+
+Anything in the second category gets replaced — **even if no scanner flagged it.**
+
+**"grep returned no matches" is not a clean bill of health.** It only means the word list you guessed didn't fire. Run the scanners below as a cheap first pass for the obvious stuff, then do the read-through as the actual gate. If you only do one, do the read-through.
+
 ## Quick Scan Commands
 
 Run these grep patterns to identify potential sensitive content:
 
 ```bash
 # Business/product names (case-insensitive)
-grep -rniE "mercury|portal|underwriting|glean|[company-name]|[product-name]" skill-folder/
+grep -rniE "acme|globex|[company-name]|[product-name]" skill-folder/
 
 # Person names (look for capitalized names)
-grep -rniE "\b(Oliver|John|Alice|Bob|建斌|小明)\b" skill-folder/
+grep -rniE "\b(Carol|John|Alice|Bob|小华|小明)\b" skill-folder/
 
 # Absolute paths and usernames
 grep -rniE "/Users/|/home/|/mnt/c/Users|OneDrive|username" skill-folder/
@@ -28,9 +40,9 @@ grep -rniE "ultrathink|internal-only|confidential" skill-folder/
 ### 1. Product and Project Names
 
 **What to find:**
-- Project codenames (e.g., "Mercury Prepared", "Project Phoenix")
-- Internal product names (e.g., "Reviewer Portal", "Admin Dashboard")
-- Tool-specific names (e.g., "Glean Gemini" → just "Gemini")
+- Project codenames (e.g., "Acme Prepared", "Project Phoenix")
+- Internal product names (e.g., "Ops Console", "Admin Dashboard")
+- Tool-specific names (e.g., "Globex Gemini" → just "Gemini")
 
 **How to replace:**
 - Use generic terms: "the system", "the application", "the service"
@@ -40,7 +52,7 @@ grep -rniE "ultrathink|internal-only|confidential" skill-folder/
 ### 2. Person Names
 
 **What to find:**
-- Real employee names in examples: "Oliver will handle...", "建斌你来..."
+- Real employee names in examples: "Carol will handle...", "小华你来..."
 - Team member references in action items
 - Author attributions that reveal identity
 
@@ -65,7 +77,7 @@ grep -rniE "ultrathink|internal-only|confidential" skill-folder/
 
 **What to find:**
 - Team-specific folders: `10-team-collaboration/Meeting Minutes`
-- Project-specific paths: `reviewer-portal-api-design`
+- Project-specific paths: `ops-console-api-design`
 - Environment-specific paths: user home directory project paths
 
 **How to replace:**
@@ -77,7 +89,7 @@ grep -rniE "ultrathink|internal-only|confidential" skill-folder/
 
 **What to find:**
 - Internal slang: "ultrathink", "deep dive session"
-- Company-specific processes: "Mercury standup", "Portal review"
+- Company-specific processes: "Acme standup", "Portal review"
 - Abbreviations without context: "MP", "RP", "UW"
 
 **How to replace:**
@@ -114,7 +126,7 @@ grep -rniE "ultrathink|internal-only|confidential" skill-folder/
 **What to find:**
 - Internal APIs: `POST /evaluate (push to Risk Model)`
 - Company-specific integrations: "Sync with Underwriting system"
-- Internal tool names: "Glean search", "Internal Wiki"
+- Internal tool names: "Globex search", "Internal Wiki"
 
 **How to replace:**
 - Use generic services: `POST /process (send to External Service)`
@@ -139,19 +151,19 @@ For each match:
 3. Check if replacement maintains meaning
 4. Verify no broken references
 
-### Phase 3: Verification
+### Phase 3: Verification (the read-through is the real gate)
 
 After sanitization:
-1. Re-run all grep patterns - should return no matches
-2. Read through skill to ensure coherence
-3. Test skill functionality still works
-4. Have someone unfamiliar with the original project review
+1. **Read the whole skill again yourself** — SKILL.md + every reference + every example — re-asking the semantic question above on each concrete noun and snippet. This is what catches the no-keyword leaks (a verbatim transcript line, a real spoken example) that scanners structurally cannot see. **This step, not the grep, is what "passes" sanitization.**
+2. Re-run the grep patterns + `security_scan.py` as a secondary check — but read "no matches" as "the obvious stuff is gone", never as "it's clean"
+3. Test skill functionality still works (no broken references after replacements)
+4. If you can, have a fresh reader — a person, or a subagent with no prior context — read it cold; fresh eyes catch what you've already read past
 
 ## Common Pitfalls
 
 | Pitfall | Solution |
 |---------|----------|
-| Over-sanitizing generic terms | "reviewer" as a role is fine; "Reviewer Portal" is not |
+| Over-sanitizing generic terms | "reviewer" as a role is fine; "Ops Console" is not |
 | Breaking examples by removing context | Replace with equivalent generic examples |
 | Leaving orphaned references | Check all cross-references after renaming |
 | Inconsistent replacements | Use find-and-replace for consistency |
