@@ -74,8 +74,8 @@ Identifier-bearing endpoints use `{"identifier": {"type": "rp_entity_id",
 | `events_calendar(id?, *, categories, start_date, end_date, countries?, limit=5, cursor?)` | `v1/events-calendar/query` | forward earnings/call calendar; pass no entity + `countries` + window to scan the whole market | **L4** |
 | `analyst_estimates(id, *, period='quarter', limit=5)` | `v1/analyst-estimates/query` | forward consensus: REVENUE/EBITDA/EBIT/NET_INCOME/SGA/EPS LOW/HIGH/AVG + analyst counts, by fiscal period | **L4** |
 | `latest_surprise(id)` | `v1/latest-surprise/query` | most recent reporting_date + eps/revenue actual vs estimated + surprise_pct (single latest period only) | **L4** |
-| `analyst_ratings(id)` | `v1/analyst-ratings/query` | strong_buy/buy/hold/sell/strong_sell + consensus | **L3** |
-| `price_target(id)` | `v1/price/target/query` | target high/low/consensus/median + currency | **L3** |
+| `analyst_ratings(id)` | `v1/analyst-ratings/query` | strong_buy/buy/hold/sell/strong_sell + consensus | **L4** |
+| `price_target(id)` | `v1/price/target/query` | target high/low/consensus/median + currency | **L4** |
 | `company_screener(*, market_cap_more_than, sector, industry, country, exchange, is_etf, limit, **extra)` | `v1/company-screener/query` | universe construction | **L4** (filters nested under `filters`, verified) |
 | `income_statement(id, *, period, limit)` | `v1/income-statement/query` | income statement fields (REVENUE/GROSS_PROFIT/EBITDA/EBIT/NET_INCOME…), `{fields,values}` | **L4** |
 | `balance_sheet(id, *, period, limit)` | `v1/balance-sheet/query` | balance sheet (TOTAL_ASSETS/TOTAL_DEBT/NET_DEBT/EQUITY…), `{fields,values}` | **L4** |
