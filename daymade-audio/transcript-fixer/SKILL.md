@@ -49,7 +49,7 @@ Two-phase pipeline with persistent learning:
 5. **Save stable patterns**: `--add "错误词" "正确词"` after each session
 6. **Review learned patterns**: `--review-learned` and `--approve` high-confidence suggestions
 
-**Domains**: `general`, `embodied_ai`, `finance`, `medical`, or custom (e.g., `火星加速器`)
+**Domains**: `general`, `embodied_ai`, `finance`, `medical`, or custom (e.g., `legal`, `gaming`)
 **Learning**: Patterns appearing ≥3 times at ≥80% confidence auto-promote from AI to dictionary
 
 **After fixing, always save reusable corrections to dictionary.** This is the skill's core value — see `references/iteration_workflow.md` for the complete checklist.
@@ -61,9 +61,9 @@ After native AI correction, review all applied fixes and decide which to save. U
 | Pattern type | Example | Action |
 |-------------|---------|--------|
 | Non-word → correct term | 克劳锐→Claude, cloucode→Claude Code | ✅ Add (zero false positive risk) |
-| Rare word → correct term | 潜彩→前采, 维星→韦青 | ✅ Add (verify it's not a real word first) |
-| Person/company name ASR error | 宋天航→宋天生, 策马攀山→策马看山 | ✅ Add (stable, unique) |
-| Common word → context word | 争→蒸, 钱财→前采, 报纸→标品 | ❌ Skip (high false positive risk) |
+| Rare word → correct term | 拉行链→LangChain, 哈金费斯→Hugging Face | ✅ Add (verify it's not a real word first) |
+| Person/company name ASR error | 卡帕西→Karpathy, Anthropics→Anthropic | ✅ Add (stable, unique) |
+| Common word → context word | 争→蒸, affect→effect | ❌ Skip (high false positive risk) |
 | Real brand → different brand | Xcode→Claude Code, Clover→Claude | ❌ Skip (real words in other contexts) |
 
 Batch add multiple corrections in one session:
@@ -150,8 +150,8 @@ uv run scripts/fix_transcript_timestamps.py meeting.txt --in-place
 **Split transcript into sections** (rebase each to `00:00:00`):
 ```bash
 uv run scripts/split_transcript_sections.py meeting.txt \
-  --first-section-name "课前聊天" \
-  --section "正式上课::好，无缝切换嘛。" \
+  --first-section-name "intro" \
+  --section "main::<verbatim line that starts the next section>" \
   --rebase-to-zero
 ```
 
