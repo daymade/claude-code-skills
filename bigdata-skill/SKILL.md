@@ -18,13 +18,15 @@ description: >-
 
 # Bigdata.com SDK + REST Toolkit
 
-Get the data the Bigdata.com MCP server hides. The MCP is a **lossy wrapper**:
-it returns clean prose but strips the machine-readable layer (per-chunk
-sentiment, entity spans) and exposes none of the `/v1/*` structured-financial
-endpoints. The official `bigdata-client` SDK plus a thin REST escape hatch over
-the *same backend, same JWT* recover all of it. This skill bundles a toolkit
-that does exactly that — already debugged, already cost-guarded — so you don't
-re-pay the discovery cost.
+Get the structured substrate the Bigdata.com MCP server doesn't hand over. The
+MCP returns clean prose and pre-synthesized tearsheets, but its search tool
+gives chunks with no per-chunk sentiment or entity spans, and its tearsheets
+give aggregate values — not the fiscal-period time series, universe screener, or
+per-field JSON you'd build a pipeline on. The official `bigdata-client` SDK plus
+a thin REST passthrough over the *same backend, same JWT* reach the official
+`/v1/*` endpoints that hold it. This skill bundles a toolkit that does exactly
+that — already debugged, already cost-guarded — so you don't re-pay the
+discovery cost.
 
 ## The core problem this solves (read this first)
 
@@ -220,8 +222,8 @@ reproductions and fixes in **`references/known_pitfalls.md`**:
 3. **The 52x doc-limit billing trap** → always `ChunkLimit`, never a bare `int`.
 4. **Closure capture in loops** → bind loop vars: `rc(lambda q=q, dr=dr: ...)`.
 5. **`analyst_estimates(period="quarter")` 400s above `limit≈20`.**
-6. **`company_screener` filters are flat top-level keys**, not nested under
-   `"filters"` (nesting 400s).
+6. **`company_screener` filters must nest under `"filters"`** — flat top-level
+   keys don't 400, they're silently dropped → unfiltered universe.
 7. **`Document.reporting_period` is always `None`** (the SDK model drops a field
    present on the REST wire) → `fetch_reporting_period_raw`.
 
