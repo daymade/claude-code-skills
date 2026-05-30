@@ -488,8 +488,11 @@ class BatchSearch:
     证据流回填）—— N 个 search 打成一个 batch，单价从 ``$0.015`` 降到
     ``$0.0075`` / query_unit。
 
-    流程（contract-tested 2026-05-30: ``create_job`` / ``get_status`` = L4 实打；
-    ``upload_input`` / ``download_results`` 端到端待用时验）::
+    流程（2026-05-31 contract-tested：``create_job`` / ``upload_input`` /
+    ``get_status`` 轮询 = **L4 实跑**（含 upload 的 Content-Type 403 bug 修复，
+    实测状态流转 pending→processing）；``download_results`` 是标准 S3 GET，因
+    smart batch 处理 >10min 未跑到 completed 而**未端到端验**——用时若异常照本
+    docstring 自查）::
 
         bs = BatchSearch(client)
         job = bs.create_job()                              # {batch_id, presigned_url}
@@ -536,19 +539,37 @@ class BatchSearch:
     def upload_input(presigned_url: str, jsonl_text: str) -> int:
         """PUT .jsonl 到 ``create_job`` 返回的 presigned_url（S3，非 Bigdata API）。
 
-        ⚠️ 走裸 ``requests``（presigned 是 S3 URL，不经 Bigdata 认证层）；
-        ``requests`` 默认读 ``HTTPS_PROXY`` env，中国网络环境会自动走代理。
+        ⚠️ **Content-Type 必须匹配 presigned 签名**：URL query 的 ``content-type``
+        参数（实测后端签的是 ``application/jsonl``）正是 S3 计算签名用的值，PUT
+        必须带完全相同的 Content-Type，否则 ``403 SignatureDoesNotMatch``。这里从
+        URL query 解析出来用上，不写死（后端若换 type 也跟得上）。contract-tested
+        2026-05-31。
+        ⚠️ 走裸 ``requests``（presigned 是 S3 直连签名 URL，不经 Bigdata 认证层）；
+        ``requests`` 读 ``HTTPS_PROXY`` 走代理，代理对 S3 大 host 偶发 ``503 Tunnel``，
+        故内置瞬时重试（``rc()`` 的 marker 大小写匹配不到 ``ProxyError``，单独处理）。
         """
+        import time
+        import urllib.parse
+
         import requests
 
-        resp = requests.put(
-            presigned_url,
-            data=jsonl_text.encode("utf-8"),
-            headers={"Content-Type": "application/octet-stream"},
-            timeout=120,
-        )
-        resp.raise_for_status()
-        return resp.status_code
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(presigned_url).query)
+        content_type = qs.get("content-type", ["application/jsonl"])[0]
+        last_exc: Optional[Exception] = None
+        for _ in range(5):
+            try:
+                resp = requests.put(
+                    presigned_url,
+                    data=jsonl_text.encode("utf-8"),
+                    headers={"Content-Type": content_type},
+                    timeout=120,
+                )
+                resp.raise_for_status()
+                return resp.status_code
+            except requests.exceptions.ProxyError as exc:
+                last_exc = exc  # 代理对 S3 偶发 503 Tunnel，退避重试
+                time.sleep(2)
+        raise last_exc  # type: ignore[misc]
 
     @staticmethod
     def download_results(output_file_url: str) -> list[dict]:
