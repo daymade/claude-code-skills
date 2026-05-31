@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.60.0] - 2026-05-31
+
 ### Added
-- **pdf-creator** v1.6.0: Add `cjk-auto` theme for content-driven table layouts. Based on `default` theme but uses `table-layout: auto` so column widths adapt to actual cell content rather than equal distribution. Best for tables with highly uneven column lengths (course schedules, itemized lists) where fixed equal-width would force CJK mid-breaks. Previously only existed in local cache; now bundled in version control so skill upgrades no longer lose it.
+- **auto-repo-setup** v1.0.0: Automated repository environment configuration, fault diagnosis, and repair for non-technical users. Reads ONBOARDING.md, audits environment gaps, installs missing dependencies, validates with smoke tests, and safely handles git operations with PII Guard and Push Safety. Includes SessionStart hook initialization, counter-review workflows, and git history sanitization.
+
+## [1.56.0] - 2026-05-24
 
 ## [1.56.0] - 2026-05-24
 
