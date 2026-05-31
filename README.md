@@ -2135,6 +2135,28 @@ Transcribe Chinese / English audio with `stepaudio-2.5-asr`. Hides the #1 trap o
 
 ---
 
+### 53. **hermes-supercode-skills** - Production-Grade Claude Code Skills Collection
+
+> **Install**: `npx hermes-skills install`
+
+13 production-grade Claude Code skills for backend engineering, security, observability, and deployment workflows.
+
+**When to use:**
+- Setting up database query optimization workflows (`db-whisperer`)
+- Implementing auth patterns and security review (`auth-architect`, `security-sentinel`)
+- Adding observability, alerting, and tracing (`obs-guardian`)
+- Automating deployment pipelines (`deploy-ninja`, `infra-automation`)
+- Debugging complex multi-service issues (`quantum-debugger`)
+- Designing and reviewing REST/GraphQL APIs (`api-sculptor`)
+
+**Key features:**
+- 13 specialist skills: db-whisperer · auth-architect · obs-guardian · deploy-ninja · quantum-debugger · security-sentinel · api-sculptor · pipeline-architect · ghost-scraper · mcp-conductor · prediction-alpha · prompt-forge · infra-automation
+- One-command install via npx
+- npm: [hermes-skills](https://www.npmjs.com/package/hermes-skills)
+- GitHub: [mturac/hermes-supercode-skills](https://github.com/mturac/hermes-supercode-skills)
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
