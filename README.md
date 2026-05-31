@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-52-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-53-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.52.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -14,7 +14,7 @@
 
 </div>
 
-Professional Claude Code skills marketplace featuring 52 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 53 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2132,6 +2132,40 @@ Transcribe Chinese / English audio with `stepaudio-2.5-asr`. Hides the #1 trap o
 - Suggests `transcript-fixer` (ASR error correction) and `meeting-minutes-taker` (structured minutes) as natural downstream skills
 
 **Requirements**: StepFun API key, "Normal" tier (https://platform.stepfun.com/). Plan keys cannot call audio endpoints.
+
+---
+
+### 53. **auto-repo-setup** - Automated Repository Setup & Environment Repair
+
+Turn "it won't run" into "it's running" without requiring users to understand git, uv, ffmpeg, or API keys. Designed for non-technical teammates (editors, business, ops) who need to clone a repo and get it working — and for technical users who want standardized, handoff-ready project onboarding.
+
+**When to use:**
+- A non-technical user says "跑不起来", "怎么启动", "环境怎么配", or "帮我设置代码库"
+- Setting up a new machine or onboarding a teammate to a codebase
+- Configuring SessionStart hooks so Claude Code auto-checks environment on entry
+- Sanitizing git history after accidental secret/path leaks
+- Handling merge conflicts or git push failures for users who don't use git daily
+
+**Key features:**
+- **ONBOARDING.md-first workflow**: reads the project's guide, validates each step, fixes gaps iteratively
+- **SessionStart hook generator**: one-command `init_session_start_hook.py` sets up auto-environment-check on every Claude Code session entry
+- **Safety guardrails**: Push Safety (visibility verification before any push), PII Guard (4-layer secret scanning), NO FALLBACK principle for env vars, Git Hook Bypass ban
+- **Counter-review workflow**: multi-agent security/code-quality/devops/doc review for significant changes
+- **Bundled scripts**: `check_env.py` (audit git/ffmpeg/uv/python/.env), `sanitize_history.sh` (scan history for secrets/paths/domains), `init_session_start_hook.py`
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install auto-repo-setup@daymade-skills
+
+# Then ask Claude naturally
+"我跑不起来这个仓库"
+"帮我设置一下这个项目的环境"
+"初始化 SessionStart hook"
+"git push 被拒了"
+```
+
+**Requirements**: Python 3.8+, `uv` package manager. No external API keys required for the skill itself.
 
 ---
 
