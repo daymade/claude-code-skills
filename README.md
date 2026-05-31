@@ -2137,6 +2137,31 @@ Transcribe Chinese / English audio with `stepaudio-2.5-asr`. Hides the #1 trap o
 
 ## 🎬 Interactive Demo Gallery
 
+
+### 53. **google-maps-agent-skills** - Google Maps Lead Generation
+
+> **Install**: `npx skills add gmapsscraper/google-maps-agent-skills/google-maps-scraper`
+
+8-skill collection for Google Maps lead generation. Scrape businesses, extract emails, find local leads, analyze competitors, and write cold outreach — all from your AI agent.
+
+**When to use:**
+- Finding local businesses by category and location
+- Extracting business emails and phone numbers from Google Maps
+- Building qualified lead lists with scoring
+- Writing personalized cold emails to local businesses
+- Analyzing local competitors (ratings, reviews, market gaps)
+- Exporting data to CSV/JSON/HubSpot/Pipedrive
+
+**Key features:**
+- Auto-geocoding: say "dentist in Miami" — no coordinates needed
+- Two-layer design: paid skills scrape fresh data, free skills process existing CSV
+- Credit confirmation before each API call (2 credits/search)
+- Supports 11 agent platforms (Claude Code, Codex, Gemini CLI, Kiro, OpenCode...)
+- 8 independent skills: google-maps-scraper, google-maps-leads, local-business-finder, business-email-extractor, google-maps-export, cold-email-local-business, competitor-analysis-local, google-maps-reviews-scraper
+
+**Requirements**: API key from https://gmapsscraper.io (free tier: 10 credits / 5 searches)
+
+---
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
 
 ## 🎯 Use Cases
