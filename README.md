@@ -2169,6 +2169,38 @@ claude plugin install auto-repo-setup@daymade-skills
 
 ---
 
+### 54. **bloom-tutor** - Interactive Socratic Learning System
+
+A one-on-one AI tutor based on Benjamin Bloom's "2 Sigma Problem" (1984). Each subject becomes a self-contained folder, and the tutor adaptively generates **one course document at a time**, waiting for your written feedback before producing the next — simulating a personal Socratic tutor that drives learning toward +2σ mastery. Documents are the primary vehicle; conversation only confirms state. Responds in Chinese.
+
+**When to use:**
+- Start a new course on any topic ("开个文件夹学 X", "我想学 X", "帮我学 X")
+- Advance to the next article ("继续", "下一篇")
+- Submit learning feedback or signal completion ("我读完了")
+- Review or organize the learning log ("查看学习日志", "整理学习")
+
+**Key features:**
+- **One-document-at-a-time pacing**: never batch-generates; each doc waits for feedback, so the path adapts to your actual understanding
+- **Feedback loop**: re-reads all prior docs + your in-doc feedback + every `???` marker before generating the next
+- **Adaptive syllabus**: a new course produces `syllabus.md` + first article `01.md` in the same turn, then re-plans as you learn
+- **Progressive learning log**: tracks overall state in a root `learning-log.jsonl`, loaded incrementally
+- **Auto-summary gate**: `summary.md` is generated only after all mastery items are complete — never on demand
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install bloom-tutor@daymade-skills
+
+# Then ask Claude naturally
+"我想系统学一下强化学习"
+"继续"
+"我读完了，第二节那个公式没太懂"
+```
+
+**Requirements**: None. Pure prompt-based skill (`SKILL.md` + `references/`); no scripts or API keys.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).

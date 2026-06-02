@@ -830,6 +830,26 @@
         "role-model",
         "竞品对标"
       ]
+    },
+    {
+      "name": "bloom-tutor",
+      "description": "Interactive one-on-one Socratic tutoring system based on Benjamin Bloom's '2 Sigma Problem' (1984). Each subject is a self-contained folder; the tutor adaptively generates one course document at a time, waits for the learner's written feedback in the doc, then iterates toward +2σ mastery. Documents (syllabus + numbered articles + an auto-generated summary) are the primary learning vehicle — conversation only confirms state. Strict guardrails enforce one-document-at-a-time pacing, mandatory re-reading of prior docs and feedback before generating the next, and progressive loading of a JSONL learning log. Use when the user wants to systematically learn a topic with a personal AI tutor: start a new course, advance to the next article, submit learning feedback or say 'I finished reading', or review the learning log. Responds in Chinese.",
+      "source": "./bloom-tutor",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "learning",
+        "tutoring",
+        "socratic-method",
+        "education",
+        "bloom-2-sigma",
+        "spaced-learning",
+        "苏格拉底",
+        "交互式学习",
+        "个性化辅导",
+        "claude-code"
+      ]
     }
   ]
 }
