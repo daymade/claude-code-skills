@@ -16,6 +16,7 @@ import os
 import sys
 import subprocess
 import argparse
+import plistlib
 from pathlib import Path
 
 
@@ -45,24 +46,73 @@ def get_dir_size(path):
         return 0
 
 
+def get_bundle_identifier(app_path):
+    """Read CFBundleIdentifier from an app bundle when available."""
+    info_plist = app_path / 'Contents' / 'Info.plist'
+    try:
+        with info_plist.open('rb') as f:
+            info = plistlib.load(f)
+    except Exception:
+        return None
+
+    bundle_id = info.get('CFBundleIdentifier')
+    if isinstance(bundle_id, str) and bundle_id.strip():
+        return bundle_id.strip()
+    return None
+
+
+def _empty_installed_apps():
+    return {
+        'names': set(),
+        'bundle_ids': set(),
+    }
+
+
+def _coerce_installed_apps(installed_apps):
+    if isinstance(installed_apps, dict):
+        return {
+            'names': set(installed_apps.get('names', set())),
+            'bundle_ids': set(installed_apps.get('bundle_ids', set())),
+        }
+    return {
+        'names': set(installed_apps),
+        'bundle_ids': set(),
+    }
+
+
+def _add_app_bundle(installed_apps, app_path):
+    installed_apps['names'].add(app_path.stem)
+    bundle_id = get_bundle_identifier(app_path)
+    if bundle_id:
+        installed_apps['bundle_ids'].add(bundle_id)
+
+
+def _matches_bundle_identifier(dir_name, bundle_id):
+    dir_lower = dir_name.lower()
+    bundle_lower = bundle_id.lower()
+    if dir_lower == bundle_lower or dir_lower.startswith(bundle_lower + '.'):
+        return True
+
+    return normalize_name(dir_name) == normalize_name(bundle_id)
+
+
 def get_installed_apps():
-    """Get list of installed application names."""
-    apps = set()
+    """Get installed application names and bundle identifiers."""
+    apps = _empty_installed_apps()
 
     # System applications
     system_app_dir = Path('/Applications')
     if system_app_dir.exists():
         for app in system_app_dir.iterdir():
             if app.suffix == '.app':
-                # Remove .app suffix
-                apps.add(app.stem)
+                _add_app_bundle(apps, app)
 
     # User applications
     user_app_dir = Path.home() / 'Applications'
     if user_app_dir.exists():
         for app in user_app_dir.iterdir():
             if app.suffix == '.app':
-                apps.add(app.stem)
+                _add_app_bundle(apps, app)
 
     return apps
 
@@ -94,12 +144,22 @@ def is_likely_orphaned(dir_name, installed_apps):
         (is_orphaned, confidence, reason)
         confidence: 'high' | 'medium' | 'low'
     """
+    installed = _coerce_installed_apps(installed_apps)
     norm_dir = normalize_name(dir_name)
 
-    # Check exact matches
-    for app in installed_apps:
+    # Bundle identifiers are common in Containers and Saved Application State.
+    for bundle_id in installed['bundle_ids']:
+        if _matches_bundle_identifier(dir_name, bundle_id):
+            return (
+                False,
+                None,
+                f"Matches installed app bundle identifier: {bundle_id}"
+            )
+
+    # Check display-name matches.
+    for app in installed['names']:
         norm_app = normalize_name(app)
-        if norm_app in norm_dir or norm_dir in norm_app:
+        if norm_app and (norm_app in norm_dir or norm_dir in norm_app):
             return (False, None, f"Matches installed app: {app}")
 
     # System/common directories to always keep
@@ -124,7 +184,7 @@ def analyze_library_dir(library_path, min_size_bytes, installed_apps):
     Args:
         library_path: Path to scan (e.g., ~/Library/Application Support)
         min_size_bytes: Minimum size to report
-        installed_apps: Set of installed app names
+        installed_apps: Dict with installed app names and bundle identifiers
 
     Returns:
         List of (name, path, size, confidence, reason) tuples
@@ -180,7 +240,10 @@ def main():
     # Get installed apps
     print("Scanning installed applications...")
     installed_apps = get_installed_apps()
-    print(f"Found {len(installed_apps)} installed applications\n")
+    print(
+        f"Found {len(installed_apps['names'])} installed applications "
+        f"and {len(installed_apps['bundle_ids'])} bundle identifiers\n"
+    )
 
     # Directories to check
     library_dirs = {

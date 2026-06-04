@@ -18,6 +18,63 @@ import subprocess
 from pathlib import Path
 
 
+def _canonical_path(path):
+    """Return a canonical path for safety comparisons."""
+    return Path(os.path.realpath(os.path.expanduser(str(path))))
+
+
+ROOT_PATH = _canonical_path('/')
+
+HIGH_RISK_PATHS = frozenset(
+    _canonical_path(path)
+    for path in [
+        '/System',
+        '/Library/Apple',
+        '/usr',
+        '/bin',
+        '/sbin',
+        '/etc',
+        '/private/var/db',
+        '~/.ssh',
+        '~/.aws',
+        '~/.gnupg',
+        '~/Library/Keychains',
+    ]
+)
+
+
+def _is_same_or_child(path, parent):
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def get_high_risk_match(path):
+    """Return the denied ancestor path when path is too dangerous to delete."""
+    canonical = _canonical_path(path)
+    if canonical == ROOT_PATH:
+        return ROOT_PATH
+
+    for denied_path in HIGH_RISK_PATHS:
+        if _is_same_or_child(canonical, denied_path):
+            return denied_path
+    return None
+
+
+def is_high_risk_path(path):
+    """Check whether a path is blocked by the forced-delete denylist."""
+    return get_high_risk_match(path) is not None
+
+
+def format_blocked_message(path, denied_path):
+    return (
+        "BLOCKED: high-risk path refused by safety denylist "
+        f"({path} matches or is inside {denied_path})"
+    )
+
+
 def format_size(bytes_size):
     """Convert bytes to human-readable format."""
     for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
@@ -86,6 +143,12 @@ def confirm_delete(path, size, description):
     Returns:
         True if user confirms, False otherwise
     """
+    denied_path = get_high_risk_match(path)
+    if denied_path:
+        print(f"\n⛔ {format_blocked_message(path, denied_path)}")
+        print("   Refusing to ask for confirmation for this target.")
+        return False
+
     print(f"\n🗑️  Confirm Deletion")
     print("━" * 50)
     print(f"Path:        {path}")
@@ -180,6 +243,10 @@ def delete_path(path):
         (success, message)
     """
     try:
+        denied_path = get_high_risk_match(path)
+        if denied_path:
+            return (False, format_blocked_message(path, denied_path))
+
         path_obj = Path(path)
 
         if not path_obj.exists():
@@ -237,6 +304,17 @@ def main():
     if not paths:
         parser.print_help()
         return 1
+
+    # Block high-risk paths before sizing or confirmation.
+    allowed_paths = []
+    for path in paths:
+        denied_path = get_high_risk_match(path)
+        if denied_path:
+            print(f"⛔ {format_blocked_message(path, denied_path)}")
+        else:
+            allowed_paths.append(path)
+
+    paths = allowed_paths
 
     # Prepare items
     items = []
