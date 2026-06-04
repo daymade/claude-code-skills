@@ -35,11 +35,20 @@ If uncertain about safety: **DON'T DELETE**.
 
 Ask user to verify instead.
 
-### Rule 4: Suggest Backups for Large Deletions
+### Rule 4: High-Risk Paths Are Hard Blocks
+
+`safe_delete.py` must refuse dangerous system and credential paths before confirmation and inside the delete function. A warning is not enough for:
+- `/`, `/System`, `/usr`, `/bin`, `/etc`
+- `~/.ssh`, `~/.aws`, `~/.gnupg`
+- `~/Library/Keychains`
+
+These paths and their descendants are blocked even when the user selects `all` in batch mode.
+
+### Rule 5: Suggest Backups for Large Deletions
 
 Before deleting >10 GB, recommend Time Machine backup.
 
-### Rule 5: Docker Prune Prohibition
+### Rule 6: Docker Prune Prohibition
 
 **NEVER use any Docker prune command.** This includes:
 - `docker image prune` / `docker image prune -a`
@@ -61,7 +70,7 @@ docker rm container-name-1 container-name-2
 docker volume rm project-mysql-data project-redis-data
 ```
 
-### Rule 6: Double-Check Verification Protocol
+### Rule 7: Double-Check Verification Protocol
 
 Before deleting ANY Docker object, perform independent cross-verification. This applies to images, volumes, and containers.
 
@@ -73,7 +82,7 @@ Before deleting ANY Docker object, perform independent cross-verification. This 
 
 See **SKILL.md Step 4** for the complete verification commands and database volume inspection workflow.
 
-### Rule 7: Use Trash When Possible
+### Rule 8: Use Trash When Possible
 
 Prefer moving to Trash over permanent deletion:
 
@@ -93,7 +102,7 @@ rm -rf /path/to/file
 |------|-----|-------------------|
 | `/System` | macOS core | System unbootable |
 | `/Library/Apple` | Apple frameworks | Apps won't launch |
-| `/private/etc` | System config | System unstable |
+| `/etc`, `/private/etc` | System config | System unstable |
 | `/private/var/db` | System databases | System unstable |
 | `/usr` | Unix utilities | Commands won't work |
 | `/bin`, `/sbin` | System binaries | System unusable |
@@ -114,6 +123,8 @@ rm -rf /path/to/file
 | Path | Why | Impact if Deleted |
 |------|-----|-------------------|
 | `~/.ssh` | SSH keys | Cannot access servers |
+| `~/.aws` | Cloud credentials | Cannot access cloud resources |
+| `~/.gnupg` | GPG keys | Cannot decrypt or sign data |
 | `~/Library/Keychains` | Passwords, certificates | Cannot access accounts/services |
 | Any file with "credential", "password", "key" in name | Security data | Cannot authenticate |
 
@@ -179,7 +190,7 @@ Please run this command manually:
 
 ### Docker Objects (Images, Containers, Volumes)
 
-**Action**: List every object individually. Use precision deletion only (see Rule 5 and Rule 6).
+**Action**: List every object individually. Use precision deletion only (see Rule 6 and Rule 7).
 
 **NEVER use prune commands.** Always specify exact IDs/names.
 
@@ -235,17 +246,24 @@ if not os.path.exists(path):
     return False
 ```
 
-### Check 2: Not a System Path
+### Check 2: Not a Blocked Path
 
 ```python
-system_paths = [
-    '/System', '/Library/Apple', '/private/etc',
-    '/usr', '/bin', '/sbin', '/private/var/db'
+blocked_paths = [
+    '/System', '/Library/Apple', '/etc', '/private/etc',
+    '/usr', '/bin', '/sbin', '/private/var/db',
+    '~/.ssh', '~/.aws', '~/.gnupg', '~/Library/Keychains',
 ]
 
-for sys_path in system_paths:
-    if path.startswith(sys_path):
-        print(f"❌ Cannot delete system path: {path}")
+expanded_path = os.path.realpath(os.path.expanduser(path))
+if expanded_path == '/':
+    print("❌ Cannot delete root path")
+    return False
+
+for blocked_path in blocked_paths:
+    expanded_blocked = os.path.realpath(os.path.expanduser(blocked_path))
+    if expanded_path == expanded_blocked or expanded_path.startswith(expanded_blocked + os.sep):
+        print(f"❌ Cannot delete blocked path: {path}")
         return False
 ```
 
@@ -254,7 +272,7 @@ for sys_path in system_paths:
 ```python
 user_data_paths = [
     '~/Documents', '~/Desktop', '~/Pictures',
-    '~/Movies', '~/Music', '~/.ssh'
+    '~/Movies', '~/Music'
 ]
 
 expanded_path = os.path.expanduser(path)
