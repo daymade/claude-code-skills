@@ -2230,6 +2230,273 @@ claude plugin install daymade-docs@daymade-skills
 
 ---
 
+### 56. **asr-transcribe-to-text** - Audio/Video Transcription with Qwen3-ASR
+
+> **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:asr-transcribe-to-text`)
+
+Transcribe audio and video files to text using Qwen3-ASR via two interchangeable inference paths: local MLX on macOS Apple Silicon (no API key, 15-27x realtime) or a remote vLLM/OpenAI-compatible API for any platform. Auto-detects the platform and recommends the best path, persisting the choice in `${CLAUDE_PLUGIN_DATA}/config.json`.
+
+**When to use:**
+- Transcribing meeting recordings, lectures, interviews, podcasts, or screen recordings
+- Converting any audio/video file to text (speech-to-text)
+- Local, free transcription on an Apple Silicon Mac, or remote API when local is unavailable
+- The first stage of a transcribe → correct → minutes pipeline
+
+**Key features:**
+- Dual inference paths — local MLX (15-27x realtime, free) and remote API, with automatic platform detection
+- Bundled `transcribe_local_mlx.py` loads the model once and processes files sequentially (no GPU contention)
+- Defaults `max_tokens=200000` to defeat the upstream `mlx-audio` 8192-token truncation that silently cuts audio past ~40 minutes
+- Remote fallback `overlap_merge_transcribe.py` splits into 18-minute chunks with 2-minute overlap and fuzzy-merges
+- ffmpeg video→16kHz mono WAV extraction, truncation verification, and proxy-bypass handling
+- Proactively suggests `transcript-fixer` to clean ASR recognition errors on the output
+
+**Example usage:**
+```bash
+# asr-transcribe-to-text lives in the daymade-audio suite
+claude plugin install daymade-audio@daymade-skills
+
+# Then ask Claude naturally
+"transcribe this meeting recording to text"
+"把这个录音转成文字"
+"convert lecture.mp4 to a transcript"
+```
+
+**Requirements**: `uv`, ffmpeg/ffprobe. Local MLX path needs macOS Apple Silicon; remote path needs a reachable vLLM/OpenAI-compatible ASR endpoint. No API key for local mode.
+
+---
+
+### 57. **marketplace-dev** - Skills Repo → Plugin Marketplace
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:marketplace-dev`)
+
+Convert any Claude Code skills repository into an official plugin marketplace so users can install skills via `claude plugin marketplace add` and get auto-updates. Generates a spec-conforming `.claude-plugin/marketplace.json`, validates with `claude plugin validate`, tests real installation, and opens an upstream PR — encoding hard-won schema, version, and description anti-patterns.
+
+**When to use:**
+- Making a skills repo installable via `claude plugin install`
+- Generating or fixing a `marketplace.json` (plugin distribution, one-click install, auto-update)
+- Adding a new plugin to an existing marketplace and bumping the right versions
+- Debugging schema rejections like `Unrecognized key: "$schema"` or duplicate plugin names
+
+**Key features:**
+- Evidence-intake phase that mines docs and local session history instead of guessing from a template
+- Encodes non-obvious schema rules: `$schema` is rejected, `metadata` has only 3 valid fields, `strict: false` semantics, single-skill vs suite `source`/`skills` patterns
+- Bundled `check_marketplace.sh` runs four checks (JSON syntax → `claude plugin validate` → source/skills resolution → reverse sync) and exits non-zero on failure
+- Installation, cache-footprint, and GitHub-install test recipes to confirm `source` produced the intended snapshot
+- Two PostToolUse hooks (validate on `marketplace.json` edit; warn on un-bumped version when a `SKILL.md` changes) that auto-activate with the plugin
+
+**Example usage:**
+```bash
+# marketplace-dev lives in the daymade-claude-code suite
+claude plugin install daymade-claude-code@daymade-skills
+
+# Then ask Claude naturally
+"turn this skills repo into a plugin marketplace"
+"generate a marketplace.json for this repo and validate it"
+"add my new skill to the marketplace and open a PR"
+```
+
+**Requirements**: `claude` CLI (for `claude plugin validate` / install tests), `jq`. Git remotes configured if opening an upstream PR.
+
+---
+
+### 58. **skill-creator** - Create, Improve & Benchmark Skills
+
+> **Install**: `claude plugin install daymade-skill@daymade-skills` (suite-only — invoked as `daymade-skill:skill-creator`)
+
+The essential meta-skill for building your own skills. Guides the full create → test → review → improve loop: drafts a SKILL.md, generates realistic test prompts, runs the skill against a baseline, helps evaluate results qualitatively and quantitatively, and iterates. Also optimizes a skill's `description` for better triggering accuracy.
+
+**When to use:**
+- Creating a skill from scratch, or editing/optimizing an existing one
+- Running evals to test a skill, or benchmarking performance with variance analysis
+- Improving a skill's description so Claude triggers it more reliably
+- Wrapping a third-party CLI tool you just got working into a reusable companion skill
+
+**Key features:**
+- Prior-art research across conversation history, local SOPs, installed plugins/MCPs, skills.sh, official plugins, npm/PyPI — to reuse infrastructure and encode only the user's unique methodology
+- The inline-vs-`context: fork` decision guide (subagents can't spawn subagents or call skills) and composable/orthogonal skill design
+- `init_skill.py` scaffolding, `package_skill.py` (auto-validates), and `security_scan.py` (gitleaks-based secret/PII detection)
+- Eval harness: spawn with-skill + baseline runs, draft assertions, grade, aggregate a benchmark, and review in a generated HTML viewer
+- Mandatory sanitization read-through for public skills — catches no-keyword leaks scanners miss
+- Description-optimization loop (60/40 train/test split, selects best description by held-out score)
+
+**Example usage:**
+```bash
+# skill-creator lives in the daymade-skill suite
+claude plugin install daymade-skill@daymade-skills
+
+# Then ask Claude naturally
+"create a skill that does X"
+"improve this skill's description so it triggers more reliably"
+"benchmark this skill against a no-skill baseline"
+```
+
+**Requirements**: Python 3, `uv`, PyYAML (validation/packaging), gitleaks (security scan). `claude` CLI for eval/description-optimization runs.
+
+---
+
+### 59. **feishu-doc-scraper** - Feishu/Lark → Faithful Markdown
+
+Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets, and Minutes (妙记) transcripts into faithful local Markdown. The primary path uses the `lark-cli` API — it extracts the document body programmatically (no model paraphrasing), recursively follows a collection's reference graph, and reads permission boundaries from error codes; a browser-DOM path is the fallback only when lark-cli cannot reach the content.
+
+**When to use:**
+- The source is a Feishu/Lark URL and fidelity matters (导出飞书文档/合集/妙记转写)
+- Converting a Feishu wiki/knowledge base to Markdown, or archiving a Feishu collection
+- Exporting a Feishu Minutes (妙记) transcript
+- Converting an owner-exported `.docx` into faithful Markdown with heading/highlight restoration
+
+**Key features:**
+- lark-cli API extraction writes the body to disk via `jq` (never retyped by the model — the single most important fidelity rule)
+- Recursive reference-graph traversal (BFS) with `feishu_extract_refs.py`, plus a residual rich-media-tag acceptance gate so no referenced doc is silently missed
+- Native Minutes transcript export (never re-runs ASR on downloaded media)
+- Permission-denied path: owner-exported `.docx` → Markdown with font-size→heading and `w:shd`→highlight restoration, then visual verification
+- `LARK_CLI_NO_PROXY=1` discipline for `*.feishu.cn` (avoids credential leak/DNS hijack) and a U+FFFD encoding-corruption final check
+- Works with both Feishu (feishu.cn) and Lark (larkoffice.com)
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install feishu-doc-scraper@daymade-skills
+
+# Then ask Claude naturally
+"把这个飞书合集导出成 markdown"
+"export this Feishu Minutes transcript"
+"save this Lark wiki page as Markdown"
+```
+
+**Requirements**: `lark-cli` binary (npm `@larksuite/cli`) authenticated to the target tenant; `jq`. Fallback path needs a browser-automation surface; the docx path needs `python-docx` and a docx→md converter (the bundled doc-to-markdown skill or pandoc).
+
+---
+
+### 60. **bigdata-skill** - Bigdata.com (RavenPack) SDK + REST Toolkit
+
+Pull Bigdata.com (RavenPack) financial and news data through the official `bigdata-client` SDK and its public `/v1/*` REST endpoints — reaching the structured substrate the Bigdata MCP server doesn't hand over. The MCP returns prose chunks and pre-synthesized tearsheets; this toolkit reaches structured financials, prices, analyst estimates, a daily entity-sentiment series, annotated chunk search with sentiment + entity spans, and a screener.
+
+**When to use:**
+- Using Bigdata.com / RavenPack and the MCP result feels thin ("where's the sentiment score?", "I need entity-level data", "the calendar")
+- Pulling forward/structured financials: analyst estimates, earnings/event calendar, surprises, ratings, price targets, statements, TTM metrics, a company screener
+- Wanting annotated news chunks with numeric sentiment + entity spans, a sentiment time series, or a co-mention graph
+- Mentions a `bd_v2_` API key, `rp_entity_id`, `query_unit`/chunk cost, `bigdata-client`, or "the bigdata MCP isn't enough"
+
+**Key features:**
+- One `BigdataClient` exposing both the SDK (search + knowledge graph) and a REST escape hatch (`bd._api.http`) for every `/v1/*` endpoint the SDK never wrapped
+- Routing table mapping each question to the right module; `fields_values_to_records()` to flatten `{fields, values}` responses
+- Cost discipline: `1 query_unit = 10 chunks`, only chunk-search billed, `ChunkLimit` (never a bare `int`), rerank thresholds, 50%-cheaper batch search, and a `CostModel`/`CostTracker` budget veto
+- The "two data faces" guidance — structured financial (works for A-shares via English name/ISIN) vs unstructured Chinese NLP (a data-source-level dead end)
+- `rc()` SSL-retry wrapper for the common first-handshake `SSL: UNEXPECTED_EOF`, plus a known-pitfalls reference with reproductions and fixes
+- Fail-fast on a missing `BIGDATA_API_KEY` (no plaintext fallback); read-only, never writes/uploads
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install bigdata-skill@daymade-skills
+export BIGDATA_API_KEY=bd_v2_xxxxxxxx
+
+# Then ask Claude naturally
+"pull NVIDIA's forward analyst estimates and last earnings surprise from Bigdata"
+"give me a daily entity-sentiment series for this ticker"
+"the bigdata MCP only gave me a tearsheet — I need the structured fields"
+```
+
+**Requirements**: A `bd_v2_` Bigdata.com API key (env var, never hardcoded), `uv`, the official `bigdata-client` SDK in an isolated venv. Optional outbound/WSS proxy only if your network needs one to reach `api.bigdata.com`.
+
+---
+
+### 61. **gangtise-copilot** - Gangtise Investment-Research Suite Installer
+
+One-command installer, credential configurator, and diagnostic layer for the full Gangtise (岗底斯投研) OpenAPI skill suite. Installs all 19 official Gangtise skills (data, research, utility), configures accessKey/secretAccessKey with a live auth check, and runs a read-only health diagnostic — solving the suite's core discoverability problem (no public manifest, listing-disabled OBS bucket, two parallel naming lines).
+
+**When to use:**
+- The user mentions Gangtise / 岗底斯, or any `gangtise-*` skill
+- Setting up Gangtise credentials (accessKey / secretAccessKey)
+- Errors like `token is invalid` / `接口地址错误`, or "my gangtise install is broken"
+- Routing a data question (research reports, chief-analyst opinions, OHLC, valuation) to the right Gangtise skill
+
+**Key features:**
+- `install_gangtise.sh` downloads 4 OBS bundles → extracts 19 skill directories → symlinks them into detected agent skills dirs (Claude Code, OpenClaw, Codex), with `minimal`/`workshop`/`full`/`--only` presets
+- `configure_auth.sh` writes one shared XDG credential file (mode 600), runs a live auth call, and symlinks every skill's `.authorization` to it (rotate one file, not 19)
+- Read-only `diagnose.sh` reports install state, credential validity, and scoped capability tiers (auth scope vs RAG scope)
+- Skill registry routing a data question across the two-dimensional (data tier × operation type) matrix of 19 skills
+- Wrapper contract: never vendors/forks upstream files, always re-downloads the canonical OBS artifact, and asks before touching any installed skill
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install gangtise-copilot@daymade-skills
+
+# Then ask Claude naturally
+"装一下 gangtise 的所有 skill 并配置好凭据"
+"my gangtise skills report token is invalid — diagnose it"
+"宁德时代的研报用哪个 gangtise skill 查"
+```
+
+**Requirements**: A Gangtise accessKey + secretAccessKey; `bash`, `curl`, network access to the official OBS bucket and `open.gangtise.com`. Works with Claude Code, OpenClaw, and Codex agent layouts.
+
+---
+
+### 62. **llm-wiki-setup** - Co-Create a Personal Investment-Research LLM Wiki
+
+Co-create a personal investment-research LLM Wiki (Andrej Karpathy's pattern) where the user's OWN analysis framework becomes a living CLAUDE.md — built by interviewing them rather than handing over a template. Pure markdown + `[[wikilinks]]`, NO RAG / vector DB (Karpathy's core idea — do not over-engineer). The value is extracting the user's personal investment preferences into THEIR OWN schema, never imposing a standard one.
+
+**When to use:**
+- Building a compounding research knowledge base (投研第二大脑 / 投研知识库 / 个人投研 wiki)
+- Instantiating Karpathy's LLM Wiki pattern for finance/investing
+- Turning a stock-picking, analyst-tracking, or earnings-watching workflow into a structured markdown vault
+- Ingesting research reports / earnings calls / expert notes into an existing wiki, or running post-earnings prediction→fulfillment reviews
+
+**Key features:**
+- Sharp mechanism-layer vs rule-layer split: the three-level directory + wikilink + lint + git hook scaffold is copyable; the analysis schema is interview-grown, never templated
+- `init_vault.py` scaffolds the mechanism layer only (no schema), then an 8-dimension interview builds the user's own CLAUDE.md in their own words
+- Anti-corrosion: git hook + `lint-vault.py` keep the vault consistent and fight derived-value drift
+- SOPs for ingesting a real source (HITL 5-checkpoint flow) and post-earnings fulfillment reviews
+- Runs inline (calls the `analyst-track-record` skill and Bash) and chains into `analyst-track-record` for analyst back-testing — without rebuilding it
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install llm-wiki-setup@daymade-skills
+
+# Then ask Claude naturally
+"帮我搭一个投研第二大脑"
+"build me a personal investment-research wiki in Karpathy's style"
+"ingest this earnings call into my research vault"
+```
+
+**Requirements**: Python 3, `uv` (for `init_vault.py` / lint), `git`. Markdown + wikilinks only — no vector DB or embedding service. Pairs with the `analyst-track-record` skill for back-testing.
+
+---
+
+### 63. **benchmark-due-diligence** - Adversarial Teardown of an Envied Benchmark
+
+Run adversarial due-diligence on a benchmark the user envies — a founder, KOL, company, or product whose claimed success looks inflated — separating marketing bubble from real signal, then mapping the validated playbook onto the user's own resources. The adversarial, decision-oriented cousin of `deep-research`: it assumes the picture is inflated until proven otherwise and ends in "what this means for ME", not a neutral report.
+
+**When to use:**
+- Wanting to 尽调/对标/拆解 a competitor or role-model, or 抄/偷师 someone's playbook
+- Suspecting 水分/泡沫 in someone's claims (#1 on Product Hunt, 0-to-1M users, funding, 估值几个亿)
+- Asking whether wins are 真本事 vs 运气/时机, or saying someone is 太成功了 and wanting the real story
+- Preferring a debunk + replicable playbook over `deep-research`'s neutral briefing
+
+**Key features:**
+- Two strictly-separated injection channels — public FACTS go to every agent; private COMMISSIONER_CONTEXT reaches only the final mapping agent (so client names never leak into open-web searches)
+- Phase 0 foundation-by-evidence: verifies the benchmark's real entity graph and headline-claim attribution before any fan-out (don't reason from names/domains)
+- Four-phase orchestration — collect → adversarial verify (L1-L4 grading, `坐实/存疑/证伪-水分` verdicts) → due-diligence conclusion (bubble-busting table + attribution breakdown) → commissioner resource-mapping
+- Reuses existing plumbing instead of rebuilding it (`deep-research` fan-out, `osint-investigate` identity checks, the `qcc` family for 工商 data, `agent-reach` for social-platform data)
+- Runs inline (it's an orchestrator — `context: fork` would silently break the fan-out)
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install benchmark-due-diligence@daymade-skills
+
+# Then ask Claude naturally
+"帮我尽调一下这个创始人，他到底有没有水分"
+"tear down this competitor's playbook and tell me what I can actually copy"
+"this KOL claims 0-to-1M users — is that real, and is it replicable for me?"
+```
+
+**Requirements**: Web access for the collection/verification agents. Optionally composes with `deep-research`, `osint-investigate`, the `qcc` skill family, and `agent-reach`; renders a shareable report via `pdf-creator`.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
