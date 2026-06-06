@@ -2199,6 +2199,37 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
+### 55. **pdf-to-html** - Read a PDF as Faithful HTML (with Optional Translation)
+
+Convert a PDF into one self-contained, readable HTML file that preserves images, charts and reading order — optionally translating it into another language while keeping every figure. A PDF is a layout, not just a text stream, so the workflow renders each page for you to *see* before building, and renders the HTML for visual verification before delivery.
+
+**When to use:**
+- Reading a PDF as a clean web page or document (especially on a phone)
+- Turning a report or whitepaper PDF into styled HTML without losing its figures
+- Translating a PDF into another language while keeping its images, charts and tables in place
+
+**Key features:**
+- **Structured extraction** (PyMuPDF): text blocks with font sizes + images, with decorative images (footer logos, rules) auto-detected and dropped
+- **Data-driven build**: heading levels inferred from font size, content images compressed and base64-inlined into one portable file
+- **Optional parallel translation**: a Dynamic Workflow translates pages concurrently, captions data charts, and reconciles terminology — with fidelity rules (never invent a translated name; copy numbers and proper nouns verbatim)
+- **Mandatory visual verification**: adaptive headless-Chrome screenshot sliced into readable segments (works around Chrome's ~16384px screenshot cap)
+- **Bundled failure-cases reference**: the real traps (verification, rendering limits, fidelity) so they are not re-discovered
+
+**Example usage:**
+```bash
+# pdf-to-html lives in the daymade-docs suite
+claude plugin install daymade-docs@daymade-skills
+
+# Then ask Claude naturally
+"把这个 PDF 转成中文网页版"
+"make this report readable as HTML"
+"translate this PDF to English but keep the charts"
+```
+
+**Requirements**: `uv`, Google Chrome or Chromium (visual verification). Python packages (PyMuPDF, Pillow, numpy) auto-install via `uv run --with`.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
