@@ -7,6 +7,7 @@ semantics.
 ## Contents
 
 - [Mental Model](#mental-model) — the three-level marketplace → plugin → skill hierarchy
+- [Why Plugin Boundaries Matter](#why-plugin-boundaries-matter-toggle-granularity) — toggle granularity, the baoyu-skills failure case, the false-green trap
 - [Pattern: Single-Skill Narrow Cache](#pattern-single-skill-narrow-cache) — independent install/update for one skill
 - [Pattern: Suite Plugin](#pattern-suite-plugin) — shared namespace for related skills
 - [Canonical Source for Suite Members](#canonical-source-for-suite-members) — avoiding duplicate skill directories
@@ -27,6 +28,39 @@ marketplace -> plugin -> skill
 
 `source` defines the installed plugin root. `skills` paths are resolved relative
 to that root.
+
+## Why Plugin Boundaries Matter (Toggle Granularity)
+
+The plugin boundary isn't just a cache/namespace detail — it decides **what a user
+can turn on and off**. The smallest unit a user can enable/disable (`enabledPlugins`)
+is a *plugin*, not a skill. **Multiple skills bundled in one plugin are
+all-or-nothing** — a user cannot disable just one of them. (Platform behavior:
+`skillOverrides` does not apply to plugin-sourced skills, and `/skills` can't toggle
+them either. Tracking: anthropics/claude-code#14920, long-open.)
+
+So the single-vs-suite choice below is really a product decision: *will users want
+to toggle these abilities separately?* Yes → one plugin per ability. Always used
+together → a suite is fine, but tell users it's all-or-nothing.
+
+### Failure case: baoyu-skills
+
+baoyu-skills (20k+ stars) originally split its skills into 3 plugins
+(content / ai-generation / utility), all sharing `"source": "./"`. The shared
+source caused duplicate registration (issue #49 "installing one pulls in unrelated
+skills"; #79 "slash command list 3x"), forcing PR #106 to **merge all 3 into 1** —
+which bound ~21 skills together, so users can no longer toggle them individually.
+Two lessons: (1) never share `"source": "./"` across plugins (see Anti-Patterns);
+(2) if a repo keeps shared code at its root (baoyu's bun `packages/`), it can't be
+split into independent plugins at all — on GitHub install each plugin gets only its
+own `source` subtree, so repo-root shared code never reaches any plugin's cache.
+Keep each plugin self-contained.
+
+### Trap: local directory-source installs give a false green
+
+A local directory-source install references the source in place (no copy), so
+repo-root shared code and cross-subdir references *appear* to work — but a real
+GitHub install breaks them. Validate subdirectory isolation / self-containment
+against a real GitHub install, not just a local directory source.
 
 ## Pattern: Single-Skill Plugin
 
