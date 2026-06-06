@@ -1,15 +1,13 @@
 ---
 name: marketplace-dev
-description: |
-  Converts any Claude Code skills repository into an official plugin marketplace.
-  Analyzes existing skills, generates .claude-plugin/marketplace.json conforming to
-  the Anthropic spec, validates with `claude plugin validate`, tests real installation,
-  and creates a PR to the upstream repo. Encodes hard-won anti-patterns from real
-  marketplace development (schema traps, version semantics, description pitfalls).
-  Use when the user mentions: marketplace, plugin support, one-click install,
-  marketplace.json, plugin distribution, auto-update, or wants a skills repo
-  installable via `claude plugin install`. Also trigger when the user has a skills
-  repo and asks about packaging, distribution, or making it installable.
+description: >-
+  Converts any Claude Code skills repository into an official plugin marketplace —
+  generates spec-conforming .claude-plugin/marketplace.json, validates with
+  `claude plugin validate`, tests real installation, and PRs the upstream repo,
+  encoding hard-won schema/version/description anti-patterns. Use when the user
+  mentions marketplace, plugin support, one-click install, marketplace.json,
+  plugin distribution, auto-update, or wants a skills repo installable via
+  `claude plugin install`.
 argument-hint: [repo-path]
 ---
 

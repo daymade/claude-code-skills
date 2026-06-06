@@ -1,6 +1,6 @@
 ---
 name: github-contributor
-description: End-to-end playbook for shipping high-quality pull requests to open-source projects you don't maintain. Use whenever the user is creating, editing, or pushing a PR to a third-party GitHub repo — even if they just say "submit a PR", "open a PR", "fix this upstream", "rebase against main", "respond to the bot review", or names a target repo in the form `owner/repo`. Covers project discovery, CONTRIBUTING.md compliance, PR-size sanity check, minimal-diff implementation, isolated GUI E2E verification, PR description writing with AI-assisted disclosure, conflict resolution with fixup + autosquash, and post-submission bot/maintainer interaction. Also triggers on Chinese phrases like "提 PR"、"上游 PR"、"贡献代码"、"rebase 冲突"、"PR 描述写不好"、"回应维护者"、"AI 贡献声明".
+description: End-to-end playbook for shipping high-quality pull requests to open-source projects you don't maintain — discovery, CONTRIBUTING compliance, PR-size check, minimal-diff implementation, PR description with AI-assisted disclosure, conflict resolution, and post-submission maintainer interaction. Use whenever creating, editing, or pushing a PR to a third-party GitHub repo — "submit a PR", "open a PR", "fix this upstream", "rebase against main", "respond to the bot review", an `owner/repo` target, or 提 PR / 上游 PR / 贡献代码 / rebase 冲突 / 回应维护者.
 ---
 
 # GitHub Contributor
