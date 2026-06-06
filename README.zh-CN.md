@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-52-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.60.1-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-61-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.61.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 52 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 61 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -1361,7 +1361,6 @@ claude plugin install skill-reviewer@daymade-skills
 📚 **文档**：参见 [daymade-skill/skill-reviewer/references/](./daymade-skill/daymade-skill/skill-reviewer/references/) 了解：
 - `evaluation_checklist.md` - 完整的技能评估标准
 - `pr_template.md` - 专业 PR 描述模板
-- `marketplace_template.json` - marketplace 配置模板
 
 ---
 
@@ -2177,6 +2176,37 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
+### 53. **terminal-screenshot** - 看见终端输出的真实视觉效果
+
+把终端 CLI 程序的彩色输出渲染成 PNG，让 Claude 真正"看见"渲染后的效果——颜色对比、对齐、背景色块、高亮——而不是只读到纯文本和原始 ANSI 转义码。读 hex 值是猜，看真实终端背景上渲染出的对比才是验证。
+
+**何时使用：**
+- 改完任何 CLI 配色（delta / bat / 主题 / lazygit pager）后，立即视觉确认效果
+- 验证 git diff（delta）增删对比、bat 语法高亮、starship prompt、eza/ls 配色、ripgrep 匹配
+- 任何需要判断"这配色对不对 / 对比够不够"而不是从 hex 码瞎猜的场景
+
+**核心特性：**
+- **先捕获再渲染的纪律**：先在正常 shell 捕获完整 ANSI，再渲染——绝不让渲染器代跑复杂 CLI（它们在子 pty 里会降级、丢背景块）
+- **freeze 优先 + 零依赖兜底**：优先用 charmbracelet/freeze 忠实渲染；没有时回退到内置的纯 stdlib ANSI→HTML 转换器 + headless Chrome
+- **真实终端背景**：用终端实际背景色渲染，深色主题才能判断准确
+- **各 CLI 捕获模板**：delta、git、bat、eza、ls、ripgrep，以及通用强制着色路径
+- **内置脚本**：`render_ansi.sh`（自动选 freeze/Chrome）、`ansi2html.py`（stdlib 渲染器）
+
+**使用示例：**
+```bash
+# terminal-screenshot 属于 daymade-claude-code 套件
+claude plugin install daymade-claude-code@daymade-skills
+
+# 然后自然地让 Claude 做
+"verify my delta diff colors"
+"看一下这个终端配色的真实效果"
+"git diff 的增删对比够明显吗"
+```
+
+**要求**：macOS。`charmbracelet/freeze`（首选渲染器）或 Google Chrome（兜底）。兜底渲染器需要 Python 3。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -2344,7 +2374,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - **iOS-APP-developer**：参见 `iOS-APP-developer/references/xcodegen-full.md` 了解 XcodeGen 选项与 project.yml 细节
 - **twitter-reader**：参见 `twitter-reader/SKILL.md` 了解 API 密钥设置和 URL 格式支持
 - **macos-cleaner**：参见 `macos-cleaner/references/cleanup_targets.md` 了解详细清理目标说明、`macos-cleaner/references/mole_integration.md` 了解 Mole 可视化工具集成、`macos-cleaner/references/safety_rules.md` 了解全面安全指南
-- **skill-reviewer**：参见 `daymade-skill/skill-reviewer/references/evaluation_checklist.md` 了解完整评估标准、`daymade-skill/skill-reviewer/references/pr_template.md` 了解 PR 模板、`daymade-skill/skill-reviewer/references/marketplace_template.json` 了解 marketplace 配置
+- **skill-reviewer**：参见 `daymade-skill/skill-reviewer/references/evaluation_checklist.md` 了解完整评估标准、`daymade-skill/skill-reviewer/references/pr_template.md` 了解 PR 模板
 - **github-contributor**：参见 `github-contributor/references/pr_checklist.md` 了解 PR 质量清单、`github-contributor/references/project_evaluation.md` 了解项目评估标准、`github-contributor/references/communication_templates.md` 了解 issue/PR 沟通模板
 - **i18n-expert**：参见 `i18n-expert/SKILL.md` 了解完整的 i18n 设置工作流程、键架构指导和审计程序
 - **claude-skills-troubleshooting**：参见 `daymade-claude-code/claude-skills-troubleshooting/SKILL.md` 了解插件故障排除工作流程和架构

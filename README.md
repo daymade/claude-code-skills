@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-53-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.60.1-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-61-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.61.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 53 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 61 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -1319,7 +1319,6 @@ claude plugin install skill-reviewer@daymade-skills
 📚 **Documentation**: See [daymade-skill/skill-reviewer/references/](./daymade-skill/daymade-skill/skill-reviewer/references/) for:
 - `evaluation_checklist.md` - Complete skill evaluation criteria
 - `pr_template.md` - Professional PR description template
-- `marketplace_template.json` - Marketplace configuration template
 
 ---
 
@@ -2169,6 +2168,37 @@ claude plugin install auto-repo-setup@daymade-skills
 
 ---
 
+### 54. **terminal-screenshot** - See the Real Visual Result of Terminal Output
+
+Render a terminal CLI program's colored output to a PNG so Claude can actually *see* the rendered result — color contrast, alignment, background blocks, highlighting — instead of only reading plain text and raw ANSI escape codes. Reading a hex value is guessing; seeing the rendered contrast on the real terminal background is verification.
+
+**When to use:**
+- Right after changing any CLI color config (delta / bat / themes / lazygit pager) to visually confirm the result
+- Verifying git diff (delta) add/remove contrast, bat syntax highlighting, starship prompt, eza/ls colors, ripgrep matches
+- Any time you need to judge "does this color look right / is the contrast enough" instead of guessing from hex codes
+
+**Key features:**
+- **Capture-then-render discipline**: captures full-fidelity ANSI in a normal shell first, then renders — never lets the renderer run complex CLIs (which degrade in a child pty and drop background blocks)
+- **freeze-first, zero-dependency fallback**: prefers charmbracelet/freeze for faithful rendering; falls back to a bundled stdlib ANSI→HTML converter + headless Chrome when freeze is unavailable
+- **Real terminal background**: renders on the actual terminal background color so dark themes are judged accurately
+- **Per-CLI capture recipes**: delta, git, bat, eza, ls, ripgrep, and a generic forced-color path
+- **Bundled scripts**: `render_ansi.sh` (freeze/Chrome auto-select), `ansi2html.py` (stdlib renderer)
+
+**Example usage:**
+```bash
+# terminal-screenshot lives in the daymade-claude-code suite
+claude plugin install daymade-claude-code@daymade-skills
+
+# Then ask Claude naturally
+"verify my delta diff colors"
+"看一下这个终端配色的真实效果"
+"is the add/remove contrast in git diff strong enough?"
+```
+
+**Requirements**: macOS. `charmbracelet/freeze` (preferred renderer) or Google Chrome (fallback). Python 3 for the fallback renderer.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -2336,7 +2366,7 @@ Each skill includes:
 - **iOS-APP-developer**: See `iOS-APP-developer/references/xcodegen-full.md` for XcodeGen options and project.yml details
 - **twitter-reader**: See `twitter-reader/SKILL.md` for API key setup and URL format support
 - **macos-cleaner**: See `macos-cleaner/references/cleanup_targets.md` for detailed cleanup target explanations, `macos-cleaner/references/mole_integration.md` for Mole visual tool integration, and `macos-cleaner/references/safety_rules.md` for comprehensive safety guidelines
-- **skill-reviewer**: See `daymade-skill/skill-reviewer/references/evaluation_checklist.md` for complete evaluation criteria, `daymade-skill/skill-reviewer/references/pr_template.md` for PR templates, and `daymade-skill/skill-reviewer/references/marketplace_template.json` for marketplace configuration
+- **skill-reviewer**: See `daymade-skill/skill-reviewer/references/evaluation_checklist.md` for complete evaluation criteria and `daymade-skill/skill-reviewer/references/pr_template.md` for PR templates
 - **github-contributor**: See `github-contributor/references/pr_checklist.md` for PR quality checklist, `github-contributor/references/project_evaluation.md` for project evaluation criteria, and `github-contributor/references/communication_templates.md` for issue/PR templates
 - **i18n-expert**: See `i18n-expert/SKILL.md` for complete i18n setup workflow, key architecture guidance, and audit procedures
 - **claude-skills-troubleshooting**: See `daymade-claude-code/claude-skills-troubleshooting/SKILL.md` for plugin troubleshooting workflow and architecture
