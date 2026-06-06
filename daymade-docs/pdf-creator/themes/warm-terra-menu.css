@@ -1,0 +1,132 @@
+/*
+ * Warm Terra Menu — warm-terra 视觉 + 双列长文本表格适配
+ *
+ * 基于 warm-terra.css（terra cotta #d97756 + PingFang + 浅米表头），仅改两处：
+ *   1. 表格：首列改换行（warm-terra 原版 th/td nowrap + 仅末列 wrap，导致长标题
+ *      首列溢出盖住次列）→ 全列 white-space:normal + 固定 44/56 两列宽 + 顶对齐
+ *   2. inline code 字体链：Songti SC (CID TrueType) 先于 PingFang (CID Type0C OT)，
+ *      防 macOS 预览 / Adobe Reader 把 CJK inline code 显示成空白（warm-terra 原版
+ *      用 Menlo→PingFang，无 unicode-range 约束，发客户端有乱码风险）
+ *
+ * Best for: 模块菜单 / 首列是长问题式标题的双列清单。
+ */
+
+/* Menlo 限 Latin，CJK inline code fallback 到 CID-TrueType Songti SC */
+@font-face {
+    font-family: 'Menlo';
+    src: local('Menlo');
+    unicode-range: U+0020-007F, U+00A0-00FF, U+2000-206F, U+2070-209F, U+20A0-20CF, U+2100-214F;
+}
+
+@page {
+    size: A4;
+    margin: 14mm 13mm 14mm;
+    @bottom-center {
+        content: counter(page) " / " counter(pages);
+        font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+        font-size: 8.5pt;
+        color: #8a7460;
+    }
+}
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+    max-width: 100%;
+    margin: 0;
+    font-size: 10.5pt;
+    line-height: 1.65;
+    color: #1f1b17;
+}
+
+h1 {
+    font-size: 21pt;
+    font-weight: 800;
+    color: #1f1b17;
+    border-bottom: 2px solid #d97756;
+    padding-bottom: 8px;
+    margin: 0 0 0.8em;
+}
+
+h2 {
+    font-size: 15pt;
+    font-weight: 700;
+    color: #d97756;
+    margin: 22px 0 0.3em;
+    break-after: avoid;
+}
+
+h2 + p { color: #6c6158; font-size: 9.5pt; margin: 3px 0 12px; line-height: 1.55; break-after: avoid; }
+
+h3 { font-size: 13pt; font-weight: 700; color: #1f1b17; margin: 14px 0 0.4em; break-after: avoid; }
+
+p { margin: 0.6em 0; }
+
+blockquote {
+    border-left: 3px solid #d97756;
+    background: #faf5f0;
+    padding: 6px 0 6px 13px;
+    color: #6c6158;
+    margin: 12px 0 6px;
+    font-size: 9.4pt;
+    line-height: 1.7;
+}
+blockquote strong { color: #1f1b17; }
+
+/* ===== 表格：warm-terra 浅米表头 + 双列长文本换行（修 nowrap 溢出）===== */
+table {
+    border-collapse: collapse;
+    width: 100% !important;
+    margin: 8px 0 6px;
+    font-size: 9.8pt;
+    table-layout: fixed !important;
+}
+table colgroup col { width: auto !important; }
+tr { break-inside: avoid; page-break-inside: avoid; }
+thead { display: table-header-group; }
+
+th {
+    background: #faf5f0;
+    color: #1f1b17;
+    border: 1px solid #e2d6c8;
+    padding: 7px 9px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 9.5pt;
+}
+
+/* 关键修复：全列换行（去掉 warm-terra 的 nowrap），CJK 不切字，顶对齐 */
+td {
+    border: 1px solid #e2d6c8;
+    padding: 8px 9px;
+    text-align: left;
+    white-space: normal !important;
+    word-break: keep-all !important;
+    overflow-wrap: break-word !important;
+    vertical-align: top;
+    line-height: 1.55;
+}
+
+/* 双列宽：模块问题 44% / 一句话 56% */
+th:nth-child(1), td:nth-child(1) { width: 44%; }
+th:nth-child(2), td:nth-child(2) { width: 56%; }
+td:nth-child(1) { font-weight: 700; }
+
+/* inline code = metadata 小标签；字体链 Songti CID 先防预览乱码；本身短，nowrap 不溢出 */
+code {
+    font-family: 'Menlo', 'Songti SC', 'Heiti SC', 'SimSun', 'PingFang SC', monospace;
+    background: #faf5f0;
+    color: #8a7460;
+    padding: 1.5px 7px;
+    border-radius: 4px;
+    border: 1px solid #ecdfd2;
+    font-size: 8.5pt;
+    white-space: nowrap;
+}
+
+strong { color: #1f1b17; }
+hr { border: none; border-top: 1px solid #e2d6c8; margin: 18px 0 4px; }
+ul, ol { padding-left: 1.8em; margin: 0.6em 0; }
+li { margin-bottom: 3px; word-break: break-word; }
+header, .date { display: none !important; }

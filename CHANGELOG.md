@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **pdf-creator** (`daymade-docs` v1.1.0): new `warm-terra-menu` theme — a warm-terra variant hardened for 2-column long-text module menus (full-column wrap removes first-column overflow; a Menlo `unicode-range` keeps CJK inline-code from rendering blank in Preview/Adobe Reader).
+
+### Fixed
+- **SKILL.md frontmatter strict-YAML validity (codex compatibility).** `description:` values are unquoted YAML plain scalars, so a `: ` or ` #` inside them breaks strict parsers — Claude Code's lenient frontmatter parser accepted them, codex did not.
+  - **tunnel-doctor** v1.5.2: `: ` inside literal ssh output (`"debug2: resolving"`, `"debug1: connect"`) raised a `ScannerError`; wrapped the description in single quotes so the ssh strings stay verbatim.
+  - **benchmark-due-diligence** v1.0.1: ` #` in `Product Hunt #1` silently truncated the parsed description; reordered to `#1 on Product Hunt` (no keyword loss).
+  - **pdf-creator** (`daymade-docs` v1.1.0): `**Scope: markdown → PDF only.**` → `**Scope — markdown → PDF only.**`.
+
 ## [1.60.0] - 2026-05-31
 
 ### Added
