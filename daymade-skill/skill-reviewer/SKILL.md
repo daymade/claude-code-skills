@@ -148,12 +148,11 @@ Task Progress:
 
 ### Issue: Missing Marketplace Support
 
-```bash
-mkdir -p .claude-plugin
-# Create marketplace.json from template
-```
-
-See `references/marketplace_template.json`.
+Adding or validating `marketplace.json` (plugin boundaries, `source`/`skills`
+layout, whether skills are independently toggleable) is the `marketplace-dev`
+skill's domain — don't author it from a template here. Ensure `marketplace-dev`
+is available (auto-install it if missing), then follow its workflow and
+`references/cache_and_source_patterns.md`.
 
 ## PR Guidelines
 
@@ -196,5 +195,4 @@ Respect Check:
 
 - `references/evaluation_checklist.md` - Full evaluation checklist
 - `references/pr_template.md` - PR description template
-- `references/marketplace_template.json` - marketplace.json template
 - Best practices: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
