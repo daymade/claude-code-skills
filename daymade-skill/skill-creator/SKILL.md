@@ -1037,6 +1037,15 @@ After packaging, update the marketplace registry to include the new or updated s
 
 **For updated skills**, bump the version in `plugins[].version` following semver.
 
+**Plugin boundaries are not this skill's domain.** Whether to split skills into
+separate plugins, how to lay out `source`/`skills`, and whether users can toggle
+skills individually all belong to the packaging/distribution domain — the SSOT is
+the `marketplace-dev` skill, not here. When a task actually needs those decisions:
+ensure `marketplace-dev` is available (auto-install it if missing — the same way
+`skill-reviewer` pulls in `skill-creator` when it needs its scripts), then read its
+`references/cache_and_source_patterns.md` and follow it. Don't restate its rules
+here; a copy would drift.
+
 ### Step 9: Ship or Iterate
 
 After completing the skill, use **AskUserQuestion** to determine next steps:

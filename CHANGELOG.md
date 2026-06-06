@@ -8,9 +8,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **pdf-creator** v1.6.0: Add `cjk-auto` theme for content-driven table layouts. Based on `default` theme but uses `table-layout: auto` so column widths adapt to actual cell content rather than equal distribution. Best for tables with highly uneven column lengths (course schedules, itemized lists) where fixed equal-width would force CJK mid-breaks. Previously only existed in local cache; now bundled in version control so skill upgrades no longer lose it.
+- **pdf-creator** (`daymade-docs` v1.1.0): new `warm-terra-menu` theme — a warm-terra variant hardened for 2-column long-text module menus (full-column wrap removes first-column overflow; a Menlo `unicode-range` keeps CJK inline-code from rendering blank in Preview/Adobe Reader).
 - **tunnel-doctor** v1.6.0: Add "TUN Measurement Contamination" diagnostic section — while a proxy runs in TUN/global mode, common probes lie: `nc -z` shows a fabricated `0.00s` handshake (TUN completes it locally), `ping`/`remote_ip` are spoofed, and a foreign IP-geo lookup reports the proxy exit instead of the real home IP. Documents what to trust instead (`time_appconnect`/`time_starttransfer`, an in-region IP-geo source, config-decode + GUI cross-check) and adds matching trigger phrases.
 - **debugging-network-issues** v1.1.0: Add cognitive Trap 12 "Reverse-path / directional asymmetry" — A→B healthy does not imply B→A healthy; an external probe to a node only proves that node's return direction, systematically missing the user's failing outbound direction (and the congested direction is often one an external probe structurally cannot reach). Sibling to Trap 5 (probe self-verification); synced into the SKILL.md trap list; fixed a stale "All nine traps" count in the summary.
+
+### Fixed
+- **SKILL.md frontmatter strict-YAML validity (codex compatibility).** `description:` values are unquoted YAML plain scalars, so a `: ` or ` #` inside them breaks strict parsers — Claude Code's lenient frontmatter parser accepted them, codex did not.
+  - **tunnel-doctor** v1.5.2: `: ` inside literal ssh output (`"debug2: resolving"`, `"debug1: connect"`) raised a `ScannerError`; wrapped the description in single quotes so the ssh strings stay verbatim.
+  - **benchmark-due-diligence** v1.0.1: ` #` in `Product Hunt #1` silently truncated the parsed description; reordered to `#1 on Product Hunt` (no keyword loss).
+  - **pdf-creator** (`daymade-docs` v1.1.0): `**Scope: markdown → PDF only.**` → `**Scope — markdown → PDF only.**`.
+
+## [1.62.0] - 2026-06-07
+
+### Added
+- **terminal-screenshot** v1.0.0 (`daymade-claude-code` suite): render a terminal CLI's colored output to a PNG so Claude can *see* the real visual result (color contrast, alignment, background blocks) instead of raw ANSI codes — for verifying delta/bat/starship/lazygit color config. Capture-then-render discipline (never `freeze --execute` complex CLIs, which degrade in a child pty and drop background blocks); freeze-first renderer with a bundled stdlib ANSI→HTML + headless-Chrome fallback; per-CLI capture recipes. Bundled `render_ansi.sh`, `ansi2html.py`.
+- **check_doc_skill_lists.py** (`marketplace-dev`): drift guard comparing the skill lists in CLAUDE.md / README.md / README.zh-CN.md against the authoritative marketplace.json (expanded), reporting MISSING and GHOST entries per doc and exiting non-zero on drift.
+
+### Changed
+- Marketplace version: 1.60.1 → 1.62.0; `daymade-claude-code` suite: 1.0.0 → 1.1.0 (adds terminal-screenshot).
+- Synced documentation skill counts to the authoritative 61: README.md / README.zh-CN.md badges + descriptions, CLAUDE.md overview (54 → 61) and plugin-entry count (39 → 43).
+- Backfilled the CLAUDE.md Available Skills list to 61 (added marketplace-dev, asr-transcribe-to-text, bigdata-skill, gangtise-copilot, llm-wiki-setup, benchmark-due-diligence, pdf-to-html, terminal-screenshot) and removed the ghost `wechat-article-scraper` entry (skill no longer on disk).
+- Backfilled all missing README.md / README.zh-CN.md skill sections (asr-transcribe-to-text, marketplace-dev, skill-creator, feishu-doc-scraper, bigdata-skill, gangtise-copilot, llm-wiki-setup, benchmark-due-diligence, plus auto-repo-setup in zh-CN); all three doc lists (CLAUDE.md / README.md / README.zh-CN.md) now pass `check_doc_skill_lists.py`.
+
+## [1.60.1] - 2026-06-05
+
+### Fixed
+- **macos-cleaner** v1.1.0 → v1.1.1: Hardened `safe_delete.py` with forced high-risk path blocking before confirmation and inside `delete_path()`, and updated `find_app_remnants.py` to match installed apps by Bundle Identifier as well as display name. Fixes [#70](https://github.com/daymade/claude-code-skills/issues/70).
+- Marketplace version: 1.60.0 → 1.60.1
+
+## [1.60.0] - 2026-05-31
+
+### Added
+- **auto-repo-setup** v1.0.0: Automated repository environment configuration, fault diagnosis, and repair for non-technical users. Reads ONBOARDING.md, audits environment gaps, installs missing dependencies, validates with smoke tests, and safely handles git operations with PII Guard and Push Safety. Includes SessionStart hook initialization, counter-review workflows, and git history sanitization.
+
+## [1.56.0] - 2026-05-24
 
 ## [1.56.0] - 2026-05-24
 

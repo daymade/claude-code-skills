@@ -1,6 +1,18 @@
 ---
 name: tunnel-doctor
-description: Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers six conflict layers - (1) route hijacking, (2) HTTP proxy env var interception, (3) system proxy bypass, (4) SSH ProxyCommand double tunneling, (5) VM/container runtime proxy propagation (OrbStack/Docker), and (6) stalled DNS resolver in macOS getaddrinfo chain (dead VPN daemon leaving zombie utun + DNS injection). Includes SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when git push fails with "failed to begin relaying via HTTP", when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, when bootstrapping remote dev environments over Tailscale, when ssh/curl/git hang ~60 seconds before resolving a hostname while nslookup returns instantly, when ping to a resolver IP works but dig to the same IP times out, or when ssh -vvv freezes at "debug2: resolving" without ever reaching "debug1: connect", or when raw probes give impossibly-fast results while a TUN proxy is up — nc -z / TCP connect returning 0.00s or ping returning sub-millisecond RTT to an overseas node (the TUN fabricates them locally), or an IP-geo lookup reporting your proxy exit IP instead of your real home/ISP.
+description: >
+  Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket,
+  Clash, Surge, OrbStack/Docker) on macOS — route hijacking, HTTP proxy env vars,
+  system proxy bypass, SSH ProxyCommand double-tunneling, VM/container proxy
+  propagation, and stalled macOS DNS resolution. Use when Tailscale ping works but
+  SSH/HTTP times out, browser returns 503 but curl works, git push fails with "failed
+  to begin relaying via HTTP", Docker pull/build times out behind TUN/VPN, setting up
+  Tailscale SSH to WSL, bootstrapping remote dev over Tailscale, ssh/curl/git hang ~60s
+  before resolving a hostname while nslookup returns instantly, ping to a resolver IP
+  works but dig to the same IP times out, ssh -vvv freezes at "debug2: resolving"
+  without reaching "debug1: connect", or raw probes give impossibly-fast results under
+  a TUN proxy (nc -z 0.00s, sub-ms ping to overseas nodes, or an IP-geo lookup
+  reporting the proxy exit instead of your real home/ISP — the TUN fabricates locally).
 allowed-tools: Read, Grep, Edit, Bash
 ---
 

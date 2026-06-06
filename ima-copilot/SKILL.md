@@ -1,6 +1,14 @@
 ---
 name: ima-copilot
-description: One-stop companion and installer for the official Tencent IMA skill (腾讯 IMA / ima.qq.com). Handles zero-config installation to Claude Code / Codex / OpenClaw via `npx skills add`, guides API key setup, detects and fixes known issues in the upstream package (including the missing-YAML-frontmatter bug in submodule SKILL.md files), and implements a personalized fan-out search strategy with priority-based knowledge base boosting. Use this skill whenever the user mentions IMA, 腾讯 IMA, ima.qq.com, ima-skill, installing or configuring ima-skill, searching across IMA knowledge bases, 知识库搜索, 笔记搜索, fan-out search with preferred KBs, or reports errors like "Skipped loading skill(s) due to invalid SKILL.md". Also trigger for any request to diagnose, repair, or personalize the behavior of an ima-skill installation. This is a wrapper layer around ima-skill — it installs and orchestrates ima-skill rather than replacing it.
+description: >
+  Installs, troubleshoots, and personalizes the official Tencent IMA skill (a wrapper
+  layer that orchestrates upstream ima-skill, not a replacement). Use when the user
+  mentions IMA, 腾讯 IMA, ima.qq.com, ima-skill, installing or configuring ima-skill,
+  IMA API key / credentials, searching across IMA knowledge bases, 知识库搜索, 笔记搜索,
+  fan-out search with preferred KBs / priority boosting, or wants to diagnose, repair, or
+  personalize an ima-skill install. Also trigger on the missing-YAML-frontmatter bug in
+  ima-skill submodule SKILL.md files and errors like "Skipped loading skill(s) due to
+  invalid SKILL.md".
 ---
 
 # IMA Copilot

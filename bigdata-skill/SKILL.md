@@ -1,19 +1,14 @@
 ---
 name: bigdata-skill
 description: >-
-  Pull Bigdata.com (RavenPack) financial and news data through the official
-  `bigdata-client` SDK and its public `/v1/*` REST endpoints when the Bigdata
-  MCP server returns only pre-synthesized tearsheets but you need the
-  machine-readable substrate underneath. MCP search returns prose chunks (text +
-  relevance only — no per-chunk sentiment, no entity spans); its tearsheets give
-  only aggregate values, not computable time series or per-field JSON. This skill
-  bundles a verified, cost-guarded toolkit over the official REST API: annotated
-  chunk search, entity/ISIN resolution, analyst estimates, calendar/surprise/
-  ratings/targets, financial statements, TTM metrics & ratios, prices, dividends,
-  revenue segments, a daily entity-sentiment series, co-mention graph, screener,
-  and batch search. Use it whenever the user mentions Bigdata.com, RavenPack, a
-  `bd_v2_` key, the bigdata MCP, rp_entity_id, chunk/query_unit cost, or wants
-  structured financials, fundamentals, prices, sentiment, or annotated news.
+  Pull Bigdata.com (RavenPack) financial and news data via the official
+  `bigdata-client` SDK and `/v1/*` REST endpoints — structured financials,
+  prices, analyst estimates, daily entity-sentiment series, annotated chunk
+  search, screener — when the Bigdata MCP returns only pre-synthesized tearsheets
+  but you need the machine-readable substrate. Use when the user mentions
+  Bigdata.com, RavenPack, a `bd_v2_` key, the bigdata MCP, rp_entity_id,
+  chunk/query_unit cost, or wants structured financials, fundamentals, prices,
+  sentiment, or annotated news.
 ---
 
 # Bigdata.com SDK + REST Toolkit
