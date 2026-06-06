@@ -1,6 +1,6 @@
 ---
 name: pdf-creator
-description: Convert markdown files to professional PDF documents with proper Chinese font support, theme system, and visual self-check. Use whenever the user asks to create PDFs, convert markdown to PDF, generate printable documents, or needs documents formatted for print or mobile reading. This skill MUST be used instead of manual pandoc/Chrome invocations — it handles CJK typography, Chrome header/footer suppression, and mandatory visual verification that manual approaches miss. **Scope: markdown → PDF only.** For Word (.docx) output use `minimax-docx`; this skill does not produce docx and the two pipelines are intentionally orthogonal.
+description: Convert markdown files to professional PDF documents with proper Chinese font support, theme system, and visual self-check. Use whenever the user asks to create PDFs, convert markdown to PDF, generate printable documents, or needs documents formatted for print or mobile reading. This skill MUST be used instead of manual pandoc/Chrome invocations — it handles CJK typography, Chrome header/footer suppression, and mandatory visual verification that manual approaches miss. **Scope — markdown → PDF only.** For Word (.docx) output use `minimax-docx`; this skill does not produce docx and the two pipelines are intentionally orthogonal.
 ---
 
 # PDF Creator
@@ -38,6 +38,7 @@ Stored in `themes/*.css`. Each theme is a standalone CSS file.
 | `default` | A4 | Songti SC + Heiti SC | Black/grey | Legal docs, contracts, formal reports |
 | `cjk-auto` | A4 | Songti SC + Heiti SC | Black/grey | Tables with uneven column content (course schedules, itemized lists) |
 | `warm-terra` | A4 | PingFang SC | Terra cotta (#d97756) + warm neutrals | Course outlines, training materials, workshops |
+| `warm-terra-menu` | A4 | PingFang SC | Terra cotta (#d97756) + warm neutrals | warm-terra variant hardened for module menus/lists: 2-column long-text tables wrap without first-column overflow + Menlo unicode-range keeps CJK inline-code from rendering blank in Preview/Adobe |
 | `mobile` | 148mm × 210mm | PingFang SC | Terra cotta + warm neutrals | Phone reading, WeChat sharing, on-the-go reference |
 
 To create a new theme: copy `themes/default.css`, modify, save as `themes/your-theme.css`.

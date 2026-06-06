@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 53 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
+This is a Claude Code skills marketplace containing 61 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -153,7 +153,7 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 39 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
+- Contains 43 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
 - Each plugin has: name, description, source, version, category, keywords
 - Marketplace metadata: name, owner, version
 - Single-skill plugins follow the official pattern (167/168 plugins in `anthropics/claude-plugins-official`): `source` points to skill directory, `skills` omitted
@@ -243,13 +243,21 @@ This applies when you change ANY file under a skill directory:
 44. **ima-copilot** - One-stop companion and installer for the official Tencent IMA skill with zero-config three-agent installation via vercel-labs/skills, XDG credential management, read-only diagnostic, known-issue auto-repair under user consent, and personalized fan-out search with priority-based knowledge base boosting
 45. **claude-export-txt-better** - Fixes broken line wrapping in Claude Code exported `.txt` conversation files; reconstructs tables, paragraphs, paths, and tool calls hard-wrapped at fixed column widths; ships with a 53-check automated validation suite
 46. **douban-skill** - Exports and syncs Douban (豆瓣) book/movie/music/game collections to local CSV files via the reverse-engineered Frodo API; supports full export and RSS incremental sync with no login, cookies, or browser required
-47. **wechat-article-scraper** - World-class WeChat article extraction with 6-level strategy routing, OG metadata fallback, image-paragraph association, and Sogou search discovery; supports Markdown/JSON/HTML/PDF export
+47. **marketplace-dev** - Converts any Claude Code skills repository into an official plugin marketplace — generates spec-conforming marketplace.json, validates with `claude plugin validate`, tests real installation, and opens an upstream PR
 48. **terraform-skill** - Operational traps for Terraform provisioners, multi-environment isolation, and zero-to-deployment reliability; covers provisioner timing races, SSH connection conflicts, DNS record duplication, volume permissions, database bootstrap gaps, Cloudflare credential errors, and init-data-only-on-first-boot pitfalls
 49. **slides-creator** - Narrative-first slide deck creation guiding users through structured narrative design (ABCDEFG model), then delegating visual generation to baoyu-slide-deck. Triggers on create slides, make a presentation, generate deck, slide deck, PPT, or when user needs to turn content into visual slides
 50. **debugging-network-issues** - Evidence-driven, falsification-first methodology for network/streaming/protocol-layer bugs (HTTP/2 RST_STREAM, SSE stalls, fixed-time drops, CDN/proxy/CGNAT idle timeouts). Layered isolation experiments + counter-review filter + a cognitive-traps catalog (incl. reverse-path/directional asymmetry), with bundled probe scripts and a real SSE 130s case study
 51. **stepfun-tts** - StepFun stepaudio-2.5-tts (Contextual TTS): natural-language `instruction` (≤200 chars) + inline `()` parentheses for句内 prosody. Captures the two TTS-side breaking changes from step-tts-2 (voice_label removal + stricter 2.5-era censorship) with migration playbook
 52. **stepfun-asr** - StepFun stepaudio-2.5-asr (SSE endpoint, 32K context, ~85-101× RTF, 30-min single-call). Hides the #1 trap of the 2.5 ASR family: it does NOT live on `/v1/audio/transcriptions` — the wrong endpoint returns a misleading `model not supported` error. Bundled stdlib CLI handles base64 + nested JSON body + SSE parsing including `error` events
 53. **feishu-doc-scraper** - Save Feishu Docs and Feishu Wiki pages as clean Markdown from a live authenticated browser session. Primary path: injectable JS script (`feishu_dom_capture.js`) for TOC-driven DOM capture, image download via session cookie, noise stripping, and clipboard bridge transport. Fallback path: Python SSR extraction (`browser_cookie3` + `requests`) when browser automation is unavailable. Enforces per-document image naming and recovers `[图片: Feishu Docs - Image]` placeholders. Works with both Feishu (feishu.cn) and Lark (larkoffice.com)
+54. **auto-repo-setup** - Automated repository environment configuration, fault diagnosis, and repair for non-technical users. Reads ONBOARDING.md, audits environment gaps (git, ffmpeg, uv, Python, API keys), installs missing dependencies, validates with smoke tests, and safely handles git operations with PII Guard and Push Safety. Includes SessionStart hook initialization, counter-review workflows, and git history sanitization.
+55. **asr-transcribe-to-text** - Transcribes audio and video files to text using Qwen3-ASR — local MLX inference on Apple Silicon (no API key, 15-27x realtime) or remote vLLM/OpenAI-compatible API, with automatic platform detection
+56. **bigdata-skill** - Pull Bigdata.com (RavenPack) financial and news data via the official `bigdata-client` SDK and `/v1/*` REST endpoints — structured financials, prices, analyst estimates, a daily entity-sentiment series, annotated chunk search, and a screener
+57. **gangtise-copilot** - Gangtise investment-research OpenAPI skill suite installer and diagnostic tool
+58. **llm-wiki-setup** - Co-create a personal investment-research LLM Wiki (Karpathy's pattern) where the user's own analysis framework becomes a living CLAUDE.md, built by interviewing them rather than handing over a template
+59. **benchmark-due-diligence** - Runs adversarial due-diligence on a benchmark the user envies (a founder, KOL, company, or product whose claimed success looks inflated), separating marketing bubble from real signal and mapping the validated playbook onto the user's own situation
+60. **pdf-to-html** - Converts a PDF into one self-contained, readable HTML file preserving images, tables, charts, and reading order, optionally translating it into another language while keeping every figure
+61. **terminal-screenshot** - Render a terminal CLI program's colored output to a PNG so Claude can see the real visual result (color contrast, alignment, background blocks) instead of raw ANSI codes — for verifying delta/bat/starship/lazygit color config
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
@@ -317,6 +325,10 @@ cd .. && bash daymade-claude-code/marketplace-dev/scripts/check_marketplace.sh
 # Runs: JSON syntax → claude plugin validate → source+skills resolution →
 # reverse sync (warns when a disk SKILL.md is not registered). A WARN on
 # reverse sync is the canary for orphan skills — register them or delete them.
+# Then verify the human-facing skill lists match the manifest (counts drift too):
+python3 daymade-claude-code/marketplace-dev/scripts/check_doc_skill_lists.py
+# Reports MISSING/GHOST per doc (CLAUDE.md / README.md / README.zh-CN.md vs the
+# expanded marketplace.json); exits non-zero on drift. Must be green before push.
 
 # 4. Stage specific files by name, never `git add -A` or `git add .`
 #    (a parallel agent once piggybacked another session's unstaged changes

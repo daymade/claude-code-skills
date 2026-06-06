@@ -1,6 +1,15 @@
 ---
 name: benchmark-due-diligence
-description: Adversarial due-diligence on a benchmark you envy — a founder, KOL, company, or product whose claimed success you suspect is inflated. Inline four-phase orchestration — fan-out collection, adversarial verification grading every claim L1-L4 to split marketing bubble from real signal, attribution weighting (product vs timing vs IP vs luck, what's replicable), then mapping the validated playbook onto the user's own resources. Use whenever the user wants to 尽调/对标/拆解 a competitor or role-model, 抄/偷师 someone's playbook, suspects 水分/泡沫 in their claims (Product Hunt #1, 0-to-1M users, funding, 估值几个亿), asks whether wins are 真本事 vs 运气/时机, or says someone is 太成功了/crushing it and wants the real story — even if they never say 尽调, and even though it looks web-searchable (it isn't — the value is structured bubble-busting + attribution + self-mapping, not the search). Prefer over deep-research for debunking inflated claims and extracting a replicable playbook, not a neutral briefing.
+description: >
+  Runs adversarial due-diligence on a benchmark the user envies — a founder, KOL,
+  company, or product whose claimed success looks inflated — splitting marketing
+  bubble from real signal, then mapping the validated playbook onto the user's own
+  resources. Use whenever the user wants to 尽调/对标/拆解 a competitor or role-model,
+  抄/偷师 someone's playbook, suspects 水分/泡沫 in their claims (#1 on Product Hunt,
+  0-to-1M users, funding, 估值几个亿), asks whether wins are 真本事 vs 运气/时机, or says
+  someone is 太成功了/crushing it and wants the real story — even if they never say 尽调.
+  Prefer over deep-research for debunking inflated claims and extracting a replicable
+  playbook rather than a neutral briefing.
 ---
 
 # Benchmark Due Diligence
