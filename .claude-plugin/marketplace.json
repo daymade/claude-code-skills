@@ -135,7 +135,7 @@
       "description": "Documentation suite plugin that exposes document conversion, Mermaid diagram generation, PDF/PPT creation, and documentation cleanup skills under one shared namespace",
       "source": "./daymade-docs",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -151,7 +151,8 @@
         "./mermaid-tools",
         "./pdf-creator",
         "./ppt-creator",
-        "./docs-cleaner"
+        "./docs-cleaner",
+        "./pdf-to-html"
       ]
     },
     {
