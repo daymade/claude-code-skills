@@ -5,7 +5,7 @@ description: >
   Supports full export (all history) and RSS incremental sync (recent items).
   Use when the user wants to export Douban reading/watching/listening/gaming history,
   back up their Douban data, set up incremental sync, or mentions 豆瓣/douban collections.
-  Triggers on: 豆瓣, douban, 读书记录, 观影记录, 书影音, 导出豆瓣, export, backup, sync, collection.
+  Triggers on: 豆瓣, douban, 读书记录, 观影记录, 书影音, 导出豆瓣.
 ---
 
 # Douban Collection Export
