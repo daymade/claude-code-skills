@@ -2207,6 +2207,37 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
+### 54. **pdf-to-html** - 把 PDF 读成保真 HTML（可选翻译）
+
+把 PDF 转成单文件、可阅读的 HTML，保留图片、图表和阅读顺序——还可选翻译成另一种语言，同时保住每一张图。PDF 是版面而不只是文本流，所以流程会先渲染每一页让你"看"清布局再组装，交付前再渲染 HTML 做视觉验证。
+
+**何时使用：**
+- 想把 PDF 当干净网页/文档阅读（尤其在手机上）
+- 把报告/白皮书 PDF 转成有排版的 HTML 而不丢图表
+- 把 PDF 翻译成另一种语言，同时让图片、图表、表格留在原位
+
+**核心特性：**
+- **结构化提取**（PyMuPDF）：带字号的文本块 + 图片，自动识别并丢弃装饰图（页脚 logo、分隔线）
+- **数据驱动组装**：按字号推断标题层级，内容图压缩后 base64 内嵌成单一可移植文件
+- **可选并行翻译**：用 Dynamic Workflow 并行翻译各页、为数据图表生成译注、统稿统一术语——带忠实度铁律（不给真人编译名，数字与专名照搬）
+- **强制视觉验证**：自适应 headless-Chrome 截图并切成可读分段（绕开 Chrome ~16384px 截图上限）
+- **内置失败案例参考**：把真实踩过的坑（验证、渲染限制、忠实度）固化，别人不必重踩
+
+**使用示例：**
+```bash
+# pdf-to-html 属于 daymade-docs 套件
+claude plugin install daymade-docs@daymade-skills
+
+# 然后自然地让 Claude 做
+"把这个 PDF 转成中文网页版"
+"make this report readable as HTML"
+"把这份 PDF 翻成英文但保留图表"
+```
+
+**要求**：`uv`、Google Chrome 或 Chromium（视觉验证）。Python 依赖（PyMuPDF、Pillow、numpy）通过 `uv run --with` 自动安装。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
