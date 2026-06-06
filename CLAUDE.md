@@ -325,6 +325,10 @@ cd .. && bash daymade-claude-code/marketplace-dev/scripts/check_marketplace.sh
 # Runs: JSON syntax → claude plugin validate → source+skills resolution →
 # reverse sync (warns when a disk SKILL.md is not registered). A WARN on
 # reverse sync is the canary for orphan skills — register them or delete them.
+# Then verify the human-facing skill lists match the manifest (counts drift too):
+python3 daymade-claude-code/marketplace-dev/scripts/check_doc_skill_lists.py
+# Reports MISSING/GHOST per doc (CLAUDE.md / README.md / README.zh-CN.md vs the
+# expanded marketplace.json); exits non-zero on drift. Must be green before push.
 
 # 4. Stage specific files by name, never `git add -A` or `git add .`
 #    (a parallel agent once piggybacked another session's unstaged changes

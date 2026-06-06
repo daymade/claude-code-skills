@@ -26,9 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Marketplace version: 1.60.1 → 1.62.0; `daymade-claude-code` suite: 1.0.0 → 1.1.0 (adds terminal-screenshot).
 - Synced documentation skill counts to the authoritative 61: README.md / README.zh-CN.md badges + descriptions, CLAUDE.md overview (54 → 61) and plugin-entry count (39 → 43).
 - Backfilled the CLAUDE.md Available Skills list to 61 (added marketplace-dev, asr-transcribe-to-text, bigdata-skill, gangtise-copilot, llm-wiki-setup, benchmark-due-diligence, pdf-to-html, terminal-screenshot) and removed the ghost `wechat-article-scraper` entry (skill no longer on disk).
-
-### Known gaps
-- README.md / README.zh-CN.md detailed skill sections remain incomplete (a long-standing backlog surfaced by `check_doc_skill_lists.py`). The drift guard now reports the missing ones precisely; the full rich-section backfill is a tracked follow-up.
+- Backfilled all missing README.md / README.zh-CN.md skill sections (asr-transcribe-to-text, marketplace-dev, skill-creator, feishu-doc-scraper, bigdata-skill, gangtise-copilot, llm-wiki-setup, benchmark-due-diligence, plus auto-repo-setup in zh-CN); all three doc lists (CLAUDE.md / README.md / README.zh-CN.md) now pass `check_doc_skill_lists.py`.
 
 ## [1.60.1] - 2026-06-05
 
