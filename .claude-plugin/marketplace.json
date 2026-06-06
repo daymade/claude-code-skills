@@ -647,7 +647,7 @@
       "description": "Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers six conflict layers: route hijacking, HTTP proxy env var interception, system proxy bypass, SSH ProxyCommand double tunneling, VM/container proxy propagation, and stalled DNS resolver in macOS getaddrinfo chain (dead VPN daemon leaves zombie utun + DNS injection). Includes an automated quick-diagnose script plus SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when local vanity domains fail behind proxy, when git push fails with failed to begin relaying via HTTP, when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, when bootstrapping remote dev environments over Tailscale, or when ssh/curl/git hang ~60s before resolving a hostname while nslookup returns instantly",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.5.1",
+      "version": "1.5.2",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
@@ -816,7 +816,7 @@
       "description": "Adversarial due-diligence on a benchmark you envy (a founder, KOL, company, or product whose claimed success you suspect is inflated). Inline four-phase orchestration: fan-out collection, adversarial verification grading every claim L1-L4 to separate marketing bubble from real signal, attribution weighting (product vs timing vs personal-IP vs luck, and which parts are replicable), then mapping the validated playbook onto the commissioner's own resources with concrete next moves. Use whenever the user wants to 尽调/对标/拆解 a competitor or role-model, suspects 水分/泡沫 in someone's claims (Product Hunt #1, 0-to-1M-users, funding rounds), asks what they can actually steal from a benchmark, or wants to know if a benchmark's wins are real and copyable before betting on the same strategy. Prefer over deep-research when the goal is debunking inflated claims and extracting a replicable playbook, not a neutral briefing.",
       "source": "./benchmark-due-diligence",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "productivity",
       "keywords": [
         "due-diligence",
