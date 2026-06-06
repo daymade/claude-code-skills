@@ -242,6 +242,11 @@ cd .. && bash daymade-claude-code/marketplace-dev/scripts/check_marketplace.sh
 #   [3/4] source+skills resolution         (every plugin entry points to a real SKILL.md)
 #   [4/4] reverse sync (disk → manifest)   (WARN-only: orphan SKILL.md detection)
 
+# 3b. Verify the doc skill lists match the manifest (drift the 4 checks above miss)
+python3 daymade-claude-code/marketplace-dev/scripts/check_doc_skill_lists.py
+# Reports MISSING/GHOST per doc (CLAUDE.md / README.md / README.zh-CN.md vs the
+# expanded marketplace.json); exits non-zero on drift. Must be green before push.
+
 # 4. Verify counts/versions are in sync across English and Chinese docs
 grep "skills-[0-9]*"       README.md README.zh-CN.md
 grep "version-[0-9.]*"     README.md README.zh-CN.md

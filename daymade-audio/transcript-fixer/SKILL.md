@@ -125,6 +125,20 @@ When fixing multiple files (e.g., 5 transcripts from one day):
 4. **Apply global corrections first** (sed with multiple `-e` flags), then per-file context-dependent fixes
 5. **Verify all diffs**, finalize all files, then do one dictionary addition pass
 
+### Parallel via Dynamic Workflow (large batches)
+
+For a large batch (10+ files), a Dynamic Workflow — one subagent per file, running in parallel — is faster than a shell loop and gives each file full AI attention. Four rules earned the hard way; skipping any of them has caused real damage:
+
+1. **Hardcode the file list into the script — don't pass it through `args`.** A Workflow `args` array of strings containing non-ASCII characters, brackets, or path separators can silently arrive empty: the script sees zero files, no agents spawn, and it exits instantly with something like "no files". Plain alphanumeric tokens pass fine, but file paths should go straight into a `const FILES = [...]` literal in the script body, guarded with `if (!FILES.length) return`.
+
+2. **Scope each agent to exactly one file, and forbid cross-file `grep -r` / `sed` in its prompt.** Left unconstrained, an agent will turn a local fix ("this garbled term → correct term, here") into a global search-and-replace and edit unrelated files that were never part of the batch. State the single file path and an explicit "only edit this one file" instruction.
+
+3. **After the batch, verify with `git diff` before trusting it** (works when the files are under version control):
+   - `git diff --name-only` against your intended list — this catches any agent that strayed outside its assigned file. `git checkout` to revert the strays.
+   - `grep` the deleted (`-`) lines for invariants that must never change. For speaker-diarized transcripts, that invariant is the **speaker-label lines** — an ASR fix should only ever touch spoken content, never alter or reassign who-said-what. Confirm zero speaker lines were deleted or changed.
+
+4. **Run the aggregated dictionary suggestions through the false-positive filter before saving any of them.** Parallel agents collectively propose far more rules than are safe — and they don't see each other's suggestions, so duplicates and overreach pile up. Keep only unambiguous **non-word → correct-term** mappings. Drop anything whose "from" side is a real word in some context: a common word, or a term that's only wrong inside one domain. A global dictionary rule on a real word silently corrupts every future transcript — exactly what `references/false_positive_guide.md` warns about. (In one real batch, ~80 raw suggestions collapsed to ~18 safe ones after this filter.)
+
 ### Enhanced Capabilities (Native Mode Only)
 
 - **Intelligent paragraph breaks**: Add `\n\n` at logical topic transitions

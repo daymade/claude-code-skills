@@ -1,6 +1,16 @@
 ---
 name: statusline-generator
-description: Install, configure, customize, or troubleshoot the Claude Code statusline (the line above the prompt with cwd, model, and token counts). Use when the user wants to set up or change the statusline, switch between minimal and full layouts, show absolute token counts (e.g. ctx 108K / 1M) instead of a percentage, add cost via ccusage or git status, or fix a statusline that is blank, silent, stuck, shows "permission denied", or stopped updating after a script edit (commonly a missing chmod +x). Also covers debug-dumping the stdin JSON Claude Code passes the script. Trigger phrases include "configure statusline", "statusline blank", "status line not showing", "statusline broken", "show token count in statusline", 状态栏, 状态栏不显示, 状态栏空白, 显示工作目录, 显示 token 数.
+description: >
+  Installs, configures, customizes, or troubleshoots the Claude Code statusline
+  (cwd, model, token counts). Use when the user wants to set up or change the
+  statusline, switch minimal vs full layouts, show absolute token counts
+  (e.g. ctx 108K / 1M) instead of a percentage, add cost via ccusage or git
+  status, dump the stdin JSON Claude Code passes the script, or fix a statusline
+  that is blank, silent, stuck, shows "permission denied", or stopped updating
+  after a script edit (often a missing chmod +x). Trigger phrases: "configure
+  statusline", "statusline blank", "status line not showing", "statusline
+  broken", "show token count in statusline", 状态栏, 状态栏不显示, 状态栏空白,
+  显示工作目录, 显示 token 数.
 ---
 
 # Statusline Generator

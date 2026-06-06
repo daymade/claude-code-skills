@@ -1,6 +1,15 @@
 ---
 name: terraform-skill
-description: Operational traps for Terraform provisioners, multi-environment isolation, and zero-to-deployment reliability. Covers provisioner timing races, SSH connection conflicts, DNS record duplication, volume permissions, database bootstrap gaps, snapshot cross-contamination, Cloudflare credential format errors, hardcoded domains in Caddyfiles/compose, and init-data-only-on-first-boot pitfalls. Activate when writing null_resource provisioners, creating multi-environment Terraform setups, debugging containers that are Restarting/unhealthy after terraform apply, setting up fresh instances with cloud-init, or any IaC code that SSHs into remote hosts. Also activate when the user mentions terraform plan/apply errors, provisioner failures, infrastructure drift, TLS certificate errors, or Caddy/gateway configuration.
+description: >
+  Operational traps for Terraform provisioners, multi-environment isolation, and
+  zero-to-deployment reliability. Use when writing null_resource / remote-exec /
+  local-exec / file provisioners, setting up fresh instances with cloud-init, or any
+  IaC code that SSHs into remote hosts; when creating multi-environment Terraform
+  setups (DNS record duplication, snapshot cross-contamination); or when debugging
+  containers that are Restarting/unhealthy after terraform apply. Also when the user
+  mentions terraform plan/apply errors, provisioner failures, infrastructure drift,
+  TLS certificate errors, Cloudflare credential format, or Caddy/gateway / Caddyfile /
+  compose configuration.
 ---
 
 # Terraform Operational Traps
