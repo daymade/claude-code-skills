@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# LLM Wiki vault lint —— commit 前自动跑结构性检查，硬 fail 阻断 commit。
+# 启用：git config core.hooksPath .githooks
+#   （hooksPath 是 local 配置、不随仓库走，换机 / 重 clone 后要重设一次）
+exec 1>&2
+
+# 只在 commit 涉及 wiki/ 文件时跑。
+# 注意：git diff --name-only 默认把非 ASCII 路径转义成 \xxx 八进制，
+#       故用 ASCII 段 wiki/ 匹配（不用完整可能含中文的路径 pattern）。
+if git diff --cached --name-only | grep -qE '(^|/)wiki/'; then
+  # PYTHONUTF8=1 防 LC_ALL=C 环境下 python open 中文路径失败。
+  if command -v uv >/dev/null 2>&1; then
+    PYTHONUTF8=1 uv run --no-project --with pyyaml python3 scripts/lint-vault.py wiki || exit 1
+  else
+    PYTHONUTF8=1 python3 scripts/lint-vault.py wiki || exit 1
+  fi
+fi
