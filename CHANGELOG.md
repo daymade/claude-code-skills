@@ -16,6 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **benchmark-due-diligence** v1.0.1: ` #` in `Product Hunt #1` silently truncated the parsed description; reordered to `#1 on Product Hunt` (no keyword loss).
   - **pdf-creator** (`daymade-docs` v1.1.0): `**Scope: markdown → PDF only.**` → `**Scope — markdown → PDF only.**`.
 
+## [1.62.0] - 2026-06-07
+
+### Added
+- **terminal-screenshot** v1.0.0 (`daymade-claude-code` suite): render a terminal CLI's colored output to a PNG so Claude can *see* the real visual result (color contrast, alignment, background blocks) instead of raw ANSI codes — for verifying delta/bat/starship/lazygit color config. Capture-then-render discipline (never `freeze --execute` complex CLIs, which degrade in a child pty and drop background blocks); freeze-first renderer with a bundled stdlib ANSI→HTML + headless-Chrome fallback; per-CLI capture recipes. Bundled `render_ansi.sh`, `ansi2html.py`.
+- **check_doc_skill_lists.py** (`marketplace-dev`): drift guard comparing the skill lists in CLAUDE.md / README.md / README.zh-CN.md against the authoritative marketplace.json (expanded), reporting MISSING and GHOST entries per doc and exiting non-zero on drift.
+
+### Changed
+- Marketplace version: 1.60.1 → 1.62.0; `daymade-claude-code` suite: 1.0.0 → 1.1.0 (adds terminal-screenshot).
+- Synced documentation skill counts to the authoritative 61: README.md / README.zh-CN.md badges + descriptions, CLAUDE.md overview (54 → 61) and plugin-entry count (39 → 43).
+- Backfilled the CLAUDE.md Available Skills list to 61 (added marketplace-dev, asr-transcribe-to-text, bigdata-skill, gangtise-copilot, llm-wiki-setup, benchmark-due-diligence, pdf-to-html, terminal-screenshot) and removed the ghost `wechat-article-scraper` entry (skill no longer on disk).
+
+### Known gaps
+- README.md / README.zh-CN.md detailed skill sections remain incomplete (a long-standing backlog surfaced by `check_doc_skill_lists.py`). The drift guard now reports the missing ones precisely; the full rich-section backfill is a tracked follow-up.
+
 ## [1.60.1] - 2026-06-05
 
 ### Fixed
