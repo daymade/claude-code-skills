@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **benchmark-due-diligence** v1.0.1: ` #` in `Product Hunt #1` silently truncated the parsed description; reordered to `#1 on Product Hunt` (no keyword loss).
   - **pdf-creator** (`daymade-docs` v1.1.0): `**Scope: markdown → PDF only.**` → `**Scope — markdown → PDF only.**`.
 
+## [1.60.1] - 2026-06-05
+
+### Fixed
+- **macos-cleaner** v1.1.0 → v1.1.1: Hardened `safe_delete.py` with forced high-risk path blocking before confirmation and inside `delete_path()`, and updated `find_app_remnants.py` to match installed apps by Bundle Identifier as well as display name. Fixes [#70](https://github.com/daymade/claude-code-skills/issues/70).
+- Marketplace version: 1.60.0 → 1.60.1
+
 ## [1.60.0] - 2026-05-31
 
 ### Added

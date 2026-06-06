@@ -454,7 +454,7 @@
       "description": "Intelligent macOS disk space analysis and cleanup with safety-first philosophy. Use when users report disk space issues, need to clean their Mac, or want to understand storage consumption. Analyzes system caches, application remnants, large files, and development environments (Docker, Homebrew, npm, pip) with risk categorization (Safe/Caution/Keep) and requires explicit user confirmation before any deletions. Includes Mole visual tool integration for hybrid workflow",
       "source": "./macos-cleaner",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.1.1",
       "category": "utilities",
       "keywords": [
         "macos",
