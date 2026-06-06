@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **pdf-creator** v1.6.0: Add `cjk-auto` theme for content-driven table layouts. Based on `default` theme but uses `table-layout: auto` so column widths adapt to actual cell content rather than equal distribution. Best for tables with highly uneven column lengths (course schedules, itemized lists) where fixed equal-width would force CJK mid-breaks. Previously only existed in local cache; now bundled in version control so skill upgrades no longer lose it.
+- **tunnel-doctor** v1.6.0: Add "TUN Measurement Contamination" diagnostic section — while a proxy runs in TUN/global mode, common probes lie: `nc -z` shows a fabricated `0.00s` handshake (TUN completes it locally), `ping`/`remote_ip` are spoofed, and a foreign IP-geo lookup reports the proxy exit instead of the real home IP. Documents what to trust instead (`time_appconnect`/`time_starttransfer`, an in-region IP-geo source, config-decode + GUI cross-check) and adds matching trigger phrases.
+- **debugging-network-issues** v1.1.0: Add cognitive Trap 12 "Reverse-path / directional asymmetry" — A→B healthy does not imply B→A healthy; an external probe to a node only proves that node's return direction, systematically missing the user's failing outbound direction (and the congested direction is often one an external probe structurally cannot reach). Sibling to Trap 5 (probe self-verification); synced into the SKILL.md trap list; fixed a stale "All nine traps" count in the summary.
 
 ## [1.56.0] - 2026-05-24
 
