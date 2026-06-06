@@ -2238,6 +2238,307 @@ claude plugin install daymade-docs@daymade-skills
 
 ---
 
+### 55. **asr-transcribe-to-text** - 用 Qwen3-ASR 把音视频转文字
+
+> **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:asr-transcribe-to-text`）
+
+用 Qwen3-ASR 把音视频文件转成文字，提供两条可互换的推理路径：macOS Apple Silicon 上的本地 MLX（无需 API key，15-27 倍实时）或任意平台的远端 vLLM/OpenAI 兼容 API。自动检测平台并推荐最佳路径，配置持久化在 `${CLAUDE_PLUGIN_DATA}/config.json`。
+
+**使用场景：**
+- 转写会议录音、讲座、访谈、播客或屏幕录制
+- 把任意音视频文件转成文字（语音转文字）
+- 在 Apple Silicon Mac 上做本地免费转写，或本地不可用时走远端 API
+- 作为「转写 → 纠错 → 纪要」流水线的第一步
+
+**主要功能：**
+- 双推理路径——本地 MLX（15-27 倍实时、免费）与远端 API，自动检测平台
+- 内置 `transcribe_local_mlx.py`：只加载一次模型并顺序处理多个文件（无 GPU 争用）
+- 默认 `max_tokens=200000`，规避上游 `mlx-audio` 的 8192 token 截断（会静默截掉 ~40 分钟以上的音频）
+- 远端兜底 `overlap_merge_transcribe.py`：切成 18 分钟片段、2 分钟重叠、模糊合并
+- ffmpeg 视频→16kHz 单声道 WAV 提取、截断校验与代理绕过处理
+- 主动建议用 `transcript-fixer` 清理输出中的 ASR 识别错误
+
+**示例用法：**
+```bash
+# asr-transcribe-to-text 属于 daymade-audio 套件
+claude plugin install daymade-audio@daymade-skills
+
+# 然后自然地让 Claude 做
+"transcribe this meeting recording to text"
+"把这个录音转成文字"
+"convert lecture.mp4 to a transcript"
+```
+
+**要求**：`uv`、ffmpeg/ffprobe。本地 MLX 路径需要 macOS Apple Silicon；远端路径需要可达的 vLLM/OpenAI 兼容 ASR 端点。本地模式无需 API key。
+
+---
+
+### 56. **marketplace-dev** - 把技能仓库变成插件市场
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:marketplace-dev`）
+
+把任意 Claude Code 技能仓库转换成官方插件市场，让用户通过 `claude plugin marketplace add` 安装技能并获得自动更新。生成符合规范的 `.claude-plugin/marketplace.json`，用 `claude plugin validate` 校验，测试真实安装，并向上游仓库提 PR——把来之不易的 schema、版本与 description 反模式固化进流程。
+
+**使用场景：**
+- 让技能仓库可通过 `claude plugin install` 安装
+- 生成或修复 `marketplace.json`（插件分发、一键安装、自动更新）
+- 向已有市场新增插件并正确 bump 版本
+- 排查 schema 报错，如 `Unrecognized key: "$schema"` 或插件名重复
+
+**主要功能：**
+- 证据采集阶段：挖掘文档与本地会话历史，而不是凭模板猜
+- 固化非显然的 schema 规则：`$schema` 被拒、`metadata` 只有 3 个有效字段、`strict: false` 语义、单技能 vs 套件的 `source`/`skills` 模式
+- 内置 `check_marketplace.sh` 跑四道检查（JSON 语法 → `claude plugin validate` → source/skills 解析 → 反向同步），任一必需项失败即非零退出
+- 安装测试、缓存足迹测试与 GitHub 安装测试配方，确认 `source` 产出的快照符合预期
+- 两个 PostToolUse hook（编辑 `marketplace.json` 时校验；改了 `SKILL.md` 但没 bump 版本时告警），随插件启用自动生效
+
+**示例用法：**
+```bash
+# marketplace-dev 属于 daymade-claude-code 套件
+claude plugin install daymade-claude-code@daymade-skills
+
+# 然后自然地让 Claude 做
+"turn this skills repo into a plugin marketplace"
+"给这个仓库生成 marketplace.json 并校验"
+"把我的新 skill 加进市场并提一个 PR"
+```
+
+**要求**：`claude` CLI（用于 `claude plugin validate` / 安装测试）、`jq`。若要提上游 PR，需配置好 git remote。
+
+---
+
+### 57. **skill-creator** - 创建、改进与基准测试技能
+
+> **安装**：`claude plugin install daymade-skill@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-skill:skill-creator`）
+
+构建你自己技能的核心元技能。引导完整的「创建 → 测试 → 审阅 → 改进」循环：起草 SKILL.md、生成真实的测试 prompt、把技能跑出来与 baseline 对比、协助做定性与定量评估并迭代。还能优化技能的 `description` 以提升触发准确率。
+
+**使用场景：**
+- 从零创建技能，或编辑/优化已有技能
+- 跑 eval 测试技能，或做带方差分析的性能基准测试
+- 改进技能 description，让 Claude 更可靠地触发它
+- 把刚调通的第三方 CLI 工具包装成可复用的伴侣技能
+
+**主要功能：**
+- 跨会话历史、本地 SOP、已装插件/MCP、skills.sh、官方插件、npm/PyPI 的先验调研——复用基础设施，只把用户独有的方法论编码进技能
+- inline vs `context: fork` 决策指引（subagent 不能 spawn subagent 或调 skill）与可组合/正交的技能设计
+- `init_skill.py` 脚手架、`package_skill.py`（自动校验）、`security_scan.py`（基于 gitleaks 的密钥/PII 检测）
+- Eval 工具链：并行 spawn 带技能 + baseline 运行、起草断言、评分、聚合基准、在生成的 HTML viewer 里审阅
+- 面向公开技能的强制语义通读——抓住扫描器漏掉的「无关键词」泄漏
+- description 优化循环（60/40 训练/测试切分，按 held-out 分数选最优 description）
+
+**示例用法：**
+```bash
+# skill-creator 属于 daymade-skill 套件
+claude plugin install daymade-skill@daymade-skills
+
+# 然后自然地让 Claude 做
+"create a skill that does X"
+"优化这个 skill 的 description，让它更可靠地触发"
+"把这个 skill 和无技能 baseline 做基准对比"
+```
+
+**要求**：Python 3、`uv`、PyYAML（校验/打包）、gitleaks（安全扫描）。eval 与 description 优化需要 `claude` CLI。
+
+---
+
+### 58. **feishu-doc-scraper** - 飞书/Lark → 保真 Markdown
+
+把飞书（Lark）文档、Wiki 页面/合集、表格以及妙记转写提取成保真的本地 Markdown。首选路径用 `lark-cli` API——以编程方式提取正文（不经模型改写）、递归跟随合集的引用图、从错误码读取权限边界；浏览器 DOM 路径只在 lark-cli 触达不到内容时作为兜底。
+
+**使用场景：**
+- 源是飞书/Lark URL 且要求保真（导出飞书文档/合集/妙记转写）
+- 把飞书 wiki/知识库转成 Markdown，或归档一个飞书合集
+- 导出飞书妙记转写
+- 把文档所有者导出的 `.docx` 转成保真 Markdown 并恢复标题/高亮
+
+**主要功能：**
+- lark-cli API 提取通过 `jq` 把正文落盘（绝不经模型转抄——最重要的保真铁律）
+- 用 `feishu_extract_refs.py` 做递归引用图遍历（BFS），并设残留富媒体标签验收闸，确保没有被引用的文档被静默漏掉
+- 妙记原生转写导出（绝不对下载的媒体重跑 ASR）
+- 权限被拒路径：所有者导出 `.docx` → Markdown，恢复字号→标题、`w:shd`→高亮，再做视觉验证
+- 对 `*.feishu.cn` 强制 `LARK_CLI_NO_PROXY=1`（避免凭据泄漏/DNS 劫持），并做 U+FFFD 编码损坏终检
+- 同时支持飞书（feishu.cn）与 Lark（larkoffice.com）
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install feishu-doc-scraper@daymade-skills
+
+# 然后自然地让 Claude 做
+"把这个飞书合集导出成 markdown"
+"export this Feishu Minutes transcript"
+"把这个 Lark wiki 页面存成 Markdown"
+```
+
+**要求**：已认证到目标租户的 `lark-cli` 二进制（npm `@larksuite/cli`）、`jq`。兜底路径需要浏览器自动化环境；docx 路径需要 `python-docx` 和一个 docx→md 转换器（内置的 doc-to-markdown 技能或 pandoc）。
+
+---
+
+### 59. **bigdata-skill** - Bigdata.com（RavenPack）SDK + REST 工具箱
+
+通过官方 `bigdata-client` SDK 及其公开的 `/v1/*` REST 端点拉取 Bigdata.com（RavenPack）的金融与新闻数据——触达 Bigdata MCP 服务器不提供的结构化底层数据。MCP 只返回散文片段和预合成的 tearsheet；本工具箱触达结构化财务、行情、分析师预期、按日的实体情绪序列、带情绪 + 实体跨度的标注片段检索，以及选股器。
+
+**使用场景：**
+- 在用 Bigdata.com / RavenPack 而 MCP 结果太单薄（"情绪分在哪"、"我要实体级数据"、"日历"）
+- 拉取前瞻/结构化财务：分析师预期、财报/事件日历、超预期、评级、目标价、三大报表、TTM 指标、选股器
+- 想要带数值情绪 + 实体跨度的标注新闻片段、情绪时序，或共现图
+- 提到 `bd_v2_` API key、`rp_entity_id`、`query_unit`/chunk 计费、`bigdata-client`，或"bigdata MCP 不够用"
+
+**主要功能：**
+- 一个 `BigdataClient` 同时暴露 SDK（检索 + 知识图谱）与 REST 逃生舱（`bd._api.http`），触达 SDK 从未封装的每个 `/v1/*` 端点
+- 路由表把每类问题映射到正确模块；`fields_values_to_records()` 把 `{fields, values}` 响应拍平
+- 成本纪律：`1 query_unit = 10 chunks`、仅片段检索计费、用 `ChunkLimit`（绝不用裸 `int`）、rerank 阈值、便宜 50% 的批量检索，以及 `CostModel`/`CostTracker` 预算否决
+- "两张数据面"指引——结构化财务（A 股可经英文名/ISIN 触达）vs 非结构化中文 NLP（数据源级死路）
+- 针对常见首次握手 `SSL: UNEXPECTED_EOF` 的 `rc()` 重试包装，以及带复现与修复的已知坑参考
+- `BIGDATA_API_KEY` 缺失即 fail-fast（无明文兜底）；只读，绝不写入/上传
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install bigdata-skill@daymade-skills
+export BIGDATA_API_KEY=bd_v2_xxxxxxxx
+
+# 然后自然地让 Claude 做
+"pull NVIDIA's forward analyst estimates and last earnings surprise from Bigdata"
+"给我这个标的按日的实体情绪序列"
+"bigdata MCP 只给了 tearsheet——我要结构化字段"
+```
+
+**要求**：一个 `bd_v2_` Bigdata.com API key（用环境变量，绝不硬编码）、`uv`、隔离 venv 中的官方 `bigdata-client` SDK。仅当网络需要时才配出站/WSS 代理以触达 `api.bigdata.com`。
+
+---
+
+### 60. **gangtise-copilot** - Gangtise 投研技能套件安装器
+
+为完整的 Gangtise（岗底斯投研）OpenAPI 技能套件提供一键安装器、凭据配置器和诊断层。安装全部 19 个官方 Gangtise 技能（数据、研究、工具类），用一次实时鉴权校验配置 accessKey/secretAccessKey，并跑只读健康诊断——解决该套件的核心可发现性问题（无公开 manifest、禁列目录的 OBS bucket、两条并行命名线）。
+
+**使用场景：**
+- 用户提到 Gangtise / 岗底斯，或任意 `gangtise-*` 技能
+- 配置 Gangtise 凭据（accessKey / secretAccessKey）
+- 报错如 `token is invalid` / `接口地址错误`，或"我的 gangtise 装得不对"
+- 把数据问题（研报、首席观点、OHLC、估值）路由到正确的 Gangtise 技能
+
+**主要功能：**
+- `install_gangtise.sh` 下载 4 个 OBS bundle → 解出 19 个技能目录 → 软链进检测到的 agent 技能目录（Claude Code、OpenClaw、Codex），含 `minimal`/`workshop`/`full`/`--only` 预设
+- `configure_auth.sh` 写一份共享 XDG 凭据文件（mode 600），跑实时鉴权调用，并把每个技能的 `.authorization` 软链到它（轮换改一份文件，而非 19 份）
+- 只读 `diagnose.sh` 报告安装状态、凭据有效性与作用域能力分层（auth 作用域 vs RAG 作用域）
+- 技能注册表把数据问题路由到 19 个技能构成的二维（数据层 × 操作类型）矩阵
+- 包装契约：绝不 vendor/fork 上游文件，始终重新下载规范 OBS 制品，改动任何已装技能前必先询问
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install gangtise-copilot@daymade-skills
+
+# 然后自然地让 Claude 做
+"装一下 gangtise 的所有 skill 并配置好凭据"
+"my gangtise skills report token is invalid — diagnose it"
+"宁德时代的研报用哪个 gangtise skill 查"
+```
+
+**要求**：一组 Gangtise accessKey + secretAccessKey；`bash`、`curl`、能访问官方 OBS bucket 和 `open.gangtise.com` 的网络。兼容 Claude Code、OpenClaw、Codex 的 agent 布局。
+
+---
+
+### 61. **llm-wiki-setup** - 共创个人投研 LLM Wiki
+
+共创一个个人投研 LLM Wiki（Andrej Karpathy 模式），让用户自己的分析框架长成一份活的 CLAUDE.md——靠访谈用户而不是塞给他一份模板。纯 markdown + `[[wikilink]]`，不用 RAG / 向量库（Karpathy 的核心思想——别过度工程化）。其价值在于把用户的个人投资偏好提炼进他自己的 schema，而非强加一份标准 schema。
+
+**使用场景：**
+- 搭建随用复利的研究知识库（投研第二大脑 / 投研知识库 / 个人投研 wiki）
+- 为金融/投资实例化 Karpathy 的 LLM Wiki 模式
+- 把选股、分析师跟踪或财报观察的工作流变成结构化 markdown 库
+- 把研报 / 电话会 / 专家纪要 ingest 进已有 wiki，或做财报后「预测→兑现」复盘
+
+**主要功能：**
+- 清晰的机制层 vs 规则层切分：三层目录 + wikilink + lint + git hook 脚手架可照抄；分析 schema 由访谈长出，绝不套模板
+- `init_vault.py` 只 scaffold 机制层（不写 schema），再由 8 维访谈用用户自己的话写出他专属的 CLAUDE.md
+- 防腐：git hook + `lint-vault.py` 保持库一致并对抗派生值漂移
+- ingest 真实源（HITL 5 卡点流程）与财报后兑现复盘的 SOP
+- inline 运行（调 `analyst-track-record` 技能与 Bash），并链入 `analyst-track-record` 做分析师回测——而不重造它
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install llm-wiki-setup@daymade-skills
+
+# 然后自然地让 Claude 做
+"帮我搭一个投研第二大脑"
+"build me a personal investment-research wiki in Karpathy's style"
+"把这场电话会 ingest 进我的研究库"
+```
+
+**要求**：Python 3、`uv`（用于 `init_vault.py` / lint）、`git`。只用 markdown + wikilink——无向量库或 embedding 服务。与 `analyst-track-record` 技能配合做回测。
+
+---
+
+### 62. **benchmark-due-diligence** - 对标对象的对抗式尽调拆解
+
+对一个你眼红的对标对象——创始人、KOL、公司或产品，其宣称的成功看着虚高——做对抗式尽调，把营销泡沫与真实信号分开，再把验证过的打法映射到你自己的资源上。它是 `deep-research` 的对抗式、决策导向版本：默认这幅图是注水的，直到被证明，并以「这对我意味着什么」收尾，而不是一份中立报告。
+
+**使用场景：**
+- 想尽调/对标/拆解一个竞争对手或榜样，或抄/偷师某人的打法
+- 怀疑某人宣称里有水分/泡沫（Product Hunt #1、0 到 100 万用户、融资、估值几个亿）
+- 追问那些战绩是真本事还是运气/时机，或说某人太成功了、想知道真相
+- 相比 `deep-research` 的中立简报，更想要一份「祛魅 + 可复制打法」
+
+**主要功能：**
+- 两条严格隔离的注入通道——公开 FACTS 发给每个 agent；私有 COMMISSIONER_CONTEXT 只到达最后的映射 agent（这样委托方的客户名绝不泄漏进公网检索）
+- Phase 0 以证据立地基：在任何 fan-out 之前核实对标对象的真实实体图与头条声明归属（别从名字/域名推断）
+- 四阶段编排——采集 → 对抗式核验（L1-L4 分级，`坐实/存疑/证伪-水分` 裁决）→ 尽调结论（泡沫拆穿表 + 归因拆解）→ 委托方资源映射
+- 复用现有管线而非重造（`deep-research` 扇出、`osint-investigate` 身份核查、`qcc` 系列查工商、`agent-reach` 取社媒数据）
+- inline 运行（它是编排器——`context: fork` 会静默打断扇出）
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install benchmark-due-diligence@daymade-skills
+
+# 然后自然地让 Claude 做
+"帮我尽调一下这个创始人，他到底有没有水分"
+"tear down this competitor's playbook and tell me what I can actually copy"
+"这个 KOL 号称 0 到 100 万用户——是真的吗，对我可复制吗"
+```
+
+**要求**：采集/核验 agent 需要联网。可选与 `deep-research`、`osint-investigate`、`qcc` 技能系列、`agent-reach` 组合；通过 `pdf-creator` 渲染可分享报告。
+
+---
+
+### 63. **auto-repo-setup** - 自动化仓库配置与环境修复
+
+把"跑不起来"变成"已经在跑"，而不要求用户懂 git、uv、ffmpeg 或 API key。为需要克隆仓库并让它跑起来的非技术同事（编辑、商务、运营）设计——也面向想要标准化、可交接的项目上手流程的技术用户。
+
+**使用场景：**
+- 非技术用户说"跑不起来"、"怎么启动"、"环境怎么配"或"帮我设置代码库"
+- 配置新机器，或让同事上手一个代码库
+- 配置 SessionStart hook，让 Claude Code 进入时自动检查环境
+- 误泄漏密钥/路径后清理 git 历史
+- 为不常用 git 的用户处理合并冲突或 git push 失败
+
+**主要功能：**
+- **ONBOARDING.md 优先工作流**：读项目指南，逐步校验，迭代修补缺口
+- **SessionStart hook 生成器**：一条命令 `init_session_start_hook.py` 设好每次 Claude Code 会话进入时的自动环境检查
+- **安全护栏**：Push Safety（任何 push 前验证可见性）、PII Guard（4 层密钥扫描）、环境变量的 NO FALLBACK 原则、Git Hook Bypass 禁令
+- **对抗审查工作流**：对重大改动做多 agent 安全/代码质量/devops/文档审查
+- **内置脚本**：`check_env.py`（审计 git/ffmpeg/uv/python/.env）、`sanitize_history.sh`（扫历史中的密钥/路径/域名）、`init_session_start_hook.py`
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install auto-repo-setup@daymade-skills
+
+# 然后自然地让 Claude 做
+"我跑不起来这个仓库"
+"帮我设置一下这个项目的环境"
+"初始化 SessionStart hook"
+"git push 被拒了"
+```
+
+**要求**：Python 3.8+、`uv` 包管理器。技能本身无需外部 API key。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
