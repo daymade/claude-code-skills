@@ -14,6 +14,7 @@ Curated list of wrong-turn patterns observed in real investigations. Each entry:
 - Trap 9: Agent output equals ground truth
 - Trap 10: Unverified premise
 - Trap 11: Threat-model mismatch
+- Trap 12: Reverse-path / directional asymmetry
 
 ## Trap 1: Circumstantial evidence convergence
 
@@ -128,9 +129,21 @@ Phrased as a question: "My fix makes bytes flow at boundary X. Is X the same as 
 
 In the SKILL.md workflow, this is the Step-2 third-question prompt. Do it before writing code.
 
+## Trap 12: Reverse-path / directional asymmetry
+
+A→B healthy does not imply B→A healthy. Network paths are routinely asymmetric — forward and return routes differ, and congestion or interference on one direction is invisible from the other. Probing from the wrong end (or from only one end) systematically misses the failing direction.
+
+**Why it is seductive**: a probe from a clean external vantage point (a cloud server in another region) to the suspect hop returns perfect numbers, and that feels like proof the hop is healthy. But that probe traversed the *return* leg (or an entirely different path) — not the direction the user's traffic actually fails on.
+
+**Example** (anonymized from a cross-border proxy investigation): user traffic `home → relay → exit → site` degraded badly at peak hours. To "prove the relay and exit nodes were healthy", the investigator drove probes *from an overseas server* to those nodes and got a perfect score (30/30). The conclusion "the nodes are fine, so the fault is purely the user's last mile" was wrong: overseas→node is the lightly-loaded *inbound/return* direction; the failing direction was the user's *outbound* leg into those nodes, which the overseas probe never touched. In many networks the congested direction is structurally the one an external probe cannot reach — only in-country vantage points measure it. The 30/30 "proof" had zero bearing on the failing direction.
+
+**Counter-move**: measure the *same direction the user's traffic flows, from the user's side*, before declaring a hop healthy. A clean external probe proves only that hop's externally-facing/return path — label it as such, never generalize it to "the hop is healthy". For directional confirmation, run TCP-mode `mtr`/`nexttrace` **from the affected origin** toward the target (not ICMP — see Trap 5 and the ICMP caveat) and read where loss first appears; or, if you must use a remote vantage point, deliberately point it at the *return* leg (traffic toward the affected origin), not the outbound leg.
+
+This is the directional sibling of Trap 5 (probe self-verification): Trap 5 is about the probe being structurally independent of the subject; this one is about the probe traversing the *same direction* as the failure. Both fail identically — the measurement does not cover the thing it claims to.
+
 ## Summary: the meta-move
 
-All nine traps share a common structure: the investigator is willing to act on indirect evidence when a cheap direct test is available but was skipped.
+All of these traps share a common structure: the investigator is willing to act on indirect evidence when a cheap direct test is available but was skipped.
 
 The universal counter-move, restated:
 

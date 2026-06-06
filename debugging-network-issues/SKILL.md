@@ -189,6 +189,7 @@ Future investigators — including future self — will read this to avoid the s
 6. **Assumption-rescue cycle.** When evidence contradicts a hypothesis, the temptation is to add a modifier ("yes, but only in case X"). Resist. If the first falsifier fires, scrap the hypothesis.
 7. **Unverified premise.** Investigating a symptom that was never directly observed — inferred from user frustration, alert titles, or downstream effects. Verify first (Step 0.5). Do not investigate anecdotes.
 8. **Threat-model mismatch.** Proposing a fix that targets the wrong layer — writing bytes downstream to solve an upstream problem, tuning a timeout on a hop that never fires it. Naming the boundary each hypothesis targets (Step 2) surfaces this.
+9. **Reverse-path / directional asymmetry.** A→B healthy ≠ B→A healthy. An external probe to a node proves only that node's return/inbound direction; network paths and congestion are directional. Measure the same direction the user's traffic flows, from the user's side (TCP-mode `mtr`/`nexttrace` from the affected origin), before declaring a hop healthy.
 
 See [references/cognitive-traps.md](references/cognitive-traps.md) for extended examples including this case study.
 

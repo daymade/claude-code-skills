@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, local Claude session continuation from `.claude` artifacts, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, multi-path parallel product analysis with cross-model test-time compute scaling, real financial data collection for US equities with validation and yfinance pitfall handling, advanced Excel automation for formatted workbook generation and complex xlsm parsing, macOS programmatic window screenshot capture workflows, verified Scrapling CLI installation and web extraction workflows, plugin marketplace development for converting skills repos into official Claude Code marketplaces, Tencent IMA knowledge base companion with zero-config installation across Claude Code/Codex/OpenClaw, upstream bug detection and runtime repair, personalized fan-out search with priority-based knowledge base boosting, and suite plugins that expose related skills under shared namespaces for combined installation workflows — including a dedicated Claude Code operations suite (daymade-claude-code) bundling session recovery, CLAUDE.md optimization, troubleshooting, statusline configuration, export repair, and marketplace development skills under one namespace, and the StepFun StepAudio 2.5 audio family (stepfun-tts for Contextual TTS with instruction + inline parentheses, stepfun-asr for the SSE endpoint that handles 30-minute audio in a single call)",
-    "version": "1.59.0"
+    "version": "1.60.0"
   },
   "plugins": [
     {
@@ -644,10 +644,10 @@
     },
     {
       "name": "tunnel-doctor",
-      "description": "Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers six conflict layers: route hijacking, HTTP proxy env var interception, system proxy bypass, SSH ProxyCommand double tunneling, VM/container proxy propagation, and stalled DNS resolver in macOS getaddrinfo chain (dead VPN daemon leaves zombie utun + DNS injection). Includes an automated quick-diagnose script plus SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when local vanity domains fail behind proxy, when git push fails with failed to begin relaying via HTTP, when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, when bootstrapping remote dev environments over Tailscale, or when ssh/curl/git hang ~60s before resolving a hostname while nslookup returns instantly",
+      "description": "Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers six conflict layers: route hijacking, HTTP proxy env var interception, system proxy bypass, SSH ProxyCommand double tunneling, VM/container proxy propagation, and stalled DNS resolver in macOS getaddrinfo chain (dead VPN daemon leaves zombie utun + DNS injection). Includes an automated quick-diagnose script plus SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when local vanity domains fail behind proxy, when git push fails with failed to begin relaying via HTTP, when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, when bootstrapping remote dev environments over Tailscale, when ssh/curl/git hang ~60s before resolving a hostname while nslookup returns instantly, or when raw probes give impossibly-fast results under a TUN proxy (nc -z 0.00s or sub-ms ping to overseas nodes, or an IP-geo lookup reporting your proxy exit IP instead of your real home/ISP) — the TUN fabricates them locally",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.5.1",
+      "version": "1.6.0",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
@@ -773,10 +773,10 @@
     },
     {
       "name": "debugging-network-issues",
-      "description": "Evidence-driven investigation for network, streaming, and protocol-layer bugs. Use when debugging connection resets, SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, or any incident where symptoms do not match the obvious cause. Applies falsification-first methodology with layered isolation experiments, env-gated runtime instrumentation, and counter-review agent teams.",
+      "description": "Evidence-driven investigation for network, streaming, and protocol-layer bugs. Use when debugging connection resets, SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, or any incident where symptoms do not match the obvious cause. Applies falsification-first methodology with layered isolation experiments, env-gated runtime instrumentation, and counter-review agent teams. Cognitive-trap catalog includes reverse-path / directional asymmetry — an external probe to a node only proves that node's return direction, not the user's failing outbound direction.",
       "source": "./debugging-network-issues",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "debugging",
