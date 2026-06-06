@@ -1,6 +1,6 @@
 ---
 name: tunnel-doctor
-description: Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers six conflict layers - (1) route hijacking, (2) HTTP proxy env var interception, (3) system proxy bypass, (4) SSH ProxyCommand double tunneling, (5) VM/container runtime proxy propagation (OrbStack/Docker), and (6) stalled DNS resolver in macOS getaddrinfo chain (dead VPN daemon leaving zombie utun + DNS injection). Includes SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when git push fails with "failed to begin relaying via HTTP", when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, when bootstrapping remote dev environments over Tailscale, when ssh/curl/git hang ~60 seconds before resolving a hostname while nslookup returns instantly, when ping to a resolver IP works but dig to the same IP times out, or when ssh -vvv freezes at "debug2: resolving" without ever reaching "debug1: connect".
+description: Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers six conflict layers - (1) route hijacking, (2) HTTP proxy env var interception, (3) system proxy bypass, (4) SSH ProxyCommand double tunneling, (5) VM/container runtime proxy propagation (OrbStack/Docker), and (6) stalled DNS resolver in macOS getaddrinfo chain (dead VPN daemon leaving zombie utun + DNS injection). Includes SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when git push fails with "failed to begin relaying via HTTP", when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, when bootstrapping remote dev environments over Tailscale, when ssh/curl/git hang ~60 seconds before resolving a hostname while nslookup returns instantly, when ping to a resolver IP works but dig to the same IP times out, or when ssh -vvv freezes at "debug2: resolving" without ever reaching "debug1: connect", or when raw probes give impossibly-fast results while a TUN proxy is up — nc -z / TCP connect returning 0.00s or ping returning sub-millisecond RTT to an overseas node (the TUN fabricates them locally), or an IP-geo lookup reporting your proxy exit IP instead of your real home/ISP.
 allowed-tools: Read, Grep, Edit, Bash
 ---
 
@@ -76,6 +76,25 @@ When symptoms point at a component (proxy, VPN, route table, DNS), **don't commi
 **Why this matters**: A symptom that matches the description of Step 2X does not, by itself, prove component X is the problem. Multiple layers can produce overlapping symptoms (a 60-second hang during `git push` could be proxy node death, fakeip route corruption, or DNS resolver stall — all plausible from the user-visible symptom alone). Reaching for the most specific verification first avoids committing to a wrong layer and chasing it down a dead end.
 
 If the failing operation involves DNS at all, **run the per-nameserver bisection from Step 2I before suspecting proxy or routing**. It rules in/out the largest single class of macOS-on-China-network failures in under 15 seconds.
+
+### TUN Measurement Contamination (what your probes lie about while a TUN proxy is up)
+
+When a proxy tool runs in **TUN / global mode** (Shadowrocket, Clash, Surge), it intercepts traffic at the routing layer and fabricates parts of the network stack locally. Several everyday diagnostic commands then return **fabricated or misrouted numbers** — trusting them sends the whole investigation the wrong way. Know what each probe actually measures under TUN:
+
+| Probe | What it looks like | What it actually is under TUN | Trust? |
+|-------|-------------------|-------------------------------|--------|
+| `nc -z <node-ip> <port>` / raw TCP connect showing `0.00s` | "node reachable, instant" | TUN completes the TCP handshake **locally** before tunneling. `0.00s` to an overseas host is physically impossible (light alone is tens of ms each way) — you connected to the TUN, not the node. | ❌ |
+| `ping <host>` with near-zero loss / sub-ms RTT | "link healthy" | TUN can answer ICMP locally; loss and RTT are fabricated and uncorrelated with TCP. (Separately: ICMP ≠ TCP even with no TUN.) | ❌ |
+| `curl … -w '%{remote_ip}'` | "connected to peer X" | Always the local TUN endpoint (`127.0.0.1` / loopback), never the real remote peer. | ❌ |
+| IP-geo lookup via a **foreign** service (an `ip-api`-style endpoint) | "my egress / home IP is …" | A foreign-domain request gets routed **through the proxy**, so it reports the **exit IP**, not your real local/home IP. | ❌ for "what is my real local IP" |
+| IPv4-vs-IPv6 path choice, HTTP/3 / QUIC speedup | varies | TUN typically does not forward UDP/443, so QUIC never leaves. The comparison is meaningless. | ❌ |
+
+**What you *can* trust under TUN:**
+- **`time_appconnect` / `time_starttransfer`** from `curl` (application-layer handshake / TTFB) — these complete only after the tunneled connection actually establishes, so they reflect the real end-to-end path.
+- **An in-region / domestic IP-geo source** for "what is my real local ISP" — an in-region domain hits the proxy's DIRECT rule and exits your real last mile (the foreign source gets tunneled and lies; see table).
+- **The proxy/TUN config decoded from disk + the tool's own GUI** — the authoritative source of which node/route is actually active. Cross-check a file parse against the GUI; do not infer the active node from a network probe.
+
+**Counter-move**: before citing any latency / reachability number while a TUN is up, ask *"would this number be physically possible if the packet really traversed to the destination?"* A `0.00s` connect or a `0.2ms` ping to another continent is the tell that you measured the TUN, not the network. Switch to `time_appconnect`, or temporarily disable the TUN to get a clean baseline (raw probes become meaningful again once it is off).
 
 ### Fast Path: Run Automated Checks
 

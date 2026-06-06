@@ -2274,7 +2274,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 使用 **i18n-expert** 为 React/Next.js/Vue 应用程序设置完整的 i18n 基础设施、审计现有实现中缺失的翻译键，并确保 en-US 和 zh-CN 之间的语言环境一致性。非常适合向全球市场推出产品的团队、维护多语言 UI，或将硬编码字符串替换为正确的 i18n 键。与 **skill-creator** 结合使用可创建支持语言环境的技能，或与 **docs-cleaner** 结合使用可整合多种语言的文档。
 
 ### 网络与 VPN 故障排查
-使用 **tunnel-doctor** 诊断和修复 macOS 上 Tailscale 与代理/VPN 工具的四层冲突（路由劫持、HTTP 环境变量、系统代理、SSH ProxyCommand）。当 Tailscale ping 正常但 TCP 连接失败、git push 报 "failed to begin relaying via HTTP"，或在使用 Shadowrocket、Clash、Surge 的同时设置 Tailscale SSH 到 WSL 实例时特别有用。
+使用 **tunnel-doctor** 诊断和修复 macOS 上 Tailscale 与代理/VPN 工具的多层冲突（路由劫持、HTTP 环境变量、系统代理、SSH ProxyCommand、VM/容器代理传播、DNS 解析器卡死）。当 Tailscale ping 正常但 TCP 连接失败、git push 报 "failed to begin relaying via HTTP"，或在使用 Shadowrocket、Clash、Surge 的同时设置 Tailscale SSH 到 WSL 实例时特别有用。还覆盖 **TUN 测量污染**——开着全局代理时，裸探针（`nc -z` 显示 0.00s、`ping`、国外 `ip-api` 查询）为什么会撒谎，以及该信什么。
 
 ### 产品审计与优化
 使用 **product-analysis** 进行上线前和例行产品体检，覆盖 UX、API、架构与竞品对比场景。支持 P0/P1/P2 分级建议，并可根据可量化指标输出可执行优化清单。适用于需要跨团队协作验证方向是否合理的复杂产品。
@@ -2298,7 +2298,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 使用 **terraform-skill** 当 `terraform apply` 在 provisioner 步骤失败、新实例遇到 "docker: not found"、或多环境 setup 意外共享快照时。Skill 里每一条都是*确切报错 → 根本原因 → 复制粘贴修复*三元组，来自真实事故。特别适合曾经被 cloud-init 的时序竞争、local-exec 里 rsync 连接断开、或者 Caddyfile 里硬编码域名搞掉一个周末的人。
 
 ### 网络、流式与协议层调试
-使用 **debugging-network-issues** 应对症状和"显然原因"对不上的场景：HTTP/2 `RST_STREAM`、SSE 在 60s/100s/130s 整点卡死、"时灵时不灵"故障、或 CDN / 代理 / CGNAT 链路上的空闲超时事件。Skill 用**分层隔离实验**（同一逻辑请求走三条以上、每条仅差一跳的路径）替代假设堆叠，再加一套反审查模式——只在假设被**证伪**而不是单纯被"证实"之后才上 fix。
+使用 **debugging-network-issues** 应对症状和"显然原因"对不上的场景：HTTP/2 `RST_STREAM`、SSE 在 60s/100s/130s 整点卡死、"时灵时不灵"故障、或 CDN / 代理 / CGNAT 链路上的空闲超时事件。Skill 用**分层隔离实验**（同一逻辑请求走三条以上、每条仅差一跳的路径）替代假设堆叠，再加一套反审查模式——只在假设被**证伪**而不是单纯被"证实"之后才上 fix。认知陷阱清单含反向路径/方向不对称——从错误的一端（或只从一端）测量会系统性漏掉方向性故障。
 
 ### 中文 TTS（StepFun 阶跃 StepAudio 2.5）
 使用 **stepfun-tts** 进行中 / 日语语音合成（通过 `instruction` + 行内 `()` 控制情绪与韵律）。封装了让 StepAudio 2.5 新用户必踩的两个 TTS 破坏性变更：`voice_label` 移除和 2.5 时代更严的审查规则。可把 `step-tts-2` 作为单条审查兜底来组合使用。
