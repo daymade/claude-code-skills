@@ -2497,6 +2497,39 @@ claude plugin install benchmark-due-diligence@daymade-skills
 
 ---
 
+### 64. **bilibili-source** - Login-Free Bilibili Video Data + Danmaku Fetcher
+
+Fetch real, citable data for any Bilibili (B站) video — title, UP follower count, publish date, tags, partition, per-part cids, live stats (view/like/coin/favorite/share/reply/danmaku), and full danmaku (bullet-comment) text — in one `view/detail` call, login-free. Built so engagement numbers are cheap to fetch and impossible to fake, instead of hand-typed into a doc where they rot.
+
+**When to use:**
+- Ingesting a Bilibili video into a knowledge base, or building a "why did this perform" case study
+- Verifying a creator's claimed view/like/favorite numbers, or about to write any B站 metric into a document
+- Wanting the danmaku text (qualitative audience reactions), not just a reply count
+- Pasting a BVID, `av` number, `b23.tv` short link, or full URL — all normalized automatically
+
+**Key features:**
+- One `bili-fetch.sh` returns full metadata + live stats + UP fans + tags + every part's cid; metrics carry a `fetched_at` timestamp because they drift in real time
+- `bili-danmaku.sh` pulls and decompresses the danmaku full text; `bili-subs.sh` handles the login-gated subtitle track (asks before touching browser cookies)
+- `bili-selftest.sh` health-check verifies every endpoint against the live API, so API drift surfaces as one clear FAIL instead of a silent wrong answer
+- NO-FABRICATION discipline: an unfetchable number is marked unverified, never estimated
+- Strips the local proxy (Bilibili is a domestic CN service), sends UA+Referer (avoids HTTP 412), retries with backoff
+- API reference includes the WBI request-signing algorithm for `space/wbi/*` extension
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install bilibili-source@daymade-skills
+
+# Then ask Claude naturally
+"pull the real view/like/favorite counts for this B站 video so I can cite them"
+"这个 B站 视频弹幕里大家在说什么？"
+"grab the subtitle transcript from this bilibili video so I can summarize it"
+```
+
+**Requirements**: `curl`, `jq`, `python3` (danmaku decompression). `yt-dlp` only for the login-gated subtitle path. No login for stats / metadata / danmaku.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).

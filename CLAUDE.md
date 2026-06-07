@@ -258,6 +258,7 @@ This applies when you change ANY file under a skill directory:
 59. **benchmark-due-diligence** - Runs adversarial due-diligence on a benchmark the user envies (a founder, KOL, company, or product whose claimed success looks inflated), separating marketing bubble from real signal and mapping the validated playbook onto the user's own situation
 60. **pdf-to-html** - Converts a PDF into one self-contained, readable HTML file preserving images, tables, charts, and reading order, optionally translating it into another language while keeping every figure
 61. **terminal-screenshot** - Render a terminal CLI program's colored output to a PNG so Claude can see the real visual result (color contrast, alignment, background blocks) instead of raw ANSI codes — for verifying delta/bat/starship/lazygit color config
+62. **bilibili-source** - Fetch login-free, citable data for a Bilibili (B站) video — stats, UP fans, tags, per-part cids, and full danmaku text — via one view/detail call (accepts BVID/av/b23.tv/URL); login-gated subtitles; ships a self-test for API-drift detection
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
