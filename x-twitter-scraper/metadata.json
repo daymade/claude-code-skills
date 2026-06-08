@@ -1,0 +1,12 @@
+{
+  "version": "2.4.16",
+  "organization": "Xquik",
+  "date": "April 2026",
+  "abstract": "Integration guide for the Xquik X (Twitter) real-time data platform. Covers the REST API (100+ endpoints across tweet search, user lookup, user tweets/likes/media, favoriters, mutual followers, confirmation-gated private reads, media download, extractions, monitors, events, webhooks, trends, radar, compose, style analysis, drafts, draws, connected X account listing, confirmation-gated write actions, credit balance, and support tickets), HMAC webhook verification, MCP server setup for 10 IDEs and AI agents (2 structured API tools: explore + xquik), all 23 extraction tools, tweet composition with algorithm scoring, usage-cost estimates, and complete TypeScript type definitions. Code examples in JavaScript, Python, Go, and cURL.",
+  "references": [
+    "https://docs.xquik.com",
+    "https://docs.xquik.com/api-reference/overview",
+    "https://docs.xquik.com/mcp/overview",
+    "https://docs.xquik.com/webhooks/overview"
+  ]
+}

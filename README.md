@@ -14,7 +14,7 @@
 
 </div>
 
-Professional Claude Code skills marketplace featuring 61 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 62 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2496,6 +2496,29 @@ claude plugin install benchmark-due-diligence@daymade-skills
 **Requirements**: Web access for the collection/verification agents. Optionally composes with `deep-research`, `osint-investigate`, the `qcc` skill family, and `agent-reach`; renders a shareable report via `pdf-creator`.
 
 ---
+
+### 64. **x-twitter-scraper** - Xquik X/Twitter API Skill
+
+Use Xquik from Claude Code for X/Twitter data, MCP access, HMAC webhooks, bulk extraction workflows, and confirmation-gated actions. The skill uses API-key based access and never asks for X login material.
+
+**When to use:**
+- Searching tweets, users, trends, followers, media, and bulk extraction outputs
+- Setting up the Xquik MCP server for agent workflows
+- Building webhook-driven workflows with signed delivery
+- Running confirmation-gated X actions from a coding-agent workflow
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install x-twitter-scraper@daymade-skills
+
+# Then ask Claude naturally
+"Search recent tweets about a topic with Xquik"
+"Set up the Xquik MCP server"
+"Create a webhook workflow for extraction results"
+```
+
+**Requirements**: Xquik API key.
 
 ## 🎬 Interactive Demo Gallery
 

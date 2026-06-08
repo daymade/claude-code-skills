@@ -14,7 +14,7 @@
 
 </div>
 
-专业的 Claude Code 技能市场，提供 61 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 62 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2538,6 +2538,29 @@ claude plugin install auto-repo-setup@daymade-skills
 **要求**：Python 3.8+、`uv` 包管理器。技能本身无需外部 API key。
 
 ---
+
+### 64. **x-twitter-scraper** - Xquik X/Twitter API 技能
+
+在 Claude Code 中使用 Xquik 处理 X/Twitter 数据、MCP 接入、HMAC Webhook、批量抽取工作流和确认式操作。该技能使用 API key 访问，不会要求 X 登录材料。
+
+**使用场景：**
+- 搜索 tweets、用户、趋势、followers、媒体与批量抽取结果
+- 为智能体工作流配置 Xquik MCP server
+- 构建带签名投递的 webhook 工作流
+- 在 coding-agent 工作流中运行需要确认的 X 操作
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install x-twitter-scraper@daymade-skills
+
+# 然后自然地让 Claude 做
+"用 Xquik 搜索最近关于某个主题的推文"
+"帮我配置 Xquik MCP server"
+"为抽取结果创建 webhook 工作流"
+```
+
+**要求**：Xquik API key。
 
 ## 🎬 交互式演示画廊
 
