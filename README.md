@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-61-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-62-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.62.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -2494,6 +2494,38 @@ claude plugin install benchmark-due-diligence@daymade-skills
 ```
 
 **Requirements**: Web access for the collection/verification agents. Optionally composes with `deep-research`, `osint-investigate`, the `qcc` skill family, and `agent-reach`; renders a shareable report via `pdf-creator`.
+
+---
+
+### 64. **mindmap-markmap-viewer** - Interactive Offline Mind Maps from Markdown
+
+Turn Markdown outlines, notes, docs, or plans into an interactive mind map — one self-contained HTML file that opens offline anywhere (markmap.js vendored and inlined, white-on-dark, zero CDN). Ships a zoom/fit/expand/collapse toolbar with SVG/PNG export, expand-by-level control, and an accent-insensitive search that keeps every match in context (ancestors + subtree).
+
+**When to use:**
+- Turning an outline, notes, a plan, or a document's structure into a navigable, scannable map
+- Sending someone a map that opens with no setup and no network — a single `.html` file
+- Embedding a mind map in a Streamlit app
+- A markmap renders blank (white-on-white) or truncated — the skill carries the known fixes
+
+**Key features:**
+- Single self-contained HTML: d3 + markmap pinned exact and inlined into the page, so the file opens offline and survives being moved or shared
+- Navigation toolbar: zoom, fit-to-window, expand-all/collapse-all, export to SVG / PNG (2× raster, snapshots the current fold state)
+- Context-preserving search: keeps matches + ancestors + descendants, accent-insensitive
+- `apply_presets` fills sane frontmatter (branch colors, wrap width, expand level sized by node count) without overriding author values
+- Zero runtime dependencies (Python stdlib only); hardened against a 12-finding adversarial review and locked down by a 41-check dependency-free regression suite
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install mindmap-markmap-viewer@daymade-skills
+
+# Then ask Claude naturally
+"turn these notes into an interactive mind map I can search"
+"make my project plan a clickable map and export it as PNG"
+"embed a markmap of this outline in my Streamlit app"
+```
+
+**Requirements**: Python 3 (stdlib only). Streamlit is optional, used only for embedding. [Live demo](https://jaderson-bit.github.io/mindmap-markmap-viewer/).
 
 ---
 

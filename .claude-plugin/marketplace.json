@@ -853,6 +853,26 @@
         "second-brain",
         "投研知识库"
       ]
+    },
+    {
+      "name": "mindmap-markmap-viewer",
+      "description": "Turn Markdown outlines, notes, docs, or plans into an interactive mind map — a single self-contained HTML file that opens offline anywhere (markmap.js, white-on-dark, zoom/expand/export toolbar, search that keeps matches in context). Use whenever the user asks for a mind map, markmap, or concept map, wants to visualize or diagram the structure of a document or topic, summarize notes as a navigable tree, make an outline clickable or explorable, or embed such a map in Streamlit — even when they don't literally say 'mind map'.",
+      "source": "./mindmap-markmap-viewer",
+      "strict": false,
+      "version": "1.1.0",
+      "category": "productivity",
+      "keywords": [
+        "mindmap",
+        "mind-map",
+        "markmap",
+        "markdown",
+        "visualization",
+        "outline",
+        "concept-map",
+        "offline-html",
+        "svg-export",
+        "streamlit"
+      ]
     }
   ]
 }

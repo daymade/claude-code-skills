@@ -1,0 +1,30 @@
+{
+  "skill_name": "mindmap-markmap-viewer",
+  "notes": "Helper correctness is locked down programmatically by test_render_markmap.py (run: python evals/test_render_markmap.py). The prompts below are realistic invocation cases for trigger/behavior review.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Turn this outline into an interactive mindmap I can click through and search:\n\n# Compliance Program\n## Policies\n- Code of conduct\n- Anti-bribery\n## Training\n- Onboarding\n- Annual refresher",
+      "expected_output": "A standalone HTML mind map (dark background, white font) rendered with markmap.js; nodes match the headings/bullets; search filters the tree to matches + ancestors + descendants.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Embed a markmap of my project plan in my Streamlit app, starting collapsed to the top two levels with an expand-all toggle.",
+      "expected_output": "Uses render_markmap() inside Streamlit via components.html; initialExpandLevel set to 2 by default; an expand-all path sets level -1. Dark iframe background so the white font is readable.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "My mind map shows up blank/empty when I open the HTML file in the browser — the text seems invisible. Fix it.",
+      "expected_output": "Diagnoses white-font-on-white/transparent-background; build_html paints its own dark backdrop (#0e1117) by default so the white font is visible standalone.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Make a mindmap from these notes that include some code generics like List<String> and a step that says 'collapse with </div>'.",
+      "expected_output": "Map renders fully without truncation; '<', '>', '&' in node text are HTML-escaped by build_html and round-trip to markmap unchanged (no early </div> break, no dropped <String>).",
+      "files": []
+    }
+  ]
+}
