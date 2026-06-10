@@ -1155,8 +1155,8 @@ Workflow:
 3. Present findings: "45 GB in ~/Library/Caches"
 4. Explain: "These are safe to delete, apps will regenerate them"
 5. Ask confirmation
-6. Execute: `rm -rf ~/Library/Caches/*`
-7. Report: "Recovered 45 GB"
+6. Provide the command for the user to run themselves: `rm -rf ~/Library/Caches/*` (per Core Principle 9, do not auto-execute)
+7. After the user runs it, verify with `df -h /` and report: "Recovered 45 GB"
 
 ### Example 2: Development Environment Cleanup
 
@@ -1179,7 +1179,7 @@ Workflow:
 2. Present top 20 large files with context
 3. Categorize: videos, datasets, archives, disk images
 4. Let user decide what to delete
-5. Execute confirmed deletions
+5. Provide deletion commands for the user to run (or use scripts/safe_delete.py for interactive per-item confirmation)
 6. Suggest archiving to external drive
 
 ## Best Practices
