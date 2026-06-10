@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-61-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-62-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.62.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -2536,6 +2536,38 @@ claude plugin install auto-repo-setup@daymade-skills
 ```
 
 **要求**：Python 3.8+、`uv` 包管理器。技能本身无需外部 API key。
+
+---
+
+### 64. **mindmap-markmap-viewer** - Markdown 大纲变交互式离线思维导图
+
+把 Markdown 大纲、笔记、文档或计划变成可交互的思维导图——一个自包含的 HTML 文件，离线随处打开（markmap.js 本地内联、白字深底、零 CDN）。自带缩放/适配/全展开/全折叠工具栏和 SVG/PNG 导出、按层级展开控制，以及保留上下文的搜索（命中 + 祖先 + 子树，忽略重音符号）。
+
+**使用场景：**
+- 把大纲、笔记、计划或文档结构变成可浏览、可扫读的导图
+- 把导图发给任何人：一个 `.html`，无需安装、无需联网
+- 在 Streamlit 应用里嵌入思维导图
+- markmap 渲染空白（白字白底）或被截断——本技能内置已知修复
+
+**主要功能：**
+- 单文件自包含 HTML：d3 + markmap 版本钉死并内联进页面，离线打开，移动/分享不坏
+- 导航工具栏：缩放、适配窗口、全展开/全折叠、导出 SVG / PNG（2× 栅格、保留当前折叠状态）
+- 保留上下文的搜索：命中 + 祖先 + 子树，忽略重音符号
+- `apply_presets` 自动填充合理 frontmatter（分支配色、换行宽度、按节点数定展开层级），绝不覆盖作者已设的值
+- 零运行时依赖（纯 Python 标准库）；经 12 项对抗式审查加固，并由 41 项无依赖回归测试锁定
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install mindmap-markmap-viewer@daymade-skills
+
+# 然后自然地让 Claude 做
+"把这些笔记变成可搜索的交互式思维导图"
+"把我的项目计划做成可点击的导图并导出 PNG"
+"在我的 Streamlit 应用里嵌入这个大纲的 markmap"
+```
+
+**要求**：Python 3（仅标准库）。Streamlit 可选，仅用于嵌入。[在线演示](https://jaderson-bit.github.io/mindmap-markmap-viewer/)。
 
 ---
 
