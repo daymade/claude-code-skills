@@ -14,6 +14,8 @@ No install needed — paste this into Claude (Claude Code or the app):
 
 Claude clones the skill on the fly, follows its authoring rules (balanced branches, short labels), and hands back an interactive `.html` that opens offline plus the editable `.md` source of truth. Swap "Product Management" for anything you want mapped.
 
+![One-line prompt in the Claude app producing an interactive Product Management mind map](assets/one-line-demo.png)
+
 ## Why this exists
 
 markmap renders a Markdown outline as a zoomable mind map, but three things need a layer on top to be genuinely usable:
