@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claude Usage Analyst"
+  short_description: "Analyze Claude Code token and cost burn"
+  default_prompt: "Use $claude-usage-analyst to explain today’s Claude Code token and cost usage with evidence."
