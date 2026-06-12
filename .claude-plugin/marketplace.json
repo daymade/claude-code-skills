@@ -853,6 +853,26 @@
         "second-brain",
         "投研知识库"
       ]
+    },
+    {
+      "name": "necl-content-poster",
+      "description": "Turn one draft into three platform-tuned posts at once: Telegram (RU), LinkedIn (EN), Threads (EN). Encodes 8 proven hook archetypes, a banned-phrases list that strips AI-marker language, a 6-block LinkedIn structure with a mandatory twist line, and a one-inference rule for Threads. Reads a company-context.md for brand voice, audience, and CTAs (template included). Use when the user provides a draft, idea, news item, or announcement and wants polished cross-platform posts — triggers on 'write a post', 'cross-post this', 'превратить в пост'.",
+      "source": "./necl-content-poster",
+      "strict": false,
+      "version": "0.1.0",
+      "category": "content-creation",
+      "keywords": [
+        "content",
+        "social-media",
+        "copywriting",
+        "cross-platform",
+        "telegram",
+        "linkedin",
+        "threads",
+        "bilingual",
+        "marketing",
+        "claude-code"
+      ]
     }
   ]
 }
