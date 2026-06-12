@@ -202,4 +202,4 @@ If any box fails, revise that block before delivering.
 
 ---
 
-*Built by [NeCL](https://neclco.com) — production-grade AI engineering. [Book a call](https://calendly.com/neclcompany/30min?utm_source=marketplace&utm_medium=skill&utm_campaign=content-poster) if you need a content engine wired to a real publishing pipeline.*
+*Built by [NeCL](https://neclco.com/?utm_source=marketplace&utm_medium=skill&utm_campaign=content-poster) — production-grade AI engineering. Visit neclco.com if you need a content engine wired to a real publishing pipeline.*
