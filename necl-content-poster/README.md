@@ -70,7 +70,7 @@ See [SKILL.md](./SKILL.md) — bottom section has a full input → 3 outputs exa
 
 [neclco.com](https://neclco.com) — production AI engineering. We build content engines, RAG systems, voice agents, and full Telegram bot platforms.
 
-**Need a content engine that posts itself across all your channels?** [Book a call](https://calendly.com/neclcompany/30min?utm_source=marketplace&utm_medium=skill&utm_campaign=content-poster).
+**Need a content engine that posts itself across all your channels?** Visit [neclco.com](https://neclco.com/?utm_source=marketplace&utm_medium=skill&utm_campaign=content-poster).
 
 Pair this skill with [necl-hn-mcp](https://github.com/adjacentai/necl-hn-mcp) for full HN → drafts pipeline.
 
