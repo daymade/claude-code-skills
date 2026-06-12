@@ -2497,6 +2497,25 @@ claude plugin install benchmark-due-diligence@daymade-skills
 
 ---
 
+### 64. **necl-content-poster** - Cross-Platform Content Generation
+
+Turns one draft into three platform-tuned posts: Telegram (RU), LinkedIn (EN), Threads (EN).
+
+**When to use:**
+- Announcing a product, feature, or case study across channels
+- Turning a rough idea or news item into ready-to-publish posts
+- Cross-posting without rewriting tone per platform three times
+- Keeping LinkedIn copy free of AI-marker language
+
+**Key features:**
+- 8 proven hook archetypes (shock-stat, counter-narrative, confession, dated story...)
+- Banned-phrases list that strips recognizable AI-text patterns
+- 6-block LinkedIn structure with a mandatory twist line
+- One-inference rule for Threads (15-50 words, screenshot-bait)
+- `company-context.md` template for brand voice, audience, and CTAs
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
