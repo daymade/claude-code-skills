@@ -2,6 +2,17 @@
 
 This document defines the JSON schemas used by skill-creator.
 
+## Contents
+
+- **evals.json** — test case definitions (prompts, expected output, assertions)
+- **history.json** — description optimization loop history
+- **grading.json** — per-run assertion results (viewer depends on exact field names)
+- **metrics.json** — per-run quantitative metrics
+- **timing.json** — token/duration data captured from task notifications
+- **benchmark.json** — aggregated cross-configuration comparison (viewer input)
+- **comparison.json** — blind A/B comparison verdicts
+- **analysis.json** — analyst-pass observations over benchmark data
+
 ---
 
 ## evals.json

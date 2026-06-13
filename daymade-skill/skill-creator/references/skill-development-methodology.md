@@ -139,6 +139,34 @@ SKILL.md 提到 timing.json 和 benchmark，但未给出具体应跟踪哪些指
 
 SKILL.md 已完整覆盖描述优化循环（20 个 eval query、60/40 train/test split、5 轮迭代）和打包流程（prerequisites、security scan、marketplace.json）。无补充。
 
+## Phase 9: 实战案例库（每条规则背后的事故）
+
+SKILL.md 中的若干行级规则来自下面这些真实事故。规则本身在 SKILL.md 在场，这里只存浓缩战例——当你怀疑某条规则是否值得遵守时来查它的代价。
+
+### Case 1: YAML frontmatter 跨解析器分叉（2026-06）
+
+某 PDF skill 的 description 是未加引号的 YAML plain scalar，值内含 `**Scope: markdown → PDF only.**`。Claude Code 的宽松解析器正常工作数月，codex 的严格解析器直接报 `invalid YAML: mapping values are not allowed`——同一文件跨 runtime 行为分叉。更阴险的同类发现：另一 skill 的 description 内含 ` #`，**不报任何错**——description 被静默截断（985 字符截到约三分之一处），触发关键词全部丢失，所有扫描全绿。发现一例后 grep 全仓，共 3 个 skill 中招。全仓修复方案：description 统一块标量 `>` 写法 + PyYAML 严格解析过闸（62/62 通过）。
+
+→ 对应规则：SKILL.md Step 4 "Validate immediately after every SKILL.md edit" + 块标量约定
+
+### Case 2: 脱敏按目的地，不按内容（2026-06）
+
+从真实生产事故报告蒸馏 debugging skill 时，把私有 repo 的事故报告和公开 skill bundle 一起脱敏 → 违反私有仓库审计透明原则（事故报告的真实 hostname/路径/时间戳是审计价值所在），三轮返工逐文件恢复。期间另踩两坑：第一轮占位符把要隐藏的真实域名编码进了占位符名本身（形如 `<真实项目名-domain>`，替换等于没替换）；批量替换脚本无文件白名单，误改了项目 CLAUDE.md 被迫 git 恢复。
+
+→ 对应规则：SKILL.md Step 5 "Scope the pass by destination" + 占位符命名/白名单两条
+
+### Case 3: 用户词典零丢失的 suite 迁移（2026-05）
+
+某转写纠错 skill 从 standalone 目录迁入 suite（安装路径与调用名同时变化）。用户最关心累积的纠错词典会不会丢——答案是零风险：词典 SSOT 在 `~/.<skill-name>/` 下且自带 `.bak` 备份，脚本所有路径从 `Path.home()` 起算，与安装位置完全解耦。同次事故面：marketplace 双重注册（standalone entry + suite skills 数组并存）导致双调用名共存让用户困惑；批量删除 standalone entry 后报 19 个 plugin error——Claude Code **没有**"删 entry 自动清理本地安装"机制，dangling 安装（16 entry × 多 profile ≈ 900MB cache）波及所有外部用户，只能靠 CHANGELOG migration 指引走。
+
+→ 对应规则：SKILL.md Scripts "User-mutable data lives outside the bundle" + Step 8 breaking change 段 + 跨 skill 引用 namespaced
+
+### Case 4: 历史挖掘撑爆 context（2026-06）
+
+「基于全部对话历史优化 skill」任务在已接近满的主 context 里直接做：发起委派时 tool_use input 流出为空对象（InputValidationError: required parameter missing），下一请求超 token 上限 **17 个 token** 崩溃，整个 session 报废。重试时改为：两个并行 subagent 各自用 python 逐行解析 + 每字段截断提取 + 只返回浓缩教训清单，主 context 只收结论——一次成功，且萃取质量更高（每条教训带证据定位）。
+
+→ 对应规则：SKILL.md Capture Intent 的 past-transcripts 委托段
+
 ## 来源
 
 | 来源 | 本文档引用的独有贡献 |

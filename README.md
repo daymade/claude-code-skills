@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-62-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-63-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.63.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -14,7 +14,7 @@
 
 </div>
 
-Professional Claude Code skills marketplace featuring 62 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 63 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2527,6 +2527,40 @@ claude plugin install bilibili-source@daymade-skills
 ```
 
 **Requirements**: `curl`, `jq`, `python3` (danmaku decompression). `yt-dlp` only for the login-gated subtitle path. No login for stats / metadata / danmaku.
+
+---
+
+### 65. **claude-usage-analyst** - Explain Claude Code Token Usage & Quota Burn
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-usage-analyst`)
+
+Turn local `ccusage` data into an evidence-based, human-readable explanation of where your Claude Code / Claude Desktop tokens, cost, and quota went — separating observed numbers from interpretation instead of guessing.
+
+**When to use:**
+- Asking why a Claude quota or 5-hour block got exhausted
+- Wondering whether a model (`fable` / `opus` / `sonnet`) is unusually expensive for your workload
+- Needing today's or a historical window's token/cost breakdown, including cache read/write pressure
+- Explaining usage to a non-technical reader without unexplained jargon
+
+**Key features:**
+- Bundled `analyze_claude_usage.py` summarizes tokens, cost, input/output, and cache create/read over any date window and timezone
+- Model-comparison mode (`--model-a` / `--model-b`) weighs both token volume and estimated cost — a model can be cheap per token but expensive overall
+- A 5-hour-block table for quota-exhaustion questions
+- Evidence discipline: every numeric claim is grounded in `ccusage` output; cache-read pressure is counted even when you never typed those tokens
+- Scope is stated explicitly: `ccusage claude` measures local Claude Code logs, not a full Claude.ai chat bill
+
+**Example usage:**
+```bash
+# Install the suite
+claude plugin install daymade-claude-code@daymade-skills
+
+# Then ask Claude naturally
+"why did my Claude quota run out today?"
+"is opus more expensive than sonnet for what I'm doing?"
+"break down my Claude Code token usage for this month"
+```
+
+**Requirements**: `ccusage` (via `npm i -g ccusage` or `npx ccusage@latest`), `python3`.
 
 ---
 
