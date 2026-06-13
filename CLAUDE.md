@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 63 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
+This is a Claude Code skills marketplace containing 64 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -153,7 +153,7 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 44 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
+- Contains 45 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
 - Each plugin has: name, description, source, version, category, keywords
 - Marketplace metadata: name, owner, version
 - Single-skill plugins follow the official pattern (167/168 plugins in `anthropics/claude-plugins-official`): `source` points to skill directory, `skills` omitted
@@ -260,6 +260,7 @@ This applies when you change ANY file under a skill directory:
 61. **terminal-screenshot** - Render a terminal CLI program's colored output to a PNG so Claude can see the real visual result (color contrast, alignment, background blocks) instead of raw ANSI codes — for verifying delta/bat/starship/lazygit color config
 62. **bilibili-source** - Fetch login-free, citable data for a Bilibili (B站) video — stats, UP fans, tags, per-part cids, and full danmaku text — via one view/detail call (accepts BVID/av/b23.tv/URL); login-gated subtitles; ships a self-test for API-drift detection
 63. **claude-usage-analyst** - Explain local Claude Code / Claude Desktop token usage, cost, quota burn, model mix, and cache pressure from `ccusage` data — separating observed numbers from interpretation in plain language (daymade-claude-code suite member)
+64. **marketplace-health-check** - Run a full 6-dimension health check of this skills marketplace repo (code/script safety, doc/SSOT consistency, security/PII, open-PR triage, open-issue triage, marketplace integrity) via a parallel fan-out Dynamic Workflow, then Counter-Review the serious findings and report by priority
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
