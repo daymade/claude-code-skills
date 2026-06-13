@@ -78,7 +78,7 @@ python scripts/fix_transcription.py --input meeting.md --stage 3 --output ./corr
 
 ## fix_transcript_timestamps.py
 
-Normalize speaker timestamp lines such as `天生 00:21` or `Speaker 7 01:31:10`.
+Normalize speaker timestamp lines such as `说话人A 00:21` or `Speaker 7 01:31:10`.
 
 ### Syntax
 

@@ -113,7 +113,7 @@ When a proxy tool runs in **TUN / global mode** (Shadowrocket, Clash, Surge), it
 For common macOS conflicts (env proxy, system proxy exceptions, direct/proxy path split, local TLS trust), run:
 
 ```bash
-python3 scripts/quick_diagnose.py --host local.claude4.dev --url https://local.claude4.dev/health
+python3 scripts/quick_diagnose.py --host local.example.com --url https://local.example.com/health
 ```
 
 Optional route ownership check for a Tailscale destination:

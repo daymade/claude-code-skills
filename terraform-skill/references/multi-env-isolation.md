@@ -77,12 +77,12 @@ Two Terraform environments creating A records for `@` (root) in the same Cloudfl
 ```hcl
 # Production: root domain records
 resource "cloudflare_dns_record" "prod" {
-  name = "@"  # gpt-6.pro
+  name = "@"  # example.com
 }
 
 # Staging: subdomain records only
 resource "cloudflare_dns_record" "staging" {
-  name = "staging"  # staging.gpt-6.pro
+  name = "staging"  # staging.example.com
 }
 ```
 

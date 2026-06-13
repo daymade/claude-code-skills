@@ -25,8 +25,8 @@
 claude plugin marketplace add https://github.com/daymade/claude-code-skills
 
 # Marketplace 名称：daymade-skills（来自 marketplace.json）
-# 安装 skill-creator
-claude plugin install skill-creator@daymade-skills
+# 安装 daymade-skill 套件（含 skill-creator）
+claude plugin install daymade-skill@daymade-skills
 ```
 
 ### 步骤 2：初始化你的第一个技能
@@ -122,7 +122,7 @@ claude plugin marketplace add https://github.com/daymade/claude-code-skills
 # 在 Claude Code 内使用 `/plugin ...`，在终端中使用 `claude plugin ...`
 # 步骤 2：安装你需要的技能
 claude plugin install github-ops@daymade-skills
-claude plugin install doc-to-markdown@daymade-skills
+claude plugin install daymade-docs@daymade-skills
 # ... 根据需要添加更多
 
 # 步骤 3：重启 Claude Code

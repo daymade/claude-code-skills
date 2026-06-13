@@ -151,7 +151,7 @@ Caddyfile or compose has literal domain names. Staging Caddy loads production co
 **Caddyfile**: Use `{$VAR}` — Caddy evaluates env vars at startup.
 ```caddy
 # WRONG
-gpt-6.pro { tls { dns cloudflare {env.CLOUDFLARE_API_TOKEN} } }
+example.com { tls { dns cloudflare {env.CLOUDFLARE_API_TOKEN} } }
 
 # RIGHT
 {$LOBEHUB_DOMAIN} { tls { dns cloudflare {env.CLOUDFLARE_API_TOKEN} } }
@@ -160,7 +160,7 @@ gpt-6.pro { tls { dns cloudflare {env.CLOUDFLARE_API_TOKEN} } }
 **Compose**: Use `${VAR:?required}` — fail-fast if unset.
 ```yaml
 # WRONG
-- APP_URL=https://gpt-6.pro
+- APP_URL=https://example.com
 
 # RIGHT
 - APP_URL=${APP_URL:?APP_URL is required}
@@ -180,10 +180,10 @@ Casdoor `init_data.json` contains hardcoded redirect URIs. `--createDatabase=tru
 ```bash
 # Replace production domain with staging in existing Casdoor DB
 $PSQL -c "UPDATE application SET redirect_uris = REPLACE(redirect_uris,
-  'gpt-6.pro', 'staging.gpt-6.pro')
+  'example.com', 'staging.example.com')
   WHERE name='lobechat'
-  AND redirect_uris LIKE '%gpt-6.pro%'
-  AND redirect_uris NOT LIKE '%staging.gpt-6.pro%';"
+  AND redirect_uris LIKE '%example.com%'
+  AND redirect_uris NOT LIKE '%staging.example.com%';"
 ```
 
 Also check `AUTH_CASDOOR_ISSUER` — it must match the Casdoor subdomain (`auth.staging.example.com`), not the app root domain.
