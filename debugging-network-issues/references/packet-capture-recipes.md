@@ -1,6 +1,7 @@
 # Packet Capture Recipes
 
 ## Contents
+
 - When to capture packets
 - Interface selection on Docker hosts
 - Essential filters for RST isolation
@@ -25,13 +26,13 @@ Container traffic traverses multiple interfaces on a Docker host. Picking the wr
 
 Typical layout:
 
-| Interface | Traffic |
-|-----------|---------|
-| `eth0` | Public ingress/egress (internet) |
+| Interface   | Traffic                                         |
+| ----------- | ----------------------------------------------- |
+| `eth0`      | Public ingress/egress (internet)                |
 | `br-<hash>` | Custom Docker bridge networks (compose-defined) |
-| `docker0` | Default Docker bridge |
-| `vethXXXX` | One veth pair per container (host-side end) |
-| `lo` | Loopback on the host |
+| `docker0`   | Default Docker bridge                           |
+| `vethXXXX`  | One veth pair per container (host-side end)     |
+| `lo`        | Loopback on the host                            |
 
 Use `tcpdump -i any` to capture across all interfaces, at the cost of higher volume. For specific scoping:
 
@@ -88,10 +89,10 @@ tcpdump -i any -w /tmp/cap-%Y%m%d-%H%M%S.pcap -G 60 -W 10 'host <target>'
 
 A key trap: HTTP/2 has its own RST mechanism at the stream level (`RST_STREAM` frame) that is unrelated to TCP-level RST. The two failure modes look different:
 
-| Failure | TCP layer shows | HTTP/2 layer shows | curl reports |
-|---------|----------------|--------------------|--------------| 
-| TCP RST (connection-level reset) | RST packet | N/A (connection dies) | `Recv failure: Connection reset by peer` |
-| HTTP/2 RST_STREAM frame | (no RST packet — connection stays alive) | `RST_STREAM` frame with error code | `HTTP/2 stream N was not closed cleanly: INTERNAL_ERROR (err 2)` |
+| Failure                          | TCP layer shows                          | HTTP/2 layer shows                 | curl reports                                                     |
+| -------------------------------- | ---------------------------------------- | ---------------------------------- | ---------------------------------------------------------------- |
+| TCP RST (connection-level reset) | RST packet                               | N/A (connection dies)              | `Recv failure: Connection reset by peer`                         |
+| HTTP/2 RST_STREAM frame          | (no RST packet — connection stays alive) | `RST_STREAM` frame with error code | `HTTP/2 stream N was not closed cleanly: INTERNAL_ERROR (err 2)` |
 
 The case study was the second kind: `tcpdump` showed no TCP RST on the client→origin path but curl reported `HTTP/2 stream 1 was not closed cleanly: INTERNAL_ERROR (err 2)`. The reset was a peer-initiated HTTP/2 `RST_STREAM`, sent as a data frame on a connection that otherwise stayed open for other streams.
 
@@ -141,7 +142,7 @@ Fix: use `-i any` first to verify, then narrow once you see traffic.
 
 ### Missing the RST because it happened before capture started
 
-`tcpdump` only captures from the moment it starts. If the RST already happened, there is no going back. The fix is to start capture *before* reproducing the incident (or to leave a ring-buffer capture running in advance for known-intermittent issues).
+`tcpdump` only captures from the moment it starts. If the RST already happened, there is no going back. The fix is to start capture _before_ reproducing the incident (or to leave a ring-buffer capture running in advance for known-intermittent issues).
 
 ### Forgetting snaplen
 
