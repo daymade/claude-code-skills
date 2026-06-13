@@ -8,16 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **skill-creator** (`daymade-skill` v1.2.0): five incident-distilled authoring rules, each placed at the workflow step where it fires:
+  - *Step 4*: validate immediately after every SKILL.md edit (strict-YAML `quick_validate`, not packaging-time) + block-scalar `>-` convention for descriptions containing `: ` / ` #` — lenient/strict parser divergence and silent ` #` description truncation both shipped undetected before this.
+  - *Step 5*: sanitization is scoped **by destination** — only the publicly-shipping skill bundle gets redacted; private-repo companion docs (incident reports, runbooks) keep audit-grade real values. Placeholders must not encode the real value they hide; bulk replaces need an explicit file whitelist scoped to the skill directory.
+  - *Bundled Resources*: user-mutable data (correction dictionaries, learned preferences) lives under `~/.<skill-name>/` outside the bundle — installs are wiped on every update/suite-migration, a home-relative store survives untouched.
+  - *Capture Intent*: mining past-session transcripts must be delegated to subagents with line-by-line truncated extraction — a full-context attempt died 17 tokens over the window limit and killed the session.
+  - *Privacy & Paths*: cross-skill references — bare relative paths always mean "own bundle" (validators treat them so); name the owner skill in prose and invoke by namespaced `/suite:skill`. Marketplace-entry rename/relocation/removal flagged as a breaking change (dangling installs; mechanics live in marketplace-dev).
+  - New "Phase 9 实战案例库" in `references/skill-development-methodology.md` preserving the four incident case files behind these rules; `references/schemas.md` gains a table of contents (8 schemas, >100 lines).
 - **bilibili-source** v1.0.0: new skill — login-free fetch of comprehensive Bilibili (B站) video data in one `view/detail` call (title, UP follower count, tags, partition, per-part cids, live stats, and full danmaku text), accepting BVID / `av` number / `b23.tv` short link / full URL with the BVID-regex, multi-part-cid, and short-link edge cases all handled. Login-gated subtitles via `yt-dlp` (asks before reading browser cookies — no anonymous path exists, verified). Bundles a `bili-selftest.sh` health-check that detects API drift against a stable fixture, an API reference including the WBI request-signing algorithm, and 4 evals. All examples use synthetic/neutral data; metrics always carry a `fetched_at` timestamp (NO-FABRICATION discipline).
 - **pdf-creator** (`daymade-docs` v1.1.0): new `warm-terra-menu` theme — a warm-terra variant hardened for 2-column long-text module menus (full-column wrap removes first-column overflow; a Menlo `unicode-range` keeps CJK inline-code from rendering blank in Preview/Adobe Reader).
 - **tunnel-doctor** v1.6.0: Add "TUN Measurement Contamination" diagnostic section — while a proxy runs in TUN/global mode, common probes lie: `nc -z` shows a fabricated `0.00s` handshake (TUN completes it locally), `ping`/`remote_ip` are spoofed, and a foreign IP-geo lookup reports the proxy exit instead of the real home IP. Documents what to trust instead (`time_appconnect`/`time_starttransfer`, an in-region IP-geo source, config-decode + GUI cross-check) and adds matching trigger phrases.
 - **debugging-network-issues** v1.1.0: Add cognitive Trap 12 "Reverse-path / directional asymmetry" — A→B healthy does not imply B→A healthy; an external probe to a node only proves that node's return direction, systematically missing the user's failing outbound direction (and the congested direction is often one an external probe structurally cannot reach). Sibling to Trap 5 (probe self-verification); synced into the SKILL.md trap list; fixed a stale "All nine traps" count in the summary.
 
 ### Fixed
+- **skill-creator** (`daymade-skill` v1.2.0): `quick_validate` was failing on skill-creator itself — the marketplace-dev cross-reference was written as a bare `references/cache_and_source_patterns.md` path, which the validator (correctly, per the new cross-skill reference rule) treated as a missing local file; rewritten as a prose owner reference. Also fixed "has wrote" → "has written".
 - **SKILL.md frontmatter strict-YAML validity (codex compatibility).** `description:` values are unquoted YAML plain scalars, so a `: ` or ` #` inside them breaks strict parsers — Claude Code's lenient frontmatter parser accepted them, codex did not.
   - **tunnel-doctor** v1.5.2: `: ` inside literal ssh output (`"debug2: resolving"`, `"debug1: connect"`) raised a `ScannerError`; wrapped the description in single quotes so the ssh strings stay verbatim.
   - **benchmark-due-diligence** v1.0.1: ` #` in `Product Hunt #1` silently truncated the parsed description; reordered to `#1 on Product Hunt` (no keyword loss).
   - **pdf-creator** (`daymade-docs` v1.1.0): `**Scope: markdown → PDF only.**` → `**Scope — markdown → PDF only.**`.
+
+### Changed
+- `daymade-skill` suite: 1.1.0 → 1.2.0 (skill-creator authoring rules above; also covers the previously-unversioned "Plugin boundaries are not this skill's domain" SSOT pointer added to skill-creator in the marketplace-dev consolidation).
 
 ## [1.62.0] - 2026-06-07
 

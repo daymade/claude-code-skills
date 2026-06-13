@@ -66,6 +66,8 @@ It's OK to briefly explain terms if you're in doubt, and feel free to clarify te
 
 Start by understanding the user's intent. The current conversation might already contain a workflow the user wants to capture (e.g., they say "turn this into a skill"). If so, extract answers from the conversation history first — the tools used, the sequence of steps, corrections the user made, input/output formats observed. The user may need to fill the gaps, and should confirm before proceeding to the next step.
 
+When the source material is *past* session transcripts (the JSONL files under the Claude Code projects directory) rather than the live conversation, do not load them into your own context — a multi-MB transcript will blow the window (one such attempt died 17 tokens over the limit and took the whole session with it). Delegate extraction to subagents instead, with explicit instructions to parse line-by-line with a script, truncate every extracted field, and return only a distilled lessons list — the raw transcript never enters the main context.
+
 1. What should this skill enable Claude to do?
 2. When should this skill trigger? (what user phrases/contexts)
 3. What's the expected output format?
@@ -451,6 +453,7 @@ Executable code (Python/Bash/etc.) for tasks that require deterministic reliabil
 - **Example**: `scripts/rotate_pdf.py` for PDF rotation tasks
 - **Benefits**: Token efficient, deterministic, may be executed without loading into context
 - **Note**: Scripts may still need to be read by Claude for patching or environment-specific adjustments
+- **User-mutable data lives outside the bundle**: if a script accumulates user data (correction dictionaries, learned preferences, caches), store it under a stable home-relative directory (e.g. `~/.<skill-name>/`) with its own backup — never inside the skill directory. Skill installs are wiped and re-created on every update and suite migration; a home-relative store survives them untouched. This is how a dictionary-accumulating skill survived a full suite migration with zero user data loss
 
 ##### References (`references/`)
 
@@ -481,6 +484,8 @@ Files not intended to be loaded into context, but rather used within the output 
 - **Allowed**: Relative paths within the skill bundle (`scripts/example.py`, `references/guide.md`)
 - **Allowed**: Standard placeholders (`<workspace>/project`, `<user>`, `<organization>`)
 
+**Cross-skill references**: a bare relative path always means "inside this skill's own bundle" — validators and readers both treat it that way, so a bare path pointing at another skill's file fails validation and misleads readers. When pointing at another skill, name the owner in prose ("marketplace-dev's cache-and-source-patterns reference") and invoke skills by their namespaced name (`/suite-name:skill-name`, not a bare `/skill-name`). Bare cross-references break silently when skills move between suites — one suite migration left 21 broken cross-references across two cleanup passes because of this.
+
 ##### Versioning
 
 **CRITICAL**: Skills should NOT contain version history or version numbers in SKILL.md:
@@ -503,7 +508,7 @@ Filenames must be self-explanatory without reading contents.
 
 ### Skill Creation Best Practice
 
-Anthropic has wrote skill authoring best practices, you SHOULD retrieve it before you create or update any skills, the link is https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices.md
+Anthropic has written skill authoring best practices — retrieve it before you create or update any skills: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices.md
 
 #### Development Methodology Reference
 
@@ -915,6 +920,15 @@ The script creates a template skill directory with proper frontmatter, resource 
 
 When editing, remember that the skill is being created for another instance of Claude to use. Focus on information that would be beneficial and non-obvious to Claude.
 
+**Validate immediately after every SKILL.md edit — don't wait for packaging (Step 7).** The failure this catches early is real: a frontmatter description written as an unquoted YAML scalar parses fine in Claude Code's lenient parser but breaks in strict parsers (codex reported `invalid YAML: mapping values are not allowed` on a skill that had been shipping for months), and a ` #` inside an unquoted description doesn't even error — it silently truncates everything after it, so the trigger keywords vanish while every scan stays green.
+
+```bash
+cd <skill-creator-path>
+uv run --with PyYAML python -m scripts.quick_validate <path/to/skill-folder>
+```
+
+**Write the description as a YAML block scalar** (`description: >-` followed by an indented paragraph) whenever it contains `: ` or ` #` or spans multiple sentences — block scalars tolerate both characters natively, which is why they became the repo-wide convention after the incident above.
+
 **When updating an existing skill**: Scan all existing reference files to check if they need corresponding updates.
 
 **Pipeline check**: Consider whether this skill's output naturally feeds into another skill. If so, add a "Next Step" handoff section (see "Pipeline Handoff" in the Skill Writing Guide). Also check if any existing skill should chain *into* this one.
@@ -922,6 +936,8 @@ When editing, remember that the skill is being created for another instance of C
 ### Step 5: Sanitization Review (mandatory for any public skill)
 
 **Not optional for a skill going to a public repo.** Private content leaks into public skills all the time, and the leaks a scanner misses are the dangerous ones — a real name in a non-English language, a verbatim line from a real transcript, a real example dropped into an illustration. Skip only if the skill is genuinely internal-only.
+
+**Scope the pass by destination, not by topic.** Only the artifact that ships publicly — the skill bundle itself — gets sanitized. Companion documents that stay in a private repo (the incident report the skill was distilled from, internal runbooks, the project's CLAUDE.md) keep their real hostnames, paths, and timestamps: redacting those destroys their audit value, and you will end up reverting it. One distillation session went through three rounds of rework precisely because the redaction pass was applied to everything the source material touched instead of just the public skill.
 
 Use **AskUserQuestion** to confirm the depth (not whether to do it):
 
@@ -940,7 +956,7 @@ C) This skill is genuinely internal-only — skip
 
 1. **Read the entire skill yourself and judge semantically** (this is the real check): SKILL.md + every reference + every example. For each concrete noun / example / snippet ask "generic-placeholder-or-public-entity, or lifted-from-a-real-project/person/transcript?" Replace the latter — even if no scanner flagged it. This is the only thing that catches no-keyword leaks. Full guidance + the semantic question in [references/sanitization_checklist.md](references/sanitization_checklist.md).
 2. **Run scanners as a cheap first pass**: the checklist's grep patterns + `security_scan.py` (Step 6). They catch obvious secrets / paths / known names fast — but "no matches" is not a pass.
-3. **Replace** each finding with a generic equivalent that keeps the teaching point (real name → public figure or `<placeholder>`, real snippet → `<placeholder>`).
+3. **Replace** each finding with a generic equivalent that keeps the teaching point (real name → public figure or `<placeholder>`, real snippet → `<placeholder>`). Two rules learned the hard way: the placeholder itself must not encode the real value — `<acme-corp-domain>` leaks exactly the name it was supposed to hide; name the *role* instead (`<api-domain>`, `<upstream-provider>`). And when you script a bulk replace, give it an explicit file whitelist scoped to the skill directory — an unscoped find-and-replace will happily rewrite the project's own CLAUDE.md and force a git restore.
 4. **Verify by re-reading, not by re-grepping**: re-read the changed sections and confirm no broken references.
 
 ### Step 6: Security Review
@@ -1042,9 +1058,15 @@ separate plugins, how to lay out `source`/`skills`, and whether users can toggle
 skills individually all belong to the packaging/distribution domain — the SSOT is
 the `marketplace-dev` skill, not here. When a task actually needs those decisions:
 ensure `marketplace-dev` is available (auto-install it if missing — the same way
-`skill-reviewer` pulls in `skill-creator` when it needs its scripts), then read its
-`references/cache_and_source_patterns.md` and follow it. Don't restate its rules
-here; a copy would drift.
+`skill-reviewer` pulls in `skill-creator` when it needs its scripts), then read
+marketplace-dev's cache-and-source-patterns reference and follow it. Don't restate
+its rules here; a copy would drift.
+
+**Renaming, relocating, or removing a marketplace entry is a breaking change** for
+every user who already installed it — Claude Code does not clean up installed copies
+when an entry disappears, leaving dangling installs that error on every `marketplace
+update`. Treat such changes like an API deprecation: ship a migration note in the
+changelog, and follow marketplace-dev's guidance for the mechanics.
 
 ### Step 9: Ship or Iterate
 
