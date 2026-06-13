@@ -7,7 +7,7 @@
 
 This script targets transcript lines shaped like:
 
-    天生 00:21
+    说话人A 00:21
     Speaker 11 01:31:10
 
 Common fixes:
