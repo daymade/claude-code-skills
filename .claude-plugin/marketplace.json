@@ -5,7 +5,7 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills for GitHub operations, document conversion, diagram generation, statusline customization, Teams communication, repomix utilities, skill creation, CLI demo generation, LLM icon access, Cloudflare troubleshooting, UI design system extraction, professional presentation creation, YouTube video downloading, secure repomix packaging, ASR transcription correction, video comparison quality analysis, comprehensive QA testing infrastructure, prompt optimization with EARS methodology, session history recovery, local Claude session continuation from `.claude` artifacts, documentation cleanup, format-controlled deep research report generation with evidence tracking, PDF generation with Chinese font support, CLAUDE.md progressive disclosure optimization, CCPM skill registry search and management, Promptfoo LLM evaluation framework, iOS app development with XcodeGen and SwiftUI, fact-checking with automated corrections, Twitter/X content fetching, intelligent macOS disk space recovery, skill quality review and improvement, GitHub contribution strategy, complete internationalization/localization setup, plugin/skill troubleshooting with diagnostic tools, evidence-based competitor analysis with source citations, Windows Remote Desktop (AVD/W365) connection quality diagnosis with transport protocol analysis and log parsing, Tailscale+proxy conflict diagnosis with SSH tunnel SOP for remote development, multi-path parallel product analysis with cross-model test-time compute scaling, real financial data collection for US equities with validation and yfinance pitfall handling, advanced Excel automation for formatted workbook generation and complex xlsm parsing, macOS programmatic window screenshot capture workflows, verified Scrapling CLI installation and web extraction workflows, plugin marketplace development for converting skills repos into official Claude Code marketplaces, Tencent IMA knowledge base companion with zero-config installation across Claude Code/Codex/OpenClaw, upstream bug detection and runtime repair, personalized fan-out search with priority-based knowledge base boosting, and suite plugins that expose related skills under shared namespaces for combined installation workflows — including a dedicated Claude Code operations suite (daymade-claude-code) bundling session recovery, CLAUDE.md optimization, troubleshooting, statusline configuration, export repair, marketplace development, terminal-output-to-PNG visual CLI verification, and ccusage-based token-usage/cost analysis skills under one namespace, and the StepFun StepAudio 2.5 audio family (stepfun-tts for Contextual TTS with instruction + inline parentheses, stepfun-asr for the SSE endpoint that handles 30-minute audio in a single call)",
+    "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
     "version": "1.65.0"
   },
   "plugins": [
@@ -126,7 +126,7 @@
       "description": "Claude Code operations suite that bundles session history recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, plugin marketplace development, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.2.1",
       "category": "suite",
       "keywords": [
         "suite",
@@ -572,7 +572,7 @@
       "description": "Safely package codebases with repomix by automatically detecting and removing hardcoded credentials before packing. Use when packaging code for distribution, creating reference packages, or when the user mentions security concerns about sharing code with repomix",
       "source": "./repomix-safe-mixer",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "security",
       "keywords": [
         "repomix",

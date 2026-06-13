@@ -10,7 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **marketplace-health-check** v1.0.0: new skill — the 6-dimension repo health-check workflow distilled from a real audit session, fixed as a reusable skill. A parallel fan-out Dynamic Workflow runs six inspectors (code/script safety, documentation/SSOT consistency, security/PII, open-PR triage, open-issue triage, marketplace-manifest integrity); the skill then Counter-Reviews every high/critical finding (agent findings are hypotheses, verified before reporting) and reports by priority. Bundles the proven workflow script + a methodology reference (anti-target PII rule, working-copy-vs-history distinction, scan-marker necessary-not-sufficient, the broken-install-command bug class, promotion-decline default). Inline orchestrator — uses the Workflow tool, so it must not run forked.
 
+### Changed
+- **Doc-governance hardening** (post-v1.65.0 health-check): `check_doc_skill_lists.py` now also asserts the README version badge equals `marketplace.json` metadata.version — that badge silently drifted twice (1.63→1.64, 1.64→1.65) when a metadata bump forgot it, so the drift guard enforces it instead of relying on manual discipline (`daymade-claude-code` suite v1.2.1). Slimmed `marketplace.json` metadata.description from a per-skill enumeration (which had silently fallen ~11 skills behind) to a category-level summary that points to the README for the authoritative breakdown. Removed a duplicate `## [1.56.0]` CHANGELOG header.
+
 ### Fixed
+- **repomix-safe-mixer** v1.0.1: the "before" examples in SKILL.md + `references/common_secrets.md` used a real-looking Supabase project ref + JWT, flagged CRITICAL by the bundled scanner — which had never run on this skill (it shipped with no `.security-scan-passed` marker). Replaced with neutral placeholders. Also backfilled `.security-scan-passed` markers for 20 skills that shipped without a recorded scan (one of which, repomix-safe-mixer, is exactly why — it had a real leak no one had scanned for).
 - **Sensitive-info sanitization** (full health-check findings): removed the owner's real private domains from shipped examples — `tunnel-doctor` v1.6.1 (`quick_diagnose.py` default `--host` + SKILL.md example) and `terraform-skill` v1.0.1 (Caddyfile / compose / SQL examples) — and a real personal handle used as a speaker-name example in `transcript-fixer` (`daymade-audio` suite v1.2.1); all replaced with `example.com` / neutral placeholders. These were pre-existing leaks predating the global PII-guard domain rules (which already cover them for future diffs). The repo-local `.gitleaks.toml` is deliberately NOT given the real private values — a public allowlist enumerating real assets would itself be a leak (anti-target principle).
 - **Broken flagship install commands** ([#67](https://github.com/daymade/claude-code-skills/issues/67)): `claude plugin install skill-creator@daymade-skills` (plus `skill-reviewer` / `skills-search` / `doc-to-markdown`) failed because those are suite members, not standalone plugins. Corrected every occurrence across README.md, README.zh-CN.md, QUICKSTART.md, QUICKSTART.zh-CN.md to the suite name (`daymade-skill@daymade-skills` / `daymade-docs@daymade-skills`), invoked as `daymade-skill:skill-creator` etc.
 
@@ -63,8 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **auto-repo-setup** v1.0.0: Automated repository environment configuration, fault diagnosis, and repair for non-technical users. Reads ONBOARDING.md, audits environment gaps, installs missing dependencies, validates with smoke tests, and safely handles git operations with PII Guard and Push Safety. Includes SessionStart hook initialization, counter-review workflows, and git history sanitization.
-
-## [1.56.0] - 2026-05-24
 
 ## [1.56.0] - 2026-05-24
 
