@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `daymade-skill` suite: 1.1.0 → 1.2.0 (skill-creator authoring rules above; also covers the previously-unversioned "Plugin boundaries are not this skill's domain" SSOT pointer added to skill-creator in the marketplace-dev consolidation).
+- **macos-cleaner** v1.1.1 → v1.2.0 ([#84](https://github.com/daymade/claude-code-skills/pull/84), thanks @geniusart): progressive-disclosure refactor — moved Docker deep-analysis (Step 2A-2C), Mole multi-layer TUI exploration, and the object-level/report templates out of SKILL.md into `references/docker_analysis.md`, `references/mole_integration.md`, and `references/report_templates.md` (SKILL.md trimmed ~440 lines, zero content loss). Aligned the Example workflows with Core Principle 9 (provide commands for the user to run + `df -h` verification, never auto-execute `rm -rf`; point to `safe_delete.py` for interactive confirmation) and hardened `cleanup_report.py` exception handling (bare `except:` → specific exception types).
 
 ## [1.62.0] - 2026-06-07
 
