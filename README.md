@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-63-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-64-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.64.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -14,7 +14,7 @@
 
 </div>
 
-Professional Claude Code skills marketplace featuring 63 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 64 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2562,6 +2562,41 @@ claude plugin install daymade-claude-code@daymade-skills
 ```
 
 **Requirements**: `ccusage` (via `npm i -g ccusage` or `npx ccusage@latest`), `python3`.
+
+---
+
+### 66. **marketplace-health-check** - Full 6-Dimension Repo Health Check
+
+```bash
+claude plugin install marketplace-health-check@daymade-skills
+```
+
+Run a comprehensive, evidence-based health check of this skills marketplace repo with a parallel fan-out Dynamic Workflow — six inspectors cover code/script safety, documentation/SSOT consistency, security/PII leaks, open-PR triage, open-issue triage, and marketplace-manifest integrity at once — then the serious findings are Counter-Reviewed before they reach the report.
+
+**When to use:**
+- Before a release, or any time you want a full "is this whole repo OK across the board" sweep
+- Checking whether docs/versions are consistent, PRs/issues are triaged, or PII has leaked into a public skill
+- 全面体检 / 检查仓库状态 / 审计一下仓库
+
+**Key features:**
+- Six parallel inspectors (one per dimension) via a Dynamic Workflow — fast and focused (~15-20 min)
+- Counter-Review: every high/critical finding is verified by hand before it reaches the report (agent findings are hypotheses, not conclusions) — catches false alarms AND wrong fixes
+- Priority-ranked report: must-fix / backlog / optional / key insights, each item tagged real vs false-alarm
+- Bundles the proven workflow script + a methodology reference (anti-target PII rule, working-copy-vs-history, scan-marker necessary-not-sufficient, the broken-install-command bug class)
+- Inline orchestrator — drives the Workflow tool, so it never runs forked
+
+**Example usage:**
+```bash
+# Install
+claude plugin install marketplace-health-check@daymade-skills
+
+# Then ask Claude naturally
+"do a full health check of this repo before I cut a release"
+"audit the marketplace — code, docs, PII, PRs, issues, everything"
+"全面体检一下这个仓库"
+```
+
+**Requirements**: `gh` CLI (authenticated), `git`, `jq`, `python3`; opt-in to the Workflow tool (asking to run the health check is the opt-in).
 
 ---
 

@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-63-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-64-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.64.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -14,7 +14,7 @@
 
 </div>
 
-专业的 Claude Code 技能市场，提供 63 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 64 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2604,6 +2604,41 @@ claude plugin install daymade-claude-code@daymade-skills
 ```
 
 **要求**：`ccusage`（用 `npm i -g ccusage` 或 `npx ccusage@latest`）、`python3`。
+
+---
+
+### 66. **marketplace-health-check** - 仓库 6 维度全面健康体检
+
+```bash
+claude plugin install marketplace-health-check@daymade-skills
+```
+
+用并行 fan-out 的 Dynamic Workflow 对这个 skills marketplace 仓库做全面、有证据的健康检查——六个 inspector 同时覆盖代码/脚本安全、文档/SSOT 一致性、安全/PII 泄露、open-PR 分类、open-issue 分类、marketplace 清单完整性——然后对严重发现先做 Counter-Review 再报告。
+
+**使用场景：**
+- 发版前，或任何想对仓库做一次"整体是否健康"全面扫描时
+- 检查文档/版本是否一致、PR/issue 是否已分类、PII 是否泄露进了 public skill
+- 全面体检 / 检查仓库状态 / 审计一下仓库
+
+**主要功能：**
+- 通过 Dynamic Workflow 六个并行 inspector（每维度一个）——快且聚焦（约 15-20 分钟）
+- Counter-Review：每条 high/critical 发现都先手工验证再进报告（agent 发现是假设不是结论）——既抓误报也抓错误的修复建议
+- 按优先级分级报告：必修 / backlog / 可选 / 关键洞察，每项标注真问题 vs 误报
+- 内置已验证的 workflow 脚本 + 方法论 reference（反靶子 PII 原则、当前版本 vs 历史、scan marker necessary-not-sufficient、坏 install 命令 bug 类）
+- inline orchestrator——驱动 Workflow 工具，绝不 forked 运行
+
+**示例用法：**
+```bash
+# 安装
+claude plugin install marketplace-health-check@daymade-skills
+
+# 然后自然地让 Claude 做
+"发版前帮我对这个仓库做一次全面健康检查"
+"审计一下 marketplace——代码、文档、PII、PR、issue，全都查"
+"全面体检一下这个仓库"
+```
+
+**要求**：`gh` CLI（已认证）、`git`、`jq`、`python3`；需 opt-in Workflow 工具（让我跑健康检查就是 opt-in）。
 
 ---
 
