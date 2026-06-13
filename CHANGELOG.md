@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.64.0] - 2026-06-13
+
 ### Added
 - **claude-usage-analyst** (`daymade-claude-code` v1.2.0): new skill — turns local `ccusage` data into an evidence-based, human-readable explanation of Claude Code / Claude Desktop token usage, cost, quota burn, model mix, and cache read/write pressure. Bundled `analyze_claude_usage.py` summarizes any date window/timezone; model-comparison mode weighs token volume against estimated cost (a model can be cheap per token but expensive overall); a 5-hour-block table addresses quota-exhaustion questions. Evidence discipline: numbers are grounded in `ccusage` output and scope is stated explicitly (local Claude Code logs, not a full Claude.ai chat bill). Registered into the `daymade-claude-code` suite (skills[] + suite 1.1.0 → 1.2.0); marketplace catalog 1.63.0 → 1.64.0.
 - **skill-creator** (`daymade-skill` v1.2.0): five incident-distilled authoring rules, each placed at the workflow step where it fires:
