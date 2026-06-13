@@ -1,0 +1,55 @@
+{
+  "skill_name": "bilibili-source",
+  "evals": [
+    {
+      "id": 1,
+      "name": "cite-real-stats-from-url",
+      "prompt": "I'm writing up a short analysis of this B站 video: https://www.bilibili.com/video/BV17x411w7KC — I need the actual play count, likes and favorites to cite, not rough numbers. Can you get them?",
+      "expected_behavior": [
+        "Runs scripts/bili-fetch.sh with the URL instead of guessing or estimating numbers",
+        "Reports view/like/favorite from the returned stat block",
+        "Includes the fetched_at timestamp alongside the metrics (because they are live snapshots)",
+        "Does not hand-type or round numbers as if authoritative",
+        "Mentions the UP name and other metadata returned in the same call where relevant"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "danmaku-audience-reactions",
+      "prompt": "这个 B站 视频 av170001 弹幕里大家都在说什么？我想了解观众的真实反应",
+      "expected_behavior": [
+        "Recognizes danmaku (bullet comments) as the relevant signal and uses scripts/bili-danmaku.sh",
+        "Handles the av number input (does not require a BVID)",
+        "Returns actual danmaku text, not just the danmaku count",
+        "Does not fabricate comments if the fetch returns few or none"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "subtitles-need-login",
+      "prompt": "Grab the subtitle transcript from this bilibili video BV17x411w7KC so I can summarize what it's about.",
+      "expected_behavior": [
+        "Knows Bilibili subtitles are login-gated and there is no anonymous path",
+        "Asks the user before reading their browser cookies / using their Bilibili login",
+        "Uses scripts/bili-subs.sh (or the documented SESSDATA path) rather than claiming a login-free method",
+        "Treats the ai-zh track as AI-generated draft, not a verified verbatim transcript",
+        "Does not invent a transcript if no subtitle track exists"
+      ],
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "multipart-and-shortlink",
+      "prompt": "朋友发我一个 b23.tv 短链（类似 https://b23.tv/xxxxxxx），说是个多P的合集视频，帮我看看有几个分P、每个分P的 cid 是多少，UP 有多少粉丝",
+      "expected_behavior": [
+        "Passes the b23.tv short link straight to scripts/bili-fetch.sh (which expands it)",
+        "Reports videos (part count) and the per-part cids from pages[], not just the top-level cid",
+        "Reports the UP follower count (up.fans) from the same call",
+        "Does not claim it cannot handle short links or multi-part videos"
+      ],
+      "files": []
+    }
+  ]
+}

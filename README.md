@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-61-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.62.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-62-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.63.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 61 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 62 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2494,6 +2494,39 @@ claude plugin install benchmark-due-diligence@daymade-skills
 ```
 
 **Requirements**: Web access for the collection/verification agents. Optionally composes with `deep-research`, `osint-investigate`, the `qcc` skill family, and `agent-reach`; renders a shareable report via `pdf-creator`.
+
+---
+
+### 64. **bilibili-source** - Login-Free Bilibili Video Data + Danmaku Fetcher
+
+Fetch real, citable data for any Bilibili (B站) video — title, UP follower count, publish date, tags, partition, per-part cids, live stats (view/like/coin/favorite/share/reply/danmaku), and full danmaku (bullet-comment) text — in one `view/detail` call, login-free. Built so engagement numbers are cheap to fetch and impossible to fake, instead of hand-typed into a doc where they rot.
+
+**When to use:**
+- Ingesting a Bilibili video into a knowledge base, or building a "why did this perform" case study
+- Verifying a creator's claimed view/like/favorite numbers, or about to write any B站 metric into a document
+- Wanting the danmaku text (qualitative audience reactions), not just a reply count
+- Pasting a BVID, `av` number, `b23.tv` short link, or full URL — all normalized automatically
+
+**Key features:**
+- One `bili-fetch.sh` returns full metadata + live stats + UP fans + tags + every part's cid; metrics carry a `fetched_at` timestamp because they drift in real time
+- `bili-danmaku.sh` pulls and decompresses the danmaku full text; `bili-subs.sh` handles the login-gated subtitle track (asks before touching browser cookies)
+- `bili-selftest.sh` health-check verifies every endpoint against the live API, so API drift surfaces as one clear FAIL instead of a silent wrong answer
+- NO-FABRICATION discipline: an unfetchable number is marked unverified, never estimated
+- Strips the local proxy (Bilibili is a domestic CN service), sends UA+Referer (avoids HTTP 412), retries with backoff
+- API reference includes the WBI request-signing algorithm for `space/wbi/*` extension
+
+**Example usage:**
+```bash
+# Install the skill
+claude plugin install bilibili-source@daymade-skills
+
+# Then ask Claude naturally
+"pull the real view/like/favorite counts for this B站 video so I can cite them"
+"这个 B站 视频弹幕里大家在说什么？"
+"grab the subtitle transcript from this bilibili video so I can summarize it"
+```
+
+**Requirements**: `curl`, `jq`, `python3` (danmaku decompression). `yt-dlp` only for the login-gated subtitle path. No login for stats / metadata / danmaku.
 
 ---
 
