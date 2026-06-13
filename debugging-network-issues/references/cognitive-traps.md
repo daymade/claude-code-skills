@@ -3,6 +3,7 @@
 Curated list of wrong-turn patterns observed in real investigations. Each entry: the trap, why it is seductive, a concrete example, and the counter-move.
 
 ## Contents
+
 - Trap 1: Circumstantial evidence convergence
 - Trap 2: Field-semantic confusion
 - Trap 3: Single-cause bias
@@ -21,6 +22,7 @@ Curated list of wrong-turn patterns observed in real investigations. Each entry:
 Five indirect clues all pointing toward hypothesis H feel like proof. They are not, because they share a common cause (your mental model) that selected them.
 
 **Example** (from this case study): Initial assumption was "VPN node rotation". Supporting circumstantial evidence:
+
 - Client IP flipped between CN and US across requests (real)
 - Request to CF hit SJC PoP (real, expected for US-routed)
 - Each failed request had short duration in some log field (misread — see Trap 2)
@@ -47,9 +49,9 @@ Real production failures often emerge from multiple cooperating defects. Finding
 **Example** (case study in full resolution):
 
 - Direct cause: Cloudflare edge HTTP/2 stream idle timeout at 126s
-- Amplifying factor 1: Qiniu proxy does not emit SSE `event: ping` during upstream stalls
-- Amplifying factor 2: Upstream Claude Sonnet 4.6 batches tool_use output (125s silences observed)
-- Amplifying factor 3: Claude CLI has no client-side idle watchdog (GitHub issue documented)
+- Amplifying factor 1: <upstream-provider> proxy does not emit SSE `event: ping` during upstream stalls
+- Amplifying factor 2: Upstream Claude <model-name> batches tool_use output (125s silences observed)
+- Amplifying factor 3: <cli-client> has no client-side idle watchdog (GitHub issue documented)
 
 Fixing only the direct cause (e.g., moving off CF) would leave factors 1-3. Factor 2 means even with a different CDN with a larger idle window, a different idle threshold eventually fires. Factor 3 means the client is blind to the stall. The durable fix addresses factor 1 at minimum and factor 2 via server-side keepalive as defense in depth.
 
@@ -109,7 +111,7 @@ Investigating a symptom that was never directly observed. The premise enters the
 
 **Example**: A user reports "our SSE connections keep dropping at 130 seconds". The team spends 3 hours building a keepalive patch. On the verification run before ship, they realize the original symptom was a single-digit frequency over the last week — well within normal disconnect noise for that service — and the "130-second pattern" was coincidence across two samples.
 
-**Another example** (surfaced by counter-review in this case study): the proposed fix was server-side SSE keepalive. Counter-review asked: "does the user have direct evidence the RST is actually happening right now, or is this inferred from a past incident?" The fix was for a real incident that *had* occurred, so the question was answered correctly — but the habit of asking is what prevents investigating a non-problem.
+**Another example** (surfaced by counter-review in this case study): the proposed fix was server-side SSE keepalive. Counter-review asked: "does the user have direct evidence the RST is actually happening right now, or is this inferred from a past incident?" The fix was for a real incident that _had_ occurred, so the question was answered correctly — but the habit of asking is what prevents investigating a non-problem.
 
 **Counter-move**: Before investigating, answer one question: "What direct artifact (log line with timestamp, captured packet, screenshot) shows this symptom is currently real?" If the answer is "nothing I can point to", the first action is not investigation — it is adding the telemetry and waiting for the next real occurrence. This is faster and more correct than investigating on vapor.
 
@@ -117,11 +119,11 @@ See [SKILL.md Step 0.5](../SKILL.md) for the verification checklist.
 
 ## Trap 11: Threat-model mismatch
 
-Proposing a fix that operates on the wrong hop. The hypothesis correctly identifies that *some layer* is at fault, but the implementation lands at a different layer, so the fix cannot actually remediate the real cause.
+Proposing a fix that operates on the wrong hop. The hypothesis correctly identifies that _some layer_ is at fault, but the implementation lands at a different layer, so the fix cannot actually remediate the real cause.
 
 **Example** (from eval-3 baseline in this skill's iteration-1 tests): a proposed SSE keepalive patch writes `: keepalive\n\n` to `res` (downstream client-facing connection). But the stated concern was "upstream idle > 15s". Writing bytes to the downstream socket does nothing to maintain the upstream TCP connection — if the idle timeout fires on the proxy→upstream hop, the keepalive is directed at the wrong boundary. The patch would ship without reducing the incidence of the original symptom.
 
-This trap is particularly insidious because the hypothesis about "why" was correct (idle timeout somewhere) and the fix category was correct (keepalive). Only the *layer* was wrong.
+This trap is particularly insidious because the hypothesis about "why" was correct (idle timeout somewhere) and the fix category was correct (keepalive). Only the _layer_ was wrong.
 
 **Counter-move**: For every proposed fix, explicitly name which layer boundary it operates on, and then check whether that boundary is the one where the problem originates. If they do not match, the fix is targeting the wrong thing regardless of how reasonable it looks in isolation.
 
@@ -133,13 +135,13 @@ In the SKILL.md workflow, this is the Step-2 third-question prompt. Do it before
 
 A→B healthy does not imply B→A healthy. Network paths are routinely asymmetric — forward and return routes differ, and congestion or interference on one direction is invisible from the other. Probing from the wrong end (or from only one end) systematically misses the failing direction.
 
-**Why it is seductive**: a probe from a clean external vantage point (a cloud server in another region) to the suspect hop returns perfect numbers, and that feels like proof the hop is healthy. But that probe traversed the *return* leg (or an entirely different path) — not the direction the user's traffic actually fails on.
+**Why it is seductive**: a probe from a clean external vantage point (a cloud server in another region) to the suspect hop returns perfect numbers, and that feels like proof the hop is healthy. But that probe traversed the _return_ leg (or an entirely different path) — not the direction the user's traffic actually fails on.
 
-**Example** (anonymized from a cross-border proxy investigation): user traffic `home → relay → exit → site` degraded badly at peak hours. To "prove the relay and exit nodes were healthy", the investigator drove probes *from an overseas server* to those nodes and got a perfect score (30/30). The conclusion "the nodes are fine, so the fault is purely the user's last mile" was wrong: overseas→node is the lightly-loaded *inbound/return* direction; the failing direction was the user's *outbound* leg into those nodes, which the overseas probe never touched. In many networks the congested direction is structurally the one an external probe cannot reach — only in-country vantage points measure it. The 30/30 "proof" had zero bearing on the failing direction.
+**Example** (anonymized from a cross-border proxy investigation): user traffic `home → relay → exit → site` degraded badly at peak hours. To "prove the relay and exit nodes were healthy", the investigator drove probes _from an overseas server_ to those nodes and got a perfect score (30/30). The conclusion "the nodes are fine, so the fault is purely the user's last mile" was wrong: overseas→node is the lightly-loaded _inbound/return_ direction; the failing direction was the user's _outbound_ leg into those nodes, which the overseas probe never touched. In many networks the congested direction is structurally the one an external probe cannot reach — only in-country vantage points measure it. The 30/30 "proof" had zero bearing on the failing direction.
 
-**Counter-move**: measure the *same direction the user's traffic flows, from the user's side*, before declaring a hop healthy. A clean external probe proves only that hop's externally-facing/return path — label it as such, never generalize it to "the hop is healthy". For directional confirmation, run TCP-mode `mtr`/`nexttrace` **from the affected origin** toward the target (not ICMP — see Trap 5 and the ICMP caveat) and read where loss first appears; or, if you must use a remote vantage point, deliberately point it at the *return* leg (traffic toward the affected origin), not the outbound leg.
+**Counter-move**: measure the _same direction the user's traffic flows, from the user's side_, before declaring a hop healthy. A clean external probe proves only that hop's externally-facing/return path — label it as such, never generalize it to "the hop is healthy". For directional confirmation, run TCP-mode `mtr`/`nexttrace` **from the affected origin** toward the target (not ICMP — see Trap 5 and the ICMP caveat) and read where loss first appears; or, if you must use a remote vantage point, deliberately point it at the _return_ leg (traffic toward the affected origin), not the outbound leg.
 
-This is the directional sibling of Trap 5 (probe self-verification): Trap 5 is about the probe being structurally independent of the subject; this one is about the probe traversing the *same direction* as the failure. Both fail identically — the measurement does not cover the thing it claims to.
+This is the directional sibling of Trap 5 (probe self-verification): Trap 5 is about the probe being structurally independent of the subject; this one is about the probe traversing the _same direction_ as the failure. Both fail identically — the measurement does not cover the thing it claims to.
 
 ## Summary: the meta-move
 

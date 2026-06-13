@@ -1,6 +1,7 @@
 # Instrumentation Patterns
 
 ## Contents
+
 - When to instrument
 - Env-gated TRACE pattern (the default)
 - Log tag conventions
@@ -35,19 +36,25 @@ Instrumentation added mid-incident tends to become tech debt. The right pattern 
 
 ```js
 // Near config section
-const TRACE_SSE_CHUNKS = (process.env.TRACE_SSE_CHUNKS || 'false').toLowerCase() === 'true';
-if (TRACE_SSE_CHUNKS) console.log('[SSE-CHUNK] instrumentation ENABLED');
+const TRACE_SSE_CHUNKS =
+  (process.env.TRACE_SSE_CHUNKS || "false").toLowerCase() === "true";
+if (TRACE_SSE_CHUNKS) console.log("[SSE-CHUNK] instrumentation ENABLED");
 
 // At the observation point
-proxyRes.on('data', (chunk) => {
+proxyRes.on("data", (chunk) => {
   if (TRACE_SSE_CHUNKS && isAnthropicMessagesPath && isStreaming) {
-    const reqId = (proxyRes.headers && proxyRes.headers['x-oneapi-request-id']) || 'n/a';
+    const reqId =
+      (proxyRes.headers && proxyRes.headers["x-oneapi-request-id"]) || "n/a";
     const total = chunks.reduce((a, c) => a + c.length, 0);
     console.log(
-      '[SSE-CHUNK] ts=' + Date.now() +
-      ' req=' + reqId +
-      ' bytes=' + chunk.length +
-      ' total=' + total
+      "[SSE-CHUNK] ts=" +
+        Date.now() +
+        " req=" +
+        reqId +
+        " bytes=" +
+        chunk.length +
+        " total=" +
+        total,
     );
   }
   // ... existing logic untouched
@@ -110,9 +117,9 @@ When adding instrumentation to a running system:
 
 ## Worked example: TRACE_SSE_CHUNKS
 
-Real artifact from this investigation. Goal: observe the upstream chunk arrival pattern to confirm/refute the hypothesis "Qiniu batches chunks and goes silent for >120s during tool_use generation".
+Real artifact from this investigation. Goal: observe the upstream chunk arrival pattern to confirm/refute the hypothesis "<upstream-provider> batches chunks and goes silent for >120s during tool_use generation".
 
-**Before instrumentation**: the only available signal was aggregate `duration_ms` in the archive metadata. This told us the request took 315 seconds total but said nothing about *when* within those 315s bytes flowed.
+**Before instrumentation**: the only available signal was aggregate `duration_ms` in the archive metadata. This told us the request took 315 seconds total but said nothing about _when_ within those 315s bytes flowed.
 
 **After instrumentation (10 lines added)**:
 
@@ -126,7 +133,7 @@ Real artifact from this investigation. Goal: observe the upstream chunk arrival 
 [SSE-CHUNK] ts=1776870425235 req=202604221504562... bytes=74 total=3865
 ```
 
-Extracted: 30 chunks in the first 1.2 seconds (3791 bytes total), then a **125-second gap with zero bytes**, then 74 more bytes. The hypothesis was confirmed: Qiniu emits the beginning of the response in a burst, then stays silent for over 2 minutes while the model generates the tool_use arguments internally.
+Extracted: 30 chunks in the first 1.2 seconds (3791 bytes total), then a **125-second gap with zero bytes**, then 74 more bytes. The hypothesis was confirmed: <upstream-provider> emits the beginning of the response in a burst, then stays silent for over 2 minutes while the model generates the tool_use arguments internally.
 
 Without the instrumentation, this would have been invisible. With 10 lines of code gated on one env var, it became a permanent observability capability.
 
@@ -165,6 +172,7 @@ Traditional wisdom says "remove debug logging after fix". That wisdom predates t
 **Keep the instrumentation code. Leave the env toggle off. Document the toggle in an ops runbook.**
 
 Rationale:
+
 - Adding instrumentation mid-incident under pressure is error-prone. Far better to have the gate already in place.
 - Zero runtime cost when off.
 - The env variable name is self-documenting.
@@ -183,4 +191,4 @@ Always apply the code change to the source of truth first:
 3. Run the normal deploy to propagate
 4. Only after that, enable the env toggle
 
-If time-critical: apply directly to the running server *and* to the source, in the same session. Never only to the running server.
+If time-critical: apply directly to the running server _and_ to the source, in the same session. Never only to the running server.
