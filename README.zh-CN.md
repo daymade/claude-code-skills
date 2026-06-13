@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-61-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.62.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-62-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.63.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 61 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 62 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2536,6 +2536,39 @@ claude plugin install auto-repo-setup@daymade-skills
 ```
 
 **要求**：Python 3.8+、`uv` 包管理器。技能本身无需外部 API key。
+
+---
+
+### 64. **bilibili-source** - 免登录 B站视频数据 + 弹幕抓取
+
+一次 `view/detail` 调用、免登录地拉取任意 B站视频的可引用数据——标题、UP 粉丝数、发布时间、标签、分区、各分P 的 cid、实时互动数据（播放/点赞/投币/收藏/转发/评论/弹幕），以及完整弹幕全文。设计目标：让互动数字"取数便宜、无法伪造"，而不是手敲进文档里慢慢烂掉。
+
+**使用场景：**
+- 把 B站视频吸收进知识库，或做"它为什么火"的案例拆解
+- 核实创作者宣称的播放/点赞/收藏数，或要把任何 B站指标写进文档时
+- 想要弹幕全文（观众的定性反应），而不只是一个评论数
+- 粘贴 BVID、`av` 号、`b23.tv` 短链或完整 URL——全部自动识别
+
+**主要功能：**
+- 一个 `bili-fetch.sh` 返回全量元数据 + 实时互动 + UP 粉丝 + 标签 + 每个分P 的 cid；互动数带 `fetched_at` 时间戳（因为实时漂移）
+- `bili-danmaku.sh` 拉取并解压弹幕全文；`bili-subs.sh` 处理需登录的字幕轨（动浏览器 cookie 前会先问你）
+- `bili-selftest.sh` 健康自检对着真实 API 验每个端点，API 一漂移就报一行清晰 FAIL，而非静默给错数据
+- NO-FABRICATION 纪律：拿不到的数字标"未核实"，绝不估算
+- 自动剥离本地代理（B站是国内服务）、带 UA+Referer（防 HTTP 412）、失败退避重试
+- API 参考含 `space/wbi/*` 扩展所需的 WBI 签名算法
+
+**示例用法：**
+```bash
+# 安装技能
+claude plugin install bilibili-source@daymade-skills
+
+# 然后自然地让 Claude 做
+"把这个 B站 视频的真实播放/点赞/收藏数拉出来，我要引用"
+"这个 B站 视频弹幕里大家在说什么？"
+"帮我抓这个 bilibili 视频的字幕逐字稿做总结"
+```
+
+**要求**：`curl`、`jq`、`python3`（弹幕解压）。`yt-dlp` 仅用于需登录的字幕路径。stats/元数据/弹幕均无需登录。
 
 ---
 
