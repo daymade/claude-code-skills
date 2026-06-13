@@ -425,3 +425,180 @@ brew upgrade tw93/tap/mole
 6. **Never auto-execute** cleanup commands
 7. **Be patient** - scans take time
 8. **User runs cleanup** - provide command, don't execute
+
+## Multi-Layer Deep Exploration with Mole
+
+For comprehensive analysis, perform multi-layer exploration, not just top-level scans. This section documents the proven workflow for navigating Mole's TUI.
+
+### Navigation Commands
+
+```bash
+# Create session
+tmux new-session -d -s mole -x 120 -y 40
+
+# Start analysis
+tmux send-keys -t mole 'mo analyze' Enter
+
+# Wait for initial scan
+sleep 8 && tmux capture-pane -t mole -p
+
+# Navigation keys (send via tmux)
+tmux send-keys -t mole Enter    # Enter/expand selected directory
+tmux send-keys -t mole Left     # Go back to parent directory
+tmux send-keys -t mole Down     # Move to next item
+tmux send-keys -t mole Up       # Move to previous item
+tmux send-keys -t mole 'q'      # Quit TUI
+
+# Capture current view
+tmux capture-pane -t mole -p
+```
+
+### Multi-Layer Exploration Workflow
+
+**Step 1: Top-level overview**
+```bash
+# Start mo analyze, wait for initial menu
+tmux send-keys -t mole 'mo analyze' Enter
+sleep 8 && tmux capture-pane -t mole -p
+
+# Example output:
+# 1. Home           289.4 GB (58.5%)
+# 2. App Library    145.2 GB (29.4%)
+# 3. Applications    49.5 GB (10.0%)
+# 4. System Library  10.3 GB (2.1%)
+```
+
+**Step 2: Enter largest directory (Home)**
+```bash
+tmux send-keys -t mole Enter
+sleep 10 && tmux capture-pane -t mole -p
+
+# Example output:
+# 1. Library       144.4 GB (49.9%)
+# 2. Workspace      52.0 GB (18.0%)
+# 3. .cache         19.3 GB (6.7%)
+# 4. Applications   17.0 GB (5.9%)
+# ...
+```
+
+**Step 3: Drill into specific directories**
+```bash
+# Go to .cache (3rd item: Down Down Enter)
+tmux send-keys -t mole Down Down Enter
+sleep 5 && tmux capture-pane -t mole -p
+
+# Example output:
+# 1. uv           10.3 GB (55.6%)
+# 2. modelscope    5.5 GB (29.5%)
+# 3. huggingface   887.8 MB (4.7%)
+```
+
+**Step 4: Navigate back and explore another branch**
+```bash
+# Go back to parent
+tmux send-keys -t mole Left
+sleep 2
+
+# Navigate to different directory
+tmux send-keys -t mole Down Down Down Down Enter  # Go to .npm
+sleep 5 && tmux capture-pane -t mole -p
+```
+
+**Step 5: Deep dive into Library**
+```bash
+# Back to Home, then into Library
+tmux send-keys -t mole Left
+tmux send-keys -t mole Up Up Up Up Up Up Enter  # Go to Library
+sleep 10 && tmux capture-pane -t mole -p
+
+# Example output:
+# 1. Application Support  37.1 GB
+# 2. Containers          35.4 GB
+# 3. Developer           17.8 GB  ← Xcode is here
+# 4. Caches               8.2 GB
+```
+
+### Recommended Exploration Path
+
+For comprehensive analysis, follow this exploration tree:
+
+```
+mo analyze
+├── Home (Enter)
+│   ├── Library (Enter)
+│   │   ├── Developer (Enter) → Xcode/DerivedData, iOS DeviceSupport
+│   │   ├── Caches (Enter) → Playwright, JetBrains, etc.
+│   │   └── Application Support (Enter) → App data
+│   ├── .cache (Enter) → uv, modelscope, huggingface
+│   ├── .npm (Enter) → _cacache, _npx
+│   ├── Downloads (Enter) → Large files to review
+│   ├── .Trash (Enter) → Confirm trash contents
+│   └── miniconda3/other dev tools (Enter) → Check last used time
+├── App Library → Usually overlaps with ~/Library
+└── Applications → Installed apps
+```
+
+### Time Expectations
+
+| Directory | Scan Time | Notes |
+|-----------|-----------|-------|
+| Top-level menu | 5-8 seconds | Fast |
+| Home directory | 5-10 minutes | Large, be patient |
+| ~/Library | 3-5 minutes | Many small files |
+| Subdirectories | 2-30 seconds | Varies by size |
+
+### Example Complete Session
+
+```bash
+# 1. Create session
+tmux new-session -d -s mole -x 120 -y 40
+
+# 2. Start analysis and get overview
+tmux send-keys -t mole 'mo analyze' Enter
+sleep 8 && tmux capture-pane -t mole -p
+
+# 3. Enter Home
+tmux send-keys -t mole Enter
+sleep 10 && tmux capture-pane -t mole -p
+
+# 4. Enter .cache to see dev caches
+tmux send-keys -t mole Down Down Enter
+sleep 5 && tmux capture-pane -t mole -p
+
+# 5. Back to Home, then to .npm
+tmux send-keys -t mole Left
+sleep 2
+tmux send-keys -t mole Down Down Down Down Enter
+sleep 5 && tmux capture-pane -t mole -p
+
+# 6. Back to Home, enter Library
+tmux send-keys -t mole Left
+sleep 2
+tmux send-keys -t mole Up Up Up Up Up Up Enter
+sleep 10 && tmux capture-pane -t mole -p
+
+# 7. Enter Developer to see Xcode
+tmux send-keys -t mole Down Down Down Enter
+sleep 5 && tmux capture-pane -t mole -p
+
+# 8. Enter Xcode
+tmux send-keys -t mole Enter
+sleep 5 && tmux capture-pane -t mole -p
+
+# 9. Enter DerivedData to see projects
+tmux send-keys -t mole Enter
+sleep 5 && tmux capture-pane -t mole -p
+
+# 10. Cleanup
+tmux kill-session -t mole
+```
+
+### Key Insights from Exploration
+
+After multi-layer exploration, you will discover:
+
+1. **What projects are using DerivedData** - specific project names
+2. **Which caches are actually large** - uv vs npm vs others
+3. **Age of files** - Mole shows ">3mo", ">7mo", ">1yr" markers
+4. **Specific volumes and their purposes** - Docker project data
+5. **Downloads that can be cleaned** - old dmgs, duplicate files
