@@ -59,7 +59,7 @@ def get_disk_usage():
                     'percent': percent,
                     'timestamp': datetime.now().isoformat()
                 }
-    except:
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
         pass
 
     return None
