@@ -85,7 +85,7 @@ Then:
 ```bash
 claude plugin marketplace add https://github.com/daymade/claude-code-skills
 # Marketplace name: daymade-skills (from marketplace.json)
-claude plugin install skill-creator@daymade-skills
+claude plugin install daymade-skill@daymade-skills
 ```
 
 ### What You Can Do
@@ -159,7 +159,8 @@ In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude 
 
 **Essential Skill** (recommended first install):
 ```bash
-claude plugin install skill-creator@daymade-skills
+# skill-creator ships inside the daymade-skill suite
+claude plugin install daymade-skill@daymade-skills
 ```
 
 **Documentation Suite** (shared namespace for document workflows):
@@ -240,7 +241,7 @@ claude plugin install qa-expert@daymade-skills
 claude plugin install prompt-optimizer@daymade-skills
 
 # CCPM skill registry search and management
-claude plugin install skills-search@daymade-skills
+claude plugin install daymade-skill@daymade-skills
 
 # Promptfoo LLM evaluation framework
 claude plugin install promptfoo-evaluation@daymade-skills
@@ -252,7 +253,7 @@ claude plugin install iOS-APP-developer@daymade-skills
 claude plugin install twitter-reader@daymade-skills
 
 # Skill quality review and improvement
-claude plugin install skill-reviewer@daymade-skills
+claude plugin install daymade-skill@daymade-skills
 
 # GitHub contribution strategy
 claude plugin install github-contributor@daymade-skills
@@ -1300,7 +1301,7 @@ Review and improve Claude Code skills against official best practices with three
 **Example usage:**
 ```bash
 # Install the skill
-claude plugin install skill-reviewer@daymade-skills
+claude plugin install daymade-skill@daymade-skills
 
 # Self-review your skill
 "Validate my skill at ~/my-skills/my-awesome-skill"
