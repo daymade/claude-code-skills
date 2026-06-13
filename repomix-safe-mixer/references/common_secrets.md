@@ -48,12 +48,12 @@ This document catalogs common credential types detected by the security scanner.
 
 **Project URL**:
 - Pattern: `https://[a-z]{20}.supabase.co`
-- Example: `https://ghyttjckzmzdxumxcixe.supabase.co`
+- Example: `https://your-project-ref.supabase.co`
 - Risk: Project identification
 
 **Anon/Public Key**:
 - Pattern: JWT token starting with `eyJ`
-- Example: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+- Example: `<hardcoded-anon-key-DO-NOT-COMMIT>`
 - Risk: Public data access, edge function invocation, quota abuse
 
 **Service Role Key**:
@@ -200,8 +200,8 @@ Look for credential indicators:
 
 **Before** (hardcoded):
 ```javascript
-const SUPABASE_URL = "https://ghyttjckzmzdxumxcixe.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+const SUPABASE_URL = "https://your-project-ref.supabase.co";
+const SUPABASE_KEY = "<hardcoded-anon-key-DO-NOT-COMMIT>";
 ```
 
 **After** (environment variables):

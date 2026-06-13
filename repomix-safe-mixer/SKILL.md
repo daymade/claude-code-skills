@@ -50,7 +50,7 @@ python3 scripts/safe_pack.py ./my-project
 
 🔴 supabase_url: 1 instance(s)
    - src/client.ts:5
-     Match: https://ghyttjckzmzdxumxcixe.supabase.co
+     Match: https://your-project-ref.supabase.co
 
 ❌ Cannot pack: Secrets detected!
 ```
@@ -152,8 +152,8 @@ Examine each finding to verify it's a real credential (not a placeholder or exam
 
 **Before**:
 ```javascript
-const SUPABASE_URL = "https://ghyttjckzmzdxumxcixe.supabase.co";
-const API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+const SUPABASE_URL = "https://your-project-ref.supabase.co";
+const API_KEY = "<hardcoded-anon-key-DO-NOT-COMMIT>";
 ```
 
 **After**:
