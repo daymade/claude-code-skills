@@ -1,6 +1,7 @@
 # Layered Isolation Experiment
 
 ## Contents
+
 - Why layered isolation
 - The 3-path pattern
 - Mock upstream pattern
@@ -19,11 +20,11 @@ Layered isolation inverts the approach: instead of reasoning about which hop cau
 
 For a CDN-fronted service with the topology `Client → CDN → LB → Origin`:
 
-| Path | How it routes | Excludes if clean |
-|------|--------------|-------------------|
-| **A** | Client → CDN → LB → Origin (full production path) | (baseline — this reproduces the symptom) |
-| **B** | Client → Origin directly (e.g., `curl --resolve host:443:origin-ip`) | The CDN layer |
-| **C** | Server loopback (`curl http://127.0.0.1:port/...` on the origin host itself) | CDN + LB + any intermediate network |
+| Path  | How it routes                                                                | Excludes if clean                        |
+| ----- | ---------------------------------------------------------------------------- | ---------------------------------------- |
+| **A** | Client → CDN → LB → Origin (full production path)                            | (baseline — this reproduces the symptom) |
+| **B** | Client → Origin directly (e.g., `curl --resolve host:443:origin-ip`)         | The CDN layer                            |
+| **C** | Server loopback (`curl http://127.0.0.1:port/...` on the origin host itself) | CDN + LB + any intermediate network      |
 
 Interpretation:
 
@@ -49,7 +50,7 @@ def gen():
 
 Why this is better than using a real long-tail production request to trigger the failure:
 
-- **Controlled timing**: 200-second idle is a knob; a real Sonnet 4.6 request has variable thinking duration
+- **Controlled timing**: 200-second idle is a knob; a real <model-name> request has variable thinking duration
 - **Cheap**: no model inference cost
 - **Reproducible**: deterministic bytes, deterministic timing
 - **Isolated from app bugs**: rules out "maybe the app itself has a bug"
@@ -72,16 +73,16 @@ Always record observations from both ends (curl-side time_total AND server-side 
 
 The observed constant in the failing path (here: 126s) is usually close to a known layer's default idle policy. Cross-reference against:
 
-| Layer | Common idle default |
-|-------|---------------------|
-| Cloudflare Free/Pro proxy_read_timeout | 100s (but see caveat below) |
-| Cloudflare HTTP/2 stream idle | empirically ~126s in our case |
-| AWS ALB idle | 60s default, configurable |
-| Nginx `proxy_read_timeout` | 60s default, configurable |
-| Node http server `headersTimeout` | 60s (Node ≥ 18) |
-| Node undici `bodyTimeout` | 300s default |
-| CGNAT TCP initial timeout (Cisco ISM) | 120s typical |
-| Linux kernel TCP `net.ipv4.tcp_keepalive_time` | 7200s (rarely relevant) |
+| Layer                                          | Common idle default           |
+| ---------------------------------------------- | ----------------------------- |
+| Cloudflare Free/Pro proxy_read_timeout         | 100s (but see caveat below)   |
+| Cloudflare HTTP/2 stream idle                  | empirically ~126s in our case |
+| AWS ALB idle                                   | 60s default, configurable     |
+| Nginx `proxy_read_timeout`                     | 60s default, configurable     |
+| Node http server `headersTimeout`              | 60s (Node ≥ 18)               |
+| Node undici `bodyTimeout`                      | 300s default                  |
+| CGNAT TCP initial timeout (Cisco ISM)          | 120s typical                  |
+| Linux kernel TCP `net.ipv4.tcp_keepalive_time` | 7200s (rarely relevant)       |
 
 **Do not** treat this table as authoritative for your environment. These are starting points to cross-check against your measured constant. Confirm via vendor documentation or direct testing before citing as cause.
 
@@ -130,12 +131,12 @@ For each path, record at minimum: HTTP status code, total elapsed time, bytes re
 
 The 130s RST incident (documented in [case-sse-rst-130s.md](case-sse-rst-130s.md)) ran exactly this 3-path matrix after 5 hours of hypothesis-stacking failed to converge. The result:
 
-| Path | Result |
-|------|--------|
-| A: via Cloudflare | RST @ 126.01-126.02s, HTTP/2 INTERNAL_ERROR |
+| Path                        | Result                                        |
+| --------------------------- | --------------------------------------------- |
+| A: via Cloudflare           | RST @ 126.01-126.02s, HTTP/2 INTERNAL_ERROR   |
 | B: `--resolve` to origin IP | Clean @ 220s (bounded by client `--max-time`) |
-| C: server loopback | Clean @ 220s |
+| C: server loopback          | Clean @ 220s                                  |
 
-Interpretation was immediate: the RST comes from Cloudflare's edge, not the origin or any network in between. What 5 hours of circumstantial reasoning could not resolve (Caddy? Qiniu? VPN? CGNAT? CLI bug?), the 3-path experiment resolved in the 10 minutes it took to set up.
+Interpretation was immediate: the RST comes from Cloudflare's edge, not the origin or any network in between. What 5 hours of circumstantial reasoning could not resolve (Caddy? <upstream-provider>? VPN? CGNAT? CLI bug?), the 3-path experiment resolved in the 10 minutes it took to set up.
 
 The lesson: **when multiple layers could be the cause, do not reason about which one — test**.

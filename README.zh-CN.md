@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-62-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-63-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.63.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -14,7 +14,7 @@
 
 </div>
 
-专业的 Claude Code 技能市场，提供 62 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 63 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2569,6 +2569,40 @@ claude plugin install bilibili-source@daymade-skills
 ```
 
 **要求**：`curl`、`jq`、`python3`（弹幕解压）。`yt-dlp` 仅用于需登录的字幕路径。stats/元数据/弹幕均无需登录。
+
+---
+
+### 65. **claude-usage-analyst** - 解释 Claude Code Token 用量与额度消耗
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（套件专用——通过 `daymade-claude-code:claude-usage-analyst` 调用）
+
+把本地 `ccusage` 数据变成有证据、说人话的用量解释，讲清你的 Claude Code / Claude Desktop 的 token、成本、额度都花在哪了——把"观测到的数字"和"解读"分开，而不是靠猜。
+
+**使用场景：**
+- 想知道 Claude 额度或 5 小时块为什么被用光
+- 怀疑某个模型（`fable` / `opus` / `sonnet`）对你的工作负载是不是格外贵
+- 需要今天或某段历史窗口的 token/成本明细，含 cache 读写压力
+- 要给非技术读者解释用量，不堆没解释的术语
+
+**主要功能：**
+- 内置 `analyze_claude_usage.py` 按任意日期窗口和时区汇总 token、成本、输入/输出、cache 创建/读取
+- 模型对比模式（`--model-a` / `--model-b`）同时权衡 token 量和估算成本——一个模型可能单 token 便宜但总体更贵
+- 额度耗尽问题给出 5 小时块表格
+- 证据纪律：每条数值主张都以 `ccusage` 输出为准；cache 读取压力即使你没敲那些 token 也计入
+- 明确范围：`ccusage claude` 测的是本地 Claude Code 日志，不是完整的 Claude.ai 聊天账单
+
+**示例用法：**
+```bash
+# 安装套件
+claude plugin install daymade-claude-code@daymade-skills
+
+# 然后自然地让 Claude 做
+"我今天的 Claude 额度为什么用光了？"
+"做我这些活，opus 是不是比 sonnet 贵？"
+"把我这个月的 Claude Code token 用量拆解一下"
+```
+
+**要求**：`ccusage`（用 `npm i -g ccusage` 或 `npx ccusage@latest`）、`python3`。
 
 ---
 

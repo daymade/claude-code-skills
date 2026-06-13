@@ -8,8 +8,8 @@ reproducible than using a real slow production request.
 Usage (standalone):
     python3 mock-idle-upstream.py --port 19999 --idle 200
 
-Usage (Docker, running on a lobe-network compose):
-    docker run --rm --network lobe-dev_default -p 19999:80 \
+Usage (Docker, running on a <compose-network> compose):
+    docker run --rm --network <compose-network> -p 19999:80 \
       -v $(pwd)/mock-idle-upstream.py:/app/mock.py \
       python:3.12-slim \
       sh -c 'pip install flask -q && python /app/mock.py --port 80 --idle 200'
