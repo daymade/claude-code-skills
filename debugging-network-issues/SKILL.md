@@ -1,6 +1,7 @@
 ---
 name: debugging-network-issues
-description: Evidence-driven investigation for network, streaming, and protocol-layer bugs where symptoms don't match the obvious cause. Use when debugging connection resets (ECONNRESET, HTTP/2 RST_STREAM, INTERNAL_ERROR), SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, or symptoms like "socket closed unexpectedly", "stream interrupted", "fails after N seconds", "works sometimes but not always", "upstream silent for X seconds". Applies falsification-first layered isolation to pin down the responsible network layer instead of stacking assumptions.
+description: >-
+  Evidence-driven investigation for network, streaming, and protocol-layer bugs where symptoms don't match the obvious cause. Use when debugging connection resets (ECONNRESET, HTTP/2 RST_STREAM, INTERNAL_ERROR), SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, client-side proxy/VPN/TUN misrouting, CNAME-based proxy rule overrides, or symptoms like "socket closed unexpectedly", "stream interrupted", "fails after N seconds", "works sometimes but not always", "upstream silent for X seconds", ERR_CONNECTION_CLOSED, SSL_ERROR_SYSCALL. Applies falsification-first layered isolation to pin down the responsible network layer instead of stacking assumptions.
 ---
 
 # Debugging Network Issues
@@ -18,6 +19,7 @@ Before applying the general methodology below, check whether the symptom points 
 | macOS Tailscale ⨯ proxy/VPN conflict (Shadowrocket / Clash / Surge): `tailscale ping` works but SSH/curl/git fails, `Connection closed by 198.18.x.x`, TUN DNS hijack, ~60s `getaddrinfo` resolver stall | **tunnel-doctor**                            |
 | Cloudflare config: `ERR_TOO_MANY_REDIRECTS`, SSL-mode mismatch, DNS / proxy-status issues behind the orange cloud                                                                                        | **cloudflare-troubleshooting**               |
 | Windows App / AVD / W365 RDP connection quality: WebSocket instead of UDP Shortpath, high RTT, STUN/TURN interference                                                                                    | **windows-remote-desktop-connection-doctor** |
+| Client-side proxy / VPN / TUN misrouting: one specific site fails with `ERR_CONNECTION_CLOSED` or `SSL_ERROR_SYSCALL`, other sites work, DNS returns fake/TUN IPs, and adding a PROXY rule did not help | **this skill** — read [references/case-proxy-tun-cname-override.md](references/case-proxy-tun-cname-override.md) first |
 
 If none match — or you tried a domain skill and the evidence points elsewhere — continue below. The methodology generalizes to any multi-layer system.
 
@@ -306,8 +308,28 @@ Future investigators — including future self — will read this to avoid the s
 8. **Threat-model mismatch.** Proposing a fix that targets the wrong layer — writing bytes downstream to solve an upstream problem, tuning a timeout on a hop that never fires it. Naming the boundary each hypothesis targets (Step 2) surfaces this.
 9. **Reverse-path / directional asymmetry.** A→B healthy ≠ B→A healthy. An external probe to a node proves only that node's return/inbound direction; network paths and congestion are directional. Measure the same direction the user's traffic flows, from the user's side (TCP-mode `mtr`/`nexttrace` from the affected origin), before declaring a hop healthy.
 10. **Edge timeouts masquerading as upstream client aborts.** A 524 from Cloudflare can cause the origin proxy (Caddy/nginx) to log the upstream connection as a "client abort" (`status=0`, `Client request error: aborted`). The abort is real at the origin, but the _cause_ is the CDN edge timing out first. Always correlate edge error codes, edge timestamps, and origin logs before attributing an abort to the client. See the upload-vs-processing recipe in Step 0.6.
+11. **Assuming a top-of-list proxy rule beats CNAME matching.** Proxy clients that resolve CNAMEs may apply rules to the resolved CNAME chain, not just the original hostname. A `DOMAIN-SUFFIX,<cname-suffix>,DIRECT` rule can override an explicit `DOMAIN,<target>,PROXY` rule. Verify by inspecting the config and by testing hostname vs IP paths through the proxy.
+12. **Proxy-node DNS = client DNS.** The proxy node may resolve a hostname differently than the client. A client-side DoH query can return a working IP while the proxy node returns a blocked or non-routable IP. Test with `curl -x proxy -H 'Host: host' -I https://<working-ip>` to separate DNS from reachability.
 
 See [references/cognitive-traps.md](references/cognitive-traps.md) for extended examples including this case study.
+
+## Client-side proxy / VPN / TUN misrouting
+
+When the symptom is **client-specific** (browser on one machine fails, other devices or networks work, or the failure disappears when the proxy/VPN is turned off), the proxy client itself is a network hop. Treat it like one.
+
+Quick differential checklist:
+
+1. **DNS**: What IP does the OS resolve? If it is a fake/TUN IP (e.g. `198.18.x.x`), the proxy client is intercepting DNS.
+2. **Route**: `route -n get <ip>` shows which interface the packet leaves. A fake IP routed through `utun5` is normal for TUN mode; a real IP routed only through TUN while the physical interface cannot reach it means local direct is broken.
+3. **Proxy port**: Is the local proxy listening? `lsof -P -i TCP:<port>` confirms. Test both with and without it.
+4. **Hostname vs IP through proxy**:
+   - `curl -x http://127.0.0.1:<port> -I https://<host>`
+   - Resolve the host yourself (DoH), then `curl -x http://127.0.0.1:<port> -k -H 'Host: <host>' -I https://<ip>`
+   If the second works and the first fails, the proxy node’s DNS is returning a different/bad IP than the client’s DoH query.
+5. **Physical interface reachability**: Force the real IP out `en0` (or the active physical interface) temporarily. If it fails while the TUN path works, the local network cannot reach the target; the proxy/TUN is required.
+6. **Rule/CNAME interaction**: Inspect the proxy config for rules matching the CNAME suffix of the target. A `DOMAIN-SUFFIX,<cname-suffix>,DIRECT` rule can override an explicit `DOMAIN,<host>,PROXY` rule if the client evaluates rules against resolved CNAMEs.
+
+If all of the above point to a proxy client that resolves a bad CNAME or relies on a bad proxy-node DNS, see the fix pattern in [references/case-proxy-tun-cname-override.md](references/case-proxy-tun-cname-override.md).
 
 ## Anti-patterns — things to explicitly avoid
 
@@ -319,13 +341,15 @@ See [references/cognitive-traps.md](references/cognitive-traps.md) for extended 
 
 ## Case studies
 
-Two canonical cases illustrate the methodology in different failure modes:
+Three canonical cases illustrate the methodology in different failure modes:
 
 1. [references/case-sse-rst-130s.md](references/case-sse-rst-130s.md) — a 5-hour investigation where the assistant repeatedly jumped to the wrong conclusion. The right answer — Cloudflare edge HTTP/2 stream idle timeout at 126 seconds, amplified by <upstream-provider> not emitting SSE ping during <model-name> tool_use generation — surfaced in 10 minutes once a subagent designed a 3-path layered isolation experiment with a mock idle upstream.
 
 2. [references/case-cloudflare-524-upload.md](references/case-cloudflare-524-upload.md) — a Cloudflare 524 on `<api-domain>/<openrouter-path>` where a ~6 MB POST body took longer to upload from the US client to the <origin-region> origin than Cloudflare's default origin read timeout allowed. The key insight came from comparing `bytes_read` (4.1 MB) to `Content-Length` (6.0 MB) and confirming the request never reached `<upstream-capture-service>` or `<new-api-container>`. This case is the source of the upload-vs-processing recipe and the "edge timeouts masquerading as client aborts" trap above.
 
-Read both before applying this skill to an unfamiliar problem domain; the wrong-turn anatomy is the teaching.
+3. [references/case-proxy-tun-cname-override.md](references/case-proxy-tun-cname-override.md) — a client-side `<proxy-client>` TUN case where `<auth-domain>` failed with `ERR_CONNECTION_CLOSED` even though explicit PROXY rules were at the top of the config. The root cause was a `DOMAIN-SUFFIX,<cname-suffix>,DIRECT` rule matching the target's CNAME chain, plus the proxy node's own DNS returning a different IP than the client's DoH query. The fix pattern uses `[Host]` mapping and `use-local-host-item-for-proxy`.
+
+Read these before applying this skill to an unfamiliar problem domain; the wrong-turn anatomy is the teaching.
 
 ## Reference files
 
@@ -335,6 +359,8 @@ Read both before applying this skill to an unfamiliar problem domain; the wrong-
 - [references/counter-review-pattern.md](references/counter-review-pattern.md) — 4-agent team composition, 4-question filter, integration workflow
 - [references/cognitive-traps.md](references/cognitive-traps.md) — extended examples, rescue-cycle warnings
 - [references/case-sse-rst-130s.md](references/case-sse-rst-130s.md) — canonical case study with wrong-turn timeline
+- [references/case-cloudflare-524-upload.md](references/case-cloudflare-524-upload.md) — upload-timeout vs processing-timeout recipe
+- [references/case-proxy-tun-cname-override.md](references/case-proxy-tun-cname-override.md) — client-side proxy/TUN CNAME rule override and fix pattern
 
 ## Scripts
 
