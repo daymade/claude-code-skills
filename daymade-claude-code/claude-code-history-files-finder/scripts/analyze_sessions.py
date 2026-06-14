@@ -36,17 +36,16 @@ class SessionAnalyzer:
         Find all session files for a specific project.
 
         Args:
-            project_path: Project path (e.g., ~/Workspace/js/myproject)
+            project_path: The project's working directory. An absolute path, a
+                ``~`` path, or a relative path are all expanded and resolved to
+                an absolute path before encoding. A bare directory name
+                (basename) is also accepted and matched via reverse lookup.
 
         Returns:
-            List of session file paths
+            List of session file paths (empty if the project has no history)
         """
-        # Convert project path to Claude's directory naming
-        # Example: ~/Workspace/js/myproject -> -Users-<username>-Workspace-js-myproject
-        normalized = project_path.replace("/", "-")
-        project_dir = self.projects_dir / normalized
-
-        if not project_dir.exists():
+        project_dir = self._resolve_project_dir(project_path)
+        if project_dir is None or not project_dir.exists():
             return []
 
         # Find all session JSONL files (exclude agent files)
@@ -56,6 +55,53 @@ class SessionAnalyzer:
                 sessions.append(file)
 
         return sorted(sessions, key=lambda p: p.stat().st_mtime, reverse=True)
+
+    def _resolve_project_dir(self, project_path: str) -> Optional[Path]:
+        """
+        Resolve a project path to its encoded directory under projects_dir.
+
+        Claude Code encodes the project's ABSOLUTE working-directory path by
+        replacing every ``/`` with ``-`` (e.g. ``/Users/<name>/app`` ->
+        ``-Users-<name>-app``). The directory name is NOT the basename, so a
+        bare name or an unexpanded ``~`` path never matches directly — the #1
+        reason a real history is mistaken for "no sessions".
+
+        Strategy:
+        1. Expand ``~`` and resolve to an absolute path, then encode it.
+        2. If that misses, treat the input as a basename and reverse-look-up
+           any encoded dir ending in ``-<basename>``. Return the single match;
+           on multiple matches, list them and return None (never guess).
+        """
+        # 1. Exact: expand ~ and resolve to an absolute path, then encode
+        try:
+            abs_path = Path(project_path).expanduser().resolve()
+            exact = self.projects_dir / str(abs_path).replace("/", "-")
+            if exact.exists():
+                return exact
+        except (OSError, RuntimeError):
+            pass
+
+        # 2. Reverse lookup by basename (handles bare names and ~ paths)
+        base = Path(project_path).name
+        if base and self.projects_dir.exists():
+            candidates = [
+                d
+                for d in self.projects_dir.iterdir()
+                if d.is_dir() and d.name.endswith("-" + base)
+            ]
+            if len(candidates) == 1:
+                return candidates[0]
+            if len(candidates) > 1:
+                print(
+                    f"Ambiguous project name '{base}' — {len(candidates)} matches. "
+                    "Re-run with the full absolute path:",
+                    file=sys.stderr,
+                )
+                for d in sorted(candidates):
+                    print(f"  {d.name}", file=sys.stderr)
+                return None
+
+        return None
 
     def search_sessions(
         self, sessions: List[Path], keywords: List[str], case_sensitive: bool = False

@@ -12,11 +12,17 @@ Claude Code stores conversation history in JSONL (JSON Lines) format, where each
 ~/.claude/projects/<normalized-project-path>/<session-id>.jsonl
 ```
 
-**Path normalization**: Project paths are converted by replacing `/` with `-`
+**Path normalization**: the project's **absolute** working-directory path is encoded by replacing every `/` with `-`. It is the full absolute path, **not** the basename — a bare project name never matches.
 
 Example:
-- Project: `~/Workspace/js/myproject`
+- Project (absolute): `/Users/<username>/Workspace/js/myproject`
 - Directory: `~/.claude/projects/-Users-<username>-Workspace-js-myproject/`
+
+To locate a project's directory, reverse-look-up the encoded name instead of guessing — a failed `ls` of the basename does NOT mean the history is absent:
+
+```bash
+ls ~/.claude/projects/ | grep -i <project-name>
+```
 
 ### File Types
 
@@ -27,23 +33,35 @@ Example:
 
 ## JSON Structure
 
-### Message Object
+### Message lines
 
-Every line in a JSONL file follows this structure:
+Conversation messages are the lines you usually want. In current Claude Code (>= 2.x) each such line carries a top-level `type` plus a nested `message` object:
 
 ```json
 {
-  "role": "user" | "assistant",
+  "type": "user" | "assistant",
   "message": {
     "role": "user" | "assistant",
-    "content": [...]
+    "content": [ ... ]
   },
-  "timestamp": "2025-11-26T00:00:00.000Z",
   "uuid": "message-uuid",
-  "parentUuid": "parent-message-uuid",
-  "sessionId": "session-uuid"
+  "parentUuid": "parent-message-uuid" | null,
+  "sessionId": "session-uuid",
+  "timestamp": "2026-06-14T16:45:08.359Z",
+  "cwd": "/absolute/working/dir",
+  "version": "2.1.170",
+  "gitBranch": "main",
+  "userType": "external",
+  "isSidechain": false
 }
 ```
+
+- **Role lives in `message.role`**; the top-level `type` only labels the line. Older sessions stored `role`/`content` at the top level, so a robust extractor reads both locations, e.g. `role = data.get("role") or data.get("message", {}).get("role")` (the bundled scripts do this).
+- `message.content` is either a string or an array of content blocks (`text`, `tool_use`, `tool_result`, ...).
+
+### Non-message event lines
+
+Recent sessions also interleave non-conversation event lines. Their `type` is one of `attachment`, `system`, `summary`, `last-prompt`, `queue-operation`, `custom-title`, `mode`, etc. These carry no `message.role` and no recoverable text/tool content — extractors should skip any line whose role is neither `user` nor `assistant` (the bundled scripts skip them naturally, so counts stay correct).
 
 ### Content Types
 
