@@ -2076,6 +2076,7 @@ Falsification-first methodology for network, streaming, and protocol-layer bugs 
 - Connection resets (`ECONNRESET`, HTTP/2 `RST_STREAM`, `INTERNAL_ERROR`)
 - SSE / long-polling stalls or fixed-time drops (60s, 100s, 130s)
 - CDN / proxy / CGNAT idle-timeout incidents
+- Client-side proxy / VPN / TUN misrouting (e.g. `ERR_CONNECTION_CLOSED`, `SSL_ERROR_SYSCALL`, fake TUN DNS IPs, CNAME-based rule overrides)
 - Any "works sometimes / fails after N seconds" pattern
 - Multi-hop systems (client → CDN → LB → reverse proxy → app → upstream) where a symptom could plausibly come from several layers
 
@@ -2084,7 +2085,7 @@ Falsification-first methodology for network, streaming, and protocol-layer bugs 
 - Env-gated runtime instrumentation patterns (no production-code mutation)
 - Counter-review four-question filter to challenge single-cause assumptions
 - Bundled probe scripts (`layered-isolation-probe.sh`, `mock-idle-upstream.py`)
-- Real case study: SSE RST_STREAM at 130s caused by CGNAT idle timeout
+- Real case studies: SSE RST_STREAM at 130s caused by CGNAT idle timeout; proxy/TUN CNAME rule override causing `ERR_CONNECTION_CLOSED`
 
 **Requirements**: None (methodology + portable shell/Python probes).
 
@@ -2721,7 +2722,7 @@ Use **douban-skill** to back up your Douban 书影音 (book/movie/music/game) hi
 Use **terraform-skill** when your `terraform apply` fails at a provisioner step, when fresh instances hit "docker: not found", or when multi-environment setups accidentally share snapshots. Every pattern in the skill is an *exact error → root cause → copy-paste fix* triple drawn from real incidents. Perfect for anyone who has lost a weekend to timing races in cloud-init, rsync connection drops in local-exec, or hardcoded domains in Caddyfiles.
 
 ### For Network, Streaming & Protocol-Layer Debugging
-Use **debugging-network-issues** when symptoms do not match the obvious cause: HTTP/2 `RST_STREAM`, SSE stalls at exactly 60s/100s/130s, "works sometimes but not always" failures, or anything that looks like an idle-timeout incident through CDN / proxy / CGNAT chains. The skill replaces assumption-stacking with **layered isolation experiments** — running the same logical request through three or more paths that differ by one hop — plus a counter-review pattern for shipping fixes only after the hypothesis has been falsified, not just confirmed. The cognitive-trap catalog includes reverse-path / directional asymmetry — measuring from the wrong end (or only one end) systematically misses a directional failure.
+Use **debugging-network-issues** when symptoms do not match the obvious cause: HTTP/2 `RST_STREAM`, SSE stalls at exactly 60s/100s/130s, "works sometimes but not always" failures, client-side proxy/VPN/TUN misrouting with `ERR_CONNECTION_CLOSED` or `SSL_ERROR_SYSCALL`, or anything that looks like an idle-timeout or rule-override incident through CDN / proxy / CGNAT / TUN chains. The skill replaces assumption-stacking with **layered isolation experiments** — running the same logical request through three or more paths that differ by one hop — plus a counter-review pattern for shipping fixes only after the hypothesis has been falsified, not just confirmed. The cognitive-trap catalog includes reverse-path / directional asymmetry and proxy-node DNS ≠ client DNS.
 
 ### For Chinese TTS (StepFun StepAudio 2.5)
 Use **stepfun-tts** for Chinese / Japanese voice synthesis with emotional control via `instruction` + inline `()` prosody. Captures the two breaking changes that ambush new StepAudio 2.5 users: `voice_label` removal and stricter 2.5-era censorship rules. Pair with `step-tts-2` as a per-line fallback for content that triggers censorship.
@@ -2784,7 +2785,7 @@ Each skill includes:
 - **douban-skill**: See `douban-skill/SKILL.md` for the export workflow and `douban-skill/references/troubleshooting.md` for the complete log of 7 tested scraping approaches and why each failed
 - **terraform-skill**: See `terraform-skill/SKILL.md` for the full catalogue of operational traps organised by exact error → root cause → copy-paste fix
 - **slides-creator**: See `slides-creator/SKILL.md` for the narrative-first workflow, `slides-creator/references/narrative-design-guide.md` for the ABCDEFG model, and `slides-creator/references/content-creation-first-law.md` for the universal content creation principle
-- **debugging-network-issues**: See `debugging-network-issues/SKILL.md` for the falsification-first workflow, `debugging-network-issues/references/layered-isolation-experiment.md` for the multi-hop isolation pattern, and `debugging-network-issues/references/case-sse-rst-130s.md` for the real production case study
+- **debugging-network-issues**: See `debugging-network-issues/SKILL.md` for the falsification-first workflow, `debugging-network-issues/references/layered-isolation-experiment.md` for the multi-hop isolation pattern, `debugging-network-issues/references/case-sse-rst-130s.md` for the SSE production case study, and `debugging-network-issues/references/case-proxy-tun-cname-override.md` for the client-side proxy/TUN CNAME-rule-override case study
 - **stepfun-tts**: See `stepfun-tts/SKILL.md` for the Contextual TTS decision tree and `stepfun-tts/references/migration_from_v2.md` for the `voice_label` → `instruction` migration playbook plus the censorship rewrite list
 - **stepfun-asr**: See `stepfun-asr/SKILL.md` for the SSE-endpoint workflow and the four ASR-side traps (wrong endpoint, Plan-vs-Normal key, repetition hallucination, SSE `error` event). `stepfun-asr/references/api_reference.md` documents the exact JSON request body and SSE event contract for raw HTTP integration
 
