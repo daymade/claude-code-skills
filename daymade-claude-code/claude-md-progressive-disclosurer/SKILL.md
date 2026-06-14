@@ -1,9 +1,7 @@
 ---
 name: claude-md-progressive-disclosurer
 description: |
-  Optimize CLAUDE.md files using progressive disclosure.
-  Goal: Maximize information efficiency, readability, and maintainability.
-  Use when: User wants to optimize CLAUDE.md, information is duplicated across files, or LLM repeatedly fails to follow rules.
+  Optimize / slim down / restructure a CLAUDE.md (or AGENTS.md) using progressive disclosure — move low-frequency detail to Level 2 references while keeping Level 1 lean, WITHOUT losing information. Use this whenever the user asks to optimize / 精简 / 瘦身 / 重构 CLAUDE.md, asks "CLAUDE.md 是不是太大了 / 太长了" (is my CLAUDE.md too big / too long / bloated), wants to 把内容拆到 reference / 外部 / Level 2, do 整段外移 / 渐进式披露 / progressive disclosure, or whenever a CLAUDE.md duplicates info across files or the LLM keeps failing to follow its rules. ALSO trigger the moment an optimization turns into moving / cutting / compressing sections of a CLAUDE.md — even mid-task while another claude-md skill is already running. Distinct from claude-md quality auditors / scorers: this is the restructuring-and-offloading methodology that guarantees zero information loss (grep-verified pointers, verbatim moves, 5b content-integrity audit).
 ---
 
 # CLAUDE.md 渐进式披露优化器
@@ -14,7 +12,7 @@ description: |
 
 **目标是最大化信息效率、可读性、可维护性。**
 
-> 本 skill 自身遵守渐进式披露：新方法论以"精炼规则 + 触发条件"留在 SKILL.md，深度与引文沉到 references/。SKILL.md 保持 ≤500 行（Anthropic skill 规范）——skill 自己示范它要求别人做的事。
+> 本 skill 自身遵守渐进式披露：新方法论以"精炼规则 + 触发条件"留在 SKILL.md，深度战例 / 引文沉到 references/。SKILL.md 行数由信息密度决定、**不设为硬目标**（约 500 行量级；新增高价值规则可略超，但深度永远沉 references）——skill 自己示范它教别人的事：**行数不是 KPI**，自洽地不拿"≤N 行"约束自己。
 
 ### 铁律：行数禁作 KPI，可作诊断症状
 
@@ -31,6 +29,10 @@ description: |
 - 允许把"行数异常大 + Claude 反复不遵守某规则"当成**触发调查的信号**，不是结论
 - 调查动作仍是信号分诊（Step 2.1）+ 分层，**不是"砍到 N 行"**
 - 一句话区分：行数可以让你**开始怀疑**，不可以成为你**优化的目标**或**汇报的成果**
+
+#### 触发即 reframe（用户说「太大 / 太长 / 精简 / 瘦身」时——最易在此处跑偏）
+
+这些词触发的本能是「砍行数」。**先 reframe，再动手**：① 当场声明「行数不是目标，单一信息源 / 认知相关性才是」；② 直接进 Step 2.1 信号分诊，用「这段有没有 canonical source 重复 / 是不是反信号」决定去留，**不是**用「文件多长」；③ 把「太大吗」当**调查的起点**，不是**砍的许可**。用户连续追问「还是太大」时同理——回应是「再做一轮分诊找重复 / 反信号」，分诊空了就诚实说「剩下都是高频核心，再砍会丢信号」，**不是**继续砍有信息的内容。（实战：把「太大吗」做成减行数任务、一路用「省 39%」当成果汇报、被连续追问拽着越砍越多 → 案例 15、16。）
 
 ### 两层架构
 
@@ -140,6 +142,8 @@ cp CLAUDE.md CLAUDE.md.bak.$(date +%Y%m%d_%H%M%S)
 5. **添加「修改代码前必读」表格**（按"要改什么"索引）
 6. **在末尾再放一份触发索引表**
 
+**⚠️ 写指针前的硬 gate（事中验证，最易跳过、本次最大踩坑）**：每写一条「→ 某 reference / 详见 X」指针前，**当场 `grep` 确认目标文件真有这段内容**。三种结果：① 目标已有完整内容 → 写指针；② 目标没有 / 不确定是否完整 → 先把原文 verbatim cut 到目标（回 Step 3），再写指针；③ **绝不写「指向一个其实没有该内容的文件」的假指针**。假指针比丢内容更隐蔽——它让 5a「文件存在」通过、却在读者点进去时才发现是空的。Why：5a/5b 是**事后**验证，假指针那一刻已写进文件；事中 gate 才能在源头拦住。（实战：写「详见 anti-patterns」但那里 0 命中 Stripe 端点 → 案例 15。）
+
 ### Step 5: 验证（三项全部通过才算完成）
 
 #### 5a. 引用文件存在性
@@ -168,6 +172,8 @@ done
    - 唯一允许删除的情况：**该信息已有独立的 canonical source**（如 `docs/README.md` 已是文档索引的 canonical source），且在 Level 1 中有明确的指向
 
 **禁止将"故意删除"作为分类来掩盖信息丢失。** 每一项"故意删除"都必须说明 canonical source 在哪里。如果说不出来，就不是"故意删除"，而是"遗漏"。
+
+**大量压缩时用独立 agent 做 5b（强烈推荐）**：执行者自审有「乐观偏差」——倾向相信自己砍掉的内容都有归属。压缩涉及多段 / 整章时，启动一个**独立 sub-agent** 做完整逐节 5b（读 `/tmp/claude-md-original.md` + 当前文件 + 所有 reference，逐个信息点 grep 验证归属，只返回「真丢失 / 指针失准」清单）。它没有你的 sunk-cost，能抓到你抽查会放过的。Why：本 skill 的真实使用中，执行者抽查 5 点「自我感觉良好」，独立 agent 逐节查 55 点才暴露真问题。prompt 模板 + 批量内容点 grep 脚本见 `references/progressive_disclosure_principles.md` 附录 D。
 
 #### 5c. 行数不进验证标准
 
@@ -410,6 +416,16 @@ function getDatabase() {
 
 > ⚠️ 但若禁令原句嵌在 case study 混合段落里，先按反模式 6 整段 verbatim 移 L2，再在 L1 派生重述——不可改写原句（案例 14）。
 
+### ⚠️ 反模式 9：假指针（指向不存在的内容）
+
+**案例**：移走一段内容后写「详见 `X.md`」，但 `X.md` 里根本没有这段——指针指向空。
+
+**问题**：比直接丢内容更隐蔽。`5a`「文件存在」会通过（`X.md` 确实存在），但内容不在那里；读者点进去才发现，且此时已无从知道原文是什么。本质是反模式 6（移动时压缩）+ 反模式 7（掩盖丢失）的组合：内容被砍 + 用一个看似合规的指针掩盖。
+
+**正确**：写指针前当场 `grep` 验证目标真有该内容（Step 4 硬 gate）。指针指错文件（内容在 A、却写「详见 B」）是同类问题，按内容实际所在地修正、不是删指针。
+
+> 完整案例分析见 `references/progressive_disclosure_principles.md` 案例 15
+
 ---
 
 ## 信息量检验
@@ -477,6 +493,8 @@ function getDatabase() {
 - [ ] **Level 2 文件内容与原始内容完全一致**——没有在移动过程中被"精简"
 - [ ] **没有信号被静默删除**——每项删除是反信号且有用户确认/canonical source（反信号删除正当，见 Step 2.1）
 - [ ] **没有把行数当成果/KPI/移动理由/汇报指标**（诊断性观察不在此限，见「铁律」）
+- [ ] **每条「→ reference」指针都 grep 验证过目标真有该内容**（无假指针 / 指针失准，Step 4 硬 gate；反模式 9）
+- [ ] **大量压缩时跑了独立 agent 5b 审计**（执行者自审有乐观偏差，Step 5b）
 
 ### 结构质量
 - [ ] 「信息记录原则」在文档开头（防止未来膨胀）

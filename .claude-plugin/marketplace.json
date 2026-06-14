@@ -126,7 +126,7 @@
       "description": "Claude Code operations suite that bundles session history recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, plugin marketplace development, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.2.1",
+      "version": "1.3.0",
       "category": "suite",
       "keywords": [
         "suite",
