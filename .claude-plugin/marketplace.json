@@ -6,9 +6,27 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.65.0"
+    "version": "1.66.0"
   },
   "plugins": [
+    {
+      "name": "automotive-ve-ai-skills-kit",
+      "description": "Convert automotive value engineering and VAVE workflows into reusable Claude Code skills with candidate scoring, opportunity-register drafting, SOP generation, adoption metrics, evidence-claim auditing, and human-review guardrails. Use for BOM reviews, quotation analysis, cost-opportunity workshops, VE meeting notes, resume or portfolio evidence checks, and AI productivity pilots in engineering or procurement teams.",
+      "source": "./automotive-ve-ai-skills-kit",
+      "strict": false,
+      "version": "0.1.0",
+      "category": "productivity",
+      "keywords": [
+        "automotive",
+        "value-engineering",
+        "vave",
+        "bom",
+        "cost-analysis",
+        "ai-skills",
+        "workflow-automation",
+        "claude-code"
+      ]
+    },
     {
       "name": "bigdata-skill",
       "description": "Pull Bigdata.com (RavenPack) financial and news data through the official bigdata-client Python SDK and its /v1/* REST endpoints when the Bigdata MCP server gives you too little — it silently drops per-chunk sentiment, entity character-spans, and the entire structured-financial product line (analyst estimates, earnings/event calendar, earnings surprise, analyst ratings, price targets, company screener). Bundles a verified, cost-guarded toolkit plus the SSL-retry, chunk-billing 52x trap, and entity-query pitfalls already solved in real use. Use whenever the user mentions Bigdata.com, RavenPack, a bd_v2_ API key, the bigdata MCP, rp_entity_id resolution, chunk / query_unit cost, or wants forward estimates, an earnings/event calendar, earnings surprise, price targets, or annotated news sentiment for a ticker — even if they never name the SDK. Reach for it the moment an MCP financial data source returns less than you know the underlying API holds.",

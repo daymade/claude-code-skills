@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-64-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.65.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-65-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.66.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 64 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 65 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2565,7 +2565,30 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### 66. **marketplace-health-check** - Full 6-Dimension Repo Health Check
+### 66. **automotive-ve-ai-skills-kit** - Automotive Value Engineering AI Skills
+
+```bash
+claude plugin install automotive-ve-ai-skills-kit@daymade-skills
+```
+
+Convert automotive value engineering and VAVE workflows into reusable Claude Code skills with candidate scoring, opportunity-register drafting, SOP generation, adoption metrics, evidence-claim auditing, and human-review guardrails.
+
+**When to use:**
+- Mining BOM review, quotation review, VAVE meeting, or cost-opportunity workflows for AI Skill candidates
+- Drafting opportunity registers while preserving cost, supplier, quality, and engineering review boundaries
+- Building safe AI productivity pilots for automotive engineering or procurement teams using redacted or synthetic data
+
+**Key features:**
+- Seven-factor Skill candidate scoring: frequency, time cost, standardization, risk control, data availability, visible benefit, and user willingness
+- VAVE opportunity-register template with explicit evidence labels: Fact, Calculation, Hypothesis, Needs confirmation
+- SOP and adoption-report patterns for turning pilots into repeatable team workflows
+- Reference methodology plus link to a tested open-source project with scripts, examples, and unit tests
+
+**Requirements**: None. Python scripts and examples are available in the reference project: https://github.com/onyx679/automotive-ve-ai-skills-kit
+
+---
+
+### 67. **marketplace-health-check** - Full 6-Dimension Repo Health Check
 
 ```bash
 claude plugin install marketplace-health-check@daymade-skills
