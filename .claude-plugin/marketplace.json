@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "automotive-ve-ai-skills-kit",
-      "description": "Convert automotive value engineering and VAVE workflows into reusable Claude Code skills with candidate scoring, opportunity-register drafting, SOP generation, adoption metrics, and human-review guardrails. Use for BOM reviews, quotation analysis, cost-opportunity workshops, VE meeting notes, and AI productivity pilots in engineering or procurement teams.",
+      "description": "Convert automotive value engineering and VAVE workflows into reusable Claude Code skills with candidate scoring, opportunity-register drafting, SOP generation, adoption metrics, evidence-claim auditing, and human-review guardrails. Use for BOM reviews, quotation analysis, cost-opportunity workshops, VE meeting notes, resume or portfolio evidence checks, and AI productivity pilots in engineering or procurement teams.",
       "source": "./automotive-ve-ai-skills-kit",
       "strict": false,
       "version": "0.1.0",

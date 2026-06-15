@@ -39,3 +39,20 @@ Use evidence labels:
 
 Track active users, repeat usage, task time, rework count, field completeness, missed confirmation questions, satisfaction, and issue fix rate.
 
+## 6. Audit Evidence Claims
+
+Before using project work in a resume, portfolio, release note, or management summary, break claims into atomic statements and classify each one.
+
+Required fields:
+
+- `source_kind`: platform record, repository artifact, independent source, self-reported, or mixed.
+- `evidence_level`: `L4` for directly checkable platform/repository records, `L3` for multiple independent sources, `L2` for one credible third-party source, `L1` for self-reported or weak evidence.
+- `verdict`: confirmed, largely credible, doubtful, or debunked.
+- `evidence_status`: verified, open, pending-review, or missing.
+- `claim_level`: resume-ready, boundary-only, or do-not-claim.
+
+Rules:
+
+- Do not claim open PRs as merged, accepted, or contributor status.
+- Do not claim internal deployment, supplier quote handling, real BOM handling, or business impact without approved evidence.
+- Use conservative wording such as "submitted PR", "published demo", "verified by CI", and "review-pending".

@@ -2571,7 +2571,7 @@ claude plugin install daymade-claude-code@daymade-skills
 claude plugin install automotive-ve-ai-skills-kit@daymade-skills
 ```
 
-Convert automotive value engineering and VAVE workflows into reusable Claude Code skills with candidate scoring, opportunity-register drafting, SOP generation, adoption metrics, and human-review guardrails.
+Convert automotive value engineering and VAVE workflows into reusable Claude Code skills with candidate scoring, opportunity-register drafting, SOP generation, adoption metrics, evidence-claim auditing, and human-review guardrails.
 
 **When to use:**
 - Mining BOM review, quotation review, VAVE meeting, or cost-opportunity workflows for AI Skill candidates
