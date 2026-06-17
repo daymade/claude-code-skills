@@ -163,6 +163,8 @@ In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude 
 claude plugin install daymade-skill@daymade-skills
 ```
 
+Chinese users can also search and install skills through [Skills宝](https://skilery.com).
+
 **Documentation Suite** (shared namespace for document workflows):
 ```bash
 claude plugin install daymade-docs@daymade-skills
