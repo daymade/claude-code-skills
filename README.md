@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-64-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.65.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-67-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.66.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 64 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 67 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2600,6 +2600,51 @@ claude plugin install marketplace-health-check@daymade-skills
 
 ---
 
+### 67. **agent-skill-groups** - Scenario-Based Skill Profile Manager
+
+```bash
+claude plugin install agent-skill-groups@daymade-skills
+```
+
+Organize large Claude Code, Codex, OpenCode, or generic Agent Skills inventories into scenario profiles with the external `agent-skill-groups` CLI. Keep a lean always-on `core`, move optional skills into a managed disabled pool, and switch only the needed group for the current task.
+
+**When to use:**
+- Your local skills list is too large, noisy, or expensive to keep active for every task
+- You want repeatable groups such as `core`, `research`, `frontend-browser`, `ctf-web`, `docs`, or team-specific profiles
+- You need to generate a `groups.json` table and a managed `CLAUDE.md` / `AGENTS.md` memory block
+- You want a preview, backup, and recovery workflow before moving skill directories
+
+**Key features:**
+- Runtime-aware workflow for Claude Code, Codex, OpenCode, and generic Agent Skills roots
+- Read-only inventory analysis and grouping suggestions before any filesystem move
+- Guardrails: `validate`, `doctor`, `plan`, `backup`, `profile`, `status`, and `restore`
+- Persistent agent memory generation so future sessions know which groups exist and how to load them
+- Bundled checker script plus detailed CLI workflow reference
+
+**Example usage:**
+```bash
+# Install the underlying CLI if needed
+pipx install git+https://github.com/go165/agent-skill-groups.git
+
+# Check the CLI and local runtime
+python agent-skill-groups/scripts/check_agent_skill_groups.py --runtime claude-code
+
+# Create and validate a profile table
+agent-skill-groups init --runtime claude-code --output groups.json
+agent-skill-groups validate --config groups.json --runtime claude-code
+agent-skill-groups plan --config groups.json --runtime claude-code research
+
+# Switch after reviewing the plan and taking a backup
+agent-skill-groups backup --config groups.json --runtime claude-code
+agent-skill-groups profile --config groups.json --runtime claude-code research
+```
+
+**Requirements**: `python3`; `pipx` recommended for installing the external CLI.
+
+📚 **Documentation**: See [agent-skill-groups/SKILL.md](./agent-skill-groups/SKILL.md) and [agent-skill-groups/references/cli_workflow.md](./agent-skill-groups/references/cli_workflow.md). Canonical project: [go165/agent-skill-groups](https://github.com/go165/agent-skill-groups).
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -2898,4 +2943,4 @@ If you find these skills useful, please:
 
 **Built with ❤️ using the skill-creator skill for Claude Code**
 
-Last updated: 2026-06-05 | Marketplace version 1.60.1
+Last updated: 2026-06-22 | Marketplace version 1.66.0
