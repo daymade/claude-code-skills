@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-64-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.65.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-67-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.66.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 64 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 67 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2642,6 +2642,51 @@ claude plugin install marketplace-health-check@daymade-skills
 
 ---
 
+### 67. **agent-skill-groups** - 场景化技能分组管理器
+
+```bash
+claude plugin install agent-skill-groups@daymade-skills
+```
+
+用外部 `agent-skill-groups` CLI 把庞大的 Claude Code、Codex、OpenCode 或通用 Agent Skills 技能库整理成场景化 profile。保留精简的常驻 `core`，把可选技能放入受管理的 disabled pool，并按任务只加载所需分组。
+
+**使用场景：**
+- 本地 skills 太多、太吵，或不适合每次任务都全部启用
+- 想建立 `core`、`research`、`frontend-browser`、`ctf-web`、`docs` 或团队专属 profile
+- 需要生成可维护的 `groups.json` 表，以及受管理的 `CLAUDE.md` / `AGENTS.md` 记忆块
+- 想在移动 skill 目录前先预览、备份，并保留恢复路径
+
+**主要功能：**
+- 支持 Claude Code、Codex、OpenCode 和通用 Agent Skills 目录布局
+- 先做只读 inventory 分析和分组建议，再执行任何文件移动
+- 提供 `validate`、`doctor`、`plan`、`backup`、`profile`、`status`、`restore` 等保护步骤
+- 可生成持久 agent memory，让后续会话知道有哪些分组以及如何加载
+- 内置检查脚本和详细 CLI workflow 参考文档
+
+**示例用法：**
+```bash
+# 如有需要，先安装底层 CLI
+pipx install git+https://github.com/go165/agent-skill-groups.git
+
+# 检查 CLI 和本地 runtime
+python agent-skill-groups/scripts/check_agent_skill_groups.py --runtime claude-code
+
+# 创建并验证 profile 表
+agent-skill-groups init --runtime claude-code --output groups.json
+agent-skill-groups validate --config groups.json --runtime claude-code
+agent-skill-groups plan --config groups.json --runtime claude-code research
+
+# 读完 plan 并备份后再切换 profile
+agent-skill-groups backup --config groups.json --runtime claude-code
+agent-skill-groups profile --config groups.json --runtime claude-code research
+```
+
+**要求**：`python3`；建议用 `pipx` 安装外部 CLI。
+
+📚 **文档**：见 [agent-skill-groups/SKILL.md](./agent-skill-groups/SKILL.md) 和 [agent-skill-groups/references/cli_workflow.md](./agent-skill-groups/references/cli_workflow.md)。上游项目：[go165/agent-skill-groups](https://github.com/go165/agent-skill-groups)。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -2937,4 +2982,4 @@ claude plugin install skill-name@daymade-skills
 
 **使用 skill-creator 技能为 Claude Code 精心打造 ❤️**
 
-最后更新：2026-06-05 | 市场版本 1.60.1
+最后更新：2026-06-22 | 市场版本 1.66.0
