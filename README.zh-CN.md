@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-64-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.65.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-65-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.66.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 64 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 65 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -185,7 +185,7 @@ claude plugin install daymade-docs@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——会话恢复、CLAUDE.md 调优、故障诊断、statusline 配置、导出修复与 marketplace 开发：
+一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——会话恢复、CLAUDE.md 调优、故障诊断、statusline 配置、导出修复、marketplace 开发、终端截图渲染、用量分析以及多 Provider 模型切换：
 
 ```text
 /daymade-claude-code:claude-code-history-files-finder
@@ -195,9 +195,12 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:statusline-generator
 /daymade-claude-code:claude-export-txt-better
 /daymade-claude-code:marketplace-dev
+/daymade-claude-code:terminal-screenshot
+/daymade-claude-code:claude-usage-analyst
+/daymade-claude-code:claude-switch-models-setup
 ```
 
-安装后调用统一显示为 `daymade-claude-code:<skill>`，共享同一命名空间。这些技能仅作为套件发布——安装套件即可获得全部 7 个技能。
+安装后调用统一显示为 `daymade-claude-code:<skill>`，共享同一命名空间。这些技能仅作为套件发布——安装套件即可获得全部技能。
 
 **安装其他技能：**
 ```bash
@@ -2640,6 +2643,41 @@ claude plugin install marketplace-health-check@daymade-skills
 ```
 
 **要求**：`gh` CLI（已认证）、`git`、`jq`、`python3`；需 opt-in Workflow 工具（让我跑健康检查就是 opt-in）。
+
+---
+
+### 67. **claude-switch-models-setup** - 多 Provider Claude Code 配置
+
+```bash
+claude plugin install daymade-claude-code@daymade-skills
+```
+
+设置多个互相隔离的 Claude Code CLI profile，让你可以在不同终端窗口同时运行不同的 LLM provider（Kimi、GLM、DeepSeek、StepFun、Anthropic）——每个 profile 拥有独立的 `claude.json` 状态，同时共享 skills、projects、hooks 和 agents。
+
+**使用场景：**
+- 想在一个终端跑 Kimi、另一个终端跑 DeepSeek
+- 需要在 Anthropic 和第三方模型之间切换，且不希望配置互相污染
+- 为学员配置课后环境，复现同样的多 provider 工作流
+
+**主要功能：**
+- 一键安装器将 profile 管理器复制到 `~/.config/claude-switch-models-setup/`
+- 生成 provider 专用的 `~/.claude/settings/<provider>.json` 模板，并带上必要的隔离标志
+- `claude-profiles-init` 创建隔离目录 `~/.claude-profiles/<provider>/`，其余资源通过 symlink 共享
+- 每次启动 profile 时自动修复 marketplace 路径污染
+- 内置学生安装指南和故障排查参考
+
+**示例用法：**
+```bash
+# 安装套件
+claude plugin install daymade-claude-code@daymade-skills
+
+# 然后自然地让 Claude 做
+"帮我配置 Kimi 和 DeepSeek 的 Claude Code profile"
+"我想在两个独立终端分别跑 Kimi 和 Anthropic"
+"安装 workshop 上的多 provider 配置"
+```
+
+**要求**：`claude` CLI、`zsh` 或 `bash`、`python3`，以及你想使用的 provider 的 API key。
 
 ---
 
