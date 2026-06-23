@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-64-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.65.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-65-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.66.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 64 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 65 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -185,7 +185,7 @@ These skills ship as a bundle — there are no separate single-skill plugins. Al
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-This suite bundles the skills that extend Claude Code itself — session recovery, CLAUDE.md tuning, troubleshooting, statusline configuration, export repair, and marketplace development:
+This suite bundles the skills that extend Claude Code itself — session recovery, CLAUDE.md tuning, troubleshooting, statusline configuration, export repair, marketplace development, terminal screenshot rendering, usage analysis, and multi-provider model switching:
 
 ```text
 /daymade-claude-code:claude-code-history-files-finder
@@ -195,9 +195,12 @@ This suite bundles the skills that extend Claude Code itself — session recover
 /daymade-claude-code:statusline-generator
 /daymade-claude-code:claude-export-txt-better
 /daymade-claude-code:marketplace-dev
+/daymade-claude-code:terminal-screenshot
+/daymade-claude-code:claude-usage-analyst
+/daymade-claude-code:claude-switch-models-setup
 ```
 
-Installed names render as `daymade-claude-code:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all seven.
+Installed names render as `daymade-claude-code:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all members.
 
 **Install Other Skills:**
 ```bash
@@ -2598,6 +2601,41 @@ claude plugin install marketplace-health-check@daymade-skills
 ```
 
 **Requirements**: `gh` CLI (authenticated), `git`, `jq`, `python3`; opt-in to the Workflow tool (asking to run the health check is the opt-in).
+
+---
+
+### 67. **claude-switch-models-setup** - Multi-Provider Claude Code Profiles
+
+```bash
+claude plugin install daymade-claude-code@daymade-skills
+```
+
+Set up multiple isolated Claude Code CLI profiles so you can run different LLM providers (Kimi, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time — each profile gets its own `claude.json` state while sharing skills, projects, hooks, and agents.
+
+**When to use:**
+- You want one terminal with Kimi and another with DeepSeek running side-by-side
+- You need to switch between Anthropic and third-party models without config bleed
+- You're setting up a post-workshop environment for students who want the same multi-provider workflow
+
+**Key features:**
+- One-click installer copies the profile manager to `~/.config/claude-switch-models-setup/`
+- Generates provider-specific `~/.claude/settings/<provider>.json` templates with required isolation flags
+- `claude-profiles-init` creates isolated `~/.claude-profiles/<provider>/` directories with symlinked shared resources
+- Built-in marketplace path pollution fixer runs automatically on every profile launch
+- Includes student setup guide and troubleshooting reference
+
+**Example usage:**
+```bash
+# Install the suite
+claude plugin install daymade-claude-code@daymade-skills
+
+# Then ask Claude naturally
+"set up Claude Code profiles for Kimi and DeepSeek"
+"I want to run Kimi and Anthropic in separate terminals"
+"install the multi-provider profile setup from the workshop"
+```
+
+**Requirements**: `claude` CLI, `zsh` or `bash`, `python3`, plus API keys for the providers you want to use.
 
 ---
 
