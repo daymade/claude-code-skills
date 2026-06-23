@@ -211,3 +211,86 @@ Replying as a comment (not in PR body) means the resolution appears next to the 
 8. **`code-simplifier` cleanups should be a separate commit** (or a separate PR) — bundling them into a fix commit makes review harder and risks scope creep.
 9. **`--force-with-lease`, never plain `--force`** — review threads are too easy to destroy.
 10. **Self-audit "what's my evidence?" pass** before publishing the PR body catches fabrication-by-default.
+
+## Phase 6 — Keeping the PR merge-ready over time
+
+After the initial push, upstream `main` continued to move. The PR sat open long enough that a second rebase was required. This phase is where many PRs quietly rot; the work below is what kept it in a merge-ready state.
+
+### Rebase against latest upstream `main`
+
+```bash
+git fetch origin
+git rebase origin/main
+```
+
+Two new conflicts appeared:
+
+- **`src-tauri/src/deeplink/provider.rs`** — upstream had extracted a helper `extract_claude_config_env(request)` in the same region where the PR added `build_claude_settings(request, extra_env)`. The resolution kept both: use upstream's extraction for the standard fields, then layer the PR's `extra_env` merge on top.
+- **`src-tauri/src/services/provider/usage.rs`** — upstream had refactored credential resolution into `resolve_script_credentials`. The PR's older `extract_api_key_from_provider` changes were obsolete; dropping them was the correct resolution.
+
+After resolving, two upstream test initializers lacked the new `extra_env` field. The fix was minimal:
+
+```rust
+DeepLinkImportRequest {
+    // ... existing fields ...
+    extra_env: None,
+}
+```
+
+**Lesson**: when rebasing, prefer the upstream's architectural change and re-apply your feature as a thin layer on top. Do not re-litigate upstream refactors inside your PR.
+
+### Quality gates re-run
+
+Every rebase invalidates your previous "tests pass" claim. Re-run the full suite:
+
+```bash
+pnpm typecheck
+pnpm test:unit
+cargo clippy --all-targets
+cargo test
+```
+
+This surfaced two clippy warnings in unrelated transcript-protection code that had been added in a parallel PR:
+
+- `.map_or(false, |d| d == 99999)` → `== Some(99999)`
+- `.map_or(false, |days| days > 365)` → `.is_some_and(|days| days > 365)`
+
+Both were fixed before push. The key point is not the specific warnings but the rule: **a rebase means re-running every gate**.
+
+### Push-time failures
+
+#### 1. Gitconfig URL rewrite (`503` on push)
+
+`git push fork feat/deeplink-extra-env` failed with a 503. The cause was a stale global rewrite that mapped SSH-style GitHub URLs to HTTPS:
+
+```bash
+git config --global --get-regexp url
+# output showed url.https://github.com/.insteadOf=<ssh-git-url-prefix>
+```
+
+Removing the rewrite restored normal SSH push.
+
+#### 2. Local PII hook false positives
+
+The local pre-push hook (gitleaks + bash fallback) rejected several upstream commits because they contained sample home-directory paths used as test fixture data (e.g., macOS `/Users/…` and Linux `/home/…` examples) and a public upstream maintainer email address in `README_DE.md`.
+
+The correct response was **not** `--no-verify`. Instead, the allowlist in the local guard config was updated to recognize these as public fixture content. This is a one-time local config change; it was not committed to the upstream repo.
+
+### Counter-review with filtering
+
+A Dynamic Workflow review was run over the combined changes. It produced a list of findings. The majority were discarded using the skill's probability / cost / reality filter. Two survived:
+
+1. A clippy warning in the transcript-protection code (fixed).
+2. A unit-test mocking issue caused by a new helper calling transcript-protection APIs; the fix was to pass a `persistedValue` baseline so the API is only invoked when the toggle actually changes.
+
+Both fixes were amended into the tip commit and force-pushed with `--force-with-lease`.
+
+### Final mergeability check
+
+After push:
+
+```bash
+gh pr view 2634 --repo farion1231/cc-switch --json mergeable,mergeStateStatus
+```
+
+Returned `mergeable: MERGEABLE`. That is the only state that justifies calling the PR "ready to merge".
