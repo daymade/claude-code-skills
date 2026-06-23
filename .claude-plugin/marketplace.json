@@ -364,10 +364,10 @@
     },
     {
       "name": "github-contributor",
-      "description": "Strategic guide for becoming an effective GitHub contributor. Covers opportunity discovery, project selection, high-quality PR creation, and reputation building. Use when looking to contribute to open-source projects, building GitHub presence, or learning contribution best practices",
+      "description": "End-to-end playbook for shipping high-quality pull requests to open-source projects you don't maintain — discovery, CONTRIBUTING compliance, PR-size check, minimal-diff implementation, PR description with AI-assisted disclosure, conflict resolution, and post-submission maintainer interaction. Use whenever creating, editing, or pushing a PR to a third-party GitHub repo — submit a PR, open a PR, fix this upstream, rebase against main, respond to the bot review, an owner/repo target, or 提 PR / 上游 PR / 贡献代码 / rebase 冲突 / 回应维护者.",
       "source": "./github-contributor",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -376,7 +376,12 @@
         "pull-request",
         "reputation",
         "contributor",
-        "oss"
+        "oss",
+        "rebase",
+        "conflict-resolution",
+        "pr-description",
+        "ai-assisted-disclosure",
+        "bot-review"
       ]
     },
     {
