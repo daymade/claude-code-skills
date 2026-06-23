@@ -110,6 +110,23 @@ Before writing the PR description, list every "I tested…" / "I verified…" / 
 
 This rule prevents the most damaging trust failure: a maintainer running your "tested" command and finding it doesn't work.
 
+### Step 3.4 — Push-time verification
+
+Local tests passing is not the finish line. Before you call the PR merge-ready, run the push-time checklist:
+
+1. **Visibility check** — confirm the target repo is actually public/private as you assume:
+   ```bash
+   gh repo view <owner>/<repo> --json visibility,isPrivate,defaultBranchRef
+   ```
+2. **Security hooks** — if pre-push fails, fix the rule or the content; do not `--no-verify`.
+3. **Push succeeds** — if it fails with 503/auth errors, check `git config --global --get-regexp url` for stale URL rewrites.
+4. **Mergeability check** — `git push` succeeding does not mean GitHub can merge:
+   ```bash
+   gh pr view <pr-number> --repo <owner>/<repo> --json mergeable,mergeStateStatus
+   ```
+
+Full details (URL rewrites, PII-hook false positives, `--force-with-lease` caveats) are in [`references/push_time_gotchas.md`](references/push_time_gotchas.md).
+
 ## Phase 4 — PR Description Writing
 
 A great PR description does three jobs: (1) lets the maintainer decide in 30 seconds whether to merge, (2) gives reviewers everything they need to verify without DM'ing you, (3) creates a written record that survives team turnover.
@@ -240,7 +257,9 @@ The point of counter-review is to surface things you didn't think of, not to man
 | [`references/phase3_quality_gates_and_e2e.md`](references/phase3_quality_gates_and_e2e.md) | Isolated-home pattern, single-instance forward, SQLite verification, screencapture + window focus |
 | [`references/phase4_pr_description.md`](references/phase4_pr_description.md) | Body skeleton, test-coverage-matrix, AI disclosure templates, screenshot placeholder pattern |
 | [`references/phase5_post_submission.md`](references/phase5_post_submission.md) | `gh api in_reply_to` recipe, `--force-with-lease` semantics, counter-review filtering |
+| [`references/push_time_gotchas.md`](references/push_time_gotchas.md) | Git remote URL rewrites, PII-hook false positives, mergeability verification, force-push caveats |
 | [`references/case_study_cc-switch_pr_2634.md`](references/case_study_cc-switch_pr_2634.md) | Full real-world walkthrough including dev log, SQLite dump, screenshots |
+| [`references/case_study_cc-switch_pr_1624.md`](references/case_study_cc-switch_pr_1624.md) | Frontend/state-management rebase case study — async init guards, test coupling, i18n conflicts |
 | [`references/pr_checklist.md`](references/pr_checklist.md) | Original consolidated checklist (legacy; phase docs supersede the workflow sections) |
 | [`references/project_evaluation.md`](references/project_evaluation.md) | Project health rubric for the discovery step |
 | [`references/communication_templates.md`](references/communication_templates.md) | Issue-claim, review-response, and after-merge templates |
