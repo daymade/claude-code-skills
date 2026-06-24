@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-65-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.66.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-66-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.67.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 65 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 66 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -287,6 +287,9 @@ claude plugin install douban-skill@daymade-skills
 
 # Terraform operational traps and multi-environment reliability patterns
 claude plugin install terraform-skill@daymade-skills
+
+# Evaluate any LLM endpoint across speed, concurrency, protocol, and quality
+claude plugin install llm-eval-harness@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -2639,6 +2642,52 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
+### 68. **llm-eval-harness** - Four-Dimension LLM Endpoint Evaluation
+
+```bash
+claude plugin install llm-eval-harness@daymade-skills
+```
+
+Evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four dimensions — instead of trusting a vendor's headline numbers — and report measured results separately from inferred ones.
+
+**When to use:**
+- Benchmarking a model, or verifying a vendor's tokens-per-second claim
+- Comparing two models head-to-head under identical conditions
+- Vetting a newly released or "Anthropic-compatible" endpoint before adopting it
+- Probing concurrency limits before a workshop or batch job
+
+**Key features:**
+- **Four dimensions, four scripts**: speed (`speed_probe.py` — TTFT + thinking-aware tokens/sec), concurrency/stability (`concurrency_probe.py` — success rate, p50/p90, breaking point), Anthropic protocol compliance (`protocol_probe.py` — thinking-block trigger rate over N≥10), and quality regression (`usecase_runner.py` + independent blind judges)
+- **Thinking-aware throughput**: captures `reasoning_content` separately so reasoning tokens don't inflate tok/s (the trap that once read a ~750 tok/s model as 4700)
+- **Probabilistic protocol verdicts**: `fully-implemented` / `intermittent (k/N)` / `not-implemented`, never concluding from a single sample, with `Connection: close` so a load balancer can't pin all samples to one replica
+- **Blind-judge quality**: 3 independent judges per case, majority-pass, with per-category precision to surface a systematically weak category
+- **Keys via env-var name only** (`--key-env MY_KEY`) — the key never appears in `ps`, shell history, or a saved report
+- **Your use-case library lives outside the bundle** (e.g. `~/.llm-eval/usecases.json`) so it survives skill updates and never lands in a public repo
+
+**Example usage:**
+```bash
+export MY_KEY=sk-...   # the key never appears in a command below
+
+# Speed: real-task throughput + sustained decode ceiling
+uv run --with openai python scripts/speed_probe.py \
+  --base-url https://api.example.com/v1 --model some-model --key-env MY_KEY --mode both
+
+# Concurrency: ramp until it breaks
+uv run --with aiohttp python scripts/concurrency_probe.py \
+  --url https://api.example.com/v1/chat/completions --model some-model \
+  --key-env MY_KEY --format openai --concurrency 10 20 40 60
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [llm-eval-harness/references/evaluation_disciplines.md](./llm-eval-harness/references/evaluation_disciplines.md) for the reasoning behind each discipline and [llm-eval-harness/references/quality_blind_judge.md](./llm-eval-harness/references/quality_blind_judge.md) for the blind-judge method.
+
+**Requirements**: Python 3.8+, `uv`; `openai` and `aiohttp` (auto-installed via `uv run --with`); an API key for the endpoint under test. Optionally composes with **promptfoo-evaluation** for rubric-based gating.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
@@ -2718,7 +2767,7 @@ Use **claude-md-progressive-disclosurer** to reduce CLAUDE.md bloat by moving de
 Use **skills-search** to find, install, and manage Claude Code skills from the CCPM registry. Perfect for discovering new skills for specific tasks, installing skill bundles for common workflows, and keeping your skill collection organized.
 
 ### For LLM Evaluation & Model Comparison
-Use **promptfoo-evaluation** to set up prompt tests, compare model outputs, and run automated evaluations with custom assertions.
+Use **promptfoo-evaluation** to set up prompt tests, compare model outputs, and run automated evaluations with custom assertions. Use **llm-eval-harness** to benchmark an endpoint across speed (thinking-aware tok/s), concurrency/stability, Anthropic protocol compliance, and quality regression against your own use cases — verifying a vendor's tokens-per-second claim or vetting a newly released model before adopting it. The two compose: promptfoo for fast per-case rubric gating, llm-eval-harness for blind-judge precision and raw speed/concurrency probing.
 
 ### For iOS App Development
 Use **iOS-APP-developer** to configure XcodeGen projects, resolve SPM dependency issues, and troubleshoot code signing or device deployment.
@@ -2826,6 +2875,7 @@ Each skill includes:
 - **debugging-network-issues**: See `debugging-network-issues/SKILL.md` for the falsification-first workflow, `debugging-network-issues/references/layered-isolation-experiment.md` for the multi-hop isolation pattern, `debugging-network-issues/references/case-sse-rst-130s.md` for the SSE production case study, and `debugging-network-issues/references/case-proxy-tun-cname-override.md` for the client-side proxy/TUN CNAME-rule-override case study
 - **stepfun-tts**: See `stepfun-tts/SKILL.md` for the Contextual TTS decision tree and `stepfun-tts/references/migration_from_v2.md` for the `voice_label` → `instruction` migration playbook plus the censorship rewrite list
 - **stepfun-asr**: See `stepfun-asr/SKILL.md` for the SSE-endpoint workflow and the four ASR-side traps (wrong endpoint, Plan-vs-Normal key, repetition hallucination, SSE `error` event). `stepfun-asr/references/api_reference.md` documents the exact JSON request body and SSE event contract for raw HTTP integration
+- **llm-eval-harness**: See `llm-eval-harness/references/evaluation_disciplines.md` for the reasoning behind each discipline (env-var keys, thinking-aware throughput, proxy isolation, probabilistic protocol verdicts) and `llm-eval-harness/references/quality_blind_judge.md` for the independent blind-judge quality method
 
 ## 🛠️ Requirements
 
@@ -2855,6 +2905,7 @@ Each skill includes:
 - **uv + Scrapling CLI** (for scrapling-skill): `uv tool install 'scrapling[shell]'` and `scrapling install` for browser-backed fetches
 - **Node.js 18+ + curl + unzip** (for ima-copilot): `npx skills` is fetched on demand from the npm registry; IMA OpenAPI credentials from [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface)
 - **StepFun API key** (for stepfun-tts and stepfun-asr — must be "Normal" tier, Plan keys silently fail on audio endpoints): Available at [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys
+- **uv + an endpoint API key** (for llm-eval-harness): `openai` and `aiohttp` are auto-installed via `uv run --with`; the key is passed by env-var name only
 
 ## ❓ FAQ
 
