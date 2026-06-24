@@ -182,7 +182,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun), transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.2.2",
+      "version": "1.2.1",
       "category": "suite",
       "keywords": [
         "suite",
@@ -928,7 +928,7 @@
       "description": "Set up and send technical status notifications through WeCom (Enterprise WeChat) webhooks. Use this skill whenever the user needs to send notifications, alerts, backup completion reports, or status updates via WeCom; when they mention 企业微信, 企微机器人, webhook, or alerting; or when a message needs to be clear, unambiguous, and technically precise rather than vague or condescending.",
       "source": "./setup-notifications-via-wecom",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.0.0",
       "category": "developer-tools",
       "keywords": [
         "wecom",
