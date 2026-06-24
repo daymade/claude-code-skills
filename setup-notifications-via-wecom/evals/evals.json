@@ -1,0 +1,23 @@
+{
+  "skill_name": "setup-notifications-via-wecom",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "给我的 Claude Code 备份脚本加一个 WeCom 通知。要求：同步完成后发到企业微信，告诉我有没有遗漏。已知：今天 03:00 自动同步正常，之后手动增量同步了 13 个主 session 和 230 个子代理/工具输出/工作流文件；源目录有 1075 个主 session，备份里有 2328 个；验证结果是 0 缺失、0 滞后。",
+      "expected_output": "A WeCom message following the backup-sync-completion template: headline first, distinguishes automatic vs manual sync, reports delta counts with definitions, includes verification metrics (0 missing, 0 stale), states current totals, and ends with next action. The sender must unset proxy env vars before calling the WeCom webhook.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "帮我发一条企业微信消息，通知大家 'Claude Code 备份状态正常，无需操作'。webhook 已经配好了。",
+      "expected_output": "A concise status-update WeCom message with a clear headline, current state, and next action. The skill should use the configured webhook and clear proxy env vars before sending.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "我这条告警消息被人说看不懂，帮我改清楚，然后用企微发出去：'验证结果：1367/1367 条 session 已同步，0 缺失，0 版本滞后。当前 1367 条，备份仓库共 2620 条（含历史旧 session）。' 真实数据是：源目录主 session 1075 个，备份主 session 2328 个，差额是过去保留的旧 session；今天只增量同步了 13 个主 session 和 230 个其他文件。",
+      "expected_output": "A rewritten WeCom message that removes misleading fraction notation, defines every number (main session vs other files), distinguishes state from delta, uses clear location names (电脑上/备份里), and avoids undefined jargon. Then sends it via WeCom with proxy env vars unset.",
+      "files": []
+    }
+  ]
+}
