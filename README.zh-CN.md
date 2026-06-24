@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-65-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.66.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-66-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.67.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 65 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 66 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -290,6 +290,9 @@ claude plugin install douban-skill@daymade-skills
 
 # Terraform 实操陷阱与多环境可靠性模式
 claude plugin install terraform-skill@daymade-skills
+
+# 跨速度、并发、协议、质量四个维度评测任意 LLM 端点
+claude plugin install llm-eval-harness@daymade-skills
 ```
 
 每个技能都可以独立安装 - 只选择你需要的！
@@ -2681,6 +2684,52 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
+### 68. **llm-eval-harness** - 四维度 LLM 端点评测
+
+```bash
+claude plugin install llm-eval-harness@daymade-skills
+```
+
+评测任意位于 OpenAI 兼容或 Anthropic 兼容端点背后的 LLM，跨四个维度衡量它是否真的够快、够稳、协议正确、质量够好——而不是轻信厂商给出的标称数字，并在汇报时把实测值与推断值明确分开。
+
+**使用场景：**
+- 给某个模型跑基准，或核验厂商宣称的 tokens/秒
+- 在完全一致的条件下对两个模型做正面对比
+- 在采用一个新发布或"号称 Anthropic 兼容"的端点之前先验货
+- 在 workshop 或批量任务前探测并发上限
+
+**主要功能：**
+- **四维度、四脚本**：速度（`speed_probe.py`——TTFT + thinking-aware tokens/秒）、并发/稳定性（`concurrency_probe.py`——成功率、p50/p90、崩溃临界点）、Anthropic 协议合规（`protocol_probe.py`——thinking 块触发率，N≥10）、质量回归（`usecase_runner.py` + 独立盲审）
+- **thinking-aware 吞吐**：单独捕获 `reasoning_content`，避免推理 token 把 tokens/秒虚高（正是这个陷阱曾把约 750 tokens/秒的模型读成 4700）
+- **概率化协议判定**：三态 `fully-implemented` / `intermittent (k/N)` / `not-implemented`，绝不靠单次采样下结论，并强制 `Connection: close`，防止负载均衡把所有采样钉在同一副本上
+- **盲审质量评估**：每个用例 3 名独立评委、多数通过，并给出分类别 precision，暴露系统性偏弱的类别
+- **key 仅按环境变量名传入**（`--key-env MY_KEY`）——key 永不出现在 `ps`、shell 历史或落盘的报告里
+- **你的用例库放在 bundle 之外**（如 `~/.llm-eval/usecases.json`），从而在技能更新后依然保留，且永不进入公开仓库
+
+**示例用法：**
+```bash
+export MY_KEY=sk-...   # the key never appears in a command below
+
+# Speed: real-task throughput + sustained decode ceiling
+uv run --with openai python scripts/speed_probe.py \
+  --base-url https://api.example.com/v1 --model some-model --key-env MY_KEY --mode both
+
+# Concurrency: ramp until it breaks
+uv run --with aiohttp python scripts/concurrency_probe.py \
+  --url https://api.example.com/v1/chat/completions --model some-model \
+  --key-env MY_KEY --format openai --concurrency 10 20 40 60
+```
+
+**🎬 演示**
+
+*即将推出*
+
+📚 **文档**：参见 [llm-eval-harness/references/evaluation_disciplines.md](./llm-eval-harness/references/evaluation_disciplines.md) 了解每条纪律背后的推理，以及 [llm-eval-harness/references/quality_blind_judge.md](./llm-eval-harness/references/quality_blind_judge.md) 了解独立盲审质量方法。
+
+**要求**：Python 3.8+、`uv`；`openai` 和 `aiohttp`（通过 `uv run --with` 自动安装）；被测端点的 API key。可与 **promptfoo-evaluation** 组合，用于基于 rubric 的门控。
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
@@ -2757,7 +2806,7 @@ claude plugin install daymade-claude-code@daymade-skills
 使用 **claude-md-progressive-disclosurer** 通过渐进式披露减少 CLAUDE.md 体积，同时保留关键规则。
 
 ### LLM 评测与模型对比
-使用 **promptfoo-evaluation** 运行提示词测试、对比模型输出并执行自定义断言评测。
+使用 **promptfoo-evaluation** 运行提示词测试、对比模型输出并执行自定义断言评测。使用 **llm-eval-harness** 从速度（thinking-aware tokens/秒）、并发/稳定性、Anthropic 协议合规、以及针对你自己用例的质量回归四个维度给端点跑基准——核验厂商宣称的 tokens/秒，或在采用新发布的模型前先验货。两者可组合：promptfoo 负责快速的逐用例 rubric 门控，llm-eval-harness 负责盲审 precision 与原始的速度/并发探测。
 
 ### iOS 应用开发
 使用 **iOS-APP-developer** 配置 XcodeGen 项目，处理 SPM 依赖、签名与部署问题。
@@ -2868,6 +2917,7 @@ claude plugin install daymade-claude-code@daymade-skills
 - **debugging-network-issues**：参见 `debugging-network-issues/SKILL.md` 了解证伪优先工作流，参见 `debugging-network-issues/references/layered-isolation-experiment.md` 了解多跳隔离模式，参见 `debugging-network-issues/references/case-sse-rst-130s.md` 查看 SSE 生产案例，参见 `debugging-network-issues/references/case-proxy-tun-cname-override.md` 查看客户端代理/TUN CNAME 规则覆盖案例
 - **stepfun-tts**：参见 `stepfun-tts/SKILL.md` 了解 Contextual TTS 决策树，参见 `stepfun-tts/references/migration_from_v2.md` 查看 `voice_label` → `instruction` 迁移手册和审查改写清单
 - **stepfun-asr**：参见 `stepfun-asr/SKILL.md` 了解 SSE 端点工作流和 ASR 侧四个坑（错端点、Plan vs Normal key、重复幻觉、SSE `error` 事件）。`stepfun-asr/references/api_reference.md` 给出原始 HTTP 集成所需的 JSON 请求体和 SSE 事件契约
+- **llm-eval-harness**：参见 `llm-eval-harness/references/evaluation_disciplines.md` 了解每条纪律背后的推理（环境变量传 key、thinking-aware 吞吐、代理隔离、概率化协议判定），以及 `llm-eval-harness/references/quality_blind_judge.md` 了解独立盲审质量方法
 
 ## 🛠️ 系统要求
 
@@ -2894,6 +2944,7 @@ claude plugin install daymade-claude-code@daymade-skills
 - **uv + Scrapling CLI**（用于 scrapling-skill）：`uv tool install 'scrapling[shell]'`，浏览器抓取前运行 `scrapling install`
 - **Node.js 18+ + curl + unzip**（用于 ima-copilot）：`npx skills` 按需从 npm registry 拉取；IMA OpenAPI 凭据从 [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface) 获取
 - **StepFun API key**（用于 stepfun-tts 和 stepfun-asr——必须是 "Normal" 等级，Plan key 调音频端点会无声失败）：在 [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys 获取
+- **uv + 被测端点的 API key**（用于 llm-eval-harness）：`openai` 和 `aiohttp` 通过 `uv run --with` 自动安装；key 仅按环境变量名传入
 
 ## ❓ 常见问题
 
