@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.66.0"
+    "version": "1.67.0"
   },
   "plugins": [
     {
@@ -460,6 +460,26 @@
         "claude-code",
         "codex",
         "openclaw"
+      ]
+    },
+    {
+      "name": "llm-eval-harness",
+      "description": "Evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four dimensions — speed (TTFT + thinking-aware tokens/sec), concurrency/stability (success rate, p50/p90, breaking point), Anthropic protocol compliance (thinking-block trigger rate), and quality regression against your own accumulated use cases (blind-judge precision). Use to benchmark a model, verify a tokens-per-second claim, compare models head-to-head, or vet a newly released model before adopting it.",
+      "source": "./llm-eval-harness",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "llm",
+        "eval",
+        "benchmark",
+        "model-comparison",
+        "speed-test",
+        "concurrency",
+        "protocol-compliance",
+        "tokens-per-second",
+        "ttft",
+        "thinking-aware"
       ]
     },
     {

@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.67.0] - 2026-06-24
+
+### Added
+- **llm-eval-harness** v1.0.0: new skill — evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four dimensions instead of trusting a vendor's headline numbers:
+  - **Speed** (`scripts/speed_probe.py`): TTFT + sustained decode tok/s, **thinking-aware** — captures `reasoning_content` separately so reasoning tokens don't inflate throughput (the trap that once read a ~750 tok/s model as 4700 tok/s).
+  - **Concurrency / stability** (`scripts/concurrency_probe.py`): success rate, p50/p90 latency, and the level where it breaks; isolates from ambient proxy (`trust_env=False`) and disables keep-alive (`force_close`) so you measure the model, not the proxy.
+  - **Anthropic protocol compliance** (`scripts/protocol_probe.py`): does `thinking: {type: enabled}` actually fire `thinking_delta` / `signature_delta` (N≥10)? Verdict is three-state (`fully-implemented` / `intermittent (k/N)` / `not-implemented`), never concluded from a single sample; forces `Connection: close` so a load balancer can't pin all samples to one replica.
+  - **Quality / use-case regression** (`scripts/usecase_runner.py` + independent blind judges): collect then judge in isolation (3 judges/case, majority-pass, per-category precision) so the model never grades itself.
+  - Keys are passed by **env-var name only** (`--key-env MY_KEY`) — never on the command line, never in a saved report. The use-case library lives **outside** the bundle (`~/.llm-eval/`) so it survives skill updates and never lands in a public repo. Bundles `assets/example_usecases.json`, two references (`evaluation_disciplines.md`, `quality_blind_judge.md`), and a recorded security scan.
+
+### Changed
+- Updated marketplace skills count from 65 to 66.
+- Updated marketplace version from 1.66.0 to 1.67.0.
+- Updated marketplace plugin entry count from 45 to 46 (single-skill plugin, `source` → `./llm-eval-harness`, no `skills` field).
+- Updated README.md badges (skills count, version) and description; added llm-eval-harness install command, skill section #68, the "For LLM Evaluation & Model Comparison" use case (composes with promptfoo-evaluation), a documentation quick link, and a requirements entry.
+- Updated README.zh-CN.md to match (same 7 locations, translated).
+- Updated CLAUDE.md repository overview skill count (64 → 66, reconciled to the authoritative manifest), marketplace-config plugin count (45 → 46), and Available Skills list (added #66 llm-eval-harness).
+
 ## [Unreleased]
 
 ### Added
