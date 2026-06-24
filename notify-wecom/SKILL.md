@@ -27,11 +27,18 @@ The skill reads the webhook URL from the shared config file:
 
 If the config is missing, it prints the one-line setup command and stops.
 
+## Prerequisite
+
+This skill is a lightweight companion to `setup-notifications-via-wecom`. Either:
+
+- Install `setup-notifications-via-wecom` first (recommended — it provides the webhook setup steps and the `scripts/send_wecom.py` sender), or
+- Create the config file manually as shown below.
+
 ## What It Does
 
 1. Reads `~/.config/setup-notifications-via-wecom/config.json` for `webhook_url`.
 2. Unsets all local proxy env vars (Tencent endpoints must be reached directly).
-3. Sends the message via the WeCom webhook.
+3. Sends the message via the WeCom webhook using the sender from `setup-notifications-via-wecom` (or an equivalent inline curl call).
 4. Reports success or the exact WeCom error.
 
 ## Examples
