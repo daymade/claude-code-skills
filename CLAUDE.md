@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 64 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
+This is a Claude Code skills marketplace containing 66 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -153,7 +153,7 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 45 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
+- Contains 46 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
 - Each plugin has: name, description, source, version, category, keywords
 - Marketplace metadata: name, owner, version
 - Single-skill plugins follow the official pattern (167/168 plugins in `anthropics/claude-plugins-official`): `source` points to skill directory, `skills` omitted
@@ -264,6 +264,7 @@ This applies when you change ANY file under a skill directory:
 63. **claude-usage-analyst** - Explain local Claude Code / Claude Desktop token usage, cost, quota burn, model mix, and cache pressure from `ccusage` data — separating observed numbers from interpretation in plain language (daymade-claude-code suite member)
 64. **marketplace-health-check** - Run a full 6-dimension health check of this skills marketplace repo (code/script safety, doc/SSOT consistency, security/PII, open-PR triage, open-issue triage, marketplace integrity) via a parallel fan-out Dynamic Workflow, then Counter-Review the serious findings and report by priority
 65. **claude-switch-models-setup** - Set up multiple isolated Claude Code CLI profiles so students and power users can run different LLM providers (Kimi, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time (daymade-claude-code suite member)
+66. **llm-eval-harness** - Evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four dimensions (speed with thinking-aware tok/s, concurrency/stability, Anthropic protocol compliance, and quality regression against your own use cases via blind judges); keys passed by env-var name only, use-case library kept outside the bundle
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
