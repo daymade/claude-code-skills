@@ -18,6 +18,14 @@ paths = [
 regexes = [
   # Douban mobile app's public API key (documented as public, hardcoded for zero-config usage)
   '''0dad551ec0f84ed02907ff5c42e8ec70''',
+  # Example JWT literal used in documentation (not a real secret)
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.\.\.''',
+  # Repo owner's public contact email in README/marketplace metadata
+  '''daymadev89@gmail\.com''',
+  # Common placeholder user paths used in documentation examples
+  '''/Users/(?:username|name|you|user)/''',
+  '''/home/username/''',
+  '''C:\\Users\\(?:username|name)\\''',
 ]
 
 [[rules]]
@@ -53,5 +61,5 @@ tags = ["pii", "username"]
 [[rules]]
 id = "email-personal"
 description = "Personal email address"
-regex = '''[a-zA-Z0-9._%+-]+@(gmail|qq|163|126|outlook|hotmail|yahoo|icloud|foxmail)\.[a-zA-Z]{2,}'''
+regex = '''[a-zA-Z0-9._%+-]+@(?:gmail|qq|163|126|outlook|hotmail|yahoo|icloud|foxmail)\.[a-zA-Z]{2,}'''
 tags = ["pii", "email"]
