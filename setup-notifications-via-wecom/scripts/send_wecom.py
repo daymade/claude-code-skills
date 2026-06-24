@@ -150,7 +150,7 @@ def main():
 
     if result.get("errcode") != 0:
         print(
-            f"WeCom returned an error: {result.get('errmsg')}",
+            f"WeCom returned an error: {result.get('errmsg', 'unknown error')}",
             file=sys.stderr,
         )
         sys.exit(1)
