@@ -99,13 +99,41 @@ root. If that file contains real private domains, **do not commit it** — add i
 to `.gitignore` or keep it outside the repo. `rewrite_history.py` will abort if
 the working tree has untracked files.
 
+To enable Layer 3 (private infrastructure context from your gitleaks config and
+an optional identities file):
+
+```bash
+uv run --with gitpython scripts/scan_repo.py \
+  --repo /path/to/repo \
+  --gitleaks-config ~/scripts/git-pii-guard/gitleaks.toml \
+  --identities-file ~/.config/github-sensitive-data-cleanup/identities.txt \
+  --output /tmp/scan-report.json
+```
+
+The `--gitleaks-config` flag reads `private-domain-context` and
+`private-ip-context` rules from your private gitleaks config. The real patterns
+stay in your private config; nothing is copied into this public skill.
+
 Review `/tmp/scan-report.json`. It includes:
 
 - `gitleaks` findings (secrets, API keys, tokens).
-- Custom pattern matches (private domains, internal IPs, PII).
+- Custom pattern matches (internal IPs, phone numbers, PII).
+- Layer 3 context matches (private domains, IPs, identities from your config).
 - A reminder to do an AI semantic review for content that regex cannot catch.
 
 If nothing sensitive is found, **stop**. Do not rewrite history.
+
+### Step 1.5: AI semantic review (Layer 4)
+
+Regex scanners (Layers 1-3) cannot catch novel private context: real names,
+project codenames, transcript snippets, internal meeting references, or
+architecture descriptions. You must do an AI semantic review.
+
+Use the prompt in `references/ai_semantic_review_prompt.md` on the flagged
+commits. Re-run the review until no new private context is found.
+
+If you skip this step, you may push private context that gitleaks never knew to
+look for.
 
 ### Step 2: Classify findings and choose a remediation
 
@@ -290,3 +318,5 @@ entry to the repo's `.gitleaks.toml` or `.gitleaksignore` (never use
   this skill prevents those mistakes.
 - `references/tooling_notes.md` — choosing between `git-filter-repo` and BFG,
   allowlist patterns, and common errors.
+- `references/ai_semantic_review_prompt.md` — Layer 4 AI semantic review prompt
+  for finding private context that regex cannot catch.

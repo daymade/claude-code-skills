@@ -1,28 +1,38 @@
 #!/usr/bin/env python3
 """
-Scan a git repository for sensitive data.
+Scan a git repository for sensitive data across PII Guard layers.
 
-Combines gitleaks (secrets) with a custom bash/grep layer for private domains,
-internal IPs, and other context that gitleaks does not cover.
-
-Outputs a JSON report.
+Layer 1: gitleaks (secrets, API keys, tokens)
+Layer 2: Custom regex patterns (internal IPs, phone numbers, repo-specific PII)
+Layer 3: Private infrastructure context from the user's gitleaks.toml
+         (private domains, known IPs, optional identities file)
+Layer 4: AI semantic review flag (must be performed manually by an agent)
 
 Usage:
     uv run --with gitpython scripts/scan_repo.py --repo /path/to/repo --output /tmp/report.json
+
+    With Layer 3 enabled:
+    uv run --with gitpython scripts/scan_repo.py \
+      --repo /path/to/repo \
+      --gitleaks-config ~/scripts/git-pii-guard/gitleaks.toml \
+      --identities-file ~/.config/setup-notifications-via-wecom/identities.txt \
+      --output /tmp/report.json
 """
 
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-# Default custom patterns for context that gitleaks may miss.
+# Default Layer 2 patterns for context that gitleaks may miss.
 # Add repo-specific patterns in a .pii-patterns file next to the repo root.
-# Do NOT hardcode real private domains here; distribute them via .pii-patterns.
+# Do NOT hardcode real private domains here; distribute them via .pii-patterns
+# or via --gitleaks-config for Layer 3.
 DEFAULT_PATTERNS = [
     # Internal IP ranges
     r"\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b",
@@ -31,6 +41,9 @@ DEFAULT_PATTERNS = [
     # Chinese mobile phone numbers (approximate; adjust strictness as needed)
     r"\b1[3-9]\d{9}\b",
 ]
+
+# Layer 3: rule IDs to extract from the user's gitleaks config.
+LAYER3_RULE_IDS = ["private-domain-context", "private-ip-context"]
 
 
 def run_gitleaks(repo_path: Path, output_path: Path) -> dict:
@@ -43,10 +56,7 @@ def run_gitleaks(repo_path: Path, output_path: Path) -> dict:
             "findings": [],
         }
 
-    # Write gitleaks JSON to a temp file so we can parse it even if it exits 1.
-    with tempfile.NamedTemporaryFile(mode="w+", suffix=".json", delete=False) as tmp:
-        tmp_path = Path(tmp.name)
-
+    tmp_path = Path(tempfile.mktemp(suffix=".json"))
     cmd = [
         gitleaks_bin,
         "detect",
@@ -62,6 +72,7 @@ def run_gitleaks(repo_path: Path, output_path: Path) -> dict:
     try:
         subprocess.run(cmd, capture_output=True, text=True, check=False)
     except Exception as e:
+        tmp_path.unlink(missing_ok=True)
         return {
             "tool": "gitleaks",
             "error": f"failed to run gitleaks: {e}",
@@ -69,15 +80,14 @@ def run_gitleaks(repo_path: Path, output_path: Path) -> dict:
         }
 
     findings = []
-    if tmp_path.exists():
-        try:
-            with tmp_path.open("r", encoding="utf-8") as f:
-                data = json.load(f)
-            findings = data if isinstance(data, list) else data.get("findings", [])
-        except json.JSONDecodeError:
-            pass
-        finally:
-            tmp_path.unlink(missing_ok=True)
+    try:
+        with tmp_path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        findings = data if isinstance(data, list) else data.get("findings", [])
+    except json.JSONDecodeError:
+        pass
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
     return {
         "tool": "gitleaks",
@@ -100,6 +110,93 @@ def load_custom_patterns(repo_path: Path) -> list[str]:
     return patterns
 
 
+def load_identities(identities_path: Path | None) -> list[str]:
+    """Load known identities from a one-per-line file."""
+    if not identities_path or not identities_path.exists():
+        return []
+    identities = []
+    for line in identities_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            identities.append(line)
+    return identities
+
+
+def parse_gitleaks_rules(config_path: Path) -> dict[str, str]:
+    """
+    Extract rule ID -> regex mappings from a gitleaks TOML config.
+
+    We do not depend on an external TOML parser. This parser handles the
+    specific subset used by gitleaks rules: id = "..." and regex = '''...'''.
+    """
+    text = config_path.read_text(encoding="utf-8")
+    rules = {}
+
+    # Split into [[rules]] blocks. The first chunk may itself start with a rule.
+    blocks = re.split(r"\[\[rules\]\]\n", text)
+    for block in blocks:
+        id_match = re.search(r'^id\s*=\s*"([^"]+)"', block, re.MULTILINE)
+        if not id_match:
+            continue
+        rule_id = id_match.group(1)
+
+        # regex may be triple-quoted or double-quoted.
+        triple = re.search(r"^regex\s*=\s*'''(.*?)'''", block, re.DOTALL | re.MULTILINE)
+        double = re.search(r'^regex\s*=\s*"([^"]+)"', block, re.MULTILINE)
+        regex = triple.group(1) if triple else (double.group(1) if double else None)
+        if regex is not None:
+            rules[rule_id] = regex.strip()
+
+    return rules
+
+
+def grep_all_commits(repo_path: Path, pattern: str, max_commits: int = 1000) -> tuple[set[str], str | None]:
+    """
+    Search all commits for a PCRE pattern using `git grep --perl-regexp`.
+
+    Returns a set of commit hashes that contain the pattern, or an error string.
+    """
+    rev_list = subprocess.run(
+        ["git", "-C", str(repo_path), "rev-list", "--all"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if rev_list.returncode != 0:
+        return set(), f"git rev-list failed: {rev_list.stderr}"
+
+    commits = [c for c in rev_list.stdout.splitlines() if c.strip()]
+    if not commits:
+        return set(), None
+
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_path),
+            "grep",
+            "--perl-regexp",
+            "-n",
+            "-e",
+            pattern,
+        ]
+        + commits[:max_commits],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 1 and not result.stdout:
+        return set(), None
+    if result.returncode != 0:
+        return set(), result.stderr.strip()
+
+    matched = set()
+    for line in result.stdout.splitlines():
+        if ":" in line:
+            matched.add(line.split(":", 1)[0])
+    return matched, None
+
+
 def run_custom_scan(repo_path: Path, patterns: list[str]) -> dict:
     """Run grep across all commits for custom patterns."""
     if not patterns:
@@ -107,43 +204,98 @@ def run_custom_scan(repo_path: Path, patterns: list[str]) -> dict:
 
     findings = []
     for pattern in patterns:
-        try:
-            result = subprocess.run(
-                [
-                    "git",
-                    "-C",
-                    str(repo_path),
-                    "log",
-                    "--all",
-                    "--source",
-                    "--pickaxe-regex",
-                    "-S",
-                    pattern,
-                    "--pretty=format:%H",
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
+        matched, error = grep_all_commits(repo_path, pattern)
+        if error:
+            findings.append({"pattern": pattern, "error": error})
+            continue
+        if matched:
+            findings.append(
+                {
+                    "pattern": pattern,
+                    "match_count": len(matched),
+                    "sample_commits": list(matched)[:10],
+                }
             )
-            commits = [c for c in result.stdout.splitlines() if c.strip()]
-            if commits:
-                findings.append(
-                    {
-                        "pattern": pattern,
-                        "match_count": len(commits),
-                        "sample_commits": commits[:10],
-                    }
-                )
-        except Exception as e:
-            findings.append({"pattern": pattern, "error": str(e)})
 
     return {"tool": "custom-grep", "findings": findings}
+
+
+def run_layer3_scan(
+    repo_path: Path,
+    gitleaks_config_path: Path | None,
+    identities_path: Path | None,
+) -> dict:
+    """
+    Layer 3: scan for private infrastructure context from the user's gitleaks
+    config plus an optional identities file.
+
+    Uses `git grep --perl-regexp` across all commits so that PCRE features
+    (e.g., \b word boundaries) in the gitleaks rules work as intended.
+    """
+    patterns = []
+    rule_sources = {}
+
+    if gitleaks_config_path and gitleaks_config_path.exists():
+        try:
+            rules = parse_gitleaks_rules(gitleaks_config_path)
+            for rule_id in LAYER3_RULE_IDS:
+                regex = rules.get(rule_id)
+                if regex:
+                    patterns.append(regex)
+                    rule_sources[regex] = f"gitleaks:{rule_id}"
+        except Exception as e:
+            return {
+                "tool": "layer3-context",
+                "error": f"failed to parse {gitleaks_config_path}: {e}",
+                "findings": [],
+            }
+
+    identities = load_identities(identities_path)
+    for identity in identities:
+        escaped = re.escape(identity)
+        patterns.append(escaped)
+        rule_sources[escaped] = "identities-file"
+
+    if not patterns:
+        return {
+            "tool": "layer3-context",
+            "note": "No Layer 3 patterns available. Pass --gitleaks-config and/or --identities-file.",
+            "findings": [],
+        }
+
+    findings = []
+    for pattern in patterns:
+        matched, error = grep_all_commits(repo_path, pattern)
+        if error:
+            findings.append(
+                {"source": rule_sources.get(pattern, "unknown"), "error": error}
+            )
+            continue
+        if matched:
+            findings.append(
+                {
+                    "source": rule_sources.get(pattern, "unknown"),
+                    "pattern": pattern,
+                    "match_count": len(matched),
+                    "sample_commits": list(matched)[:10],
+                }
+            )
+
+    return {"tool": "layer3-context", "findings": findings}
 
 
 def main():
     parser = argparse.ArgumentParser(description="Scan a repo for sensitive data.")
     parser.add_argument("--repo", required=True, help="Path to the git repository.")
     parser.add_argument("--output", required=True, help="Path for the JSON report.")
+    parser.add_argument(
+        "--gitleaks-config",
+        help="Path to your private gitleaks.toml (enables Layer 3 private domain/IP scanning).",
+    )
+    parser.add_argument(
+        "--identities-file",
+        help="Path to a one-per-line file of known private identities (enables Layer 3 identity scanning).",
+    )
     args = parser.parse_args()
 
     repo_path = Path(args.repo).resolve()
@@ -151,10 +303,14 @@ def main():
         print(f"Not a git repository: {repo_path}", file=sys.stderr)
         sys.exit(1)
 
+    gitleaks_config = Path(args.gitleaks_config) if args.gitleaks_config else None
+    identities_file = Path(args.identities_file) if args.identities_file else None
+
     patterns = DEFAULT_PATTERNS + load_custom_patterns(repo_path)
 
     gitleaks_result = run_gitleaks(repo_path, Path(args.output))
     custom_result = run_custom_scan(repo_path, patterns)
+    layer3_result = run_layer3_scan(repo_path, gitleaks_config, identities_file)
 
     report = {
         "repo": str(repo_path),
@@ -164,11 +320,13 @@ def main():
             text=True,
             check=True,
         ).stdout.strip(),
-        "tools": [gitleaks_result, custom_result],
+        "tools": [gitleaks_result, custom_result, layer3_result],
         "ai_semantic_review_required": True,
+        "ai_semantic_review_prompt": "Use references/ai_semantic_review_prompt.md",
         "summary": {
             "gitleaks_findings": len(gitleaks_result.get("findings", [])),
             "custom_findings": len(custom_result.get("findings", [])),
+            "layer3_findings": len(layer3_result.get("findings", [])),
         },
     }
 
@@ -177,10 +335,14 @@ def main():
     with output_path.open("w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
 
-    total = report["summary"]["gitleaks_findings"] + report["summary"]["custom_findings"]
+    total = (
+        report["summary"]["gitleaks_findings"]
+        + report["summary"]["custom_findings"]
+        + report["summary"]["layer3_findings"]
+    )
     print(f"Scan complete. Total findings: {total}")
     print(f"Report written to: {output_path}")
-    print("IMPORTANT: Regex scanners miss semantic private context. Do an AI semantic review before pushing.")
+    print("IMPORTANT: Layers 1-3 are regex/grep. Layer 4 AI semantic review is mandatory.")
 
     if total > 0:
         sys.exit(2)

@@ -15,6 +15,7 @@ Usage:
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -22,13 +23,15 @@ import tempfile
 from pathlib import Path
 
 
-def extract_patterns_from_replacements(replacements_path: Path) -> list[str]:
+def extract_patterns_from_replacements(replacements_path: Path) -> list[dict]:
     """
-    Parse a git-filter-repo --replace-text file and return the search sides.
+    Parse a git-filter-repo --replace-text file and return search descriptors.
 
     Supports:
         literal:old==>new
         regex:old==>new
+
+    Returns a list of dicts: {"pattern": str, "is_regex": bool}
     """
     patterns = []
     for line in replacements_path.read_text(encoding="utf-8").splitlines():
@@ -42,45 +45,70 @@ def extract_patterns_from_replacements(replacements_path: Path) -> list[str]:
         if not left:
             continue
         if left.startswith("literal:"):
-            patterns.append(left[len("literal:"):])
+            patterns.append(
+                {"pattern": left[len("literal:"):], "is_regex": False}
+            )
         elif left.startswith("regex:"):
-            patterns.append(left[len("regex:"):])
+            patterns.append({"pattern": left[len("regex:"):], "is_regex": True})
         else:
             # Bare string, treat as literal.
-            patterns.append(left)
+            patterns.append({"pattern": left, "is_regex": False})
     return patterns
 
 
-def load_extra_patterns(patterns_path: Path | None) -> list[str]:
+def load_extra_patterns(patterns_path: Path | None) -> list[dict]:
     if not patterns_path:
         return []
     patterns = []
     for line in patterns_path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line and not line.startswith("#"):
-            patterns.append(line)
+            patterns.append({"pattern": line, "is_regex": True})
     return patterns
 
 
-def check_pattern_in_history(repo_path: Path, pattern: str) -> list[str]:
+def check_pattern_in_history(repo_path: Path, pattern: str, is_regex: bool) -> list[str]:
     """Return commits that still contain the pattern."""
+    rev_list = subprocess.run(
+        ["git", "-C", str(repo_path), "rev-list", "--all"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if rev_list.returncode != 0:
+        return []
+
+    commits = [c for c in rev_list.stdout.splitlines() if c.strip()]
+    if not commits:
+        return []
+
+    effective_pattern = pattern if is_regex else re.escape(pattern)
     result = subprocess.run(
         [
             "git",
             "-C",
             str(repo_path),
-            "log",
-            "--all",
-            "--pickaxe-regex",
-            "-S",
-            pattern,
-            "--pretty=format:%H",
-        ],
+            "grep",
+            "--perl-regexp",
+            "-n",
+            "-e",
+            effective_pattern,
+        ]
+        + commits,
         capture_output=True,
         text=True,
         check=False,
     )
-    return [c for c in result.stdout.splitlines() if c.strip()]
+    if result.returncode == 1 and not result.stdout:
+        return []
+    if result.returncode != 0:
+        return []
+
+    matched = set()
+    for line in result.stdout.splitlines():
+        if ":" in line:
+            matched.add(line.split(":", 1)[0])
+    return list(matched)
 
 
 def run_gitleaks(repo_path: Path) -> list[dict]:
@@ -157,10 +185,14 @@ def main():
 
     print("Checking for remaining sensitive patterns in history...")
     remaining = []
-    for pattern in patterns:
-        commits = check_pattern_in_history(repo_path, pattern)
+    for item in patterns:
+        commits = check_pattern_in_history(
+            repo_path, item["pattern"], item["is_regex"]
+        )
         if commits:
-            remaining.append({"pattern": pattern, "commits": commits[:10]})
+            remaining.append(
+                {"pattern": item["pattern"], "is_regex": item["is_regex"], "commits": commits[:10]}
+            )
 
     report = {
         "repo": str(repo_path),
