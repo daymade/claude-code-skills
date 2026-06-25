@@ -1,6 +1,6 @@
 # lark-cli API Extraction (Path A — primary)
 
-The primary, highest-fidelity way to turn a Feishu/Lark source into Markdown. Everything here was verified end-to-end on a real multi-document collection import (lark-cli 1.0.27 and 1.0.32, 2026-05).
+The primary, highest-fidelity way to turn a Feishu/Lark source into Markdown. Everything here was verified end-to-end on a real multi-document collection import (lark-cli 1.0.27 and 1.0.32, 2026-05; re-verified on 1.0.55, 2026-06 — which is where the docs-body and sheet field paths below changed, see Steps 3–4).
 
 ## Contents
 
@@ -69,31 +69,42 @@ Returns `{"code":0,"data":{"node":{"node_token":"…","obj_token":"<DOC_TOKEN>",
 
 ## Step 3: fetch the body programmatically
 
+The body field moved between lark-cli versions, so probe both instead of hard-coding one — this keeps working whichever version is installed:
+
 ```bash
 lark-cli docs +fetch --doc <obj_token> --format json > /tmp/fetch.json 2> /tmp/fetch.err
-jq -r '.data.markdown' /tmp/fetch.json > "<sanitized-title>.md"
+# ≤1.0.32: clean Markdown in .data.markdown.
+# 1.0.55: body moved to .data.document.content as HTML (.data.markdown is null).
+if jq -e -r '.data.markdown // empty' /tmp/fetch.json > "<sanitized-title>.md" && [ -s "<sanitized-title>.md" ]; then
+  : # got clean Markdown directly
+else
+  jq -r '.data.document.content' /tmp/fetch.json | pandoc -f html -t gfm > "<sanitized-title>.md"
+fi
 ```
 
-- `.data.markdown` is clean Markdown with Feishu rich-media tags preserved (resolve them in Step 5).
+- On 1.0.55 the HTML in `.data.document.content` carries Feishu structure as `<h1>/<table>/<cite doc-id=…>` tags; `pandoc -f html -t gfm` renders headings and tables faithfully, and the `<cite>` tags surface as the reference list Step 5 recurses on. `--format markdown` is **not** a valid value (lark-cli warns and falls back to json).
 - **Keep stdout/stderr separate.** `stderr` may carry `[deprecated] docs +fetch with v1 API is deprecated` — harmless. Doing `2>/dev/null | jq` in one pipe produced a spurious `Exit code 5`; redirect to files and inspect instead.
-- **Never** reconstruct `.data.markdown` by reading and retyping it. `jq -r` it to disk. This is the fidelity guarantee that makes Path A structurally safer than any browser/LLM path.
-- `--format json` is preferred over text so you parse one field deterministically.
+- **Never** reconstruct the body by reading and retyping it — `jq`/`pandoc` it to disk. pandoc only re-renders HTML structure (it does not rewrite prose), so the fidelity guarantee that makes Path A safer than any browser/LLM path still holds.
+- `--format json` is required so you parse one field deterministically.
 
 ## Step 4: spreadsheets
 
-A `<sheet token="<SP>_<SID>"/>` tag (or a `…/sheets/<SP>` URL) carries the spreadsheet token and sheet id joined by `_`. Split on `_`:
+A `<sheet token="<SP>_<SID>"/>` tag (or a `…/sheets/<SP>` URL) carries the spreadsheet token and sheet id joined by `_`. A spreadsheet usually has **multiple tabs** — list them all and pull each, don't assume one:
 
 ```bash
+# list every tab. Note the nesting: 1.0.55 returns .data.sheets.sheets[] (two levels);
+# older builds returned .data.sheets[]. The // keeps it version-robust.
 lark-cli sheets +info --spreadsheet-token <SP> \
-  --jq '.data.sheets[]? | {sheet_id, title, rowCount: .gridProperties.rowCount, colCount: .gridProperties.columnCount}'
+  --jq '(.data.sheets.sheets // .data.sheets)[]? | {sheet_id, title}'
 
-lark-cli sheets +read --spreadsheet-token <SP> --sheet-id <SID> \
-  --range A1:AZ200 --value-render-option ToString \
-  --jq '.data.valueRange.values'
+# read one tab. 1.0.55 uses +cells-get with --format csv (clean CSV straight out):
+lark-cli sheets +cells-get --spreadsheet-token <SP> --sheet-id <SID> \
+  --range A1:AZ800 --format csv > "<tab-title>.csv"
 ```
 
-- `--value-render-option ToString` returns plain text cells (formulas/dates rendered), which is what Markdown tables need.
-- The result is a 2-D array; render it to a Markdown table. Size the range from `sheets +info` row/col counts; do not blind-guess a tiny range.
+- A tab `title` can contain newlines (`\n`); strip them (`tr -d '\n\r'`) before using it as a filename.
+- `--format csv` writes ready-to-file CSV; if you need a Markdown table instead, render the CSV. Size `--range` generously (`A1:AZ800`) — an over-wide range just returns the populated cells, while an under-sized one silently truncates rows.
+- Older builds exposed this as `sheets +read … --value-render-option ToString --jq '.data.valueRange.values'` (a 2-D array). If `+cells-get` is absent on your version, fall back to `+read`.
 
 ## Step 5: the reference-graph recursion (collections/hubs)
 
@@ -136,6 +147,8 @@ This grep being empty is a hard acceptance gate for collections.
 
 `https://<other-tenant>.feishu.cn/docx/…` and `https://my.feishu.cn/docx/…` (personal space) use the **same** `docs +fetch` — Feishu permission is per-document, not per-domain. A reference living in another tenant or someone's personal space is often still readable with the current token. Do not skip a reference just because its host differs; try the fetch and let the error code (`131006` / `0`) decide.
 
+**Which profile to use across tenants.** lark-cli auths per-app, and the same person often has several profiles (a *personal-edition* app and an *enterprise-edition* app). For documents scattered across — or shared into — *several different tenants*, the document **owner's personal-edition profile** tends to reach all of them, because the owner holds a personal grant on each. An **enterprise-edition** app frequently fails these with `app_scope_not_applied` (`99991672` — the app never requested `wiki:wiki` / `wiki:node:read` scopes in its developer console, and a per-user OAuth cannot add an app-level scope). So when one profile 403s on a cross-tenant link, retry with the owner's personal profile **before** concluding it's permission-walled.
+
 ## Step 7: frontmatter and provenance
 
 Each produced file should carry minimal frontmatter so the extraction is auditable and the host PKM can file it (this skill stops at producing it, not filing it):
@@ -158,6 +171,8 @@ post_process: <one line if any non-trivial transform was applied; omit if pure j
 |---|---|---|
 | `docs +fetch` "Exit code 5" but data looks present | `2>/dev/null` swallowed stderr while `jq` failed on mixed stream | Redirect stdout/stderr to separate files; parse the file |
 | `wiki spaces get_node` → `code 131006` | No read permission on that node | Path B (owner exports docx); do not bypass |
+| `docs +fetch` / `get_node` → `TLS handshake timeout` on `open.feishu.cn` (often the first call) | transient mainland-network flake, not auth | just retry — it succeeds on the 2nd/3rd attempt; don't re-auth or switch profiles over it |
+| `get_node` / `docs +fetch` → `99991672 app_scope_not_applied` | enterprise-edition app lacks `wiki:*` scope | switch to the owner's personal-edition profile (Step 6); a per-user re-login can't add an app scope |
 | `api …/transcript` → `code 99991679` | Missing scope | feishu-minutes-transcript.md (device-flow scope grant) |
 | lark-cli reports `API returned an empty JSON response body` | lark-cli mis-renders a binary/error HTTP response | Real status is hidden — see permission-and-failure-boundaries.md; do not trust "empty JSON" literally |
 | Need an API lark-cli does not wrap | — | `lark-cli api <METHOD> <path> --params '{…}' --as user`; find the spec via `open.feishu.cn/llms-docs/zh-CN/llms-<module>.txt` (the `/document/server-docs/` pages are flaky in WebFetch) |
