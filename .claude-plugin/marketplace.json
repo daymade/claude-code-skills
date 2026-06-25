@@ -958,6 +958,26 @@
         "企微机器人",
         "claude-code"
       ]
+    },
+    {
+      "name": "github-sensitive-data-cleanup",
+      "description": "Scan and remove sensitive data (secrets, API keys, private domains/IPs, PII) from GitHub repository history. Use this skill whenever the user says scan sensitive data, clean git history, remove secrets from repo, sanitize GitHub history, 清理敏感数据, 历史重写, force push, 泄露, or needs to repair a public repo after accidental secret/private context leakage. Also use before any force push to a public repository to verify visibility, backup, and scan results.",
+      "source": "./github-sensitive-data-cleanup",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "security",
+      "keywords": [
+        "github",
+        "sensitive-data",
+        "secrets",
+        "history-rewrite",
+        "git-filter-repo",
+        "gitleaks",
+        "pii",
+        "force-push",
+        "cleanup",
+        "claude-code"
+      ]
     }
   ]
 }
