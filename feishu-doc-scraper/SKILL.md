@@ -52,15 +52,20 @@ This does not conflict with any "Claude/Anthropic domains must use the proxy" ru
 - `…/sheets/<token>` — spreadsheet, use the sheets commands (see reference).
 - `…/minutes/<token>` — Minutes, go to **Path C**.
 
-**3. Fetch the body as Markdown — programmatically, never via the model.**
+**3. Fetch the body programmatically — never via the model.** The body field moved across lark-cli versions, so probe both rather than hard-coding one (this keeps working whichever version is installed):
 
 ```bash
 lark-cli docs +fetch --doc <obj_token> --format json > /tmp/fetch.json 2> /tmp/fetch.err
-# body is .data.markdown — extract with jq, do NOT retype or summarize it
-jq -r '.data.markdown' /tmp/fetch.json > source.md
+# ≤1.0.32: clean Markdown in .data.markdown.
+# 1.0.55: body moved to .data.document.content as HTML (.data.markdown is null).
+if jq -e -r '.data.markdown // empty' /tmp/fetch.json > source.md && [ -s source.md ]; then
+  : # got clean Markdown directly
+else
+  jq -r '.data.document.content' /tmp/fetch.json | pandoc -f html -t gfm > source.md
+fi
 ```
 
-Keep stdout and stderr separate. A harmless `[deprecated] docs +fetch with v1 API is deprecated` goes to stderr; piping `2>/dev/null` *and* `jq` together produced a false `Exit code 5` in practice — redirect to files and inspect, don't blind-pipe. The body must reach disk without passing through the model (paraphrasing silently corrupts source text — this is the single most important fidelity rule).
+`--format markdown` is **not** a valid value (lark-cli warns and falls back to json). Keep stdout and stderr separate — a harmless `[deprecated]` line goes to stderr, and piping `2>/dev/null` *and* `jq` together produced a false `Exit code 5` in practice. The body must reach disk via `jq`/`pandoc`, never retyped or summarized by the model — paraphrasing silently corrupts source text, the single most important fidelity rule. (pandoc only re-renders HTML structure to Markdown; it does not rewrite prose, so fidelity holds.)
 
 **4. If it's a collection/hub, follow the reference graph (BFS).** The hub body contains `<mention-doc>`, `<sheet>`, `<image>` tags and cross-tenant / Minutes / Tencent-Meeting URLs. Extract every reference, dispatch by type, fetch, and **repeat on each newly fetched doc until no new references remain** (leaf nodes). Use the bundled extractor so nothing is silently missed (a missed reference = a missing document, the #1 hub-scraping failure):
 
