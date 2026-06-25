@@ -22,6 +22,10 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Share the all-commits grep helper so fixes to chunking/error handling apply
+# to both scanning and verification.
+from scan_repo import grep_all_commits
+
 
 def extract_patterns_from_replacements(replacements_path: Path) -> list[dict]:
     """
@@ -46,10 +50,10 @@ def extract_patterns_from_replacements(replacements_path: Path) -> list[dict]:
             continue
         if left.startswith("literal:"):
             patterns.append(
-                {"pattern": left[len("literal:"):], "is_regex": False}
+                {"pattern": left[len("literal:"):].strip(), "is_regex": False}
             )
         elif left.startswith("regex:"):
-            patterns.append({"pattern": left[len("regex:"):], "is_regex": True})
+            patterns.append({"pattern": left[len("regex:"):].strip(), "is_regex": True})
         else:
             # Bare string, treat as literal.
             patterns.append({"pattern": left, "is_regex": False})
@@ -67,48 +71,15 @@ def load_extra_patterns(patterns_path: Path | None) -> list[dict]:
     return patterns
 
 
-def check_pattern_in_history(repo_path: Path, pattern: str, is_regex: bool) -> list[str]:
-    """Return commits that still contain the pattern."""
-    rev_list = subprocess.run(
-        ["git", "-C", str(repo_path), "rev-list", "--all"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if rev_list.returncode != 0:
-        return []
-
-    commits = [c for c in rev_list.stdout.splitlines() if c.strip()]
-    if not commits:
-        return []
-
+def check_pattern_in_history(
+    repo_path: Path, pattern: str, is_regex: bool
+) -> tuple[list[str], str | None]:
+    """Return commits that still contain the pattern, or an error string."""
     effective_pattern = pattern if is_regex else re.escape(pattern)
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repo_path),
-            "grep",
-            "--perl-regexp",
-            "-n",
-            "-e",
-            effective_pattern,
-        ]
-        + commits,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode == 1 and not result.stdout:
-        return []
-    if result.returncode != 0:
-        return []
-
-    matched = set()
-    for line in result.stdout.splitlines():
-        if ":" in line:
-            matched.add(line.split(":", 1)[0])
-    return list(matched)
+    matched, error = grep_all_commits(repo_path, effective_pattern)
+    if error:
+        return [], error
+    return list(matched), None
 
 
 def run_gitleaks(repo_path: Path) -> list[dict]:
@@ -185,10 +156,16 @@ def main():
 
     print("Checking for remaining sensitive patterns in history...")
     remaining = []
+    check_errors = []
     for item in patterns:
-        commits = check_pattern_in_history(
+        commits, error = check_pattern_in_history(
             repo_path, item["pattern"], item["is_regex"]
         )
+        if error:
+            check_errors.append(
+                {"pattern": item["pattern"], "is_regex": item["is_regex"], "error": error}
+            )
+            continue
         if commits:
             remaining.append(
                 {"pattern": item["pattern"], "is_regex": item["is_regex"], "commits": commits[:10]}
@@ -199,13 +176,14 @@ def main():
         "patterns_checked": len(patterns),
         "gitleaks_findings": gitleaks_findings,
         "remaining_patterns": remaining,
+        "check_errors": check_errors,
         "ai_semantic_review_required": True,
     }
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
-    if gitleaks_findings or remaining:
-        print("\nVERIFICATION FAILED: sensitive data still present.", file=sys.stderr)
+    if gitleaks_findings or remaining or check_errors:
+        print("\nVERIFICATION FAILED: sensitive data still present or check could not complete.", file=sys.stderr)
         sys.exit(1)
 
     print("\nVERIFICATION PASSED: no known sensitive patterns remain in history.")

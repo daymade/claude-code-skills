@@ -15,18 +15,21 @@ Usage:
     uv run --with gitpython scripts/scan_repo.py \
       --repo /path/to/repo \
       --gitleaks-config ~/scripts/git-pii-guard/gitleaks.toml \
-      --identities-file ~/.config/setup-notifications-via-wecom/identities.txt \
+      --identities-file ~/.config/github-sensitive-data-cleanup/identities.txt \
       --output /tmp/report.json
 """
 
 import argparse
 import json
-import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+try:
+    import tomllib
+except ModuleNotFoundError:
+    tomllib = None
 from pathlib import Path
 
 # Default Layer 2 patterns for context that gitleaks may miss.
@@ -56,7 +59,12 @@ def run_gitleaks(repo_path: Path, output_path: Path) -> dict:
             "findings": [],
         }
 
-    tmp_path = Path(tempfile.mktemp(suffix=".json"))
+    # Write gitleaks JSON to a temp file so we can parse it even if it exits 1.
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+
     cmd = [
         gitleaks_bin,
         "detect",
@@ -126,11 +134,25 @@ def parse_gitleaks_rules(config_path: Path) -> dict[str, str]:
     """
     Extract rule ID -> regex mappings from a gitleaks TOML config.
 
-    We do not depend on an external TOML parser. This parser handles the
-    specific subset used by gitleaks rules: id = "..." and regex = '''...'''.
+    Uses the standard library tomllib when available (Python 3.11+) so TOML
+    escaping is handled correctly. Falls back to a minimal parser for older
+    interpreters, which only reliably supports the triple-single-quoted regex
+    style used by the reference gitleaks config.
     """
-    text = config_path.read_text(encoding="utf-8")
     rules = {}
+
+    if tomllib is not None:
+        with config_path.open("rb") as f:
+            data = tomllib.load(f)
+        for rule in data.get("rules", []):
+            rule_id = rule.get("id")
+            regex = rule.get("regex")
+            if rule_id and regex is not None:
+                rules[rule_id] = regex.strip()
+        return rules
+
+    # Fallback minimal parser for Python < 3.11 without tomli.
+    text = config_path.read_text(encoding="utf-8")
 
     # Split into [[rules]] blocks. The first chunk may itself start with a rule.
     blocks = re.split(r"\[\[rules\]\]\n", text)
@@ -150,61 +172,77 @@ def parse_gitleaks_rules(config_path: Path) -> dict[str, str]:
     return rules
 
 
-def grep_all_commits(repo_path: Path, pattern: str, max_commits: int = 1000) -> tuple[set[str], str | None]:
+def grep_all_commits(
+    repo_path: Path,
+    pattern: str,
+    commits: list[str] | None = None,
+    batch_size: int = 500,
+) -> tuple[set[str], str | None]:
     """
     Search all commits for a PCRE pattern using `git grep --perl-regexp`.
 
+    If `commits` is not provided, it is fetched once with `git rev-list --all`.
+    The commit list is processed in batches to avoid command-line length limits
+    and to ensure the entire history is searched (not just the newest N).
+
     Returns a set of commit hashes that contain the pattern, or an error string.
     """
-    rev_list = subprocess.run(
-        ["git", "-C", str(repo_path), "rev-list", "--all"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if rev_list.returncode != 0:
-        return set(), f"git rev-list failed: {rev_list.stderr}"
+    if commits is None:
+        rev_list = subprocess.run(
+            ["git", "-C", str(repo_path), "rev-list", "--all"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if rev_list.returncode != 0:
+            return set(), f"git rev-list failed: {rev_list.stderr}"
+        commits = [c for c in rev_list.stdout.splitlines() if c.strip()]
 
-    commits = [c for c in rev_list.stdout.splitlines() if c.strip()]
     if not commits:
         return set(), None
 
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repo_path),
-            "grep",
-            "--perl-regexp",
-            "-n",
-            "-e",
-            pattern,
-        ]
-        + commits[:max_commits],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode == 1 and not result.stdout:
-        return set(), None
-    if result.returncode != 0:
-        return set(), result.stderr.strip()
+    matched: set[str] = set()
+    for i in range(0, len(commits), batch_size):
+        batch = commits[i : i + batch_size]
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_path),
+                "grep",
+                "--perl-regexp",
+                "-n",
+                "-e",
+                pattern,
+            ]
+            + batch,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 1 and not result.stdout:
+            # No matches in this batch.
+            continue
+        if result.returncode != 0:
+            return set(), result.stderr.strip()
 
-    matched = set()
-    for line in result.stdout.splitlines():
-        if ":" in line:
-            matched.add(line.split(":", 1)[0])
+        for line in result.stdout.splitlines():
+            if ":" in line:
+                matched.add(line.split(":", 1)[0])
+
     return matched, None
 
 
-def run_custom_scan(repo_path: Path, patterns: list[str]) -> dict:
+def run_custom_scan(
+    repo_path: Path, patterns: list[str], commits: list[str] | None = None
+) -> dict:
     """Run grep across all commits for custom patterns."""
     if not patterns:
         return {"tool": "custom-grep", "findings": []}
 
     findings = []
     for pattern in patterns:
-        matched, error = grep_all_commits(repo_path, pattern)
+        matched, error = grep_all_commits(repo_path, pattern, commits=commits)
         if error:
             findings.append({"pattern": pattern, "error": error})
             continue
@@ -224,6 +262,7 @@ def run_layer3_scan(
     repo_path: Path,
     gitleaks_config_path: Path | None,
     identities_path: Path | None,
+    commits: list[str] | None = None,
 ) -> dict:
     """
     Layer 3: scan for private infrastructure context from the user's gitleaks
@@ -265,7 +304,7 @@ def run_layer3_scan(
 
     findings = []
     for pattern in patterns:
-        matched, error = grep_all_commits(repo_path, pattern)
+        matched, error = grep_all_commits(repo_path, pattern, commits=commits)
         if error:
             findings.append(
                 {"source": rule_sources.get(pattern, "unknown"), "error": error}
@@ -282,6 +321,19 @@ def run_layer3_scan(
             )
 
     return {"tool": "layer3-context", "findings": findings}
+
+
+def get_all_commits(repo_path: Path) -> tuple[list[str], str | None]:
+    """Return all commit hashes for the repo, or an error string."""
+    result = subprocess.run(
+        ["git", "-C", str(repo_path), "rev-list", "--all"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return [], result.stderr.strip()
+    return [c for c in result.stdout.splitlines() if c.strip()], None
 
 
 def main():
@@ -306,11 +358,18 @@ def main():
     gitleaks_config = Path(args.gitleaks_config) if args.gitleaks_config else None
     identities_file = Path(args.identities_file) if args.identities_file else None
 
+    all_commits, commits_err = get_all_commits(repo_path)
+    if commits_err:
+        print(f"Failed to list commits: {commits_err}", file=sys.stderr)
+        sys.exit(1)
+
     patterns = DEFAULT_PATTERNS + load_custom_patterns(repo_path)
 
     gitleaks_result = run_gitleaks(repo_path, Path(args.output))
-    custom_result = run_custom_scan(repo_path, patterns)
-    layer3_result = run_layer3_scan(repo_path, gitleaks_config, identities_file)
+    custom_result = run_custom_scan(repo_path, patterns, commits=all_commits)
+    layer3_result = run_layer3_scan(
+        repo_path, gitleaks_config, identities_file, commits=all_commits
+    )
 
     report = {
         "repo": str(repo_path),
