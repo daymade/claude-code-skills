@@ -95,8 +95,9 @@ uv run --with gitpython scripts/scan_repo.py --repo /path/to/repo --output /tmp/
 ```
 
 The scanner auto-loads repo-specific patterns from `.pii-patterns` in the repo
-root. If that file contains real private domains, **do not commit it** — keep it
-untracked or outside the repo.
+root. If that file contains real private domains, **do not commit it** — add it
+to `.gitignore` or keep it outside the repo. `rewrite_history.py` will abort if
+the working tree has untracked files.
 
 Review `/tmp/scan-report.json`. It includes:
 
@@ -147,12 +148,16 @@ uv run scripts/rewrite_history.py --repo /path/to/repo \
 
 This script:
 
-1. Verifies `git-filter-repo` is installed.
-2. Creates a `git bundle` backup of the current state.
-3. Runs `git filter-repo --replace-text`.
-4. Reports the old and new commit hashes.
+1. Verifies `git-filter-repo` is installed and executable.
+2. Checks that the working tree is clean (no uncommitted changes or untracked
+   files). If not, aborts.
+3. Creates a `git bundle` backup of the current state.
+4. Verifies the backup bundle with `git bundle verify`.
+5. Runs `git filter-repo --replace-text`.
+6. Reports the old and new commit hashes.
 
-**If the backup step fails, the script stops.** Do not proceed manually.
+**If the backup or verification step fails, the script stops.** Do not proceed
+manually.
 
 ### Step 5: Verify the cleanup
 
