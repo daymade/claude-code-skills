@@ -36,7 +36,7 @@ def get_current_heads(repo_path: Path) -> dict:
 
 
 def create_backup(repo_path: Path, backup_path: Path) -> None:
-    """Create a git bundle backup of all refs."""
+    """Create a git bundle backup of all refs and verify it."""
     backup_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         "git",
@@ -48,6 +48,33 @@ def create_backup(repo_path: Path, backup_path: Path) -> None:
         "--all",
     ]
     subprocess.run(cmd, check=True)
+
+    verify = subprocess.run(
+        ["git", "bundle", "verify", str(backup_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if verify.returncode != 0:
+        raise RuntimeError(f"Backup verification failed: {verify.stderr}")
+
+
+def check_clean_working_tree(repo_path: Path) -> None:
+    """Abort if there are uncommitted changes or untracked files."""
+    result = subprocess.run(
+        ["git", "-C", str(repo_path), "status", "--short"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.stdout.strip():
+        print(
+            "Working tree is not clean. Commit, stash, or remove the following "
+            "before rewriting history:\n",
+            file=sys.stderr,
+        )
+        print(result.stdout, file=sys.stderr)
+        sys.exit(1)
 
 
 def main():
@@ -81,6 +108,21 @@ def main():
             file=sys.stderr,
         )
         sys.exit(1)
+
+    version_check = subprocess.run(
+        [filter_repo_bin, "--version"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if version_check.returncode != 0:
+        print(
+            f"git-filter-repo found but not executable: {version_check.stderr}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    check_clean_working_tree(repo_path)
 
     # Safety: confirm the user wants to proceed.
     print("=" * 60)

@@ -38,6 +38,9 @@ def extract_patterns_from_replacements(replacements_path: Path) -> list[str]:
         if "==>" not in line:
             continue
         left, _ = line.split("==>", 1)
+        left = left.strip()
+        if not left:
+            continue
         if left.startswith("literal:"):
             patterns.append(left[len("literal:"):])
         elif left.startswith("regex:"):
