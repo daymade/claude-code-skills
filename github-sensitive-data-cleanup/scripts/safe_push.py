@@ -18,10 +18,15 @@ import sys
 from pathlib import Path
 
 
-def get_remote_repo_info(repo_path: Path, remote: str) -> dict | None:
-    """Use gh repo view to get visibility and fork count."""
+def get_remote_repo_info(repo_path: Path) -> dict | None:
+    """Use gh repo view (cwd inference) to get visibility and fork count.
+
+    We do NOT pass a remote name here. `gh repo view` resolves the repository
+    from the current working directory's git remote, which is the only reliable
+    way to avoid guessing owner/repo from a remote name or URL string.
+    """
     result = subprocess.run(
-        ["gh", "repo", "view", remote, "--json", "visibility,isPrivate,stargazerCount,forkCount,owner,name"],
+        ["gh", "repo", "view", "--json", "visibility,isPrivate,stargazerCount,forkCount,owner,name"],
         cwd=str(repo_path),
         capture_output=True,
         text=True,
@@ -31,10 +36,22 @@ def get_remote_repo_info(repo_path: Path, remote: str) -> dict | None:
         print(f"gh repo view failed: {result.stderr}", file=sys.stderr)
         return None
     try:
-        return json.loads(result.stdout)
+        data = json.loads(result.stdout)
     except json.JSONDecodeError:
         print(f"Could not parse gh output: {result.stdout}", file=sys.stderr)
         return None
+
+    required_keys = ["visibility", "isPrivate", "stargazerCount", "forkCount", "owner", "name"]
+    missing = [k for k in required_keys if k not in data]
+    if missing:
+        print(
+            f"gh repo view returned incomplete metadata (missing: {', '.join(missing)}). "
+            "Aborting rather than using fallback values.",
+            file=sys.stderr,
+        )
+        return None
+
+    return data
 
 
 def push(repo_path: Path, remote: str, branch: str) -> None:
@@ -82,7 +99,7 @@ def main():
         print(f"Not a git repository: {repo_path}", file=sys.stderr)
         sys.exit(1)
 
-    info = get_remote_repo_info(repo_path, args.remote)
+    info = get_remote_repo_info(repo_path)
     if not info:
         print("Could not verify repository visibility. Push aborted.", file=sys.stderr)
         sys.exit(1)
@@ -90,11 +107,11 @@ def main():
     print("=" * 60)
     print(f"Repository: {info['owner']['login']}/{info['name']}")
     print(f"Visibility: {info['visibility']} (private={info['isPrivate']})")
-    print(f"Stars: {info.get('stargazerCount', 'unknown')}")
-    print(f"Forks: {info.get('forkCount', 'unknown')}")
+    print(f"Stars: {info['stargazerCount']}")
+    print(f"Forks: {info['forkCount']}")
     print("=" * 60)
 
-    if not info["isPrivate"] and info.get("forkCount", 0) > 0:
+    if not info["isPrivate"] and info["forkCount"] > 0:
         print(
             f"WARNING: This is a PUBLIC repository with {info['forkCount']} forks. "
             "Force-pushing will not update those forks.",
