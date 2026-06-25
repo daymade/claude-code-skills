@@ -1,0 +1,20 @@
+{
+  "model": {
+    "id": "deepseek-v4-pro",
+    "name": "DeepSeek V4 Pro 1M",
+    "api": "anthropic-messages",
+    "input": ["text"],
+    "reasoning": true,
+    "cost": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0
+    },
+    "contextWindow": 1000000,
+    "maxTokens": 32768
+  },
+  "alias": {
+    "alias": "DeepSeek V4 Pro"
+  }
+}
