@@ -112,7 +112,7 @@ Signals it does **not** apply (use the generic workflow above instead):
 
 When the wrapper skill workflow applies, **do not** continue reading the sections below. Jump to [`workflows/wrapper-skill/workflow.md`](workflows/wrapper-skill/workflow.md) and follow that workflow end-to-end. It is a **retrospective distillation** workflow — its job is to mine the current conversation for the install flow, the bugs that were fixed, and the design decisions that were made, and to turn that mining output into a complete, self-contained wrapper skill that another user can install and benefit from without reliving the debugging session.
 
-The wrapper skill workflow has its own architecture contract, code templates, and verification protocol — it does not share test-case infrastructure with the generic workflow, because its output is a user's install state rather than a file that can be easily asserted on. The canonical reference implementation is [`ima-copilot`](../ima-copilot), a wrapper around the Tencent IMA skill distilled from a real session using this exact workflow.
+The wrapper skill workflow has its own architecture contract, code templates, and verification protocol — it does not share test-case infrastructure with the generic workflow, because its output is a user's install state rather than a file that can be easily asserted on. The canonical reference implementation is the `ima-copilot` skill — a sibling skill in the same repo (not bundled inside this skill) that wraps the Tencent IMA skill, distilled from a real session using this exact workflow.
 
 ### Prior Art Research (Do Not Skip)
 
@@ -621,6 +621,7 @@ Once all runs are done:
 
 2. **Aggregate into benchmark** — run the aggregation script from the skill-creator directory:
    ```bash
+   cd <skill-creator-path>
    python -m scripts.aggregate_benchmark <workspace>/iteration-N --skill-name <name>
    ```
    This produces `benchmark.json` and `benchmark.md` with pass_rate, time, and tokens for each configuration, with mean +/- stddev and the delta. If generating benchmark.json manually, see `references/schemas.md` for the exact schema the viewer expects.
@@ -1029,7 +1030,9 @@ The packaging script will:
 
 1. **Validate** the skill automatically (YAML frontmatter, naming conventions, path reference integrity)
 2. **Verify security scan** (content hash must match last scan)
-3. **Package** the skill into a distributable archive
+3. **Package** the skill into a distributable archive at `<skill-folder>/dist/<skill-name>.skill`
+
+**Important:** The skill folder itself is the source of truth (what you edit and commit). The `.skill` file is a disposable distribution artifact — a zip bundle you can send to others or install, but it is not the canonical location of the skill. Delete it after distribution if you don't want to keep build artifacts around.
 
 If validation fails, the script reports errors and exits without creating a package.
 
@@ -1096,7 +1099,7 @@ Check whether you have access to the `present_files` tool. If you don't, skip th
 uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder>
 ```
 
-After packaging, direct the user to the resulting `.skill` file path so they can install it.
+After packaging, the `.skill` artifact is written to `<skill-folder>/dist/<skill-name>.skill`. Direct the user to that artifact path if they need to install or distribute it, but remind them that the skill folder itself remains the source of truth.
 
 ---
 

@@ -108,8 +108,11 @@ def load_run_results(benchmark_dir: Path) -> dict:
             if config not in results:
                 results[config] = []
 
-            for run_dir in sorted(config_dir.glob("run-*")):
-                run_number = int(run_dir.name.split("-")[1])
+            for run_idx, run_dir in enumerate(sorted(config_dir.glob("run-*"))):
+                try:
+                    run_number = int(run_dir.name.split("-")[1])
+                except ValueError:
+                    run_number = run_idx
                 grading_file = run_dir / "grading.json"
 
                 if not grading_file.exists():

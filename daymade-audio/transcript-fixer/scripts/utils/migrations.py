@@ -20,6 +20,12 @@ import logging
 from typing import Dict, Any, Tuple, Optional
 
 from .database_migration import Migration
+from core.defaults import (
+    API_PROVIDER,
+    DEFAULT_MODEL,
+    API_BASE_URL,
+    DEFAULT_DOMAIN,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +61,7 @@ MIGRATION_V1_0 = Migration(
     version="1.0",
     name="Initial Database Schema",
     description="Create basic tables for correction storage",
-    forward_sql="""
+    forward_sql=f"""
     -- Enable foreign keys
     PRAGMA foreign_keys = ON;
 
@@ -102,8 +108,8 @@ MIGRATION_V1_0 = Migration(
 
     INSERT OR IGNORE INTO system_config (key, value, value_type, description) VALUES
         ('schema_version', '1.0', 'string', 'Database schema version'),
-        ('api_provider', 'GLM', 'string', 'API provider name'),
-        ('api_model', 'GLM-4.6', 'string', 'Default AI model');
+        ('api_provider', '{API_PROVIDER}', 'string', 'API provider name'),
+        ('api_model', '{DEFAULT_MODEL}', 'string', 'Default AI model');
 
     -- Create indexes
     CREATE INDEX idx_corrections_domain ON corrections(domain);
@@ -140,7 +146,7 @@ MIGRATION_V2_0 = Migration(
     version="2.0",
     name="Complete Schema Enhancement",
     description="Add advanced tables for learning system and audit trail",
-    forward_sql="""
+    forward_sql=f"""
     -- Enable foreign keys
     PRAGMA foreign_keys = ON;
 
@@ -256,8 +262,8 @@ MIGRATION_V2_0 = Migration(
     -- Update system config
     UPDATE system_config SET value = '2.0' WHERE key = 'schema_version';
     INSERT OR IGNORE INTO system_config (key, value, value_type, description) VALUES
-        ('api_base_url', 'https://open.bigmodel.cn/api/anthropic', 'string', 'API endpoint URL'),
-        ('default_domain', 'general', 'string', 'Default correction domain'),
+        ('api_base_url', '{API_BASE_URL}', 'string', 'API endpoint URL'),
+        ('default_domain', '{DEFAULT_DOMAIN}', 'string', 'Default correction domain'),
         ('auto_learn_enabled', 'true', 'boolean', 'Enable automatic pattern learning'),
         ('backup_enabled', 'true', 'boolean', 'Create backups before operations'),
         ('learning_frequency_threshold', '3', 'int', 'Min frequency for learned suggestions'),
@@ -425,6 +431,32 @@ MIGRATION_V2_2 = Migration(
     is_breaking=False
 )
 
+# Migration from v2.2 to v2.3 (align system_config with canonical defaults)
+MIGRATION_V2_3 = Migration(
+    version="2.3",
+    name="Align system_config with canonical defaults",
+    description="Update AI provider/model/URL defaults to match core.defaults and ensure all canonical keys exist.",
+    forward_sql=f"""
+    -- Update existing AI-related defaults to current canonical values
+    UPDATE system_config SET value = '{API_PROVIDER}' WHERE key = 'api_provider';
+    UPDATE system_config SET value = '{DEFAULT_MODEL}' WHERE key = 'api_model';
+    UPDATE system_config SET value = '{API_BASE_URL}' WHERE key = 'api_base_url';
+
+    -- Ensure canonical keys exist (idempotent)
+    INSERT OR IGNORE INTO system_config (key, value, value_type, description) VALUES
+        ('api_provider', '{API_PROVIDER}', 'string', 'API provider name'),
+        ('api_model', '{DEFAULT_MODEL}', 'string', 'Default AI model'),
+        ('api_base_url', '{API_BASE_URL}', 'string', 'API endpoint URL'),
+        ('default_domain', '{DEFAULT_DOMAIN}', 'string', 'Default correction domain');
+    """,
+    backward_sql="""
+    -- This migration only updates default values; rollback is a no-op.
+    """,
+    dependencies=["2.2"],
+    check_function=None,
+    is_breaking=False
+)
+
 # Registry of all migrations
 # Order matters - add new migrations at the end
 ALL_MIGRATIONS = [
@@ -432,6 +464,7 @@ ALL_MIGRATIONS = [
     MIGRATION_V2_0,
     MIGRATION_V2_1,
     MIGRATION_V2_2,
+    MIGRATION_V2_3,
 ]
 
 # Migration registry by version

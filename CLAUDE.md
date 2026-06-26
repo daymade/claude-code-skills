@@ -123,6 +123,7 @@ description: Clear description with activation triggers. This skill should be us
 Skills for public distribution must NOT contain:
 - Absolute paths to user directories (`/home/username/`, `/Users/username/`)
 - Personal usernames, company names, product names
+- **Real person / client / project names — *including ones used only as an example or in an illustration*.** This is the easy one to miss: a name you just worked with, dropped into a sample `--add` command, a dictionary-rule example, or a war-story. Use placeholders (`张三` / `Alice` / `<name>`) or well-known fictional names instead. (2026-06-26: real CJK names leaked into a skill's example commands exactly this way — caught by review, not by any regex, because CJK names have no secret signature.)
 - Phone numbers, personal email addresses
 - OneDrive paths or environment-specific absolute paths
 - Use relative paths within skill bundle or standard placeholders (`<workspace>/`, `<user_id>`)
@@ -271,6 +272,25 @@ This applies when you change ANY file under a skill directory:
 ## YouTube Downloader SOP (Internal)
 
 See [youtube-downloader/references/internal-sop.md](./youtube-downloader/references/internal-sop.md) for yt-dlp troubleshooting steps (PO tokens, proxy, cookies, etc.).
+
+## 转写 / 会议记录 ASR 纠错 → 用 transcript-fixer，别写一次性脚本
+
+**遇到「一批转写 / 会议记录里同一个词被 ASR 反复识别错」（garbled 术语、同音字、人名、中英混杂）—— 用 `daymade-audio/transcript-fixer`，不要自己写 python/sed 一次性替换脚本。** 这是 `Standard Tools First / 别重复造轮子` 在文本纠错上的具体落地。
+
+踩过的真坑：面对一批转写的人名 ASR 错误，绕开这个 skill 写了 python 全局替换 —— 做完知识就散了，下一批、下个项目又从头写。一次性脚本不复利；transcript-fixer 的词典 db 会累积、越用越准。
+
+**它是什么**：`daymade-audio/transcript-fixer`（suite 调用名 `daymade-audio:transcript-fixer`）。修 ASR/STT 识别错误，两阶段 —— 词典精确替换（即时免费）+ Claude 原生 AI 语义纠错；规则累积进 `~/.transcript-fixer/corrections.db`（home 下，随用户走、不随 skill 更新丢）。
+
+**怎么用（核心 = `--domain` 隔离 + 复利）**：
+```bash
+TF="daymade-audio/transcript-fixer/scripts/fix_transcription.py"   # 从仓库根；完整调用见该 skill 的 SKILL.md
+uv run "$TF" --add "<错误词>" "<正确词>" --domain <project>        # 项目特定词加项目专属 domain，绝不进 general
+uv run "$TF" --input <file>.md --stage 1 --domain <project>        # 只用该 domain 规则，不污染别项目转写
+```
+
+`--domain` 是关键：一个人名「在本项目是 ASR 错、在别项目可能是真名」，所以加到项目专属 domain、应用时带同一 domain，别的项目转写完全不受影响。**曾经就是误以为「没有隔离、全局词典会跨项目污染」才绕开 skill 写脚本 —— 其实 `--domain` 正是为此设计的。** recurring / 项目特定的错 → `--add ... --domain`（复利）；只有真正一次性、永不复发的才考虑 sed。
+
+详细用法（false-positive 防护、批量、AI 阶段、db 操作）见 `daymade-audio/transcript-fixer/SKILL.md` 与其 `references/` —— 本节只记「何时用 + 禁脚本」，不复述命令细节。
 
 ## Python Development
 

@@ -133,6 +133,20 @@ grep -rniE "ultrathink|internal-only|confidential" skill-folder/
 - Use placeholder APIs: `<external-api>/endpoint`
 - Use generic tool categories: "enterprise search", "knowledge base"
 
+### 9. Legal / Compliance / Disclaimer Hedges (a different axis from identifiers)
+
+This is **not** an identifier leak like the categories above — nothing here names a person or project. It's a register problem, and it's easy to miss precisely because no scanner has a keyword for it: legal, compliance, licensing, data-disclosure, and disclaimer-style **hedge sentences** that drift in from the source material (often a business/procurement context the skill was distilled from) and don't belong in a **technical deliverable** — a skill, code, docstring, README, or error message. The skill teaches *how to use a tool*; legal/procurement/disclosure is not its job, so a CYA hedge there is noise that slows the reader and reads as nervous.
+
+**What to find** (default-delete these unless the user explicitly asked for them):
+- "pricing is subject to commercial negotiation", "final terms per contract"
+- "reselling/displaying this data externally requires authorization from the provider"
+- "this module does not decide disclosure boundaries for the user"
+- "not legal advice / consult your own counsel", "for reference only", boilerplate liability/warranty disclaimers
+
+**What to keep:** plain **technical facts** — e.g. "this module is read-only, performs no upload; `uploads` raises `NotImplementedError`."
+
+**The test — judge by fit, not by leak.** For the categories above the question is "does this leak who/what." Here the standard is different: **"does this sentence earn its place as a *technical fact* in a technical deliverable?"** (the technical-content version of Business Doc Minimalism). Concretely: *delete this line — what **necessary** information does the **technical user** lose?* If you can't name something, delete it. Default-strip all legal/compliance/license/disclaimer framing; keep only technical facts.
+
 ## Sanitization Process
 
 ### Phase 1: Automated Scan
@@ -178,6 +192,7 @@ After sanitization:
 - [ ] No unexplained jargon or abbreviations
 - [ ] No language-specific content (unless intentional)
 - [ ] No internal API or service references
+- [ ] No legal/compliance/license/disclaimer hedge sentences — only technical facts remain
 - [ ] All examples are generic and universally understandable
 - [ ] Skill still functions correctly after changes
 - [ ] Someone unfamiliar with original project can understand it

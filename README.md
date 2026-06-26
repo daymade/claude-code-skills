@@ -225,6 +225,9 @@ claude plugin install cloudflare-troubleshooting@daymade-skills
 # UI design system extraction
 claude plugin install ui-designer@daymade-skills
 
+# Rendered frontend visual QA
+claude plugin install frontend-visual-qa@daymade-skills
+
 # YouTube video/audio downloading
 claude plugin install youtube-downloader@daymade-skills
 
@@ -559,6 +562,39 @@ Extract design systems from reference UI images and generate implementation-read
 **🎬 Live Demo**
 
 ![UI Designer Demo](./demos/ui-designer/extract-design-system.gif)
+
+---
+
+### 10.1. **frontend-visual-qa** - Rendered Frontend Visual QA Gate
+
+Catch embarrassing rendered UI defects that normal lint/build checks miss.
+
+**When to use:**
+- Reviewing or shipping a frontend, website, dashboard, design-system specimen, or HTML slide page
+- User flags awkward line breaks, cramped text, double scrollbars, overlap, or generic AI slop aesthetics
+- User says the artifact has the wrong type, such as a design system turning into a fake app/workbench
+- Need Chrome/Playwright evidence across desktop and mobile viewports
+- Need to complement `ui-designer`, `frontend-design`, and `qa-expert`
+
+**Key features:**
+- History-derived checklist for recurring line-break, overflow, and typography failures
+- Chrome DevTools first-pass for the user-visible browser viewport, including stale mobile emulation checks
+- Playwright-core audit script for desktop-wide, desktop, and mobile viewports
+- Detects horizontal overflow, orphan Chinese characters, wrapped controls/tags/nav labels, bad rendered terms, clipped text, and missing images
+- Adds page-type contracts with `--page-type design-system` to catch missing design-system structure and dashboard/workbench drift
+- Flags repeated card/panel density so agents review whether cards serve structure or replace information architecture
+- Requires screenshot inspection before declaring a UI complete
+
+**Example usage:**
+```bash
+cd /path/to/frontend
+npm install -D playwright-core
+node /path/to/claude-code-skills/frontend-visual-qa/scripts/visual_layout_audit.mjs \
+  --url http://127.0.0.1:5173/ \
+  --page-type design-system
+```
+
+📚 **Documentation**: See [frontend-visual-qa/references/history-derived-checklist.md](./frontend-visual-qa/references/history-derived-checklist.md).
 
 ---
 

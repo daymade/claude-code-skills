@@ -225,6 +225,9 @@ claude plugin install cloudflare-troubleshooting@daymade-skills
 # UI 设计系统提取
 claude plugin install ui-designer@daymade-skills
 
+# 渲染后前端视觉 QA
+claude plugin install frontend-visual-qa@daymade-skills
+
 # YouTube 视频/音频下载
 claude plugin install youtube-downloader@daymade-skills
 
@@ -584,6 +587,39 @@ CC-Switch 支持以下中国 AI 服务提供商：
 **🎬 实时演示**
 
 ![UI 设计器演示](./demos/ui-designer/extract-design-system.gif)
+
+---
+
+### 10.1. **frontend-visual-qa** - 渲染后前端视觉 QA 门禁
+
+捕捉普通 lint/build 检查发现不了的低级界面排版和视觉错误。
+
+**使用场景：**
+- 审核或交付前端、网站、dashboard、设计系统样张或 HTML 演示页
+- 用户指出不恰当换行、文字挤、双滚动条、重叠或 AI slop 审美
+- 用户指出产物类型错位，例如把设计系统做成假的工作台/业务界面
+- 需要在桌面和移动端用 Chrome/Playwright 留证
+- 需要补足 `ui-designer`、`frontend-design` 和 `qa-expert` 之间的空档
+
+**主要功能：**
+- 基于本地历史反馈沉淀的换行、溢出、排版错误清单
+- 优先用 Chrome DevTools 检查用户当前可见浏览器视口，包括残留移动端 emulation
+- Playwright-core 脚本覆盖宽桌面、常规桌面和移动端视口
+- 检测横向溢出、中文孤字、按钮/标签/导航换行、过时术语、文本裁切、图片缺失
+- 增加 `--page-type design-system` 页面类型契约，检查设计系统结构缺失和 dashboard/workbench 漂移
+- 提示重复卡片/面板密度，迫使审查卡片是否服务结构，而不是替代信息架构
+- 要求打开并审查截图后，才能声明界面完成
+
+**示例用法：**
+```bash
+cd /path/to/frontend
+npm install -D playwright-core
+node /path/to/claude-code-skills/frontend-visual-qa/scripts/visual_layout_audit.mjs \
+  --url http://127.0.0.1:5173/ \
+  --page-type design-system
+```
+
+📚 **文档**：参见 [frontend-visual-qa/references/history-derived-checklist.md](./frontend-visual-qa/references/history-derived-checklist.md)。
 
 ---
 

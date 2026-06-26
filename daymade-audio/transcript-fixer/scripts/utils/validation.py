@@ -18,6 +18,31 @@ import os
 import sys
 from pathlib import Path
 
+from core.defaults import API_PROVIDER, DEFAULT_MODEL, API_BASE_URL
+
+
+def _check_system_config_consistency(repository) -> list[str]:
+    """Compare DB system_config against canonical defaults."""
+    expected = {
+        "api_provider": API_PROVIDER,
+        "api_model": DEFAULT_MODEL,
+        "api_base_url": API_BASE_URL,
+    }
+    mismatches = []
+    with repository._pool.get_connection() as conn:
+        for key, expected_value in expected.items():
+            cursor = conn.execute(
+                "SELECT value FROM system_config WHERE key = ?", (key,)
+            )
+            row = cursor.fetchone()
+            if row is None:
+                mismatches.append(f"system_config missing '{key}'")
+            elif row[0] != expected_value:
+                mismatches.append(
+                    f"system_config.{key}='{row[0]}' (expected '{expected_value}')"
+                )
+    return mismatches
+
 
 def validate_configuration() -> tuple[list[str], list[str]]:
     """
@@ -75,6 +100,14 @@ def validate_configuration() -> tuple[list[str], list[str]]:
             else:
                 print(f"✅ All {len(expected_tables)} tables present")
 
+            # Check system_config defaults match canonical values
+            mismatches = _check_system_config_consistency(repository)
+            if mismatches:
+                errors.append(f"Default configuration drift: {'; '.join(mismatches)}")
+                print(f"❌ {errors[-1]}")
+            else:
+                print("✅ Default configuration values consistent")
+
             service.close()
 
         except Exception as e:
@@ -84,13 +117,24 @@ def validate_configuration() -> tuple[list[str], list[str]]:
         warnings.append("Database not found (will be created on first use)")
         print(f"⚠️  Database not found: {db_path}")
 
-    # Check API key
-    api_key = os.getenv("GLM_API_KEY")
+    # Check API key (canonical source: config directory)
+    config_dir = Path.home() / ".transcript-fixer"
+    try:
+        from utils.config import get_config
+        config = get_config()
+        api_key = config.api.api_key
+        config_dir = config.paths.config_dir
+    except Exception as e:
+        errors.append(f"Could not load configuration: {e}")
+        print(f"❌ Could not load configuration: {e}")
+        api_key = None
+
     if not api_key:
-        warnings.append("GLM_API_KEY environment variable not set")
-        print("⚠️  GLM_API_KEY not set (required for Stage 2 AI corrections)")
+        warnings.append("API key not configured (required for Stage 2 AI corrections)")
+        print(f"⚠️  API key not configured. Set it in {config_dir}/config.json (api.api_key)")
+        print("   or via the GLM_API_KEY / ANTHROPIC_API_KEY environment variable.")
     else:
-        print("✅ GLM_API_KEY is set")
+        print("✅ API key is configured")
 
     return errors, warnings
 
