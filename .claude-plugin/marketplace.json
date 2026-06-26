@@ -123,10 +123,10 @@
     },
     {
       "name": "daymade-claude-code",
-      "description": "Claude Code operations suite that bundles session history recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, plugin marketplace development, multi-provider profile isolation for running Kimi/GLM/DeepSeek/StepFun/Anthropic in separate windows, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
+      "description": "Claude Code operations suite that bundles session history recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full web-conversation extraction from claude.ai, plugin marketplace development, multi-provider profile isolation for running Kimi/GLM/DeepSeek/StepFun/Anthropic in separate windows, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.5.0",
+      "version": "1.6.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -137,7 +137,8 @@
         "troubleshooting",
         "marketplace-dev",
         "terminal-screenshot",
-        "usage-analyst"
+        "usage-analyst",
+        "web-conversation-export"
       ],
       "skills": [
         "./claude-code-history-files-finder",
@@ -149,7 +150,8 @@
         "./marketplace-dev",
         "./terminal-screenshot",
         "./claude-usage-analyst",
-        "./claude-switch-models-setup"
+        "./claude-switch-models-setup",
+        "./read-claude-web-conversation"
       ]
     },
     {
