@@ -23,10 +23,11 @@ def fetch_tweet(url: str, output_file: str = None) -> str:
     """Fetch tweet content using jina.ai API via curl."""
     api_key = os.getenv("JINA_API_KEY")
     if not api_key:
-        print("Error: JINA_API_KEY environment variable is not set", file=sys.stderr)
-        print("Get your API key from https://jina.ai/ and set:", file=sys.stderr)
-        print("  export JINA_API_KEY='your_api_key_here'", file=sys.stderr)
-        sys.exit(1)
+        raise RuntimeError(
+            "JINA_API_KEY environment variable is not set. "
+            "Get your API key from https://jina.ai/ and set: "
+            "export JINA_API_KEY='your_api_key_here'"
+        )
 
     jina_api_url = f"https://r.jina.ai/{url}"
 
@@ -38,13 +39,17 @@ def fetch_tweet(url: str, output_file: str = None) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
-        print(f"Error fetching tweet: {result.stderr}", file=sys.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"Error fetching tweet: {result.stderr}")
 
     content = result.stdout
 
     if output_file:
-        Path(output_file).write_text(content, encoding="utf-8")
+        output_path = Path(output_file)
+        try:
+            output_path.resolve(strict=False)
+        except (OSError, ValueError) as e:
+            raise ValueError(f"Invalid output file path: {output_file}") from e
+        output_path.write_text(content, encoding="utf-8")
         print(f"Saved to {output_file}")
 
     return content
