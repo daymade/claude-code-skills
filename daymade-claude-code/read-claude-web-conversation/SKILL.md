@@ -92,15 +92,32 @@ const conv = await fetch(
   { headers: { accept: 'application/json' } }
 ).then(r => r.json());
 
-const msgs = conv.chat_messages || [];
-// Body is either top-level m.text or a content[] block array. Keep the non-text
-// blocks too — thinking / tool_use / tool_result carry real content (common in
-// Claude Code / agent conversations); dropping them holes out the transcript.
-const textOf = (m) => m.text || (m.content || []).map(b =>
+// tree=True returns the WHOLE message tree, including branches abandoned by edits
+// or regenerations. Walk the active path from the current leaf up its parents so
+// the transcript is the conversation as actually read — not dead branches in array
+// order. Falls back to raw order if these fields aren't present.
+const raw = conv.chat_messages || [];
+const byId = Object.fromEntries(raw.map(m => [m.uuid, m]));
+const path = [];
+for (let id = conv.current_leaf_message_uuid; id && byId[id]; id = byId[id].parent_message_uuid) {
+  path.unshift(byId[id]);
+}
+const msgs = path.length ? path : raw;          // fallback: leaf walk unavailable → raw order
+
+// A message can carry a top-level m.text AND a content[] array at once (agent turns:
+// thinking + tool_use blocks PLUS a final text answer). Build from content[] first so
+// nothing is dropped, then fold in m.text if not already there — never short-circuit
+// on m.text alone (that silently discards every block whenever m.text is set).
+const blockText = (b) =>
   b.text || b.thinking
   || (b.type === 'tool_use'    ? `[tool_use ${b.name || ''}] ${JSON.stringify(b.input || {})}` : '')
-  || (b.type === 'tool_result' ? `[tool_result] ${typeof b.content === 'string' ? b.content : JSON.stringify(b.content || '')}` : '')
-).filter(Boolean).join('\n');
+  || (b.type === 'tool_result' ? `[tool_result] ${typeof b.content === 'string' ? b.content : JSON.stringify(b.content || '')}` : '');
+const textOf = (m) => {
+  const blocks = (m.content || []).map(blockText).filter(Boolean);
+  const joined = blocks.join('\n');
+  if (m.text && !joined.includes(m.text)) return joined ? `${joined}\n${m.text}` : m.text;
+  return joined || m.text || '';
+};
 
 const transcript = msgs
   .map(m => `## ${m.sender === 'human' ? 'User' : 'Claude'}\n\n${textOf(m)}`)
@@ -132,15 +149,21 @@ larger risks hitting the truncation limit again.
 ## Gotchas
 
 - **`sender` values are `'human'` and `'assistant'`** (not `'user'`/`'claude'`).
-- **Text lives in `m.text` OR `m.content[].text`.** Older/streamed messages put
-  the body in a `content` block array; blocks may be `text`, `thinking`,
-  `tool_use`, or `tool_result`. The `textOf()` above keeps all of them — don't
-  simplify it back to `.text`-only or tool-heavy conversations export with holes.
-  If you get blank messages, inspect one raw: `Object.keys(msgs[0])` and
+- **A message can have `m.text` AND `m.content[]` at the same time.** Agent turns
+  often carry the final answer in `m.text` plus `thinking` / `tool_use` /
+  `tool_result` blocks in `content[]`. `textOf()` above builds from `content[]`
+  first and folds in `m.text` — do NOT reduce it to `m.text || (content…)`, which
+  short-circuits and silently drops every block whenever `m.text` is set. If a
+  message comes back blank, inspect one raw: `Object.keys(msgs[0])` and
   `msgs[0].content?.map(b => b.type)`.
 - **If `rendering_mode=raw` returns empty or short bodies, retry with
   `rendering_mode=messages`.** The two modes expose slightly different fields;
   `messages` is the usual fallback when `raw` looks incomplete.
+- **`tree=True` returns the whole tree, including abandoned edit/regeneration
+  branches.** The code walks the active path from `conv.current_leaf_message_uuid`
+  via `parent_message_uuid`, so dead branches don't leak into the transcript or
+  inflate the `messages` count. If a payload lacks those fields the walk falls back
+  to raw array order — correct for never-edited (single-chain) conversations.
 - **Multiple organizations:** `orgs[0]` may be the wrong one. If the conversation
   404s, list them — `orgs.map(o => ({ uuid: o.uuid, name: o.name }))` — and try
   the org whose name matches the user's account, or loop the fetch across orgs.

@@ -51,25 +51,33 @@ Only the fields this skill relies on are listed; the payload contains more.
 |-------|---------|
 | `name` | Conversation title (the auto-generated or user-set name) |
 | `uuid` | Conversation id (matches `{convId}`) |
-| `chat_messages` | Array of message objects, in order |
+| `current_leaf_message_uuid` | Tip of the active path — start here and walk `parent_message_uuid` to recover the live conversation |
+| `chat_messages` | All message nodes. Under `tree=True` this is the WHOLE tree (including abandoned edit/regen branches), NOT a linear reading order — reconstruct order via the leaf/parent walk |
 
 **Message object** (`chat_messages[i]`)
 
 | Field | Meaning |
 |-------|---------|
+| `uuid` / `parent_message_uuid` | This node's id and its parent — used to walk the active path |
 | `sender` | `'human'` or `'assistant'` — note: NOT `'user'`/`'claude'` |
-| `text` | The message body as a plain string (present on most messages) |
-| `content` | Block array (present when `text` is empty). Each block has a `type`: `text`, `thinking`, `tool_use` (carries `name` + `input`), or `tool_result` (carries `content`) |
+| `text` | Top-level body string. MAY coexist with `content[]` — an agent turn can have both a final-answer `text` AND a `content[]` of thinking/tool blocks — so do not treat `text` as authoritative on its own |
+| `content` | Block array. Each block has a `type`: `text`, `thinking`, `tool_use` (carries `name` + `input`), or `tool_result` (carries `content`) |
 
-The robust extractor keeps **every** block type — dropping `tool_use` /
-`thinking` would silently hole out agent / Claude-Code conversations:
+The robust extractor builds from `content[]` first and then folds in the top-level
+`text` — short-circuiting on `m.text` would silently drop every block whenever
+`m.text` is set (the common agent-turn shape):
 
 ```js
 const blockToText = (b) =>
   b.text || b.thinking
   || (b.type === 'tool_use'    ? `[tool_use ${b.name || ''}] ${JSON.stringify(b.input || {})}` : '')
   || (b.type === 'tool_result' ? `[tool_result] ${typeof b.content === 'string' ? b.content : JSON.stringify(b.content || '')}` : '');
-const textOf = (m) => m.text || (m.content || []).map(blockToText).filter(Boolean).join('\n');
+const textOf = (m) => {
+  const blocks = (m.content || []).map(blockToText).filter(Boolean);
+  const joined = blocks.join('\n');
+  if (m.text && !joined.includes(m.text)) return joined ? `${joined}\n${m.text}` : m.text;
+  return joined || m.text || '';
+};
 ```
 
 ## Full export script
@@ -90,12 +98,28 @@ const conv = await fetch(
   { headers: { accept: 'application/json' } }
 ).then(r => r.json());
 
-const msgs = conv.chat_messages || [];
+// tree=True returns the whole tree (incl. abandoned edit/regen branches). Walk the
+// active path from the current leaf up its parents; fall back to raw order if the
+// leaf/parent fields are absent.
+const raw = conv.chat_messages || [];
+const byId = Object.fromEntries(raw.map(m => [m.uuid, m]));
+const path = [];
+for (let id = conv.current_leaf_message_uuid; id && byId[id]; id = byId[id].parent_message_uuid) {
+  path.unshift(byId[id]);
+}
+const msgs = path.length ? path : raw;
+
 const blockToText = (b) =>
   b.text || b.thinking
   || (b.type === 'tool_use'    ? `[tool_use ${b.name || ''}] ${JSON.stringify(b.input || {})}` : '')
   || (b.type === 'tool_result' ? `[tool_result] ${typeof b.content === 'string' ? b.content : JSON.stringify(b.content || '')}` : '');
-const textOf = (m) => m.text || (m.content || []).map(blockToText).filter(Boolean).join('\n');
+// content[] first, then fold in m.text — never short-circuit on m.text alone.
+const textOf = (m) => {
+  const blocks = (m.content || []).map(blockToText).filter(Boolean);
+  const joined = blocks.join('\n');
+  if (m.text && !joined.includes(m.text)) return joined ? `${joined}\n${m.text}` : m.text;
+  return joined || m.text || '';
+};
 
 // Cache the assembled transcript on the page so paging calls don't re-fetch.
 window.__claudeTranscript = msgs
@@ -152,6 +176,7 @@ cleanly into other tools.
 | 200 OK but bodies are empty/short | `rendering_mode=raw` doesn't expose the text for these messages | Retry the fetch with `rendering_mode=messages` |
 | Messages present but `text` empty | Body is in the `content[]` block array, not `text` | Use `textOf()` (handles every block type); inspect `msgs[0].content?.map(b=>b.type)` |
 | Return value looks cut off | Tool truncated a large response | Page it with `.slice()` windows |
+| Transcript has duplicated / out-of-order / contradictory turns | The conversation was edited or regenerated; `tree=True` returned dead branches | Use the active-path walk (`current_leaf_message_uuid` → `parent_message_uuid`) from the export script — it drops dead branches and fixes ordering |
 | It's a `/share/...` link | Public share payload differs from private `/chat/...` | Try `get_page_text` or fetch the share JSON directly; the private-conversation endpoint may not apply |
 
 ## Sanitization note for maintainers
