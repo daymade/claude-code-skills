@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-76-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.74.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-77-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.75.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 76 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 77 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2909,6 +2909,24 @@ claude plugin install ashare-news-fetcher@daymade-skills
 - 多源公开 feed 聚合（免登录）
 - 按个股或全市场过滤
 - 结构化 JSON / Markdown 输出
+
+### 79. **pharma-daily-report** - A 股医药板块日报
+
+```bash
+claude plugin install pharma-daily-report@daymade-skills
+```
+
+生成 A 股医药行业日报 —— 从新浪财经抓取核心医药股实时行情，按 7 大细分赛道排名、涨跌榜、资金流向分析，然后可选通过飞书发送富文本日报。
+
+**使用场景：**
+- 需要 A 股医药板块的每日快照（行情、赛道排名、资金流向）
+- 想要飞书富文本推送医药市场数据
+- 跟踪一个可自定义的核心医药股池
+
+**主要功能：**
+- 新浪财经实时行情管线（免登录）
+- 7 大细分赛道分类 + 涨跌榜 + 资金流向估算
+- 可选飞书富文本推送；默认 20 只医药标的，可自定义增减
 
 ---
 
