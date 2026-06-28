@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-72-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.70.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-73-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.71.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 72 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 73 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2836,6 +2836,25 @@ claude plugin install frontend-visual-qa@daymade-skills
 - 基于本地历史反馈沉淀的换行、溢出、排版错误清单
 - 优先用 Chrome DevTools 检查用户当前可见浏览器视口，包括残留移动端 emulation
 - Playwright-core 脚本覆盖宽桌面、常规桌面和移动端视口
+
+### 75. **openclaw** - OpenClaw (龙虾) 配置管理器
+
+```bash
+claude plugin install openclaw@daymade-skills
+```
+
+管理 OpenClaw (龙虾) 实例配置 —— 在 `openclaw.json` 文件间审计、对比、复制、加模型、列出和切换模型。
+
+**使用场景：**
+- 管理多个 OpenClaw / Claude Code wrapper 实例
+- 给实例打 DeepSeek 模型补丁
+- 在实例间审计、对比、复制 provider/模型配置
+- 管理默认模型和别名，或校验配置
+
+**主要功能：**
+- 统一 CLI：audit / diff / copy / add-model / list / switch
+- 变更命令自动审计，带 `--no-audit` 逃生口
+- 昵称注册表支持跨配置操作
 
 ---
 

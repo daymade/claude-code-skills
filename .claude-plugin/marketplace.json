@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.70.0"
+    "version": "1.71.0"
   },
   "plugins": [
     {
@@ -1016,6 +1016,23 @@
         "playwright",
         "ai-slop",
         "design-review"
+      ]
+    },
+    {
+      "name": "openclaw",
+      "description": "Manage OpenClaw (龙虾 / lobster) instance configurations — audit, diff, copy, add-model, list, and switch models across openclaw.json files. Use when juggling multiple OpenClaw / Claude Code wrapper instances, applying DeepSeek model patches, managing default models and aliases, or validating config.",
+      "source": "./openclaw",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "claude-code",
+      "keywords": [
+        "openclaw",
+        "lobster",
+        "config",
+        "model-management",
+        "deepseek",
+        "claude-code",
+        "config-validation"
       ]
     }
   ]

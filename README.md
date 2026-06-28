@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-72-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.70.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-73-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.71.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 72 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 73 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2794,6 +2794,25 @@ Catch embarrassing rendered UI defects that normal lint/build checks miss.
 - History-derived checklist for recurring line-break, overflow, and typography failures
 - Chrome DevTools first-pass for the user-visible browser viewport, including stale mobile emulation checks
 - Playwright-core audit script for desktop-wide, desktop, and mobile viewports
+
+### 75. **openclaw** - OpenClaw (龙虾) Config Manager
+
+```bash
+claude plugin install openclaw@daymade-skills
+```
+
+Manage OpenClaw (龙虾/lobster) instance configurations — audit, diff, copy, add-model, list, and switch models across `openclaw.json` files.
+
+**When to use:**
+- Managing multiple OpenClaw / Claude Code wrapper instances
+- Applying DeepSeek model patches to an instance
+- Auditing, diffing, or copying provider/model config between instances
+- Managing default models and aliases, or validating config
+
+**Key features:**
+- Unified CLI: audit / diff / copy / add-model / list / switch
+- Auto-audit on mutating commands with a `--no-audit` escape hatch
+- Nickname registry for cross-config operations
 
 ---
 
