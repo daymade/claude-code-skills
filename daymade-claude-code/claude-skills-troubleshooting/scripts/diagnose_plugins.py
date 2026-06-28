@@ -12,7 +12,7 @@ This script checks for common problems:
 import json
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def get_claude_dir():
@@ -88,20 +88,47 @@ def find_missing_enabled(installed, enabled):
     return missing
 
 
+def _parse_last_updated(value):
+    """Parse the ISO-8601 lastUpdated string into a naive UTC datetime."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+    # Normalize to naive UTC so we can compare against datetime.utcnow().
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def check_cache_freshness(marketplaces):
-    """Check if marketplace caches are stale."""
+    """Check if marketplace caches are stale.
+
+    Prefer the authoritative ``lastUpdated`` timestamp recorded in
+    known_marketplaces.json (this is what ``claude plugin marketplace update``
+    actually writes). The cache directory's filesystem mtime is unreliable:
+    updates pull files into a nested repo without touching the top-level
+    directory's mtime, so it reports caches as perpetually stale.
+    """
     claude_dir = get_claude_dir()
     cache_dir = claude_dir / "plugins" / "cache"
 
     stale = []
     for name, info in marketplaces.items():
-        marketplace_cache = cache_dir / name
-        if marketplace_cache.exists():
-            # Check modification time
+        updated = _parse_last_updated(info.get("lastUpdated"))
+        if updated is not None:
+            age_days = (datetime.utcnow() - updated).days
+        else:
+            # Fall back to the cache directory mtime when no timestamp exists.
+            marketplace_cache = cache_dir / name
+            if not marketplace_cache.exists():
+                continue
             mtime = datetime.fromtimestamp(marketplace_cache.stat().st_mtime)
             age_days = (datetime.now() - mtime).days
-            if age_days > 7:
-                stale.append((name, age_days))
+
+        if age_days > 7:
+            stale.append((name, age_days))
 
     return stale
 
