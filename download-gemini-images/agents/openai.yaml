@@ -1,0 +1,4 @@
+interface:
+  display_name: "Download Gemini Images"
+  short_description: "Download Gemini chat images as a ZIP"
+  default_prompt: "Use $download-gemini-images to download all images from this Gemini conversation and package them as a ZIP."
