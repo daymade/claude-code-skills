@@ -10,6 +10,63 @@
   },
   "plugins": [
     {
+      "name": "ashare-news-fetcher",
+      "description": "抓取 A 股消息面情报：从财联社、华尔街见闻、金十、新浪 7x24、东财快讯、证监会/央行/上交所/财政部政策公告、东方财富股吧等公开来源抓取与股票相关的新闻、政策、情绪，输出结构化 JSON 或 Markdown。当用户提到 A 股消息面、抓新闻、个股消息、政策监管、股吧情绪、市场情绪，或需要把某只股票相关的公开情报聚合出来时触发。",
+      "source": "./ashare-news-fetcher",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "a-share",
+        "news",
+        "stock",
+        "finance",
+        "sentiment",
+        "policy",
+        "cailianshe"
+      ]
+    },
+    {
+      "name": "auto-repo-setup",
+      "description": "Automated repository environment configuration, fault diagnosis, and repair for non-technical users. When someone clones a repo and says 'it won't run', 'how do I set this up', 'environment issues', or 'how do I start the project', this skill reads ONBOARDING.md, audits environment gaps (git, ffmpeg, uv, Python, whisper.cpp, API keys), installs missing dependencies, validates with smoke tests, and safely handles git operations (commit, push, merge conflicts) with PII Guard and Push Safety. Also includes SessionStart hook initialization, counter-review workflows, and git history sanitization for project setup standardization.",
+      "source": "./auto-repo-setup",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "repo-setup",
+        "environment",
+        "onboarding",
+        "git",
+        "configuration",
+        "claude-code",
+        "non-technical",
+        "session-start",
+        "pii-guard",
+        "whisper"
+      ]
+    },
+    {
+      "name": "benchmark-due-diligence",
+      "description": "Adversarial due-diligence on a benchmark you envy (a founder, KOL, company, or product whose claimed success you suspect is inflated). Inline four-phase orchestration: fan-out collection, adversarial verification grading every claim L1-L4 to separate marketing bubble from real signal, attribution weighting (product vs timing vs personal-IP vs luck, and which parts are replicable), then mapping the validated playbook onto the commissioner's own resources with concrete next moves. Use whenever the user wants to 尽调/对标/拆解 a competitor or role-model, suspects 水分/泡沫 in someone's claims (Product Hunt #1, 0-to-1M-users, funding rounds), asks what they can actually steal from a benchmark, or wants to know if a benchmark's wins are real and copyable before betting on the same strategy. Prefer over deep-research when the goal is debunking inflated claims and extracting a replicable playbook, not a neutral briefing.",
+      "source": "./benchmark-due-diligence",
+      "strict": false,
+      "version": "1.0.1",
+      "category": "productivity",
+      "keywords": [
+        "due-diligence",
+        "benchmark",
+        "competitor-teardown",
+        "对标尽调",
+        "破泡沫",
+        "bubble-busting",
+        "attribution",
+        "playbook-teardown",
+        "role-model",
+        "竞品对标"
+      ]
+    },
+    {
       "name": "bigdata-skill",
       "description": "Pull Bigdata.com (RavenPack) financial and news data through the official bigdata-client Python SDK and its /v1/* REST endpoints when the Bigdata MCP server gives you too little — it silently drops per-chunk sentiment, entity character-spans, and the entire structured-financial product line (analyst estimates, earnings/event calendar, earnings surprise, analyst ratings, price targets, company screener). Bundles a verified, cost-guarded toolkit plus the SSL-retry, chunk-billing 52x trap, and entity-query pitfalls already solved in real use. Use whenever the user mentions Bigdata.com, RavenPack, a bd_v2_ API key, the bigdata MCP, rp_entity_id resolution, chunk / query_unit cost, or wants forward estimates, an earnings/event calendar, earnings surprise, price targets, or annotated news sentiment for a ticker — even if they never name the SDK. Reach for it the moment an MCP financial data source returns less than you know the underlying API holds.",
       "source": "./bigdata-skill",
@@ -105,6 +162,24 @@
       ]
     },
     {
+      "name": "codex-image-gallery",
+      "description": "Start or reuse a self-contained local web gallery for browsing Codex-generated images. Use when the user asks to browse Codex generated images, open a local image gallery, inspect ~/.codex/generated_images, view a Codex image output folder, or browse image files produced by Codex.",
+      "source": "./codex-image-gallery",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "utilities",
+      "keywords": [
+        "codex",
+        "generated-images",
+        "image-gallery",
+        "local-server",
+        "browser",
+        "generated_images",
+        "gpt-image",
+        "image-review"
+      ]
+    },
+    {
       "name": "competitors-analysis",
       "description": "Analyze competitor repositories with evidence-based approach. Use when tracking competitors, creating competitor profiles, or generating competitive analysis. All analysis must be based on actual cloned code, never assumptions. Triggers include analyze competitor, add competitor, competitive analysis, or 竞品分析",
       "source": "./competitors-analysis",
@@ -119,6 +194,32 @@
         "market-research",
         "竞品分析",
         "code-analysis"
+      ]
+    },
+    {
+      "name": "daymade-audio",
+      "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun), transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
+      "source": "./daymade-audio",
+      "strict": false,
+      "version": "1.3.0",
+      "category": "suite",
+      "keywords": [
+        "suite",
+        "audio",
+        "asr",
+        "tts",
+        "transcription",
+        "speech-to-text",
+        "text-to-speech",
+        "meeting-minutes",
+        "voice"
+      ],
+      "skills": [
+        "./asr-transcribe-to-text",
+        "./stepfun-asr",
+        "./transcript-fixer",
+        "./meeting-minutes-taker",
+        "./stepfun-tts"
       ]
     },
     {
@@ -180,32 +281,6 @@
       ]
     },
     {
-      "name": "daymade-audio",
-      "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun), transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
-      "source": "./daymade-audio",
-      "strict": false,
-      "version": "1.3.0",
-      "category": "suite",
-      "keywords": [
-        "suite",
-        "audio",
-        "asr",
-        "tts",
-        "transcription",
-        "speech-to-text",
-        "text-to-speech",
-        "meeting-minutes",
-        "voice"
-      ],
-      "skills": [
-        "./asr-transcribe-to-text",
-        "./stepfun-asr",
-        "./transcript-fixer",
-        "./meeting-minutes-taker",
-        "./stepfun-tts"
-      ]
-    },
-    {
       "name": "daymade-skill",
       "description": "Daymade skills core suite. Bundles skill creation, quality review, search, and marketplace development tooling under one shared namespace.",
       "source": "./daymade-skill",
@@ -224,6 +299,31 @@
         "./skill-creator",
         "./skill-reviewer",
         "./skills-search"
+      ]
+    },
+    {
+      "name": "debugging-network-issues",
+      "description": "Evidence-driven investigation for network, streaming, and protocol-layer bugs. Use when debugging connection resets, SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, client-side proxy/VPN/TUN misrouting, CNAME-based rule overrides, or any incident where symptoms do not match the obvious cause. Applies falsification-first methodology with layered isolation experiments, env-gated runtime instrumentation, and counter-review agent teams. Cognitive-trap catalog includes reverse-path / directional asymmetry and proxy-node DNS ≠ client DNS.",
+      "source": "./debugging-network-issues",
+      "strict": false,
+      "version": "1.3.0",
+      "category": "developer-tools",
+      "keywords": [
+        "debugging",
+        "network",
+        "sse",
+        "http2",
+        "rst",
+        "econnreset",
+        "cloudflare",
+        "streaming",
+        "troubleshooting",
+        "methodology",
+        "proxy",
+        "tun",
+        "vpn",
+        "cname",
+        "dns"
       ]
     },
     {
@@ -262,6 +362,23 @@
         "backup",
         "rss",
         "frodo"
+      ]
+    },
+    {
+      "name": "download-gemini-images",
+      "description": "Download, export, save, or package images from a Google Gemini conversation page — uploaded images or generated image previews. Use when the task needs logged-in Chrome/Gemini state, opening Gemini image lightboxes, downloading the larger displayed files, renaming them in order, and producing a ZIP archive.",
+      "source": "./download-gemini-images",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "media",
+      "keywords": [
+        "gemini",
+        "images",
+        "download",
+        "chrome",
+        "lightbox",
+        "zip",
+        "export"
       ]
     },
     {
@@ -344,6 +461,25 @@
       ]
     },
     {
+      "name": "frontend-visual-qa",
+      "description": "Reviews rendered frontends, dashboards, HTML slides, design-system specimens, and generated UIs for visual quality defects that lint/build miss: awkward line breaks, orphan Chinese characters, wrapped buttons/tags/nav, horizontal overflow, double scrollbars, repeated card piles, page-type drift such as design systems becoming fake workbenches, missing images, generic AI slop, and Chrome DevTools viewport mistakes. Use after frontend-design or ui-designer work and alongside qa-expert release gates.",
+      "source": "./frontend-visual-qa",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "design",
+      "keywords": [
+        "frontend",
+        "visual-qa",
+        "layout",
+        "line-breaks",
+        "responsive",
+        "chrome",
+        "playwright",
+        "ai-slop",
+        "design-review"
+      ]
+    },
+    {
       "name": "gangtise-copilot",
       "description": "One-stop installer and companion for the full Gangtise (岗底斯投研) OpenAPI skill suite — 19 official skills covering data retrieval (OHLC 行情, 财务, 估值, 研报, 首席观点, 会议纪要, 调研纪要), research workflows (个股研究 L1-L4, 观点 PK 对抗性分析, 主题研究, 事件复盘), and utility (股票池管理, 公开网页搜索). Zero-config install to Claude Code / OpenClaw / Codex with 4 preset modes (full / workshop / minimal / custom), guides accessKey + secretAccessKey setup with a live validation call against open.gangtise.com, and ships a read-only diagnostic script. Use this skill whenever the user mentions Gangtise, 岗底斯, gangtise-data-client, gangtise-kb-client, gangtise-file-client, gangtise-stock-research, gangtise-opinion-pk, installing any gangtise-* skill, configuring its credentials, or reports errors like 'token is invalid', '接口地址错误', 'the uri can't be accessed'. This is a wrapper around Gangtise's official skills — it installs and orchestrates them rather than replacing them.",
       "source": "./gangtise-copilot",
@@ -403,6 +539,26 @@
       ]
     },
     {
+      "name": "github-sensitive-data-cleanup",
+      "description": "Scan and remove sensitive data (secrets, API keys, private domains/IPs, PII) from GitHub repository history. Use this skill whenever the user says scan sensitive data, clean git history, remove secrets from repo, sanitize GitHub history, 清理敏感数据, 历史重写, force push, 泄露, or needs to repair a public repo after accidental secret/private context leakage. Also use before any force push to a public repository to verify visibility, backup, and scan results.",
+      "source": "./github-sensitive-data-cleanup",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "security",
+      "keywords": [
+        "github",
+        "sensitive-data",
+        "secrets",
+        "history-rewrite",
+        "git-filter-repo",
+        "gitleaks",
+        "pii",
+        "force-push",
+        "cleanup",
+        "claude-code"
+      ]
+    },
+    {
       "name": "i18n-expert",
       "description": "Complete internationalization/localization setup and auditing for UI codebases. Configure i18n frameworks, replace hard-coded strings with translation keys, ensure locale parity between en-US and zh-CN, and validate pluralization and formatting. Use when setting up i18n for React/Next.js/Vue apps, auditing existing implementations, replacing hard-coded strings, ensuring proper error code mapping, or validating pluralization and date/time/number formatting across locales",
       "source": "./i18n-expert",
@@ -420,27 +576,6 @@
         "locale",
         "multilingual",
         "globalization"
-      ]
-    },
-    {
-      "name": "iOS-APP-developer",
-      "description": "Develops iOS applications with XcodeGen, SwiftUI, and SPM. Use when configuring XcodeGen project.yml, resolving SPM dependency issues, deploying to devices, handling code signing, debugging camera/AVFoundation, iOS version compatibility issues, or fixing Library not loaded @rpath framework errors. Includes state machine testing patterns for @MainActor classes",
-      "source": "./iOS-APP-developer",
-      "strict": false,
-      "version": "1.1.0",
-      "category": "developer-tools",
-      "keywords": [
-        "ios",
-        "xcodegen",
-        "swiftui",
-        "spm",
-        "avfoundation",
-        "camera",
-        "code-signing",
-        "device-deployment",
-        "swift",
-        "xcode",
-        "testing"
       ]
     },
     {
@@ -462,6 +597,27 @@
         "claude-code",
         "codex",
         "openclaw"
+      ]
+    },
+    {
+      "name": "iOS-APP-developer",
+      "description": "Develops iOS applications with XcodeGen, SwiftUI, and SPM. Use when configuring XcodeGen project.yml, resolving SPM dependency issues, deploying to devices, handling code signing, debugging camera/AVFoundation, iOS version compatibility issues, or fixing Library not loaded @rpath framework errors. Includes state machine testing patterns for @MainActor classes",
+      "source": "./iOS-APP-developer",
+      "strict": false,
+      "version": "1.1.0",
+      "category": "developer-tools",
+      "keywords": [
+        "ios",
+        "xcodegen",
+        "swiftui",
+        "spm",
+        "avfoundation",
+        "camera",
+        "code-signing",
+        "device-deployment",
+        "swift",
+        "xcode",
+        "testing"
       ]
     },
     {
@@ -500,6 +656,26 @@
       ]
     },
     {
+      "name": "llm-wiki-setup",
+      "description": "Co-create a personal investment-research LLM Wiki (Andrej Karpathy's pattern) where the user's OWN analysis framework becomes a living CLAUDE.md — by interviewing them, NOT by handing them a template. Use whenever the user wants to build a compounding research knowledge base, 投研第二大脑, 投研知识库, or 个人投研 wiki; instantiate Karpathy's LLM Wiki gist for finance/investing; turn their stock-picking, analyst-tracking, or earnings-watching workflow into a structured markdown vault; or build a wiki tracking companies / industries / macro / analysts over time. Pure markdown + wikilinks, NO RAG / vector DB (Karpathy's core idea — do not over-engineer). Also triggers for ingesting research reports / earnings calls / expert notes into an existing wiki, and for post-earnings prediction→fulfillment reviews. Core value = extracting the user's personal investment preferences into THEIR OWN schema, never imposing a standard one.",
+      "source": "./llm-wiki-setup",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "documentation",
+      "keywords": [
+        "llm-wiki",
+        "karpathy",
+        "investment-research",
+        "投研第二大脑",
+        "knowledge-base",
+        "markdown-wiki",
+        "compounding-notes",
+        "analyst-tracking",
+        "second-brain",
+        "投研知识库"
+      ]
+    },
+    {
       "name": "macos-cleaner",
       "description": "Intelligent macOS disk space analysis and cleanup with safety-first philosophy. Use when users report disk space issues, need to clean their Mac, or want to understand storage consumption. Analyzes system caches, application remnants, large files, and development environments (Docker, Homebrew, npm, pip) with risk categorization (Safe/Caution/Keep) and requires explicit user confirmation before any deletions. Includes Mole visual tool integration for hybrid workflow",
       "source": "./macos-cleaner",
@@ -517,6 +693,73 @@
         "homebrew",
         "system-maintenance",
         "safety"
+      ]
+    },
+    {
+      "name": "marketplace-health-check",
+      "description": "Run a full 6-dimension health check of this Claude Code skills marketplace repo — code/script safety, documentation/SSOT consistency, security/PII leaks, open-PR triage, open-issue triage, and marketplace-manifest integrity — via a parallel fan-out Dynamic Workflow, then verify the serious findings and report by priority. Use this whenever the user asks to check the repo, run a health check, do a full sweep/audit before a release, 全面体检, 检查仓库状态, 看看仓库健康吗, 审计一下仓库, or asks whether the PRs / issues / docs / versions / PII are in good shape across the board — even if they never say workflow. Reach for it for any broad is-this-whole-repo-OK request, not just one-file checks.",
+      "source": "./marketplace-health-check",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "health-check",
+        "audit",
+        "marketplace",
+        "workflow",
+        "pii",
+        "code-review",
+        "repo-audit"
+      ]
+    },
+    {
+      "name": "notify-wecom",
+      "description": "Send a single one-off message to a WeCom (Enterprise WeChat) group bot. Use this skill whenever the user says /notify-wecom, send a quick WeCom message, 企微通知一下, 临时发一条企业微信, or any one-shot notification that does not need a reusable template or setup workflow.",
+      "source": "./notify-wecom",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "wecom",
+        "enterprise-wechat",
+        "notify",
+        "one-shot",
+        "企业微信",
+        "企微机器人",
+        "claude-code"
+      ]
+    },
+    {
+      "name": "openclaw",
+      "description": "Manage OpenClaw (龙虾 / lobster) instance configurations — audit, diff, copy, add-model, list, and switch models across openclaw.json files. Use when juggling multiple OpenClaw / Claude Code wrapper instances, applying DeepSeek model patches, managing default models and aliases, or validating config.",
+      "source": "./openclaw",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "claude-code",
+      "keywords": [
+        "openclaw",
+        "lobster",
+        "config",
+        "model-management",
+        "deepseek",
+        "claude-code",
+        "config-validation"
+      ]
+    },
+    {
+      "name": "pharma-daily-report",
+      "description": "生成 A 股医药行业日报：从新浪财经抓取核心医药股实时行情，按 7 大细分赛道排名、涨跌榜、资金流向分析，可选通过飞书发送富文本日报。默认 20 只核心医药标的，可自定义增减。当用户需要医药日报、医药行业日报、A 股医药板块分析、飞书推送医药数据时触发。",
+      "source": "./pharma-daily-report",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "a-share",
+        "pharma",
+        "daily-report",
+        "sina-finance",
+        "feishu",
+        "sector-analysis"
       ]
     },
     {
@@ -643,6 +886,25 @@
         "wechat",
         "extraction",
         "cli"
+      ]
+    },
+    {
+      "name": "setup-notifications-via-wecom",
+      "description": "Set up and send technical status notifications through WeCom (Enterprise WeChat) webhooks. Use this skill whenever the user needs to send notifications, alerts, backup completion reports, or status updates via WeCom; when they mention 企业微信, 企微机器人, webhook, or alerting; or when a message needs to be clear, unambiguous, and technically precise rather than vague or condescending.",
+      "source": "./setup-notifications-via-wecom",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "wecom",
+        "enterprise-wechat",
+        "notifications",
+        "webhook",
+        "alerts",
+        "企业微信",
+        "企微机器人",
+        "status-updates",
+        "claude-code"
       ]
     },
     {
@@ -802,6 +1064,44 @@
       ]
     },
     {
+      "name": "wps-doc-scraper",
+      "description": "Faithfully archive public WPS / KDocs / 金山文档 links — especially embedded ProcessOn .pof mind maps and canvases — as raw source data, original SVG/PNG, and Markdown. Use when a user gives a kdocs.cn or wps.processon.com link and asks to scrape, save, download, 扒下来, 归档, or 转 Markdown without logging in.",
+      "source": "./wps-doc-scraper",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "wps",
+        "kdocs",
+        "processon",
+        "mindmap",
+        "scraper",
+        "markdown",
+        "archive"
+      ]
+    },
+    {
+      "name": "x-twitter-scraper",
+      "description": "X (Twitter) data platform skill for AI coding agents. Uses Xquik for REST API endpoints, 2 MCP tools, extraction workflows, HMAC webhooks, and confirmation-gated actions.",
+      "source": "./x-twitter-scraper",
+      "strict": false,
+      "version": "2.4.16",
+      "category": "data-extraction",
+      "keywords": [
+        "twitter",
+        "x",
+        "xquik",
+        "x-twitter-scraper",
+        "social-media",
+        "scraping",
+        "api",
+        "extraction",
+        "automation",
+        "mcp",
+        "webhooks"
+      ]
+    },
+    {
       "name": "youtube-downloader",
       "description": "Download YouTube videos and HLS streams (m3u8) from platforms like Mux, Vimeo, etc. using yt-dlp and ffmpeg. Use when users request downloading videos, extracting audio, handling protected streams with authentication headers, or troubleshooting download issues like nsig extraction failures, 403 errors, or cookie extraction problems",
       "source": "./youtube-downloader",
@@ -821,285 +1121,6 @@
         "streaming",
         "mux",
         "vimeo"
-      ]
-    },
-    {
-      "name": "debugging-network-issues",
-      "description": "Evidence-driven investigation for network, streaming, and protocol-layer bugs. Use when debugging connection resets, SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, client-side proxy/VPN/TUN misrouting, CNAME-based rule overrides, or any incident where symptoms do not match the obvious cause. Applies falsification-first methodology with layered isolation experiments, env-gated runtime instrumentation, and counter-review agent teams. Cognitive-trap catalog includes reverse-path / directional asymmetry and proxy-node DNS ≠ client DNS.",
-      "source": "./debugging-network-issues",
-      "strict": false,
-      "version": "1.3.0",
-      "category": "developer-tools",
-      "keywords": [
-        "debugging",
-        "network",
-        "sse",
-        "http2",
-        "rst",
-        "econnreset",
-        "cloudflare",
-        "streaming",
-        "troubleshooting",
-        "methodology",
-        "proxy",
-        "tun",
-        "vpn",
-        "cname",
-        "dns"
-      ]
-    },
-    {
-      "name": "auto-repo-setup",
-      "description": "Automated repository environment configuration, fault diagnosis, and repair for non-technical users. When someone clones a repo and says 'it won't run', 'how do I set this up', 'environment issues', or 'how do I start the project', this skill reads ONBOARDING.md, audits environment gaps (git, ffmpeg, uv, Python, whisper.cpp, API keys), installs missing dependencies, validates with smoke tests, and safely handles git operations (commit, push, merge conflicts) with PII Guard and Push Safety. Also includes SessionStart hook initialization, counter-review workflows, and git history sanitization for project setup standardization.",
-      "source": "./auto-repo-setup",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "developer-tools",
-      "keywords": [
-        "repo-setup",
-        "environment",
-        "onboarding",
-        "git",
-        "configuration",
-        "claude-code",
-        "non-technical",
-        "session-start",
-        "pii-guard",
-        "whisper"
-      ]
-    },
-    {
-      "name": "benchmark-due-diligence",
-      "description": "Adversarial due-diligence on a benchmark you envy (a founder, KOL, company, or product whose claimed success you suspect is inflated). Inline four-phase orchestration: fan-out collection, adversarial verification grading every claim L1-L4 to separate marketing bubble from real signal, attribution weighting (product vs timing vs personal-IP vs luck, and which parts are replicable), then mapping the validated playbook onto the commissioner's own resources with concrete next moves. Use whenever the user wants to 尽调/对标/拆解 a competitor or role-model, suspects 水分/泡沫 in someone's claims (Product Hunt #1, 0-to-1M-users, funding rounds), asks what they can actually steal from a benchmark, or wants to know if a benchmark's wins are real and copyable before betting on the same strategy. Prefer over deep-research when the goal is debunking inflated claims and extracting a replicable playbook, not a neutral briefing.",
-      "source": "./benchmark-due-diligence",
-      "strict": false,
-      "version": "1.0.1",
-      "category": "productivity",
-      "keywords": [
-        "due-diligence",
-        "benchmark",
-        "competitor-teardown",
-        "对标尽调",
-        "破泡沫",
-        "bubble-busting",
-        "attribution",
-        "playbook-teardown",
-        "role-model",
-        "竞品对标"
-      ]
-    },
-    {
-      "name": "llm-wiki-setup",
-      "description": "Co-create a personal investment-research LLM Wiki (Andrej Karpathy's pattern) where the user's OWN analysis framework becomes a living CLAUDE.md — by interviewing them, NOT by handing them a template. Use whenever the user wants to build a compounding research knowledge base, 投研第二大脑, 投研知识库, or 个人投研 wiki; instantiate Karpathy's LLM Wiki gist for finance/investing; turn their stock-picking, analyst-tracking, or earnings-watching workflow into a structured markdown vault; or build a wiki tracking companies / industries / macro / analysts over time. Pure markdown + wikilinks, NO RAG / vector DB (Karpathy's core idea — do not over-engineer). Also triggers for ingesting research reports / earnings calls / expert notes into an existing wiki, and for post-earnings prediction→fulfillment reviews. Core value = extracting the user's personal investment preferences into THEIR OWN schema, never imposing a standard one.",
-      "source": "./llm-wiki-setup",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "documentation",
-      "keywords": [
-        "llm-wiki",
-        "karpathy",
-        "investment-research",
-        "投研第二大脑",
-        "knowledge-base",
-        "markdown-wiki",
-        "compounding-notes",
-        "analyst-tracking",
-        "second-brain",
-        "投研知识库"
-      ]
-    },
-    {
-      "name": "marketplace-health-check",
-      "description": "Run a full 6-dimension health check of this Claude Code skills marketplace repo — code/script safety, documentation/SSOT consistency, security/PII leaks, open-PR triage, open-issue triage, and marketplace-manifest integrity — via a parallel fan-out Dynamic Workflow, then verify the serious findings and report by priority. Use this whenever the user asks to check the repo, run a health check, do a full sweep/audit before a release, 全面体检, 检查仓库状态, 看看仓库健康吗, 审计一下仓库, or asks whether the PRs / issues / docs / versions / PII are in good shape across the board — even if they never say workflow. Reach for it for any broad is-this-whole-repo-OK request, not just one-file checks.",
-      "source": "./marketplace-health-check",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "developer-tools",
-      "keywords": [
-        "health-check",
-        "audit",
-        "marketplace",
-        "workflow",
-        "pii",
-        "code-review",
-        "repo-audit"
-      ]
-    },
-    {
-      "name": "setup-notifications-via-wecom",
-      "description": "Set up and send technical status notifications through WeCom (Enterprise WeChat) webhooks. Use this skill whenever the user needs to send notifications, alerts, backup completion reports, or status updates via WeCom; when they mention 企业微信, 企微机器人, webhook, or alerting; or when a message needs to be clear, unambiguous, and technically precise rather than vague or condescending.",
-      "source": "./setup-notifications-via-wecom",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "developer-tools",
-      "keywords": [
-        "wecom",
-        "enterprise-wechat",
-        "notifications",
-        "webhook",
-        "alerts",
-        "企业微信",
-        "企微机器人",
-        "status-updates",
-        "claude-code"
-      ]
-    },
-    {
-      "name": "notify-wecom",
-      "description": "Send a single one-off message to a WeCom (Enterprise WeChat) group bot. Use this skill whenever the user says /notify-wecom, send a quick WeCom message, 企微通知一下, 临时发一条企业微信, or any one-shot notification that does not need a reusable template or setup workflow.",
-      "source": "./notify-wecom",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "developer-tools",
-      "keywords": [
-        "wecom",
-        "enterprise-wechat",
-        "notify",
-        "one-shot",
-        "企业微信",
-        "企微机器人",
-        "claude-code"
-      ]
-    },
-    {
-      "name": "github-sensitive-data-cleanup",
-      "description": "Scan and remove sensitive data (secrets, API keys, private domains/IPs, PII) from GitHub repository history. Use this skill whenever the user says scan sensitive data, clean git history, remove secrets from repo, sanitize GitHub history, 清理敏感数据, 历史重写, force push, 泄露, or needs to repair a public repo after accidental secret/private context leakage. Also use before any force push to a public repository to verify visibility, backup, and scan results.",
-      "source": "./github-sensitive-data-cleanup",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "security",
-      "keywords": [
-        "github",
-        "sensitive-data",
-        "secrets",
-        "history-rewrite",
-        "git-filter-repo",
-        "gitleaks",
-        "pii",
-        "force-push",
-        "cleanup",
-        "claude-code"
-      ]
-    },
-    {
-      "name": "codex-image-gallery",
-      "description": "Start or reuse a self-contained local web gallery for browsing Codex-generated images. Use when the user asks to browse Codex generated images, open a local image gallery, inspect ~/.codex/generated_images, view a Codex image output folder, or browse image files produced by Codex.",
-      "source": "./codex-image-gallery",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "utilities",
-      "keywords": [
-        "codex",
-        "generated-images",
-        "image-gallery",
-        "local-server",
-        "browser",
-        "generated_images",
-        "gpt-image",
-        "image-review"
-      ]
-    },
-    {
-      "name": "frontend-visual-qa",
-      "description": "Reviews rendered frontends, dashboards, HTML slides, design-system specimens, and generated UIs for visual quality defects that lint/build miss: awkward line breaks, orphan Chinese characters, wrapped buttons/tags/nav, horizontal overflow, double scrollbars, repeated card piles, page-type drift such as design systems becoming fake workbenches, missing images, generic AI slop, and Chrome DevTools viewport mistakes. Use after frontend-design or ui-designer work and alongside qa-expert release gates.",
-      "source": "./frontend-visual-qa",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "design",
-      "keywords": [
-        "frontend",
-        "visual-qa",
-        "layout",
-        "line-breaks",
-        "responsive",
-        "chrome",
-        "playwright",
-        "ai-slop",
-        "design-review"
-      ]
-    },
-    {
-      "name": "openclaw",
-      "description": "Manage OpenClaw (龙虾 / lobster) instance configurations — audit, diff, copy, add-model, list, and switch models across openclaw.json files. Use when juggling multiple OpenClaw / Claude Code wrapper instances, applying DeepSeek model patches, managing default models and aliases, or validating config.",
-      "source": "./openclaw",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "claude-code",
-      "keywords": [
-        "openclaw",
-        "lobster",
-        "config",
-        "model-management",
-        "deepseek",
-        "claude-code",
-        "config-validation"
-      ]
-    },
-    {
-      "name": "download-gemini-images",
-      "description": "Download, export, save, or package images from a Google Gemini conversation page — uploaded images or generated image previews. Use when the task needs logged-in Chrome/Gemini state, opening Gemini image lightboxes, downloading the larger displayed files, renaming them in order, and producing a ZIP archive.",
-      "source": "./download-gemini-images",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "media",
-      "keywords": [
-        "gemini",
-        "images",
-        "download",
-        "chrome",
-        "lightbox",
-        "zip",
-        "export"
-      ]
-    },
-    {
-      "name": "wps-doc-scraper",
-      "description": "Faithfully archive public WPS / KDocs / 金山文档 links — especially embedded ProcessOn .pof mind maps and canvases — as raw source data, original SVG/PNG, and Markdown. Use when a user gives a kdocs.cn or wps.processon.com link and asks to scrape, save, download, 扒下来, 归档, or 转 Markdown without logging in.",
-      "source": "./wps-doc-scraper",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "productivity",
-      "keywords": [
-        "wps",
-        "kdocs",
-        "processon",
-        "mindmap",
-        "scraper",
-        "markdown",
-        "archive"
-      ]
-    },
-    {
-      "name": "ashare-news-fetcher",
-      "description": "抓取 A 股消息面情报：从财联社、华尔街见闻、金十、新浪 7x24、东财快讯、证监会/央行/上交所/财政部政策公告、东方财富股吧等公开来源抓取与股票相关的新闻、政策、情绪，输出结构化 JSON 或 Markdown。当用户提到 A 股消息面、抓新闻、个股消息、政策监管、股吧情绪、市场情绪，或需要把某只股票相关的公开情报聚合出来时触发。",
-      "source": "./ashare-news-fetcher",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "productivity",
-      "keywords": [
-        "a-share",
-        "news",
-        "stock",
-        "finance",
-        "sentiment",
-        "policy",
-        "cailianshe"
-      ]
-    },
-    {
-      "name": "pharma-daily-report",
-      "description": "生成 A 股医药行业日报：从新浪财经抓取核心医药股实时行情，按 7 大细分赛道排名、涨跌榜、资金流向分析，可选通过飞书发送富文本日报。默认 20 只核心医药标的，可自定义增减。当用户需要医药日报、医药行业日报、A 股医药板块分析、飞书推送医药数据时触发。",
-      "source": "./pharma-daily-report",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "productivity",
-      "keywords": [
-        "a-share",
-        "pharma",
-        "daily-report",
-        "sina-finance",
-        "feishu",
-        "sector-analysis"
       ]
     }
   ]

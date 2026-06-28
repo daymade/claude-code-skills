@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-77-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-80-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.75.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -14,7 +14,7 @@
 
 </div>
 
-Professional Claude Code skills marketplace featuring 77 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 80 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2886,6 +2886,26 @@ Generate an A-share pharmaceutical sector daily report — pull real-time quotes
 - 7 sub-sector classification + gainers/losers + fund-flow estimate
 - Optional Feishu rich-text delivery; default 20-stock watchlist, customizable
 
+### 80. **x-twitter-scraper** - Xquik X/Twitter API Skill
+
+```bash
+claude plugin install x-twitter-scraper@daymade-skills
+```
+
+Use Xquik from Claude Code for X/Twitter data, MCP access, HMAC webhooks, bulk
+extraction workflows, and confirmation-gated actions. The skill uses API-key
+based access and never asks for X login material.
+
+**When to use:**
+- Search, lookup, extract, or monitor public X/Twitter data through Xquik
+- Set up the Xquik MCP server for agent workflows
+- Draft confirmation-gated X/Twitter actions without collecting X credentials
+
+**Key features:**
+- REST API, MCP, webhooks, extraction, and monitoring workflows
+- Explicit untrusted-content boundaries for X-authored text
+- Confirmation gates for writes, private reads, persistent monitors, and event delivery
+
 ---
 
 ## 🎬 Interactive Demo Gallery
@@ -3076,6 +3096,7 @@ Each skill includes:
 - **stepfun-tts**: See `stepfun-tts/SKILL.md` for the Contextual TTS decision tree and `stepfun-tts/references/migration_from_v2.md` for the `voice_label` → `instruction` migration playbook plus the censorship rewrite list
 - **stepfun-asr**: See `stepfun-asr/SKILL.md` for the SSE-endpoint workflow and the four ASR-side traps (wrong endpoint, Plan-vs-Normal key, repetition hallucination, SSE `error` event). `stepfun-asr/references/api_reference.md` documents the exact JSON request body and SSE event contract for raw HTTP integration
 - **llm-eval-harness**: See `llm-eval-harness/references/evaluation_disciplines.md` for the reasoning behind each discipline (env-var keys, thinking-aware throughput, proxy isolation, probabilistic protocol verdicts) and `llm-eval-harness/references/quality_blind_judge.md` for the independent blind-judge quality method
+- **x-twitter-scraper**: See `x-twitter-scraper/SKILL.md` for Xquik REST, MCP, extraction, webhook, and confirmation-gated X/Twitter workflows
 
 ## 🛠️ Requirements
 
@@ -3106,6 +3127,7 @@ Each skill includes:
 - **Node.js 18+ + curl + unzip** (for ima-copilot): `npx skills` is fetched on demand from the npm registry; IMA OpenAPI credentials from [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface)
 - **StepFun API key** (for stepfun-tts and stepfun-asr — must be "Normal" tier, Plan keys silently fail on audio endpoints): Available at [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys
 - **uv + an endpoint API key** (for llm-eval-harness): `openai` and `aiohttp` are auto-installed via `uv run --with`; the key is passed by env-var name only
+- **Xquik API key** (for x-twitter-scraper): Use a user-issued API key from Xquik
 
 ## ❓ FAQ
 

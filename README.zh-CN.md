@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-77-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-80-blue.svg)](https://github.com/daymade/claude-code-skills)
 [![Version](https://img.shields.io/badge/version-1.75.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
@@ -14,7 +14,7 @@
 
 </div>
 
-专业的 Claude Code 技能市场，提供 77 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 80 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2928,6 +2928,25 @@ claude plugin install pharma-daily-report@daymade-skills
 - 7 大细分赛道分类 + 涨跌榜 + 资金流向估算
 - 可选飞书富文本推送；默认 20 只医药标的，可自定义增减
 
+### 80. **x-twitter-scraper** - Xquik X/Twitter API 技能
+
+```bash
+claude plugin install x-twitter-scraper@daymade-skills
+```
+
+在 Claude Code 中使用 Xquik 处理 X/Twitter 数据、MCP 接入、HMAC webhook、
+批量提取流程和需确认的操作。该技能使用 API key，不会索要 X 登录材料。
+
+**使用场景：**
+- 通过 Xquik 搜索、查询、提取或监控公开 X/Twitter 数据
+- 为代理工作流设置 Xquik MCP server
+- 起草需确认的 X/Twitter 操作，同时不收集 X 凭据
+
+**主要功能：**
+- REST API、MCP、webhook、提取和监控工作流
+- 为 X 作者文本设置明确的不可信内容边界
+- 写操作、私有读取、持久监控和事件投递都需要确认
+
 ---
 
 ## 🎬 交互式演示画廊
@@ -3118,6 +3137,7 @@ claude plugin install pharma-daily-report@daymade-skills
 - **stepfun-tts**：参见 `stepfun-tts/SKILL.md` 了解 Contextual TTS 决策树，参见 `stepfun-tts/references/migration_from_v2.md` 查看 `voice_label` → `instruction` 迁移手册和审查改写清单
 - **stepfun-asr**：参见 `stepfun-asr/SKILL.md` 了解 SSE 端点工作流和 ASR 侧四个坑（错端点、Plan vs Normal key、重复幻觉、SSE `error` 事件）。`stepfun-asr/references/api_reference.md` 给出原始 HTTP 集成所需的 JSON 请求体和 SSE 事件契约
 - **llm-eval-harness**：参见 `llm-eval-harness/references/evaluation_disciplines.md` 了解每条纪律背后的推理（环境变量传 key、thinking-aware 吞吐、代理隔离、概率化协议判定），以及 `llm-eval-harness/references/quality_blind_judge.md` 了解独立盲审质量方法
+- **x-twitter-scraper**：参见 `x-twitter-scraper/SKILL.md` 了解 Xquik REST、MCP、提取、webhook 和需确认的 X/Twitter 工作流
 
 ## 🛠️ 系统要求
 
@@ -3145,6 +3165,7 @@ claude plugin install pharma-daily-report@daymade-skills
 - **Node.js 18+ + curl + unzip**（用于 ima-copilot）：`npx skills` 按需从 npm registry 拉取；IMA OpenAPI 凭据从 [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface) 获取
 - **StepFun API key**（用于 stepfun-tts 和 stepfun-asr——必须是 "Normal" 等级，Plan key 调音频端点会无声失败）：在 [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys 获取
 - **uv + 被测端点的 API key**（用于 llm-eval-harness）：`openai` 和 `aiohttp` 通过 `uv run --with` 自动安装；key 仅按环境变量名传入
+- **Xquik API key**（用于 x-twitter-scraper）：使用 Xquik 生成的用户 API key
 
 ## ❓ 常见问题
 
