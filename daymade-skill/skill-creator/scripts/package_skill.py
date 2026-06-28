@@ -8,6 +8,12 @@ Usage:
 Example:
     uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill
     uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill ./dist
+
+Notes:
+    - The skill SOURCE OF TRUTH is the skill folder itself (e.g. skills/public/my-skill).
+    - The .skill file produced by this script is a DISTRIBUTION ARTIFACT (zip bundle).
+    - By default the artifact is written to <skill-folder>/dist/ so it stays next to
+      its source and is easy to find and clean up. It is NOT the canonical skill location.
 """
 
 import fnmatch
@@ -26,11 +32,11 @@ from scripts.quick_validate import validate_skill
 from scripts.security_scan import calculate_skill_hash
 
 # Patterns to exclude when packaging skills.
-EXCLUDE_DIRS = {"__pycache__", "node_modules"}
+EXCLUDE_DIRS = {"__pycache__", "node_modules", ".pytest_cache", ".venv"}
 EXCLUDE_GLOBS = {"*.pyc"}
-EXCLUDE_FILES = {".DS_Store"}
+EXCLUDE_FILES = {".DS_Store", ".security-scan-passed"}
 # Directories excluded only at the skill root (not when nested deeper).
-ROOT_EXCLUDE_DIRS = {"evals"}
+ROOT_EXCLUDE_DIRS = {"evals", "dist"}
 
 
 def should_exclude(rel_path: Path) -> bool:
@@ -91,8 +97,9 @@ def package_skill(skill_path, output_dir=None):
     Package a skill folder into a .skill file.
 
     Args:
-        skill_path: Path to the skill folder
-        output_dir: Optional output directory for the .skill file (defaults to current directory)
+        skill_path: Path to the skill folder (source of truth)
+        output_dir: Optional output directory for the .skill artifact.
+                    Defaults to <skill-folder>/dist/.
 
     Returns:
         Path to the created .skill file, or None if error
@@ -141,9 +148,10 @@ def package_skill(skill_path, output_dir=None):
     skill_name = skill_path.name
     if output_dir:
         output_path = Path(output_dir).resolve()
-        output_path.mkdir(parents=True, exist_ok=True)
     else:
-        output_path = Path.cwd()
+        # Default: place artifact next to source in a dedicated dist/ folder
+        output_path = skill_path / "dist"
+    output_path.mkdir(parents=True, exist_ok=True)
 
     skill_filename = output_path / f"{skill_name}.skill"
 
@@ -161,7 +169,9 @@ def package_skill(skill_path, output_dir=None):
                 zipf.write(file_path, arcname)
                 print(f"  Added: {arcname}")
 
-        print(f"\nSuccessfully packaged skill to: {skill_filename}")
+        print(f"\nDistribution artifact created: {skill_filename}")
+        print(f"  Source of truth (kept in git): {skill_path}")
+        print(f"  The .skill file is a disposable zip bundle; delete it after distribution if desired.")
         return skill_filename
 
     except Exception as e:
@@ -175,14 +185,18 @@ def main():
         print("\nExample:")
         print("  uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill")
         print("  uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill ./dist")
+        print("\nDefault output: <skill-folder>/dist/<skill-name>.skill")
+        print("The skill folder itself is the source of truth; the .skill file is a distribution artifact.")
         sys.exit(1)
 
     skill_path = sys.argv[1]
     output_dir = sys.argv[2] if len(sys.argv) > 2 else None
 
-    print(f"Packaging skill: {skill_path}")
+    print(f"Packaging skill source: {skill_path}")
     if output_dir:
-        print(f"   Output directory: {output_dir}")
+        print(f"   Artifact output directory: {output_dir}")
+    else:
+        print(f"   Artifact output directory: {Path(skill_path).resolve() / 'dist'}")
     print()
 
     result = package_skill(skill_path, output_dir)
