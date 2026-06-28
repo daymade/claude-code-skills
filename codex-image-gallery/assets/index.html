@@ -1,0 +1,1387 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codex Images</title>
+  <style>
+    :root {
+      --ink: #171512;
+      --ink-2: #23211b;
+      --paper: #f3efe4;
+      --paper-2: #e5ddcd;
+      --muted: #8c877a;
+      --line: #3a362c;
+      --line-soft: rgba(23, 21, 18, 0.14);
+      --acid: #d8ff45;
+      --ember: #ff6b35;
+      --aqua: #68c7bd;
+      --shadow: 0 20px 50px rgba(0, 0, 0, 0.32);
+      --card-min: 236px;
+      --radius: 6px;
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-height: 100%;
+      background: var(--ink);
+      color: var(--paper);
+      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        linear-gradient(116deg, rgba(216, 255, 69, 0.12), transparent 29%),
+        linear-gradient(242deg, rgba(104, 199, 189, 0.11), transparent 34%),
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 18px),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 18px),
+        var(--ink);
+      background-attachment: fixed;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button,
+    a.button {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+      color: var(--ink);
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+    }
+
+    button:hover,
+    a.button:hover {
+      border-color: var(--acid);
+      box-shadow: 0 0 0 2px rgba(216, 255, 69, 0.28);
+      transform: translateY(-1px);
+    }
+
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible {
+      outline: 2px solid var(--acid);
+      outline-offset: 2px;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: minmax(248px, 304px) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .rail {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      padding: 24px 20px;
+      border-right: 1px solid rgba(255, 255, 255, 0.12);
+      background:
+        linear-gradient(180deg, rgba(35, 33, 27, 0.95), rgba(18, 17, 14, 0.95)),
+        var(--ink);
+      backdrop-filter: blur(18px);
+      box-shadow: 16px 0 50px rgba(0, 0, 0, 0.25);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--aqua);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: "DIN Condensed", "Avenir Next Condensed", "Helvetica Neue", sans-serif;
+      font-size: clamp(40px, 4.8vw, 62px);
+      font-weight: 900;
+      line-height: 0.9;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .root-path {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .stat {
+      position: relative;
+      min-height: 66px;
+      padding: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.032));
+      overflow: hidden;
+    }
+
+    .stat::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, var(--acid), transparent 78%);
+      opacity: 0.7;
+    }
+
+    .stat dt {
+      margin: 0 0 7px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .stat dd {
+      margin: 0;
+      color: var(--paper);
+      font-family: "DIN Alternate", "Avenir Next Condensed", sans-serif;
+      font-size: 27px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .rail-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .rail-actions button,
+    .rail-actions a {
+      display: grid;
+      place-items: center;
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .source-note {
+      margin: auto 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.55;
+    }
+
+    .workspace {
+      min-width: 0;
+      padding: 24px;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) 164px 126px;
+      gap: 12px;
+      padding: 0 0 14px;
+      background: linear-gradient(to bottom, rgba(23, 21, 18, 0.99) 72%, rgba(23, 21, 18, 0));
+    }
+
+    .search,
+    .select {
+      height: 44px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.095);
+      color: var(--paper);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .search {
+      padding: 0 14px;
+    }
+
+    .search::placeholder {
+      color: rgba(243, 239, 228, 0.48);
+    }
+
+    .select {
+      padding: 0 12px;
+    }
+
+    .view-toggle {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .view-toggle button {
+      min-height: 34px;
+      border: 0;
+      background: transparent;
+      color: var(--paper);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .view-toggle button.is-active {
+      background: var(--acid);
+      color: var(--ink);
+    }
+
+    .session-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin: 0 0 16px;
+    }
+
+    .chip {
+      min-height: 32px;
+      padding: 0 9px;
+      border-color: rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--paper);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .chip.is-active {
+      border-color: var(--acid);
+      background: var(--acid);
+      color: var(--ink);
+    }
+
+    .count-pill {
+      display: inline-grid;
+      min-width: 22px;
+      height: 18px;
+      place-items: center;
+      margin-left: 6px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.18);
+      font-size: 10px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .batch-section {
+      display: grid;
+      gap: 10px;
+    }
+
+    .batch-header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 2px 2px 0;
+      color: var(--paper);
+    }
+
+    .batch-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1.2;
+    }
+
+    .batch-meta {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .batch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
+      gap: 14px;
+      align-items: start;
+    }
+
+    .grid.is-list .batch-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .card {
+      display: grid;
+      width: 100%;
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: var(--radius);
+      background: var(--paper);
+      color: var(--ink);
+      text-align: left;
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+      transform: translateY(8px);
+      opacity: 0;
+      animation: cardIn 360ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+      animation-delay: calc(min(var(--i, 0), 16) * 24ms);
+      transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    .card:hover {
+      border-color: rgba(216, 255, 69, 0.86);
+      box-shadow: 0 22px 46px rgba(0, 0, 0, 0.32), 0 0 0 2px rgba(216, 255, 69, 0.18);
+      transform: translateY(-3px);
+    }
+
+    @keyframes cardIn {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .thumb {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background:
+        linear-gradient(45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25% 75%, rgba(0, 0, 0, 0.05) 75%),
+        linear-gradient(45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25% 75%, rgba(0, 0, 0, 0.05) 75%);
+      background-position: 0 0, 10px 10px;
+      background-size: 20px 20px;
+    }
+
+    .thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      transition: transform 220ms ease, filter 220ms ease;
+    }
+
+    .card:hover .thumb img {
+      filter: saturate(1.03) contrast(1.02);
+      transform: scale(1.018);
+    }
+
+    .badge {
+      position: absolute;
+      left: 7px;
+      top: 7px;
+      max-width: calc(100% - 16px);
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: rgba(23, 21, 18, 0.82);
+      color: var(--paper);
+      font-size: 9px;
+      font-weight: 800;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 42px;
+      padding: 8px 10px;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+      background: rgba(243, 239, 228, 0.94);
+    }
+
+    .file-name {
+      margin: 0;
+      min-width: 0;
+      color: var(--ink);
+      font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.28;
+      overflow-wrap: anywhere;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+
+    .sub-name {
+      color: rgba(23, 21, 18, 0.58);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .facts {
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      color: rgba(23, 21, 18, 0.72);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .fact {
+      padding: 4px 6px;
+      border-radius: 999px;
+      background: rgba(23, 21, 18, 0.07);
+      white-space: nowrap;
+    }
+
+    .grid.is-list .card {
+      grid-template-columns: 130px 1fr;
+    }
+
+    .grid.is-list .thumb {
+      aspect-ratio: 1 / 1;
+    }
+
+    .grid.is-list .meta {
+      align-content: center;
+      border-top: 0;
+      border-left: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+    .empty {
+      display: none;
+      min-height: 42vh;
+      place-items: center;
+      border: 1px dashed rgba(255, 255, 255, 0.22);
+      border-radius: var(--radius);
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .empty.is-visible {
+      display: grid;
+    }
+
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      background:
+        linear-gradient(135deg, rgba(216, 255, 69, 0.08), transparent 34%),
+        rgba(10, 9, 7, 0.93);
+      backdrop-filter: blur(12px);
+    }
+
+    .lightbox[hidden] {
+      display: none;
+    }
+
+    .stage {
+      display: grid;
+      place-items: center;
+      min-width: 0;
+      padding: 30px;
+      background:
+        linear-gradient(45deg, rgba(255, 255, 255, 0.025) 25%, transparent 25% 75%, rgba(255, 255, 255, 0.025) 75%),
+        linear-gradient(45deg, rgba(255, 255, 255, 0.025) 25%, transparent 25% 75%, rgba(255, 255, 255, 0.025) 75%);
+      background-position: 0 0, 14px 14px;
+      background-size: 28px 28px;
+    }
+
+    .stage img {
+      max-width: 100%;
+      max-height: calc(100vh - 60px);
+      object-fit: contain;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: var(--shadow);
+    }
+
+    .detail {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
+      padding: 24px;
+      border-left: 1px solid rgba(255, 255, 255, 0.14);
+      background: linear-gradient(180deg, var(--paper), var(--paper-2));
+      color: var(--ink);
+    }
+
+    .detail h2 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+
+    .detail dl {
+      display: grid;
+      grid-template-columns: 82px 1fr;
+      gap: 9px 12px;
+      margin: 0;
+      font-size: 12px;
+    }
+
+    .detail dt {
+      color: rgba(23, 21, 18, 0.56);
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .detail dd {
+      margin: 0;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-weight: 700;
+    }
+
+    .tech-details {
+      border-top: 1px solid rgba(23, 21, 18, 0.16);
+      padding-top: 12px;
+    }
+
+    .tech-details summary {
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .tech-details dl {
+      margin-top: 12px;
+    }
+
+    .detail-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: auto;
+    }
+
+    .detail-actions button,
+    .detail-actions a {
+      display: grid;
+      place-items: center;
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .close {
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      z-index: 40;
+      transform: translateX(-50%) translateY(20px);
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: var(--acid);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 900;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+
+    .toast.is-visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @media (max-width: 860px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .rail {
+        position: relative;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        gap: 14px;
+      }
+
+      .toolbar {
+        grid-template-columns: 1fr;
+        padding-top: 2px;
+      }
+
+      .workspace {
+        padding: 18px;
+      }
+
+      .lightbox {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr) auto;
+      }
+
+      .stage {
+        padding: 16px;
+      }
+
+      .stage img {
+        max-height: 58vh;
+      }
+
+      .detail {
+        max-height: 42vh;
+        overflow: auto;
+        border-left: 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+      }
+    }
+
+    @media (max-width: 520px) {
+      body {
+        overflow-x: hidden;
+      }
+
+      h1 {
+        font-size: 34px;
+      }
+
+      .rail {
+        padding: 16px;
+        gap: 11px;
+      }
+
+      .root-path {
+        margin-top: 7px;
+        font-size: 10px;
+      }
+
+      .detail-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .stat-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .stat {
+        min-height: 52px;
+        padding: 8px;
+      }
+
+      .stat dt {
+        margin-bottom: 5px;
+        font-size: 8px;
+      }
+
+      .stat dd {
+        font-size: 21px;
+      }
+
+      .rail-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .rail-actions button,
+      .rail-actions a {
+        min-height: 36px;
+        font-size: 12px;
+      }
+
+      .source-note {
+        display: none;
+      }
+
+      .workspace {
+        padding: 12px;
+      }
+
+      .toolbar {
+        gap: 8px;
+      }
+
+      .search,
+      .select {
+        height: 40px;
+      }
+
+      .view-toggle button {
+        min-height: 30px;
+      }
+
+      .session-bar {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 6px;
+        scrollbar-width: thin;
+      }
+
+      .chip {
+        flex: 0 0 auto;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .grid.is-list .card {
+        grid-template-columns: 104px 1fr;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 1ms !important;
+        scroll-behavior: auto !important;
+        transition-duration: 1ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <aside class="rail" aria-label="Gallery controls">
+      <div>
+        <p class="eyebrow">Light table</p>
+        <h1>Codex Images</h1>
+        <p class="root-path" id="rootPath">Source: generated_images</p>
+      </div>
+
+      <dl class="stat-grid" aria-label="Gallery stats">
+        <div class="stat">
+          <dt>Images</dt>
+          <dd id="imageCount">0</dd>
+        </div>
+        <div class="stat">
+          <dt>Batches</dt>
+          <dd id="sessionCount">0</dd>
+        </div>
+        <div class="stat">
+          <dt>Visible</dt>
+          <dd id="shownCount">0</dd>
+        </div>
+        <div class="stat">
+          <dt>Storage</dt>
+          <dd id="totalSize">0</dd>
+        </div>
+      </dl>
+
+      <div class="rail-actions">
+        <button id="scanButton" type="button" title="Scan an image folder in this browser">Open another folder</button>
+        <a class="button" href="./" title="Reload the gallery">Reload</a>
+      </div>
+
+      <p class="source-note" id="sourceNote">Dynamic index.</p>
+      <input id="fileInput" type="file" accept="image/*" webkitdirectory multiple hidden>
+    </aside>
+
+    <section class="workspace" aria-label="Image gallery">
+      <header class="toolbar">
+        <input class="search" id="searchInput" type="search" placeholder="Search images" autocomplete="off">
+        <select class="select" id="sortSelect" aria-label="Sort images">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="size">Largest first</option>
+          <option value="session">Batch order</option>
+        </select>
+        <div class="view-toggle" aria-label="View mode">
+          <button id="gridView" type="button" class="is-active">Grid</button>
+          <button id="listView" type="button">List</button>
+        </div>
+      </header>
+
+      <nav class="session-bar" id="sessionBar" aria-label="Session filter"></nav>
+      <div class="grid" id="grid"></div>
+      <div class="empty" id="empty">No matches</div>
+    </section>
+  </main>
+
+  <section class="lightbox" id="lightbox" hidden aria-label="Image detail">
+    <div class="stage" id="stage">
+      <img id="detailImage" alt="">
+    </div>
+    <aside class="detail">
+      <h2 id="detailTitle"></h2>
+      <dl>
+        <dt>Batch</dt>
+        <dd id="detailSession"></dd>
+        <dt>Modified</dt>
+        <dd id="detailDate"></dd>
+        <dt>Size</dt>
+        <dd id="detailSize"></dd>
+        <dt>Pixels</dt>
+        <dd id="detailPixels"></dd>
+      </dl>
+      <details class="tech-details">
+        <summary>Technical details</summary>
+        <dl>
+          <dt>Original filename</dt>
+          <dd id="detailFile"></dd>
+          <dt>Internal session ID</dt>
+          <dd id="detailRawSession"></dd>
+          <dt>Full path</dt>
+          <dd id="detailPath"></dd>
+        </dl>
+      </details>
+      <div class="detail-actions">
+        <button id="prevButton" type="button">Prev</button>
+        <button id="nextButton" type="button">Next</button>
+        <a id="openLink" class="button" href="#" target="_blank" rel="noreferrer">Open</a>
+        <button id="copyButton" type="button">Copy full path</button>
+        <button id="closeButton" class="close" type="button">Close</button>
+      </div>
+    </aside>
+  </section>
+
+  <div class="toast" id="toast">Copied</div>
+
+  <script>
+    const DEFAULT_ROOT_PATH = "";
+    const INITIAL_ITEMS = [];
+
+
+    const state = {
+      items: [],
+      visible: [],
+      session: "all",
+      query: "",
+      sort: "newest",
+      view: "grid",
+      activeIndex: -1,
+      rootPath: DEFAULT_ROOT_PATH,
+      objectUrls: []
+    };
+
+    const els = {
+      imageCount: document.getElementById("imageCount"),
+      sessionCount: document.getElementById("sessionCount"),
+      shownCount: document.getElementById("shownCount"),
+      totalSize: document.getElementById("totalSize"),
+      sourceNote: document.getElementById("sourceNote"),
+      rootPath: document.getElementById("rootPath"),
+      scanButton: document.getElementById("scanButton"),
+      fileInput: document.getElementById("fileInput"),
+      searchInput: document.getElementById("searchInput"),
+      sortSelect: document.getElementById("sortSelect"),
+      gridView: document.getElementById("gridView"),
+      listView: document.getElementById("listView"),
+      sessionBar: document.getElementById("sessionBar"),
+      grid: document.getElementById("grid"),
+      empty: document.getElementById("empty"),
+      lightbox: document.getElementById("lightbox"),
+      stage: document.getElementById("stage"),
+      detailImage: document.getElementById("detailImage"),
+      detailTitle: document.getElementById("detailTitle"),
+      detailSession: document.getElementById("detailSession"),
+      detailFile: document.getElementById("detailFile"),
+      detailRawSession: document.getElementById("detailRawSession"),
+      detailDate: document.getElementById("detailDate"),
+      detailSize: document.getElementById("detailSize"),
+      detailPixels: document.getElementById("detailPixels"),
+      detailPath: document.getElementById("detailPath"),
+      prevButton: document.getElementById("prevButton"),
+      nextButton: document.getElementById("nextButton"),
+      openLink: document.getElementById("openLink"),
+      copyButton: document.getElementById("copyButton"),
+      closeButton: document.getElementById("closeButton"),
+      toast: document.getElementById("toast")
+    };
+
+    function normalizeItem(item, index) {
+      const path = item.path.replace(/^\/+/, "");
+      return {
+        ...item,
+        path,
+        key: `${path}:${item.mtime || 0}:${index}`,
+        session: path.includes("/") ? path.split("/")[0] : "selected",
+        filename: path.split("/").pop(),
+        absolutePath: item.absolutePath || (state.rootPath ? `${state.rootPath}/${path}` : path)
+      };
+    }
+
+    function padNumber(value) {
+      return String(value).padStart(2, "0");
+    }
+
+    const GENERATED_SESSION_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const GENERATED_FILE_RE = /^ig_[0-9a-f]{24,}\.(png|jpe?g|webp|gif)$/i;
+
+    function formatBatchDate(ms) {
+      if (!ms) return "Undated";
+      return new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "2-digit"
+      }).format(new Date(ms));
+    }
+
+    function formatTime(ms) {
+      if (!ms) return "-";
+      return new Intl.DateTimeFormat(undefined, {
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(new Date(ms));
+    }
+
+    function formatBatchRange(oldest, newest) {
+      if (!oldest && !newest) return "Undated";
+      const date = formatBatchDate(newest || oldest);
+      if (!oldest || !newest || oldest === newest) return `${date}, ${formatTime(newest || oldest)}`;
+      return `${date}, ${formatTime(oldest)}-${formatTime(newest)}`;
+    }
+
+    function isGeneratedSession(name) {
+      return GENERATED_SESSION_RE.test(name || "");
+    }
+
+    function isGeneratedFile(name) {
+      return GENERATED_FILE_RE.test(name || "");
+    }
+
+    function labelItems(items) {
+      const sessions = getSessions(items);
+      const sessionMap = new Map(sessions.map((session, index) => [
+        session.name,
+        {
+          batchIndex: index + 1,
+          label: session.label,
+          shortLabel: session.shortLabel,
+          contextLabel: session.contextLabel
+        }
+      ]));
+
+      sessions.forEach((session) => {
+        const meta = sessionMap.get(session.name);
+        items
+          .filter((item) => item.session === session.name)
+          .sort((a, b) => (b.mtime || 0) - (a.mtime || 0) || a.path.localeCompare(b.path))
+          .forEach((item, index) => {
+            item.batchIndex = meta.batchIndex;
+            item.batchLabel = meta.label;
+            item.batchShortLabel = meta.shortLabel;
+            item.batchContextLabel = meta.contextLabel;
+            item.imageLabel = isGeneratedFile(item.filename) ? `Image ${padNumber(index + 1)}` : item.filename;
+            item.imageShortLabel = isGeneratedFile(item.filename) ? padNumber(index + 1) : item.filename;
+            item.displayTitle = item.imageLabel;
+            item.searchText = [
+              item.displayTitle,
+              item.batchLabel,
+              item.batchContextLabel,
+              item.batchShortLabel,
+              item.filename,
+              item.session,
+              item.path,
+              formatDate(item.mtime)
+            ].join(" ").toLowerCase();
+          });
+      });
+
+      return items;
+    }
+
+    function encodedPath(path) {
+      return path.split("/").map(encodeURIComponent).join("/");
+    }
+
+    function srcFor(item) {
+      if (item.url) return item.url;
+      const encoded = encodedPath(item.path);
+      return location.protocol === "file:" ? encoded : `/images/${encoded}`;
+    }
+
+    function displayPath(item) {
+      if (item.url) return item.absolutePath || item.path;
+      return item.absolutePath || (state.rootPath ? `${state.rootPath}/${item.path}` : item.path);
+    }
+
+    function formatDate(ms) {
+      if (!ms) return "-";
+      return new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(new Date(ms));
+    }
+
+    function formatBytes(bytes) {
+      if (!Number.isFinite(bytes)) return "-";
+      if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+      if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+      return `${bytes} B`;
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
+    function getSessions(items) {
+      const sessions = new Map();
+      items.forEach((item) => {
+        const current = sessions.get(item.session) || { name: item.session, count: 0, newest: 0, oldest: Infinity };
+        current.count += 1;
+        current.newest = Math.max(current.newest, item.mtime || 0);
+        current.oldest = Math.min(current.oldest, item.mtime || Infinity);
+        sessions.set(item.session, current);
+      });
+      return [...sessions.values()]
+        .sort((a, b) => b.newest - a.newest || a.name.localeCompare(b.name))
+        .map((session, index) => ({
+          ...session,
+          batchIndex: index + 1,
+          label: isGeneratedSession(session.name) ? formatBatchRange(session.oldest, session.newest) : session.name,
+          shortLabel: isGeneratedSession(session.name) ? `B${padNumber(index + 1)}` : session.name,
+          contextLabel: `${session.count} ${session.count === 1 ? "image" : "images"}`
+        }));
+    }
+
+    function applySort(items) {
+      const sorted = [...items];
+      if (state.sort === "oldest") {
+        sorted.sort((a, b) => (a.mtime || 0) - (b.mtime || 0) || a.path.localeCompare(b.path));
+      } else if (state.sort === "size") {
+        sorted.sort((a, b) => (b.size || 0) - (a.size || 0) || a.path.localeCompare(b.path));
+      } else if (state.sort === "session") {
+        sorted.sort((a, b) => (a.batchIndex || 0) - (b.batchIndex || 0) || (b.mtime || 0) - (a.mtime || 0));
+      } else {
+        sorted.sort((a, b) => (b.mtime || 0) - (a.mtime || 0) || a.path.localeCompare(b.path));
+      }
+      return sorted;
+    }
+
+    function getVisibleItems() {
+      const query = state.query.trim().toLowerCase();
+      return applySort(state.items.filter((item) => {
+        if (state.session !== "all" && item.session !== state.session) return false;
+        if (!query) return true;
+        const searchable = item.searchText || [item.path, item.session, item.filename].join(" ").toLowerCase();
+        return searchable.includes(query);
+      }));
+    }
+
+    function renderStats() {
+      const sessions = getSessions(state.items);
+      const totalBytes = state.items.reduce((sum, item) => sum + (item.size || 0), 0);
+      els.imageCount.textContent = state.items.length;
+      els.sessionCount.textContent = sessions.length;
+      els.shownCount.textContent = state.visible.length;
+      els.totalSize.textContent = (totalBytes / 1024 / 1024).toFixed(0);
+    }
+
+    function renderSessions() {
+      const sessions = getSessions(state.items);
+      const buttons = [
+        `<button class="chip ${state.session === "all" ? "is-active" : ""}" type="button" data-session="all">All<span class="count-pill">${state.items.length}</span></button>`,
+        ...sessions.map((session) => (
+          `<button class="chip ${state.session === session.name ? "is-active" : ""}" type="button" data-session="${escapeHtml(session.name)}" title="${escapeHtml(`${session.label} · ${session.contextLabel}`)}">${escapeHtml(session.label)}<span class="count-pill">${session.count}</span></button>`
+        ))
+      ];
+      els.sessionBar.innerHTML = buttons.join("");
+    }
+
+    function groupedVisibleItems() {
+      const groups = [];
+      const index = new Map();
+      state.visible.forEach((item, visibleIndex) => {
+        let group = index.get(item.session);
+        if (!group) {
+          group = {
+            session: item.session,
+            label: item.batchLabel,
+            contextLabel: item.batchContextLabel,
+            newest: item.mtime || 0,
+            items: []
+          };
+          index.set(item.session, group);
+          groups.push(group);
+        }
+        group.items.push({ item, visibleIndex });
+      });
+      return groups;
+    }
+
+    function renderGrid() {
+      els.grid.classList.toggle("is-list", state.view === "list");
+      els.empty.classList.toggle("is-visible", state.visible.length === 0);
+      els.grid.innerHTML = groupedVisibleItems().map((group) => `
+        <section class="batch-section">
+          <header class="batch-header">
+            <h2 class="batch-title">${escapeHtml(group.label)}</h2>
+            <span class="batch-meta">${escapeHtml(group.contextLabel)}</span>
+          </header>
+          <div class="batch-grid">
+            ${group.items.map(({ item, visibleIndex }) => `
+              <button class="card" type="button" data-index="${visibleIndex}" title="${escapeHtml(`${item.displayTitle} · ${formatDate(item.mtime)}`)}" aria-label="Open ${escapeHtml(item.displayTitle)}" style="--i: ${visibleIndex};">
+                <span class="thumb">
+                  <img src="${escapeHtml(srcFor(item))}" alt="" loading="${visibleIndex < 10 ? "eager" : "lazy"}" decoding="async" data-key="${escapeHtml(item.key)}">
+                  <span class="badge">${escapeHtml(`${item.batchShortLabel} · ${item.imageShortLabel}`)}</span>
+                </span>
+                <span class="meta">
+                  <span class="file-name">${escapeHtml(item.displayTitle)}</span>
+                  <span class="sub-name">${escapeHtml(formatDate(item.mtime))}</span>
+                  <span class="facts">
+                    <span class="fact">${formatBytes(item.size)}</span>
+                    <span class="fact" data-dim="${escapeHtml(item.key)}">...</span>
+                  </span>
+                </span>
+              </button>
+            `).join("")}
+          </div>
+        </section>
+      `).join("");
+
+      els.grid.querySelectorAll(".card").forEach((card) => {
+        card.addEventListener("click", () => openLightbox(Number(card.dataset.index)));
+      });
+
+      els.grid.querySelectorAll("img").forEach((img) => {
+        img.addEventListener("load", () => {
+          const item = state.items.find((candidate) => candidate.key === img.dataset.key);
+          if (!item) return;
+          item.width = img.naturalWidth;
+          item.height = img.naturalHeight;
+          document.querySelectorAll(`[data-dim="${CSS.escape(item.key)}"]`).forEach((node) => {
+            node.textContent = `${item.width} x ${item.height}`;
+          });
+          if (state.activeIndex >= 0 && state.visible[state.activeIndex]?.key === item.key) {
+            renderDetail();
+          }
+        });
+      });
+    }
+
+    function render() {
+      state.visible = getVisibleItems();
+      renderStats();
+      renderSessions();
+      renderGrid();
+    }
+
+    function renderDetail() {
+      const item = state.visible[state.activeIndex];
+      if (!item) return;
+      const source = srcFor(item);
+      els.detailImage.src = source;
+      els.detailImage.alt = item.displayTitle;
+      els.detailTitle.textContent = item.displayTitle;
+      els.detailSession.textContent = `${item.batchLabel} · ${item.batchContextLabel}`;
+      els.detailFile.textContent = item.filename;
+      els.detailRawSession.textContent = item.session;
+      els.detailDate.textContent = formatDate(item.mtime);
+      els.detailSize.textContent = formatBytes(item.size);
+      els.detailPixels.textContent = item.width && item.height ? `${item.width} x ${item.height}` : "-";
+      els.detailPath.textContent = displayPath(item);
+      els.openLink.href = source;
+      els.prevButton.disabled = state.visible.length < 2;
+      els.nextButton.disabled = state.visible.length < 2;
+    }
+
+    function openLightbox(index) {
+      state.activeIndex = index;
+      renderDetail();
+      els.lightbox.hidden = false;
+      els.closeButton.focus();
+    }
+
+    function closeLightbox() {
+      els.lightbox.hidden = true;
+      state.activeIndex = -1;
+      els.detailImage.removeAttribute("src");
+    }
+
+    function moveLightbox(step) {
+      if (state.activeIndex < 0 || state.visible.length === 0) return;
+      state.activeIndex = (state.activeIndex + step + state.visible.length) % state.visible.length;
+      renderDetail();
+    }
+
+    async function copyActivePath() {
+      const item = state.visible[state.activeIndex];
+      if (!item) return;
+      const text = displayPath(item);
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast("Full path copied");
+      } catch {
+        window.prompt("Path", text);
+      }
+    }
+
+    function showToast(text) {
+      els.toast.textContent = text;
+      els.toast.classList.add("is-visible");
+      window.clearTimeout(showToast.timer);
+      showToast.timer = window.setTimeout(() => els.toast.classList.remove("is-visible"), 1200);
+    }
+
+    function resetObjectUrls() {
+      state.objectUrls.forEach((url) => URL.revokeObjectURL(url));
+      state.objectUrls = [];
+    }
+
+    function setItems(items, note, rootLabel, rootPath = "") {
+      resetObjectUrls();
+      state.objectUrls = items.map((item) => item.url).filter(Boolean);
+      state.rootPath = rootPath;
+      state.items = labelItems(items.map(normalizeItem));
+      state.session = "all";
+      state.query = "";
+      els.searchInput.value = "";
+      els.sourceNote.textContent = note;
+      els.rootPath.textContent = rootLabel.startsWith("Source:") ? rootLabel : `Source: ${rootLabel}`;
+      render();
+    }
+
+    async function loadInitialItems() {
+      if (location.protocol === "file:") {
+        state.rootPath = DEFAULT_ROOT_PATH;
+        state.items = labelItems(INITIAL_ITEMS.map(normalizeItem));
+        els.sourceNote.textContent = "No dynamic index on file://.";
+        render();
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/images", { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        const rootLabel = payload.rootLabel || "generated_images";
+        state.rootPath = payload.rootPath || DEFAULT_ROOT_PATH;
+        state.items = labelItems((payload.items || []).map(normalizeItem));
+        els.rootPath.textContent = `Source: ${rootLabel}`;
+        els.sourceNote.textContent = `Indexed ${state.items.length} images from ${rootLabel}.`;
+      } catch (error) {
+        state.rootPath = DEFAULT_ROOT_PATH;
+        state.items = labelItems(INITIAL_ITEMS.map(normalizeItem));
+        els.sourceNote.textContent = "Dynamic index unavailable.";
+      }
+
+      render();
+    }
+
+    async function walkDirectory(handle, prefix = "") {
+      const files = [];
+      for await (const [name, entry] of handle.entries()) {
+        const path = prefix ? `${prefix}/${name}` : name;
+        if (entry.kind === "directory") {
+          files.push(...await walkDirectory(entry, path));
+        } else if (/\.(png|jpe?g|webp|gif)$/i.test(name)) {
+          const file = await entry.getFile();
+          files.push(fileToItem(file, path));
+        }
+      }
+      return files;
+    }
+
+    function fileToItem(file, path) {
+      const url = URL.createObjectURL(file);
+      return {
+        path,
+        mtime: file.lastModified,
+        size: file.size,
+        url,
+        absolutePath: path
+      };
+    }
+
+    async function chooseFolder() {
+      if (window.showDirectoryPicker) {
+        try {
+          const handle = await window.showDirectoryPicker();
+          const items = await walkDirectory(handle);
+          setItems(
+            applySort(items),
+            `Browser scan: ${items.length} images.`,
+            handle.name
+          );
+          return;
+        } catch (error) {
+          if (error.name === "AbortError") return;
+        }
+      }
+      els.fileInput.click();
+    }
+
+    els.fileInput.addEventListener("change", () => {
+      const files = [...els.fileInput.files].filter((file) => /^image\//.test(file.type) || /\.(png|jpe?g|webp|gif)$/i.test(file.name));
+      const items = files.map((file) => fileToItem(file, file.webkitRelativePath || file.name));
+      setItems(applySort(items), `Browser scan: ${items.length} images.`, "Selected folder");
+      els.fileInput.value = "";
+    });
+
+    els.scanButton.addEventListener("click", chooseFolder);
+    els.searchInput.addEventListener("input", (event) => {
+      state.query = event.target.value;
+      render();
+    });
+    els.sortSelect.addEventListener("change", (event) => {
+      state.sort = event.target.value;
+      render();
+    });
+    els.gridView.addEventListener("click", () => {
+      state.view = "grid";
+      els.gridView.classList.add("is-active");
+      els.listView.classList.remove("is-active");
+      renderGrid();
+    });
+    els.listView.addEventListener("click", () => {
+      state.view = "list";
+      els.listView.classList.add("is-active");
+      els.gridView.classList.remove("is-active");
+      renderGrid();
+    });
+    els.sessionBar.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-session]");
+      if (!button) return;
+      state.session = button.dataset.session;
+      render();
+    });
+    els.prevButton.addEventListener("click", () => moveLightbox(-1));
+    els.nextButton.addEventListener("click", () => moveLightbox(1));
+    els.copyButton.addEventListener("click", copyActivePath);
+    els.closeButton.addEventListener("click", closeLightbox);
+    els.stage.addEventListener("click", closeLightbox);
+    document.addEventListener("keydown", (event) => {
+      if (els.lightbox.hidden) return;
+      if (event.key === "Escape") closeLightbox();
+      if (event.key === "ArrowLeft") moveLightbox(-1);
+      if (event.key === "ArrowRight") moveLightbox(1);
+    });
+
+    loadInitialItems();
+  </script>
+</body>
+</html>

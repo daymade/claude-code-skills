@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.69.0] - 2026-06-27
+
+### Added
+- **codex-image-gallery** v1.0.0: new self-contained skill for browsing Codex-generated images in a local web gallery. Bundles `scripts/server.mjs` and `assets/index.html`; scans `~/.codex/generated_images` by default; supports `GALLERY_ROOT`, `PORT`, and `HOST`; serves a dynamic `/api/images` index and protected `/images/<relative-path>` image routes.
+
+### Changed
+- Updated marketplace skills count from 70 to 71.
+- Updated marketplace plugin entry count from 49 to 50.
+- Updated marketplace version from 1.68.0 to 1.69.0.
+- Updated README.md / README.zh-CN.md badges and skill lists to include `codex-image-gallery`.
+- Backfilled existing doc-list drift for `read-claude-web-conversation`, `setup-notifications-via-wecom`, `notify-wecom`, and `github-sensitive-data-cleanup` so the human-facing lists match `marketplace.json`.
+- Updated CLAUDE.md repository overview count, marketplace plugin count, and Available Skills list.
+
 ## [1.67.0] - 2026-06-24
 
 ### Added
