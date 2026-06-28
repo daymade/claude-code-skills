@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-66-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.67.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-71-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.69.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 66 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 71 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2727,6 +2727,95 @@ uv run --with aiohttp python scripts/concurrency_probe.py \
 📚 **文档**：参见 [llm-eval-harness/references/evaluation_disciplines.md](./llm-eval-harness/references/evaluation_disciplines.md) 了解每条纪律背后的推理，以及 [llm-eval-harness/references/quality_blind_judge.md](./llm-eval-harness/references/quality_blind_judge.md) 了解独立盲审质量方法。
 
 **要求**：Python 3.8+、`uv`；`openai` 和 `aiohttp`（通过 `uv run --with` 自动安装）；被测端点的 API key。可与 **promptfoo-evaluation** 组合，用于基于 rubric 的门控。
+
+---
+
+### 69. **read-claude-web-conversation** - 提取 Claude.ai 网页会话
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（套件专用——通过 `daymade-claude-code:read-claude-web-conversation` 调用）
+
+通过 Claude Code operations 套件提取 Claude.ai 网页会话全文，用于恢复、审计、归档或迁移。
+
+**使用场景：**
+- 需要读取本地 Claude Code 日志里没有的 Claude.ai 网页会话
+- 为交接、审计或归档恢复完整网页线程
+- 对比浏览器可见内容、导出文件和本地 session artifact
+
+**要求**：已安装 `daymade-claude-code` 套件，并能访问相关浏览器/session 上下文。
+
+---
+
+### 70. **setup-notifications-via-wecom** - 可复用企微通知配置
+
+```bash
+claude plugin install setup-notifications-via-wecom@daymade-skills
+```
+
+配置可复用的企业微信/WeCom webhook 通知，用于技术状态报告、告警和任务完成消息。
+
+**使用场景：**
+- 配置可复用的企业微信 / WeCom 通知通道
+- 发送结构化状态通知、备份报告或告警
+- 把一次性 webhook 变成可复用通知流程
+
+**要求**：企业微信机器人 webhook URL 和 shell 环境。
+
+---
+
+### 71. **notify-wecom** - 发送一次性企微消息
+
+```bash
+claude plugin install notify-wecom@daymade-skills
+```
+
+发送单条企业微信群机器人消息，不建立可复用通知工作流。
+
+**使用场景：**
+- `/notify-wecom`
+- 临时发一条企业微信 / 企微通知一下
+- 不需要模板或持久配置的一次性提醒
+
+**要求**：企业微信机器人 webhook URL。
+
+---
+
+### 72. **github-sensitive-data-cleanup** - GitHub 敏感数据清理
+
+```bash
+claude plugin install github-sensitive-data-cleanup@daymade-skills
+```
+
+扫描并清理 GitHub 仓库历史里的敏感数据，带备份、可见性检查和 force-push 安全门。
+
+**使用场景：**
+- 仓库泄露了 secrets、私有域名/IP、API key 或 PII
+- 公开暴露前后需要清理 git 历史
+- 对公共仓库 force push 前做安全验证
+
+**要求**：`git`、GitHub 访问权限，以及目标仓库所需的扫描/历史重写工具。
+
+---
+
+### 73. **codex-image-gallery** - Codex 生成图片本地浏览器
+
+```bash
+claude plugin install codex-image-gallery@daymade-skills
+```
+
+启动一个自包含的本地网页 gallery 浏览 Codex 生成图片。Skill 自带 Node server 和 HTML UI，默认扫描 `~/.codex/generated_images`，也可用 `GALLERY_ROOT` 指向其他目录。
+
+**使用场景：**
+- 用本地 UI 浏览 Codex 生成图片
+- 查看 `~/.codex/generated_images`
+- 用搜索、批次分组和详情视图检查自定义图片输出目录
+
+**主要功能：**
+- 内置 `scripts/server.mjs` 和 `assets/index.html`
+- 动态 `/api/images` 扫描，不维护手写 manifest
+- `/images/<relative-path>` 图片路由带路径穿越保护
+- 支持可选 `GALLERY_ROOT`、`PORT`、`HOST`
+
+**要求**：Node.js 18+，并能访问目标图片目录。
 
 ---
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Image Gallery"
+  short_description: "Browse Codex generated images locally"
+  default_prompt: "Use $codex-image-gallery to open a local browser for Codex generated images."
