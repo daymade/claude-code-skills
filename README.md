@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-73-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.71.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-74-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.72.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 73 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 74 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2813,6 +2813,24 @@ Manage OpenClaw (龙虾/lobster) instance configurations — audit, diff, copy, 
 - Unified CLI: audit / diff / copy / add-model / list / switch
 - Auto-audit on mutating commands with a `--no-audit` escape hatch
 - Nickname registry for cross-config operations
+
+### 76. **download-gemini-images** - Download Images from Gemini Conversations
+
+```bash
+claude plugin install download-gemini-images@daymade-skills
+```
+
+Download images (uploaded files or generated previews) from a Google Gemini conversation page using your logged-in Chrome session, then package them into an ordered ZIP.
+
+**When to use:**
+- Saving images from a Gemini chat/app page (uploaded or generated previews)
+- Need the larger lightbox image, not the thumbnail
+- Renaming downloaded images in order and producing a ZIP archive
+
+**Key features:**
+- Lightbox-first download via the Chrome plugin (uses your existing Google session)
+- `pageAssets` fallback when lightbox automation fails
+- Ordered ZIP packaging with integrity verification
 
 ---
 

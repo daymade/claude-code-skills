@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-73-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.71.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-74-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.72.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 73 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 74 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2855,6 +2855,24 @@ claude plugin install openclaw@daymade-skills
 - 统一 CLI：audit / diff / copy / add-model / list / switch
 - 变更命令自动审计，带 `--no-audit` 逃生口
 - 昵称注册表支持跨配置操作
+
+### 76. **download-gemini-images** - 从 Gemini 对话下载图片
+
+```bash
+claude plugin install download-gemini-images@daymade-skills
+```
+
+用你已登录的 Chrome session 从 Google Gemini 对话页下载图片（上传的或生成的预览），按顺序重命名后打包成 ZIP。
+
+**使用场景：**
+- 保存 Gemini 对话页里的图片（上传的或生成的预览）
+- 需要更大的 lightbox 大图，而非缩略图
+- 把下载的图片按顺序重命名并打包成 ZIP
+
+**主要功能：**
+- 通过 Chrome 插件优先下载 lightbox 大图（用你现有的 Google session）
+- lightbox 自动化失败时回退到 `pageAssets`
+- 有序 ZIP 打包 + 完整性校验
 
 ---
 
