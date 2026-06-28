@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-71-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.69.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-72-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.70.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 71 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 72 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2816,6 +2816,26 @@ claude plugin install codex-image-gallery@daymade-skills
 - 支持可选 `GALLERY_ROOT`、`PORT`、`HOST`
 
 **要求**：Node.js 18+，并能访问目标图片目录。
+
+### 74. **frontend-visual-qa** - 渲染后前端视觉 QA 门禁
+
+```bash
+claude plugin install frontend-visual-qa@daymade-skills
+```
+
+捕捉普通 lint/build 检查发现不了的低级界面排版和视觉错误。
+
+**使用场景：**
+- 审核或交付前端、网站、dashboard、设计系统样张或 HTML 演示页
+- 用户指出不恰当换行、文字挤、双滚动条、重叠或 AI slop 审美
+- 用户指出产物类型错位，例如把设计系统做成假的工作台/业务界面
+- 需要在桌面和移动端用 Chrome/Playwright 留证
+- 需要补足 `ui-designer`、`frontend-design` 和 `qa-expert` 之间的空档
+
+**主要功能：**
+- 基于本地历史反馈沉淀的换行、溢出、排版错误清单
+- 优先用 Chrome DevTools 检查用户当前可见浏览器视口，包括残留移动端 emulation
+- Playwright-core 脚本覆盖宽桌面、常规桌面和移动端视口
 
 ---
 
