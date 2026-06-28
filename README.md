@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-75-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.73.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-76-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.74.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 75 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 76 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2849,6 +2849,24 @@ Faithfully archive public WPS / KDocs / 金山文档 links — especially embedd
 - Unauthenticated data-API-first extraction (no login, no account save)
 - Original SVG/PNG capture for canvases and mind maps
 - Markdown as a structured representation of the source
+
+### 78. **ashare-news-fetcher** - A-Share Market News & Sentiment Aggregator
+
+```bash
+claude plugin install ashare-news-fetcher@daymade-skills
+```
+
+Aggregate A-share (Chinese stock market) news, policy, and sentiment from public sources — 财联社, 华尔街见闻, 金十, 新浪 7x24, 东财快讯, regulator announcements (CSRC / PBoC / SSE), 东方财富股吧 — into structured JSON or Markdown.
+
+**When to use:**
+- Need recent news/policy/sentiment for a specific A-share stock or the whole market
+- Aggregating 消息面 intel from multiple Chinese financial sources at once
+- Producing a structured JSON or Markdown news digest
+
+**Key features:**
+- Multi-source public-feed aggregation (no login)
+- Per-stock or market-wide filtering
+- Structured JSON / Markdown output
 
 ---
 
