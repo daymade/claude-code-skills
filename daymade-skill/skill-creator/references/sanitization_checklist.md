@@ -43,6 +43,9 @@ grep -rniE "ultrathink|internal-only|confidential" skill-folder/
 - Project codenames (e.g., "Acme Prepared", "Project Phoenix")
 - Internal product names (e.g., "Ops Console", "Admin Dashboard")
 - Tool-specific names (e.g., "Globex Gemini" → just "Gemini")
+- **CJK project/instance nicknames** (e.g., real pet-names for your own instances). gitleaks ignores CJK entirely, and the person-name grep above only lists a few given names — a Chinese project nickname sprinkled through your examples sails past every scanner.
+
+> **War-story (2026-06-28):** the `openclaw` skill used two real private instance nicknames as examples in 13+ places across SKILL.md and an architecture doc. `security_scan` was green, gitleaks found nothing, every grep pattern missed them — they were caught only by reading the file and recognizing the names as a real project, then replaced with generic placeholders. **A green scan on a config / personal-workflow skill is exactly when to slow down and read every example noun**, because those skills are built around your own real instances.
 
 **How to replace:**
 - Use generic terms: "the system", "the application", "the service"

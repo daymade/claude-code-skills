@@ -16,11 +16,13 @@
 
 ## Step-by-Step Process
 
-### 1. Refine the Skill (if needed)
+### 1. Refine the Skill + PII Read-Through (mandatory gate)
 ```bash
 cd skill-creator
 uv run python -m scripts.security_scan ../skill-name --verbose
 ```
+
+`security_scan` (gitleaks) is a **keyword-based first pass, NOT the gate**. It cannot see real project/person nicknames, CJK names (gitleaks ignores CJK), or verbatim transcript lines — none have a secret signature. **Before publishing you MUST read the whole skill yourself** (SKILL.md + every reference + every example) and judge each concrete noun semantically: generic placeholder, or lifted from a real project/person? See [`../daymade-skill/skill-creator/references/sanitization_checklist.md`](../daymade-skill/skill-creator/references/sanitization_checklist.md). A green scan is **not** a clean bill of health. (2026-06-28: openclaw shipped review with real instance nicknames that scan/gitleaks/grep all missed — caught only by the read-through.)
 
 ### 2. Package the Skill
 ```bash
@@ -222,6 +224,7 @@ Before committing, verify:
 6. **Relying on JSON syntax check alone** - `python -m json.tool` only catches malformed JSON. It will NOT catch missing plugin entries, broken source+skills resolution, or orphan SKILL.md files on disk. Use `bash daymade-claude-code/marketplace-dev/scripts/check_marketplace.sh` for the full 4-check validation.
 7. **Leaving orphan SKILL.md directories** - A tracked skill directory with no plugin entry in marketplace.json is invisible to `claude plugin install`. The reverse-sync check in `check_marketplace.sh` emits a WARN for each orphan. Treat every WARN as a real signal: register it or delete it.
 8. **Using `git add -A` or `git add .`** - When multiple sessions/agents edit the repo in parallel, a blanket stage can piggyback another agent's unstaged changes into your commit. Always stage files by name.
+   - **Detecting a concurrent session before you commit:** if working-tree files keep changing between your `git status` calls (e.g. a file you just deleted reappears, or `marketplace.json` grows entries you didn't add), find who is writing instead of guessing. List each Claude session's working directory — `for p in $(pgrep -f 'claude --dangerously'); do echo -n "$p "; lsof -a -p $p -d cwd -Fn 2>/dev/null | sed -n 's/^n//p'; done` — any session whose cwd is this repo is the culprit. Then cross-check file mtimes (`stat -f '%Sm %N' <file>`): minutes-old and static ⇒ the other session has stopped, the tree is safe to integrate; seconds-fresh ⇒ still active, so let it settle (or isolate your work in a `git worktree`) before committing. *(2026-06-28: ~10 rounds were lost treating a concurrent session's writes as a phantom bug — "the working tree keeps changing on its own" — until `ps`/`lsof` cwd + mtime pinned the real root cause. Root-cause first, don't keep reverting symptoms.)*
 9. **Forgetting to push** - Local changes are invisible until pushed to GitHub
 
 ## Quick Reference Commands
