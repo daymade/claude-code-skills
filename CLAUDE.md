@@ -326,9 +326,9 @@ For the full step-by-step guide with templates and examples, see [references/new
 |------|-------------------|
 | `.claude-plugin/marketplace.json` | metadata.version + metadata.description + new plugin entry |
 | `CHANGELOG.md` | New version entry |
-| `README.md` | 7 locations: badges (skills-count badge AND version badge — version MUST equal `marketplace.json` metadata.version; it has drifted twice from a metadata bump that forgot the badge), description, install cmd, skill section, use case, docs link, requirements |
+| `README.md` | 7 locations: badges (skills-count badge AND version badge — version MUST equal `marketplace.json` metadata.version; re-verify it every release, it silently drifts whenever a metadata bump forgets the badge), description, install cmd, skill section, use case, docs link, requirements |
 | `README.zh-CN.md` | 7 locations: same as above, translated |
-| `CLAUDE.md` | 3 locations: overview count, marketplace config count, Available Skills list |
+| `CLAUDE.md` | Available Skills list only (the overview & marketplace-config counts were removed as derived values — don't reintroduce them) |
 | `skill-name/` | The actual skill directory + packaged .zip |
 
 **Quick workflow**:
