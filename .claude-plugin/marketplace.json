@@ -306,7 +306,7 @@
       "description": "Extract Feishu (Lark) Docs, Wiki pages, Wiki collections/hubs, spreadsheets, and Minutes (妙记) transcripts into clean high-fidelity local Markdown. The primary path is the lark-cli API — programmatic extraction with no LLM rewriting of the body — which recursively follows a collection's reference graph (mention-doc / sheet / cross-tenant links) and uses error codes to resolve permission boundaries precisely; a browser-DOM path is the fallback only when lark-cli cannot reach the content. Use this whenever the source is a Feishu/Lark URL and fidelity matters — including 导出飞书文档/合集/妙记转写, 把飞书 wiki/知识库转 markdown, scraping or archiving a Feishu collection, exporting a Feishu Minutes/妙记 transcript, or saving a Feishu page locally — even if the user only says clipping, archiving, converting, or \"save this\". Also covers the permission-denied path (owner-exported .docx → faithful Markdown with heading/highlight restoration).",
       "source": "./feishu-doc-scraper",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.2.1",
       "category": "productivity",
       "keywords": [
         "feishu",
