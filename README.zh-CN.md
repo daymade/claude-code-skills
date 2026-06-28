@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-75-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.73.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-76-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.74.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 75 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 76 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2891,6 +2891,24 @@ claude plugin install wps-doc-scraper@daymade-skills
 - 优先用免登录数据 API 提取（不登录、不存到账号）
 - 画布和思维导图的原版 SVG/PNG 捕获
 - Markdown 作为源的结构化表示
+
+### 78. **ashare-news-fetcher** - A 股消息面情报聚合
+
+```bash
+claude plugin install ashare-news-fetcher@daymade-skills
+```
+
+从公开来源聚合 A 股新闻、政策和市场情绪 —— 财联社、华尔街见闻、金十、新浪 7x24、东财快讯、证监会/央行/上交所政策公告、东方财富股吧 —— 输出结构化 JSON 或 Markdown。
+
+**使用场景：**
+- 需要某只 A 股个股或整个市场近期的新闻/政策/情绪
+- 一次性从多个中文财经源聚合消息面情报
+- 生成结构化 JSON 或 Markdown 新闻摘要
+
+**主要功能：**
+- 多源公开 feed 聚合（免登录）
+- 按个股或全市场过滤
+- 结构化 JSON / Markdown 输出
 
 ---
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 75 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
+This is a Claude Code skills marketplace containing 76 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -153,7 +153,7 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 54 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
+- Contains 55 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
 - Each plugin has: name, description, source, version, category, keywords
 - Marketplace metadata: name, owner, version
 - Single-skill plugins follow the official pattern (167/168 plugins in `anthropics/claude-plugins-official`): `source` points to skill directory, `skills` omitted
@@ -274,6 +274,7 @@ This applies when you change ANY file under a skill directory:
 73. **openclaw** - Manage OpenClaw (龙虾/lobster) instance configs: audit, diff, copy, add-model, list, switch models across openclaw.json files; DeepSeek model patches, default-model/alias management, config validation
 74. **download-gemini-images** - Download images (uploaded files or generated previews) from a Google Gemini conversation page via logged-in Chrome; lightbox-first with pageAssets fallback, ordered ZIP packaging with integrity verification
 75. **wps-doc-scraper** - Faithfully archive public WPS/KDocs/金山文档 links (incl. embedded ProcessOn mind maps and canvases) as raw source data, original SVG/PNG, and Markdown without login; unauthenticated data-API-first with browser-DOM fallback
+76. **ashare-news-fetcher** - Aggregate A-share (Chinese market) news, policy, and sentiment from public sources (财联社/华尔街见闻/金十/新浪7x24/东财快讯/regulators/东财股吧) into structured JSON or Markdown; per-stock or market-wide, no login
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 

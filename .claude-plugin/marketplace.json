@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.73.0"
+    "version": "1.74.0"
   },
   "plugins": [
     {
@@ -1067,6 +1067,23 @@
         "scraper",
         "markdown",
         "archive"
+      ]
+    },
+    {
+      "name": "ashare-news-fetcher",
+      "description": "抓取 A 股消息面情报：从财联社、华尔街见闻、金十、新浪 7x24、东财快讯、证监会/央行/上交所/财政部政策公告、东方财富股吧等公开来源抓取与股票相关的新闻、政策、情绪，输出结构化 JSON 或 Markdown。当用户提到 A 股消息面、抓新闻、个股消息、政策监管、股吧情绪、市场情绪，或需要把某只股票相关的公开情报聚合出来时触发。",
+      "source": "./ashare-news-fetcher",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "a-share",
+        "news",
+        "stock",
+        "finance",
+        "sentiment",
+        "policy",
+        "cailianshe"
       ]
     }
   ]
