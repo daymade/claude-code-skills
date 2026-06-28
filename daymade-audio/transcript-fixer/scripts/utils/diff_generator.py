@@ -3,14 +3,19 @@
 Generate word-level correction comparison reports
 Orchestrates multiple diff formats for visualization
 
+This module is designed to be imported. To run it from the command line, use
+the wrapper script at scripts/generate_diff_report.py:
+
+    uv run scripts/generate_diff_report.py <orig> <stage1> <stage2> [-o <dir>]
+
 SINGLE RESPONSIBILITY: Coordinate diff generation workflow
 """
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
+from core.defaults import DEFAULT_MODEL
 from .diff_formats import (
     generate_unified_diff,
     generate_html_diff,
@@ -24,7 +29,8 @@ def generate_full_report(
     original_file: str,
     stage1_file: str,
     stage2_file: str,
-    output_dir: str = None
+    output_dir: str = None,
+    model: str = DEFAULT_MODEL,
 ):
     """
     Generate comprehensive comparison report
@@ -40,6 +46,7 @@ def generate_full_report(
         stage1_file: Path to stage 1 (dictionary) corrected version
         stage2_file: Path to stage 2 (AI) corrected version
         output_dir: Optional output directory (defaults to original file location)
+        model: Model name to display in the Markdown report (defaults to DEFAULT_MODEL)
     """
     original_path = Path(original_file)
     stage1_path = Path(stage1_file)
@@ -67,7 +74,8 @@ def generate_full_report(
     print(f"   生成Markdown报告...")
     md_report = generate_markdown_report(
         original_file, stage1_file, stage2_file,
-        original, stage1, stage2
+        original, stage1, stage2,
+        model=model,
     )
     md_file = output_path / f"{base_name}_对比报告.md"
     with open(md_file, 'w', encoding='utf-8') as f:
@@ -106,27 +114,3 @@ def generate_full_report(
     print(f"   2. {diff_file.name} - Unified Diff格式")
     print(f"   3. {html_file.name} - HTML并排对比")
     print(f"   4. {inline_file.name} - 行内标记对比")
-
-
-def main():
-    """CLI entry point"""
-    if len(sys.argv) < 4:
-        print("用法: python generate_diff_report.py <原始文件> <阶段1文件> <阶段2文件> [输出目录]")
-        print()
-        print("示例:")
-        print("  python generate_diff_report.py \\")
-        print("    原始.md \\")
-        print("    原始_阶段1_词典修复.md \\")
-        print("    原始_阶段2_AI修复.md")
-        sys.exit(1)
-
-    original_file = sys.argv[1]
-    stage1_file = sys.argv[2]
-    stage2_file = sys.argv[3]
-    output_dir = sys.argv[4] if len(sys.argv) > 4 else None
-
-    generate_full_report(original_file, stage1_file, stage2_file, output_dir)
-
-
-if __name__ == "__main__":
-    main()

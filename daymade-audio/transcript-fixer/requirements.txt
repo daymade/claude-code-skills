@@ -5,3 +5,9 @@ httpx>=0.24.0
 
 # File locking for thread-safe operations (P1-1 fix)
 filelock>=3.13.0
+
+# Chinese word segmentation — advisory audit heuristic only
+# (is_likely_valid_phrase in utils/common_words.py) to surface 4+ char
+# real-word false-positive rules during --audit. Optional at import time;
+# the shipped CLI declares it so audit always gets the check.
+jieba>=0.42.1

@@ -27,7 +27,7 @@ Recommendations for effective use of transcript-fixer based on production experi
   - [Validate After Manual Changes](#validate-after-manual-changes)
   - [Monitor Learning Quality](#monitor-learning-quality)
 - [Production Deployment](#production-deployment)
-  - [Environment Variables](#environment-variables)
+  - [Configuration File](#configuration-file)
   - [Monitoring](#monitoring)
   - [Performance](#performance)
 - [Summary](#summary)
@@ -250,16 +250,24 @@ meeting_20250128_stage2.md    # Final corrected version
 **Generate diff reports** for review:
 
 ```bash
-uv run scripts/diff_generator.py \
+# Word-level HTML diff (best for human review)
+uv run scripts/generate_word_diff.py \
+  meeting_20250128.md \
+  meeting_20250128_stage2.md \
+  meeting_20250128_diff.html
+
+# Full multi-format report (Markdown + unified diff + HTML + inline markers)
+uv run scripts/generate_diff_report.py \
   meeting_20250128.md \
   meeting_20250128_stage1.md \
-  meeting_20250128_stage2.md
+  meeting_20250128_stage2.md \
+  -o ./diff_reports
 ```
 
 **Output formats**:
-- Markdown report (what changed, statistics)
+- Word-level HTML diff (color-coded additions/deletions, recommended for review)
+- Markdown report (statistics + change list)
 - Unified diff (git-style)
-- HTML side-by-side (visual review)
 - Inline markers (for direct editing)
 
 ### Batch Processing
@@ -363,14 +371,30 @@ WHERE s.confidence < 0.8 AND s.status = 'pending';
 
 ## Production Deployment
 
-### Environment Variables
+### Configuration File
 
-**Set permanently** in production:
+**Store the API key in the config directory**, not in shell profile or systemd `Environment=` directly:
 
 ```bash
-# Add to /etc/environment or systemd service
-GLM_API_KEY=your-production-key
+# ~/.transcript-fixer/config.json
+{
+  "environment": "production",
+  "api": {
+    "api_key": "your-production-key",
+    "timeout": 60.0,
+    "max_retries": 3
+  }
+}
 ```
+
+Set restrictive permissions:
+
+```bash
+chmod 700 ~/.transcript-fixer
+chmod 600 ~/.transcript-fixer/config.json
+```
+
+For containers or CI, you may set `GLM_API_KEY` / `ANTHROPIC_API_KEY` as an explicit override. Do not persist the key in shell dotfiles.
 
 ### Monitoring
 
@@ -409,6 +433,18 @@ sqlite3 ~/.transcript-fixer/corrections.db "ANALYZE;"
 # Vacuum to reclaim space
 sqlite3 ~/.transcript-fixer/corrections.db "VACUUM;"
 ```
+
+### Maintaining Single Source of Truth
+
+**Default values live in one place**: `scripts/core/defaults.py`.
+
+When a provider setting changes (model, base URL, auth header, timeout, file permissions):
+
+1. Update `scripts/core/defaults.py`.
+2. Run `uv run scripts/fix_transcription.py --validate`.
+3. Fix any reported `Default configuration drift` errors before shipping.
+
+**Do not** hard-code the same value in `ai_processor.py`, `schema.sql`, `migrations.py`, or report templates. If `--validate` is green, the runtime, database, and migrations are aligned.
 
 ## Summary
 

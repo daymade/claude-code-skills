@@ -168,7 +168,7 @@ System configuration key-value store.
 **Default Values**:
 - `schema_version`: "2.0"
 - `api_provider`: "GLM"
-- `api_model`: "GLM-4.6"
+- `api_model`: "GLM-5.2"
 - `default_domain`: "general"
 - `auto_learn_enabled`: "true"
 - `learning_frequency_threshold`: "3"
@@ -349,8 +349,8 @@ sqlite3 ~/.transcript-fixer/corrections.db ".backup ~/backups/corrections.db"
 Instead, export corrections periodically:
 
 ```bash
-python scripts/fix_transcription.py --export-json corrections_backup.json
-git add corrections_backup.json
+uv run scripts/fix_transcription.py --export general_$(date +%Y%m%d).json --domain general
+git add general_*.json
 git commit -m "Backup corrections"
 ```
 
@@ -391,5 +391,5 @@ sqlite3 corrections.db ".recover" | sqlite3 corrections_new.db
 
 ```bash
 # Reinitialize schema (safe, uses IF NOT EXISTS)
-python -c "from core import CorrectionRepository; from pathlib import Path; CorrectionRepository(Path.home() / '.transcript-fixer' / 'corrections.db')"
+uv run python -c "from core import CorrectionRepository; from pathlib import Path; CorrectionRepository(Path.home() / '.transcript-fixer' / 'corrections.db')"
 ```

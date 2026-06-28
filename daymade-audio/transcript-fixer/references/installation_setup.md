@@ -13,22 +13,22 @@ Complete installation and configuration guide for transcript-fixer.
 
 ### Dependencies
 
-Install required dependencies using uv:
+所有脚本使用 PEP 723 内联元数据，`uv run` 会自动安装依赖。只需要安装 [uv](https://docs.astral.sh/uv/getting-started/installation/) 即可。
+
+```bash
+# 直接运行（推荐）
+uv run scripts/fix_transcription.py --help
+```
+
+如需手动安装依赖：
 
 ```bash
 uv pip install -r requirements.txt
 ```
 
-Or sync the project environment:
-
-```bash
-uv sync
-```
-
 **Required packages**:
-- `anthropic` - For Claude API integration (future)
-- `requests` - For GLM API calls
-- `difflib` - Standard library for diff generation
+- `httpx>=0.24.0` - 用于 GLM API 调用
+- `filelock>=3.13.0` - 用于线程安全操作
 
 ### Database Initialization
 
@@ -38,11 +38,12 @@ Initialize the SQLite database (first time only):
 uv run scripts/fix_transcription.py --init
 ```
 
-This creates `~/.transcript-fixer/corrections.db` with the complete schema:
+This creates `~/.transcript-fixer/` with the complete schema:
 - 8 tables (corrections, context_rules, history, suggestions, etc.)
 - 3 views (active_corrections, pending_suggestions, statistics)
 - ACID transactions enabled
 - Automatic backups before migrations
+- Config directory restricted to `0o700`
 
 See `file_formats.md` for complete database schema.
 
@@ -55,23 +56,61 @@ Stage 2 AI corrections require a GLM API key.
 1. **Obtain API key**: Visit https://open.bigmodel.cn/
 2. **Register** for an account
 3. **Generate** an API key from the dashboard
-4. **Set environment variable**:
+4. **Write to config file**:
+
+```bash
+# 先初始化目录
+uv run scripts/fix_transcription.py --init
+```
+
+然后编辑 `~/.transcript-fixer/config.json`：
+
+```json
+{
+  "environment": "development",
+  "database": {
+    "path": "~/.transcript-fixer/corrections.db",
+    "max_connections": 5,
+    "connection_timeout": 30.0
+  },
+  "api": {
+    "api_key": "your-glm-api-key",
+    "base_url": null,
+    "timeout": 60.0,
+    "max_retries": 3
+  },
+  "paths": {
+    "config_dir": "~/.transcript-fixer",
+    "data_dir": "~/.transcript-fixer/data",
+    "log_dir": "~/.transcript-fixer/logs",
+    "cache_dir": "~/.transcript-fixer/cache"
+  },
+  "resources": {
+    "max_text_length": 1000000,
+    "max_file_size": 10000000,
+    "max_concurrent_tasks": 10
+  },
+  "features": {
+    "enable_learning": true,
+    "enable_metrics": true,
+    "enable_auto_approval": false
+  },
+  "debug": false
+}
+```
+
+### Environment Variable Overrides (Optional)
+
+环境变量仅用于临时覆盖或 CI/容器场景：
 
 ```bash
 export GLM_API_KEY="your-api-key-here"
+export ANTHROPIC_API_KEY="your-api-key-here"
+export ANTHROPIC_BASE_URL="https://open.bigmodel.cn/api/anthropic"
+export TRANSCRIPT_FIXER_CONFIG_DIR="/custom/config/dir"
 ```
 
-**Persistence**: Add to shell profile for permanent access:
-
-```bash
-# For bash
-echo 'export GLM_API_KEY="your-key"' >> ~/.bashrc
-source ~/.bashrc
-
-# For zsh
-echo 'export GLM_API_KEY="your-key"' >> ~/.zshrc
-source ~/.zshrc
-```
+**不要**把 `GLM_API_KEY` 写进 `~/.bashrc` 或 `~/.zshrc` 持久化。
 
 ### Verify Configuration
 
@@ -88,7 +127,7 @@ uv run scripts/fix_transcription.py --validate
 ✅ Configuration directory exists: ~/.transcript-fixer
 ✅ Database valid: 0 corrections
 ✅ All 8 tables present
-✅ GLM_API_KEY is set
+✅ API key is configured
 
 ============================================================
 ✅ All checks passed! Configuration is valid.
@@ -99,7 +138,7 @@ uv run scripts/fix_transcription.py --validate
 
 ### Python Environment
 
-**Required**: Python 3.8+
+**Required**: Python 3.10+
 
 **Recommended**: Use uv for all Python operations:
 
@@ -117,12 +156,15 @@ After initialization, the directory structure is:
 
 ```
 ~/.transcript-fixer/
+├── config.json                 # API key and settings (0o600)
 ├── corrections.db              # SQLite database
 ├── corrections.YYYYMMDD.bak   # Automatic backups
-└── (migration artifacts)
+├── data/                       # Application data
+├── logs/                       # Log files
+└── cache/                      # Cache files
 ```
 
-**Important**: The `.db` file should NOT be committed to Git. Export corrections to JSON for version control instead.
+**Important**: The `.db` and `config.json` files should NOT be committed to Git. Export corrections to JSON for version control instead.
 
 ## Next Steps
 

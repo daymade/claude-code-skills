@@ -11,7 +11,8 @@ Detailed command-line parameters and usage examples for transcript-fixer Python 
   - [Learning Commands](#learning-commands)
 - [fix_transcript_timestamps.py](#fix_transcript_timestampspy) - Normalize/repair speaker timestamps
 - [split_transcript_sections.py](#split_transcript_sectionspy) - Split transcript into named sections
-- [diff_generator.py](#diffgeneratorpy) - Generate comparison reports
+- [generate_word_diff.py](#generate_word_diffpy) - Generate word-level HTML diff
+- [generate_diff_report.py](#generate_diff_reportpy) - Generate multi-format comparison report
 - [Common Workflows](#common-workflows)
 - [Exit Codes](#exit-codes)
 - [Environment Variables](#environment-variables)
@@ -25,7 +26,7 @@ Main correction pipeline script supporting three processing stages.
 ### Syntax
 
 ```bash
-python scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <dir>]
+uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <dir>]
 ```
 
 ### Parameters
@@ -36,44 +37,49 @@ python scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
   - `2` = AI corrections only (requires Stage 1 output file)
   - `3` = Both stages sequentially
 - `--output, -o` (optional): Output directory (defaults to input file directory)
+- `--domain, -d` (optional): Restrict to one correction domain (default: all domains)
+- `--apply-all` (optional): Opt out of the default safe mode and apply every risk level (low/medium/high). Higher false-positive risk — see false_positive_guide.md.
+- `--review` (deprecated): No-op kept for backward compatibility; safe mode is now the default.
+- `--dry-run` (optional): Preview Stage 1 changes to `*_dryrun.md` without writing `*_stage1.md`.
+- `--changes-file` (optional): Always write `*_changes.md` (already on by default in safe mode).
 
 ### Usage Examples
 
 **Run dictionary corrections only:**
 ```bash
-python scripts/fix_transcription.py --input meeting.md --stage 1
+uv run scripts/fix_transcription.py --input meeting.md --stage 1
 ```
 
-Output: `meeting_阶段1_词典修复.md`
+Output: `meeting_stage1.md`
 
 **Run AI corrections only:**
 ```bash
-python scripts/fix_transcription.py --input meeting_阶段1_词典修复.md --stage 2
+uv run scripts/fix_transcription.py --input meeting_stage1.md --stage 2
 ```
 
-Output: `meeting_阶段2_AI修复.md`
+Output: `meeting_stage2.md`
 
 Note: Requires Stage 1 output file as input.
 
 **Run complete pipeline:**
 ```bash
-python scripts/fix_transcription.py --input meeting.md --stage 3
+uv run scripts/fix_transcription.py --input meeting.md --stage 3
 ```
 
 Outputs:
-- `meeting_阶段1_词典修复.md`
-- `meeting_阶段2_AI修复.md`
+- `meeting_stage1.md`
+- `meeting_stage2.md`
 
 **Custom output directory:**
 ```bash
-python scripts/fix_transcription.py --input meeting.md --stage 3 --output ./corrections
+uv run scripts/fix_transcription.py --input meeting.md --stage 3 --output ./corrections
 ```
 
 ### Exit Codes
 
 - `0` - Success
 - `1` - Missing required parameters or file not found
-- `2` - GLM_API_KEY environment variable not set (Stage 2 or 3 only)
+- `2` - API key not configured (Stage 2 or 3 only)
 - `3` - API request failed
 
 ## fix_transcript_timestamps.py
@@ -83,7 +89,7 @@ Normalize speaker timestamp lines such as `说话人A 00:21` or `Speaker 7 01:31
 ### Syntax
 
 ```bash
-python scripts/fix_transcript_timestamps.py <file> [--output FILE | --in-place | --check]
+uv run scripts/fix_transcript_timestamps.py <file> [--output FILE | --in-place | --check]
 ```
 
 ### Key Parameters
@@ -97,13 +103,13 @@ python scripts/fix_transcript_timestamps.py <file> [--output FILE | --in-place |
 
 ```bash
 # Normalize mixed MM:SS / HH:MM:SS
-python scripts/fix_transcript_timestamps.py meeting.txt --in-place
+uv run scripts/fix_transcript_timestamps.py meeting.txt --in-place
 
 # Rebase a split transcript so it starts at 00:00:00
-python scripts/fix_transcript_timestamps.py workshop-class.txt --in-place --rebase-to-zero
+uv run scripts/fix_transcript_timestamps.py workshop-class.txt --in-place --rebase-to-zero
 
 # Only inspect anomalies, do not write
-python scripts/fix_transcript_timestamps.py meeting.txt --check
+uv run scripts/fix_transcript_timestamps.py meeting.txt --check
 ```
 
 ## split_transcript_sections.py
@@ -113,7 +119,7 @@ Split a transcript into named sections using marker phrases. Useful for workshop
 ### Syntax
 
 ```bash
-python scripts/split_transcript_sections.py <file> \
+uv run scripts/split_transcript_sections.py <file> \
   --first-section-name <name> \
   --section "Name::Marker" \
   --section "Name::Marker"
@@ -122,76 +128,91 @@ python scripts/split_transcript_sections.py <file> \
 ### Usage Example
 
 ```bash
-python scripts/split_transcript_sections.py workshop.txt \
+uv run scripts/split_transcript_sections.py workshop.txt \
   --first-section-name "课前聊天" \
   --section "正式上课::好，无缝切换嘛。对。那个曹总连上了吗？那个网页。" \
   --section "课后复盘::我们复盘一下。" \
   --rebase-to-zero
 ```
 
-## generate_diff_report.py
+## generate_word_diff.py
 
-Multi-format diff report generator for comparing correction stages.
+Word-level HTML diff generator for comparing original and corrected transcripts.
 
 ### Syntax
 
 ```bash
-python scripts/generate_diff_report.py --original <file> --stage1 <file> --stage2 <file> [--output-dir <dir>]
+uv run scripts/generate_word_diff.py <original_file> <corrected_file> [output_file]
 ```
 
 ### Parameters
 
-- `--original` (required): Original transcript file path
-- `--stage1` (required): Stage 1 correction output file path
-- `--stage2` (required): Stage 2 correction output file path
-- `--output-dir` (optional): Output directory for diff reports (defaults to original file directory)
+- `original_file` (required): Original transcript file path
+- `corrected_file` (required): Corrected transcript file path
+- `output_file` (optional): Output HTML path (defaults to `<corrected_file>.diff.html`)
 
 ### Usage Examples
 
 **Basic usage:**
 ```bash
-python scripts/generate_diff_report.py \
-    --original "meeting.md" \
-    --stage1 "meeting_阶段1_词典修复.md" \
-    --stage2 "meeting_阶段2_AI修复.md"
+uv run scripts/generate_word_diff.py meeting.md meeting_stage2.md comparison.html
 ```
 
-**Custom output directory:**
+**Review Stage 1 output:**
 ```bash
-python scripts/generate_diff_report.py \
-    --original "meeting.md" \
-    --stage1 "meeting_阶段1_词典修复.md" \
-    --stage2 "meeting_阶段2_AI修复.md" \
-    --output-dir "./reports"
+uv run scripts/generate_word_diff.py meeting.md meeting_stage1.md stage1_comparison.html
 ```
 
-### Output Files
+### Output
 
-The script generates four comparison formats:
-
-1. **Markdown summary** (`*_对比报告.md`)
-   - High-level statistics and change summary
-   - Word count changes per stage
-   - Common error patterns identified
-
-2. **Unified diff** (`*_unified.diff`)
-   - Traditional Unix diff format
-   - Suitable for command-line review or version control
-
-3. **HTML side-by-side** (`*_对比.html`)
-   - Visual side-by-side comparison
-   - Color-coded additions/deletions
-   - **Recommended for human review**
-
-4. **Inline marked** (`*_行内对比.txt`)
-   - Single-column format with inline change markers
-   - Useful for quick text editor review
+Generates an HTML file with color-coded word-level additions/deletions. Recommended for human review.
 
 ### Exit Codes
 
 - `0` - Success
 - `1` - Missing required parameters or file not found
-- `2` - File format error (non-Markdown input)
+
+## generate_diff_report.py
+
+Generate a comprehensive comparison report across four formats: Markdown summary, unified diff, HTML side-by-side comparison, and inline marked text.
+
+### Syntax
+
+```bash
+uv run scripts/generate_diff_report.py <original_file> <stage1_file> <stage2_file> [-o <output_dir>]
+```
+
+### Parameters
+
+- `original_file` (required): Original transcript file path
+- `stage1_file` (required): Stage 1 (dictionary) corrected file path
+- `stage2_file` (required): Stage 2 (AI) corrected file path
+- `-o, --output-dir` (optional): Output directory (defaults to the original file's directory)
+
+### Usage Example
+
+```bash
+uv run scripts/fix_transcription.py --input meeting.md --stage 3
+uv run scripts/generate_diff_report.py \
+  meeting.md \
+  meeting_stage1.md \
+  meeting_stage2.md \
+  -o ./diff_reports
+```
+
+### Output
+
+Generates four files in the output directory:
+
+- `<name>_对比报告.md` — Markdown summary report with change statistics
+- `<name>_unified.diff` — Git-style unified diff
+- `<name>_对比.html` — Side-by-side HTML comparison
+- `<name>_行内对比.txt` — Inline marked comparison text
+
+### Exit Codes
+
+- `0` - Success
+- `1` - Missing required parameters or file not found
 
 ## Common Workflows
 
@@ -202,13 +223,13 @@ Test dictionary updates before running expensive AI corrections:
 ```bash
 # 1. Update CORRECTIONS_DICT in scripts/fix_transcription.py
 # 2. Run Stage 1 only
-python scripts/fix_transcription.py --input meeting.md --stage 1
+uv run scripts/fix_transcription.py --input meeting.md --stage 1
 
 # 3. Review output
-cat meeting_阶段1_词典修复.md
+cat meeting_stage1.md
 
 # 4. If satisfied, run Stage 2
-python scripts/fix_transcription.py --input meeting_阶段1_词典修复.md --stage 2
+uv run scripts/fix_transcription.py --input meeting_stage1.md --stage 2
 ```
 
 ### Batch Processing
@@ -217,25 +238,34 @@ Process multiple transcripts in sequence:
 
 ```bash
 for file in transcripts/*.md; do
-    python scripts/fix_transcription.py --input "$file" --stage 3
+    uv run scripts/fix_transcription.py --input "$file" --stage 3
 done
 ```
 
 ### Quick Review Cycle
 
-Generate and open comparison report immediately after correction:
+Generate and open word-level diff immediately after correction:
 
 ```bash
 # Run corrections
-python scripts/fix_transcription.py --input meeting.md --stage 3
+uv run scripts/fix_transcription.py --input meeting.md --stage 3
 
-# Generate and open diff report
-python scripts/generate_diff_report.py \
-    --original "meeting.md" \
-    --stage1 "meeting_阶段1_词典修复.md" \
-    --stage2 "meeting_阶段2_AI修复.md"
+# Generate and open diff
+uv run scripts/generate_word_diff.py meeting.md meeting_stage2.html
 
-open meeting_对比.html  # macOS
-# xdg-open meeting_对比.html  # Linux
-# start meeting_对比.html  # Windows
+open meeting_stage2.diff.html  # macOS
+# xdg-open meeting_stage2.diff.html  # Linux
+# start meeting_stage2.diff.html  # Windows
 ```
+
+## Environment Variables
+
+The canonical source for configuration is `~/.transcript-fixer/config.json`. Environment variables are supported only as explicit overrides:
+
+- `GLM_API_KEY` — override the GLM API key
+- `ANTHROPIC_API_KEY` — alternative override name
+- `ANTHROPIC_BASE_URL` — override the API base URL
+- `TRANSCRIPT_FIXER_CONFIG_DIR` — change the config directory (default: `~/.transcript-fixer`)
+- `TRANSCRIPT_FIXER_DB_PATH` — override the SQLite database path
+
+For normal use, write the API key to `~/.transcript-fixer/config.json` instead of exporting it.

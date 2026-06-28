@@ -20,10 +20,14 @@ from core import (
     DictionaryProcessor,
     AIProcessor,
     LearningEngine,
+    UncertainExtractor,
 )
+from core.defaults import API_BASE_URL
+from data.tech_presets import get_preset_names, get_preset_rules
 from utils import validate_configuration, print_validation_summary
 from utils.health_check import HealthChecker, CheckLevel, format_health_output
 from utils.metrics import get_metrics, format_metrics_summary
+from utils.diff_generator import generate_full_report
 from utils.config import get_config
 from utils.db_migrations_cli import create_migration_cli
 
@@ -34,6 +38,53 @@ def _get_service() -> CorrectionService:
     config = get_config()
     repository = CorrectionRepository(config.database.path)
     return CorrectionService(repository)
+
+
+def _format_changes_report(
+    changes,
+    original_text: str,
+    title: str = "Stage 1 Correction Report"
+) -> str:
+    """Format a list of Change objects into a markdown report with risk levels."""
+    if not changes:
+        return f"# {title}\n\nNo Stage 1 corrections applied.\n"
+
+    lines = [f"# {title}", ""]
+    lines.append(f"Total changes: {len(changes)}\n")
+
+    # Summary by risk
+    risk_counts = {"low": 0, "medium": 0, "high": 0}
+    for c in changes:
+        risk_counts[c.risk] = risk_counts.get(c.risk, 0) + 1
+    lines.append("| Risk | Count |")
+    lines.append("|------|-------|")
+    for risk in ("low", "medium", "high"):
+        lines.append(f"| {risk} | {risk_counts.get(risk, 0)} |")
+    lines.append("")
+
+    # Group by risk
+    by_risk = {"low": [], "medium": [], "high": []}
+    for c in changes:
+        by_risk.setdefault(c.risk, []).append(c)
+
+    original_lines = original_text.split("\n")
+    idx = 1
+    for risk in ("high", "medium", "low"):
+        group = by_risk.get(risk, [])
+        if not group:
+            continue
+        lines.append(f"## {risk.upper()} Risk ({len(group)})")
+        for c in group:
+            context = original_lines[c.line_number - 1] if 1 <= c.line_number <= len(original_lines) else ""
+            lines.append(f"### {idx}. Line {c.line_number}")
+            lines.append(f"- **From**: `{c.from_text}`")
+            lines.append(f"- **To**: `{c.to_text}`")
+            lines.append(f"- **Type**: {c.rule_type}")
+            lines.append(f"- **Context**: {context}")
+            lines.append("")
+            idx += 1
+
+    return "\n".join(lines)
 
 
 def cmd_init(args: argparse.Namespace) -> None:
@@ -161,7 +212,7 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
     service = _get_service()
 
     # Load corrections and rules
-    corrections = service.get_corrections(args.domain)
+    corrections, correction_meta = service.get_corrections_with_metadata(args.domain)
     context_rules = service.load_context_rules()
     domain_stats = service.get_domain_stats()
 
@@ -181,26 +232,89 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
         print(f"📚 No corrections in database")
     print()
 
+    dry_run = getattr(args, 'dry_run', False)
+    # Stage 1 defaults to conservative "safe mode": only auto-apply low-risk
+    # (non-word, high-confidence) corrections. Medium/high-risk rules — common
+    # words, <=2-char, real-word fragments — are tracked to *_needs_review.md for
+    # AI/human confirmation rather than applied silently.
+    #
+    # Why the default flipped: _assess_risk() always classified risk correctly
+    # (e.g. 多深→high, 小龙虾→medium), but review_mode defaulting to False meant
+    # every level got applied anyway — the guard was computed and then ignored.
+    # On a clean transcript from a strong ASR engine, cross-domain dictionary
+    # rules are the main false-positive source, so applying only low-risk by
+    # default is the safe choice. --apply-all opts back into apply-everything.
+    review_mode = not getattr(args, 'apply_all', False)
+    changes_file = getattr(args, 'changes_file', False) or review_mode
+
     # Stage 1: Dictionary corrections
     stage1_changes = []
     stage1_text = original_text
     if args.stage >= 1:
         print("=" * 60)
         print("🔧 Stage 1: Dictionary Corrections")
+        if dry_run:
+            print("   (DRY RUN — no files will be written)")
+        elif review_mode:
+            print("   (SAFE MODE [default] — only low-risk auto-applied; medium/high → *_needs_review.md. Pass --apply-all to apply every level.)")
+        else:
+            print("   (APPLY-ALL — every risk level applied; higher false-positive risk)")
         print("=" * 60)
 
-        processor = DictionaryProcessor(corrections, context_rules)
-        stage1_text, stage1_changes = processor.process(original_text)
+        processor = DictionaryProcessor(corrections, context_rules, correction_meta)
+        stage1_text, stage1_changes = processor.process(original_text, review_mode=review_mode)
 
         summary = processor.get_summary(stage1_changes)
-        print(f"✓ Applied {summary['total_changes']} corrections")
+        risk_counts = {"low": 0, "medium": 0, "high": 0}
+        for c in stage1_changes:
+            risk_counts[c.risk] = risk_counts.get(c.risk, 0) + 1
+
+        applied_count = sum(1 for c in stage1_changes if c.risk == "low" or not review_mode)
+        skipped_count = sum(1 for c in stage1_changes if c.risk in ("medium", "high") and review_mode)
+
+        print(f"✓ Found {summary['total_changes']} corrections")
         print(f"  - Dictionary: {summary['dictionary_changes']}")
         print(f"  - Context rules: {summary['context_rule_changes']}")
+        print(f"  - Risk: low={risk_counts['low']}, medium={risk_counts['medium']}, high={risk_counts['high']}")
+        if review_mode:
+            print(f"  - Applied (low risk): {applied_count}")
+            print(f"  - Skipped for review: {skipped_count}")
 
-        stage1_file = output_dir / f"{input_path.stem}_stage1.md"
-        with open(stage1_file, 'w', encoding='utf-8') as f:
-            f.write(stage1_text)
-        print(f"💾 Saved: {stage1_file.name}")
+        if not dry_run:
+            stage1_file = output_dir / f"{input_path.stem}_stage1.md"
+            with open(stage1_file, 'w', encoding='utf-8') as f:
+                f.write(stage1_text)
+            print(f"💾 Saved: {stage1_file.name}")
+
+            # Write changes report
+            if changes_file:
+                changes_report = _format_changes_report(stage1_changes, original_text)
+                changes_file_path = output_dir / f"{input_path.stem}_changes.md"
+                with open(changes_file_path, 'w', encoding='utf-8') as f:
+                    f.write(changes_report)
+                print(f"📋 Changes report: {changes_file_path.name}")
+
+            # Write needs-review file
+            if review_mode and skipped_count > 0:
+                needs_review = [c for c in stage1_changes if c.risk in ("medium", "high")]
+                review_report = _format_changes_report(needs_review, original_text, title="Needs Review")
+                review_file_path = output_dir / f"{input_path.stem}_needs_review.md"
+                with open(review_file_path, 'w', encoding='utf-8') as f:
+                    f.write(review_report)
+                print(f"🟡 Needs review: {review_file_path.name}")
+
+        else:
+            # Dry run: write a changes report so the user can preview. Mark which
+            # risk levels a real run would actually apply, so the preview matches
+            # the default (safe) run instead of implying every listed change applies.
+            mode_note = (" (SAFE MODE — only LOW-risk auto-applied; MEDIUM/HIGH shown for reference)"
+                         if review_mode else
+                         " (APPLY-ALL — every listed change will be applied)")
+            preview_report = _format_changes_report(stage1_changes, original_text, title="Dry Run Preview" + mode_note)
+            preview_path = output_dir / f"{input_path.stem}_dryrun.md"
+            with open(preview_path, 'w', encoding='utf-8') as f:
+                f.write(preview_report)
+            print(f"🔍 Dry-run preview: {preview_path.name}")
 
         # Hint when 0 corrections and other domains have rules
         if summary['total_changes'] == 0 and args.domain and domain_stats:
@@ -215,19 +329,26 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
     # Stage 2: AI corrections
     stage2_changes = []
     stage2_text = stage1_text
-    if args.stage >= 2:
+    stage2_file = None
+    if args.stage >= 2 and not dry_run:
         print("=" * 60)
         print("🤖 Stage 2: AI Corrections")
         print("=" * 60)
 
-        # Check API key
-        api_key = os.environ.get("GLM_API_KEY")
+        # Check API key from config directory (canonical source)
+        config = get_config()
+        api_key = config.api.api_key
         if not api_key:
-            print("❌ Error: GLM_API_KEY environment variable not set")
-            print("   Set it with: export GLM_API_KEY='your-key'")
+            print("❌ Error: API key not configured")
+            config_dir = config.paths.config_dir
+            print(f"   Add it to {config_dir}/config.json under api.api_key,")
+            print("   or set GLM_API_KEY or ANTHROPIC_API_KEY environment variable.")
             sys.exit(1)
 
-        ai_processor = AIProcessor(api_key)
+        ai_processor = AIProcessor(
+            api_key,
+            base_url=config.api.base_url or API_BASE_URL
+        )
         stage2_text, stage2_changes = ai_processor.process(stage1_text)
 
         print(f"✓ Processed {len(stage2_changes)} chunks\n")
@@ -237,15 +358,20 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
             f.write(stage2_text)
         print(f"💾 Saved: {stage2_file.name}\n")
 
-        # Save history for learning
+        # Save history for learning — only the Stage 1 changes that were
+        # ACTUALLY applied. In safe mode (review_mode=True) medium/high-risk
+        # changes are tracked but not applied, so recording them here would
+        # inflate the history count and persist edits that never reached the
+        # output. This applied set mirrors the applied_count condition above.
+        applied_stage1 = [c for c in stage1_changes if c.risk == "low" or not review_mode]
         service.save_history(
             filename=str(input_path),
             domain=args.domain,
             original_length=len(original_text),
-            stage1_changes=len(stage1_changes),
+            stage1_changes=len(applied_stage1),
             stage2_changes=len(stage2_changes),
-            model="GLM-4.6",
-            changes=stage1_changes + stage2_changes
+            model=ai_processor.model,
+            changes=applied_stage1 + stage2_changes
         )
 
         # Run learning engine - AUTO-LEARN from AI results!
@@ -281,11 +407,24 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
             print()
 
     # Stage 3: Generate diff report
-    if args.stage >= 3:
+    if args.stage >= 3 and not dry_run:
         print("=" * 60)
         print("📊 Stage 3: Generating Diff Report")
         print("=" * 60)
-        print("   Use diff_generator.py to create visual comparison\n")
+
+        if stage2_file is not None and stage2_file.exists():
+            try:
+                generate_full_report(
+                    original_file=str(input_path),
+                    stage1_file=str(stage1_file),
+                    stage2_file=str(stage2_file),
+                    output_dir=str(output_dir),
+                    model=ai_processor.model,
+                )
+            except Exception as e:
+                print(f"⚠️  Diff report generation failed: {e}", file=sys.stderr)
+        else:
+            print("   Skipped: Stage 2 output required for diff report\n")
 
     print("✅ Correction complete!")
 
@@ -593,3 +732,57 @@ def cmd_audit_retention(args: argparse.Namespace) -> None:
         print(f"❌ Unknown audit-retention action: {args.action}")
         print("Valid actions: cleanup, report, policies, restore")
         sys.exit(1)
+
+
+def cmd_extract_uncertain(args: argparse.Namespace) -> None:
+    """Extract uncertain ASR tokens from a transcript file."""
+    input_path = Path(args.input)
+    if not input_path.exists():
+        print(f"❌ Error: File not found: {input_path}")
+        sys.exit(1)
+
+    output_dir = Path(args.output) if args.output else input_path.parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"🔍 Extracting uncertain items from: {input_path.name}")
+    with open(input_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+
+    extractor = UncertainExtractor()
+    items = extractor.extract(text)
+
+    from core.uncertain_extractor import format_uncertain_report
+    report = format_uncertain_report(items)
+
+    output_path = output_dir / f"{input_path.stem}_uncertain.md"
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(report)
+
+    print(f"   Found {len(items)} uncertain item(s)")
+    print(f"💾 Saved: {output_path.name}")
+
+
+def cmd_report_false_positive(args: argparse.Namespace) -> None:
+    """Report a false-positive correction and disable it."""
+    service = _get_service()
+    domain = getattr(args, 'domain', None) or "general"
+    success = service.report_false_positive(args.from_text, args.to_text, domain)
+    if success:
+        print(f"🚫 Reported false positive: '{args.from_text}' -> '{args.to_text}' (domain: {domain})")
+        print("   The rule has been disabled and confidence lowered.")
+    else:
+        print(f"❌ No active rule matching '{args.from_text}' -> '{args.to_text}' (domain: {domain})")
+        sys.exit(1)
+
+
+def cmd_load_presets(args: argparse.Namespace) -> None:
+    """Load preset correction rules for a domain."""
+    service = _get_service()
+    domain = args.load_presets
+    count = service.load_presets(domain)
+    print(f"✅ Loaded {count} preset rule(s) for domain: {domain}")
+
+
+def get_available_presets() -> list:
+    """Return available preset domain names."""
+    return get_preset_names()
