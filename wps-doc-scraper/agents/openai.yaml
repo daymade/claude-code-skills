@@ -1,0 +1,4 @@
+interface:
+  display_name: "WPS Doc Scraper"
+  short_description: "Archive WPS/KDocs documents faithfully"
+  default_prompt: "Use $wps-doc-scraper to save this WPS/KDocs link as local source data, original image, and Markdown."

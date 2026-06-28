@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.72.0"
+    "version": "1.73.0"
   },
   "plugins": [
     {
@@ -1050,6 +1050,23 @@
         "lightbox",
         "zip",
         "export"
+      ]
+    },
+    {
+      "name": "wps-doc-scraper",
+      "description": "Faithfully archive public WPS / KDocs / 金山文档 links — especially embedded ProcessOn .pof mind maps and canvases — as raw source data, original SVG/PNG, and Markdown. Use when a user gives a kdocs.cn or wps.processon.com link and asks to scrape, save, download, 扒下来, 归档, or 转 Markdown without logging in.",
+      "source": "./wps-doc-scraper",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "wps",
+        "kdocs",
+        "processon",
+        "mindmap",
+        "scraper",
+        "markdown",
+        "archive"
       ]
     }
   ]
