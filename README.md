@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-71-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.69.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-72-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.70.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 71 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 72 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2774,6 +2774,26 @@ Start a self-contained local web gallery for Codex-generated image outputs. The 
 - Optional `GALLERY_ROOT`, `PORT`, and `HOST`
 
 **Requirements**: Node.js 18+ and access to the image folder.
+
+### 74. **frontend-visual-qa** - Rendered Frontend Visual QA Gate
+
+```bash
+claude plugin install frontend-visual-qa@daymade-skills
+```
+
+Catch embarrassing rendered UI defects that normal lint/build checks miss.
+
+**When to use:**
+- Reviewing or shipping a frontend, website, dashboard, design-system specimen, or HTML slide page
+- User flags awkward line breaks, cramped text, double scrollbars, overlap, or generic AI slop aesthetics
+- User says the artifact has the wrong type, such as a design system turning into a fake app/workbench
+- Need Chrome/Playwright evidence across desktop and mobile viewports
+- Need to complement `ui-designer`, `frontend-design`, and `qa-expert`
+
+**Key features:**
+- History-derived checklist for recurring line-break, overflow, and typography failures
+- Chrome DevTools first-pass for the user-visible browser viewport, including stale mobile emulation checks
+- Playwright-core audit script for desktop-wide, desktop, and mobile viewports
 
 ---
 
