@@ -258,6 +258,11 @@ def print_simple_report(gitleaks_findings: List[Dict], skill_name: str) -> int:
     """
     if not gitleaks_findings:
         print(f"{GREEN}✅ Security scan passed: No secrets detected{RESET}")
+        print(f"{YELLOW}⚠  Keyword-based gate only. It does NOT catch real project/person")
+        print(f"   nicknames, CJK names (gitleaks ignores CJK), or verbatim transcript lines —")
+        print(f"   none have a secret signature. Before publishing to a PUBLIC repo you MUST")
+        print(f"   read the skill yourself; a green scan is not a clean bill of health.")
+        print(f"   See references/sanitization_checklist.md{RESET}")
         return 0
 
     critical_count = sum(1 for f in gitleaks_findings
