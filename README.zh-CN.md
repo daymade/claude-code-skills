@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-74-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.72.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-75-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.73.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 74 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供 75 个生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -2873,6 +2873,24 @@ claude plugin install download-gemini-images@daymade-skills
 - 通过 Chrome 插件优先下载 lightbox 大图（用你现有的 Google session）
 - lightbox 自动化失败时回退到 `pageAssets`
 - 有序 ZIP 打包 + 完整性校验
+
+### 77. **wps-doc-scraper** - 归档公开 WPS/KDocs 文档
+
+```bash
+claude plugin install wps-doc-scraper@daymade-skills
+```
+
+忠实归档公开的 WPS / KDocs / 金山文档链接 —— 尤其是内嵌的 ProcessOn 思维导图和画布 —— 保存为原始源数据、原版 SVG/PNG 和 Markdown，无需登录。
+
+**使用场景：**
+- 给一个 `kdocs.cn` 或 `wps.processon.com` 链接，要抓取、保存、下载或转 Markdown
+- 归档内嵌的 ProcessOn 思维导图或画布，保持源保真度
+- 需要原始 payload + 原版视觉产物，而不只是渲染后的文本
+
+**主要功能：**
+- 优先用免登录数据 API 提取（不登录、不存到账号）
+- 画布和思维导图的原版 SVG/PNG 捕获
+- Markdown 作为源的结构化表示
 
 ---
 

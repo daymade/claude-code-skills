@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-74-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.72.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-75-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.73.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 74 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 75 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2831,6 +2831,24 @@ Download images (uploaded files or generated previews) from a Google Gemini conv
 - Lightbox-first download via the Chrome plugin (uses your existing Google session)
 - `pageAssets` fallback when lightbox automation fails
 - Ordered ZIP packaging with integrity verification
+
+### 77. **wps-doc-scraper** - Archive Public WPS/KDocs Documents
+
+```bash
+claude plugin install wps-doc-scraper@daymade-skills
+```
+
+Faithfully archive public WPS / KDocs / 金山文档 links — especially embedded ProcessOn mind maps and canvases — as raw source data, original SVG/PNG, and Markdown, without logging in.
+
+**When to use:**
+- Given a `kdocs.cn` or `wps.processon.com` link to scrape, save, download, or convert to Markdown
+- Archiving an embedded ProcessOn mind map or canvas with source fidelity
+- Need the raw payloads + original visual artifact, not just rendered text
+
+**Key features:**
+- Unauthenticated data-API-first extraction (no login, no account save)
+- Original SVG/PNG capture for canvases and mind maps
+- Markdown as a structured representation of the source
 
 ---
 
