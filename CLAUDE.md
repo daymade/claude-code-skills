@@ -278,6 +278,7 @@ This applies when you change ANY file under a skill directory:
 77. **pharma-daily-report** - Generate an A-share pharma sector daily report from Sina Finance (core pharma stocks, 7 sub-sector ranking, gainers/losers, fund-flow estimate), optional Feishu rich-text push; default 20-stock watchlist, customizable (daymade-financial suite member)
 78. **local-codex** - Delegate coding tasks to the local OpenAI Codex CLI agent using ChatGPT Pro OAuth flat-rate subscription; wraps `codex exec` / `codex review` for code generation, refactoring, and review without per-token API charges
 79. **openclaw-model-switch** - Switch the default AI model for an OpenClaw instance (e.g., Kimi K2.6 → K2.7) by safely editing `openclaw.json` with backup, model validation, and optional gateway restart
+80. **gemini-history-analyzer** - Analyze Google Takeout exports of Gemini conversation history; extract/categorize transcripts and attachments, context-verified domain keyword search, meeting-transcript detection, PII flagging, and optional distillation into project memory or a personal knowledge base
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 

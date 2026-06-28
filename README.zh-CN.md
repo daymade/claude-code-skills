@@ -6,8 +6,8 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-77-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.76.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-80-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.78.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -2981,6 +2981,22 @@ claude plugin install openclaw-model-switch@daymade-skills
 - 新浪财经实时行情管线（免登录）
 - 7 大细分赛道分类 + 涨跌榜 + 资金流向估算
 - 可选飞书富文本推送；默认 20 只医药标的，可自定义增减
+
+### 82. **gemini-history-analyzer** - 分析 Gemini 对话历史
+
+> **安装**：`claude plugin install gemini-history-analyzer@daymade-skills`
+
+分析 Google Takeout 导出的 Gemini 对话历史 —— 提取并归类转录文本和附件、用上下文核验的关键词搜索挖掘特定领域洞察，并可选地蒸馏进个人知识库。
+
+**使用场景：**
+- 有一个 Gemini Takeout 压缩包，想知道里面有什么（主题、对话类型、有价值的文档）
+- 想在 Gemini 历史里挖掘某个领域（金融、法律等）又不被关键词假阳性淹没
+- 把 Gemini 对话数据蒸馏进项目 memory 或个人 wiki
+
+**主要功能：**
+- 处理中文/Unicode 文件名（用 `unar`，而非会损坏文件名的 macOS `unzip`）
+- 会议转录 vs 提问-回答 识别；主题归类；PII 标记
+- 上下文核验的关键词搜索（grep 只是第一步，不是答案）+ 可选的 memory 文件生成
 
 ---
 

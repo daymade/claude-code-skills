@@ -6,8 +6,8 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-77-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.76.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-80-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.78.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -2939,6 +2939,22 @@ Generate an A-share pharmaceutical sector daily report — pull real-time quotes
 - Sina Finance real-time quote pipeline (no login)
 - 7 sub-sector classification + gainers/losers + fund-flow estimate
 - Optional Feishu rich-text delivery; default 20-stock watchlist, customizable
+
+### 82. **gemini-history-analyzer** - Analyze Gemini Conversation History
+
+> **Install**: `claude plugin install gemini-history-analyzer@daymade-skills`
+
+Analyze Google Takeout exports of Gemini conversation history — extract and categorize transcripts and attachments, mine them for domain-specific insights with context-verified keyword search, and optionally distill findings into a personal knowledge base.
+
+**When to use:**
+- Have a Gemini Takeout zip and want to know what's in it (topics, conversation type, valuable documents)
+- Want to mine Gemini history for a specific domain (finance, legal, etc.) without drowning in keyword false positives
+- Distilling Gemini conversation data into project memory or a personal wiki
+
+**Key features:**
+- Handles Chinese/Unicode filenames (uses `unar`, not the corrupting macOS `unzip`)
+- Meeting-transcript vs prompt-response detection; topic categorization; PII flagging
+- Context-verified keyword search (grep is step 1, not the answer) + optional memory-file generation
 
 ---
 

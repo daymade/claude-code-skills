@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.78.0] - 2026-06-29
+
+### Added
+- **gemini-history-analyzer** v1.0.0: Analyze Google Takeout exports of Gemini conversation history — extract and categorize transcripts and attachments, context-verified domain keyword search (finance/legal/etc.), meeting-transcript vs prompt-response detection, Chinese/Unicode filename handling via `unar` (the macOS `unzip` corrupts them), PII flagging, and optional distillation into project memory or a personal knowledge base. Top-level plugin: `gemini-history-analyzer@daymade-skills`.
+
+### Changed
+- Marketplace version: 1.77.0→1.78.0; plugin entries 54→55.
+
+## [1.77.0] - 2026-06-29
+
+### Added
+- Four new skills landed: **claude-migrate-memory-to-doc** (migrate `.claude` memory into versioned, tool-agnostic docs), **design-style-picker** (batch-generate and compare visual design directions before committing), **local-codex** (delegate coding tasks to the local OpenAI Codex CLI via ChatGPT Pro OAuth), and **openclaw-model-switch** (switch an OpenClaw instance's default model with backup and validation).
+
+### Security
+- Removed hardcoded personal identifiers from the repo PII deny-list (`.gitleaks.toml`, `.githooks/pre-commit`) and ran a PII history-cleanup pass on the repository.
+
+### Changed
+- Marketplace version: 1.76.0→1.77.0.
+
 ## [1.76.0] - 2026-06-28
 
 ### Added
