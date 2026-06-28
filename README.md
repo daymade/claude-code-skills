@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-66-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.67.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-71-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.69.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 66 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 71 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2685,6 +2685,95 @@ uv run --with aiohttp python scripts/concurrency_probe.py \
 📚 **Documentation**: See [llm-eval-harness/references/evaluation_disciplines.md](./llm-eval-harness/references/evaluation_disciplines.md) for the reasoning behind each discipline and [llm-eval-harness/references/quality_blind_judge.md](./llm-eval-harness/references/quality_blind_judge.md) for the blind-judge method.
 
 **Requirements**: Python 3.8+, `uv`; `openai` and `aiohttp` (auto-installed via `uv run --with`); an API key for the endpoint under test. Optionally composes with **promptfoo-evaluation** for rubric-based gating.
+
+---
+
+### 69. **read-claude-web-conversation** - Extract Claude.ai Web Conversations
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:read-claude-web-conversation`)
+
+Extract full Claude.ai web conversation content through the Claude Code operations suite when local browser/export paths are needed for recovery, auditing, or migration.
+
+**When to use:**
+- Reading a Claude.ai web conversation that is not available in local Claude Code logs
+- Recovering a full web thread for handoff, audit, or archival
+- Comparing browser-visible content with exported or local session artifacts
+
+**Requirements**: Installed `daymade-claude-code` suite and access to the relevant browser/session context.
+
+---
+
+### 70. **setup-notifications-via-wecom** - Reusable WeCom Notification Setup
+
+```bash
+claude plugin install setup-notifications-via-wecom@daymade-skills
+```
+
+Set up reusable WeCom (Enterprise WeChat) webhook notifications for technical status reports, alerts, and completion messages.
+
+**When to use:**
+- Configuring a reusable 企业微信 / WeCom notification channel
+- Sending structured status notifications, backup reports, or alerts
+- Turning a one-off webhook into a repeatable notification workflow
+
+**Requirements**: WeCom bot webhook URL and shell access.
+
+---
+
+### 71. **notify-wecom** - One-Off WeCom Message
+
+```bash
+claude plugin install notify-wecom@daymade-skills
+```
+
+Send a single WeCom group-bot message without setting up a reusable notification workflow.
+
+**When to use:**
+- `/notify-wecom`
+- 临时发一条企业微信 / 企微通知一下
+- One-shot alerts that do not need templates or persistent setup
+
+**Requirements**: WeCom bot webhook URL.
+
+---
+
+### 72. **github-sensitive-data-cleanup** - GitHub Sensitive Data Cleanup
+
+```bash
+claude plugin install github-sensitive-data-cleanup@daymade-skills
+```
+
+Scan and remove sensitive data from GitHub repository history, with backup, visibility checks, and force-push safety gates.
+
+**When to use:**
+- A repo leaked secrets, private domains/IPs, API keys, or PII
+- Cleaning git history before or after a public exposure
+- Verifying safety before any force push to a public repository
+
+**Requirements**: `git`, GitHub access, and the relevant scanning/history-rewrite tools for the target repository.
+
+---
+
+### 73. **codex-image-gallery** - Local Browser for Codex Generated Images
+
+```bash
+claude plugin install codex-image-gallery@daymade-skills
+```
+
+Start a self-contained local web gallery for Codex-generated image outputs. The skill bundles its Node server and HTML UI, scans `~/.codex/generated_images` by default, and can point at another folder with `GALLERY_ROOT`.
+
+**When to use:**
+- Browsing Codex generated images in a local UI
+- Inspecting `~/.codex/generated_images`
+- Reviewing a custom image output directory with search, batches, and image detail view
+
+**Key features:**
+- Bundled `scripts/server.mjs` and `assets/index.html`
+- Dynamic `/api/images` scan; no hardcoded manifest
+- `/images/<relative-path>` image route with path traversal protection
+- Optional `GALLERY_ROOT`, `PORT`, and `HOST`
+
+**Requirements**: Node.js 18+ and access to the image folder.
 
 ---
 
