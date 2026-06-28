@@ -273,6 +273,29 @@ class CorrectionService:
             logger.error(f"Failed to add correction: {e}")
             raise
 
+    def get_corrections_with_metadata(
+        self, domain: Optional[str] = None
+    ) -> Tuple[Dict[str, str], Dict[str, Dict]]:
+        """
+        Get corrections as a dictionary plus per-rule metadata.
+
+        Returns:
+            Tuple of (corrections_dict, metadata_dict) where metadata_dict
+            maps from_text -> {"confidence": float, "notes": str}
+        """
+        if domain:
+            self.validate_domain_name(domain)
+            corrections = self.repository.get_all_corrections(domain=domain, active_only=True)
+        else:
+            corrections = self.repository.get_all_corrections(active_only=True)
+
+        corrections_dict = {c.from_text: c.to_text for c in corrections}
+        metadata = {
+            c.from_text: {"confidence": c.confidence, "notes": c.notes or ""}
+            for c in corrections
+        }
+        return corrections_dict, metadata
+
     def get_corrections(self, domain: Optional[str] = None) -> Dict[str, str]:
         """
         Get corrections as a dictionary for processing.
@@ -593,6 +616,95 @@ class CorrectionService:
 
         except Exception as e:
             logger.error(f"Failed to save history: {e}")
+
+    def report_false_positive(
+        self,
+        from_text: str,
+        to_text: str,
+        domain: str = "general",
+        reported_by: Optional[str] = None
+    ) -> bool:
+        """
+        Report a Stage 1 false positive.
+
+        Action: lower confidence and mark inactive. The rule is not deleted
+        so the audit trail is preserved, but it will no longer be applied.
+
+        Returns:
+            True if a matching active rule was found and disabled.
+        """
+        self.validate_correction_text(from_text, "from_text")
+        self.validate_domain_name(domain)
+
+        if reported_by is None:
+            reported_by = os.getenv("USER") or os.getenv("USERNAME") or "unknown"
+
+        correction = self.repository.get_correction(from_text, domain)
+        if correction is None or correction.to_text != to_text:
+            logger.warning(
+                f"No active rule '{from_text}' -> '{to_text}' in domain '{domain}'"
+            )
+            return False
+
+        # Disable the rule and append a false-positive note
+        note_suffix = f"[FALSE POSITIVE reported by {reported_by}]"
+        new_notes = f"{correction.notes or ''}\n{note_suffix}".strip()
+
+        with self.repository._transaction() as conn:
+            conn.execute("""
+                UPDATE corrections
+                SET is_active = 0,
+                    confidence = 0.1,
+                    notes = ?
+                WHERE from_text = ? AND domain = ? AND is_active = 1
+            """, (new_notes, from_text, domain))
+
+            self.repository._audit_log(
+                conn,
+                action="report_false_positive",
+                entity_type="correction",
+                entity_id=correction.id,
+                user=reported_by,
+                details=f"Disabled '{from_text}' -> '{to_text}' (domain: {domain}) due to false positive"
+            )
+
+        logger.info(f"Disabled false-positive rule: '{from_text}' -> '{to_text}'")
+        return True
+
+    def load_presets(self, domain: str, loaded_by: Optional[str] = None) -> int:
+        """
+        Load preset corrections for a domain.
+
+        Returns:
+            Number of rules added or updated.
+        """
+        self.validate_domain_name(domain)
+
+        if loaded_by is None:
+            loaded_by = os.getenv("USER") or os.getenv("USERNAME") or "unknown"
+
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from data.tech_presets import get_preset_rules
+
+        rules = get_preset_rules(domain)
+        added = 0
+        for from_text, to_text, confidence, notes in rules:
+            try:
+                self.add_correction(
+                    from_text=from_text,
+                    to_text=to_text,
+                    domain=domain,
+                    source="imported",
+                    confidence=confidence,
+                    notes=f"preset: {notes}",
+                    force=True,
+                )
+                added += 1
+            except Exception as e:
+                logger.warning(f"Skipping preset rule '{from_text}' -> '{to_text}': {e}")
+
+        logger.info(f"Loaded {added} preset rules for domain '{domain}'")
+        return added
 
     def close(self) -> None:
         """Close underlying repository."""

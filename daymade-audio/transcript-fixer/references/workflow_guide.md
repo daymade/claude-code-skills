@@ -34,7 +34,7 @@ Before running corrections, verify these prerequisites:
 ### Initial Setup
 - [ ] Initialized with `uv run scripts/fix_transcription.py --init`
 - [ ] Database exists at `~/.transcript-fixer/corrections.db`
-- [ ] `GLM_API_KEY` environment variable set (run `echo $GLM_API_KEY`)
+- [ ] API key configured in `~/.transcript-fixer/config.json` (set `api.api_key`)
 - [ ] Configuration validated (run `--validate`)
 
 ### File Preparation
@@ -56,7 +56,7 @@ Before running corrections, verify these prerequisites:
 **Quick validation**:
 
 ```bash
-uv run scripts/fix_transcription.py --validate && echo $GLM_API_KEY
+uv run scripts/fix_transcription.py --validate
 ```
 
 ## Core Workflows
@@ -70,8 +70,9 @@ uv run scripts/fix_transcription.py --validate && echo $GLM_API_KEY
 1. **Initialize** (if not done):
    ```bash
    uv run scripts/fix_transcription.py --init
-   export GLM_API_KEY="your-key"
    ```
+
+   Then add your GLM API key to `~/.transcript-fixer/config.json` under `api.api_key`.
 
 2. **Add initial corrections** (5-10 common errors):
    ```bash
@@ -98,8 +99,8 @@ uv run scripts/fix_transcription.py --validate && echo $GLM_API_KEY
    # Stage 2: Final corrected version
    less transcript_stage2.md
 
-   # Generate diff report
-   uv run scripts/diff_generator.py transcript.md transcript_stage1.md transcript_stage2.md
+   # Generate word-level diff
+   uv run scripts/generate_word_diff.py transcript.md transcript_stage2.md transcript_diff.html
    ```
 
 **Expected duration**:
@@ -370,34 +371,36 @@ See `file_formats.md` for context_rules schema.
    uv run scripts/fix_transcription.py --input transcript.md --stage 3
    ```
 
-2. **Generate diff reports**:
+2. **Generate word-level diff** (single HTML file, best for human review):
    ```bash
-   uv run scripts/diff_generator.py \
+   uv run scripts/generate_word_diff.py \
      transcript.md \
-     transcript_stage1.md \
-     transcript_stage2.md
+     transcript_stage2.md \
+     transcript_diff.html
    ```
 
-3. **Review outputs**:
+3. **Generate full multi-format report** (Markdown summary + unified diff + HTML + inline markers):
    ```bash
-   # Markdown report (statistics + summary)
-   less diff_report.md
+   uv run scripts/generate_diff_report.py \
+     transcript.md \
+     transcript_stage1.md \
+     transcript_stage2.md \
+     -o ./diff_reports
+   ```
 
-   # Unified diff (git-style)
-   less transcript_unified.diff
-
-   # HTML side-by-side (visual review)
-   open transcript_sidebyside.html
-
-   # Inline markers (for editing)
-   less transcript_inline.md
+4. **Review output**:
+   ```bash
+   open transcript_diff.html
+   # or
+   open ./diff_reports/transcript_对比.html
    ```
 
 **Report contents**:
-- Total changes count
-- Stage 1 vs Stage 2 breakdown
-- Character/word count changes
-- Side-by-side comparison
+- Word-level additions/deletions highlighted
+- Side-by-side visual comparison
+- Markdown summary with change counts
+- Git-style unified diff
+- Suitable for manual review and version-control diffs
 
 See `script_parameters.md` for advanced diff options.
 

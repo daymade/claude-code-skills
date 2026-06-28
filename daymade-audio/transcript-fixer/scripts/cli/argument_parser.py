@@ -77,6 +77,25 @@ def create_argument_parser() -> argparse.ArgumentParser:
         default=None,
         help="Correction domain (default: all domains)"
     )
+    parser.add_argument(
+        "--review",
+        action="store_true",
+        help="(Deprecated — safe mode is now the Stage 1 default) Kept as a no-op for backward compatibility"
+    )
+    parser.add_argument(
+        "--apply-all",
+        action="store_true",
+        dest="apply_all",
+        help="Opt OUT of the default safe mode: auto-apply ALL risk levels (low/medium/high) "
+             "instead of only low-risk. Higher false-positive risk — use only when the dictionary "
+             "domain matches the transcript and you've reviewed the rules."
+    )
+    parser.add_argument(
+        "--changes-file",
+        action="store_true",
+        dest="changes_file",
+        help="Always write *_changes.md with before/after/risk for every correction (automatically on in safe mode, which is the default)"
+    )
 
     # Learning commands
     parser.add_argument(
@@ -88,7 +107,30 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--approve",
         nargs=2,
         metavar=("FROM", "TO"),
-        help="Approve suggestion"
+        help="Approve a learned correction"
+    )
+    parser.add_argument(
+        "--report-false-positive",
+        nargs=2,
+        metavar=("FROM", "TO"),
+        dest="report_false_positive",
+        help="Report a Stage 1 false positive to disable/downgrade the rule"
+    )
+
+    # Preset commands
+    parser.add_argument(
+        "--load-presets",
+        metavar="DOMAIN",
+        dest="load_presets",
+        help="Load preset corrections for a domain (e.g. tech)"
+    )
+
+    # Uncertain extraction
+    parser.add_argument(
+        "--extract-uncertain",
+        action="store_true",
+        dest="extract_uncertain",
+        help="Extract likely ASR errors into *_uncertain.md without applying corrections"
     )
 
     # Utility commands

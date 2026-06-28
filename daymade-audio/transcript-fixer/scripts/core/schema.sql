@@ -130,19 +130,9 @@ CREATE TABLE IF NOT EXISTS system_config (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert default configuration
-INSERT OR IGNORE INTO system_config (key, value, value_type, description) VALUES
-    ('schema_version', '2.0', 'string', 'Database schema version'),
-    ('api_provider', 'GLM', 'string', 'API provider name'),
-    ('api_model', 'GLM-4.6', 'string', 'Default AI model'),
-    ('api_base_url', 'https://open.bigmodel.cn/api/anthropic', 'string', 'API endpoint URL'),
-    ('default_domain', 'general', 'string', 'Default correction domain'),
-    ('auto_learn_enabled', 'true', 'boolean', 'Enable automatic pattern learning'),
-    ('backup_enabled', 'true', 'boolean', 'Create backups before operations'),
-    ('learning_frequency_threshold', '3', 'int', 'Min frequency for learned suggestions'),
-    ('learning_confidence_threshold', '0.8', 'float', 'Min confidence for learned suggestions'),
-    ('history_retention_days', '90', 'int', 'Days to retain correction history'),
-    ('max_correction_length', '1000', 'int', 'Maximum length for correction text');
+-- Default system_config values are defined in core.defaults.SYSTEM_CONFIG_DEFAULTS
+-- and written by CorrectionRepository._initialize_system_config(). Keep them out
+-- of this file to avoid drift between the schema and the runtime defaults.
 
 -- Table: audit_log
 -- Comprehensive audit trail for all operations

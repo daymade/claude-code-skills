@@ -14,6 +14,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Set
 
+# jieba is an OPTIONAL enhancement used only by the audit-time "valid phrase"
+# heuristic (is_likely_valid_phrase). It is advisory — it NEVER gates
+# auto-application — so when jieba is absent the heuristic returns False and
+# audit falls back to the structural checks. fix_transcription.py declares jieba
+# in its PEP 723 inline deps so the shipped CLI always has it.
+try:
+    import jieba
+    _JIEBA_AVAILABLE = True
+except ImportError:
+    _JIEBA_AVAILABLE = False
+
 
 # High-frequency Chinese words that should NEVER be dictionary correction sources.
 # These are words that appear correctly in normal Chinese text and replacing them
@@ -68,6 +79,13 @@ COMMON_WORDS_2CHAR: Set[str] = {
     # "打一" caused production false positive: "打一个锚" → "答疑个锚" (2026-04)
     "打一", "来一", "做一", "写一", "给一", "拉一", "开一", "看一",
     "跑一", "找一", "选一", "试一", "走一", "问一", "搞一", "聊一",
+    # --- 2026-06 production false positives ---
+    # Real common words that had been mis-added as correction sources and
+    # silently corrupted clean transcripts: "多深"→"多申" hit "抓多深", and a
+    # food word / its 3-char form (below) hit a project codename. Listing them
+    # here makes --add block the bad rule, _assess_risk flag it high, and
+    # --audit surface it — the three guards that all read ALL_COMMON_WORDS.
+    "龙虾", "多深", "早生",
 }
 
 # Common 3+ character words that should also be protected.
@@ -105,6 +123,8 @@ COMMON_WORDS_3PLUS: Set[str] = {
     "正面临", "正面对",
     "应急响应", "应急预案", "应急处理",
     "仅供参考", "仅供参阅",
+    # --- 2026-06 production false positives (see COMMON_WORDS_2CHAR note) ---
+    "小龙虾",
 }
 
 # Words that commonly contain other words as substrings.
@@ -158,6 +178,33 @@ class SafetyWarning:
     category: str       # "common_word", "short_text", "substring_collision"
     message: str
     suggestion: str     # What to do instead
+
+
+def is_likely_valid_phrase(text: str) -> bool:
+    """
+    Advisory heuristic: does `text` look like a legitimate multi-char Chinese
+    phrase (rather than ASR garble)? Surfaces the "4+ char real-word"
+    false-positive class that the structural risk rules (length / confidence /
+    280-word list) provably cannot catch — e.g. 济南大学→暨南大学,
+    关税证明→完税证明, where from_text is itself valid text.
+
+    Returns True when every multi-char token jieba produces is a known
+    dictionary word, i.e. the string decomposes cleanly into real words.
+
+    IMPORTANT — ADVISORY ONLY. It has known false positives (e.g. '语音是别' →
+    '语音' + single chars, all-known → True even though it is garble), so it must
+    NEVER gate auto-application — only flag rules for human audit, where a false
+    flag costs one glance. A false flag on a good rule (停-applying it) would
+    silently cut recall; a missed bad rule just stays as today. Requires jieba;
+    returns False without it.
+    """
+    if not _JIEBA_AVAILABLE or len(text) < 4:
+        return False
+    tokens = jieba.lcut(text)
+    multi = [t for t in tokens if len(t) >= 2]
+    if not multi:
+        return False
+    return all(jieba.dt.FREQ.get(t, 0) > 0 for t in multi)
 
 
 def check_correction_safety(
@@ -257,6 +304,31 @@ def check_correction_safety(
                 f"tied to that domain's vocabulary."
             ),
         ))
+
+    # Check 5 (advisory, audit-focused): does from_text look like a valid
+    # multi-char Chinese phrase? This catches the 4+ char real-word class the
+    # structural rules miss (济南大学→暨南大学…). It is a WARNING, never an error,
+    # because the jieba heuristic has false positives and must not block
+    # legitimate 4+ char ASR-garble rules (巨升智能 etc. decompose with an OOV
+    # token → not flagged). Skipped if the exact-word checks already flagged it.
+    if not any(w.category in ("common_word", "both_common") for w in warnings):
+        if is_likely_valid_phrase(from_text):
+            warnings.append(SafetyWarning(
+                level="warning",
+                category="valid_phrase",
+                message=(
+                    f"'{from_text}' decomposes into all-known Chinese words (jieba), "
+                    f"so it is likely valid text that appears correctly in normal "
+                    f"transcripts. Replacing it with '{to_text}' risks corrupting "
+                    f"clean text — the structural length/confidence rules cannot "
+                    f"catch this class, so review it by hand."
+                ),
+                suggestion=(
+                    f"If '{from_text}' is a genuine ASR error only in a specific "
+                    f"context, convert it to a context rule. Otherwise disable it "
+                    f"(--report-false-positive, or set is_active=0)."
+                ),
+            ))
 
     return warnings
 

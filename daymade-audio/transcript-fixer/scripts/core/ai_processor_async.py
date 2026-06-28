@@ -22,14 +22,20 @@ from __future__ import annotations
 
 import asyncio
 import gc
-import os
-import re
 import logging
 from typing import List, Tuple, Optional, Final
-from dataclasses import dataclass
 import httpx
 
+from .ai_utils import AIChange, AIAPIError, split_into_chunks, build_correction_prompt, parse_anthropic_response
 from .change_extractor import ChangeExtractor, ExtractedChange
+from .defaults import (
+    DEFAULT_MODEL,
+    FALLBACK_MODEL,
+    API_BASE_URL,
+    AUTH_HEADER_NAME,
+    ANTHROPIC_VERSION,
+    API_TIMEOUT,
+)
 
 # CRITICAL FIX: Import structured logging and retry logic
 import sys
@@ -47,21 +53,9 @@ MAX_CHANGES_TO_TRACK: Final[int] = 1000  # Limit changes tracking to prevent mem
 MEMORY_WARNING_THRESHOLD: Final[int] = 100  # Warn if >100 chunks
 
 
-@dataclass
-class AIChange:
-    """Represents an AI-suggested change"""
-    chunk_index: int
-    from_text: str
-    to_text: str
-    confidence: float  # 0.0 to 1.0
-    context_before: str = ""
-    context_after: str = ""
-    change_type: str = "unknown"
-
-
 class AIProcessorAsync:
     """
-    Stage 2 Processor: AI-powered corrections using GLM-4.6 with parallel processing
+    Stage 2 Processor: AI-powered corrections using GLM-5.2 with parallel processing
 
     Process:
     1. Split text into chunks (respecting API limits)
@@ -72,16 +66,16 @@ class AIProcessorAsync:
     Performance: ~5-10x faster than sequential processing on large files
     """
 
-    def __init__(self, api_key: str, model: str = "GLM-4.6",
-                 base_url: str = "https://open.bigmodel.cn/api/anthropic",
-                 fallback_model: str = "GLM-4.5-Air",
+    def __init__(self, api_key: str, model: str = DEFAULT_MODEL,
+                 base_url: str = API_BASE_URL,
+                 fallback_model: str = FALLBACK_MODEL,
                  max_concurrent: int = 5):
         """
         Initialize AI processor with async support
 
         Args:
             api_key: GLM API key
-            model: Model name (default: GLM-4.6)
+            model: Model name (default: GLM-5.2)
             base_url: API base URL
             fallback_model: Fallback model on primary failure
             max_concurrent: Maximum concurrent API requests (default: 5)
@@ -118,9 +112,9 @@ class AIProcessorAsync:
                     keepalive_expiry=30.0
                 )
                 self._http_client = httpx.AsyncClient(
-                    timeout=60.0,
+                    timeout=API_TIMEOUT,
                     limits=limits,
-                    http2=True  # Enable HTTP/2 for better performance
+                    http2=False  # Disable HTTP/2 to avoid missing h2 package
                 )
                 logger.debug("Created new HTTP client with connection pooling")
 
@@ -166,7 +160,7 @@ class AIProcessorAsync:
         - Releases intermediate results
         - Monitors memory usage
         """
-        chunks = self._split_into_chunks(text)
+        chunks = split_into_chunks(text, self.max_chunk_size)
         all_changes = []
 
         # CRITICAL FIX: Memory warning for large files
@@ -177,10 +171,8 @@ class AIProcessorAsync:
             )
 
         logger.info(
-            f"Starting batch processing",
-            total_chunks=len(chunks),
-            model=self.model,
-            max_concurrent=self.max_concurrent
+            f"Starting batch processing: total_chunks={len(chunks)}, "
+            f"model={self.model}, max_concurrent={self.max_concurrent}"
         )
 
         # CRITICAL FIX: Error rate monitoring
@@ -213,9 +205,7 @@ class AIProcessorAsync:
         for i, (chunk, result) in enumerate(zip(chunks, results), 1):
             if isinstance(result, Exception):
                 logger.error(
-                    f"Chunk {i} raised exception",
-                    chunk_index=i,
-                    error=str(result),
+                    f"Chunk {i} raised exception: {result}",
                     exc_info=True
                 )
                 corrected_chunks.append(chunk)
@@ -225,8 +215,7 @@ class AIProcessorAsync:
                 if error_counter.should_abort():
                     stats = error_counter.get_stats()
                     logger.critical(
-                        f"Error rate exceeded threshold, aborting",
-                        **stats
+                        f"Error rate exceeded threshold, aborting. Stats: {stats}"
                     )
                     raise RuntimeError(
                         f"Error rate {stats['window_failure_rate']:.1%} exceeds "
@@ -273,12 +262,9 @@ class AIProcessorAsync:
         # Final statistics
         stats = error_counter.get_stats()
         logger.info(
-            "Batch processing completed",
-            total_chunks=len(chunks),
-            successes=stats['total_successes'],
-            failures=stats['total_failures'],
-            failure_rate=stats['window_failure_rate'],
-            changes_extracted=len(all_changes)
+            f"Batch processing completed: total_chunks={len(chunks)}, "
+            f"successes={stats['total_successes']}, failures={stats['total_failures']}, "
+            f"failure_rate={stats['window_failure_rate']:.2%}, changes_extracted={len(all_changes)}"
         )
 
         return "\n\n".join(corrected_chunks), all_changes
@@ -298,10 +284,8 @@ class AIProcessorAsync:
         """
         async with semaphore:
             logger.info(
-                f"Processing chunk {chunk_index}/{total_chunks}",
-                chunk_index=chunk_index,
-                total_chunks=total_chunks,
-                chunk_length=len(chunk)
+                f"Processing chunk {chunk_index}/{total_chunks} "
+                f"(length={len(chunk)})"
             )
 
             try:
@@ -314,25 +298,21 @@ class AIProcessorAsync:
                     result = await process_with_retry()
 
                 logger.info(
-                    f"Chunk {chunk_index} completed successfully",
-                    chunk_index=chunk_index
+                    f"Chunk {chunk_index} completed successfully"
                 )
                 return result
 
             except Exception as e:
+                print(f"[DEBUG] Chunk {chunk_index} primary error: {type(e).__name__}: {e}")
                 logger.warning(
-                    f"Chunk {chunk_index} failed with primary model: {e}",
-                    chunk_index=chunk_index,
-                    error_type=type(e).__name__,
+                    f"Chunk {chunk_index} failed with primary model ({type(e).__name__}): {e}",
                     exc_info=True
                 )
 
                 # Retry with fallback model
                 if self.fallback_model and self.fallback_model != self.model:
                     logger.info(
-                        f"Retrying chunk {chunk_index} with fallback model: {self.fallback_model}",
-                        chunk_index=chunk_index,
-                        fallback_model=self.fallback_model
+                        f"Retrying chunk {chunk_index} with fallback model: {self.fallback_model}"
                     )
 
                     try:
@@ -342,83 +322,25 @@ class AIProcessorAsync:
 
                         result = await fallback_with_retry()
                         logger.info(
-                            f"Chunk {chunk_index} succeeded with fallback model",
-                            chunk_index=chunk_index
+                            f"Chunk {chunk_index} succeeded with fallback model"
                         )
                         return result
 
                     except Exception as e2:
+                        print(f"[DEBUG] Chunk {chunk_index} fallback error: {type(e2).__name__}: {e2}")
                         logger.error(
-                            f"Chunk {chunk_index} failed with fallback model: {e2}",
-                            chunk_index=chunk_index,
-                            error_type=type(e2).__name__,
+                            f"Chunk {chunk_index} failed with fallback model ({type(e2).__name__}): {e2}",
                             exc_info=True
                         )
 
-                # CLAUDE_FALLBACK: Signal Claude Code to take over manual correction
-                print("[CLAUDE_FALLBACK] GLM API unavailable. Claude Code should analyze this text for ASR errors:")
-                print("---")
-                print(chunk[:2000] if len(chunk) > 2000 else chunk)
-                print("---")
-                print("After fixing, MUST save corrections: --add \"错误词\" \"正确词\" --domain general")
+                # API fallback: keep original text and warn clearly.
+                print(f"[WARNING] Chunk {chunk_index}: GLM API unavailable after retries; leaving original text unchanged.")
+                print(f"  To correct without an API, use native mode in Claude Code, or provide a valid API key.")
 
                 logger.warning(
-                    f"Using original text for chunk {chunk_index} after all retries failed",
-                    chunk_index=chunk_index
+                    f"Using original text for chunk {chunk_index} after all retries failed"
                 )
                 return chunk
-
-    def _split_into_chunks(self, text: str) -> List[str]:
-        """
-        Split text into processable chunks
-
-        Strategy:
-        - Split by double newlines (paragraphs)
-        - Keep chunks under max_chunk_size
-        - Don't split mid-paragraph if possible
-        """
-        paragraphs = text.split('\n\n')
-        chunks = []
-        current_chunk = []
-        current_length = 0
-
-        for para in paragraphs:
-            para_length = len(para)
-
-            # If single paragraph exceeds limit, force split
-            if para_length > self.max_chunk_size:
-                if current_chunk:
-                    chunks.append('\n\n'.join(current_chunk))
-                    current_chunk = []
-                    current_length = 0
-
-                # Split long paragraph by sentences
-                sentences = re.split(r'([。！？\n])', para)
-                temp_para = ""
-                for i in range(0, len(sentences), 2):
-                    sentence = sentences[i] + (sentences[i+1] if i+1 < len(sentences) else "")
-                    if len(temp_para) + len(sentence) > self.max_chunk_size:
-                        if temp_para:
-                            chunks.append(temp_para)
-                        temp_para = sentence
-                    else:
-                        temp_para += sentence
-                if temp_para:
-                    chunks.append(temp_para)
-
-            # Normal case: accumulate paragraphs
-            elif current_length + para_length > self.max_chunk_size and current_chunk:
-                chunks.append('\n\n'.join(current_chunk))
-                current_chunk = [para]
-                current_length = para_length
-            else:
-                current_chunk.append(para)
-                current_length += para_length + 2  # +2 for \n\n
-
-        if current_chunk:
-            chunks.append('\n\n'.join(current_chunk))
-
-        return chunks
 
     async def _process_chunk_async(self, chunk: str, context: str, model: str) -> str:
         """
@@ -426,12 +348,12 @@ class AIProcessorAsync:
 
         CRITICAL FIX (P1-3): Uses shared HTTP client for connection pooling
         """
-        prompt = self._build_prompt(chunk, context)
+        prompt = build_correction_prompt(chunk, context)
 
         url = f"{self.base_url}/v1/messages"
         headers = {
-            "anthropic-version": "2023-06-01",
-            "Authorization": f"Bearer {self.api_key}",
+            "anthropic-version": ANTHROPIC_VERSION,
+            AUTH_HEADER_NAME: self.api_key,
             "content-type": "application/json"
         }
 
@@ -447,30 +369,4 @@ class AIProcessorAsync:
         client = await self._get_http_client()
         response = await client.post(url, headers=headers, json=data)
         response.raise_for_status()
-        result = response.json()
-        return result["content"][0]["text"]
-
-    def _build_prompt(self, chunk: str, context: str) -> str:
-        """Build correction prompt for GLM"""
-        base_prompt = """你是专业的会议记录校对专家。请修复以下会议转录中的语音识别错误。
-
-**修复原则**：
-1. 严格保留原有格式（时间戳、发言人标识、Markdown标记等）
-2. 修复明显的同音字错误
-3. 修复专业术语错误
-4. 修复标点符号错误
-5. 不要改变语句含义和结构
-
-**不要做**：
-- 不要添加或删除内容
-- 不要重新组织段落
-- 不要改变发言人标识
-- 不要修改时间戳
-
-直接输出修复后的文本，不要解释。
-"""
-
-        if context:
-            base_prompt += f"\n\n**领域上下文**：{context}\n"
-
-        return base_prompt + f"\n\n{chunk}"
+        return parse_anthropic_response(response.json())
