@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.74.0"
+    "version": "1.75.0"
   },
   "plugins": [
     {
@@ -1084,6 +1084,22 @@
         "sentiment",
         "policy",
         "cailianshe"
+      ]
+    },
+    {
+      "name": "pharma-daily-report",
+      "description": "生成 A 股医药行业日报：从新浪财经抓取核心医药股实时行情，按 7 大细分赛道排名、涨跌榜、资金流向分析，可选通过飞书发送富文本日报。默认 20 只核心医药标的，可自定义增减。当用户需要医药日报、医药行业日报、A 股医药板块分析、飞书推送医药数据时触发。",
+      "source": "./pharma-daily-report",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "a-share",
+        "pharma",
+        "daily-report",
+        "sina-finance",
+        "feishu",
+        "sector-analysis"
       ]
     }
   ]

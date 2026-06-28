@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-76-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.74.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-77-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.75.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 76 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 77 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -2867,6 +2867,24 @@ Aggregate A-share (Chinese stock market) news, policy, and sentiment from public
 - Multi-source public-feed aggregation (no login)
 - Per-stock or market-wide filtering
 - Structured JSON / Markdown output
+
+### 79. **pharma-daily-report** - A-Share Pharma Sector Daily Report
+
+```bash
+claude plugin install pharma-daily-report@daymade-skills
+```
+
+Generate an A-share pharmaceutical sector daily report — pull real-time quotes for core pharma stocks from Sina Finance, rank 7 sub-sectors, top gainers/losers, and estimated fund flow, then optionally push a rich-text report via Feishu.
+
+**When to use:**
+- Need a daily snapshot of the A-share pharma sector (quotes, sub-sector ranking, fund flow)
+- Want a Feishu rich-text push of pharma market data
+- Tracking a configurable watchlist of core pharma stocks
+
+**Key features:**
+- Sina Finance real-time quote pipeline (no login)
+- 7 sub-sector classification + gainers/losers + fund-flow estimate
+- Optional Feishu rich-text delivery; default 20-stock watchlist, customizable
 
 ---
 
