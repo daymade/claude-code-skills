@@ -56,12 +56,6 @@ regex = '''\b1[3-9]\d{9}\b'''
 tags = ["pii", "phone"]
 
 [[rules]]
-id = "douban-user-id-literal"
-description = "Hardcoded Douban user ID"
-regex = '''REDACTED-DOUBAN-ID'''
-tags = ["pii", "username"]
-
-[[rules]]
 id = "email-personal"
 description = "Personal email address"
 regex = '''[a-zA-Z0-9._%+-]+@(?:gmail|qq|163|126|outlook|hotmail|yahoo|icloud|foxmail)\.[a-zA-Z]{2,}'''
