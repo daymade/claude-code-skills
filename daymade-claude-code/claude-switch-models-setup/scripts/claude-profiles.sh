@@ -6,6 +6,8 @@
 # - Auto-discovery: scan ~/.claude/settings/*.json, create one profile per file
 # - Idempotent init: safe to run multiple times
 # - Shared symlinks: skills, projects, hooks, agents all point back to ~/.claude
+#   (exception: plugins/ is NOT shared as a whole — content sub-items are symlinked but
+#    known_marketplaces.json is per-profile; see claude-plugins-sync.py for why)
 # - Isolated state: each profile has its own claude.json
 # - Safe removal: rm only deletes the isolation directory, never shared data
 #
@@ -19,7 +21,17 @@
 # Override defaults via environment variables
 CLAUDE_PROFILES_DIR="${CLAUDE_PROFILES_DIR:-$HOME/.claude-profiles}"
 CLAUDE_BASE_DIR="${CLAUDE_BASE_DIR:-$HOME/.claude}"
-CLAUDE_PROFILES_CONFIG_DIR="${CLAUDE_PROFILES_CONFIG_DIR:-$HOME/.config/claude-switch-models-setup}"
+
+# Resolve this script's own directory so the helper python (claude-plugins-sync.py)
+# is found right next to it — self-contained whether sourced from the skill repo or
+# from an installed copy (e.g. ~/.config/claude-switch-models-setup). Override with
+# CLAUDE_PROFILES_CONFIG_DIR if you keep the helper somewhere else.
+if [ -n "${ZSH_VERSION:-}" ]; then
+    _CP_SELF="$(eval 'print -r -- ${(%):-%x}')"
+else
+    _CP_SELF="${BASH_SOURCE[0]:-$0}"
+fi
+CLAUDE_PROFILES_CONFIG_DIR="${CLAUDE_PROFILES_CONFIG_DIR:-$(cd "$(dirname "$_CP_SELF")" >/dev/null 2>&1 && pwd)}"
 
 # Internal constants
 CLAUDE_JSON="claude.json"
@@ -92,6 +104,15 @@ claude-profiles-init() {
                 continue
             fi
 
+            # plugins/ must NOT be symlinked as a whole: known_marketplaces.json's
+            # installLocation is config-dir-specific (Claude validates with path.resolve,
+            # which does not resolve symlinks), so a shared copy makes every other profile
+            # report "corrupted installLocation". Handled by claude-plugins-sync.py instead:
+            # content sub-items symlinked, known_marketplaces.json kept per-profile.
+            if [ "$subname" = "plugins" ]; then
+                continue
+            fi
+
             local target="$profile_dir/$subname"
             if [ ! -L "$target" ] && [ ! -e "$target" ]; then
                 ln -s "$subdir_path" "$target"
@@ -106,8 +127,67 @@ claude-profiles-init() {
             echo "[INIT] $profile: symlinked $SETTINGS_DIR"
         fi
 
+        # Ensure per-profile settings.json carries statusLine.
+        # Claude Code does NOT merge statusLine from the global settings.json into a
+        # profile's settings.json; each profile needs its own. The global settings file
+        # is ~/.claude/settings.json (NOT settings/settings.json — that subdir only holds
+        # per-profile provider JSONs). Paths are passed via argv, never interpolated into
+        # the python source, and we do NOT toggle `set -e` (this file is sourced into the
+        # user's interactive shell — flipping errexit would leak into their session).
+        local profile_settings="$profile_dir/settings.json"
+        local global_settings="$CLAUDE_BASE_DIR/settings.json"
+        local statusline_cmd=""
+        if [ -f "$global_settings" ]; then
+            statusline_cmd=$(python3 -c "
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        cmd = json.load(f).get('statusLine', {}).get('command')
+    if cmd:
+        print(cmd)
+except Exception:
+    pass
+" "$global_settings" 2>/dev/null || true)
+        fi
+        if [ -z "$statusline_cmd" ] && [ -x "$HOME/.claude/statusline.sh" ]; then
+            statusline_cmd="$HOME/.claude/statusline.sh"
+        fi
+        if [ -n "$statusline_cmd" ]; then
+            if [ ! -f "$profile_settings" ]; then
+                echo '{}' > "$profile_settings"
+            fi
+            if python3 -c "
+import json, sys
+p, cmd = sys.argv[1], sys.argv[2]
+with open(p) as f:
+    data = json.load(f)
+data.setdefault('statusLine', {})['command'] = cmd
+data['statusLine']['type'] = 'command'
+data['statusLine'].setdefault('padding', 0)
+with open(p, 'w') as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+    f.write('\n')
+" "$profile_settings" "$statusline_cmd" 2>/dev/null; then
+                echo "[INIT] $profile: ensured statusLine -> $statusline_cmd"
+            else
+                echo "[WARN] $profile: failed to inject statusLine" >&2
+            fi
+        fi
+
         skipped=$((skipped + 1))
     done
+
+    # plugins: build per-profile structure + per-profile known_marketplaces.json
+    # (the whole-dir symlink above deliberately skips plugins)
+    local syncer="$CLAUDE_PROFILES_CONFIG_DIR/claude-plugins-sync.py"
+    if command -v python3 >/dev/null 2>&1 && [ -f "$syncer" ]; then
+        echo ""
+        echo "[INIT] syncing per-profile plugin marketplaces ..."
+        python3 "$syncer"
+    else
+        echo "[WARN] plugin sync SKIPPED: python3 or claude-plugins-sync.py missing ($syncer)." >&2
+        echo "       per-profile known_marketplaces.json was NOT built — marketplaces may report 'corrupted installLocation'." >&2
+    fi
 
     echo ""
     echo "Done. Initialized/verified $skipped profile(s), created $count new claude.json."
@@ -151,10 +231,15 @@ claude-profile() {
     echo "[LAUNCH] Settings: $settings_file"
     echo ""
 
-    # Auto-fix marketplace paths polluted by cross-profile updates
-    local fixer="$CLAUDE_PROFILES_CONFIG_DIR/fix-marketplace-paths.py"
-    if command -v python3 >/dev/null 2>&1 && [ -f "$fixer" ]; then
-        python3 "$fixer" >/dev/null 2>&1
+    # Sync THIS profile's plugin marketplace metadata (root-cause fix; replaces the old
+    # fix-marketplace-paths.py, which CAUSED the corruption by rewriting the shared file).
+    # --profile limits work + concurrent writes to the profile being launched; stdout is
+    # quiet on this hot path, but errors stay on stderr (not /dev/null) so failures show.
+    local syncer="$CLAUDE_PROFILES_CONFIG_DIR/claude-plugins-sync.py"
+    if command -v python3 >/dev/null 2>&1 && [ -f "$syncer" ]; then
+        python3 "$syncer" --profile "$profile" >/dev/null
+    else
+        echo "[WARN] plugin sync SKIPPED: python3 or claude-plugins-sync.py missing ($syncer) — marketplaces may report 'corrupted installLocation'." >&2
     fi
 
     CLAUDE_CONFIG_DIR="$profile_dir" claude --settings "$settings_file" "$@"
@@ -276,6 +361,19 @@ claude-profile-rm() {
             continue
         fi
 
+        # Real files/dirs the per-profile structure legitimately creates:
+        #   plugins/      — content symlinks + independent known_marketplaces.json (rebuildable)
+        #   settings.json — per-profile statusLine, written by init
+        if [ "$name" = "plugins" ] || [ "$name" = "settings.json" ]; then
+            continue
+        fi
+        # pre-sync backups hold a profile's salvaged old real plugins dir — allowed, but
+        # surfaced so the user knows this safety copy is removed together with the profile.
+        if [[ "$name" == plugins.pre-sync-* ]]; then
+            echo "NOTE: will also delete salvaged backup: $name"
+            continue
+        fi
+
         has_real_files=true
         echo "WARN: Unexpected real file found: $name"
     done
@@ -320,7 +418,7 @@ Commands:
 Environment:
   CLAUDE_PROFILES_DIR         Profile isolation root (default: ~/.claude-profiles)
   CLAUDE_BASE_DIR             Main Claude config dir (default: ~/.claude)
-  CLAUDE_PROFILES_CONFIG_DIR  Where fix-marketplace-paths.py lives
+  CLAUDE_PROFILES_CONFIG_DIR  Where claude-plugins-sync.py lives
                               (default: ~/.config/claude-switch-models-setup)
 
 Shell aliases (add to ~/.zshrc or ~/.bashrc):

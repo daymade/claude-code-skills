@@ -39,7 +39,7 @@ If you prefer to understand before running, here is the full manual flow:
 Copy these two files to `~/.config/claude-switch-models-setup/`:
 
 - `claude-profiles.sh`
-- `fix-marketplace-paths.py`
+- `claude-plugins-sync.py`
 
 ### 2. Add to your shell config
 

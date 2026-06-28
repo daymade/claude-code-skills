@@ -21,7 +21,7 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from utils.common_words import ALL_COMMON_WORDS
+from utils.common_words import ALL_COMMON_WORDS, is_likely_valid_phrase
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +116,10 @@ class DictionaryProcessor:
             search_start = 0
             for match in re.finditer(pattern, corrected):
                 matched = match.group(0)
-                risk = "medium" if len(matched) <= 3 else "low"
                 line_num = corrected[:match.start()].count('\n') + 1
+                # Use the same risk classifier as dictionary rules so context
+                # rules do not bypass the common-word / length safety layers.
+                risk = self._assess_risk(matched, replacement)
                 changes.append(Change(
                     line_number=line_num,
                     from_text=matched,
@@ -343,10 +345,14 @@ class DictionaryProcessor:
         Medium risk:
         - confidence metadata is 0.7-0.9
         - from_text is 3 characters and looks like a real word fragment
+        - from_text is 4+ characters and jieba identifies it as a likely valid
+          Chinese phrase (e.g. 济南大学, 关税证明), unless the rule is highly
+          trusted (confidence >= 0.95 and length >= 5).
 
         Low risk:
         - Non-word garbled text (e.g., 克劳锐 -> Claude)
-        - High confidence (>= 0.9) and not a common word
+        - High confidence (>= 0.95), length >= 5, and not identified as a
+          likely valid Chinese phrase
         """
         meta = self.correction_meta.get(wrong, {})
         confidence = meta.get("confidence", 1.0)
@@ -362,6 +368,13 @@ class DictionaryProcessor:
 
         if confidence < 0.9:
             return "medium"
+
+        # 4+ char real-word guard: if jieba thinks this is a valid Chinese
+        # phrase, defer it in safe mode unless the rule is highly trusted
+        # (confidence >= 0.95 and length >= 5).
+        if len(wrong) >= 4 and is_likely_valid_phrase(wrong):
+            if not (confidence >= 0.95 and len(wrong) >= 5):
+                return "medium"
 
         # Short but not common words are still somewhat risky
         if len(wrong) <= 3:

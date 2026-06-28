@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.76.0] - 2026-06-28
+
+### Added
+- **daymade-financial** suite v1.0.0: Financial data and investment-research suite bundling 5 skills under a shared namespace — `bigdata-skill` (Bigdata.com/RavenPack SDK + REST), `financial-data-collector` (US equity fundamentals via yfinance), `gangtise-copilot` (Gangtise OpenAPI suite installer), `ashare-news-fetcher` (A-share news/policy aggregation), and `pharma-daily-report` (A-share pharma sector daily report). Install once via `daymade-financial@daymade-skills` and invoke as `daymade-financial:<skill>`.
+
+### Changed
+- **Suite-only migration**: the 5 financial skills are now suite-only. Removed 5 standalone plugin entries from `marketplace.json`; they are now reachable only via the `daymade-financial` suite.
+- Plugin entries: 56→52 (5 standalone removed, 1 suite added).
+- Marketplace version: 1.75.0→1.76.0.
+- README.md / README.zh-CN.md / CLAUDE.md: added suite install block, added suite-only markers to the 5 skill sections, removed standalone install commands, added Financial Data use case, updated documentation links.
+
+### Migration
+- Existing users of any of the 5 affected standalone plugins (`bigdata-skill@daymade-skills`, `financial-data-collector@daymade-skills`, `gangtise-copilot@daymade-skills`, `ashare-news-fetcher@daymade-skills`, `pharma-daily-report@daymade-skills`) should install the suite: `claude plugin install daymade-financial@daymade-skills`. Personal data and credentials are unaffected.
+
 ## [1.75.0] - 2026-06-28
 
 ### Added
@@ -92,6 +106,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **marketplace-health-check** v1.0.0: new skill — the 6-dimension repo health-check workflow distilled from a real audit session, fixed as a reusable skill. A parallel fan-out Dynamic Workflow runs six inspectors (code/script safety, documentation/SSOT consistency, security/PII, open-PR triage, open-issue triage, marketplace-manifest integrity); the skill then Counter-Reviews every high/critical finding (agent findings are hypotheses, verified before reporting) and reports by priority. Bundles the proven workflow script + a methodology reference (anti-target PII rule, working-copy-vs-history distinction, scan-marker necessary-not-sufficient, the broken-install-command bug class, promotion-decline default). Inline orchestrator — uses the Workflow tool, so it must not run forked.
+
+### Changed
+- **local-codex** extracted from `~/.kimi_openclaw/workspace/local-codex.skill` and promoted to a standalone top-level skill. Delegates coding tasks to the local OpenAI Codex CLI via ChatGPT Pro OAuth flat-rate subscription; example paths updated from `~/.agents/skills/local-codex/...` to repo-relative `scripts/codex_wrapper.py`.
+- **openclaw-model-switch** extracted from `~/.agents/skills/openclaw-model-switch.skill` and promoted to a standalone top-level skill. Switches the default OpenClaw model by safely editing `openclaw.json` with backup, model validation, and optional gateway restart; example paths updated from `~/.agents/skills/openclaw-model-switch/...` to repo-relative `scripts/switch-model.py`.
+- README.md, README.zh-CN.md, CLAUDE.md: added sections for `local-codex` (#78) and `openclaw-model-switch` (#79), renumbered subsequent skill sections, updated skill counts and descriptions.
+- Plugin entries: 52→54 (2 new standalone skills added).
+- Marketplace version: 1.76.0→1.77.0.
 
 ### Changed
 - **debugging-network-issues** v1.3.0: Add client-side proxy / VPN / TUN misrouting coverage. New reference `references/case-proxy-tun-cname-override.md` documents a CNAME-based rule override that caused `ERR_CONNECTION_CLOSED` even though explicit PROXY rules were at the top of the config, plus the decisive experiments (hostname-vs-IP through the proxy, TUN-vs-physical-interface reachability) and the fix pattern (`[Host]` mapping + `use-local-host-item-for-proxy`). Adds cognitive Trap 11 "Assuming a top-of-list proxy rule beats CNAME matching" and Trap 12 "Proxy-node DNS = client DNS"; adds a triage entry and a client-side proxy/TUN checklist to SKILL.md. Marketplace description and keywords synced; README / README.zh-CN skill sections and documentation pointers updated.

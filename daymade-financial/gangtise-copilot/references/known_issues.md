@@ -137,7 +137,7 @@ When integrating with Gangtise manually, use this pattern:
 ```python
 # CORRECT
 raw_token = response.json()["data"]["accessToken"]
-# raw_token already looks like "Bearer fb335616-..."
+# raw_token already looks like "Bearer xxxxxxxx-..."
 headers = {"Authorization": raw_token}
 
 # WRONG

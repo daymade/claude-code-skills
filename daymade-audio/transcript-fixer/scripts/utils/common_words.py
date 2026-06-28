@@ -19,11 +19,28 @@ from typing import List, Set
 # auto-application — so when jieba is absent the heuristic returns False and
 # audit falls back to the structural checks. fix_transcription.py declares jieba
 # in its PEP 723 inline deps so the shipped CLI always has it.
-try:
-    import jieba
-    _JIEBA_AVAILABLE = True
-except ImportError:
-    _JIEBA_AVAILABLE = False
+#
+# jieba is loaded LAZILY because importing it builds the prefix dictionary,
+# which adds ~0.2-0.5s to every CLI startup even for commands that never use it
+# (e.g. --stage 1, --list). The first call to is_likely_valid_phrase() triggers
+# the import.
+import functools
+import importlib.util
+
+_JIEBA_AVAILABLE = importlib.util.find_spec("jieba") is not None
+_JIEBA_MODULE = None
+
+
+def _get_jieba():
+    """Lazy-load jieba on first use. Returns the module or None if unavailable."""
+    global _JIEBA_AVAILABLE, _JIEBA_MODULE
+    if _JIEBA_MODULE is None and _JIEBA_AVAILABLE:
+        try:
+            import jieba
+            _JIEBA_MODULE = jieba
+        except ImportError:
+            _JIEBA_AVAILABLE = False
+    return _JIEBA_MODULE
 
 
 # High-frequency Chinese words that should NEVER be dictionary correction sources.
@@ -180,6 +197,7 @@ class SafetyWarning:
     suggestion: str     # What to do instead
 
 
+@functools.lru_cache(maxsize=4096)
 def is_likely_valid_phrase(text: str) -> bool:
     """
     Advisory heuristic: does `text` look like a legitimate multi-char Chinese
@@ -188,17 +206,19 @@ def is_likely_valid_phrase(text: str) -> bool:
     280-word list) provably cannot catch — e.g. 济南大学→暨南大学,
     关税证明→完税证明, where from_text is itself valid text.
 
+    Cached because it is called repeatedly during Stage 1 risk assessment.
+
     Returns True when every multi-char token jieba produces is a known
     dictionary word, i.e. the string decomposes cleanly into real words.
 
-    IMPORTANT — ADVISORY ONLY. It has known false positives (e.g. '语音是别' →
-    '语音' + single chars, all-known → True even though it is garble), so it must
-    NEVER gate auto-application — only flag rules for human audit, where a false
-    flag costs one glance. A false flag on a good rule (停-applying it) would
-    silently cut recall; a missed bad rule just stays as today. Requires jieba;
-    returns False without it.
+    IMPORTANT — ADVISORY ONLY at add-time; during Stage 1 it is used as one
+    signal among several to promote 4+ char real phrases to medium risk in
+    safe mode. It has known false positives (e.g. '语音是别' → '语音' + single
+    chars, all-known → True even though it is garble), so it must NEVER be the
+    sole gate for auto-application.
     """
-    if not _JIEBA_AVAILABLE or len(text) < 4:
+    jieba = _get_jieba()
+    if jieba is None or len(text) < 4:
         return False
     tokens = jieba.lcut(text)
     multi = [t for t in tokens if len(t) >= 2]

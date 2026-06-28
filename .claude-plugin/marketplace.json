@@ -5,33 +5,10 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.75.0"
+    "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-financial, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
+    "version": "1.77.0"
   },
   "plugins": [
-    {
-      "name": "bigdata-skill",
-      "description": "Pull Bigdata.com (RavenPack) financial and news data through the official bigdata-client Python SDK and its /v1/* REST endpoints when the Bigdata MCP server gives you too little — it silently drops per-chunk sentiment, entity character-spans, and the entire structured-financial product line (analyst estimates, earnings/event calendar, earnings surprise, analyst ratings, price targets, company screener). Bundles a verified, cost-guarded toolkit plus the SSL-retry, chunk-billing 52x trap, and entity-query pitfalls already solved in real use. Use whenever the user mentions Bigdata.com, RavenPack, a bd_v2_ API key, the bigdata MCP, rp_entity_id resolution, chunk / query_unit cost, or wants forward estimates, an earnings/event calendar, earnings surprise, price targets, or annotated news sentiment for a ticker — even if they never name the SDK. Reach for it the moment an MCP financial data source returns less than you know the underlying API holds.",
-      "source": "./bigdata-skill",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "developer-tools",
-      "keywords": [
-        "bigdata",
-        "bigdata-com",
-        "ravenpack",
-        "investment-research",
-        "financial-data",
-        "sdk",
-        "rest-api",
-        "mcp",
-        "sentiment-analysis",
-        "analyst-estimates",
-        "earnings-calendar",
-        "rp-entity-id",
-        "claude-code"
-      ]
-    },
     {
       "name": "bilibili-source",
       "description": "Fetch comprehensive, login-free data for any Bilibili (B站) video — title, UP name and follower count, publish date, partition, tags, per-part cids, live stats (view, like, coin, favorite, share, reply, danmaku), and full danmaku (bullet-comment) text. Use this skill whenever working with a Bilibili video and needing real, citable numbers or metadata — ingesting a Bilibili source into a knowledge base, analyzing why a video performed, verifying a creator's claimed metrics, building a case study, or any time a Bilibili view/like/favorite count is about to be written into a document — fetch it, never hand-type or estimate it. Accepts BVID, av numbers, b23.tv short links, or full URLs. Subtitles are also covered but require the user's Bilibili login.",
@@ -126,7 +103,7 @@
       "description": "Claude Code operations suite that bundles session history recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full web-conversation extraction from claude.ai, plugin marketplace development, multi-provider profile isolation for running Kimi/GLM/DeepSeek/StepFun/Anthropic in separate windows, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.6.0",
+      "version": "1.6.1",
       "category": "suite",
       "keywords": [
         "suite",
@@ -180,6 +157,33 @@
       ]
     },
     {
+      "name": "daymade-financial",
+      "description": "Financial data and investment-research suite covering the full China A-share and global equity data pipeline: Bigdata.com (RavenPack) structured financials and news sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite installation and orchestration, A-share news and policy aggregation, and A-share pharmaceutical sector daily reporting. Install once for the complete financial data workflow.",
+      "source": "./daymade-financial",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "suite",
+      "keywords": [
+        "suite",
+        "financial-data",
+        "investment-research",
+        "a-share",
+        "bigdata",
+        "ravenpack",
+        "gangtise",
+        "pharma",
+        "news",
+        "yfinance"
+      ],
+      "skills": [
+        "./bigdata-skill",
+        "./financial-data-collector",
+        "./gangtise-copilot",
+        "./ashare-news-fetcher",
+        "./pharma-daily-report"
+      ]
+    },
+    {
       "name": "daymade-audio",
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun), transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
@@ -210,7 +214,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, search, and marketplace development tooling under one shared namespace.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.4.0",
+      "version": "1.5.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -322,46 +326,6 @@
         "scraping",
         "browser",
         "archival"
-      ]
-    },
-    {
-      "name": "financial-data-collector",
-      "description": "Collect real financial data for any US publicly traded company from free public sources (yfinance). Output structured JSON with market data, historical financials, WACC inputs, and analyst estimates. Handles NaN year detection, CapEx sign preservation, and FCF definition mismatches. Use when users request company financials, stock data, DCF inputs, or financial data collection for any US equity ticker",
-      "source": "./financial-data-collector",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "productivity",
-      "keywords": [
-        "finance",
-        "financial-data",
-        "yfinance",
-        "stock-data",
-        "dcf",
-        "wacc",
-        "market-data",
-        "investment-research",
-        "sec-filings"
-      ]
-    },
-    {
-      "name": "gangtise-copilot",
-      "description": "One-stop installer and companion for the full Gangtise (岗底斯投研) OpenAPI skill suite — 19 official skills covering data retrieval (OHLC 行情, 财务, 估值, 研报, 首席观点, 会议纪要, 调研纪要), research workflows (个股研究 L1-L4, 观点 PK 对抗性分析, 主题研究, 事件复盘), and utility (股票池管理, 公开网页搜索). Zero-config install to Claude Code / OpenClaw / Codex with 4 preset modes (full / workshop / minimal / custom), guides accessKey + secretAccessKey setup with a live validation call against open.gangtise.com, and ships a read-only diagnostic script. Use this skill whenever the user mentions Gangtise, 岗底斯, gangtise-data-client, gangtise-kb-client, gangtise-file-client, gangtise-stock-research, gangtise-opinion-pk, installing any gangtise-* skill, configuring its credentials, or reports errors like 'token is invalid', '接口地址错误', 'the uri can't be accessed'. This is a wrapper around Gangtise's official skills — it installs and orchestrates them rather than replacing them.",
-      "source": "./gangtise-copilot",
-      "strict": false,
-      "version": "1.2.0",
-      "category": "developer-tools",
-      "keywords": [
-        "gangtise",
-        "岗底斯",
-        "investment-research",
-        "financial-data",
-        "ohlc",
-        "research-report",
-        "installer",
-        "wrapper",
-        "claude-code",
-        "openclaw",
-        "codex"
       ]
     },
     {
@@ -1070,36 +1034,43 @@
       ]
     },
     {
-      "name": "ashare-news-fetcher",
-      "description": "抓取 A 股消息面情报：从财联社、华尔街见闻、金十、新浪 7x24、东财快讯、证监会/央行/上交所/财政部政策公告、东方财富股吧等公开来源抓取与股票相关的新闻、政策、情绪，输出结构化 JSON 或 Markdown。当用户提到 A 股消息面、抓新闻、个股消息、政策监管、股吧情绪、市场情绪，或需要把某只股票相关的公开情报聚合出来时触发。",
-      "source": "./ashare-news-fetcher",
+      "name": "local-codex",
+      "description": "Delegate coding tasks to the local OpenAI Codex CLI agent using ChatGPT Pro OAuth flat-rate subscription. Wraps `codex exec` and `codex review` for code generation, refactoring, and review without per-token API charges. Use when the user wants to run coding tasks through Codex, generate or refactor code, or run code reviews via the local Codex CLI.",
+      "source": "./local-codex",
       "strict": false,
       "version": "1.0.0",
-      "category": "productivity",
+      "category": "developer-tools",
       "keywords": [
-        "a-share",
-        "news",
-        "stock",
-        "finance",
-        "sentiment",
-        "policy",
-        "cailianshe"
+        "codex",
+        "openai",
+        "coding",
+        "code-generation",
+        "code-review",
+        "refactoring",
+        "oauth",
+        "chatgpt-pro",
+        "claude-code",
+        "sub-agent"
       ]
     },
     {
-      "name": "pharma-daily-report",
-      "description": "生成 A 股医药行业日报：从新浪财经抓取核心医药股实时行情，按 7 大细分赛道排名、涨跌榜、资金流向分析，可选通过飞书发送富文本日报。默认 20 只核心医药标的，可自定义增减。当用户需要医药日报、医药行业日报、A 股医药板块分析、飞书推送医药数据时触发。",
-      "source": "./pharma-daily-report",
+      "name": "openclaw-model-switch",
+      "description": "Switch the default AI model for an OpenClaw instance (e.g., Kimi K2.6 to K2.7) by safely editing openclaw.json with automatic backup, model validation, and optional gateway restart. Use when upgrading models, switching between reasoning and non-reasoning models, rolling back after testing, or modifying the default model configuration.",
+      "source": "./openclaw-model-switch",
       "strict": false,
       "version": "1.0.0",
-      "category": "productivity",
+      "category": "claude-code",
       "keywords": [
-        "a-share",
-        "pharma",
-        "daily-report",
-        "sina-finance",
-        "feishu",
-        "sector-analysis"
+        "openclaw",
+        "lobster",
+        "model-switch",
+        "kimi",
+        "k2.7",
+        "deepseek",
+        "config",
+        "model-management",
+        "gateway",
+        "claude-code"
       ]
     }
   ]

@@ -16,6 +16,7 @@ The result: you can open one terminal with Kimi, another with DeepSeek, another 
 - `CLAUDE_CONFIG_DIR` tells Claude Code CLI which directory to use as its config root.
 - Each profile lives in `~/.claude-profiles/<name>/` with an isolated `claude.json`.
 - Everything else (`skills/`, `projects/`, `hooks/`, `agents/`, `settings/`) is symlinked back to the main `~/.claude/` directory so you only maintain one copy.
+- **Exception — `plugins/`:** the marketplace *content* is shared (symlinked), but each profile keeps its **own** `known_marketplaces.json`. Claude validates a marketplace's `installLocation` with `path.resolve()` (which does NOT resolve symlinks), so a single shared file would make every non-writing profile report "corrupted installLocation". `claude-plugins-sync.py` builds and maintains this per-profile structure.
 - Provider routing is done via `~/.claude/settings/<name>.json`, which sets `ANTHROPIC_MODEL`, `ANTHROPIC_BASE_URL`, and `ANTHROPIC_AUTH_TOKEN` for that window.
 
 ## One-Click Setup Workflow
@@ -29,7 +30,7 @@ When the user says something like "set up Claude Code profiles" or "I want to us
 
 2. **Install the profile manager scripts**
    - Copy `scripts/claude-profiles.sh` to `~/.config/claude-switch-models-setup/claude-profiles.sh`
-   - Copy `scripts/fix-marketplace-paths.py` to `~/.config/claude-switch-models-setup/fix-marketplace-paths.py`
+   - Copy `scripts/claude-plugins-sync.py` to `~/.config/claude-switch-models-setup/claude-plugins-sync.py`
    - Make both executable
 
 3. **Add shell integration**
@@ -51,6 +52,13 @@ When the user says something like "set up Claude Code profiles" or "I want to us
 5. **Initialize profile directories**
    - Run `claude-profiles-init`
    - This creates `~/.claude-profiles/<provider>/` with isolated `claude.json` and symlinks
+
+   **Statusline wiring:** `claude-profiles-init` auto-detects a statusline script from
+   `~/.claude/settings.json` or `~/.claude/statusline.sh` and injects it into each new
+   profile. If neither is present, profiles will work but without a status bar. **It is
+   the AI's job** to decide whether the user needs a statusline, install the
+   `statusline-generator` skill if appropriate, and run its installer — not the profile
+   setup script. Do not hardcode dependency installs into shell scripts.
 
 6. **Verify isolation**
    - Run `claude-profiles-doctor`
@@ -106,20 +114,29 @@ Each template has placeholders for `<API_KEY>` and `<BASE_URL>`. Ask the user fo
 |------|----------|---------|
 | Session history | `~/.claude-profiles/<name>/.claude.json` | **Isolated per profile** |
 | Auth tokens/cache | `~/.claude-profiles/<name>/.claude.json` | **Isolated per profile** |
-| Skills/plugins | `~/.claude/skills/`, `~/.claude/plugins/` | Shared via symlink |
+| Skills | `~/.claude/skills/` | Shared via symlink |
+| Plugin content | `~/.claude/plugins/marketplaces`, `cache`, `data`, ... | Shared via symlink |
+| Plugin marketplace index | `<profile>/plugins/known_marketplaces.json` | **Per-profile** (installLocation is config-dir-specific; can't be shared) |
 | Projects/memory | `~/.claude/projects/`, `~/.claude/memory/` | Shared via symlink |
 | Hooks/commands | `~/.claude/hooks/`, `~/.claude/commands/` | Shared via symlink |
 | Provider settings | `~/.claude/settings/<name>.json` | Shared source, loaded per profile |
 
 ## Troubleshooting
 
-### Marketplace paths break after plugin update
+### Marketplace says "corrupted installLocation"
 
-Symptom: A profile loads plugins from the wrong directory.
-Fix: `fix-marketplace-paths.py` runs automatically at `claude-profile` launch. To run manually:
+Symptom: `/plugin` or `claude plugin marketplace update` reports
+`corrupted installLocation ... expected a path inside <config-dir>/plugins/marketplaces`.
+
+Cause: `known_marketplaces.json` ended up shared across profiles (or hand-edited). Its
+`installLocation` is config-dir-specific because Claude validates with `path.resolve()`
+(symlinks NOT resolved), so one shared copy cannot satisfy multiple profiles.
+
+Fix: `claude-plugins-sync.py` rebuilds each profile's own copy + the shared-content
+symlinks. It runs automatically at `claude-profile` init/launch; to run manually:
 
 ```bash
-python3 ~/.config/claude-switch-models-setup/fix-marketplace-paths.py
+python3 ~/.config/claude-switch-models-setup/claude-plugins-sync.py
 ```
 
 ### Third-party profile tries to use Anthropic-specific features

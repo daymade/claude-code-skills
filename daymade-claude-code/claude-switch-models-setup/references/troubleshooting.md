@@ -33,15 +33,16 @@ These flags prevent Claude Code from trying Anthropic-only features when talking
 
 Set `CLAUDE_CODE_SUBAGENT_MODEL` to the same value as `ANTHROPIC_MODEL` in the profile settings. Otherwise subagents may fall back to the default Anthropic model.
 
-## Marketplace paths point to the wrong profile
+## Marketplace says "corrupted installLocation"
 
-Run the fixer manually:
+Each profile needs its OWN `known_marketplaces.json` — its `installLocation` is
+config-dir-specific (Claude validates with `path.resolve`, which does NOT resolve
+symlinks), so it cannot be shared across profiles. `claude-plugins-sync.py` rebuilds them.
+It runs automatically every time `claude-profile` init/launches; to run manually:
 
 ```bash
-python3 ~/.config/claude-switch-models-setup/fix-marketplace-paths.py
+python3 ~/.config/claude-switch-models-setup/claude-plugins-sync.py
 ```
-
-This also runs automatically every time `claude-profile` launches.
 
 ## I want to add another provider
 

@@ -7,14 +7,14 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Skills](https://img.shields.io/badge/skills-77-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.75.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.76.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-专业的 Claude Code 技能市场，提供 77 个生产就绪的技能，用于增强开发工作流。
+专业的 Claude Code 技能市场，提供生产就绪的技能，用于增强开发工作流。
 
 ## 📑 目录
 
@@ -202,6 +202,23 @@ claude plugin install daymade-claude-code@daymade-skills
 
 安装后调用统一显示为 `daymade-claude-code:<skill>`，共享同一命名空间。这些技能仅作为套件发布——安装套件即可获得全部技能。
 
+**金融数据套件**（为投研与金融数据工作流提供统一命名空间）：
+```bash
+claude plugin install daymade-financial@daymade-skills
+```
+
+一次安装即可获得完整的金融数据与投研技能——Bigdata.com（RavenPack）结构化财务与情绪数据、美股基本面数据（yfinance）、Gangtise（岗底斯）OpenAPI 投研套件安装与编排、A 股消息面与政策聚合、A 股医药板块日报：
+
+```text
+/daymade-financial:bigdata-skill
+/daymade-financial:financial-data-collector
+/daymade-financial:gangtise-copilot
+/daymade-financial:ashare-news-fetcher
+/daymade-financial:pharma-daily-report
+```
+
+安装后调用统一显示为 `daymade-financial:<skill>`，共享同一命名空间。这些技能仅作为套件发布——安装套件即可获得全部技能。
+
 **安装其他技能：**
 ```bash
 # GitHub 操作
@@ -269,9 +286,6 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 # 产品审计与优化
 claude plugin install product-analysis@daymade-skills
-
-# 美股金融数据采集
-claude plugin install financial-data-collector@daymade-skills
 
 # Excel 创建、解析与 macOS 自动化控制
 claude plugin install excel-automation@daymade-skills
@@ -1751,6 +1765,8 @@ claude plugin install product-analysis@daymade-skills
 
 ### 39. **financial-data-collector** - 美股金融数据采集
 
+> **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:financial-data-collector`）
+
 从免费公开数据源（yfinance）采集美股上市公司的实时金融数据，输出结构化 JSON，包含市场数据、历史财务报表（利润表、现金流量表、资产负债表）、WACC 输入参数和分析师一致预期——可直接用于下游 DCF 建模、可比公司分析或财报复盘。
 
 **使用场景：**
@@ -1768,8 +1784,8 @@ claude plugin install product-analysis@daymade-skills
 
 **示例用法：**
 ```bash
-# 安装技能
-claude plugin install financial-data-collector@daymade-skills
+# 安装套件
+claude plugin install daymade-financial@daymade-skills
 
 # 然后请求数据采集
 "采集 META 的金融数据"
@@ -1781,7 +1797,7 @@ claude plugin install financial-data-collector@daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [financial-data-collector/SKILL.md](./financial-data-collector/SKILL.md)、[output-schema.md](./financial-data-collector/references/output-schema.md) 和 [yfinance-pitfalls.md](./financial-data-collector/references/yfinance-pitfalls.md)。
+📚 **文档**：参见 [financial-data-collector/SKILL.md](./daymade-financial/financial-data-collector/SKILL.md)、[output-schema.md](./daymade-financial/financial-data-collector/references/output-schema.md) 和 [yfinance-pitfalls.md](./daymade-financial/financial-data-collector/references/yfinance-pitfalls.md)。
 
 **要求**：Python 3.11+、`yfinance`、`pandas`（通过 uv 内联依赖自动安装）。
 
@@ -2385,6 +2401,8 @@ claude plugin install feishu-doc-scraper@daymade-skills
 
 ### 59. **bigdata-skill** - Bigdata.com（RavenPack）SDK + REST 工具箱
 
+> **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:bigdata-skill`）
+
 通过官方 `bigdata-client` SDK 及其公开的 `/v1/*` REST 端点拉取 Bigdata.com（RavenPack）的金融与新闻数据——触达 Bigdata MCP 服务器不提供的结构化底层数据。MCP 只返回散文片段和预合成的 tearsheet；本工具箱触达结构化财务、行情、分析师预期、按日的实体情绪序列、带情绪 + 实体跨度的标注片段检索，以及选股器。
 
 **使用场景：**
@@ -2403,8 +2421,8 @@ claude plugin install feishu-doc-scraper@daymade-skills
 
 **示例用法：**
 ```bash
-# 安装技能
-claude plugin install bigdata-skill@daymade-skills
+# 安装套件
+claude plugin install daymade-financial@daymade-skills
 export BIGDATA_API_KEY=bd_v2_xxxxxxxx
 
 # 然后自然地让 Claude 做
@@ -2418,6 +2436,8 @@ export BIGDATA_API_KEY=bd_v2_xxxxxxxx
 ---
 
 ### 60. **gangtise-copilot** - Gangtise 投研技能套件安装器
+
+> **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:gangtise-copilot`）
 
 为完整的 Gangtise（岗底斯投研）OpenAPI 技能套件提供一键安装器、凭据配置器和诊断层。安装全部 19 个官方 Gangtise 技能（数据、研究、工具类），用一次实时鉴权校验配置 accessKey/secretAccessKey，并跑只读健康诊断——解决该套件的核心可发现性问题（无公开 manifest、禁列目录的 OBS bucket、两条并行命名线）。
 
@@ -2436,8 +2456,8 @@ export BIGDATA_API_KEY=bd_v2_xxxxxxxx
 
 **示例用法：**
 ```bash
-# 安装技能
-claude plugin install gangtise-copilot@daymade-skills
+# 安装套件
+claude plugin install daymade-financial@daymade-skills
 
 # 然后自然地让 Claude 做
 "装一下 gangtise 的所有 skill 并配置好凭据"
@@ -2894,9 +2914,7 @@ claude plugin install wps-doc-scraper@daymade-skills
 
 ### 78. **ashare-news-fetcher** - A 股消息面情报聚合
 
-```bash
-claude plugin install ashare-news-fetcher@daymade-skills
-```
+> **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:ashare-news-fetcher`）
 
 从公开来源聚合 A 股新闻、政策和市场情绪 —— 财联社、华尔街见闻、金十、新浪 7x24、东财快讯、证监会/央行/上交所政策公告、东方财富股吧 —— 输出结构化 JSON 或 Markdown。
 
@@ -2910,11 +2928,47 @@ claude plugin install ashare-news-fetcher@daymade-skills
 - 按个股或全市场过滤
 - 结构化 JSON / Markdown 输出
 
-### 79. **pharma-daily-report** - A 股医药板块日报
+### 79. **local-codex** - 本地 OpenAI Codex CLI Agent
 
 ```bash
-claude plugin install pharma-daily-report@daymade-skills
+claude plugin install local-codex@daymade-skills
 ```
+
+通过 ChatGPT Pro OAuth 固定费率订阅，把编码任务委托给本地 OpenAI Codex CLI agent。封装 `codex exec` / `codex review`，用于代码生成、重构和 review，无逐 token API 计费。
+
+**使用场景：**
+- 把编码任务委托给 Codex 做生成、重构或 review
+- 运行 `codex exec` 执行非交互式编码任务
+- 通过本地 CLI 使用 Codex 的 GPT-5.5 agent 能力
+
+**主要功能：**
+- ChatGPT Pro OAuth 固定费率计费，通过 `~/.codex/auth.json` 认证（不用 API key）
+- 自动检测 Codex CLI：桌面 app / Homebrew / npm / PATH
+- JSONL 输出解析，提取最终 assistant 消息
+- 可配置沙箱级别：read-only / workspace-write / danger-full-access
+
+### 80. **openclaw-model-switch** - OpenClaw 模型切换器
+
+```bash
+claude plugin install openclaw-model-switch@daymade-skills
+```
+
+安全地编辑 `openclaw.json` 来切换 OpenClaw 实例的默认 AI 模型（如 Kimi K2.6 → K2.7），包含自动备份、模型校验和可选的 gateway 重启。
+
+**使用场景：**
+- 升级到新发布的模型
+- 根据不同任务切换模型
+- 测试新模型后回滚
+
+**主要功能：**
+- 修改前自动备份配置
+- 根据 provider 的模型列表做校验
+- 切换后可选择是否重启 gateway
+- 支持 Kimi K2.x 模型家族及上下文窗口规格
+
+### 81. **pharma-daily-report** - A 股医药板块日报
+
+> **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:pharma-daily-report`）
 
 生成 A 股医药行业日报 —— 从新浪财经抓取核心医药股实时行情，按 7 大细分赛道排名、涨跌榜、资金流向分析，然后可选通过飞书发送富文本日报。
 
@@ -2973,7 +3027,7 @@ claude plugin install pharma-daily-report@daymade-skills
 使用 **transcript-fixer** 通过基于字典的规则和 AI 驱动的校正自动学习，纠正会议记录、讲座和访谈中的语音转文本错误。
 
 ### 金融数据与投研
-使用 **financial-data-collector** 采集任意美股上市公司的结构化金融数据，将 JSON 输出接入 DCF 建模、可比公司分析或财报复盘工作流。
+使用 **daymade-financial** 套件完成完整投研数据管线。**bigdata-skill** 通过官方 SDK 拉取 Bigdata.com（RavenPack）结构化财务与情绪数据。**financial-data-collector** 从 yfinance 采集美股基本面数据并遵循 NO FALLBACK 纪律。**gangtise-copilot** 安装并编排完整 Gangtise（岗底斯）OpenAPI 投研套件。**ashare-news-fetcher** 聚合 A 股新闻、政策与市场情绪。**pharma-daily-report** 生成医药板块日报，含实时行情与资金流向分析。
 
 ### Excel 与财务模型自动化
 使用 **excel-automation** 创建格式化工作簿、解析复杂 `.xlsm` 模型，并自动化 Excel 窗口操作以提升分析效率。
@@ -3139,6 +3193,8 @@ claude plugin install pharma-daily-report@daymade-skills
 - **Codex CLI**（可选，用于 product-analysis 多模型并行模式）
 - **Mole**（可选，用于 macos-cleaner 可视化清理）：从 https://github.com/tw93/Mole 下载
 - **uv + openpyxl**（用于 excel-automation）：`uv run --with openpyxl ...`
+- **Bigdata.com API 密钥**（用于 `daymade-financial:bigdata-skill`）：从 [https://www.bigdata.com/](https://www.bigdata.com/) 获取 `bd_v2_` 密钥
+- **Gangtise 凭据**（用于 `daymade-financial:gangtise-copilot`）：从 [https://open.gangtise.com/](https://open.gangtise.com/) 获取 accessKey + secretAccessKey
 - **macOS**（用于 capture-screen 与 excel-automation 的 AppleScript 控制流程）
 - **Python 3.8+**（用于 continue-claude-work）：内置脚本进行会话提取（无外部依赖）
 - **uv + Scrapling CLI**（用于 scrapling-skill）：`uv tool install 'scrapling[shell]'`，浏览器抓取前运行 `scrapling install`

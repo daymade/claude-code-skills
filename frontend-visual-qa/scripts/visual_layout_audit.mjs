@@ -49,6 +49,8 @@ const outDir = getArg("--out", "/tmp/frontend-visual-qa");
 const forbidPattern = getArg("--forbid", "");
 const requirePattern = getArg("--require", "");
 const pageType = getArg("--page-type", "auto");
+const waitUntil = getArg("--wait-until", "domcontentloaded");
+const settleMs = Number.parseInt(getArg("--settle-ms", "750"), 10);
 const expectedWindowWidth = parsePositiveInt(getArg("--expected-window-width", ""));
 const contentSelector = getArg("--content-selector", "");
 const mediaSelector = getArg("--media-selector", "");
@@ -58,7 +60,7 @@ const screenshotSections = process.argv.includes("--screenshot-sections");
 const failOnWarning = process.argv.includes("--fail-on-warning");
 
 if (!target || process.argv.includes("--help")) {
-  console.error("Usage: visual_layout_audit.mjs --url <http://localhost:port/|local.html> [--page-type design-system|live-artifact-design-system|dashboard|app|landing|auto] [--forbid \"Old Name|Bad Term\"] [--require \"Required Term\"] [--expected-window-width 1920] [--content-selector main] [--media-selector .hero] [--section-selector \"section\"] [--screenshot-sections] [--max-section-screenshots 4] [--out /tmp/dir] [--fail-on-warning]");
+  console.error("Usage: visual_layout_audit.mjs --url <http://localhost:port/|local.html> [--page-type design-system|live-artifact-design-system|dashboard|app|landing|auto] [--wait-until domcontentloaded|load|networkidle|commit] [--settle-ms 750] [--forbid \"Old Name|Bad Term\"] [--require \"Required Term\"] [--expected-window-width 1920] [--content-selector main] [--media-selector .hero] [--section-selector \"section\"] [--screenshot-sections] [--max-section-screenshots 4] [--out /tmp/dir] [--fail-on-warning]");
   process.exit(2);
 }
 
@@ -66,6 +68,11 @@ const url = normalizeTarget(target);
 validateForbidPattern(forbidPattern);
 validateForbidPattern(requirePattern);
 validatePageType(pageType);
+validateWaitUntil(waitUntil);
+if (!Number.isFinite(settleMs) || settleMs < 0) {
+  console.error(`Invalid --settle-ms value: ${getArg("--settle-ms")}`);
+  process.exit(2);
+}
 validateSelector(sectionSelector, "--section-selector");
 
 const { chromium } = loadPlaywright();
@@ -97,7 +104,8 @@ for (const viewport of viewports) {
     isMobile: viewport.isMobile,
     hasTouch: viewport.hasTouch,
   });
-  await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
+  await page.goto(url, { waitUntil, timeout: 30_000 });
+  if (settleMs > 0) await page.waitForTimeout(settleMs);
   await page.evaluate(() => window.scrollTo(0, 0));
   const screenshot = `${outDir}/${viewport.name}.png`;
   await page.screenshot({ path: screenshot, fullPage: false });
@@ -192,6 +200,14 @@ function validatePageType(value) {
   const allowed = new Set(["auto", "design-system", "live-artifact-design-system", "dashboard", "app", "landing"]);
   if (!allowed.has(value)) {
     console.error(`Invalid --page-type "${value}". Expected one of: ${[...allowed].join(", ")}`);
+    process.exit(2);
+  }
+}
+
+function validateWaitUntil(value) {
+  const allowed = new Set(["domcontentloaded", "load", "networkidle", "commit"]);
+  if (!allowed.has(value)) {
+    console.error(`Invalid --wait-until "${value}". Expected one of: ${[...allowed].join(", ")}`);
     process.exit(2);
   }
 }
@@ -300,6 +316,10 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
     "[class*='tag']", "[class*='badge']", "[class*='pill']", "[class*='nav']",
     "[class*='title']", "[class*='label']", "[class*='note']", "[class*='eyebrow']",
   ].join(",");
+  const controlParts = new Set(["tag", "tags", "badge", "badges", "pill", "pills", "button", "btn", "tab", "tabs", "nav", "menu", "link", "chip", "chips", "toggle", "switch", "seg", "opt", "qbadge", "tier"]);
+  const headingParts = new Set(["title", "heading", "headline", "eyebrow"]);
+  const labelParts = new Set(["label", "title", "name", "caption"]);
+  const helperParts = new Set(["helper", "hint", "error", "message", "feedback", "description", "note", "caption"]);
 
   for (const [selector, flagName] of [[contentSelector, "--content-selector"], [mediaSelector, "--media-selector"], [sectionSelector, "--section-selector"]]) {
     if (!selector) continue;
@@ -397,6 +417,20 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
 
   issues.push(...auditPageType({ viewportName, pageType }));
 
+  for (const el of [...document.querySelectorAll("[role='button']")].filter(isVisible)) {
+    const selector = describe(el);
+    if (!el.hasAttribute("tabindex") && el.tagName !== "BUTTON" && el.tagName !== "A") {
+      issues.push({
+        viewport: viewportName,
+        selector,
+        type: "non-focusable-custom-button",
+        severity: "error",
+        text: clean(el.textContent || "").slice(0, 120),
+        detail: "Element uses role=button but is not naturally focusable and has no tabindex. It will not behave like a production-ready component.",
+      });
+    }
+  }
+
   for (const el of [...document.querySelectorAll(textSelector)].filter(isVisible)) {
     const text = clean(el.textContent || "");
     if (!text || text.length < 2 || text.length > 180) continue;
@@ -418,12 +452,12 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
     const lastCharCount = [...lastLine.replace(/\s+/g, "")].length;
     const className = typeof el.className === "string" ? el.className : "";
     const classTokens = className.split(/\s+/).filter(Boolean);
-    const isHeading = /^H[1-4]$/.test(el.tagName) || classTokens.some((token) => /(^|[-_])(title|heading)([-_]|$)/i.test(token));
+    const isHeading = /^H[1-4]$/.test(el.tagName) || classTokens.some((token) => /(^|[-_])(title|heading)([-_]|$)/i.test(token)) || hasSemanticPart(el, headingParts);
     const role = el.getAttribute("role") || "";
-    const isInteractiveAnchor = el.tagName === "A" && /button|tab|nav|menu|link/i.test(classTokens.join(" ") + " " + role);
+    const isInteractiveAnchor = el.tagName === "A" && hasSemanticPart(el, controlParts);
     const isControlClass = classTokens.some((token) => /^(tag|badge|pill|btn|button|tab|nav|seg__opt|qbadge|tier)$/.test(token));
     const isControlRole = /^(button|tab|menuitem|switch|checkbox|radio|link)$/.test(role);
-    const isControl = el.tagName === "BUTTON" || isInteractiveAnchor || isControlRole || isControlClass;
+    const isControl = el.tagName === "BUTTON" || isInteractiveAnchor || isControlRole || isControlClass || hasSemanticPart(el, controlParts);
     const isTableLabel = /T[HD]/.test(el.tagName);
     const rect = el.getBoundingClientRect();
     const fontSize = Number.parseFloat(style.fontSize) || 0;
@@ -458,6 +492,8 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
       issues.push({ viewport: viewportName, selector, type: "suspicious-orphan-line", severity: "warning", text, detail: `Last rendered line is "${lastLine}".` });
     }
   }
+
+  auditSameRowFields();
 
   for (const img of selectedImages(mediaSelector).filter(isVisible)) {
     if (!img.complete || img.naturalWidth === 0) {
@@ -502,6 +538,147 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
     const rect = el.getBoundingClientRect();
     const style = getComputedStyle(el);
     return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+  }
+
+  function semanticParts(el) {
+    const className = typeof el.className === "string" ? el.className : "";
+    const role = el.getAttribute("role") || "";
+    return `${className} ${role}`
+      .split(/\s+/)
+      .filter(Boolean)
+      .flatMap((token) => token.split(/[-_:]+/))
+      .map((part) => part.toLowerCase())
+      .filter(Boolean);
+  }
+
+  function hasSemanticPart(el, parts) {
+    return semanticParts(el).some((part) => parts.has(part));
+  }
+
+  function auditSameRowFields() {
+    const fieldRootSelector = [
+      "form",
+      "[class*='form']",
+      "[class*='fields']",
+      "[class*='field']",
+      "[class*='grid']",
+      "[class*='row']",
+    ].join(",");
+    const roots = [...document.querySelectorAll(fieldRootSelector)].filter(isVisible);
+    const seenRows = new Set();
+
+    for (const root of roots) {
+      const directFields = [...root.children].filter(isFieldContainer);
+      if (directFields.length < 2) continue;
+
+      const rows = [];
+      for (const field of directFields) {
+        const rect = field.getBoundingClientRect();
+        const row = rows.find((candidate) => Math.abs(candidate.top - rect.top) <= 6);
+        if (row) {
+          row.fields.push(field);
+          row.top = (row.top + rect.top) / 2;
+        } else {
+          rows.push({ top: rect.top, fields: [field] });
+        }
+      }
+
+      for (const row of rows.filter((candidate) => candidate.fields.length >= 2)) {
+        const metrics = row.fields.map(fieldMetric).filter(Boolean).sort((a, b) => a.rect.left - b.rect.left);
+        if (metrics.length < 2) continue;
+        const rowKey = metrics
+          .map((metric) => `${describe(metric.field)}@${Math.round(metric.rect.left)}:${Math.round(metric.rect.top)}`)
+          .join("|");
+        if (seenRows.has(rowKey)) continue;
+        seenRows.add(rowKey);
+
+        const anchor = metrics[0];
+        for (const metric of metrics.slice(1)) {
+          const labelTopDelta = Math.abs(metric.labelRect.top - anchor.labelRect.top);
+          const controlTopDelta = Math.abs(metric.controlRect.top - anchor.controlRect.top);
+          const controlBottomDelta = Math.abs(metric.controlRect.bottom - anchor.controlRect.bottom);
+          const controlHeightDelta = Math.abs(metric.controlRect.height - anchor.controlRect.height);
+          if (labelTopDelta > 3 || controlTopDelta > 3 || controlBottomDelta > 3 || controlHeightDelta > 2) {
+            issues.push({
+              viewport: viewportName,
+              selector: `${describe(root)} > ${describe(metric.field)}`,
+              type: "same-row-field-control-misalignment",
+              severity: "error",
+              text: rowText(metrics),
+              detail: `Sibling field axes differ: labelTopDelta=${Math.round(labelTopDelta)}px, controlTopDelta=${Math.round(controlTopDelta)}px, controlBottomDelta=${Math.round(controlBottomDelta)}px, controlHeightDelta=${Math.round(controlHeightDelta)}px.`,
+            });
+          }
+
+          const fieldHeightDelta = Math.abs(metric.rect.height - anchor.rect.height);
+          const fieldBottomDelta = Math.abs(metric.rect.bottom - anchor.rect.bottom);
+          const helperPresenceMismatch = Boolean(metric.helperRect) !== Boolean(anchor.helperRect);
+          const helperTopDelta = metric.helperRect && anchor.helperRect ? Math.abs(metric.helperRect.top - anchor.helperRect.top) : 0;
+          const helperHeightDelta = metric.helperRect && anchor.helperRect ? Math.abs(metric.helperRect.height - anchor.helperRect.height) : 0;
+          if (fieldHeightDelta > 4 || fieldBottomDelta > 4 || helperPresenceMismatch || helperTopDelta > 4 || helperHeightDelta > 4) {
+            issues.push({
+              viewport: viewportName,
+              selector: `${describe(root)} > ${describe(metric.field)}`,
+              type: "same-row-field-helper-slot-misalignment",
+              severity: "error",
+              text: rowText(metrics),
+              detail: `Sibling field/helper slots differ: fieldHeightDelta=${Math.round(fieldHeightDelta)}px, fieldBottomDelta=${Math.round(fieldBottomDelta)}px, helperPresenceMismatch=${helperPresenceMismatch}, helperTopDelta=${Math.round(helperTopDelta)}px, helperHeightDelta=${Math.round(helperHeightDelta)}px.`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  function isFieldContainer(el) {
+    if (!isVisible(el)) return false;
+    const control = findFieldControl(el);
+    if (!control) return false;
+    if (el.tagName === "LABEL" || el.querySelector("label")) return true;
+    return hasSemanticPart(el, new Set(["field", "input", "control", "form"]));
+  }
+
+  function findFieldControl(field) {
+    return [...field.querySelectorAll("input, textarea, select, [role='textbox'], [role='combobox'], [contenteditable='true']")]
+      .find(isVisible) || null;
+  }
+
+  function fieldMetric(field) {
+    const control = findFieldControl(field);
+    if (!control) return null;
+    const rect = field.getBoundingClientRect();
+    const controlRect = control.getBoundingClientRect();
+    return {
+      field,
+      rect,
+      controlRect,
+      labelRect: findLabelRect(field, control, controlRect) || rect,
+      helperRect: findHelperRect(field, controlRect),
+    };
+  }
+
+  function findLabelRect(field, control, controlRect) {
+    const labelCandidate = [...field.querySelectorAll("*")]
+      .filter((candidate) => candidate !== control && isVisible(candidate))
+      .filter((candidate) => hasSemanticPart(candidate, labelParts) || clean(candidate.textContent || "").length > 0)
+      .filter((candidate) => candidate.getBoundingClientRect().bottom <= controlRect.top + 6)
+      .sort((a, b) => b.getBoundingClientRect().bottom - a.getBoundingClientRect().bottom)[0];
+    return labelCandidate ? labelCandidate.getBoundingClientRect() : null;
+  }
+
+  function findHelperRect(field, controlRect) {
+    const helperCandidate = [...field.querySelectorAll("*")]
+      .filter((candidate) => isVisible(candidate) && hasSemanticPart(candidate, helperParts))
+      .filter((candidate) => candidate.getBoundingClientRect().top >= controlRect.bottom - 6)
+      .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)[0];
+    return helperCandidate ? helperCandidate.getBoundingClientRect() : null;
+  }
+
+  function rowText(metrics) {
+    return metrics
+      .map((metric) => clean(metric.field.textContent || ""))
+      .filter(Boolean)
+      .join(" | ")
+      .slice(0, 180);
   }
 
   function selectedImages(selector) {

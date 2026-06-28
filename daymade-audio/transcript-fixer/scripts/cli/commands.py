@@ -18,18 +18,11 @@ from core import (
     CorrectionRepository,
     CorrectionService,
     DictionaryProcessor,
-    AIProcessor,
-    LearningEngine,
-    UncertainExtractor,
 )
-from core.defaults import API_BASE_URL
-from data.tech_presets import get_preset_names, get_preset_rules
-from utils import validate_configuration, print_validation_summary
-from utils.health_check import HealthChecker, CheckLevel, format_health_output
-from utils.metrics import get_metrics, format_metrics_summary
-from utils.diff_generator import generate_full_report
 from utils.config import get_config
-from utils.db_migrations_cli import create_migration_cli
+
+# Heavy command-specific imports are deferred to the functions that use them
+# to keep CLI startup fast for simple operations like --list / --add / --stage 1.
 
 
 def _get_service() -> CorrectionService:
@@ -197,7 +190,15 @@ def cmd_list_corrections(args: argparse.Namespace) -> None:
 
 
 def cmd_run_correction(args: argparse.Namespace) -> None:
-    """Run the correction workflow"""
+    """Run the correction workflow.
+
+    Heavy imports (AIProcessor, diff generator) are loaded only when Stage 2/3
+    is requested, keeping --stage 1 startup fast.
+    """
+    from core import AIProcessor, LearningEngine
+    from core.defaults import API_BASE_URL
+    from utils.diff_generator import generate_full_report
+
     # Validate input file
     input_path = Path(args.input)
     if not input_path.exists():
@@ -445,6 +446,8 @@ def cmd_approve(args: argparse.Namespace) -> None:
 
 def cmd_validate(args: argparse.Namespace) -> None:
     """Validate configuration and JSON files"""
+    from utils import validate_configuration, print_validation_summary
+
     errors, warnings = validate_configuration()
     exit_code = print_validation_summary(errors, warnings)
     if exit_code != 0:
@@ -457,6 +460,8 @@ def cmd_health(args: argparse.Namespace) -> None:
 
     CRITICAL FIX (P1-4): Production-grade health monitoring
     """
+    from utils.health_check import HealthChecker, CheckLevel, format_health_output
+
     # Parse check level
     level_map = {
         'basic': CheckLevel.BASIC,
@@ -491,6 +496,8 @@ def cmd_metrics(args: argparse.Namespace) -> None:
 
     CRITICAL FIX (P1-7): Production-grade metrics and observability
     """
+    from utils.metrics import get_metrics, format_metrics_summary
+
     metrics = get_metrics()
 
     # Output format
@@ -577,6 +584,8 @@ def cmd_migration(args: argparse.Namespace) -> None:
 
     CRITICAL FIX (P1-6): Production database migration system
     """
+    from utils.db_migrations_cli import create_migration_cli
+
     migration_cli = create_migration_cli()
 
     if args.action == 'status':
@@ -736,6 +745,8 @@ def cmd_audit_retention(args: argparse.Namespace) -> None:
 
 def cmd_extract_uncertain(args: argparse.Namespace) -> None:
     """Extract uncertain ASR tokens from a transcript file."""
+    from core import UncertainExtractor
+
     input_path = Path(args.input)
     if not input_path.exists():
         print(f"❌ Error: File not found: {input_path}")
@@ -785,4 +796,5 @@ def cmd_load_presets(args: argparse.Namespace) -> None:
 
 def get_available_presets() -> list:
     """Return available preset domain names."""
+    from data.tech_presets import get_preset_names
     return get_preset_names()

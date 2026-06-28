@@ -205,6 +205,20 @@ class TestBoundaryAwareReplacement(unittest.TestCase):
         self.assertEqual(result, "框架系统需要优化")
         self.assertEqual(len(changes), 1)
 
+    def test_context_rules_use_common_word_risk(self):
+        """Context rules matching a common word get high/medium risk, not low."""
+        context_rules = [{
+            "pattern": r"数据",
+            "replacement": "数具",
+            "description": "fake ASR error"
+        }]
+        processor = DictionaryProcessor({}, context_rules)
+        text = "数据库很重要"
+        result, changes = processor.process(text, review_mode=True)
+        self.assertEqual(result, "数据库很重要",
+                         "common-word context match must NOT auto-apply in safe mode")
+        self.assertIn(changes[0].risk, ("high", "medium"))
+
 
 class TestSupersetReplacementBug(unittest.TestCase):
     """
@@ -730,13 +744,30 @@ class TestProductionFalsePositives2026_06(unittest.TestCase):
                          "low-risk rule must still apply in safe mode")
         self.assertEqual(changes[0].risk, "low")
 
+    @unittest.skipUnless(_JIEBA_AVAILABLE, "jieba not installed")
+    def test_safe_mode_defers_real_word_phrase(self):
+        """4+ char real Chinese phrases are deferred in safe mode."""
+        processor = DictionaryProcessor({"济南大学": "暨南大学"}, [])
+        result, changes = processor.process("我在济南大学读书", review_mode=True)
+        self.assertEqual(result, "我在济南大学读书",
+                         "real-word phrase must NOT auto-apply in safe mode")
+        self.assertEqual(changes[0].risk, "medium")
+
+    def test_apply_all_applies_real_word_phrase(self):
+        """Apply-all mode still applies real-word phrase corrections."""
+        processor = DictionaryProcessor({"济南大学": "暨南大学"}, [])
+        result, changes = processor.process("我在济南大学读书", review_mode=False)
+        self.assertEqual(result, "我在暨南大学读书")
+        self.assertEqual(changes[0].risk, "medium")
+
 
 class TestValidPhraseAuditHeuristic(unittest.TestCase):
     """
-    jieba-based advisory heuristic (is_likely_valid_phrase) for the 4+ char
-    real-word false-positive class (济南大学→暨南大学) that the structural
-    risk rules cannot catch. Audit-only — must NEVER gate auto-apply, and is a
-    warning (never error) so it can't block legitimate 4+ char ASR-garble rules.
+    jieba-based heuristic (is_likely_valid_phrase) for the 4+ char real-word
+    false-positive class (济南大学→暨南大学) that the structural risk rules
+    cannot catch. It now feeds into Stage 1 risk assessment: 4+ char phrases
+    that decompose into known words are promoted to medium risk in safe mode,
+    unless the rule is highly trusted (confidence >= 0.95 and length >= 5).
     """
 
     @unittest.skipUnless(_JIEBA_AVAILABLE, "jieba not installed")

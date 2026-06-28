@@ -68,6 +68,8 @@ Start by understanding the user's intent. The current conversation might already
 
 When the source material is *past* session transcripts (the JSONL files under the Claude Code projects directory) rather than the live conversation, do not load them into your own context — a multi-MB transcript will blow the window (one such attempt died 17 tokens over the limit and took the whole session with it). Delegate extraction to subagents instead, with explicit instructions to parse line-by-line with a script, truncate every extracted field, and return only a distilled lessons list — the raw transcript never enters the main context.
 
+**First, resolve which DIRECTION this is — before the four questions below.** The request may be one of several *opposite* things: build a NEW skill / edit an EXISTING skill / optimize skill-creator itself / or it's not-a-skill-at-all (a one-off task). Guessing wrong wastes the whole session — the research you'd do for "new skill" is the wrong research for "optimize the meta-tool." When the phrasing is ambiguous (e.g. "make me a skill" while pointing at skill-creator's own path), one AskUserQuestion here costs 30 seconds. The wrapper-skill fork below is one special case of this; the direction check is general.
+
 1. What should this skill enable Claude to do?
 2. When should this skill trigger? (what user phrases/contexts)
 3. What's the expected output format?
@@ -133,6 +135,8 @@ The user's private methodology — their domain rules, workflow decisions, compe
 
 Channels 1-3 surface the user's own proven patterns and existing integrations. Channels 4-8 find public infrastructure. The user's private SOP always takes precedence — public tools are building blocks, not replacements. In competitive domains (finance, trading, proprietary operations), the valuable methodology will never be public.
 
+**Bias toward merge/extend over create-new, and sweep EVERY skill root — not just `~/.claude`.** When channels 1-3 turn up an existing skill that overlaps the requested domain, the usual right move is to extend or merge into it (one real "new skill" task became "make the existing extractor the extract-phase of the new archiver"), not to ship a parallel skill that competes for the same triggers — two overlapping skills fight over triggering and confuse users. When searching, enumerate the real install roots: the skill source repos (e.g. a `claude-code-skills` checkout and any `-pro` sibling), other agents' skill dirs (`~/.codex/skills`, `~/.agents/skills`), per-profile skill dirs, and `~/Downloads` — a skill the user already installed somewhere is the strongest prior art there is.
+
 **If a public MCP server or skill is found, clone it and verify — don't trust the README:**
 
 1. **Read the actual source code** — many projects have polished READMEs on hollow codebases
@@ -150,8 +154,25 @@ Channels 1-3 surface the user's own proven patterns and existing integrations. C
 | Mature MCP/SDK handles the infrastructure | **Adopt it, build on top** — install the MCP, then build the skill as a workflow layer encoding the user's methodology |
 | Partial MCP or SDK exists | **Extend** — use for infrastructure, fill gaps in the skill |
 | Public skill covers the same domain | **Use for structural inspiration only** — public skills in competitive domains are generic by definition. The user's edge is their private SOP |
+| **Complementary skill exists that provides a sub-capability of what you're building** | **Bundle it** — copy the complementary skill's self-contained assets into your bundle and wire them up. Do NOT rely on the user having it pre-installed. See "Complementary Skills" below |
 | Nothing public exists | **Build from scratch** — validate API access patterns work (auth, endpoints, proxy) before writing the full skill |
 | Integration cost > build cost | **Build it** — a 2-hour custom implementation you own beats a "mature" tool with integration friction and upstream risk |
+
+##### Complementary Skills (bundle, don't depend)
+
+When building a skill that touches a domain with an existing complementary skill, you have two choices:
+
+- **Depend on it being installed**: fragile — the user may not have it, or may have a different version. Every missing-dependency failure traces back to this choice.
+- **Bundle it**: copy the complementary skill's self-contained assets (scripts, templates, reference docs) into your own bundle, and wire them up so your skill works standalone.
+
+**Rule: if a sub-capability your skill needs is provided by another installable skill, bundle it.** This is especially important for:
+- Statusline / UI rendering scripts (e.g., `statusline-generator`'s `generate_statusline.sh`)
+- Shared validation / sanitization scripts
+- Common data transformation utilities
+
+**Example**: `claude-switch-models-setup` manages multiple Claude Code profiles. Each profile needs a statusline. The `statusline-generator` skill provides `generate_statusline.sh`. Rather than depending on the user running `statusline-generator` first, the profile setup skill bundles `statusline.sh` and wires it into each new profile during `claude-profiles-init`. The two skills remain independently useful, but the wrapper skill works standalone.
+
+**Anti-pattern**: writing "run `other-skill`'s installer first" in your SKILL.md. That pushes the dependency to the user and creates a fragile install order. Bundle instead.
 
 After research completes, present findings via **AskUserQuestion**:
 
@@ -427,6 +448,12 @@ ALWAYS use this exact template:
 Input: Added user authentication with JWT tokens
 Output: feat(auth): implement JWT-based authentication
 ```
+
+**Usability patterns worth building into a skill** - These four structural elements repeatedly turned a "works but confusing" skill into one users could actually drive — they were the concrete enhancements that made a heavily-used skill usable, so reach for them when a skill has modes, runs commands, or can be re-run:
+- **Entry decision-tree**: if the skill has multiple modes, open with a tiny "user said X → use mode Y" map so the model routes correctly instead of guessing.
+- **Expected-output block after each command**: show "what you should see" right after a command, so the model (and the user) can tell real success from silent failure.
+- **Troubleshooting section**: enumerate the known failure modes and their fixes — the single most valuable section for a skill others will run on machines you can't see.
+- **Step-0 idempotency guard**: if re-running could redo finished work, open with a cheap "is this already done?" check before doing anything expensive.
 
 ### Writing Style
 
@@ -1051,7 +1078,7 @@ After packaging, update the marketplace registry to include the new or updated s
 }
 ```
 
-**For updated skills**, bump the version in `plugins[].version` following semver.
+**For updated skills**, bump the version in `plugins[].version` following semver. Any change to a skill's files — even a one-line typo fix — needs a bump: without it, `marketplace update` sees no new version, so **already-installed copies never refresh** and users keep running the old skill while your fix sits unshipped.
 
 **Plugin boundaries are not this skill's domain.** Whether to split skills into
 separate plugins, how to lay out `source`/`skills`, and whether users can toggle
@@ -1067,6 +1094,8 @@ every user who already installed it — Claude Code does not clean up installed 
 when an entry disappears, leaving dangling installs that error on every `marketplace
 update`. Treat such changes like an API deprecation: ship a migration note in the
 changelog, and follow marketplace-dev's guidance for the mechanics.
+
+**If you commit/push the skill repo yourself:** stage only the skill's explicit paths (`git add <skill-dir> .claude-plugin/marketplace.json`) — never `git add .`; the working tree is usually full of unrelated churn that will otherwise ride into the commit (one commit swept in a pile of unrelated transcript files and had to be `git reset` and re-staged). Before pushing, confirm the repo's real visibility with `gh repo view --json visibility,isPrivate` instead of assuming from the path — a public skill repo deserves a PR + review, not a direct push to main.
 
 ### Step 9: Ship or Iterate
 

@@ -7,14 +7,14 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Skills](https://img.shields.io/badge/skills-77-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.75.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.76.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 77 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -202,6 +202,23 @@ This suite bundles the skills that extend Claude Code itself — session recover
 
 Installed names render as `daymade-claude-code:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all members.
 
+**Financial Data Suite** (shared namespace for investment-research and financial data workflows):
+```bash
+claude plugin install daymade-financial@daymade-skills
+```
+
+This suite bundles the skills that fetch and analyze financial data — Bigdata.com (RavenPack) structured financials and sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite orchestration, A-share news and policy aggregation, and A-share pharmaceutical sector daily reporting:
+
+```text
+/daymade-financial:bigdata-skill
+/daymade-financial:financial-data-collector
+/daymade-financial:gangtise-copilot
+/daymade-financial:ashare-news-fetcher
+/daymade-financial:pharma-daily-report
+```
+
+Installed names render as `daymade-financial:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all members.
+
 **Install Other Skills:**
 ```bash
 # GitHub operations
@@ -266,9 +283,6 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 # Product analysis and optimization
 claude plugin install product-analysis@daymade-skills
-
-# Financial data collection for US equities
-claude plugin install financial-data-collector@daymade-skills
 
 # Excel automation for creation, parsing, and macOS control
 claude plugin install excel-automation@daymade-skills
@@ -1709,6 +1723,8 @@ claude plugin install product-analysis@daymade-skills
 
 ### 39. **financial-data-collector** - Financial Data Collection for US Equities
 
+> **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:financial-data-collector`)
+
 Collect real financial data for any US publicly traded company from free public sources (yfinance). Output structured JSON with market data, historical financials (income statement, cash flow, balance sheet), WACC inputs, and analyst estimates - ready for downstream DCF modeling, comps analysis, or earnings review.
 
 **When to use:**
@@ -1726,8 +1742,8 @@ Collect real financial data for any US publicly traded company from free public 
 
 **Example usage:**
 ```bash
-# Install the skill
-claude plugin install financial-data-collector@daymade-skills
+# Install the suite
+claude plugin install daymade-financial@daymade-skills
 
 # Then ask Claude to collect data
 "Collect financial data for META"
@@ -1739,7 +1755,7 @@ claude plugin install financial-data-collector@daymade-skills
 
 *Coming soon*
 
-📚 **Documentation**: See [financial-data-collector/SKILL.md](./financial-data-collector/SKILL.md), [output-schema.md](./financial-data-collector/references/output-schema.md), and [yfinance-pitfalls.md](./financial-data-collector/references/yfinance-pitfalls.md).
+📚 **Documentation**: See [financial-data-collector/SKILL.md](./daymade-financial/financial-data-collector/SKILL.md), [output-schema.md](./daymade-financial/financial-data-collector/references/output-schema.md), and [yfinance-pitfalls.md](./daymade-financial/financial-data-collector/references/yfinance-pitfalls.md).
 
 **Requirements**: Python 3.11+, `yfinance`, `pandas` (auto-installed via uv inline dependencies).
 
@@ -2377,6 +2393,8 @@ claude plugin install feishu-doc-scraper@daymade-skills
 
 ### 60. **bigdata-skill** - Bigdata.com (RavenPack) SDK + REST Toolkit
 
+> **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:bigdata-skill`)
+
 Pull Bigdata.com (RavenPack) financial and news data through the official `bigdata-client` SDK and its public `/v1/*` REST endpoints — reaching the structured substrate the Bigdata MCP server doesn't hand over. The MCP returns prose chunks and pre-synthesized tearsheets; this toolkit reaches structured financials, prices, analyst estimates, a daily entity-sentiment series, annotated chunk search with sentiment + entity spans, and a screener.
 
 **When to use:**
@@ -2395,8 +2413,8 @@ Pull Bigdata.com (RavenPack) financial and news data through the official `bigda
 
 **Example usage:**
 ```bash
-# Install the skill
-claude plugin install bigdata-skill@daymade-skills
+# Install the suite
+claude plugin install daymade-financial@daymade-skills
 export BIGDATA_API_KEY=bd_v2_xxxxxxxx
 
 # Then ask Claude naturally
@@ -2410,6 +2428,8 @@ export BIGDATA_API_KEY=bd_v2_xxxxxxxx
 ---
 
 ### 61. **gangtise-copilot** - Gangtise Investment-Research Suite Installer
+
+> **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:gangtise-copilot`)
 
 One-command installer, credential configurator, and diagnostic layer for the full Gangtise (岗底斯投研) OpenAPI skill suite. Installs all 19 official Gangtise skills (data, research, utility), configures accessKey/secretAccessKey with a live auth check, and runs a read-only health diagnostic — solving the suite's core discoverability problem (no public manifest, listing-disabled OBS bucket, two parallel naming lines).
 
@@ -2428,8 +2448,8 @@ One-command installer, credential configurator, and diagnostic layer for the ful
 
 **Example usage:**
 ```bash
-# Install the skill
-claude plugin install gangtise-copilot@daymade-skills
+# Install the suite
+claude plugin install daymade-financial@daymade-skills
 
 # Then ask Claude naturally
 "装一下 gangtise 的所有 skill 并配置好凭据"
@@ -2852,9 +2872,7 @@ Faithfully archive public WPS / KDocs / 金山文档 links — especially embedd
 
 ### 78. **ashare-news-fetcher** - A-Share Market News & Sentiment Aggregator
 
-```bash
-claude plugin install ashare-news-fetcher@daymade-skills
-```
+> **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:ashare-news-fetcher`)
 
 Aggregate A-share (Chinese stock market) news, policy, and sentiment from public sources — 财联社, 华尔街见闻, 金十, 新浪 7x24, 东财快讯, regulator announcements (CSRC / PBoC / SSE), 东方财富股吧 — into structured JSON or Markdown.
 
@@ -2868,11 +2886,47 @@ Aggregate A-share (Chinese stock market) news, policy, and sentiment from public
 - Per-stock or market-wide filtering
 - Structured JSON / Markdown output
 
-### 79. **pharma-daily-report** - A-Share Pharma Sector Daily Report
+### 79. **local-codex** - Local OpenAI Codex CLI Agent
 
 ```bash
-claude plugin install pharma-daily-report@daymade-skills
+claude plugin install local-codex@daymade-skills
 ```
+
+Delegate coding tasks to the local OpenAI Codex CLI agent using your ChatGPT Pro OAuth flat-rate subscription. Wraps `codex exec` / `codex review` for code generation, refactoring, and review without per-token API charges.
+
+**When to use:**
+- Delegating coding tasks to Codex for generation, refactoring, or review
+- Running `codex exec` for non-interactive coding tasks
+- Using Codex's GPT-5.5 agent capabilities through local CLI
+
+**Key features:**
+- ChatGPT Pro OAuth flat-rate billing via `~/.codex/auth.json` (no API keys)
+- Auto-detects Codex CLI from desktop app, Homebrew, npm, or PATH
+- JSONL output parsing with final assistant message extraction
+- Configurable sandbox levels: read-only / workspace-write / danger-full-access
+
+### 80. **openclaw-model-switch** - OpenClaw Model Switcher
+
+```bash
+claude plugin install openclaw-model-switch@daymade-skills
+```
+
+Switch the default AI model for an OpenClaw instance (e.g., Kimi K2.6 → K2.7) by safely editing `openclaw.json` with automatic backup, model validation, and optional gateway restart.
+
+**When to use:**
+- Upgrading to a newly released model
+- Switching between models for different tasks
+- Rolling back after testing a new model
+
+**Key features:**
+- Automatic config backup before changes
+- Model validation against provider's model list
+- Optional gateway restart after switching
+- Supports Kimi K2.x model family with context window specs
+
+### 81. **pharma-daily-report** - A-Share Pharma Sector Daily Report
+
+> **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:pharma-daily-report`)
 
 Generate an A-share pharmaceutical sector daily report — pull real-time quotes for core pharma stocks from Sina Finance, rank 7 sub-sectors, top gainers/losers, and estimated fund flow, then optionally push a rich-text report via Feishu.
 
@@ -2931,7 +2985,7 @@ Use **youtube-downloader** to download YouTube videos and extract audio from vid
 Use **transcript-fixer** to correct speech-to-text errors in meeting notes, lectures, and interviews through dictionary-based rules and AI-powered corrections with automatic learning.
 
 ### For Financial Data & Investment Research
-Use **financial-data-collector** to pull structured financial data for any US public company, then feed the JSON output into DCF modeling, comps analysis, or earnings review workflows.
+Use the **daymade-financial** suite for the complete investment-research data pipeline. **bigdata-skill** pulls structured financials and sentiment from Bigdata.com (RavenPack) via the official SDK. **financial-data-collector** gathers US equity fundamentals from yfinance with validation and NO FALLBACK discipline. **gangtise-copilot** installs and orchestrates the full Gangtise (岗底斯) OpenAPI research suite. **ashare-news-fetcher** aggregates A-share news, policy, and sentiment from Chinese public sources. **pharma-daily-report** generates pharmaceutical sector daily reports with real-time quotes and fund-flow analysis.
 
 ### For Excel & Financial Modeling Automation
 Use **excel-automation** to create formatted workbooks, parse complex `.xlsm` models, and automate Excel window controls for repetitive analyst workflows.
@@ -3100,6 +3154,8 @@ Each skill includes:
 - **macOS + Xcode, XcodeGen** (for iOS-APP-developer)
 - **Codex CLI** (optional, for product-analysis multi-model mode)
 - **uv + openpyxl** (for excel-automation): `uv run --with openpyxl ...`
+- **Bigdata.com API key** (for `daymade-financial:bigdata-skill`): `bd_v2_` key from [https://www.bigdata.com/](https://www.bigdata.com/)
+- **Gangtise credentials** (for `daymade-financial:gangtise-copilot`): accessKey + secretAccessKey from [https://open.gangtise.com/](https://open.gangtise.com/)
 - **macOS** (for capture-screen and excel-automation AppleScript control workflows)
 - **Python 3.8+** (for continue-claude-work): bundled script for session extraction (no external dependencies)
 - **uv + Scrapling CLI** (for scrapling-skill): `uv tool install 'scrapling[shell]'` and `scrapling install` for browser-backed fetches

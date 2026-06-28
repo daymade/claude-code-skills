@@ -460,5 +460,68 @@ class TestLearningEngineCorrectness:
         assert ("bad", "wrong") in rejected
 
 
+class MockCorrectionService:
+    """Mock correction service that blocks unsafe patterns."""
+
+    def __init__(self, blocked):
+        self.blocked = blocked
+        self.added = []
+
+    def add_correction(self, from_text, to_text, domain):
+        if (from_text, to_text) in self.blocked:
+            from core.correction_repository import ValidationError
+            raise ValidationError(f"Safety check blocked: {from_text} -> {to_text}")
+        self.added.append((from_text, to_text, domain))
+
+
+class TestLearningEngineAutoApprove:
+    """Test auto-approve behavior with safety checks."""
+
+    @pytest.fixture
+    def temp_dirs(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            history_dir = temp_path / "history"
+            learned_dir = temp_path / "learned"
+            history_dir.mkdir()
+            learned_dir.mkdir()
+            yield history_dir, learned_dir
+
+    @pytest.fixture
+    def engine_with_service(self, temp_dirs):
+        history_dir, learned_dir = temp_dirs
+        service = MockCorrectionService(blocked={("仿佛", "反复")})
+        return LearningEngine(history_dir, learned_dir, correction_service=service)
+
+    def test_validation_error_routes_to_pending(self, engine_with_service, caplog):
+        """Blocked auto-approvals must be routed to pending, not silently dropped."""
+        import logging
+        from dataclasses import dataclass
+
+        @dataclass
+        class FakeAIChange:
+            from_text: str
+            to_text: str
+            confidence: float
+            chunk_index: int = 0
+            context_before: str = ""
+            context_after: str = ""
+            change_type: str = "ai"
+
+        # Auto-approve requires frequency >= 5
+        changes = (
+            [FakeAIChange("仿佛", "反复", 0.95)] * 5
+            + [FakeAIChange("克劳锐", "Claude", 0.95)] * 5
+        )
+
+        with caplog.at_level(logging.WARNING):
+            stats = engine_with_service.analyze_and_auto_approve(changes, "general")
+
+        # Unsafe pattern goes to pending, safe one auto-approved
+        assert stats["auto_approved"] == 1
+        assert stats["pending_review"] == 1
+        assert "Routing to pending review" in caplog.text
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

@@ -177,6 +177,8 @@ If the scaffolding script is missing or fails (e.g. the target repo has an unusu
 
 If the tool has no meaningful user preferences (no priority lists, no per-user config), drop `config-template/` entirely. Don't invent configuration surface area that wasn't in the original session.
 
+**Bundling complementary skills**: if the wrapped tool needs a sub-capability that another skill already provides (e.g., statusline rendering, validation utilities), bundle that skill's self-contained assets into your `scripts/` or `references/` rather than writing "install other-skill first" in your SKILL.md. A wrapper skill should work standalone after its own install.
+
 ## Step 4 — Fill SKILL.md
 
 Open `patterns.md` and copy the SKILL.md template. Fill in:

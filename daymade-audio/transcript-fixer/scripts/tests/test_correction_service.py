@@ -247,6 +247,61 @@ class TestCorrectionService(unittest.TestCase):
         self.assertEqual(exported["错误1"], "正确1")
         self.assertEqual(exported["错误2"], "正确2")
 
+    def test_save_history_accepts_dataclass_changes(self):
+        """save_history() must accept Change / AIChange dataclasses, not only dicts."""
+        from core.dictionary_processor import Change
+        from core.ai_utils import AIChange
+
+        changes = [
+            Change(
+                line_number=7,
+                from_text="访问",
+                to_text="访谈",
+                rule_type="dictionary",
+                rule_name="corrections_dict",
+                risk="low",
+            ),
+            AIChange(
+                chunk_index=0,
+                from_text="Unifox",
+                to_text="Unifuncs",
+                confidence=0.95,
+                context_before="调用一下 ",
+                context_after=" 这种第三方",
+                # Default change_type is "unknown"; save_history must map it to "ai"
+            ),
+        ]
+
+        self.service.save_history(
+            filename="test.md",
+            domain="test_domain",
+            original_length=100,
+            stage1_changes=1,
+            stage2_changes=1,
+            model="test-model",
+            changes=changes,
+        )
+
+        # Verify by querying history
+        with self.service.repository._pool.get_connection() as conn:
+            history = conn.execute(
+                "SELECT id FROM correction_history WHERE filename = ?", ("test.md",)
+            ).fetchone()
+            self.assertIsNotNone(history)
+
+            detail = conn.execute(
+                "SELECT COUNT(*) FROM correction_changes WHERE history_id = ?",
+                (history[0],)
+            ).fetchone()
+            self.assertEqual(detail[0], 2)
+
+            rule_types = conn.execute(
+                "SELECT rule_type FROM correction_changes WHERE history_id = ? ORDER BY id",
+                (history[0],)
+            ).fetchall()
+            self.assertEqual(rule_types[0][0], "dictionary")
+            self.assertEqual(rule_types[1][0], "ai")
+
     # ==================== Statistics Tests ====================
 
     def test_get_statistics_empty(self):

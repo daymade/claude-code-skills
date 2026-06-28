@@ -3,7 +3,9 @@ name: frontend-visual-qa
 description: >-
   Reviews rendered frontends, websites, dashboards, HTML slides, design-system
   specimens, live-artifact design systems, and generated UIs for visual quality
-  defects that lint/build miss.
+  defects that lint/build miss, including same-row label/input/helper
+  misalignment, sibling component axis drift, wrong rendered state/branch,
+  and user-journey recovery gaps.
   Use when shipping or reviewing UI, especially after frontend-design or
   ui-designer work, or when the user mentions awkward line breaks, orphan
   Chinese characters, cramped text, wrapped buttons/tags/nav, horizontal
@@ -21,6 +23,10 @@ description: >-
 
 This skill turns recurring frontend review failures into a repeatable rendered visual QA gate. The core lesson: passing `lint`, `build`, or a scripted screenshot is not enough. The agent must prove that the UI the user can actually see has no embarrassing layout defects.
 
+Two failure modes are equally fatal. **Micro** defects include line breaks, wrapped controls, clipped text, and same-row field/control/helper misalignment. **Macro** defects are whole-page composition: an oversized heading, visual weight dumped in one corner, chrome fighting the canvas, or a generic template gestalt that does not match the product/domain. Fixing every micro defect is still not enough if the whole page reads cheap.
+
+A clean screenshot is also not proof if it is the wrong state. Fresh headless or incognito sessions often render logged-out, onboarding, no-data, or empty branches, which can hide the region under review. Visual QA must name the state/branch, exercise the intended journey, and verify that the user can recover from processing, error, and advanced-mode states.
+
 Use it after implementation and before saying a UI is done. Also use it during review when the user says things like "不恰当的换行", "断行", "挤在一起", "滚动条不对", "低级排版错误", "AI slop", "use frontend-design to review", "自己用 Chrome 看", or "为什么你检查不出来".
 
 ## Relationship To Other Skills
@@ -35,6 +41,8 @@ Use it after implementation and before saying a UI is done. Also use it during r
 1. **Load Project Intent**
    - Read the product/design context, current route/page, and any design-system docs.
    - Identify the page type: real app, dashboard, landing page, deck-like HTML, static design-system reference, live-artifact design system, game/tool.
+   - Name the primary user journey and the exact rendered state/branch before judging pixels. If the change is support work, say that; do not let micro-polish become the main goal.
+   - Name the default path and exception path. Advanced modes must not hijack the default trigger, and the way back to the default path must be obvious.
    - If reference images or official brand materials exist, use them before judging aesthetics.
    - Write down the page's anti-goals before reviewing. Examples:
      - A design-system specimen is not a real app screen.
@@ -49,6 +57,7 @@ Use it after implementation and before saying a UI is done. Also use it during r
 
 2. **Check The User-Visible Chrome First**
    - If Chrome DevTools tools are available and the user is looking at the page, inspect that page before running headless scripts.
+   - For Electron/native/hybrid desktop apps, use the project's canonical app harness. Do not treat a renderer dev-server URL as proof that the native app launched; verify the app process/window and renderer surface.
    - Establish the viewport contract before judging layout. Record all four widths because they answer different questions:
      - `outerWidth`: the user's visible Chrome window.
      - `innerWidth`: the CSS layout viewport the page is rendered into.
@@ -124,6 +133,8 @@ npm install -D playwright-core   # if the project does not already have it
 node <path-to-this-skill>/scripts/visual_layout_audit.mjs --url http://127.0.0.1:5173/
 ```
 
+   - The script defaults should avoid hanging on SPAs and dev servers. Use `--wait-until networkidle` only when the app reliably reaches network idle; otherwise prefer `domcontentloaded` plus a settle delay.
+
    - If the artifact has a known page type, pass it explicitly:
 
 ```bash
@@ -158,6 +169,14 @@ node <path-to-this-skill>/scripts/visual_layout_audit.mjs \
   --forbid "Old Product Name|Deprecated Font|staging-only label"
 ```
 
+   - Pass required rendered terms for the state/branch under review so the sweep proves the relevant surface is present:
+
+```bash
+node <path-to-this-skill>/scripts/visual_layout_audit.mjs \
+  --url http://127.0.0.1:5173/ \
+  --require "Start recording|Settings|Project Alpha"
+```
+
    - If the user is looking at a wider Chrome window than the scripted viewport, pass the visible window width so the script can flag a mismatch:
 
 ```bash
@@ -170,26 +189,43 @@ node <path-to-this-skill>/scripts/visual_layout_audit.mjs \
    - The script is a sweep, not proof by itself. DevTools evidence and screenshot inspection still decide user-visible correctness.
 
 4. **Use Real Browser Evidence**
+   - First confirm the screenshot is on the same state/branch the user is reporting. Compare `h1`, title, visible headline, and required rendered terms. If the user is on a connected/populated branch but the capture shows onboarding/empty/logged-out, the screenshot is invalid for this review.
+   - Reach the user's actual state by reusing their browser/profile, seeding required data, setting the app's onboarding-complete flag, or using the app's own e2e/mock harness. If you must use mock data or a substituted font, state that tradeoff.
+   - Screenshot the whole rendered page first — sidebar, header, main, footer/composer, and chrome included — before zooming into any inner container. Macro composition defects are only visible at this scale.
    - Verify at least one desktop viewport and one mobile viewport.
    - Record: `outerWidth`, `innerWidth`, `visualViewport.width`, `outerWidth - innerWidth`, `innerHeight`, `overflowX`, document title/H1, important image load status.
    - For the first viewport, also record the effective content bounds, left/right blank space, primary image displayed ratio versus natural ratio, and whether any label/caption overlaps important image content.
    - Record enough typography evidence to answer whether the font, spacing, width, text size, and style are right: body font family, H1 size, body size, sidebar/rail width, repeated text-column width, and smallest important text size.
    - Take screenshots. Inspect them. Do not treat the screenshot file as proof until you actually look at it.
    - If the user complained about a specific area, scroll to that area and screenshot it, not just the top of the page.
+   - For repeated controls, form fields, state rails, metric cards, tab bars, or design-system specimens, run an explicit geometry pass. Compare siblings that share a visual row or repeated component contract: label top, control/input top and bottom, helper/error top, field height, left/right edges, and baseline rhythm. A field with an error/helper must not sit higher/lower than its sibling; either reserve an empty helper slot or change the layout so the whole row stays aligned.
+   - Do not rely on "looks roughly lined up" from a full-page screenshot when the user points to a local mismatch. Use bounding boxes from the real DOM for the disputed group, then inspect the local screenshot.
    - For long pages or design systems, inspect at least the first viewport plus representative lower sections. Do not stop after a clean hero/cover screenshot.
    - For a live artifact design system, exercise at least one interactive specimen: variant/tab/segmented switch, drawer/modal open-close, chart state, filter state, or responsive/state demo. Record what changed and whether text, overlay, scroll ownership, or overflow broke while the state was active.
    - If no meaningful interaction can be exercised in a live artifact, report that as a finding rather than silently treating it as static documentation.
 
-5. **Classify Findings**
+5. **Exercise The User Journey And State Contract**
+   - Click through the actual path the user will take, not only the initial render. Verify the primary action, stop/cancel path, retry path, settings/escape hatch, and return-to-idle path.
+   - For modeful UIs, list the mutually exclusive modes and the owner of each trigger. The same key/button/gesture must not silently mean two unrelated things unless the mode is unmistakable, switching is explicit, and the default path has an obvious one-step return.
+   - For each visible state (`ready`, `active`, `processing`, `error`, `disabled`, `recovery`), verify that the copy says what is happening, the action available is the next safe action, and global/floating surfaces show the same mode.
+   - Every blocking or long-running state must show progress, current work, or a recovery action. A stuck `processing` state with no way back to the main journey is a P1 even if the layout is pretty.
+   - Error states must preserve the feature context that failed. A multi-step or mode-specific failure must not degrade into a generic error that looks like another feature failed.
+   - Convert each confirmed miss into either a product fix or a regression guard. A visual QA finding that remains only in chat memory is not closed.
+
+6. **Run A Counter-Review Pass**
+   - Before reporting "done" on nontrivial UI, run an adversarial pass focused on what a tired real user would misunderstand first: mode ownership, the way back to default, blocked states, misleading provider/model labels, inaccessible controls, whether the UI asks for avoidable manual work, and which guard now catches the same class of miss.
+
+7. **Classify Findings**
    - `P0`: page unusable, blank, primary action blocked, text unreadable, severe overlap.
-   - `P1`: horizontal page overflow, double/incorrect scroll container, modal/toolbar blocks content, major responsive failure.
+   - `P1`: horizontal page overflow, double/incorrect scroll container, modal/toolbar blocks content, major responsive failure, ambiguous primary trigger, hidden way back to default mode, stuck processing with no recovery, wrong error/feature context, wrong app/surface verified.
    - `P2`: awkward heading line break, orphan Chinese character/word, wrapped button/tag, cramped card text, important image missing.
    - `P3`: minor spacing, weak contrast, inconsistent alignment, non-critical polish.
    - `Intent`: wrong artifact type, such as a design system presented as a fake app, a dashboard presented as a poster, or a landing page presented as a component catalog.
    - `Taste`: generic AI slop aesthetic, wrong domain style, unmotivated gradient/glow/card pile, not enough brand/product signal.
 
-6. **Fix And Re-run**
+8. **Fix And Re-run**
    - Do not say "fixed" after editing CSS. Re-run the visual checks and inspect screenshots again.
+   - If there is a benchmark, put your after-screenshot beside it and name the concrete remaining gap. A general aesthetic principle never outranks the specific target the user asked to match.
    - For awkward line breaks, prefer structural fixes over random width tweaks:
      - shorten copy;
      - split title into intentional spans;
@@ -212,6 +248,8 @@ Load `references/history-derived-checklist.md` for the detailed checklist. Minim
 - typography system mismatch: font family, type scale, line height, text-column width, and density do not match the artifact type or domain;
 - cramped text in cards/tables/timelines;
 - text clipped by fixed heights;
+- same-row sibling drift: labels, inputs, helper/error text, tab items, metric cards, and repeated component specimens not sharing the same visual axes;
+- helper/error slot shifts: one field grows or moves because only one sibling has helper/error copy, making paired fields look misaligned;
 - horizontal page overflow;
 - viewport/window mismatch that makes a normal desktop Chrome render through a smaller emulated viewport;
 - excessive or asymmetric blank space in the first viewport;
@@ -223,6 +261,11 @@ Load `references/history-derived-checklist.md` for the detailed checklist. Minim
 - page-type drift: design system vs app/workbench/dashboard/landing/deck;
 - live-artifact drift: useful interactive specimens are wrongly removed, or live controls appear without specimen labels, state/variant framing, or usage rules;
 - unexercised live-artifact interactions: controls exist, but nobody checked the changed state for overflow, clipping, overlay, stale chart data, or scroll problems;
+- ambiguous or overloaded controls/shortcuts;
+- hidden or confusing return path from advanced mode back to the default mode;
+- blocked processing/error states without recovery or clear next action;
+- provider/model/runtime labels that are too vague, stale, or not backed by the actual selected path;
+- wrong app surface: renderer page verified while the native shell/user-visible app was not;
 - repeated card/panel grids that replace information architecture;
 - generic AI slop aesthetics: purple/blue gradient default, glass cards, decorative orbs/glow, card grids everywhere, vague "AI empowers" copy.
 
@@ -285,9 +328,13 @@ When reporting, be concrete:
 Findings:
 - P2 awkward heading break: `.hero-title` renders as `客户增长分析 / 系统` at 1700px. Fix: split H1 into intentional semantic spans.
 - P1 horizontal overflow: mobile 390px has `overflowX=42`; source `.toolbar`.
+- P1 mode collision: `Fn` starts two unrelated flows with no visible mode boundary; fix by assigning explicit triggers and a visible return-to-default path.
+- P2 same-row field mismatch: paired fields render with helper/error slot heights that differ by 18px; fix by reserving helper slots or stacking fields.
 - Taste: hero uses generic purple gradient and no real product/domain visual; replace with domain-specific image.
 
 Verified:
+- state/branch: connected ready branch, h1 matches user-reported state.
+- journey: start -> processing -> recovery -> idle verified; stale shortcut copy absent.
 - desktop 1700x1000: `overflowX=0`, title/H1 correct, primary image loaded.
 - mobile 390x844: `overflowX=0`, no wrapped controls.
 - screenshots: `/tmp/page-desktop.png`, `/tmp/page-mobile.png`.
@@ -314,11 +361,16 @@ Verified:
 - Adding `overflow: hidden` to hide the problem.
 - Shrinking all text until it fits.
 - Letting labels or table first columns break character-by-character.
+- Accepting same-row field/control/helper misalignment because each individual component looks valid in isolation.
 - Saying "responsive" because CSS has media queries.
 - Treating `frontend-design` as a substitute for actual Chrome verification.
 - Treating a headless Playwright pass as proof that the user's current Chrome window is correct.
+- Treating a renderer dev server as proof that an Electron/native app launched.
+- Verifying one static screenshot while skipping the user's actual journey and state transitions.
+- Fixing a user-reported UI miss without adding any regression guard or repeatable review step.
+- Fixing a user-reported UI miss with a project-specific one-off script when the failure class is generic. Convert it into a reusable checklist item, visual audit rule, or test pattern instead.
 
 ## Bundled Resources
 
-- `scripts/visual_layout_audit.mjs`: Playwright-core script that loads a URL at desktop/mobile viewports and reports bad terms, horizontal overflow, section overflow, orphan heading lines, wrapped controls, clipped text, image defects, and optional lower-section screenshots.
+- `scripts/visual_layout_audit.mjs`: Playwright-core script that loads a URL at desktop/mobile viewports and reports bad terms, horizontal overflow, section overflow, orphan heading lines, wrapped controls, clipped text, image defects, same-row field/control/helper misalignment, and optional lower-section screenshots.
 - `references/history-derived-checklist.md`: distilled checklist from local Claude/Codex history and recurring user corrections.

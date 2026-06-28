@@ -15,7 +15,7 @@ import os
 import sys
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 from .correction_repository import (
@@ -572,7 +572,7 @@ class CorrectionService:
 
     def save_history(self, filename: str, domain: str, original_length: int,
                     stage1_changes: int, stage2_changes: int, model: str,
-                    changes: List[Dict]) -> None:
+                    changes: List[Any]) -> None:
         """
         Save correction run history for learning.
 
@@ -583,8 +583,40 @@ class CorrectionService:
             stage1_changes: Number of Stage 1 changes
             stage2_changes: Number of Stage 2 changes
             model: AI model used
-            changes: List of individual changes
+            changes: List of individual changes (dict or dataclass: Change / AIChange)
         """
+        def _normalize_change(change):
+            """Extract standard fields from dict or dataclass (Change / AIChange)."""
+            if isinstance(change, dict):
+                return {
+                    "line_number": change.get("line_number"),
+                    "from_text": change.get("from_text", ""),
+                    "to_text": change.get("to_text", ""),
+                    "rule_type": change.get("rule_type", "dictionary"),
+                    "context_before": change.get("context_before"),
+                    "context_after": change.get("context_after"),
+                }
+            # Dataclass fallback: Change has line_number/rule_type;
+            # AIChange has chunk_index/change_type instead.
+            line_number = getattr(change, "line_number", None)
+            if line_number is None:
+                line_number = getattr(change, "chunk_index", None)
+
+            rule_type = getattr(change, "rule_type", None)
+            if rule_type is None:
+                change_type = getattr(change, "change_type", "ai")
+                # DB CHECK constraint only allows context/dictionary/ai
+                rule_type = change_type if change_type in ("context", "dictionary", "ai") else "ai"
+
+            return {
+                "line_number": line_number,
+                "from_text": getattr(change, "from_text", ""),
+                "to_text": getattr(change, "to_text", ""),
+                "rule_type": rule_type,
+                "context_before": getattr(change, "context_before", None),
+                "context_after": getattr(change, "context_after", None),
+            }
+
         try:
             with self.repository._transaction() as conn:
                 # Insert history record
@@ -598,18 +630,19 @@ class CorrectionService:
 
                 # Insert individual changes
                 for change in changes:
+                    normalized = _normalize_change(change)
                     conn.execute("""
                         INSERT INTO correction_changes
                         (history_id, line_number, from_text, to_text, rule_type, context_before, context_after)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                     """, (
                         history_id,
-                        change.get("line_number"),
-                        change.get("from_text", ""),
-                        change.get("to_text", ""),
-                        change.get("rule_type", "dictionary"),
-                        change.get("context_before"),
-                        change.get("context_after")
+                        normalized["line_number"],
+                        normalized["from_text"],
+                        normalized["to_text"],
+                        normalized["rule_type"],
+                        normalized["context_before"],
+                        normalized["context_after"],
                     ))
 
                 logger.info(f"Saved correction history for {filename}: {stage1_changes + stage2_changes} total changes")

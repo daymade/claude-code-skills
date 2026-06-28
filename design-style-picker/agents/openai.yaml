@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Style Picker"
+  short_description: "Batch visual directions for taste selection"
+  default_prompt: "Use $design-style-picker to generate and compare design style directions before implementing UI."

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 77 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
+This is a Claude Code skills marketplace containing production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -153,11 +153,11 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 56 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
+- Contains plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-financial`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
 - Each plugin has: name, description, source, version, category, keywords
 - Marketplace metadata: name, owner, version
 - Single-skill plugins follow the official pattern (167/168 plugins in `anthropics/claude-plugins-official`): `source` points to skill directory, `skills` omitted
-- **All 4 suites are suite-only.** `daymade-audio`, `daymade-claude-code`, `daymade-docs`, and `daymade-skill` do NOT register their member skills as standalone plugins. Users install the suite (e.g., `daymade-audio@daymade-skills`) and invoke skills as `<suite>:<skill>` (e.g., `daymade-audio:transcript-fixer`, `daymade-claude-code:statusline-generator`). When adding a new skill that belongs to a suite, only update the suite entry's `skills` array — do NOT create a parallel standalone plugin entry.
+- **All suites are suite-only.** `daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-financial`, and `daymade-skill` do NOT register their member skills as standalone plugins. Users install the suite (e.g., `daymade-audio@daymade-skills`) and invoke skills as `<suite>:<skill>` (e.g., `daymade-audio:transcript-fixer`, `daymade-claude-code:statusline-generator`). When adding a new skill that belongs to a suite, only update the suite entry's `skills` array — do NOT create a parallel standalone plugin entry.
 
 ### Versioning Architecture
 
@@ -237,7 +237,7 @@ This applies when you change ANY file under a skill directory:
 36. **tunnel-doctor** - Diagnose and fix Tailscale + proxy/VPN conflicts (six layers: route, HTTP env, system proxy, SSH ProxyCommand, VM/container proxy, DNS resolver stall) on macOS with WSL SSH support, plus a TUN measurement-contamination guide (raw probes lie under a global proxy)
 37. **windows-remote-desktop-connection-doctor** - Diagnose AVD/W365 connection quality issues with transport protocol analysis and Windows App log parsing
 38. **product-analysis** - Perform structured product audits across UX, API, architecture, and compare mode to produce prioritized optimization recommendations
-39. **financial-data-collector** - Collect real financial data for US public companies via yfinance with validation, NaN detection, and NO FALLBACK principle
+39. **financial-data-collector** - Collect real financial data for US public companies via yfinance with validation, NaN detection, and NO FALLBACK principle (daymade-financial suite member)
 40. **excel-automation** - Create formatted Excel files, parse complex xlsm models, and control Excel windows on macOS via AppleScript
 41. **capture-screen** - Programmatically capture macOS application windows using Swift window ID discovery and screencapture workflows
 42. **continue-claude-work** - Recover local `.claude` session context via compact-boundary extraction, subagent workflow recovery, and session end reason detection, then continue interrupted work without `claude --resume`
@@ -254,8 +254,8 @@ This applies when you change ANY file under a skill directory:
 53. **feishu-doc-scraper** - Save Feishu Docs and Feishu Wiki pages as clean Markdown from a live authenticated browser session. Primary path: injectable JS script (`feishu_dom_capture.js`) for TOC-driven DOM capture, image download via session cookie, noise stripping, and clipboard bridge transport. Fallback path: Python SSR extraction (`browser_cookie3` + `requests`) when browser automation is unavailable. Enforces per-document image naming and recovers `[图片: Feishu Docs - Image]` placeholders. Works with both Feishu (feishu.cn) and Lark (larkoffice.com)
 54. **auto-repo-setup** - Automated repository environment configuration, fault diagnosis, and repair for non-technical users. Reads ONBOARDING.md, audits environment gaps (git, ffmpeg, uv, Python, API keys), installs missing dependencies, validates with smoke tests, and safely handles git operations with PII Guard and Push Safety. Includes SessionStart hook initialization, counter-review workflows, and git history sanitization.
 55. **asr-transcribe-to-text** - Transcribes audio and video files to text using Qwen3-ASR — local MLX inference on Apple Silicon (no API key, 15-27x realtime) or remote vLLM/OpenAI-compatible API, with automatic platform detection
-56. **bigdata-skill** - Pull Bigdata.com (RavenPack) financial and news data via the official `bigdata-client` SDK and `/v1/*` REST endpoints — structured financials, prices, analyst estimates, a daily entity-sentiment series, annotated chunk search, and a screener
-57. **gangtise-copilot** - Gangtise investment-research OpenAPI skill suite installer and diagnostic tool
+56. **bigdata-skill** - Pull Bigdata.com (RavenPack) financial and news data via the official `bigdata-client` SDK and `/v1/*` REST endpoints — structured financials, prices, analyst estimates, a daily entity-sentiment series, annotated chunk search, and a screener (daymade-financial suite member)
+57. **gangtise-copilot** - Gangtise investment-research OpenAPI skill suite installer and diagnostic tool (daymade-financial suite member)
 58. **llm-wiki-setup** - Co-create a personal investment-research LLM Wiki (Karpathy's pattern) where the user's own analysis framework becomes a living CLAUDE.md, built by interviewing them rather than handing over a template
 59. **benchmark-due-diligence** - Runs adversarial due-diligence on a benchmark the user envies (a founder, KOL, company, or product whose claimed success looks inflated), separating marketing bubble from real signal and mapping the validated playbook onto the user's own situation
 60. **pdf-to-html** - Converts a PDF into one self-contained, readable HTML file preserving images, tables, charts, and reading order, optionally translating it into another language while keeping every figure
@@ -274,8 +274,10 @@ This applies when you change ANY file under a skill directory:
 73. **openclaw** - Manage OpenClaw (龙虾/lobster) instance configs: audit, diff, copy, add-model, list, switch models across openclaw.json files; DeepSeek model patches, default-model/alias management, config validation
 74. **download-gemini-images** - Download images (uploaded files or generated previews) from a Google Gemini conversation page via logged-in Chrome; lightbox-first with pageAssets fallback, ordered ZIP packaging with integrity verification
 75. **wps-doc-scraper** - Faithfully archive public WPS/KDocs/金山文档 links (incl. embedded ProcessOn mind maps and canvases) as raw source data, original SVG/PNG, and Markdown without login; unauthenticated data-API-first with browser-DOM fallback
-76. **ashare-news-fetcher** - Aggregate A-share (Chinese market) news, policy, and sentiment from public sources (财联社/华尔街见闻/金十/新浪7x24/东财快讯/regulators/东财股吧) into structured JSON or Markdown; per-stock or market-wide, no login
-77. **pharma-daily-report** - Generate an A-share pharma sector daily report from Sina Finance (core pharma stocks, 7 sub-sector ranking, gainers/losers, fund-flow estimate), optional Feishu rich-text push; default 20-stock watchlist, customizable
+76. **ashare-news-fetcher** - Aggregate A-share (Chinese market) news, policy, and sentiment from public sources (财联社/华尔街见闻/金十/新浪7x24/东财快讯/regulators/东财股吧) into structured JSON or Markdown; per-stock or market-wide, no login (daymade-financial suite member)
+77. **pharma-daily-report** - Generate an A-share pharma sector daily report from Sina Finance (core pharma stocks, 7 sub-sector ranking, gainers/losers, fund-flow estimate), optional Feishu rich-text push; default 20-stock watchlist, customizable (daymade-financial suite member)
+78. **local-codex** - Delegate coding tasks to the local OpenAI Codex CLI agent using ChatGPT Pro OAuth flat-rate subscription; wraps `codex exec` / `codex review` for code generation, refactoring, and review without per-token API charges
+79. **openclaw-model-switch** - Switch the default AI model for an OpenClaw instance (e.g., Kimi K2.6 → K2.7) by safely editing `openclaw.json` with backup, model validation, and optional gateway restart
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 

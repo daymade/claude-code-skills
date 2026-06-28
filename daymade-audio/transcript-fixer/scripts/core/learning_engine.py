@@ -36,6 +36,8 @@ except ImportError:
         "Install with: uv add filelock"
     )
 
+from .correction_repository import ValidationError
+
 logger = logging.getLogger(__name__)
 
 
@@ -505,9 +507,25 @@ class LearningEngine:
                             "domain": domain
                         })
                         stats["auto_approved"] += 1
+                    except ValidationError as e:
+                        # Safety check blocked the rule (common word / collision).
+                        # Route to pending review instead of silently dropping it.
+                        logger.warning(
+                            f"Auto-approve blocked for '{from_text}' -> '{to_text}' "
+                            f"by safety check: {e}. Routing to pending review."
+                        )
+                        pending_patterns.append({
+                            "from": from_text,
+                            "to": to_text,
+                            "frequency": frequency,
+                            "confidence": avg_confidence
+                        })
+                        stats["pending_review"] += 1
                     except Exception as e:
-                        # Already exists or validation error
-                        pass
+                        # Other failures (database, already exists, etc.)
+                        logger.warning(
+                            f"Auto-approve failed for '{from_text}' -> '{to_text}': {e}"
+                        )
 
             # Add to pending review if meets minimum criteria
             elif (frequency >= self.MIN_FREQUENCY and
@@ -550,7 +568,7 @@ class LearningEngine:
                 with open(self.auto_approved_file, 'r', encoding='utf-8') as f:
                     content = f.read().strip()
                     if content:
-                        data = json.load(json.loads(content) if isinstance(content, str) else f)
+                        data = json.loads(content)
                         existing = data.get("auto_approved", [])
 
             # Append new
