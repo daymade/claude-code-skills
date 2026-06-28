@@ -416,6 +416,7 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
   }
 
   issues.push(...auditPageType({ viewportName, pageType }));
+  issues.push(...auditCardSideRails({ viewportName }));
 
   for (const el of [...document.querySelectorAll("[role='button']")].filter(isVisible)) {
     const selector = describe(el);
@@ -627,6 +628,73 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
         }
       }
     }
+  }
+
+  function auditCardSideRails({ viewportName }) {
+    const candidates = [...document.querySelectorAll([
+      "[class*='card']",
+      "[class*='panel']",
+      "[class*='module']",
+      "[class*='shell']",
+      "[class*='alert']",
+      "[class*='callout']",
+      "[class*='evidence']",
+      "[class*='spec']",
+      "[class*='route']",
+      "[class*='kpi']",
+      "[class*='bulkbar']",
+      "article",
+      "section",
+    ].join(","))].filter(isVisible);
+
+    return candidates
+      .filter((el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.width < 160 || rect.height < 58) return false;
+        if (isAllowedSideRailElement(el)) return false;
+        const style = getComputedStyle(el);
+        const borderLeftWidth = Number.parseFloat(style.borderLeftWidth) || 0;
+        const borderTopWidth = Number.parseFloat(style.borderTopWidth) || 0;
+        const borderLeftColor = style.borderLeftColor || "";
+        const hasOpaqueLeftBorder = borderLeftWidth >= 3 && borderTopWidth < borderLeftWidth && !/rgba\([^)]*,\s*0\)/i.test(borderLeftColor);
+        const hasLeftInsetShadow = hasInsetLeftRail(style.boxShadow);
+        return hasOpaqueLeftBorder || hasLeftInsetShadow;
+      })
+      .map((el) => ({
+        viewport: viewportName,
+        selector: describe(el),
+        type: "card-side-rail-ai-slop",
+        severity: "error",
+        text: clean(el.textContent || "").slice(0, 160),
+        detail: "Large rounded/card-like container uses a colored left border or left inset shadow as a visual accent. Use top rules, internal state capsules, table row state, or semantic layout instead.",
+      }));
+  }
+
+  function isAllowedSideRailElement(el) {
+    const className = typeof el.className === "string" ? el.className : "";
+    const semantic = semanticParts(el).join(" ");
+    if (/(tag|badge|pill|qbadge|tier|dot|icon|thumb|avatar|logo|motif|symbol|checkbox|radio|switch|field|input|label|selection|option|row|cell|rail)/i.test(`${className} ${semantic}`)) {
+      return true;
+    }
+    if (/^(BUTTON|INPUT|TEXTAREA|SELECT|LABEL|TH|TD)$/.test(el.tagName)) return true;
+    return false;
+  }
+
+  function hasInsetLeftRail(boxShadow) {
+    if (!boxShadow || boxShadow === "none" || !/inset/i.test(boxShadow)) return false;
+    const layers = boxShadow
+      .replace(/rgba?\([^)]*\)/gi, "COLOR")
+      .split(/\s*,\s*/)
+      .filter((layer) => /\binset\b/i.test(layer));
+    return layers.some((layer) => {
+      const lengths = [...layer
+        .replace(/\binset\b/gi, "")
+        .matchAll(/-?\d+(?:\.\d+)?px/g)]
+        .map((match) => Number.parseFloat(match[0]));
+      if (lengths.length < 2) return false;
+      const [offsetX, offsetY] = lengths;
+      return Math.abs(offsetX) >= 3 && Math.abs(offsetY) <= 1;
+    });
   }
 
   function isFieldContainer(el) {
