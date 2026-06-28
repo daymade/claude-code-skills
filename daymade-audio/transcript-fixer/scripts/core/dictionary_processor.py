@@ -17,7 +17,7 @@ import re
 import sys
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -34,6 +34,7 @@ class Change:
     to_text: str
     rule_type: str  # "dictionary" or "context_rule"
     rule_name: str
+    risk: str = "low"  # "low", "medium", "high"
 
 
 class DictionaryProcessor:
@@ -46,20 +47,34 @@ class DictionaryProcessor:
     3. Track all changes for learning
     """
 
-    def __init__(self, corrections: Dict[str, str], context_rules: List[Dict]):
+    def __init__(self, corrections: Dict[str, str], context_rules: List[Dict],
+                 correction_meta: Optional[Dict[str, Dict]] = None):
         """
         Initialize processor with corrections and rules
 
         Args:
             corrections: Dictionary of {wrong: correct} pairs
             context_rules: List of context-aware regex rules
+            correction_meta: Optional metadata per correction key,
+                e.g. {"wrong": {"confidence": 0.95, "notes": "..."}}
         """
         self.corrections = corrections
         self.context_rules = context_rules
+        self.correction_meta = correction_meta or {}
 
-    def process(self, text: str) -> Tuple[str, List[Change]]:
+    def process(self, text: str, review_mode: bool = False) -> Tuple[str, List[Change]]:
         """
-        Apply all corrections to text
+        Apply all corrections to text.
+
+        Args:
+            text: Input text
+            review_mode: If True, only apply low-risk corrections; medium/high
+                are tracked but not applied. NOTE: this engine-level default is
+                False (apply everything) so the function stays a pure
+                transformer, but the CLI deliberately defaults it to True (safe
+                mode) in commands.cmd_run_correction. New direct callers should
+                pass review_mode explicitly rather than assume the safe default
+                applies at this layer.
 
         Returns:
             (corrected_text, list_of_changes)
@@ -68,17 +83,26 @@ class DictionaryProcessor:
         all_changes = []
 
         # Step 1: Apply context rules (more specific, higher priority)
-        corrected_text, context_changes = self._apply_context_rules(corrected_text)
+        corrected_text, context_changes = self._apply_context_rules(corrected_text, review_mode=review_mode)
         all_changes.extend(context_changes)
 
         # Step 2: Apply dictionary replacements (more general)
-        corrected_text, dict_changes = self._apply_dictionary(corrected_text)
+        corrected_text, dict_changes = self._apply_dictionary(corrected_text, review_mode=review_mode)
         all_changes.extend(dict_changes)
 
         return corrected_text, all_changes
 
-    def _apply_context_rules(self, text: str) -> Tuple[str, List[Change]]:
-        """Apply context-aware regex rules"""
+    def _apply_context_rules(self, text: str, review_mode: bool = False) -> Tuple[str, List[Change]]:
+        """
+        Apply context-aware regex rules.
+
+        Like the dictionary path, in review_mode only low-risk matches are
+        applied; medium/high-risk matches are tracked as changes but left in
+        place (for *_needs_review.md). Without this gate, safe mode would apply
+        every context rule unconditionally regardless of risk, and the run
+        summary would mis-count a change as "skipped" while it was already
+        mutated into the output.
+        """
         changes = []
         corrected = text
 
@@ -87,23 +111,33 @@ class DictionaryProcessor:
             replacement = rule["replacement"]
             description = rule.get("description", "")
 
-            # Find all matches with their positions
+            # Position-aware rebuild so risky matches can be selectively kept.
+            result_parts = []
+            search_start = 0
             for match in re.finditer(pattern, corrected):
+                matched = match.group(0)
+                risk = "medium" if len(matched) <= 3 else "low"
                 line_num = corrected[:match.start()].count('\n') + 1
                 changes.append(Change(
                     line_number=line_num,
-                    from_text=match.group(0),
+                    from_text=matched,
                     to_text=replacement,
                     rule_type="context_rule",
-                    rule_name=description or pattern
+                    rule_name=description or pattern,
+                    risk=risk,
                 ))
-
-            # Apply replacement
-            corrected = re.sub(pattern, replacement, corrected)
+                result_parts.append(corrected[search_start:match.start()])
+                if review_mode and risk in ("medium", "high"):
+                    result_parts.append(matched)       # keep original (deferred to needs_review)
+                else:
+                    result_parts.append(replacement)   # apply
+                search_start = match.end()
+            result_parts.append(corrected[search_start:])
+            corrected = "".join(result_parts)
 
         return corrected, changes
 
-    def _apply_dictionary(self, text: str) -> Tuple[str, List[Change]]:
+    def _apply_dictionary(self, text: str, review_mode: bool = False) -> Tuple[str, List[Change]]:
         """
         Apply dictionary replacements with substring safety checks.
 
@@ -127,6 +161,7 @@ class DictionaryProcessor:
             needs_boundary_check = len(wrong) <= 3
             corrected, new_changes = self._apply_with_safety_checks(
                 corrected, wrong, correct, needs_boundary_check,
+                review_mode=review_mode,
             )
             changes.extend(new_changes)
 
@@ -151,9 +186,10 @@ class DictionaryProcessor:
         wrong: str,
         correct: str,
         check_boundaries: bool,
+        review_mode: bool = False,
     ) -> Tuple[str, List[Change]]:
         """
-        Apply replacement at each match position with two safety layers:
+        Apply replacement at each match position with safety layers.
 
         1. Superset check (all rules): When to_text contains from_text
            (e.g., "金流"→"现金流"), check if the surrounding text already
@@ -161,6 +197,10 @@ class DictionaryProcessor:
 
         2. Boundary check (short rules only): Check if the match is inside
            a longer common word (e.g., "天差" inside "天差地别").
+
+        3. Risk classification: low/medium/high based on confidence and
+           common-word membership. In review_mode, high/medium changes are
+           tracked but not applied.
         """
         changes = []
         result_parts = []
@@ -195,15 +235,24 @@ class DictionaryProcessor:
                 )
                 continue
 
-            # Safe to replace
+            # Safe to replace (or record for review)
             line_num = text[:pos].count('\n') + 1
+            risk = self._assess_risk(wrong, correct)
+
             changes.append(Change(
                 line_number=line_num,
                 from_text=wrong,
                 to_text=correct,
                 rule_type="dictionary",
-                rule_name="corrections_dict"
+                rule_name="corrections_dict",
+                risk=risk,
             ))
+
+            if review_mode and risk in ("medium", "high"):
+                # Track but do not apply
+                result_parts.append(text[search_start:pos + len(wrong)])
+                search_start = pos + len(wrong)
+                continue
 
             result_parts.append(text[search_start:pos])
             result_parts.append(correct)
@@ -281,6 +330,44 @@ class DictionaryProcessor:
                     return True
 
         return False
+
+    def _assess_risk(self, wrong: str, correct: str) -> str:
+        """
+        Classify a dictionary change as low/medium/high risk.
+
+        High risk:
+        - from_text is a known common Chinese word
+        - from_text length <= 2
+        - confidence metadata is below 0.7
+
+        Medium risk:
+        - confidence metadata is 0.7-0.9
+        - from_text is 3 characters and looks like a real word fragment
+
+        Low risk:
+        - Non-word garbled text (e.g., 克劳锐 -> Claude)
+        - High confidence (>= 0.9) and not a common word
+        """
+        meta = self.correction_meta.get(wrong, {})
+        confidence = meta.get("confidence", 1.0)
+
+        if wrong in ALL_COMMON_WORDS:
+            return "high"
+
+        if len(wrong) <= 2:
+            return "high"
+
+        if confidence < 0.7:
+            return "high"
+
+        if confidence < 0.9:
+            return "medium"
+
+        # Short but not common words are still somewhat risky
+        if len(wrong) <= 3:
+            return "medium"
+
+        return "low"
 
     def get_summary(self, changes: List[Change]) -> Dict[str, int]:
         """Generate summary statistics"""

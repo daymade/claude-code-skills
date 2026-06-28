@@ -108,7 +108,7 @@ Key-value configuration store.
 
 **Default configs**:
 - `schema_version`: '2.0'
-- `api_model`: 'GLM-4.6'
+- `api_model`: 'GLM-5.2'
 - `learning_frequency_threshold`: 3
 - `learning_confidence_threshold`: 0.8
 - `history_retention_days`: 90

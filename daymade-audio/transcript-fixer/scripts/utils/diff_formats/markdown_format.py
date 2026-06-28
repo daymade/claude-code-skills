@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .change_extractor import extract_changes, generate_change_summary
+from core.defaults import DEFAULT_MODEL
 
 
 def generate_markdown_report(
@@ -19,7 +20,8 @@ def generate_markdown_report(
     stage2_file: str,
     original: str,
     stage1: str,
-    stage2: str
+    stage2: str,
+    model: str = DEFAULT_MODEL
 ) -> str:
     """
     Generate comprehensive Markdown comparison report
@@ -64,7 +66,7 @@ def generate_markdown_report(
 | 阶段 | 修改数量 | 说明 |
 |------|---------|------|
 | 阶段1: 词典修复 | {len(changes_stage1)} | 基于预定义词典的批量替换 |
-| 阶段2: AI修复 | {len(changes_stage2)} | GLM-4.6智能纠错 |
+| 阶段2: AI修复 | {len(changes_stage2)} | {model} 智能纠错 |
 | **总计** | **{len(changes_total)}** | **原始→最终版本** |
 
 ---

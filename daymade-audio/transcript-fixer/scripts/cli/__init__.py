@@ -20,6 +20,9 @@ from .commands import (
     cmd_config,
     cmd_migration,
     cmd_audit_retention,
+    cmd_report_false_positive,
+    cmd_load_presets,
+    cmd_extract_uncertain,
 )
 from .argument_parser import create_argument_parser
 
@@ -37,5 +40,8 @@ __all__ = [
     'cmd_config',
     'cmd_migration',
     'cmd_audit_retention',
+    'cmd_report_false_positive',
+    'cmd_load_presets',
+    'cmd_extract_uncertain',
     'create_argument_parser',
 ]

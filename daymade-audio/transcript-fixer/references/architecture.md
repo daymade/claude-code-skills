@@ -46,21 +46,25 @@ The codebase follows a modular package structure for maintainability:
 
 ```
 scripts/
-├── fix_transcription.py        # Main entry point (~70 lines)
+├── fix_transcription.py        # Main entry point
 ├── core/                       # Business logic & data access
-│   ├── correction_repository.py # Data access layer (466 lines)
-│   ├── correction_service.py    # Business logic layer (525 lines)
-│   ├── schema.sql              # SQLite database schema (216 lines)
-│   ├── dictionary_processor.py # Stage 1 processor (140 lines)
-│   ├── ai_processor.py        # Stage 2 processor (199 lines)
-│   └── learning_engine.py     # Pattern detection (252 lines)
+│   ├── correction_repository.py # Data access layer
+│   ├── correction_service.py    # Business logic layer
+│   ├── schema.sql              # SQLite database schema
+│   ├── dictionary_processor.py # Stage 1 processor
+│   ├── ai_processor.py        # Stage 2 synchronous processor
+│   ├── ai_processor_async.py  # Stage 2 async/parallel processor
+│   ├── ai_utils.py            # Shared chunking, prompt, response parsing
+│   └── learning_engine.py     # Pattern detection
 ├── cli/                        # Command-line interface
-│   ├── commands.py            # Command handlers (180 lines)
-│   └── argument_parser.py     # Argument config (95 lines)
+│   ├── commands.py            # Command handlers
+│   └── argument_parser.py     # Argument config
 └── utils/                      # Utility functions
-    ├── diff_generator.py       # Multi-format diffs (132 lines)
-    ├── logging_config.py       # Logging configuration (130 lines)
-    └── validation.py          # SQLite validation (105 lines)
+    ├── config.py              # Configuration management
+    ├── diff_generator.py       # Multi-format diffs
+    ├── logging_config.py       # Logging configuration
+    ├── path_validator.py      # Input/output path validation
+    └── validation.py          # SQLite validation
 ```
 
 **Benefits of modular structure**:
@@ -104,20 +108,13 @@ Every module follows SOLID principles for maintainability:
 
 ### File Length Limits
 
-All files comply with code quality standards:
+All business-logic modules are kept small and single-purpose. The authoritative source for current file sizes is the repository itself; this document does not duplicate those derived counts.
 
-| File | Lines | Limit | Status |
-|------|-------|-------|--------|
-| `validation.py` | 105 | 200 | ✅ |
-| `logging_config.py` | 130 | 200 | ✅ |
-| `diff_generator.py` | 132 | 200 | ✅ |
-| `dictionary_processor.py` | 140 | 200 | ✅ |
-| `commands.py` | 180 | 200 | ✅ |
-| `ai_processor.py` | 199 | 250 | ✅ |
-| `schema.sql` | 216 | 250 | ✅ |
-| `learning_engine.py` | 252 | 250 | ✅ |
-| `correction_repository.py` | 466 | 500 | ✅ |
-| `correction_service.py` | 525 | 550 | ✅ |
+| Layer | Files | Status |
+|-------|-------|--------|
+| CLI / utilities | `commands.py`, `argument_parser.py`, `validation.py`, `logging_config.py`, `diff_generator.py`, `config.py`, `path_validator.py` | ✅ |
+| Core processors | `dictionary_processor.py`, `ai_processor.py`, `ai_processor_async.py`, `ai_utils.py`, `learning_engine.py` | ✅ |
+| Data access | `correction_repository.py`, `correction_service.py`, `schema.sql` | ✅ |
 
 ## Module Architecture
 
@@ -199,8 +196,8 @@ All files comply with code quality standards:
    ↓
 5. AIProcessor.process()
    - Split into chunks
-   - Call GLM-4.6 API
-   - Retry with fallback on error
+   - Call GLM-5.2 API
+   - Retry with fallback (GLM-5-turbo) on error
    - Track AI changes
    ↓
 6. CorrectionService.save_history()
@@ -539,17 +536,20 @@ class Change:
 
 **Responsibilities**:
 - Split text into API-friendly chunks
-- Call GLM-4.6 API
+- Call GLM-5.2 API
 - Handle retries with fallback model
 - Track AI-suggested changes
 
 **Key Methods**:
 ```python
 process(text, context) -> (corrected_text, changes)
-_split_into_chunks()     # Respect paragraph boundaries
 _process_chunk()         # Single API call
-_build_prompt()          # Construct correction prompt
 ```
+
+**Shared Utilities**:
+- `ai_utils.split_into_chunks()` — paragraph-aware chunking
+- `ai_utils.build_correction_prompt()` — prompt construction
+- `ai_utils.parse_anthropic_response()` — safe response parsing
 
 **Chunking Strategy**:
 - Max 6000 characters per chunk
@@ -558,7 +558,7 @@ _build_prompt()          # Construct correction prompt
 - Preserve context across chunks
 
 **Error Handling**:
-- Retry with fallback model (GLM-4.5-Air)
+- Retry with fallback model (GLM-5-turbo)
 - If both fail, use original text
 - Never lose user's data
 
@@ -694,9 +694,9 @@ def test_learning_thresholds():
 
 ```bash
 # End-to-end test
-python fix_transcription.py --init
-python fix_transcription.py --add "test" "TEST"
-python fix_transcription.py --input test.md --stage 3
+uv run scripts/fix_transcription.py --init
+uv run scripts/fix_transcription.py --add "test" "TEST"
+uv run scripts/fix_transcription.py --input test.md --stage 3
 # Verify output files exist
 ```
 
@@ -738,7 +738,9 @@ python fix_transcription.py --input test.md --stage 3
 
 ### Secret Management
 
-- API keys via environment variables only
+- API keys are loaded from the canonical config directory (`~/.transcript-fixer/config.json`) by default
+- Environment variables (`GLM_API_KEY`, `ANTHROPIC_API_KEY`) are supported only as explicit overrides
+- Config directory is restricted to `0o700`; config file to `0o600`
 - Never hardcode credentials
 - Security scanner enforces this
 
@@ -786,8 +788,11 @@ class SpellCheckProcessor:
 
 ### Required
 
-- Python 3.8+ (`from __future__ import annotations`)
+- Python 3.10+ (`from __future__ import annotations`)
 - `httpx` (for API calls)
+- `filelock` (for thread-safe operations)
+
+Scripts use PEP 723 inline metadata; run with `uv run` to auto-install dependencies.
 
 ### Optional
 
@@ -809,24 +814,31 @@ class SpellCheckProcessor:
 git clone <repo> transcript-fixer
 cd transcript-fixer
 
-# 2. Install dependencies
-pip install -r requirements.txt
+# 2. Initialize (uv auto-installs PEP 723 dependencies)
+uv run scripts/fix_transcription.py --init
 
-# 3. Initialize
-python scripts/fix_transcription.py --init
-
-# 4. Set API key
-export GLM_API_KEY="KEY_VALUE"
+# 3. Configure API key in the canonical config file
+cat > ~/.transcript-fixer/config.json <<'EOF'
+{
+  "api": {
+    "api_key": "your-glm-api-key",
+    "timeout": 60.0,
+    "max_retries": 3
+  }
+}
+EOF
 
 # Ready to use!
 ```
+
+For CI/one-off runs you may override the key with `GLM_API_KEY` or `ANTHROPIC_API_KEY`, but the config file is the recommended persistent location.
 
 ### CI/CD Pipeline (Future)
 
 ```yaml
 # Potential GitHub Actions workflow
 test:
-  - Install dependencies
+  - Install uv
   - Run unit tests
   - Run integration tests
   - Check code style (black, mypy)

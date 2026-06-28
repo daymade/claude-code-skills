@@ -30,6 +30,15 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional, Dict, Any, Final
 
+from core.defaults import (
+    APP_NAME,
+    APP_VERSION,
+    API_TIMEOUT,
+    API_MAX_RETRIES,
+    CONFIG_DIR_MODE,
+    CONFIG_FILE_MODE,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,6 +68,8 @@ class DatabaseConfig:
         # Ensure database directory exists
         self.path = Path(self.path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # Restrict database directory to owner only
+        os.chmod(self.path.parent, CONFIG_DIR_MODE)
 
 
 @dataclass
@@ -66,8 +77,8 @@ class APIConfig:
     """API configuration"""
     api_key: Optional[str] = None
     base_url: Optional[str] = None
-    timeout: float = 60.0
-    max_retries: int = 3
+    timeout: float = API_TIMEOUT
+    max_retries: int = API_MAX_RETRIES
     retry_backoff: float = 1.0  # Exponential backoff base (seconds)
 
     def __post_init__(self):
@@ -95,9 +106,10 @@ class PathConfig:
         self.log_dir = Path(self.log_dir)
         self.cache_dir = Path(self.cache_dir)
 
-        # Create all directories
+        # Create all directories and restrict to owner only
         for dir_path in [self.config_dir, self.data_dir, self.log_dir, self.cache_dir]:
             dir_path.mkdir(parents=True, exist_ok=True)
+            os.chmod(dir_path, CONFIG_DIR_MODE)
 
 
 @dataclass
@@ -160,8 +172,8 @@ class Config:
     features: FeatureFlags = field(default_factory=FeatureFlags)
 
     # Application metadata
-    app_name: str = "transcript-fixer"
-    app_version: str = "1.0.0"
+    app_name: str = APP_NAME
+    app_version: str = APP_VERSION
     debug: bool = False
 
     def __post_init__(self):
@@ -218,7 +230,7 @@ class Config:
         # API config
         api_key = os.getenv("GLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
         base_url = os.getenv("ANTHROPIC_BASE_URL")
-        api_timeout = float(os.getenv("TRANSCRIPT_FIXER_API_TIMEOUT", "60.0"))
+        api_timeout = float(os.getenv("TRANSCRIPT_FIXER_API_TIMEOUT", str(API_TIMEOUT)))
 
         api = APIConfig(
             api_key=api_key,
@@ -305,7 +317,7 @@ class Config:
             api_key=api_data.get("api_key"),
             base_url=api_data.get("base_url"),
             timeout=api_data.get("timeout", 60.0),
-            max_retries=api_data.get("max_retries", 3),
+            max_retries=api_data.get("max_retries", API_MAX_RETRIES),
         )
 
         # Parse path config
@@ -353,6 +365,8 @@ class Config:
         """
         config_path = Path(config_path)
         config_path.parent.mkdir(parents=True, exist_ok=True)
+        # Restrict config directory to owner only
+        os.chmod(config_path.parent, CONFIG_DIR_MODE)
 
         data = {
             "environment": self.environment.value,
@@ -389,6 +403,7 @@ class Config:
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
+        os.chmod(config_path, CONFIG_FILE_MODE)
         logger.info(f"Configuration saved to {config_path}")
 
     def validate(self) -> tuple[list[str], list[str]]:
@@ -448,15 +463,38 @@ def get_config() -> Config:
     """
     Get global configuration instance (singleton pattern).
 
+    Loads configuration in this order:
+    1. Config file (`~/.transcript-fixer/config.json` or
+       `$TRANSCRIPT_FIXER_CONFIG_DIR/config.json`) if it exists
+    2. Environment variables (override config file values)
+
     Returns:
-        Config instance loaded from environment variables
+        Config instance
     """
     global _config
 
     if _config is None:
-        # Load from environment by default
-        _config = Config.from_env()
-        logger.info(f"Configuration loaded: {_config.environment.value}")
+        config_dir = Path(os.getenv(
+            "TRANSCRIPT_FIXER_CONFIG_DIR",
+            str(Path.home() / ".transcript-fixer")
+        ))
+        config_file = config_dir / "config.json"
+
+        if config_file.exists():
+            _config = Config.from_file(config_file)
+            logger.info(f"Configuration loaded from file: {config_file}")
+        else:
+            _config = Config.from_env()
+            logger.info(f"Configuration loaded from environment: {_config.environment.value}")
+
+        # Environment variables always override file values
+        env_api_key = os.getenv("GLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
+        if env_api_key:
+            _config.api.api_key = env_api_key
+
+        env_base_url = os.getenv("ANTHROPIC_BASE_URL")
+        if env_base_url:
+            _config.api.base_url = env_base_url
 
         # Validate
         errors, warnings = _config.validate()
@@ -531,8 +569,10 @@ def create_example_config(output_path: Path) -> None:
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(output_path.parent, CONFIG_DIR_MODE)
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(CONFIG_FILE_TEMPLATE)
 
+    os.chmod(output_path, CONFIG_FILE_MODE)
     logger.info(f"Example config created: {output_path}")

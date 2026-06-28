@@ -19,8 +19,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, asdict
 import threading
 
-# CRITICAL FIX: Import thread-safe connection pool
 from .connection_pool import ConnectionPool, PoolExhaustedError
+from .defaults import SYSTEM_CONFIG_DEFAULTS
 
 # CRITICAL FIX: Import domain validation (SQL injection prevention)
 import sys
@@ -177,7 +177,28 @@ class CorrectionRepository:
         with self._transaction() as conn:
             conn.executescript(schema_sql)
 
+        # Write canonical defaults from Python SSOT (idempotent).
+        # This replaces the historical schema.sql INSERT OR IGNORE block so
+        # default values are defined in exactly one place: core.defaults.
+        self._initialize_system_config()
+
         logger.info(f"Database initialized: {self.db_path}")
+
+    def _initialize_system_config(self) -> None:
+        """Insert or ignore canonical system_config defaults."""
+        values = [
+            (key, value, value_type, description)
+            for key, (value, value_type, description) in SYSTEM_CONFIG_DEFAULTS.items()
+        ]
+        with self._transaction() as conn:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO system_config (key, value, value_type, description)
+                VALUES (?, ?, ?, ?)
+                """,
+                values,
+            )
+        logger.debug("system_config defaults initialized")
 
     # ==================== Correction Operations ====================
 
