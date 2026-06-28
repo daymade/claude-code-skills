@@ -97,13 +97,15 @@ A `<sheet token="<SP>_<SID>"/>` tag (or a `…/sheets/<SP>` URL) carries the spr
 lark-cli sheets +info --spreadsheet-token <SP> \
   --jq '(.data.sheets.sheets // .data.sheets)[]? | {sheet_id, title}'
 
-# read one tab. 1.0.55 uses +cells-get with --format csv (clean CSV straight out):
-lark-cli sheets +cells-get --spreadsheet-token <SP> --sheet-id <SID> \
-  --range A1:AZ800 --format csv > "<tab-title>.csv"
+# read one tab. ⚠️ `--format csv` does NOT emit CSV for cells-get (verified 1.0.55) —
+# it returns a JSON cell grid (.data.ranges[].cells[][].value) regardless. Convert with jq:
+lark-cli sheets +cells-get --spreadsheet-token <SP> --sheet-id <SID> --range A1:AZ800 \
+  | jq -r '.data.ranges[0].cells[] | map(.value // "" | tostring) | @csv' > "<tab-title>.csv"
 ```
 
+- The cell grid carries border/style objects too; `.value` is the text, empty cells are `{}` → `.value // ""`. `tostring` guards numeric cells.
 - A tab `title` can contain newlines (`\n`); strip them (`tr -d '\n\r'`) before using it as a filename.
-- `--format csv` writes ready-to-file CSV; if you need a Markdown table instead, render the CSV. Size `--range` generously (`A1:AZ800`) — an over-wide range just returns the populated cells, while an under-sized one silently truncates rows.
+- **Check `.data.has_more`** — cells-get caps one response at ~4000–6000 cells (~200 rows); if `has_more:true` the grid was truncated — page with a smaller range / offset. `.data.ranges[0].actual_range` reports what you actually got.
 - Older builds exposed this as `sheets +read … --value-render-option ToString --jq '.data.valueRange.values'` (a 2-D array). If `+cells-get` is absent on your version, fall back to `+read`.
 
 ## Step 5: the reference-graph recursion (collections/hubs)
