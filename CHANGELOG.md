@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.75.0] - 2026-06-28
+
+### Added
+- **pharma-daily-report** v1.0.0: A-share pharmaceutical sector daily report — Sina Finance real-time quotes, 7 sub-sector ranking, gainers/losers, fund-flow estimate, optional Feishu rich-text push; default 20-stock watchlist, customizable.
+
+### Changed
+- skills 76→77, plugin entries 55→56, marketplace 1.74.0→1.75.0.
+
+## [1.74.0] - 2026-06-28
+
+### Added
+- **ashare-news-fetcher** v1.0.0: aggregate A-share news, policy, and sentiment from public Chinese sources (财联社/华尔街见闻/金十/新浪 7x24/东财快讯/regulators/东财股吧) into structured JSON or Markdown; per-stock or market-wide, no login.
+
+### Changed
+- skills 75→76, plugin entries 54→55, marketplace 1.73.0→1.74.0.
+
+## [1.73.0] - 2026-06-28
+
+### Added
+- **wps-doc-scraper** v1.0.0: faithfully archive public WPS/KDocs/金山文档 links (incl. embedded ProcessOn mind maps) as raw source, SVG/PNG, and Markdown without login; data-API-first with browser-DOM fallback.
+
+### Changed
+- skills 74→75, plugin entries 53→54, marketplace 1.72.0→1.73.0.
+
+## [1.72.0] - 2026-06-28
+
+### Added
+- **download-gemini-images** v1.0.0: download images from a Google Gemini conversation page via logged-in Chrome (lightbox-first, pageAssets fallback), rename in order, package into a verified ZIP.
+
+### Changed
+- skills 73→74, plugin entries 52→53, marketplace 1.71.0→1.72.0.
+
+## [1.71.0] - 2026-06-28
+
+### Added
+- **openclaw** v1.0.0: manage OpenClaw (龙虾/lobster) instance configs — audit/diff/copy/add-model/list/switch, DeepSeek patches, config validation. Real private instance nicknames were sanitized to placeholders (甲虾/乙虾) before publishing.
+
+### Changed
+- skills 72→73, plugin entries 51→52, marketplace 1.70.0→1.71.0.
+
+## [1.70.0] - 2026-06-28
+
+### Added
+- **frontend-visual-qa** v1.0.0: review rendered frontends/dashboards/HTML slides for visual defects lint/build miss (awkward line breaks, wrapped controls, overflow, double scrollbars, AI slop, Chrome DevTools viewport mistakes); history-derived checklist + Chrome-first pass + Playwright-core audit.
+
+### Changed
+- skills 71→72, plugin entries 50→51, marketplace 1.69.0→1.70.0.
+- **transcript-fixer** → daymade-audio 1.3.0: uncertain extraction, tech presets, common-words safety table + tests.
+- **feishu-doc-scraper** → 1.2.1: correct lark-cli 1.0.55 `cells-get` CSV behavior (returns JSON cell grid, not CSV) + pagination note.
+- **skill-creator** (`package_skill`) → daymade-skill 1.3.0: exclude `.pytest_cache`/`.venv`/`.security-scan-passed`/`dist`, default artifact output to `<skill>/dist/`, +16 tests.
+- **skill-creator** (PII SOP) → daymade-skill 1.4.0: `security_scan` "passed" now warns it is keyword-based only; `sanitization_checklist` adds the CJK project-nickname blind spot + an openclaw war-story; `new-skill-guide` makes the manual逐字 PII read-through a mandatory Step-1 gate and adds multi-agent concurrent-session diagnosis.
+
 ## [1.69.0] - 2026-06-27
 
 ### Added
