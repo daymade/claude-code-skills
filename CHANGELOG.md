@@ -5,19 +5,130 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.75.0] - 2026-06-28
+
+### Added
+- **pharma-daily-report** v1.0.0: A-share pharmaceutical sector daily report — Sina Finance real-time quotes, 7 sub-sector ranking, gainers/losers, fund-flow estimate, optional Feishu rich-text push; default 20-stock watchlist, customizable.
+
+### Changed
+- skills 76→77, plugin entries 55→56, marketplace 1.74.0→1.75.0.
+
+## [1.74.0] - 2026-06-28
+
+### Added
+- **ashare-news-fetcher** v1.0.0: aggregate A-share news, policy, and sentiment from public Chinese sources (财联社/华尔街见闻/金十/新浪 7x24/东财快讯/regulators/东财股吧) into structured JSON or Markdown; per-stock or market-wide, no login.
+
+### Changed
+- skills 75→76, plugin entries 54→55, marketplace 1.73.0→1.74.0.
+
+## [1.73.0] - 2026-06-28
+
+### Added
+- **wps-doc-scraper** v1.0.0: faithfully archive public WPS/KDocs/金山文档 links (incl. embedded ProcessOn mind maps) as raw source, SVG/PNG, and Markdown without login; data-API-first with browser-DOM fallback.
+
+### Changed
+- skills 74→75, plugin entries 53→54, marketplace 1.72.0→1.73.0.
+
+## [1.72.0] - 2026-06-28
+
+### Added
+- **download-gemini-images** v1.0.0: download images from a Google Gemini conversation page via logged-in Chrome (lightbox-first, pageAssets fallback), rename in order, package into a verified ZIP.
+
+### Changed
+- skills 73→74, plugin entries 52→53, marketplace 1.71.0→1.72.0.
+
+## [1.71.0] - 2026-06-28
+
+### Added
+- **openclaw** v1.0.0: manage OpenClaw (龙虾/lobster) instance configs — audit/diff/copy/add-model/list/switch, DeepSeek patches, config validation. Real private instance nicknames were sanitized to placeholders (甲虾/乙虾) before publishing.
+
+### Changed
+- skills 72→73, plugin entries 51→52, marketplace 1.70.0→1.71.0.
+
+## [1.70.0] - 2026-06-28
+
+### Added
+- **frontend-visual-qa** v1.0.0: review rendered frontends/dashboards/HTML slides for visual defects lint/build miss (awkward line breaks, wrapped controls, overflow, double scrollbars, AI slop, Chrome DevTools viewport mistakes); history-derived checklist + Chrome-first pass + Playwright-core audit.
+
+### Changed
+- skills 71→72, plugin entries 50→51, marketplace 1.69.0→1.70.0.
+- **transcript-fixer** → daymade-audio 1.3.0: uncertain extraction, tech presets, common-words safety table + tests.
+- **feishu-doc-scraper** → 1.2.1: correct lark-cli 1.0.55 `cells-get` CSV behavior (returns JSON cell grid, not CSV) + pagination note.
+- **skill-creator** (`package_skill`) → daymade-skill 1.3.0: exclude `.pytest_cache`/`.venv`/`.security-scan-passed`/`dist`, default artifact output to `<skill>/dist/`, +16 tests.
+- **skill-creator** (PII SOP) → daymade-skill 1.4.0: `security_scan` "passed" now warns it is keyword-based only; `sanitization_checklist` adds the CJK project-nickname blind spot + an openclaw war-story; `new-skill-guide` makes the manual逐字 PII read-through a mandatory Step-1 gate and adds multi-agent concurrent-session diagnosis.
+
+## [1.69.0] - 2026-06-27
+
+### Added
+- **codex-image-gallery** v1.0.0: new self-contained skill for browsing Codex-generated images in a local web gallery. Bundles `scripts/server.mjs` and `assets/index.html`; scans `~/.codex/generated_images` by default; supports `GALLERY_ROOT`, `PORT`, and `HOST`; serves a dynamic `/api/images` index and protected `/images/<relative-path>` image routes.
+
+### Changed
+- Updated marketplace skills count from 70 to 71.
+- Updated marketplace plugin entry count from 49 to 50.
+- Updated marketplace version from 1.68.0 to 1.69.0.
+- Updated README.md / README.zh-CN.md badges and skill lists to include `codex-image-gallery`.
+- Backfilled existing doc-list drift for `read-claude-web-conversation`, `setup-notifications-via-wecom`, `notify-wecom`, and `github-sensitive-data-cleanup` so the human-facing lists match `marketplace.json`.
+- Updated CLAUDE.md repository overview count, marketplace plugin count, and Available Skills list.
+
+## [1.67.0] - 2026-06-24
+
+### Added
+- **llm-eval-harness** v1.0.0: new skill — evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four dimensions instead of trusting a vendor's headline numbers:
+  - **Speed** (`scripts/speed_probe.py`): TTFT + sustained decode tok/s, **thinking-aware** — captures `reasoning_content` separately so reasoning tokens don't inflate throughput (the trap that once read a ~750 tok/s model as 4700 tok/s).
+  - **Concurrency / stability** (`scripts/concurrency_probe.py`): success rate, p50/p90 latency, and the level where it breaks; isolates from ambient proxy (`trust_env=False`) and disables keep-alive (`force_close`) so you measure the model, not the proxy.
+  - **Anthropic protocol compliance** (`scripts/protocol_probe.py`): does `thinking: {type: enabled}` actually fire `thinking_delta` / `signature_delta` (N≥10)? Verdict is three-state (`fully-implemented` / `intermittent (k/N)` / `not-implemented`), never concluded from a single sample; forces `Connection: close` so a load balancer can't pin all samples to one replica.
+  - **Quality / use-case regression** (`scripts/usecase_runner.py` + independent blind judges): collect then judge in isolation (3 judges/case, majority-pass, per-category precision) so the model never grades itself.
+  - Keys are passed by **env-var name only** (`--key-env MY_KEY`) — never on the command line, never in a saved report. The use-case library lives **outside** the bundle (`~/.llm-eval/`) so it survives skill updates and never lands in a public repo. Bundles `assets/example_usecases.json`, two references (`evaluation_disciplines.md`, `quality_blind_judge.md`), and a recorded security scan.
+
+### Changed
+- Updated marketplace skills count from 65 to 66.
+- Updated marketplace version from 1.66.0 to 1.67.0.
+- Updated marketplace plugin entry count from 45 to 46 (single-skill plugin, `source` → `./llm-eval-harness`, no `skills` field).
+- Updated README.md badges (skills count, version) and description; added llm-eval-harness install command, skill section #68, the "For LLM Evaluation & Model Comparison" use case (composes with promptfoo-evaluation), a documentation quick link, and a requirements entry.
+- Updated README.zh-CN.md to match (same 7 locations, translated).
+- Updated CLAUDE.md repository overview skill count (64 → 66, reconciled to the authoritative manifest), marketplace-config plugin count (45 → 46), and Available Skills list (added #66 llm-eval-harness).
+
 ## [Unreleased]
 
 ### Added
-- **x-twitter-scraper** v2.4.16: Xquik X/Twitter API skill for tweet search, user lookup, media download, follower checks, bulk extractions, MCP setup, HMAC webhooks, and confirmation-gated actions.
-- **pdf-creator** (`daymade-docs` v1.1.0): new `warm-terra-menu` theme — a warm-terra variant hardened for 2-column long-text module menus (full-column wrap removes first-column overflow; a Menlo `unicode-range` keeps CJK inline-code from rendering blank in Preview/Adobe Reader).
-- **tunnel-doctor** v1.6.0: Add "TUN Measurement Contamination" diagnostic section — while a proxy runs in TUN/global mode, common probes lie: `nc -z` shows a fabricated `0.00s` handshake (TUN completes it locally), `ping`/`remote_ip` are spoofed, and a foreign IP-geo lookup reports the proxy exit instead of the real home IP. Documents what to trust instead (`time_appconnect`/`time_starttransfer`, an in-region IP-geo source, config-decode + GUI cross-check) and adds matching trigger phrases.
-- **debugging-network-issues** v1.1.0: Add cognitive Trap 12 "Reverse-path / directional asymmetry" — A→B healthy does not imply B→A healthy; an external probe to a node only proves that node's return direction, systematically missing the user's failing outbound direction (and the congested direction is often one an external probe structurally cannot reach). Sibling to Trap 5 (probe self-verification); synced into the SKILL.md trap list; fixed a stale "All nine traps" count in the summary.
+- **marketplace-health-check** v1.0.0: new skill — the 6-dimension repo health-check workflow distilled from a real audit session, fixed as a reusable skill. A parallel fan-out Dynamic Workflow runs six inspectors (code/script safety, documentation/SSOT consistency, security/PII, open-PR triage, open-issue triage, marketplace-manifest integrity); the skill then Counter-Reviews every high/critical finding (agent findings are hypotheses, verified before reporting) and reports by priority. Bundles the proven workflow script + a methodology reference (anti-target PII rule, working-copy-vs-history distinction, scan-marker necessary-not-sufficient, the broken-install-command bug class, promotion-decline default). Inline orchestrator — uses the Workflow tool, so it must not run forked.
+
+### Changed
+- **debugging-network-issues** v1.3.0: Add client-side proxy / VPN / TUN misrouting coverage. New reference `references/case-proxy-tun-cname-override.md` documents a CNAME-based rule override that caused `ERR_CONNECTION_CLOSED` even though explicit PROXY rules were at the top of the config, plus the decisive experiments (hostname-vs-IP through the proxy, TUN-vs-physical-interface reachability) and the fix pattern (`[Host]` mapping + `use-local-host-item-for-proxy`). Adds cognitive Trap 11 "Assuming a top-of-list proxy rule beats CNAME matching" and Trap 12 "Proxy-node DNS = client DNS"; adds a triage entry and a client-side proxy/TUN checklist to SKILL.md. Marketplace description and keywords synced; README / README.zh-CN skill sections and documentation pointers updated.
+- **Doc-governance hardening** (post-v1.65.0 health-check): `check_doc_skill_lists.py` now also asserts the README version badge equals `marketplace.json` metadata.version — that badge silently drifted twice (1.63→1.64, 1.64→1.65) when a metadata bump forgot it, so the drift guard enforces it instead of relying on manual discipline (`daymade-claude-code` suite v1.2.1). Slimmed `marketplace.json` metadata.description from a per-skill enumeration (which had silently fallen ~11 skills behind) to a category-level summary that points to the README for the authoritative breakdown. Removed a duplicate `## [1.56.0]` CHANGELOG header.
 
 ### Fixed
+- **claude-code-history-files-finder** (`daymade-claude-code` suite v1.3.0 → v1.4.0): `analyze_sessions.py` only matched a project when given its exact absolute path — a `~` path, a relative path, or a bare project name silently returned "No sessions found", because the lookup did `project_path.replace("/", "-")` with no `expanduser`/`resolve` and no fallback. This is the trap that makes a real local history look like it was "written somewhere else" (e.g. assumed to be Claude Desktop): the encoded directory name is the *absolute* working-directory path (`/Users/<name>/Desktop/app` → `-Users-<name>-Desktop-app`), not the basename. Now expands `~`, resolves to an absolute path, then reverse-looks-up by basename (listing candidates instead of guessing when ambiguous). SKILL.md gains an explicit "reverse-look-up before concluding "no history"" gate and a note that Claude Desktop cowork sessions also land in `~/.claude/projects/`; `references/session_file_format.md` is corrected to the real 2.x line schema (top-level `type` + nested `message.role`, plus non-message event lines like `queue-operation` / `last-prompt`).
+- **repomix-safe-mixer** v1.0.1: the "before" examples in SKILL.md + `references/common_secrets.md` used a real-looking Supabase project ref + JWT, flagged CRITICAL by the bundled scanner — which had never run on this skill (it shipped with no `.security-scan-passed` marker). Replaced with neutral placeholders. Also backfilled `.security-scan-passed` markers for 20 skills that shipped without a recorded scan (one of which, repomix-safe-mixer, is exactly why — it had a real leak no one had scanned for).
+- **Sensitive-info sanitization** (full health-check findings): removed the owner's real private domains from shipped examples — `tunnel-doctor` v1.6.1 (`quick_diagnose.py` default `--host` + SKILL.md example) and `terraform-skill` v1.0.1 (Caddyfile / compose / SQL examples) — and a real personal handle used as a speaker-name example in `transcript-fixer` (`daymade-audio` suite v1.2.1); all replaced with `example.com` / neutral placeholders. These were pre-existing leaks predating the global PII-guard domain rules (which already cover them for future diffs). The repo-local `.gitleaks.toml` is deliberately NOT given the real private values — a public allowlist enumerating real assets would itself be a leak (anti-target principle).
+- **Broken flagship install commands** ([#67](https://github.com/daymade/claude-code-skills/issues/67)): `claude plugin install skill-creator@daymade-skills` (plus `skill-reviewer` / `skills-search` / `doc-to-markdown`) failed because those are suite members, not standalone plugins. Corrected every occurrence across README.md, README.zh-CN.md, QUICKSTART.md, QUICKSTART.zh-CN.md to the suite name (`daymade-skill@daymade-skills` / `daymade-docs@daymade-skills`), invoked as `daymade-skill:skill-creator` etc.
+
+## [1.64.0] - 2026-06-13
+
+### Added
+- **claude-usage-analyst** (`daymade-claude-code` v1.2.0): new skill — turns local `ccusage` data into an evidence-based, human-readable explanation of Claude Code / Claude Desktop token usage, cost, quota burn, model mix, and cache read/write pressure. Bundled `analyze_claude_usage.py` summarizes any date window/timezone; model-comparison mode weighs token volume against estimated cost (a model can be cheap per token but expensive overall); a 5-hour-block table addresses quota-exhaustion questions. Evidence discipline: numbers are grounded in `ccusage` output and scope is stated explicitly (local Claude Code logs, not a full Claude.ai chat bill). Registered into the `daymade-claude-code` suite (skills[] + suite 1.1.0 → 1.2.0); marketplace catalog 1.63.0 → 1.64.0.
+- **skill-creator** (`daymade-skill` v1.2.0): five incident-distilled authoring rules, each placed at the workflow step where it fires:
+  - *Step 4*: validate immediately after every SKILL.md edit (strict-YAML `quick_validate`, not packaging-time) + block-scalar `>-` convention for descriptions containing `: ` / ` #` — lenient/strict parser divergence and silent ` #` description truncation both shipped undetected before this.
+  - *Step 5*: sanitization is scoped **by destination** — only the publicly-shipping skill bundle gets redacted; private-repo companion docs (incident reports, runbooks) keep audit-grade real values. Placeholders must not encode the real value they hide; bulk replaces need an explicit file whitelist scoped to the skill directory.
+  - *Bundled Resources*: user-mutable data (correction dictionaries, learned preferences) lives under `~/.<skill-name>/` outside the bundle — installs are wiped on every update/suite-migration, a home-relative store survives untouched.
+  - *Capture Intent*: mining past-session transcripts must be delegated to subagents with line-by-line truncated extraction — a full-context attempt died 17 tokens over the window limit and killed the session.
+  - *Privacy & Paths*: cross-skill references — bare relative paths always mean "own bundle" (validators treat them so); name the owner skill in prose and invoke by namespaced `/suite:skill`. Marketplace-entry rename/relocation/removal flagged as a breaking change (dangling installs; mechanics live in marketplace-dev).
+  - New "Phase 9 实战案例库" in `references/skill-development-methodology.md` preserving the four incident case files behind these rules; `references/schemas.md` gains a table of contents (8 schemas, >100 lines).
+- **bilibili-source** v1.0.0: new skill — login-free fetch of comprehensive Bilibili (B站) video data in one `view/detail` call (title, UP follower count, tags, partition, per-part cids, live stats, and full danmaku text), accepting BVID / `av` number / `b23.tv` short link / full URL with the BVID-regex, multi-part-cid, and short-link edge cases all handled. Login-gated subtitles via `yt-dlp` (asks before reading browser cookies — no anonymous path exists, verified). Bundles a `bili-selftest.sh` health-check that detects API drift against a stable fixture, an API reference including the WBI request-signing algorithm, and 4 evals. All examples use synthetic/neutral data; metrics always carry a `fetched_at` timestamp (NO-FABRICATION discipline).
+- **pdf-creator** (`daymade-docs` v1.1.0): new `warm-terra-menu` theme — a warm-terra variant hardened for 2-column long-text module menus (full-column wrap removes first-column overflow; a Menlo `unicode-range` keeps CJK inline-code from rendering blank in Preview/Adobe Reader).
+- **tunnel-doctor** v1.6.0: Add "TUN Measurement Contamination" diagnostic section — while a proxy runs in TUN/global mode, common probes lie: `nc -z` shows a fabricated `0.00s` handshake (TUN completes it locally), `ping`/`remote_ip` are spoofed, and a foreign IP-geo lookup reports the proxy exit instead of the real home IP. Documents what to trust instead (`time_appconnect`/`time_starttransfer`, an in-region IP-geo source, config-decode + GUI cross-check) and adds matching trigger phrases.
+- **debugging-network-issues** v1.2.0: New **Step 0.6 "upload-timeout vs processing-timeout"** recipe for large `POST` bodies behind a CDN — compare `bytes_read` to `Content-Length` in the edge/reverse-proxy log; a `status=0` / "client abort" is often the CDN edge timing out first, not a backend stall. Adds a second case study `references/case-cloudflare-524-upload.md` (a ~6 MB request body uploaded slower than Cloudflare's ~120 s origin read timeout → 524 while every backend was healthy) and cognitive Trap 10 "edge timeouts masquerading as upstream client aborts". Also adds cognitive Trap 12 "Reverse-path / directional asymmetry" — A→B healthy does not imply B→A healthy; an external probe to a node only proves that node's return direction, systematically missing the user's failing outbound direction (and the congested direction is often one an external probe structurally cannot reach). Sibling to Trap 5 (probe self-verification); synced into the SKILL.md trap list; fixed a stale "All nine traps" count in the summary.
+
+### Fixed
+- **skill-creator** (`daymade-skill` v1.2.0): `quick_validate` was failing on skill-creator itself — the marketplace-dev cross-reference was written as a bare `references/cache_and_source_patterns.md` path, which the validator (correctly, per the new cross-skill reference rule) treated as a missing local file; rewritten as a prose owner reference. Also fixed "has wrote" → "has written".
 - **SKILL.md frontmatter strict-YAML validity (codex compatibility).** `description:` values are unquoted YAML plain scalars, so a `: ` or ` #` inside them breaks strict parsers — Claude Code's lenient frontmatter parser accepted them, codex did not.
   - **tunnel-doctor** v1.5.2: `: ` inside literal ssh output (`"debug2: resolving"`, `"debug1: connect"`) raised a `ScannerError`; wrapped the description in single quotes so the ssh strings stay verbatim.
   - **benchmark-due-diligence** v1.0.1: ` #` in `Product Hunt #1` silently truncated the parsed description; reordered to `#1 on Product Hunt` (no keyword loss).
   - **pdf-creator** (`daymade-docs` v1.1.0): `**Scope: markdown → PDF only.**` → `**Scope — markdown → PDF only.**`.
+
+### Changed
+- `daymade-skill` suite: 1.1.0 → 1.2.0 (skill-creator authoring rules above; also covers the previously-unversioned "Plugin boundaries are not this skill's domain" SSOT pointer added to skill-creator in the marketplace-dev consolidation).
+- **macos-cleaner** v1.1.1 → v1.2.0 ([#84](https://github.com/daymade/claude-code-skills/pull/84), thanks @geniusart): progressive-disclosure refactor — moved Docker deep-analysis (Step 2A-2C), Mole multi-layer TUI exploration, and the object-level/report templates out of SKILL.md into `references/docker_analysis.md`, `references/mole_integration.md`, and `references/report_templates.md` (SKILL.md trimmed ~440 lines, zero content loss). Aligned the Example workflows with Core Principle 9 (provide commands for the user to run + `df -h` verification, never auto-execute `rm -rf`; point to `safe_delete.py` for interactive confirmation) and hardened `cleanup_report.py` exception handling (bare `except:` → specific exception types).
 
 ## [1.62.0] - 2026-06-07
 
@@ -26,7 +137,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **check_doc_skill_lists.py** (`marketplace-dev`): drift guard comparing the skill lists in CLAUDE.md / README.md / README.zh-CN.md against the authoritative marketplace.json (expanded), reporting MISSING and GHOST entries per doc and exiting non-zero on drift.
 
 ### Changed
-- Marketplace version: 1.63.0 -> 1.64.0; synced skill count to include x-twitter-scraper.
 - Marketplace version: 1.60.1 → 1.62.0; `daymade-claude-code` suite: 1.0.0 → 1.1.0 (adds terminal-screenshot).
 - Synced documentation skill counts to the authoritative 61: README.md / README.zh-CN.md badges + descriptions, CLAUDE.md overview (54 → 61) and plugin-entry count (39 → 43).
 - Backfilled the CLAUDE.md Available Skills list to 61 (added marketplace-dev, asr-transcribe-to-text, bigdata-skill, gangtise-copilot, llm-wiki-setup, benchmark-due-diligence, pdf-to-html, terminal-screenshot) and removed the ghost `wechat-article-scraper` entry (skill no longer on disk).
@@ -42,8 +152,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **auto-repo-setup** v1.0.0: Automated repository environment configuration, fault diagnosis, and repair for non-technical users. Reads ONBOARDING.md, audits environment gaps, installs missing dependencies, validates with smoke tests, and safely handles git operations with PII Guard and Push Safety. Includes SessionStart hook initialization, counter-review workflows, and git history sanitization.
-
-## [1.56.0] - 2026-05-24
 
 ## [1.56.0] - 2026-05-24
 

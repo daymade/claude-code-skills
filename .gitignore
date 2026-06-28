@@ -91,9 +91,8 @@ recovered_deep_research/
 # OpenCLI cache
 .opencli/
 
-# Eval workspaces (contain test data with personal info)
-douban-skill-workspace/
-debugging-network-issues-workspace/
+# Eval / runtime workspaces (test data, snapshots — never committed)
+*-workspace/
 .gstack/
 
 # Claude Code local settings

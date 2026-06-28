@@ -26,6 +26,9 @@ def _lazy_import(name: str) -> object:
     elif name == 'LearningEngine':
         from .learning_engine import LearningEngine
         return LearningEngine
+    elif name == 'UncertainExtractor':
+        from .uncertain_extractor import UncertainExtractor
+        return UncertainExtractor
     raise ImportError(f"Unknown module: {name}")
 
 # Export main classes
@@ -40,6 +43,6 @@ __all__ = [
 
 # Make lazy imports available via __getattr__
 def __getattr__(name):
-    if name in ['DictionaryProcessor', 'AIProcessor', 'LearningEngine']:
+    if name in ['DictionaryProcessor', 'AIProcessor', 'LearningEngine', 'UncertainExtractor']:
         return _lazy_import(name)
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

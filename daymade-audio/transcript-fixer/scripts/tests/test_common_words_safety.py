@@ -23,6 +23,8 @@ from utils.common_words import (
     ALL_COMMON_WORDS,
     COMMON_WORDS_2CHAR,
     SUBSTRING_COLLISION_MAP,
+    is_likely_valid_phrase,
+    _JIEBA_AVAILABLE,
 )
 from core.dictionary_processor import DictionaryProcessor
 from core.correction_repository import CorrectionRepository
@@ -669,6 +671,117 @@ class TestAuditCatchesAllProductionFalsePositives(unittest.TestCase):
                 word, issues,
                 f"audit_corrections MUST flag '{word}' but did not"
             )
+
+
+class TestProductionFalsePositives2026_06(unittest.TestCase):
+    """
+    Regression tests for the 2026-06 false positives, found when a clean
+    Feishu-ASR transcript was run through Stage 1:
+    - 多深→多申 (education, 2-char) corrupted "抓多深"
+    - 小龙虾→小 Claude (tech, 3-char real word) corrupted a project codename
+    - 早生→早申 (education, 2-char) is a real word
+
+    The root cause was two independent failures, and both are covered here:
+    1. These real words were not in the common-words list, so the add-time
+       guard and the risk classifier were blind to them.
+    2. Stage 1's review_mode defaulted to False, so even a correctly
+       classified medium/high-risk rule got applied anyway — the guard was
+       computed and then ignored.
+    """
+
+    def test_duoshen_in_common_words(self):
+        self.assertIn("多深", ALL_COMMON_WORDS)
+        errors = [w for w in check_correction_safety("多深", "多申", strict=True)
+                  if w.level == "error"]
+        self.assertTrue(errors, "'多深' must be blocked at --add time")
+
+    def test_zaosheng_in_common_words(self):
+        self.assertIn("早生", ALL_COMMON_WORDS)
+        errors = [w for w in check_correction_safety("早生", "早申", strict=True)
+                  if w.level == "error"]
+        self.assertTrue(errors, "'早生' must be blocked at --add time")
+
+    def test_xiaolongxia_in_common_words(self):
+        self.assertIn("小龙虾", ALL_COMMON_WORDS)
+        errors = [w for w in check_correction_safety("小龙虾", "小 Claude", strict=True)
+                  if w.level == "error"]
+        self.assertTrue(errors, "'小龙虾' must be blocked at --add time")
+
+    def test_safe_mode_skips_high_risk(self):
+        """Safe mode (review_mode=True) must NOT apply a high-risk rule."""
+        processor = DictionaryProcessor({"多深": "多申"}, [])
+        result, changes = processor.process("我不知道他要抓多深", review_mode=True)
+        self.assertEqual(result, "我不知道他要抓多深",
+                         "high-risk rule must NOT apply in safe mode")
+        self.assertEqual(len(changes), 1, "the change is still tracked for review")
+        self.assertEqual(changes[0].risk, "high")
+
+    def test_apply_all_mode_applies_high_risk(self):
+        """Without review_mode (i.e. --apply-all) the rule still applies (back-compat)."""
+        processor = DictionaryProcessor({"多深": "多申"}, [])
+        result, changes = processor.process("抓多深", review_mode=False)
+        self.assertEqual(result, "抓多申")
+
+    def test_safe_mode_keeps_low_risk(self):
+        """Safe mode still applies genuine low-risk (non-word) corrections."""
+        processor = DictionaryProcessor({"巨升智能": "具身智能"}, [])
+        result, changes = processor.process("讨论巨升智能", review_mode=True)
+        self.assertEqual(result, "讨论具身智能",
+                         "low-risk rule must still apply in safe mode")
+        self.assertEqual(changes[0].risk, "low")
+
+
+class TestValidPhraseAuditHeuristic(unittest.TestCase):
+    """
+    jieba-based advisory heuristic (is_likely_valid_phrase) for the 4+ char
+    real-word false-positive class (济南大学→暨南大学) that the structural
+    risk rules cannot catch. Audit-only — must NEVER gate auto-apply, and is a
+    warning (never error) so it can't block legitimate 4+ char ASR-garble rules.
+    """
+
+    @unittest.skipUnless(_JIEBA_AVAILABLE, "jieba not installed")
+    def test_flags_real_word_phrases(self):
+        self.assertTrue(is_likely_valid_phrase("济南大学"))
+        self.assertTrue(is_likely_valid_phrase("关税证明"))
+        self.assertTrue(is_likely_valid_phrase("老公说的"))
+
+    @unittest.skipUnless(_JIEBA_AVAILABLE, "jieba not installed")
+    def test_does_not_flag_asr_garble(self):
+        # multi-char OOV token (巨升 / 西火) → not a clean decomposition → good
+        # rule kept (won't be falsely deferred, preserving recall)
+        self.assertFalse(is_likely_valid_phrase("巨升智能"))
+        self.assertFalse(is_likely_valid_phrase("发动机西火"))
+
+    @unittest.skipUnless(_JIEBA_AVAILABLE, "jieba not installed")
+    def test_short_garble_below_threshold(self):
+        # 3-char garble is below the len>=4 gate, so never flagged — this is
+        # what prevents the 克劳锐→Claude false flag the heuristic would
+        # otherwise make.
+        self.assertFalse(is_likely_valid_phrase("克劳锐"))
+
+    @unittest.skipUnless(_JIEBA_AVAILABLE, "jieba not installed")
+    def test_audit_surfaces_real_word_rule(self):
+        cats = [w.category for w in check_correction_safety("济南大学", "暨南大学", strict=False)]
+        self.assertIn("valid_phrase", cats)
+
+    @unittest.skipUnless(_JIEBA_AVAILABLE, "jieba not installed")
+    def test_audit_clean_for_good_rule(self):
+        cats = [w.category for w in check_correction_safety("巨升智能", "具身智能", strict=False)]
+        self.assertNotIn("valid_phrase", cats)
+
+    @unittest.skipUnless(_JIEBA_AVAILABLE, "jieba not installed")
+    def test_valid_phrase_is_warning_never_error(self):
+        # advisory: even in strict mode it must not become a blocking error,
+        # otherwise it would reject legitimate 4+ char rules at --add time.
+        for w in check_correction_safety("济南大学", "暨南大学", strict=True):
+            if w.category == "valid_phrase":
+                self.assertEqual(w.level, "warning")
+
+    def test_heuristic_safe_without_jieba(self):
+        # Degrades gracefully: when jieba is missing it returns False (no flag),
+        # never raises — audit falls back to structural checks.
+        result = is_likely_valid_phrase("济南大学")
+        self.assertIsInstance(result, bool)
 
 
 if __name__ == '__main__':

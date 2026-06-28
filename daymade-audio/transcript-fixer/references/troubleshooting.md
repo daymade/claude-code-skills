@@ -5,7 +5,7 @@ Solutions to common issues and error conditions.
 ## Table of Contents
 
 - [API Authentication Errors](#api-authentication-errors)
-  - [GLM_API_KEY Not Set](#glm_api_key-not-set)
+  - [API Key Not Configured](#api-key-not-configured)
   - [Invalid API Key](#invalid-api-key)
 - [Learning System Issues](#learning-system-issues)
   - [No Suggestions Generated](#no-suggestions-generated)
@@ -28,27 +28,31 @@ Solutions to common issues and error conditions.
 
 ## API Authentication Errors
 
-### GLM_API_KEY Not Set
+### API Key Not Configured
 
 **Symptom**:
 ```
-❌ Error: GLM_API_KEY environment variable not set
-   Set it with: export GLM_API_KEY='your-key'
+❌ API key not configured. Please add it to the config file:
+   ~/.transcript-fixer/config.json
+   { "api": { "api_key": "your-key" } }
+   Or set GLM_API_KEY / ANTHROPIC_API_KEY environment variable.
 ```
 
 **Solution**:
 ```bash
-# Check if key is set
-echo $GLM_API_KEY
+# 1. Make sure the config directory exists
+uv run scripts/fix_transcription.py --init
 
-# If empty, export key
-export GLM_API_KEY="your-api-key-here"
-
-# Verify
-uv run scripts/fix_transcription.py --validate
+# 2. Edit the config file and set api.api_key
+# ~/.transcript-fixer/config.json
 ```
 
-**Persistence**: Add to shell profile (`.bashrc` or `.zshrc`) for permanent access.
+**Quick override** (not recommended for long-term use):
+```bash
+export GLM_API_KEY="your-api-key-here"
+# or
+export ANTHROPIC_API_KEY="your-api-key-here"
+```
 
 See `glm_api_setup.md` for detailed API key management.
 
@@ -58,9 +62,10 @@ See `glm_api_setup.md` for detailed API key management.
 
 **Solutions**:
 1. Verify key is correct (copy from https://open.bigmodel.cn/)
-2. Check for extra spaces or quotes in the key
-3. Regenerate key if compromised
-4. Verify API quota hasn't been exceeded
+2. Check for extra spaces or quotes in the config file
+3. Confirm the config uses `api.api_key`, not a top-level key
+4. Regenerate key if compromised
+5. Verify API quota hasn't been exceeded
 
 ## Learning System Issues
 
@@ -179,6 +184,10 @@ uv run scripts/fix_transcription.py --init
 
 ## Common Pitfalls
 
+### Stage 1 reports "Applied: 0" (usually correct, not a bug)
+
+Safe mode is the default, so Stage 1 only auto-applies **low-risk** (non-word, high-confidence) corrections. On a clean transcript — or one from a strong ASR engine — there may be no low-risk dictionary hits, so `Applied: 0` is expected. Any medium/high-risk candidates are written to `*_needs_review.md` for you to confirm. To apply every risk level (the pre-safe-mode behavior), pass `--apply-all`.
+
 ### 1. Stage Order Confusion
 
 **Problem**: Running Stage 2 without Stage 1 output.
@@ -269,6 +278,19 @@ uv run scripts/fix_transcription.py --validate
 # Export for version control instead
 uv run scripts/fix_transcription.py --export corrections_$(date +%Y%m%d).json
 git add corrections_*.json
+```
+
+### 7. `mv` Silently Skips Overwrite at Finalize (macOS)
+
+**Problem**: At finalize (rename `*_stage1.md` → `*.md`), a bare `mv` over an existing target does nothing and the un-corrected file survives — yet `mv` exits 0, so `mv … && echo done` falsely reports success and the wrong file gets ingested.
+
+**Cause**: macOS shells commonly alias `mv` to `mv -i`. The `-i` flag prompts before overwrite; with no interactive answer it defaults to "no" and skips the move (still exit 0).
+
+**Solution**: bypass the alias, force the overwrite, then verify the rename actually landed.
+
+```bash
+/bin/mv -f file_stage1.md file.md          # /bin/mv ignores the alias; -f forces overwrite
+grep -c '<a-term-you-corrected>' file.md   # confirm the corrected version is what remains
 ```
 
 ## Validation Commands

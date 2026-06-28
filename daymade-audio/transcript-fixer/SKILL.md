@@ -19,8 +19,21 @@ All scripts use PEP 723 inline metadata — `uv run` auto-installs dependencies.
 # First time: Initialize database
 uv run scripts/fix_transcription.py --init
 
-# Single file
+# Single file — Stage 1 runs in SAFE MODE by default: only low-risk
+# (non-word, high-confidence) corrections auto-apply. Medium/high-risk ones
+# (common words, <=2-char, real-word fragments) are written to
+# *_needs_review.md for you / the AI pass to judge, not applied silently.
 uv run scripts/fix_transcription.py --input meeting.md --stage 1
+
+# Apply EVERY risk level (the pre-safe-mode behavior). Higher false-positive
+# risk — only when the dictionary's domain matches this transcript.
+uv run scripts/fix_transcription.py --input meeting.md --stage 1 --apply-all
+
+# Dry run: preview all Stage 1 changes (with risk levels) without writing *_stage1.md
+uv run scripts/fix_transcription.py --input meeting.md --stage 1 --dry-run
+
+# Extract likely ASR errors without applying any corrections
+uv run scripts/fix_transcription.py --extract-uncertain -i meeting.md -o ./review
 
 # Batch: multiple files in parallel (use shell loop)
 for f in /path/to/*.txt; do
@@ -28,15 +41,20 @@ for f in /path/to/*.txt; do
 done
 ```
 
-After Stage 1, Claude reads the output and fixes remaining ASR errors natively (no API key needed). The full method — triage by confidence, verify-don't-guess, second pass, needs-checking list — is in **Native AI Correction** below; read that section as the source of truth. For a quick, clean transcript it collapses to: read the whole thing → fix the obvious errors with sed → save reusable patterns to the dictionary.
+After Stage 1, Claude reads the output and fixes remaining ASR errors natively (no API key needed). The full method — triage by confidence, verify-don't-guess, second pass, needs-checking list — is in **Native AI Correction** below; read that section as the source of truth. For a quick, clean transcript it collapses to: read the whole thing → fix the obvious one-off errors inline → `--add` any recurring or project-specific ones (especially names) to a `--domain` dictionary so they auto-fix next time (see "Project-Specific & Person-Name Corrections").
 
 See `references/example_session.md` for a concrete input/output walkthrough.
 
 **Alternative: API batch processing** (for automation without Claude Code):
 ```bash
+# Recommended: store the key in the config directory
+# Edit ~/.transcript-fixer/config.json and set api.api_key
+# Or override with an environment variable:
 export GLM_API_KEY="<api-key>"  # From https://open.bigmodel.cn/
 uv run scripts/fix_transcript_enhanced.py input.md --output ./corrected
 ```
+
+See `references/installation_setup.md` for the full config-file format and `references/glm_api_setup.md` for GLM endpoint details.
 
 ## Core Workflow
 
@@ -45,12 +63,22 @@ Two-phase pipeline with persistent learning:
 1. **Initialize** (once): `uv run scripts/fix_transcription.py --init`
 2. **Add domain corrections**: `--add "错误词" "正确词" --domain <domain>`
 3. **Phase 1 — Dictionary**: `--input file.md --stage 1` (instant, free)
-4. **Phase 2 — AI Correction**: Claude reads output and fixes errors natively, or `--stage 3` with `GLM_API_KEY` for API mode
+4. **Phase 2 — AI Correction**: Claude reads output and fixes errors natively, or `--stage 3` with the API key configured in `~/.transcript-fixer/config.json` for API mode
 5. **Save stable patterns**: `--add "错误词" "正确词"` after each session
 6. **Review learned patterns**: `--review-learned` and `--approve` high-confidence suggestions
 
-**Domains**: `general`, `embodied_ai`, `finance`, `medical`, or custom (e.g., `legal`, `gaming`)
+**Domains**: `general`, `embodied_ai`, `finance`, `medical`, `tech`, or custom (e.g., `legal`, `gaming`)
 **Learning**: Patterns appearing ≥3 times at ≥80% confidence auto-promote from AI to dictionary
+
+### New safety & review commands
+
+- **Safe mode is the Stage 1 default**: only low-risk (non-word, high-confidence) corrections auto-apply; medium/high-risk ones (common words, ≤2-char, real-word fragments) are tracked to `*_needs_review.md` instead of being applied silently. So **`Applied: 0` on a clean transcript is correct, not a bug** — the risky rules are waiting in `*_needs_review.md` for you or the AI pass to judge. Pass `--apply-all` to apply every risk level (the old behavior); `--review` is kept as a deprecated no-op. This reconnects the risk classifier that was being computed and then ignored — but it does NOT eliminate every false positive: rules whose `from_text` is a 4+ char valid phrase are still graded low and auto-apply (see `references/false_positive_guide.md` → "The 4+ char real-word blind spot").
+- **Preview changes before applying**: `--dry-run` writes `*_dryrun.md` with every planned Stage 1 change and its risk level.
+- **Always-on changes report**: `--changes-file` writes `*_changes.md` with before/after/risk for every correction (on by default in safe mode).
+- **Extract uncertain ASR tokens**: `--extract-uncertain -i file.md` writes `*_uncertain.md` with likely errors (short all-caps tokens, transliteration fragments, repeated words) without changing the file.
+- **Load domain presets**: `--load-presets tech` imports a curated set of tech/Claude Code ASR corrections.
+- **Report false positives**: `--report-false-positive "错误词" "正确词" -d domain` disables a bad dictionary rule and lowers its confidence.
+- **Audit for risky rules**: `--audit` flags existing rules that look like false-positive sources (common words, ≤2-char, substring collisions, and — with jieba — 4+ char real-word phrases). **It is advisory: it surfaces candidates, it does NOT disable anything.** Disabling is a human decision — review each hit by hand and back up the DB first, because the audit cannot know your context and mislabels a large fraction of good rules (e.g. `GDP 5.5→GPT 5.5` looks wrong generically but is a correct fix for an AI-heavy user). See `references/false_positive_guide.md`.
 
 **After fixing, always save reusable corrections to dictionary.** This is the skill's core value — see `references/iteration_workflow.md` for the complete checklist.
 
@@ -77,6 +105,33 @@ uv run scripts/fix_transcription.py --add "错误2" "正确2" --domain business
 
 Adding wrong dictionary rules silently corrupts future transcripts. **Read `references/false_positive_guide.md` before adding any correction rule**, especially for short words (≤2 chars) or common Chinese words that appear correctly in normal text.
 
+## Project-Specific & Person-Name Corrections (`--domain` isolation)
+
+The most important pattern for **recurring, project-specific errors** — person names, project jargon, product codenames — is the `--domain` flag. It is also the *answer* to the false-positive worry above: a person-name fix that's right **in your project** (a teammate's name the ASR keeps garbling) might collide with a real, differently-spelled person in someone else's transcript — so it must NOT go into the global (`general`) dictionary.
+
+`--domain` makes such rules safe by isolating them:
+
+```bash
+# Add the rule under an isolated, project-named domain (not 'general')
+uv run scripts/fix_transcription.py --add "<ASR-garbled-name>" "<correct-name>" --domain <project>
+# Apply ONLY that domain's rules to this project's transcripts
+uv run scripts/fix_transcription.py --input meeting.md --stage 1 --domain <project>
+```
+
+A rule added under `--domain <project>` only fires when you pass `--domain <project>` at correction time. Other projects (their own domain, or default `all`) are unaffected — so even a risky short-word / common-word person-name rule is safe, because it only fires inside the project where it's correct.
+
+### Why this beats a one-off script (the core value, do not skip)
+
+Facing a transcript — or a whole batch — full of the same ASR-garbled names, the tempting move is a quick `sed` / `python` find-and-replace. **Don't.** That is the single biggest anti-pattern with this skill:
+
+- A throwaway script fixes *this batch* and the knowledge then evaporates: next batch, next week, next project, you rewrite it from scratch. It does not compound.
+- The dictionary **compounds**: `--add` once, and every future transcript auto-corrects via `--stage 1 --domain <project>`. Wire that one command into the project's ingest step and the names are fixed forever, for free.
+- The dictionary has false-positive protection (short-word warnings, the `audit` command, `--report-false-positive`); a raw `sed` has none and will silently corrupt look-alike words.
+
+**Rule of thumb: recurring or project-specific error → `--add ... --domain <project>` (it compounds). Never a throwaway sed/python replace.** A one-off script is acceptable only for a genuinely one-time, never-recurring fix — and even then the dictionary is usually less effort.
+
+ASR is especially unstable on Chinese names: one person can shatter into a dozen homophone variants (in one real project a single surname+given-name was seen as 13+ `[姓变体]×[名变体]` combinations). Capture every confirmed variant with `--add --domain <project>` so they all collapse to the canonical name on every future run.
+
 ## Native AI Correction (Default Mode)
 
 When running inside Claude Code, use Claude's own language understanding for Phase 2 — on high-quality ASR this is where almost all the real correction happens. **Scale the effort to the transcript.** A short, clean recording with no proper nouns (a quick voice memo) just needs steps 1-3 plus one obvious-fix pass; skip the verification / second-pass / subagent / needs-checking machinery below, which earns its keep on long, multi-speaker, domain-heavy, or high-stakes transcripts. Don't turn a 10-second memo into a research project.
@@ -89,13 +144,13 @@ When running inside Claude Code, use Claude's own language understanding for Pha
    - **Needs verification** — a proper noun you can't confirm from context: a person / company / ticker / product / place name (a misheard drug name in a medical interview, a researcher's surname in a podcast, a ticker on an earnings call), or any term you can't point to a specific source for — even one you think you recognize ("I'm pretty sure" is exactly how wrong names slip in). **Search it, don't guess** — WebSearch, or a local grep if it's a project / personal entity. A confirmed result becomes a Confident fix; if the search *can't* confirm it, it drops to Uncertain. Batch these: collect the unique unknowns and look them up together, not one-by-one.
    - **Uncertain** — you suspect an error but can't confirm it even after searching (a syllable that maps to several real entities; a structurally broken sentence). **Leave the original text exactly as-is** and record it in the needs-checking list (step 7). A fluent-but-wrong "fix" is harder to catch downstream than an obvious garble — silence beats a confident guess.
 5. Apply the confident fixes efficiently:
-   - **Global replacements** (unique non-words like "克劳锐"→"Claude"): one `sed -i ''` with multiple `-e` flags
+   - **Global replacements** (unique non-words like "克劳锐"→"Claude"): if it recurs across transcripts — most product/name garbles do — `--add` it to a `--domain` so it compounds to every future run; for a genuinely one-off term, one `sed -i ''` with multiple `-e` flags
    - **Context-dependent** (a word that's only wrong in one context, like "争"→"蒸" in a distillation discussion): sed with a longer surrounding phrase for uniqueness, or the Edit tool
    - Re-grep each changed term afterward to confirm it landed and didn't hit look-alikes you meant to keep
 6. **Second pass — catch what one read missed.** A single linear read reliably leaves residue: an idiom degraded into a near-homophone, a term wrong in just one spot among many correct ones, an acronym misheard as another. Always re-scan once for leftovers. For a long or high-stakes transcript, *also* spawn an independent subagent (Task) to re-read the corrected file cold — fresh eyes with no memory of your first pass catch what you've read past. Have it report suspected residuals **with line numbers**, then run each back through step-4 triage (fix / search / log). Task works when you're in the main context; if it isn't available — e.g. these instructions are themselves running inside a subagent, which can't spawn another — just do one more thorough independent re-read yourself. Never skip the second pass over a missing tool.
 7. **Emit a needs-checking list** — in your chat summary to the human, not baked into the file — for everything still *Uncertain*: line number, the original text you left in place, what you suspect, and why you couldn't confirm it. This surfaces the few items that need a recording or source to resolve, instead of burying them or papering over them with guesses. If nothing is uncertain, say so.
 8. Verify with diff against the file you actually edited (`diff <original> <your-working-file>`) — every change should trace back to a triage decision
-9. Finalize: rename `*_stage1.md` → `*.md`, delete the original `.txt`
+9. Finalize: rename `*_stage1.md` → `*.md`, delete the original `.txt`. **Use `/bin/mv -f`, not a bare `mv`** — on macOS `mv` is commonly aliased to `mv -i`, which prompts before overwriting an existing target and, with no interactive answer, defaults to "no" and **skips the move while still exiting 0**. A bare `mv … && echo done` then reports success while the un-corrected file silently survives as the final output. After renaming, re-grep the final file for a correction you know you applied (e.g. a fixed name) to confirm the corrected version is what landed.
 10. Save stable patterns to the dictionary (see "Dictionary Addition" below)
 11. If you worked from `corrected_stage1.md`, strip any remaining Stage 1 false positives before finalizing
 
@@ -113,7 +168,7 @@ AI product names are frequently garbled. These patterns recur across transcripts
 | GitHub | get Hub, Git Hub |
 | prototype | Pre top |
 
-Person names and company names also produce consistent ASR errors across sessions — always add confirmed name corrections to the dictionary.
+Person names and company names also produce consistent ASR errors across sessions — always add confirmed name corrections to the dictionary, and for project-specific names use `--domain <project>` to keep them isolated (see "Project-Specific & Person-Name Corrections").
 
 ### Efficient Batch Fix Strategy
 
@@ -121,8 +176,8 @@ When fixing multiple files (e.g., 5 transcripts from one day):
 
 1. **Stage 1 in parallel**: run all files through dictionary at once
 2. **Read all files first**: build a mental model of speakers, topics, and recurring terms before fixing anything
-3. **Compile a global correction list**: many errors repeat across files from the same session (same speakers, same topics)
-4. **Apply global corrections first** (sed with multiple `-e` flags), then per-file context-dependent fixes
+3. **Compile a global correction list**: many errors repeat across files from the same session (same speakers, same topics). **If an error recurs — especially a person name or project term — `--add` it to a project `--domain` (see "Project-Specific & Person-Name Corrections" above) instead of replacing it inline; it then auto-fixes every future file, not just this batch.**
+4. **Apply the remaining one-off corrections** (sed with multiple `-e` flags, for genuinely non-recurring fixes only), then per-file context-dependent fixes
 5. **Verify all diffs**, finalize all files, then do one dictionary addition pass
 
 ### Parallel via Dynamic Workflow (large batches)
@@ -148,11 +203,11 @@ For a large batch (10+ files), a Dynamic Workflow — one subagent per file, run
 
 ### When to Use API Mode Instead
 
-Use `GLM_API_KEY` + Stage 3 for batch processing, standalone usage without Claude Code, or reproducible automated processing.
+Use the API key configured in `~/.transcript-fixer/config.json` (or the `GLM_API_KEY` / `ANTHROPIC_API_KEY` environment variable for temporary overrides) + Stage 3 for batch processing, standalone usage without Claude Code, or reproducible automated processing.
 
-### Legacy Fallback
+### API Fallback
 
-When the script outputs `[CLAUDE_FALLBACK]` (GLM API error), switch to native mode automatically.
+When the GLM API is unavailable after retries, the script keeps the original text unchanged and prints a clear warning. If you need AI correction without an external API, run inside Claude Code and use native mode.
 
 ## Utility Scripts
 
@@ -174,11 +229,26 @@ uv run scripts/split_transcript_sections.py meeting.txt \
 uv run scripts/generate_word_diff.py original.md corrected.md output.html
 ```
 
+**Full multi-format diff report** (Markdown summary + unified diff + HTML + inline markers):
+```bash
+uv run scripts/generate_diff_report.py \
+  original.md \
+  original_stage1.md \
+  original_stage2.md \
+  -o ./diff_reports
+```
+
 ## Output Files
 
 - `*_stage1.md` — Dictionary corrections applied
-- `*_corrected.txt` — Final version (native mode) or `*_stage2.md` (API mode)
+- `*_stage2.md` — AI-corrected version (API mode)
+- `*_changes.md` — Stage 1 report with risk levels and line context (written by default in safe mode, or with `--changes-file`)
+- `*_needs_review.md` — Medium/high-risk corrections deferred in safe mode (the default)
+- `*_dryrun.md` — Preview of all Stage 1 changes, annotated with which risk levels a real run would apply
+- `*_uncertain.md` — Likely ASR errors extracted by `--extract-uncertain`
 - `*_对比.html` — Visual diff (open in browser)
+
+In native mode, finalize by renaming `*_stage1.md` to your desired output name (see the Native AI Correction workflow).
 
 ## Database Operations
 
@@ -208,6 +278,7 @@ sqlite3 ~/.transcript-fixer/corrections.db "SELECT value FROM system_config WHER
 - `fix_transcript_enhanced.py` — Enhanced wrapper for interactive use
 - `fix_transcript_timestamps.py` — Timestamp normalization and repair
 - `generate_word_diff.py` — Word-level diff HTML generation
+- `generate_diff_report.py` — Multi-format comparison report (Markdown, unified diff, HTML, inline markers)
 - `split_transcript_sections.py` — Split transcript by marker phrases
 
 **References** (load as needed):

@@ -79,6 +79,27 @@ def main():
             print("  GHOST (in doc, not in manifest):")
             for s in ghost:
                 print(f"    - {s}")
+
+    # Version-badge coherence: the README version badge must equal the manifest's
+    # metadata.version. This badge is a derived value that has silently drifted
+    # twice (1.63->1.64, 1.64->1.65) when a metadata bump forgot to move the badge,
+    # so the drift guard now asserts it instead of leaving it to manual discipline.
+    meta_version = json.load(
+        open(os.path.join(repo, ".claude-plugin", "marketplace.json"))
+    )["metadata"]["version"]
+    print(f"\nmarketplace metadata.version: {meta_version}")
+    for name in ("README.md", "README.zh-CN.md"):
+        path = os.path.join(repo, name)
+        if not os.path.exists(path):
+            continue
+        m = re.search(r"version-(\d+\.\d+\.\d+)-", open(path, encoding="utf-8").read())
+        badge = m.group(1) if m else "(none)"
+        if badge != meta_version:
+            drift = True
+            print(f"{name} version badge: {badge} — DRIFT (expected {meta_version})")
+        else:
+            print(f"{name} version badge: {badge} — OK")
+
     if drift:
         print("\nResult: DRIFT — sync the doc lists with marketplace.json.")
         sys.exit(1)

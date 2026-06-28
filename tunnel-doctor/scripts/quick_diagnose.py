@@ -480,7 +480,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Quick diagnostics for Tailscale + proxy conflicts on macOS."
     )
-    parser.add_argument("--host", default="local.claude4.dev", help="Target host to diagnose.")
+    parser.add_argument("--host", default="local.example.com", help="Target host to diagnose.")
     parser.add_argument(
         "--url",
         default="",

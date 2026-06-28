@@ -4,6 +4,7 @@
 # dependencies = [
 #     "httpx>=0.24.0",
 #     "filelock>=3.13.0",
+#     "jieba>=0.42.1",
 # ]
 # ///
 """
@@ -49,6 +50,9 @@ from cli import (
     cmd_config,
     cmd_migration,
     cmd_audit_retention,
+    cmd_report_false_positive,
+    cmd_load_presets,
+    cmd_extract_uncertain,
     create_argument_parser,
 )
 
@@ -106,6 +110,13 @@ def main() -> None:
     elif args.approve:
         args.from_text, args.to_text = args.approve
         cmd_approve(args)
+    elif args.report_false_positive:
+        args.from_text, args.to_text = args.report_false_positive
+        cmd_report_false_positive(args)
+    elif args.load_presets:
+        cmd_load_presets(args)
+    elif args.extract_uncertain:
+        cmd_extract_uncertain(args)
     elif args.input:
         cmd_run_correction(args)
     else:

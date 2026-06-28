@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Claude Code skills marketplace containing 61 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
+This is a Claude Code skills marketplace containing 77 production-ready skills organized in a plugin marketplace structure. Most plugins expose one skill for narrow installs; suite plugins expose related skills under shared namespaces for combined installation workflows.
 
 **Essential Skill**: `skill-creator` is the most important skill in this marketplace - it's a meta-skill that enables users to create their own skills. Always recommend it first for users interested in extending Claude Code.
 
@@ -153,7 +153,7 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 ## Marketplace Configuration
 
 The marketplace is configured in `.claude-plugin/marketplace.json`:
-- Contains 43 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
+- Contains 56 plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); suite plugins (`daymade-audio`, `daymade-claude-code`, `daymade-docs`, `daymade-skill`) use explicit `skills` arrays for multi-skill routing
 - Each plugin has: name, description, source, version, category, keywords
 - Marketplace metadata: name, owner, version
 - Single-skill plugins follow the official pattern (167/168 plugins in `anthropics/claude-plugins-official`): `source` points to skill directory, `skills` omitted
@@ -194,6 +194,8 @@ This applies when you change ANY file under a skill directory:
 **Pre-commit check:** Before committing, run `git diff --name-only` and verify: for every `skill-name/` directory that appears, `marketplace.json` also has a version bump for that skill's `plugins[].version`.
 
 ## Available Skills
+
+> **Authoritative registry:** `.claude-plugin/marketplace.json`. The list below is a human-readable snapshot; always check the marketplace file for the current skill set, versions, and suite membership.
 
 **Priority Order** (by importance):
 
@@ -258,8 +260,22 @@ This applies when you change ANY file under a skill directory:
 59. **benchmark-due-diligence** - Runs adversarial due-diligence on a benchmark the user envies (a founder, KOL, company, or product whose claimed success looks inflated), separating marketing bubble from real signal and mapping the validated playbook onto the user's own situation
 60. **pdf-to-html** - Converts a PDF into one self-contained, readable HTML file preserving images, tables, charts, and reading order, optionally translating it into another language while keeping every figure
 61. **terminal-screenshot** - Render a terminal CLI program's colored output to a PNG so Claude can see the real visual result (color contrast, alignment, background blocks) instead of raw ANSI codes — for verifying delta/bat/starship/lazygit color config
-
-62. **x-twitter-scraper** - Xquik X/Twitter API skill for tweet search, user lookup, media download, follower checks, bulk extractions, MCP setup, HMAC webhooks, and confirmation-gated actions. Uses an Xquik API key and never asks for X login material.
+62. **bilibili-source** - Fetch login-free, citable data for a Bilibili (B站) video — stats, UP fans, tags, per-part cids, and full danmaku text — via one view/detail call (accepts BVID/av/b23.tv/URL); login-gated subtitles; ships a self-test for API-drift detection
+63. **claude-usage-analyst** - Explain local Claude Code / Claude Desktop token usage, cost, quota burn, model mix, and cache pressure from `ccusage` data — separating observed numbers from interpretation in plain language (daymade-claude-code suite member)
+64. **marketplace-health-check** - Run a full 6-dimension health check of this skills marketplace repo (code/script safety, doc/SSOT consistency, security/PII, open-PR triage, open-issue triage, marketplace integrity) via a parallel fan-out Dynamic Workflow, then Counter-Review the serious findings and report by priority
+65. **claude-switch-models-setup** - Set up multiple isolated Claude Code CLI profiles so students and power users can run different LLM providers (Kimi, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time (daymade-claude-code suite member)
+66. **llm-eval-harness** - Evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four dimensions (speed with thinking-aware tok/s, concurrency/stability, Anthropic protocol compliance, and quality regression against your own use cases via blind judges); keys passed by env-var name only, use-case library kept outside the bundle
+67. **read-claude-web-conversation** - Extract full Claude.ai web conversations through the daymade-claude-code suite for recovery, audit, archival, or migration
+68. **setup-notifications-via-wecom** - Set up reusable WeCom / Enterprise WeChat webhook notifications for status reports, alerts, and completion messages
+69. **notify-wecom** - Send a single one-off WeCom group-bot message without setting up a reusable notification workflow
+70. **github-sensitive-data-cleanup** - Scan and remove secrets, API keys, private domains/IPs, and PII from GitHub repository history with force-push safety gates
+71. **codex-image-gallery** - Start a self-contained local web gallery for browsing Codex-generated images from `~/.codex/generated_images` or a custom `GALLERY_ROOT`
+72. **frontend-visual-qa** - Reviews rendered frontends, dashboards, HTML slides, and generated UIs for visual quality defects that lint/build miss (awkward line breaks, wrapped controls, horizontal overflow, double scrollbars, AI slop, Chrome DevTools viewport mistakes); use after frontend-design/ui-designer and alongside qa-expert
+73. **openclaw** - Manage OpenClaw (龙虾/lobster) instance configs: audit, diff, copy, add-model, list, switch models across openclaw.json files; DeepSeek model patches, default-model/alias management, config validation
+74. **download-gemini-images** - Download images (uploaded files or generated previews) from a Google Gemini conversation page via logged-in Chrome; lightbox-first with pageAssets fallback, ordered ZIP packaging with integrity verification
+75. **wps-doc-scraper** - Faithfully archive public WPS/KDocs/金山文档 links (incl. embedded ProcessOn mind maps and canvases) as raw source data, original SVG/PNG, and Markdown without login; unauthenticated data-API-first with browser-DOM fallback
+76. **ashare-news-fetcher** - Aggregate A-share (Chinese market) news, policy, and sentiment from public sources (财联社/华尔街见闻/金十/新浪7x24/东财快讯/regulators/东财股吧) into structured JSON or Markdown; per-stock or market-wide, no login
+77. **pharma-daily-report** - Generate an A-share pharma sector daily report from Sina Finance (core pharma stocks, 7 sub-sector ranking, gainers/losers, fund-flow estimate), optional Feishu rich-text push; default 20-stock watchlist, customizable
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
@@ -307,7 +323,7 @@ For the full step-by-step guide with templates and examples, see [references/new
 |------|-------------------|
 | `.claude-plugin/marketplace.json` | metadata.version + metadata.description + new plugin entry |
 | `CHANGELOG.md` | New version entry |
-| `README.md` | 7 locations: badges, description, install cmd, skill section, use case, docs link, requirements |
+| `README.md` | 7 locations: badges (skills-count badge AND version badge — version MUST equal `marketplace.json` metadata.version; it has drifted twice from a metadata bump that forgot the badge), description, install cmd, skill section, use case, docs link, requirements |
 | `README.zh-CN.md` | 7 locations: same as above, translated |
 | `CLAUDE.md` | 3 locations: overview count, marketplace config count, Available Skills list |
 | `skill-name/` | The actual skill directory + packaged .zip |

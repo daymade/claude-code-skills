@@ -17,7 +17,20 @@ Extract and recover content from Claude Code's session history files stored in `
 
 ## Session File Locations
 
-Session files are stored at `~/.claude/projects/<normalized-path>/<session-id>.jsonl`.
+Session files are stored at `~/.claude/projects/<encoded-project-path>/<session-id>.jsonl`.
+
+**The directory name is the project's ABSOLUTE working-directory path with every `/` replaced by `-` — never the basename.** For example `/Users/<name>/Desktop/my-app` becomes `-Users-<name>-Desktop-my-app`, so a bare `my-app` cannot match a directory directly.
+
+**Before concluding a project "has no history", reverse-look-up the encoded name — do not infer absence from a failed `ls`:**
+
+```bash
+ls ~/.claude/projects/ | grep -i <project-name>
+find ~/.claude/projects -maxdepth 1 -iname '*<project-name>*'
+```
+
+A `ls <basename>` that returns nothing means the lookup used the wrong name, NOT that history is absent. The bundled `analyze_sessions.py` already expands `~`, resolves to an absolute path, and falls back to a basename reverse-lookup — prefer passing it the path (absolute, `~`, relative, or bare name all work).
+
+Note: sessions run from **Claude Desktop's cowork / built-in Claude Code mode** also land here (Desktop runs a bundled CLI); only Desktop's *native* chat lives elsewhere (a LevelDB store, not JSONL). So "it ran inside Desktop" does not mean it is missing from `~/.claude/projects/`.
 
 For detailed JSONL structure and extraction patterns, see `references/session_file_format.md`.
 

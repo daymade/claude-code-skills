@@ -1,6 +1,7 @@
 # Counter-Review Pattern
 
 ## Contents
+
 - Why counter-review (not peer-review)
 - The four-agent team composition
 - The four-question filter
@@ -12,7 +13,7 @@
 
 A lone investigator converging on a conclusion is highly susceptible to confirmation bias, especially after investing hours in a line of reasoning. Standard peer review is better but shares most of the investigator's context and inherits the same blind spots.
 
-**Counter-review** is adversarial by design: the reviewer's job is to *falsify* the conclusion, not confirm it. They start from the same evidence but are explicitly instructed to find what the investigator missed, find weaker-evidence conclusions the investigator over-weighted, and propose experiments that could disprove the current hypothesis.
+**Counter-review** is adversarial by design: the reviewer's job is to _falsify_ the conclusion, not confirm it. They start from the same evidence but are explicitly instructed to find what the investigator missed, find weaker-evidence conclusions the investigator over-weighted, and propose experiments that could disprove the current hypothesis.
 
 Counter-review works best when:
 
@@ -36,7 +37,7 @@ This composition was used in this investigation and proved effective. Roles are 
 
 **Prompt framing**: "The main conclusion is X. Challenge it using external research (WebSearch authoritative sources, vendor docs, bug trackers). Cite URLs. Do not rely on training data."
 
-**Typical value**: finds vendor-documented behavior that contradicts or qualifies the investigator's assumption. In this case study, this agent found published evidence that Anthropic's own official API also experiences SSE stalls during tool_use generation — downgrading the "Qiniu does not forward ping" hypothesis from "root cause" to "amplifying factor".
+**Typical value**: finds vendor-documented behavior that contradicts or qualifies the investigator's assumption. In this case study, this agent found published evidence that Anthropic's own official API also experiences SSE stalls during tool_use generation — downgrading the "<upstream-provider> does not forward ping" hypothesis from "root cause" to "amplifying factor".
 
 **Agent type**: `general-purpose` with WebSearch
 
@@ -73,6 +74,7 @@ Ask: in the actual deployment, under actual load patterns, with actual input dis
 ### 2. Cost — what is the cost of fixing versus ignoring?
 
 For each finding:
+
 - Cost of fixing: engineering time + regression risk + complexity added
 - Cost of ignoring: expected incidents × their impact
 
@@ -141,19 +143,19 @@ In other words: counter-review is for the **conclusion** phase, not the stabiliz
 
 ## The case study: what counter-review surfaced
 
-Main investigator's tentative conclusion before counter-review: "Qiniu does not forward SSE ping, causing some middle layer to RST after ~130s. Fix: add server-side keepalive in provider-gateway."
+Main investigator's tentative conclusion before counter-review: "<upstream-provider> does not forward SSE ping, causing some middle layer to RST after ~130s. Fix: add server-side keepalive in <provider-gateway-service>."
 
 Counter-review surfaced:
 
-| Agent | Finding | Classification after filter |
-|-------|---------|---------------------------|
-| Challenger | Anthropic's official API also stalls 59-138s+ on tool_use (GitHub issues cited). "Qiniu not forwarding ping" is not sufficient as independent root cause. | Partly right — downgraded assumption from "root cause" to "amplifying factor" |
-| Challenger | 130s matches Cisco CGNAT initial TCP timeout (120s + RTT) better than CF 100s. | Partly right — worth testing but did not change the fix |
-| Code reviewer | Proposed keepalive would corrupt non-streaming Anthropic JSON responses (res.write before writeHead triggers implicit headers). | Real issue — fixed before deploy |
-| Code reviewer | Several clearInterval paths missing (proxyReq.on error, proxyRes aborted). | Real issue — fixed before deploy |
-| Code reviewer | SSE comment (`:` prefix) client-compatibility claim needed to be verified, not assumed. | Verified from primary sources (WHATWG EventSource spec + `@anthropic-ai/sdk` `SSEDecoder` source + `openai` SDK + lobe-chat EventSourceParserStream). Confirmed safe. Removed from risk list. |
-| Independent | Caddy default IdleConnTimeout is 120s, could match the 130s constant. | Turned out wrong (ruled out by experiment) but good hypothesis |
-| Experiment | 3-path layered isolation with mock idle upstream: Path A fails at 126s, B and C clean at 220s. | Definitive — pinpointed CF edge |
+| Agent         | Finding                                                                                                                                                                 | Classification after filter                                                                                                                                                                       |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Challenger    | Anthropic's official API also stalls 59-138s+ on tool_use (GitHub issues cited). "<upstream-provider> not forwarding ping" is not sufficient as independent root cause. | Partly right — downgraded assumption from "root cause" to "amplifying factor"                                                                                                                     |
+| Challenger    | 130s matches Cisco CGNAT initial TCP timeout (120s + RTT) better than CF 100s.                                                                                          | Partly right — worth testing but did not change the fix                                                                                                                                           |
+| Code reviewer | Proposed keepalive would corrupt non-streaming Anthropic JSON responses (res.write before writeHead triggers implicit headers).                                         | Real issue — fixed before deploy                                                                                                                                                                  |
+| Code reviewer | Several clearInterval paths missing (proxyReq.on error, proxyRes aborted).                                                                                              | Real issue — fixed before deploy                                                                                                                                                                  |
+| Code reviewer | SSE comment (`:` prefix) client-compatibility claim needed to be verified, not assumed.                                                                                 | Verified from primary sources (WHATWG EventSource spec + `@anthropic-ai/sdk` `SSEDecoder` source + `openai` SDK + <chat-client> EventSourceParserStream). Confirmed safe. Removed from risk list. |
+| Independent   | Caddy default IdleConnTimeout is 120s, could match the 130s constant.                                                                                                   | Turned out wrong (ruled out by experiment) but good hypothesis                                                                                                                                    |
+| Experiment    | 3-path layered isolation with mock idle upstream: Path A fails at 126s, B and C clean at 220s.                                                                          | Definitive — pinpointed CF edge                                                                                                                                                                   |
 
 Raw count: 6 findings surfaced. Acted on: 3 (2 code fixes, 1 definitive experiment result). Discarded: 1 (wrong). Downgraded but kept as context: 2.
 

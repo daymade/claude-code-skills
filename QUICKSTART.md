@@ -25,8 +25,8 @@ Then:
 claude plugin marketplace add https://github.com/daymade/claude-code-skills
 
 # Marketplace name: daymade-skills (from marketplace.json)
-# Install skill-creator
-claude plugin install skill-creator@daymade-skills
+# Install the daymade-skill suite (bundles skill-creator)
+claude plugin install daymade-skill@daymade-skills
 ```
 
 ### Step 2: Initialize Your First Skill
@@ -122,7 +122,7 @@ claude plugin marketplace add https://github.com/daymade/claude-code-skills
 # In Claude Code use `/plugin ...`; in your terminal use `claude plugin ...`
 # Step 2: Install skills you need
 claude plugin install github-ops@daymade-skills
-claude plugin install doc-to-markdown@daymade-skills
+claude plugin install daymade-docs@daymade-skills
 # ... add more as needed
 
 # Step 3: Restart Claude Code

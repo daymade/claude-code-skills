@@ -19,7 +19,7 @@ Intelligently analyze macOS disk usage and provide actionable cleanup recommenda
 4. **Value Over Vanity**: Your goal is NOT to maximize cleaned space. Your goal is to identify what is **truly useless** vs **valuable cache**. Clearing 50GB of useful cache just to show a big number is harmful.
 5. **Network Environment Awareness**: Many users (especially in China) have slow/unreliable internet. Re-downloading caches can take hours. A cache that saves 30 minutes of download time is worth keeping.
 6. **Impact Analysis Required**: Every cleanup recommendation MUST include "what happens if deleted" column. Never just list items without explaining consequences.
-7. **Double-Check Before Delete**: Verify each Docker object with independent cross-checks before deletion (see Step 2A).
+7. **Double-Check Before Delete**: Verify each Docker object with independent cross-checks before deletion (see references/docker_analysis.md).
 8. **Patience Over Speed**: Disk scans can take 5-10 minutes. NEVER interrupt or skip slow operations. Report progress to user regularly.
 9. **User Executes Cleanup**: After analysis, provide the cleanup command for the user to run themselves. Do NOT auto-execute cleanup.
 10. **Conservative Defaults**: When in doubt, don't delete. Err on the side of caution.
@@ -326,101 +326,9 @@ docker volume rm ragflow_mysql_data ragflow_redis_data
 
 **Safety level**: 🟢 Homebrew/npm cleanup, 🔴 Docker volumes require per-project confirmation
 
-### Step 2A: Docker Deep Analysis
+### Step 2A-2C: Docker Deep Analysis
 
-Use agent team to analyze Docker resources in parallel for comprehensive coverage:
-
-**Agent 1 — Images**:
-```bash
-# List all images sorted by size
-docker images --format "table {{.ID}}\t{{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}" | sort -k3 -h -r
-
-# Identify dangling images (no tag)
-docker images -f "dangling=true" --format "{{.ID}}\t{{.Size}}\t{{.CreatedSince}}"
-
-# For each image, check if any container references it
-docker ps -a --filter "ancestor=<IMAGE_ID>" --format "{{.Names}}\t{{.Status}}"
-```
-
-**Agent 2 — Containers and Volumes**:
-```bash
-# All containers with status
-docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Size}}"
-
-# All volumes with size
-docker system df -v | grep -A 1000 "VOLUME NAME"
-
-# Identify dangling volumes
-docker volume ls -f dangling=true
-
-# For each volume, check which container uses it
-docker ps -a --filter "volume=<VOLUME_NAME>" --format "{{.Names}}"
-```
-
-**Agent 3 — System Level**:
-```bash
-# Docker disk usage summary
-docker system df
-
-# Build cache
-docker builder du
-
-# Container logs size
-for c in $(docker ps -a --format "{{.Names}}"); do
-  echo "$c: $(docker inspect --format='{{.LogPath}}' $c | xargs ls -lh 2>/dev/null | awk '{print $5}')"
-done
-```
-
-**Version Management Awareness**: Identify version-managed images (e.g., Supabase managed by CLI). When newer versions are confirmed running, older versions are safe to remove. Pay attention to Docker Compose naming conventions (dash vs underscore).
-
-### Step 2B: OrbStack-Specific Analysis
-
-OrbStack users have additional considerations.
-
-**data.img.raw is a Sparse File**:
-```bash
-# Logical size (can show 8TB+, meaningless)
-ls -lh ~/Library/OrbStack/data/data.img.raw
-
-# Actual disk usage (this is what matters)
-du -h ~/Library/OrbStack/data/data.img.raw
-```
-
-The logical vs actual size difference is normal. Only actual usage counts.
-
-**Post-Cleanup: Reclaim Disk Space**: After cleaning Docker objects inside OrbStack, `data.img.raw` does NOT shrink automatically. Instruct user: Open OrbStack Settings → "Reclaim disk space" to compact the sparse file.
-
-**OrbStack Logs**: Typically 1-2 MB total (`~/Library/OrbStack/log/`). Not worth cleaning.
-
-### Step 2C: Double-Check Verification Protocol
-
-Before deleting ANY Docker object, perform independent verification.
-
-**For Images**:
-```bash
-# Verify no container (running or stopped) references the image
-docker ps -a --filter "ancestor=<IMAGE_ID>" --format "{{.Names}}\t{{.Status}}"
-
-# If empty → safe to delete with: docker rmi <IMAGE_ID>
-```
-
-**For Volumes**:
-```bash
-# Verify no container mounts the volume
-docker ps -a --filter "volume=<VOLUME_NAME>" --format "{{.Names}}"
-
-# If empty → check if database volume (see below)
-# If not database → safe to delete with: docker volume rm <VOLUME_NAME>
-```
-
-**Database Volume Red Flag Rule**: If volume name contains mysql, postgres, redis, mongo, or mariadb, MANDATORY content inspection:
-```bash
-# Inspect database volume contents with temporary container
-docker run --rm -v <VOLUME_NAME>:/data alpine ls -la /data
-docker run --rm -v <VOLUME_NAME>:/data alpine du -sh /data/*
-```
-
-Only delete after user confirms the data is not needed.
+For Docker-heavy systems, follow the detailed per-object analysis and verification protocol (image/container/volume inspection, OrbStack sparse-file handling, and the database-volume red-flag rule) in `references/docker_analysis.md`. Core rule: verify every Docker object with independent cross-checks before deleting, and never use prune-family commands.
 
 ## Step 3: Integration with Mole
 
@@ -484,180 +392,7 @@ See `references/mole_integration.md` for detailed tmux workflow and troubleshoot
 
 ## Multi-Layer Deep Exploration with Mole
 
-**CRITICAL**: For comprehensive analysis, you MUST perform multi-layer exploration, not just top-level scans. This section documents the proven workflow for navigating Mole's TUI.
-
-### Navigation Commands
-
-```bash
-# Create session
-tmux new-session -d -s mole -x 120 -y 40
-
-# Start analysis
-tmux send-keys -t mole 'mo analyze' Enter
-
-# Wait for initial scan
-sleep 8 && tmux capture-pane -t mole -p
-
-# Navigation keys (send via tmux)
-tmux send-keys -t mole Enter    # Enter/expand selected directory
-tmux send-keys -t mole Left     # Go back to parent directory
-tmux send-keys -t mole Down     # Move to next item
-tmux send-keys -t mole Up       # Move to previous item
-tmux send-keys -t mole 'q'      # Quit TUI
-
-# Capture current view
-tmux capture-pane -t mole -p
-```
-
-### Multi-Layer Exploration Workflow
-
-**Step 1: Top-level overview**
-```bash
-# Start mo analyze, wait for initial menu
-tmux send-keys -t mole 'mo analyze' Enter
-sleep 8 && tmux capture-pane -t mole -p
-
-# Example output:
-# 1. Home           289.4 GB (58.5%)
-# 2. App Library    145.2 GB (29.4%)
-# 3. Applications    49.5 GB (10.0%)
-# 4. System Library  10.3 GB (2.1%)
-```
-
-**Step 2: Enter largest directory (Home)**
-```bash
-tmux send-keys -t mole Enter
-sleep 10 && tmux capture-pane -t mole -p
-
-# Example output:
-# 1. Library       144.4 GB (49.9%)
-# 2. Workspace      52.0 GB (18.0%)
-# 3. .cache         19.3 GB (6.7%)
-# 4. Applications   17.0 GB (5.9%)
-# ...
-```
-
-**Step 3: Drill into specific directories**
-```bash
-# Go to .cache (3rd item: Down Down Enter)
-tmux send-keys -t mole Down Down Enter
-sleep 5 && tmux capture-pane -t mole -p
-
-# Example output:
-# 1. uv           10.3 GB (55.6%)
-# 2. modelscope    5.5 GB (29.5%)
-# 3. huggingface   887.8 MB (4.7%)
-```
-
-**Step 4: Navigate back and explore another branch**
-```bash
-# Go back to parent
-tmux send-keys -t mole Left
-sleep 2
-
-# Navigate to different directory
-tmux send-keys -t mole Down Down Down Down Enter  # Go to .npm
-sleep 5 && tmux capture-pane -t mole -p
-```
-
-**Step 5: Deep dive into Library**
-```bash
-# Back to Home, then into Library
-tmux send-keys -t mole Left
-tmux send-keys -t mole Up Up Up Up Up Up Enter  # Go to Library
-sleep 10 && tmux capture-pane -t mole -p
-
-# Example output:
-# 1. Application Support  37.1 GB
-# 2. Containers          35.4 GB
-# 3. Developer           17.8 GB  ← Xcode is here
-# 4. Caches               8.2 GB
-```
-
-### Recommended Exploration Path
-
-For comprehensive analysis, follow this exploration tree:
-
-```
-mo analyze
-├── Home (Enter)
-│   ├── Library (Enter)
-│   │   ├── Developer (Enter) → Xcode/DerivedData, iOS DeviceSupport
-│   │   ├── Caches (Enter) → Playwright, JetBrains, etc.
-│   │   └── Application Support (Enter) → App data
-│   ├── .cache (Enter) → uv, modelscope, huggingface
-│   ├── .npm (Enter) → _cacache, _npx
-│   ├── Downloads (Enter) → Large files to review
-│   ├── .Trash (Enter) → Confirm trash contents
-│   └── miniconda3/other dev tools (Enter) → Check last used time
-├── App Library → Usually overlaps with ~/Library
-└── Applications → Installed apps
-```
-
-### Time Expectations
-
-| Directory | Scan Time | Notes |
-|-----------|-----------|-------|
-| Top-level menu | 5-8 seconds | Fast |
-| Home directory | 5-10 minutes | Large, be patient |
-| ~/Library | 3-5 minutes | Many small files |
-| Subdirectories | 2-30 seconds | Varies by size |
-
-### Example Complete Session
-
-```bash
-# 1. Create session
-tmux new-session -d -s mole -x 120 -y 40
-
-# 2. Start analysis and get overview
-tmux send-keys -t mole 'mo analyze' Enter
-sleep 8 && tmux capture-pane -t mole -p
-
-# 3. Enter Home
-tmux send-keys -t mole Enter
-sleep 10 && tmux capture-pane -t mole -p
-
-# 4. Enter .cache to see dev caches
-tmux send-keys -t mole Down Down Enter
-sleep 5 && tmux capture-pane -t mole -p
-
-# 5. Back to Home, then to .npm
-tmux send-keys -t mole Left
-sleep 2
-tmux send-keys -t mole Down Down Down Down Enter
-sleep 5 && tmux capture-pane -t mole -p
-
-# 6. Back to Home, enter Library
-tmux send-keys -t mole Left
-sleep 2
-tmux send-keys -t mole Up Up Up Up Up Up Enter
-sleep 10 && tmux capture-pane -t mole -p
-
-# 7. Enter Developer to see Xcode
-tmux send-keys -t mole Down Down Down Enter
-sleep 5 && tmux capture-pane -t mole -p
-
-# 8. Enter Xcode
-tmux send-keys -t mole Enter
-sleep 5 && tmux capture-pane -t mole -p
-
-# 9. Enter DerivedData to see projects
-tmux send-keys -t mole Enter
-sleep 5 && tmux capture-pane -t mole -p
-
-# 10. Cleanup
-tmux kill-session -t mole
-```
-
-### Key Insights from Exploration
-
-After multi-layer exploration, you will discover:
-
-1. **What projects are using DerivedData** - specific project names
-2. **Which caches are actually large** - uv vs npm vs others
-3. **Age of files** - Mole shows ">3mo", ">7mo", ">1yr" markers
-4. **Specific volumes and their purposes** - Docker project data
-5. **Downloads that can be cleaned** - old dmgs, duplicate files
+For comprehensive analysis, perform multi-layer exploration (drilling into Home, Library, .cache, .npm, Downloads, etc.) rather than only top-level scans. The full TUI navigation walkthrough, recommended exploration tree, time expectations, and a complete example session are documented in `references/mole_integration.md`.
 
 ## Anti-Patterns: What NOT to Delete
 
@@ -728,147 +463,11 @@ Items marked 🔴 require explicit confirmation per-item.
 
 ### Docker Report: Required Object-Level Detail
 
-Docker reports MUST list every individual object, not just categories:
-
-```markdown
-#### Dangling Images (no tag, no container references)
-| Image ID | Size | Created | Safe? |
-|----------|------|---------|-------|
-| a02c40cc28df | 884 MB | 2 months ago | ✅ No container uses it |
-| 555434521374 | 231 MB | 3 months ago | ✅ No container uses it |
-
-#### Stopped Containers
-| Name | Image | Status | Size |
-|------|-------|--------|------|
-| ragflow-mysql | mysql:8.0 | Exited 2 weeks ago | 1.2 GB |
-
-#### Volumes
-| Volume | Size | Mounted By | Contains |
-|--------|------|------------|----------|
-| ragflow_mysql_data | 1.8 GB | ragflow-mysql | MySQL databases |
-| redis_data | 500 MB | (none - dangling) | Redis dump |
-
-#### 🔴 Database Volumes Requiring Inspection
-| Volume | Inspected Contents | User Decision |
-|--------|--------------------|---------------|
-| ragflow_mysql_data | 8 databases, 45 tables | Still need? |
-```
+Docker reports must list every individual object (each image, container, and volume), not just categories. See the object-level table templates in `references/report_templates.md`.
 
 ## High-Quality Report Template
 
-After multi-layer exploration, present findings using this proven template:
-
-```markdown
-## 📊 磁盘空间深度分析报告
-
-**分析日期**: YYYY-MM-DD
-**使用工具**: Mole CLI + 多层目录探索
-**分析原则**: 安全第一，价值优于虚荣
-
----
-
-### 总览
-
-| 区域 | 总占用 | 关键发现 |
-|------|--------|----------|
-| **Home** | XXX GB | Library占一半(XXX GB) |
-| **App Library** | XXX GB | 与Home/Library重叠统计 |
-| **Applications** | XXX GB | 应用本体 |
-
----
-
-### 🟢 绝对安全可删除 (约 X.X GB)
-
-| 项目 | 大小 | 位置 | 删除后影响 | 清理命令 |
-|------|------|------|-----------|---------|
-| **废纸篓** | XXX MB | ~/.Trash | 无 - 你已决定删除的文件 | 清空废纸篓 |
-| **npm _npx** | X.X GB | ~/.npm/_npx | 下次 npx 命令重新下载 | `rm -rf ~/.npm/_npx` |
-| **Homebrew 旧版本** | XX MB | /opt/homebrew | 无 - 已被新版本替代 | `brew cleanup --prune=0` |
-
-**废纸篓内容预览**:
-- [列出主要文件]
-
----
-
-### 🟡 需要你确认的项目
-
-#### 1. [项目名] (X.X GB) - [状态描述]
-
-| 子目录 | 大小 | 最后使用 |
-|--------|------|----------|
-| [子目录1] | X.X GB | >X个月 |
-| [子目录2] | X.X GB | >X个月 |
-
-**问题**: [需要用户回答的问题]
-
----
-
-#### 2. Downloads 中的旧文件 (X.X GB)
-
-| 文件/目录 | 大小 | 年龄 | 建议 |
-|-----------|------|------|------|
-| [文件1] | X.X GB | - | [建议] |
-| [文件2] | XXX MB | >X个月 | [建议] |
-
-**建议**: 手动检查 Downloads，删除已不需要的文件。
-
----
-
-#### 3. 停用的 Docker 项目 Volumes
-
-| 项目前缀 | 可能包含的数据 | 需要你确认 |
-|---------|--------------|-----------|
-| `project1_*` | MySQL, Redis | 还在用吗？ |
-| `project2_*` | Postgres | 还在用吗？ |
-
-**注意**: 我不会使用 `docker volume prune -f`，只会在你确认后删除特定项目的 volumes。
-
----
-
-### 🔴 不建议删除的项目 (有价值的缓存)
-
-| 项目 | 大小 | 为什么要保留 |
-|------|------|-------------|
-| **Xcode DerivedData** | XX GB | [项目名]的编译缓存，删除后下次构建需要X分钟 |
-| **npm _cacache** | X.X GB | 所有下载过的 npm 包，删除后需要重新下载 |
-| **~/.cache/uv** | XX GB | Python 包缓存，重新下载在中国网络下很慢 |
-| [其他有价值的缓存] | X.X GB | [保留原因] |
-
----
-
-### 📋 其他发现
-
-| 项目 | 大小 | 说明 |
-|------|------|------|
-| **OrbStack/Docker** | XX GB | 正常的 VM/容器占用 |
-| [其他发现] | X.X GB | [说明] |
-
----
-
-### ✅ 推荐操作
-
-**立即可执行** (无需确认):
-```bash
-# 1. 清空废纸篓 (XXX MB)
-# 手动: Finder → 清空废纸篓
-
-# 2. npm _npx (X.X GB)
-rm -rf ~/.npm/_npx
-
-# 3. Homebrew 旧版本 (XX MB)
-brew cleanup --prune=0
-```
-
-**预计释放**: ~X.X GB
-
----
-
-**需要你确认后执行**:
-
-1. **[项目1]** - [确认问题]
-2. **[项目2]** - [确认问题]
-3. **Docker 项目** - 告诉我哪些项目确定不用了
-```
+After multi-layer exploration, present findings using the detailed fill-in-the-blank template in `references/report_templates.md`.
 
 ### Report Quality Checklist
 
@@ -1038,29 +637,7 @@ Breakdown:
 
 ## Bonus: Dockerfile Optimization Discoveries
 
-During image analysis, if you discover oversized images, suggest multi-stage build optimization:
-
-```dockerfile
-# Before: 884 MB (full build environment in final image)
-FROM node:20
-COPY . .
-RUN npm ci && npm run build
-CMD ["node", "dist/index.js"]
-
-# After: ~150 MB (only runtime in final image)
-FROM node:20 AS builder
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM node:20-slim
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-CMD ["node", "dist/index.js"]
-```
-
-Key techniques: multi-stage builds, slim/alpine base images, `.dockerignore`, layer ordering.
+When image analysis reveals oversized images, suggest multi-stage build optimization. See the before/after example and key techniques in `references/docker_analysis.md`.
 
 ## ⚠️ Safety Guidelines
 
@@ -1140,7 +717,9 @@ docker volume inspect <volume_name>
 ### references/
 
 - `cleanup_targets.md` - Detailed explanations of each cleanup target
-- `mole_integration.md` - How to use Mole alongside this skill
+- `mole_integration.md` - How to use Mole, plus the multi-layer TUI exploration walkthrough
+- `docker_analysis.md` - Docker deep-analysis workflow (Step 2A-2C) and Dockerfile optimization
+- `report_templates.md` - Detailed report templates (object-level Docker tables, full report layout)
 - `safety_rules.md` - Comprehensive list of what to never delete
 
 ## Usage Examples
@@ -1155,8 +734,8 @@ Workflow:
 3. Present findings: "45 GB in ~/Library/Caches"
 4. Explain: "These are safe to delete, apps will regenerate them"
 5. Ask confirmation
-6. Execute: `rm -rf ~/Library/Caches/*`
-7. Report: "Recovered 45 GB"
+6. Provide the command for the user to run themselves: `rm -rf ~/Library/Caches/*` (per Core Principle 9, do not auto-execute)
+7. After the user runs it, verify with `df -h /` and report: "Recovered 45 GB"
 
 ### Example 2: Development Environment Cleanup
 
@@ -1179,7 +758,7 @@ Workflow:
 2. Present top 20 large files with context
 3. Categorize: videos, datasets, archives, disk images
 4. Let user decide what to delete
-5. Execute confirmed deletions
+5. Provide deletion commands for the user to run (or use scripts/safe_delete.py for interactive per-item confirmation)
 6. Suggest archiving to external drive
 
 ## Best Practices

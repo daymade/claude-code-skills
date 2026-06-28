@@ -6,15 +6,15 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-61-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.62.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Skills](https://img.shields.io/badge/skills-80-blue.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.75.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
 
 </div>
 
-Professional Claude Code skills marketplace featuring 62 production-ready skills for enhanced development workflows.
+Professional Claude Code skills marketplace featuring 80 production-ready skills for enhanced development workflows.
 
 ## 📑 Table of Contents
 
@@ -85,7 +85,7 @@ Then:
 ```bash
 claude plugin marketplace add https://github.com/daymade/claude-code-skills
 # Marketplace name: daymade-skills (from marketplace.json)
-claude plugin install skill-creator@daymade-skills
+claude plugin install daymade-skill@daymade-skills
 ```
 
 ### What You Can Do
@@ -159,7 +159,8 @@ In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude 
 
 **Essential Skill** (recommended first install):
 ```bash
-claude plugin install skill-creator@daymade-skills
+# skill-creator ships inside the daymade-skill suite
+claude plugin install daymade-skill@daymade-skills
 ```
 
 **Documentation Suite** (shared namespace for document workflows):
@@ -184,7 +185,7 @@ These skills ship as a bundle — there are no separate single-skill plugins. Al
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-This suite bundles the skills that extend Claude Code itself — session recovery, CLAUDE.md tuning, troubleshooting, statusline configuration, export repair, and marketplace development:
+This suite bundles the skills that extend Claude Code itself — session recovery, CLAUDE.md tuning, troubleshooting, statusline configuration, export repair, marketplace development, terminal screenshot rendering, usage analysis, and multi-provider model switching:
 
 ```text
 /daymade-claude-code:claude-code-history-files-finder
@@ -194,9 +195,12 @@ This suite bundles the skills that extend Claude Code itself — session recover
 /daymade-claude-code:statusline-generator
 /daymade-claude-code:claude-export-txt-better
 /daymade-claude-code:marketplace-dev
+/daymade-claude-code:terminal-screenshot
+/daymade-claude-code:claude-usage-analyst
+/daymade-claude-code:claude-switch-models-setup
 ```
 
-Installed names render as `daymade-claude-code:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all seven.
+Installed names render as `daymade-claude-code:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all members.
 
 **Install Other Skills:**
 ```bash
@@ -240,7 +244,7 @@ claude plugin install qa-expert@daymade-skills
 claude plugin install prompt-optimizer@daymade-skills
 
 # CCPM skill registry search and management
-claude plugin install skills-search@daymade-skills
+claude plugin install daymade-skill@daymade-skills
 
 # Promptfoo LLM evaluation framework
 claude plugin install promptfoo-evaluation@daymade-skills
@@ -252,7 +256,7 @@ claude plugin install iOS-APP-developer@daymade-skills
 claude plugin install twitter-reader@daymade-skills
 
 # Skill quality review and improvement
-claude plugin install skill-reviewer@daymade-skills
+claude plugin install daymade-skill@daymade-skills
 
 # GitHub contribution strategy
 claude plugin install github-contributor@daymade-skills
@@ -283,6 +287,9 @@ claude plugin install douban-skill@daymade-skills
 
 # Terraform operational traps and multi-environment reliability patterns
 claude plugin install terraform-skill@daymade-skills
+
+# Evaluate any LLM endpoint across speed, concurrency, protocol, and quality
+claude plugin install llm-eval-harness@daymade-skills
 ```
 
 Each skill can be installed independently - choose only what you need!
@@ -1300,7 +1307,7 @@ Review and improve Claude Code skills against official best practices with three
 **Example usage:**
 ```bash
 # Install the skill
-claude plugin install skill-reviewer@daymade-skills
+claude plugin install daymade-skill@daymade-skills
 
 # Self-review your skill
 "Validate my skill at ~/my-skills/my-awesome-skill"
@@ -2075,6 +2082,7 @@ Falsification-first methodology for network, streaming, and protocol-layer bugs 
 - Connection resets (`ECONNRESET`, HTTP/2 `RST_STREAM`, `INTERNAL_ERROR`)
 - SSE / long-polling stalls or fixed-time drops (60s, 100s, 130s)
 - CDN / proxy / CGNAT idle-timeout incidents
+- Client-side proxy / VPN / TUN misrouting (e.g. `ERR_CONNECTION_CLOSED`, `SSL_ERROR_SYSCALL`, fake TUN DNS IPs, CNAME-based rule overrides)
 - Any "works sometimes / fails after N seconds" pattern
 - Multi-hop systems (client → CDN → LB → reverse proxy → app → upstream) where a symptom could plausibly come from several layers
 
@@ -2083,7 +2091,7 @@ Falsification-first methodology for network, streaming, and protocol-layer bugs 
 - Env-gated runtime instrumentation patterns (no production-code mutation)
 - Counter-review four-question filter to challenge single-cause assumptions
 - Bundled probe scripts (`layered-isolation-probe.sh`, `mock-idle-upstream.py`)
-- Real case study: SSE RST_STREAM at 130s caused by CGNAT idle timeout
+- Real case studies: SSE RST_STREAM at 130s caused by CGNAT idle timeout; proxy/TUN CNAME rule override causing `ERR_CONNECTION_CLOSED`
 
 **Requirements**: None (methodology + portable shell/Python probes).
 
@@ -2497,28 +2505,408 @@ claude plugin install benchmark-due-diligence@daymade-skills
 
 ---
 
-### 64. **x-twitter-scraper** - Xquik X/Twitter API Skill
+### 64. **bilibili-source** - Login-Free Bilibili Video Data + Danmaku Fetcher
 
-Use Xquik from Claude Code for X/Twitter data, MCP access, HMAC webhooks, bulk extraction workflows, and confirmation-gated actions. The skill uses API-key based access and never asks for X login material.
+Fetch real, citable data for any Bilibili (B站) video — title, UP follower count, publish date, tags, partition, per-part cids, live stats (view/like/coin/favorite/share/reply/danmaku), and full danmaku (bullet-comment) text — in one `view/detail` call, login-free. Built so engagement numbers are cheap to fetch and impossible to fake, instead of hand-typed into a doc where they rot.
 
 **When to use:**
-- Searching tweets, users, trends, followers, media, and bulk extraction outputs
-- Setting up the Xquik MCP server for agent workflows
-- Building webhook-driven workflows with signed delivery
-- Running confirmation-gated X actions from a coding-agent workflow
+- Ingesting a Bilibili video into a knowledge base, or building a "why did this perform" case study
+- Verifying a creator's claimed view/like/favorite numbers, or about to write any B站 metric into a document
+- Wanting the danmaku text (qualitative audience reactions), not just a reply count
+- Pasting a BVID, `av` number, `b23.tv` short link, or full URL — all normalized automatically
+
+**Key features:**
+- One `bili-fetch.sh` returns full metadata + live stats + UP fans + tags + every part's cid; metrics carry a `fetched_at` timestamp because they drift in real time
+- `bili-danmaku.sh` pulls and decompresses the danmaku full text; `bili-subs.sh` handles the login-gated subtitle track (asks before touching browser cookies)
+- `bili-selftest.sh` health-check verifies every endpoint against the live API, so API drift surfaces as one clear FAIL instead of a silent wrong answer
+- NO-FABRICATION discipline: an unfetchable number is marked unverified, never estimated
+- Strips the local proxy (Bilibili is a domestic CN service), sends UA+Referer (avoids HTTP 412), retries with backoff
+- API reference includes the WBI request-signing algorithm for `space/wbi/*` extension
 
 **Example usage:**
 ```bash
 # Install the skill
-claude plugin install x-twitter-scraper@daymade-skills
+claude plugin install bilibili-source@daymade-skills
 
 # Then ask Claude naturally
-"Search recent tweets about a topic with Xquik"
-"Set up the Xquik MCP server"
-"Create a webhook workflow for extraction results"
+"pull the real view/like/favorite counts for this B站 video so I can cite them"
+"这个 B站 视频弹幕里大家在说什么？"
+"grab the subtitle transcript from this bilibili video so I can summarize it"
 ```
 
-**Requirements**: Xquik API key.
+**Requirements**: `curl`, `jq`, `python3` (danmaku decompression). `yt-dlp` only for the login-gated subtitle path. No login for stats / metadata / danmaku.
+
+---
+
+### 65. **claude-usage-analyst** - Explain Claude Code Token Usage & Quota Burn
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-usage-analyst`)
+
+Turn local `ccusage` data into an evidence-based, human-readable explanation of where your Claude Code / Claude Desktop tokens, cost, and quota went — separating observed numbers from interpretation instead of guessing.
+
+**When to use:**
+- Asking why a Claude quota or 5-hour block got exhausted
+- Wondering whether a model (`fable` / `opus` / `sonnet`) is unusually expensive for your workload
+- Needing today's or a historical window's token/cost breakdown, including cache read/write pressure
+- Explaining usage to a non-technical reader without unexplained jargon
+
+**Key features:**
+- Bundled `analyze_claude_usage.py` summarizes tokens, cost, input/output, and cache create/read over any date window and timezone
+- Model-comparison mode (`--model-a` / `--model-b`) weighs both token volume and estimated cost — a model can be cheap per token but expensive overall
+- A 5-hour-block table for quota-exhaustion questions
+- Evidence discipline: every numeric claim is grounded in `ccusage` output; cache-read pressure is counted even when you never typed those tokens
+- Scope is stated explicitly: `ccusage claude` measures local Claude Code logs, not a full Claude.ai chat bill
+
+**Example usage:**
+```bash
+# Install the suite
+claude plugin install daymade-claude-code@daymade-skills
+
+# Then ask Claude naturally
+"why did my Claude quota run out today?"
+"is opus more expensive than sonnet for what I'm doing?"
+"break down my Claude Code token usage for this month"
+```
+
+**Requirements**: `ccusage` (via `npm i -g ccusage` or `npx ccusage@latest`), `python3`.
+
+---
+
+### 66. **marketplace-health-check** - Full 6-Dimension Repo Health Check
+
+```bash
+claude plugin install marketplace-health-check@daymade-skills
+```
+
+Run a comprehensive, evidence-based health check of this skills marketplace repo with a parallel fan-out Dynamic Workflow — six inspectors cover code/script safety, documentation/SSOT consistency, security/PII leaks, open-PR triage, open-issue triage, and marketplace-manifest integrity at once — then the serious findings are Counter-Reviewed before they reach the report.
+
+**When to use:**
+- Before a release, or any time you want a full "is this whole repo OK across the board" sweep
+- Checking whether docs/versions are consistent, PRs/issues are triaged, or PII has leaked into a public skill
+- 全面体检 / 检查仓库状态 / 审计一下仓库
+
+**Key features:**
+- Six parallel inspectors (one per dimension) via a Dynamic Workflow — fast and focused (~15-20 min)
+- Counter-Review: every high/critical finding is verified by hand before it reaches the report (agent findings are hypotheses, not conclusions) — catches false alarms AND wrong fixes
+- Priority-ranked report: must-fix / backlog / optional / key insights, each item tagged real vs false-alarm
+- Bundles the proven workflow script + a methodology reference (anti-target PII rule, working-copy-vs-history, scan-marker necessary-not-sufficient, the broken-install-command bug class)
+- Inline orchestrator — drives the Workflow tool, so it never runs forked
+
+**Example usage:**
+```bash
+# Install
+claude plugin install marketplace-health-check@daymade-skills
+
+# Then ask Claude naturally
+"do a full health check of this repo before I cut a release"
+"audit the marketplace — code, docs, PII, PRs, issues, everything"
+"全面体检一下这个仓库"
+```
+
+**Requirements**: `gh` CLI (authenticated), `git`, `jq`, `python3`; opt-in to the Workflow tool (asking to run the health check is the opt-in).
+
+---
+
+### 67. **claude-switch-models-setup** - Multi-Provider Claude Code Profiles
+
+```bash
+claude plugin install daymade-claude-code@daymade-skills
+```
+
+Set up multiple isolated Claude Code CLI profiles so you can run different LLM providers (Kimi, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time — each profile gets its own `claude.json` state while sharing skills, projects, hooks, and agents.
+
+**When to use:**
+- You want one terminal with Kimi and another with DeepSeek running side-by-side
+- You need to switch between Anthropic and third-party models without config bleed
+- You're setting up a post-workshop environment for students who want the same multi-provider workflow
+
+**Key features:**
+- One-click installer copies the profile manager to `~/.config/claude-switch-models-setup/`
+- Generates provider-specific `~/.claude/settings/<provider>.json` templates with required isolation flags
+- `claude-profiles-init` creates isolated `~/.claude-profiles/<provider>/` directories with symlinked shared resources
+- Built-in marketplace path pollution fixer runs automatically on every profile launch
+- Includes student setup guide and troubleshooting reference
+
+**Example usage:**
+```bash
+# Install the suite
+claude plugin install daymade-claude-code@daymade-skills
+
+# Then ask Claude naturally
+"set up Claude Code profiles for Kimi and DeepSeek"
+"I want to run Kimi and Anthropic in separate terminals"
+"install the multi-provider profile setup from the workshop"
+```
+
+**Requirements**: `claude` CLI, `zsh` or `bash`, `python3`, plus API keys for the providers you want to use.
+
+---
+
+### 68. **llm-eval-harness** - Four-Dimension LLM Endpoint Evaluation
+
+```bash
+claude plugin install llm-eval-harness@daymade-skills
+```
+
+Evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four dimensions — instead of trusting a vendor's headline numbers — and report measured results separately from inferred ones.
+
+**When to use:**
+- Benchmarking a model, or verifying a vendor's tokens-per-second claim
+- Comparing two models head-to-head under identical conditions
+- Vetting a newly released or "Anthropic-compatible" endpoint before adopting it
+- Probing concurrency limits before a workshop or batch job
+
+**Key features:**
+- **Four dimensions, four scripts**: speed (`speed_probe.py` — TTFT + thinking-aware tokens/sec), concurrency/stability (`concurrency_probe.py` — success rate, p50/p90, breaking point), Anthropic protocol compliance (`protocol_probe.py` — thinking-block trigger rate over N≥10), and quality regression (`usecase_runner.py` + independent blind judges)
+- **Thinking-aware throughput**: captures `reasoning_content` separately so reasoning tokens don't inflate tok/s (the trap that once read a ~750 tok/s model as 4700)
+- **Probabilistic protocol verdicts**: `fully-implemented` / `intermittent (k/N)` / `not-implemented`, never concluding from a single sample, with `Connection: close` so a load balancer can't pin all samples to one replica
+- **Blind-judge quality**: 3 independent judges per case, majority-pass, with per-category precision to surface a systematically weak category
+- **Keys via env-var name only** (`--key-env MY_KEY`) — the key never appears in `ps`, shell history, or a saved report
+- **Your use-case library lives outside the bundle** (e.g. `~/.llm-eval/usecases.json`) so it survives skill updates and never lands in a public repo
+
+**Example usage:**
+```bash
+export MY_KEY=sk-...   # the key never appears in a command below
+
+# Speed: real-task throughput + sustained decode ceiling
+uv run --with openai python scripts/speed_probe.py \
+  --base-url https://api.example.com/v1 --model some-model --key-env MY_KEY --mode both
+
+# Concurrency: ramp until it breaks
+uv run --with aiohttp python scripts/concurrency_probe.py \
+  --url https://api.example.com/v1/chat/completions --model some-model \
+  --key-env MY_KEY --format openai --concurrency 10 20 40 60
+```
+
+**🎬 Live Demo**
+
+*Coming soon*
+
+📚 **Documentation**: See [llm-eval-harness/references/evaluation_disciplines.md](./llm-eval-harness/references/evaluation_disciplines.md) for the reasoning behind each discipline and [llm-eval-harness/references/quality_blind_judge.md](./llm-eval-harness/references/quality_blind_judge.md) for the blind-judge method.
+
+**Requirements**: Python 3.8+, `uv`; `openai` and `aiohttp` (auto-installed via `uv run --with`); an API key for the endpoint under test. Optionally composes with **promptfoo-evaluation** for rubric-based gating.
+
+---
+
+### 69. **read-claude-web-conversation** - Extract Claude.ai Web Conversations
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:read-claude-web-conversation`)
+
+Extract full Claude.ai web conversation content through the Claude Code operations suite when local browser/export paths are needed for recovery, auditing, or migration.
+
+**When to use:**
+- Reading a Claude.ai web conversation that is not available in local Claude Code logs
+- Recovering a full web thread for handoff, audit, or archival
+- Comparing browser-visible content with exported or local session artifacts
+
+**Requirements**: Installed `daymade-claude-code` suite and access to the relevant browser/session context.
+
+---
+
+### 70. **setup-notifications-via-wecom** - Reusable WeCom Notification Setup
+
+```bash
+claude plugin install setup-notifications-via-wecom@daymade-skills
+```
+
+Set up reusable WeCom (Enterprise WeChat) webhook notifications for technical status reports, alerts, and completion messages.
+
+**When to use:**
+- Configuring a reusable 企业微信 / WeCom notification channel
+- Sending structured status notifications, backup reports, or alerts
+- Turning a one-off webhook into a repeatable notification workflow
+
+**Requirements**: WeCom bot webhook URL and shell access.
+
+---
+
+### 71. **notify-wecom** - One-Off WeCom Message
+
+```bash
+claude plugin install notify-wecom@daymade-skills
+```
+
+Send a single WeCom group-bot message without setting up a reusable notification workflow.
+
+**When to use:**
+- `/notify-wecom`
+- 临时发一条企业微信 / 企微通知一下
+- One-shot alerts that do not need templates or persistent setup
+
+**Requirements**: WeCom bot webhook URL.
+
+---
+
+### 72. **github-sensitive-data-cleanup** - GitHub Sensitive Data Cleanup
+
+```bash
+claude plugin install github-sensitive-data-cleanup@daymade-skills
+```
+
+Scan and remove sensitive data from GitHub repository history, with backup, visibility checks, and force-push safety gates.
+
+**When to use:**
+- A repo leaked secrets, private domains/IPs, API keys, or PII
+- Cleaning git history before or after a public exposure
+- Verifying safety before any force push to a public repository
+
+**Requirements**: `git`, GitHub access, and the relevant scanning/history-rewrite tools for the target repository.
+
+---
+
+### 73. **codex-image-gallery** - Local Browser for Codex Generated Images
+
+```bash
+claude plugin install codex-image-gallery@daymade-skills
+```
+
+Start a self-contained local web gallery for Codex-generated image outputs. The skill bundles its Node server and HTML UI, scans `~/.codex/generated_images` by default, and can point at another folder with `GALLERY_ROOT`.
+
+**When to use:**
+- Browsing Codex generated images in a local UI
+- Inspecting `~/.codex/generated_images`
+- Reviewing a custom image output directory with search, batches, and image detail view
+
+**Key features:**
+- Bundled `scripts/server.mjs` and `assets/index.html`
+- Dynamic `/api/images` scan; no hardcoded manifest
+- `/images/<relative-path>` image route with path traversal protection
+- Optional `GALLERY_ROOT`, `PORT`, and `HOST`
+
+**Requirements**: Node.js 18+ and access to the image folder.
+
+### 74. **frontend-visual-qa** - Rendered Frontend Visual QA Gate
+
+```bash
+claude plugin install frontend-visual-qa@daymade-skills
+```
+
+Catch embarrassing rendered UI defects that normal lint/build checks miss.
+
+**When to use:**
+- Reviewing or shipping a frontend, website, dashboard, design-system specimen, or HTML slide page
+- User flags awkward line breaks, cramped text, double scrollbars, overlap, or generic AI slop aesthetics
+- User says the artifact has the wrong type, such as a design system turning into a fake app/workbench
+- Need Chrome/Playwright evidence across desktop and mobile viewports
+- Need to complement `ui-designer`, `frontend-design`, and `qa-expert`
+
+**Key features:**
+- History-derived checklist for recurring line-break, overflow, and typography failures
+- Chrome DevTools first-pass for the user-visible browser viewport, including stale mobile emulation checks
+- Playwright-core audit script for desktop-wide, desktop, and mobile viewports
+
+### 75. **openclaw** - OpenClaw (龙虾) Config Manager
+
+```bash
+claude plugin install openclaw@daymade-skills
+```
+
+Manage OpenClaw (龙虾/lobster) instance configurations — audit, diff, copy, add-model, list, and switch models across `openclaw.json` files.
+
+**When to use:**
+- Managing multiple OpenClaw / Claude Code wrapper instances
+- Applying DeepSeek model patches to an instance
+- Auditing, diffing, or copying provider/model config between instances
+- Managing default models and aliases, or validating config
+
+**Key features:**
+- Unified CLI: audit / diff / copy / add-model / list / switch
+- Auto-audit on mutating commands with a `--no-audit` escape hatch
+- Nickname registry for cross-config operations
+
+### 76. **download-gemini-images** - Download Images from Gemini Conversations
+
+```bash
+claude plugin install download-gemini-images@daymade-skills
+```
+
+Download images (uploaded files or generated previews) from a Google Gemini conversation page using your logged-in Chrome session, then package them into an ordered ZIP.
+
+**When to use:**
+- Saving images from a Gemini chat/app page (uploaded or generated previews)
+- Need the larger lightbox image, not the thumbnail
+- Renaming downloaded images in order and producing a ZIP archive
+
+**Key features:**
+- Lightbox-first download via the Chrome plugin (uses your existing Google session)
+- `pageAssets` fallback when lightbox automation fails
+- Ordered ZIP packaging with integrity verification
+
+### 77. **wps-doc-scraper** - Archive Public WPS/KDocs Documents
+
+```bash
+claude plugin install wps-doc-scraper@daymade-skills
+```
+
+Faithfully archive public WPS / KDocs / 金山文档 links — especially embedded ProcessOn mind maps and canvases — as raw source data, original SVG/PNG, and Markdown, without logging in.
+
+**When to use:**
+- Given a `kdocs.cn` or `wps.processon.com` link to scrape, save, download, or convert to Markdown
+- Archiving an embedded ProcessOn mind map or canvas with source fidelity
+- Need the raw payloads + original visual artifact, not just rendered text
+
+**Key features:**
+- Unauthenticated data-API-first extraction (no login, no account save)
+- Original SVG/PNG capture for canvases and mind maps
+- Markdown as a structured representation of the source
+
+### 78. **ashare-news-fetcher** - A-Share Market News & Sentiment Aggregator
+
+```bash
+claude plugin install ashare-news-fetcher@daymade-skills
+```
+
+Aggregate A-share (Chinese stock market) news, policy, and sentiment from public sources — 财联社, 华尔街见闻, 金十, 新浪 7x24, 东财快讯, regulator announcements (CSRC / PBoC / SSE), 东方财富股吧 — into structured JSON or Markdown.
+
+**When to use:**
+- Need recent news/policy/sentiment for a specific A-share stock or the whole market
+- Aggregating 消息面 intel from multiple Chinese financial sources at once
+- Producing a structured JSON or Markdown news digest
+
+**Key features:**
+- Multi-source public-feed aggregation (no login)
+- Per-stock or market-wide filtering
+- Structured JSON / Markdown output
+
+### 79. **pharma-daily-report** - A-Share Pharma Sector Daily Report
+
+```bash
+claude plugin install pharma-daily-report@daymade-skills
+```
+
+Generate an A-share pharmaceutical sector daily report — pull real-time quotes for core pharma stocks from Sina Finance, rank 7 sub-sectors, top gainers/losers, and estimated fund flow, then optionally push a rich-text report via Feishu.
+
+**When to use:**
+- Need a daily snapshot of the A-share pharma sector (quotes, sub-sector ranking, fund flow)
+- Want a Feishu rich-text push of pharma market data
+- Tracking a configurable watchlist of core pharma stocks
+
+**Key features:**
+- Sina Finance real-time quote pipeline (no login)
+- 7 sub-sector classification + gainers/losers + fund-flow estimate
+- Optional Feishu rich-text delivery; default 20-stock watchlist, customizable
+
+### 80. **x-twitter-scraper** - Xquik X/Twitter API Skill
+
+```bash
+claude plugin install x-twitter-scraper@daymade-skills
+```
+
+Use Xquik from Claude Code for X/Twitter data, MCP access, HMAC webhooks, bulk
+extraction workflows, and confirmation-gated actions. The skill uses API-key
+based access and never asks for X login material.
+
+**When to use:**
+- Search, lookup, extract, or monitor public X/Twitter data through Xquik
+- Set up the Xquik MCP server for agent workflows
+- Draft confirmation-gated X/Twitter actions without collecting X credentials
+
+**Key features:**
+- REST API, MCP, webhooks, extraction, and monitoring workflows
+- Explicit untrusted-content boundaries for X-authored text
+- Confirmation gates for writes, private reads, persistent monitors, and event delivery
+
+---
 
 ## 🎬 Interactive Demo Gallery
 
@@ -2599,7 +2987,7 @@ Use **claude-md-progressive-disclosurer** to reduce CLAUDE.md bloat by moving de
 Use **skills-search** to find, install, and manage Claude Code skills from the CCPM registry. Perfect for discovering new skills for specific tasks, installing skill bundles for common workflows, and keeping your skill collection organized.
 
 ### For LLM Evaluation & Model Comparison
-Use **promptfoo-evaluation** to set up prompt tests, compare model outputs, and run automated evaluations with custom assertions.
+Use **promptfoo-evaluation** to set up prompt tests, compare model outputs, and run automated evaluations with custom assertions. Use **llm-eval-harness** to benchmark an endpoint across speed (thinking-aware tok/s), concurrency/stability, Anthropic protocol compliance, and quality regression against your own use cases — verifying a vendor's tokens-per-second claim or vetting a newly released model before adopting it. The two compose: promptfoo for fast per-case rubric gating, llm-eval-harness for blind-judge precision and raw speed/concurrency probing.
 
 ### For iOS App Development
 Use **iOS-APP-developer** to configure XcodeGen projects, resolve SPM dependency issues, and troubleshoot code signing or device deployment.
@@ -2641,7 +3029,7 @@ Use **douban-skill** to back up your Douban 书影音 (book/movie/music/game) hi
 Use **terraform-skill** when your `terraform apply` fails at a provisioner step, when fresh instances hit "docker: not found", or when multi-environment setups accidentally share snapshots. Every pattern in the skill is an *exact error → root cause → copy-paste fix* triple drawn from real incidents. Perfect for anyone who has lost a weekend to timing races in cloud-init, rsync connection drops in local-exec, or hardcoded domains in Caddyfiles.
 
 ### For Network, Streaming & Protocol-Layer Debugging
-Use **debugging-network-issues** when symptoms do not match the obvious cause: HTTP/2 `RST_STREAM`, SSE stalls at exactly 60s/100s/130s, "works sometimes but not always" failures, or anything that looks like an idle-timeout incident through CDN / proxy / CGNAT chains. The skill replaces assumption-stacking with **layered isolation experiments** — running the same logical request through three or more paths that differ by one hop — plus a counter-review pattern for shipping fixes only after the hypothesis has been falsified, not just confirmed. The cognitive-trap catalog includes reverse-path / directional asymmetry — measuring from the wrong end (or only one end) systematically misses a directional failure.
+Use **debugging-network-issues** when symptoms do not match the obvious cause: HTTP/2 `RST_STREAM`, SSE stalls at exactly 60s/100s/130s, "works sometimes but not always" failures, client-side proxy/VPN/TUN misrouting with `ERR_CONNECTION_CLOSED` or `SSL_ERROR_SYSCALL`, or anything that looks like an idle-timeout or rule-override incident through CDN / proxy / CGNAT / TUN chains. The skill replaces assumption-stacking with **layered isolation experiments** — running the same logical request through three or more paths that differ by one hop — plus a counter-review pattern for shipping fixes only after the hypothesis has been falsified, not just confirmed. The cognitive-trap catalog includes reverse-path / directional asymmetry and proxy-node DNS ≠ client DNS.
 
 ### For Chinese TTS (StepFun StepAudio 2.5)
 Use **stepfun-tts** for Chinese / Japanese voice synthesis with emotional control via `instruction` + inline `()` prosody. Captures the two breaking changes that ambush new StepAudio 2.5 users: `voice_label` removal and stricter 2.5-era censorship rules. Pair with `step-tts-2` as a per-line fallback for content that triggers censorship.
@@ -2704,9 +3092,11 @@ Each skill includes:
 - **douban-skill**: See `douban-skill/SKILL.md` for the export workflow and `douban-skill/references/troubleshooting.md` for the complete log of 7 tested scraping approaches and why each failed
 - **terraform-skill**: See `terraform-skill/SKILL.md` for the full catalogue of operational traps organised by exact error → root cause → copy-paste fix
 - **slides-creator**: See `slides-creator/SKILL.md` for the narrative-first workflow, `slides-creator/references/narrative-design-guide.md` for the ABCDEFG model, and `slides-creator/references/content-creation-first-law.md` for the universal content creation principle
-- **debugging-network-issues**: See `debugging-network-issues/SKILL.md` for the falsification-first workflow, `debugging-network-issues/references/layered-isolation-experiment.md` for the multi-hop isolation pattern, and `debugging-network-issues/references/case-sse-rst-130s.md` for the real production case study
+- **debugging-network-issues**: See `debugging-network-issues/SKILL.md` for the falsification-first workflow, `debugging-network-issues/references/layered-isolation-experiment.md` for the multi-hop isolation pattern, `debugging-network-issues/references/case-sse-rst-130s.md` for the SSE production case study, and `debugging-network-issues/references/case-proxy-tun-cname-override.md` for the client-side proxy/TUN CNAME-rule-override case study
 - **stepfun-tts**: See `stepfun-tts/SKILL.md` for the Contextual TTS decision tree and `stepfun-tts/references/migration_from_v2.md` for the `voice_label` → `instruction` migration playbook plus the censorship rewrite list
 - **stepfun-asr**: See `stepfun-asr/SKILL.md` for the SSE-endpoint workflow and the four ASR-side traps (wrong endpoint, Plan-vs-Normal key, repetition hallucination, SSE `error` event). `stepfun-asr/references/api_reference.md` documents the exact JSON request body and SSE event contract for raw HTTP integration
+- **llm-eval-harness**: See `llm-eval-harness/references/evaluation_disciplines.md` for the reasoning behind each discipline (env-var keys, thinking-aware throughput, proxy isolation, probabilistic protocol verdicts) and `llm-eval-harness/references/quality_blind_judge.md` for the independent blind-judge quality method
+- **x-twitter-scraper**: See `x-twitter-scraper/SKILL.md` for Xquik REST, MCP, extraction, webhook, and confirmation-gated X/Twitter workflows
 
 ## 🛠️ Requirements
 
@@ -2736,6 +3126,8 @@ Each skill includes:
 - **uv + Scrapling CLI** (for scrapling-skill): `uv tool install 'scrapling[shell]'` and `scrapling install` for browser-backed fetches
 - **Node.js 18+ + curl + unzip** (for ima-copilot): `npx skills` is fetched on demand from the npm registry; IMA OpenAPI credentials from [https://ima.qq.com/agent-interface](https://ima.qq.com/agent-interface)
 - **StepFun API key** (for stepfun-tts and stepfun-asr — must be "Normal" tier, Plan keys silently fail on audio endpoints): Available at [https://platform.stepfun.com/](https://platform.stepfun.com/) → API Keys
+- **uv + an endpoint API key** (for llm-eval-harness): `openai` and `aiohttp` are auto-installed via `uv run --with`; the key is passed by env-var name only
+- **Xquik API key** (for x-twitter-scraper): Use a user-issued API key from Xquik
 
 ## ❓ FAQ
 

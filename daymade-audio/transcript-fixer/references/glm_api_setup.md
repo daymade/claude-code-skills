@@ -1,116 +1,151 @@
 # GLM API 配置指南
 
-## API配置
+ transcript-fixer 通过智谱 GLM 的 **Anthropic 兼容端点**调用 AI 纠错能力。本节是 API 配置的唯一权威来源（SSOT）。
 
-### 设置环境变量
+## 配置优先级
 
-在运行脚本前,设置GLM API密钥环境变量:
+1. **配置文件**（推荐）：`~/.transcript-fixer/config.json`
+2. **环境变量**（显式覆盖）：`GLM_API_KEY`、`ANTHROPIC_API_KEY`、`ANTHROPIC_BASE_URL`、`TRANSCRIPT_FIXER_CONFIG_DIR`
+3. **代码默认值**
 
-```bash
-# Linux/macOS
-export GLM_API_KEY="your-api-key-here"
+环境变量仅用于临时覆盖或 CI/容器场景，不要把密钥写进 shell profile。
 
-# Windows (PowerShell)
-$env:GLM_API_KEY="your-api-key-here"
+## 推荐配置方式
 
-# Windows (CMD)
-set GLM_API_KEY=your-api-key-here
-```
-
-**永久设置** (推荐):
+### 1. 初始化配置目录
 
 ```bash
-# Linux/macOS: 添加到 ~/.bashrc 或 ~/.zshrc
-echo 'export GLM_API_KEY="your-api-key-here"' >> ~/.bashrc
-source ~/.bashrc
-
-# Windows: 在系统环境变量中设置
+uv run scripts/fix_transcription.py --init
 ```
 
-### 脚本配置
+这会自动创建 `~/.transcript-fixer/` 目录并设置 `0o700` 权限。
 
-脚本会自动从环境变量读取API密钥:
+### 2. 写入配置文件
 
-```python
-# 脚本会检查环境变量
-if "GLM_API_KEY" not in os.environ:
-    raise ValueError("请设置 GLM_API_KEY 环境变量")
+编辑 `~/.transcript-fixer/config.json`：
 
-os.environ["ANTHROPIC_BASE_URL"] = "https://open.bigmodel.cn/api/anthropic"
-os.environ["ANTHROPIC_API_KEY"] = os.environ["GLM_API_KEY"]
+```json
+{
+  "api": {
+    "api_key": "your-glm-api-key",
+    "base_url": null,
+    "timeout": 60.0,
+    "max_retries": 3
+  }
+}
+```
 
-# 模型配置
-GLM_MODEL = "GLM-4.6"  # 主力模型
-GLM_MODEL_FAST = "GLM-4.5-Air"  # 快速模型(备用)
+配置文件的完整模板见 `references/installation_setup.md`。
+
+### 3. 验证
+
+```bash
+uv run scripts/fix_transcription.py --validate
+```
+
+## 环境变量覆盖（可选）
+
+```bash
+# 临时覆盖 API 密钥
+export GLM_API_KEY="your-glm-api-key"
+
+# 或使用 Anthropic 兼容密钥名
+export ANTHROPIC_API_KEY="your-glm-api-key"
+
+# 自定义端点（高级）
+export ANTHROPIC_BASE_URL="https://open.bigmodel.cn/api/anthropic"
+
+# 自定义配置目录
+export TRANSCRIPT_FIXER_CONFIG_DIR="/path/to/config"
 ```
 
 ## 支持的模型
 
+代码默认值：
+
 | 模型名称 | 说明 | 用途 |
 |---------|------|------|
-| GLM-4.6 | 最强模型 | 默认使用,精度最高 |
-| GLM-4.5-Air | 快速模型 | 备用,速度更快 |
+| GLM-5.2 | 主力模型 | 默认使用，精度最高 |
+| GLM-5-turbo | 快速模型 | 主模型失败时回落，速度更快 |
 
-**注意**: 模型名称大小写不敏感。
+模型名称通过 `ai_processor.py` / `ai_processor_async.py` 的构造函数传入；修改配置文件中不会自动改变模型，需要改代码或调用处。
 
-## API认证
+## API 认证
 
-智谱GLM使用Anthropic兼容API:
+GLM Anthropic 兼容端点使用 `x-api-key` 头，而不是 `Authorization: Bearer`：
 
 ```python
 headers = {
     "anthropic-version": "2023-06-01",
-    "Authorization": f"Bearer {api_key}",
+    "x-api-key": api_key,
     "content-type": "application/json"
 }
 ```
 
-**关键点:**
-- 使用 `Authorization: Bearer` 头
-- 不要使用 `x-api-key` 头
+**关键点：**
+- 使用 `x-api-key` 头
+- 不要使用 `Authorization: Bearer`
 
-## API调用示例
+## API 调用示例
 
 ```python
-def call_glm_api(prompt: str) -> str:
+import httpx
+
+def call_glm_api(prompt: str, api_key: str) -> str:
     url = "https://open.bigmodel.cn/api/anthropic/v1/messages"
     headers = {
         "anthropic-version": "2023-06-01",
-        "Authorization": f"Bearer {os.environ.get('ANTHROPIC_API_KEY')}",
+        "x-api-key": api_key,
         "content-type": "application/json"
     }
 
     data = {
-        "model": "GLM-4.6",
+        "model": "GLM-5.2",
         "max_tokens": 8000,
         "temperature": 0.3,
         "messages": [{"role": "user", "content": prompt}]
     }
 
-    response = httpx.post(url, headers=headers, json=data, timeout=60.0)
-    return response.json()["content"][0]["text"]
+    with httpx.Client(timeout=60.0, http2=False) as client:
+        response = client.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        return response.json()["content"][0]["text"]
 ```
 
-## 获取API密钥
+生产代码应使用 `scripts/core/ai_utils.py` 中的 `build_correction_prompt()` 和 `parse_anthropic_response()`，而不是手写解析。
+
+## 获取 API 密钥
 
 1. 访问 https://open.bigmodel.cn/
 2. 注册/登录账号
-3. 进入API管理页面
-4. 创建新的API密钥
-5. 复制密钥到配置中
+3. 进入 API 管理页面
+4. 创建新的 API 密钥
+5. 复制密钥到 `~/.transcript-fixer/config.json` 的 `api.api_key` 字段
 
 ## 费用
 
-参考智谱AI官方定价:
-- GLM-4.6: 按token计费
-- GLM-4.5-Air: 更便宜的选择
+参考智谱 AI 官方定价：
+- GLM-5.2：按 token 计费
+- GLM-5-turbo：更便宜的选择
 
 ## 故障排查
 
-### 401错误
-- 检查API密钥是否正确
-- 确认使用 `Authorization: Bearer` 头
+### 401/403 错误
+- 检查 API 密钥是否正确
+- 确认使用 `x-api-key` 头，而不是 `Authorization: Bearer`
+- 确认密钥未过期且余额充足
 
 ### 超时错误
-- 增加timeout参数
-- 考虑使用GLM-4.5-Air快速模型
+- 增加 `timeout` 参数
+- 考虑使用 GLM-5-turbo 快速模型
+
+### 配置未生效
+- 确认配置文件路径：`~/.transcript-fixer/config.json`
+- 确认 JSON 格式有效
+- 运行 `--validate` 查看加载的配置目录
+
+## 安全提示
+
+- 不要把 `api_key` 提交到 Git
+- 配置文件权限由脚本自动设为 `0o600`
+- 不要在 shell profile 或 `.bashrc` 中持久化 `GLM_API_KEY`
