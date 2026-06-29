@@ -1,22 +1,6 @@
 ---
 name: dual-pool-review
 description: Multi-round adversarial review methodology that rotates reviewers across two pools — fixed (curated, knows your context) and random (fresh web search each round) — to catch blind spots a single reviewer or single round would miss. Use when reviewing complex output, security-critical code, or identity/persona-related content. Use when you need review depth beyond a single pass. Use when a single perspective may have dangerous blind spots.
-keywords:
-  - review
-  - adversarial
-  - methodology
-  - quality
-  - code-review
-  - security-review
-  - design-review
-  - multi-persona
-  - dual-pool
-  - evidence-based
-  - web-search
-  - quote-first
-  - symmetric-burden
-  - blind-spot
-  - cross-validation
 ---
 
 # Dual-Pool Adversarial Review
