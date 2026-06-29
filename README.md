@@ -1,4 +1,4 @@
-# Claude Code Skills Marketplace
+[Resource from github at repo://daymade/claude-code-skills/sha/9d512c1f5658ea3776ab9b3487eb7845d12c9d49/contents/README.md] # Claude Code Skills Marketplace
 
 <div align="center">
 
@@ -2955,6 +2955,29 @@ Analyze Google Takeout exports of Gemini conversation history — extract and ca
 - Handles Chinese/Unicode filenames (uses `unar`, not the corrupting macOS `unzip`)
 - Meeting-transcript vs prompt-response detection; topic categorization; PII flagging
 - Context-verified keyword search (grep is step 1, not the answer) + optional memory-file generation
+
+### 83. **dual-pool-review** - Dual-Pool Adversarial Review
+
+> **Install**: `claude plugin install dual-pool-review@daymade-skills`
+
+Multi-round adversarial review that rotates reviewers across two pools — a fixed curated pool that learns your patterns, and a random pool recruited fresh each round via web search — to catch blind spots a single reviewer or single pass would miss.
+
+**When to use:**
+- Multi-file changes or architectural decisions where a quick pass is insufficient
+- Security-critical or user-facing output where blind spots compound
+- Any output where "one person said it's fine" is not enough confidence
+- Identity-defining content, personal configuration, or methodology documents
+- When you need evidence-backed review with every finding traceable to a verbatim web search quote
+
+**Key features:**
+- **Dual-pool rotation**: Fixed pool (4-6 curated personas, learns your patterns) + Random pool (1 fresh reviewer per round, recruited via web search)
+- **Quote-First Rule**: Every reviewer extracts verbatim quotes from web search BEFORE seeing the target — prevents confirmation bias
+- **Symmetric Burden**: Zero findings costs as much as a finding — must cite 3+ quotes the output satisfies (prevents lazy "everything looks fine")
+- **Evidence Table**: Mandatory per-round table linking every finding to a specific, searchable quote — the non-negotiable quality gate
+- **Adaptive Stop Check**: Each round asks "did this find issues the previous round missed?" — self-terminates when value stops
+- **Concurrence Promotion**: 2+ independent reviewers finding same issue → severity promoted; random-pool concurrence required for full promotion
+- **Lightweight Path**: Single-file low-risk changes get 1 reviewer + web search; escalate to full dual-pool if CRITICAL/WARNING found
+- **Integrity Check**: Post-round self-audit verifying quote traceability, random-pool value, and meaningful output change
 
 ---
 

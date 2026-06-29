@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-financial, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.78.0"
+    "version": "1.79.0"
   },
   "plugins": [
     {
@@ -1089,6 +1089,30 @@
         "model-management",
         "gateway",
         "claude-code"
+      ]
+    },
+    {
+      "name": "dual-pool-review",
+      "description": "Multi-round adversarial review methodology rotating reviewers across two pools — fixed curated pool (learns your patterns) and random pool (fresh web search each round) — with mandatory Quote-First Rule, Symmetric Burden evidence tables, and adaptive stop checks. Use when reviewing complex output, security-critical code, methodology documents, or any work where a single reviewer perspective has dangerous blind spots. Activate before merging PRs, shipping identity-defining content, or reviewing personal configuration.",
+      "source": "./dual-pool-review",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "review",
+        "adversarial",
+        "methodology",
+        "quality",
+        "code-review",
+        "security-review",
+        "design-review",
+        "multi-persona",
+        "dual-pool",
+        "evidence-based",
+        "web-search",
+        "quote-first",
+        "symmetric-burden",
+        "blind-spot"
       ]
     }
   ]
