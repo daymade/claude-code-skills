@@ -1,0 +1,11 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Aident Loadout",
+      "description": "Use Aident-managed integrations, Vault, CLI, MCP, and audit history from agent environments.",
+      "skills": ["aident-skill"]
+    }
+  ]
+}

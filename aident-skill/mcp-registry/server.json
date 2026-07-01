@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "ai.aident/loadout",
+  "title": "Aident Loadout",
+  "description": "Use Aident Loadout to connect AI agents to 1,000+ apps and 27,000+ actions.",
+  "version": "0.1.0",
+  "websiteUrl": "https://loadout.aident.ai",
+  "repository": {
+    "url": "https://github.com/aident-ai/aident-skill",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://app.aident.ai/assets/aident-v2-logo.png",
+      "mimeType": "image/png"
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://loadout.aident.ai/mcp"
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "title": "Aident Loadout",
+      "tags": ["ai-agents", "automation", "integrations", "remote-mcp"],
+      "description": "Use Aident Loadout to connect your AI agent to 1,000+ real-world apps and tools like Gmail, Slack, Linear, Notion, Firecrawl, and Fal, unlock 27,000+ executable actions, and track full audit history so your agents can get real work done reliably."
+    }
+  }
+}
