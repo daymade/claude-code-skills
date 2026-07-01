@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Context rules are now gated by `review_mode` like dictionary rules (safe mode defers risky ones instead of applying them unconditionally).
 - `--audit` runs an advisory jieba heuristic to surface 4+ char "real-word" false-positive rules for human review (see Known limitations). Adds `jieba` to dependencies.
 - **Finalize now prescribes `/bin/mv -f` instead of a bare `mv`.** SKILL.md step 9 and new troubleshooting entry #7: on macOS `mv` is commonly aliased to `mv -i`, which skips overwriting an existing target while still exiting 0 — so a finalize `mv *_stage1.md *.md && echo done` reported success while the un-corrected file silently survived as the output. Doc-only change.
+- **Native AI Correction step-4 ("Needs verification") now prescribes a local-first search ladder.** Previously the instruction was "Search it, don't guess — WebSearch, or a local grep," which put WebSearch first and left "local grep" vague — so project / person names whose canonical spelling already lived in another `corrections.db` domain or in project delivery docs got escalated to the user instead of resolved locally. The ladder now orders: all `corrections.db` domains (not just the current `--domain`) → project delivery docs → memory → WebSearch (public entities only) → then the user. Doc-only.
 
 ### Deprecated
 - `--review` is now a no-op (safe mode is the default). Use `--apply-all` for the opposite behavior.
