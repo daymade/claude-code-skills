@@ -1,7 +1,7 @@
 ---
 name: continue-claude-work
 description: Recover actionable context from local `.claude` session artifacts and continue interrupted work without running `claude --resume`. This skill should be used when the user provides a Claude session ID, asks to continue prior work from local history, or wants to inspect `.claude` files before resuming implementation.
-argument-hint: [session-id]
+argument-hint: "[session-id]"
 ---
 
 # Continue Claude Work

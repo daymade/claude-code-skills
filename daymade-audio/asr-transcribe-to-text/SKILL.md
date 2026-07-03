@@ -1,7 +1,7 @@
 ---
 name: asr-transcribe-to-text
 description: Transcribes audio and video files to text using Qwen3-ASR. Supports two modes — local MLX inference on macOS Apple Silicon (no API key, 15-27x realtime) and remote API via vLLM/OpenAI-compatible endpoints. Auto-detects platform and recommends the best path. Triggers when the user wants to transcribe recordings, convert audio/video to text, do speech-to-text, or mentions ASR, Qwen ASR, 转录, 语音转文字, 录音转文字. Also triggers for meeting recordings, lectures, interviews, podcasts, screen recordings, or any audio/video file the user wants converted to text.
-argument-hint: [audio-or-video-file-path ...]
+argument-hint: "[audio-or-video-file-path ...]"
 ---
 
 # ASR Transcribe to Text

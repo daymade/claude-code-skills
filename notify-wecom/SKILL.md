@@ -6,7 +6,7 @@ description: >-
   or any one-shot notification that does not need a reusable template or setup workflow. The message
   is sent immediately; no confirmation prompt is shown unless the message is empty or the webhook is
   not configured.
-argument-hint: [message]
+argument-hint: "[message]"
 ---
 
 # /notify-wecom
