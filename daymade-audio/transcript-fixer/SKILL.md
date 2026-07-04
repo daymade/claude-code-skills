@@ -1,6 +1,6 @@
 ---
 name: transcript-fixer
-description: Corrects speech-to-text transcription errors using dictionary rules and AI-powered analysis. Builds personalized correction databases that learn from each fix. Triggers when working with ASR/STT output containing recognition errors, homophones, garbled technical terms, or Chinese/English mixed content. Also triggers on requests to clean up meeting notes, lecture transcripts, interview recordings, or any text produced by speech recognition. Use this skill even when the user just says "fix this transcript" or "clean up these meeting notes" without mentioning ASR specifically.
+description: Corrects speech-to-text transcription errors using dictionary rules and AI-powered analysis. Builds personalized correction databases that learn from each fix, and auto-loads person-name ASR variants from your people roster. Triggers when working with ASR/STT output containing recognition errors, homophones, garbled technical terms, person-name errors, or Chinese/English mixed content. Also triggers on requests to clean up meeting notes, lecture transcripts, interview recordings, or any text produced by speech recognition. Use this skill even when the user just says "fix this transcript", "clean up these meeting notes", or mentions garbled names without invoking ASR specifically.
 ---
 
 # Transcript Fixer
@@ -90,7 +90,7 @@ After native AI correction, review all applied fixes and decide which to save. U
 |-------------|---------|--------|
 | Non-word → correct term | 克劳锐→Claude, cloucode→Claude Code | ✅ Add (zero false positive risk) |
 | Rare word → correct term | 拉行链→LangChain, 哈金费斯→Hugging Face | ✅ Add (verify it's not a real word first) |
-| Person/company name ASR error | 卡帕西→Karpathy, Anthropics→Anthropic | ✅ Add (stable, unique) |
+| Person/company name ASR error | 卡帕西→Karpathy, Anthropics→Anthropic | For **important recurring people**, add to your **people roster** instead (see "People Roster" above) — it carries relationship context and survives DB resets. For one-off names: ✅ `--add --domain` (stable, unique) |
 | Common word → context word | 争→蒸, affect→effect | ❌ Skip (high false positive risk) |
 | Real brand → different brand | Xcode→Claude Code, Clover→Claude | ❌ Skip (real words in other contexts) |
 
@@ -132,6 +132,43 @@ Facing a transcript — or a whole batch — full of the same ASR-garbled names,
 
 ASR is especially unstable on Chinese names: one person can shatter into a dozen homophone variants (in one real project a single surname+given-name was seen as 13+ `[姓变体]×[名变体]` combinations). Capture every confirmed variant with `--add --domain <project>` so they all collapse to the canonical name on every future run.
 
+
+### People Roster (long-term person-name SSOT)
+
+For **important recurring people** whose names ASR consistently garbles
+(coworkers, clients, family, workshop attendees), maintain a **people roster**
+markdown file — the SSOT for person names — rather than adding them one-by-one
+to the DB. Transcript-fixer auto-loads person-name corrections from this roster
+at Stage 1 time when `people_roster_path` is set in
+`~/.transcript-fixer/config.json`.
+
+**Roster format** (canonical: `### Name` + `- **ASR 变体**: variant1, variant2`):
+```markdown
+### Holly Yang
+- **ASR 变体**: Hollie, 浩磊
+
+### Jo
+- **ASR 变体**: Joe, Joe 老师
+```
+
+**Setup** (once):
+```bash
+# Edit ~/.transcript-fixer/config.json and add:
+#   "paths": { "people_roster_path": "/path/to/people.md" }
+```
+
+After this, every `--stage 1` run automatically merges roster corrections
+(in-memory only — never written to DB). The DB always wins on conflicts, so the
+roster fills gaps without overriding hand-tuned entries. See
+`core/people_roster.py` for the parser.
+
+**When to use the roster vs `--add` to DB:**
+
+| Person | Go to | Why |
+|--------|-------|-----|
+| Long-term recurring (coworker, client, family, workshop attendee) | **people.md** | SSOT with relationship context; survives DB resets |
+| One-off / minor name | **DB** (`--add --domain`) | Quick, no context needed |
+
 ## Native AI Correction (Default Mode)
 
 When running inside Claude Code, use Claude's own language understanding for Phase 2 — on high-quality ASR this is where almost all the real correction happens. **Scale the effort to the transcript.** A short, clean recording with no proper nouns (a quick voice memo) just needs steps 1-3 plus one obvious-fix pass; skip the verification / second-pass / subagent / needs-checking machinery below, which earns its keep on long, multi-speaker, domain-heavy, or high-stakes transcripts. Don't turn a 10-second memo into a research project.
@@ -143,13 +180,22 @@ When running inside Claude Code, use Claude's own language understanding for Pha
    - **Confident fix** — non-words, obvious garbling, product-name variants you already recognize, or a homophone that's unambiguous in context (`their`→`there` where context forces it; `彭波`→`彭博` when every other mention already reads `彭博`). Apply directly (step 5).
    - **Needs verification** — a proper noun you can't confirm from context: a person / company / ticker / product / place name (a misheard drug name in a medical interview, a researcher's surname in a podcast, a ticker on an earnings call), or any term you can't point to a specific source for — even one you think you recognize ("I'm pretty sure" is exactly how wrong names slip in). **Resolve it through a local-first search ladder before asking the user.** For project / personal entities the authoritative spelling almost always already lives on this machine, and WebSearch is near-useless on internal names — it returns wrong same-name people, or nothing — and worse, a fluent wrong guess becomes a confident fix that's hard to catch later. Search in this order:
 
+
+	      0. **People roster** — `people.md` (or wherever `people_roster_path` in
+	         `~/.transcript-fixer/config.json` points). This is your curated SSOT
+	         of long-term recurring people with their ASR variants annotated under
+	         `- **ASR 变体**:`. A garbled name that already maps to a canonical
+	         person here — e.g. `Hollie`→`Holly Yang`, `丛老师`→`聪聪` — is a
+	         Confident fix: apply immediately. **This one step replaces asking the
+	         user for every name they've already documented.** Skip only for
+	         transcripts whose speakers are confirmed NOT in the roster.
       1. **All domains of `corrections.db`, not just the current `--domain`.** The same entity shatters into different ASR variants across projects, and every prior fix already collapsed them to the canonical name — so the answer is often sitting in another domain you didn't pass to `--stage 1`. Checking only the current domain and giving up is the recurring failure mode.
          `sqlite3 ~/.transcript-fixer/corrections.db "SELECT from_text, to_text, domain FROM active_corrections WHERE to_text LIKE '%<fragment>%' OR from_text LIKE '%<fragment>%';"`
       2. **Project delivery docs** — cost reports, review sheets, deliverables, PKM notes for that project. These are human-written correct spellings, the strongest possible source. `grep -rl "<fragment>" <project-dir>` then read the hits.
       3. **Memory** (`~/.claude/.../memory/`) — project relationship maps and person profiles often record canonical names explicitly.
       4. **WebSearch** — only for genuinely public entities (a public-company ticker, a known researcher, a drug name). Skip for anything project-internal.
 
-      Only after all four strike out do you ask the user — and by then you've shown the entity isn't already recorded on this machine, which makes the ask legitimate. A confirmed result becomes a Confident fix; if the search *can't* confirm it, it drops to Uncertain. **Batch these**: collect the unique unknowns and run the ladder once per unique entity, not once per occurrence.
+      Only after all of these strike out do you ask the user — and by then you've shown the entity isn't already recorded on this machine, which makes the ask legitimate. A confirmed result becomes a Confident fix; if the search *can't* confirm it, it drops to Uncertain. **Batch these**: collect the unique unknowns and run the ladder once per unique entity, not once per occurrence.
    - **Uncertain** — you suspect an error but can't confirm it even after searching (a syllable that maps to several real entities; a structurally broken sentence). **Leave the original text exactly as-is** and record it in the needs-checking list (step 7). A fluent-but-wrong "fix" is harder to catch downstream than an obvious garble — silence beats a confident guess.
 5. Apply the confident fixes efficiently:
    - **Global replacements** (unique non-words like "克劳锐"→"Claude"): if it recurs across transcripts — most product/name garbles do — `--add` it to a `--domain` so it compounds to every future run; for a genuinely one-off term, one `sed -i ''` with multiple `-e` flags
