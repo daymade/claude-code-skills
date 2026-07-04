@@ -217,6 +217,36 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
     context_rules = service.load_context_rules()
     domain_stats = service.get_domain_stats()
 
+    # Merge person-name ASR variants from the people roster (if configured).
+    # Source: args.people_roster > env TRANSCRIPT_FIXER_PEOPLE_ROSTER > config.json paths.people_roster_path.
+    # The roster is the curated SSOT for important recurring people; DB entries (catch-all,
+    # including minor/one-off names and generic terms) win on conflict so the roster never
+    # silently overrides a hand-tuned DB entry. Roster corrections are in-memory only —
+    # never written to the DB, per the "one SSOT + DB stays" design.
+    from pathlib import Path as _Path
+    from utils.config import get_config
+    roster_path = (getattr(args, 'people_roster', None)
+                   or os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER")
+                   or get_config().paths.people_roster_path)
+    if roster_path:
+        roster_path = _Path(roster_path).expanduser()
+        if roster_path.exists():
+            from core.people_roster import load_people_roster
+            roster_corr, _ = load_people_roster(roster_path)
+            new_count = 0
+            for wrong, correct in roster_corr.items():
+                if wrong not in corrections:
+                    corrections[wrong] = correct
+                    correction_meta[wrong] = {
+                        "confidence": 1.0,
+                        "notes": "people roster",
+                    }
+                    new_count += 1
+            if new_count:
+                print(f"👥 People roster: +{new_count} person-name corrections ({roster_path.name})")
+        else:
+            print(f"⚠️  People roster not found: {roster_path}")
+
     # Read input file
     print(f"📖 Reading: {input_path.name}")
     with open(input_path, 'r', encoding='utf-8') as f:
