@@ -98,6 +98,10 @@ class PathConfig:
     data_dir: Path
     log_dir: Path
     cache_dir: Path
+    # Markdown roster of person-name ASR variants (e.g. PKM next/_meta/people.md).
+    # When set, its `### Person` + `- **ASR 变体**: ...` entries are merged into
+    # Stage 1 at runtime as in-memory corrections (never written to the DB).
+    people_roster_path: Optional[Path] = None
 
     def __post_init__(self):
         """Validate and create directories"""
@@ -244,6 +248,8 @@ class Config:
             data_dir=config_dir / "data",
             log_dir=config_dir / "logs",
             cache_dir=config_dir / "cache",
+            people_roster_path=Path(os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER")).expanduser()
+                if os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER") else None,
         )
 
         # Resource limits
@@ -328,6 +334,8 @@ class Config:
             data_dir=Path(paths_data.get("data_dir", str(config_dir / "data"))),
             log_dir=Path(paths_data.get("log_dir", str(config_dir / "logs"))),
             cache_dir=Path(paths_data.get("cache_dir", str(config_dir / "cache"))),
+            people_roster_path=Path(paths_data["people_roster_path"]).expanduser()
+                if paths_data.get("people_roster_path") else None,
         )
 
         # Parse resource limits
@@ -386,6 +394,7 @@ class Config:
                 "data_dir": str(self.paths.data_dir),
                 "log_dir": str(self.paths.log_dir),
                 "cache_dir": str(self.paths.cache_dir),
+                "people_roster_path": str(self.paths.people_roster_path) if self.paths.people_roster_path else None,
             },
             "resources": {
                 "max_text_length": self.resources.max_text_length,
@@ -543,7 +552,8 @@ CONFIG_FILE_TEMPLATE: Final[str] = """{
     "config_dir": "~/.transcript-fixer",
     "data_dir": "~/.transcript-fixer/data",
     "log_dir": "~/.transcript-fixer/logs",
-    "cache_dir": "~/.transcript-fixer/cache"
+    "cache_dir": "~/.transcript-fixer/cache",
+    "people_roster_path": null
   },
   "resources": {
     "max_text_length": 1000000,
