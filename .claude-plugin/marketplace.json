@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-financial, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.78.0"
+    "version": "1.80.0"
   },
   "plugins": [
     {
@@ -83,10 +83,10 @@
     },
     {
       "name": "competitors-analysis",
-      "description": "Analyze competitor repositories with evidence-based approach. Use when tracking competitors, creating competitor profiles, or generating competitive analysis. All analysis must be based on actual cloned code, never assumptions. Triggers include analyze competitor, add competitor, competitive analysis, or 竞品分析",
+      "description": "Discover, clone, update, and analyze competitor repositories with evidence-based competitive intelligence. Use when tracking competitors, reviewing competitor source code, adding a competitor repository, comparing product capabilities, building a competitor landscape, checking latest competitor code, or when the user says 竞品分析, competitor scan, analyze competitor, or compare with X. Repository-backed findings must come from local cloned code with file:line citations; market-landscape claims must cite their source and volatility.",
       "source": "./competitors-analysis",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.1.0",
       "category": "productivity",
       "keywords": [
         "competitors",
@@ -100,10 +100,10 @@
     },
     {
       "name": "daymade-claude-code",
-      "description": "Claude Code operations suite that bundles session history recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full web-conversation extraction from claude.ai, plugin marketplace development, multi-provider profile isolation for running Kimi/GLM/DeepSeek/StepFun/Anthropic in separate windows, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
+      "description": "Claude Code operations suite that bundles session history recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full web-conversation extraction from claude.ai, plugin marketplace development, multi-provider profile isolation for running Kimi/GLM/DeepSeek/StepFun/Anthropic in separate windows, local source sync for Claude/Codex skill installs, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.6.1",
+      "version": "1.7.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -113,6 +113,8 @@
         "statusline",
         "troubleshooting",
         "marketplace-dev",
+        "local-source-sync",
+        "codex",
         "terminal-screenshot",
         "usage-analyst",
         "web-conversation-export"
@@ -211,15 +213,16 @@
     },
     {
       "name": "daymade-skill",
-      "description": "Daymade skills core suite. Bundles skill creation, quality review, search, and marketplace development tooling under one shared namespace.",
+      "description": "Daymade skills core suite. Bundles skill creation, quality review, governance, and marketplace development tooling under one shared namespace.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.6.0",
+      "version": "1.8.0",
       "category": "suite",
       "keywords": [
         "suite",
         "skill-creation",
         "skill-review",
+        "skill-governance",
         "marketplace-dev",
         "development",
         "tooling"
@@ -227,7 +230,8 @@
       "skills": [
         "./skill-creator",
         "./skill-reviewer",
-        "./skills-search"
+        "./skills-search",
+        "./skill-governance"
       ]
     },
     {
@@ -256,7 +260,7 @@
       "description": "Export and sync Douban (豆瓣) book/movie/music/game collections to local CSV files via Frodo API. Supports full export (all history) and RSS incremental sync (recent items). Use when the user wants to export Douban reading/watching/listening/gaming history, back up their Douban data, set up incremental sync, or mentions 豆瓣/douban collections. Triggers on: 豆瓣, douban, 读书记录, 观影记录, 书影音, 导出豆瓣, export, backup, sync, collection.",
       "source": "./douban-skill",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "productivity",
       "keywords": [
         "douban",
@@ -965,10 +969,10 @@
     },
     {
       "name": "frontend-visual-qa",
-      "description": "Reviews rendered frontends, dashboards, HTML slides, design-system specimens, and generated UIs for visual quality defects that lint/build miss: awkward line breaks, orphan Chinese characters, wrapped buttons/tags/nav, horizontal overflow, double scrollbars, repeated card piles, page-type drift such as design systems becoming fake workbenches, missing images, generic AI slop, and Chrome DevTools viewport mistakes. Use after frontend-design or ui-designer work and alongside qa-expert release gates.",
+      "description": "Reviews rendered frontends, enterprise dashboards, HTML slides, design-system specimens/live artifacts, map/GIS canvases, generated UIs, and browser-integrated export/share/download/print/PDF flows for visual and UX defects that lint/build miss: awkward line breaks, overflow, wrong state, route drift, unusable drawers/maps/tables, unreadable standalone artifacts, blank print previews, generic AI slop, and Chrome/Computer Use verification gaps. Use after frontend-design or ui-designer work and alongside qa-expert release gates.",
       "source": "./frontend-visual-qa",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "design",
       "keywords": [
         "frontend",
