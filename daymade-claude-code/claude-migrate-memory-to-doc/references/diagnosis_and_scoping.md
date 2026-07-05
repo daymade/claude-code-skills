@@ -7,6 +7,7 @@ Classify each memory file by **scope** — who/what needs it — not by "is it m
 | Memory content | Goes to | Why |
 |---|---|---|
 | Team rules, coding standards, project SOPs | project `CLAUDE.md` / `docs/` | version-controlled, team-visible, reviewable |
+| Project-specific architecture, decisions, war-stories, operational SOPs | project `docs/` (decisions / architecture / references / reports / troubleshooting) | same reasoning as above; these are project artifacts, not user profile |
 | User profile, background, values, identity | global `~/.claude/references/user/` | cross-tool + cross-project; any AI should read it first |
 | Collaboration preferences / feedback (how to work with this user) | global `~/.claude/references/user/` | cross-tool; not a project artifact |
 | User's methodology / principles | global `~/.claude/references/user/` | cross-tool |
@@ -27,6 +28,24 @@ The pre-existing project rule may say "user preferences → memory". That rule p
 When deciding keep-vs-delete, content that depends on the user's **private context** (their correction dictionary, their internal naming, their idiosyncratic preferences) **cannot be batch-judged by a subagent** — agents have generic common sense but not "what *this* user actually values". A subagent will confidently flag a context-correct entry as wrong.
 
 So: agents may **surface candidates**, but the user (or you, holding full context) **decides**. Multi-agent workflows are good for **objective** classification (broken links, derived counts, structural matches), not for "is this private fact worth keeping".
+
+## Privacy check: don't migrate PII into shared docs
+
+Some memory contains personally identifying information: real-name-to-username maps, private contacts, home addresses, medical/life details, etc. Even when the *topic* is project-relevant, the *identifying payload* is not a team artifact. Route it like this:
+
+- **Identity mapping / real names** → keep in private memory (thin to a pointer if the SSOT is elsewhere); do not put in project docs.
+- **Operational facts that happen to contain a name** (e.g., "ask 星月 for the Alipay key") → de-identify if you migrate them, or leave in memory.
+- **PII that is also cross-tool user profile** (rare) → `~/.claude/references/user/` is still private to the user's machine, but mark the file clearly as privacy-sensitive.
+
+## Inline discipline: some rules belong in CLAUDE.md body, not just references/
+
+Even when a rule is about "how to work with the user" (which normally goes to `references/user/`), consider inlining it into `~/.claude/CLAUDE.md` if it governs **every message the agent produces**. Examples:
+
+- Commitment-word discipline ("已修复" must pair with a tool call).
+- Tone / language defaults that shape output.
+- Private-context correction rules the agent must apply before speaking.
+
+The test is: *if this rule is missed because the agent didn't open the reference, will the user's trust erode immediately?* If yes, inline it.
 
 ## Phase 6 cleanup decisions (for memory that did NOT migrate)
 

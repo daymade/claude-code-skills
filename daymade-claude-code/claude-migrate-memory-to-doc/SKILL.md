@@ -84,7 +84,9 @@ The short version:
 - **Cross-tool user profile / collaboration preferences / methodology / personal affairs** → `~/.claude/references/user/` (tool-agnostic). **This is the bucket that migrates.**
 - **Temporary handoff snapshots / external system pointers** → **stay in memory**. This is memory's legitimate purpose; do not migrate them.
 
-Do NOT migrate everything. Over-migrating handoff state into long-lived docs is its own mistake.
+Do NOT migrate everything. Over-migrating handoff state into long-lived docs is its own mistake. **But do look at the whole directory** — not just `feedback_*.md` — because project SOPs and operational war-stories often sit in `project_*.md` or `architecture_*.md` files and belong in the repo's docs.
+
+Also flag **private-context / PII** in this pass: a memory file that maps system usernames to real names, private contacts, or other personally identifying information should **stay in private memory** even if it is project-relevant. Project docs are version-controlled and potentially shared; identity-mapping belongs in the thin handoff layer.
 
 ### Phase 2 — Tool-agnostic migration
 
@@ -113,7 +115,7 @@ Address what review surfaced. Common real findings (all from a live run): a hub 
 
 ### Phase 5 — VERIFY BY RUNNING CODEX (do not skip, do not delegate to the user)
 
-The step you'll be tempted to replace with "looks right" or "you can check it yourself later". Don't. **Run codex from any dir with `--skip-git-repo-check`, match its session log by session id (not by mtime), and grep for your inlined `User context` section + a back-of-file string.** A passing run greps `1` (and `1` again for the back half if CLAUDE.md > 32 KiB). The exact, empirically-verified command block — `--skip-git-repo-check`, session-id extraction (it's in the header, not the tail), the 32 KiB check, plus the `< 32 KiB` and `codex-not-installed` shortcuts and expected console output — is in **[references/review_and_verification.md](references/review_and_verification.md)**. Use it verbatim; don't hand-roll a variant here (that's how the two copies drift).
+The step you'll be tempted to replace with "looks right" or "you can check it yourself later". Don't. **Run codex from any dir with `--skip-git-repo-check`, match its session log by session id (not by mtime), and grep for your inlined hardcore section + a back-of-file string.** The inlined section may be titled `# User context`, `# 用户上下文`, or whatever localization the user uses — grep for the *actual* heading string, not a hardcoded English one. A passing run greps `1` for that heading and `1` for the back-half string (if CLAUDE.md > 32 KiB). The exact, empirically-verified command block — `--skip-git-repo-check`, session-id extraction (it's in the header, not the tail), the 32 KiB check, plus the `< 32 KiB` and `codex-not-installed` shortcuts and expected console output — is in **[references/review_and_verification.md](references/review_and_verification.md)**. Use it verbatim; don't hand-roll a variant here (that's how the two copies drift).
 
 ### Phase 6 — Memory cleanup
 
@@ -125,7 +127,11 @@ For the memory files that did NOT migrate, do one of three things (decision deta
 
 Update the memory index (e.g. `MEMORY.md`) to drop migrated entries and add one migration pointer.
 
-**Soft-delete, never hard-`rm`.** Move migrated/cleaned files to a dated backup dir **outside** `memory/` (e.g. a sibling `~/.claude/projects/<slug>/.memory-archive-YYYYMMDD/`) so they can't be re-read as live memory, and the operation stays reversible. Tell the user they can `rm` the backup after a couple of weeks of confirming both tools behave.
+**Before moving anything, grep the whole memory dir AND the project docs / CLAUDE.md for references to the files you are about to archive.** A surviving file or active doc that links to an archived file ends up with a dangling reference. Repoint those links to the new doc location or to a plain-text pointer. Memory cross-links are not the only risk — project `CLAUDE.md` and handoff docs often cite memory files by name.
+
+**Soft-delete, never hard-`rm`.** Move migrated/cleaned files to a dated backup dir **outside** `memory/` (e.g., a sibling `~/.claude/projects/<slug>/.memory-archive-2026-07-06/` — use the **actual current date**, not a placeholder). Putting the archive inside `memory/` leaves it readable as live memory, defeating the cleanup. Update the index pointer to the new outside-memory path. Tell the user they can `rm` the backup after a couple of weeks of confirming both tools behave.
+
+**After a migration that taught you something new, update this skill.** If you hit a failure mode not listed in `references/failure_cases.md`, append it; if a step was underspecified, tighten the SKILL.md checklist. A skill that isn't fed back its own lessons will repeat the same mistakes.
 
 ## Do NOT (each one learned by getting it wrong in a live run)
 
@@ -137,7 +143,11 @@ Update the memory index (e.g. `MEMORY.md`) to drop migrated entries and add one 
 - **Don't delete a memory file before grepping for `[[cross-references]]` to it.** A surviving file pointing at a deleted one becomes a dangling link.
 - **Don't let an agent batch-decide what to delete/keep when the content depends on the user's private context.** Agents lack "what the user actually values"; surface candidates, let the user (or you, with full context) decide.
 - **Don't make the user verify.** Running codex and grepping the log is agent-doable — own the verification loop, don't hand it back.
-- **Don't hard-`rm`.** Soft-delete to a backup dir; the operation must be reversible.
+- **Don't treat "the symlink exists" as Codex verification.** A correct symlink is necessary but not sufficient; the only proof is a real `codex exec` session whose rollout log contains your inlined hardcore section.
+- **Don't put the archive inside `memory/`.** It remains readable as live memory there, defeating the cleanup. Move it to a sibling dir outside `memory/`.
+- **Don't migrate real-name identity maps or PII into project docs.** Project docs are version-controlled and shared. If a memory file maps `user3 → 慧如`, keep it in private memory (thinned to a pointer if the SSOT lives elsewhere) — do not move it to `docs/`.
+- **Don't overwrite an existing doc with a memory duplicate without diffing first.** Many memory files are *partial* duplicates of docs (e.g., `architecture_v2_decision.md` vs `docs/decisions/2026-02-21-v2-architecture.md`). Migrate only the **unique** details; append them to the existing doc rather than replacing it.
+- **Don't forget to repoint links in project docs, not just memory.** `CLAUDE.md` and handoff docs often cite memory files by basename. Grep them before archiving.
 
 ## Failure cases (the full war-stories)
 
