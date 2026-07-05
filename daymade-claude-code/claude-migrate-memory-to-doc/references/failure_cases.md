@@ -37,3 +37,23 @@ After wiring the symlink, the instinct was to tell the user "next time you run C
 ## 9. (meta) Don't load past-session JSONL into context to "mine history"
 
 When distilling a skill from *prior* sessions, do **not** read the multi-MB transcript JSONL into your own context — it blows the window (one attempt died ~17 tokens over the limit and lost the whole session). Delegate extraction to subagents that parse line-by-line with a script and return only a distilled lessons list. (For this skill the live run was already in-context, so no mining was needed — but the instinct to "just read the history" is the trap.)
+
+## 10. The archive was left inside `memory/`
+
+A soft-delete moved `feedback_*.md` into `memory/archive/2026-07-05/`. Because the memory loader scans the `memory/` tree recursively, those files were still live memory. The fix: move the dated archive to a sibling directory **outside** `memory/` (e.g., `~/.claude/projects/<slug>/.memory-archive-2026-07-05/`) and update the index pointer. Verifying: `grep -R "feedback_" memory/` should only hit the explicit archive pointer or text references, not the archived files.
+
+## 11. "Symlink looks correct" was mistaken for Codex verification
+
+After creating `~/.codex/AGENTS.md → ~/.claude/CLAUDE.md`, the agent stopped there. Later, a live `codex exec` run revealed the global file was loading, but the verification protocol had hardcoded `"User context"` while the actual inlined section was titled `"用户上下文"`, so the heading grep returned `0`. The fix: run `codex exec --skip-git-repo-check`, extract the session id from the header, find the rollout JSONL, and grep for the **actual** heading string plus a back-half string. Only that empirical check is proof.
+
+## 13. Dangling references were hiding in project docs, not just memory (2026-07-06)
+
+A memory file about the prod cutover was referenced by the project's own `CLAUDE.md` and by a handoff doc in `docs/handoff/`. The cross-reference agent had only been asked to grep the memory directory, so those live-doc pointers would have dangled after archival. The fix: extend the pre-archive grep to **project docs, CLAUDE.md, and handoff docs** — anywhere a memory basename might be cited.
+
+## 14. A real-name identity map almost migrated into project docs (2026-07-06)
+
+`project_user_management_sop.md` contained a table mapping `user3 → 慧如` and other real-name-to-system-username pairs. It was project-relevant (useful for ops), but the real names are PII and the mapping is not a team artifact. Migrating it into version-controlled `docs/` would have leaked identifying information. The fix: keep identity-mapping in private memory, thin it to a pointer to the public SOP, and add an explicit privacy check in Phase 1.
+
+## 15. Partial duplicates were overwritten instead of merged (2026-07-06)
+
+Several memory files (`architecture_v2_decision.md`, `cache_regression_2026_04_12.md`, `project_upstream_capture_shipped_2026_05_13.md`) were partial duplicates of existing project docs. The first instinct was to replace the doc with the memory version; that would have lost doc-only updates and formatting. The correct move: diff the two, append the memory's **unique** details to the existing doc, and archive the memory.

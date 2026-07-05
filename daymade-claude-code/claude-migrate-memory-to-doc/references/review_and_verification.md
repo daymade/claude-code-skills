@@ -9,7 +9,7 @@ Copy-pasteable prompt skeletons (fill in `<paths>`):
 ```
 [Content completeness] Read every memory file under <memory-dir> and every new file under ~/.claude/references/user/. Diff them: did any fact (number, date, war-story, how-to-apply item) get dropped or altered in the condensing? Return a coverage matrix (each memory → which reference) + a lost/weakened list with quoted evidence. Cite file:line.
 
-[Cross-reference breakage] grep all of <memory-dir> for [[wikilinks]]. Report only TRUE breaks: a link FROM a file that will survive, pointing AT a file that will be deleted. (Links between two to-be-deleted files vanish together — not a break.) Also verify the new references' internal pointers resolve. Give grep evidence.
+[Cross-reference breakage] grep all of <memory-dir> AND the project docs / CLAUDE.md / handoff docs for references (wikilinks `[[...]]`, plain-text filenames, or markdown links) to the memory files being archived. Report only TRUE breaks: a link FROM a file that will survive, pointing AT a file that will be deleted. (Links between two to-be-deleted files vanish together — not a break.) Also verify the new references' internal pointers resolve. **Extra:** confirm the archive directory will sit outside `memory/` so it cannot be re-read as live memory, and that no surviving file links into it. Give grep evidence.
 
 [Tool-agnostic link integrity] Verify: (a) readlink ~/.codex/AGENTS.md resolves to ~/.claude/CLAUDE.md and the target exists; (b) the CLAUDE.md "User context" pointer paths all exist; (c) whether Codex actually reads reference CONTENT or only the inlined CLAUDE.md text — check Codex's official AGENTS.md docs + ~/.codex/config.toml. Report what would silently fail to load.
 
@@ -40,7 +40,15 @@ SID=$(grep "session id:" /tmp/cx-verify.txt | head -1 | sed -E 's/.*session id: 
 # already-open OLDER session, a real trap that wastes a verification cycle).
 NEW=$(find ~/.codex/sessions -name "rollout-*$SID*.jsonl")
 
-grep -c "User context" "$NEW"                                  # inlined hardcore section — EXPECT: 1
+# Before running, check CLAUDE.md size vs the configured limit.
+CLAUDE_SIZE=$(wc -c < ~/.claude/CLAUDE.md)
+MAX_BYTES=$(grep -E '^project_doc_max_bytes\s*=' ~/.codex/config.toml | sed -E 's/.*= *([0-9]+).*/\1/')
+[ "$CLAUDE_SIZE" -lt "$MAX_BYTES" ] || echo "WARNING: CLAUDE.md ($CLAUDE_SIZE bytes) is larger than project_doc_max_bytes ($MAX_BYTES); tail may be truncated." >&2
+
+# Use the ACTUAL title of your inlined hardcore section (e.g. "User context", "用户上下文", ...).
+HARDCORE_HEADING="<Your inlined section heading>"
+
+grep -c "$HARDCORE_HEADING" "$NEW"                                  # inlined hardcore section — EXPECT: 1
 grep -c "<a string that appears ONLY in your global CLAUDE.md>" "$NEW"   # whole-file injection — EXPECT: 1
 # 32 KiB check — ONLY if CLAUDE.md > 32 KiB. Pick a heading you KNOW sits in the file's SECOND half
 # (not a fixed line number — that's tied to one file's size):
