@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-financial, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.80.0"
+    "version": "1.81.0"
   },
   "plugins": [
     {
@@ -1093,6 +1093,24 @@
         "model-management",
         "gateway",
         "claude-code"
+      ]
+    },
+    {
+      "name": "routerbase-model-gateway",
+      "description": "Plan and implement RouterBase model gateway integrations. Use when migrating OpenAI-compatible SDK calls, selecting chat/image/video/audio models, designing fallback routes, documenting media generation workflows, or reviewing RouterBase API key and logging safety.",
+      "source": "./routerbase-model-gateway",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "routerbase",
+        "openai-compatible",
+        "model-routing",
+        "llm-gateway",
+        "media-generation",
+        "api-integration",
+        "fallback",
+        "developer-tools"
       ]
     }
   ]

@@ -2998,6 +2998,26 @@ claude plugin install openclaw-model-switch@daymade-skills
 - 会议转录 vs 提问-回答 识别；主题归类；PII 标记
 - 上下文核验的关键词搜索（grep 只是第一步，不是答案）+ 可选的 memory 文件生成
 
+### 83. **routerbase-model-gateway** - RouterBase 模型网关
+
+```bash
+claude plugin install routerbase-model-gateway@daymade-skills
+```
+
+通过 [routerbase](https://routerbase.com/) 规划和实现 OpenAI-compatible API 集成，包括模型路由、fallback 和媒体生成工作流。
+
+**使用场景：**
+- 将现有 OpenAI SDK 代码迁移到 RouterBase
+- 为 chat、image、video、audio 或 embedding 任务选择模型路由
+- 设计跨 provider 的 fallback 方案
+- 检查 RouterBase API key 管理、请求日志和生产上线校验
+
+**主要功能：**
+- OpenAI-compatible base URL 与 SDK 迁移 checklist
+- 面向延迟、预算、上下文和 fallback 的模型路由评估方法
+- image、video、speech、audio 生成端点说明
+- 针对 secrets、日志和用户隐私数据的安全边界
+
 ---
 
 ## 🎬 交互式演示画廊

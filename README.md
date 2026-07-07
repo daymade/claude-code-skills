@@ -2956,6 +2956,26 @@ Analyze Google Takeout exports of Gemini conversation history — extract and ca
 - Meeting-transcript vs prompt-response detection; topic categorization; PII flagging
 - Context-verified keyword search (grep is step 1, not the answer) + optional memory-file generation
 
+### 83. **routerbase-model-gateway** - RouterBase Model Gateway
+
+```bash
+claude plugin install routerbase-model-gateway@daymade-skills
+```
+
+Plan and implement OpenAI-compatible API integrations through [routerbase](https://routerbase.com/), including model routing, fallbacks, and media generation workflows.
+
+**When to use:**
+- Migrating existing OpenAI SDK code to RouterBase
+- Choosing chat, image, video, audio, or embedding model routes
+- Designing fallback plans across providers
+- Reviewing RouterBase API key handling, request logging, and production rollout checks
+
+**Key features:**
+- OpenAI-compatible base URL and SDK migration checklist
+- Model routing rubric for latency, budget, context, and fallback behavior
+- Media endpoint notes for image, video, speech, and audio generation
+- Safety guardrails for secrets, logs, and private user data
+
 ---
 
 ## 🎬 Interactive Demo Gallery
