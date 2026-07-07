@@ -234,7 +234,7 @@ This applies when you change ANY file under a skill directory:
 33. **meeting-minutes-taker** - Transform meeting transcripts into structured minutes with multi-pass generation, speaker quotes, and iterative human review
 34. **deep-research** - Generate format-controlled research reports with evidence mapping, citations, and multi-pass synthesis
 35. **competitors-analysis** - Evidence-based competitor tracking and analysis with source citations (file:line_number format)
-36. **tunnel-doctor** - Diagnose and fix Tailscale + proxy/VPN conflicts (six layers: route, HTTP env, system proxy, SSH ProxyCommand, VM/container proxy, DNS resolver stall) on macOS with WSL SSH support, plus a TUN measurement-contamination guide (raw probes lie under a global proxy)
+36. **tunnel-doctor** - Diagnose and fix Tailscale + proxy/VPN conflicts (route, HTTP env, system proxy, SSH ProxyCommand, VM/container proxy, DNS resolver stall, TUN DIRECT split-brain) on macOS with WSL SSH support, plus a TUN measurement-contamination guide (raw probes lie under a global proxy)
 37. **windows-remote-desktop-connection-doctor** - Diagnose AVD/W365 connection quality issues with transport protocol analysis and Windows App log parsing
 38. **product-analysis** - Perform structured product audits across UX, API, architecture, and compare mode to produce prioritized optimization recommendations
 39. **financial-data-collector** - Collect real financial data for US public companies via yfinance with validation, NaN detection, and NO FALLBACK principle (daymade-financial suite member)
