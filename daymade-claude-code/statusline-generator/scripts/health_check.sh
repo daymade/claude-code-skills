@@ -120,6 +120,16 @@ run_mock "cwd in HOME → ~ short path" \
     "{\"workspace\":{\"current_dir\":\"$HOME/x/y\"},\"model\":{\"display_name\":\"M\"}}" \
     '~/x/y'
 
+# Test 5: git branch renders without spawning git — the script reads .git/HEAD
+# as a plain file, so this works (and must pass) even on hosts with no git binary.
+HC_GIT_DIR=$(mktemp -d)
+mkdir -p "$HC_GIT_DIR/.git"
+echo "ref: refs/heads/hc-test-branch" > "$HC_GIT_DIR/.git/HEAD"
+run_mock "git repo cwd → [branch] read zero-fork from .git/HEAD" \
+    "{\"workspace\":{\"current_dir\":\"$HC_GIT_DIR\"},\"model\":{\"display_name\":\"M\"}}" \
+    '\[hc-test-branch\]  M'
+rm -rf "$HC_GIT_DIR"
+
 # ---------- 4. Real stdin replay (if available) ----------
 section "4. Real stdin replay"
 
