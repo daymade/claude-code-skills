@@ -74,7 +74,14 @@ cwd="${cwd:-$PWD}"
 ctx_size="${ctx_size:-0}"
 ctx_used=$((${ctx_input:-0} + ${ctx_cache_read:-0} + ${ctx_cache_create:-0}))
 ctx_pct_int=$(printf '%.0f' "${ctx_pct:-0}" 2>/dev/null || echo 0)
-short_path="${cwd/#$HOME/~}"
+# Cross-shell-safe HOME → ~ shortening.
+# Bash expands ~ in the replacement string of ${var/#pattern/~}, so we use a
+# case statement instead of a single parameter expansion.
+case "$cwd" in
+    "$HOME"/*) short_path="~${cwd#$HOME}" ;;
+    "$HOME")   short_path="~" ;;
+    *)         short_path="$cwd" ;;
+esac
 
 # ---------- Helpers ----------
 # Format token counts: 999 / 108K / 1M / 1.5M
@@ -93,9 +100,41 @@ human_tokens() {
     }'
 }
 
+# Zero-fork git branch: walk up to .git and read HEAD as a file. Never spawns
+# git. The statusline runs on every refresh in every concurrent agent session,
+# so per-refresh subprocess cost multiplies fast — spawning git (or worse, a
+# package-runner statusline re-resolved from a registry on each refresh,
+# measured ~0.4s CPU vs ~0.01s for this script) becomes machine-wide process
+# churn and battery drain, not a cosmetic cost (verified 2026-07).
+git_branch_fast() {
+    local d="$1" gitdir head_ref
+    while [ -n "$d" ] && [ "$d" != "/" ]; do
+        if [ -f "$d/.git/HEAD" ]; then
+            gitdir="$d/.git"
+            break
+        elif [ -f "$d/.git" ]; then
+            # worktree/submodule: .git is a file "gitdir: <path>"
+            read -r gitdir < "$d/.git" 2>/dev/null
+            gitdir="${gitdir#gitdir: }"
+            [ "${gitdir#/}" = "$gitdir" ] && gitdir="$d/$gitdir"
+            break
+        fi
+        d="${d%/*}"
+    done
+    [ -n "$gitdir" ] && [ -f "$gitdir/HEAD" ] || return 0
+    read -r head_ref < "$gitdir/HEAD" 2>/dev/null
+    case "$head_ref" in
+        "ref: refs/heads/"*) printf '%s' "${head_ref#ref: refs/heads/}" ;;
+        ?*)                  printf '%s' "${head_ref:0:8}" ;;  # detached HEAD: short sha
+    esac
+}
+
 # ---------- Minimal layout (default) ----------
 render_minimal() {
     local out="$short_path"
+    local branch
+    branch=$(git_branch_fast "$cwd")
+    [ -n "$branch" ] && out="${out}  [${branch}]"
     [ -n "$model_full" ] && out="${out}  ${model_full}"
     if [ "${ctx_size:-0}" -gt 0 ] 2>/dev/null; then
         out="${out}  ctx: $(human_tokens "$ctx_used") / $(human_tokens "$ctx_size")"
