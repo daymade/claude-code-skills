@@ -41,6 +41,10 @@ def main():
 
     # vault 实际存在的页（相对 wiki，去 .md 后缀）
     pages = {os.path.relpath(f, wiki)[:-3] for f in md_files}
+    # vault 根目录的 .md（SCHEMA / index / README 等）也算可解析 target —— Obsidian wikilink 全 vault 解析，lint 必须照做
+    vault_root = os.path.dirname(wiki)
+    root_pages = {os.path.splitext(os.path.basename(f))[0]
+                  for f in glob.glob(os.path.join(vault_root, '*.md'))}
 
     fails = []   # 硬错：阻断 commit
     warns = []   # 软警告：仅提示
@@ -61,7 +65,7 @@ def main():
                 continue  # raw 逻辑引用不在 wiki/ 内，跳过断链检查
             if target.startswith('../'):
                 continue  # 跨目录逻辑引用，不检查
-            if target not in pages:
+            if target not in pages and target not in root_pages:
                 fails.append(f'BROKEN_WIKILINK  {rel}: [[{target}]] → 不存在的页')
 
     # ---- 硬 2. INVALID_YAML（pyyaml 缺失则降级 skip，不误 fail）----

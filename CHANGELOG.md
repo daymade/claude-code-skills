@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **llm-wiki-setup** v1.1.0: resolve wikilinks against root-level Markdown pages, trigger vault lint when those targets are deleted or renamed, and add a backup-preserving tooling refresh path for existing vaults.
 - **daymade-audio** v1.4.0: `asr-transcribe-to-text` documents batch transcription of many short files — music-only/BGM-only clips can trigger a repetition-loop hallucination that stalls a whole batch, so drive batches one-file-per-process with a per-file timeout, retry stuck files with `--max-tokens 3000`, and classify no-speech clips by unique-word ratio; Step 3 now cross-references the hazard.
 - **feishu-doc-scraper** v1.3.0: documents sheet cell-attachment extraction — recover fileTokens via the raw v2 values API (`+cells-get` flattens attachments to filenames), download through `medias/batch_get_tmp_download_url` with `file_tokens` as a JSON array (`drive +download` 403s on media resources), plus date-cell Excel-style serial numbers.
 - **daymade-claude-code** v1.8.4: `claude-switch-models-setup` fixes — the `css` shell alias in `claude-profiles-help` points back at the shipped `stepfun` profile (a rename had left it targeting a nonexistent `css` profile); the cross-process sync lock moved out of `~/.claude/plugins/` so `shared_item_names()` can no longer symlink it into every profile as flickering dangling debris, with a scan guard against legacy lock residue.

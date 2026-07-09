@@ -4,10 +4,19 @@
 #   （hooksPath 是 local 配置、不随仓库走，换机 / 重 clone 后要重设一次）
 exec 1>&2
 
-# 只在 commit 涉及 wiki/ 文件时跑。
-# 注意：git diff --name-only 默认把非 ASCII 路径转义成 \xxx 八进制，
-#       故用 ASCII 段 wiki/ 匹配（不用完整可能含中文的路径 pattern）。
-if git diff --cached --name-only | grep -qE '(^|/)wiki/'; then
+# 只在 commit 可能改变 lint 结果时跑：wiki/ 内容，或 vault 根目录的 Markdown target。
+# 用 -z 保留任意文件名；--no-renames 把移出受管范围的 rename 展开为 delete + add，
+# 确保删除 / 改名 SCHEMA.md 之类根级 target 时也会触发。
+should_lint=0
+while IFS= read -r -d '' staged_path; do
+  if [[ "$staged_path" == wiki/* ]] || \
+     [[ "$staged_path" != */* && "$staged_path" == *.md ]]; then
+    should_lint=1
+    break
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACMRTD --no-renames -z --)
+
+if [[ "$should_lint" -eq 1 ]]; then
   # PYTHONUTF8=1 防 LC_ALL=C 环境下 python open 中文路径失败。
   if command -v uv >/dev/null 2>&1; then
     PYTHONUTF8=1 uv run --no-project --with pyyaml python3 scripts/lint-vault.py wiki || exit 1
