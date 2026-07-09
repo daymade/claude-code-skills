@@ -6,8 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-80-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.78.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.82.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -185,7 +184,7 @@ claude plugin install daymade-docs@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——会话恢复、CLAUDE.md 调优、故障诊断、statusline 配置、导出修复、marketplace 开发、终端截图渲染、用量分析以及多 Provider 模型切换：
+一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——会话恢复、CLAUDE.md 调优、故障诊断、statusline 配置、导出修复、marketplace 开发、终端截图渲染、用量分析、多 Provider 模型切换，以及 Claude Code/Codex 安装目录的自动本地 skill 源码同步：
 
 ```text
 /daymade-claude-code:claude-code-history-files-finder
@@ -1606,24 +1605,27 @@ claude plugin install deep-research@daymade-skills
 
 ---
 
-### 35. **competitors-analysis** - 证据驱动的竞品追踪
+### 35. **competitors-analysis** - 证据驱动的竞品情报
 
-基于证据的竞品仓库分析。所有分析必须基于实际克隆的代码，禁止任何推测。
+发现、克隆、更新并分析竞品仓库，产出可审计的竞争情报。仓库技术结论必须来自本地克隆代码；市场格局结论必须标注来源和易变性。
 
 **使用场景：**
 - 追踪和分析竞品产品或技术
+- 为某个产品或市场发现 GitHub 竞品
 - 创建基于证据的竞品档案
-- 生成竞争分析报告
+- 生成竞品格局和机会报告
+- 检查竞品代码是否有最新变化
 - 需要以引用来源记录技术决策
 
 **主要功能：**
-- 分析前检查清单，确保仓库已本地克隆
-- 禁止模式以防止假设（"推测..."、"可能..."、"应该..."）
-- 必须的引用格式（文件:行号）
+- 按 `$HOME/workspace/competitors/{product}/` 组织长期竞品源码
+- GitHub 发现流程，用于筛选相关仓库
+- 仓库 ingest/update 流程，记录 remote 和 commit
+- 仓库事实必须使用 `文件:行号` 引用
+- 输出定位、优劣势、机会、风险的竞品格局总结
 - 支持 Node.js、Python、Rust 项目的技术栈分析指南
-- 目录结构规范用于组织竞品追踪
 - 内置模板：竞品档案模板、分析检查清单
-- 管理脚本用于批量克隆/拉取/状态检查操作
+- 管理脚本支持 discover/clone-url/clone/pull/status
 
 **示例用法：**
 ```bash
@@ -1633,6 +1635,7 @@ claude plugin install competitors-analysis@daymade-skills
 # 然后让 Claude 分析竞品
 "分析竞品 https://github.com/org/repo"
 "添加竞品到 flowzero 产品的竞品列表"
+"看看 claude-flow-viewer 这个方向最近有哪些竞品更新"
 ```
 
 **🎬 实时演示**
@@ -2141,6 +2144,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - SSE / 长轮询挂起或定时断开（60s、100s、130s）
 - CDN / 代理 / CGNAT 空闲超时事件
 - 客户端代理 / VPN / TUN 错路由（如 `ERR_CONNECTION_CLOSED`、`SSL_ERROR_SYSCALL`、假 TUN DNS IP、CNAME 规则覆盖）
+- 证书校验错误（`UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`、证书发错站点）
 - "时灵时不灵 / N 秒后必断"模式
 - 多跳系统（client → CDN → LB → reverse proxy → app → upstream）症状可能来自多层
 
@@ -2686,6 +2690,8 @@ claude plugin install daymade-claude-code@daymade-skills
 - 一键安装器将 profile 管理器复制到 `~/.config/claude-switch-models-setup/`
 - 生成 provider 专用的 `~/.claude/settings/<provider>.json` 模板，并带上必要的隔离标志
 - `claude-profiles-init` 创建隔离目录 `~/.claude-profiles/<provider>/`，其余资源通过 symlink 共享
+- profile 同步会镜像默认 Claude profile 的 enabled plugins，并共享 installed plugin state
+- 本地源码同步会把 Claude plugin cache 和 Codex skill 目录链接回源码仓库，并为 maintainer 机器提供监听 marketplace manifest 变化的 LaunchAgent
 - 每次启动 profile 时自动修复 marketplace 路径污染
 - 内置学生安装指南和故障排查参考
 
@@ -2837,25 +2843,27 @@ claude plugin install codex-image-gallery@daymade-skills
 
 **要求**：Node.js 18+，并能访问目标图片目录。
 
-### 74. **frontend-visual-qa** - 渲染后前端视觉 QA 门禁
+### 74. **frontend-visual-qa** - 渲染后前端与浏览器输出视觉 QA 门禁
 
 ```bash
 claude plugin install frontend-visual-qa@daymade-skills
 ```
 
-捕捉普通 lint/build 检查发现不了的低级界面排版和视觉错误。
+捕捉普通 lint/build 检查发现不了的界面排版、视觉和分享/导出错误。
 
 **使用场景：**
 - 审核或交付前端、网站、dashboard、设计系统样张或 HTML 演示页
 - 用户指出不恰当换行、文字挤、双滚动条、重叠或 AI slop 审美
 - 用户指出产物类型错位，例如把设计系统做成假的工作台/业务界面
 - 需要在桌面和移动端用 Chrome/Playwright 留证
+- 需要从真实浏览器 UI 验证导出、下载、分享链接、打印或 PDF 流程
 - 需要补足 `ui-designer`、`frontend-design` 和 `qa-expert` 之间的空档
 
 **主要功能：**
 - 基于本地历史反馈沉淀的换行、溢出、排版错误清单
 - 优先用 Chrome DevTools 检查用户当前可见浏览器视口，包括残留移动端 emulation
 - Playwright-core 脚本覆盖宽桌面、常规桌面和移动端视口
+- 用 Computer Use / 真实 Chrome 操作检查下载文件、分享 URL、剪贴板/新标签行为，以及非空的打印/PDF 预览
 
 ### 75. **openclaw** - OpenClaw (龙虾) 配置管理器
 
@@ -2998,6 +3006,23 @@ claude plugin install openclaw-model-switch@daymade-skills
 - 会议转录 vs 提问-回答 识别；主题归类；PII 标记
 - 上下文核验的关键词搜索（grep 只是第一步，不是答案）+ 可选的 memory 文件生成
 
+### 83. **skill-governance** - Skill marketplace 与缓存治理
+
+> **安装**：`claude plugin install daymade-skill@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-skill:skill-governance`）
+
+让 Claude Code skill marketplace 和已安装缓存与源码仓库保持一致。用于只读漂移检查、通过官方 Claude plugin 命令从源码同步、清理旧缓存版本，以及把 marketplace 条目切到本地源码。
+
+**使用场景：**
+- 某个 skill 看起来过期、缺失、重复，或来自异常缓存版本
+- 需要对比 `.claude-plugin/marketplace.json`、源码目录和 Claude/Codex 已安装 skill
+- 从源码仓库重建本地 skill marketplace，但不手动复制派生缓存文件
+
+**主要功能：**
+- 把源码目录视为权威来源，plugin/cache 目录视为派生产物
+- 使用官方 `claude plugin` 命令执行同步操作
+- 检测孤儿缓存版本、源码/缓存漂移、marketplace 条目指向错误源码
+- 检查发布面时忽略 `scripts/`、`references/`、`tests/`、demo 和构建产物等工作区专用目录
+
 ---
 
 ## 🎬 交互式演示画廊
@@ -3016,7 +3041,7 @@ claude plugin install openclaw-model-switch@daymade-skills
 使用 **deep-research** 生成格式可控的调研报告，包含证据表与引用。与 **fact-checker** 结合用于验证关键结论，或与 **twitter-reader** 结合收集社媒资料。
 
 ### 竞争情报
-使用 **competitors-analysis** 以证据驱动的方法追踪和分析竞品仓库。所有发现都来自实际代码（文件:行号），杜绝臆测。与 **deep-research** 结合生成全面的竞争格局报告。
+使用 **competitors-analysis** 发现、持久化、更新并分析竞品仓库，仓库结论必须带源码引用。需要更宽的市场、定价或叙事研究时，再结合 **deep-research**。
 
 ### PDF 与可打印文档
 使用 **pdf-creator** 将 markdown 转换为适合打印的 PDF，并提供中文字体支持，适用于正式报告和归档材料。
@@ -3172,7 +3197,7 @@ claude plugin install openclaw-model-switch@daymade-skills
 - **i18n-expert**：参见 `i18n-expert/SKILL.md` 了解完整的 i18n 设置工作流程、键架构指导和审计程序
 - **claude-skills-troubleshooting**：参见 `daymade-claude-code/claude-skills-troubleshooting/SKILL.md` 了解插件故障排除工作流程和架构
 - **fact-checker**：参见 `fact-checker/SKILL.md` 了解事实核查工作流程和声明验证过程
-- **competitors-analysis**：参见 `competitors-analysis/SKILL.md` 了解证据驱动的分析工作流程和 `competitors-analysis/references/profile_template.md` 了解竞品档案模板
+- **competitors-analysis**：参见 `competitors-analysis/SKILL.md` 了解 discover/ingest/profile/landscape 工作流，参见 `competitors-analysis/references/profile_template.md` 了解竞品档案模板
 - **windows-remote-desktop-connection-doctor**：参见 `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` 了解日志解析模式和 `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` 了解传输协议详情
 - **product-analysis**：参见 `product-analysis/SKILL.md` 了解工作流，参见 `product-analysis/references/synthesis_methodology.md` 了解跨代理加权与推荐逻辑
 - **excel-automation**：参见 `excel-automation/SKILL.md` 了解创建/解析/控制工作流，参见 `excel-automation/references/formatting-reference.md` 了解格式规范

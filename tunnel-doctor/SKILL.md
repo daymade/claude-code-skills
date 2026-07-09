@@ -7,12 +7,13 @@ description: >
   propagation, and stalled macOS DNS resolution. Use when Tailscale ping works but
   SSH/HTTP times out, browser returns 503 but curl works, git push fails with "failed
   to begin relaying via HTTP", Docker pull/build times out behind TUN/VPN, setting up
-  Tailscale SSH to WSL, bootstrapping remote dev over Tailscale, ssh/curl/git hang ~60s
-  before resolving a hostname while nslookup returns instantly, ping to a resolver IP
-  works but dig to the same IP times out, ssh -vvv freezes at "debug2: resolving"
-  without reaching "debug1: connect", or raw probes give impossibly-fast results under
-  a TUN proxy (nc -z 0.00s, sub-ms ping to overseas nodes, or an IP-geo lookup
-  reporting the proxy exit instead of your real home/ISP — the TUN fabricates locally).
+  Tailscale SSH to WSL or remote dev over Tailscale, ssh/curl/git hang ~60s resolving
+  a hostname while nslookup is instant, ping to a resolver IP works but dig to it
+  times out, ssh -vvv freezes at "debug2: resolving", raw probes look impossibly fast
+  under a TUN proxy (nc -z 0.00s, sub-ms ping overseas — the TUN fabricates locally),
+  or all domestic/DIRECT-routed sites fail at once (TLS handshake EOF,
+  UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, proxy CONNECT 503) while proxied sites
+  work — TUN DIRECT split-brain.
 allowed-tools: Read, Grep, Edit, Bash
 ---
 
@@ -22,9 +23,9 @@ Diagnose and fix conflicts when Tailscale coexists with proxy/VPN tools on macOS
 
 > **Methodology base:** the general diagnostic discipline this skill builds on — evidence over assumption, falsification over confirmation, layered isolation, counter-review — lives in the **debugging-network-issues** skill. This skill is the macOS Tailscale⨯proxy *domain* layer on top of it; reach for the base skill when the symptom is *not* a known Tailscale/proxy conflict.
 
-## Five Conflict Layers
+## Conflict Layers
 
-Proxy/VPN tools on macOS create conflicts at five independent layers. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations; Layer 5 affects VM/container runtimes:
+Proxy/VPN tools on macOS create conflicts at several independent layers. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations; Layer 5 affects VM/container runtimes. TUN-state failure modes beyond this table — DNS hijack, resolver stall, DIRECT split-brain — are covered in Steps 2H–2J:
 
 | Layer | What breaks | What still works | Root cause |
 |-------|-------------|------------------|------------|
@@ -52,6 +53,7 @@ Determine which scenario applies:
 - **Container healthcheck `(unhealthy)` but app runs fine** → Lowercase proxy env var leak (Step 2G-4, fix: clear `http_proxy`+`HTTP_PROXY`)
 - **`docker build` can't fetch base images** → VM/container proxy propagation (Step 2G)
 - **`git clone` fails with `Connection closed by 198.18.x.x`** → TUN DNS hijack for SSH (Step 2H)
+- **Every domestic/DIRECT-rule site fails at once (TLS `unexpected EOF` mid-handshake, proxy-port CONNECT returns 503, Node CLIs report `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`) while proxied overseas sites keep working** → TUN DIRECT split-brain (Step 2J)
 - **SSH connects but `operation not permitted`** → Tailscale SSH config issue (Step 4)
 - **SSH connects but `be-child ssh` exits code 1** → WSL snap sandbox issue (Step 5)
 - **TCP port 22 reachable (`nc -z` succeeds) but SSH fails with `kex_exchange_identification: Connection closed`** → Tailscale SSH proxy intercept on WSL (Step 5A)
@@ -67,6 +69,7 @@ Determine which scenario applies:
 - If `docker pull` works but `docker build` `RUN apk add` fails instantly with `Connection refused` → OrbStack transparent proxy broken by TUN (Step 2G-1).
 - If container healthcheck shows `(unhealthy)` but app works → lowercase `http_proxy` leaked into container (Step 2G-4).
 - If DNS resolves to `198.18.x.x` virtual IPs → TUN DNS hijack (Step 2H).
+- If connections to fake-IP-resolved domains die but the same host works via `curl --resolve <host>:443:<real-ip>` (real IP from `dig @<public-resolver>`) → the TUN tool's DIRECT forwarding state is broken, not your network and not the destination (Step 2J).
 - If `nc -z` succeeds on port 22 but SSH gets no banner (`kex_exchange_identification`) → Tailscale SSH proxy intercept (Step 5A). Confirm with `tcpdump -i any port 22` on the remote — 0 packets means Tailscale intercepts above the kernel.
 - If `tailscale ssh` fails with "not available on App Store builds" → install Standalone Tailscale (Step 5B).
 - If `nslookup <host>` is fast (<0.1s) but `dscacheutil -q host -a name <host>` takes 60s+ → a supplemental resolver in `scutil --dns` is dead (Step 2I).
@@ -723,6 +726,55 @@ ssh -o "ProxyCommand=none" -T git@github.com
 The fourth dimension is the one that matters most. If you applied a workaround during diagnosis (a `ProxyCommand` that delegates DNS to a SOCKS5 proxy, a `/etc/hosts` entry, a hardcoded IP), running the original command with the workaround disabled (`ProxyCommand=none`) is the only way to know you actually healed the system DNS path rather than just routed around it.
 
 See [references/dns_resolver_chain_stall.md](references/dns_resolver_chain_stall.md) for the full mental model of macOS resolver ordering, the IPv4-vs-IPv6 split, and a worked example walking through every diagnostic command and its real output.
+
+### Step 2J: Fix TUN DIRECT Split-Brain (domain connections die, real-IP connections work)
+
+**Symptom**: every site that the TUN tool routes DIRECT (domestic sites, cloud-provider APIs, your own API domain) fails **at the same time**, while proxied overseas sites keep working. The failures wear several disguises depending on the client:
+
+- `curl` direct: `SSL routines::unexpected eof while reading` mid-handshake
+- `curl -x http://127.0.0.1:<proxy-port>`: `CONNECT tunnel failed, response 503`
+- Node-based CLIs (Claude Code, npm, etc.): `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR` with endless retries — the fake-IP↔domain table is mismapped, so the TUN forwards your SNI to the **wrong backend**, which presents another site's certificate
+- A proxy health watchdog, if you run one, keeps reporting **healthy** — see the warning below
+
+**Root cause**: the TUN tool (Shadowrocket / Clash / Surge in fake-IP mode) has two independent forwarding planes: proxied traffic (overseas, via the node) and DIRECT traffic (matched by domain rules, forwarded from the tool's own network stack). The DIRECT plane's state can break alone — DNS-over-tunnel failure, stale fake-IP table after a network change, or internal state corruption — while the proxied plane stays perfectly healthy. Everything resolved to a fake IP whose domain matches a DIRECT rule then dies inside the tool.
+
+**Diagnosis** — three commands separate this from a real network outage:
+
+```bash
+# 1. Confirm fake-IP DNS is in effect (domain resolves into 198.18.0.0/15)
+dig +short <any-direct-rule-domain>
+# → 198.18.x.x
+
+# 2. Get the real IP from a public resolver (UDP/53 usually bypasses the broken path)
+dig +short @223.5.5.5 <domain>   # or @1.1.1.1 / @8.8.8.8
+# → real address
+
+# 3. Connect by real IP with correct SNI — bypasses the fake-IP table
+curl -sS -o /dev/null -w '%{http_code}\n' --resolve <domain>:443:<real-ip> https://<domain>/
+# → normal HTTP status  ← physical network is FINE; the TUN's DIRECT state is broken
+```
+
+If step 3 also fails, this is not split-brain — treat it as a real local-network outage.
+
+**Fix** — restart the tunnel, then flush the OS DNS cache (stale fake-IP entries survive the reconnect):
+
+```bash
+# Shadowrocket (URL scheme; Clash/Surge: use their API or GUI toggle)
+open "shadowrocket://disconnect" && sleep 3 && open "shadowrocket://connect" && sleep 6
+
+sudo killall -HUP mDNSResponder
+```
+
+**Verify all four planes** — a fix that restores one plane can leave (or put) another down:
+
+```bash
+curl -sS -o /dev/null -w 'domestic direct: %{http_code}\n' --max-time 10 https://<domestic-site>/
+curl -sS -o /dev/null -w 'own DIRECT-rule domain: %{http_code}\n' --max-time 12 https://<your-api-domain>/health
+curl -sS -o /dev/null -w 'cloud API: %{http_code}\n' --max-time 10 https://<cloud-provider-endpoint>/
+curl -x http://127.0.0.1:<proxy-port> -sS -o /dev/null -w 'overseas via proxy: %{http_code}\n' --max-time 10 https://www.google.com/generate_204
+```
+
+**Watchdog blind spot**: if you run an automated proxy health checker, check what it actually probes. A watchdog that only tests an overseas endpoint through the proxy certifies the proxied plane and nothing else — in the incident that produced this section, the watchdog reported "healthy" every 5 minutes for 2+ hours while the DIRECT plane was completely down. A green health check is evidence only for the path it probes; probe each plane the tool forwards.
 
 ### Step 3: Fix Proxy Tool Configuration
 

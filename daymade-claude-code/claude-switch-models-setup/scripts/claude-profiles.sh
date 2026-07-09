@@ -8,7 +8,7 @@
 # - Shared symlinks: skills, projects, hooks, agents all point back to ~/.claude
 #   (exception: plugins/ is NOT shared as a whole — content sub-items are symlinked but
 #    known_marketplaces.json is per-profile; see claude-plugins-sync.py for why)
-# - Isolated state: each profile has its own claude.json
+# - Isolated state: each profile has its own .claude.json
 # - Safe removal: rm only deletes the isolation directory, never shared data
 #
 # Usage:
@@ -27,6 +27,9 @@ CLAUDE_BASE_DIR="${CLAUDE_BASE_DIR:-$HOME/.claude}"
 # from an installed copy (e.g. ~/.config/claude-switch-models-setup). Override with
 # CLAUDE_PROFILES_CONFIG_DIR if you keep the helper somewhere else.
 if [ -n "${ZSH_VERSION:-}" ]; then
+    # zsh can echo `local name=value` assignments when TYPESET_SILENT is off.
+    # This file is usually sourced from ~/.zshrc, so keep helper output clean.
+    setopt TYPESET_SILENT 2>/dev/null || true
     _CP_SELF="$(eval 'print -r -- ${(%):-%x}')"
 else
     _CP_SELF="${BASH_SOURCE[0]:-$0}"
@@ -34,7 +37,7 @@ fi
 CLAUDE_PROFILES_CONFIG_DIR="${CLAUDE_PROFILES_CONFIG_DIR:-$(cd "$(dirname "$_CP_SELF")" >/dev/null 2>&1 && pwd)}"
 
 # Internal constants
-CLAUDE_JSON="claude.json"
+CLAUDE_JSON=".claude.json"
 SETTINGS_DIR="settings"
 
 # ---------------------------------------------------------------------------
@@ -86,7 +89,9 @@ claude-profiles-init() {
         profile_dir=$(_profile_dir "$profile")
         mkdir -p "$profile_dir"
 
-        # Create empty claude.json if missing
+        # Create empty .claude.json if missing. Claude Code reads this file from
+        # CLAUDE_CONFIG_DIR; legacy claude.json files are left in place but are not
+        # sufficient for modern Claude Code launches.
         if [ ! -f "$profile_dir/$CLAUDE_JSON" ]; then
             echo '{}' > "$profile_dir/$CLAUDE_JSON"
             echo "[INIT] $profile: created $CLAUDE_JSON"
@@ -118,6 +123,23 @@ claude-profiles-init() {
                 ln -s "$subdir_path" "$target"
                 echo "[INIT] $profile: symlinked $subname"
             fi
+        done
+
+        # Prune obsolete profile links that point back into ~/.claude after the base
+        # item has been removed. This keeps doctor useful when Claude Code creates and
+        # later removes optional runtime directories such as image-cache/.
+        for stale_link in "$profile_dir"/*; do
+            [ -L "$stale_link" ] || continue
+            [ ! -e "$stale_link" ] || continue
+
+            local stale_target
+            stale_target=$(readlink "$stale_link" 2>/dev/null || true)
+            case "$stale_target" in
+                "$CLAUDE_BASE_DIR"/*)
+                    rm "$stale_link"
+                    echo "[INIT] $profile: pruned stale symlink $(basename "$stale_link")"
+                    ;;
+            esac
         done
 
         # settings/ is shared because the profile JSON files live there
@@ -177,6 +199,14 @@ with open(p, 'w') as f:
         skipped=$((skipped + 1))
     done
 
+    # Maintainer worktrees: keep Claude/Codex installed copies linked to local source
+    # before building per-profile plugin metadata. Ordinary skill edits are live through
+    # symlinks; this idempotent pass covers manifest/version/topology changes.
+    local source_syncer="$CLAUDE_PROFILES_CONFIG_DIR/sync-local-skill-sources.py"
+    if command -v python3 >/dev/null 2>&1 && [ -f "$source_syncer" ]; then
+        python3 "$source_syncer" --apply --quiet >/dev/null
+    fi
+
     # plugins: build per-profile structure + per-profile known_marketplaces.json
     # (the whole-dir symlink above deliberately skips plugins)
     local syncer="$CLAUDE_PROFILES_CONFIG_DIR/claude-plugins-sync.py"
@@ -190,7 +220,7 @@ with open(p, 'w') as f:
     fi
 
     echo ""
-    echo "Done. Initialized/verified $skipped profile(s), created $count new claude.json."
+    echo "Done. Initialized/verified $skipped profile(s), created $count new .claude.json."
     echo "Profiles directory: $CLAUDE_PROFILES_DIR"
 }
 
@@ -235,6 +265,11 @@ claude-profile() {
     # fix-marketplace-paths.py, which CAUSED the corruption by rewriting the shared file).
     # --profile limits work + concurrent writes to the profile being launched; stdout is
     # quiet on this hot path, but errors stay on stderr (not /dev/null) so failures show.
+    local source_syncer="$CLAUDE_PROFILES_CONFIG_DIR/sync-local-skill-sources.py"
+    if command -v python3 >/dev/null 2>&1 && [ -f "$source_syncer" ]; then
+        python3 "$source_syncer" --apply --quiet >/dev/null
+    fi
+
     local syncer="$CLAUDE_PROFILES_CONFIG_DIR/claude-plugins-sync.py"
     if command -v python3 >/dev/null 2>&1 && [ -f "$syncer" ]; then
         python3 "$syncer" --profile "$profile" >/dev/null
@@ -261,12 +296,12 @@ claude-profiles-ls() {
         local profile
         profile=$(basename "$profile_dir")
 
-        local status="ok"
+        local profile_status="ok"
         if [ ! -f "$profile_dir/$CLAUDE_JSON" ]; then
-            status="MISSING_CLAUDE_JSON"
+            profile_status="MISSING_CLAUDE_JSON"
         fi
 
-        printf "  %-20s %s\n" "$profile" "$status"
+        printf "  %-20s %s\n" "$profile" "$profile_status"
     done
 }
 
@@ -306,7 +341,12 @@ claude-profiles-doctor() {
             [ -e "$item" ] || continue
             local name
             name=$(basename "$item")
-            if [ -f "$item" ] && [ "$name" != "$CLAUDE_JSON" ]; then
+            if [ -f "$item" ]; then
+                case "$name" in
+                    "$CLAUDE_JSON"|claude.json|settings.json|settings.json.bak.*|history.jsonl|daemon.log|stats-cache.json|mcp-needs-auth-cache.json|.last-cleanup|.last-update-result.json|.claude.claude.json.bak-*)
+                        continue
+                        ;;
+                esac
                 echo "[$profile] WARN: Unexpected real file: $name"
             fi
         done
@@ -353,7 +393,7 @@ claude-profile-rm() {
         local name
         name=$(basename "$item")
 
-        if [ "$name" = "$CLAUDE_JSON" ]; then
+        if [ "$name" = "$CLAUDE_JSON" ] || [ "$name" = "claude.json" ]; then
             continue
         fi
 
@@ -420,6 +460,7 @@ Environment:
   CLAUDE_BASE_DIR             Main Claude config dir (default: ~/.claude)
   CLAUDE_PROFILES_CONFIG_DIR  Where claude-plugins-sync.py lives
                               (default: ~/.config/claude-switch-models-setup)
+  DAYMADE_SKILL_SOURCE_REPOS  Optional colon-separated local source repos
 
 Shell aliases (add to ~/.zshrc or ~/.bashrc):
   alias csk='claude-profile kimi'

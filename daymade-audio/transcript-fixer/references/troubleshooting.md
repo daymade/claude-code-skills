@@ -21,6 +21,7 @@ Solutions to common issues and error conditions.
   - [4. Testing on Large Files](#4-testing-on-large-files)
   - [5. Manual Database Edits Without Validation](#5-manual-database-edits-without-validation)
   - [6. Committing .db Files to Git](#6-committing-db-files-to-git)
+  - [7. Leftover `_stage1.md` / `_dryrun.md` Files](#7-leftover-_stage1md--_dryrunmd-files)
 - [Validation Commands](#validation-commands)
   - [Quick Health Check](#quick-health-check)
   - [Detailed Diagnostics](#detailed-diagnostics)
@@ -74,31 +75,41 @@ See `glm_api_setup.md` for detailed API key management.
 **Symptom**: Running `--review-learned` shows no suggestions after multiple corrections.
 
 **Requirements**:
-- Minimum 3 correction runs with consistent patterns
-- Learning frequency threshold ≥3 (default)
+- Repeated Stage 2 / AI changes saved in `correction_history` + `correction_changes`
+- Minimum frequency is 3, but the current confidence formula usually needs more repeated occurrences before crossing the 0.8 review threshold
 - Learning confidence threshold ≥0.8 (default)
 
 **Diagnostic steps**:
 
 ```bash
-# Check correction history count
-sqlite3 ~/.transcript-fixer/corrections.db "SELECT COUNT(*) FROM correction_history;"
+# Check successful correction history count
+sqlite3 ~/.transcript-fixer/corrections.db "SELECT COUNT(*) FROM correction_history WHERE success = 1;"
 
 # If 0, no corrections have been run yet
-# If >0 but <3, run more corrections
+# If the repeated AI pattern count is still low, run more similar corrections
 
-# Check suggestions table
-sqlite3 ~/.transcript-fixer/corrections.db "SELECT * FROM learned_suggestions;"
+# Check repeated AI patterns visible to --review-learned
+sqlite3 ~/.transcript-fixer/corrections.db "
+SELECT c.from_text, c.to_text, h.domain, COUNT(*) AS frequency
+FROM correction_changes c
+JOIN correction_history h ON h.id = c.history_id
+WHERE c.rule_type = 'ai' AND h.success = 1
+GROUP BY c.from_text, c.to_text, h.domain
+ORDER BY frequency DESC;
+"
+
+# Check pending review file produced by --review-learned
+cat ~/.transcript-fixer/learned/pending_review.json
 
 # Check system configuration
 sqlite3 ~/.transcript-fixer/corrections.db "SELECT key, value FROM system_config WHERE key LIKE 'learning%';"
 ```
 
 **Solutions**:
-1. Run at least 3 correction sessions
+1. Run more similar correction sessions until repeated AI patterns cross the review threshold
 2. Ensure patterns repeat (same error → same correction)
 3. Verify database permissions (should be readable/writable)
-4. Check `correction_history` table has entries
+4. Check `correction_history` and `correction_changes` have successful AI entries
 
 ## Database Issues
 
@@ -280,13 +291,29 @@ uv run scripts/fix_transcription.py --export corrections_$(date +%Y%m%d).json
 git add corrections_*.json
 ```
 
-### 7. `mv` Silently Skips Overwrite at Finalize (macOS)
+### 7. Leftover `_stage1.md` / `_dryrun.md` Files
 
-**Problem**: At finalize (rename `*_stage1.md` → `*.md`), a bare `mv` over an existing target does nothing and the un-corrected file survives — yet `mv` exits 0, so `mv … && echo done` falsely reports success and the wrong file gets ingested.
+**Problem**: After correction you end up with multiple intermediate files (`file_stage1.md`, `file_dryrun.md`, `file_changes.md`, `file_needs_review.md`) in the working directory.
 
-**Cause**: macOS shells commonly alias `mv` to `mv -i`. The `-i` flag prompts before overwrite; with no interactive answer it defaults to "no" and skips the move (still exit 0).
+**Preferred solution**: Re-run `--stage 1` on the original `file.md`. If `file_stage1.md` is newer than `file.md`, transcript-fixer automatically promotes it to `file.md` and removes the sidecars. It skips promotion if `file.md` has been edited more recently, so it never overwrites your manual changes. This is the recommended finalize path.
 
-**Solution**: bypass the alias, force the overwrite, then verify the rename actually landed.
+```bash
+uv run scripts/fix_transcription.py --input file.md --stage 1
+```
+
+**Manual fallback**: In the native AI-correction workflow, edit the original `file.md` directly, archive it, then delete the sidecars with a Python one-liner (avoids macOS `mv` alias hazards):
+
+```bash
+uv run python -c "
+from pathlib import Path
+stem = 'file'
+for suffix in ['_stage1.md','_dryrun.md','_changes.md','_needs_review.md','_uncertain.md','_stage2.md','_对比.html']:
+    p = Path(f'{stem}{suffix}')
+    p.exists() and p.unlink()
+"
+```
+
+**Why not a bare `mv`**: On macOS, `mv` is commonly aliased to `mv -i`. A bare `mv file_stage1.md file.md && echo done` can skip the overwrite (still exit 0) when the target already exists, leaving the uncorrected file in place. Use the Python one-liner above, or `/bin/mv -f`, if you must use the shell:
 
 ```bash
 /bin/mv -f file_stage1.md file.md          # /bin/mv ignores the alias; -f forces overwrite

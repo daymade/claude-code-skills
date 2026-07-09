@@ -2,6 +2,25 @@
 
 This checklist was distilled from local Claude/Codex history where the user repeatedly corrected rendered frontend artifacts. The raw histories contain private project details; this file keeps the reusable patterns and removes project-specific content.
 
+## Contents
+
+- Recurring Failure Patterns
+- Macro Composition Failures
+- Whole-Page-First Rule
+- Right-State-First Rule
+- Journey-State Contract
+- Browser-Integrated Delivery Flow Rules
+- Mandatory Viewports
+- Text And Line-Break Rules
+- Layout Rules
+- Design-System Artifact Rules
+- Live Artifact Design-System Rules
+- Enterprise Admin / Dashboard Rules
+- Drawer / Inspector Rules
+- Map / GIS Rules
+- Aesthetic Rules
+- How This Differs From Existing Skills
+
 ## Recurring Failure Patterns
 
 | Pattern | What It Looked Like | Detection Heuristic | Preferred Fix |
@@ -28,6 +47,14 @@ This checklist was distilled from local Claude/Codex history where the user repe
 | Unframed live artifact | Interactive modules exist, but nothing says what component, pattern, state, or rule they demonstrate. The page feels like a half-built product. | Scan nearby headings and labels for specimen/pattern/component/state/variant/token/anatomy/usage language. Check whether sample data is marked as specimen data. | Convert app-like modules into live specimens: add component names, state labels, usage rules, do/don't notes, and explicit sample-data framing. |
 | Unexercised live interaction | Buttons, tabs, drawers, or chart controls are visible, but the review never clicks them. The default state looks acceptable while alternate states overflow, clip, or show stale labels. | In Chrome, exercise at least one representative interaction per live specimen family. Record before/after state and inspect overflow, text wrapping, overlay, and scroll ownership while the state is active. | Treat live artifact review like a small interaction QA pass: click variant/state controls, open/close overlays, hover/select charts when possible, then re-screenshot the changed state. |
 | Repeated card pile | Many identical cards/panels appear because the agent translated every idea into a card. The page feels generated rather than designed. | Count repeated card/panel/tile containers and inspect whether they express hierarchy or just duplicate a template. | Use tables, rules, specimens, side notes, bands, and structured lists. Keep cards for repeated items, examples, modals, and genuine component specimens. |
+| Repeated global KPI strip | A dashboard repeats the same 3-5 overview metric cards at the top of every subpage, so maps, tables, queues, and detail work all start with irrelevant tiles. | Click every sidebar/tab workspace and compare the first viewport. If the same metric card group appears before unrelated task surfaces, flag it. | Keep global KPI cards on the overview only. Subpages should start with their own task surface or a compact workspace-specific summary. |
+| Enterprise admin as instruction manual | A backend page becomes a long waterfall of explanatory cards and prose. It tells users what the system is instead of letting them scan, filter, inspect, and act. | Judge the first two viewports: count prose blocks versus operational surfaces such as table, matrix, map, queue, filters, and row actions. Ask what a returning operator would do first. | Replace explanatory sections with task-first surfaces. Keep help text short, inline, and attached to the control or data it clarifies. |
+| Route-state drift | Clicking a tab, workspace, map section, or dashboard page changes the visible content but leaves the URL/hash unchanged, so refresh, back, and shared links lose the current state. | After each navigation click, record `location.href`, then refresh and use browser back/forward. Compare visible active nav and page title to the URL. | Give every real page/workspace a canonical route or hash. Add tests for click -> URL, direct URL -> state, refresh -> state, and back -> previous state. |
+| Permanent rail without ownership | A right-side tab/rail/panel permanently consumes a large part of the layout but is not navigation, not a selected-object inspector, and not a dismissible drawer. | Inspect whether the rail changes with selection, can close when not needed, owns its scroll, and helps the current task. If it just stands there with generic content, flag it. | Convert it to real navigation, an on-demand drawer, or a contextual inspector tied to the selected object. Otherwise remove it and return width to the primary canvas. |
+| Drawer acting like accidental modal | A row-detail drawer opens with a mask, fixed width, or intercepted clicks even though the user should still navigate, filter, or inspect the table behind it. | Open the drawer and record mask count, pointer-events on the main workspace, close path, drawer width, and mobile `scrollWidth`. Screenshot the open state after animation settles. | Use a true modal only for blocking decisions. Otherwise use a non-modal drawer/inspector, pass width props correctly through wrappers, and verify desktop and mobile open states. |
+| Mobile table squeezed into desktop grid | Mobile reports no page overflow, but the table is still a desktop grid: key columns are off-screen, row meaning is lost, or actions require sideways drag. | At 390px, compare the mobile row/card/list against the desktop table's decision fields and row actions. Zero page overflow alone is not enough. | Provide a mobile card/list/table pattern with the same status, identity, key metrics, and action. Hide the desktop table when the mobile pattern owns the workflow. |
+| Map/GIS treated as static art | A page looks like a map but lacks basic GIS interaction, or map labels/popovers/panels make provinces, cities, or markers hard to click. | Exercise wheel/button zoom, drag pan, reset/fit, marker/region click, hover, and selection clearing. Measure whether overlays cover the clicked target or neighboring targets. | Add real pan/zoom controls, larger hit targets, clear selected states, non-blocking inspectors, and layer rules for labels/popovers/toolbars. |
+| Design-system asset drift | A project has existing tokens, product imagery, logo marks, or component conventions, but the new UI invents a separate look and generic placeholder branding. | Before aesthetic judgment, inspect design-system docs/assets and compare the rendered page's colors, typography, logo, image usage, and component patterns. | Reuse the design system first. Add new visual elements only when they extend the system, and document the rule they add. |
 | QA script gaming | A detector flags an issue, then the implementation is changed to avoid the selector rather than fixing the visual problem or detector. | Compare the user's complaint, screenshot, and code change. Renaming `.tag-sample` to avoid a wrapped-control warning is a smell unless the detector logic is also corrected. | Fix the detector if it misclassifies, or fix the layout if it is real. Record the reason. |
 | Overlap | Calendar/timeline/event labels collide, or blocks overlap after data changes. | Use viewport screenshots around dense areas and inspect bounding boxes when possible. | Reserve dimensions, use collision-aware layout, reduce competing columns, or stack on small widths. |
 | Hidden/clipped content | Screenshot/section/page is not fully visible; fixed-height panels cut off text. | Compare `scrollHeight` vs `clientHeight`; inspect screenshots across viewports. | Remove arbitrary fixed heights or provide intentional scroll area with affordance. |
@@ -35,6 +62,10 @@ This checklist was distilled from local Claude/Codex history where the user repe
 | Generic AI slop | Purple gradients, glow, glass cards, decorative blobs, card grids everywhere, "AI empowers" copy. | Compare against domain references and product purpose. | Use domain-specific visuals, brand tokens, real objects/states, and restrained composition. |
 | Card side-rail AI slop | A rounded card or large module uses a 3-4px colored left border or left inset shadow to fake status, hierarchy, or sophistication. | Inspect computed styles for large `card/panel/module/alert/shell` containers with `border-left >= 3px` or `box-shadow: inset Npx 0 0`. Exempt small tags, labels, checkboxes, table selection cells, and motif diagrams. | Move state into small capsules/tags, field-level feedback, table row state, top rules, or real object structure. Do not use card-level left rails as decoration. |
 | Screenshot not actually reviewed | Agent claims done after build/lint, but browser view still has obvious line breaks. | Require screenshot paths and a short visual finding summary. | Open and inspect screenshots before final response. |
+| Browser output path untested | The page looks fine in-app, but export/share/print/download buttons are never clicked in the real browser. Unit tests pass while the deliverable people receive is blank, blocked, stale, or unreadable. | For every user-visible output action, click the real control in Chrome or Computer Use and observe the browser-level result: download popover/file, new tab/window, alert, clipboard result, share URL, or print preview. | Treat browser-integrated output paths as UI journeys. Verify the artifact the recipient will open, not only the event handler. |
+| Popup or print preview blank | A PDF/print button calls `window.open` or `print`, but Chrome opens `about:blank`, blocks the popup, or shows a print shell with no rendered pages. | Click the visible PDF/print control in a normal Chrome window. Verify `chrome://print/` displays nonblank page previews and page count. A handler/unit test is insufficient. | Use a user-gesture-safe print path, such as a prepared same-page/iframe print flow when appropriate, and re-test in real Chrome. Do not claim a PDF file exists unless it was saved and visually inspected. |
+| Standalone export quality drift | The app view is readable, but exported HTML/PDF/share output loses the overview-first structure, fonts, spacing, responsive behavior, or hides the next reading layer behind raw protocol noise. | Open the exported file/share URL/print preview as a recipient would. Compare title, first viewport, overview, structure, raw transcript/audit fallback, and mobile rendering against the in-app quality target. | Generate share/export artifacts from the same rendering contract where possible; preserve the human reading path and verify each artifact directly. |
+| Share link not opened | The UI reports "copied" or "share ready," but nobody opens the URL. The link may point to localhost-only state, missing snapshot data, wrong route, or a blank page. | After creating a share, paste/open the copied URL in a normal tab/window, refresh it, and inspect desktop plus mobile-ish rendering when the audience includes phones. | Store a self-contained snapshot or clearly state its local-only scope; ensure the share page is read-only when intended and has the same reading quality as the source. |
 | Staged viewport not restored | A mobile or narrow emulation profile remains active after testing, so later reviewers see a phone-sized page inside a desktop window. | End the review by reading `outerWidth`, `innerWidth`, `visualViewport`, and DPR again in the user's Chrome. | Reset to the expected desktop viewport or explicitly report the remaining emulation state. |
 | Wrong app surface verified | Desktop/native app task was "verified" by opening only the renderer/dev-server URL; native window, IPC, menus, permissions, shortcuts, or shell state were never exercised. | For Electron/native shells, compare the launched surface to the project launcher SOP: app process/window, renderer, and route must all be true. | Use the canonical app harness; report dev-server URLs only as renderer diagnostics, not as app entry points. |
 | Ambiguous trigger ownership | One key/button appears to switch between unrelated modes, or old shortcut copy still tells users to use a retired path. | List each primary trigger and the mode it owns; grep rendered UI for stale shortcut/mode labels. | Give each workflow an explicit entry; make mode switches visible and intentional; remove stale copy from UI and docs. |
@@ -42,6 +73,12 @@ This checklist was distilled from local Claude/Codex history where the user repe
 | Unrecoverable processing | A preparation/transcription/save/upload state can hang while the main input path remains blocked and the user has no return-to-idle action. | In the rendered state, look for progress/current work and an escape path. In tests, force a pending promise and assert recovery. | Add progress or specific current-work copy plus retry/cancel/return-to-idle; ignore stale completions after recovery. |
 | Error loses feature context | A multi-mode feature fails, but the global toast/floating control shows a generic error from another feature. | Trigger a failure and compare page card, toast, floating control, and settings state. | Preserve `{feature/mode, state, error}` through the UI boundary and render feature-specific retry/reset actions. |
 | Provider/model label drift | Status UI says a vague model family or "preparing" while the selected provider, hardware/runtime path, account/config state, or actual blocker is different. | Compare visible model/provider copy to runtime settings, logs, and status payloads. Require actionable progress or next step. | Display the selected provider/runtime truthfully; map raw stage/error codes to user actions; hide raw local paths unless explicitly diagnostic. |
+| Internal artifact language as primary UX | A user-facing or reviewer-facing page says `Export JSON`, `gate`, `case bundle`, `state file`, `acceptance evidence`, or similar internal terms where the user expects a task like finish, save, approve, retry, or correct. | Read visible headings, button labels, status text, browser title, and alerts. Ask whether each term names the user's task or an implementation artifact. | Rename primary surfaces around the human task. Move JSON filenames, commands, logs, and gate details into diagnostics or technical handoff. Add forbidden rendered term checks for retired labels. |
+| Raw machine IDs as people | Review, diarization, clustering, annotation, moderation, or tagging UI asks users to choose `cluster 1`, `speaker 2`, `spk1`, `label_3`, or opaque model tokens as the main identity. | Inspect primary chips, dropdowns, cards, legends, and row headers. If the label is only meaningful to the model or database, it is not a primary user label. | Give each entity a human alias first (`Person A`, `Me`, role/name placeholders), let the user rename it, and demote raw IDs to small secondary diagnostic tokens. |
+| Default prediction asks for repeated work | The UI separately shows a predicted label and then asks the user to select the same label again, so the default state reads like an unmade choice. | In annotation/review rows, compare the displayed prediction to the selected/active control state. If the predicted option is not visibly selected, the user will think they must click it. | Make machine predictions editable selected defaults. The user should only correct wrong predictions or confirm the current labels at a higher level. |
+| Blind labeling before transcript/context | Audio/image/text review asks users to identify segments without first showing the machine transcript, crop, preview, or highest-value context. | Walk the first review item as a tired user. If they must play an entire source or inspect raw IDs before knowing what to label, the workflow is too expensive. | Put the most informative context inline with the review item, auto-play or preview the exact span when useful, and prioritize high-value clips rather than dumping a long queue. |
+| Review queue has no humane stop path | A queue implies the user must finish every item, while skip/save-later/finish-current-work is hidden or technically worded. | Start the queue, complete one item, then try to stop. Check whether current progress is saved and the next action is obvious. | Provide visible skip/finish/save controls, persist partial work, and explain what will and will not be reused. Do not turn optional evidence completion into an unbounded chore. |
+| Correction does not compound | A user correction is saved only as local UI state or a one-off file, so the same kind of mistake will be asked again later. | After a correction/accept/reject/skip action, inspect whether the UI or code path records reusable supervision, preference, training/eval data, or a guard against asking again. | Persist corrections as first-class feedback where appropriate, auto-apply safe matches, and surface the dividend as fewer future asks rather than more manual queues. |
 | Feedback loop stops at chat | User reports a low-level UI miss, the code is fixed, but no test, script, or checklist would catch the same class next time. | For every confirmed visual/journey defect, ask which guard now fails if it regresses. | Add/extend a unit, e2e, visual audit, forbidden rendered term, or checklist item before closing. |
 | One-off regression guard | A user-reported issue is patched with a project-specific script tied to one route or selector, so similar defects elsewhere still pass. | Ask whether the guard would catch the same failure in another component/page/domain without renaming selectors. | Convert the lesson into a generic visual audit rule, checklist item, or reusable helper; keep project-specific selectors only as optional examples. |
 | Class-name substring false positive | Automated QA treats `stage` as if it were `tag`, or otherwise infers semantics from arbitrary substrings. | Review regexes that match raw class strings with patterns like `tag|tab|nav`; test against words that merely contain those letters. | Match semantic class parts/tokens, roles, and native elements, not arbitrary substrings. |
@@ -57,6 +94,7 @@ The patterns above are caught row-by-row; these are whole-page defects a clean m
 | Unbalanced visual weight | Eyebrow + title + subtitle + input all stacked top-left; the rest of the canvas sits empty. | Whole-page screenshot. Ask where the eye lands and whether weight is centered/intentional or dumped in a corner. | Center or rebalance the composition, narrow the focal column, and balance vertical whitespace. |
 | Chrome fights canvas | A near-black sidebar against a warm/light body; the boundary reads as two unrelated apps. | Whole-page screenshot; compare chrome lightness/temperature to the body and to the benchmark. | Align chrome tokens with the benchmark and product surface. |
 | Same context repeated | Workspace/project name appears in the top bar, heading, and sidebar. | Read every visible string; flag the same identity stated 3+ times in one viewport. | Say it once where it carries most meaning; drop duplicates. |
+| Enterprise chrome copied across all pages | The shell makes every workspace feel like the same overview page: same metric strip, same explanatory lead, same card rhythm, then the actual content appears below the fold. | Compare whole-page screenshots across at least three workspaces. If the primary difference is only nav active state and lower content, the shell is overpowering the task. | Give each workspace a distinct information architecture while sharing tokens and navigation. Overview can summarize; task pages should privilege the work object. |
 | Gap to benchmark unmeasured | "Looks better now" declared without putting the after-shot beside the named reference. | Check whether there is an after-vs-benchmark comparison. | Screenshot both, name concrete remaining differences, then close those. |
 
 ## Whole-Page-First Rule
@@ -69,7 +107,19 @@ A whole-page screenshot of the wrong conditional branch is a false verification.
 
 ## Journey-State Contract
 
-Rendered QA is incomplete until the primary journey has been exercised. For each changed flow, record entry, trigger owner, active state, long-running state, error state, return state, cross-surface consistency, and the regression guard. If any state blocks the main journey with no safe next action, classify it at least P1.
+Rendered QA is incomplete until the primary journey has been exercised. For each changed flow, record entry, trigger owner, active state, long-running state, error state, return state, cross-surface consistency, route/addressability, and the regression guard. If any state blocks the main journey with no safe next action, classify it at least P1.
+
+## Browser-Integrated Delivery Flow Rules
+
+When the feature produces something outside the current DOM, review that output as a first-class artifact. Browser chrome is part of the workflow for downloads, share links, clipboard copy, new windows/tabs, file dialogs, and print/PDF preview.
+
+- Prefer the user's visible Chrome window when the failure is about what the user will click. If Computer Use is available, use it to click and observe; if only DevTools/Playwright is available, state the limitation.
+- Download/export: verify completion in the browser or filesystem, then open/inspect the downloaded artifact. A successful button click is not enough.
+- Share: create the link, open it directly, refresh it, and inspect desktop plus mobile-ish rendering when the link is meant for others. Check that the reader lands on a human-readable page, not raw logs or protocol furniture.
+- PDF/print: verify Chrome print preview renders nonblank pages and the expected page count/destination. A blocked popup, `about:blank`, empty preview, or only the first shell page is at least P1.
+- Clipboard/new-tab/alert: verify the visible result. For clipboard URLs, paste/open them; for alerts, confirm the message is human-readable and not a raw implementation dump.
+- Recipient quality matters. Local HTML, PDF, and share pages should be close to the in-app human-readable view unless the product explicitly says they are technical audit artifacts.
+- Do not save a file just to prove the path works if print preview is sufficient for the task; but if you report that a saved file exists, actually save and visually inspect it.
 
 ## Mandatory Viewports
 
@@ -95,6 +145,9 @@ For each viewport record:
 - text overlays that intersect important image content
 - typography evidence: font family, key text sizes, line heights, sidebar/rail width, repeated text-column width, smallest important text size
 - screenshot path
+- browser-output evidence when relevant: completed download filename/size, opened export/share URL, print preview page count, nonblank preview status, and whether mobile-ish rendering was checked
+- route evidence for navigable apps: initial URL, URL after each workspace/tab click, direct deep-link reload result, and browser back/forward result
+- overlay evidence when a drawer/modal/inspector is part of the journey: mask count, close path, pointer-events on main workspace, drawer width, and mobile scroll width
 - lower-section screenshot paths when the page is long, a design system, or a live artifact
 
 ## Text And Line-Break Rules
@@ -114,12 +167,16 @@ For each viewport record:
 - Do not put every concept into identical cards.
 - Do not put cards inside cards unless it is a modal or repeated item structure.
 - Do not reduce "avoid cards" to "no cards anywhere." The question is whether the card has a job.
+- Do not reuse an overview metric strip as page furniture. If the metric does not help the current workspace act, remove it or move it to overview.
 - Preserve clear primary/secondary hierarchy.
 - Give repeated fixed-format elements stable dimensions.
 - For sibling fields or repeated component specimens, define a common anatomy: label row, control row, helper/error row, action row. If one sibling lacks content in a row, reserve the slot or change the layout.
 - Same visual row means same axes. Compare top/bottom/height values for labels, controls, helper/error text, and card bodies; do not accept "close enough" when the mismatch is visible.
 - A panel that scrolls must visibly own its scroll; the page must not hijack panel scrolling.
 - Sticky/floating controls must not cover content.
+- Persistent rails must have a named role: navigation, selected-object inspector, utility panel, or dismissible drawer. A generic rail that permanently narrows the main canvas is layout debt.
+- A detail drawer that is not meant to block work should not create a visible or hit-test mask over the main workspace.
+- Mobile data views must preserve the row's identity, status, decision metrics, and action. A hidden desktop table plus a real mobile list/card pattern is usually better than a squeezed admin table.
 - A wide desktop first viewport should not accidentally underfill one side. If there is a large blank area, classify whether it comes from viewport emulation, intentional max-width centering, or broken grid/container sizing.
 - Section containers must not have their own accidental horizontal overflow even when the whole document reports `overflowX=0`.
 - Font size, line height, spacing, and column width must be judged together. A readable font can still fail if the column is too narrow, and a wide layout can still fail if the type scale is too small for the artifact.
@@ -147,6 +204,38 @@ Some projects intentionally ship the design system as a live artifact: a rendere
 - Fail the artifact when interaction changes content without revealing a design rule. A live artifact earns its interactivity by making a rule testable.
 - Click representative controls during review. A live artifact is not verified until at least one changed state has been inspected for overflow, clipping, image/text collision, and scroll ownership.
 
+## Enterprise Admin / Dashboard Rules
+
+For enterprise backends, judge whether the screen supports repeated operational use. Returning users should be able to scan status, filter data, inspect exceptions, and act without reading a page-length explanation.
+
+- The primary surface should be a table, matrix, map, queue, timeline, form, or inspector tied to a real workflow.
+- Overview pages may summarize with KPI cards; subpages should not inherit those cards unless the numbers directly drive that subpage's action.
+- Top copy should identify the current workspace and state, not explain the whole product. If a paragraph reads like sales collateral or onboarding, cut or move it.
+- Sidebar or tab navigation should update the active route. Refresh and direct links must restore the same workspace.
+- Detail panels should appear because something is selected or invoked. Always-visible generic panels are suspect.
+- Data-boundary copy is useful, but it should usually be a terse chip, column label, status tag, or inline note attached to the relevant data. If it becomes a paragraph stack, the backend is turning into a manual.
+- A dashboard that requires scrolling past explanation cards before reaching the table/map/queue is failing the admin-console page type.
+
+## Drawer / Inspector Rules
+
+Drawers and inspectors are useful when they clarify the selected object. They are harmful when they permanently occupy layout width or accidentally inherit modal behavior.
+
+- Default state: no selected object should mean no large generic detail rail.
+- Selected state: the panel title should name the selected object and the body should show actions/evidence for that object.
+- Blocking is a product decision. If the user should keep scanning the table/map behind the drawer, verify `mask=false` behavior, background pointer events, and navigation clicks.
+- Width must be rendered, not assumed from wrapper props. Inspect the actual drawer content rectangle on desktop and mobile.
+- Mobile open state needs its own screenshot. Check `documentElement.scrollWidth - clientWidth`, drawer width, close path, and whether the first meaningful action is reachable.
+
+## Map / GIS Rules
+
+For GIS or map-like workspaces, review the map as an interactive control, not as a background image.
+
+- Verify zoom in/out, drag pan, reset/fit, marker/region click, hover/selected states, and clear-selection behavior.
+- Hit targets must be large enough for dense regions; labels, popovers, and markers must not stack into an unclickable knot.
+- Toolbars, legends, drawers, and inspectors must not cover the geography the user just clicked or the nearby targets they are likely to click next.
+- Selection should coordinate with adjacent tables or inspectors without trapping the user in a modal or permanent panel.
+- If a map view exists as a sidebar tab or workspace, its route must be addressable like any other real page.
+
 ## Aesthetic Rules
 
 - First viewport must communicate the actual domain/product, not just generic SaaS competence.
@@ -154,6 +243,7 @@ Some projects intentionally ship the design system as a live artifact: a rendere
 - Avoid default AI visual tropes: purple/blue gradients, glassmorphism, floating orbs, excessive glow, decorative dashboards with fake data.
 - Avoid card-level colored left rails on rounded cards and panels. Small vertical capsules in tags/labels can be deliberate; scaled-up left bars on containers usually read as generated UI.
 - If a page belongs to a brand or industry, check official materials or reference images before choosing style.
+- If a project already has a design system, logo, or approved imagery, use that as the first source of visual truth before generating a new mark or image language.
 
 ## How This Differs From Existing Skills
 

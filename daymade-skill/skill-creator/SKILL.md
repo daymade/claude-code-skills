@@ -644,7 +644,7 @@ This is the only opportunity to capture this data — it comes through the task 
 
 Once all runs are done:
 
-1. **Grade each run** — spawn a grader subagent (or grade inline) that reads `agents/grader.md` and evaluates each assertion against the outputs. Save results to `grading.json` in each run directory. The grading.json expectations array must use the fields `text`, `passed`, and `evidence` (not `name`/`met`/`details` or other variants) — the viewer depends on these exact field names. For assertions that can be checked programmatically, write and run a script rather than eyeballing it — scripts are faster, more reliable, and can be reused across iterations.
+1. **Grade each run** — spawn a grader subagent (or grade inline) that reads `agents/grader.md` and evaluates each assertion against the outputs. Save results to `grading.json` in each run directory. The grading.json expectations array must use the fields `text`, `passed`, and `evidence` (not `name`/`met`/`details` or other variants) — the viewer depends on these exact field names. For assertions that can be checked programmatically, write and run a script rather than eyeballing it — scripts are faster, more reliable, and can be reused across iterations. **But objective grep/script assertions cut both ways** (same-word-different-meaning false hits, wording-difference misses), so **benchmark pass-rate is a signal, not a verdict**: spot-check what each assertion actually matched, and watch for a baseline run that reveals a factual error in the skill itself (the "wait, the data IS in the API" moment). See methodology §5.3–5.6 + §6.4.
 
 2. **Aggregate into benchmark** — run the aggregation script from the skill-creator directory:
    ```bash
@@ -874,7 +874,14 @@ Take `best_description` from the JSON output and update the skill's SKILL.md fro
 
 ## CRITICAL: Edit Skills at Source Location
 
-**NEVER edit skills in `~/.claude/plugins/cache/`** — that's a read-only cache directory. All changes there are:
+**NEVER edit installed skill copies first.** Treat all of these as installed/runtime copies unless the user explicitly says they are the source:
+- `~/.codex/skills/<skill-name>`
+- `~/.claude/skills/<skill-name>`
+- `~/.agents/skills/<skill-name>`
+- `~/.claude/plugins/cache/...`
+- `~/.codex/plugins/cache/...`
+
+Editing installed copies first causes changes to be:
 - Lost when cache refreshes
 - Not synced to source control
 - Wasted effort requiring manual re-merge
@@ -884,11 +891,23 @@ Take `best_description` from the JSON output and update the skill's SKILL.md fro
 # WRONG - cache location (read-only copy)
 ~/.claude/plugins/cache/daymade-skills/my-skill/1.0.0/my-skill/SKILL.md
 
+# WRONG - personal installed copy unless explicitly used as source
+~/.codex/skills/my-skill/SKILL.md
+
 # RIGHT - source repository
 <repo-root>/my-skill/SKILL.md
 ```
 
-**Before any edit**, confirm the file path does NOT contain `/cache/` or `/plugins/cache/`.
+**Before any edit**, run a source-location check and say which path is source:
+
+```bash
+pwd
+git rev-parse --show-toplevel
+rg -n '"name": "<skill-or-suite-name>"' .claude-plugin/marketplace.json
+find . -path '*/SKILL.md' -maxdepth 4 | rg '(^|/)<skill-name>/SKILL.md$'
+```
+
+If the available-skills list points at `~/.codex/skills`, `~/.claude/skills`, or a plugin cache, do not assume that path is source. Locate the repository-backed source first, edit it, validate it, and only then sync the installed copy when the user needs immediate local runtime use.
 
 ---
 
