@@ -95,6 +95,8 @@ recovered_deep_research/
 *-workspace/
 .gstack/
 .in_use/
+# skill-governance orphan marker — runtime artifact, not source
+.orphaned_at
 
 # Claude Code local settings
 .claude/settings.local.json
