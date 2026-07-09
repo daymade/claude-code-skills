@@ -1,12 +1,13 @@
 ---
 name: asr-transcribe-to-text
-description: Transcribes audio and video files to text using Qwen3-ASR. Supports two modes — local MLX inference on macOS Apple Silicon (no API key, 15-27x realtime) and remote API via vLLM/OpenAI-compatible endpoints. Auto-detects platform and recommends the best path. Triggers when the user wants to transcribe recordings, convert audio/video to text, do speech-to-text, or mentions ASR, Qwen ASR, 转录, 语音转文字, 录音转文字. Also triggers for meeting recordings, lectures, interviews, podcasts, screen recordings, or any audio/video file the user wants converted to text.
-argument-hint: [audio-or-video-file-path ...]
+description: >-
+  Transcribes audio and video to text using Qwen3-ASR, with input handling for local files, direct media URLs, and podcast/web pages. Supports local MLX inference on macOS Apple Silicon and remote OpenAI-compatible ASR endpoints. Use when the user wants to transcribe recordings, podcasts, lectures, interviews, meetings, screen recordings, or any audio/video file; also use for ASR, Qwen ASR, speech-to-text, 转录, 语音转文字, and 录音转文字 requests.
+argument-hint: [audio-or-video-file-path-or-url ...]
 ---
 
 # ASR Transcribe to Text
 
-Transcribe audio/video files to text using Qwen3-ASR. Two inference paths:
+Transcribe audio/video to text using Qwen3-ASR. Two inference paths:
 
 | Mode | When | Speed | Cost |
 |------|------|-------|------|
@@ -58,8 +59,8 @@ For **other platforms** (recommended: remote):
 ASR setup — local MLX requires macOS Apple Silicon. Using remote API mode.
 
 Q1: ASR Endpoint URL?
-  A) http://workstation-4090-wsl:8002/v1/audio/transcriptions (Qwen3-ASR vLLM via Tailscale)
-  B) http://localhost:8002/v1/audio/transcriptions (Local server)
+  A) https://asr.example.com/v1/audio/transcriptions (Self-hosted remote ASR)
+  B) http://localhost:8002/v1/audio/transcriptions (Local ASR server)
   C) Custom URL
 
 Q2: Proxy bypass needed?
@@ -86,7 +87,42 @@ print('Config saved.')
 "
 ```
 
-## Step 1: Extract Audio (if input is video)
+## Step 1: Resolve Input
+
+Accept local files, direct media URLs, or web/podcast episode pages.
+
+- **Web or podcast page URL**: inspect the page for an existing transcript first. Use an official/platform transcript only when it is directly accessible to the user's account. If the transcript endpoint requires a login token and none is available, say that clearly and fall back to ASR from the audio URL.
+- **Local file, direct media URL, or page URL fallback**: run the bundled resolver. It extracts media from common page metadata (`og:audio`, media tags, JSON-LD, RSS-style enclosure links), downloads URLs with atomic temp-file replacement, verifies remote `Content-Length` when present, computes SHA-256, and validates the result with `ffprobe`.
+
+```bash
+uv run ${CLAUDE_PLUGIN_ROOT}/scripts/resolve_media_input.py \
+  INPUT_FILE_OR_URL [INPUT_FILE_OR_URL2 ...] \
+  --output-dir OUTPUT_DIR \
+  --manifest OUTPUT_DIR/media_manifest.json
+```
+
+For suspicious or high-value downloads, add `--decode-check` to make `ffmpeg` decode the whole file before transcription:
+
+```bash
+uv run ${CLAUDE_PLUGIN_ROOT}/scripts/resolve_media_input.py \
+  "https://www.xiaoyuzhoufm.com/episode/EPISODE_ID" \
+  --output-dir OUTPUT_DIR \
+  --manifest OUTPUT_DIR/media_manifest.json \
+  --decode-check
+```
+
+Expected output:
+
+```text
+Downloaded ... bytes in ...s -> OUTPUT_DIR/episode-title.m4a
+OUTPUT_DIR/episode-title.m4a
+```
+
+Use the printed local path as `INPUT_AUDIO` in later steps. If `${CLAUDE_PLUGIN_ROOT}` is empty, use the absolute path to this skill directory.
+
+For third-party public podcasts or copyrighted media, save the transcript as a local file for the user's personal analysis. Do not paste a full long transcript into chat; provide a path, previews, summaries, or short excerpts instead.
+
+## Step 2: Extract Audio (if input is video)
 
 For video files (mp4, mov, mkv, avi, webm), extract as 16kHz mono WAV:
 
@@ -101,11 +137,26 @@ ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:no
 
 **Cleanup**: After transcription succeeds, delete extracted WAV files to save disk space.
 
-## Step 2: Transcribe
+## Step 3: Transcribe
 
 ### Path A: Local MLX (macOS Apple Silicon)
 
-Use the bundled script — it handles model loading, chunking, and the critical `max_tokens` parameter:
+Use the bundled script — it handles dependency pins, model loading, chunking, and the critical `max_tokens` parameter. If `${CLAUDE_PLUGIN_ROOT}` is empty, use the absolute path to the `asr-transcribe-to-text` skill directory you just read.
+
+Before a long first run, load the model once:
+
+```bash
+uv run ${CLAUDE_PLUGIN_ROOT}/scripts/transcribe_local_mlx.py --smoke-test
+```
+
+Expected output includes:
+```text
+Dependency stack: mlx-audio 0.3.1, mlx-lm 0.30.5, transformers 5.0.0rc3
+Model loaded in ...
+Smoke test OK: model loaded
+```
+
+Then transcribe:
 
 ```bash
 uv run ${CLAUDE_PLUGIN_ROOT}/scripts/transcribe_local_mlx.py \
@@ -113,7 +164,7 @@ uv run ${CLAUDE_PLUGIN_ROOT}/scripts/transcribe_local_mlx.py \
   --output-dir OUTPUT_DIR
 ```
 
-The script loads the model once and transcribes all files sequentially (no GPU contention). For details on performance, model compatibility, and the max_tokens truncation issue, see `references/local_mlx_guide.md`.
+The script loads the model once and transcribes all files sequentially (no GPU contention). For details on performance, dependency pins, model compatibility, and the max_tokens truncation issue, see `references/local_mlx_guide.md`.
 
 **Critical**: The upstream `mlx-audio` default `max_tokens=8192` silently truncates audio longer than ~40 minutes. The bundled script defaults to `200000`. If calling `model.generate()` directly, always pass `max_tokens=200000`.
 
@@ -176,7 +227,7 @@ os.unlink(output_json)
 2. Service: `tailscale ssh USER@HOST "curl -s localhost:PORT/v1/models"`
 3. Proxy: retry with `--noproxy '*'` toggled
 
-## Step 3: Verify Output
+## Step 4: Verify Output
 
 After transcription, check for truncation — the most common failure mode:
 
@@ -199,7 +250,7 @@ C) Save as-is — the output looks complete to me
 D) Abort
 ```
 
-## Step 4: Fallback — Overlap-Merge (Remote API Only)
+## Step 5: Fallback — Overlap-Merge (Remote API Only)
 
 If single remote request fails (timeout, OOM), fall back to chunked transcription:
 
@@ -213,7 +264,7 @@ Splits into 18-minute chunks with 2-minute overlap, merges using punctuation-str
 
 For local MLX mode, overlap-merge is unnecessary — the bundled script handles chunking internally with `max_tokens=200000`.
 
-## Step 5: Recommend Transcript Correction
+## Step 6: Recommend Transcript Correction
 
 ASR output always contains recognition errors — homophones, garbled technical terms, broken sentences. After successful transcription, **proactively suggest** running the `transcript-fixer` skill on the output:
 
@@ -239,9 +290,34 @@ rm "${CLAUDE_PLUGIN_DATA}/config.json"
 
 Then re-run Step 0.
 
+## Troubleshooting
+
+### Local MLX fails while loading the model
+
+If model loading fails with an error like:
+
+```text
+AttributeError: 'str' object has no attribute '__module__'
+```
+
+the agent is probably using an unpinned or stale copy of the local MLX script. The known-good stack is:
+
+```text
+mlx-audio 0.3.1
+mlx-lm 0.30.5
+transformers 5.0.0rc3
+```
+
+Run the bundled `--smoke-test` command and confirm the dependency stack line matches. Do not start a long transcription until the smoke test succeeds.
+
+### `${CLAUDE_PLUGIN_ROOT}` is empty
+
+Some runtimes do not set skill environment variables. Use the absolute path to the skill directory that contains this `SKILL.md`, then run `scripts/transcribe_local_mlx.py` from there.
+
 ## Bundled Resources
 
 **Scripts:**
+- `resolve_media_input.py` — Resolve local paths, direct media URLs, and podcast/web pages into validated local media files
 - `transcribe_local_mlx.py` — Local MLX transcription (macOS ARM64, PEP 723 deps)
 - `overlap_merge_transcribe.py` — Chunked transcription with overlap merge (remote API fallback)
 
