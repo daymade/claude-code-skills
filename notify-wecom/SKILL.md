@@ -6,7 +6,7 @@ description: >-
   or any one-shot notification that does not need a reusable template or setup workflow. The message
   is sent immediately; no confirmation prompt is shown unless the message is empty or the webhook is
   not configured.
-argument-hint: [message]
+argument-hint: "[message]"
 ---
 
 # /notify-wecom
@@ -31,7 +31,7 @@ If the config is missing, it prints the one-line setup command and stops.
 
 This skill is a lightweight companion to `setup-notifications-via-wecom`. Either:
 
-- Install `setup-notifications-via-wecom` first (recommended — it provides the webhook setup steps and the `scripts/send_wecom.py` sender), or
+- Install `setup-notifications-via-wecom` first (recommended — it provides the webhook setup steps and its bundled sender), or
 - Create the config file manually as shown below.
 
 ## What It Does

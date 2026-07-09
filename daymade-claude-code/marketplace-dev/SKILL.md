@@ -8,7 +8,7 @@ description: >-
   mentions marketplace, plugin support, one-click install, marketplace.json,
   plugin distribution, auto-update, or wants a skills repo installable via
   `claude plugin install`.
-argument-hint: [repo-path]
+argument-hint: "[repo-path]"
 ---
 
 # marketplace-dev

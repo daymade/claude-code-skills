@@ -232,7 +232,7 @@ name: my-skill
 description: What this skill does and when to use it. Use when...
 context: fork
 agent: general-purpose
-argument-hint: [topic]
+argument-hint: "[topic]"
 ---
 ```
 
