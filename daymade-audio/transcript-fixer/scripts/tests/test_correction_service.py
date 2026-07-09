@@ -8,6 +8,8 @@ Tests business logic, validation, and service layer functionality.
 import unittest
 import tempfile
 import shutil
+import argparse
+import json
 from pathlib import Path
 import sys
 
@@ -324,6 +326,111 @@ class TestCorrectionService(unittest.TestCase):
         self.assertEqual(stats['by_source']['manual'], 1)
         self.assertEqual(stats['by_source']['learned'], 1)
         self.assertEqual(stats['by_source']['imported'], 1)
+
+
+class TestCorrectionCliImportExport(unittest.TestCase):
+    """Test CLI import/export wrappers around the service layer."""
+
+    def setUp(self):
+        from utils.config import Config, DatabaseConfig, PathConfig, set_config
+
+        self.test_dir = Path(tempfile.mkdtemp())
+        self.config = Config(
+            database=DatabaseConfig(path=self.test_dir / "corrections.db"),
+            paths=PathConfig(
+                config_dir=self.test_dir,
+                data_dir=self.test_dir / "data",
+                log_dir=self.test_dir / "logs",
+                cache_dir=self.test_dir / "cache",
+            ),
+        )
+        set_config(self.config)
+
+    def tearDown(self):
+        from utils.config import reset_config
+
+        reset_config()
+        shutil.rmtree(self.test_dir)
+
+    def test_parser_accepts_import_export_flags(self):
+        from cli import create_argument_parser
+
+        parser = create_argument_parser()
+        args = parser.parse_args([
+            "--import", "team.json",
+            "--merge",
+            "--domain", "tech",
+        ])
+
+        self.assertEqual(args.import_path, "team.json")
+        self.assertTrue(args.merge)
+        self.assertEqual(args.domain, "tech")
+
+    def test_export_writes_metadata_wrapped_json(self):
+        from cli.commands import cmd_export_corrections
+
+        service = CorrectionService(CorrectionRepository(self.config.database.path))
+        service.add_correction("wrong-token", "correct-token", "tech")
+        service.close()
+
+        export_path = self.test_dir / "tech.json"
+        cmd_export_corrections(argparse.Namespace(
+            export_path=str(export_path),
+            domain="tech",
+        ))
+
+        data = json.loads(export_path.read_text(encoding="utf-8"))
+        self.assertEqual(data["metadata"]["domain"], "tech")
+        self.assertEqual(data["corrections"], {"wrong-token": "correct-token"})
+
+    def test_import_reads_metadata_domain_and_merges(self):
+        from cli.commands import cmd_import_corrections
+
+        import_path = self.test_dir / "team.json"
+        import_path.write_text(json.dumps({
+            "metadata": {"domain": "tech"},
+            "corrections": {
+                "wrong-token": "correct-token",
+                "another-token": "fixed-token",
+            },
+        }), encoding="utf-8")
+
+        cmd_import_corrections(argparse.Namespace(
+            import_path=str(import_path),
+            domain=None,
+            merge=True,
+        ))
+
+        service = CorrectionService(CorrectionRepository(self.config.database.path))
+        try:
+            corrections = service.get_corrections("tech")
+        finally:
+            service.close()
+
+        self.assertEqual(corrections["wrong-token"], "correct-token")
+        self.assertEqual(corrections["another-token"], "fixed-token")
+
+    def test_import_accepts_legacy_plain_dictionary(self):
+        from cli.commands import cmd_import_corrections
+
+        import_path = self.test_dir / "legacy.json"
+        import_path.write_text(json.dumps({
+            "wrong-token": "correct-token",
+        }), encoding="utf-8")
+
+        cmd_import_corrections(argparse.Namespace(
+            import_path=str(import_path),
+            domain="legacy",
+            merge=False,
+        ))
+
+        service = CorrectionService(CorrectionRepository(self.config.database.path))
+        try:
+            corrections = service.get_corrections("legacy")
+        finally:
+            service.close()
+
+        self.assertEqual(corrections, {"wrong-token": "correct-token"})
 
 
 class TestValidationRules(unittest.TestCase):

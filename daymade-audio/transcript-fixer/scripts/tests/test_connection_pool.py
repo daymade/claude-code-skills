@@ -23,6 +23,11 @@ import time
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Add parent directory to path so `core.*` imports work when running this file
+# directly with pytest.
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from core.connection_pool import (
     ConnectionPool,
     PoolExhaustedError,
