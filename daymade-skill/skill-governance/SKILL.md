@@ -1,7 +1,7 @@
 ---
 name: skill-governance
 description: >-
-  Enforce source-of-truth discipline for Claude Code skill marketplaces and caches. Use whenever the user says "check skill drift", "检查 skill 漂移", "sync skills from source", "以源码为准同步 skill 缓存", "clean old skill cache versions", "清理 skill 缓存旧版本", "switch marketplace to local source", "marketplace 切到本地源码", or talks about skill caches being stale, version mismatches, orphaned plugins, or rebuilding the marketplace cache from a local source repo.
+  Enforce source-of-truth discipline for Claude Code skill marketplaces, caches, and loose userSettings skills. Use whenever the user says "check skill drift", "检查 skill 漂移", "sync skills from source", "以源码为准同步 skill 缓存", "clean old skill cache versions", "清理 skill 缓存旧版本", "switch marketplace to local source", "marketplace 切到本地源码", "thin skills", "薄 skill", "loose skills", "清理 user skills", or talks about skill caches being stale, version mismatches, orphaned plugins, duplicate direct-copy skills, untracked user skills, or rebuilding the marketplace cache from a local source repo.
 ---
 
 # Skill Governance
@@ -16,6 +16,7 @@ This skill keeps Claude Code skill marketplaces and their caches aligned with th
 4. **One version per skill in cache** — After syncing, remove old semver version subdirectories so only the latest remains.
 5. **No-op safety** — Drift checks are read-only. Sync and cleanup run only after user confirmation or an explicit trigger.
 6. **Workspace dirs are not plugins** — Ignore `*-workspace`, `dist`, `scripts`, `tests`, `references`, `demos`, and other non-plugin directories when deciding what belongs in the cache.
+7. **Retire loose skills, do not destroy them** — For untracked userSettings skills that have no SSOT or are obsolete duplicates, move the active directory to a dated `retired-skills/` backup instead of deleting outright.
 
 ## What to ignore when comparing source to cache
 
@@ -88,6 +89,28 @@ This deletes cache directories. Confirm with the user before proceeding.
    ```
 3. Verify with `claude plugin marketplace list`.
 4. Report the new source path.
+
+## Workflow E: Audit loose userSettings skills / 清理松散 user skill
+
+Use when the user asks where thin skills came from, why generic skills are loaded, or whether loose user skills should be removed. This workflow covers direct directories under `~/.claude/skills`, `~/.codex/skills`, and `~/.agents/skills`; plugin caches are handled by Workflows A-D.
+
+1. Enumerate direct skill directories and line counts with `find` plus `wc -l`. Do not recurse into unrelated repos.
+2. Classify each candidate:
+   - **Lock-managed** — present in `.skill-lock.json` or installed plugin metadata. Do not manually move it; use official uninstall/sync flows.
+   - **Source-backed copy** — content matches a canonical source repo. Prefer symlink, marketplace install, or source sync before removing the copy.
+   - **Loose template** — short generic prompt, no scripts/references/assets, no user-specific methodology, no source record.
+   - **Loose but valuable** — contains scripts, references, credentials flow, domain-specific SOP, or user-specific methodology. Keep until it is migrated into a source repo.
+   - **Obsolete backup** — active directory name or frontmatter shows backup/deprecated status and a newer canonical skill exists.
+3. For each retire candidate, verify all three before moving:
+   - It is absent from lock-managed sources.
+   - It has a replacement or no meaningful unique capability.
+   - A backup destination under the matching profile's `retired-skills/<reason>-<date>/` does not already exist.
+4. Move retire candidates out of the active skill root with `mv`, preserving the full directory. Do not use `rm -rf`.
+5. Verify:
+   - Active skill roots no longer contain the retired frontmatter names.
+   - Kept valuable skills still exist.
+   - The retired directories contain the expected `SKILL.md` files and hashes.
+6. Report kept, retired, backup locations, unresolved drift, and whether the current running session may still have a cached skill list.
 
 ## Suite plugins
 
