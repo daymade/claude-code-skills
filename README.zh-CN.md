@@ -2144,6 +2144,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - SSE / 长轮询挂起或定时断开（60s、100s、130s）
 - CDN / 代理 / CGNAT 空闲超时事件
 - 客户端代理 / VPN / TUN 错路由（如 `ERR_CONNECTION_CLOSED`、`SSL_ERROR_SYSCALL`、假 TUN DNS IP、CNAME 规则覆盖）
+- 证书校验错误（`UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`、证书发错站点）
 - "时灵时不灵 / N 秒后必断"模式
 - 多跳系统（client → CDN → LB → reverse proxy → app → upstream）症状可能来自多层
 

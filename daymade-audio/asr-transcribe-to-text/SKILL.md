@@ -166,6 +166,8 @@ uv run ${CLAUDE_PLUGIN_ROOT}/scripts/transcribe_local_mlx.py \
 
 The script loads the model once and transcribes all files sequentially (no GPU contention). For details on performance, dependency pins, model compatibility, and the max_tokens truncation issue, see `references/local_mlx_guide.md`.
 
+**Before batching many short files** (promo clips, montage cuts — anything that may contain music-only audio), read `## Batch Transcription (many short files)` below: one music-only clip can stall the whole batch for 10+ minutes.
+
 **Critical**: The upstream `mlx-audio` default `max_tokens=8192` silently truncates audio longer than ~40 minutes. The bundled script defaults to `200000`. If calling `model.generate()` directly, always pass `max_tokens=200000`.
 
 ### Path B: Remote API

@@ -466,6 +466,6 @@ Shell aliases (add to ~/.zshrc or ~/.bashrc):
   alias csk='claude-profile kimi'
   alias csd='claude-profile deepseek'
   alias csg='claude-profile glm'
-  alias css='claude-profile css'
+  alias css='claude-profile stepfun'
 EOF
 }

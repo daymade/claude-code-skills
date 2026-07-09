@@ -99,7 +99,10 @@ def process_alive(pid: int) -> bool:
 
 @contextmanager
 def sync_lock():
-    lock_dir = BASE_PLUGINS / SYNC_LOCK_NAME
+    # The lock must live OUTSIDE <base>/plugins: shared_item_names() scans that
+    # directory while the lock is held, so a lock inside it would get symlinked
+    # into every profile and go dangling once released.
+    lock_dir = BASE / SYNC_LOCK_NAME
     start = time.time()
     acquired = False
     while True:
@@ -139,6 +142,8 @@ def shared_item_names():
         if entry.name == KM:
             continue
         if ".bak" in entry.name or entry.name.startswith("plugins.pre-sync-"):
+            continue
+        if entry.name == SYNC_LOCK_NAME:  # legacy lock residue from older versions
             continue
         names.append(entry.name)
     return names
