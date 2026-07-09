@@ -34,11 +34,17 @@ THE FIX (idempotent)
 Each ~/.claude-profiles/<p>/plugins becomes a REAL directory:
     marketplaces -> symlink ~/.claude/plugins/marketplaces   (shared content)
     cache        -> symlink ~/.claude/plugins/cache          (shared content)
+    installed_plugins.json -> symlink ~/.claude/plugins/installed_plugins.json
     ... every other item -> symlink ~/.claude/plugins/<item>
     known_marketplaces.json  = independent real file (this profile's prefix)
 
 ~/.claude (the default profile / real plugins store) is never restructured; only its
 known_marketplaces.json is canonicalised to the ~/.claude prefix.
+
+The same launch-time sync also mirrors `enabledPlugins` from ~/.claude/settings.json
+into every profile's settings.json. Claude Code treats enabled plugin state as
+config-dir-local, so sharing the cache is not enough: without this mirror, Kimi/GLM/etc.
+see the files but silently don't load most skills.
 
 Usage:
     python3 claude-plugins-sync.py            # apply
@@ -53,15 +59,22 @@ Env overrides (match claude-profiles.sh):
 
 import json
 import os
+import shutil
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 BASE = Path(os.environ.get("CLAUDE_BASE_DIR", str(Path.home() / ".claude")))
 BASE_PLUGINS = BASE / "plugins"
 PROFILES_DIR = Path(os.environ.get("CLAUDE_PROFILES_DIR", str(Path.home() / ".claude-profiles")))
 KM = "known_marketplaces.json"
+SETTINGS = "settings.json"
 MARKER = "/plugins/marketplaces/"
+MIGRATE_REAL_SHARED_ITEMS = {"installed_plugins.json", "plugin-catalog-cache.json"}
+SYNC_LOCK_NAME = ".daymade-skill-sync.lock"
+SYNC_LOCK_TIMEOUT_SECONDS = 120
+SYNC_LOCK_STALE_SECONDS = 600
 
 DRY = "--dry-run" in sys.argv or "-n" in sys.argv
 
@@ -72,6 +85,50 @@ def log(*a):
 
 def err(*a):
     print(*a, file=sys.stderr)
+
+
+def process_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+@contextmanager
+def sync_lock():
+    lock_dir = BASE_PLUGINS / SYNC_LOCK_NAME
+    start = time.time()
+    acquired = False
+    while True:
+        try:
+            lock_dir.mkdir()
+            (lock_dir / "pid").write_text(str(os.getpid()), encoding="utf-8")
+            acquired = True
+            break
+        except FileExistsError:
+            stale = False
+            try:
+                age = time.time() - lock_dir.stat().st_mtime
+                pid_text = (lock_dir / "pid").read_text(encoding="utf-8").strip()
+                stale = age > SYNC_LOCK_STALE_SECONDS or (
+                    pid_text.isdigit() and not process_alive(int(pid_text))
+                )
+            except OSError:
+                stale = time.time() - start > SYNC_LOCK_TIMEOUT_SECONDS
+            if stale:
+                shutil.rmtree(lock_dir, ignore_errors=True)
+                continue
+            if time.time() - start > SYNC_LOCK_TIMEOUT_SECONDS:
+                raise TimeoutError(f"timed out waiting for sync lock: {lock_dir}")
+            time.sleep(0.2)
+    try:
+        yield
+    finally:
+        if acquired:
+            shutil.rmtree(lock_dir, ignore_errors=True)
 
 
 def shared_item_names():
@@ -170,13 +227,21 @@ def ensure_structure(profile_dir: Path):
         if DRY:
             if not (link.is_symlink() or link.exists()):
                 log(f"      + symlink {item}")
+            elif link.exists() and not link.is_symlink() and item in MIGRATE_REAL_SHARED_ITEMS:
+                log(f"      ~ would migrate real {item} -> backup, then symlink")
             continue
         if link.is_symlink():
             if os.readlink(link) != str(src):
                 link.unlink()
                 link.symlink_to(src)
         elif link.exists():
-            log(f"      ! {item} is a real file/dir (unexpected) — left as-is for manual review")
+            if item in MIGRATE_REAL_SHARED_ITEMS:
+                bak = plugins / f"{item}.pre-sync-{time.strftime('%Y%m%d-%H%M%S')}"
+                log(f"      ~ migrate real {item} -> {bak.name}")
+                link.rename(bak)
+                link.symlink_to(src)
+            else:
+                log(f"      ! {item} is a real file/dir (unexpected) — left as-is for manual review")
         else:
             link.symlink_to(src)
 
@@ -217,11 +282,58 @@ def write_profile_json(config_dir: Path, canonical: dict):
     if DRY:
         log(f"  [{config_dir.name}] would write {len(data)} marketplaces -> {out}")
         return
-    tmp = out.with_name(out.name + ".tmp")
+    tmp = out.with_name(f"{out.name}.{os.getpid()}.tmp")
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, out)  # atomic — concurrent launches never see a half-written file
+
+
+def read_default_enabled_plugins():
+    """Read the default profile's enabledPlugins map.
+
+    This is required state, not a best-effort convenience. If the default settings file
+    is unreadable or malformed, refuse to sync rather than partially rewriting profile
+    settings and making plugin visibility drift harder to reason about.
+    """
+    settings_path = BASE / SETTINGS
+    with open(settings_path, encoding="utf-8") as fh:
+        settings = json.load(fh)
+    enabled = settings.get("enabledPlugins")
+    if enabled is None:
+        enabled = {}
+    if not isinstance(enabled, dict):
+        raise ValueError(f"{settings_path}: enabledPlugins must be an object")
+    return enabled
+
+
+def write_profile_settings(config_dir: Path, default_enabled: dict):
+    """Mirror default enabledPlugins into a profile settings.json, preserving other keys."""
+    if config_dir == BASE:
+        return
+    out = config_dir / SETTINGS
+    if out.exists():
+        with open(out, encoding="utf-8") as fh:
+            settings = json.load(fh)
+    else:
+        settings = {}
+    if not isinstance(settings, dict):
+        raise ValueError(f"{out}: settings root must be an object")
+
+    if settings.get("enabledPlugins") == default_enabled:
+        return
+
+    settings["enabledPlugins"] = json.loads(json.dumps(default_enabled))
+    if DRY:
+        log(f"  [{config_dir.name}] would mirror enabledPlugins ({len(default_enabled)} entries)")
+        return
+
+    tmp = out.with_name(f"{out.name}.{os.getpid()}.tmp")
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(settings, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    os.replace(tmp, out)
+    log(f"  [{config_dir.name}] mirrored enabledPlugins ({len(default_enabled)} entries)")
 
 
 def _target_profile():
@@ -236,6 +348,11 @@ def _target_profile():
 
 
 def main():
+    with sync_lock():
+        _main_locked()
+
+
+def _main_locked():
     if not (BASE_PLUGINS / KM).exists():
         log(f"No canonical {KM} at {BASE_PLUGINS}; nothing to do.")
         return
@@ -245,6 +362,11 @@ def main():
     except (json.JSONDecodeError, OSError) as e:
         # NO FALLBACK: refuse to sync rather than overwrite the default KM with a partial set.
         err(f"ERROR: default {KM} unreadable ({e}); refusing to sync. Fix/restore it first.")
+        return
+    try:
+        default_enabled = read_default_enabled_plugins()
+    except (json.JSONDecodeError, OSError, ValueError) as e:
+        err(f"ERROR: default {SETTINGS} unreadable ({e}); refusing to sync. Fix/restore it first.")
         return
     log(f"canonical: {len(canonical)} marketplace(s) (union of default + profiles)")
 
@@ -262,6 +384,7 @@ def main():
                 continue
             ensure_structure(profile_dir)
             write_profile_json(profile_dir, canonical)
+            write_profile_settings(profile_dir, default_enabled)
 
     log("Done." + (" (dry-run)" if DRY else ""))
 

@@ -36,10 +36,12 @@ If you prefer to understand before running, here is the full manual flow:
 
 ### 1. Install the profile manager
 
-Copy these two files to `~/.config/claude-switch-models-setup/`:
+Copy these files to `~/.config/claude-switch-models-setup/`:
 
 - `claude-profiles.sh`
 - `claude-plugins-sync.py`
+- `sync-local-skill-sources.py`
+- `sync-local-skill-sources-daemon.sh`
 
 ### 2. Add to your shell config
 
@@ -90,6 +92,7 @@ claude-profiles-init
 ```
 
 This creates `~/.claude-profiles/<provider>/` for each settings file.
+It also keeps plugin install state and enabled plugin settings aligned with the default Claude profile.
 
 ### 5. Launch
 
