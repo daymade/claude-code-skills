@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **daymade-audio** v1.4.0: `asr-transcribe-to-text` documents batch transcription of many short files — music-only/BGM-only clips can trigger a repetition-loop hallucination that stalls a whole batch, so drive batches one-file-per-process with a per-file timeout, retry stuck files with `--max-tokens 3000`, and classify no-speech clips by unique-word ratio; Step 3 now cross-references the hazard.
+- **feishu-doc-scraper** v1.3.0: documents sheet cell-attachment extraction — recover fileTokens via the raw v2 values API (`+cells-get` flattens attachments to filenames), download through `medias/batch_get_tmp_download_url` with `file_tokens` as a JSON array (`drive +download` 403s on media resources), plus date-cell Excel-style serial numbers.
+- **daymade-claude-code** v1.8.4: `claude-switch-models-setup` fixes — the `css` shell alias in `claude-profiles-help` points back at the shipped `stepfun` profile (a rename had left it targeting a nonexistent `css` profile); the cross-process sync lock moved out of `~/.claude/plugins/` so `shared_item_names()` can no longer symlink it into every profile as flickering dangling debris, with a scan guard against legacy lock residue.
+
 ## [1.82.0] - 2026-07-07
 
 ### Changed
@@ -16,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **competitors-analysis** v1.2.0: restructured SKILL.md around an Entry Router / Discovery Workflow / Durable Source Layout / Report Structure with explicit Evidence Rules and an Output Quality Bar; `update-competitors.sh` rewritten with `discover` / `clone-url` / `clone` / `pull` / `status` subcommands plus SSH-URL derivation helpers.
 - **daymade-skill** v1.8.1: skill-creator methodology added benchmark-vs-grep, baseline-reveals-fact-errors, and counter-review sections (§5.3–5.6, §6.5, Case 8); skill-governance added Workflow E to audit and prune loose user-installed skills.
 - **frontend-visual-qa** v1.2.0: added Map / GIS Workbench checks and a new data-viz tier & design-system token audit reference for reporting-grade data pages (dashboards, KPI boards) where chart tier and categorical colorblind-safety matter.
+- **daymade-audio** v1.3.3: `asr-transcribe-to-text` gained a media-input resolver and a restructured Step 1–6 workflow; `transcript-fixer` added stage1 auto-finalize, learned-review, dictionary import/export, and a sqlite connection-pool fix.
+- **tunnel-doctor** v1.7.0: TUN DIRECT split-brain diagnosis, plus a TUN measurement-contamination guide (raw probes lie under a global proxy).
+- **debugging-network-issues** v1.4.0: certificate-verification triage (UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, wrong-site certificate).
 - Marketplace version: 1.81.0→1.82.0.
 
 ## [1.81.0] - 2026-07-07

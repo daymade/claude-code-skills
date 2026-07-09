@@ -82,7 +82,10 @@ def process_alive(pid: int) -> bool:
 
 @contextmanager
 def sync_lock(claude_dir: Path):
-    lock_dir = claude_dir / "plugins" / SYNC_LOCK_NAME
+    # Same lock path as claude-plugins-sync.py — and it must live OUTSIDE
+    # <claude_dir>/plugins, which that script scans-and-symlinks into every
+    # profile while the lock is held.
+    lock_dir = claude_dir / SYNC_LOCK_NAME
     start = time.time()
     acquired = False
     while True:

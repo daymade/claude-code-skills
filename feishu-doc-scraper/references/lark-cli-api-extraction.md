@@ -131,6 +131,8 @@ lark-cli api GET "/open-apis/drive/v1/medias/batch_get_tmp_download_url" \
 
 Also note `drive +download --output` only accepts a **relative path** under the CWD (a safety constraint) — `cd` to the destination first.
 
+Both calls above were verified with the default identity; if they return a permission error on a user-owned spreadsheet, append `--as user` (the raw-API pattern used elsewhere in this file).
+
 ## Step 5: the reference-graph recursion (collections/hubs)
 
 A hub is the root of a reference graph. Treat it as BFS/DFS over references until every branch reaches a leaf (a doc with no further references).

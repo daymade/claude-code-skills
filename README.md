@@ -2102,6 +2102,7 @@ Falsification-first methodology for network, streaming, and protocol-layer bugs 
 - SSE / long-polling stalls or fixed-time drops (60s, 100s, 130s)
 - CDN / proxy / CGNAT idle-timeout incidents
 - Client-side proxy / VPN / TUN misrouting (e.g. `ERR_CONNECTION_CLOSED`, `SSL_ERROR_SYSCALL`, fake TUN DNS IPs, CNAME-based rule overrides)
+- Certificate-verification errors (`UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`, wrong-site certificate)
 - Any "works sometimes / fails after N seconds" pattern
 - Multi-hop systems (client → CDN → LB → reverse proxy → app → upstream) where a symptom could plausibly come from several layers
 
