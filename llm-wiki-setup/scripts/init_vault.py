@@ -5,11 +5,14 @@
 **不写任何 schema / 投资偏好**——那是 CLAUDE.md 规则层的事，由访谈长出
 （见 skill 的 SKILL.md + references/interview.md）。规则层照抄模板 = 背叛「每个人建自己的」。
 
-用法：python init_vault.py <目标目录>
+用法：
+  python init_vault.py <目标目录>
+  python init_vault.py --refresh-tools <已有 vault>
 """
-import sys
+import filecmp
 import os
 import shutil
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -39,11 +42,72 @@ LOG_TMPL = """# Log
 """
 
 
-def main():
-    if len(sys.argv) < 2:
-        print("用法: python init_vault.py <目标目录>")
+def managed_tools(target):
+    """Return canonical source and vault destination pairs for managed tooling."""
+    return [
+        (HERE / 'lint-vault.py', target / 'scripts' / 'lint-vault.py'),
+        (TEMPLATES / 'pre-commit.snippet', target / '.githooks' / 'pre-commit'),
+    ]
+
+
+def refresh_tools(target):
+    """Refresh copied tooling in an existing vault without touching user content."""
+    required_files = [
+        target / 'CLAUDE.md',
+        target / 'wiki' / 'index.md',
+        target / 'wiki' / 'log.md',
+        *[destination for _, destination in managed_tools(target)],
+    ]
+    invalid = [
+        path
+        for path in required_files
+        if path.is_symlink() or not path.is_file()
+    ]
+    if not target.is_dir() or invalid:
+        print(f"❌ 不是可安全刷新的 LLM Wiki vault: {target}")
+        for path in invalid:
+            print(f"   缺失或不是普通文件: {path}")
         return 1
-    target = Path(sys.argv[1]).resolve()
+
+    pending = []
+    for source, destination in managed_tools(target):
+        content_matches = filecmp.cmp(source, destination, shallow=False)
+        is_executable = (destination.stat().st_mode & 0o111) == 0o111
+        if content_matches and is_executable:
+            continue
+        backup = destination.with_name(destination.name + '.before-refresh')
+        if destination.exists() and (backup.exists() or backup.is_symlink()):
+            print(f"❌ 备份已存在，未修改任何文件: {backup}")
+            print("   请先审阅并移走该备份，再重新执行 refresh。")
+            return 1
+        pending.append((source, destination, backup))
+
+    if not pending:
+        print(f"✅ vault 工具已是最新: {target}")
+        return 0
+
+    for source, destination, backup in pending:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists():
+            shutil.copy2(destination, backup)
+            print(f"   已备份: {backup}")
+        shutil.copy2(source, destination)
+        os.chmod(destination, 0o755)
+        print(f"   已刷新: {destination}")
+
+    print("✅ 只刷新了 scripts/lint-vault.py 与 .githooks/pre-commit；wiki/raw/CLAUDE.md 未改。")
+    return 0
+
+
+def main():
+    args = sys.argv[1:]
+    if len(args) == 2 and args[0] == '--refresh-tools':
+        return refresh_tools(Path(args[1]).resolve())
+    if len(args) != 1 or args[0].startswith('-'):
+        print("用法: python init_vault.py <目标目录>")
+        print("      python init_vault.py --refresh-tools <已有 vault>")
+        return 1
+    target = Path(args[0]).resolve()
     if target.exists() and any(target.iterdir()):
         print(f"⚠️  目标非空: {target}\n   为安全不覆盖，请指定空目录。")
         return 1

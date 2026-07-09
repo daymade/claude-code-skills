@@ -318,9 +318,9 @@ Connection setup is slightly slower (~6s vs ~2s) because TUN routing has more ne
 
 ## General Principles
 
-### Five Conflict Layers
+### Conflict Layers
 
-Proxy tools create conflicts at five independent layers on macOS. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations; Layer 5 affects VM/container runtimes:
+Proxy tools create conflicts at several independent layers on macOS. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations; Layer 5 affects VM/container runtimes:
 
 | Layer | Setting | What it controls | Symptom when wrong |
 |-------|---------|------------------|--------------------|

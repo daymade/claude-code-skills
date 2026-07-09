@@ -753,6 +753,7 @@ class TestProductionFalsePositives2026_06(unittest.TestCase):
                          "real-word phrase must NOT auto-apply in safe mode")
         self.assertEqual(changes[0].risk, "medium")
 
+    @unittest.skipUnless(_JIEBA_AVAILABLE, "jieba not installed")
     def test_apply_all_applies_real_word_phrase(self):
         """Apply-all mode still applies real-word phrase corrections."""
         processor = DictionaryProcessor({"济南大学": "暨南大学"}, [])

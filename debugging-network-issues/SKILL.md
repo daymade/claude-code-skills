@@ -1,7 +1,7 @@
 ---
 name: debugging-network-issues
 description: >-
-  Evidence-driven investigation for network, streaming, and protocol-layer bugs where symptoms don't match the obvious cause. Use when debugging connection resets (ECONNRESET, HTTP/2 RST_STREAM, INTERNAL_ERROR), SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, client-side proxy/VPN/TUN misrouting, CNAME-based proxy rule overrides, or symptoms like "socket closed unexpectedly", "stream interrupted", "fails after N seconds", "works sometimes but not always", "upstream silent for X seconds", ERR_CONNECTION_CLOSED, SSL_ERROR_SYSCALL. Applies falsification-first layered isolation to pin down the responsible network layer instead of stacking assumptions.
+  Evidence-driven investigation for network, streaming, and protocol-layer bugs where symptoms don't match the obvious cause. Use when debugging connection resets (ECONNRESET, HTTP/2 RST_STREAM, INTERNAL_ERROR), SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, client-side proxy/VPN/TUN misrouting, CNAME-based proxy rule overrides, or symptoms like "socket closed unexpectedly", "stream interrupted", "fails after N seconds", "works sometimes but not always", "upstream silent for X seconds", ERR_CONNECTION_CLOSED, SSL_ERROR_SYSCALL, or certificate-verification errors (UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, wrong-site certificate) that hit some domains while others work. Applies falsification-first layered isolation to pin down the responsible network layer instead of stacking assumptions.
 ---
 
 # Debugging Network Issues
@@ -20,6 +20,7 @@ Before applying the general methodology below, check whether the symptom points 
 | Cloudflare config: `ERR_TOO_MANY_REDIRECTS`, SSL-mode mismatch, DNS / proxy-status issues behind the orange cloud                                                                                        | **cloudflare-troubleshooting**               |
 | Windows App / AVD / W365 RDP connection quality: WebSocket instead of UDP Shortpath, high RTT, STUN/TURN interference                                                                                    | **windows-remote-desktop-connection-doctor** |
 | Client-side proxy / VPN / TUN misrouting: one specific site fails with `ERR_CONNECTION_CLOSED` or `SSL_ERROR_SYSCALL`, other sites work, DNS returns fake/TUN IPs, and adding a PROXY rule did not help | **this skill** — read [references/case-proxy-tun-cname-override.md](references/case-proxy-tun-cname-override.md) first |
+| TLS certificate-verification errors (`UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`, a cert for the wrong site) or mid-handshake EOFs on **every** DIRECT-routed/domestic domain at once, while proxied domains work — and any proxy health watchdog still reports green                                        | **tunnel-doctor** (TUN DIRECT split-brain step) |
 
 If none match — or you tried a domain skill and the evidence points elsewhere — continue below. The methodology generalizes to any multi-layer system.
 
@@ -46,6 +47,12 @@ Multi-hop systems (client → CDN → LB → reverse proxy → app → upstream)
 ### 4. Counter-review before committing
 
 Before committing to a root cause or shipping a fix, have independent reviewers challenge the conclusion — not confirm it. Agents are good at surfacing risks a single investigator did not think of; they are bad at weighing them. Apply the four-question filter (see [references/counter-review-pattern.md](references/counter-review-pattern.md)) to every finding before it shapes action.
+
+### 5. A green health check certifies only the path it probes
+
+Monitors watch the paths their authors thought to probe. Multi-plane systems — a TUN proxy with a DIRECT plane and a proxied plane, a service with a data plane and a control plane, a stack with a backend API and a web login page — fail one plane at a time, and a watchdog that probes only the other plane stays green through the entire outage. In the incident behind this principle, a proxy health daemon probed one overseas endpoint through the proxy every 5 minutes and logged "healthy" for 2+ hours while the direct plane was completely down.
+
+Before accepting "the monitor says it's healthy" as evidence, ask: **which exact path does that check exercise?** Its green counts as evidence for that path alone. Enumerate the planes the system actually forwards or serves, and probe the failing one directly — the check that would have caught the outage is usually one curl away.
 
 ## Workflow
 

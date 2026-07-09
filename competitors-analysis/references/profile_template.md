@@ -1,125 +1,126 @@
-# {Competitor Name} 深度分析
+# {Competitor Name} Competitor Profile
 
-**仓库**: {GitHub URL}
-**版本**: {version} (来源: package.json:2)
-**License**: {license} (来源: LICENSE)
-**分析日期**: {YYYY-MM-DD}
-**分析 Commit**: {git log -1 --format="%h %s"}
-**数据来源**: `~/Workspace/competitors/{product}/{competitor}/`
+## Source Register
 
----
+| Field | Value |
+|---|---|
+| Repository | {GitHub URL} |
+| Local path | `$COMPETITORS_BASE/{product-slug}/{owner-repo}` |
+| Remote | `{git remote get-url origin}` |
+| Branch | `{git branch --show-current}` |
+| Commit | `{git log -1 --format='%H'}` |
+| Commit date | `{git log -1 --format='%cI'}` |
+| Retrieved | {YYYY-MM-DD} |
+| License | {license source} |
 
-## 分析声明
+## Analysis Boundary
 
-> 本分析基于本地克隆的代码仓库，所有技术细节均标注来源文件和行号。
-> 未标注来源的内容为"待验证"状态。
+This profile separates:
 
----
+- **Repository facts**: verified from local cloned source code and cited as
+  `file:line`.
+- **Market facts**: sourced from GitHub/API/official pages with retrieval date.
+- **Judgment**: synthesis based on cited evidence, labeled with confidence.
 
-## 核心定位
+## Positioning
 
-> "{从 README.md 直接引用的描述}"
+> "{README or official description quote}"
 >
-> — README.md:{行号}
+> Source: `{README.md:start-end}` or {official page URL, retrieved YYYY-MM-DD}
 
----
+| Question | Answer | Source |
+|---|---|---|
+| Target user | {segment} | {source} |
+| Primary promise | {promise} | {source} |
+| Distribution model | {CLI/web/app/library/etc.} | {source} |
+| Pricing / monetization | {value or 待验证} | {source or next check} |
 
-## 技术栈 (来源: package.json / Cargo.toml / pyproject.toml)
+## Technical Stack
 
-| 依赖 | 版本 | 用途 | 来源 |
-|------|------|------|------|
-| {dep1} | {ver} | {用途} | package.json:{行号} |
-| {dep2} | {ver} | {用途} | package.json:{行号} |
+| Area | Value | Source |
+|---|---|---|
+| Language/runtime | {value} | `{file}:{line}` |
+| UI framework | {value} | `{file}:{line}` |
+| Backend/server | {value} | `{file}:{line}` |
+| Storage | {value} | `{file}:{line}` |
+| Build/test tooling | {value} | `{file}:{line}` |
 
----
+## Repository Structure
 
-## 项目结构 (来源: `ls -la`)
-
-```
-{competitor}/
-├── {file1}           # {说明} ({大小})
-├── {dir1}/
-│   ├── {file2}       # {说明}
-│   └── ...
+```text
+{owner-repo}/
+├── {file-or-dir}
 └── ...
 ```
 
----
+Source command:
 
-## 核心模块分析
-
-### {模块名} (来源: {文件路径})
-
-**文件**: `{path/to/file.js}`
-**行数**: {wc -l 结果}
-
-**关键代码**:
-```javascript
-// {文件}:{起始行}-{结束行}
-{代码片段}
+```bash
+find "$repo" -maxdepth 2 -mindepth 1 -print | sort
 ```
 
-**发现**:
-- {发现1} (行 {X})
-- {发现2} (行 {Y})
+## Core Implementation Findings
 
----
+| Capability | Implementation | Evidence | Notes |
+|---|---|---|---|
+| {capability} | {how it works} | `{file}:{start}-{end}` | {notes} |
+| {capability} | {how it works} | `{file}:{start}-{end}` | {notes} |
 
-## 与 {你的产品} 对比
+## Data Model / Input Format
 
-| 维度 | {竞品} | 来源 | {你的产品} | 来源 |
-|------|--------|------|------------|------|
-| **框架** | {value} | package.json:{行} | {value} | package.json:{行} |
-| **ASR 引擎** | {value} | {file}:{行} | {value} | {file}:{行} |
-| **数据库** | {value} | package.json:{行} | {value} | package.json:{行} |
+Use this section when the competitor parses structured data, session logs, exports,
+or protocol messages.
 
----
+| Data object | Fields / shape | Evidence | Implication |
+|---|---|---|---|
+| {object} | {fields} | `{file}:{start}-{end}` | {why it matters} |
 
-## 可借鉴点
+## User-Facing Capabilities
 
-| 特性 | 实现位置 | 代码示例 | 借鉴价值 |
-|------|----------|----------|----------|
-| {特性1} | `{file}:{行号}` | `{简短代码}` | {价值说明} |
-| {特性2} | `{file}:{行号}` | `{简短代码}` | {价值说明} |
+| Capability | User-visible behavior | Evidence | Maturity |
+|---|---|---|---|
+| {feature} | {behavior} | `{file}:{line}` / `{README.md}:{line}` | {stable/partial/experimental/待验证} |
 
----
+## Strengths
 
-## 差异化机会
+| Strength | Evidence | Why it matters |
+|---|---|---|
+| {strength} | `{file}:{line}` | {product implication} |
 
-| {你的产品}优势 | 原因 | 竞品对应实现 |
-|----------------|------|--------------|
-| {优势1} | {原因} | {竞品如何实现或缺失} |
-| {优势2} | {原因} | {竞品如何实现或缺失} |
+## Weaknesses And Gaps
 
----
+| Gap | Evidence | Opportunity |
+|---|---|---|
+| {gap} | `{file}:{line}` or `待验证: {next check}` | {opportunity} |
 
-## 源码阅读记录
+## Comparison With {Our Product}
 
-| 文件 | 行数 | 核心发现 | 来源行号 |
-|------|------|----------|----------|
-| `{file1}` | {lines} | {发现} | L{start}-L{end} |
-| `{file2}` | {lines} | {发现} | L{start}-L{end} |
+| Dimension | Competitor | Source | Our product | Source |
+|---|---|---|---|---|
+| {dimension} | {value} | `{file}:{line}` | {value} | `{file}:{line}` |
 
----
+## Recent Change Signal
 
-## 待验证项
+| Signal | Value | Source |
+|---|---|---|
+| Latest commit | `{hash} {date} {subject}` | `git log -1` |
+| Recent release | {value or 待验证} | {source or next check} |
+| Active issues | {value or 待验证} | {GitHub API, retrieved YYYY-MM-DD} |
 
-以下信息未能从代码中直接确认，需要进一步调查：
+## Opportunities
 
-- [ ] {待验证项1} - 原因: {为什么无法确认}
-- [ ] {待验证项2} - 原因: {为什么无法确认}
+| Opportunity | Evidence base | Confidence | Next action |
+|---|---|---|---|
+| {opportunity} | {source rows} | High/Medium/Low | {specific action} |
 
----
+## Risks And Assumptions
 
-## 社区数据 (来源: GitHub API / 页面)
+| Item | What is known | What still needs verification | Next check |
+|---|---|---|---|
+| {risk/assumption} | {evidence} | {unknown} | {command/source to check} |
 
-| 指标 | 数值 | 获取日期 |
-|------|------|----------|
-| Stars | {count} | {date} |
-| Forks | {count} | {date} |
-| Open Issues | {count} | {date} |
-| Last Commit | {date} | {date} |
+## Source Reading Log
 
----
-
-*返回 [README.md](../README.md)*
+| File | Why read | Key finding | Citation |
+|---|---|---|---|
+| `{file}` | {reason} | {finding} | `{file}:{start}-{end}` |

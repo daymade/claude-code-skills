@@ -32,20 +32,10 @@ def import_from_dict():
         "三观": "三关"
     }
 
-    # Convert to list format for import
-    corrections_list = []
-    for from_text, to_text in corrections_dict.items():
-        corrections_list.append({
-            "from_text": from_text,
-            "to_text": to_text,
-            "domain": "embodied_ai",
-            "source": "imported",
-            "confidence": 1.0
-        })
-
     # Import
     inserted, updated, skipped = service.import_corrections(
-        corrections=corrections_list,
+        corrections=corrections_dict,
+        domain="embodied_ai",
         merge=True
     )
 
@@ -78,22 +68,14 @@ def import_from_json_file():
     repository = CorrectionRepository(db_path)
     service = CorrectionService(repository)
 
-    # Convert JSON to import format
+    # Read domain and corrections from wrapped JSON export
     domain = sample_json["metadata"].get("domains", ["general"])[0]
-    corrections_list = []
-
-    for from_text, to_text in sample_json["corrections"].items():
-        corrections_list.append({
-            "from_text": from_text,
-            "to_text": to_text,
-            "domain": domain,
-            "source": "imported",
-            "confidence": 1.0
-        })
+    corrections_dict = sample_json["corrections"]
 
     # Import
     inserted, updated, skipped = service.import_corrections(
-        corrections=corrections_list,
+        corrections=corrections_dict,
+        domain=domain,
         merge=True
     )
 
