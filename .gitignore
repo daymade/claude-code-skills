@@ -94,6 +94,7 @@ recovered_deep_research/
 # Eval / runtime workspaces (test data, snapshots — never committed)
 *-workspace/
 .gstack/
+.in_use/
 
 # Claude Code local settings
 .claude/settings.local.json
