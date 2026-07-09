@@ -1351,13 +1351,13 @@ claude plugin install fact-checker@daymade-skills
 - 确保技能符合市场标准
 
 **主要功能：**
-- **自检模式**：通过 skill-creator 脚本运行自动化验证
+- **自检模式**：运行内置 reviewer，并复用 skill-creator 的权威校验逻辑
 - **外部审查模式**：克隆、分析并生成改进报告
 - **Auto-PR 模式**：Fork → 改进 → 提交 PR（仅添加性更改）
 - **评估清单**：验证 frontmatter、说明、资源
 - **仅添加原则**：贡献他人项目时绝不删除文件
 - **PR 指南**：语气建议和专业模板
-- **自动安装依赖**：若缺少 skill-creator 则自动安装
+- **可靠自动化**：用结构化 JSON 和独立退出码区分审查发现与调用/运行故障
 
 **示例用法：**
 ```bash
@@ -1378,7 +1378,7 @@ claude plugin install daymade-skill@daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [daymade-skill/skill-reviewer/references/](./daymade-skill/daymade-skill/skill-reviewer/references/) 了解：
+📚 **文档**：参见 [daymade-skill/skill-reviewer/references/](./daymade-skill/skill-reviewer/references/) 了解：
 - `evaluation_checklist.md` - 完整的技能评估标准
 - `pr_template.md` - 专业 PR 描述模板
 

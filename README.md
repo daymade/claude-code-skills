@@ -1309,13 +1309,13 @@ Review and improve Claude Code skills against official best practices with three
 - Ensuring skills follow marketplace standards
 
 **Key features:**
-- **Self-review mode**: Run automated validation via skill-creator scripts
+- **Self-review mode**: Run the bundled reviewer backed by canonical skill-creator validation
 - **External review mode**: Clone, analyze, and generate improvement reports
 - **Auto-PR mode**: Fork → improve → submit PR with additive-only changes
 - **Evaluation checklist**: Frontmatter, instructions, resources verification
 - **Additive-only principle**: Never delete files when contributing to others
 - **PR guidelines**: Tone recommendations and professional templates
-- **Auto-install dependencies**: Automatically installs skill-creator if missing
+- **Reliable automation**: Distinguishes review findings from invocation/runtime failures with structured JSON output
 
 **Example usage:**
 ```bash
@@ -1336,7 +1336,7 @@ claude plugin install daymade-skill@daymade-skills
 
 *Coming soon*
 
-📚 **Documentation**: See [daymade-skill/skill-reviewer/references/](./daymade-skill/daymade-skill/skill-reviewer/references/) for:
+📚 **Documentation**: See [daymade-skill/skill-reviewer/references/](./daymade-skill/skill-reviewer/references/) for:
 - `evaluation_checklist.md` - Complete skill evaluation criteria
 - `pr_template.md` - Professional PR description template
 

@@ -40,7 +40,7 @@ Skills use a three-level loading system:
 Then:
 1. Select **Browse and install plugins**
 2. Select **daymade/claude-code-skills**
-3. Select **skill-creator**
+3. Select **daymade-skill**
 4. Select **Install now**
 
 **From your terminal (CLI):**
@@ -54,7 +54,7 @@ iwr -useb https://raw.githubusercontent.com/daymade/claude-code-skills/main/scri
 # Manual installation
 claude plugin marketplace add https://github.com/daymade/claude-code-skills
 # Marketplace name: daymade-skills (from marketplace.json)
-claude plugin install skill-creator@daymade-skills
+claude plugin install daymade-skill@daymade-skills
 ```
 
 ### Skill Validation and Packaging
@@ -77,8 +77,8 @@ uv run python daymade-skill/skill-creator/scripts/init_skill.py <skill-name> --p
 claude plugin marketplace add https://github.com/daymade/claude-code-skills
 # Marketplace name: daymade-skills (from marketplace.json)
 
-# Install specific skill (start with skill-creator)
-claude plugin install skill-creator@daymade-skills
+# Install the suite that contains skill-creator and skill-reviewer
+claude plugin install daymade-skill@daymade-skills
 
 # Test by copying to user skills directory
 cp -r skill-name ~/.claude/skills/
@@ -258,7 +258,7 @@ This applies when you change ANY file under a skill directory:
 26. **fact-checker** - Verify factual claims in documents using web search with automated corrections
 27. **twitter-reader** - Fetch Twitter/X post content using Jina.ai API without JavaScript or authentication
 28. **macos-cleaner** - Intelligent macOS disk space analysis and cleanup with safety-first philosophy, risk categorization, and interactive confirmation
-29. **skill-reviewer** - Reviews and improves Claude Code skills against official best practices with self-review, external review, and auto-PR modes
+29. **skill-reviewer** - Reviews and improves Claude Code skills with a canonical-validator-backed CLI, structured exit semantics, external review, and auto-PR modes
 30. **github-contributor** - Strategic guide for becoming an effective GitHub contributor with opportunity discovery, project selection, and reputation building
 31. **i18n-expert** - Complete internationalization/localization setup and auditing for UI codebases with framework support, key architecture, and parity validation
 32. **claude-skills-troubleshooting** - Diagnose and resolve Claude Code plugin and skill configuration issues with diagnostic scripts and architecture documentation
