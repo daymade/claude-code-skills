@@ -7,9 +7,24 @@ description: Reviews and improves Claude Code skills against official best pract
 
 Review and improve Claude Code skills against official best practices.
 
+## Quick Start (No Dependencies)
+
+For a fast structural check, run the bundled standalone validator. It needs only the Python 3 standard library -- no plugin installation, works offline:
+
+```bash
+python3 <this-skill-path>/scripts/review_skill.py <target-skill-path>
+python3 <this-skill-path>/scripts/review_skill.py <target-skill-path> --json
+```
+
+It checks frontmatter quality (including multi-line YAML descriptions), directory structure, SKILL.md size, hardcoded paths and secrets, script hygiene, subagent_type validity, and instruction style heuristics.
+
+Exit codes reflect the review verdict, not script health: 0 = clean, 1 = warnings only, 2 = errors found. A non-zero exit is the expected outcome for an imperfect skill, not a failure of the script itself.
+
+For the deeper validation suite (security scan, packaging checks), use `skill-creator` as described below.
+
 ## Setup (Auto-Install Dependencies)
 
-Before using this skill, ensure `skill-creator` is installed for automated validation.
+For the full validation suite, ensure `skill-creator` is installed.
 
 **Auto-install sequence:**
 
@@ -33,7 +48,13 @@ echo "skill-creator location: $SKILL_CREATOR"
 
 Check your own skill before publishing.
 
-**Automated validation** (run after setup):
+**Automated validation** (standalone, no setup needed):
+
+```bash
+python3 <this-skill-path>/scripts/review_skill.py <target-skill>
+```
+
+**Extended validation** (requires skill-creator, see Setup):
 
 ```bash
 # Quick validation
@@ -193,6 +214,7 @@ Respect Check:
 
 ## References
 
+- `scripts/review_skill.py` - Standalone structural validator (stdlib only)
 - `references/evaluation_checklist.md` - Full evaluation checklist
 - `references/pr_template.md` - PR description template
 - Best practices: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
