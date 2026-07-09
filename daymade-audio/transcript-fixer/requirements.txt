@@ -11,3 +11,7 @@ filelock>=3.13.0
 # real-word false-positive rules during --audit. Optional at import time;
 # the shipped CLI declares it so audit always gets the check.
 jieba>=0.42.1
+
+# Test dependencies (no separate dev file yet; keep minimal)
+pytest>=8.0.0
+pytest-asyncio>=0.24.0

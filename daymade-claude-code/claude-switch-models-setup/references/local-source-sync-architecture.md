@@ -23,6 +23,7 @@ The sync scripts exist for topology repair, not day-to-day editing.
 | Edit an existing `SKILL.md`, script, reference, or asset | Live through symlink; restart running agent session if needed |
 | Install/uninstall a plugin in the default Claude profile | Default `settings.json` / `installed_plugins.json` changes; LaunchAgent watcher mirrors state to every profile |
 | Add a new skill/plugin entry | Marketplace manifest changes; LaunchAgent watcher runs source sync |
+| Remove or rename a skill entry | Marketplace manifest changes; LaunchAgent watcher prunes stale Codex/agents symlinks that point into managed source repos |
 | Bump `plugins[].version` | Marketplace manifest changes; LaunchAgent watcher creates/updates the version symlink and installed metadata |
 | Add a new Claude profile | `claude-profiles-init` runs source sync and plugin profile sync |
 | Launch Kimi/GLM/DeepSeek/Step profile | `claude-profile` runs source sync, then mirrors enabled plugins |
@@ -32,10 +33,14 @@ The sync scripts exist for topology repair, not day-to-day editing.
 
 | Component | Role |
 |---|---|
-| `sync-local-skill-sources.py` | Idempotent repair primitive. Finds local source repos, points local marketplaces at directory sources, links Claude cache/Codex/agents installs to source, and updates installed plugin metadata. |
+| `sync-local-skill-sources.py` | Idempotent repair primitive. Finds local source repos, points local marketplaces at directory sources, links Claude cache/Codex/agents installs to source, prunes stale managed Codex/agents symlinks, and updates installed plugin metadata. |
 | `sync-local-skill-sources-daemon.sh` | macOS LaunchAgent runner. Installs or removes the watcher and runs one locked sync pass. |
 | `claude-plugins-sync.py` | Per-profile Claude Code sync. Builds profile-local `known_marketplaces.json`, shares installed plugin state, and mirrors `enabledPlugins`. |
 | `claude-profiles.sh` | Shell integration. Runs local source sync on profile init/launch before profile plugin sync. |
+
+Both Python sync scripts take the same cross-process lock under the Claude plugins directory before changing marketplace JSON, installed plugin metadata, or cache symlinks. This matters because power users may open several tmux panes or terminal windows at once; without one shared lock, simultaneous `claude-profile ...` launches can race on cache symlink creation or `known_marketplaces.json` temp-file replacement.
+
+Profile state uses `.claude.json` inside each `CLAUDE_CONFIG_DIR`. Older `claude.json` files may still exist as harmless legacy files, but modern Claude Code will not use them as the profile state file.
 
 ## Source Repo Discovery
 
@@ -117,8 +122,22 @@ python3 ~/.config/claude-switch-models-setup/claude-plugins-sync.py
 
 Then compare `enabledPlugins` between the default profile and each profile.
 
+For launch-path verification, test concurrently because that is how race bugs surface:
+
+```bash
+for profile in kimi kimi-long glm deepseek css cssl step step-pay; do
+  tmux new-session -d -s "ccver-$profile" \
+    "zsh -lc 'source ~/.config/claude-switch-models-setup/claude-profiles.sh; claude-profile $profile --version'"
+done
+```
+
+Expected: every configured profile prints the same Claude Code version and no sync traceback. A profile directory without a matching `~/.claude/settings/<profile>.json` is a stale profile and should fail fast at settings-file lookup.
+
+If a `claude-profile <name> -p ...` probe starts successfully, debug logs should show plugin and skill loading before any API call. Network or TLS errors after lines such as `Loaded ... installed plugins` and `Loaded ... unique skills` are provider connectivity problems, not skill-sync failures.
+
 ## Design Boundaries
 
 - This system does not hot-reload already-running Claude Code or Codex sessions. Restart the session when skill metadata needs to be re-read.
 - This system does not install arbitrary new marketplaces. It only manages the local daymade source repos.
 - This system does not delete old real copies. It moves them into `.source-sync-backups/` before replacing them with symlinks.
+- This system may remove stale symlinks from Codex/agents skill roots, but only when the symlink target is inside a managed daymade source repo and the skill is no longer registered in the marketplace manifest.

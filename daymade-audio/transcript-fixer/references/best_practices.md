@@ -45,13 +45,13 @@ uv run scripts/fix_transcription.py --add "巨升" "具身" --domain embodied_ai
 uv run scripts/fix_transcription.py --add "奇迹创坛" "奇绩创坛" --domain embodied_ai
 ```
 
-**Let learning discover others**: After 3-5 correction runs, the learning system will suggest additional patterns automatically.
+**Let learning discover others**: After several similar correction runs, `--review-learned` will surface repeated AI patterns once they cross the frequency and confidence thresholds.
 
 **Rationale**: Manual corrections provide high-quality training data. Learning amplifies your corrections exponentially.
 
 ### Review Learned Suggestions Regularly
 
-**Frequency**: Every 3-5 correction runs
+**Frequency**: After each small batch or weekly during active transcript cleanup
 
 ```bash
 uv run scripts/fix_transcription.py --review-learned

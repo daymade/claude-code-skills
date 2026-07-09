@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **daymade-audio** v1.4.0: `asr-transcribe-to-text` documents batch transcription of many short files — music-only/BGM-only clips can trigger a repetition-loop hallucination that stalls a whole batch, so drive batches one-file-per-process with a per-file timeout, retry stuck files with `--max-tokens 3000`, and classify no-speech clips by unique-word ratio; Step 3 now cross-references the hazard.
+- **feishu-doc-scraper** v1.3.0: documents sheet cell-attachment extraction — recover fileTokens via the raw v2 values API (`+cells-get` flattens attachments to filenames), download through `medias/batch_get_tmp_download_url` with `file_tokens` as a JSON array (`drive +download` 403s on media resources), plus date-cell Excel-style serial numbers.
+- **daymade-claude-code** v1.8.4: `claude-switch-models-setup` fixes — the `css` shell alias in `claude-profiles-help` points back at the shipped `stepfun` profile (a rename had left it targeting a nonexistent `css` profile); the cross-process sync lock moved out of `~/.claude/plugins/` so `shared_item_names()` can no longer symlink it into every profile as flickering dangling debris, with a scan guard against legacy lock residue.
+
+## [1.82.0] - 2026-07-07
+
+### Changed
+- **daymade-claude-code** v1.8.1: hardened `claude-switch-models-setup` under real multi-profile tmux launch tests. The profile helper now creates the modern `.claude.json` state file, keeps zsh-sourced helper output clean, and the local-source/plugin sync scripts share a cross-process lock so simultaneous Kimi/GLM/DeepSeek/Step launches cannot race on cache symlink creation or `known_marketplaces.json` replacement.
+- Documented the launch-path verification protocol and the boundary between successful skill/plugin loading and provider-side network/TLS failures.
+- Ignored Claude Code `.in_use/` runtime marker directories, which can appear in source repos when plugin cache entries are symlinked back to local source.
+- **daymade-claude-code** v1.8.2: `claude-profiles-init` now prunes stale profile symlinks whose targets under `~/.claude` disappeared, so optional runtime directories such as `image-cache/` do not leave every profile in a broken-link doctor state.
+- **daymade-claude-code** v1.8.3: local source sync now prunes stale Codex/agents skill symlinks that point into the managed daymade source repos after a skill is removed or renamed in the marketplace manifest. Real skill directories are still never deleted.
+- **competitors-analysis** v1.2.0: restructured SKILL.md around an Entry Router / Discovery Workflow / Durable Source Layout / Report Structure with explicit Evidence Rules and an Output Quality Bar; `update-competitors.sh` rewritten with `discover` / `clone-url` / `clone` / `pull` / `status` subcommands plus SSH-URL derivation helpers.
+- **daymade-skill** v1.8.1: skill-creator methodology added benchmark-vs-grep, baseline-reveals-fact-errors, and counter-review sections (§5.3–5.6, §6.5, Case 8); skill-governance added Workflow E to audit and prune loose user-installed skills.
+- **frontend-visual-qa** v1.2.0: added Map / GIS Workbench checks and a new data-viz tier & design-system token audit reference for reporting-grade data pages (dashboards, KPI boards) where chart tier and categorical colorblind-safety matter.
+- **daymade-audio** v1.3.3: `asr-transcribe-to-text` gained a media-input resolver and a restructured Step 1–6 workflow; `transcript-fixer` added stage1 auto-finalize, learned-review, dictionary import/export, and a sqlite connection-pool fix.
+- **tunnel-doctor** v1.7.0: TUN DIRECT split-brain diagnosis, plus a TUN measurement-contamination guide (raw probes lie under a global proxy).
+- **debugging-network-issues** v1.4.0: certificate-verification triage (UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, wrong-site certificate).
+- Marketplace version: 1.81.0→1.82.0.
+
+## [1.81.0] - 2026-07-07
+
+### Changed
+- **daymade-claude-code** v1.8.0: statusline-generator learned zero-fork git-branch rendering — the minimal layout now shows `[branch]` by reading `.git/HEAD` as a plain file (worktree/submodule `gitdir:` indirection and detached-HEAD short-sha included) instead of spawning `git`, so it works even without a git binary.
+- statusline-generator SKILL.md: new authoring Rule 3 ("the statusline is a hot path") — budget subprocesses per refresh, never resolve packages (`bunx`/`npx` `@latest`) at refresh time, don't spawn `git` for the branch, treat dirty-state `git status` as a full-layout-only luxury. Distilled from a real battery-drain investigation where a package-runner statusline cost ~0.4s CPU per refresh vs ~0.01s for this script.
+- statusline-generator: back-ported the cross-shell-safe `$HOME` → `~` shortening fix (case statement instead of `${var/#pattern/~}`, whose replacement-string `~` bash expands) that had drifted between the installed copy and the skill source.
+- statusline-generator health_check.sh: new mock test verifies `[branch]` renders from a synthetic `.git/HEAD` with no git binary required.
+- Marketplace version: 1.80.0→1.81.0.
+
+## [1.80.0] - 2026-07-05
+
+### Changed
+- **competitors-analysis** v1.1.0: expands from single-repository code profiling into a durable competitor intelligence workflow covering discovery, clone/ingest, update, source-cited profiles, and landscape synthesis.
+- Updated the competitor workspace convention to `$HOME/workspace/competitors/{product}/` with `COMPETITORS_BASE` override support.
+- `competitors-analysis/scripts/update-competitors.sh` now supports `discover`, `clone-url`, `clone`, `pull`, and `status`, and can update an existing product competitor directory without requiring a prefilled repository map.
+- README.md / README.zh-CN.md / CLAUDE.md: synced the competitors-analysis entry to the new discover/ingest/profile/landscape workflow.
+- Marketplace version: 1.79.0→1.80.0.
+
+## [1.79.0] - 2026-07-03
+
+### Changed
+- **daymade-claude-code** v1.7.0: multi-provider profile sync now mirrors enabled plugins from the default Claude profile, shares installed plugin state across profiles, and automatically keeps local skill source repos linked into Claude Code and Codex installs. Maintainer machines can install a macOS LaunchAgent to watch marketplace manifest changes.
+- **daymade-skill** v1.8.0: adds `skill-governance` as a suite member for marketplace/cache drift checks, source-backed sync through official plugin commands, old cache cleanup, and local-source switching.
+- **frontend-visual-qa** v1.1.0: browser-integrated output QA now treats export/download/share/print/PDF flows as first-class GUI journeys, requiring real Chrome/Computer Use evidence for downloads, share URLs, clipboard/new-tab behavior, and nonblank print/PDF previews.
+- README.md / README.zh-CN.md / CLAUDE.md: synced the `skill-governance` listing to the marketplace manifest, updated version badges to 1.79.0, and removed the README skill-count badge derived value.
+- Marketplace version: 1.78.0→1.79.0.
+
 ## [1.78.0] - 2026-06-29
 
 ### Added

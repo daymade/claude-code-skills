@@ -17,6 +17,7 @@ backup directory before a symlink is created.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
 import os
 import shutil
@@ -31,6 +32,9 @@ DEFAULT_CLAUDE_DIR = HOME / ".claude"
 DEFAULT_CODEX_SKILLS = HOME / ".codex" / "skills"
 DEFAULT_AGENTS_SKILLS = HOME / ".agents" / "skills"
 LOCAL_MARKETPLACE_NAMES = ("daymade-skills", "daymade-skills-pro")
+SYNC_LOCK_NAME = ".daymade-skill-sync.lock"
+SYNC_LOCK_TIMEOUT_SECONDS = 120
+SYNC_LOCK_STALE_SECONDS = 600
 QUIET = False
 
 
@@ -66,6 +70,53 @@ def log(msg: str) -> None:
         print(msg)
 
 
+def process_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+@contextmanager
+def sync_lock(claude_dir: Path):
+    # Same lock path as claude-plugins-sync.py — and it must live OUTSIDE
+    # <claude_dir>/plugins, which that script scans-and-symlinks into every
+    # profile while the lock is held.
+    lock_dir = claude_dir / SYNC_LOCK_NAME
+    start = time.time()
+    acquired = False
+    while True:
+        try:
+            lock_dir.mkdir()
+            (lock_dir / "pid").write_text(str(os.getpid()), encoding="utf-8")
+            acquired = True
+            break
+        except FileExistsError:
+            stale = False
+            try:
+                age = time.time() - lock_dir.stat().st_mtime
+                pid_text = (lock_dir / "pid").read_text(encoding="utf-8").strip()
+                stale = age > SYNC_LOCK_STALE_SECONDS or (
+                    pid_text.isdigit() and not process_alive(int(pid_text))
+                )
+            except OSError:
+                stale = time.time() - start > SYNC_LOCK_TIMEOUT_SECONDS
+            if stale:
+                shutil.rmtree(lock_dir, ignore_errors=True)
+                continue
+            if time.time() - start > SYNC_LOCK_TIMEOUT_SECONDS:
+                raise TimeoutError(f"timed out waiting for sync lock: {lock_dir}")
+            time.sleep(0.2)
+    try:
+        yield
+    finally:
+        if acquired:
+            shutil.rmtree(lock_dir, ignore_errors=True)
+
+
 def load_json(path: Path) -> object:
     with open(path, encoding="utf-8") as fh:
         return json.load(fh)
@@ -75,7 +126,7 @@ def write_json(path: Path, data: object, apply: bool) -> None:
     if not apply:
         log(f"DRY write JSON: {path}")
         return
-    tmp = path.with_name(path.name + ".tmp")
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
@@ -244,7 +295,12 @@ def replace_with_symlink(dest: Path, src: Path, backup_root: Path, stamp: str, a
         if apply:
             dest.unlink()
             ensure_parent(dest, apply=True)
-            dest.symlink_to(src, target_is_directory=src.is_dir())
+            try:
+                dest.symlink_to(src, target_is_directory=src.is_dir())
+            except FileExistsError:
+                if dest.is_symlink() and dest.resolve() == src:
+                    return "already-linked"
+                raise
         return action
 
     if dest.exists():
@@ -256,14 +312,38 @@ def replace_with_symlink(dest: Path, src: Path, backup_root: Path, stamp: str, a
                 raise FileExistsError(f"backup already exists: {bak}")
             shutil.move(str(dest), str(bak))
             ensure_parent(dest, apply=True)
-            dest.symlink_to(src, target_is_directory=src.is_dir())
+            try:
+                dest.symlink_to(src, target_is_directory=src.is_dir())
+            except FileExistsError:
+                if dest.is_symlink() and dest.resolve() == src:
+                    return "already-linked"
+                raise
         return action
 
     action = f"create link {dest} -> {src}"
     if apply:
         ensure_parent(dest, apply=True)
-        dest.symlink_to(src, target_is_directory=src.is_dir())
+        try:
+            dest.symlink_to(src, target_is_directory=src.is_dir())
+        except FileExistsError:
+            if dest.is_symlink() and dest.resolve() == src:
+                return "already-linked"
+            raise
     return action
+
+
+def path_is_under(path: Path, roots: list[Path]) -> bool:
+    try:
+        resolved = path.resolve()
+    except OSError:
+        resolved = path.absolute()
+    for root in roots:
+        try:
+            resolved.relative_to(root.resolve())
+            return True
+        except (OSError, ValueError):
+            continue
+    return False
 
 
 def sync_known_marketplaces(claude_dir: Path, sources: list[MarketplaceSource], apply: bool) -> None:
@@ -347,6 +427,7 @@ def sync_claude_cache(
 def sync_skill_root(
     root: Path,
     skills: dict[str, SkillSource],
+    source_roots: list[Path],
     stamp: str,
     apply: bool,
     create_missing: bool,
@@ -354,6 +435,7 @@ def sync_skill_root(
     if not root.exists():
         log(f"skill root missing: {root}; skip")
         return
+    desired_names = set(skills)
     for name, skill in sorted(skills.items()):
         dest = root / name
         if not create_missing and not (dest.exists() or dest.is_symlink()):
@@ -361,6 +443,17 @@ def sync_skill_root(
         action = replace_with_symlink(dest, skill.source_dir, root, stamp, apply)
         if action != "already-linked":
             log(f"{root.name} skill {name}: {action}")
+    for dest in sorted(root.iterdir()):
+        if dest.name in desired_names or not dest.is_symlink():
+            continue
+        try:
+            target = dest.resolve()
+        except (OSError, RuntimeError):
+            continue
+        if path_is_under(target, source_roots):
+            log(f"{root.name} skill {dest.name}: prune stale managed symlink -> {target}")
+            if apply:
+                dest.unlink()
 
 
 def main(argv: list[str]) -> int:
@@ -387,20 +480,22 @@ def main(argv: list[str]) -> int:
             print(src.repo / ".claude-plugin" / "marketplace.json")
         return 0
     skills = {name: skill for src in sources for name, skill in src.skills.items()}
+    source_roots = [src.repo for src in sources]
 
     log(f"mode: {'APPLY' if args.apply else 'DRY-RUN'}")
     for src in sources:
         log(f"source {src.name}: {src.repo} ({len(src.plugins)} plugins, {len(src.skills)} skills)")
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    if not args.skip_marketplace_source:
-        sync_known_marketplaces(args.claude_dir, sources, args.apply)
-    if not args.skip_claude_cache:
-        sync_claude_cache(args.claude_dir, sources, stamp, args.apply)
-    if not args.skip_codex:
-        sync_skill_root(args.codex_skills, skills, stamp, args.apply, create_missing=True)
-    if not args.skip_agents:
-        sync_skill_root(args.agents_skills, skills, stamp, args.apply, create_missing=False)
+    with sync_lock(args.claude_dir):
+        if not args.skip_marketplace_source:
+            sync_known_marketplaces(args.claude_dir, sources, args.apply)
+        if not args.skip_claude_cache:
+            sync_claude_cache(args.claude_dir, sources, stamp, args.apply)
+        if not args.skip_codex:
+            sync_skill_root(args.codex_skills, skills, source_roots, stamp, args.apply, create_missing=True)
+        if not args.skip_agents:
+            sync_skill_root(args.agents_skills, skills, source_roots, stamp, args.apply, create_missing=False)
 
     if not args.apply:
         log("Dry-run only. Re-run with --apply to make these changes.")

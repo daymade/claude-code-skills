@@ -107,6 +107,31 @@ lark-cli sheets +cells-get --spreadsheet-token <SP> --sheet-id <SID> --range A1:
 - A tab `title` can contain newlines (`\n`); strip them (`tr -d '\n\r'`) before using it as a filename.
 - **Check `.data.has_more`** — cells-get caps one response at ~4000–6000 cells (~200 rows); if `has_more:true` the grid was truncated — page with a smaller range / offset. `.data.ranges[0].actual_range` reports what you actually got.
 - Older builds exposed this as `sheets +read … --value-render-option ToString --jq '.data.valueRange.values'` (a 2-D array). If `+cells-get` is absent on your version, fall back to `+read`.
+- **Date cells return serial numbers** (e.g. `45000`), not date strings — Excel-style epoch, `date(1899,12,30) + N days`. Convert before filtering by date.
+
+### Step 4b: cell attachments (uploaded files inside sheet cells)
+
+Business sheets often carry uploaded files (video/PDF/image) as **cell attachments**. Two traps, both verified on 1.0.65 (2026-07-09):
+
+1. **`+cells-get` flattens attachments to their filename text** — the fileToken is unrecoverable from it. To get tokens, hit the raw v2 values API, where an attachment cell is a segment array:
+
+```bash
+lark-cli api GET "/open-apis/sheets/v2/spreadsheets/<SP>/values/<SID>!D2:D50"
+# attachment segment: {"type":"attachment","fileToken":"...","text":"<filename>","size":N,"mimeType":"video/mp4"}
+```
+
+2. **Downloading: `drive +download` returns HTTP 403 for these tokens** (that command wraps the *files* API; sheet attachments are *media* resources). Use the media temp-URL endpoint — and pass `file_tokens` as a **JSON array**; a comma-joined string silently returns an empty result:
+
+```bash
+lark-cli api GET "/open-apis/drive/v1/medias/batch_get_tmp_download_url" \
+  --params '{"file_tokens":["TOKEN1","TOKEN2"]}'
+# → per-token tmp_download_url (valid ~24h) → curl each to disk
+# Feishu CDN is a domestic (CN) service: bypass any local HTTP proxy when curling.
+```
+
+Also note `drive +download --output` only accepts a **relative path** under the CWD (a safety constraint) — `cd` to the destination first.
+
+Both calls above were verified with the default identity; if they return a permission error on a user-owned spreadsheet, append `--as user` (the raw-API pattern used elsewhere in this file).
 
 ## Step 5: the reference-graph recursion (collections/hubs)
 

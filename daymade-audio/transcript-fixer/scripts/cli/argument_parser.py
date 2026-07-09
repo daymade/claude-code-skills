@@ -55,6 +55,24 @@ def create_argument_parser() -> argparse.ArgumentParser:
         dest="audit_dictionary",
         help="Audit all active corrections for false positive risks (common words, short text, substring collisions)"
     )
+    parser.add_argument(
+        "--export",
+        metavar="PATH",
+        dest="export_path",
+        help="Export corrections to a JSON file"
+    )
+    parser.add_argument(
+        "--import",
+        metavar="PATH",
+        dest="import_path",
+        help="Import corrections from a JSON file"
+    )
+    parser.add_argument(
+        "--merge",
+        action="store_true",
+        default=False,
+        help="Merge imported corrections with existing rules instead of replacing matching entries"
+    )
 
     # Correction workflow
     parser.add_argument(
