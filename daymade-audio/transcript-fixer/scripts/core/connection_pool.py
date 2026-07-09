@@ -2,8 +2,11 @@
 """
 Thread-Safe SQLite Connection Pool
 
-CRITICAL FIX: Replaces unsafe check_same_thread=False pattern
-ISSUE: Critical-1 in Engineering Excellence Plan
+CRITICAL FIX: Uses check_same_thread=False together with a Queue that
+enforces exclusive thread access. SQLite's same-thread guard prevents a
+connection created in one thread from being used in another, which breaks
+pools that hand connections across worker threads. The Queue guarantees only
+one thread holds a given connection at a time, so disabling the guard is safe.
 
 This module provides:
 1. Thread-safe connection pooling
@@ -184,7 +187,9 @@ class ConnectionPool:
         Create a new SQLite connection with optimal settings.
 
         Settings explained:
-        1. check_same_thread=True - ENFORCE thread safety (critical fix)
+        1. check_same_thread=False - The Queue guarantees only one thread uses a
+           connection at a time, so SQLite's same-thread check is unnecessary and
+           would prevent the pool from handing connections across threads.
         2. timeout=30.0 - Prevent infinite locks
         3. isolation_level='DEFERRED' - Explicit transaction control
         4. WAL mode - Better concurrency (allows concurrent reads)
@@ -199,7 +204,7 @@ class ConnectionPool:
         try:
             conn = sqlite3.connect(
                 str(self.db_path),
-                check_same_thread=True,  # CRITICAL FIX: Enforce thread safety
+                check_same_thread=False,  # Pool enforces one-thread-at-a-time via Queue
                 timeout=self.connection_timeout,
                 isolation_level='DEFERRED'  # Explicit transaction control
             )
@@ -369,7 +374,7 @@ class ConnectionPool:
         """Support using pool as context manager"""
         return self
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object | None) -> bool:
+    def __exit__(self, *_exc_info: object) -> bool:
         """Cleanup on context exit"""
         self.close_all()
         return False
