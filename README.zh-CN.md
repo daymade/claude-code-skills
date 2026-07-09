@@ -2372,7 +2372,7 @@ claude plugin install daymade-skill@daymade-skills
 
 ### 58. **feishu-doc-scraper** - 飞书/Lark → 保真 Markdown
 
-把飞书（Lark）文档、Wiki 页面/合集、表格以及妙记转写提取成保真的本地 Markdown。首选路径用 `lark-cli` API——以编程方式提取正文（不经模型改写）、递归跟随合集的引用图、从错误码读取权限边界；浏览器 DOM 路径只在 lark-cli 触达不到内容时作为兜底。
+把飞书（Lark）文档、Wiki 页面/合集、表格（含单元格附件文件下载）以及妙记转写提取成保真的本地 Markdown。首选路径用 `lark-cli` API——以编程方式提取正文（不经模型改写）、递归跟随合集的引用图、从错误码读取权限边界；浏览器 DOM 路径只在 lark-cli 触达不到内容时作为兜底。
 
 **使用场景：**
 - 源是飞书/Lark URL 且要求保真（导出飞书文档/合集/妙记转写）

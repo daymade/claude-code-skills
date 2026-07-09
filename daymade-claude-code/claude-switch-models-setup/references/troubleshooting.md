@@ -118,7 +118,8 @@ cp <source>/scripts/sync-local-skill-sources.py ~/.config/claude-switch-models-s
 Then verify with concurrent version probes:
 
 ```bash
-for profile in kimi kimi-long glm deepseek css cssl step step-pay; do
+# adjust the list to the profiles you actually configured
+for profile in kimi glm deepseek stepfun anthropic; do
   tmux new-session -d -s "ccver-$profile" \
     "zsh -lc 'source ~/.config/claude-switch-models-setup/claude-profiles.sh; claude-profile $profile --version'"
 done
