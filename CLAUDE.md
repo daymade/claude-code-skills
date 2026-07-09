@@ -87,6 +87,37 @@ cp -r skill-name ~/.claude/skills/
 
 In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude plugin ...`.
 
+### Source Location Guard for Skill Edits
+
+Before editing an existing skill, verify the **source** path, not just the path currently loaded by Codex / Claude Code.
+
+Treat these as installed copies unless proven otherwise:
+- `~/.codex/skills/<skill-name>`
+- `~/.claude/skills/<skill-name>`
+- `~/.agents/skills/<skill-name>`
+- `~/.claude/plugins/cache/...`
+- `~/.codex/plugins/cache/...`
+
+The source for this marketplace is this repository. For single-skill plugins, edit:
+```bash
+<repo-root>/<skill-name>/SKILL.md
+```
+
+For suite skills, edit:
+```bash
+<repo-root>/<suite-name>/<skill-name>/SKILL.md
+```
+
+Required workflow before any skill edit:
+```bash
+pwd
+git rev-parse --show-toplevel
+rg -n '"name": "<skill-or-suite-name>"' .claude-plugin/marketplace.json
+find . -path '*/SKILL.md' -maxdepth 4 | rg '(^|/)<skill-name>/SKILL.md$'
+```
+
+If the user gives a source path, use that path. If the available skill list points to a different installed copy, update the source first, then sync the installed copy only if the user explicitly needs the current session to use the new version immediately.
+
 ### Git Operations
 
 This repository uses standard git workflow, but **always stage files by name**,
@@ -233,8 +264,8 @@ This applies when you change ANY file under a skill directory:
 32. **claude-skills-troubleshooting** - Diagnose and resolve Claude Code plugin and skill configuration issues with diagnostic scripts and architecture documentation
 33. **meeting-minutes-taker** - Transform meeting transcripts into structured minutes with multi-pass generation, speaker quotes, and iterative human review
 34. **deep-research** - Generate format-controlled research reports with evidence mapping, citations, and multi-pass synthesis
-35. **competitors-analysis** - Evidence-based competitor tracking and analysis with source citations (file:line_number format)
-36. **tunnel-doctor** - Diagnose and fix Tailscale + proxy/VPN conflicts (six layers: route, HTTP env, system proxy, SSH ProxyCommand, VM/container proxy, DNS resolver stall) on macOS with WSL SSH support, plus a TUN measurement-contamination guide (raw probes lie under a global proxy)
+35. **competitors-analysis** - Discover, persist, update, and analyze competitor repositories with source-cited profiles and landscape synthesis
+36. **tunnel-doctor** - Diagnose and fix Tailscale + proxy/VPN conflicts (route, HTTP env, system proxy, SSH ProxyCommand, VM/container proxy, DNS resolver stall, TUN DIRECT split-brain) on macOS with WSL SSH support, plus a TUN measurement-contamination guide (raw probes lie under a global proxy)
 37. **windows-remote-desktop-connection-doctor** - Diagnose AVD/W365 connection quality issues with transport protocol analysis and Windows App log parsing
 38. **product-analysis** - Perform structured product audits across UX, API, architecture, and compare mode to produce prioritized optimization recommendations
 39. **financial-data-collector** - Collect real financial data for US public companies via yfinance with validation, NaN detection, and NO FALLBACK principle (daymade-financial suite member)
@@ -270,7 +301,7 @@ This applies when you change ANY file under a skill directory:
 69. **notify-wecom** - Send a single one-off WeCom group-bot message without setting up a reusable notification workflow
 70. **github-sensitive-data-cleanup** - Scan and remove secrets, API keys, private domains/IPs, and PII from GitHub repository history with force-push safety gates
 71. **codex-image-gallery** - Start a self-contained local web gallery for browsing Codex-generated images from `~/.codex/generated_images` or a custom `GALLERY_ROOT`
-72. **frontend-visual-qa** - Reviews rendered frontends, dashboards, HTML slides, and generated UIs for visual quality defects that lint/build miss (awkward line breaks, wrapped controls, horizontal overflow, double scrollbars, AI slop, Chrome DevTools viewport mistakes); use after frontend-design/ui-designer and alongside qa-expert
+72. **frontend-visual-qa** - Reviews rendered frontends, dashboards, HTML slides, generated UIs, and browser-integrated export/share/download/print/PDF flows for visual defects that lint/build miss (awkward line breaks, wrapped controls, horizontal overflow, double scrollbars, unreadable standalone artifacts, blank print previews, AI slop, Chrome/Computer Use verification gaps); use after frontend-design/ui-designer and alongside qa-expert
 73. **openclaw** - Manage OpenClaw (龙虾/lobster) instance configs: audit, diff, copy, add-model, list, switch models across openclaw.json files; DeepSeek model patches, default-model/alias management, config validation
 74. **download-gemini-images** - Download images (uploaded files or generated previews) from a Google Gemini conversation page via logged-in Chrome; lightbox-first with pageAssets fallback, ordered ZIP packaging with integrity verification
 75. **wps-doc-scraper** - Faithfully archive public WPS/KDocs/金山文档 links (incl. embedded ProcessOn mind maps and canvases) as raw source data, original SVG/PNG, and Markdown without login; unauthenticated data-API-first with browser-DOM fallback
@@ -279,6 +310,7 @@ This applies when you change ANY file under a skill directory:
 78. **local-codex** - Delegate coding tasks to the local OpenAI Codex CLI agent using ChatGPT Pro OAuth flat-rate subscription; wraps `codex exec` / `codex review` for code generation, refactoring, and review without per-token API charges
 79. **openclaw-model-switch** - Switch the default AI model for an OpenClaw instance (e.g., Kimi K2.6 → K2.7) by safely editing `openclaw.json` with backup, model validation, and optional gateway restart
 80. **gemini-history-analyzer** - Analyze Google Takeout exports of Gemini conversation history; extract/categorize transcripts and attachments, context-verified domain keyword search, meeting-transcript detection, PII flagging, and optional distillation into project memory or a personal knowledge base
+81. **skill-governance** - Enforce source-of-truth discipline for Claude Code skill marketplaces and caches: check source/cache drift, sync through official plugin commands, clean old cache versions, and switch marketplace entries to local source (daymade-skill suite member)
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
@@ -326,8 +358,8 @@ For the full step-by-step guide with templates and examples, see [references/new
 |------|-------------------|
 | `.claude-plugin/marketplace.json` | metadata.version + metadata.description + new plugin entry |
 | `CHANGELOG.md` | New version entry |
-| `README.md` | 7 locations: badges (skills-count badge AND version badge — version MUST equal `marketplace.json` metadata.version; re-verify it every release, it silently drifts whenever a metadata bump forgets the badge), description, install cmd, skill section, use case, docs link, requirements |
-| `README.zh-CN.md` | 7 locations: same as above, translated |
+| `README.md` | Review the user-facing surfaces for this skill: version badge (MUST equal `marketplace.json` metadata.version; re-verify it every release, it silently drifts whenever a metadata bump forgets the badge; do not reintroduce a skill-count badge), description, install cmd, skill section, use case, docs link, requirements |
+| `README.zh-CN.md` | Same as above, translated |
 | `CLAUDE.md` | Available Skills list only (the overview & marketplace-config counts were removed as derived values — don't reintroduce them) |
 | `skill-name/` | The actual skill directory + packaged .zip |
 
@@ -339,7 +371,7 @@ uv run python -m scripts.security_scan ../skill-name --verbose
 uv run --with PyYAML python -m scripts.package_skill ../skill-name
 
 # 2. Update all files listed above (see references/new-skill-guide.md for the
-#    detailed step-by-step, including 7 README locations and 3 CLAUDE.md spots)
+#    detailed step-by-step)
 
 # 3. One-shot marketplace validation (ships with marketplace-dev skill)
 cd .. && bash daymade-claude-code/marketplace-dev/scripts/check_marketplace.sh
