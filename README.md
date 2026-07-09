@@ -2364,7 +2364,7 @@ claude plugin install daymade-skill@daymade-skills
 
 ### 59. **feishu-doc-scraper** - Feishu/Lark → Faithful Markdown
 
-Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets, and Minutes (妙记) transcripts into faithful local Markdown. The primary path uses the `lark-cli` API — it extracts the document body programmatically (no model paraphrasing), recursively follows a collection's reference graph, and reads permission boundaries from error codes; a browser-DOM path is the fallback only when lark-cli cannot reach the content.
+Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets (including cell-attachment file download), and Minutes (妙记) transcripts into faithful local Markdown. The primary path uses the `lark-cli` API — it extracts the document body programmatically (no model paraphrasing), recursively follows a collection's reference graph, and reads permission boundaries from error codes; a browser-DOM path is the fallback only when lark-cli cannot reach the content.
 
 **When to use:**
 - The source is a Feishu/Lark URL and fidelity matters (导出飞书文档/合集/妙记转写)

@@ -38,7 +38,7 @@ The sync scripts exist for topology repair, not day-to-day editing.
 | `claude-plugins-sync.py` | Per-profile Claude Code sync. Builds profile-local `known_marketplaces.json`, shares installed plugin state, and mirrors `enabledPlugins`. |
 | `claude-profiles.sh` | Shell integration. Runs local source sync on profile init/launch before profile plugin sync. |
 
-Both Python sync scripts take the same cross-process lock under the Claude plugins directory before changing marketplace JSON, installed plugin metadata, or cache symlinks. This matters because power users may open several tmux panes or terminal windows at once; without one shared lock, simultaneous `claude-profile ...` launches can race on cache symlink creation or `known_marketplaces.json` temp-file replacement.
+Both Python sync scripts take the same cross-process lock — a lock directory kept in the Claude config dir, deliberately OUTSIDE the plugins directory so the sync never mirrors the lock itself into profiles — before changing marketplace JSON, installed plugin metadata, or cache symlinks. This matters because power users may open several tmux panes or terminal windows at once; without one shared lock, simultaneous `claude-profile ...` launches can race on cache symlink creation or `known_marketplaces.json` temp-file replacement.
 
 Profile state uses `.claude.json` inside each `CLAUDE_CONFIG_DIR`. Older `claude.json` files may still exist as harmless legacy files, but modern Claude Code will not use them as the profile state file.
 
@@ -125,7 +125,8 @@ Then compare `enabledPlugins` between the default profile and each profile.
 For launch-path verification, test concurrently because that is how race bugs surface:
 
 ```bash
-for profile in kimi kimi-long glm deepseek css cssl step step-pay; do
+# adjust the list to the profiles you actually configured
+for profile in kimi glm deepseek stepfun anthropic; do
   tmux new-session -d -s "ccver-$profile" \
     "zsh -lc 'source ~/.config/claude-switch-models-setup/claude-profiles.sh; claude-profile $profile --version'"
 done
