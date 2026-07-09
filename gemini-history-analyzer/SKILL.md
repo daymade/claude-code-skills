@@ -1,7 +1,7 @@
 ---
 name: gemini-history-analyzer
 description: Analyze Google Takeout exports of Gemini conversation history. Use when the user mentions Gemini takeout, Gemini export, Gemini history, Gemini conversation analysis, Google Takeout zip analysis, or drags a takeout zip into the project. Also use when the user asks to "analyze my Gemini data", "what did I talk to Gemini about", or wants to extract insights from Gemini chat logs.
-argument-hint: [takeout-zip-path]
+argument-hint: "[takeout-zip-path]"
 ---
 
 # Gemini History Analyzer

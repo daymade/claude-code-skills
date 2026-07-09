@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **daymade-audio** v1.4.1, **daymade-claude-code** v1.8.6, **daymade-skill** v1.8.2, **feishu-doc-scraper** v1.3.1, **product-analysis** v1.0.2, **notify-wecom** v1.0.1, and **gemini-history-analyzer** v1.0.1: quote bracketed `argument-hint` values so strict YAML loaders parse them as strings; preserve the current URL-capable ASR hint while resolving PR #121 against latest main, and remove `notify-wecom`'s misleading bare cross-skill sender path so validation resolves only files in its own bundle.
 - **llm-wiki-setup** v1.1.0: resolve wikilinks against root-level Markdown pages, trigger vault lint when those targets are deleted or renamed, and add a backup-preserving tooling refresh path for existing vaults.
 - **daymade-audio** v1.4.0: `asr-transcribe-to-text` documents batch transcription of many short files — music-only/BGM-only clips can trigger a repetition-loop hallucination that stalls a whole batch, so drive batches one-file-per-process with a per-file timeout, retry stuck files with `--max-tokens 3000`, and classify no-speech clips by unique-word ratio; Step 3 now cross-references the hazard.
 - **feishu-doc-scraper** v1.3.0: documents sheet cell-attachment extraction — recover fileTokens via the raw v2 values API (`+cells-get` flattens attachments to filenames), download through `medias/batch_get_tmp_download_url` with `file_tokens` as a JSON array (`drive +download` 403s on media resources), plus date-cell Excel-style serial numbers.

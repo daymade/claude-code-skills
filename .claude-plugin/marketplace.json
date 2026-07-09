@@ -103,7 +103,7 @@
       "description": "Claude Code operations suite that bundles session history recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full web-conversation extraction from claude.ai, plugin marketplace development, multi-provider profile isolation for running Kimi/GLM/DeepSeek/StepFun/Anthropic in separate windows, local source sync for Claude/Codex skill installs, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.8.5",
+      "version": "1.8.6",
       "category": "suite",
       "keywords": [
         "suite",
@@ -190,7 +190,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.4.0",
+      "version": "1.4.1",
       "category": "suite",
       "keywords": [
         "suite",
@@ -216,7 +216,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, governance, and marketplace development tooling under one shared namespace.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.8.1",
+      "version": "1.8.2",
       "category": "suite",
       "keywords": [
         "suite",
@@ -314,7 +314,7 @@
       "description": "Extract Feishu (Lark) Docs, Wiki pages, Wiki collections/hubs, spreadsheets (including cell-attachment file download), and Minutes (妙记) transcripts into clean high-fidelity local Markdown. The primary path is the lark-cli API — programmatic extraction with no LLM rewriting of the body — which recursively follows a collection's reference graph (mention-doc / sheet / cross-tenant links) and uses error codes to resolve permission boundaries precisely; a browser-DOM path is the fallback only when lark-cli cannot reach the content. Use this whenever the source is a Feishu/Lark URL and fidelity matters — including 导出飞书文档/合集/妙记转写, 把飞书 wiki/知识库转 markdown, scraping or archiving a Feishu collection, exporting a Feishu Minutes/妙记 transcript, or saving a Feishu page locally — even if the user only says clipping, archiving, converting, or \"save this\". Also covers the permission-denied path (owner-exported .docx → faithful Markdown with heading/highlight restoration).",
       "source": "./feishu-doc-scraper",
       "strict": false,
-      "version": "1.3.0",
+      "version": "1.3.1",
       "category": "productivity",
       "keywords": [
         "feishu",
@@ -492,7 +492,7 @@
       "description": "Multi-path parallel product analysis with cross-model test-time compute scaling. Spawns parallel agents (Claude Code + Codex CLI) for multi-perspective exploration, then synthesizes findings into actionable optimization plans. Supports self-audit, UX audit, API audit, architecture review, and competitive benchmarking via competitors-analysis skill",
       "source": "./product-analysis",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.0.2",
       "category": "productivity",
       "keywords": [
         "product-analysis",
@@ -917,7 +917,7 @@
       "description": "Send a single one-off message to a WeCom (Enterprise WeChat) group bot. Use this skill whenever the user says /notify-wecom, send a quick WeCom message, 企微通知一下, 临时发一条企业微信, or any one-shot notification that does not need a reusable template or setup workflow.",
       "source": "./notify-wecom",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "developer-tools",
       "keywords": [
         "wecom",
@@ -1025,7 +1025,7 @@
       "description": "Analyze Google Takeout exports of Gemini conversation history — extract, categorize, and mine transcripts and attachments for insights, then optionally distill them into a personal knowledge base. Use when the user mentions Gemini Takeout, Gemini export, Gemini history, analyzing Gemini conversation data, or drags a takeout zip into the project.",
       "source": "./gemini-history-analyzer",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "productivity",
       "keywords": [
         "gemini",
