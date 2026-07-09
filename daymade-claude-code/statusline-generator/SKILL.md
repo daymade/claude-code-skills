@@ -33,7 +33,8 @@ It validates four layers:
    `exec` fails, statusline goes blank.
 2. `~/.claude/settings.json` has a valid `statusLine` block pointing at the script.
 3. Mock stdin tests covering complete data, zero tokens, missing fields,
-   and `$HOME` path shortening.
+   `$HOME` path shortening, and zero-fork git-branch rendering (via a synthetic
+   `.git/HEAD` — no git binary required).
 4. Real stdin replay from `/tmp/.claude-statusline-last-stdin.json` if you
    previously ran with `CLAUDE_STATUSLINE_DEBUG=1`.
 
@@ -60,11 +61,14 @@ Restart Claude Code (or send any new message) to see the statusline update.
 ### Default — minimal one-line layout
 
 ```
-~/code/myproject  Opus 4.7 (1M context)  ctx: 108K / 1M
+~/code/myproject  [main]  Opus 4.7 (1M context)  ctx: 108K / 1M
 ```
 
-Just the essentials: short path, model name, absolute token counts. No colors,
-no git, no cost, no percentage. Designed for users who want signal without noise.
+Just the essentials: short path, git branch, model name, absolute token counts.
+No colors, no cost, no percentage. The branch is read **zero-fork** — the script
+reads `.git/HEAD` as a plain file (with worktree/submodule `gitdir:` indirection
+and detached-HEAD short-sha handling) instead of spawning `git`, so it costs
+nothing and works even on hosts without a git binary.
 
 ### Full — multi-line with cost and git
 
@@ -114,7 +118,7 @@ Each invocation writes its stdin to `/tmp/.claude-statusline-last-stdin.json`
 
 ## Authoring rules (why this skill is shaped this way)
 
-Two production failure modes drove the current design. Both are sealed in code,
+Three production failure modes drove the current design. All are sealed in code,
 not just docs:
 
 ### Rule 1 — Always `chmod +x`, always verify by running
@@ -131,6 +135,28 @@ mock-test it before declaring done:** `echo '{}' | bash your-script.sh`.
 and produces the expected output." `install_statusline.sh` therefore always
 runs `health_check.sh` at the end and exits non-zero if any check fails.
 Treat any "complete!" report from any agent that lacks evidence as suspect.
+
+### Rule 3 — The statusline is a hot path: budget subprocesses, not just correctness
+
+A statusline script looks like UI polish, but it executes on **every refresh in
+every concurrent agent session**. Whatever it spawns gets multiplied by refresh
+rate × number of live sessions, all day. Measured on a machine running many
+concurrent sessions: a package-runner statusline (`bunx <pkg>@latest`-style,
+which re-resolves the registry and re-writes a lockfile per refresh, then runs
+`git status` + `git branch`) cost ~0.4s CPU per refresh; this script costs
+~0.01s. Across many sessions that difference is a measurable share of
+machine-wide process churn, heat, and battery — the statusline was one of the
+top contributors found in a real battery-drain investigation (2026-07).
+
+Concretely:
+- **Never resolve packages at refresh time.** No `bunx`/`npx` `@latest` in
+  `statusLine.command` — pin and install once, or use a local script.
+- **Don't spawn `git` for the branch.** Read `.git/HEAD` as a file (see
+  `git_branch_fast` in the script) — same answer, zero subprocesses.
+- **Treat `git status` (dirty state) as a luxury.** It walks the worktree on
+  every refresh; only the full layout runs it, and only when explicitly enabled.
+- **Budget: a statusline refresh should cost single-digit milliseconds and
+  a handful of forks at most** (one `jq` + one `awk` here).
 
 For field-level traps (`used_percentage` null at session start, `total_input_tokens`
 semantics across Claude Code versions, hardcoded `context_window_size`), see
@@ -150,7 +176,7 @@ The script auto-detects available tools and degrades gracefully:
 | `jq` | JSON parsing (preferred) | falls back to `python3` |
 | `python3` | JSON parsing fallback | bare `cwd` only |
 | `awk` | token K/M formatting | required by both layouts |
-| `git` | git status (full layout) | silent skip if missing or not in repo |
+| `git` | dirty-state `*`/`+` markers (full layout only — minimal reads the branch from `.git/HEAD` without git) | silent skip if missing or not in repo |
 | `ccusage` | cost (full layout) | silent skip if missing |
 
 Install on macOS: `brew install jq`. On Debian/Ubuntu: `apt install jq`.

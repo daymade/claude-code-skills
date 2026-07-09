@@ -25,6 +25,8 @@ Usage:
     # Manage corrections
     python fix_transcription.py --add "错误" "正确"
     python fix_transcription.py --list
+    python fix_transcription.py --export tech.json --domain tech
+    python fix_transcription.py --import tech.json --domain tech --merge
 
     # Review learned suggestions
     python fix_transcription.py --review-learned
@@ -41,6 +43,8 @@ from cli import (
     cmd_add_correction,
     cmd_audit,
     cmd_list_corrections,
+    cmd_export_corrections,
+    cmd_import_corrections,
     cmd_run_correction,
     cmd_review_learned,
     cmd_approve,
@@ -105,6 +109,10 @@ def main() -> None:
         cmd_audit(args)
     elif args.list_corrections:
         cmd_list_corrections(args)
+    elif args.export_path:
+        cmd_export_corrections(args)
+    elif args.import_path:
+        cmd_import_corrections(args)
     elif args.review_learned:
         cmd_review_learned(args)
     elif args.approve:

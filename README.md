@@ -6,8 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Skills](https://img.shields.io/badge/skills-80-blue.svg)](https://github.com/daymade/claude-code-skills)
-[![Version](https://img.shields.io/badge/version-1.78.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.82.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -185,7 +184,7 @@ These skills ship as a bundle — there are no separate single-skill plugins. Al
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-This suite bundles the skills that extend Claude Code itself — session recovery, CLAUDE.md tuning, troubleshooting, statusline configuration, export repair, marketplace development, terminal screenshot rendering, usage analysis, and multi-provider model switching:
+This suite bundles the skills that extend Claude Code itself — session recovery, CLAUDE.md tuning, troubleshooting, statusline configuration, export repair, marketplace development, terminal screenshot rendering, usage analysis, multi-provider model switching, and automatic local skill-source sync for Claude Code/Codex installs:
 
 ```text
 /daymade-claude-code:claude-code-history-files-finder
@@ -1564,24 +1563,27 @@ claude plugin install deep-research@daymade-skills
 
 ---
 
-### 35. **competitors-analysis** - Evidence-Based Competitor Tracking
+### 35. **competitors-analysis** - Evidence-Based Competitor Intelligence
 
-Analyze competitor repositories with evidence-based approach. All analysis must be based on actual cloned code, never assumptions.
+Discover, clone, update, and analyze competitor repositories with evidence-based competitive intelligence. Repository-backed findings must come from local cloned code; market-landscape claims must cite their source and volatility.
 
 **When to use:**
 - Track and analyze competitor products or technologies
+- Discover GitHub competitors for a product or market
 - Create evidence-based competitor profiles
-- Generate competitive analysis reports
+- Generate competitive landscape and opportunity reports
+- Check whether competitor code has changed
 - Need to document technical decisions with cited sources
 
 **Key features:**
-- Pre-analysis checklist to ensure repositories are cloned locally
-- Forbidden patterns to prevent assumptions ("推测...", "可能...", "应该...")
-- Required patterns for source citation (file:line_number format)
+- Durable competitor workspace convention using `$HOME/workspace/competitors/{product}/`
+- GitHub discovery workflow for shortlisting relevant repositories
+- Repository ingest/update flow with remote + commit recording
+- Required source citation format for repository facts (`file:line_number`)
+- Landscape synthesis for positioning, strengths, weaknesses, opportunities, and risks
 - Tech stack analysis guides for Node.js, Python, Rust projects
-- Directory structure conventions for organized competitor tracking
 - Bundled templates: profile template, analysis checklist
-- Management script for batch clone/pull/status operations
+- Management script for discover/clone-url/clone/pull/status operations
 
 **Example usage:**
 ```bash
@@ -1591,6 +1593,7 @@ claude plugin install competitors-analysis@daymade-skills
 # Then ask Claude to analyze a competitor
 "分析竞品 https://github.com/org/repo"
 "添加竞品到 flowzero 产品的竞品列表"
+"看看 claude-flow-viewer 这个方向最近有哪些竞品更新"
 ```
 
 **🎬 Live Demo**
@@ -2099,6 +2102,7 @@ Falsification-first methodology for network, streaming, and protocol-layer bugs 
 - SSE / long-polling stalls or fixed-time drops (60s, 100s, 130s)
 - CDN / proxy / CGNAT idle-timeout incidents
 - Client-side proxy / VPN / TUN misrouting (e.g. `ERR_CONNECTION_CLOSED`, `SSL_ERROR_SYSCALL`, fake TUN DNS IPs, CNAME-based rule overrides)
+- Certificate-verification errors (`UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`, wrong-site certificate)
 - Any "works sometimes / fails after N seconds" pattern
 - Multi-hop systems (client → CDN → LB → reverse proxy → app → upstream) where a symptom could plausibly come from several layers
 
@@ -2360,7 +2364,7 @@ claude plugin install daymade-skill@daymade-skills
 
 ### 59. **feishu-doc-scraper** - Feishu/Lark → Faithful Markdown
 
-Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets, and Minutes (妙记) transcripts into faithful local Markdown. The primary path uses the `lark-cli` API — it extracts the document body programmatically (no model paraphrasing), recursively follows a collection's reference graph, and reads permission boundaries from error codes; a browser-DOM path is the fallback only when lark-cli cannot reach the content.
+Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets (including cell-attachment file download), and Minutes (妙记) transcripts into faithful local Markdown. The primary path uses the `lark-cli` API — it extracts the document body programmatically (no model paraphrasing), recursively follows a collection's reference graph, and reads permission boundaries from error codes; a browser-DOM path is the fallback only when lark-cli cannot reach the content.
 
 **When to use:**
 - The source is a Feishu/Lark URL and fidelity matters (导出飞书文档/合集/妙记转写)
@@ -2644,6 +2648,8 @@ Set up multiple isolated Claude Code CLI profiles so you can run different LLM p
 - One-click installer copies the profile manager to `~/.config/claude-switch-models-setup/`
 - Generates provider-specific `~/.claude/settings/<provider>.json` templates with required isolation flags
 - `claude-profiles-init` creates isolated `~/.claude-profiles/<provider>/` directories with symlinked shared resources
+- Profile sync mirrors enabled plugins from the default Claude profile and shares installed plugin state
+- Local source sync links installed Claude plugin caches and Codex skill directories back to the source repos, with a maintainer LaunchAgent for marketplace manifest changes
 - Built-in marketplace path pollution fixer runs automatically on every profile launch
 - Includes student setup guide and troubleshooting reference
 
@@ -2795,25 +2801,27 @@ Start a self-contained local web gallery for Codex-generated image outputs. The 
 
 **Requirements**: Node.js 18+ and access to the image folder.
 
-### 74. **frontend-visual-qa** - Rendered Frontend Visual QA Gate
+### 74. **frontend-visual-qa** - Rendered Frontend and Browser Output Visual QA Gate
 
 ```bash
 claude plugin install frontend-visual-qa@daymade-skills
 ```
 
-Catch embarrassing rendered UI defects that normal lint/build checks miss.
+Catch embarrassing rendered UI and share/export defects that normal lint/build checks miss.
 
 **When to use:**
 - Reviewing or shipping a frontend, website, dashboard, design-system specimen, or HTML slide page
 - User flags awkward line breaks, cramped text, double scrollbars, overlap, or generic AI slop aesthetics
 - User says the artifact has the wrong type, such as a design system turning into a fake app/workbench
 - Need Chrome/Playwright evidence across desktop and mobile viewports
+- Need to verify export, download, share link, print, or PDF flows from the real browser UI
 - Need to complement `ui-designer`, `frontend-design`, and `qa-expert`
 
 **Key features:**
 - History-derived checklist for recurring line-break, overflow, and typography failures
 - Chrome DevTools first-pass for the user-visible browser viewport, including stale mobile emulation checks
 - Playwright-core audit script for desktop-wide, desktop, and mobile viewports
+- Computer Use / real Chrome journey checks for downloaded files, share URLs, clipboard/new-tab behavior, and nonblank print/PDF previews
 
 ### 75. **openclaw** - OpenClaw (龙虾) Config Manager
 
@@ -2956,6 +2964,23 @@ Analyze Google Takeout exports of Gemini conversation history — extract and ca
 - Meeting-transcript vs prompt-response detection; topic categorization; PII flagging
 - Context-verified keyword search (grep is step 1, not the answer) + optional memory-file generation
 
+### 83. **skill-governance** - Skill Marketplace and Cache Governance
+
+> **Install**: `claude plugin install daymade-skill@daymade-skills` (suite-only — invoked as `daymade-skill:skill-governance`)
+
+Keep Claude Code skill marketplaces and installed caches aligned with source repositories. Use it for read-only drift checks, source-backed syncs through official Claude plugin commands, old cache cleanup, and local-source marketplace switching.
+
+**When to use:**
+- A skill appears stale, missing, duplicated, or installed from an unexpected cache version
+- Need to compare `.claude-plugin/marketplace.json`, source directories, and Claude/Codex installed skills
+- Rebuilding a local skill marketplace from a source repo without hand-copying derived cache files
+
+**Key features:**
+- Treats source directories as canonical and plugin/cache folders as derived artifacts
+- Uses official `claude plugin` commands for sync operations
+- Detects orphaned cache versions, source/cache drift, and marketplace entries pointing at the wrong source
+- Ignores workspace-only folders such as `scripts/`, `references/`, `tests/`, demos, and build outputs when checking published skill surfaces
+
 ---
 
 ## 🎬 Interactive Demo Gallery
@@ -2974,7 +2999,7 @@ Combine **doc-to-markdown** for document conversion and **mermaid-tools** for di
 Use **deep-research** to produce format-controlled research reports with evidence tables and citations. Combine with **fact-checker** to validate claims or with **twitter-reader** for social-source collection.
 
 ### For Competitive Intelligence
-Use **competitors-analysis** to track and analyze competitor repositories with evidence-based approach. All findings are sourced from actual code (file:line_number), eliminating speculation. Combine with **deep-research** for comprehensive competitive landscape reports.
+Use **competitors-analysis** to discover, persist, update, and analyze competitor repositories with evidence-based source citations. Combine with **deep-research** when the landscape also needs broader market, pricing, or narrative research.
 
 ### For PDF & Printable Documents
 Use **pdf-creator** to convert markdown to print-ready PDFs with proper Chinese font support for formal documents and reports.
@@ -3130,7 +3155,7 @@ Each skill includes:
 - **i18n-expert**: See `i18n-expert/SKILL.md` for complete i18n setup workflow, key architecture guidance, and audit procedures
 - **claude-skills-troubleshooting**: See `daymade-claude-code/claude-skills-troubleshooting/SKILL.md` for plugin troubleshooting workflow and architecture
 - **fact-checker**: See `fact-checker/SKILL.md` for fact-checking workflow and claim verification process
-- **competitors-analysis**: See `competitors-analysis/SKILL.md` for evidence-based analysis workflow and `competitors-analysis/references/profile_template.md` for competitor profile template
+- **competitors-analysis**: See `competitors-analysis/SKILL.md` for the discover/ingest/profile/landscape workflow and `competitors-analysis/references/profile_template.md` for the competitor profile template
 - **windows-remote-desktop-connection-doctor**: See `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` for log parsing patterns and `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` for transport protocol details
 - **product-analysis**: See `product-analysis/SKILL.md` for workflow and `product-analysis/references/synthesis_methodology.md` for cross-agent weighting and recommendation logic
 - **excel-automation**: See `excel-automation/SKILL.md` for create/parse/control workflows and `excel-automation/references/formatting-reference.md` for formatting standards

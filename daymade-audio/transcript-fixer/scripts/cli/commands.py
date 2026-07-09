@@ -10,8 +10,11 @@ All cmd_* functions take parsed args and execute the requested operation.
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 from core import (
@@ -24,6 +27,18 @@ from utils.config import get_config
 # Heavy command-specific imports are deferred to the functions that use them
 # to keep CLI startup fast for simple operations like --list / --add / --stage 1.
 
+# Known intermediate files produced by transcript-fixer runs. Used for both
+# cleanup and test assertions so the lists stay in sync.
+STAGE1_SIDECAR_SUFFIXES = [
+    "_stage1.md",
+    "_stage2.md",
+    "_dryrun.md",
+    "_changes.md",
+    "_needs_review.md",
+    "_uncertain.md",
+    "_对比.html",
+]
+
 
 def _get_service() -> CorrectionService:
     """Get configured CorrectionService instance."""
@@ -31,6 +46,19 @@ def _get_service() -> CorrectionService:
     config = get_config()
     repository = CorrectionRepository(config.database.path)
     return CorrectionService(repository)
+
+
+def _get_learning_engine(service: CorrectionService | None = None):
+    """Create the file-backed learning engine for review/approval commands."""
+    from core import LearningEngine
+
+    config = get_config()
+    return LearningEngine(
+        history_dir=config.paths.config_dir / "history",
+        learned_dir=config.paths.config_dir / "learned",
+        db_path=config.database.path,
+        correction_service=service,
+    )
 
 
 def _format_changes_report(
@@ -78,6 +106,77 @@ def _format_changes_report(
             idx += 1
 
     return "\n".join(lines)
+
+
+def _auto_finalize_stage1(input_path: Path, output_dir: Path, dry_run: bool = False) -> bool:
+    """Promote an existing *_stage1.md to the input file before re-running Stage 1.
+
+    If <stem>_stage1.md exists and is newer than the input file, replace the input
+    file with it and remove the intermediate sidecars left by previous runs. This
+    removes the manual finalize step for the native AI-correction workflow without
+    adding a new CLI command.
+
+    Returns True if a finalize happened (or would happen in dry-run mode).
+    """
+    stage1_file = output_dir / f"{input_path.stem}_stage1.md"
+    if not stage1_file.exists():
+        return False
+
+    # Guard: only promote if the Stage 1 output is newer than the input file.
+    # If the user edited the input file after Stage 1 ran, we must not overwrite.
+    try:
+        if stage1_file.stat().st_mtime <= input_path.stat().st_mtime:
+            return False
+    except FileNotFoundError:
+        return False
+
+    if dry_run:
+        print(f"🔍 Would auto-finalize: {stage1_file.name} -> {input_path.name}")
+        for suffix in STAGE1_SIDECAR_SUFFIXES:
+            sidecar = output_dir / f"{input_path.stem}{suffix}"
+            if sidecar.exists() and sidecar.name != stage1_file.name:
+                print(f"   Would remove: {sidecar.name}")
+        return True
+
+    # Atomic promotion: os.replace overwrites input_path even on macOS where mv
+    # is often aliased to mv -i. If source and destination live on different
+    # filesystems, os.replace raises OSError; fall back to copy-to-temp +
+    # replace so a partial copy never corrupts the input file.
+    try:
+        os.replace(stage1_file, input_path)
+    except OSError:
+        fd, temp_name = tempfile.mkstemp(
+            prefix=f".{input_path.name}.",
+            suffix=".tmp",
+            dir=str(input_path.parent),
+        )
+        os.close(fd)
+        temp_path = Path(temp_name)
+        try:
+            shutil.copy2(stage1_file, temp_path)
+            os.replace(temp_path, input_path)
+            stage1_file.unlink()
+        except Exception:
+            temp_path.unlink(missing_ok=True)
+            raise
+    print(f"✅ Auto-finalized: {stage1_file.name} -> {input_path.name}")
+
+    removed = []
+    for suffix in STAGE1_SIDECAR_SUFFIXES:
+        sidecar = output_dir / f"{input_path.stem}{suffix}"
+        # After promotion, stage1_file no longer exists, so this loop silently
+        # skips the promoted suffix. We iterate the full list anyway to keep
+        # cleanup robust against partial failures.
+        if sidecar.exists():
+            try:
+                sidecar.unlink()
+                removed.append(sidecar.name)
+            except OSError as e:
+                print(f"⚠️  Could not remove {sidecar.name}: {e}", file=sys.stderr)
+    if removed:
+        print(f"🧹 Cleaned up: {', '.join(removed)}")
+
+    return True
 
 
 def cmd_init(args: argparse.Namespace) -> None:
@@ -189,13 +288,111 @@ def cmd_list_corrections(args: argparse.Namespace) -> None:
     print()
 
 
+def cmd_export_corrections(args: argparse.Namespace) -> None:
+    """Export corrections to a JSON file."""
+    service = _get_service()
+    domain = args.domain or "general"
+    output_path = Path(args.export_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        try:
+            corrections = service.export_corrections(domain)
+        except Exception as e:
+            print(f"❌ Error exporting corrections: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        payload = {
+            "metadata": {
+                "version": "1.0",
+                "domain": domain,
+            },
+            "corrections": corrections,
+        }
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+
+        print(f"✅ Exported {len(corrections)} correction(s) to: {output_path}")
+    finally:
+        service.close()
+
+
+def _read_corrections_export(path: Path) -> tuple[dict[str, str], str | None]:
+    """Read a corrections export file in current or legacy JSON shape."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        raise ValueError(f"Import file not found: {path}") from None
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in import file: {e}") from e
+
+    metadata_domain = None
+    if isinstance(data, dict) and "corrections" in data:
+        metadata = data.get("metadata") or {}
+        if isinstance(metadata, dict):
+            metadata_domain = metadata.get("domain")
+            if metadata_domain is None:
+                domains = metadata.get("domains")
+                if isinstance(domains, list) and domains:
+                    metadata_domain = domains[0]
+        corrections = data.get("corrections")
+    else:
+        corrections = data
+
+    if not isinstance(corrections, dict):
+        raise ValueError("Import JSON must be an object or contain a 'corrections' object")
+
+    normalized = {}
+    for from_text, to_text in corrections.items():
+        if not isinstance(from_text, str) or not isinstance(to_text, str):
+            raise ValueError("All imported correction keys and values must be strings")
+        normalized[from_text] = to_text
+
+    return normalized, metadata_domain
+
+
+def cmd_import_corrections(args: argparse.Namespace) -> None:
+    """Import corrections from a JSON file."""
+    input_path = Path(args.import_path)
+
+    try:
+        corrections, metadata_domain = _read_corrections_export(input_path)
+        domain = args.domain or metadata_domain or "general"
+    except Exception as e:
+        print(f"❌ Error importing corrections: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    service = _get_service()
+    try:
+        try:
+            inserted, updated, skipped = service.import_corrections(
+                corrections,
+                domain=domain,
+                merge=getattr(args, "merge", False),
+            )
+        except Exception as e:
+            print(f"❌ Error importing corrections: {e}", file=sys.stderr)
+            sys.exit(1)
+    finally:
+        service.close()
+
+    mode = "merge" if getattr(args, "merge", False) else "replace"
+    print(f"✅ Imported corrections ({mode}, domain: {domain})")
+    print(f"   Inserted: {inserted}")
+    print(f"   Updated: {updated}")
+    print(f"   Skipped: {skipped}")
+
+
 def cmd_run_correction(args: argparse.Namespace) -> None:
     """Run the correction workflow.
 
     Heavy imports (AIProcessor, diff generator) are loaded only when Stage 2/3
     is requested, keeping --stage 1 startup fast.
     """
-    from core import AIProcessor, LearningEngine
+    from core import AIProcessor
     from core.defaults import API_BASE_URL
     from utils.diff_generator import generate_full_report
 
@@ -208,6 +405,17 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
     # Setup output directory
     output_dir = Path(args.output) if args.output else input_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Auto-finalize: if a previous Stage 1 run left *_stage1.md behind and it is
+    # newer than the input file, promote it to the input file and clean up
+    # sidecars before running Stage 1 again. This replaces the manual finalize
+    # step for the native AI-correction workflow.
+    dry_run = getattr(args, 'dry_run', False)
+    if args.stage >= 1:
+        auto_finalized = _auto_finalize_stage1(input_path, output_dir, dry_run=dry_run)
+        if auto_finalized and args.stage == 1:
+            print("✅ Finalize complete.")
+            return
 
     # Initialize service
     service = _get_service()
@@ -263,7 +471,6 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
         print(f"📚 No corrections in database")
     print()
 
-    dry_run = getattr(args, 'dry_run', False)
     # Stage 1 defaults to conservative "safe mode": only auto-apply low-risk
     # (non-word, high-confidence) corrections. Medium/high-risk rules — common
     # words, <=2-char, real-word fragments — are tracked to *_needs_review.md for
@@ -411,12 +618,7 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
             print("🎓 Learning System: Analyzing AI Corrections")
             print("=" * 60)
 
-            config_dir = Path.home() / ".transcript-fixer"
-            learning = LearningEngine(
-                history_dir=config_dir / "history",
-                learned_dir=config_dir / "learned",
-                correction_service=service
-            )
+            learning = _get_learning_engine(service)
 
             stats = learning.analyze_and_auto_approve(stage2_changes, args.domain)
 
@@ -461,17 +663,85 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
 
 
 def cmd_review_learned(args: argparse.Namespace) -> None:
-    """Review learned suggestions"""
-    # TODO: Implement learning engine with SQLite backend
-    print("⚠️  Learning engine not yet implemented with SQLite backend")
-    print("   This feature will be added in a future update")
+    """Review learned suggestions."""
+    engine = _get_learning_engine()
+    engine.analyze_and_suggest()
+    pending = engine.list_pending()
+
+    if not pending:
+        print("✅ No learned suggestions pending review")
+        return
+
+    print(f"\n🧠 Learned suggestions pending review ({len(pending)})")
+    print("=" * 70)
+
+    for idx, suggestion in enumerate(pending, 1):
+        domain = suggestion.get("domain") or "general"
+        confidence = suggestion.get("confidence", 0)
+        frequency = suggestion.get("frequency", 0)
+        print(f"\n{idx}. [{domain}] '{suggestion['from_text']}' -> '{suggestion['to_text']}'")
+        print(f"   Frequency: {frequency} | Confidence: {confidence:.2f}")
+
+        examples = suggestion.get("examples") or []
+        if examples:
+            example = examples[0]
+            context = example.get("context", "")
+            if context:
+                print(f"   Example: {context[:160]}")
+
+    print("\nApprove one with:")
+    print("  uv run scripts/fix_transcription.py --approve \"错误词\" \"正确词\" -d domain")
 
 
 def cmd_approve(args: argparse.Namespace) -> None:
-    """Approve a learned suggestion"""
-    # TODO: Implement learning engine with SQLite backend
-    print("⚠️  Learning engine not yet implemented with SQLite backend")
-    print("   This feature will be added in a future update")
+    """Approve a learned suggestion and add it to the correction dictionary."""
+    service = _get_service()
+    engine = _get_learning_engine(service)
+
+    pending = engine.list_pending()
+    match = next(
+        (
+            suggestion for suggestion in pending
+            if suggestion.get("from_text") == args.from_text
+            and suggestion.get("to_text") == args.to_text
+        ),
+        None,
+    )
+
+    if not match:
+        print(
+            f"❌ No pending learned suggestion matching "
+            f"'{args.from_text}' -> '{args.to_text}'",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    domain = args.domain or match.get("domain") or "general"
+    confidence = float(match.get("confidence", 0.8))
+    frequency = match.get("frequency", 0)
+
+    try:
+        service.add_correction(
+            args.from_text,
+            args.to_text,
+            domain=domain,
+            source="learned",
+            confidence=confidence,
+            notes=f"Approved learned suggestion; frequency={frequency}",
+            force=getattr(args, "force", False),
+        )
+    except Exception as e:
+        print(f"❌ Error approving learned suggestion: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if not engine.approve_suggestion(args.from_text, args.to_text):
+        print(
+            "⚠️  Added correction, but could not remove the pending suggestion",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    print(f"✅ Approved learned correction: '{args.from_text}' -> '{args.to_text}' (domain: {domain})")
 
 
 def cmd_validate(args: argparse.Namespace) -> None:

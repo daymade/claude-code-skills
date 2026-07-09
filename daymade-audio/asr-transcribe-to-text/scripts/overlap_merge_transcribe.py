@@ -149,7 +149,7 @@ def main():
     parser.add_argument("input", help="Input audio/video file")
     parser.add_argument("output", help="Output text file")
     parser.add_argument("--config", help="Path to config.json (from CLAUDE_PLUGIN_DATA)")
-    parser.add_argument("--endpoint", default="http://workstation-4090-wsl:8002/v1/audio/transcriptions", help="ASR endpoint URL")
+    parser.add_argument("--endpoint", default="http://localhost:8002/v1/audio/transcriptions", help="ASR endpoint URL")
     parser.add_argument("--model", default="Qwen/Qwen3-ASR-1.7B", help="Model name")
     parser.add_argument("--noproxy", action="store_true", default=True, help="Use --noproxy with curl")
     parser.add_argument("--chunk-duration", type=int, default=1080, help="Chunk duration in seconds (default: 1080 = 18min)")

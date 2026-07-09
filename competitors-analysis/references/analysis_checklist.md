@@ -1,137 +1,144 @@
-# 竞品分析检查清单
+# Competitor Analysis Checklist
 
-## 分析前检查 (Pre-Analysis)
+Use this checklist before, during, and after any competitor analysis. The purpose
+is to keep repository evidence, market evidence, and judgment separate.
 
-### 1. 仓库准备
-- [ ] 仓库 URL 是否正确？
-- [ ] 已创建产品竞品目录 `~/Workspace/competitors/{product}/`
-- [ ] 已成功克隆仓库到本地
-- [ ] 运行 `git pull` 确保代码最新
-- [ ] 记录当前 commit: `git log -1 --format="%h %s"`
+## 1. Scope And Storage
 
-### 2. 基础文件确认
-- [ ] README.md 存在且可读
-- [ ] 配置文件存在 (package.json / Cargo.toml / pyproject.toml)
-- [ ] LICENSE 文件存在
-- [ ] 源码目录结构清晰 (src/ 或等效目录)
+- [ ] Product or market scope is explicit.
+- [ ] Competitor base directory is explicit:
+  `COMPETITORS_BASE="${COMPETITORS_BASE:-$HOME/workspace/competitors}"`.
+- [ ] Product directory exists under `$COMPETITORS_BASE/{product-slug}/`.
+- [ ] Repository directory uses the `owner-repo` convention.
+- [ ] Any existing local clone is reused instead of cloning into a second path.
 
----
+## 2. Discovery Checks
 
-## 分析中检查 (During Analysis)
-
-### 3. 技术栈验证
-- [ ] 框架版本来自配置文件，已标注行号
-- [ ] 依赖列表来自配置文件，已标注行号
-- [ ] 入口文件已确认并读取
-
-### 4. 核心模块分析
-- [ ] 已识别核心模块/helper 文件
-- [ ] 已读取关键实现代码
-- [ ] 代码片段标注了文件路径和行号
-
-### 5. 来源标注
-- [ ] 每个版本号都有 (来源: file:行号)
-- [ ] 每个技术细节都有来源
-- [ ] 引用 README 内容标注了行号
-- [ ] 对比表中竞品数据都有来源列
-
----
-
-## 分析后检查 (Post-Analysis)
-
-### 6. 禁止词汇检查
-在分析文档中搜索以下词汇，如果存在必须修改或删除：
+For broad searches, run more than one query:
 
 ```bash
-grep -E "(推测|可能|应该|大概|似乎|或许|未知|未披露|未公开)" profile.md
+gh search repos "primary keywords" --limit 30 --archived=false \
+  --json fullName,url,description,stargazersCount,forksCount,openIssuesCount,language,pushedAt,updatedAt,defaultBranch
 ```
 
-- [ ] 无"推测"
-- [ ] 无"可能"
-- [ ] 无"应该"
-- [ ] 无"大概"/"似乎"/"或许"
-- [ ] 无"未知"/"未披露"/"未公开" (改为"待验证"并说明原因)
+- [ ] Search queries are recorded.
+- [ ] Candidate relevance is tied to the user's product scope.
+- [ ] Broad search results are shortlisted before deep analysis.
+- [ ] Forks, archived repos, and stale repos are identified rather than silently
+  treated as first-class competitors.
 
-### 7. 来源完整性检查
+## 3. Repository Preparation
 
 ```bash
-# 检查是否有未标注来源的技术细节
-grep -E "^- |^\| " profile.md | grep -v "(来源:|待验证)"
+repo="$COMPETITORS_BASE/{product-slug}/{owner-repo}"
+test -d "$repo/.git"
+git -C "$repo" remote -v
+git -C "$repo" fetch --all --prune
+git -C "$repo" log -1 --format='%H%x09%cI%x09%s'
 ```
 
-- [ ] 所有列表项都有来源或标记为待验证
-- [ ] 所有表格数据都有来源列
+- [ ] Remote URL is recorded.
+- [ ] Latest local commit hash is recorded.
+- [ ] Commit date is recorded.
+- [ ] Default branch or current branch is recorded.
+- [ ] Local changes, if any, are noted before pulling.
 
-### 8. 文件引用验证
-确认分析中引用的文件确实存在：
+## 4. Source Reading
+
+- [ ] README or docs are read for positioning.
+- [ ] Config files are read for language, framework, scripts, and dependencies.
+- [ ] Entry points are identified from config or file layout.
+- [ ] Core implementation files are read directly.
+- [ ] Tests or fixtures are checked when the competitor handles structured data.
+- [ ] Changelog/releases are checked when the user asks for "latest".
+
+## 5. Citation Checks
+
+Use line-numbered reads before writing technical claims:
 
 ```bash
-# 提取所有引用的文件路径
-grep -oE "[a-zA-Z0-9_/]+\.(js|ts|py|rs|json|toml|md):[0-9]+" profile.md
+nl -ba package.json | sed -n '1,140p'
+nl -ba src/main.ts | sed -n '1,220p'
 ```
 
-- [ ] 所有引用的文件都存在于仓库中
-- [ ] 行号在文件范围内
+- [ ] Versions cite config file lines.
+- [ ] Feature claims cite README/docs and implementation lines when available.
+- [ ] Parser/export/storage claims cite code lines.
+- [ ] Market data cites GitHub/API/web source plus retrieval date.
+- [ ] Each comparison-table value has a source cell.
 
----
+## 6. Language Checks
 
-## 常见错误修复
+Search the final report for unsupported language:
 
-### 错误 1: 使用了推测性语言
+```bash
+rg -n "(推测|可能|应该|大概|似乎|或许|未知|未披露|未公开|assume|probably|maybe)" profile.md
+```
 
-**修复前**:
+- [ ] No unsupported inference is presented as fact.
+- [ ] Unknowns are written as `待验证` with a specific next check.
+- [ ] Judgment is separated from repository facts.
+
+## 7. Landscape Checks
+
+For multi-competitor reports:
+
+- [ ] Source register lists local path, remote, commit, and retrieval date.
+- [ ] Positioning table distinguishes user segment from technical implementation.
+- [ ] Strengths are tied to user-visible behavior or code evidence.
+- [ ] Weaknesses/gaps cite evidence or are labeled as `待验证`.
+- [ ] Opportunities cite the evidence rows they derive from.
+- [ ] Risks and assumptions include the next verification step.
+
+## Common Fixes
+
+### Unsupported Architecture Claim
+
+Before:
+
 ```markdown
-## 架构设计（推测版）
-可能使用了微服务架构...
+## Architecture
+The app probably uses a microservice architecture.
 ```
 
-**修复后**:
+After:
+
 ```markdown
-## 架构设计 (来源: 代码结构分析)
-基于 src/ 目录结构，项目采用模块化设计：
-- helpers/ 包含 30 个工具模块 (来源: `ls src/helpers/ | wc -l`)
-- services/ 包含业务逻辑 (来源: 目录结构)
+## Architecture
+The repository exposes one Vite app and one Node server entrypoint:
+- `apps/web/package.json:7` defines `vite --host`.
+- `server/index.ts:1-42` creates the HTTP server.
 ```
 
-### 错误 2: 对比表无来源
+### Unsourced Comparison Row
 
-**修复前**:
+Before:
+
 ```markdown
-| 维度 | 竞品 | 我们 |
-|------|------|------|
-| Stars | 920 | 100 |
+| Dimension | Competitor | Our product |
+|---|---|---|
+| Export | HTML and PDF | HTML and PDF |
 ```
 
-**修复后**:
+After:
+
 ```markdown
-| 维度 | 竞品 | 来源 | 我们 | 来源 |
-|------|------|------|------|------|
-| Stars | 920 | GitHub 2026-01-29 | 100 | GitHub 2026-01-29 |
+| Dimension | Competitor | Source | Our product | Source |
+|---|---|---|---|---|
+| Export | HTML and PDF | `src/export.ts:12-84` | HTML and PDF | `src/export/share.ts:1-92` |
 ```
 
-### 错误 3: 版本号无来源
+### Stale Local Clone
 
-**修复前**:
+Before:
+
 ```markdown
-使用 React 19 和 Electron 36
+Analyzed local copy in ~/Downloads/repo.
 ```
 
-**修复后**:
+After:
+
 ```markdown
-使用 React 19.1.0 (package.json:96) 和 Electron 36.9.5 (package.json:68)
+Analyzed `$COMPETITORS_BASE/{product}/{owner-repo}` at commit
+`<full-hash>` (`git log -1 --format='%H %cI %s'`).
 ```
-
----
-
-## 质量评分
-
-完成分析后，按以下标准自评：
-
-| 维度 | 权重 | 评分标准 |
-|------|------|----------|
-| 数据来源 | 40% | 100% 技术细节有来源 = 满分 |
-| 无推测语言 | 30% | 0 个禁止词汇 = 满分 |
-| 代码分析深度 | 20% | 读取 5+ 核心文件 = 满分 |
-| 对比完整性 | 10% | 对比表 5+ 维度 = 满分 |
-
-**目标**: 总分 >= 90%

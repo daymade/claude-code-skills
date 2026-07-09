@@ -21,11 +21,13 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 from dataclasses import dataclass, asdict
 from collections import defaultdict
 from contextlib import contextmanager
+from datetime import datetime, timezone
 
 # CRITICAL FIX: Import file locking
 try:
@@ -52,6 +54,7 @@ class Suggestion:
     first_seen: str
     last_seen: str
     status: str  # "pending", "approved", "rejected"
+    domain: str = "general"
 
 
 class LearningEngine:
@@ -75,17 +78,35 @@ class LearningEngine:
     AUTO_APPROVE_FREQUENCY = 5  # Must appear at least 5 times
     AUTO_APPROVE_CONFIDENCE = 0.85  # Must have 85%+ confidence
 
-    def __init__(self, history_dir: Path, learned_dir: Path, correction_service=None):
+    def __init__(
+        self,
+        history_dir: Path,
+        learned_dir: Path,
+        db_path: Optional[Path] = None,
+        correction_service=None,
+    ):
         """
         Initialize learning engine
 
         Args:
             history_dir: Directory containing correction history
             learned_dir: Directory for learned suggestions
+            db_path: Optional SQLite database containing correction_history
             correction_service: CorrectionService for auto-adding to dictionary
         """
+        if (
+            db_path is not None
+            and correction_service is None
+            and not isinstance(db_path, (str, Path))
+        ):
+            # Backward compatibility with the old
+            # LearningEngine(history_dir, learned_dir, correction_service) form.
+            correction_service = db_path
+            db_path = None
+
         self.history_dir = history_dir
         self.learned_dir = learned_dir
+        self.db_path = Path(db_path) if db_path else None
         self.pending_file = learned_dir / "pending_review.json"
         self.rejected_file = learned_dir / "rejected.json"
         self.auto_approved_file = learned_dir / "auto_approved.json"
@@ -179,7 +200,8 @@ class LearningEngine:
                 examples=occurrences[:5],  # Top 5 examples
                 first_seen=occurrences[0]["timestamp"],
                 last_seen=occurrences[-1]["timestamp"],
-                status="pending"
+                status="pending",
+                domain=occurrences[0].get("domain", "general")
             )
 
             suggestions.append(suggestion)
@@ -190,7 +212,7 @@ class LearningEngine:
 
         return suggestions
 
-    def approve_suggestion(self, from_text: str) -> bool:
+    def approve_suggestion(self, from_text: str, to_text: Optional[str] = None) -> bool:
         """
         Approve a suggestion (remove from pending).
 
@@ -198,6 +220,8 @@ class LearningEngine:
 
         Args:
             from_text: The 'from' text of suggestion to approve
+            to_text: Optional exact 'to' text. When provided, both fields must
+                match so similarly named suggestions are not removed together.
 
         Returns:
             True if approved, False if not found
@@ -206,14 +230,23 @@ class LearningEngine:
         with self._file_lock(self.pending_lock, "approve suggestion"):
             pending = self._load_pending_suggestions_unlocked()
 
-            for suggestion in pending:
-                if suggestion["from_text"] == from_text:
-                    pending.remove(suggestion)
-                    self._save_suggestions_unlocked(pending, self.pending_file)
-                    logger.info(f"Approved suggestion: {from_text}")
-                    return True
+            remaining = [
+                suggestion for suggestion in pending
+                if not (
+                    suggestion["from_text"] == from_text
+                    and (to_text is None or suggestion.get("to_text") == to_text)
+                )
+            ]
 
-            logger.warning(f"Suggestion not found for approval: {from_text}")
+            removed = len(pending) - len(remaining)
+            if removed > 0:
+                self._save_suggestions_unlocked(remaining, self.pending_file)
+                logger.info(
+                    f"Approved {removed} suggestion(s): {from_text} -> {to_text or '*'}"
+                )
+                return True
+
+            logger.warning(f"Suggestion not found for approval: {from_text} -> {to_text or '*'}")
             return False
 
     def reject_suggestion(self, from_text: str, to_text: str) -> None:
@@ -257,6 +290,13 @@ class LearningEngine:
 
     def _extract_patterns(self) -> Dict[tuple, List[Dict]]:
         """Extract all correction patterns from history"""
+        if self.db_path and self.db_path.exists():
+            return self._extract_patterns_from_sqlite()
+
+        return self._extract_patterns_from_json()
+
+    def _extract_patterns_from_json(self) -> Dict[tuple, List[Dict]]:
+        """Extract correction patterns from legacy JSON history files."""
         patterns = defaultdict(list)
 
         if not self.history_dir.exists():
@@ -278,6 +318,58 @@ class LearningEngine:
                         "context": change.get("context", ""),
                         "timestamp": data["timestamp"]
                     })
+
+        return patterns
+
+    def _extract_patterns_from_sqlite(self) -> Dict[tuple, List[Dict]]:
+        """Extract AI correction patterns from SQLite correction history."""
+        patterns = defaultdict(list)
+
+        assert self.db_path is not None
+        query = """
+            SELECT
+                h.filename,
+                h.domain,
+                h.run_timestamp,
+                c.line_number,
+                c.from_text,
+                c.to_text,
+                c.context_before,
+                c.context_after
+            FROM correction_changes c
+            JOIN correction_history h ON h.id = c.history_id
+            WHERE c.rule_type = 'ai'
+              AND h.success = 1
+            ORDER BY h.run_timestamp ASC, c.id ASC
+        """
+
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(query).fetchall()
+        except sqlite3.Error as e:
+            logger.warning(f"Could not read SQLite correction history: {e}")
+            return patterns
+
+        for row in rows:
+            key = (row["from_text"], row["to_text"])
+            context = " ".join(
+                part for part in [
+                    row["context_before"],
+                    row["from_text"],
+                    "->",
+                    row["to_text"],
+                    row["context_after"],
+                ]
+                if part
+            )
+            patterns[key].append({
+                "file": row["filename"],
+                "line": row["line_number"] or 0,
+                "context": context,
+                "timestamp": row["run_timestamp"],
+                "domain": row["domain"] or "general",
+            })
 
         return patterns
 
@@ -353,11 +445,59 @@ class LearningEngine:
 
             # Modify
             new_suggestions = [asdict(s) for s in suggestions]
-            all_suggestions = existing + new_suggestions
+            all_suggestions = self._dedupe_suggestions(existing + new_suggestions)
 
             # Write
             # All done atomically under lock
             self._save_suggestions_unlocked(all_suggestions, self.pending_file)
+
+    def _dedupe_suggestions(self, suggestions: List[Dict]) -> List[Dict]:
+        """Merge duplicate pending suggestions by from/to/domain."""
+        merged: Dict[tuple, Dict[str, Any]] = {}
+        order = []
+
+        for suggestion in suggestions:
+            normalized = dict(suggestion)
+            normalized["domain"] = normalized.get("domain") or "general"
+            key = (
+                normalized.get("from_text"),
+                normalized.get("to_text"),
+                normalized.get("domain"),
+            )
+            if key not in merged:
+                merged[key] = normalized
+                order.append(key)
+                continue
+
+            current = merged[key]
+            current["frequency"] = max(
+                int(current.get("frequency", 0) or 0),
+                int(normalized.get("frequency", 0) or 0),
+            )
+            current["confidence"] = max(
+                float(current.get("confidence", 0) or 0),
+                float(normalized.get("confidence", 0) or 0),
+            )
+
+            existing_examples = current.get("examples") or []
+            for example in normalized.get("examples") or []:
+                if example not in existing_examples:
+                    existing_examples.append(example)
+            current["examples"] = existing_examples[:5]
+
+            first_seen = normalized.get("first_seen")
+            if first_seen and (
+                not current.get("first_seen") or first_seen < current["first_seen"]
+            ):
+                current["first_seen"] = first_seen
+
+            last_seen = normalized.get("last_seen")
+            if last_seen and (
+                not current.get("last_seen") or last_seen > current["last_seen"]
+            ):
+                current["last_seen"] = last_seen
+
+        return [merged[key] for key in order]
 
     def _save_suggestions_unlocked(self, suggestions: List[Dict], filepath: Path) -> None:
         """
@@ -483,7 +623,8 @@ class LearningEngine:
         }
 
         auto_approved_patterns = []
-        pending_patterns = []
+        pending_suggestions = []
+        now = datetime.now(timezone.utc).isoformat()
 
         for (from_text, to_text), occurrences in patterns.items():
             frequency = len(occurrences)
@@ -514,12 +655,9 @@ class LearningEngine:
                             f"Auto-approve blocked for '{from_text}' -> '{to_text}' "
                             f"by safety check: {e}. Routing to pending review."
                         )
-                        pending_patterns.append({
-                            "from": from_text,
-                            "to": to_text,
-                            "frequency": frequency,
-                            "confidence": avg_confidence
-                        })
+                        pending_suggestions.append(self._build_pending_suggestion(
+                            from_text, to_text, occurrences, avg_confidence, domain, now,
+                        ))
                         stats["pending_review"] += 1
                     except Exception as e:
                         # Other failures (database, already exists, etc.)
@@ -530,17 +668,18 @@ class LearningEngine:
             # Add to pending review if meets minimum criteria
             elif (frequency >= self.MIN_FREQUENCY and
                   avg_confidence >= self.MIN_CONFIDENCE):
-                pending_patterns.append({
-                    "from": from_text,
-                    "to": to_text,
-                    "frequency": frequency,
-                    "confidence": avg_confidence
-                })
+                pending_suggestions.append(self._build_pending_suggestion(
+                    from_text, to_text, occurrences, avg_confidence, domain, now,
+                ))
                 stats["pending_review"] += 1
 
         # Save auto-approved for transparency
         if auto_approved_patterns:
             self._save_auto_approved(auto_approved_patterns)
+
+        # Save pending suggestions so --review-learned has real data to show.
+        if pending_suggestions:
+            self._save_pending_suggestions(pending_suggestions)
 
         # Calculate savings potential
         total_dict_covered = sum(p["frequency"] for p in auto_approved_patterns)
@@ -549,6 +688,46 @@ class LearningEngine:
             stats["savings_potential"] = f"{savings_pct}% of current errors now handled by dictionary (free)"
 
         return stats
+
+    def _build_pending_suggestion(
+        self,
+        from_text: str,
+        to_text: str,
+        occurrences: List,
+        confidence: float,
+        domain: str,
+        timestamp: str,
+    ) -> Suggestion:
+        """Convert current-run AI changes into a reviewable pending suggestion."""
+        examples = []
+        for change in occurrences[:5]:
+            context = " ".join(
+                part for part in [
+                    getattr(change, "context_before", ""),
+                    getattr(change, "from_text", from_text),
+                    "->",
+                    getattr(change, "to_text", to_text),
+                    getattr(change, "context_after", ""),
+                ] if part
+            )
+            examples.append({
+                "file": "",
+                "line": getattr(change, "chunk_index", 0),
+                "context": context,
+                "timestamp": timestamp,
+            })
+
+        return Suggestion(
+            from_text=from_text,
+            to_text=to_text,
+            frequency=len(occurrences),
+            confidence=confidence,
+            examples=examples,
+            first_seen=timestamp,
+            last_seen=timestamp,
+            status="pending",
+            domain=domain or "general",
+        )
 
     def _save_auto_approved(self, patterns: List[Dict]) -> None:
         """
