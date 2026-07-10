@@ -296,7 +296,7 @@ This applies when you change ANY file under a skill directory:
 64. **marketplace-health-check** - Run a full 6-dimension health check of this skills marketplace repo (code/script safety, doc/SSOT consistency, security/PII, open-PR triage, open-issue triage, marketplace integrity) via a parallel fan-out Dynamic Workflow, then Counter-Review the serious findings and report by priority
 65. **claude-switch-models-setup** - Set up multiple isolated Claude Code CLI profiles so students and power users can run different LLM providers (Kimi, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time (daymade-claude-code suite member)
 66. **llm-eval-harness** - Evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four dimensions (speed with thinking-aware tok/s, concurrency/stability, Anthropic protocol compliance, and quality regression against your own use cases via blind judges); keys passed by env-var name only, use-case library kept outside the bundle
-67. **read-claude-web-conversation** - Extract full Claude.ai web conversations through the daymade-claude-code suite for recovery, audit, archival, or migration
+67. **read-claude-web-conversation** - Extract the active path of a Claude.ai web conversation with full tool-call rendering, local Markdown export, upload/generated-file inventory and download, sandbox-file reconstruction, and a macOS AppleScript fallback when the Chrome extension cannot pair (daymade-claude-code suite member)
 68. **setup-notifications-via-wecom** - Set up reusable WeCom / Enterprise WeChat webhook notifications for status reports, alerts, and completion messages
 69. **notify-wecom** - Send a single one-off WeCom group-bot message without setting up a reusable notification workflow
 70. **github-sensitive-data-cleanup** - Scan and remove secrets, API keys, private domains/IPs, and PII from GitHub repository history with force-push safety gates
@@ -311,6 +311,8 @@ This applies when you change ANY file under a skill directory:
 79. **openclaw-model-switch** - Switch the default AI model for an OpenClaw instance (e.g., Kimi K2.6 → K2.7) by safely editing `openclaw.json` with backup, model validation, and optional gateway restart
 80. **gemini-history-analyzer** - Analyze Google Takeout exports of Gemini conversation history; extract/categorize transcripts and attachments, context-verified domain keyword search, meeting-transcript detection, PII flagging, and optional distillation into project memory or a personal knowledge base
 81. **skill-governance** - Enforce source-of-truth discipline for Claude Code skill marketplaces and caches: check source/cache drift, sync through official plugin commands, clean old cache versions, and switch marketplace entries to local source (daymade-skill suite member)
+82. **photo-to-scanned-pdf** - Turn phone photos of paper documents into a scanner-quality A4 PDF with perspective correction, noteshrink enhancement, colored-paper handling, content-based page ordering, and mandatory whole-document visual verification (daymade-docs suite member)
+83. **github-review-pr** - Review one named contributor PR (open or closed under reconsideration) or all open PRs newest-to-oldest against the live base, with immutable OID snapshots, history-discontinuity detection, isolated current-base contribution projection, three-way merge analysis, PR/BASE/SHARED ownership, explicit personal maintainer context, and per-PR review-gated repair or landing
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
@@ -321,7 +323,7 @@ See [youtube-downloader/references/internal-sop.md](./youtube-downloader/referen
 ## Python Development
 
 All Python scripts in this repository:
-- Use Python 3.6+ syntax
+- Use Python 3.10+ syntax
 - Include shebang: `#!/usr/bin/env python3`
 - Are executable (chmod +x)
 - Have no external dependencies or document them clearly

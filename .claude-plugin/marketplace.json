@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations, document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-financial, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.82.0"
+    "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-financial, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
+    "version": "1.83.0"
   },
   "plugins": [
     {
@@ -372,6 +372,26 @@
         "issues",
         "workflows",
         "api"
+      ]
+    },
+    {
+      "name": "github-review-pr",
+      "description": "Reviews or re-reviews one contributor pull request—including an explicitly named closed PR being reconsidered—or a bounded newest-to-oldest sweep of all open contributor PRs, for a GitHub repository maintainer against the current base branch. Handles base drift, history discontinuities, polluted branches, ownership, curation, supersession, and review-conditioned repair or landing using immutable Git snapshots, three-way merge results, isolated contribution projection, checks, tests, and findings-first reporting. Use for a PR URL or number, \"main changed, review again\", \"review all open PRs newest to oldest\", \"apply our maintainer principles\", \"can we merge this and fix the rest ourselves?\", or merge readiness. Do not use for general GitHub CRUD, repository-wide audits, CI-only diagnosis, security-only diff audits, unpushed local diffs, merely addressing existing review comments, or merging without a fresh review.",
+      "source": "./github-review-pr",
+      "strict": false,
+      "version": "1.2.0",
+      "category": "developer-tools",
+      "keywords": [
+        "github",
+        "pull-request",
+        "code-review",
+        "maintainer",
+        "base-drift",
+        "merge-readiness",
+        "three-way-merge",
+        "contributor",
+        "open-pr-sweep",
+        "curation"
       ]
     },
     {
