@@ -1,0 +1,5 @@
+{"type":"user","message":{"role":"user","content":"How do I set up the fictional ExampleHub fixture with cache-first behavior?"},"timestamp":"2026-02-01T10:00:00Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Run the fixture sync command after loading placeholder configuration."}]},"timestamp":"2026-02-01T10:00:05Z"}
+{"type":"user","message":{"role":"user","content":"The fixture sync returned no records. What should I inspect?"},"timestamp":"2026-02-01T10:01:00Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Validate each fictional resource_id and report malformed fixture data explicitly."}]},"timestamp":"2026-02-01T10:01:05Z"}
+{"type":"user","message":{"role":"user","content":"Unrelated: what is the weather today?"},"timestamp":"2026-02-01T10:02:00Z"}

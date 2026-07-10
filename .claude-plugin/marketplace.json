@@ -216,10 +216,10 @@
     },
     {
       "name": "daymade-skill",
-      "description": "Daymade skills core suite. Bundles skill creation, quality review, governance, and marketplace development tooling under one shared namespace.",
+      "description": "Daymade skills core suite. Bundles skill creation, quality review, governance, and marketplace development tooling under one shared namespace. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.9.0",
+      "version": "1.10.0",
       "category": "suite",
       "keywords": [
         "suite",

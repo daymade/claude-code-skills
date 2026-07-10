@@ -16,7 +16,6 @@ Notes:
       its source and is easy to find and clean up. It is NOT the canonical skill location.
 """
 
-import fnmatch
 import re
 import sys
 import zipfile
@@ -30,28 +29,7 @@ if str(PACKAGE_ROOT) not in sys.path:
 
 from scripts.quick_validate import validate_skill
 from scripts.security_scan import calculate_skill_hash
-
-# Patterns to exclude when packaging skills.
-EXCLUDE_DIRS = {"__pycache__", "node_modules", ".pytest_cache", ".venv"}
-EXCLUDE_GLOBS = {"*.pyc"}
-EXCLUDE_FILES = {".DS_Store", ".security-scan-passed"}
-# Directories excluded only at the skill root (not when nested deeper).
-ROOT_EXCLUDE_DIRS = {"evals", "dist"}
-
-
-def should_exclude(rel_path: Path) -> bool:
-    """Check if a path should be excluded from packaging."""
-    parts = rel_path.parts
-    if any(part in EXCLUDE_DIRS for part in parts):
-        return True
-    # rel_path is relative to skill_path.parent, so parts[0] is the skill
-    # folder name and parts[1] (if present) is the first subdir.
-    if len(parts) > 1 and parts[1] in ROOT_EXCLUDE_DIRS:
-        return True
-    name = rel_path.name
-    if name in EXCLUDE_FILES:
-        return True
-    return any(fnmatch.fnmatch(name, pat) for pat in EXCLUDE_GLOBS)
+from scripts.packaging_policy import should_exclude
 
 
 def validate_security_marker(skill_path: Path) -> Tuple[bool, str]:
@@ -92,7 +70,7 @@ def validate_security_marker(skill_path: Path) -> Tuple[bool, str]:
     return True, "Security scan valid"
 
 
-def package_skill(skill_path, output_dir=None):
+def package_skill(skill_path, output_dir=None, include_evals=False):
     """
     Package a skill folder into a .skill file.
 
@@ -100,6 +78,7 @@ def package_skill(skill_path, output_dir=None):
         skill_path: Path to the skill folder (source of truth)
         output_dir: Optional output directory for the .skill artifact.
                     Defaults to <skill-folder>/dist/.
+        include_evals: Ship the root evals/ directory too (excluded by default).
 
     Returns:
         Path to the created .skill file, or None if error
@@ -136,7 +115,7 @@ def package_skill(skill_path, output_dir=None):
 
     if not is_valid:
         print(f"BLOCKED: {message}")
-        print(f"   You MUST run: python scripts/security_scan.py {skill_path.name}")
+        print(f"   You MUST run: uv run --with PyYAML python -m scripts.security_scan {skill_path.name}")
         print("   Security review is MANDATORY before packaging.")
         return None
     print(f"PASSED: {message}\n")
@@ -163,7 +142,7 @@ def package_skill(skill_path, output_dir=None):
                 if not file_path.is_file():
                     continue
                 arcname = file_path.relative_to(skill_path.parent)
-                if should_exclude(arcname):
+                if should_exclude(arcname, include_evals=include_evals):
                     print(f"  Skipped: {arcname}")
                     continue
                 zipf.write(file_path, arcname)
@@ -180,17 +159,21 @@ def package_skill(skill_path, output_dir=None):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder> [output-directory]")
+    args = [a for a in sys.argv[1:] if a != "--include-evals"]
+    include_evals = "--include-evals" in sys.argv[1:]
+    if not args:
+        print("Usage: uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder> [output-directory] [--include-evals]")
         print("\nExample:")
         print("  uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill")
-        print("  uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill ./dist")
+        print("  uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill ./dist --include-evals")
         print("\nDefault output: <skill-folder>/dist/<skill-name>.skill")
+        print("evals/ is excluded by default (development asset); pass --include-evals to ship it.")
+        print("Root tests/ and .enrich/ are always excluded from distribution artifacts.")
         print("The skill folder itself is the source of truth; the .skill file is a distribution artifact.")
         sys.exit(1)
 
-    skill_path = sys.argv[1]
-    output_dir = sys.argv[2] if len(sys.argv) > 2 else None
+    skill_path = args[0]
+    output_dir = args[1] if len(args) > 1 else None
 
     print(f"Packaging skill source: {skill_path}")
     if output_dir:
@@ -199,7 +182,7 @@ def main():
         print(f"   Artifact output directory: {Path(skill_path).resolve() / 'dist'}")
     print()
 
-    result = package_skill(skill_path, output_dir)
+    result = package_skill(skill_path, output_dir, include_evals=include_evals)
 
     if result:
         sys.exit(0)

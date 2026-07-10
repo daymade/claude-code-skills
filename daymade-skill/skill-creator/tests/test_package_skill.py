@@ -17,6 +17,8 @@ from scripts.security_scan import calculate_skill_hash
         (Path("my-skill/.DS_Store"), True),
         (Path("my-skill/evals/evals.json"), True),
         (Path("my-skill/dist/my-skill.skill"), True),
+        (Path("my-skill/tests/test_runtime.py"), True),
+        (Path("my-skill/.enrich/run/manifest.json"), True),
         (Path("my-skill/scripts/nested/evals/helper.py"), False),
         (Path("my-skill/references/guide.md"), False),
         (Path("my-skill/SKILL.md"), False),
@@ -76,6 +78,10 @@ def test_package_skill_artifact_contains_skill_files(tmp_path):
     skill_dir = _make_minimal_skill(tmp_path, "test-skill")
     (skill_dir / "references").mkdir()
     (skill_dir / "references" / "guide.md").write_text("# Guide\n", encoding="utf-8")
+    (skill_dir / "tests").mkdir()
+    (skill_dir / "tests" / "test_runtime.py").write_text("assert True\n", encoding="utf-8")
+    (skill_dir / ".enrich" / "run").mkdir(parents=True)
+    (skill_dir / ".enrich" / "run" / "manifest.json").write_text("{}\n", encoding="utf-8")
     _add_security_marker(skill_dir)
 
     artifact = package_skill(skill_dir)
@@ -87,6 +93,8 @@ def test_package_skill_artifact_contains_skill_files(tmp_path):
     # Excluded files should not be packaged.
     assert not any("__pycache__" in n for n in names)
     assert not any(".security-scan-passed" in n for n in names)
+    assert not any("tests/" in n for n in names)
+    assert not any(".enrich/" in n for n in names)
 
 
 def test_package_skill_artifact_excludes_dist_directory(tmp_path):
