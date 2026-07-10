@@ -215,20 +215,32 @@ def print_usage() -> None:
         "Usage: python fix_ssl_mode.py <domain> <email> <api_key> <mode> "
         "[--apply] [--purge-cache]"
     )
-    print("\nBy default this script runs in dry-run mode and does not change live settings.")
+    print(
+        "\nBy default this script runs in dry-run mode and does not change "
+        "live settings."
+    )
     print("Add --apply to update SSL mode. --purge-cache also requires --apply.")
     print("\nSSL Modes:")
-    print("  flexible - Cloudflare -> Origin uses HTTP (can cause loops with HTTPS origins)")
+    print(
+        "  flexible - Cloudflare -> Origin uses HTTP "
+        "(can cause loops with HTTPS origins)"
+    )
     print("  full     - Cloudflare -> Origin uses HTTPS (recommended for most origins)")
     print("  strict   - Full + validates origin certificate (most secure)")
     print("  off      - No encryption (not recommended)")
     print("\nExamples:")
     print("  # Preview the change without writing")
-    print("  python fix_ssl_mode.py typeof.tech user@example.com abc123... full")
+    print("  python fix_ssl_mode.py example.com user@example.com abc123... full")
     print("\n  # Fix redirect loop for GitHub Pages")
-    print("  python fix_ssl_mode.py typeof.tech user@example.com abc123... full --apply --purge-cache")
+    print(
+        "  python fix_ssl_mode.py example.com user@example.com abc123... "
+        "full --apply --purge-cache"
+    )
     print("\n  # Switch to strict mode")
-    print("  python fix_ssl_mode.py example.com user@example.com abc123... strict --apply")
+    print(
+        "  python fix_ssl_mode.py example.com user@example.com abc123... "
+        "strict --apply"
+    )
 
 
 def main() -> None:
