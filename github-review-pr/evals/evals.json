@@ -1,0 +1,19 @@
+{
+  "skill_name": "github-review-pr",
+  "evals": [
+    {
+      "id": 1,
+      "name": "personal-context-current-base-ownership",
+      "prompt": "Use my personal maintainer context to re-review a contributor PR after main changed. The current three-way landing result is clean and the core feature passes its tests. A version-list inconsistency found during review is unchanged on current main. Tell me whether to land as-is, fix the contributor branch first, land then fix it ourselves, request contributor changes, close as superseded, or stop as blocked. Do not change GitHub.",
+      "expected_output": "A read-only personal-maintainer decision that attributes the pre-existing bookkeeping issue to BASE and permits land-then-fix only after every safety gate is checked.",
+      "expectations": [
+        "Explicitly applies references/personal_maintainer_context.md",
+        "Classifies the unchanged version-list inconsistency as BASE rather than a contributor blocker",
+        "Checks irreversibility, security/privacy/data impact, public interface impact, fix certainty, validation coverage, and temporary-main risk",
+        "Chooses exactly one landing decision and names the owner and validation of any follow-up",
+        "Performs no GitHub mutation"
+      ],
+      "files": []
+    }
+  ]
+}
