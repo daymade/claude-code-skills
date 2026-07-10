@@ -9,11 +9,12 @@ description: >-
   copy, mobile table failures, brand drift, hardcoded chart colors vs
   design-system tokens, colorblind palette gaps, reporting-grade pages a tier
   below their reference, green tests that pass while the view fails the user's
-  job, and browser-integrated export/share/download/print/PDF flows. Use after
-  frontend-design or ui-designer, or when the user mentions generic AI slop,
-  screenshot QA, Chrome DevTools, Computer Use, enterprise backend design,
-  URL not changing, "not the same level/tier", or "look at the page yourself."
-  Prioritizes real Chrome and GUI journey evidence, then scriptable sweeps.
+  job, transient toasts a screenshot misses, and browser-integrated
+  export/share/download/print/PDF flows. Use after frontend-design or ui-designer,
+  or when the user says generic AI slop, screenshot QA, Chrome DevTools,
+  Computer Use, enterprise backend design, URL not changing,
+  "not the same level/tier", "look at the page yourself", or user-journey
+  walkthroughs. Prioritizes real Chrome/GUI evidence, then scriptable sweeps.
 ---
 
 # Frontend Visual QA
@@ -205,6 +206,25 @@ node <path-to-this-skill>/scripts/visual_layout_audit.mjs \
    - For the first viewport, also record the effective content bounds, left/right blank space, primary image displayed ratio versus natural ratio, and whether any label/caption overlaps important image content.
    - Record enough typography evidence to answer whether the font, spacing, width, text size, and style are right: body font family, H1 size, body size, sidebar/rail width, repeated text-column width, and smallest important text size.
    - Take screenshots. Inspect them. Do not treat the screenshot file as proof until you actually look at it.
+   - Some UI is time-boxed: toasts, snackbars, auto-dismissing banners, inline validation that clears on the next keystroke, and short animations live for a second or two and then vanish. A single screenshot, or a `wait_for` that fires a beat late, can miss them entirely — and "I couldn't capture it" then gets misread as "it never rendered" or "the handler is broken." Absence of a capture is not evidence of absence; a screenshot that arrives after the element auto-dismissed proves nothing about whether it fired. Before concluding a transient element is missing or broken, instrument its lifecycle instead of racing it: attach a `MutationObserver` (or capture the relevant event) that records every matching node as it is added, then trigger the action and read the log. Only after the observer stays empty across repeated triggers is "it did not fire" an actual finding. Conversely, if the observer proves the toast fires with the right text, then the real defect is often that it is too ephemeral to read (see the error-copy persistence note in Exercise The User Journey), not that it is absent.
+
+```js
+// Arm before triggering the action. Adapt the selector to the app's toast/alert markup.
+() => {
+  window.__transient = [];
+  const sel = '[role="alert"], .toast, .snackbar, .notification, .ant-message, [class*="toast"]';
+  new MutationObserver(() => {
+    document.querySelectorAll(sel).forEach((el) => {
+      const t = el.textContent?.replace(/\s+/g, " ").trim();
+      if (t && !window.__transient.includes(t)) window.__transient.push(t);
+    });
+  }).observe(document.body, { childList: true, subtree: true });
+  return "observer armed";
+}
+// ...trigger the action, let it settle, then read what actually appeared:
+// () => window.__transient
+```
+
    - If the user complained about a specific area, scroll to that area and screenshot it, not just the top of the page.
    - For repeated controls, form fields, state rails, metric cards, tab bars, or design-system specimens, run an explicit geometry pass. Compare siblings that share a visual row or repeated component contract: label top, control/input top and bottom, helper/error top, field height, left/right edges, and baseline rhythm. A field with an error/helper must not sit higher/lower than its sibling; either reserve an empty helper slot or change the layout so the whole row stays aligned.
    - Do not rely on "looks roughly lined up" from a full-page screenshot when the user points to a local mismatch. Use bounding boxes from the real DOM for the disputed group, then inspect the local screenshot.
@@ -228,9 +248,11 @@ node <path-to-this-skill>/scripts/visual_layout_audit.mjs \
    - Verify that raw machine identifiers, IDs, logs, JSON filenames, gate names, and follow-up commands are not the main call to action. Keep them available in diagnostics or technical handoff when they are necessary, but do not make them the primary user journey.
    - Verify that the user can defer or stop without losing work. A review/annotation queue must have an obvious save/finish/skip path and should not imply that the user must complete an unbounded backlog.
    - For modeful UIs, list the mutually exclusive modes and the owner of each trigger. The same key/button/gesture must not silently mean two unrelated things unless the mode is unmistakable, switching is explicit, and the default path has an obvious one-step return.
+   - Verify the authenticated-but-unauthorized state, not only logged-in and logged-out. A user who signs in successfully but has no role, membership, tenant, or permission yet must not see the same surfaces, entries, and actions as a privileged user. Fail-closed belongs at the UI layer too: if the data layer denies the rows but the UI still renders the privileged shell and entry points, the user lands in a populated-looking workbench that dead-ends on every click. The correct state is a plain "no access yet / contact your admin" surface. This state is easy to miss because a fresh test account often has full seed permissions — provision or borrow a genuinely role-less account to see it.
    - For each visible state (`ready`, `active`, `processing`, `error`, `disabled`, `recovery`), verify that the copy says what is happening, the action available is the next safe action, and global/floating surfaces show the same mode.
    - Every blocking or long-running state must show progress, current work, or a recovery action. A stuck `processing` state with no way back to the main journey is a P1 even if the layout is pretty.
    - Error states must preserve the feature context that failed. A multi-step or mode-specific failure must not degrade into a generic error that looks like another feature failed.
+   - Error copy must be in the user's language and register. Raw backend strings, English exception messages, or stack fragments leaking to a localized or non-technical audience — for example a login form that shows a verbatim English `Invalid login credentials` to operators who use the product in another language — is a defect: map known errors to human, localized text and fall back to the raw string only for genuinely unknown ones. An error the user must act on also needs a surface that persists long enough to read and act on. A toast that auto-dismisses in ~3s is too ephemeral for an actionable failure; prefer inline or persistent placement with `role="alert"` so assistive tech announces it, and clear the fields the user must re-enter (for example the password) so the recovered state is legible rather than looking unchanged.
    - Convert each confirmed miss into either a product fix or a regression guard. A visual QA finding that remains only in chat memory is not closed.
    - When a UI is a temporary scaffold that may later become product infrastructure, review it with product standards anyway: low-friction defaults, plain actor/task language, and compounding user effort. Do not excuse hostile interaction just because the page was first built for diagnostics.
 
@@ -247,6 +269,7 @@ node <path-to-this-skill>/scripts/visual_layout_audit.mjs \
 
 8. **Fix And Re-run**
    - Do not say "fixed" after editing CSS. Re-run the visual checks and inspect screenshots again.
+   - For a subjective visual choice — which of several colors, gradients, spacings, radii, or weights reads right — do not guess-commit-revert, and do not ask the user to imagine the options. Preview the candidates live in the browser first: override the token/style with DevTools `evaluate_script`, or drop a small comparison overlay that renders each candidate as a swatch/row, screenshot it, and pick from the rendered evidence before editing source. This turns a taste argument into a visual diff, avoids edit-revert churn, and gives a defensible reason for the choice. When the change is to a shared design token, preview it on a dense specimen page too — not only the one screen that prompted it — so a global change is judged where it actually repeats.
    - If there is a benchmark, put your after-screenshot beside it and name the concrete remaining gap. A general aesthetic principle never outranks the specific target the user asked to match.
    - For awkward line breaks, prefer structural fixes over random width tweaks:
      - shorten copy;
@@ -301,7 +324,9 @@ Load `references/history-derived-checklist.md` for the detailed checklist; for r
 - wrong app surface: renderer page verified while the native shell/user-visible app was not;
 - repeated card/panel grids that replace information architecture;
 - generic AI slop aesthetics: purple/blue gradient default, glass cards, decorative orbs/glow, card grids everywhere, vague "AI empowers" copy.
+- accidental brand collision: a decorative motif reproduces another famous brand's signature — four equal hard-edged primary blocks read as Google's bar, a particular swoosh or ring reads as a competitor logo — so the product looks off-brand or unprofessional. It is most visible on a lone hero element where the motif stands alone rather than dissolving into a dense grid; when in doubt, anchor the motif in the product's own brand color and soften the resemblance.
 - success-target drift: e2e/visual assertions that only prove structure exists ("section present", "tab switches", "nine zones render") while never asserting the view answers the user's actual question at that state — a false pass that hides a product gap;
+- transient-UI verification gap: a toast/snackbar/auto-dismissing alert/inline validation is declared missing or broken because a single screenshot or a late `wait_for` did not catch it, without instrumenting the element's lifecycle to prove presence or absence — treating a missed capture as a negative result; or the element does fire correctly but auto-dismisses too fast for the user to read an actionable message;
 - visual-tier drift: a reporting-grade data page (dashboard, KPI board, monitoring console) rendered at generic-admin tier — small single-color numbers, plain-text verdict, separate card pile — when the user has a higher-tier reference in mind. Open the reference, diff quantifiable params (number px, color semantics, notes-per-KPI). See `references/data_viz_tier_and_token_audit.md`;
 - chart color-token drift: chart/series colors hardcoded as hex instead of design-system tokens (grep `#[0-9a-fA-F]{6}` outside the token file; prove resolution with `getComputedStyle`), or a categorical series palette shipped without colorblind (CVD) validation and colliding with the semantic hues. See `references/data_viz_tier_and_token_audit.md`.
 
@@ -421,11 +446,13 @@ Verified:
 - Judging only `innerWidth` while the user is reacting to the full visible Chrome `outerWidth`.
 - Calling a centered max-width layout "fine" before checking whether the right blank area is symmetric and intentional.
 - Taking a screenshot but not opening it.
+- Concluding a toast/snackbar/transient element "does not fire" from one screenshot or a late `wait_for`, instead of arming a MutationObserver or event capture and proving what actually rendered. A missed capture is not a negative result; the element may live for a second and vanish before the tool reacts.
 - Reviewing only the first viewport of a long page and missing broken lower sections.
 - Leaving tabs/drawers/modals/chart states unclicked in a live artifact.
 - Fixing one visible line break without scanning other headings/buttons/tables.
 - Overcorrecting Chinese short-tail lines by forcing every 2-3 character final line to disappear.
 - Answering "font/spacing/width/size/style are fine" without computed values and screenshot evidence.
+- Guess-committing a subjective visual choice (color, gradient, spacing, weight) and reverting when it looks wrong, instead of previewing the candidates live in the browser and comparing screenshots before touching source.
 - Gaming the QA script by renaming classes or hiding overflow instead of fixing the visual defect or the detector.
 - Treating a design-system specimen as permission to build a fake product screen.
 - Turning "avoid repeated cards" into a mechanical "remove all cards" rule. The real issue is whether cards serve component specimens or replace information architecture.
