@@ -12,15 +12,18 @@ Requires:
     JINA_API_KEY environment variable set with your Jina.ai API key
 """
 
-import sys
-import os
 import argparse
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 
 def fetch_tweet(url: str, output_file: str = None) -> str:
     """Fetch tweet content using jina.ai API via curl."""
+    if not url.startswith(("https://x.com/", "https://twitter.com/")):
+        raise ValueError("URL must be from x.com or twitter.com (HTTPS only)")
+
     api_key = os.getenv("JINA_API_KEY")
     if not api_key:
         raise RuntimeError(
@@ -39,33 +42,37 @@ def fetch_tweet(url: str, output_file: str = None) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
-        raise RuntimeError(f"Error fetching tweet: {result.stderr}")
+        detail = result.stderr.strip() or f"curl exited with status {result.returncode}"
+        raise RuntimeError(f"Failed to fetch tweet: {detail}")
 
     content = result.stdout
 
     if output_file:
         output_path = Path(output_file)
-        try:
-            output_path.resolve(strict=False)
-        except (OSError, ValueError) as e:
-            raise ValueError(f"Invalid output file path: {output_file}") from e
         output_path.write_text(content, encoding="utf-8")
         print(f"Saved to {output_file}")
 
     return content
 
 
-if __name__ == "__main__":
+def main() -> int:
+    """Run the command-line interface and return its process exit code."""
     parser = argparse.ArgumentParser(description="Fetch Twitter/X post content")
     parser.add_argument("url", help="Twitter/X post URL")
     parser.add_argument("output", nargs="?", help="Optional output file path")
     args = parser.parse_args()
 
-    if not args.url.startswith(("https://x.com/", "https://twitter.com/")):
-        print("Error: URL must be from x.com or twitter.com (HTTPS only)", file=sys.stderr)
-        sys.exit(1)
-
-    content = fetch_tweet(args.url, args.output)
+    try:
+        content = fetch_tweet(args.url, args.output)
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
     if not args.output:
         print(content)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
