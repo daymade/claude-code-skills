@@ -1,7 +1,7 @@
 ---
 name: asr-transcribe-to-text
 description: >-
-  Transcribes audio and video to text using Qwen3-ASR, with input handling for local files, direct media URLs, and podcast/web pages. Supports local MLX inference on macOS Apple Silicon and remote OpenAI-compatible ASR endpoints. Use when the user wants to transcribe recordings, podcasts, lectures, interviews, meetings, screen recordings, or any audio/video file; also use for ASR, Qwen ASR, speech-to-text, 转录, 语音转文字, and 录音转文字 requests.
+  Transcribes audio and video to text using Qwen3-ASR, with input handling for local files, direct media URLs, and podcast/web pages. Supports local MLX inference on macOS Apple Silicon and remote OpenAI-compatible ASR endpoints. Use when the user wants to transcribe recordings, podcasts, lectures, interviews, meetings, screen recordings, or any audio/video file; also use for ASR, Qwen ASR, speech-to-text, 转录, 语音转文字, and 录音转文字 requests. Also covers word-level timestamps via mlx-whisper for subtitles and audio-visual alignment (字幕, 时间戳, 音画对齐).
 argument-hint: "[audio-or-video-file-path-or-url ...]"
 ---
 
@@ -15,6 +15,8 @@ Transcribe audio/video to text using Qwen3-ASR. Two inference paths:
 | **Remote API** | Any platform, or when local unavailable | Depends on GPU | API/self-hosted |
 
 Configuration persists in `${CLAUDE_PLUGIN_DATA}/config.json`.
+
+> **Need timestamps, not just text?** Qwen3-ASR outputs plain text only. For word-level timestamps (subtitles, aligning voiceover to video shots) use the mlx-whisper path instead — see `## Word-Level Timestamps` below.
 
 ## Step 0: Detect Platform and Load Config
 
@@ -301,6 +303,16 @@ Passing many files to one `transcribe_local_mlx.py` invocation is efficient (mod
 - For a stuck file, retry with `--max-tokens 3000`: real speech in a short clip fits comfortably; a looping file gets truncated output you can classify.
 - **Detect "no speech" instead of shipping garbage**: if the transcript's unique-word ratio is extremely low (e.g. `len(set(words))/len(words) < 0.06` on a 40+ char output), the clip almost certainly has no voiceover — label it as such rather than delivering the loop text. (Downstream OCR of on-screen captions is the actual fix for subtitle-only videos.)
 
+## Word-Level Timestamps (subtitles, audio-visual alignment)
+
+Qwen3-ASR is an LLM-decoder ASR: it emits plain text with no alignment information, on both local and remote paths. When the task needs to know *when* each word is spoken — subtitle generation, aligning narration to shot boundaries, per-clip captioning — use `mlx-whisper` with `word_timestamps=True` instead. Whisper's cross-attention word alignment is the de-facto local solution for this class of task.
+
+Key facts (full recipe in `references/whisper_word_timestamps.md`):
+
+- Model: `mlx-community/whisper-large-v3-turbo` (~1.6GB). Its Chinese WER is higher than Qwen3-ASR for pure transcription, but for alignment tasks Qwen3-ASR is not an option at all; prime domain terms via `initial_prompt`.
+- **Segment granularity trap**: on short videos (15–40s) whisper often returns the whole clip as one segment — always work from the word list and assign words to time windows by midpoint.
+- Pairs with ffmpeg scene detection (`select='gt(scene,0.3)'`) for the visual side; avoid PySceneDetect on non-ASCII paths.
+
 ## Troubleshooting
 
 ### Local MLX fails while loading the model
@@ -335,3 +347,4 @@ Some runtimes do not set skill environment variables. Use the absolute path to t
 **References:**
 - `local_mlx_guide.md` — Performance benchmarks, max_tokens truncation, model compatibility
 - `overlap_merge_strategy.md` — Why naive chunking fails, fuzzy merge algorithm
+- `whisper_word_timestamps.md` — Word-level timestamps via mlx-whisper: alignment recipe, segment-granularity trap, scene-detection pairing

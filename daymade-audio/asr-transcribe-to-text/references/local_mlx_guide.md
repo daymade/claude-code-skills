@@ -90,5 +90,5 @@ Observed root cause: resolving `mlx-audio>=0.3.1` installed `mlx-audio 0.4.4`, `
 | Approach | Issue |
 |----------|-------|
 | PyTorch MPS (qwen-asr package) | 97.77% time in GPU↔CPU sync, RTF 5.5-24.5x |
-| whisper.cpp large-v3-turbo | High Chinese error rate |
+| whisper.cpp large-v3-turbo | High Chinese error rate **for pure transcription** — but when the task needs word-level timestamps (subtitles, audio-visual alignment), whisper is the only local option and Qwen3-ASR cannot do it at all; see `whisper_word_timestamps.md` |
 | Official qwen-asr on macOS | Designed for CUDA only |
