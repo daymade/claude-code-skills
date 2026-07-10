@@ -80,7 +80,7 @@ Description should include:
 
 ## Privacy and Paths
 
-- [ ] No absolute user paths (`/Users/username/`)
+- [ ] No machine-specific user-home paths
 - [ ] No personal/company names
 - [ ] No hardcoded secrets
 - [ ] Relative paths only
