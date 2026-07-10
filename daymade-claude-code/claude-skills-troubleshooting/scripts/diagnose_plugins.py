@@ -10,9 +10,18 @@ This script checks for common problems:
 """
 
 import json
-import os
+import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from datetime import datetime, timezone
+
+
+LAST_UPDATED_PATTERN = re.compile(
+    r"^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})"
+    r"(?P<fraction>\.\d{1,6})?"
+    r"(?P<zone>Z|(?P<sign>[+-])(?P<offset_hour>\d{2}):"
+    r"(?P<offset_minute>\d{2}))$"
+)
+STALE_AFTER = timedelta(days=7)
 
 
 def get_claude_dir():
@@ -25,7 +34,7 @@ def load_json_file(path):
     try:
         with open(path, 'r') as f:
             return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
+    except (FileNotFoundError, json.JSONDecodeError):
         return None
 
 
@@ -66,14 +75,26 @@ def check_marketplaces():
     marketplaces_path = claude_dir / "plugins" / "known_marketplaces.json"
 
     data = load_json_file(marketplaces_path)
-    if not data:
+    if data is None:
         print("❌ Cannot read known_marketplaces.json")
-        return {}
+        return None
+    if not isinstance(data, dict):
+        print("❌ known_marketplaces.json must contain a JSON object")
+        return None
 
     print(f"🏪 Found {len(data)} registered marketplaces:")
     for name, info in data.items():
-        last_updated = info.get("lastUpdated", "unknown")
-        print(f"   - {name} (updated: {last_updated[:10] if len(last_updated) > 10 else last_updated})")
+        if not isinstance(info, dict):
+            display_updated = "invalid metadata"
+        else:
+            last_updated = info.get("lastUpdated")
+            try:
+                _parse_last_updated(last_updated)
+            except ValueError:
+                display_updated = "invalid lastUpdated"
+            else:
+                display_updated = last_updated[:10]
+        print(f"   - {name} (updated: {display_updated})")
     return data
 
 
@@ -89,48 +110,78 @@ def find_missing_enabled(installed, enabled):
 
 
 def _parse_last_updated(value):
-    """Parse the ISO-8601 lastUpdated string into a naive UTC datetime."""
-    if not value:
-        return None
+    """Parse a timezone-qualified ISO-8601 timestamp as aware UTC."""
+    if not isinstance(value, str) or not value:
+        raise ValueError("lastUpdated must be a non-empty string")
+
+    match = LAST_UPDATED_PATTERN.fullmatch(value)
+    if match is None:
+        raise ValueError(
+            "lastUpdated must include seconds and a Z or ±HH:MM timezone"
+        )
+
+    timestamp = match.group("timestamp")
+    fraction = match.group("fraction") or ""
+    parse_format = "%Y-%m-%dT%H:%M:%S.%f" if fraction else "%Y-%m-%dT%H:%M:%S"
     try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
-        return None
-    # Normalize to naive UTC so we can compare against datetime.utcnow().
-    if dt.tzinfo is not None:
-        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
-    return dt
+        parsed = datetime.strptime(timestamp + fraction, parse_format)
+    except ValueError as exc:
+        raise ValueError("lastUpdated contains an invalid date or time") from exc
+
+    if match.group("zone") == "Z":
+        source_timezone = timezone.utc
+    else:
+        offset_hour = int(match.group("offset_hour"))
+        offset_minute = int(match.group("offset_minute"))
+        if offset_hour > 23 or offset_minute > 59:
+            raise ValueError("lastUpdated contains an invalid timezone offset")
+        offset = timedelta(hours=offset_hour, minutes=offset_minute)
+        if match.group("sign") == "-":
+            offset = -offset
+        source_timezone = timezone(offset)
+
+    try:
+        return parsed.replace(tzinfo=source_timezone).astimezone(timezone.utc)
+    except (OverflowError, ValueError) as exc:
+        raise ValueError(
+            "lastUpdated cannot be normalized to a valid UTC datetime"
+        ) from exc
 
 
-def check_cache_freshness(marketplaces):
+def check_cache_freshness(marketplaces, now=None):
     """Check if marketplace caches are stale.
 
-    Prefer the authoritative ``lastUpdated`` timestamp recorded in
-    known_marketplaces.json (this is what ``claude plugin marketplace update``
-    actually writes). The cache directory's filesystem mtime is unreliable:
-    updates pull files into a nested repo without touching the top-level
-    directory's mtime, so it reports caches as perpetually stale.
+    Use only the authoritative ``lastUpdated`` timestamp recorded in
+    known_marketplaces.json. Missing or malformed timestamps are configuration
+    errors; never guess freshness from the unreliable cache-directory mtime.
     """
-    claude_dir = get_claude_dir()
-    cache_dir = claude_dir / "plugins" / "cache"
+    reference_time = now if now is not None else datetime.now(timezone.utc)
+    if reference_time.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    reference_time = reference_time.astimezone(timezone.utc)
 
     stale = []
+    invalid = []
     for name, info in marketplaces.items():
-        updated = _parse_last_updated(info.get("lastUpdated"))
-        if updated is not None:
-            age_days = (datetime.utcnow() - updated).days
-        else:
-            # Fall back to the cache directory mtime when no timestamp exists.
-            marketplace_cache = cache_dir / name
-            if not marketplace_cache.exists():
-                continue
-            mtime = datetime.fromtimestamp(marketplace_cache.stat().st_mtime)
-            age_days = (datetime.now() - mtime).days
+        if not isinstance(info, dict):
+            invalid.append((name, "marketplace metadata must be an object"))
+            continue
 
-        if age_days > 7:
-            stale.append((name, age_days))
+        try:
+            updated = _parse_last_updated(info.get("lastUpdated"))
+        except ValueError as exc:
+            invalid.append((name, str(exc)))
+            continue
 
-    return stale
+        if updated > reference_time:
+            invalid.append((name, "lastUpdated is in the future"))
+            continue
+
+        age = reference_time - updated
+        if age > STALE_AFTER:
+            stale.append((name, age.days))
+
+    return stale, invalid
 
 
 def main():
@@ -148,7 +199,9 @@ def main():
     print()
 
     # Check marketplaces
-    marketplaces = check_marketplaces()
+    marketplaces_result = check_marketplaces()
+    marketplace_load_failed = marketplaces_result is None
+    marketplaces = marketplaces_result if marketplaces_result is not None else {}
     print()
 
     # Find missing enabled
@@ -175,7 +228,23 @@ def main():
         print()
 
     # Check cache freshness
-    stale = check_cache_freshness(marketplaces)
+    stale, invalid_marketplaces = check_cache_freshness(marketplaces)
+    if marketplace_load_failed:
+        invalid_marketplaces.append(
+            ("known_marketplaces.json", "file is missing, invalid, or unreadable")
+        )
+
+    if invalid_marketplaces:
+        print("=" * 60)
+        print("⚠️  Invalid marketplace freshness metadata detected:")
+        print("=" * 60)
+        for name, reason in invalid_marketplaces:
+            print(f"   - {name}: {reason}")
+        print()
+        print("Refresh each marketplace so Claude Code rewrites lastUpdated:")
+        print("   claude plugin marketplace update <marketplace-name>")
+        print()
+
     if stale:
         print("=" * 60)
         print("⚠️  Stale marketplace caches detected:")
@@ -195,14 +264,16 @@ def main():
     print(f"  Enabled plugins:    {sum(1 for v in enabled.values() if v)}")
     print(f"  Missing enabled:    {len(missing)}")
     print(f"  Marketplaces:       {len(marketplaces)}")
+    print(f"  Stale caches:       {len(stale)}")
+    print(f"  Invalid freshness:  {len(invalid_marketplaces)}")
     print()
 
-    if missing:
-        print("🔧 Action needed: Enable missing plugins to make them available")
+    if missing or stale or invalid_marketplaces:
+        print("🔧 Action needed: Resolve the diagnostics listed above")
         return 1
-    else:
-        print("✅ No issues detected!")
-        return 0
+
+    print("✅ No issues detected!")
+    return 0
 
 
 if __name__ == "__main__":

@@ -20,8 +20,14 @@ python3 scripts/diagnose_plugins.py
 The script checks:
 - Installed vs enabled plugins mismatch
 - Missing enabledPlugins entries in settings.json
-- Stale marketplace cache
+- Stale marketplace cache using `known_marketplaces.json` `lastUpdated`
+- Missing, malformed, timezone-free, or future `lastUpdated` metadata
 - Invalid plugin configurations
+
+Treat `lastUpdated` as the only cache-freshness source. Do not fall back to
+cache-directory modification times: marketplace updates can refresh nested
+files without changing that directory timestamp. The diagnostic exits nonzero
+for stale caches or invalid freshness metadata.
 
 ## Common Issues
 

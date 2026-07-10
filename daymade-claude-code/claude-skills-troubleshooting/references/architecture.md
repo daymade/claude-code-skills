@@ -127,6 +127,13 @@
 }
 ```
 
+Treat `lastUpdated` as the authoritative cache-freshness value. It must be an
+ISO-8601 timestamp with an explicit `Z` or numeric timezone offset. Missing,
+malformed, timezone-free, or future values are invalid metadata; do not infer
+freshness from `~/.claude/plugins/cache/<marketplace>/` modification time.
+Marketplace updates change files inside nested repositories and may leave the
+top-level cache directory timestamp unchanged.
+
 ### marketplace.json (in marketplace repo)
 
 **Purpose:** Defines available plugins in a marketplace.
