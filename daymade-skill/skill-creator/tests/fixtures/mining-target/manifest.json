@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "target_skill": "mining-target",
+  "topic_spec": {
+    "description": "Fictional ExampleHub synchronization and validation",
+    "keywords": [
+      "examplehub",
+      "cache-first",
+      "resource_id",
+      "sync"
+    ],
+    "exclude_keywords": [
+      "weather",
+      "capital"
+    ],
+    "min_relevance_score": 0.1
+  },
+  "sources": {
+    "claude_code_sessions": {
+      "roots": [
+        "transcripts"
+      ],
+      "since": "2026-01-01T00:00:00Z",
+      "until": "2026-12-31T23:59:59Z"
+    },
+    "claude_command_history": {
+      "path": "transcripts/history.jsonl"
+    },
+    "codex_transcripts": {},
+    "manual_exports": [
+      "transcripts/codex_history.jsonl"
+    ]
+  },
+  "redaction": {
+    "allowlisted_placeholders": [
+      "sk-example-*",
+      "sk-test-*"
+    ],
+    "extra_patterns": []
+  },
+  "partitioning": {
+    "chunk_tokens": 2000,
+    "encoding_model": "cl100k_base"
+  },
+  "mining_agents": [
+    "patterns",
+    "war-stories",
+    "query-guide",
+    "usage-patterns",
+    "code-assets"
+  ]
+}

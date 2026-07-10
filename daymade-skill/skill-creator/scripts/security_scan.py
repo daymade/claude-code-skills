@@ -26,8 +26,15 @@ import argparse
 import hashlib
 from pathlib import Path
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+PACKAGE_ROOT = SCRIPT_DIR.parent
+if str(PACKAGE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PACKAGE_ROOT))
+
+from scripts.packaging_policy import should_exclude
 
 # ANSI color codes
 RED = '\033[91m'
@@ -221,12 +228,12 @@ def scan_skill_patterns(skill_path: Path) -> tuple[List[SecurityIssue], Dict[str
     stats = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0}
 
     code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.sh', '.bash',
-                       '.md', '.yml', '.yaml', '.json', '.toml'}
+                       '.md', '.yml', '.yaml', '.json', '.jsonl', '.toml'}
 
     for file_path in skill_path.rglob('*'):
         if not file_path.is_file() or file_path.suffix not in code_extensions:
             continue
-        if any(part.startswith('.') for part in file_path.parts):
+        if any(part.startswith('.') for part in file_path.relative_to(skill_path).parts):
             continue
         if '__pycache__' in file_path.parts or 'node_modules' in file_path.parts:
             continue
@@ -384,21 +391,19 @@ def calculate_skill_hash(skill_path: Path) -> str:
     - Hashes concatenated content (path + content for each file)
     - Ignores .security-scan-passed itself and hidden files
     """
-    code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.sh', '.bash',
-                       '.md', '.yml', '.yaml', '.json', '.toml'}
-
+    skill_path = Path(skill_path).resolve()
     hasher = hashlib.sha256()
 
-    # Collect all relevant files
+    # Hash every file that could ship. Pattern scanners intentionally focus on
+    # text, but the attestation must also bind templates, HTML, binary assets,
+    # and extensionless files. include_evals=True binds the superset accepted
+    # by the optional packaging flag.
     files_to_hash = []
     for file_path in skill_path.rglob('*'):
-        if not file_path.is_file() or file_path.suffix not in code_extensions:
+        if not file_path.is_file():
             continue
-        if file_path.name == '.security-scan-passed':
-            continue
-        if any(part.startswith('.') for part in file_path.parts):
-            continue
-        if '__pycache__' in file_path.parts or 'node_modules' in file_path.parts:
+        rel_path = file_path.relative_to(skill_path.parent)
+        if should_exclude(rel_path, include_evals=True):
             continue
         files_to_hash.append(file_path)
 
@@ -434,7 +439,7 @@ def create_security_marker(skill_path: Path) -> None:
 
     marker_file.write_text(
         f"Security scan passed\n"
-        f"Scanned at: {datetime.now().isoformat()}\n"
+        f"Scanned at: {datetime.now(timezone.utc).isoformat()}\n"
         f"Tool: gitleaks + pattern-based validation\n"
         f"Content hash: {content_hash}\n"
     )
