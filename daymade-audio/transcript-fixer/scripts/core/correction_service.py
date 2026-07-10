@@ -260,7 +260,8 @@ class CorrectionService:
                 source=source,
                 confidence=confidence,
                 added_by=added_by,
-                notes=notes
+                notes=notes,
+                force=force
             )
 
             logger.info(
