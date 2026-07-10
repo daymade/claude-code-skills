@@ -1,25 +1,21 @@
 # Tests
 
-Regression tests for safety-critical skill scripts.
+Repository-level regression tests for selected skill scripts.
 
 ## Running
 
-```bash
-python -m pytest tests/
-```
-
-Or with the standard `unittest` runner:
+Run the suite with pytest in an isolated `uv` environment:
 
 ```bash
-python -m unittest discover tests
+uv run --with pytest python -m pytest tests/
 ```
 
-## Coverage
+Or use the standard-library `unittest` runner without installing pytest:
 
-| Test file | What it covers |
-|-----------|----------------|
-| `test_macos_cleaner_safety.py` | `macos-cleaner` safety guards — verifies that `safe_delete` blocks high-risk system paths and credentials, and that `find_app_remnants` correctly identifies orphaned app support files without false positives. |
+```bash
+uv run python -m unittest discover tests
+```
 
 ## Adding Tests
 
-Place new test files in this directory following the `test_<skill_name>_<area>.py` naming convention. Each file should import the target script via `importlib` (see the existing test for an example) so tests remain independent of install location.
+Place new test files in this directory using a descriptive `test_<component>[_<area>].py` name. Import the target script via `importlib` (see the existing tests for examples) so tests remain independent of install location.
