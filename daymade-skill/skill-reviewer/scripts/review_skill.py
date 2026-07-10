@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-Validate a Claude Code skill against official best practices.
+Review a Claude Code skill against official best practices.
 
 Usage:
-    python3 review_skill.py <skill-path>
-    python3 review_skill.py <skill-path> --json
+    uv run --with PyYAML python review_skill.py <skill-path>
+    uv run --with PyYAML python review_skill.py <skill-path> --json
 
 Checks:
-    - Frontmatter: name, description presence and quality
+    - Canonical validation: YAML frontmatter, schema, internal paths
+    - Frontmatter quality: name, description, trigger conditions
     - Structure: correct directory layout
     - Size: SKILL.md body under 500 lines
     - Privacy: no hardcoded user paths or secrets
@@ -19,13 +20,15 @@ Exit codes:
     0 - all checks passed
     1 - warnings only
     2 - errors found
+    3 - invocation or runtime failure
 """
 
-import os
+import ast
 import re
 import sys
 import json
 import argparse
+import subprocess
 from pathlib import Path
 
 
@@ -38,63 +41,180 @@ CORE_SUBAGENT_TYPES = {
     "Plan",
 }
 
-HARDCODED_PATH_PATTERNS = [
-    r"/Users/\w+",
-    r"/home/\w+",
-    r"C:\\Users\\\w+",
+EXIT_CLEAN = 0
+EXIT_WARNINGS = 1
+EXIT_FINDINGS = 2
+EXIT_OPERATIONAL = 3
+
+IGNORED_DIRECTORY_NAMES = {
+    ".git",
+    ".pytest_cache",
+    "__pycache__",
+    "node_modules",
+}
+
+BINARY_SUFFIXES = {
+    ".gif", ".ico", ".jpeg", ".jpg", ".mov", ".mp3", ".mp4",
+    ".otf", ".pdf", ".png", ".ttf", ".wav", ".webp", ".woff",
+    ".woff2", ".zip",
+}
+
+PATH_PATTERNS = [
+    re.compile(r"/Users/(?P<user>[A-Za-z][A-Za-z0-9._-]*)(?=/|[\s`'\"),;:]|$)"),
+    re.compile(r"/home/(?P<user>[A-Za-z][A-Za-z0-9._-]*)(?=/|[\s`'\"),;:]|$)"),
+    re.compile(r"C:\\Users\\(?P<user>[A-Za-z][A-Za-z0-9._-]*)(?=\\|[\s`'\"),;:]|$)"),
 ]
+
+PLACEHOLDER_USERNAMES = {
+    "example",
+    "example-user",
+    "name",
+    "user",
+    "username",
+    "your-name",
+    "yourname",
+}
 
 SECRET_PATTERNS = [
-    r"(?i)(api[_-]?key|secret[_-]?key|password|token)\s*[:=]\s*['\"][^'\"]{8,}",
-    r"sk-[a-zA-Z0-9]{20,}",
-    r"ghp_[a-zA-Z0-9]{36}",
+    re.compile(
+        r"\b(?:api[_-]?key|secret[_-]?key|password|token)\b"
+        r"\s*[:=]\s*['\"](?P<value>[^'\"]{8,})['\"]",
+        re.IGNORECASE,
+    ),
+    re.compile(r"(?P<value>sk-[A-Za-z0-9]{20,})"),
+    re.compile(r"(?P<value>ghp_[A-Za-z0-9]{36})"),
+]
+
+PLACEHOLDER_SECRET_PATTERNS = [
+    re.compile(r"^<[^>\r\n]+>$"),
+    re.compile(
+        r"^(?:your|example|sample|dummy|fake|test)[-_]"
+        r"(?:(?:api|secret)[-_])?"
+        r"(?:key|token|password|secret)"
+        r"(?:[-_]here)?$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(?:sk|ghp)[-_](?:test|example|sample|dummy|fake|placeholder|redacted)"
+        r"(?:[-_].*)?$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^(?:change[-_]?me|replace[-_]?me|redacted|placeholder|x{3,})$",
+        re.IGNORECASE,
+    ),
 ]
 
 
-def parse_frontmatter(content):
-    """Extract YAML frontmatter from SKILL.md.
+class ReviewRuntimeError(Exception):
+    """Raised when the reviewer cannot complete a trustworthy review."""
 
-    Handles flat 'key: value' pairs, block scalars ('>', '>-', '|', '|-')
-    and plain indented continuation lines, so multi-line descriptions
-    are read as a single string instead of being lost.
-    """
+
+class ReviewArgumentParser(argparse.ArgumentParser):
+    """Keep invocation failures distinct from review findings."""
+
+    def error(self, message):
+        if "--json" in sys.argv[1:]:
+            print(json.dumps({
+                "status": "operational_error",
+                "error": {
+                    "category": "invocation",
+                    "message": message,
+                },
+            }, indent=2))
+            self.exit(EXIT_OPERATIONAL)
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_OPERATIONAL, f"{self.prog}: error: {message}\n")
+
+
+def load_yaml_module():
+    """Load the canonical YAML parser or fail with an actionable message."""
+    try:
+        import yaml
+    except ModuleNotFoundError as exc:
+        raise ReviewRuntimeError(
+            "Missing dependency: PyYAML. Run with: "
+            "uv run --with PyYAML python review_skill.py <skill-path>"
+        ) from exc
+    return yaml
+
+
+def canonical_validator_path():
+    """Resolve skill-creator's validator from the explicit suite layout."""
+    validator = (
+        Path(__file__).resolve().parents[2]
+        / "skill-creator"
+        / "scripts"
+        / "quick_validate.py"
+    )
+    if not validator.is_file():
+        raise ReviewRuntimeError(
+            "Canonical validator not found at the expected daymade-skill suite path: "
+            f"{validator}"
+        )
+    return validator
+
+
+def run_canonical_validation(skill_path, issues):
+    """Delegate structural validity to skill-creator's canonical validator."""
+    validator = canonical_validator_path()
+    try:
+        result = subprocess.run(
+            [sys.executable, str(validator), str(skill_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+        )
+    except OSError as exc:
+        raise ReviewRuntimeError(
+            f"Could not start canonical validator: {exc}"
+        ) from exc
+
+    stdout = " ".join(result.stdout.split())
+    stderr = " ".join(result.stderr.split())
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1 and not stderr:
+        issues.append((
+            "error",
+            "validation",
+            stdout or "Canonical skill validation failed",
+        ))
+        return False
+
+    output = " ".join(part for part in (stdout, stderr) if part)
+    raise ReviewRuntimeError(
+        "Canonical validator could not complete"
+        + (f": {output}" if output else f" (exit {result.returncode})")
+    )
+
+
+def parse_frontmatter(content, yaml_module):
+    """Parse YAML frontmatter with PyYAML after canonical validation."""
     match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
     if not match:
         return None, content
 
     fm_text = match.group(1)
     body = content[match.end():]
-    fm = {}
-    current_key = None
-
-    for line in fm_text.split("\n"):
-        if not line.strip():
-            continue
-        if not line[0].isspace() and ":" in line:
-            key, _, val = line.partition(":")
-            current_key = key.strip()
-            val = val.strip()
-            if val in {">", ">-", ">+", "|", "|-", "|+"}:
-                val = ""
-            fm[current_key] = val.strip('"').strip("'")
-        elif current_key:
-            extra = line.strip().strip('"').strip("'")
-            if extra:
-                fm[current_key] = (fm[current_key] + " " + extra).strip()
-
-    return fm, body
+    try:
+        fm = yaml_module.safe_load(fm_text)
+    except yaml_module.YAMLError:
+        return None, body
+    return (fm if isinstance(fm, dict) else None), body
 
 
 def check_frontmatter(fm, issues):
-    """Validate frontmatter fields."""
+    """Apply reviewer-specific quality checks to valid YAML frontmatter."""
     if fm is None:
-        issues.append(("error", "frontmatter", "YAML frontmatter is missing"))
         return
 
     if not fm.get("name"):
         issues.append(("error", "frontmatter", "'name' field is missing"))
     else:
         name = fm["name"]
+        if not isinstance(name, str):
+            return
         if len(name) > 64:
             issues.append(("warning", "frontmatter", f"'name' is {len(name)} chars (max 64)"))
         if not re.match(r"^[a-z0-9][a-z0-9-]*$", name):
@@ -104,6 +224,8 @@ def check_frontmatter(fm, issues):
         issues.append(("error", "frontmatter", "'description' field is missing"))
     else:
         desc = fm["description"]
+        if not isinstance(desc, str):
+            return
         if len(desc) > 1024:
             issues.append(("warning", "frontmatter", f"'description' is {len(desc)} chars (max 1024)"))
         if len(desc) < 50:
@@ -151,24 +273,47 @@ def check_privacy(skill_path, issues):
     for fpath in skill_path.rglob("*"):
         if not fpath.is_file():
             continue
-        if fpath.suffix in {".png", ".jpg", ".gif", ".ico", ".woff", ".woff2"}:
+        rel = fpath.relative_to(skill_path)
+        if any(part in IGNORED_DIRECTORY_NAMES for part in rel.parts):
+            continue
+        if fpath.name == ".security-scan-passed":
+            continue
+        if fpath.suffix.lower() in BINARY_SUFFIXES:
             continue
         try:
-            text = fpath.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            continue
+            text = fpath.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            raise ReviewRuntimeError(
+                f"Cannot review {rel}: file is not valid UTF-8"
+            ) from exc
+        except OSError as exc:
+            raise ReviewRuntimeError(f"Cannot read {rel}: {exc}") from exc
 
-        rel = fpath.relative_to(skill_path)
-
-        for pattern in HARDCODED_PATH_PATTERNS:
-            matches = re.findall(pattern, text)
+        for pattern in PATH_PATTERNS:
+            matches = [
+                match.group(0)
+                for match in pattern.finditer(text)
+                if match.group("user").lower() not in PLACEHOLDER_USERNAMES
+            ]
             if matches:
                 issues.append(("warning", "privacy",
                                f"{rel}: hardcoded path found {len(matches)} time(s) (e.g. {matches[0]})"))
 
         for pattern in SECRET_PATTERNS:
-            if re.search(pattern, text):
+            matches = [
+                match.group("value")
+                for match in pattern.finditer(text)
+                if not is_placeholder_secret(match.group("value"))
+            ]
+            if matches:
                 issues.append(("error", "privacy", f"{rel}: possible secret/credential detected"))
+                break
+
+
+def is_placeholder_secret(value):
+    """Recognize explicit documentation/test placeholders, not real values."""
+    normalized = value.strip()
+    return any(pattern.fullmatch(normalized) for pattern in PLACEHOLDER_SECRET_PATTERNS)
 
 
 def check_scripts(skill_path, issues):
@@ -181,19 +326,40 @@ def check_scripts(skill_path, issues):
         if not script.is_file():
             continue
         rel = script.relative_to(skill_path)
+        if any(part in IGNORED_DIRECTORY_NAMES for part in rel.parts):
+            continue
+        if script.suffix.lower() in BINARY_SUFFIXES or script.suffix == ".pyc":
+            continue
 
         try:
             text = script.read_text(encoding="utf-8")
-        except Exception:
-            issues.append(("warning", "scripts", f"{rel}: cannot read file"))
-            continue
+        except UnicodeDecodeError as exc:
+            raise ReviewRuntimeError(
+                f"Cannot review {rel}: script is not valid UTF-8"
+            ) from exc
+        except OSError as exc:
+            raise ReviewRuntimeError(f"Cannot read {rel}: {exc}") from exc
 
         if script.suffix == ".py":
             if not text.startswith("#!/"):
                 issues.append(("info", "scripts", f"{rel}: missing shebang (#!/usr/bin/env python3)"))
 
-            if "except:" in text and "except Exception" not in text:
-                issues.append(("warning", "scripts", f"{rel}: bare 'except:' found -- use specific exception types"))
+            try:
+                syntax_tree = ast.parse(text, filename=str(rel))
+            except SyntaxError as exc:
+                issues.append((
+                    "warning",
+                    "scripts",
+                    f"{rel}: Python syntax error at line {exc.lineno}: {exc.msg}",
+                ))
+            else:
+                for node in ast.walk(syntax_tree):
+                    if isinstance(node, ast.ExceptHandler) and node.type is None:
+                        issues.append((
+                            "warning",
+                            "scripts",
+                            f"{rel}:{node.lineno}: bare 'except:' found -- use specific exception types",
+                        ))
 
             if re.search(r"^\s*import\s+requests\b", text, re.MULTILINE) or re.search(r"^\s*import\s+httpx\b", text, re.MULTILINE):
                 issues.append(("info", "scripts", f"{rel}: uses external HTTP library -- document this dependency"))
@@ -247,14 +413,22 @@ def run_review(skill_path):
     skill_path = Path(skill_path).resolve()
 
     if not skill_path.is_dir():
-        return [("error", "structure", f"Path is not a directory: {skill_path}")], None
+        raise ReviewRuntimeError(f"Path is not a directory: {skill_path}")
 
     skill_md = skill_path / "SKILL.md"
     if not skill_md.exists():
         return [("error", "structure", "SKILL.md not found")], None
 
-    content = skill_md.read_text(encoding="utf-8")
-    fm, body = parse_frontmatter(content)
+    try:
+        content = skill_md.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ReviewRuntimeError("SKILL.md is not valid UTF-8") from exc
+    except OSError as exc:
+        raise ReviewRuntimeError(f"Cannot read SKILL.md: {exc}") from exc
+
+    yaml_module = load_yaml_module()
+    run_canonical_validation(skill_path, issues)
+    fm, body = parse_frontmatter(content, yaml_module)
 
     check_frontmatter(fm, issues)
     check_structure(skill_path, issues)
@@ -312,13 +486,31 @@ def format_json(issues, skill_path, skill_name=None):
     }, indent=2)
 
 
+def format_operational_error(message, as_json=False):
+    """Format a reviewer failure without misclassifying it as a finding."""
+    if as_json:
+        return json.dumps({
+            "status": "operational_error",
+            "error": {
+                "category": "runtime",
+                "message": message,
+            },
+        }, indent=2)
+    return f"Reviewer could not complete: {message}"
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Validate a Claude Code skill")
+    parser = ReviewArgumentParser(description="Review a Claude Code skill")
     parser.add_argument("skill_path", help="Path to skill directory")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
 
-    issues, skill_name = run_review(args.skill_path)
+    try:
+        issues, skill_name = run_review(args.skill_path)
+    except ReviewRuntimeError as exc:
+        output = format_operational_error(str(exc), as_json=args.json)
+        print(output, file=sys.stdout if args.json else sys.stderr)
+        return EXIT_OPERATIONAL
 
     if args.json:
         print(format_json(issues, args.skill_path, skill_name))
@@ -328,12 +520,11 @@ def main():
     errors = sum(1 for i in issues if i[0] == "error")
     warnings = sum(1 for i in issues if i[0] == "warning")
     if errors:
-        sys.exit(2)
-    elif warnings:
-        sys.exit(1)
-    else:
-        sys.exit(0)
+        return EXIT_FINDINGS
+    if warnings:
+        return EXIT_WARNINGS
+    return EXIT_CLEAN
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
