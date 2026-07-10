@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **daymade-claude-code** v1.8.4: `claude-switch-models-setup` fixes — the `css` shell alias in `claude-profiles-help` points back at the shipped `stepfun` profile (a rename had left it targeting a nonexistent `css` profile); the cross-process sync lock moved out of `~/.claude/plugins/` so `shared_item_names()` can no longer symlink it into every profile as flickering dangling debris, with a scan guard against legacy lock residue.
 - **daymade-claude-code** v1.8.5: `claude-switch-models-setup` references realigned with the code — the architecture doc now states the sync lock lives outside the plugins directory (it said "under the Claude plugins directory", stale after the v1.8.4 move), and the concurrent-launch verification examples loop over the shipped profile names (kimi/glm/deepseek/stepfun/anthropic) instead of a machine-specific list.
 
+### Fixed
+- **daymade-claude-code** v1.8.7: `claude-skills-troubleshooting` now determines marketplace-cache freshness only from the timezone-qualified `known_marketplaces.json` `lastUpdated` value, rejects missing, malformed, future, or structurally invalid metadata instead of falling back to unreliable directory mtimes, and returns a nonzero status for stale or invalid caches. Added regression coverage for timestamp parsing, threshold boundaries, malformed data, and diagnostic exit semantics.
+
 ## [1.82.0] - 2026-07-07
 
 ### Changed
