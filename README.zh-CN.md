@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.82.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.83.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -52,6 +52,10 @@
 | 发布前验证 | 基本 YAML 检查 | 扩展验证器（全部 frontmatter 字段、路径引用完整性、空白字符问题） |
 | 安全审查 | 无工具 | `security_scan.py` + gitleaks 集成——打包前硬门禁 |
 | 从真实失败中学习 | 无失败案例 | 实战方法论 + 文档化的失败模式和踩坑记录 |
+| 安全蒸馏历史对话 | 未覆盖 | 显式本地 manifest、消息级时间窗、先脱敏后落盘、匿名 source ID、默认忽略 `.enrich/`，候选只能人工晋升进 references/scripts |
+| 用证据锚定知识型 skill | 泛化建议 | 从真实调用和机器可读规范到生产代码的权威源阶梯，加上可执行示例冒烟与证据边界规则 |
+| 与官方版同时安装 | 抛硬币——两者描述几乎一字不差 | 触发时检测冲突，提供一条命令可装可卸的 SessionStart 路由 hook（仅在两者共存时才会安装）；显式点名时官方版仍可用 |
+| 你自己的 skill 与已装插件撞名 | 未覆盖 | `generate_supersede_kit.py` 把同款条件路由 kit 生成进你的 skill，附实测优先级决策指南（改名 → description 声明 → hook → disable） |
 
 **质量对比**（独立审计，8 个维度）：
 
@@ -2760,14 +2764,20 @@ uv run --with aiohttp python scripts/concurrency_probe.py \
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（套件专用——通过 `daymade-claude-code:read-claude-web-conversation` 调用）
 
-通过 Claude Code operations 套件提取 Claude.ai 网页会话全文，用于恢复、审计、归档或迁移。
+通过 Claude Code operations 套件提取 Claude.ai 当前有效会话分支的全部内容：
+消息正文、真实工具调用与结果、上传文件、生成图片和沙箱交付物。可在本地渲染
+忠实 Markdown、从工具历史重建文件，或借助已登录的浏览器下载原始字节。
 
 **使用场景：**
 - 需要读取本地 Claude Code 日志里没有的 Claude.ai 网页会话
 - 为交接、审计或归档恢复完整网页线程
 - 对比浏览器可见内容、导出文件和本地 session artifact
+- 保留普通导出会折叠掉的 agent 工具调用与分析过程
+- 下载当前有效会话分支中的上传文件和助手生成交付物
+- Chrome 扩展因账号不一致无法配对时，在 macOS 使用 AppleScript 通道
 
-**要求**：已安装 `daymade-claude-code` 套件，并能访问相关浏览器/session 上下文。
+**要求**：已安装 `daymade-claude-code` 套件，并有已登录的 Chrome 会话。
+AppleScript fallback 需要 macOS，以及由用户手动开启一次 Chrome 开发者菜单开关。
 
 ---
 
@@ -3023,6 +3033,59 @@ claude plugin install openclaw-model-switch@daymade-skills
 - 检测孤儿缓存版本、源码/缓存漂移、marketplace 条目指向错误源码
 - 检查发布面时忽略 `scripts/`、`references/`、`tests/`、demo 和构建产物等工作区专用目录
 
+### 84. **photo-to-scanned-pdf** - 手机文档照片转扫描件 PDF
+
+> **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，
+> 调用方式 `daymade-docs:photo-to-scanned-pdf`）
+
+把合同、票据、表单、证书或手写页的手机照片转换成干净的 A4 扫描件 PDF。
+流程包含透视矫正、扫描风格背景清理、彩纸处理、按内容明确排序，以及强制的
+全册联览核验。
+
+### 85. **github-review-pr** - 基于当前 Base 的贡献者 PR 评审
+
+```bash
+claude plugin install github-review-pr@daymade-skills
+```
+
+以仓库维护者视角 review 或重新 review 一个点名的贡献者 PR（包括正在重新考虑
+的 closed PR），或把全部 open PR 从新到旧逐个审核；始终以实时 base 为准，
+而不是沿用已经过时的 PR 快照。
+
+**使用场景：**
+- 上次 review 后 main/base 已变化，需要重新判断
+- 某个明确点名的 closed PR 需要回溯审核或重新考虑
+- 需要区分 PR 新引入的问题和 base 已有旧债
+- 需要知道当前三方合并真正会落下什么内容
+- 需要为全部 open PR 生成从新到旧、逐项独立的决策账本
+- 需要先 review 再修复或合并，并对每个 GitHub 写操作单独授权
+- 显式启用个人维护者政策，从历史关闭 PR 学习原则、执行策展门槛，并判断
+  值得保留的原贡献者 PR 是否应由维护者修复而不是重开
+
+**主要功能：**
+- 分开记录 PR 原 base、当前 base 和 head OID，并在结论前重新核验
+- 干净合并时审查 prospective merge tree；冲突时审查独立贡献意图和冲突 stage，并明确不存在 landing tree
+- 区分普通 base 漂移和历史断裂，再把污染分支历史与经证据确认的贡献 patch 分开判断
+- 可把确认过的 patch 投影到当前 base 供分析，但明确标为合成结果、不可直接落地
+- finding 必须由目标代码、测试、运行行为、日志或仓库规范支撑；审查者共识只提高置信度，不提高严重性
+- 每条 finding 先归因 `PR`、`BASE` 或 `SHARED`，再决定谁负责修
+- 区分策展意义上的 `DECLINE`、需要修改和真正已被 main 取代
+- 默认完全只读；修复、发 review、关闭、合并、admin、auto-merge 和删分支分别授权
+- 外部贡献者项目目标只能在内容过门槛后影响优先级，不能降低接受标准
+- 个人维护者模式下，每次只展示一个 PR 的最终快照并重新取得上下文绑定确认；
+  “继续”等明确肯定回复可确认当前 PR，但绝不把权限传给下一个 PR
+
+**示例：**
+```text
+/github-review-pr --personal-maintainer https://github.com/<owner>/<repo>/pull/<number>
+/github-review-pr --personal-maintainer --all-open
+main 在上次 review 后变了，重新告诉我现在真正会合进去什么
+把我们所有 open PR 从新到旧审核一遍，并按我以前的维护者原则判断
+这个贡献能不能先合，剩余的仓库记账问题我们自己修？
+```
+
+**依赖**：已认证的 `gh` CLI、支持 `merge-tree --write-tree` 的 `git`、`jq`。
+
 ---
 
 ## 🎬 交互式演示画廊
@@ -3032,7 +3095,9 @@ claude plugin install openclaw-model-switch@daymade-skills
 ## 🎯 使用场景
 
 ### GitHub 工作流
-使用 **github-ops** 简化 PR 创建、问题管理和 API 操作。
+使用 **github-ops** 简化 PR 创建、问题管理和 API 操作。维护者要对一个现有
+贡献者 PR 或完整 open PR 队列做基于当前 base 的代码 review、责任归因或
+review 后修复/落地时，使用 **github-review-pr**。
 
 ### 文档处理
 结合 **doc-to-markdown** 进行文档转换和 **mermaid-tools** 进行图表生成，创建全面的文档。使用 **llm-icon-finder** 添加品牌图标。
@@ -3165,6 +3230,7 @@ claude plugin install openclaw-model-switch@daymade-skills
 ### 快速链接
 
 - **github-ops**：参见 `github-ops/references/api_reference.md` 了解 API 文档
+- **github-review-pr**：参见 `github-review-pr/SKILL.md` 了解当前 base 评审工作流；显式个人政策见 `github-review-pr/references/personal_maintainer_context.md`
 - **doc-to-markdown**：参见 `daymade-docs/doc-to-markdown/references/conversion-examples.md` 了解转换场景
 - **mermaid-tools**：参见 `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` 了解设置指南
 - **statusline-generator**：参见 `daymade-claude-code/statusline-generator/references/color_codes.md` 了解自定义
@@ -3217,8 +3283,9 @@ claude plugin install openclaw-model-switch@daymade-skills
 ## 🛠️ 系统要求
 
 - **Claude Code** 2.0.13 或更高版本
-- **Python 3.6+**（用于多个技能中的脚本）
-- **gh CLI**（用于 github-ops）
+- **Python 3.10+**（市场整体基线；个别 skill 可能支持更旧版本）
+- **gh CLI**（用于 github-ops 和 github-review-pr）
+- **支持 `merge-tree --write-tree` 的 git + jq**（用于 github-review-pr）
 - **markitdown**（用于 doc-to-markdown）
 - **mermaid-cli**（用于 mermaid-tools）
 - **VHS**（用于 cli-demo-generator）：`brew install vhs`
@@ -3323,5 +3390,3 @@ claude plugin install skill-name@daymade-skills
 ---
 
 **使用 skill-creator 技能为 Claude Code 精心打造 ❤️**
-
-最后更新：2026-06-05 | 市场版本 1.60.1

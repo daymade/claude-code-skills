@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.82.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.83.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -52,6 +52,10 @@ This is a **production-hardened fork** of [Anthropic's official skill-creator](h
 | Validate before shipping | Basic YAML check | Expanded validator (all frontmatter fields, path reference integrity, whitespace issues) |
 | Catch security issues | No tooling | `security_scan.py` with gitleaks integration — hard gate before packaging |
 | Learn from real failures | No failure cases | Battle-tested methodology with documented failure patterns and gotchas |
+| Distill past conversations safely | Not covered | Explicit local manifest, message-level time window, redaction, opaque source IDs, ignored `.enrich/` staging, and manual promotion into references/scripts |
+| Ground knowledge skills in evidence | General advice | Authority ladder from real calls and machine-readable specs through production code, plus executable-example smoke checks and evidence-boundary rules |
+| Have both installed at once | Coin flip — the two descriptions are near-identical | Detects the clash on trigger and offers a one-command, reversible SessionStart routing hook (only ever installed when both coexist); the official plugin stays usable by explicit request |
+| Your own skill collides with an installed plugin | Not covered | `generate_supersede_kit.py` stamps the same conditional routing kit into your skill, plus a measured precedence decision guide (rename → description tiebreaker → hook → disable) |
 
 **Quality comparison** (independent audit, 8 dimensions):
 
@@ -2718,14 +2722,23 @@ uv run --with aiohttp python scripts/concurrency_probe.py \
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:read-claude-web-conversation`)
 
-Extract full Claude.ai web conversation content through the Claude Code operations suite when local browser/export paths are needed for recovery, auditing, or migration.
+Extract the complete active Claude.ai conversation through the Claude Code
+operations suite: message text, real tool calls and outputs, uploads, generated
+images, and sandbox deliverables. Render faithful Markdown locally, reconstruct
+files created through tool calls, or download original bytes through the
+logged-in browser session.
 
 **When to use:**
 - Reading a Claude.ai web conversation that is not available in local Claude Code logs
 - Recovering a full web thread for handoff, audit, or archival
 - Comparing browser-visible content with exported or local session artifacts
+- Preserving the analysis trace from agent conversations whose tool calls are collapsed in normal exports
+- Downloading uploads and assistant-produced files that belong to the active conversation branch
+- Using the macOS AppleScript channel when the Chrome extension is paired to a different account
 
-**Requirements**: Installed `daymade-claude-code` suite and access to the relevant browser/session context.
+**Requirements**: Installed `daymade-claude-code` suite and a logged-in Chrome
+session. The AppleScript fallback requires macOS and one user-enabled Chrome
+developer-menu toggle.
 
 ---
 
@@ -2981,6 +2994,64 @@ Keep Claude Code skill marketplaces and installed caches aligned with source rep
 - Detects orphaned cache versions, source/cache drift, and marketplace entries pointing at the wrong source
 - Ignores workspace-only folders such as `scripts/`, `references/`, `tests/`, demos, and build outputs when checking published skill surfaces
 
+### 84. **photo-to-scanned-pdf** - Phone Photos to Scanner-Quality PDF
+
+> **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only;
+> invoke as `daymade-docs:photo-to-scanned-pdf`)
+
+Turn phone photos of contracts, receipts, forms, certificates, or handwritten
+pages into a clean A4 PDF. The workflow combines perspective correction,
+scanner-style background cleanup, colored-paper handling, explicit content-based
+page ordering, and a mandatory whole-document contact-sheet check.
+
+### 85. **github-review-pr** - Current-Base Contributor PR Review
+
+```bash
+claude plugin install github-review-pr@daymade-skills
+```
+
+Review or re-review one named contributor PR—including a closed PR under
+reconsideration—or sweep every open PR newest-to-oldest as a repository maintainer,
+always against the live base rather than a stale PR snapshot.
+
+**When to use:**
+- Main/base changed after an earlier review and the PR needs a fresh decision
+- A specifically named closed PR needs a merit review or reconsideration
+- Need to distinguish PR-owned defects from pre-existing base debt
+- Need to know what the actual three-way merge would land now
+- Need a newest-to-oldest decision ledger for the complete open-PR queue
+- Need a review-gated repair or merge, with every GitHub write explicitly authorized
+- Want the opt-in personal policy to learn from prior closed-PR decisions, enforce the
+  maintainer's curation bar, or decide whether worthy original contributor PRs should
+  be repaired instead of recreated
+
+**Key features:**
+- Separates PR-recorded base, current base, and head OIDs, then rechecks them before the verdict
+- Reviews the prospective merge tree when clean, or isolated intent plus conflict stages when no landing tree exists
+- Detects ordinary base drift versus history discontinuity, then separates polluted
+  branch history from the contributor's verified intended patch
+- Can project that verified patch onto current base for analysis while labeling the
+  result synthetic and non-landable
+- Requires target code, tests, runtime behavior, logs, or repository specification for
+  findings; reviewer concurrence raises confidence, not severity
+- Attributes every finding as `PR`, `BASE`, or `SHARED` before assigning repair ownership
+- Distinguishes a curation `DECLINE` from a fix request or true supersession
+- Keeps review read-only by default; repair, review posts, close, merge, admin, auto-merge, and branch deletion remain separate actions
+- Treats external-contributor program goals only as a post-merit priority, never a reason to lower the acceptance bar
+- Requires one fresh, context-bound confirmation for the single surfaced PR before
+  merge; a short affirmative reply is accepted without carrying authority to the next PR
+
+**Example usage:**
+```text
+/github-review-pr --personal-maintainer https://github.com/<owner>/<repo>/pull/<number>
+/github-review-pr --personal-maintainer --all-open
+main changed since the last review; tell me what would actually land now
+review all of our open PRs newest to oldest and apply my prior maintainer principles
+can we merge this contribution and fix the remaining repo bookkeeping ourselves?
+```
+
+**Requirements**: authenticated `gh` CLI, `git` with `merge-tree --write-tree`, and `jq`.
+
 ---
 
 ## 🎬 Interactive Demo Gallery
@@ -2991,6 +3062,9 @@ Want to see all demos in one place with click-to-enlarge functionality? Check ou
 
 ### For GitHub Workflows
 Use **github-ops** to streamline PR creation, issue management, and API operations.
+Use **github-review-pr** when a maintainer needs a current-base code review, ownership
+decision, or review-gated repair/landing for one contributor PR or the complete open
+PR queue.
 
 ### For Documentation
 Combine **doc-to-markdown** for document conversion and **mermaid-tools** for diagram generation to create comprehensive documentation. Use **llm-icon-finder** to add brand icons.
@@ -3123,6 +3197,7 @@ Each skill includes:
 ### Quick Links
 
 - **github-ops**: See `github-ops/references/api_reference.md` for API documentation
+- **github-review-pr**: See `github-review-pr/SKILL.md` for the current-base review workflow and `github-review-pr/references/personal_maintainer_context.md` for the explicit personal policy profile
 - **doc-to-markdown**: See `daymade-docs/doc-to-markdown/references/conversion-examples.md` for conversion scenarios
 - **mermaid-tools**: See `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` for setup guide
 - **statusline-generator**: See `daymade-claude-code/statusline-generator/references/color_codes.md` for customization
@@ -3175,8 +3250,9 @@ Each skill includes:
 ## 🛠️ Requirements
 
 - **Claude Code** 2.0.13 or higher
-- **Python 3.6+** (for scripts in multiple skills)
-- **gh CLI** (for github-ops)
+- **Python 3.10+** (marketplace-wide baseline; individual skills may support older versions)
+- **gh CLI** (for github-ops and github-review-pr)
+- **git with `merge-tree --write-tree` + jq** (for github-review-pr)
 - **markitdown** (for doc-to-markdown)
 - **mermaid-cli** (for mermaid-tools)
 - **yt-dlp** (for youtube-downloader): `brew install yt-dlp` or `pip install yt-dlp`
@@ -3284,5 +3360,3 @@ If you find these skills useful, please:
 ---
 
 **Built with ❤️ using the skill-creator skill for Claude Code**
-
-Last updated: 2026-06-05 | Marketplace version 1.60.1
