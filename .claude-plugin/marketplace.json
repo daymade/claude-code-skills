@@ -190,7 +190,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.4.1",
+      "version": "1.5.0",
       "category": "suite",
       "keywords": [
         "suite",

@@ -277,7 +277,7 @@ uv run scripts/fix_transcription.py --list --domain embodied_ai | tail -10
 uv run scripts/fix_transcription.py --input file.md --stage 1 --domain general
 ```
 
-**Output**: `file_stage1.md` with dictionary corrections only.
+**Output**: `file_stage1.md` with dictionary corrections only (written only when corrections were applied; a 0-correction run skips it and safe-mode deferrals go to `_needs_review.md`).
 
 **Review**: Check if dictionary corrections are sufficient.
 

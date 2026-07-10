@@ -415,9 +415,20 @@ class Config:
         os.chmod(config_path, CONFIG_FILE_MODE)
         logger.info(f"Configuration saved to {config_path}")
 
-    def validate(self) -> tuple[list[str], list[str]]:
+    def validate(self, include_api_key_warning: bool = True) -> tuple[list[str], list[str]]:
         """
         Validate configuration completeness and correctness.
+
+        Args:
+            include_api_key_warning: Whether a missing API key should surface as
+                a warning. The key is only needed for API-mode AI corrections
+                (--stage 2/3), which fail fast with their own clear error; the
+                default native workflow (Stage 1 + agent editing) never touches
+                the API. Pass False for generic config loading so every stage-1
+                run isn't nagged about a key it doesn't need; the default True
+                serves `--config validate`, the health check that calls this
+                method directly. (`--validate` doesn't come through here — it
+                has its own independent key check in utils/validation.py.)
 
         Returns:
             Tuple of (errors, warnings)
@@ -429,7 +440,7 @@ class Config:
         if self.environment == Environment.PRODUCTION:
             if not self.api.api_key:
                 errors.append("API key is required in production environment")
-        elif not self.api.api_key:
+        elif not self.api.api_key and include_api_key_warning:
             warnings.append("API key not set (required for AI corrections)")
 
         # Check database path
@@ -505,8 +516,13 @@ def get_config() -> Config:
         if env_base_url:
             _config.api.base_url = env_base_url
 
-        # Validate
-        errors, warnings = _config.validate()
+        # Validate. The API-key warning is suppressed here: get_config() runs on
+        # every command including native/stage-1 runs that never touch the API,
+        # and the API path (--stage 2/3) fails fast with its own error. The
+        # health checks still surface the gap: `--config validate` calls
+        # Config.validate() with the default include_api_key_warning=True, and
+        # `--validate` runs its own independent key check (utils/validation.py).
+        errors, warnings = _config.validate(include_api_key_warning=False)
         if errors:
             logger.error(f"Configuration errors: {errors}")
         if warnings:
