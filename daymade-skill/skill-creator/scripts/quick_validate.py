@@ -104,6 +104,14 @@ def find_external_absolute_paths(content: str) -> list[tuple[int, str]]:
     # Match /Users/<user>/ and /home/<user>/ patterns
     pattern = re.compile(r'(/[Uu]sers/[A-Za-z][A-Za-z0-9_-]+/[^\s,;"\']+|/home/[A-Za-z][A-Za-z0-9_-]+/[^\s,;"\']+|C:\\\\Users\\\\[A-Za-z][A-Za-z0-9_-]+\\[^\s,;"\']*)')
 
+    # Placeholder detection must inspect the USERNAME SEGMENT only. The old check
+    # (`'user' in path.lower()`) skipped every macOS path outright — '/Users/' itself
+    # contains "user" — so this scanner had never flagged a single real path. Caught
+    # by scripts/selftest_validators.py test 4.
+    placeholder_users = {'user', 'username', 'yourname', 'your-name', 'name',
+                         'someone', 'example', 'placeholder', 'me'}
+    user_seg = re.compile(r'^(?:/[Uu]sers|/home)/([^/]+)/|^C:\\+Users\\+([^\\]+)\\')
+
     for line_no, line in enumerate(content.split('\n'), 1):
         # Skip code blocks that are clearly examples/placeholders
         stripped = line.strip()
@@ -111,8 +119,11 @@ def find_external_absolute_paths(content: str) -> list[tuple[int, str]]:
             continue
         for match in pattern.finditer(line):
             path = match.group(0)
-            # Skip obvious placeholders
-            if '<' in path or 'username' in path.lower() or 'user' in path.lower():
+            if '<' in path:
+                continue
+            seg_match = user_seg.match(path)
+            seg = ((seg_match.group(1) or seg_match.group(2)) if seg_match else '').lower()
+            if seg in placeholder_users:
                 continue
             issues.append((line_no, path))
 
@@ -167,6 +178,11 @@ def find_personal_identifiers(content: str) -> list[tuple[int, str, str]]:
             # Skip common non-token words
             if text.lower() in {'skill_version', 'lookback_days', 'relevance_keywords'}:
                 continue
+            # A real credential virtually always mixes in digits; a long
+            # digit-free identifier is a camelCase config key / API name
+            # (maxCommentPagesPerVideo), which drowned real findings in noise.
+            if not any(c.isdigit() for c in text):
+                continue
             issues.append((line_no, text, 'opaque_token'))
         
         # Check for CJK names (only in config-like contexts: after colon, in YAML values)
@@ -174,7 +190,10 @@ def find_personal_identifiers(content: str) -> list[tuple[int, str, str]]:
         if ':' in stripped and not stripped.startswith('#'):
             key_part, _, val_part = stripped.partition(':')
             val_part = val_part.strip()
-            if cjk_name_pattern.match(val_part):
+            # Only a SHORT all-CJK value looks like a person name in config.
+            # match() on a long sentence fired on ordinary Chinese prose
+            # (docstrings, table cells) and drowned real findings in noise.
+            if cjk_name_pattern.fullmatch(val_part):
                 # Could be a person name in config
                 issues.append((line_no, val_part, 'cjk_identifier'))
 
@@ -296,24 +315,50 @@ def validate_skill(skill_path):
     if not paths_valid:
         return False, f"Missing internal skill files: {', '.join(missing_paths)}"
 
-    # Warn about absolute user paths (personal data)
-    abs_paths = find_external_absolute_paths(content)
-    if abs_paths:
-        path_list = "; ".join(f"line {ln}: {p}" for ln, p in abs_paths[:5])
-        print(f"{__import__('os').linesep}{__import__('os').linesep}".join([
-            f"{chr(9992)}  WARNING: Found absolute user paths in {skill_md.name}:",
-            f"   {path_list}",
-            f"   These won't work on other machines.",
-            f"   Use relative paths or config placeholders instead.",
-        ]))
+    # Scan SKILL.md AND bundled text files (references/, scripts/) for portability
+    # issues. Scanning only SKILL.md is a proven blind spot: a hardcoded
+    # /Users/<name>/ path shipped inside a reference file passed validation for
+    # a full review round because this loop used to look at SKILL.md alone.
+    scan_targets = [(skill_md.name, content)]
+    for sub in ("references", "scripts"):
+        sub_dir = skill_path / sub
+        if not sub_dir.is_dir():
+            continue
+        for f in sorted(sub_dir.rglob("*")):
+            if not f.is_file() or f.suffix not in {".md", ".py", ".sh", ".bash", ".txt"}:
+                continue
+            if "__pycache__" in f.parts:
+                continue
+            try:
+                scan_targets.append((str(f.relative_to(skill_path)), f.read_text(encoding="utf-8")))
+            except (OSError, UnicodeDecodeError):
+                continue
 
-    # Warn about personal identifiers (profiles, tokens, names)
-    personal = find_personal_identifiers(content)
-    if personal:
-        personal_list = "; ".join(f"line {ln}: {cat}={val!r}" for ln, val, cat in personal[:5])
-        print(f"{chr(9992)}  WARNING: Found personal/project-specific identifiers in {skill_md.name}:")
-        print(f"   {personal_list}")
-        print(f"   These are fine for private projects but should be reviewed before sharing.")
+    for rel_name, file_content in scan_targets:
+        # Warn about absolute user paths (personal data)
+        abs_paths = find_external_absolute_paths(file_content)
+        if abs_paths:
+            path_list = "; ".join(f"line {ln}: {p}" for ln, p in abs_paths[:5])
+            print(f"{chr(9992)}  WARNING: Found absolute user paths in {rel_name}:")
+            print(f"   {path_list}")
+            print(f"   These won't work on other machines. Use relative paths or config placeholders instead.")
+
+        # Warn about personal identifiers (profiles, tokens, names).
+        # Markdown only: scripts legitimately contain long hex/token-shaped
+        # literals and CJK comments, which are noise, not identity leaks.
+        personal = find_personal_identifiers(file_content) if rel_name.endswith(".md") else []
+        if personal:
+            personal_list = "; ".join(f"line {ln}: {cat}={val!r}" for ln, val, cat in personal[:5])
+            print(f"{chr(9992)}  WARNING: Found personal/project-specific identifiers in {rel_name}:")
+            print(f"   {personal_list}")
+            print(f"   These are fine for private projects but should be reviewed before sharing.")
+
+        # Warn about broken skill-internal references inside reference docs
+        # (SKILL.md gets the hard-fail check above; references get a warning).
+        if rel_name != skill_md.name and rel_name.endswith(".md"):
+            _, missing = validate_internal_paths(skill_path, file_content)
+            if missing:
+                print(f"{chr(9992)}  WARNING: {rel_name} references missing skill files: {', '.join(missing[:5])}")
 
     return True, "Skill is valid!"
 

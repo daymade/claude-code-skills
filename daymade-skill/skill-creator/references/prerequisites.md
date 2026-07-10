@@ -11,6 +11,7 @@ echo "=== Skill Creator Prerequisites ==="
 echo -n "uv: "; uv --version 2>/dev/null || echo "MISSING"
 echo -n "Python: "; uv run python --version 2>/dev/null || echo "MISSING"
 echo -n "PyYAML: "; uv run --with PyYAML python -c "import yaml; print('OK')" 2>/dev/null || echo "MISSING"
+echo -n "tiktoken: "; uv run --with tiktoken python -c "import tiktoken; print('OK')" 2>/dev/null || echo "MISSING (conversation mining only)"
 echo -n "gitleaks: "; gitleaks version 2>/dev/null || echo "MISSING"
 echo -n "claude CLI: "; which claude 2>/dev/null || echo "MISSING"
 echo -n "anthropic SDK: "; uv run --with anthropic python -c "import anthropic; print('OK')" 2>/dev/null || echo "MISSING (optional)"
@@ -21,8 +22,9 @@ echo -n "anthropic SDK: "; uv run --with anthropic python -c "import anthropic; 
 | Dependency | Required For | Phase | Severity |
 |-----------|-------------|-------|----------|
 | uv | Python runtime and dependency declaration | All Python phases | **Blocking** |
-| Python 3.7+ | All scripts | All | **Blocking** |
+| Python 3.10+ | All scripts | All | **Blocking** |
 | PyYAML | `quick_validate.py`, `package_skill.py` | Validation, Packaging | **Blocking** |
+| tiktoken | `mine_conversation.py` | Conversation mining | **Blocking for conversation mining** |
 | gitleaks | `security_scan.py` | Security Review (Step 6) | **Blocking for packaging** |
 | claude CLI | `run_eval.py`, `run_loop.py` | Testing, Description Optimization | **Blocking for evals** |
 | anthropic SDK | `improve_description.py`, `run_loop.py` | Description Optimization | Optional (only for desc optimization) |
@@ -52,6 +54,13 @@ tar -xzf gitleaks_8.21.2_linux_x64.tar.gz && sudo mv gitleaks /usr/local/bin/
 
 # Verify
 gitleaks version
+```
+
+### tiktoken (required for conversation mining)
+
+```bash
+uv run --with tiktoken python -c "import tiktoken; print(tiktoken.get_encoding('cl100k_base').name)"
+uv run --with PyYAML --with tiktoken python -m scripts.mine_conversation --help
 ```
 
 ### anthropic SDK (optional, for description optimization)

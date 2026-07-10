@@ -1,0 +1,50 @@
+{
+  "version": "1.0",
+  "target_skill": "<target-skill-directory-name>",
+  "topic_spec": {
+    "description": "<one-line description of what knowledge is being mined for>",
+    "keywords": [
+      "<keyword-1>",
+      "<keyword-2>"
+    ],
+    "exclude_keywords": [
+      "<noisy-word-1>"
+    ],
+    "min_relevance_score": 0.3
+  },
+  "sources": {
+    "claude_code_sessions": {
+      "roots": [
+        "~/.claude/projects/<project-key>"
+      ],
+      "since": "2026-01-01T00:00:00Z",
+      "until": "2026-12-31T23:59:59Z"
+    },
+    "claude_command_history": {
+      "path": "~/.claude/history.jsonl"
+    },
+    "codex_transcripts": {
+      "path": "~/.codex/transcription-history.jsonl"
+    },
+    "manual_exports": []
+  },
+  "redaction": {
+    "allowlisted_placeholders": [
+      "sk-example-*",
+      "sk-test-*",
+      "your-token-here"
+    ],
+    "extra_patterns": []
+  },
+  "partitioning": {
+    "chunk_tokens": 12000,
+    "encoding_model": "cl100k_base"
+  },
+  "mining_agents": [
+    "patterns",
+    "war-stories",
+    "query-guide",
+    "usage-patterns",
+    "code-assets"
+  ]
+}
