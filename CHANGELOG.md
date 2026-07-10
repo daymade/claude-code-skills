@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **daymade-claude-code** v1.8.5: `claude-switch-models-setup` references realigned with the code — the architecture doc now states the sync lock lives outside the plugins directory (it said "under the Claude plugins directory", stale after the v1.8.4 move), and the concurrent-launch verification examples loop over the shipped profile names (kimi/glm/deepseek/stepfun/anthropic) instead of a machine-specific list.
 
 ### Fixed
+- **cloudflare-troubleshooting** v1.0.2 ([#89](https://github.com/daymade/claude-code-skills/issues/89)): `scripts/fix_ssl_mode.py` now runs in dry-run mode by default, prints the current SSL mode and target mode before writing, and requires `--apply` before changing live Cloudflare SSL settings or purging cache. Updated troubleshooting references so mutating examples include the explicit apply flag.
 - **daymade-claude-code** v1.8.7: `claude-skills-troubleshooting` now determines marketplace-cache freshness only from the timezone-qualified `known_marketplaces.json` `lastUpdated` value, rejects missing, malformed, future, or structurally invalid metadata instead of falling back to unreliable directory mtimes, and returns a nonzero status for stale or invalid caches. Added regression coverage for timestamp parsing, threshold boundaries, malformed data, and diagnostic exit semantics.
 
 ## [1.82.0] - 2026-07-07
