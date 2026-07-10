@@ -210,7 +210,8 @@ class CorrectionRepository:
         source: str = "manual",
         confidence: float = 1.0,
         added_by: Optional[str] = None,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
+        force: bool = False
     ) -> int:
         """
         Add a new correction with full validation.
@@ -267,37 +268,63 @@ class CorrectionRepository:
 
             except sqlite3.IntegrityError as e:
                 if "UNIQUE constraint failed" in str(e):
-                    # Update existing correction instead (within same transaction)
-                    logger.warning(f"Correction already exists, updating: {from_text}")
-                    cursor = conn.execute("""
-                        UPDATE corrections
-                        SET to_text = ?, source = ?, confidence = ?,
-                            added_by = ?, notes = ?, added_at = CURRENT_TIMESTAMP
-                        WHERE from_text = ? AND domain = ? AND is_active = 1
-                    """, (to_text, source, confidence, added_by, notes, from_text, domain))
+                    # A row for (from_text, domain) already exists. Query it
+                    # WITHOUT filtering on is_active so a soft-deleted (e.g.
+                    # false-positive-disabled) row is handled deliberately rather
+                    # than crashing: the old code updated only is_active=1 rows and
+                    # then raised a misleading "Correction not found" when the
+                    # existing row was disabled.
+                    row = conn.execute("""
+                        SELECT id, to_text, is_active, notes, added_at
+                        FROM corrections
+                        WHERE from_text = ? AND domain = ?
+                    """, (from_text, domain)).fetchone()
 
-                    if cursor.rowcount > 0:
-                        # Get the ID of the updated row
-                        cursor = conn.execute("""
-                            SELECT id FROM corrections
-                            WHERE from_text = ? AND domain = ? AND is_active = 1
-                        """, (from_text, domain))
-                        correction_id = cursor.fetchone()[0]
+                    if row is None:
+                        # UNIQUE fired but no matching row — a genuine integrity error.
+                        raise ValidationError(f"Integrity constraint violated: {e}") from e
 
-                        # Audit log
-                        self._audit_log(
-                            conn,
-                            action="update_correction",
-                            entity_type="correction",
-                            entity_id=correction_id,
-                            user=added_by,
-                            details=f"Updated: '{from_text}' → '{to_text}' (domain: {domain})"
+                    existing_id, old_to_text, is_active, old_notes, old_added_at = row
+
+                    # A disabled row is a deliberate signal (typically a reported
+                    # false positive). Do not silently resurrect it — require force.
+                    if not is_active and not force:
+                        detail = (
+                            f"Correction '{from_text}' -> '{old_to_text}' exists in "
+                            f"domain '{domain}' but is DISABLED"
+                        )
+                        if old_notes:
+                            detail += f" ({old_notes})"
+                        if old_added_at:
+                            detail += f", added {old_added_at}"
+                        raise ValidationError(
+                            detail
+                            + f".\nTo reactivate it with target '{to_text}', re-run with --force."
                         )
 
-                        logger.info(f"Updated correction ID {correction_id}: {from_text} → {to_text}")
-                        return correction_id
-                    else:
-                        raise ValidationError(f"Correction not found: {from_text} in domain {domain}")
+                    reactivated = not is_active
+                    conn.execute("""
+                        UPDATE corrections
+                        SET to_text = ?, source = ?, confidence = ?,
+                            added_by = ?, notes = ?, added_at = CURRENT_TIMESTAMP,
+                            is_active = 1
+                        WHERE id = ?
+                    """, (to_text, source, confidence, added_by, notes, existing_id))
+
+                    verb = "Reactivated" if reactivated else "Updated"
+                    self._audit_log(
+                        conn,
+                        action="reactivate_correction" if reactivated else "update_correction",
+                        entity_type="correction",
+                        entity_id=existing_id,
+                        user=added_by,
+                        details=(
+                            f"{verb}: '{from_text}' → '{to_text}' (domain: {domain})"
+                            + (f" [was disabled: → '{old_to_text}']" if reactivated else "")
+                        )
+                    )
+                    logger.info(f"{verb} correction ID {existing_id}: {from_text} → {to_text}")
+                    return existing_id
                 raise ValidationError(f"Integrity constraint violated: {e}") from e
 
     def get_correction(self, from_text: str, domain: str = "general") -> Optional[Correction]:
