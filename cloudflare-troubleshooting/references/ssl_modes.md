@@ -147,8 +147,11 @@ curl -X GET "https://api.cloudflare.com/client/v4/zones/ZONE_ID/settings/ssl" \
   -H "X-Auth-Email: email" \
   -H "X-Auth-Key: key"
 
-# Change to Full
+# Preview the change first
 python scripts/fix_ssl_mode.py domain.com email API_KEY full --purge-cache
+
+# Apply the change after reviewing the current -> target mode
+python scripts/fix_ssl_mode.py domain.com email API_KEY full --apply --purge-cache
 ```
 
 ### Error 526 (Invalid SSL Certificate)
@@ -159,7 +162,7 @@ python scripts/fix_ssl_mode.py domain.com email API_KEY full --purge-cache
 1. Install valid certificate on origin (recommended)
 2. Switch to "Full" mode temporarily:
    ```bash
-   python scripts/fix_ssl_mode.py domain.com email API_KEY full
+   python scripts/fix_ssl_mode.py domain.com email API_KEY full --apply
    ```
 3. Use Cloudflare Origin Certificate (free, only trusted by Cloudflare)
 

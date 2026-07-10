@@ -30,8 +30,11 @@ Change SSL mode from "Flexible" to "Full" or "Full (strict)"
 # Diagnose
 python scripts/check_cloudflare_config.py example.com user@example.com API_KEY
 
-# Fix
+# Preview the fix
 python scripts/fix_ssl_mode.py example.com user@example.com API_KEY full --purge-cache
+
+# Apply after reviewing the current -> target SSL mode
+python scripts/fix_ssl_mode.py example.com user@example.com API_KEY full --apply --purge-cache
 ```
 
 #### 2. Conflicting Page Rules
@@ -61,7 +64,7 @@ python scripts/fix_ssl_mode.py example.com user@example.com API_KEY full --purge
 
 2. **Fix SSL mode if needed:**
    ```bash
-   python scripts/fix_ssl_mode.py domain.com email API_KEY full
+   python scripts/fix_ssl_mode.py domain.com email API_KEY full --apply
    ```
 
 3. **Purge cache:**
