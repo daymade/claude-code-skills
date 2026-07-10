@@ -97,15 +97,19 @@ hardcode one — usually badly (too gray, or colorblind-ambiguous).
 
 When adding or auditing a categorical palette:
 
-- **Validate it, don't eyeball it.** Run a palette validator (the `dataviz`
-  skill ships `scripts/validate_palette.js`): it checks the lightness band, the
-  **chroma floor** (too-low chroma "reads gray" — the classic one-off-chart
-  failure), **CVD separation** (adjacent ΔE ≥ 12 under protan / deuteran /
-  tritan), and contrast vs the surface.
-
-```bash
-node <dataviz-skill>/scripts/validate_palette.js "#hex,#hex,..." --mode light --surface "#FFFFFF"
-```
+- **Validate it, don't eyeball it — compute the four checks numerically.** A
+  categorical palette has to pass four measurable tests, so read the numbers
+  rather than trusting appearance:
+  - **lightness band**: keep every slot within a controlled lightness range so
+    none dominates;
+  - **chroma floor**: no slot so low-chroma it "reads gray" — the classic
+    one-off-chart failure;
+  - **CVD separation**: every adjacent pair keeps ΔE ≥ 12 after simulating
+    protan / deuteran / tritan deficiency (Machado or Brettel model);
+  - **contrast vs the surface**: each slot clears a WCAG contrast ratio on the
+    page background.
+  Approving a palette on how it looks is exactly the eyeball failure these
+  numbers exist to prevent.
 
 - **Slot ordering is the CVD mechanism, not cosmetic.** If two adjacent slots
   fail CVD separation, reorder so warm / cool alternate — on one real palette
@@ -115,6 +119,6 @@ node <dataviz-skill>/scripts/validate_palette.js "#hex,#hex,..." --mode light --
   — avoid alert-red and success-green, so a series line never reads as a status
   and a red failure / ✕ marker on the same chart stays distinct from every
   series line.
-- A `[WARN] contrast` on one slot is acceptable only with the relief rule
-  (legend / direct labels / table view present). A `[FAIL] chroma` or
-  `[FAIL] CVD` must be fixed before the palette ships.
+- A borderline contrast on one slot is acceptable only with the relief rule
+  (legend / direct labels / table view present). A chroma-floor failure or a CVD
+  separation failure must be fixed before the palette ships.
