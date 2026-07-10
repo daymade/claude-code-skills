@@ -26,7 +26,7 @@ Main correction pipeline script supporting three processing stages.
 ### Syntax
 
 ```bash
-uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <dir>]
+uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <dir|file.md>]
 ```
 
 ### Parameters
@@ -36,7 +36,7 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
   - `1` = Dictionary corrections only
   - `2` = AI corrections only (requires Stage 1 output file)
   - `3` = Both stages sequentially
-- `--output, -o` (optional): Output directory (defaults to input file directory)
+- `--output, -o` (optional): Where results are written — accepts either a **directory** (the sidecars `<stem>_stage1.md` / `_changes.md` / `_needs_review.md` are written into it) **or a file path** ending in `.md`/`.markdown`/`.txt` that is not an existing directory (the corrected Stage 1 output is written directly to that exact file). Defaults to the input file's directory. Every "Saved" / report line prints the full resolved path, so a misdirected output is visible immediately. (Passing a file path used to silently `mkdir` a directory of that name and hide the output inside it — fixed.)
 - `--domain, -d` (optional): Restrict to one correction domain (default: all domains)
 - `--apply-all` (optional): Opt out of the default safe mode and apply every risk level (low/medium/high). Higher false-positive risk — see false_positive_guide.md.
 - `--review` (deprecated): No-op kept for backward compatibility; safe mode is now the default.
@@ -70,9 +70,14 @@ Outputs:
 - `meeting_stage1.md` (when Stage 1 applied corrections; skipped on a 0-correction run)
 - `meeting_stage2.md`
 
-**Custom output directory:**
+**Custom output directory** (sidecars written into it):
 ```bash
 uv run scripts/fix_transcription.py --input meeting.md --stage 3 --output ./corrections
+```
+
+**Write the corrected Stage 1 output to a specific file** (a `.md`/`.markdown`/`.txt` path that is not an existing directory):
+```bash
+uv run scripts/fix_transcription.py --input meeting.md --stage 1 --output ./meeting.fixed.md
 ```
 
 ### Exit Codes
