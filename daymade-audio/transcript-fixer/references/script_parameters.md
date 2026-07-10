@@ -50,7 +50,7 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 uv run scripts/fix_transcription.py --input meeting.md --stage 1
 ```
 
-Output: `meeting_stage1.md`
+Output: `meeting_stage1.md` (only when corrections were applied — a 0-correction run writes no `_stage1.md`; safe-mode deferrals go to `_needs_review.md`)
 
 **Run AI corrections only:**
 ```bash
@@ -67,7 +67,7 @@ uv run scripts/fix_transcription.py --input meeting.md --stage 3
 ```
 
 Outputs:
-- `meeting_stage1.md`
+- `meeting_stage1.md` (when Stage 1 applied corrections; skipped on a 0-correction run)
 - `meeting_stage2.md`
 
 **Custom output directory:**

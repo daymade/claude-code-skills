@@ -295,7 +295,7 @@ git add corrections_*.json
 
 **Problem**: After correction you end up with multiple intermediate files (`file_stage1.md`, `file_dryrun.md`, `file_changes.md`, `file_needs_review.md`) in the working directory.
 
-**Preferred solution**: Re-run `--stage 1` on the original `file.md`. If `file_stage1.md` is newer than `file.md`, transcript-fixer automatically promotes it to `file.md` and removes the sidecars. It skips promotion if `file.md` has been edited more recently, so it never overwrites your manual changes. This is the recommended finalize path.
+**Preferred solution**: Re-run `--stage 1` on the original `file.md` — plain, **without `--apply-all`** (an explicit `--apply-all` always runs corrections and never takes the promote path, so it won't finalize). If `file_stage1.md` is newer than `file.md`, transcript-fixer automatically promotes it to `file.md` and removes the sidecars. It skips promotion if `file.md` has been edited more recently, so it never overwrites your manual changes. This is the recommended finalize path.
 
 ```bash
 uv run scripts/fix_transcription.py --input file.md --stage 1

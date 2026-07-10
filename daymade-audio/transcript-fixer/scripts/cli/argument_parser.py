@@ -112,7 +112,7 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--changes-file",
         action="store_true",
         dest="changes_file",
-        help="Always write *_changes.md with before/after/risk for every correction (automatically on in safe mode, which is the default)"
+        help="Write *_changes.md with before/after/risk when a run applies or defers corrections (automatically on in safe mode, which is the default; a 0-change run writes no report)"
     )
 
     # Learning commands

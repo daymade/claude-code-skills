@@ -410,8 +410,17 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
     # newer than the input file, promote it to the input file and clean up
     # sidecars before running Stage 1 again. This replaces the manual finalize
     # step for the native AI-correction workflow.
+    #
+    # --apply-all is exempt: it is an explicit request to RUN corrections at
+    # every risk level. A stale _stage1.md from a previous safe-mode run may
+    # contain zero applied corrections (safe mode defers medium/high rules), so
+    # letting the promote guard fire here would silently swallow the requested
+    # correction run — the user sees "Finalize complete" and the errors stay in
+    # the file. Skip promotion and run corrections from the input as-is; the
+    # fresh output overwrites the stale sidecar.
     dry_run = getattr(args, 'dry_run', False)
-    if args.stage >= 1:
+    apply_all = getattr(args, 'apply_all', False)
+    if args.stage >= 1 and not apply_all:
         auto_finalized = _auto_finalize_stage1(input_path, output_dir, dry_run=dry_run)
         if auto_finalized and args.stage == 1:
             print("✅ Finalize complete.")
@@ -482,12 +491,15 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
     # On a clean transcript from a strong ASR engine, cross-domain dictionary
     # rules are the main false-positive source, so applying only low-risk by
     # default is the safe choice. --apply-all opts back into apply-everything.
-    review_mode = not getattr(args, 'apply_all', False)
+    review_mode = not apply_all
     changes_file = getattr(args, 'changes_file', False) or review_mode
 
     # Stage 1: Dictionary corrections
     stage1_changes = []
     stage1_text = original_text
+    # Path whose CONTENT matches stage1_text — what Stage 3's diff report must
+    # read as the "stage 1" column. Defaults to the input (0-correction case).
+    stage1_report_source = input_path
     if args.stage >= 1:
         print("=" * 60)
         print("🔧 Stage 1: Dictionary Corrections")
@@ -520,12 +532,31 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
 
         if not dry_run:
             stage1_file = output_dir / f"{input_path.stem}_stage1.md"
-            with open(stage1_file, 'w', encoding='utf-8') as f:
-                f.write(stage1_text)
-            print(f"💾 Saved: {stage1_file.name}")
+            # On a no-op run (0 corrections applied), stage1_text is byte-identical
+            # to the input, so _stage1.md would just duplicate the input and
+            # _changes.md would say "No corrections applied." Both are pure noise:
+            # they never auto-finalize (the promote guard skips when the input is
+            # newer — exactly the native AI-correction case where the agent edits
+            # the input directly) and force a manual `rm`. Skip writing them on a
+            # no-op. _needs_review.md below still writes when safe mode deferred
+            # anything (skipped_count > 0), so human review is never lost.
+            if applied_count > 0:
+                with open(stage1_file, 'w', encoding='utf-8') as f:
+                    f.write(stage1_text)
+                print(f"💾 Saved: {stage1_file.name}")
+                stage1_report_source = stage1_file
+            else:
+                print(f"✓ No corrections applied — skipping {stage1_file.name} (input is already the final output)")
+                # Nothing was written: stage1_text is byte-identical to the
+                # input, so downstream consumers (Stage 3 diff report) must
+                # read the input file — stage1_file either doesn't exist or is
+                # a stale leftover from a previous run whose content this run
+                # did NOT produce.
+                stage1_report_source = input_path
 
-            # Write changes report
-            if changes_file:
+            # Write changes report — only when something happened worth reporting
+            # (an applied change, or a safe-mode deferral worth reviewing).
+            if changes_file and (applied_count > 0 or skipped_count > 0):
                 changes_report = _format_changes_report(stage1_changes, original_text)
                 changes_file_path = output_dir / f"{input_path.stem}_changes.md"
                 with open(changes_file_path, 'w', encoding='utf-8') as f:
@@ -647,9 +678,13 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
 
         if stage2_file is not None and stage2_file.exists():
             try:
+                # stage1_report_source, not stage1_file: on a 0-correction run
+                # _stage1.md was never written (reading it would crash the
+                # report) or is a stale leftover from a previous run (reading
+                # it would silently mix old content into the diff).
                 generate_full_report(
                     original_file=str(input_path),
-                    stage1_file=str(stage1_file),
+                    stage1_file=str(stage1_report_source),
                     stage2_file=str(stage2_file),
                     output_dir=str(output_dir),
                     model=ai_processor.model,

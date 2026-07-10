@@ -255,6 +255,79 @@ class TestStage1AutoFinalize(unittest.TestCase):
         self.assertFalse(stage1.exists())
         self.assertFalse(changes.exists())
 
+    def test_cmd_apply_all_ignores_stale_stage1_and_runs_corrections(self):
+        """--apply-all must run corrections, not promote a stale sidecar.
+
+        Regression: a previous safe-mode run leaves _stage1.md behind (possibly
+        with ZERO corrections applied — safe mode defers medium/high rules).
+        An explicit --apply-all is a request to run corrections at every risk
+        level; if the auto-finalize promote guard fires first, it promotes the
+        stale 0-correction sidecar, prints "Finalize complete", and the
+        requested correction run never happens — the ASR errors stay in the
+        file. This is the exact failure observed on 2026-07-10 with a real
+        meeting transcript (13 high-risk name fixes silently skipped).
+        """
+        stage1 = self.test_dir / "meeting_stage1.md"
+        # Simulate a safe-mode leftover: identical to input (0 applied).
+        stage1.write_text("original text\n", encoding="utf-8")
+        self._make_stage1_newer(stage1, self.input_file)
+
+        cmd_run_correction(argparse.Namespace(
+            input=str(self.input_file),
+            output=None,
+            stage=1,
+            domain="zzz_test_empty_domain",
+            dry_run=False,
+            apply_all=True,
+            changes_file=False,
+            people_roster=None,
+        ))
+
+        # Input must be untouched by promotion (corrections ran; with an empty
+        # domain nothing applies, so the input stays as-is rather than being
+        # replaced by the stale sidecar).
+        self.assertEqual(self.input_file.read_text(encoding="utf-8"), "original text\n")
+        # The stale sidecar must NOT have been promoted (i.e. not consumed by
+        # os.replace into the input). A 0-correction apply-all run also must
+        # not rewrite it — meaning the correction pipeline actually executed.
+        self.assertTrue(
+            stage1.exists(),
+            "--apply-all must not consume _stage1.md via the promote path",
+        )
+
+    def test_cmd_stage1_zero_corrections_writes_no_sidecars(self):
+        """A 0-correction run must not leave _stage1.md / _changes.md.
+
+        On a clean transcript (or a native re-run after the agent already edited
+        the input), there is nothing to apply, so stage1_text == original_text.
+        Writing _stage1.md would duplicate the input and _changes.md would say
+        "No corrections applied" — pure noise that never auto-finalizes (the
+        promote guard skips when the input is newer, which is exactly the native
+        case) and forces a manual `rm`. This is the gap the no-op skip closes.
+        """
+        # Use a domain with no rules so 0 corrections are guaranteed regardless
+        # of the user's real dictionary contents — the suite runs against the
+        # live ~/.transcript-fixer/corrections.db, like the other cmd tests.
+        cmd_run_correction(argparse.Namespace(
+            input=str(self.input_file),
+            output=None,
+            stage=1,
+            domain="zzz_test_empty_domain",
+            dry_run=False,
+            apply_all=False,
+            changes_file=False,
+            people_roster=None,
+        ))
+
+        self.assertFalse(
+            (self.test_dir / "meeting_stage1.md").exists(),
+            "0-correction run must not write _stage1.md (byte-copy of input = noise)",
+        )
+        self.assertFalse(
+            (self.test_dir / "meeting_changes.md").exists(),
+            "0-correction run must not write _changes.md ('no corrections' = noise)",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

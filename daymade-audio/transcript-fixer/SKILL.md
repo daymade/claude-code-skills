@@ -1,6 +1,6 @@
 ---
 name: transcript-fixer
-description: Corrects speech-to-text transcription errors using dictionary rules and AI-powered analysis. Builds personalized correction databases that learn from each fix, and auto-loads person-name ASR variants from your people roster. Triggers when working with ASR/STT output containing recognition errors, homophones, garbled technical terms, person-name errors, or Chinese/English mixed content. Also triggers on requests to clean up meeting notes, lecture transcripts, interview recordings, or any text produced by speech recognition. Use this skill even when the user just says "fix this transcript", "clean up these meeting notes", or mentions garbled names without invoking ASR specifically.
+description: Corrects speech-to-text transcription errors using dictionary rules and AI-powered analysis. Builds personalized correction databases that learn from each fix, auto-loads person-name ASR variants from your people roster, and reads per-domain context files that prime the AI pass for context-dependent homophones. Triggers when working with ASR/STT output containing recognition errors, homophones, garbled technical terms, person-name errors, or Chinese/English mixed content. Also triggers on requests to clean up meeting notes, lecture transcripts, interview recordings, or any text produced by speech recognition. Use this skill even when the user just says "fix this transcript", "clean up these meeting notes", or mentions garbled names without invoking ASR specifically.
 ---
 
 # Transcript Fixer
@@ -41,7 +41,7 @@ for f in /path/to/*.txt; do
 done
 ```
 
-After Stage 1, Claude reads the output and fixes remaining ASR errors natively (no API key needed). The full method — triage by confidence, verify-don't-guess, second pass, needs-checking list — is in **Native AI Correction** below; read that section as the source of truth. For a quick, clean transcript it collapses to: read the whole thing → fix the obvious one-off errors inline → `--add` any recurring or project-specific ones (especially names) to a `--domain` dictionary so they auto-fix next time (see "Project-Specific & Person-Name Corrections").
+After Stage 1, Claude reads the output and fixes remaining ASR errors natively (no API key needed). The full method — triage by confidence, verify-don't-guess, second pass, needs-checking list — is in **Native AI Correction** below; read that section as the source of truth. For a quick, clean transcript it collapses to: read the domain's context file if one exists (`~/.transcript-fixer/contexts/<domain>.md`) → read the whole thing → fix the obvious one-off errors inline → `--add` any recurring or project-specific ones (especially names) to a `--domain` dictionary so they auto-fix next time (see "Project-Specific & Person-Name Corrections").
 
 See `references/example_session.md` for a concrete input/output walkthrough.
 
@@ -91,7 +91,7 @@ After native AI correction, review all applied fixes and decide which to save. U
 | Non-word → correct term | 克劳锐→Claude, cloucode→Claude Code | ✅ Add (zero false positive risk) |
 | Rare word → correct term | 拉行链→LangChain, 哈金费斯→Hugging Face | ✅ Add (verify it's not a real word first) |
 | Person/company name ASR error | 卡帕西→Karpathy, Anthropics→Anthropic | For **important recurring people**, add to your **people roster** instead (see "People Roster" above) — it carries relationship context and survives DB resets. For one-off names: ✅ `--add --domain` (stable, unique) |
-| Common word → context word | 争→蒸, affect→effect | ❌ Skip (high false positive risk) |
+| Common word → context word | 争→蒸, 减→剪, affect→effect | ❌ Never add as a rule — record the trap + its disambiguating cue in the domain's context file instead (see "Domain Correction Contexts") |
 | Real brand → different brand | Xcode→Claude Code, Clover→Claude | ❌ Skip (real words in other contexts) |
 
 Batch add multiple corrections in one session:
@@ -169,13 +169,39 @@ roster fills gaps without overriding hand-tuned entries. See
 | Long-term recurring (coworker, client, family, workshop attendee) | **people.md** | SSOT with relationship context; survives DB resets |
 | One-off / minor name | **DB** (`--add --domain`) | Quick, no context needed |
 
+## Domain Correction Contexts (per-domain AI priors)
+
+The dictionary handles deterministic replacements; the people roster handles names. A third class of error can't safely live in either: **context-dependent homophones** — words that are only wrong in a particular discussion context. Think `减`→`剪` in a meeting about producing N video clips per day, or a finance call where a common word collides with a ticker nickname. A dictionary rule on a common word silently corrupts every other transcript, and a generic AI pass lacks the domain prior to fix it confidently — it either guesses wrong or leaves it for the human. (Real case: a transcript had four `减到 N 条` occurrences that all meant `剪到`; the AI pass suspected but wouldn't touch them without a domain prior, and the user had to fix them by hand.)
+
+Domain context files close this gap. One markdown file per domain, in **user space** next to your `corrections.db` and `people.md` (never inside the skill bundle — it survives skill updates and keeps project knowledge private):
+
+```
+~/.transcript-fixer/contexts/<domain>.md
+```
+
+(If you relocated the config dir via `TRANSCRIPT_FIXER_CONFIG_DIR`, contexts live under that dir's `contexts/`.)
+
+During native correction (see workflow below), read the transcript's domain context file before triaging. It should contain three things:
+
+1. **One line of business context** — what this domain's recordings are usually about
+2. **Known homophone traps** — each with the *contextual cue* that disambiguates it ("when the sentence is about producing/editing clips, `剪` is intended"), optionally with a dated real example
+3. **Pointers to authoritative name sources** — the project's alias ledger, the relevant people-roster section, existing DB domains — so the verification ladder (step 4 below) knows where to look first
+
+What must NOT go in a context file: hard replacement rules. `减→剪` as a rule belongs in NEITHER the context file NOR the dictionary — the file primes your judgment with priors and cues; it never authorizes blind replacement. Every fix still goes through the confidence triage below.
+
+Maintenance loop (mirrors the dictionary's `--add` habit): when a native session surfaces a **context-dependent** recurring error — you fixed it here, and it'll recur in this domain's future transcripts — append it to the domain's context file with its disambiguating cue. Deterministic non-word/name fixes keep going to `--add --domain` / the roster as before.
+
+Format and a worked template: `references/domain_context_guide.md`.
+
+Note: contexts are consumed by the **native workflow** (the agent reads the file — no code involved). API mode (`--stage 2/3`, the backup channel) does not inject them yet; if that channel gets completed, the same files should feed its prompt.
+
 ## Native AI Correction (Default Mode)
 
 When running inside Claude Code, use Claude's own language understanding for Phase 2 — on high-quality ASR this is where almost all the real correction happens. **Scale the effort to the transcript.** A short, clean recording with no proper nouns (a quick voice memo) just needs steps 1-3 plus one obvious-fix pass; skip the verification / second-pass / subagent / needs-checking machinery below, which earns its keep on long, multi-speaker, domain-heavy, or high-stakes transcripts. Don't turn a 10-second memo into a research project.
 
 1. Run Stage 1 (dictionary) on all files (parallel if multiple)
 2. Verify Stage 1 — diff against the original. If the dictionary introduced false positives, work from the **original** file instead and apply your edits there
-3. Read the **entire** transcript before proposing corrections — later context disambiguates earlier errors (a name garbled near the start often becomes obvious later). For large files, read in chunks but finish the whole thing before deciding anything
+3. **Load the domain's priors, then read the entire transcript.** If `~/.transcript-fixer/contexts/<domain>.md` exists for this transcript's domain, read it first — it primes which homophone traps to suspect and names the authoritative sources for step 4's ladder (see "Domain Correction Contexts" above). Then read the **entire** transcript before proposing corrections — later context disambiguates earlier errors (a name garbled near the start often becomes obvious later). For large files, read in chunks but finish the whole thing before deciding anything
 4. **Triage each candidate error into one of three buckets** — this triage is the part that takes judgment:
    - **Confident fix** — non-words, obvious garbling, product-name variants you already recognize, or a homophone that's unambiguous in context (`their`→`there` where context forces it; `彭波`→`彭博` when every other mention already reads `彭博`). Apply directly (step 5).
    - **Needs verification** — a proper noun you can't confirm from context: a person / company / ticker / product / place name (a misheard drug name in a medical interview, a researcher's surname in a podcast, a ticker on an earnings call), or any term you can't point to a specific source for — even one you think you recognize ("I'm pretty sure" is exactly how wrong names slip in). **Resolve it through a local-first search ladder before asking the user.** For project / personal entities the authoritative spelling almost always already lives on this machine, and WebSearch is near-useless on internal names — it returns wrong same-name people, or nothing — and worse, a fluent wrong guess becomes a confident fix that's hard to catch later. Search in this order:
@@ -191,7 +217,7 @@ When running inside Claude Code, use Claude's own language understanding for Pha
 	         transcripts whose speakers are confirmed NOT in the roster.
       1. **All domains of `corrections.db`, not just the current `--domain`.** The same entity shatters into different ASR variants across projects, and every prior fix already collapsed them to the canonical name — so the answer is often sitting in another domain you didn't pass to `--stage 1`. Checking only the current domain and giving up is the recurring failure mode.
          `sqlite3 ~/.transcript-fixer/corrections.db "SELECT from_text, to_text, domain FROM active_corrections WHERE to_text LIKE '%<fragment>%' OR from_text LIKE '%<fragment>%';"`
-      2. **Project delivery docs** — cost reports, review sheets, deliverables, PKM notes for that project. These are human-written correct spellings, the strongest possible source. `grep -rl "<fragment>" <project-dir>` then read the hits.
+      2. **Project delivery docs** — cost reports, review sheets, deliverables, PKM notes for that project. These are human-written correct spellings, the strongest possible source. `grep -rl "<fragment>" <project-dir>` then read the hits. (The domain context file from step 3 usually names the project's alias ledger explicitly — start there.)
       3. **Memory** (`~/.claude/.../memory/`) — project relationship maps and person profiles often record canonical names explicitly.
       4. **WebSearch** — only for genuinely public entities (a public-company ticker, a known researcher, a drug name). Skip for anything project-internal.
 
@@ -205,7 +231,8 @@ When running inside Claude Code, use Claude's own language understanding for Pha
 7. **Emit a needs-checking list** — in your chat summary to the human, not baked into the file — for everything still *Uncertain*: line number, the original text you left in place, what you suspect, and why you couldn't confirm it. This surfaces the few items that need a recording or source to resolve, instead of burying them or papering over them with guesses. If nothing is uncertain, say so.
 8. Verify with diff against the file you actually edited (`diff <original> <your-working-file>`) — every change should trace back to a triage decision
 9. Finalize and archive:
-   - **Primary path (recommended):** Re-run `--stage 1` on the original `file.md`. If `file_stage1.md` is newer than `file.md`, transcript-fixer automatically promotes it to `file.md` and removes the intermediate sidecars (`_stage1.md`, `_stage2.md`, `_dryrun.md`, `_changes.md`, `_needs_review.md`, `_uncertain.md`, `_对比.html`). This is the default way to finalize; it is atomic, preserves manual edits (it skips promotion when `file.md` is newer), and avoids macOS `mv` alias hazards.
+   - **Primary path (recommended):** Re-run `--stage 1` on the original `file.md` — **plain, without `--apply-all`** (an explicit `--apply-all` always runs corrections and never finalizes, so a stale sidecar can't silently swallow the run). If `file_stage1.md` is newer than `file.md`, transcript-fixer automatically promotes it to `file.md` and removes the intermediate sidecars (`_stage1.md`, `_stage2.md`, `_dryrun.md`, `_changes.md`, `_needs_review.md`, `_uncertain.md`, `_对比.html`). This is the default way to finalize; it is atomic, preserves manual edits (it skips promotion when `file.md` is newer), and avoids macOS `mv` alias hazards.
+   - **Native AI-correction mode** (you edited `file.md` directly — the default workflow above): `file.md` is already the final output. No promotion is needed or possible (the promote guard correctly skips it because `file.md` is newer than any sidecar), so just re-run `--stage 1` once to confirm. A **0-correction re-run writes no `_stage1.md`**, and when nothing was deferred it writes no report sidecars either — clean directory, `file.md` ready to archive. (If medium/high-risk dictionary matches remain in the text — e.g. ones you judged false positives and deliberately kept — `_changes.md`/`_needs_review.md` re-emerge each run listing them; that's the deferral report, not a failed finalize. Delete them once you've dispositioned the items.) If a re-run does find corrections, apply the ones you want into `file.md`, then re-run.
    - **Manual fallback** (only when you need full control, or `file.md` has been edited since Stage 1 ran): Save the corrected content back to the original `file.md`. (`file_stage1.md` is only a reference/diff; do not edit it as the final output.) Then `cp file.md` to `next/00-Transcripts/YYYY-MM/` (or your archive location) and delete the local sidecars with a Python one-liner:
      ```bash
      uv run python -c "
@@ -315,7 +342,7 @@ uv run scripts/generate_diff_report.py \
 - `*_uncertain.md` — Likely ASR errors extracted by `--extract-uncertain`
 - `*_对比.html` — Visual diff (open in browser)
 
-In native mode, edit the original file directly and use it as the final output; `*_stage1.md` is a disposable diff/reference (see the Native AI Correction workflow). **Re-running `--stage 1` auto-promotes `*_stage1.md` to the original file and cleans up sidecars** when it is newer than the input file; this is the recommended finalize path.
+In native mode, edit the original file directly and use it as the final output; `*_stage1.md` is a disposable diff/reference (see the Native AI Correction workflow). **Re-running plain `--stage 1` (no `--apply-all`) auto-promotes `*_stage1.md` to the original file and cleans up sidecars** when it is newer than the input file; this is the recommended finalize path. `--apply-all` never takes the promote path — it always runs corrections. A **0-correction** run (clean transcript, or a native re-run after the input was edited) never writes `_stage1.md` (it would just duplicate the input); when nothing was deferred either, no report sidecars are written at all. When safe mode does defer medium/high rules, `_changes.md` and `_needs_review.md` still write — they are the deferral report.
 
 ## Database Operations
 
@@ -354,7 +381,7 @@ sqlite3 ~/.transcript-fixer/corrections.db "SELECT value FROM system_config WHER
 
 **References** (load as needed):
 - **Safety**: `false_positive_guide.md` (read before adding rules), `database_schema.md` (read before DB ops)
-- **Workflow**: `iteration_workflow.md`, `workflow_guide.md`, `example_session.md`
+- **Workflow**: `iteration_workflow.md`, `workflow_guide.md`, `example_session.md`, `domain_context_guide.md` (format + template for per-domain context files)
 - **CLI**: `quick_reference.md`, `script_parameters.md`
 - **Advanced**: `dictionary_guide.md`, `sql_queries.md`, `architecture.md`, `best_practices.md`
 - **Operations**: `troubleshooting.md`, `installation_setup.md`, `glm_api_setup.md`, `team_collaboration.md`
