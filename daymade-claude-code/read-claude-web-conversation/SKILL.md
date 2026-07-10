@@ -2,15 +2,17 @@
 name: read-claude-web-conversation
 description: >-
   Read or export the COMPLETE transcript of a Claude.ai web conversation (a
-  claude.ai/chat/... link) by driving the user's already-logged-in Chrome and
-  calling Claude.ai's own internal conversation API from inside the page. Use
-  this whenever the user pastes a claude.ai conversation link and asks to read,
-  summarize, export, or extract it — "read this Claude conversation", "what did
-  that other chat say", "导出这个网页版对话", "读一下这个 claude.ai 链接". Plain curl
-  / WebFetch FAIL (login-gated) and get_page_text returns only the last visible
-  message (Claude.ai uses virtual scrolling), so naive approaches silently lose
-  most of a long conversation — this skill returns every message. Scope: ONLINE
-  conversations on claude.ai. For LOCAL Claude Code session history
+  claude.ai/chat/... link) by calling Claude.ai's own internal API from inside
+  the user's logged-in Chrome — and download the conversation's FILES too
+  (uploads, assistant-produced spreadsheets/scripts/charts). Use whenever the
+  user pastes a claude.ai conversation link and asks to read, summarize,
+  export, or extract it — "read this Claude conversation", "导出这个网页版对话",
+  "把对话里的文件也下载下来". curl/WebFetch FAIL (login-gated); get_page_text
+  sees only the last visible message (virtual scrolling); default renderings
+  collapse agent tool calls into placeholders (render_all_tools fixes this).
+  Works even when the claude-in-chrome extension can't pair (signed into a
+  different account) via a macOS AppleScript fallback channel. Scope: ONLINE
+  claude.ai conversations. For LOCAL Claude Code sessions
   (~/.claude/projects/*.jsonl) use claude-code-history-files-finder; for an
   already-exported .txt/.json file use claude-export-txt-better.
 ---
@@ -20,7 +22,7 @@ description: >-
 Pull a Claude.ai **web** conversation into a full, structured transcript — every
 message, not just what is currently on screen.
 
-Verified against Claude.ai's web API as of June 2026. The endpoints below are the
+Verified against Claude.ai's web API as of June–July 2026. The endpoints below are the
 same private JSON API the Claude.ai front-end itself calls; they are not a
 documented/stable public API, so if a request 404s, re-derive the shape from the
 Network tab (see `references/claude-web-api-extraction.md`).
@@ -66,6 +68,17 @@ ToolSearch: select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome
 
 (No `get_page_text` / `read_page` needed — the API path bypasses the DOM.)
 
+**If the extension cannot connect** — `tabs_context_mcp` errors with "Browser
+extension is not connected", `list_connected_browsers` returns `[]`, and
+`switch_browser` finds nothing — the usual root cause is an **account
+mismatch**: the extension pairs only when its claude.ai login matches the
+Claude Code account. Confirm with the user; if the accounts differ, no retry
+will fix it. On macOS, switch to the **AppleScript channel** — same in-page
+API method, injected via `osascript` instead of the extension — and follow
+[references/applescript_fallback_channel.md](references/applescript_fallback_channel.md)
+(one manual Chrome menu toggle by the user, then Steps 3–4 below run through
+that channel with even better output limits).
+
 ### Step 2 — Open the conversation in the user's Chrome
 
 `tabs_context_mcp` with `{ "createIfEmpty": true }` to get a tab, then
@@ -76,9 +89,31 @@ first — do not try to automate the login.
 
 ### Step 3 — Pull the full transcript via the internal API
 
-Run this with `mcp__claude-in-chrome__javascript_tool` (`action: javascript_exec`)
-on that tab. It executes in the page, so `fetch` carries the user's auth. It
-derives the conversation id from the open URL — **never hard-code an id**:
+**Two paths — pick by what the user needs:**
+
+- **Full export / archival / the conversation used tools or files** → use the
+  bundled pipeline instead of hand-writing JS:
+  1. Run [scripts/export_conversation.js](scripts/export_conversation.js) in
+     the page (javascript_tool, or `scripts/runjs.applescript` on the
+     AppleScript channel). It fetches the JSON with `render_all_tools=true`
+     (real tool blocks) and stores it on `window.__claudeExport` —
+     fire-and-poll instructions are in the file header.
+  2. Get `rawJson` out (stdout-redirect on AppleScript; ~16k `.slice()` windows
+     on javascript_tool) and save as `conversation.json`.
+  3. Render locally:
+     `uv run python scripts/render_transcript.py conversation.json -o transcript.md`
+     — timestamped speaker headers, per-message file inventories, every tool
+     call rendered, tool outputs folded. `--list-files` inventories the
+     downloadable files; `--extract-file <sandbox-path>` reconstructs a
+     sandbox-created file without downloading and fails without writing output
+     if any replayed replacement is missing or ambiguous.
+- **Quick read of a plain chat** (no tool blocks, just need the text now) →
+  the inline snippet below assembles the transcript in-page in one call.
+
+Run the snippet with `mcp__claude-in-chrome__javascript_tool`
+(`action: javascript_exec`) on that tab. It executes in the page, so `fetch`
+carries the user's auth. It derives the conversation id from the open URL —
+**never hard-code an id**:
 
 ```js
 // Runs inside the claude.ai page; fetch inherits the logged-in session cookie.
@@ -115,7 +150,9 @@ const blockText = (b) =>
 const textOf = (m) => {
   const blocks = (m.content || []).map(blockText).filter(Boolean);
   const joined = blocks.join('\n');
-  if (m.text && !joined.includes(m.text)) return joined ? `${joined}\n${m.text}` : m.text;
+  const contentTexts = new Set((m.content || [])
+    .filter(b => b.type === 'text' && b.text).map(b => b.text));
+  if (m.text && !contentTexts.has(m.text)) return joined ? `${joined}\n${m.text}` : m.text;
   return joined || m.text || '';
 };
 
@@ -159,6 +196,22 @@ larger risks hitting the truncation limit again.
 - **If `rendering_mode=raw` returns empty or short bodies, retry with
   `rendering_mode=messages`.** The two modes expose slightly different fields;
   `messages` is the usual fallback when `raw` looks incomplete.
+- **Transcript full of "This block is not supported on your current device
+  yet."?** The conversation used code execution / file tools, and both `raw`
+  and plain `messages` collapse those into placeholders. Re-fetch with
+  `?tree=True&rendering_mode=messages&render_all_tools=true` — it returns the
+  real `tool_use`/`tool_result` blocks (verified to restore the otherwise
+  missing analysis trace; for an agent conversation the tool blocks ARE the process).
+  Field-by-field schema in the API reference.
+- **The conversation's files are downloadable too** — user uploads, and the
+  deliverables behind Download cards. Two endpoint families, keyed differently
+  (images by uuid, uploads/outputs by sandbox path via
+  `conversations/{convId}/wiggle/download-file`); uuid-guessing 404s for
+  uploads, which looks like — but is not — "unsupported".
+  [scripts/download_files.js](scripts/download_files.js) auto-inventories the
+  conversation and pulls everything through the right endpoint; endpoint
+  details in "Downloading files from the conversation" in the API reference.
+  Don't conclude anything is unavailable before trying it.
 - **`tree=True` returns the whole tree, including abandoned edit/regeneration
   branches.** The code walks the active path from `conv.current_leaf_message_uuid`
   via `parent_message_uuid`, so dead branches don't leak into the transcript or
@@ -191,5 +244,10 @@ Options:
 A) Clean it up — run transcript-fixer if it's ASR/garbled (only if relevant)
 B) Summarize / extract the decisions and action items
 C) Save it to a file — tell me where
-D) Nothing else — you just needed it read
+D) Also download the conversation's files (uploads / deliverables / charts)
+E) Nothing else — you just needed it read
 ```
+
+If the transcript showed file activity (uploads listed, Download cards,
+`present_files` blocks), mention option D explicitly — users routinely assume
+the files are lost when only the text is exported.
