@@ -636,7 +636,7 @@ list_pending()           # Get all suggestions
 
 - Records marked inactive (is_active=0) instead of DELETE
 - Preserves audit trail
-- Can be reactivated if needed
+- Reactivated by re-running `--add <from> <to> --force` — a soft-deleted row is never silently resurrected: `--add` without `--force` reports the disable and refuses (see `references/false_positive_guide.md` §Re-adding a disabled rule)
 
 ## Error Handling Strategy
 
