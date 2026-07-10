@@ -14,8 +14,10 @@ does not.
 
 - [Endpoints](#endpoints)
 - [Response schema](#response-schema)
+- [Tool-call blocks: `render_all_tools=true`](#tool-call-blocks-render_all_toolstrue)
 - [Full export script](#full-export-script)
 - [Paging long conversations](#paging-long-conversations)
+- [Downloading files from the conversation](#downloading-files-from-the-conversation)
 - [Saving to a file](#saving-to-a-file)
 - [Troubleshooting](#troubleshooting)
 
@@ -23,23 +25,36 @@ does not.
 
 These are the private JSON endpoints the Claude.ai front-end itself calls. They
 are not a documented or version-stable public API — treat them as "verified to
-work in June 2026", and if one 404s, open the Network tab on a working
+work in June–July 2026", and if one 404s, open the Network tab on a working
 conversation and copy the current request.
 
 | Purpose | Request |
 |---------|---------|
 | List the organizations the logged-in user belongs to | `GET /api/organizations` |
 | Fetch one full conversation (all messages) | `GET /api/organizations/{orgUuid}/chat_conversations/{convId}?tree=True&rendering_mode=raw` |
+| Fetch conversation **including full tool calls** (agent conversations) | `GET /api/organizations/{orgUuid}/chat_conversations/{convId}?tree=True&rendering_mode=messages&render_all_tools=true` |
+| Download an assistant-produced **image** (original bytes) | `GET /api/organizations/{orgUuid}/files/{fileUuid}/contents` |
+| Image preview (webp-transcoded, smaller) | `GET /api/{orgUuid}/files/{fileUuid}/preview` |
+| Download **user-uploaded files & sandbox outputs** (by sandbox path, NOT uuid) | `GET /api/organizations/{orgUuid}/conversations/{convId}/wiggle/download-file?path=<urlencoded-sandbox-path>` |
 
 - `{orgUuid}` comes from `organizations[0].uuid` (see Troubleshooting for the
   multi-org case).
 - `{convId}` is the last path segment of the open URL
   (`location.pathname.split('/').pop()`), e.g. for
   `https://claude.ai/chat/<id>` it is `<id>`.
-- `tree=True&rendering_mode=raw` returns the raw message bodies; this is the
-  variant verified to carry the complete text. If `raw` ever comes back with
-  empty/short bodies, retry with `rendering_mode=messages` — the two modes expose
-  slightly different fields.
+- `tree=True&rendering_mode=raw` returns the raw message text; complete for
+  plain chat conversations, but it collapses every tool call into a
+  "This block is not supported on your current device yet." placeholder and
+  leaves `content[]` empty. If `raw` ever comes back with empty/short bodies,
+  retry with `rendering_mode=messages`.
+- For conversations that used code execution / file tools, add
+  `render_all_tools=true` — see the next section. A head-to-head export of the
+  same agent conversation verified that the larger rendering restored the real
+  tool calls and outputs instead of placeholders.
+- Note the download-file endpoint says `conversations` (not
+  `chat_conversations`) and keys on the **sandbox file path** — the
+  `files/{uuid}/...` family 404s for uploaded (blob) files no matter which
+  suffix you try.
 
 ## Response schema
 
@@ -61,7 +76,50 @@ Only the fields this skill relies on are listed; the payload contains more.
 | `uuid` / `parent_message_uuid` | This node's id and its parent — used to walk the active path |
 | `sender` | `'human'` or `'assistant'` — note: NOT `'user'`/`'claude'` |
 | `text` | Top-level body string. MAY coexist with `content[]` — an agent turn can have both a final-answer `text` AND a `content[]` of thinking/tool blocks — so do not treat `text` as authoritative on its own |
-| `content` | Block array. Each block has a `type`: `text`, `thinking`, `tool_use` (carries `name` + `input`), or `tool_result` (carries `content`) |
+| `content` | Block array. Each block has a `type`: `text`, `thinking`, `tool_use` (carries `name` + `input`), or `tool_result` (carries `content`). Empty/`null` under `rendering_mode=raw` for tool-using turns — see the next section |
+| `files` | Files attached to this message. Human messages: uploads (`file_kind: "blob"`, with `path` like `/mnt/user-data/uploads/<name>` and `size_bytes`). Assistant messages: produced images (`file_kind: "image"`, with `preview_url`/`thumbnail_url`). `size_bytes` is your download-integrity check |
+| `attachments` | Legacy attachment array (older conversations); check both when hunting for files |
+
+## Tool-call blocks: `render_all_tools=true`
+
+**The signal:** an exported transcript peppered with
+`This block is not supported on your current device yet.` means the
+conversation used code execution / file tools and you exported a
+placeholder-collapsed rendering. Re-fetch with:
+
+```
+?tree=True&rendering_mode=messages&render_all_tools=true
+```
+
+Same conversation, verified: `raw` collapsed the tool work to placeholders;
+`render_all_tools=true` restored the real `tool_use`/`tool_result` sequence.
+This is the difference between "the user asked and Claude answered" and the
+actual analysis process — for a data-analysis or agent conversation, the tool
+blocks ARE the content.
+
+**`tool_use` input fields by tool** (code-execution sandbox tools, verified):
+
+| `name` | `input` fields |
+|--------|---------------|
+| `bash_tool` | `command`, `description` |
+| `view` | `path`, `description` |
+| `create_file` | `path`, `file_text`, `description` |
+| `str_replace` | `path`, `old_str`, `new_str`, `description` |
+| `present_files` | `filepaths` (the files offered to the user as download cards) |
+
+**`tool_result`**: `content` is a block list (`[{type: 'text', text}]`),
+plus `is_error`. Image-type results (e.g. after `view`ing a picture) carry no
+text — the binary never rides in the JSON, so an empty text result there is
+normal, not data loss.
+
+**Recovering a sandbox-created file without downloading it:** the full source
+of any file the assistant created is already in the payload — take the
+`create_file` block's `file_text`, then re-apply every later `str_replace` on
+the same `path` in message order (`old_str` → `new_str`). The bundled extractor
+requires exactly one match for every replacement and exits without writing if a
+step is missing or ambiguous, rather than returning stale content. Cross-check
+against a `wiggle/download-file` pull of the same path when an independent copy
+is available.
 
 The robust extractor builds from `content[]` first and then folds in the top-level
 `text` — short-circuiting on `m.text` would silently drop every block whenever
@@ -75,12 +133,21 @@ const blockToText = (b) =>
 const textOf = (m) => {
   const blocks = (m.content || []).map(blockToText).filter(Boolean);
   const joined = blocks.join('\n');
-  if (m.text && !joined.includes(m.text)) return joined ? `${joined}\n${m.text}` : m.text;
+  const contentTexts = new Set((m.content || [])
+    .filter(b => b.type === 'text' && b.text).map(b => b.text));
+  if (m.text && !contentTexts.has(m.text)) return joined ? `${joined}\n${m.text}` : m.text;
   return joined || m.text || '';
 };
 ```
 
 ## Full export script
+
+**For a full export, prefer the bundled pipeline** — fetch JSON in-page with
+`scripts/export_conversation.js` (multi-org retry, `render_all_tools=true`),
+then render locally with `scripts/render_transcript.py` (tool blocks, file
+inventories, `--list-files`, `--extract-file`). The inline script below is the
+lightweight single-call variant: it assembles a text-only transcript in-page,
+which is enough for plain chat conversations you just need to read.
 
 Fetches the conversation and assembles the entire transcript as markdown, both
 speakers and all block types included. Returns a summary plus the first window
@@ -117,7 +184,9 @@ const blockToText = (b) =>
 const textOf = (m) => {
   const blocks = (m.content || []).map(blockToText).filter(Boolean);
   const joined = blocks.join('\n');
-  if (m.text && !joined.includes(m.text)) return joined ? `${joined}\n${m.text}` : m.text;
+  const contentTexts = new Set((m.content || [])
+    .filter(b => b.type === 'text' && b.text).map(b => b.text));
+  if (m.text && !contentTexts.has(m.text)) return joined ? `${joined}\n${m.text}` : m.text;
   return joined || m.text || '';
 };
 
@@ -158,6 +227,52 @@ Repeat until you've covered `chars`, then concatenate the windows in order.
 
 Keep windows around 14–18k chars; much larger and you risk re-hitting the limit.
 
+## Downloading files from the conversation
+
+A conversation is often more than text: the user uploaded data files, the
+assistant produced deliverables (spreadsheets, scripts, charts). All of them are
+retrievable — but through **two different endpoint families keyed differently**,
+and picking the wrong one produces a wall of 404s that looks like "the platform
+doesn't support this". It does; the endpoints are just not uuid-addressed for
+everything.
+
+**Use the bundled scripts:** `scripts/render_transcript.py <json> --list-files`
+prints the complete inventory (name, size, endpoint) from an exported JSON;
+`scripts/download_files.js` runs in-page and downloads everything through the
+right endpoint automatically. The rest of this section is the underlying
+knowledge.
+
+**Inventory first.** Walk every message's `files[]` (and legacy
+`attachments[]`): human-message entries are uploads with a sandbox `path` and
+`size_bytes`; assistant-message entries are images with `preview_url`. The
+deliverables offered as download cards live in `present_files` tool blocks —
+their `filepaths` point into `/mnt/user-data/outputs/`.
+
+**Then download by kind:**
+
+| Kind | Where it appears | Endpoint |
+|------|------------------|----------|
+| Assistant-produced image (chart, render) | assistant message `files[]`, `file_kind: "image"` | `/api/organizations/{org}/files/{uuid}/contents` (original bytes; `preview` gives webp) |
+| User upload (xlsx/csv/pdf/…) | human message `files[]`, `file_kind: "blob"`, `path: /mnt/user-data/uploads/…` | `/api/organizations/{org}/conversations/{convId}/wiggle/download-file?path=<urlencoded path>` |
+| Sandbox deliverable (files behind Download cards) | `present_files` blocks, `filepaths: /mnt/user-data/outputs/…` | Same `wiggle/download-file` endpoint with the outputs path — or `.click()` the page's Download button (lands in `~/Downloads`, ` (1)` suffix on name collisions) |
+
+The `wiggle/download-file` endpoint also worked for an older conversation after
+the live sandbox container was gone. Treat persistence duration as an observed
+behavior, not a documented retention guarantee.
+
+**Verify every download:** compare byte size against the payload's
+`size_bytes` (uploads) and check magic bytes (`file <name>`); for binary
+transfer through a string channel, see the base64 bridge in the AppleScript
+reference (`references/applescript_fallback_channel.md`).
+
+**The lesson baked into this section:** the uuid-keyed guesses
+(`files/{uuid}/contents`, `/download`, `chat_conversations/{conv}/files/{uuid}`,
+…) all 404 for uploads. What revealed the real endpoint was not more guessing —
+it was clicking the file card in the UI with DevTools Network open and reading
+the request the front-end actually makes. When an endpoint family stonewalls
+you, stop deriving and go observe the UI's own traffic; and don't report
+"the platform doesn't provide it" until you've watched the UI do it.
+
 ## Saving to a file
 
 To hand the user a file instead of pasting the transcript into chat, return the
@@ -172,10 +287,13 @@ cleanly into other tools.
 |---------|-------|-----|
 | Only 1 (or a few) messages came back | You used `get_page_text` / DOM scraping; virtual scrolling only renders the tail | Switch to the API script above |
 | Auth redirect / empty shell / "Log in" title | Not running in the user's logged-in session (e.g. curl/headless), or they're signed out | Use the user's Chrome via claude-in-chrome; ask them to sign in if needed |
+| Extension won't connect at all (`list_connected_browsers` → `[]`) | Extension signed into a different claude.ai account than Claude Code | On macOS, switch to the AppleScript channel — `references/applescript_fallback_channel.md` |
 | `404` on the conversation fetch | Wrong org, or wrong `convId` | List orgs: `(await fetch('/api/organizations').then(r=>r.json())).map(o=>({uuid:o.uuid,name:o.name}))`; verify `convId` against `location.pathname` |
 | 200 OK but bodies are empty/short | `rendering_mode=raw` doesn't expose the text for these messages | Retry the fetch with `rendering_mode=messages` |
+| Transcript full of "This block is not supported on your current device yet." | Tool calls collapsed to placeholders by `raw`/`messages` rendering | Re-fetch with `rendering_mode=messages&render_all_tools=true` — see the tool-blocks section |
 | Messages present but `text` empty | Body is in the `content[]` block array, not `text` | Use `textOf()` (handles every block type); inspect `msgs[0].content?.map(b=>b.type)` |
-| Return value looks cut off | Tool truncated a large response | Page it with `.slice()` windows |
+| `files/{uuid}/...` 404s for an uploaded file | Uploads aren't uuid-addressed | Use `conversations/{convId}/wiggle/download-file?path=…` — see the file-download section |
+| Return value looks cut off | Tool truncated a large response | Page it with `.slice()` windows (or the AppleScript stdout-to-file route, which has no such limit) |
 | Transcript has duplicated / out-of-order / contradictory turns | The conversation was edited or regenerated; `tree=True` returned dead branches | Use the active-path walk (`current_leaf_message_uuid` → `parent_message_uuid`) from the export script — it drops dead branches and fixes ordering |
 | It's a `/share/...` link | Public share payload differs from private `/chat/...` | Try `get_page_text` or fetch the share JSON directly; the private-conversation endpoint may not apply |
 
