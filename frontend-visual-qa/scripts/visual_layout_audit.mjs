@@ -6,20 +6,35 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 function loadPlaywright() {
-  const requireFromProject = createRequire(`${process.cwd()}/package.json`);
-  try {
-    return requireFromProject("playwright-core");
-  } catch (projectError) {
-    try {
-      const requireFromSkill = createRequire(import.meta.url);
-      return requireFromSkill("playwright-core");
-    } catch {
-      throw new Error(
-        "playwright-core not found. Run `npm install -D playwright-core` in the frontend project, then re-run this script.\n" +
-        `Original error: ${projectError.message}`
-      );
+  // Resolve a Playwright browser driver across install layouts. Under a pnpm workspace,
+  // `playwright-core` is a non-hoisted transitive dep of `@playwright/test` and is NOT
+  // symlinked into the top-level node_modules, so requiring it by name fails there.
+  // The direct dep `@playwright/test` (and `playwright`) re-export `chromium`, so fall
+  // back to them — that path resolves cleanly under pnpm, npm, and yarn alike.
+  const requirers = [
+    createRequire(`${process.cwd()}/package.json`), // the audited project
+    createRequire(import.meta.url),                  // the skill's own dir
+  ];
+  const candidates = ["playwright-core", "playwright", "@playwright/test"];
+  const attempts = [];
+  for (const requireFrom of requirers) {
+    for (const pkg of candidates) {
+      try {
+        const mod = requireFrom(pkg);
+        if (mod && mod.chromium) return mod;
+        attempts.push(`${pkg}: resolved but has no .chromium export`);
+      } catch (error) {
+        attempts.push(`${pkg}: ${String(error.message).split("\n")[0]}`);
+      }
     }
   }
+  throw new Error(
+    "No Playwright browser driver found (tried playwright-core, playwright, @playwright/test).\n" +
+    "Install one in the frontend project, e.g. `npm install -D @playwright/test` (or the pnpm/yarn equivalent).\n" +
+    "Under a pnpm workspace, `playwright-core` is a non-hoisted transitive dep; installing `@playwright/test` as a\n" +
+    "direct dependency, or running with `NODE_PATH=node_modules/.pnpm/playwright-core@<version>/node_modules`, resolves it.\n" +
+    `Resolution attempts:\n  - ${attempts.join("\n  - ")}`
+  );
 }
 
 function getArg(name, fallback = null) {
@@ -419,17 +434,32 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
   issues.push(...auditCardSideRails({ viewportName }));
 
   for (const el of [...document.querySelectorAll("[role='button']")].filter(isVisible)) {
+    if (el.getAttribute("aria-hidden") === "true") continue; // decorative by declaration — screen readers skip it
+    if (el.hasAttribute("tabindex") || el.tagName === "BUTTON" || el.tagName === "A") continue;
     const selector = describe(el);
-    if (!el.hasAttribute("tabindex") && el.tagName !== "BUTTON" && el.tagName !== "A") {
+    if (isRedundantStepperAffordance(el)) {
+      // A number-stepper up/down affordance whose sibling input carries the keyboard contract.
+      // Warn (don't error): the affordance is mouse-only by design, but the input is operable
+      // via ArrowUp/ArrowDown, so WCAG 2.1.1 is met. Erroring here is a false positive that
+      // fires on every antd/MUI/Chakra number input.
       issues.push({
         viewport: viewportName,
         selector,
-        type: "non-focusable-custom-button",
-        severity: "error",
+        type: "non-focusable-stepper-affordance",
+        severity: "warning",
         text: clean(el.textContent || "").slice(0, 120),
-        detail: "Element uses role=button but is not naturally focusable and has no tabindex. It will not behave like a production-ready component.",
+        detail: "role=button number-stepper affordance next to a keyboard-operable input (role=spinbutton / input[type=number]). Not tab-focusable, but the sibling input handles ArrowUp/ArrowDown, so WCAG 2.1.1 is satisfied. Common in antd/MUI/Chakra. Confirm the input actually steps with arrow keys before dismissing; only add tabindex if it does NOT.",
       });
+      continue;
     }
+    issues.push({
+      viewport: viewportName,
+      selector,
+      type: "non-focusable-custom-button",
+      severity: "error",
+      text: clean(el.textContent || "").slice(0, 120),
+      detail: "Element uses role=button but is not naturally focusable and has no tabindex. It will not behave like a production-ready component.",
+    });
   }
 
   for (const el of [...document.querySelectorAll(textSelector)].filter(isVisible)) {
@@ -539,6 +569,23 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
     const rect = el.getBoundingClientRect();
     const style = getComputedStyle(el);
     return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+  }
+
+  function isRedundantStepperAffordance(el) {
+    // A role=button that is a decorative number stepper next to a keyboard-operable control
+    // (input[type=number] / role=spinbutton). antd/MUI/Chakra number inputs render up/down
+    // affordances as mouse-only, non-focusable spans by design: the input itself handles
+    // ArrowUp/ArrowDown, so WCAG 2.1.1 is met through the input, not the affordance.
+    const cls = typeof el.className === "string" ? el.className : "";
+    const looksLikeStepper = /(step|spin|handler|action|caret|chevron|arrow|inc|dec)/i.test(cls)
+      && /(up|down|increment|decrement|plus|minus)/i.test(cls);
+    if (!looksLikeStepper) return false;
+    let ancestor = el.parentElement;
+    for (let depth = 0; ancestor && depth < 4; depth += 1) {
+      if (ancestor.querySelector("input[type='number'], [role='spinbutton']")) return true;
+      ancestor = ancestor.parentElement;
+    }
+    return false;
   }
 
   function semanticParts(el) {
