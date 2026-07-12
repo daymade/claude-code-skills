@@ -25,13 +25,30 @@ Modes:
   --allow-lossy   override the fidelity gate (see below). Rarely correct.
 
 Fidelity gate (why this script refuses to run silently):
-  Rendering loss here is invisible by construction — an unhandled block type
-  renders as '' and the markdown still looks perfectly well-formed. So before
-  writing anything, every block is audited: it carried N characters of text; did
-  the renderer emit anything for it? If any block carried text and produced
-  nothing, the export FAILS (exit 2) instead of handing over a plausible-looking
-  fraction of the conversation. Blocks the platform itself emptied (see below) are
-  tracked separately as a disclosed gap, never counted as loss.
+  Rendering loss here is invisible by construction — a shape the renderer doesn't
+  know produces '' and the markdown still looks perfectly well-formed. So nothing is
+  written until every unit is accounted for: this unit carried N characters in the
+  payload; did the renderer emit anything for it? If content reached the transcript
+  as nothing, the export FAILS (exit 2) rather than hand over a plausible-looking
+  fraction of the conversation.
+
+  Two properties do the work, and both were learned by getting them wrong:
+
+    * The budget is measured off the RAW payload and never switches on type. A
+      per-type measure only looks at the fields that type's renderer happened to know
+      about, so the audit inherits the renderer's blind spots and a new field on a
+      known type vanishes at "100% retention".
+    * The renderer may decide how to PRESENT a field. It may not decide that a field
+      it doesn't recognize isn't content — whatever the type-specific branch leaves on
+      the floor gets dumped, ugly but visible.
+
+  Audited per tool_result ITEM, per message-level field, and per attachment body —
+  not merely per block, because those are the granularities content actually gets lost
+  at. Content the PLATFORM emptied (share snapshots) is tracked separately as a
+  disclosed gap and never counted as loss.
+
+  Changing the renderer? Run scripts/selftest_fidelity.py. Every case in it is a
+  payload that fooled a previous version of this gate.
 
 Two payload shapes:
   /chat/  — `name` holds the title; tool_result.content is a text[] list.
@@ -103,7 +120,12 @@ def result_item_text(item):
             return txt
         extra = {k: v for k, v in item.items()
                  if k not in ITEM_META_KEYS and isinstance(v, str) and v.strip()}
-        return json.dumps(extra, ensure_ascii=False) if extra else ''
+        if extra:
+            return json.dumps(extra, ensure_ascii=False)
+        # Leave a mark. Returning '' would be indistinguishable, to a reader, from the
+        # renderer having quietly skipped something — and this whole file exists to
+        # make "nothing came out" impossible to confuse with "nothing was there".
+        return '*(image — the binary is not carried in the JSON; see --list-files)*'
     body = item.get('text') or item.get('content')
     if isinstance(body, str) and body:
         return body
@@ -129,7 +151,33 @@ def fence(text, lang=''):
 
 
 def render_block(b, snapshot=False):
-    """Render one content block. `snapshot` = this payload came from a /share/ link.
+    """Render a block, then dump whatever the type-specific renderer left on the floor.
+
+    The two-stage shape is deliberate. `_render_block_core` is allowed to be
+    incomplete — it pretty-prints the shapes we know about, and the server owns the
+    schema, so it will meet fields it has never heard of. What it is NOT allowed to be
+    is silent. So instead of hoping every branch stays exhaustive against a schema we
+    don't control, we ask it afterwards what it didn't emit, and dump that.
+
+    A renderer may decide how to present a field. It may not decide that a field it
+    doesn't recognize isn't content.
+    """
+    if not isinstance(b, dict):
+        return fence(str(b))
+    core = _render_block_core(b, snapshot)
+    left = unrendered_fields(b, core)
+    if not left:
+        return core
+    n = sum(len(s) for s in string_leaves(left))
+    tail = (f'<details><summary>⚠️ {n} chars in fields this renderer does not know '
+            f'({", ".join(sorted(left))})</summary>\n\n'
+            + fence(json.dumps(left, ensure_ascii=False, indent=2), 'json') + '\n\n</details>')
+    return (core + '\n\n' + tail) if core.strip() else tail
+
+
+def _render_block_core(b, snapshot=False):
+    """Pretty-print the block shapes we know. `snapshot` = this payload came from a
+    /share/ link.
 
     That flag exists because the same observation — a tool call with no arguments —
     means two completely different things depending on provenance, and getting it
@@ -264,13 +312,12 @@ def render_msg(m, snapshot=False):
     files = message_files(m)
     if files and who == 'human':
         parts += render_files(files, 'uploaded')
-    blocks = m.get('content') or []
-    rendered_blocks = [x for x in (render_block(b, snapshot) for b in blocks) if x]
-    parts.extend(rendered_blocks)
+    blocks = message_blocks(m)
+    parts.extend(x for x in (render_block(b, snapshot) for b in blocks) if x)
     top_text = m.get('text')
     content_texts = {
         b.get('text') for b in blocks
-        if b.get('type') == 'text' and b.get('text')
+        if isinstance(b, dict) and b.get('type') == 'text' and b.get('text')
     }
     if top_text and top_text not in content_texts:
         # Agent turns can store thinking/tools in content[] and the final answer
@@ -278,6 +325,18 @@ def render_msg(m, snapshot=False):
         parts.append(top_text)
     if files and who == 'assistant':
         parts += render_files(files, 'produced')
+    # Message-level fields no branch above rendered. `compaction_summary` is a real one
+    # on real payloads and nothing here had ever heard of it; there will be others. A
+    # field living at message level is invisible to any content[]-only audit, so if it
+    # isn't dumped here it disappears without trace.
+    left = {k: v for k, v in m.items()
+            if k not in MSG_META_KEYS and isinstance(v, str) and v.strip()}
+    if left:
+        n = sum(len(v) for v in left.values())
+        parts.append(
+            f'<details><summary>⚠️ {n} chars in message fields this renderer does not '
+            f'know ({", ".join(sorted(left))})</summary>\n\n'
+            + fence(json.dumps(left, ensure_ascii=False, indent=2), 'json') + '\n\n</details>')
     return '\n\n'.join(parts)
 
 
@@ -303,6 +362,13 @@ ITEM_META_KEYS = frozenset({
     'metadata', 'prompt_context_metadata', 'links', 'citations',
     'start_timestamp', 'stop_timestamp', 'flags',
     'icon_name', 'integration_name', 'integration_icon_url', 'mcp_server_url',
+    # `source` carries the image BINARY (or a reference to it), not readable text.
+    # It belongs here — but note the tension with rule 2 above: taking it out of this
+    # set (an over-correction in the other direction) made the budget count a base64
+    # blob the renderer had no business printing, and the gate then failed a perfectly
+    # healthy export. The line is: exclude a key only when it is structurally incapable
+    # of carrying prose. Binary carriers qualify. "Looks like metadata" does not.
+    'source',
 })
 
 
@@ -325,22 +391,100 @@ def item_source_chars(item):
     return total
 
 
+# Structural metadata on a content BLOCK. Used ONLY by the budget side.
+# Same rule as ITEM_META_KEYS: when in doubt, leave the key out. Over-counting merely
+# obliges the renderer to emit something; under-counting is how the gate goes blind.
+BLOCK_META_KEYS = frozenset({
+    'type', 'id', 'uuid', 'tool_use_id', 'start_timestamp', 'stop_timestamp',
+    'flags', 'is_error', 'citations', 'citations_grouping_mode', 'index',
+    'integration_name', 'integration_icon_url', 'icon_name', 'tool_identifier',
+    'mcp_server_url', 'is_mcp_app', 'approval_options', 'approval_key',
+    'approval_key_legacy', 'name',
+})
+
+# Structural metadata on a MESSAGE. Everything else a message carries is content, and
+# content that nobody renders is content that silently disappeared — `compaction_summary`
+# is a real field on real payloads and no renderer here had ever heard of it.
+MSG_META_KEYS = frozenset({
+    'uuid', 'parent_message_uuid', 'sender', 'index', 'created_at', 'updated_at',
+    'content', 'text', 'files', 'attachments', 'input_mode', 'stop_reason',
+    'truncated', 'image_count', 'file_count', 'sync_sources', 'is_internal',
+})
+
+
+def message_blocks(m):
+    """content[], normalized.
+
+    A payload that puts a bare string in `content` used to make the renderer iterate
+    its characters and die on `b.get(...)`. Normalizing is not collusion: it decides
+    the SHAPE, not what counts as content.
+    """
+    c = m.get('content')
+    if isinstance(c, str):
+        return [{'type': 'text', 'text': c}] if c else []
+    return c if isinstance(c, list) else []
+
+
+def string_leaves(v):
+    """Every string buried anywhere inside a value."""
+    if isinstance(v, str):
+        return [v]
+    if isinstance(v, dict):
+        return [s for vv in v.values() for s in string_leaves(vv)]
+    if isinstance(v, list):
+        return [s for vv in v for s in string_leaves(vv)]
+    return []
+
+
 def block_source_chars(b):
-    """Content this block carries in the payload (tool_result is audited per item)."""
-    t = b.get('type')
-    if t == 'text':
-        return len(b.get('text') or '')
-    if t == 'thinking':
-        return len(b.get('thinking') or '')
-    if t == 'tool_use':
-        inp = b.get('input') or {}
-        return len(json.dumps(inp, ensure_ascii=False)) if inp else 0
-    if t == 'tool_result':
-        c = b.get('content')
-        if isinstance(c, list):
-            return sum(item_source_chars(i) for i in c)
-        return len(str(c or ''))
-    return len(json.dumps(b, ensure_ascii=False)) if b else 0
+    """ALL non-metadata content in a block, measured off the raw payload.
+
+    Deliberately does NOT switch on block type — and that is the whole point. A
+    per-type measure only ever looks at the fields that type's renderer happened to
+    know about when it was written, so the budget inherits the renderer's blind spots
+    by construction: a NEW field on a KNOWN type is invisible to both, and vanishes at
+    a serene "100% retention". That exact bug shipped three times here (a text block's
+    unknown field, a tool_use input's unknown field, an attachment body under an
+    unfamiliar key) because each fix taught one more branch about one more field
+    instead of removing the assumption that the branches know what content is.
+
+    They don't. Count everything structural-looking out, and everything else in.
+    """
+    if not isinstance(b, dict):
+        return len(str(b or ''))
+    total = 0
+    for k, v in b.items():
+        if k in BLOCK_META_KEYS:
+            continue
+        if k == 'content':
+            if isinstance(v, list):
+                total += sum(item_source_chars(i) for i in v)   # audited per item
+            else:
+                total += len(str(v or ''))
+            continue
+        if isinstance(v, str):
+            total += len(v)
+        elif isinstance(v, (dict, list)):
+            total += sum(len(s) for s in string_leaves(v))
+    return total
+
+
+def unrendered_fields(b, rendered):
+    """Content fields the type-specific renderer left on the floor.
+
+    The backstop for the recurring failure above. Rather than demand every branch be
+    exhaustive about a schema it does not control, ask it afterwards what it didn't
+    emit. The renderer may pretty-print the fields it knows; it may NOT decide that a
+    field it does not know is not content.
+    """
+    leftovers = {}
+    for k, v in b.items():
+        if k in BLOCK_META_KEYS or k == 'content':
+            continue
+        missing = [s for s in string_leaves(v) if s.strip() and s not in rendered]
+        if missing:
+            leftovers[k] = v
+    return leftovers
 
 
 def fidelity_report(conv):
@@ -389,7 +533,7 @@ def fidelity_report(conv):
             dropped.append({'unit': unit, 'type': kind, 'name': name, 'chars': src})
 
     for i, m in enumerate(msgs):
-        blocks = m.get('content') or []
+        blocks = message_blocks(m)
         msg_md = render_msg(m, snapshot)     # measured, never assumed
 
         for f in message_files(m):
@@ -402,7 +546,19 @@ def fidelity_report(conv):
                 account(f'msg[{i}].file', 'attachment', f.get('file_name', '?'),
                         src, body if body and body in msg_md else '')
 
+        # Message-level content fields. Outside content[], therefore outside the reach
+        # of any block-level audit no matter how rigorous — `compaction_summary` sat
+        # there, real and unrendered, through every previous version of this gate.
+        for k, v in m.items():
+            if k in MSG_META_KEYS or not isinstance(v, str) or not v.strip():
+                continue
+            account(f'msg[{i}].{k}', 'message-field', k, len(v), v if v in msg_md else '')
+
         for j, b in enumerate(blocks):
+            if not isinstance(b, dict):
+                account(f'msg[{i}].block[{j}]', 'raw', '', len(str(b)),
+                        str(b) if str(b) in msg_md else '')
+                continue
             kind, name = b.get('type'), b.get('name', '')
             unit = f'msg[{i}].block[{j}]'
 
@@ -513,7 +669,7 @@ def citation_sources(conv):
     so a renderer that only walks block bodies throws them away."""
     urls = []
     for m in active_path(conv):
-        for b in (m.get('content') or []):
+        for b in message_blocks(m):
             for c in (b.get('citations') or []):
                 u = (c.get('details') or {}).get('url')
                 if u and u not in urls:
@@ -563,7 +719,7 @@ def list_files(conv):
             elif kind == 'image':
                 rows.append((i, m.get('sender'), f.get('file_name'), None,
                              f'files/{f.get("file_uuid") or f.get("uuid")}/contents'))
-        for b in (m.get('content') or []):
+        for b in message_blocks(m):
             if b.get('type') == 'tool_use' and b.get('name') == 'present_files':
                 for p in (b.get('input') or {}).get('filepaths') or []:
                     rows.append((i, 'assistant', p.split('/')[-1], None,
@@ -579,7 +735,7 @@ def extract_file(conv, sandbox_path):
     """Replay create_file + later str_replace edits → final file content."""
     content, ops = None, []
     for i, m in enumerate(active_path(conv)):
-        for b in (m.get('content') or []):
+        for b in message_blocks(m):
             if b.get('type') != 'tool_use':
                 continue
             inp = b.get('input') or {}
