@@ -1,103 +1,94 @@
-# ONBOARDING.md 标准模板
+# Repository operations guide template
 
-## 模板（复制到新项目后修改）
+Use this only when the repository needs a durable handoff document. Replace every
+placeholder from project evidence; delete sections the project does not need.
 
-```markdown
-# <项目名称> Setup 指南
+## Template
 
-> 本指南面向非技术用户。遇到任何问题，直接问 Claude Code："跑不起来了"、"环境怎么配"。
+~~~markdown
+# <Project name> operations guide
 
-## Step 1: 验证系统依赖
+> Tell the Agent what outcome you want in normal language. The commands below are
+> the verified project contract, not a requirement that you run them by hand.
 
-在终端运行以下命令，**每行都要运行并确认输出**：
+## One-time setup
 
-```bash
-# 1.1 git 状态检查
-git status
-# 期望：显示 "On branch main"，无未提交改动
+### 1. Confirm repository state
 
-# 1.2 ffmpeg 检查
-ffmpeg -version | head -1
-# 期望：显示版本号（如 "ffmpeg version 7.0"）
+~~~bash
+git status --short --branch
+~~~
 
-# 1.3 uv 检查
-uv --version
-# 期望：显示版本号（如 "uv 0.5.x"）
-```
+Expected: the intended branch and a visible list of any local changes. Do not hide
+or automatically stash changes.
 
-**任一失败 → 按下方"故障排除"修复，不要跳过。**
+### 2. Verify declared prerequisites
 
-## Step 2: 初始化 Python 环境
+| Requirement | Declared by | Verification | Expected output |
+|---|---|---|---|
+| <tool/runtime> | <manifest or runbook> | <version command> | <verified example> |
 
-```bash
-# 2.1 进入项目目录（如果还没进）
-cd <REPO_ROOT>
+Install only missing requirements using the method documented for this project and
+operating system.
 
-# 2.2 同步依赖（根据 pyproject.toml 安装）
-uv sync
+### 3. Install project dependencies
 
-# 2.3 验证安装
-uv run python -c "import <main_package>; print('OK')"
-```
+~~~bash
+<dependency installation command from the manifest/lockfile>
+~~~
 
-## Step 3: 配置环境变量
+Expected: <observable success signal>.
 
-```bash
-# 3.1 查看当前 .env
-cat .env
-```
+### 4. Configure local values
 
-- 如果值是占位符（如 `YOUR_KEY_HERE`），替换为真实值
-- private repo：直接编辑 `.env` 然后 `git add .env && git commit -m "配置环境变量"`
-- public repo：**不要提交 .env**，问 Claude Code 如何处理
+- Source of required variable names: <env template or config schema>.
+- Store values in: <project-authorized local location>.
+- Never copy a value from another environment or invent a fallback.
+- Verify presence without printing secret contents.
 
-## Step 4: 运行验证测试
+### 5. Run the smoke test
 
-```bash
-# 4.1 运行 smoke test
-uv run pytest tests/test_smoke.py -v
+~~~bash
+<smallest real verification command>
+~~~
 
-# 或运行项目自带验证脚本
-uv run python scripts/verify_setup.py
-```
+Expected: <exit code plus product-level signal>.
 
-**全部通过 → 环境就绪。**
+## Daily use
 
-## Step 5: 日常使用
+| Outcome | Agent action or command | Success signal |
+|---|---|---|
+| Sync before work | Inspect state; clean → git pull --ff-only | Fast-forward or already current |
+| Start the project | <start command> | <health response/window/output> |
+| Run focused tests | <test command> | <expected pass summary> |
+| Save an intended change | Ask the Agent to review and commit selected files | Commit contains only intended paths |
 
-| 任务 | 命令 |
-|------|------|
-| 运行项目 | `uv run python main.py` |
-| 运行测试 | `uv run pytest` |
-| 更新依赖 | `uv sync` |
-| 提交代码 | 问 Claude Code "帮我提交" |
+If the worktree has local changes or histories diverged, the Agent reports the
+state instead of automatically stashing, merging, rebasing, or forcing.
 
-## 故障排除
+## Recovery
 
-### "命令找不到"（ffmpeg / uv / git）
-- macOS: `brew install ffmpeg` / `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- 重新打开终端，让 PATH 生效
+### <Observed failure signature>
 
-### "uv sync 失败"
-- 检查网络连接
-- 检查 `pyproject.toml` 是否存在
-- 问 Claude Code
+- Evidence: <exact error/exit status>
+- Root cause: <verified cause>
+- Repair: <project-consistent command or edit>
+- Verification: <command and expected result>
 
-### "pytest 失败"
-- 检查 `.env` 是否配置正确
-- 先跑 `tests/test_smoke.py`（最小测试），不要一次性跑全量
-- 问 Claude Code
+## Ownership and boundaries
 
-### "git push 被拒"
-- 问 Claude Code "push 失败了"
-- 不要强行用 `--force`
-```
+- Project instructions: <AGENTS.md/CLAUDE.md or equivalent>
+- Operational source of truth: <manifest/runbook/config>
+- Actions requiring explicit approval: <push/deploy/destructive/external actions>
+~~~
 
-## 设计原则
+## Adaptation checklist
 
-1. **所有命令可直接复制执行** — 无个人路径、无假设
-2. **每步有验证** — 不只是"安装"，而是"安装后检查"
-3. **相对路径或占位符** — `<REPO_ROOT>`、`<YOUR_NAME>`
-4. **故障排除独立成节** — 常见问题自助，复杂问题找 Claude
-5. **面向非技术用户** — 解释"期望输出是什么"、"失败了怎么办"
-6. **与 Claude Code 配合** — 明确说"问 Claude Code"的场景
+1. Derive every requirement from a project file or exercised command.
+2. Keep one operational source of truth; do not repeat volatile versions or values.
+3. Put expected output immediately after each command.
+4. Separate one-time setup from daily operation.
+5. Include only failures that were observed or are intrinsic to the selected tool.
+6. Test commands on each target operating system.
+7. Write for a capable collaborator; explain project-specific context, not generic
+   computing concepts.
