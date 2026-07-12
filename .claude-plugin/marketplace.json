@@ -691,7 +691,7 @@
       "description": "Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers the core conflict layers — route hijacking, HTTP proxy env var interception, system proxy bypass, SSH ProxyCommand double tunneling, VM/container proxy propagation — plus stalled DNS resolver in macOS getaddrinfo chain (dead VPN daemon leaves zombie utun + DNS injection). Includes an automated quick-diagnose script plus SOP for remote development via SSH tunnels with proxy-safe Makefile patterns. Use when Tailscale ping works but SSH/HTTP times out, when browser returns 503 but curl works, when local vanity domains fail behind proxy, when git push fails with failed to begin relaying via HTTP, when Docker pull times out behind TUN/VPN, when setting up Tailscale SSH to WSL instances, when bootstrapping remote dev environments over Tailscale, when ssh/curl/git hang ~60s before resolving a hostname while nslookup returns instantly, or when raw probes give impossibly-fast results under a TUN proxy (nc -z 0.00s or sub-ms ping to overseas nodes, or an IP-geo lookup reporting your proxy exit IP instead of your real home/ISP) — the TUN fabricates them locally. Also covers TUN DIRECT split-brain: all domestic/DIRECT-routed sites fail at once (TLS handshake EOF, UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, proxy CONNECT 503) while proxied sites keep working.",
       "source": "./tunnel-doctor",
       "strict": false,
-      "version": "1.7.0",
+      "version": "1.8.0",
       "category": "developer-tools",
       "keywords": [
         "tailscale",
@@ -842,10 +842,10 @@
     },
     {
       "name": "auto-repo-setup",
-      "description": "Automated repository environment configuration, fault diagnosis, and repair for non-technical users. When someone clones a repo and says 'it won't run', 'how do I set this up', 'environment issues', or 'how do I start the project', this skill reads ONBOARDING.md, audits environment gaps (git, ffmpeg, uv, Python, whisper.cpp, API keys), installs missing dependencies, validates with smoke tests, and safely handles git operations (commit, push, merge conflicts) with PII Guard and Push Safety. Also includes SessionStart hook initialization, counter-review workflows, and git history sanitization for project setup standardization.",
+      "description": "Evidence-driven repository setup, repair, handoff, and safe Git workflow for Claude Code or Codex. Detects the actual stack from project instructions and manifests instead of assuming Python, ffmpeg, uv, or .env; preserves local work during sync/conflict handling; diagnoses repeated SessionStart output before editing config; and defaults routine startup behavior to AGENTS.md/CLAUDE.md or a normal Agent request. Lifecycle hooks are an explicit pre-prompt exception with guarded, idempotent Claude Code setup and runtime-specific Codex verification.",
       "source": "./auto-repo-setup",
       "strict": false,
-      "version": "1.0.0",
+      "version": "2.0.0",
       "category": "developer-tools",
       "keywords": [
         "repo-setup",
@@ -854,10 +854,11 @@
         "git",
         "configuration",
         "claude-code",
-        "non-technical",
-        "session-start",
+        "project-instructions",
+        "session-start-diagnosis",
         "pii-guard",
-        "whisper"
+        "codex",
+        "git-sync"
       ]
     },
     {

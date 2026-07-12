@@ -2544,21 +2544,24 @@ claude plugin install benchmark-due-diligence@daymade-skills
 
 ### 63. **auto-repo-setup** - 自动化仓库配置与环境修复
 
-把"跑不起来"变成"已经在跑"，而不要求用户懂 git、uv、ffmpeg 或 API key。为需要克隆仓库并让它跑起来的非技术同事（编辑、商务、运营）设计——也面向想要标准化、可交接的项目上手流程的技术用户。
+让仓库真正跑起来并可交接，同时不猜技术栈、不改变协作者正常的工作方式。先读项目权威来源，再修已验证的缺口；把启动指令、生命周期 hook 和 Git 状态变更视为三种不同机制。
 
 **使用场景：**
-- 非技术用户说"跑不起来"、"怎么启动"、"环境怎么配"或"帮我设置代码库"
-- 配置新机器，或让同事上手一个代码库
-- 配置 SessionStart hook，让 Claude Code 进入时自动检查环境
+- 有人说"跑不起来"、"怎么启动"、"环境怎么配"或"帮我设置代码库"
+- 配置新机器，或为协作者建立可持续的仓库交接
+- 为 Claude Code/Codex 增加启动同步，同时不自动 stash 本地工作
+- 重复出现 SessionStart 输出时，先查触发来源再改配置
+- 只有行为必须发生在首条消息前时才配置生命周期 hook
 - 误泄漏密钥/路径后清理 git 历史
-- 为不常用 git 的用户处理合并冲突或 git push 失败
+- 在明确安全闸门下处理合并冲突或 git push 失败
 
 **主要功能：**
-- **ONBOARDING.md 优先工作流**：读项目指南，逐步校验，迭代修补缺口
-- **SessionStart hook 生成器**：一条命令 `init_session_start_hook.py` 设好每次 Claude Code 会话进入时的自动环境检查
+- **按目的分流**：区分环境修复、日常同步、仓库交接、hook 诊断和明确的首条消息前自动化
+- **技术栈感知审计**：`check_env.py` 只根据 manifest/lockfile 检查已声明工具，不默认要求 ffmpeg、uv、Python 或 .env
+- **启动边界**：稳定规则默认写 AGENTS.md/CLAUDE.md 或直接告诉 Agent；Claude hook 管理器可预览、幂等、只改自己的配置并可卸载
 - **安全护栏**：Push Safety（任何 push 前验证可见性）、PII Guard（4 层密钥扫描）、环境变量的 NO FALLBACK 原则、Git Hook Bypass 禁令
-- **对抗审查工作流**：对重大改动做多 agent 安全/代码质量/devops/文档审查
-- **内置脚本**：`check_env.py`（审计 git/ffmpeg/uv/python/.env）、`sanitize_history.sh`（扫历史中的密钥/路径/域名）、`init_session_start_hook.py`
+- **对抗审查边界**：只对共享配置、安全策略或破坏性 Git 变更启用，不为普通 setup 强行开多 agent
+- **内置脚本**：技术栈感知审计、受控 Claude 启动提醒管理器、只读历史候选扫描
 
 **示例用法：**
 ```bash
@@ -2568,11 +2571,13 @@ claude plugin install auto-repo-setup@daymade-skills
 # 然后自然地让 Claude 做
 "我跑不起来这个仓库"
 "帮我设置一下这个项目的环境"
-"初始化 SessionStart hook"
+"进入项目先同步远端；本地有改动不要自动 stash"
+"为什么同一个 SessionStart 输出了三次？先查清来源"
+"只有首条消息前必须注入动态提醒时，才帮我装 hook"
 "git push 被拒了"
 ```
 
-**要求**：Python 3.8+、`uv` 包管理器。技能本身无需外部 API key。
+**要求**：方法本身无运行时依赖；内置 Python 工具要求 Python 3.10+。技能本身无需外部 API key。
 
 ---
 
