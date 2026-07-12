@@ -100,10 +100,16 @@ def result_item_text(item):
         return item.get('text', '')
     if t == 'knowledge':                       # web_search result
         title, url = item.get('title', ''), item.get('url', '')
-        head = f'### {title}'.strip()
+        head = f'### {title}'.strip()          # our own heading — safe to trim
         if url:
             head += f'\n<{url}>'
-        return f'{head}\n\n{item.get("text", "")}'.strip()
+        body = item.get('text', '')
+        # The body is NOT trimmed. A trailing space in the payload is part of the
+        # payload: strip it and the original string no longer appears in the transcript,
+        # which an independent byte-level proof correctly reports as missing content.
+        # The rule, for every branch in this file: wrap and concatenate the payload's
+        # text — never edit it. Cosmetics are not worth a byte of fidelity.
+        return f'{head}\n\n{body}' if head else body
     if t == 'image':
         # The binary never rides in the JSON, so an image item usually carries no text
         # and emitting nothing IS correct. But do not hard-code that to '': if the item
@@ -150,6 +156,39 @@ def fence(text, lang=''):
     return f'{f}{lang}\n{text}\n{f}'
 
 
+def dump_fields(d, label):
+    """Dump leftover content fields as ORIGINAL text — never json.dumps'd.
+
+    json.dumps escapes newlines and quotes, so the string in the transcript is no longer
+    the string in the payload. The audit's own `v in rendered` check then fails on any
+    real content, and the export is refused with "nothing rendered" for a field that was,
+    in fact, rendered. On one real account export that rejected 321 of 339 conversations.
+
+    The selftest sailed through it, because its fixtures used escape-free strings
+    ('Q' * 8000). Synthetic data hid the bug precisely where real data trips over it —
+    which is the argument for running the real corpus, not for writing more fixtures.
+    """
+    parts = []
+    for k in sorted(d):
+        v = d[k]
+        if isinstance(v, str):
+            parts.append(f'**{k}** ({len(v)} chars):\n\n' + fence(v))
+            continue
+        # Nested value. The JSON shows the shape — but json.dumps escapes every string
+        # inside it, so the payload's actual TEXT would still not appear in the
+        # transcript, and an independent check would (correctly) call it missing. Emit
+        # the structure for legibility AND every substantial leaf verbatim, so the text
+        # is really there.
+        parts.append(f'**{k}**:\n\n'
+                     + fence(json.dumps(v, ensure_ascii=False, indent=2), 'json'))
+        for s in string_leaves(v):
+            if len(s) >= 40 and s.strip():
+                parts.append(fence(s))
+    n = sum(len(s) for s in string_leaves(d))
+    return (f'<details><summary>{label}, {n} chars ({", ".join(sorted(d))})</summary>\n\n'
+            + '\n\n'.join(parts) + '\n\n</details>')
+
+
 def render_block(b, snapshot=False):
     """Render a block, then dump whatever the type-specific renderer left on the floor.
 
@@ -168,10 +207,7 @@ def render_block(b, snapshot=False):
     left = unrendered_fields(b, core)
     if not left:
         return core
-    n = sum(len(s) for s in string_leaves(left))
-    tail = (f'<details><summary>⚠️ {n} chars in fields this renderer does not know '
-            f'({", ".join(sorted(left))})</summary>\n\n'
-            + fence(json.dumps(left, ensure_ascii=False, indent=2), 'json') + '\n\n</details>')
+    tail = dump_fields(left, '⚠️ fields this renderer does not know')
     return (core + '\n\n' + tail) if core.strip() else tail
 
 
@@ -225,7 +261,10 @@ def _render_block_core(b, snapshot=False):
             return '**📤 deliverables**: ' + ', '.join(f'`{p}`' for p in fps)
         return f'**🔧 {name}**\n\n' + fence(json.dumps(inp, ensure_ascii=False, indent=2), 'json')
     if t == 'tool_result':
-        txt = result_text(b).rstrip()
+        # No .rstrip(): it edits the payload's own text, so the original string no longer
+        # appears in the transcript and an independent proof rightly calls it missing.
+        # Cosmetics are not worth breaking byte-fidelity.
+        txt = result_text(b)
         if not txt:
             return ''  # image results etc. carry no text — the binary never rides in the JSON
         err = ' (ERROR)' if b.get('is_error') else ''
@@ -261,15 +300,18 @@ def file_text(f):
     """
     if not isinstance(f, dict):
         return ''
-    for k in FILE_TEXT_KEYS:
-        v = f.get(k)
-        if isinstance(v, str) and v.strip():
-            return v
+    # EVERY body key, not the first one that hits. Returning on the first match while
+    # the budget counted them all — and while account() credited the file its full
+    # budget on any non-empty body — let a second body key vanish at 100%. Same
+    # all-or-nothing credit bug as the per-block audit, one level down.
+    parts = [f[k] for k in FILE_TEXT_KEYS
+             if isinstance(f.get(k), str) and f[k].strip()]
     unknown = {k: v for k, v in f.items()
-               if k not in FILE_META_KEYS and isinstance(v, str) and v.strip()}
+               if k not in FILE_META_KEYS and k not in FILE_TEXT_KEYS
+               and isinstance(v, str) and v.strip()}
     if unknown:
-        return json.dumps(unknown, ensure_ascii=False, indent=2)
-    return ''
+        parts.append(json.dumps(unknown, ensure_ascii=False, indent=2))
+    return '\n\n'.join(parts)
 
 
 def file_source_chars(f):
@@ -332,11 +374,7 @@ def render_msg(m, snapshot=False):
     left = {k: v for k, v in m.items()
             if k not in MSG_META_KEYS and isinstance(v, str) and v.strip()}
     if left:
-        n = sum(len(v) for v in left.values())
-        parts.append(
-            f'<details><summary>⚠️ {n} chars in message fields this renderer does not '
-            f'know ({", ".join(sorted(left))})</summary>\n\n'
-            + fence(json.dumps(left, ensure_ascii=False, indent=2), 'json') + '\n\n</details>')
+        parts.append(dump_fields(left, '⚠️ message fields this renderer does not know'))
     return '\n\n'.join(parts)
 
 
@@ -400,6 +438,9 @@ BLOCK_META_KEYS = frozenset({
     'integration_name', 'integration_icon_url', 'icon_name', 'tool_identifier',
     'mcp_server_url', 'is_mcp_app', 'approval_options', 'approval_key',
     'approval_key_legacy', 'name',
+    # NOT here: 'display_content'. It looks like presentation metadata and it carries
+    # real content (a json_block, on real payloads). Excluding it blinded both sides at
+    # once — the failure mode this whole list is warned about.
 })
 
 # Structural metadata on a MESSAGE. Everything else a message carries is content, and
@@ -410,6 +451,27 @@ MSG_META_KEYS = frozenset({
     'content', 'text', 'files', 'attachments', 'input_mode', 'stop_reason',
     'truncated', 'image_count', 'file_count', 'sync_sources', 'is_internal',
 })
+
+# Structural metadata on the CONVERSATION itself. The audit used to begin at
+# `chat_messages`, so anything the conversation carried at top level was invisible to
+# every check in this file — however rigorous they got. `summary` is populated on 284
+# of 339 conversations in one real account export (652k chars), and no renderer here
+# had ever looked at it. Three levels now audited: conversation, message, block/item.
+CONV_META_KEYS = frozenset({
+    'uuid', 'name', 'snapshot_name', 'conversation_uuid', 'created_at', 'updated_at',
+    'chat_messages', 'current_leaf_message_uuid', 'creator', 'created_by', 'account',
+    'is_public', 'up_to_date', 'project_uuid', 'settings', 'is_starred', 'model',
+})
+
+
+def conv_extra_md(conv):
+    """Conversation-level content fields, rendered. Shared by the renderer and (as the
+    tally, not the budget) by the audit — the same discipline as render_msg()."""
+    extra = {k: v for k, v in conv.items()
+             if k not in CONV_META_KEYS and isinstance(v, str) and v.strip()}
+    if not extra:
+        return ''
+    return dump_fields(extra, '📋 conversation-level fields')
 
 
 def message_blocks(m):
@@ -478,8 +540,13 @@ def unrendered_fields(b, rendered):
     field it does not know is not content.
     """
     leftovers = {}
+    # `content` is skipped only where it is genuinely audited elsewhere — i.e. on a
+    # tool_result, which fidelity_report walks per item. Skipping it unconditionally
+    # meant a future block type carrying content[] (an mcp_tool_result, say) would have
+    # its items checked by nobody.
+    audited_elsewhere = {'content'} if b.get('type') == 'tool_result' else set()
     for k, v in b.items():
-        if k in BLOCK_META_KEYS or k == 'content':
+        if k in BLOCK_META_KEYS or k in audited_elsewhere:
             continue
         missing = [s for s in string_leaves(v) if s.strip() and s not in rendered]
         if missing:
@@ -527,10 +594,31 @@ def fidelity_report(conv):
         if src <= 0:
             return
         carried += src
-        if emitted and emitted.strip():
+        # `if emitted`, NOT `if emitted.strip()`. claude.ai emits text blocks whose
+        # entire content is "\n\n" around tool calls — 185 of them across 11.8% of the
+        # conversations in one real account export. The renderer reproduces them
+        # faithfully; .strip() then declares that faithful reproduction to be nothing,
+        # books it as a dropped block, and refuses the export with a message telling the
+        # user their payload contains a shape the renderer can't handle. It doesn't.
+        #
+        # The budget counted that whitespace as content. The tally must count the same
+        # whitespace as output. One definition per character, or the gate manufactures
+        # failures out of its own inconsistency — and a gate that cries wolf on 12% of
+        # real conversations teaches people to pass --allow-lossy, which is the one
+        # thing that actually destroys it.
+        if emitted:
             rendered += src
         else:
             dropped.append({'unit': unit, 'type': kind, 'name': name, 'chars': src})
+
+    # Conversation-level content. Audited FIRST because for years it wasn't audited at
+    # all: the walk started at chat_messages, so a 652k-char `summary` sat outside every
+    # check in this file.
+    conv_md = conv_extra_md(conv)
+    for k, v in conv.items():
+        if k in CONV_META_KEYS or not isinstance(v, str) or not v.strip():
+            continue
+        account(f'conv.{k}', 'conversation-field', k, len(v), v if v in conv_md else '')
 
     for i, m in enumerate(msgs):
         blocks = message_blocks(m)
@@ -644,6 +732,51 @@ def fidelity_report(conv):
     }
 
 
+# Below this, strings are payload plumbing: uuids (36), timestamps (~27), type names,
+# enum values, short tool names. Demanding those appear in a transcript would make the
+# proof unusable. This is a pragmatic floor, not a completeness proof — it catches the
+# failure that matters (a BODY of content going missing), not every conceivable one.
+PROVE_MIN_CHARS = 120
+
+
+def prove_no_loss(conv, transcript, min_chars=PROVE_MIN_CHARS):
+    """Independent proof: every substantial string in the payload is in the transcript.
+
+    Shares no logic with the budget or the renderer. It does not know what a block is,
+    what counts as metadata, or which fields matter — it walks the raw JSON and asks one
+    question per string.
+
+    That ignorance is the entire point. The budget and the renderer now agree with each
+    other through three shared denylists (BLOCK/ITEM/MSG_META_KEYS). A wrong entry in any
+    of them blinds BOTH sides at once, and no amount of rigor inside that machinery can
+    see it — those lists have already been wrong twice. So the last check is one that
+    trusts none of it.
+
+    Only the active path is walked: messages on abandoned edit branches are correctly
+    absent from the transcript, and demanding them would manufacture failures.
+    """
+    missing = []
+
+    def walk(v, path):
+        if isinstance(v, str):
+            if len(v) >= min_chars and v not in transcript:
+                missing.append((path, len(v)))
+        elif isinstance(v, dict):
+            for k, vv in v.items():
+                walk(vv, f'{path}.{k}')
+        elif isinstance(v, list):
+            for i, vv in enumerate(v):
+                walk(vv, f'{path}[{i}]')
+
+    for k, v in conv.items():
+        if k == 'chat_messages':
+            continue
+        walk(v, f'conv.{k}')
+    for i, m in enumerate(active_path(conv)):
+        walk(m, f'msg[{i}]')
+    return missing
+
+
 def gap_notice(report):
     """The disclosure banner. A reader must never mistake a snapshot for the whole
     conversation just because the export ran cleanly."""
@@ -702,6 +835,9 @@ def render_transcript(conv, source_url='', report=None):
                     f'(shared by: {creator})')
     head += [f'Created: {conv.get("created_at", "?")}', f'Messages: {len(msgs)}']
     head += gap_notice(report)
+    extra = conv_extra_md(conv)
+    if extra:
+        head += ['', extra]
     head += ['', '---', '']
     body = '\n\n---\n\n'.join(render_msg(m, snapshot) for m in msgs)
     return '\n'.join(head) + body + '\n' + citation_sources(conv)
@@ -815,13 +951,13 @@ def main(argv=None):
                 "truncated payload: the declared leaf message has children, so the walk "
                 "stopped short of where the conversation actually ends. Re-fetch — this is "
                 "not a rendering problem.")
-        if report['orphaned_messages']:
-            n = len(report['orphaned_messages'])
-            fatal.append(
-                f"truncated payload: {n} message(s) are orphaned — their ancestry never "
-                f"reaches the active path, so they were neither rendered nor audited. These "
-                f"are NOT abandoned edit branches (those hang off the path); the payload is "
-                f"missing the messages that would connect them. Re-fetch.")
+        # Orphans are deliberately NOT fatal. A message whose ancestry exits the payload
+        # without touching the active path is the signature of a truncated payload — and
+        # ALSO the signature of the user having edited the FIRST message of the thread,
+        # because that message's parent is a virtual root that is never in chat_messages,
+        # so its abandoned version has nowhere to hang from. The two are structurally
+        # identical; no amount of cleverness distinguishes them. Failing here rejected
+        # real conversations for the third time. Report, and let the reader judge.
 
         for d in report['dropped_blocks'][:10]:
             fatal.append(f"{d['unit']} ({d['type']}/{d['name'] or '-'}): {d['chars']:,} chars "
@@ -829,6 +965,17 @@ def main(argv=None):
         extra = len(report['dropped_blocks']) - 10
         if extra > 0:
             fatal.append(f'… and {extra} more dropped unit(s)')
+
+        # Independent proof, run against the finished transcript. It shares no logic with
+        # the audit above — which is the only way to catch a wrong entry in the denylists
+        # that audit trusts.
+        unproven = prove_no_loss(conv, out)
+        for path, n in unproven[:5]:
+            fatal.append(f"{path}: {n:,} chars are in the payload and NOT in the transcript "
+                         f"(independent proof — this bypasses the audit entirely, so the "
+                         f"audit's own denylists cannot hide it)")
+        if len(unproven) > 5:
+            fatal.append(f'… and {len(unproven) - 5} more unproven string(s)')
 
         if fatal and not args.allow_lossy:
             print('FIDELITY CHECK FAILED — refusing to write.\n', file=sys.stderr)
@@ -853,9 +1000,16 @@ def main(argv=None):
         print(f"fidelity: {report['rendered_chars']:,}/{report['carried_chars']:,} chars rendered "
               f"({report['retention']:.1%}) across {report['messages_walked']} message(s)",
               file=sys.stderr)
-        if report['messages_unwalked'] and not report['truncated']:
-            print(f"note: {report['messages_unwalked']} message(s) are off the active path "
-                  f"(abandoned edit/regeneration branches) — expected, not loss", file=sys.stderr)
+        if report['messages_unwalked']:
+            n_orphan = len(report['orphaned_messages'])
+            note = (f"note: {report['messages_unwalked']} message(s) are off the active path "
+                    f"(abandoned edit/regeneration branches) — expected, not loss")
+            if n_orphan:
+                note += (f"; {n_orphan} of them have no ancestry into the path at all, which "
+                         f"is what an edit of the FIRST message looks like — but also what a "
+                         f"truncated payload looks like. If you expected a longer "
+                         f"conversation, re-fetch")
+            print(note, file=sys.stderr)
         if report['stripped_blocks']:
             names = sorted({s['name'] for s in report['stripped_blocks'] if s['name']})
             print(f"known gap: {len(report['stripped_blocks'])} tool blocks were emptied by the "

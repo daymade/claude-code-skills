@@ -107,14 +107,61 @@ CASES = [
         2, [], [],
     ),
     (
-        # Truncation shape 2: a message whose ancestry never reaches the active path.
-        # The walk never iterates it, so a per-block audit reports a serene 100%.
-        'orphaned message must fail (its ancestors are missing from the payload)',
+        # Truncation shape 2 — deliberately DOWNGRADED to a warning. A message whose
+        # ancestry never reaches the active path is the signature of a truncated payload
+        # AND of the user having edited the FIRST message of the thread (that message's
+        # parent is a virtual root, never present in chat_messages, so its abandoned
+        # version has nothing to hang from). The two are structurally identical and no
+        # cleverness separates them. Failing here rejected real conversations — the third
+        # time a truncation check did that. Warn; let the reader judge.
+        'orphaned message warns but must NOT fail (indistinguishable from a first-message edit)',
         conv([msg('m2', parent='m1-MISSING', content=[{'type': 'text', 'text': 'a'}]),
               msg('m3', parent='m2', content=[{'type': 'text', 'text': 'b'}]),
               msg('mX', parent='m0-MISSING', content=[{'type': 'text', 'text': BIG}])],
              current_leaf_message_uuid='m3'),
-        2, [], [],
+        0, [], [],
+    ),
+
+    # ---- Found only by running 339 REAL conversations. Synthetic fixtures had ----
+    # ---- passed every one of these, because 'Q'*8000 needs no escaping and has ----
+    # ---- no trailing space. The corpus is the test; the fixtures are the memo.  ----
+    (
+        # claude.ai emits pure-whitespace text blocks around tool calls: 185 of them,
+        # across 11.8% of one real account's conversations. The budget counted the
+        # whitespace as content; the tally used .strip() and called the same characters
+        # nothing. 40 real conversations were refused with "the renderer can't handle
+        # this shape" — it could, perfectly.
+        'whitespace-only text block must not be booked as loss',
+        conv([msg('a', content=[{'type': 'text', 'text': '\n\n', 'citations': []},
+                                {'type': 'text', 'text': BIG}])]),
+        0, [BIG], [],
+    ),
+    (
+        # `summary` is populated on 284 of 339 real conversations — 652,822 chars. The
+        # audit began at chat_messages, so conversation-level content sat outside every
+        # check in the file, however rigorous they got.
+        'conversation-level content must be rendered and audited',
+        conv([msg('a', content=[{'type': 'text', 'text': 'hi'}])], summary=BIG),
+        0, [BIG], [],
+    ),
+    (
+        # json.dumps escapes newlines and quotes, so the payload's own text stopped
+        # appearing in the transcript and the audit's `v in rendered` check failed on
+        # anything real. It rejected 321 of 339 conversations. Every fixture passed.
+        'text with newlines/quotes must appear VERBATIM (never json-escaped)',
+        conv([msg('a', content=[{'type': 'text', 'text': 'hi'}],
+                  compaction_summary='line one\nline "two"\n\tand a tab')]),
+        0, ['line one\nline "two"\n\tand a tab'], [],
+    ),
+    (
+        # A trailing space in the payload IS the payload. .strip() on the payload's own
+        # text (knowledge bodies, tool_result output) made the original string vanish.
+        # Wrap and concatenate the text; never edit it.
+        'trailing whitespace in payload text must survive',
+        conv([msg('a', content=[{'type': 'tool_result', 'name': 'web_fetch', 'content': [
+            {'type': 'knowledge', 'title': 'T', 'url': 'http://example.com',
+             'text': 'body with a trailing space '}]}])]),
+        0, ['body with a trailing space '], [],
     ),
     (
         # The case that MUST still pass, and the one two different truncation checks
