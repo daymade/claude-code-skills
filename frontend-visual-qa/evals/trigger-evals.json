@@ -1,0 +1,90 @@
+[
+  {
+    "query": "我刚改完一个后台 dashboard。请你在 Chrome 里实际看看有没有低级排版、奇怪换行、双滚动条和移动端溢出，别只跑 lint。",
+    "should_trigger": true
+  },
+  {
+    "query": "PDF 按钮的单测通过了，但用户点完以后 Chrome 打印预览是空白。请按真实用户路径检查导出结果。",
+    "should_trigger": true
+  },
+  {
+    "query": "这个 Electron 设置页在 renderer URL 里看着正常。请启动真实应用窗口，检查侧栏、抽屉、快捷键和返回默认模式的路径。",
+    "should_trigger": true
+  },
+  {
+    "query": "地图工作台在手机宽度下很难点，省份标签还会被右侧详情面板挡住。请做一次真实浏览器视觉和交互检查。",
+    "should_trigger": true
+  },
+  {
+    "query": "对照我给的参考 dashboard，这个 KPI 页面明显低一个档次。帮我检查数字层级、图表 token、颜色语义和整体视觉密度。",
+    "should_trigger": true
+  },
+  {
+    "query": "登录失败的 toast 一闪就没了，我截图抓不到。请确认它到底有没有出现、文案是否可读、用户能不能恢复。",
+    "should_trigger": true
+  },
+  {
+    "query": "根据这五张竞品截图提取颜色、字体、间距和组件风格，整理成一套 implementation-ready design system prompt。",
+    "should_trigger": false
+  },
+  {
+    "query": "从零设计一个有辨识度的 SaaS 登录页，先给视觉方向和 React 实现，不需要审查现有页面。",
+    "should_trigger": false
+  },
+  {
+    "query": "给这个后端 API 建一套完整 QA 流程，包括测试用例、P0-P4 缺陷表、覆盖率和发布门禁。",
+    "should_trigger": false
+  },
+  {
+    "query": "React hydration failed because the server HTML differs from the client. 帮我沿堆栈定位代码根因。",
+    "should_trigger": false
+  },
+  {
+    "query": "解释一下 CSS Grid 的 minmax()、auto-fit 和 auto-fill 有什么区别，给三个代码例子。",
+    "should_trigger": false
+  },
+  {
+    "query": "生成一张浅色科技感活动海报，主题是本地优先 AI。",
+    "should_trigger": false
+  },
+  {
+    "query": "只看我附的这张页面截图，指出能直接观察到的构图、字体、换行和视觉层级问题；不要假装知道 DOM。",
+    "should_trigger": true
+  },
+  {
+    "query": "这三个 workspace 点起来都能换内容，但刷新、深链和浏览器后退不对。请在真实页面里检查 route-state contract。",
+    "should_trigger": true
+  },
+  {
+    "query": "这个 live design-system 页面有 tabs、drawer 和图表 hover。请实际操作 specimen，检查各状态是否溢出或失去规范语义。",
+    "should_trigger": true
+  },
+  {
+    "query": "这份 HTML slides 要在 1920x1080 投影。请渲染整套页面，检查裁切、字号、长页和每一屏的视觉密度。",
+    "should_trigger": true
+  },
+  {
+    "query": "这个已经上线的 landing page 和参考图差很多。请打开真实页面，检查首屏层级、移动端换行、图片裁切和 CTA 是否还在视口里，不要重新设计。",
+    "should_trigger": true
+  },
+  {
+    "query": "我做了一个已经能运行的浏览器小游戏，目标是 1366x768。请实际操作 HUD 和主控制，检查遮挡、状态切换、失败恢复和目标视口下的文字密度。",
+    "should_trigger": true
+  },
+  {
+    "query": "Chrome 的 LCP 变慢了，帮我录 performance trace、定位 main-thread long task 和网络瀑布，不需要做视觉审查。",
+    "should_trigger": false
+  },
+  {
+    "query": "审查这个 SwiftUI iPhone 原生页面的 ViewModel 数据流和 async/await 并发问题，不需要运行或看截图。",
+    "should_trigger": false
+  },
+  {
+    "query": "检查合同 PDF 的页眉页脚、分页和中文字体是否正确。这不是网页或桌面 UI。",
+    "should_trigger": false
+  },
+  {
+    "query": "只审 Storybook 组件的 TypeScript props API、泛型和导出命名，不渲染 story。",
+    "should_trigger": false
+  }
+]
