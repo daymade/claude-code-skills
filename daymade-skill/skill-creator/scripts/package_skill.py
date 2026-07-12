@@ -3,7 +3,9 @@
 Skill Packager - Creates a distributable .skill file of a skill folder
 
 Usage:
-    uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder> [output-directory]
+    uv run --with PyYAML python -m scripts.package_skill \
+      <path/to/skill-folder> [output-directory] \
+      [--regression-review <review.json>] [--new-skill]
 
 Example:
     uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill
@@ -14,8 +16,12 @@ Notes:
     - The .skill file produced by this script is a DISTRIBUTION ARTIFACT (zip bundle).
     - By default the artifact is written to <skill-folder>/dist/ so it stays next to
       its source and is easy to find and clean up. It is NOT the canonical skill location.
+    - A skill that already exists in Git HEAD requires its current, fully
+      classified old-vs-new regression review on every package attempt. The local
+      marker is informational and never authorizes packaging by itself.
 """
 
+import argparse
 import re
 import sys
 import zipfile
@@ -30,6 +36,11 @@ if str(PACKAGE_ROOT) not in sys.path:
 from scripts.quick_validate import validate_skill
 from scripts.security_scan import calculate_skill_hash
 from scripts.packaging_policy import should_exclude
+from scripts.audit_skill_regression import (
+    create_regression_marker,
+    requires_regression_review,
+    verify_review_for_after,
+)
 
 
 def validate_security_marker(skill_path: Path) -> Tuple[bool, str]:
@@ -70,7 +81,13 @@ def validate_security_marker(skill_path: Path) -> Tuple[bool, str]:
     return True, "Security scan valid"
 
 
-def package_skill(skill_path, output_dir=None, include_evals=False):
+def package_skill(
+    skill_path,
+    output_dir=None,
+    include_evals=False,
+    regression_review=None,
+    new_skill=False,
+):
     """
     Package a skill folder into a .skill file.
 
@@ -79,6 +96,9 @@ def package_skill(skill_path, output_dir=None, include_evals=False):
         output_dir: Optional output directory for the .skill artifact.
                     Defaults to <skill-folder>/dist/.
         include_evals: Ship the root evals/ directory too (excluded by default).
+        regression_review: Completed old-vs-new review JSON for an existing
+                           Git-tracked skill. It is re-verified during packaging.
+        new_skill: Explicit declaration for a genuinely new skill outside Git.
 
     Returns:
         Path to the created .skill file, or None if error
@@ -109,8 +129,31 @@ def package_skill(skill_path, output_dir=None, include_evals=False):
         return None
     print(f"PASSED: {message}\n")
 
-    # Step 2: Validate security scan (HARD REQUIREMENT)
-    print("Step 2: Validating security scan...")
+    # Step 2: Existing-skill capability regression gate.
+    review_required, review_reason = requires_regression_review(skill_path, new_skill=new_skill)
+    print("Step 2: Validating existing-skill regression review...")
+    if review_required and not regression_review:
+        print(f"BLOCKED: {review_reason}")
+        print("   Existing skills require their completed old-vs-new capability review.")
+        print("   Run scripts.audit_skill_regression compare/verify, then pass")
+        print("   --regression-review <review.json>.")
+        return None
+    if regression_review:
+        ok, errors = verify_review_for_after(Path(regression_review), skill_path)
+        if not ok:
+            print("BLOCKED: Skill regression review is missing, stale, or incomplete")
+            for error in errors[:20]:
+                print(f"   - {error}")
+            if len(errors) > 20:
+                print(f"   - ... {len(errors) - 20} more")
+            return None
+        create_regression_marker(skill_path, Path(regression_review))
+        print("PASSED: Skill regression review is current and fully classified\n")
+    else:
+        print(f"PASSED: Regression review not required ({review_reason})\n")
+
+    # Step 3: Validate security scan (HARD REQUIREMENT)
+    print("Step 3: Validating security scan...")
     is_valid, message = validate_security_marker(skill_path)
 
     if not is_valid:
@@ -120,8 +163,8 @@ def package_skill(skill_path, output_dir=None, include_evals=False):
         return None
     print(f"PASSED: {message}\n")
 
-    # Step 3: Package the skill
-    print("Step 3: Creating package...")
+    # Step 4: Package the skill
+    print("Step 4: Creating package...")
 
     # Determine output location
     skill_name = skill_path.name
@@ -159,21 +202,23 @@ def package_skill(skill_path, output_dir=None, include_evals=False):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if a != "--include-evals"]
-    include_evals = "--include-evals" in sys.argv[1:]
-    if not args:
-        print("Usage: uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder> [output-directory] [--include-evals]")
-        print("\nExample:")
-        print("  uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill")
-        print("  uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill ./dist --include-evals")
-        print("\nDefault output: <skill-folder>/dist/<skill-name>.skill")
-        print("evals/ is excluded by default (development asset); pass --include-evals to ship it.")
-        print("Root tests/ and .enrich/ are always excluded from distribution artifacts.")
-        print("The skill folder itself is the source of truth; the .skill file is a distribution artifact.")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Validate and package a skill directory")
+    parser.add_argument("skill_path")
+    parser.add_argument("output_dir", nargs="?")
+    parser.add_argument("--include-evals", action="store_true")
+    parser.add_argument(
+        "--new-skill",
+        action="store_true",
+        help="Declare a genuinely new skill when Git cannot prove that status",
+    )
+    parser.add_argument(
+        "--regression-review",
+        help="Completed audit_skill_regression review JSON for an existing skill",
+    )
+    args = parser.parse_args()
 
-    skill_path = args[0]
-    output_dir = args[1] if len(args) > 1 else None
+    skill_path = args.skill_path
+    output_dir = args.output_dir
 
     print(f"Packaging skill source: {skill_path}")
     if output_dir:
@@ -182,7 +227,13 @@ def main():
         print(f"   Artifact output directory: {Path(skill_path).resolve() / 'dist'}")
     print()
 
-    result = package_skill(skill_path, output_dir, include_evals=include_evals)
+    result = package_skill(
+        skill_path,
+        output_dir,
+        include_evals=args.include_evals,
+        regression_review=args.regression_review,
+        new_skill=args.new_skill,
+    )
 
     if result:
         sys.exit(0)

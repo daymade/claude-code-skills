@@ -26,6 +26,7 @@ import tempfile
 from pathlib import Path
 
 from scripts.package_skill import should_exclude, validate_security_marker
+from scripts.audit_skill_regression import build_report
 from scripts.quick_validate import validate_skill
 from scripts.security_scan import calculate_skill_hash, create_security_marker, scan_skill_patterns
 
@@ -168,7 +169,19 @@ def main() -> int:
         check("__pycache__ always excluded even with opt-in",
               should_exclude(Path("skill/scripts/__pycache__/m.pyc"), include_evals=True))
         check("scan marker never ships", should_exclude(Path("skill/.security-scan-passed")))
+        check("regression marker never ships", should_exclude(Path("skill/.skill-regression-reviewed")))
         check("normal script ships", not should_exclude(Path("skill/scripts/tool.py")))
+
+        print("[8] existing-skill regression audit must surface a deleted capability")
+        before = make_skill(tmp, "regression-before")
+        after = make_skill(tmp, "regression-after")
+        with (before / "SKILL.md").open("a", encoding="utf-8") as handle:
+            handle.write("\n- Verify a signed-in role-less account sees a no-access state.\n")
+        report = build_report(before, after)
+        check(
+            "deleted capability becomes an unclassified regression candidate",
+            any("role-less" in item["text"] for item in report["candidates"]),
+        )
 
     print()
     print(f"selftest_validators: {len(PASS)} passed, {len(FAIL)} failed")
