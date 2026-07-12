@@ -386,7 +386,7 @@ def cmd_import_corrections(args: argparse.Namespace) -> None:
     print(f"   Skipped: {skipped}")
 
 
-def cmd_run_correction(args: argparse.Namespace) -> None:
+def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     """Run the correction workflow.
 
     Heavy imports (AIProcessor, diff generator) are loaded only when Stage 2/3
@@ -402,8 +402,23 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
         print(f"❌ Error: File not found: {input_path}")
         sys.exit(1)
 
-    # Setup output directory
-    output_dir = Path(args.output) if args.output else input_path.parent
+    # Setup output location. --output may be a DIRECTORY (the tool writes the
+    # <stem>_stage1.md / _changes.md / _needs_review.md sidecars into it) or a
+    # FILE path (the corrected Stage 1 output is written directly to that file).
+    # A file path used to be silently mkdir'd into a directory of that name
+    # (e.g. `result.md/`), hiding the real output inside it and printing only a
+    # basename — a footgun that reads as a false success. Detect the file-path
+    # intent (recognized text suffix, not an existing directory) and honor it.
+    stage1_output_override = None
+    if args.output:
+        out_arg = Path(args.output)
+        if not out_arg.is_dir() and out_arg.suffix.lower() in ('.md', '.markdown', '.txt'):
+            stage1_output_override = out_arg
+            output_dir = out_arg.parent
+        else:
+            output_dir = out_arg
+    else:
+        output_dir = input_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Auto-finalize: if a previous Stage 1 run left *_stage1.md behind and it is
@@ -424,7 +439,19 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
         auto_finalized = _auto_finalize_stage1(input_path, output_dir, dry_run=dry_run)
         if auto_finalized and args.stage == 1:
             print("✅ Finalize complete.")
-            return
+            # Auto-finalize promoted a previous run's *_stage1.md onto the input
+            # file, so the input now IS the corrected output. For --json: this
+            # invocation applied no NEW corrections (applied/deferred = 0), the
+            # output is the finalized input file, and input_unchanged is False
+            # because its content was replaced. In dry-run nothing was actually
+            # written, so report output_path=None / input_unchanged=True instead.
+            return {
+                "applied": 0,
+                "deferred": 0,
+                "output_path": None if dry_run else str(input_path),
+                "needs_review_path": None,
+                "input_unchanged": bool(dry_run),
+            }
 
     # Initialize service
     service = _get_service()
@@ -500,6 +527,15 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
     # Path whose CONTENT matches stage1_text — what Stage 3's diff report must
     # read as the "stage 1" column. Defaults to the input (0-correction case).
     stage1_report_source = input_path
+    # --json status tracking. applied_count/skipped_count are (re)assigned inside
+    # the Stage 1 block below — always entered, since --stage choices are 1/2/3 —
+    # but pre-init them so the status object is well-defined even if that ever
+    # changes. The *_written paths capture what was ACTUALLY written to disk, so
+    # --json consumers never infer no-op vs failure from a sidecar's existence.
+    applied_count = 0
+    skipped_count = 0
+    stage1_output_written: Path | None = None
+    needs_review_written: Path | None = None
     if args.stage >= 1:
         print("=" * 60)
         print("🔧 Stage 1: Dictionary Corrections")
@@ -531,7 +567,9 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
             print(f"  - Skipped for review: {skipped_count}")
 
         if not dry_run:
-            stage1_file = output_dir / f"{input_path.stem}_stage1.md"
+            # Honor an explicit --output FILE path; otherwise use the
+            # <stem>_stage1.md sidecar inside the output directory.
+            stage1_file = stage1_output_override or (output_dir / f"{input_path.stem}_stage1.md")
             # On a no-op run (0 corrections applied), stage1_text is byte-identical
             # to the input, so _stage1.md would just duplicate the input and
             # _changes.md would say "No corrections applied." Both are pure noise:
@@ -540,11 +578,15 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
             # the input directly) and force a manual `rm`. Skip writing them on a
             # no-op. _needs_review.md below still writes when safe mode deferred
             # anything (skipped_count > 0), so human review is never lost.
-            if applied_count > 0:
+            # Write when corrections were applied, OR when the user gave an
+            # explicit --output FILE path (they asked for a file there — produce
+            # it even if unchanged, so the destination is never silently absent).
+            if applied_count > 0 or stage1_output_override is not None:
                 with open(stage1_file, 'w', encoding='utf-8') as f:
                     f.write(stage1_text)
-                print(f"💾 Saved: {stage1_file.name}")
+                print(f"💾 Saved: {stage1_file}")
                 stage1_report_source = stage1_file
+                stage1_output_written = stage1_file
             else:
                 print(f"✓ No corrections applied — skipping {stage1_file.name} (input is already the final output)")
                 # Nothing was written: stage1_text is byte-identical to the
@@ -561,7 +603,7 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
                 changes_file_path = output_dir / f"{input_path.stem}_changes.md"
                 with open(changes_file_path, 'w', encoding='utf-8') as f:
                     f.write(changes_report)
-                print(f"📋 Changes report: {changes_file_path.name}")
+                print(f"📋 Changes report: {changes_file_path}")
 
             # Write needs-review file
             if review_mode and skipped_count > 0:
@@ -570,7 +612,8 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
                 review_file_path = output_dir / f"{input_path.stem}_needs_review.md"
                 with open(review_file_path, 'w', encoding='utf-8') as f:
                     f.write(review_report)
-                print(f"🟡 Needs review: {review_file_path.name}")
+                print(f"🟡 Needs review: {review_file_path}")
+                needs_review_written = review_file_path
 
         else:
             # Dry run: write a changes report so the user can preview. Mark which
@@ -583,7 +626,7 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
             preview_path = output_dir / f"{input_path.stem}_dryrun.md"
             with open(preview_path, 'w', encoding='utf-8') as f:
                 f.write(preview_report)
-            print(f"🔍 Dry-run preview: {preview_path.name}")
+            print(f"🔍 Dry-run preview: {preview_path}")
 
         # Hint when 0 corrections and other domains have rules
         if summary['total_changes'] == 0 and args.domain and domain_stats:
@@ -625,7 +668,7 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
         stage2_file = output_dir / f"{input_path.stem}_stage2.md"
         with open(stage2_file, 'w', encoding='utf-8') as f:
             f.write(stage2_text)
-        print(f"💾 Saved: {stage2_file.name}\n")
+        print(f"💾 Saved: {stage2_file}\n")
 
         # Save history for learning — only the Stage 1 changes that were
         # ACTUALLY applied. In safe mode (review_mode=True) medium/high-risk
@@ -695,6 +738,20 @@ def cmd_run_correction(args: argparse.Namespace) -> None:
             print("   Skipped: Stage 2 output required for diff report\n")
 
     print("✅ Correction complete!")
+
+    # --json status object (see the --json flag help + the main() dispatch that
+    # emits this on stdout). Built from what Stage 1 actually did: output_path is
+    # the corrected *_stage1.md only when it was truly written (None on a no-op
+    # run, mirroring the "skip writing when byte-identical" contract above), and
+    # input_unchanged is the authoritative no-op signal. Scope is Stage 1 status;
+    # a --stage>=2 run still reports the Stage 1 result here.
+    return {
+        "applied": applied_count,
+        "deferred": skipped_count,
+        "output_path": str(stage1_output_written) if stage1_output_written else None,
+        "needs_review_path": str(needs_review_written) if needs_review_written else None,
+        "input_unchanged": stage1_text == original_text,
+    }
 
 
 def cmd_review_learned(args: argparse.Namespace) -> None:
@@ -1105,7 +1162,7 @@ def cmd_extract_uncertain(args: argparse.Namespace) -> None:
         f.write(report)
 
     print(f"   Found {len(items)} uncertain item(s)")
-    print(f"💾 Saved: {output_path.name}")
+    print(f"💾 Saved: {output_path}")
 
 
 def cmd_report_false_positive(args: argparse.Namespace) -> None:

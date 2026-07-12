@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browser output fixture</title>
+</head>
+<body>
+  <h1>Export report</h1>
+  <button id="download">Download HTML</button>
+  <button id="share">Copy share link</button>
+  <button id="choose-file">Choose CSV</button>
+  <input id="file-input" type="file" accept=".csv" hidden>
+  <p id="file-state">No file selected</p>
+  <button id="print">Print PDF</button>
+  <script>
+    document.querySelector("#download").addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.download = "stale-report.html";
+      link.href = URL.createObjectURL(new Blob(["<h1>Old report</h1>"], { type: "text/html" }));
+      link.click();
+    });
+    document.querySelector("#share").addEventListener("click", async () => {
+      await navigator.clipboard.writeText("data:text/html,<title>Empty share</title>");
+    });
+    document.querySelector("#choose-file").addEventListener("click", () => {
+      document.querySelector("#file-input").click();
+    });
+    document.querySelector("#file-input").addEventListener("change", (event) => {
+      document.querySelector("#file-state").textContent = event.target.files[0]?.name || "No file selected";
+    });
+    document.querySelector("#print").addEventListener("click", () => {
+      const popup = window.open("about:blank", "_blank");
+      popup?.print();
+    });
+  </script>
+</body>
+</html>

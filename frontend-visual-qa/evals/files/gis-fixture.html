@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GIS fixture</title>
+  <style>
+    body { margin: 0; font: 16px/1.4 Arial, sans-serif; overflow: hidden; }
+    header { height: 56px; padding: 16px; box-sizing: border-box; border-bottom: 1px solid #ddd; }
+    .map { position: relative; height: calc(100vh - 56px); background: #edf3ef; }
+    svg { width: 100%; height: 100%; }
+    circle { fill: #2f6f63; }
+    .drawer { position: absolute; inset: 0 0 0 auto; width: 46%; padding: 20px; box-sizing: border-box; background: white; box-shadow: -8px 0 20px #0002; }
+    .label { position: absolute; right: 42%; top: 45%; pointer-events: auto; background: white; }
+  </style>
+</head>
+<body>
+  <header>Territory map</header>
+  <main class="map">
+    <svg viewBox="0 0 600 400" aria-label="Territory map">
+      <path d="M80 70 L510 50 L560 330 L100 350 Z" fill="#cddfd5"></path>
+      <circle cx="330" cy="180" r="5"></circle>
+      <circle cx="342" cy="184" r="5"></circle>
+      <circle cx="352" cy="176" r="5"></circle>
+    </svg>
+    <span class="label">Dense region</span>
+    <aside class="drawer"><h1>Selected territory</h1><p>Details cover the selected markers.</p></aside>
+  </main>
+</body>
+</html>

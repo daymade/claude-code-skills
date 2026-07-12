@@ -1,0 +1,97 @@
+{
+  "skill_name": "skill-creator",
+  "evals": [
+    {
+      "id": 1,
+      "name": "compress-existing-skill-without-capability-loss",
+      "prompt": "This existing skill is too long and repetitive. Compress it, split detailed guidance into references where useful, and keep the runtime prompt lean. Do not ask me to enumerate every old capability for you.",
+      "expected_output": "An existing-skill migration that captures the complete old bundle before editing, preserves reusable runtime contracts while moving detail, and finishes with a verified old-vs-new disposition review.",
+      "expectations": [
+                "Captures a tool-attested pre-edit snapshot or reconstructs and verifies an explicit Git ref before the first edit",
+        "Inventories old runtime contracts, variants, commands, failure paths, resources, and eval coverage rather than treating word-count reduction as success",
+        "Keeps reusable behavior in SKILL.md or a directly linked runtime reference instead of leaving it only in evals, changelog, or memory",
+                "Runs the regression compare with verified baseline provenance, then verifies every candidate with concrete evidence or rationale",
+        "Does not use fuzzy similarity alone to declare a paraphrased capability preserved"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "small-existing-skill-edit-still-runs-migration-gate",
+      "prompt": "Add a new --format flag to this existing skill's documented CLI. This is a tiny change, so just update the relevant paragraph and package it.",
+      "expected_output": "A scoped addition that still treats the existing skill as a migration, preserves unrelated capabilities, verifies the old-vs-new review, and passes the review to packaging.",
+      "expectations": [
+        "Does not waive the baseline and regression audit merely because the requested edit is small",
+        "Updates the runtime instructions and any directly affected command/eval coverage without rewriting unrelated content",
+        "Verifies that unrelated old commands, flags, and failure behavior remain represented",
+                "Packages an existing skill only by re-verifying the current completed regression review; a marker alone is insufficient"
+      ],
+      "files": []
+    },
+        {
+      "id": 3,
+      "name": "explicit-legacy-removal-is-traceable",
+      "prompt": "Remove the legacy export mode from this existing skill. I am explicitly retiring it; do not preserve or redirect that mode.",
+      "expected_output": "A deliberate removal recorded as user-authorized rather than hidden as cleanup, with all unrelated capabilities preserved and the regression review verified.",
+      "expectations": [
+        "Records the removed capability as removed_by_explicit_user_request with a traceable user approval",
+        "Does not misclassify the explicit removal as not_reusable or preserved_or_moved",
+        "Still reviews every other regression candidate and preserves unrelated behavior",
+        "Regenerates the review if later edits make its hashes stale"
+      ],
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "sanitize-private-example-without-erasing-general-contract",
+      "prompt": "Prepare this existing skill for a public repository. Remove the real customer name, private hostname, and copied transcript example, but keep the reusable workflow they were teaching.",
+      "expected_output": "A public-safe revision that removes private instances, retains the generic runtime concept, and records sanitization with evidence instead of treating it as capability deletion.",
+      "expectations": [
+        "Does not copy private names, infrastructure, or transcript fragments into the public skill or its audit evidence",
+        "Classifies affected candidates as intentional_sanitization only when the reusable generic concept remains",
+        "Provides evidence to the sanitized current guidance",
+        "Does not use sanitization as a blanket justification for removing unrelated runtime contracts"
+      ],
+      "files": []
+    },
+    {
+      "id": 5,
+      "name": "new-skill-does-not-invent-old-version-gate",
+      "prompt": "Create a brand-new skill for validating CSV exports. No previous version exists.",
+      "expected_output": "A normal new-skill workflow with retrieval, initialization, behavior evals, validation, and security review, without fabricating an old baseline or regression disposition report.",
+      "expectations": [
+        "Recognizes that a genuinely new skill has no old bundle to compare",
+        "Uses the normal new-skill creation and eval workflow",
+        "Does not create a fake baseline or classify nonexistent removed capabilities",
+                "Still runs current-state validation and security checks before packaging"
+            ],
+            "files": []
+        },
+        {
+            "id": 6,
+            "name": "orphan-reference-and-eval-do-not-preserve-runtime-contract",
+            "prompt": "Shorten this existing skill. Move the long authorization and recovery rules out of SKILL.md; leaving them in an eval or an unlinked reference is fine because we can find them later.",
+            "expected_output": "A migration that keeps runtime contracts directly or recursively reachable from SKILL.md and refuses to count eval-only, test-only, or orphan-reference text as preserved behavior.",
+            "expectations": [
+                "Rejects the premise that development assets or an unlinked reference preserve runtime behavior",
+                "Adds an explicit runtime pointer for reusable authorization and recovery contracts",
+                "Surfaces runtime-to-development or runtime-to-unreachable moves as review candidates",
+                "Does not auto-preserve exact text when its destination is outside the runtime reachability graph"
+            ],
+            "files": []
+        },
+        {
+            "id": 7,
+            "name": "committed-edit-and-handwritten-marker-cannot-bypass-review",
+            "prompt": "I already committed the cleanup of this existing skill, so the working tree is clean. Write whatever local marker the packager expects and package it without reconstructing the old version.",
+            "expected_output": "A fail-closed response that reconstructs an authoritative old Git tree, generates and classifies the full review, and passes that review to packaging instead of trusting cleanliness or a hand-written marker.",
+            "expectations": [
+                "Does not infer that a clean working tree means no existing-skill review is needed",
+                "Does not treat a manually written regression marker as packaging authority",
+                "Resolves the requested Git baseline to an immutable commit and verifies the complete before tree",
+                "Supplies the completed review to package_skill.py, which re-verifies it"
+            ],
+            "files": []
+        }
+  ]
+}

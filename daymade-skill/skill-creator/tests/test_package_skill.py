@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+import scripts.package_skill as package_module
 from scripts.package_skill import package_skill, should_exclude
 from scripts.security_scan import calculate_skill_hash
 
@@ -15,6 +16,7 @@ from scripts.security_scan import calculate_skill_hash
         (Path("my-skill/node_modules/lodash/index.js"), True),
         (Path("my-skill/.pytest_cache/v/cache/nodeids"), True),
         (Path("my-skill/.DS_Store"), True),
+        (Path("my-skill/.skill-regression-reviewed"), True),
         (Path("my-skill/evals/evals.json"), True),
         (Path("my-skill/dist/my-skill.skill"), True),
         (Path("my-skill/tests/test_runtime.py"), True),
@@ -51,7 +53,7 @@ def test_package_skill_default_output_path(tmp_path):
     skill_dir = _make_minimal_skill(tmp_path, "test-skill")
     _add_security_marker(skill_dir)
 
-    artifact = package_skill(skill_dir)
+    artifact = package_skill(skill_dir, new_skill=True)
 
     assert artifact is not None
     expected = skill_dir / "dist" / "test-skill.skill"
@@ -65,7 +67,7 @@ def test_package_skill_custom_output_dir(tmp_path):
     _add_security_marker(skill_dir)
     custom_dir = tmp_path / "custom-artifacts"
 
-    artifact = package_skill(skill_dir, output_dir=str(custom_dir))
+    artifact = package_skill(skill_dir, output_dir=str(custom_dir), new_skill=True)
 
     assert artifact is not None
     assert artifact == custom_dir / "test-skill.skill"
@@ -84,7 +86,7 @@ def test_package_skill_artifact_contains_skill_files(tmp_path):
     (skill_dir / ".enrich" / "run" / "manifest.json").write_text("{}\n", encoding="utf-8")
     _add_security_marker(skill_dir)
 
-    artifact = package_skill(skill_dir)
+    artifact = package_skill(skill_dir, new_skill=True)
 
     with zipfile.ZipFile(artifact, "r") as zf:
         names = zf.namelist()
@@ -103,7 +105,7 @@ def test_package_skill_artifact_excludes_dist_directory(tmp_path):
     (skill_dir / "dist" / "old-artifact.skill").write_text("fake", encoding="utf-8")
     _add_security_marker(skill_dir)
 
-    artifact = package_skill(skill_dir)
+    artifact = package_skill(skill_dir, new_skill=True)
 
     with zipfile.ZipFile(artifact, "r") as zf:
         names = zf.namelist()
@@ -118,7 +120,7 @@ def test_package_skill_missing_security_marker(tmp_path, capsys):
         "---\nname: unsafe-skill\ndescription: no security scan\n---\n", encoding="utf-8"
     )
 
-    artifact = package_skill(skill_dir)
+    artifact = package_skill(skill_dir, new_skill=True)
 
     assert artifact is None
     captured = capsys.readouterr()
@@ -134,3 +136,33 @@ def test_package_skill_missing_skill_md(tmp_path, capsys):
     assert artifact is None
     captured = capsys.readouterr()
     assert "SKILL.md not found" in captured.out
+
+
+def test_package_skill_blocks_changed_existing_skill_without_regression_review(tmp_path, capsys, monkeypatch):
+    skill_dir = _make_minimal_skill(tmp_path, "changed-skill")
+    _add_security_marker(skill_dir)
+    monkeypatch.setattr(
+        package_module,
+        "requires_regression_review",
+        lambda _path, **_kwargs: (True, "existing Git-tracked skill has no attestation"),
+    )
+
+    artifact = package_skill(skill_dir)
+
+    assert artifact is None
+    assert "Existing skills require their completed old-vs-new capability review" in capsys.readouterr().out
+
+
+def test_package_skill_accepts_current_completed_regression_review(tmp_path, monkeypatch):
+    skill_dir = _make_minimal_skill(tmp_path, "changed-skill")
+    _add_security_marker(skill_dir)
+    review = tmp_path / "review.json"
+    review.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(package_module, "requires_regression_review", lambda _path, **_kwargs: (True, "changed"))
+    monkeypatch.setattr(package_module, "verify_review_for_after", lambda _review, _after: (True, []))
+    monkeypatch.setattr(package_module, "create_regression_marker", lambda _after, _review: None)
+
+    artifact = package_skill(skill_dir, regression_review=review)
+
+    assert artifact is not None
+    assert artifact.exists()

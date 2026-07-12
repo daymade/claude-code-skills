@@ -22,10 +22,12 @@ At a high level, the process of creating a skill goes like this:
 
 Your job when using this skill is to figure out where the user is in this process and then jump in and help them progress through these stages. So for instance, maybe they're like "I want to make a skill for X". You can help narrow down what they mean, write a draft, write the test cases, figure out how they want to evaluate, run all the prompts, and repeat.
 
-Two standing disciplines apply throughout, because both failure modes ship convincing-looking skills that are wrong:
+Four standing disciplines apply throughout, because these failure modes ship convincing-looking skills that are wrong:
 
 1. **Verify before you write.** Every technical assertion that enters the skill (endpoint, parameter, command, version, behavior) must trace to something you executed and observed — in this session or an explicitly approved mined one. Can't verify it right now? Either go verify it, or mark it explicitly ("unverified — from memory"). A skill multiplies whatever it contains: verified knowledge compounds, and so do confidently-stated errors. For knowledge skills (content is mostly facts about an external system — API endpoints, parameters, fields, platform behavior), read [references/knowledge-skill-grounding.md](references/knowledge-skill-grounding.md) for the operational version: the authority ladder (observed behavior > machine-readable contract > exercised production code > official docs > memory), evidence-scope annotation, pre-ship doc-example smoke runs, and the audience/Windows portability checklist. A source-grounding audit once found multiple confident contract claims that contradicted evidence already available to the author (methodology Case 9).
 2. **Treat "impossible / not supported" as a hypothesis, not a conclusion.** When a capability seems blocked (an API error wall, a tool that won't connect, a format that won't open), exhaust the observation paths — the UI's own network traffic, an alternative channel, a different documented identifier — before writing "the platform doesn't support this" into a skill. Observed behavior outranks speculative request shapes.
+3. **Stand on the field's shoulders — retrieve the domain's established best-practices into context BY DEFAULT, before authoring or optimizing a skill's methodology.** A skill's methodology is only as good as the knowledge in your context window, not the knowledge latent in your weights: pretraining is lossy, goes stale, and often is not even activated unless the canonical sources are actually pulled in. So the quality ceiling of what you write is `your training data + the user's input` — *unless* you deliberately retrieve the subject domain's real prior art. Do it: WebSearch the field's canonical theory / standards / methods, and read any bundled or installed skill in that domain, then fold the load-bearing principles into the skill with attribution. **This is a different axis from "Prior Art Research" below** — that finds *tools/infrastructure* to reuse; this grounds the *quality of the methodology itself* in the discipline's accumulated science. Make it the **default action, not something you wait to be asked for**: briefly tell the user which field you're pulling from and let them say "skip," but never ship a methodology capped by your memory plus their prompt when 40 years of the field's public work is one search away. Examples: a data-visualization skill must absorb Cleveland & McGill's graphical-perception ranking and Bertin's visual variables (position/length beat color beat text — measured, not aesthetic); a date/time skill must surface the mature libraries and their canonical pitfalls; a persuasion/negotiation skill must retrieve the established frameworks rather than reinvent them from memory. If the canonical knowledge lives only in your weights and never enters context, you are guessing where you could be citing.
+4. **Preserve before you compress an existing skill.** Updating an existing skill is a migration, not a blank-page rewrite. Before the first edit, capture the complete old bundle with the audit tool's `snapshot` command, or reconstruct it from an explicit Git ref; an arbitrary copy plus a provenance label is not a baseline. Inventory runtime capabilities, trigger contexts, interfaces, references, and eval coverage. Progressive disclosure and concision authorize moving or deduplicating content; they do not authorize silently deleting behavior. After editing, run `scripts/audit_skill_regression.py` and classify every unmatched old unit. A runtime contract that survives only in `evals/`, tests, or an unlinked reference is still lost. Do not call the update complete while any candidate is unclassified or any true gap remains unfixed.
 
 On the other hand, maybe they already have a draft of the skill. In this case you can go straight to the eval/iterate part of the loop.
 
@@ -163,6 +165,8 @@ The conversation-mining workflow has its own architecture contract, agent prompt
 ### Prior Art Research (Do Not Skip)
 
 The user's private methodology — their domain rules, workflow decisions, competitive edge — is what makes a skill valuable. No public repo can provide that. But the user shouldn't waste time reinventing infrastructure (API clients, auth flows, rate limiting) when mature tools exist. Prior art research finds building blocks for the infrastructure layer so the skill can focus on encoding the user's unique methodology.
+
+**Two axes, don't conflate them.** This section sources the *infrastructure* layer (tools / MCPs / libraries / existing skills to reuse). The *methodology* layer has two inputs of its own: the user's private edge (theirs alone, un-retrievable) **and the domain's established best-practices / science, which you retrieve into context by default per standing discipline #3.** Finding the right tool does not discharge the second — a viz skill that adopts a charting library but never absorbs Cleveland/Bertin is still capped at your pretraining. Do both.
 
 **Search these channels in order** (use subagents for 4-8 in parallel):
 
@@ -458,6 +462,7 @@ Skills use a three-level loading system:
 
 **Key patterns:**
 - SKILL.md length should be driven by **information density**, not a line count target. A 600-line skill with no filler is better than a 200-line skill that omits critical knowledge and forces the model to guess. If the skill is getting long, ask: "Is every section earning its keep?" If yes, keep it. If sections are padded or explain things Claude already knows, trim those — not the useful content. When a skill genuinely covers many domains, split into references by domain rather than artificially cramming everything into a short main file.
+- For an existing skill, progressive disclosure is a relocation strategy, not a deletion heuristic. The old runtime contract must remain reachable from SKILL.md in the packaged bundle; a trigger query, test assertion, changelog entry, or reviewer memory is not a runtime replacement.
 - Reference files clearly from SKILL.md with guidance on when to read them
 - For large reference files (>300 lines), include a table of contents
 
@@ -654,7 +659,7 @@ Execute this task:
 
 **Baseline run** (same prompt, but the baseline depends on context):
 - **Creating a new skill**: no skill at all. Same prompt, no skill path, save to `without_skill/outputs/`.
-- **Improving an existing skill**: the old version. Before editing, snapshot the skill (`cp -r <skill-path> <workspace>/skill-snapshot/`), then point the baseline subagent at the snapshot. Save to `old_skill/outputs/`.
+- **Improving an existing skill**: the old version captured by the mandatory existing-skill regression gate before the first edit. Point the baseline subagent at that immutable snapshot and save to `old_skill/outputs/`. If no pre-edit snapshot exists, stop and reconstruct an authoritative baseline from Git before continuing; never use the already-edited tree as the old baseline.
 
 Write an `eval_metadata.json` for each test case (assertions can be empty for now). Give each eval a descriptive name based on what it's testing — not just "eval-0". Use this name for the directory too. If this iteration uses new or modified eval prompts, create these files for each new eval directory — don't assume they carry over from previous iterations.
 
@@ -783,7 +788,7 @@ This is the heart of the loop. You've run the test cases, the user has reviewed 
 
 1. **Generalize from the feedback.** The big picture thing that's happening here is that we're trying to create skills that can be used a million times (maybe literally, maybe even more who knows) across many different prompts. Here you and the user are iterating on only a few examples over and over again because it helps move faster. The user knows these examples in and out and it's quick for them to assess new outputs. But if the skill you and the user are codeveloping works only for those examples, it's useless. Rather than put in fiddly overfitty changes, or oppressively constrictive MUSTs, if there's some stubborn issue, you might try branching out and using different metaphors, or recommending different patterns of working. It's relatively cheap to try and maybe you'll land on something great.
 
-2. **Keep the prompt lean.** Remove things that aren't pulling their weight. Make sure to read the transcripts, not just the final outputs — if it looks like the skill is making the model waste a bunch of time doing things that are unproductive, you can try getting rid of the parts of the skill that are making it do that and seeing what happens.
+2. **Keep the prompt lean without deleting the contract.** Remove things that aren't pulling their weight, but treat every deletion from an existing skill as a regression candidate until the old-vs-new audit classifies it. Move detailed but reusable behavior into a directly linked reference; do not leave it only in evals, a changelog, or your memory. Read the transcripts, not just final outputs—if the skill causes unproductive work, simplify the instruction and rerun the old capability cases rather than assuming fewer words means better behavior.
 
 3. **Explain the why.** Try hard to explain the **why** behind everything you're asking the model to do. Today's LLMs are *smart*. They have good theory of mind and when given a good harness can go beyond rote instructions and really make things happen. Even if the feedback from the user is terse or frustrated, try to actually understand the task and why the user is writing what they wrote, and what they actually wrote, and then transmit this understanding into the instructions. If you find yourself writing ALWAYS or NEVER in all caps, or using super rigid structures, that's a yellow flag — if possible, reframe and explain the reasoning so that the model understands why the thing you're asking for is important. That's a more humane, powerful, and effective approach.
 
@@ -814,7 +819,7 @@ D) Expand test set first — add [N] more test cases to avoid overfitting to the
 After improving the skill:
 
 1. Apply your improvements to the skill
-2. Rerun all test cases into a new `iteration-<N+1>/` directory, including baseline runs. If you're creating a new skill, the baseline is always `without_skill` (no skill) — that stays the same across iterations. If you're improving an existing skill, use your judgment on what makes sense as the baseline: the original version the user came in with, or the previous iteration.
+2. Rerun all test cases into a new `iteration-<N+1>/` directory, including baseline runs. If you're creating a new skill, the baseline is always `without_skill` (no skill). If you're improving an existing skill, the immutable original pre-edit version remains the preservation baseline for every iteration. You may additionally compare against the immediately previous iteration to measure incremental quality, but never replace the original baseline with it.
 3. Launch the reviewer with `--previous-workspace` pointing at the previous iteration
 4. Wait for the user to review and tell you they're done
 5. Read the new feedback, improve again, repeat
@@ -1017,6 +1022,72 @@ Before writing, retrieve Anthropic's best-practices doc (linked in "Skill Creati
 
 When editing, remember that the skill is being created for another instance of Claude to use. Focus on information that would be beneficial and non-obvious to Claude.
 
+**Existing-skill migration gate — required before the first edit:**
+
+1. Capture the complete current bundle before editing. For a non-Git or dirty
+   source, use the tool so the snapshot carries a verifiable provenance manifest:
+
+   ```bash
+   cd <skill-creator-path>
+   uv run --with PyYAML python -m scripts.audit_skill_regression snapshot \
+     --source <path/to/skill-folder> \
+     --output <workspace>/skill-before
+   ```
+
+   For a clean Git-tracked source, materialize the directory from the chosen ref.
+   Include SKILL.md, references, scripts, assets, workflows, and existing evals—not
+   just the main prompt. Never copy the already-edited tree and label it "before".
+2. Inventory the old skill's actor/jobs, trigger contexts, runtime contracts,
+   commands/flags, failure and recovery cases, page/domain variants, bundled
+   resources, and eval coverage. Add preservation cases for important old edge
+   behavior before a structural rewrite.
+3. After editing, generate an old-vs-new review:
+
+   ```bash
+   cd <skill-creator-path>
+   uv run --with PyYAML python -m scripts.audit_skill_regression compare \
+     --before <workspace>/skill-before \
+     --after <path/to/skill-folder> \
+     --output <workspace>/skill-regression-review.json \
+     --baseline-origin pre-edit-snapshot
+   ```
+
+   If the old directory was reconstructed from Git, replace the final flag with
+   `--baseline-origin git-ref:<ref>`. The tool resolves the ref to an immutable
+   commit and verifies every included file and executable bit against that tree.
+
+4. Review every candidate. Use exactly one disposition and record concrete
+   evidence/reason: `preserved_or_moved`, `intentional_sanitization`,
+   `intentional_boundary`, `removed_by_explicit_user_request`, `not_reusable`,
+   or `true_gap_fixed`. Runtime capabilities cannot use `not_reusable`; moving a
+   runtime capability outside this skill requires the owning destination, current
+   boundary evidence, and traceable user approval. Explicit retirement must also
+   quote/trace the user's approval. Preserved/sanitized/fixed claims must point to
+   a real current file and line and include a short `contains` quote that the
+   verifier can locate nearby. File-level candidates use the current file
+   fingerprint plus a named semantic review explaining why behavior survived—the
+   fingerprint alone proves file identity, not capability preservation.
+5. Verify the completed review. Hashes make the review stale after any further
+   edit, so regenerate and reclassify when the candidate changes. A passing
+   verification writes `.skill-regression-reviewed`, a content-bound local status
+   receipt. It helps detect later edits, but it is deliberately not standalone
+   packaging authority; packaging re-verifies the completed review itself:
+
+   ```bash
+   uv run --with PyYAML python -m scripts.audit_skill_regression verify \
+     --before <workspace>/skill-before \
+     --after <path/to/skill-folder> \
+     --review <workspace>/skill-regression-review.json
+   ```
+
+`compare` returning 1 means review candidates exist, not that the tool failed;
+2 means invocation/runtime failure. The tool proves exact movement and interface
+preservation, but deliberately refuses to infer semantic equivalence from fuzzy
+word overlap. A generic phrase such as “check permission denied” cannot silently
+replace a precise signed-in-without-role contract. Also inspect candidates marked
+`only_outside_runtime`: runtime behavior present only in evals, tests, or an
+unreachable reference is absent from the normal invocation path.
+
 **Validate immediately after every SKILL.md edit — don't wait for packaging (Step 7).** The failure this catches early is real: a frontmatter description written as an unquoted YAML scalar parses fine in Claude Code's lenient parser but breaks in strict parsers (codex reported `invalid YAML: mapping values are not allowed` on a skill that had been shipping for months), and a ` #` inside an unquoted description doesn't even error — it silently truncates everything after it, so the trigger keywords vanish while every scan stays green.
 
 ```bash
@@ -1026,7 +1097,10 @@ uv run --with PyYAML python -m scripts.quick_validate <path/to/skill-folder>
 
 **Write the description as a YAML block scalar** (`description: >-` followed by an indented paragraph) whenever it contains `: ` or ` #` or spans multiple sentences — block scalars tolerate both characters natively, which is why they became the repo-wide convention after the incident above.
 
-**When updating an existing skill**: Scan all existing reference files to check if they need corresponding updates.
+**When updating an existing skill**: Scan every existing reference and bundled
+resource for corresponding updates, then pass the migration gate above. Moving a
+contract requires a direct runtime pointer from SKILL.md; an eval or changelog is
+not a replacement.
 
 **Scripts check**: Before calling the edit done, ask: *what code did the source conversation (or the eval transcripts) write — that every future invocation would otherwise rewrite?* Bundle it into `scripts/` (parameterized, sanitized) and change the docs to point at it. The division of labor: **scripts carry the execution, docs carry the understanding** — a skill whose method lives only in prose re-pays the full authoring cost on every run. This check exists here, in the edit step, precisely because paths that skip the eval loop (conversation distillation, direct edits) never reach the eval-transcript version of this check in "Improving the skill".
 
@@ -1117,6 +1191,17 @@ cd <skill-creator-path>
 uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder>
 ```
 
+For every existing Git-tracked skill, packaging is blocked until the completed
+review is supplied and re-verified. A current marker is only a local status receipt,
+so committing first or hand-writing a marker cannot bypass the review. The review
+becomes stale on the next edit:
+
+```bash
+uv run --with PyYAML python -m scripts.package_skill \
+  <path/to/skill-folder> \
+  --regression-review <workspace>/skill-regression-review.json
+```
+
 Optional output directory, and `--include-evals` to ship the root `evals/` directory (excluded by default as a development asset):
 
 ```bash
@@ -1127,8 +1212,9 @@ uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder> ./di
 The packaging script will:
 
 1. **Validate** the skill automatically (YAML frontmatter, naming conventions, path reference integrity)
-2. **Verify security scan** (content hash must match last scan)
-3. **Package** the skill into a distributable archive
+2. **Re-verify the completed existing-skill regression review** whenever Git HEAD already contains the skill; a marker alone never authorizes packaging
+3. **Verify security scan** (content hash must match last scan)
+4. **Package** the skill into a distributable archive
 
 If validation fails, the script reports errors and exits without creating a package.
 
@@ -1221,7 +1307,7 @@ In Claude.ai, the core workflow is the same (draft -> test -> review -> improve 
 
 - **Updating an existing skill**: The user might be asking you to update an existing skill, not create a new one. In this case:
   - **Preserve the original name.** Note the skill's directory name and `name` frontmatter field — use them unchanged. E.g., if the installed skill is `research-helper`, output `research-helper.skill` (not `research-helper-v2`).
-  - **Copy to a writeable location before editing.** The installed skill path may be read-only. Copy to `/tmp/skill-name/`, edit there, and package from the copy.
+  - **Copy to a writeable location before editing.** The installed skill path may be read-only. Copy it to `/tmp/skill-name/`, immediately create the audit tool's pre-edit snapshot from that writeable copy, then edit and package from the copy with `--regression-review`. Do not pass `--new-skill`; a non-Git copy of an existing skill is still an existing skill.
   - **If packaging manually, stage in `/tmp/` first**, then copy to the output directory — direct writes may fail due to permissions.
 
 ---
@@ -1252,17 +1338,24 @@ The references/ directory has additional documentation:
 - `references/schemas.md` — JSON structures for evals.json, grading.json, benchmark.json, etc.
 - `references/sanitization_checklist.md` — Checklist for sanitizing business-specific content before public distribution
 
+The scripts/ directory includes deterministic gates used by this workflow:
+- `scripts/audit_skill_regression.py` — compares an immutable old skill bundle
+  with the edited bundle, creates an explicit disposition review, and verifies
+  its hashes/evidence before packaging an existing skill.
+
 ---
 
 Repeating one more time the core loop here for emphasis:
 
 - Figure out what the skill is about
+- For an existing skill, snapshot and inventory the old bundle before editing
 - Draft or edit the skill
 - Run claude-with-access-to-the-skill on test prompts
 - With the user, evaluate the outputs:
   - Create benchmark.json and run `eval-viewer/generate_review.py` to help the user review them
   - Run quantitative evals
 - Repeat until you and the user are satisfied
+- Run and clear the existing-skill regression review; eval-only survival does not count
 - Package the final skill and return it to the user.
 
 Please add steps to your TodoList, if you have such a thing, to make sure you don't forget. If you're in Cowork, please specifically put "Create evals JSON and run `eval-viewer/generate_review.py` so human can review test cases" in your TodoList to make sure it happens.
