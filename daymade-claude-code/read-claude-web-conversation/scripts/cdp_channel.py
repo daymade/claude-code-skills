@@ -199,9 +199,16 @@ BROWSER_EXE_NAMES = {
 
 # Flags no human ever passes to their daily browser. Far more reliable than any
 # path heuristic, so they are checked first.
+#
+# NOTE what is deliberately absent: `--remote-debugging-port`. It looks like the most
+# obvious automation tell in the world, and listing it inverted the detector on the one
+# configuration where this channel works at all — a Chrome the user themselves started
+# with a debugging port. Whenever `probe()` succeeded, `chrome_instances()` would report
+# the user's own browser as `automation` and `real: []`, which is precisely backwards
+# for the AppleScript decision that depends on it. A debugging port is what this module
+# NEEDS, not what it should recoil from.
 AUTOMATION_FLAGS = (
     '--enable-automation',
-    '--remote-debugging-port=',
     '--remote-debugging-pipe',
     '--headless',
     '--test-type',
@@ -318,7 +325,19 @@ class CDP:
         msg = {'id': mid, 'method': method, 'params': params or {}}
         if session:
             msg['sessionId'] = session
-        await self.ws.send(json.dumps(msg))
+        try:
+            await self.ws.send(json.dumps(msg))
+        except websockets.exceptions.WebSocketException as exc:
+            # The send half was outside the guard for one release. A browser quitting
+            # between two commands — `open_url` sends one a second for a minute — then
+            # produced a traceback instead of the documented exit 3, which is the exact
+            # outcome this module's docstring says it exists to prevent. ConnectionClosed
+            # is a WebSocketException, NOT a RuntimeError, so main()'s handler missed it
+            # too.
+            raise CDPUnavailable(
+                f'{method}: the browser closed the connection ({type(exc).__name__}). '
+                f'Chrome likely quit or updated. Fall back to another channel.'
+            ) from exc
         deadline = time.monotonic() + timeout
         while True:
             remaining = deadline - time.monotonic()
@@ -372,11 +391,19 @@ async def _connect(profile_dir=None):
     launch and does NOT remove it on exit, so the file outliving the browser is
     the normal state of a machine where Chrome has been closed.
     """
-    ws_url = browser_ws_url(profile_dir)
+    # browser_ws_url() lives INSIDE the guard: it touches the filesystem (a
+    # read-after-exists TOCTOU, an unreadable file, a half-written port file), and every
+    # one of those is "the route is unusable", not "this tool crashed". It used to sit
+    # outside, so a PermissionError escaped as a traceback with exit 1 — leaking past
+    # the very promise this function makes.
+    ws_url = '<unresolved>'
     try:
+        ws_url = browser_ws_url(profile_dir)
         with loopback_direct():
             ws = await asyncio.wait_for(
                 websockets.connect(ws_url, max_size=None), timeout=CONNECT_TIMEOUT)
+    except CDPUnavailable:
+        raise
     except Exception as exc:   # noqa: BLE001 - any failure here means "route unusable"
         raise CDPUnavailable(
             f'DevToolsActivePort points at {ws_url}, but the socket did not answer '
@@ -448,11 +475,16 @@ async def evaluate(js, match, profile_dir=None, await_promise=True):
         # happens Chrome returns a type/description with no `value` key. Returning
         # None there would look exactly like a successful empty export, which is the
         # one failure mode this whole skill exists to prevent.
-        if 'value' not in result:
+        if 'value' not in result or result['value'] is None:
+            # `null` DOES arrive with a 'value' key, so checking only for the key's
+            # absence let a null sail through, get written to disk as the four bytes
+            # "null", and exit 0 — an empty export, certified. A fetch that failed inside
+            # the page returns exactly this.
             raise PageError(
-                f'the JS returned a non-serializable value (type={result.get("type")}, '
+                f'the JS returned nothing usable (type={result.get("type")}, '
                 f'{result.get("description", "")[:200]}). Return a string or a plain '
-                f'object from the snippet.'
+                f'object; `null`/undefined here almost always means the in-page fetch '
+                f'failed.'
             )
         return result['value']
     finally:
@@ -534,6 +566,15 @@ def main(argv=None):
     except TabNotFound as exc:
         print(f'TAB_NOT_FOUND: {exc}', file=sys.stderr)
         return 2
+    except websockets.exceptions.WebSocketException as exc:
+        # Backstop. WebSocketException is NOT a RuntimeError, so it slipped past the
+        # handler below and surfaced as a traceback. Any socket-level failure means the
+        # route is gone — which is exit 3, "fall back", not a crash.
+        print(json.dumps({'available': False,
+                          'reason': f'the browser connection failed ({type(exc).__name__}: {exc})',
+                          'chrome_instances': chrome_instances()},
+                         ensure_ascii=False, indent=2))
+        return 3
     except (PageError, RuntimeError) as exc:
         # The browser answered, with an error. Distinct from an unusable channel:
         # falling back elsewhere won't help — the command was wrong, or the target
