@@ -49,7 +49,7 @@
 | 交互式创建 skill | 纯文字指令 | 9 个结构化 AskUserQuestion 检查点——用户永远不丢上下文 |
 | 避免常见错误 | 无指引 | 缓存编辑警告、前置依赖检查、安全扫描门禁 |
 | 了解架构选项 | 未提及 | Inline vs Fork 决策指南（选错会静默破坏你的 skill） |
-| 发布前验证 | 基本 YAML 检查 | 扩展验证器（全部 frontmatter 字段、路径引用完整性、空白字符问题） |
+| 发布前验证 | 基本 YAML 检查 | 扩展结构校验 + 带来源核验的现有 skill 新旧能力审计；打包时重验完整 review，不信任 marker 自证 |
 | 安全审查 | 无工具 | `security_scan.py` + gitleaks 集成——打包前硬门禁 |
 | 从真实失败中学习 | 无失败案例 | 实战方法论 + 文档化的失败模式和踩坑记录 |
 | 安全蒸馏历史对话 | 未覆盖 | 显式本地 manifest、消息级时间窗、先脱敏后落盘、匿名 source ID、默认忽略 `.enrich/`，候选只能人工晋升进 references/scripts |
@@ -105,7 +105,7 @@ claude plugin install daymade-skill@daymade-skills
 
 加载了 skill-creator 的 Claude Code 将引导你完成整个技能创建过程——从理解你的需求到打包最终技能。
 
-📚 **完整文档**：[daymade-skill/skill-creator/SKILL.md](./daymade-skill/daymade-skill/skill-creator/SKILL.md)
+📚 **完整文档**：[daymade-skill/skill-creator/SKILL.md](./daymade-skill/skill-creator/SKILL.md)
 
 ### 实时演示
 
@@ -2355,6 +2355,7 @@ claude plugin install daymade-claude-code@daymade-skills
 - 跨会话历史、本地 SOP、已装插件/MCP、skills.sh、官方插件、npm/PyPI 的先验调研——复用基础设施，只把用户独有的方法论编码进技能
 - inline vs `context: fork` 决策指引（subagent 不能 spawn subagent 或调 skill）与可组合/正交的技能设计
 - `init_skill.py` 脚手架、`package_skill.py`（自动校验）、`security_scan.py`（基于 gitleaks 的密钥/PII 检测）
+- 现有 skill 迁移闸门：工具签发的快照或已核验 Git commit 基线、区分运行时可达性的能力审计、逐项 disposition，以及无法被 clean commit 或手写 marker 绕过的打包时重验
 - Eval 工具链：并行 spawn 带技能 + baseline 运行、起草断言、评分、聚合基准、在生成的 HTML viewer 里审阅
 - 面向公开技能的强制语义通读——抓住扫描器漏掉的「无关键词」泄漏
 - description 优化循环（60/40 训练/测试切分，按 held-out 分数选最优 description）
@@ -2859,21 +2860,22 @@ claude plugin install codex-image-gallery@daymade-skills
 claude plugin install frontend-visual-qa@daymade-skills
 ```
 
-捕捉普通 lint/build 检查发现不了的界面排版、视觉和分享/导出错误。
+审计用户真正看到的界面，明确区分证据等级，并默认只审查、不修改源码。
 
 **使用场景：**
-- 审核或交付前端、网站、dashboard、设计系统样张或 HTML 演示页
-- 用户指出不恰当换行、文字挤、双滚动条、重叠或 AI slop 审美
-- 用户指出产物类型错位，例如把设计系统做成假的工作台/业务界面
-- 需要在桌面和移动端用 Chrome/Playwright 留证
-- 需要从真实浏览器 UI 验证导出、下载、分享链接、打印或 PDF 流程
-- 需要补足 `ui-designer`、`frontend-design` 和 `qa-expert` 之间的空档
+- 实现后审计已经渲染的 Web 或桌面 UI
+- 排查字体、换行、裁切、溢出、响应式、route/state、overlay、地图或瞬时状态缺陷
+- 将渲染结果与指定参考图或设计系统 SSOT 做实证对比
+- 按结论所需证据等级验证导出、下载、分享、popup、打印/PDF 或 Electron shell
+- 补足 `ui-designer`/设计阶段与 `qa-expert` 全局 QA 流程之间的渲染验收
 
 **主要功能：**
-- 基于本地历史反馈沉淀的换行、溢出、排版错误清单
-- 优先用 Chrome DevTools 检查用户当前可见浏览器视口，包括残留移动端 emulation
-- Playwright-core 脚本覆盖宽桌面、常规桌面和移动端视口
-- 用 Computer Use / 真实 Chrome 操作检查下载文件、分享 URL、剪贴板/新标签行为，以及非空的打印/PDF 预览
+- 默认 audit-only，按 profile 控制范围，并输出 verified / partial / blocked
+- A–D 证据阶梯，禁止用 headless、renderer 或 handler 结果冒充真实 GUI 验证
+- 先确认 state/viewport（含已登录但无角色状态与精确投影/演示画布），再结合已打开的截图与 DOM 几何取证
+- 加固后的 Playwright 机械扫描：HTTP/final URL、有效移动端视口、溢出、裁切、自定义控件焦点候选、图片和 section 证据
+- 核心视觉、复杂旅程/页面类型、data-viz 三类按需 reference，覆盖单位/来源/时间/新鲜度、密集碰撞、runtime 文案真实性和真实文件选择器边界
+- 自包含公开 fixture 的行为 eval 与触发 eval
 
 ### 75. **openclaw** - OpenClaw (龙虾) 配置管理器
 
