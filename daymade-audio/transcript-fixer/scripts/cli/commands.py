@@ -461,6 +461,16 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     context_rules = service.load_context_rules()
     domain_stats = service.get_domain_stats()
 
+    # --apply-domain: the user explicitly asserted this transcript belongs to
+    # args.domain, and every rule loaded above came from exactly that domain —
+    # each was hand-added for this project's vocabulary, so domain match =
+    # trust. Mark them so _assess_risk grades them low (auto-applied even in
+    # safe mode). MUST run before the roster merge below: roster entries are
+    # global (cross-project) and keep normal risk grading.
+    if getattr(args, "apply_domain", False) and args.domain:
+        for _m in correction_meta.values():
+            _m["trusted_domain"] = True
+
     # Merge person-name ASR variants from the people roster (if configured).
     # Source: args.people_roster > env TRANSCRIPT_FIXER_PEOPLE_ROSTER > config.json paths.people_roster_path.
     # The roster is the curated SSOT for important recurring people; DB entries (catch-all,
@@ -541,6 +551,8 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         print("🔧 Stage 1: Dictionary Corrections")
         if dry_run:
             print("   (DRY RUN — no files will be written)")
+        elif review_mode and getattr(args, "apply_domain", False) and args.domain:
+            print(f"   (SAFE MODE + trusted domain '{args.domain}' — its rules apply at every risk level; roster/other rules still defer to *_needs_review.md.)")
         elif review_mode:
             print("   (SAFE MODE [default] — only low-risk auto-applied; medium/high → *_needs_review.md. Pass --apply-all to apply every level.)")
         else:
