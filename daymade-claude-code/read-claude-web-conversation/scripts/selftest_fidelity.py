@@ -77,13 +77,39 @@ CASES = [
         0, [BIG], [],
     ),
     (
-        # The walk stops early; every message above the break is never iterated, so a
-        # per-block audit sees a perfectly clean 100%.
-        'broken parent chain must fail, not report 100%',
+        # Truncation shape 1: the payload declares a leaf that demonstrably has
+        # messages after it, so the walk stopped short of the real end.
+        'leaf with children must fail (truncated payload)',
         conv([msg('a', parent='ghost', content=[{'type': 'text', 'text': 'hi'}]),
               msg('b', parent='a', content=[{'type': 'text', 'text': BIG}])],
              current_leaf_message_uuid='a'),
         2, [], [],
+    ),
+    (
+        # Truncation shape 2: a message whose ancestry never reaches the active path.
+        # The walk never iterates it, so a per-block audit reports a serene 100%.
+        'orphaned message must fail (its ancestors are missing from the payload)',
+        conv([msg('m2', parent='m1-MISSING', content=[{'type': 'text', 'text': 'a'}]),
+              msg('m3', parent='m2', content=[{'type': 'text', 'text': 'b'}]),
+              msg('mX', parent='m0-MISSING', content=[{'type': 'text', 'text': BIG}])],
+             current_leaf_message_uuid='m3'),
+        2, [], [],
+    ),
+    (
+        # The case that MUST still pass, and the one two different truncation checks
+        # have already broken: a plain regeneration. The old answer stays in the
+        # payload, off the active path, and the thread's first message points at a
+        # parent that predates the payload — both true of a perfectly healthy export.
+        # A detector that fires here is worse than no detector at all.
+        # (This also guards a KeyError that only triggered when unwalked > 0 — i.e.
+        # only on conversations the user had actually edited.)
+        'regenerated answer (dead branch) must still export cleanly',
+        conv([msg('m1', sender='human', parent='pre-existing-root',
+                  content=[{'type': 'text', 'text': 'Q'}]),
+              msg('m2_old', parent='m1', content=[{'type': 'text', 'text': 'old answer'}]),
+              msg('m2_new', parent='m1', content=[{'type': 'text', 'text': BIG}])],
+             current_leaf_message_uuid='m2_new'),
+        0, [BIG], ['old answer'],   # dead branch is correctly off the transcript
     ),
     (
         # Provenance honesty: on the user's OWN conversation an empty tool input is just
