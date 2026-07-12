@@ -43,6 +43,8 @@ def main():
     parser.add_argument("--output-dir", default=None, help="Output directory (default: same as input)")
     parser.add_argument("--model", default="mlx-community/Qwen3-ASR-1.7B-8bit",
                         help="HuggingFace model ID (default: mlx-community/Qwen3-ASR-1.7B-8bit)")
+    parser.add_argument("--language", default="Chinese",
+                        help="Language for transcription output (default: Chinese)")
     parser.add_argument("--max-tokens", type=int, default=200000,
                         help="Max tokens for generation (default: 200000, covers multi-hour speech)")
     parser.add_argument("--smoke-test", action="store_true",
@@ -83,7 +85,12 @@ def main():
         print(f"\nTranscribing: {os.path.basename(audio_path)}", file=sys.stderr, flush=True)
         t1 = time.time()
 
-        result = model.generate(audio_path, max_tokens=args.max_tokens, verbose=True)
+        result = model.generate(
+            audio_path,
+            max_tokens=args.max_tokens,
+            language=args.language,
+            verbose=True,
+        )
 
         elapsed = time.time() - t1
         text = result.text if hasattr(result, "text") else str(result)
