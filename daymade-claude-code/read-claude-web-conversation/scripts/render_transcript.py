@@ -88,13 +88,22 @@ def result_item_text(item):
             head += f'\n<{url}>'
         return f'{head}\n\n{item.get("text", "")}'.strip()
     if t == 'image':
-        # The binary never rides in the JSON, so an image item usually carries no
-        # text and rendering nothing is correct. But do NOT hard-code that to '':
-        # if the item ever does carry a caption/OCR/alt string, returning '' here
-        # while the budget also skips images would put both sides of the audit in
-        # the same blind spot — the collusion this module is built to prevent.
-        # Emit whatever text is actually there; the budget counts the same field.
-        return item.get('text') or ''
+        # The binary never rides in the JSON, so an image item usually carries no text
+        # and emitting nothing IS correct. But do not hard-code that to '': if the item
+        # ever carries a caption, OCR, alt text — anything — returning '' here while
+        # the budget also skipped images would put both sides of the audit in the same
+        # blind spot, which is the collusion this module exists to prevent.
+        #
+        # The invariant, stated once for every branch above and below: ANY non-metadata
+        # string in the payload must be visible to BOTH the renderer and the budget.
+        # An empty render is only ever allowed where the budget is also, independently,
+        # zero.
+        txt = item.get('text')
+        if isinstance(txt, str) and txt:
+            return txt
+        extra = {k: v for k, v in item.items()
+                 if k not in ITEM_META_KEYS and isinstance(v, str) and v.strip()}
+        return json.dumps(extra, ensure_ascii=False) if extra else ''
     body = item.get('text') or item.get('content')
     if isinstance(body, str) and body:
         return body
@@ -178,21 +187,56 @@ def render_block(b, snapshot=False):
 
 
 # A message's files/attachments can carry the file's TEXT right in the payload
-# (a pasted document, an extracted PDF). Listing only the filename throws that away
-# — and because those live at message level, not in content[], a block-level audit
-# cannot even see the loss. Both the renderer and the budget read these same keys.
+# (a pasted document, an extracted PDF). Listing only the filename throws that away —
+# and because those live at message level, not in content[], a block-level audit
+# cannot even see the loss.
 FILE_TEXT_KEYS = ('extracted_content', 'preview_contents', 'text', 'content')
+
+# Structural metadata on a file object. Used ONLY by the budget side.
+FILE_META_KEYS = frozenset({
+    'file_name', 'file_kind', 'file_uuid', 'uuid', 'id', 'path', 'size_bytes',
+    'created_at', 'type', 'preview_url', 'thumbnail_url', 'document_asset_uuid',
+    'extracted_content_file_uuid',
+})
 
 
 def file_text(f):
-    """The file's text content, if the payload actually carries it."""
+    """The file's text content, if the payload carries it.
+
+    Unknown shapes must DUMP, never drop — the same rule as result_item_text(), for
+    the same reason. An attachment body sitting under a key we don't recognize has to
+    come out ugly; it must not come out missing. (It did: a 9,000-char body under
+    `document_body` rendered as nothing while the gate reported 100%, because
+    file_text() was serving as both the renderer's extractor AND the budget's measure
+    — the exact collusion this file forbids two hundred lines further up. Writing the
+    rule down did not prevent me from breaking it in the very same commit.)
+    """
     if not isinstance(f, dict):
         return ''
     for k in FILE_TEXT_KEYS:
         v = f.get(k)
         if isinstance(v, str) and v.strip():
             return v
+    unknown = {k: v for k, v in f.items()
+               if k not in FILE_META_KEYS and isinstance(v, str) and v.strip()}
+    if unknown:
+        return json.dumps(unknown, ensure_ascii=False, indent=2)
     return ''
+
+
+def file_source_chars(f):
+    """Content this file carries, measured off the RAW object — never via file_text()."""
+    if not isinstance(f, dict):
+        return 0
+    total = 0
+    for k, v in f.items():
+        if k in FILE_META_KEYS:
+            continue
+        if isinstance(v, str):
+            total += len(v)
+        elif isinstance(v, (dict, list)):
+            total += len(json.dumps(v, ensure_ascii=False))
+    return total
 
 
 def message_files(m):
@@ -237,21 +281,28 @@ def render_msg(m, snapshot=False):
     return '\n\n'.join(parts)
 
 
-# Structural metadata, not content. Used ONLY by the budget side.
+# Structural metadata on a tool_result ITEM. Used ONLY by the budget side.
 #
-# Note what this list does NOT contain: an item *type*. An earlier version excluded
-# `type == 'image'` from the budget while the renderer also returned '' for images —
-# putting both sides of the audit in the same blind spot, so an image item carrying
-# 38k chars of text scored a triumphant 100%. Judge a field by what it IS, never by
-# what the item claims to be; that is the only way the two sides stay unable to
-# collude.
+# Two rules govern this list, both learned the hard way:
+#
+# 1. It contains no item *type*. An earlier version excluded `type == 'image'` from
+#    the budget while the renderer also returned '' for images — putting both sides of
+#    the audit in the same blind spot, so an image item carrying 38k chars of text
+#    scored a triumphant 100%. Judge a field by what it IS, never by what the item
+#    claims to be.
+#
+# 2. Keep it SMALL. Over-counting the budget is safe: the renderer just has to emit
+#    something for the block, and result_item_text() dumps what it doesn't recognize,
+#    so a metadata field counted as content costs nothing. Under-counting is how the
+#    gate goes blind. An earlier version padded this list with keys copied in from the
+#    file and block layers ('name', 'path', 'file_name', …) that an item may not even
+#    have — every one of them a field the audit would refuse to look at. When in
+#    doubt, leave a key OUT of this set.
 ITEM_META_KEYS = frozenset({
     'type', 'id', 'uuid', 'tool_use_id', 'is_error', 'is_citable', 'is_missing',
-    'metadata', 'prompt_context_metadata', 'links', 'source', 'citations',
-    'start_timestamp', 'stop_timestamp', 'flags', 'name', 'icon_name',
-    'integration_name', 'integration_icon_url', 'mcp_server_url',
-    'display_content', 'file_kind', 'file_uuid', 'size_bytes', 'preview_url',
-    'thumbnail_url', 'path', 'file_name', 'created_at',
+    'metadata', 'prompt_context_metadata', 'links', 'citations',
+    'start_timestamp', 'stop_timestamp', 'flags',
+    'icon_name', 'integration_name', 'integration_icon_url', 'mcp_server_url',
 })
 
 
@@ -342,10 +393,14 @@ def fidelity_report(conv):
         msg_md = render_msg(m, snapshot)     # measured, never assumed
 
         for f in message_files(m):
-            body = file_text(f)
-            if body:
+            # Budget from the raw object, tally from the rendered message. Using
+            # file_text() for both — as an earlier version did — makes the audit agree
+            # with the renderer's blind spots by construction.
+            src = file_source_chars(f)
+            if src:
+                body = file_text(f)
                 account(f'msg[{i}].file', 'attachment', f.get('file_name', '?'),
-                        len(body), body if body in msg_md else '')
+                        src, body if body and body in msg_md else '')
 
         for j, b in enumerate(blocks):
             kind, name = b.get('type'), b.get('name', '')

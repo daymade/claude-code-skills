@@ -77,6 +77,27 @@ CASES = [
         0, [BIG], [],
     ),
     (
+        # The collusion, round two. file_text() was serving as BOTH the renderer's
+        # extractor and the budget's measure, so a body under a key it didn't know
+        # scored 100% while vanishing. Written into a commit whose own docstring
+        # forbade exactly this, two hundred lines above.
+        'attachment body under an UNKNOWN key must still surface (budget must not share the extractor)',
+        conv([msg('a', sender='human',
+                  attachments=[{'file_name': 'spec.txt', 'document_body': BIG}])]),
+        0, [BIG], [],
+    ),
+    (
+        # Budget under-counting is how the gate goes blind. Metadata keys copied in
+        # from other layers ('name', 'path', …) were fields the audit refused to look
+        # at. Over-counting is safe; under-counting is not.
+        'content under a key that looks like metadata must still be audited',
+        conv([msg('a', content=[{'type': 'tool_result', 'name': 't', 'content': [
+            {'type': 'text', 'text': 'ok'},
+            {'type': 'odd', 'name': BIG},
+        ]}])]),
+        0, [BIG], [],
+    ),
+    (
         # Truncation shape 1: the payload declares a leaf that demonstrably has
         # messages after it, so the walk stopped short of the real end.
         'leaf with children must fail (truncated payload)',
