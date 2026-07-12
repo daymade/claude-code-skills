@@ -24,16 +24,24 @@ that is signed in correctly.
 
 ## ⚠️ Before you use this channel: check for a second Chrome
 
-**Try CDP first** (`scripts/cdp_channel.py probe`). It reaches the same page
-through the same in-page-`fetch` method, needs no menu toggle, returns the whole
-payload on stdout, and — the reason this warning exists — it can actually *tell*
-which browser it is talking to.
+**Run `scripts/cdp_channel.py probe` first — but not mainly for CDP.**
 
-AppleScript cannot. It addresses Chrome by **bundle id**, and when a second Chrome
-instance is running (chrome-devtools-mcp, puppeteer, playwright, or anything else
-launched with its own `--user-data-dir`), Apple Events can be routed to **that**
-instance instead of the user's browser. macOS offers no way to target the other
-one by pid. There is no workaround — only detection.
+Yes, if CDP happens to be available it beats this channel outright. Usually it
+isn't: since Chrome 136 the debugging port is ignored on the default profile, so
+expect `available: false` and move on (never relaunch the user's Chrome to chase
+it — a fresh profile is signed out and can't read their conversations at all).
+This channel remains the realistic fallback, which is exactly why the probe still
+matters:
+
+**`probe` reports `chrome_instances` even when CDP is unavailable** — that part
+only shells out to `ps`, it needs no debugging port. And that list is the one
+thing standing between you and the trap below.
+
+AppleScript addresses Chrome by **bundle id**. When a second Chrome instance is
+running (chrome-devtools-mcp, puppeteer, playwright, or anything else launched
+with its own `--user-data-dir`), Apple Events can be routed to **that** instance
+instead of the user's browser. macOS offers no way to target the other one by pid.
+There is no workaround — only detection.
 
 The reason this is worth a section of its own is the way it *lies to you*. An
 automation profile has "Allow JavaScript from Apple Events" off, so your first

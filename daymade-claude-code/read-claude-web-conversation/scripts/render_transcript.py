@@ -233,6 +233,14 @@ def fidelity_report(conv):
     be conflated with loss: shared-link snapshots ship tool calls whose arguments
     and results the platform removed. Those are counted separately as `stripped` —
     a known, disclosed, unrecoverable gap rather than a bug in this script.
+
+    Known limit, stated so nobody mistakes this for more than it is: the check is
+    binary per block — "did the renderer emit anything for it?" It catches a block
+    that vanished (the real, observed failure: an unrecognized type returning ''),
+    not a block that was rendered but truncated. Crediting the block its full source
+    length on any non-empty output is what makes that so. If truncation is ever
+    introduced into render_block(), this gate will not notice, and it would need to
+    compare emitted content rather than merely detect its presence.
     """
     carried = rendered = 0
     dropped, stripped = [], []
@@ -264,7 +272,7 @@ def fidelity_report(conv):
     }
 
 
-def gap_notice(conv, report):
+def gap_notice(report):
     """The disclosure banner. A reader must never mistake a snapshot for the whole
     conversation just because the export ran cleanly."""
     stripped = report['stripped_blocks']
@@ -302,6 +310,13 @@ def citation_sources(conv):
 
 
 def render_transcript(conv, source_url='', report=None):
+    # The disclosure is computed here when the caller didn't supply it, so that no
+    # code path can produce a transcript that quietly omits it. Making the banner
+    # depend on an optional argument would mean the one function that hides the
+    # holes is the easiest one to call — precisely the silent-by-default shape this
+    # script exists to eliminate.
+    if report is None:
+        report = fidelity_report(conv)
     msgs = active_path(conv)
     # A share payload leaves `name` null and puts the real title in snapshot_name.
     title = conv.get('name') or conv.get('snapshot_name') or 'Untitled conversation'
@@ -313,8 +328,7 @@ def render_transcript(conv, source_url='', report=None):
         head.append(f'> Shared-link snapshot of conversation `{conv["conversation_uuid"]}` '
                     f'(shared by: {creator})')
     head += [f'Created: {conv.get("created_at", "?")}', f'Messages: {len(msgs)}']
-    if report:
-        head += gap_notice(conv, report)
+    head += gap_notice(report)
     head += ['', '---', '']
     body = '\n\n---\n\n'.join(render_msg(m) for m in msgs)
     return '\n'.join(head) + body + '\n' + citation_sources(conv)
@@ -423,6 +437,11 @@ def main(argv=None):
                 file=sys.stderr)
             return 2
 
+        if report['dropped_blocks']:   # only reachable with --allow-lossy
+            print(f"⚠️  WROTE A LOSSY TRANSCRIPT ON PURPOSE (--allow-lossy): "
+                  f"{len(report['dropped_blocks'])} block(s) carrying "
+                  f"{sum(d['chars'] for d in report['dropped_blocks']):,} chars were dropped. "
+                  f"Do not describe this export as complete.", file=sys.stderr)
         print(f"fidelity: {report['rendered_chars']:,}/{report['carried_chars']:,} chars rendered "
               f"({report['retention']:.1%})", file=sys.stderr)
         if report['stripped_blocks']:
