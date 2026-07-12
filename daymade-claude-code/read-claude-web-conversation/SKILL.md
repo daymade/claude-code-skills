@@ -73,9 +73,30 @@ rather than assume.
 | Order | Channel | Use when | Fails when |
 |-------|---------|----------|-----------|
 | 1 | **claude-in-chrome extension** | `list_connected_browsers` returns a browser | Returns `[]` → the extension's claude.ai login ≠ the Claude Code account. This is **structural** — retrying, reinstalling, and `switch_browser` all fail. Move on immediately. |
-| 2 | **CDP** (`scripts/cdp_channel.py`) | Chrome is listening on a debugging port | No `DevToolsActivePort` → Chrome wasn't launched with one (this is the default; not an error) |
-| 3 | **AppleScript** (macOS only) | Neither of the above | See the routing trap below — check for it BEFORE blaming the user |
+| 2 | **CDP** (`scripts/cdp_channel.py probe`) | probe says `available: true` — then it is the best channel there is | Usually unavailable, and that is **normal, not a malfunction** — see below. Probe is cheap; believe its answer and move on. |
+| 3 | **AppleScript** (macOS only) | The realistic fallback when the extension can't pair | See the routing trap below — check for it BEFORE blaming the user |
 | ✗ | **curl / WebFetch** | **never** | Cloudflare 403. There is no header that fixes it. |
+
+**⚠️ Expect CDP to be unavailable, and never try to force it.** Since Chrome 136
+(April 2025) the debugging port is *ignored on the default user-data-dir* — a
+deliberate hardening against malware that used CDP to steal cookies. You may still
+find a listening socket and a stale `DevToolsActivePort` on disk while the
+WebSocket handshake is never answered and `/json/*` returns 404. Verified on Chrome
+150: an endpoint that worked earlier in the same browser session later stopped
+answering, with no way to get a fresh browser id.
+
+The trap is what you'll be tempted to do next. Every fix on the web says "relaunch
+Chrome with `--user-data-dir=/tmp/whatever`". **For this skill that is worse than
+useless: a fresh profile is signed out, and a signed-out browser cannot read a
+single one of the user's conversations.** The session you need lives in precisely
+the profile Chrome is refusing to expose. So probe, take the answer, and fall
+back — never reconfigure or relaunch the user's browser to chase a port.
+
+CDP *does* work when Chrome was deliberately started on a non-default
+`--user-data-dir` **and** is signed into claude.ai. That happens, and when it does
+this channel beats the others outright (no menu toggle, immune to the Apple Events
+capture below, enumerates every tab, returns the whole payload on stdout). That is
+why it is worth one cheap probe before falling through.
 
 **To try channel 1**, load the extension's tools in a single ToolSearch call
 (they are deferred; the API path needs no `get_page_text` / `read_page`):
@@ -95,7 +116,14 @@ uv run --with websockets python scripts/cdp_channel.py probe
 
 `probe` answers three questions at once: is CDP available, is it pointed at the
 user's *real* browser (page count, and any claude.ai tabs already open), and are
-there **multiple Chrome instances** running. Its output drives everything below.
+there **multiple Chrome instances** running. Its output drives everything below —
+including the AppleScript decision, since the `chrome_instances.automation` list is
+what tells you whether Apple Events will even reach the right browser.
+
+On an unavailable port it exits **3** with `available: false` and a reason, still
+reporting `chrome_instances` so you can route. That is a routing fact, not an
+error: read it, fall through to channel 3, and say nothing to the user about
+debugging ports.
 
 ### The AppleScript routing trap (read before you blame the user)
 
@@ -279,9 +307,12 @@ stdout, which is a good reason to prefer them for a large archival export.
   fetch across orgs before concluding it's inaccessible.
 - **Just read — don't click.** This skill never needs to touch the conversation UI;
   avoid triggering navigation or dialogs mid-fetch.
-- **Don't reconfigure the user's browser.** If no debugging port is open, that is
-  a fact to route around (fall back a channel), not a setting to go change on
-  their behalf.
+- **Never relaunch the user's browser to open a debugging port.** Beyond the usual
+  reason (it's their browser, not yours), it is self-defeating here: Chrome only
+  honours the port on a *non-default* profile, and a fresh profile is **signed
+  out** — so the browser you just launched cannot read any of their conversations.
+  You would be trading the session you need for a port you don't. An unavailable
+  port is a fact to route around, not a setting to change.
 
 Full endpoint table, response schema field-by-field, the complete export script,
 and a troubleshooting table: [references/claude-web-api-extraction.md](references/claude-web-api-extraction.md).

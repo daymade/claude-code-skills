@@ -20,9 +20,33 @@ CDP has neither problem: it addresses a specific browser by its own debugging
 port, is indifferent to which account is signed in, and can enumerate every
 window/tab so you can tell the real browser from an automation instance.
 
-Requires Chrome to be listening on a debugging port. That is NOT the default —
-`probe` reports honestly when it isn't, so the caller can fall back rather than
-guess.
+## When this channel is actually available (read before trusting it)
+
+Rarely, and you must not try to force it.
+
+Since Chrome 136 (April 2025), `--remote-debugging-port` is **ignored on the
+default user-data-dir** — a deliberate hardening against malware that used CDP to
+lift cookies and passwords out of the real profile. On a default profile you may
+still find a socket listening and a stale `DevToolsActivePort` on disk (Chrome
+does not delete it), while `/json/*` answers 404 and the WebSocket handshake
+simply never completes. Verified on Chrome 150: an endpoint that worked earlier
+in the same browser session later stopped answering, with no way to obtain a
+fresh browser id because the HTTP endpoints are gone.
+
+So: `probe`, and believe it. If it says unavailable, fall back — **do not try to
+make CDP work.** The "fix" the error messages elsewhere on the web will push you
+toward is relaunching Chrome with `--user-data-dir=<some temp dir>`, and for this
+skill that is worse than useless: a fresh profile is *signed out*, so it cannot
+read a single one of the user's conversations. The whole point of these channels
+is to borrow the session that lives in the user's real profile — the profile
+Chrome is specifically refusing to expose over CDP. Relaunching their browser to
+chase a debugging port trades the only thing that matters for the one thing that
+doesn't.
+
+Where it does work: a Chrome the user (or a tool) deliberately started with a
+non-default `--user-data-dir` AND that is signed into claude.ai. That happens, and
+when it does this is the best channel available — hence probing first. It is just
+not the common case, and an unavailable CDP is not a malfunction.
 
 Usage:
   uv run --with websockets python cdp_channel.py probe
@@ -43,12 +67,33 @@ import os
 import platform
 import subprocess
 import sys
+import time
 from pathlib import Path
+
+# The debugging port lives on the loopback interface, so a proxy has no business
+# in this connection — but websockets honours *_PROXY from the environment and
+# will happily route 127.0.0.1 through it. On a machine with a proxy configured
+# (common for anyone who needs one to reach claude.ai at all) that turns a local
+# socket into "proxy rejected connection: HTTP 503" and the channel looks dead
+# when it is fine. Clear them for this process only; the browser keeps using
+# whatever proxy it is configured with for its own page loads, which is the part
+# that actually needs one.
+for _var in ('http_proxy', 'https_proxy', 'all_proxy', 'ws_proxy', 'wss_proxy',
+             'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'WS_PROXY', 'WSS_PROXY'):
+    os.environ.pop(_var, None)
+os.environ['NO_PROXY'] = os.environ['no_proxy'] = '127.0.0.1,localhost,::1'
 
 try:
     import websockets
 except ImportError:  # pragma: no cover - dependency is declared in the usage line
     sys.exit("missing dependency: run with  uv run --with websockets python cdp_channel.py ...")
+
+# Bounded waits everywhere: a half-dead browser must never turn into a process that
+# hangs with no output. EVAL is generous because the page does real network work
+# inside it (fetching a multi-megabyte conversation), which the others don't.
+CONNECT_TIMEOUT = 10
+CALL_TIMEOUT = 30
+EVAL_TIMEOUT = 180
 
 
 # Chrome writes DevToolsActivePort into the user-data-dir it was launched with:
@@ -155,26 +200,57 @@ def chrome_instances():
 
 class CDP:
     """Minimal CDP client. Deliberately does not use the HTTP /json endpoints:
-    recent Chrome (verified on 150.x, 2026) answers /json/version with 404 while
-    the WebSocket endpoint keeps working, so HTTP-probing reads as 'CDP is dead'
-    when it is very much alive."""
+    recent Chrome answers /json/* with 404 even where the WebSocket still works, so
+    HTTP-probing reads as "CDP is dead" in cases where it isn't (and, on a default
+    profile, the 404 tells you nothing you didn't already know)."""
 
     def __init__(self, ws):
         self.ws, self._id = ws, 0
 
-    async def call(self, method, params=None, session=None):
+    async def call(self, method, params=None, session=None, timeout=CALL_TIMEOUT):
+        """Send one command and wait for its reply.
+
+        The timeout is not decoration. A browser can be alive enough to accept the
+        socket and still never answer (Chrome's debugging endpoint degrades exactly
+        this way), and an un-timed `recv()` in a loop turns that into a process that
+        hangs forever with no output — the worst possible failure for something an
+        agent is driving unattended.
+
+        Note the deadline is for the whole call, not per-message. A per-`recv()`
+        timeout looks equivalent and isn't: the socket also carries unsolicited
+        events, so a chatty page would refresh the clock forever while our own reply
+        never arrives.
+        """
         self._id += 1
         mid = self._id
         msg = {'id': mid, 'method': method, 'params': params or {}}
         if session:
             msg['sessionId'] = session
         await self.ws.send(json.dumps(msg))
+        deadline = time.monotonic() + timeout
         while True:
-            r = json.loads(await self.ws.recv())
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise CDPUnavailable(
+                    f'{method}: the browser accepted the connection but never answered '
+                    f'(waited {timeout}s). Treat CDP as unusable and fall back to '
+                    f'another channel.'
+                )
+            try:
+                raw = await asyncio.wait_for(self.ws.recv(), timeout=remaining)
+            except asyncio.TimeoutError as exc:
+                raise CDPUnavailable(
+                    f'{method}: the browser accepted the connection but never answered '
+                    f'(waited {timeout}s). Treat CDP as unusable and fall back to '
+                    f'another channel.'
+                ) from exc
+            r = json.loads(raw)
             if r.get('id') == mid:
                 if 'error' in r:
                     raise RuntimeError(f"{method}: {r['error']}")
                 return r['result']
+            # else: an unsolicited event (Target.*, Runtime.*, …) — keep waiting for
+            # our own reply against the same deadline.
 
 
 async def _pages(cdp):
@@ -182,10 +258,49 @@ async def _pages(cdp):
     return [t for t in targets if t['type'] == 'page']
 
 
+async def _connect(profile_dir=None):
+    """Open the browser socket, converting EVERY connection failure into
+    CDPUnavailable.
+
+    This matters more than it looks. The whole point of this channel is that the
+    caller can ask "is CDP usable?" and get an honest answer, then fall back to
+    the extension or AppleScript if not. A traceback is not an answer — it reads
+    as a broken tool rather than an unavailable route, and an agent that sees one
+    tends to start "fixing" the user's browser instead of routing around it.
+
+    The commonest cause is a stale DevToolsActivePort: Chrome writes the file on
+    launch and does NOT remove it on exit, so the file outliving the browser is
+    the normal state of a machine where Chrome has been closed.
+    """
+    ws_url = browser_ws_url(profile_dir)
+    try:
+        ws = await asyncio.wait_for(
+            websockets.connect(ws_url, max_size=None), timeout=CONNECT_TIMEOUT)
+    except Exception as exc:   # noqa: BLE001 - any failure here means "route unusable"
+        raise CDPUnavailable(
+            f'DevToolsActivePort points at {ws_url}, but the socket did not answer '
+            f'({type(exc).__name__}: {exc}).\n\n'
+            'Two ordinary causes, neither of them a malfunction:\n'
+            '  * The file is stale. Chrome writes it at launch and leaves it behind '
+            'on exit, so it routinely outlives the browser.\n'
+            '  * The browser is on its DEFAULT profile. Since Chrome 136 the '
+            'debugging port is ignored there (anti-cookie-theft hardening): the '
+            'socket may still listen and this file may still exist, while the '
+            'handshake is never answered and /json/* returns 404 — so there is no '
+            'way to fetch a fresh browser id either.\n\n'
+            'Fall back to another channel. Do NOT relaunch Chrome with a temp '
+            '--user-data-dir to "fix" this: that profile is signed out, and a '
+            'signed-out browser cannot read a single one of the user\'s '
+            'conversations. The session you need lives in exactly the profile Chrome '
+            'is refusing to expose.'
+        ) from exc
+    return ws_url, ws
+
+
 async def probe(profile_dir=None):
     """Is CDP usable, and does it point at the user's REAL browser?"""
-    ws_url = browser_ws_url(profile_dir)
-    async with websockets.connect(ws_url, max_size=None) as ws:
+    ws_url, ws = await _connect(profile_dir)
+    try:
         cdp = CDP(ws)
         pages = await _pages(cdp)
         claude = [p for p in pages if 'claude.ai' in p.get('url', '')]
@@ -202,12 +317,14 @@ async def probe(profile_dir=None):
             'claude_tabs': [{'url': p['url'], 'title': p.get('title', '')} for p in claude],
             'chrome_instances': chrome_instances(),
         }
+    finally:
+        await ws.close()
 
 
 async def evaluate(js, match, profile_dir=None, await_promise=True):
     """Evaluate JS inside the page whose URL contains `match`."""
-    ws_url = browser_ws_url(profile_dir)
-    async with websockets.connect(ws_url, max_size=None) as ws:
+    _, ws = await _connect(profile_dir)
+    try:
         cdp = CDP(ws)
         page = next((p for p in await _pages(cdp) if match in p.get('url', '')), None)
         if not page:
@@ -221,17 +338,30 @@ async def evaluate(js, match, profile_dir=None, await_promise=True):
             'expression': js,
             'awaitPromise': await_promise,   # resolves async fetch in ONE call
             'returnByValue': True,
-        }, session=sid)
+        }, session=sid, timeout=EVAL_TIMEOUT)
         if res.get('exceptionDetails'):
             raise SystemExit('JS EXCEPTION: ' + json.dumps(res['exceptionDetails'],
                                                            ensure_ascii=False)[:2000])
-        return res['result'].get('value')
+        result = res['result']
+        # returnByValue can't marshal a value the page couldn't serialize; when that
+        # happens Chrome returns a type/description with no `value` key. Returning
+        # None there would look exactly like a successful empty export, which is the
+        # one failure mode this whole skill exists to prevent.
+        if 'value' not in result:
+            raise SystemExit(
+                'JS returned a non-serializable value '
+                f'(type={result.get("type")}, {result.get("description", "")[:200]}). '
+                'Return a string or a plain object from the snippet.'
+            )
+        return result['value']
+    finally:
+        await ws.close()
 
 
 async def open_url(url, wait_for=None, profile_dir=None):
     """Open a URL in the user's real browser (reuses an existing tab if present)."""
-    ws_url = browser_ws_url(profile_dir)
-    async with websockets.connect(ws_url, max_size=None) as ws:
+    _, ws = await _connect(profile_dir)
+    try:
         cdp = CDP(ws)
         needle = wait_for or url
         existing = next((p for p in await _pages(cdp) if needle in p.get('url', '')), None)
@@ -246,6 +376,8 @@ async def open_url(url, wait_for=None, profile_dir=None):
             if hit:
                 return {'opened': True, 'url': hit['url'], 'title': hit.get('title', '')}
         return {'opened': False, 'note': f'tab matching {needle!r} did not appear within 60s'}
+    finally:
+        await ws.close()
 
 
 def main(argv=None):
