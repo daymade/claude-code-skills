@@ -87,8 +87,14 @@ def result_item_text(item):
         if url:
             head += f'\n<{url}>'
         return f'{head}\n\n{item.get("text", "")}'.strip()
-    if t == 'image':                           # binary never rides in the JSON
-        return ''
+    if t == 'image':
+        # The binary never rides in the JSON, so an image item usually carries no
+        # text and rendering nothing is correct. But do NOT hard-code that to '':
+        # if the item ever does carry a caption/OCR/alt string, returning '' here
+        # while the budget also skips images would put both sides of the audit in
+        # the same blind spot — the collusion this module is built to prevent.
+        # Emit whatever text is actually there; the budget counts the same field.
+        return item.get('text') or ''
     body = item.get('text') or item.get('content')
     if isinstance(body, str) and body:
         return body
@@ -113,7 +119,18 @@ def fence(text, lang=''):
     return f'{f}{lang}\n{text}\n{f}'
 
 
-def render_block(b):
+def render_block(b, snapshot=False):
+    """Render one content block. `snapshot` = this payload came from a /share/ link.
+
+    That flag exists because the same observation — a tool call with no arguments —
+    means two completely different things depending on provenance, and getting it
+    wrong means lying to the user about their own data. On a shared snapshot the
+    platform really did strip the sharer's file contents, and the reader must be
+    told the hole is permanent. On the user's OWN conversation an empty `input` is
+    just an empty input, and claiming "the platform stripped this, unrecoverable"
+    would be a fabricated provenance claim about a conversation they can re-fetch in
+    full. Never assert the stronger, scarier story without the evidence for it.
+    """
     t = b.get('type')
     if t == 'text':
         return b.get('text', '')
@@ -124,15 +141,16 @@ def render_block(b):
         name = b.get('name', '')
         inp = b.get('input') or {}
         if not inp:
-            # A shared-link snapshot strips the arguments of tool calls that
-            # touched the sharer's private files (a `view` of an upload keeps its
-            # name but loses `path` and the file's content). Say so out loud:
-            # rendering it as "view ()" reads like a bug in this script, and
-            # implies the call did nothing — when in fact the payload is simply
-            # not in this link and never will be. Only the original conversation,
-            # opened by its owner, still has it.
-            return (f'**🔧 {name}** — ⚠️ arguments stripped by the platform '
-                    '(shared-link snapshot; not recoverable from this link)')
+            if snapshot:
+                # A shared-link snapshot strips the arguments of tool calls that
+                # touched the sharer's private files (a `view` of an upload keeps
+                # its name but loses `path` and the file's content). Say so: an
+                # empty "view ()" reads like a bug in this script and implies the
+                # call did nothing, when in fact the payload is simply not in this
+                # link and never will be.
+                return (f'**🔧 {name}** — ⚠️ arguments stripped by the platform '
+                        '(shared-link snapshot; not recoverable from this link)')
+            return f'**🔧 {name}** — (no arguments recorded)'
         desc = inp.get('description', '')
         if name == 'bash_tool':
             return f'**🔧 bash** — {desc}\n\n' + fence(inp.get('command', ''), 'bash')
@@ -159,15 +177,51 @@ def render_block(b):
     return ''
 
 
-def render_msg(m):
+# A message's files/attachments can carry the file's TEXT right in the payload
+# (a pasted document, an extracted PDF). Listing only the filename throws that away
+# — and because those live at message level, not in content[], a block-level audit
+# cannot even see the loss. Both the renderer and the budget read these same keys.
+FILE_TEXT_KEYS = ('extracted_content', 'preview_contents', 'text', 'content')
+
+
+def file_text(f):
+    """The file's text content, if the payload actually carries it."""
+    if not isinstance(f, dict):
+        return ''
+    for k in FILE_TEXT_KEYS:
+        v = f.get(k)
+        if isinstance(v, str) and v.strip():
+            return v
+    return ''
+
+
+def message_files(m):
+    return (m.get('files') or []) + (m.get('attachments') or [])
+
+
+def render_files(files, label):
+    if not files:
+        return []
+    parts = ['{} **{} files ({})**: {}'.format(
+        '📎' if label == 'uploaded' else '📦', label, len(files),
+        ', '.join(f'`{f.get("file_name", "?")}`' for f in files if isinstance(f, dict)))]
+    for f in files:
+        body = file_text(f)
+        if body:
+            parts.append(
+                f'<details><summary>📄 {f.get("file_name", "?")} ({len(body)} chars)</summary>\n\n'
+                + fence(body) + '\n\n</details>')
+    return parts
+
+
+def render_msg(m, snapshot=False):
     who = 'human' if m.get('sender') == 'human' else 'assistant'
     parts = [f'## {who} ({m.get("created_at", "")})']
-    files = (m.get('files') or []) + (m.get('attachments') or [])
+    files = message_files(m)
     if files and who == 'human':
-        parts.append('📎 **uploaded files ({})**: {}'.format(
-            len(files), ', '.join(f'`{f.get("file_name", "?")}`' for f in files)))
+        parts += render_files(files, 'uploaded')
     blocks = m.get('content') or []
-    rendered_blocks = [x for x in (render_block(b) for b in blocks) if x]
+    rendered_blocks = [x for x in (render_block(b, snapshot) for b in blocks) if x]
     parts.extend(rendered_blocks)
     top_text = m.get('text')
     content_texts = {
@@ -179,22 +233,49 @@ def render_msg(m):
         # only in top-level text. Preserve both without duplicating a text block.
         parts.append(top_text)
     if files and who == 'assistant':
-        parts.append('📦 **produced files ({})**: {}'.format(
-            len(files), ', '.join(f'`{f.get("file_name", "?")}`' for f in files)))
+        parts += render_files(files, 'produced')
     return '\n\n'.join(parts)
 
 
-def block_source_chars(b):
-    """How much content this block carries IN THE PAYLOAD (0 = it carries none).
+# Structural metadata, not content. Used ONLY by the budget side.
+#
+# Note what this list does NOT contain: an item *type*. An earlier version excluded
+# `type == 'image'` from the budget while the renderer also returned '' for images —
+# putting both sides of the audit in the same blind spot, so an image item carrying
+# 38k chars of text scored a triumphant 100%. Judge a field by what it IS, never by
+# what the item claims to be; that is the only way the two sides stay unable to
+# collude.
+ITEM_META_KEYS = frozenset({
+    'type', 'id', 'uuid', 'tool_use_id', 'is_error', 'is_citable', 'is_missing',
+    'metadata', 'prompt_context_metadata', 'links', 'source', 'citations',
+    'start_timestamp', 'stop_timestamp', 'flags', 'name', 'icon_name',
+    'integration_name', 'integration_icon_url', 'mcp_server_url',
+    'display_content', 'file_kind', 'file_uuid', 'size_bytes', 'preview_url',
+    'thumbnail_url', 'path', 'file_name', 'created_at',
+})
 
-    Measured straight off the raw JSON — deliberately never through result_text()
-    or any other rendering-path parser. A gate that asks the parser how much there
-    was to render can only ever confirm the parser's own blind spots: the parser
-    that couldn't see `knowledge` items would have reported a budget of zero for
-    them, and the gate would have cheerfully agreed that losing 91% of the
-    conversation was fine. The budget must come from the payload, the tally from
-    the renderer, and the two must be computed by code that cannot collude.
+
+def item_source_chars(item):
+    """Content ONE tool_result item carries, measured off the RAW payload.
+
+    Never routed through result_item_text(): the budget and the tally must be
+    computed by code that cannot agree with each other's mistakes.
     """
+    if not isinstance(item, dict):
+        return len(str(item or ''))
+    total = 0
+    for k, v in item.items():
+        if k in ITEM_META_KEYS:
+            continue
+        if isinstance(v, str):
+            total += len(v)
+        elif isinstance(v, (dict, list)):
+            total += len(json.dumps(v, ensure_ascii=False))
+    return total
+
+
+def block_source_chars(b):
+    """Content this block carries in the payload (tool_result is audited per item)."""
     t = b.get('type')
     if t == 'text':
         return len(b.get('text') or '')
@@ -205,70 +286,122 @@ def block_source_chars(b):
         return len(json.dumps(inp, ensure_ascii=False)) if inp else 0
     if t == 'tool_result':
         c = b.get('content')
-        if not c:
-            return 0                                  # genuinely empty => stripped
         if isinstance(c, list):
-            # Image results legitimately carry no text (the binary never rides in
-            # the JSON), so they are not a budget the renderer failed to meet.
-            textual = [i for i in c
-                       if not (isinstance(i, dict) and i.get('type') == 'image')]
-            return len(json.dumps(textual, ensure_ascii=False)) if textual else 0
-        return len(str(c))
+            return sum(item_source_chars(i) for i in c)
+        return len(str(c or ''))
     return len(json.dumps(b, ensure_ascii=False)) if b else 0
 
 
 def fidelity_report(conv):
-    """Account for every block: did the text in the payload reach the transcript?
+    """Did everything in the payload actually reach the transcript?
 
-    This exists because the failure it catches is SILENT. A renderer that doesn't
-    recognize a block type returns '' and nothing complains — the markdown looks
-    clean, the run exits 0, and the loss is invisible unless you happen to know
-    how long the conversation was. So instead of trusting the renderer, we ask it,
-    block by block: this block carried N characters — did you emit anything at all
-    for it? Any block that carried text and rendered to nothing is a real defect,
-    and the export must fail rather than quietly hand over a plausible-looking
-    fraction of the conversation.
+    The failure this guards against is SILENT: a renderer that meets a shape it
+    doesn't know returns '' and nothing complains — clean markdown, exit 0, and most
+    of the conversation gone. So we don't ask the renderer how it did. We measure the
+    payload independently, then check what the renderer emitted for each unit.
 
-    A block that carries NO text in the payload is a different animal and must not
-    be conflated with loss: shared-link snapshots ship tool calls whose arguments
-    and results the platform removed. Those are counted separately as `stripped` —
-    a known, disclosed, unrecoverable gap rather than a bug in this script.
+    **Audited per ITEM, not per block.** That distinction is the whole gate. An
+    earlier version credited a block its full budget on any non-empty output, so a
+    38k-char item that vanished went unnoticed because a 16-char sibling in the same
+    `content[]` rendered fine. The original 91%-loss incident was caught only by luck
+    — those tool_results happened to contain nothing *but* the unrecognized items.
+    Mix one recognized item in and the identical bug ships at "100% retention".
+    Items are the granularity result_item_text() can lose things at, so items are the
+    granularity we audit at.
 
-    Known limit, stated so nobody mistakes this for more than it is: the check is
-    binary per block — "did the renderer emit anything for it?" It catches a block
-    that vanished (the real, observed failure: an unrecognized type returning ''),
-    not a block that was rendered but truncated. Crediting the block its full source
-    length on any non-empty output is what makes that so. If truncation is ever
-    introduced into render_block(), this gate will not notice, and it would need to
-    compare emitted content rather than merely detect its presence.
+    Three other things a block-level audit structurally cannot see, all covered here:
+      * message-level file/attachment BODIES (they live outside content[]),
+      * top-level `text` (measured against the rendered message, not assumed),
+      * messages the active_path() walk never reached (a broken parent chain).
+
+    `stripped` is a different animal from loss and is only ever recorded for a
+    /share/ snapshot, where the platform genuinely removed the sharer's file
+    contents. On the user's own conversation an empty tool input is just an empty
+    tool input — claiming "the platform stripped this, unrecoverable" about a
+    conversation they can re-fetch in full would be a fabricated provenance claim.
     """
+    snapshot = bool(conv.get('conversation_uuid'))
+    all_msgs = conv.get('chat_messages') or []
+    msgs = active_path(conv)
+
     carried = rendered = 0
     dropped, stripped = [], []
-    for i, m in enumerate(active_path(conv)):
+
+    def account(unit, kind, name, src, emitted):
+        nonlocal carried, rendered
+        if src <= 0:
+            return
+        carried += src
+        if emitted and emitted.strip():
+            rendered += src
+        else:
+            dropped.append({'unit': unit, 'type': kind, 'name': name, 'chars': src})
+
+    for i, m in enumerate(msgs):
         blocks = m.get('content') or []
-        for b in blocks:
-            src = block_source_chars(b)
-            kind = b.get('type')
-            if src == 0:
-                if kind in ('tool_use', 'tool_result'):
-                    stripped.append({'msg': i, 'type': kind, 'name': b.get('name', '')})
+        msg_md = render_msg(m, snapshot)     # measured, never assumed
+
+        for f in message_files(m):
+            body = file_text(f)
+            if body:
+                account(f'msg[{i}].file', 'attachment', f.get('file_name', '?'),
+                        len(body), body if body in msg_md else '')
+
+        for j, b in enumerate(blocks):
+            kind, name = b.get('type'), b.get('name', '')
+            unit = f'msg[{i}].block[{j}]'
+
+            if kind == 'tool_result':
+                items = b.get('content')
+                if not items:
+                    if snapshot:
+                        stripped.append({'msg': i, 'type': kind, 'name': name})
+                    continue
+                if isinstance(items, list):
+                    for k, it in enumerate(items):
+                        itype = it.get('type') if isinstance(it, dict) else '?'
+                        account(f'{unit}.item[{k}]', f'tool_result/{itype}', name,
+                                item_source_chars(it), result_item_text(it))
+                    continue
+                account(unit, kind, name, len(str(items)), result_text(b))
                 continue
-            carried += src
-            if render_block(b).strip():
-                rendered += src
-            else:
-                dropped.append({'msg': i, 'type': kind, 'name': b.get('name', ''), 'chars': src})
+
+            if kind == 'tool_use' and not (b.get('input') or {}):
+                if snapshot:
+                    stripped.append({'msg': i, 'type': kind, 'name': name})
+                continue
+
+            account(unit, kind, name, block_source_chars(b), render_block(b, snapshot))
+
         top = m.get('text') or ''
-        seen = {b.get('text') for b in blocks if b.get('type') == 'text' and b.get('text')}
-        if top and top not in seen:
-            carried += len(top)
-            rendered += len(top)      # render_msg always appends it
+        if top:
+            account(f'msg[{i}].text', 'text', '', len(top), top if top in msg_md else '')
+
+    known_uuids = {mm.get('uuid') for mm in all_msgs}
+    root_parent = msgs[0].get('parent_message_uuid') if msgs else None
+    unwalked = len(all_msgs) - len(msgs)
+    # A dangling root parent is NORMAL on its own: the first message of any thread
+    # points at a parent that predates the payload (and a share snapshot omits the
+    # field entirely, so the walk falls back to array order and reaches everything).
+    # It is only evidence of a truncated payload when messages were ALSO left
+    # unreached — that combination means the walk stopped early and those blocks were
+    # never iterated, which is invisible to a per-block audit. Requiring both is what
+    # keeps this from failing every healthy export.
+    broken = unwalked > 0 and bool(root_parent) and root_parent not in known_uuids
     return {
+        'snapshot': snapshot,
+        'messages_total': len(all_msgs),
+        'messages_walked': len(msgs),
+        'messages_unwalked': unwalked,
+        'broken_chain': broken,
         'carried_chars': carried,
         'rendered_chars': rendered,
-        'retention': (rendered / carried) if carried else 1.0,
-        'dropped_blocks': dropped,     # payload had text, renderer emitted nothing => BUG
-        'stripped_blocks': stripped,   # payload itself was emptied by the platform => disclosed gap
+        # Zero carried is 0%, NOT 100%. An empty payload is the limit case of the
+        # very bug this gate exists for; scoring it perfect would be the gate failing
+        # at its own job.
+        'retention': (rendered / carried) if carried else 0.0,
+        'dropped_blocks': dropped,     # payload had content, renderer emitted nothing => BUG
+        'stripped_blocks': stripped,   # platform emptied it (snapshots only) => disclosed gap
     }
 
 
@@ -276,7 +409,7 @@ def gap_notice(report):
     """The disclosure banner. A reader must never mistake a snapshot for the whole
     conversation just because the export ran cleanly."""
     stripped = report['stripped_blocks']
-    if not stripped:
+    if not stripped or not report.get('snapshot'):
         return []
     names = sorted({s['name'] for s in stripped if s['name']})
     tools = ', '.join(f'`{n}`' for n in names) or 'tool'
@@ -317,20 +450,21 @@ def render_transcript(conv, source_url='', report=None):
     # script exists to eliminate.
     if report is None:
         report = fidelity_report(conv)
+    snapshot = report.get('snapshot', bool(conv.get('conversation_uuid')))
     msgs = active_path(conv)
     # A share payload leaves `name` null and puts the real title in snapshot_name.
     title = conv.get('name') or conv.get('snapshot_name') or 'Untitled conversation'
     head = [f'# {title}', '']
     if source_url:
         head.append(f'> Source: {source_url}')
-    if conv.get('conversation_uuid'):           # => this is a shared snapshot
+    if snapshot:
         creator = (conv.get('creator') or {}).get('full_name') or conv.get('created_by') or '?'
         head.append(f'> Shared-link snapshot of conversation `{conv["conversation_uuid"]}` '
                     f'(shared by: {creator})')
     head += [f'Created: {conv.get("created_at", "?")}', f'Messages: {len(msgs)}']
     head += gap_notice(report)
     head += ['', '---', '']
-    body = '\n\n---\n\n'.join(render_msg(m) for m in msgs)
+    body = '\n\n---\n\n'.join(render_msg(m, snapshot) for m in msgs)
     return '\n'.join(head) + body + '\n' + citation_sources(conv)
 
 
@@ -400,7 +534,20 @@ def main(argv=None):
                          '(default: refuse, because that loss is otherwise silent)')
     args = ap.parse_args(argv)
 
-    conv = json.load(open(args.json_path, encoding='utf-8'))
+    try:
+        with open(args.json_path, encoding='utf-8') as fh:
+            conv = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f'ERROR: cannot read {args.json_path}: {exc}', file=sys.stderr)
+        return 1
+    if not isinstance(conv, dict):
+        # A failed fetch leaves `null` here; a mis-scoped eval leaves a list. Neither
+        # is a conversation, and pretending otherwise produced a traceback before.
+        print(f'ERROR: {args.json_path} does not contain a conversation object '
+              f'(got {type(conv).__name__}). A failed fetch commonly leaves `null`; '
+              f're-run the fetch.', file=sys.stderr)
+        return 1
+
     if args.list_files:
         list_files(conv)
         return 0
@@ -414,36 +561,55 @@ def main(argv=None):
         report = fidelity_report(conv)
         out = render_transcript(conv, args.source_url, report)
 
-        if report['dropped_blocks'] and not args.allow_lossy:
-            print('FIDELITY CHECK FAILED — refusing to write a lossy transcript.\n',
-                  file=sys.stderr)
-            for d in report['dropped_blocks'][:10]:
-                print(f"  msg[{d['msg']}] {d['type']}/{d['name'] or '-'}: "
-                      f"{d['chars']:,} chars in the payload, nothing rendered",
-                  file=sys.stderr)
-            extra = len(report['dropped_blocks']) - 10
-            if extra > 0:
-                print(f'  … and {extra} more', file=sys.stderr)
-            print(
-                f"\n{len(report['dropped_blocks'])} block(s) carried text that never reached the\n"
-                f"transcript ({report['retention']:.0%} retention). This is exactly the silent loss\n"
-                f"this check exists to catch — the payload almost certainly contains a block shape\n"
-                f"render_block()/result_item_text() doesn't handle yet. Inspect one:\n"
-                f"    python -c \"import json;d=json.load(open('{args.json_path}'));"
-                f"b=d['chat_messages'][{report['dropped_blocks'][0]['msg']}]['content'];"
-                f"print(json.dumps(b[0],ensure_ascii=False)[:800])\"\n"
-                f"then teach the renderer that shape. Use --allow-lossy only after you have\n"
-                f"decided, explicitly, that losing this content is acceptable.",
-                file=sys.stderr)
+        # Floors first. An empty or truncated payload is the LIMIT CASE of the very
+        # loss this gate exists for — rubber-stamping it at "100%" would be the gate
+        # failing at its own job, and an empty fetch is exactly what a broken channel
+        # produces.
+        fatal = []
+        if report['messages_total'] == 0:
+            fatal.append('payload contains no chat_messages — this is not a conversation export')
+        elif report['carried_chars'] == 0:
+            fatal.append('payload carries no readable content at all — almost certainly '
+                         'an empty or failed fetch')
+        if report['broken_chain']:
+            fatal.append(
+                f"the message chain is broken: the walk begins at a message whose parent is "
+                f"absent from the payload, so {report['messages_unwalked']} of "
+                f"{report['messages_total']} messages were never even reached")
+
+        for d in report['dropped_blocks'][:10]:
+            fatal.append(f"{d['unit']} ({d['type']}/{d['name'] or '-'}): {d['chars']:,} chars "
+                         f"in the payload, nothing rendered")
+        extra = len(report['dropped_blocks']) - 10
+        if extra > 0:
+            fatal.append(f'… and {extra} more dropped unit(s)')
+
+        if fatal and not args.allow_lossy:
+            print('FIDELITY CHECK FAILED — refusing to write.\n', file=sys.stderr)
+            for f in fatal:
+                print(f'  * {f}', file=sys.stderr)
+            if report['dropped_blocks']:
+                print(
+                    f"\nContent in the payload never reached the transcript "
+                    f"({report['retention']:.0%} retention). This is the silent loss this check "
+                    f"exists to catch: the payload almost certainly contains a shape "
+                    f"result_item_text()/render_block() doesn't handle yet. Teach the renderer "
+                    f"that shape.", file=sys.stderr)
+            print("\nUse --allow-lossy only after deciding, explicitly, that losing this is "
+                  "acceptable.", file=sys.stderr)
             return 2
 
-        if report['dropped_blocks']:   # only reachable with --allow-lossy
-            print(f"⚠️  WROTE A LOSSY TRANSCRIPT ON PURPOSE (--allow-lossy): "
-                  f"{len(report['dropped_blocks'])} block(s) carrying "
+        if fatal:      # only reachable with --allow-lossy
+            print(f"⚠️  WROTE AN INCOMPLETE TRANSCRIPT ON PURPOSE (--allow-lossy): "
+                  f"{len(report['dropped_blocks'])} unit(s) carrying "
                   f"{sum(d['chars'] for d in report['dropped_blocks']):,} chars were dropped. "
-                  f"Do not describe this export as complete.", file=sys.stderr)
+                  f"Do NOT describe this export as complete.", file=sys.stderr)
         print(f"fidelity: {report['rendered_chars']:,}/{report['carried_chars']:,} chars rendered "
-              f"({report['retention']:.1%})", file=sys.stderr)
+              f"({report['retention']:.1%}) across {report['messages_walked']} message(s)",
+              file=sys.stderr)
+        if report['messages_unwalked'] and not report['broken_chain']:
+            print(f"note: {report['messages_unwalked']} message(s) are off the active path "
+                  f"(abandoned edit/regeneration branches) — expected, not loss", file=sys.stderr)
         if report['stripped_blocks']:
             names = sorted({s['name'] for s in report['stripped_blocks'] if s['name']})
             print(f"known gap: {len(report['stripped_blocks'])} tool blocks were emptied by the "

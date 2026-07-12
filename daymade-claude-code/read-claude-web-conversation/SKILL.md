@@ -120,10 +120,19 @@ there **multiple Chrome instances** running. Its output drives everything below 
 including the AppleScript decision, since the `chrome_instances.automation` list is
 what tells you whether Apple Events will even reach the right browser.
 
-On an unavailable port it exits **3** with `available: false` and a reason, still
-reporting `chrome_instances` so you can route. That is a routing fact, not an
-error: read it, fall through to channel 3, and say nothing to the user about
-debugging ports.
+Exit codes are a contract, so you never have to guess whether to fall back:
+
+| code | meaning | what to do |
+|------|---------|-----------|
+| 0 | worked | continue |
+| 1 | bad input (unreadable `--js`, etc.) | fix the call |
+| 2 | `TAB_NOT_FOUND` | use `open`, or ask the user to open the page |
+| **3** | **CDP unusable** | **fall back to another channel — this is the normal outcome** |
+| 4 | the browser answered with an error | the command was wrong, or the tab vanished mid-call; falling back won't help |
+
+Exit 3 still prints `chrome_instances`, because that part needs no debugging port.
+It is a routing fact, not an error: read it, fall through to channel 3, and say
+nothing to the user about debugging ports.
 
 ### The AppleScript routing trap (read before you blame the user)
 
@@ -248,6 +257,22 @@ prints its own accounting:
 fidelity: 143,088/143,088 chars rendered (100.0%)
 known gap: 12 tool blocks were emptied by the platform (view) — disclosed in the
            transcript header, NOT recoverable from a shared link
+```
+
+The gate audits **per item**, not per block — items are the granularity content
+actually gets lost at, and a per-block check credited a whole block as rendered
+whenever *any* part of it came out, so a vanished 38k-char item hid behind a
+16-char sibling and scored 100%. It also covers what a `content[]`-only audit
+structurally cannot see: message-level **attachment bodies** (a pasted document
+lives there, not in a block), the top-level `text`, and messages the active-path
+walk never reached. And a payload with nothing in it scores **0%, not 100%** — an
+empty fetch is the limit case of the very loss this gate exists for.
+
+**If you change the renderer, run the regression suite.** Every case in it is a
+shape that fooled a previous version of the gate:
+
+```bash
+uv run python scripts/selftest_fidelity.py
 ```
 
 Other modes, unchanged: `--list-files` inventories every downloadable file with
