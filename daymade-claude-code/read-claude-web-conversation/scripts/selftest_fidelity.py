@@ -152,6 +152,51 @@ CASES = [
              conversation_uuid='deadbeef', snapshot_name='shared'),
         0, ['Known gap'], [],
     ),
+    # ---- The renderer must not decide that a field it doesn't know isn't content. ----
+    # These four all shipped, silently, because each block type's renderer only looked
+    # at the fields it was written for, and the budget switched on type too — so a NEW
+    # field on a KNOWN type was invisible to both sides at once. Fixing them one branch
+    # at a time is what let the next one through; the fix is structural (dump whatever
+    # the type-specific renderer left on the floor, and never let the budget switch on
+    # type).
+    (
+        'unknown field on a KNOWN tool (view) must not vanish',
+        conv([msg('a', content=[{'type': 'tool_use', 'name': 'view',
+                                 'input': {'path': '/a', 'description': 'd',
+                                           'payload_v2': BIG}}])]),
+        0, [BIG], [],
+    ),
+    (
+        'unknown field on a text block must not vanish',
+        conv([msg('a', content=[{'type': 'text', 'text': 'hi', 'extra_body': BIG}])]),
+        0, [BIG], [],
+    ),
+    (
+        # `compaction_summary` is a REAL field on real payloads that no renderer here
+        # had ever heard of. Message-level content is invisible to any content[]-only
+        # audit, however rigorous.
+        'unknown MESSAGE-level field must not vanish',
+        conv([msg('a', content=[{'type': 'text', 'text': 'hi'}], compaction_summary=BIG)]),
+        0, [BIG], [],
+    ),
+    (
+        # `for b in content` iterated the characters of the string and died on b.get().
+        'content as a bare string must not crash',
+        conv([msg('a', content='a bare string, not a list')]),
+        0, ['a bare string, not a list'], [],
+    ),
+    (
+        # The counterweight to all of the above: an image item legitimately carries no
+        # text (the binary isn't in the JSON), and its `source` is a binary carrier, not
+        # prose. Counting it as content made the gate fail a perfectly healthy export.
+        # Exclude a key only when it is structurally incapable of carrying prose.
+        'image-only tool result must not be mistaken for loss',
+        conv([msg('a', content=[
+            {'type': 'tool_result', 'name': 'repl',
+             'content': [{'type': 'image', 'source': {'data': 'AAAA'}}]},
+            {'type': 'text', 'text': 'chart above'}])]),
+        0, ['chart above'], [],
+    ),
     (
         'healthy payload passes at 100%',
         conv([msg('a', content=[{'type': 'text', 'text': BIG}])]),
