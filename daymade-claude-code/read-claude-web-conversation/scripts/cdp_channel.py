@@ -62,31 +62,54 @@ context window. Unlike the AppleScript channel there is no fire-and-poll dance:
 """
 import argparse
 import asyncio
+import contextlib
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-# The debugging port lives on the loopback interface, so a proxy has no business
-# in this connection — but websockets honours *_PROXY from the environment and
-# will happily route 127.0.0.1 through it. On a machine with a proxy configured
-# (common for anyone who needs one to reach claude.ai at all) that turns a local
-# socket into "proxy rejected connection: HTTP 503" and the channel looks dead
-# when it is fine. Clear them for this process only; the browser keeps using
-# whatever proxy it is configured with for its own page loads, which is the part
-# that actually needs one.
-for _var in ('http_proxy', 'https_proxy', 'all_proxy', 'ws_proxy', 'wss_proxy',
-             'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'WS_PROXY', 'WSS_PROXY'):
-    os.environ.pop(_var, None)
-os.environ['NO_PROXY'] = os.environ['no_proxy'] = '127.0.0.1,localhost,::1'
-
 try:
     import websockets
 except ImportError:  # pragma: no cover - dependency is declared in the usage line
     sys.exit("missing dependency: run with  uv run --with websockets python cdp_channel.py ...")
+
+PROXY_VARS = ('http_proxy', 'https_proxy', 'all_proxy', 'ws_proxy', 'wss_proxy',
+              'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'WS_PROXY', 'WSS_PROXY')
+
+
+@contextlib.contextmanager
+def loopback_direct():
+    """Bypass any proxy for the duration of the CDP socket — and ONLY for that.
+
+    The debugging port is on loopback, so a proxy has no business in the connection,
+    but `websockets` honours *_PROXY from the environment and will cheerfully route
+    127.0.0.1 through it: on a machine with a proxy configured (i.e. anyone who needs
+    one to reach claude.ai at all) a perfectly healthy local socket comes back as
+    "proxy rejected connection: HTTP 503" and the channel looks dead.
+
+    Scoped, not global. An earlier version did this at import time, which meant that
+    merely importing this module — something the docs actively suggest, to reuse
+    chrome_instances() — silently stripped the proxy from the whole process. On a
+    machine where claude.ai is reachable *only* through the proxy, that would send
+    later requests straight at a wall. Whatever the process does outside this block
+    keeps its proxy configuration untouched.
+    """
+    saved = {k: os.environ.pop(k) for k in PROXY_VARS if k in os.environ}
+    saved_no = {k: os.environ.get(k) for k in ('NO_PROXY', 'no_proxy')}
+    os.environ['NO_PROXY'] = os.environ['no_proxy'] = '127.0.0.1,localhost,::1'
+    try:
+        yield
+    finally:
+        os.environ.update(saved)
+        for k, v in saved_no.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 # Bounded waits everywhere: a half-dead browser must never turn into a process that
 # hangs with no output. EVAL is generous because the page does real network work
@@ -106,16 +129,35 @@ DEFAULT_PROFILE_DIRS = {
     'Windows': [r'~\AppData\Local\Google\Chrome\User Data'],
 }
 
-# A Chrome started by an automation harness carries its own --user-data-dir.
-# These markers identify one so we never mistake it for the user's browser.
+# A Chrome started by an automation harness runs from, or writes into, one of these.
+# Matched against the WHOLE (lowercased) command line — never against a path
+# reconstructed by whitespace-splitting, which is how the previous version managed to
+# miss every real case.
+#
+# `/var/folders/` earns its place: that is macOS's real per-user temp root, where
+# puppeteer/playwright throwaway profiles actually live. The old list had Linux's
+# `/tmp/` and Windows's `Temp/` and nothing for the platform this channel is mostly
+# used on.
 AUTOMATION_MARKERS = (
-    'chrome-devtools-mcp', 'puppeteer', 'playwright', 'selenium',
-    'chrome-profile', '.cache/', 'Temp/', '/tmp/',
+    'chrome-devtools-mcp', 'puppeteer', 'playwright', 'selenium', 'chromedriver',
+    'chrome for testing', 'chrome-for-testing',
+    'chrome-profile', 'chrome_profile', 'scoped_dir',
+    '.org.chromium.',       # macOS temp-profile prefix
+    '/var/folders/',        # macOS per-user temp root
+    '/tmp/', 'temp/', '.cache/',
 )
 
 
 class CDPUnavailable(RuntimeError):
     """Chrome is not reachable over a debugging port — caller should fall back."""
+
+
+class TabNotFound(Exception):
+    """The page isn't open. Not a channel fault — ask the user, or use `open`."""
+
+
+class PageError(Exception):
+    """The page answered, badly: the JS threw, or returned something unmarshalable."""
 
 
 def candidate_profile_dirs(explicit=None):
@@ -150,9 +192,43 @@ def browser_ws_url(profile_dir=None):
 # "running Chrome instances".
 BROWSER_EXE_NAMES = {
     'google chrome', 'google chrome canary', 'google chrome beta',
+    'google chrome for testing', 'chrome for testing',
     'chrome', 'chromium', 'google-chrome', 'google-chrome-stable',
     'chromium-browser', 'chrome.exe',
 }
+
+# Flags no human ever passes to their daily browser. Far more reliable than any
+# path heuristic, so they are checked first.
+AUTOMATION_FLAGS = (
+    '--enable-automation',
+    '--remote-debugging-port=',
+    '--remote-debugging-pipe',
+    '--headless',
+    '--test-type',
+)
+
+
+def _user_data_dir(cmd):
+    """Extract --user-data-dir, tolerating spaces in the path.
+
+    Splitting the command line on whitespace (the obvious approach, and the one this
+    used to take) silently truncates every real automation profile, because they all
+    contain spaces: "Chrome for Testing/chrome-profile" parsed as ".../Google/Chrome",
+    "Application Support/puppeteer/profile" as ".../Library/Application". The marker
+    lived in the half that got thrown away, so the detector reported a clean bill of
+    health on exactly the instances it exists to catch.
+    """
+    m = re.search(r'--user-data-dir=(.*?)(?=\s+--|\s*$)', cmd)
+    return m.group(1).strip().strip('"\'') if m else ''
+
+
+def _is_automation(cmd):
+    low = cmd.lower()
+    if any(f in low for f in AUTOMATION_FLAGS):
+        return True
+    # Fall back to path markers, matched against the WHOLE command line so a space in
+    # the profile path can't hide them.
+    return any(m in low for m in AUTOMATION_MARKERS)
 
 
 def chrome_instances():
@@ -163,9 +239,14 @@ def chrome_instances():
     ("JS from Apple Events is off") then describes THAT throwaway profile rather
     than the user's browser — which is how a routing problem gets misreported to
     the user as "you forgot to enable a menu toggle".
+
+    Needs no debugging port, so it stays useful even when CDP itself is unavailable
+    (the common case) — which is precisely when the AppleScript decision gets made.
     """
     if platform.system() == 'Windows':
-        return {'real': [], 'automation': [], 'note': 'process inspection not implemented on Windows'}
+        return {'real': [], 'automation': [],
+                'note': 'process inspection not implemented on Windows — "automation: []" '
+                        'here means UNKNOWN, not "none running". Do not report it as a fact.'}
     try:
         # `comm` is the executable path alone. Renderers/helpers run a *different*
         # binary ("Google Chrome Helper (Renderer)"), so exe-name matching drops
@@ -173,7 +254,7 @@ def chrome_instances():
         listing = subprocess.run(['ps', '-axo', 'pid=,comm='], capture_output=True,
                                  text=True, timeout=10).stdout
     except (OSError, subprocess.SubprocessError):
-        return {'real': [], 'automation': [], 'note': 'ps unavailable'}
+        return {'real': [], 'automation': [], 'note': 'ps unavailable — automation state UNKNOWN'}
 
     real, automation = [], []
     for line in listing.splitlines():
@@ -185,16 +266,12 @@ def chrome_instances():
             continue
         try:
             cmd = subprocess.run(['ps', '-p', str(pid), '-o', 'command='],
-                                 capture_output=True, text=True, timeout=5).stdout
+                                 capture_output=True, text=True, timeout=5).stdout.strip()
         except (OSError, subprocess.SubprocessError):
             cmd = ''
-        udd = next((tok for tok in cmd.split() if tok.startswith('--user-data-dir=')), '')
-        path = udd.split('=', 1)[1] if udd else ''
+        path = _user_data_dir(cmd)
         entry = {'pid': pid, 'user_data_dir': path or '(default profile)'}
-        if path and any(mark in path for mark in AUTOMATION_MARKERS):
-            automation.append(entry)
-        else:
-            real.append(entry)
+        (automation if _is_automation(cmd) else real).append(entry)
     return {'real': real, 'automation': automation}
 
 
@@ -244,6 +321,14 @@ class CDP:
                     f'(waited {timeout}s). Treat CDP as unusable and fall back to '
                     f'another channel.'
                 ) from exc
+            except websockets.exceptions.ConnectionClosed as exc:
+                # Chrome quit, auto-updated, or the tab went away mid-call. The channel
+                # is gone, which is a routing fact — not a crash to hand the user.
+                raise CDPUnavailable(
+                    f'{method}: the browser closed the connection mid-call '
+                    f'({type(exc).__name__}). Chrome likely quit or updated. Fall back to '
+                    f'another channel.'
+                ) from exc
             r = json.loads(raw)
             if r.get('id') == mid:
                 if 'error' in r:
@@ -274,8 +359,9 @@ async def _connect(profile_dir=None):
     """
     ws_url = browser_ws_url(profile_dir)
     try:
-        ws = await asyncio.wait_for(
-            websockets.connect(ws_url, max_size=None), timeout=CONNECT_TIMEOUT)
+        with loopback_direct():
+            ws = await asyncio.wait_for(
+                websockets.connect(ws_url, max_size=None), timeout=CONNECT_TIMEOUT)
     except Exception as exc:   # noqa: BLE001 - any failure here means "route unusable"
         raise CDPUnavailable(
             f'DevToolsActivePort points at {ws_url}, but the socket did not answer '
@@ -328,8 +414,8 @@ async def evaluate(js, match, profile_dir=None, await_promise=True):
         cdp = CDP(ws)
         page = next((p for p in await _pages(cdp) if match in p.get('url', '')), None)
         if not page:
-            raise SystemExit(
-                f'TAB_NOT_FOUND: no open tab whose URL contains {match!r}.\n'
+            raise TabNotFound(
+                f'no open tab whose URL contains {match!r}. '
                 'Ask the user to open it, or use the `open` subcommand.'
             )
         sid = (await cdp.call('Target.attachToTarget',
@@ -340,18 +426,18 @@ async def evaluate(js, match, profile_dir=None, await_promise=True):
             'returnByValue': True,
         }, session=sid, timeout=EVAL_TIMEOUT)
         if res.get('exceptionDetails'):
-            raise SystemExit('JS EXCEPTION: ' + json.dumps(res['exceptionDetails'],
-                                                           ensure_ascii=False)[:2000])
+            raise PageError('the JS threw: ' + json.dumps(res['exceptionDetails'],
+                                                          ensure_ascii=False)[:2000])
         result = res['result']
         # returnByValue can't marshal a value the page couldn't serialize; when that
         # happens Chrome returns a type/description with no `value` key. Returning
         # None there would look exactly like a successful empty export, which is the
         # one failure mode this whole skill exists to prevent.
         if 'value' not in result:
-            raise SystemExit(
-                'JS returned a non-serializable value '
-                f'(type={result.get("type")}, {result.get("description", "")[:200]}). '
-                'Return a string or a plain object from the snippet.'
+            raise PageError(
+                f'the JS returned a non-serializable value (type={result.get("type")}, '
+                f'{result.get("description", "")[:200]}). Return a string or a plain '
+                f'object from the snippet.'
             )
         return result['value']
     finally:
@@ -396,14 +482,25 @@ def main(argv=None):
             p.add_argument('--wait-for', help='substring to wait for (default: the URL)')
     args = ap.parse_args(argv)
 
+    # Exit codes are a contract: 0 = worked · 1 = bad input · 2 = tab not found ·
+    # 3 = CDP unusable (FALL BACK to another channel) · 4 = the browser answered
+    # with an error (a command fault, not a dead channel).
     try:
         if args.cmd == 'probe':
             print(json.dumps(asyncio.run(probe(args.profile_dir)), ensure_ascii=False, indent=2))
         elif args.cmd == 'open':
-            print(json.dumps(asyncio.run(open_url(args.url, args.wait_for, args.profile_dir)),
-                             ensure_ascii=False, indent=2))
+            res = asyncio.run(open_url(args.url, args.wait_for, args.profile_dir))
+            print(json.dumps(res, ensure_ascii=False, indent=2))
+            if not (res.get('opened') or res.get('reused_existing_tab')):
+                # Previously this returned 0, so a caller chaining `open && eval`
+                # sailed on as though the tab existed.
+                return 4
         else:
-            js = Path(args.js).read_text(encoding='utf-8')
+            try:
+                js = Path(args.js).read_text(encoding='utf-8')
+            except OSError as exc:
+                print(f'ERROR: cannot read --js {args.js}: {exc}', file=sys.stderr)
+                return 1
             val = asyncio.run(evaluate(js, args.match, args.profile_dir))
             out = val if isinstance(val, str) else json.dumps(val, ensure_ascii=False)
             if args.out:
@@ -413,10 +510,21 @@ def main(argv=None):
                 sys.stdout.write(out)
     except CDPUnavailable as exc:
         # Not a crash — a routing fact the caller needs in order to fall back.
+        # chrome_instances() is still reported: it needs no debugging port, and it is
+        # exactly what the AppleScript decision hinges on.
         print(json.dumps({'available': False, 'reason': str(exc),
                           'chrome_instances': chrome_instances()},
                          ensure_ascii=False, indent=2))
         return 3
+    except TabNotFound as exc:
+        print(f'TAB_NOT_FOUND: {exc}', file=sys.stderr)
+        return 2
+    except (PageError, RuntimeError) as exc:
+        # The browser answered, with an error. Distinct from an unusable channel:
+        # falling back elsewhere won't help — the command was wrong, or the target
+        # disappeared between listing it and attaching to it.
+        print(f'CDP ERROR: {exc}', file=sys.stderr)
+        return 4
     return 0
 
 
