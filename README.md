@@ -49,7 +49,7 @@ This is a **production-hardened fork** of [Anthropic's official skill-creator](h
 | Create a skill interactively | Prose-based instructions | 9 structured AskUserQuestion checkpoints — user never loses context |
 | Avoid common mistakes | No guidance | Cache edit warnings, prerequisite checks, security scan gate |
 | Know the architecture options | Not mentioned | Inline vs Fork decision guide with examples (choosing wrong silently breaks your skill) |
-| Validate before shipping | Basic YAML check | Expanded validator (all frontmatter fields, path reference integrity, whitespace issues) |
+| Validate before shipping | Basic YAML check | Expanded structural validator plus provenance-checked old-vs-new capability audit; packaging re-verifies the completed review instead of trusting a marker |
 | Catch security issues | No tooling | `security_scan.py` with gitleaks integration — hard gate before packaging |
 | Learn from real failures | No failure cases | Battle-tested methodology with documented failure patterns and gotchas |
 | Distill past conversations safely | Not covered | Explicit local manifest, message-level time window, redaction, opaque source IDs, ignored `.enrich/` staging, and manual promotion into references/scripts |
@@ -105,7 +105,7 @@ After installing skill-creator, simply ask Claude Code:
 
 Claude Code, with skill-creator loaded, will guide you through the entire skill creation process - from understanding your requirements to packaging the final skill.
 
-📚 **Full documentation**: [daymade-skill/skill-creator/SKILL.md](./daymade-skill/daymade-skill/skill-creator/SKILL.md)
+📚 **Full documentation**: [daymade-skill/skill-creator/SKILL.md](./daymade-skill/skill-creator/SKILL.md)
 
 ### Live Demos
 
@@ -2347,6 +2347,7 @@ The essential meta-skill for building your own skills. Guides the full create �
 - Prior-art research across conversation history, local SOPs, installed plugins/MCPs, skills.sh, official plugins, npm/PyPI — to reuse infrastructure and encode only the user's unique methodology
 - The inline-vs-`context: fork` decision guide (subagents can't spawn subagents or call skills) and composable/orthogonal skill design
 - `init_skill.py` scaffolding, `package_skill.py` (auto-validates), and `security_scan.py` (gitleaks-based secret/PII detection)
+- Existing-skill migration gate: tool-attested snapshot or verified Git-commit baseline, runtime-reachability-aware capability audit, explicit dispositions, and package-time re-verification that a clean commit or hand-written marker cannot bypass
 - Eval harness: spawn with-skill + baseline runs, draft assertions, grade, aggregate a benchmark, and review in a generated HTML viewer
 - Mandatory sanitization read-through for public skills — catches no-keyword leaks scanners miss
 - Description-optimization loop (60/40 train/test split, selects best description by held-out score)
@@ -2820,21 +2821,22 @@ Start a self-contained local web gallery for Codex-generated image outputs. The 
 claude plugin install frontend-visual-qa@daymade-skills
 ```
 
-Catch embarrassing rendered UI and share/export defects that normal lint/build checks miss.
+Audit the UI users can actually see, with explicit evidence levels and no source mutation by default.
 
 **When to use:**
-- Reviewing or shipping a frontend, website, dashboard, design-system specimen, or HTML slide page
-- User flags awkward line breaks, cramped text, double scrollbars, overlap, or generic AI slop aesthetics
-- User says the artifact has the wrong type, such as a design system turning into a fake app/workbench
-- Need Chrome/Playwright evidence across desktop and mobile viewports
-- Need to verify export, download, share link, print, or PDF flows from the real browser UI
-- Need to complement `ui-designer`, `frontend-design`, and `qa-expert`
+- Auditing an already-rendered web or desktop UI after implementation
+- Diagnosing typography, wrapping, clipping, overflow, responsive, route/state, overlay, map, or transient-state defects
+- Comparing a rendered artifact with a named visual reference or design-system SSOT
+- Verifying export, download, share, popup, print/PDF, or Electron-shell behavior at the evidence level the claim requires
+- Complementing `ui-designer`/design work and the broader process managed by `qa-expert`
 
 **Key features:**
-- History-derived checklist for recurring line-break, overflow, and typography failures
-- Chrome DevTools first-pass for the user-visible browser viewport, including stale mobile emulation checks
-- Playwright-core audit script for desktop-wide, desktop, and mobile viewports
-- Computer Use / real Chrome journey checks for downloaded files, share URLs, clipboard/new-tab behavior, and nonblank print/PDF previews
+- Audit-only default with scoped profiles and verified / partial / blocked outcomes
+- A–D evidence ladder that prevents headless, renderer-only, or handler-only checks from masquerading as real GUI proof
+- State/viewport-first workflow, including authenticated-but-role-less branches and exact projection/deck canvases, plus inspected screenshots and DOM geometry
+- Hardened Playwright-powered sweep for navigation status, effective mobile viewport, overflow, clipping, custom-control focusability, images, and section evidence
+- Conditional references for core visual checks, complex journeys/page contracts, and data visualization—including units/source/time/freshness, dense collisions, runtime-label truth, and real file-dialog boundaries
+- Public behavior and trigger evals with self-contained fixtures
 
 ### 75. **openclaw** - OpenClaw (龙虾) Config Manager
 
