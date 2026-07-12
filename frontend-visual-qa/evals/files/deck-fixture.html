@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Projection deck fixture</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; font-family: Inter, Arial, sans-serif; color: #17212b; }
+      body { background: #edf2f4; font-size: 28px; line-height: 1.45; letter-spacing: 0.01em; }
+      .slide {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        padding: 96px 120px;
+        overflow: hidden;
+        background: #fff;
+        border-bottom: 1px solid #c9d4da;
+      }
+      h1, h2 { margin: 0 0 40px; font-weight: 720; line-height: 1.08; letter-spacing: -0.025em; }
+      h1 { font-size: 92px; max-width: 1320px; }
+      h2 { font-size: 68px; }
+      .eyebrow { color: #35605a; font-size: 24px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+      .clipped-copy { width: 980px; height: 58px; overflow: hidden; }
+      .timeline { position: relative; width: 1500px; height: 250px; margin-top: 110px; background: #e9eff1; }
+      .event { position: absolute; top: 56px; height: 96px; padding: 24px; color: #fff; font-weight: 700; }
+      .event-a { left: 90px; width: 620px; background: #176b87; }
+      .event-b { left: 500px; top: 96px; width: 820px; background: #a33c32; z-index: 2; }
+    </style>
+  </head>
+  <body>
+    <section class="slide" data-slide="1">
+      <p class="eyebrow">Quarterly review</p>
+      <h1>Customer signals that change the plan</h1>
+      <p>Delivery canvas: 1920 × 1080.</p>
+    </section>
+    <section class="slide" data-slide="2">
+      <p class="eyebrow">Evidence quality</p>
+      <h2>One missing sentence changes the decision</h2>
+      <p class="clipped-copy">This explanatory copy is deliberately taller than its fixed container, so the mechanical sweep must report that the visible slide clips important text.</p>
+    </section>
+    <section class="slide" data-slide="3">
+      <p class="eyebrow">Operational timeline</p>
+      <h2>Two events occupy the same decision window</h2>
+      <div class="timeline" aria-label="Timeline with overlapping events">
+        <div class="event event-a">Regional review with board decision · 09:00–10:10</div>
+        <div class="event event-b">Customer escalation · 09:45–11:00</div>
+      </div>
+    </section>
+  </body>
+</html>

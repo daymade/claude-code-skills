@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Route state fixture</title>
+  <style>
+    body { margin: 0; font: 16px/1.5 Arial, sans-serif; }
+    nav { display: flex; gap: 8px; padding: 20px; border-bottom: 1px solid #ddd; }
+    button[aria-selected="true"] { background: #111; color: white; }
+    main { padding: 32px; }
+  </style>
+</head>
+<body>
+  <nav aria-label="Workspaces">
+    <button data-view="overview" aria-selected="true">Overview</button>
+    <button data-view="queue" aria-selected="false">Queue</button>
+    <button data-view="map" aria-selected="false">Map</button>
+  </nav>
+  <main>
+    <h1>Overview</h1>
+    <p id="content">Overview content</p>
+  </main>
+  <script>
+    const title = document.querySelector("h1");
+    const content = document.querySelector("#content");
+    document.querySelectorAll("button[data-view]").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll("button[data-view]").forEach((item) => {
+          item.setAttribute("aria-selected", String(item === button));
+        });
+        title.textContent = button.textContent;
+        content.textContent = button.textContent + " content";
+        // Deliberate defect: the visible workspace changes without URL/history state.
+      });
+    });
+  </script>
+</body>
+</html>

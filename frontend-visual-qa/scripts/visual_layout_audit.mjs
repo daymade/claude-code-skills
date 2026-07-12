@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
@@ -30,16 +31,71 @@ function loadPlaywright() {
   }
   throw new Error(
     "No Playwright browser driver found (tried playwright-core, playwright, @playwright/test).\n" +
-    "Install one in the frontend project, e.g. `npm install -D @playwright/test` (or the pnpm/yarn equivalent).\n" +
-    "Under a pnpm workspace, `playwright-core` is a non-hoisted transitive dep; installing `@playwright/test` as a\n" +
-    "direct dependency, or running with `NODE_PATH=node_modules/.pnpm/playwright-core@<version>/node_modules`, resolves it.\n" +
+    "Run this sweep from a project that already provides one of those packages.\n" +
+    "Do not change the audited project's dependencies unless that mutation is explicitly authorized.\n" +
+    "In pnpm workspaces, use the direct @playwright/test package or an explicit NODE_PATH to its package directory.\n" +
     `Resolution attempts:\n  - ${attempts.join("\n  - ")}`
   );
 }
 
 function getArg(name, fallback = null) {
   const idx = process.argv.indexOf(name);
-  return idx >= 0 && process.argv[idx + 1] ? process.argv[idx + 1] : fallback;
+  if (idx < 0) return fallback;
+  const value = process.argv[idx + 1];
+  if (!value || value.startsWith("--")) {
+    failUsage("Missing value for " + name + ".");
+  }
+  return value;
+}
+
+function getArgs(name) {
+  const values = [];
+  for (let index = 0; index < process.argv.length; index += 1) {
+    if (process.argv[index] !== name) continue;
+    const value = process.argv[index + 1];
+    if (!value || value.startsWith("--")) {
+      failUsage("Missing value for " + name + ".");
+    }
+    values.push(value);
+  }
+  return values;
+}
+
+const usage = [
+  "Usage: visual_layout_audit.mjs (--url <http://localhost:port/> | --file <artifact.html>)",
+  "  [--page-type generic|design-system|live-artifact-design-system|dashboard|app|landing|deck|tool|game]",
+  "  [--viewport <width>x<height>]... (replaces the default desktop/mobile matrix)",
+  "  [--wait-until domcontentloaded|load|networkidle|commit] [--ready-selector <css>]",
+  "  [--settle-ms 750] [--forbid <regex>]... [--require <regex>]...",
+  "  [--expected-window-width 1920] [--content-selector main] [--media-selector .hero]",
+  "  [--section-selector section] [--screenshot-sections] [--max-section-screenshots 4]",
+  "  [--out <new-empty-directory>] [--fail-on-warning]",
+].join("\n");
+
+function failUsage(message) {
+  if (message) console.error(message);
+  console.error(usage);
+  process.exit(2);
+}
+
+function validateKnownFlags() {
+  const valueFlags = new Set([
+    "--url", "--file", "--out", "--forbid", "--require", "--page-type",
+    "--wait-until", "--ready-selector", "--settle-ms", "--expected-window-width",
+    "--content-selector", "--media-selector", "--section-selector",
+    "--max-section-screenshots", "--viewport",
+  ]);
+  const booleanFlags = new Set(["--help", "-h", "--screenshot-sections", "--fail-on-warning"]);
+  for (let index = 2; index < process.argv.length; index += 1) {
+    const arg = process.argv[index];
+    if (valueFlags.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if (booleanFlags.has(arg)) continue;
+    if (arg.startsWith("-")) failUsage("Unknown option: " + arg);
+    failUsage("Unexpected positional argument: " + arg);
+  }
 }
 
 function findChrome() {
@@ -48,40 +104,60 @@ function findChrome() {
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
     "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Google/Chrome/Application/chrome.exe"),
+    process.env["PROGRAMFILES(X86)"] && path.join(process.env["PROGRAMFILES(X86)"], "Google/Chrome/Application/chrome.exe"),
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Google/Chrome/Application/chrome.exe"),
+    process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Microsoft/Edge/Application/msedge.exe"),
+    process.env["PROGRAMFILES(X86)"] && path.join(process.env["PROGRAMFILES(X86)"], "Microsoft/Edge/Application/msedge.exe"),
     "/usr/bin/google-chrome-stable",
     "/usr/bin/google-chrome",
     "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/snap/bin/chromium",
   ].filter(Boolean);
-  const found = candidates.find((candidate) => fs.existsSync(candidate));
-  if (!found) {
-    throw new Error("Chrome/Chromium not found. Set CHROME_PATH to the browser executable.");
-  }
-  return found;
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
 
-const target = getArg("--url") || getArg("--file");
-const outDir = getArg("--out", "/tmp/frontend-visual-qa");
-const forbidPattern = getArg("--forbid", "");
-const requirePattern = getArg("--require", "");
-const pageType = getArg("--page-type", "auto");
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(usage);
+  process.exit(0);
+}
+validateKnownFlags();
+
+const urlTarget = getArg("--url");
+const fileTarget = getArg("--file");
+if (Boolean(urlTarget) === Boolean(fileTarget)) {
+  failUsage("Provide exactly one of --url or --file.");
+}
+const target = urlTarget || fileTarget;
+const defaultRunName = "frontend-visual-qa-" + new Date().toISOString().replace(/[:.]/g, "-") + "-" + process.pid;
+const outDir = getArg("--out", path.join(os.tmpdir(), defaultRunName));
+const forbidPatterns = getArgs("--forbid");
+const requirePatterns = getArgs("--require");
+const requestedPageType = getArg("--page-type", "generic");
+const pageType = requestedPageType === "auto" ? "generic" : requestedPageType;
+const customViewports = getArgs("--viewport").map(parseViewport);
 const waitUntil = getArg("--wait-until", "domcontentloaded");
+const readySelector = getArg("--ready-selector", "");
 const settleMs = Number.parseInt(getArg("--settle-ms", "750"), 10);
 const expectedWindowWidth = parsePositiveInt(getArg("--expected-window-width", ""));
 const contentSelector = getArg("--content-selector", "");
 const mediaSelector = getArg("--media-selector", "");
-const sectionSelector = getArg("--section-selector", "section,[role='region'],main > div,main > article");
-const maxSectionScreenshots = parsePositiveInt(getArg("--max-section-screenshots", "4"));
+const sectionSelector = getArg(
+  "--section-selector",
+  pageType === "deck"
+    ? ".slide,[data-slide],[role='group'][aria-roledescription='slide'],section"
+    : "section,[role='region'],main > div,main > article",
+);
+const maxSectionScreenshots = parsePositiveInt(
+  getArg("--max-section-screenshots", pageType === "deck" ? "50" : "4"),
+);
 const screenshotSections = process.argv.includes("--screenshot-sections");
 const failOnWarning = process.argv.includes("--fail-on-warning");
 
-if (!target || process.argv.includes("--help")) {
-  console.error("Usage: visual_layout_audit.mjs --url <http://localhost:port/|local.html> [--page-type design-system|live-artifact-design-system|dashboard|app|landing|auto] [--wait-until domcontentloaded|load|networkidle|commit] [--settle-ms 750] [--forbid \"Old Name|Bad Term\"] [--require \"Required Term\"] [--expected-window-width 1920] [--content-selector main] [--media-selector .hero] [--section-selector \"section\"] [--screenshot-sections] [--max-section-screenshots 4] [--out /tmp/dir] [--fail-on-warning]");
-  process.exit(2);
-}
-
 const url = normalizeTarget(target);
-validateForbidPattern(forbidPattern);
-validateForbidPattern(requirePattern);
+for (const pattern of forbidPatterns) validatePattern(pattern, "--forbid");
+for (const pattern of requirePatterns) validatePattern(pattern, "--require");
 validatePageType(pageType);
 validateWaitUntil(waitUntil);
 if (!Number.isFinite(settleMs) || settleMs < 0) {
@@ -90,24 +166,54 @@ if (!Number.isFinite(settleMs) || settleMs < 0) {
 }
 validateSelector(sectionSelector, "--section-selector");
 
-const { chromium } = loadPlaywright();
+let browser;
+let outputPrepared = false;
+try {
+  const { chromium } = loadPlaywright();
 
-fs.mkdirSync(outDir, { recursive: true });
+  if (fs.existsSync(outDir) && fs.readdirSync(outDir).length > 0) {
+    throw new Error("Output directory is not empty: " + outDir + ". Choose a new directory to avoid stale evidence.");
+  }
+  fs.mkdirSync(outDir, { recursive: true });
+  outputPrepared = true;
 
-const viewports = [
+const defaultViewports = [
   { name: "desktop-wide", width: 1700, height: 1000, deviceScaleFactor: 1, isMobile: false, hasTouch: false },
   { name: "desktop", width: 1440, height: 900, deviceScaleFactor: 1, isMobile: false, hasTouch: false },
   { name: "mobile", width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
 ];
+const viewports = customViewports.length ? customViewports : defaultViewports;
 
-const browser = await chromium.launch({
-  executablePath: findChrome(),
-  headless: true,
-});
+  const executablePath = findChrome();
+  browser = await chromium.launch({
+    ...(executablePath ? { executablePath } : {}),
+    headless: true,
+  });
 
 const report = {
   url,
   createdAt: new Date().toISOString(),
+  pageType,
+  requiredPatterns: requirePatterns,
+  forbiddenPatterns: forbidPatterns,
+  checked: [
+    "navigation status and final URL",
+    "effective viewport and meta viewport",
+    "page and section overflow",
+    "rendered text wrapping and clipping candidates",
+    "custom interactive-role focusability candidates",
+    "image load and aspect candidates",
+    "page-type contract heuristics",
+    "viewport and optional section screenshots",
+  ],
+  notChecked: [
+    "real browser chrome and print preview",
+    "downloads, clipboard, popup blocking, and native dialogs",
+    "keyboard journey and focus appearance",
+    "complete WCAG conformance",
+    "GIS interaction behavior",
+    "subjective reference parity",
+  ],
   viewports: [],
   issues: [],
 };
@@ -119,36 +225,93 @@ for (const viewport of viewports) {
     isMobile: viewport.isMobile,
     hasTouch: viewport.hasTouch,
   });
-  await page.goto(url, { waitUntil, timeout: 30_000 });
-  if (settleMs > 0) await page.waitForTimeout(settleMs);
+  try {
+    const response = await page.goto(url, { waitUntil, timeout: 30_000 });
+    const httpStatus = response?.status() ?? null;
+    if (httpStatus !== null && httpStatus >= 400) {
+      throw new Error("Navigation returned HTTP " + httpStatus + " for " + page.url());
+    }
+    await waitForVisualReadiness(page, readySelector, settleMs);
   await page.evaluate(() => window.scrollTo(0, 0));
   const screenshot = `${outDir}/${viewport.name}.png`;
   await page.screenshot({ path: screenshot, fullPage: false });
   const result = await page.evaluate(auditPage, {
     viewportName: viewport.name,
-    forbidPattern,
-    requirePattern,
+    requestedWidth: viewport.width,
+    isMobile: viewport.isMobile,
+    forbidPatterns,
+    requirePatterns,
     pageType,
     expectedWindowWidth,
     contentSelector,
     mediaSelector,
     sectionSelector,
+    screenshotSections,
   });
   const sectionScreenshots = screenshotSections
-    ? await captureSectionScreenshots(page, viewport, outDir, sectionSelector, maxSectionScreenshots)
+    ? await captureSectionScreenshots(
+      page,
+      viewport,
+      outDir,
+      sectionSelector,
+      maxSectionScreenshots,
+      pageType === "deck",
+    )
     : [];
-  report.viewports.push({ ...result.meta, screenshot, sectionScreenshots });
+  if (screenshotSections) {
+    const successfulCaptures = sectionScreenshots.filter((item) => item.screenshot);
+    if (successfulCaptures.length === 0) {
+      result.issues.push({
+        viewport: viewport.name,
+        type: "section-screenshot-coverage-missing",
+        severity: "warning",
+        detail: "--screenshot-sections was requested, but no independently reviewable section screenshot was produced.",
+      });
+    }
+    for (const failedCapture of sectionScreenshots.filter((item) => !item.screenshot)) {
+      result.issues.push({
+        viewport: viewport.name,
+        type: "section-screenshot-capture-failed",
+        severity: "warning",
+        text: failedCapture.label,
+        detail: failedCapture.error || "The selected section could not be captured.",
+      });
+    }
+    const expectedSlides = result.meta.pageType?.slideCount || 0;
+    if (pageType === "deck" && successfulCaptures.length < expectedSlides) {
+      result.issues.push({
+        viewport: viewport.name,
+        type: "deck-slide-evidence-incomplete",
+        severity: "error",
+        detail: `Captured ${successfulCaptures.length}/${expectedSlides} slide section(s). Increase --max-section-screenshots or fix the slide selector before claiming full-deck coverage.`,
+      });
+    }
+  }
+  report.viewports.push({
+    ...result.meta,
+    requestedUrl: url,
+    finalUrl: page.url(),
+    httpStatus,
+    redirected: page.url() !== url,
+    screenshot,
+    sectionScreenshots,
+  });
   report.issues.push(...result.issues);
-  await page.close();
+  } finally {
+    await page.close();
+  }
 }
 
-await browser.close();
-
 const reportPath = `${outDir}/frontend-visual-qa-report.json`;
-fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
-
 const errors = report.issues.filter((issue) => issue.severity === "error");
 const warnings = report.issues.filter((issue) => issue.severity === "warning");
+report.status = errors.length || (failOnWarning && warnings.length)
+  ? "findings"
+  : warnings.length
+    ? "warnings"
+    : "mechanical-pass";
+report.summary = { errors: errors.length, warnings: warnings.length };
+fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 
 for (const viewport of report.viewports) {
   const visual = viewport.visualViewport ? `, visual=${viewport.visualViewport.width}x${viewport.visualViewport.height}@${viewport.visualViewport.scale}` : "";
@@ -159,7 +322,7 @@ for (const viewport of report.viewports) {
     ? `, primaryImage=${viewport.primaryImage.displayedWidth}x${viewport.primaryImage.displayedHeight} ratio=${viewport.primaryImage.displayedRatio}/${viewport.primaryImage.naturalRatio} fit=${viewport.primaryImage.objectFit}`
     : "";
   const typography = viewport.typography
-    ? `, type=${viewport.typography.bodySize}/${viewport.typography.h1Size}, minText=${viewport.typography.smallestImportantTextSize}, minCol=${viewport.typography.narrowestTextColumnWidth}`
+    ? `, type=${viewport.typography.bodySize}/${viewport.typography.h1Size}, weight=${viewport.typography.bodyWeight}/${viewport.typography.h1Weight}, tracking=${viewport.typography.bodyLetterSpacing}/${viewport.typography.h1LetterSpacing}, minText=${viewport.typography.smallestImportantTextSize}, minCol=${viewport.typography.narrowestTextColumnWidth}`
     : "";
   const sections = viewport.sections
     ? `sections=${viewport.sections.count}, worstSectionOverflowX=${viewport.sections.worstOverflowX}`
@@ -167,7 +330,10 @@ for (const viewport of report.viewports) {
   console.log(`${viewport.viewport}: outer=${viewport.outerWidth}x${viewport.outerHeight}, inner=${viewport.width}x${viewport.height}, outerMinusInner=${viewport.outerMinusInner}, client=${viewport.clientWidth}, scroll=${viewport.scrollWidth}, overflowX=${viewport.overflowX}${visual}${content}${primaryImage}${typography}, title="${viewport.title}", h1="${viewport.h1}", screenshot=${viewport.screenshot}`);
   if (sections) console.log(`  sectionAudit: ${sections}`);
   if (viewport.sectionScreenshots?.length) {
-    console.log(`  sectionScreenshots: ${viewport.sectionScreenshots.map((item) => item.screenshot).join(", ")}`);
+    const captured = viewport.sectionScreenshots.map((item) => item.screenshot).filter(Boolean);
+    const failed = viewport.sectionScreenshots.filter((item) => !item.screenshot);
+    if (captured.length) console.log(`  sectionScreenshots: ${captured.join(", ")}`);
+    for (const item of failed) console.log(`  sectionScreenshotFailed: ${item.label}: ${item.error}`);
   }
 }
 
@@ -182,7 +348,25 @@ if (report.issues.length) {
   console.log(`\nNo mechanical layout issues found. Screenshots still require human visual review. Report: ${reportPath}`);
 }
 
-process.exit(errors.length || (failOnWarning && warnings.length) ? 1 : 0);
+process.exitCode = errors.length || (failOnWarning && warnings.length) ? 1 : 0;
+} catch (error) {
+  console.error("Visual audit failed: " + (error?.stack || error?.message || String(error)));
+  if (outputPrepared) {
+    const errorReport = {
+      url,
+      createdAt: new Date().toISOString(),
+      status: "run-error",
+      runErrors: [error?.message || String(error)],
+    };
+    fs.writeFileSync(
+      path.join(outDir, "frontend-visual-qa-report.json"),
+      JSON.stringify(errorReport, null, 2),
+    );
+  }
+  process.exitCode = 2;
+} finally {
+  if (browser) await browser.close().catch(() => {});
+}
 
 function normalizeTarget(value) {
   if (/^(https?:|file:)/i.test(value)) return value;
@@ -191,13 +375,12 @@ function normalizeTarget(value) {
   return value;
 }
 
-function validateForbidPattern(pattern) {
+function validatePattern(pattern, flagName) {
   if (!pattern) return;
   try {
     new RegExp(pattern, "g");
   } catch (error) {
-    console.error(`Invalid --forbid regular expression: ${error.message}`);
-    process.exit(2);
+    failUsage("Invalid " + flagName + " regular expression: " + error.message);
   }
 }
 
@@ -211,8 +394,27 @@ function parsePositiveInt(value) {
   return parsed;
 }
 
+function parseViewport(value, index) {
+  const match = /^(\d+)x(\d+)$/i.exec(value || "");
+  if (!match) failUsage(`Invalid --viewport "${value}". Expected WIDTHxHEIGHT, for example 1920x1080.`);
+  const width = Number.parseInt(match[1], 10);
+  const height = Number.parseInt(match[2], 10);
+  if (width < 240 || height < 240 || width > 10000 || height > 10000) {
+    failUsage(`Invalid --viewport "${value}". Width and height must be between 240 and 10000 CSS pixels.`);
+  }
+  const isMobile = width <= 480;
+  return {
+    name: `custom-${String(index + 1).padStart(2, "0")}-${width}x${height}`,
+    width,
+    height,
+    deviceScaleFactor: isMobile ? 2 : 1,
+    isMobile,
+    hasTouch: isMobile,
+  };
+}
+
 function validatePageType(value) {
-  const allowed = new Set(["auto", "design-system", "live-artifact-design-system", "dashboard", "app", "landing"]);
+  const allowed = new Set(["generic", "design-system", "live-artifact-design-system", "dashboard", "app", "landing", "deck", "tool", "game"]);
   if (!allowed.has(value)) {
     console.error(`Invalid --page-type "${value}". Expected one of: ${[...allowed].join(", ")}`);
     process.exit(2);
@@ -240,31 +442,75 @@ function validateSelector(selector, flagName) {
   }
 }
 
-async function captureSectionScreenshots(page, viewport, outDir, sectionSelector, maxCount) {
+async function waitForVisualReadiness(page, selector, delayMs) {
+  if (selector) {
+    await page.waitForSelector(selector, { state: "visible", timeout: 10_000 });
+  }
+  await page.evaluate(async () => {
+    if (document.fonts?.ready) await document.fonts.ready;
+    const loadedImages = [...document.images].filter((image) => image.complete);
+    await Promise.all(loadedImages.map((image) => image.decode?.().catch(() => {})));
+  });
+  if (delayMs > 0) await page.waitForTimeout(delayMs);
+}
+
+async function captureSectionScreenshots(page, viewport, outDir, sectionSelector, maxCount, includeFirstViewport = false) {
   const sections = await page.evaluate(collectScreenshotSections, {
     sectionSelector,
     maxCount: maxCount || 4,
+    includeFirstViewport,
   });
   const captures = [];
   for (let index = 0; index < sections.length; index += 1) {
     const section = sections[index];
-    const scrolled = await page.evaluate(({ selector, domIndex }) => {
-      const el = document.querySelectorAll(selector)[domIndex];
-      if (!el) return null;
-      el.scrollIntoView({ block: "start", inline: "nearest" });
-      return Math.round(window.scrollY);
-    }, { selector: sectionSelector, domIndex: section.domIndex });
-    if (scrolled === null) continue;
-    await page.waitForTimeout(80);
+    const locator = page.locator(sectionSelector).nth(section.domIndex);
+    if (await locator.count() === 0) continue;
     const file = `${outDir}/${viewport.name}-section-${String(index + 1).padStart(2, "0")}-${section.slug}.png`;
-    await page.screenshot({ path: file, fullPage: false });
-    captures.push({ ...section, scrollY: scrolled, screenshot: file });
+    try {
+      if (section.height > viewport.height * 1.5) {
+        const scrollY = await page.evaluate(({ top, height }) => {
+          const maxScrollY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+          const startsInFirstViewport = top <= window.innerHeight * 0.25;
+          const insideOffset = startsInFirstViewport
+            ? Math.min(window.innerHeight * 0.75, Math.max(0, height - window.innerHeight))
+            : 0;
+          const targetY = Math.max(0, Math.min(maxScrollY, top + insideOffset));
+          window.scrollTo(0, targetY);
+          return Math.round(window.scrollY);
+        }, { top: section.top, height: section.height });
+        await page.waitForTimeout(80);
+        await page.screenshot({ path: file, fullPage: false, animations: "disabled" });
+        captures.push({
+          ...section,
+          viewport: viewport.name,
+          scrollY,
+          captureMode: "viewport-slice",
+          sliceHeight: viewport.height,
+          screenshot: file,
+        });
+      } else {
+        await locator.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(80);
+        const scrollY = await page.evaluate(() => Math.round(window.scrollY));
+        await locator.screenshot({ path: file, animations: "disabled" });
+        captures.push({ ...section, viewport: viewport.name, scrollY, captureMode: "element", screenshot: file });
+      }
+    } catch (error) {
+      captures.push({
+        ...section,
+        viewport: viewport.name,
+        scrollY: Math.round(await page.evaluate(() => window.scrollY)),
+        captureMode: "failed",
+        screenshot: null,
+        error: error?.message || String(error),
+      });
+    }
   }
   await page.evaluate(() => window.scrollTo(0, 0));
   return captures;
 }
 
-function collectScreenshotSections({ sectionSelector, maxCount }) {
+function collectScreenshotSections({ sectionSelector, maxCount, includeFirstViewport }) {
   const preferredPatterns = [
     /component|组件|anatomy|解剖|specimen|样本/i,
     /chart|data.?viz|visuali[sz]ation|图表|可视化/i,
@@ -290,6 +536,7 @@ function collectScreenshotSections({ sectionSelector, maxCount }) {
       return {
         domIndex,
         top: Math.round(rect.top + window.scrollY),
+        bottom: Math.round(rect.bottom + window.scrollY),
         height: Math.round(rect.height),
         width: Math.round(rect.width),
         preferredIndex,
@@ -299,7 +546,7 @@ function collectScreenshotSections({ sectionSelector, maxCount }) {
       };
     })
     .filter((item) => item.visible)
-    .filter((item) => item.top > window.innerHeight * 0.25);
+    .filter((item) => includeFirstViewport || item.top > window.innerHeight * 0.25 || item.bottom > window.innerHeight * 1.1);
 
   const selected = [];
   for (let index = 0; index < preferredPatterns.length && selected.length < maxCount; index += 1) {
@@ -322,12 +569,14 @@ function collectScreenshotSections({ sectionSelector, maxCount }) {
   }
 }
 
-function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expectedWindowWidth, contentSelector, mediaSelector, sectionSelector }) {
+function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, requirePatterns, pageType, expectedWindowWidth, contentSelector, mediaSelector, sectionSelector, screenshotSections }) {
   const issues = [];
-  const forbiddenTerms = forbidPattern ? new RegExp(forbidPattern, "g") : null;
-  const requiredTerms = requirePattern ? new RegExp(requirePattern, "g") : null;
+  const forbiddenTerms = forbidPatterns.map((pattern) => new RegExp(pattern, "g"));
+  const requiredTerms = requirePatterns.map((pattern) => new RegExp(pattern, "g"));
   const textSelector = [
     "h1", "h2", "h3", "h4", "p", "button", "a", "strong", "em", "td", "th",
+    "[role='button']", "[role='tab']", "[role='menuitem']", "[role='switch']",
+    "[role='checkbox']", "[role='radio']", "[role='link']",
     "[class*='tag']", "[class*='badge']", "[class*='pill']", "[class*='nav']",
     "[class*='title']", "[class*='label']", "[class*='note']", "[class*='eyebrow']",
   ].join(",");
@@ -352,6 +601,8 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
 
   const meta = {
     viewport: viewportName,
+    requestedWidth,
+    href: location.href,
     width: window.innerWidth,
     height: window.innerHeight,
     outerWidth: window.outerWidth,
@@ -363,6 +614,8 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
     h1: document.querySelector("h1")?.textContent?.replace(/\s+/g, " ").trim() || null,
     overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     dpr: window.devicePixelRatio,
+    screenWidth: window.screen.width,
+    metaViewport: document.querySelector('meta[name="viewport"]')?.content || null,
     visualViewport: window.visualViewport ? {
       width: Math.round(window.visualViewport.width),
       height: Math.round(window.visualViewport.height),
@@ -381,7 +634,31 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
     issues.push({ viewport: viewportName, type: "page-horizontal-overflow", severity: "error", detail: `Page overflows by ${meta.overflowX}px.` });
   }
 
-  if (/^desktop/.test(viewportName) && Math.abs(meta.outerMinusInner) > 120) {
+  if (isMobile) {
+    const effectiveVisualWidth = meta.visualViewport?.width || meta.width;
+    const widthDelta = Math.abs(meta.width - requestedWidth);
+    const visualWidthDelta = Math.abs(effectiveVisualWidth - requestedWidth);
+    if (!meta.metaViewport) {
+      issues.push({
+        viewport: viewportName,
+        type: "mobile-viewport-meta-missing",
+        severity: "error",
+        detail: "No meta viewport is present. The nominal mobile run may be a scaled desktop layout.",
+      });
+    }
+    if (widthDelta > 24 || visualWidthDelta > 24 || Math.abs((meta.visualViewport?.scale || 1) - 1) > 0.08) {
+      issues.push({
+        viewport: viewportName,
+        type: "mobile-effective-viewport-mismatch",
+        severity: "error",
+        detail: "Requested " + requestedWidth + "px, but innerWidth=" + meta.width
+          + ", visualViewport.width=" + effectiveVisualWidth
+          + ", scale=" + (meta.visualViewport?.scale || 1) + ".",
+      });
+    }
+  }
+
+  if (!isMobile && Math.abs(meta.outerMinusInner) > 120) {
     issues.push({
       viewport: viewportName,
       type: "viewport-emulation-mismatch",
@@ -390,7 +667,7 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
     });
   }
 
-  if (/^desktop/.test(viewportName) && expectedWindowWidth && Math.abs(expectedWindowWidth - meta.width) > 120) {
+  if (!isMobile && expectedWindowWidth && Math.abs(expectedWindowWidth - meta.width) > 120) {
     issues.push({
       viewport: viewportName,
       type: "expected-window-viewport-mismatch",
@@ -399,7 +676,7 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
     });
   }
 
-  if (/^desktop/.test(viewportName) && meta.firstViewportContent) {
+  if (!isMobile && meta.firstViewportContent) {
     const blankDelta = meta.firstViewportContent.rightBlank - meta.firstViewportContent.leftBlank;
     if (blankDelta > Math.max(160, meta.width * 0.12)) {
       issues.push({
@@ -419,52 +696,82 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
     }
   }
 
-  if (forbiddenTerms) {
-    const badMatches = [...(document.body.innerText || "").matchAll(forbiddenTerms)].map((match) => match[0]);
-    for (const term of [...new Set(badMatches)]) {
+  const bodyText = visibleRenderedText(document.body);
+  for (const forbidden of forbiddenTerms) {
+    const matches = [...bodyText.matchAll(forbidden)].map((match) => match[0]);
+    for (const term of [...new Set(matches)]) {
       issues.push({ viewport: viewportName, type: "forbidden-rendered-term", severity: "error", text: term, detail: "A project-specific forbidden term appears in rendered UI." });
     }
   }
 
-  if (requiredTerms && !(document.body.innerText || "").match(requiredTerms)) {
-    issues.push({ viewport: viewportName, type: "required-rendered-term-missing", severity: "error", detail: `No rendered text matches required pattern: ${requiredTerms.source}` });
+  for (const required of requiredTerms) {
+    if (bodyText.match(required)) continue;
+    issues.push({
+      viewport: viewportName,
+      type: "required-rendered-term-missing",
+      severity: "error",
+      detail: "No rendered text matches required pattern: " + required.source,
+    });
   }
 
-  issues.push(...auditPageType({ viewportName, pageType }));
+  const pageTypeAudit = auditPageType({ viewportName, pageType, screenshotSections });
+  meta.pageType = pageTypeAudit.meta;
+  issues.push(...pageTypeAudit.issues);
   issues.push(...auditCardSideRails({ viewportName }));
 
-  for (const el of [...document.querySelectorAll("[role='button']")].filter(isVisible)) {
-    if (el.getAttribute("aria-hidden") === "true") continue; // decorative by declaration — screen readers skip it
-    if (el.hasAttribute("tabindex") || el.tagName === "BUTTON" || el.tagName === "A") continue;
+  const interactiveRoleSelector = [
+    "[role='button']", "[role='tab']", "[role='menuitem']", "[role='switch']",
+    "[role='checkbox']", "[role='radio']", "[role='link']",
+  ].join(",");
+  for (const el of [...document.querySelectorAll(interactiveRoleSelector)].filter(isVisible)) {
     const selector = describe(el);
     if (isRedundantStepperAffordance(el)) {
-      // A number-stepper up/down affordance whose sibling input carries the keyboard contract.
-      // Warn (don't error): the affordance is mouse-only by design, but the input is operable
-      // via ArrowUp/ArrowDown, so WCAG 2.1.1 is met. Erroring here is a false positive that
-      // fires on every antd/MUI/Chakra number input.
       issues.push({
         viewport: viewportName,
         selector,
         type: "non-focusable-stepper-affordance",
         severity: "warning",
         text: clean(el.textContent || "").slice(0, 120),
-        detail: "role=button number-stepper affordance next to a keyboard-operable input (role=spinbutton / input[type=number]). Not tab-focusable, but the sibling input handles ArrowUp/ArrowDown, so WCAG 2.1.1 is satisfied. Common in antd/MUI/Chakra. Confirm the input actually steps with arrow keys before dismissing; only add tabindex if it does NOT.",
+        detail: "Mouse-only stepper affordance has an adjacent number/spinbutton input. Confirm the input performs the same action with ArrowUp/ArrowDown; this warning is not a WCAG verdict.",
       });
       continue;
     }
+    if (el.getAttribute("aria-hidden") === "true") {
+      issues.push({
+        viewport: viewportName,
+        selector,
+        type: "aria-hidden-interactive-control",
+        severity: "error",
+        text: clean(el.textContent || "").slice(0, 120),
+        detail: "A visible interactive-role element is hidden from the accessibility tree.",
+      });
+      continue;
+    }
+    if (el.matches(":disabled") || el.getAttribute("aria-disabled") === "true") continue;
+    const explicitTabIndex = el.getAttribute("tabindex");
+    const parsedTabIndex = explicitTabIndex === null
+      ? null
+      : Number.parseInt(explicitTabIndex, 10);
+    const hasExplicitNonnegativeTabIndex = Number.isInteger(parsedTabIndex) && parsedTabIndex >= 0;
+    const explicitlyRemovedFromTabOrder = Number.isInteger(parsedTabIndex) && parsedTabIndex < 0;
+    const isNativeControl = /^(BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(el.tagName)
+      && !el.disabled;
+    const isLinkedAnchor = /^(A|AREA)$/.test(el.tagName) && Boolean(el.getAttribute("href"));
+    if (hasExplicitNonnegativeTabIndex) continue;
+    if (!explicitlyRemovedFromTabOrder && (isNativeControl || isLinkedAnchor)) continue;
     issues.push({
       viewport: viewportName,
       selector,
       type: "non-focusable-custom-button",
       severity: "error",
       text: clean(el.textContent || "").slice(0, 120),
-      detail: "Element uses role=button but is not naturally focusable and has no tabindex. It will not behave like a production-ready component.",
+      detail: "Interactive-role element is not in sequential focus order. Use a native control/link or an explicit nonnegative tabindex when appropriate.",
     });
   }
 
   for (const el of [...document.querySelectorAll(textSelector)].filter(isVisible)) {
     const text = clean(el.textContent || "");
-    if (!text || text.length < 2 || text.length > 180) continue;
+    if (!text || text.length < 2) continue;
     const selector = describe(el);
     const style = getComputedStyle(el);
     const overflowX = el.scrollWidth - el.clientWidth;
@@ -473,10 +780,20 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
     if (overflowX > 2 && style.overflowX !== "visible") {
       issues.push({ viewport: viewportName, selector, type: "element-horizontal-overflow", severity: "error", text, detail: `Element overflows by ${Math.round(overflowX)}px.` });
     }
-    if (overflowY > 2 && style.overflowY !== "visible" && style.maxHeight !== "none") {
-      issues.push({ viewport: viewportName, selector, type: "text-clipped", severity: "error", text, detail: `Element is clipped by ${Math.round(overflowY)}px.` });
+    if (overflowY > 2 && ["hidden", "clip"].includes(style.overflowY)) {
+      const intentionallyTruncated = (style.webkitLineClamp && style.webkitLineClamp !== "none")
+        || style.textOverflow === "ellipsis";
+      issues.push({
+        viewport: viewportName,
+        selector,
+        type: intentionallyTruncated ? "text-truncated" : "text-clipped",
+        severity: intentionallyTruncated ? "warning" : "error",
+        text,
+        detail: "Element content exceeds its visible height by " + Math.round(overflowY) + "px.",
+      });
     }
 
+    if (text.length > 180) continue;
     const lines = renderedLines(el);
     if (lines.length < 2) continue;
     const lastLine = lines.at(-1);
@@ -565,10 +882,104 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
     return value.replace(/\s+/g, " ").trim();
   }
 
+  function visibleRenderedText(root) {
+    const parts = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      const parent = node.parentElement;
+      if (parent && !/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(parent.tagName) && isVisible(parent)) {
+        const visibleText = clean(visibleTextFromNode(node));
+        if (visibleText) parts.push(visibleText);
+      }
+      node = walker.nextNode();
+    }
+    return parts.join(" ");
+  }
+
+  function visibleTextFromNode(node) {
+    const rawText = node.nodeValue || "";
+    if (!rawText) return "";
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const rects = [...range.getClientRects()]
+      .filter((rect) => rect.width > 0 && rect.height > 0);
+    if (!rects.length) {
+      range.detach?.();
+      return "";
+    }
+
+    const clips = collectNonScrollableAncestorClips(node.parentElement);
+    if (!clips.length) {
+      range.detach?.();
+      return rawText;
+    }
+
+    let visibleText = "";
+    for (let index = 0; index < rawText.length; index += 1) {
+      const character = rawText[index];
+      if (/\s/.test(character)) {
+        visibleText += " ";
+        continue;
+      }
+      range.setStart(node, index);
+      range.setEnd(node, index + 1);
+      const characterVisible = [...range.getClientRects()]
+        .filter((rect) => rect.width > 0 && rect.height > 0)
+        .some((rect) => rectSurvivesClips(rect, clips));
+      visibleText += characterVisible ? character : " ";
+    }
+    range.detach?.();
+    return visibleText;
+  }
+
+  function collectNonScrollableAncestorClips(startElement) {
+    const clips = [];
+    let ancestor = startElement;
+    while (ancestor) {
+      const style = getComputedStyle(ancestor);
+      const clipsX = ["hidden", "clip"].includes(style.overflowX);
+      const clipsY = ["hidden", "clip"].includes(style.overflowY);
+      if (clipsX || clipsY) {
+        clips.push({ rect: ancestor.getBoundingClientRect(), clipsX, clipsY });
+      }
+      ancestor = ancestor.parentElement;
+    }
+    return clips;
+  }
+
+  function rectSurvivesClips(sourceRect, clips) {
+    let visibleRect = {
+      left: sourceRect.left,
+      right: sourceRect.right,
+      top: sourceRect.top,
+      bottom: sourceRect.bottom,
+    };
+    for (const clip of clips) {
+      if (clip.clipsX) {
+        visibleRect.left = Math.max(visibleRect.left, clip.rect.left);
+        visibleRect.right = Math.min(visibleRect.right, clip.rect.right);
+      }
+      if (clip.clipsY) {
+        visibleRect.top = Math.max(visibleRect.top, clip.rect.top);
+        visibleRect.bottom = Math.min(visibleRect.bottom, clip.rect.bottom);
+      }
+      if (visibleRect.right <= visibleRect.left || visibleRect.bottom <= visibleRect.top) return false;
+    }
+    return true;
+  }
+
   function isVisible(el) {
     const rect = el.getBoundingClientRect();
     const style = getComputedStyle(el);
-    return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+    const geometryVisible = rect.width > 0 && rect.height > 0;
+    if (!geometryVisible) return false;
+    if (typeof el.checkVisibility === "function") {
+      return el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+    }
+    return style.display !== "none"
+      && style.visibility !== "hidden"
+      && Number.parseFloat(style.opacity || "1") > 0;
   }
 
   function isRedundantStepperAffordance(el) {
@@ -711,15 +1122,16 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
         viewport: viewportName,
         selector: describe(el),
         type: "card-side-rail-ai-slop",
-        severity: "error",
+        severity: "warning",
         text: clean(el.textContent || "").slice(0, 160),
-        detail: "Large rounded/card-like container uses a colored left border or left inset shadow as a visual accent. Use top rules, internal state capsules, table row state, or semantic layout instead.",
+        detail: "Large card-like container uses a colored left border or inset shadow. Treat this as a design-system/taste candidate, not a deterministic layout failure.",
       }));
   }
 
   function isAllowedSideRailElement(el) {
     const className = typeof el.className === "string" ? el.className : "";
     const semantic = semanticParts(el).join(" ");
+    if (["alert", "status"].includes(el.getAttribute("role"))) return true;
     if (/(tag|badge|pill|qbadge|tier|dot|icon|thumb|avatar|logo|motif|symbol|checkbox|radio|switch|field|input|label|selection|option|row|cell|rail)/i.test(`${className} ${semantic}`)) {
       return true;
     }
@@ -921,9 +1333,29 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
     return {
       bodyFont: bodyStyle.fontFamily,
       bodySize: bodyStyle.fontSize,
+      bodyWeight: bodyStyle.fontWeight,
       bodyLineHeight: bodyStyle.lineHeight,
+      bodyLetterSpacing: bodyStyle.letterSpacing,
+      h1Font: h1Style?.fontFamily || null,
       h1Size: h1Style?.fontSize || null,
+      h1Weight: h1Style?.fontWeight || null,
       h1LineHeight: h1Style?.lineHeight || null,
+      h1LetterSpacing: h1Style?.letterSpacing || null,
+      keyHeadings: [...document.querySelectorAll("h1,h2,h3")]
+        .filter(isVisible)
+        .slice(0, 12)
+        .map((heading) => {
+          const style = getComputedStyle(heading);
+          return {
+            tag: heading.tagName.toLowerCase(),
+            text: clean(heading.textContent || "").slice(0, 120),
+            fontFamily: style.fontFamily,
+            fontSize: style.fontSize,
+            fontWeight: style.fontWeight,
+            lineHeight: style.lineHeight,
+            letterSpacing: style.letterSpacing,
+          };
+        }),
       smallestImportantTextSize,
       narrowestTextColumnWidth: narrowTextColumns[0] || null,
     };
@@ -1057,15 +1489,19 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
   }
 
   function describe(el) {
-    if (el.id) return `${el.tagName.toLowerCase()}#${el.id}`;
+    const tag = el.tagName.toLowerCase();
+    if (el.id) return tag + "#" + CSS.escape(el.id);
+    const testId = el.getAttribute("data-testid");
+    if (testId) return tag + "[data-testid=\"" + CSS.escape(testId) + "\"]";
     const className = typeof el.className === "string"
-      ? el.className.split(/\s+/).filter(Boolean).slice(0, 2).join(".")
+      ? el.className.split(/\s+/).filter(Boolean).slice(0, 2).map((name) => CSS.escape(name)).join(".")
       : "";
-    return `${el.tagName.toLowerCase()}${className ? `.${className}` : ""}`;
+    return tag + (className ? "." + className : "");
   }
 
-  function auditPageType({ viewportName, pageType }) {
+  function auditPageType({ viewportName, pageType, screenshotSections }) {
     const found = [];
+    const pageTypeMeta = { kind: pageType };
     const isDesignSystemLike = pageType === "design-system" || pageType === "live-artifact-design-system";
     const isLiveArtifactDesignSystem = pageType === "live-artifact-design-system";
     const bodyText = clean(document.body.innerText || "");
@@ -1078,6 +1514,88 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
         const className = typeof el.className === "string" ? el.className : "";
         return /\b(card|panel|tile|module|widget)\b/i.test(className) || /(^|[-_])(card|panel|tile|module|widget)([-_]|$)/i.test(className);
       });
+
+    const visibleInteractive = [...document.querySelectorAll(
+      "a[href],button,input,select,textarea,[role='button'],[role='tab'],[tabindex]:not([tabindex='-1'])",
+    )].filter(isVisible);
+    const taskSurfaces = [...document.querySelectorAll(
+      "table,form,canvas,svg,[role='grid'],[role='treegrid'],[class*='chart'],[class*='timeline'],[class*='queue'],[class*='map']",
+    )].filter(isVisible);
+
+    if (pageType === "landing") {
+      const firstViewportText = visibleTextInViewport(0, window.innerHeight);
+      const hasHeading = [...document.querySelectorAll("h1")].some(isVisible);
+      const hasPrimaryAction = visibleInteractive.some((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.top < window.innerHeight && clean(element.textContent || "").length > 0;
+      });
+      pageTypeMeta.firstViewportHasHeading = hasHeading;
+      pageTypeMeta.firstViewportHasPrimaryAction = hasPrimaryAction;
+      if (!hasHeading || !hasPrimaryAction || !firstViewportText) {
+        found.push({
+          viewport: viewportName,
+          type: "landing-first-viewport-contract-thin",
+          severity: "warning",
+          detail: `Landing first viewport: heading=${hasHeading}, primaryAction=${hasPrimaryAction}. Inspect whether identity, value, and the main action are legible before decorative depth.`,
+        });
+      }
+    }
+
+    if (pageType === "dashboard" && taskSurfaces.length === 0) {
+      found.push({
+        viewport: viewportName,
+        type: "dashboard-task-surface-missing",
+        severity: "warning",
+        detail: "No visible table, form, chart, grid, timeline, queue, or map-like task surface was found. Confirm this is an operational dashboard rather than explanatory card copy.",
+      });
+    }
+
+    if (["app", "tool", "game"].includes(pageType) && visibleInteractive.length === 0) {
+      found.push({
+        viewport: viewportName,
+        type: `${pageType}-primary-interaction-missing`,
+        severity: "warning",
+        detail: `No visible interactive control was found for the ${pageType} profile. Confirm the primary work/play path exists and can recover from failure.`,
+      });
+    }
+
+    if (pageType === "deck") {
+      const slides = [...document.querySelectorAll(
+        ".slide,[data-slide],[role='group'][aria-roledescription='slide'],section",
+      )].filter(isVisible);
+      pageTypeMeta.slideCount = slides.length;
+      pageTypeMeta.slideGeometry = slides.slice(0, 100).map((slide, index) => {
+        const rect = slide.getBoundingClientRect();
+        return { index: index + 1, width: Math.round(rect.width), height: Math.round(rect.height) };
+      });
+      if (slides.length === 0) {
+        found.push({
+          viewport: viewportName,
+          type: "deck-slide-structure-missing",
+          severity: "error",
+          detail: "No .slide, [data-slide], ARIA slide, or section element was found for the deck profile.",
+        });
+      }
+      const geometryMismatch = pageTypeMeta.slideGeometry.filter(
+        (slide) => Math.abs(slide.width - window.innerWidth) > 4 || Math.abs(slide.height - window.innerHeight) > 4,
+      );
+      if (geometryMismatch.length) {
+        found.push({
+          viewport: viewportName,
+          type: "deck-slide-canvas-mismatch",
+          severity: "warning",
+          detail: `${geometryMismatch.length}/${slides.length} slide(s) do not match the ${window.innerWidth}x${window.innerHeight} audit canvas.`,
+        });
+      }
+      if (!screenshotSections) {
+        found.push({
+          viewport: viewportName,
+          type: "deck-slide-evidence-not-requested",
+          severity: "warning",
+          detail: "Use --screenshot-sections so every slide can be opened and inspected before claiming full-deck coverage.",
+        });
+      }
+    }
 
     if (isDesignSystemLike) {
       const designSignals = [
@@ -1164,7 +1682,9 @@ function auditPage({ viewportName, forbidPattern, requirePattern, pageType, expe
       });
     }
 
-    return found;
+    pageTypeMeta.visibleInteractiveCount = visibleInteractive.length;
+    pageTypeMeta.taskSurfaceCount = taskSurfaces.length;
+    return { issues: found, meta: pageTypeMeta };
   }
 
   function visibleTextInViewport(top, bottom) {
