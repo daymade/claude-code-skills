@@ -223,12 +223,27 @@ def _user_data_dir(cmd):
 
 
 def _is_automation(cmd):
+    """Is this Chrome process a harness's, rather than the user's?
+
+    Two signals, and the order matters:
+
+    1. Flags no human passes to their daily browser (--enable-automation, a debugging
+       port, headless). Unambiguous, so they're matched against the whole line.
+    2. Path markers — but ONLY against the extracted profile path.
+
+    Matching the markers against the whole command line looks more robust and is
+    strictly worse: a perfectly normal browser carrying --disk-cache-dir=~/.cache/…
+    or --crash-dumps-dir=/tmp/… gets branded an automation instance. That flips the
+    AppleScript routing decision exactly as wrongly as missing a real harness does,
+    just in the other direction — and it slanders the user's actual browser while
+    doing it. Look at the profile path, which is the only place the marker means
+    anything.
+    """
     low = cmd.lower()
     if any(f in low for f in AUTOMATION_FLAGS):
         return True
-    # Fall back to path markers, matched against the WHOLE command line so a space in
-    # the profile path can't hide them.
-    return any(m in low for m in AUTOMATION_MARKERS)
+    path = _user_data_dir(cmd).lower()
+    return bool(path) and any(m in path for m in AUTOMATION_MARKERS)
 
 
 def chrome_instances():

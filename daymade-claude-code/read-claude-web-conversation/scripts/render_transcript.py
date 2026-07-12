@@ -377,23 +377,51 @@ def fidelity_report(conv):
         if top:
             account(f'msg[{i}].text', 'text', '', len(top), top if top in msg_md else '')
 
-    known_uuids = {mm.get('uuid') for mm in all_msgs}
-    root_parent = msgs[0].get('parent_message_uuid') if msgs else None
+    # Truncation detection. Two shapes, both invisible to a per-block audit (the
+    # blocks in question are never iterated at all), and both of which must be told
+    # apart from the abandoned edit/regeneration branches that any edited conversation
+    # is full of.
+    #
+    #   ORPHANS — messages whose ancestry never reaches the active path. A regenerated
+    #   answer is emphatically NOT one: it hangs off a message that IS on the path,
+    #   which is exactly what makes it a branch rather than debris. Following the
+    #   ancestry is what separates them; counting unwalked messages cannot.
+    #
+    #   LEAF WITH CHILDREN — the payload declares the thread ends at a message that
+    #   demonstrably has messages after it, so the walk stopped short of the real end.
+    #
+    # Getting this wrong in the safe-looking direction is not safe. An earlier attempt
+    # keyed on "the first walked message's parent is absent from the payload" — which
+    # is true of EVERY conversation, since a thread's first message points at something
+    # predating it — and so rejected every conversation the user had ever edited. A
+    # detector that fires on healthy input is worse than no detector at all: people
+    # learn to reach for --allow-lossy, and then it guards nothing.
+    by_id_all = {mm.get('uuid'): mm for mm in all_msgs}
+    path_ids = {mm.get('uuid') for mm in msgs}
+    orphans = []
+    for mm in all_msgs:
+        if mm.get('uuid') in path_ids:
+            continue
+        mid, seen = mm.get('parent_message_uuid'), set()
+        while mid and mid in by_id_all and mid not in seen:
+            if mid in path_ids:
+                break                              # hangs off the path => a branch
+            seen.add(mid)
+            mid = by_id_all[mid].get('parent_message_uuid')
+        else:
+            orphans.append(mm.get('uuid'))         # ancestry never touched the path
+    leaf = conv.get('current_leaf_message_uuid')
+    leaf_has_children = bool(leaf) and any(
+        mm.get('parent_message_uuid') == leaf for mm in all_msgs)
     unwalked = len(all_msgs) - len(msgs)
-    # A dangling root parent is NORMAL on its own: the first message of any thread
-    # points at a parent that predates the payload (and a share snapshot omits the
-    # field entirely, so the walk falls back to array order and reaches everything).
-    # It is only evidence of a truncated payload when messages were ALSO left
-    # unreached — that combination means the walk stopped early and those blocks were
-    # never iterated, which is invisible to a per-block audit. Requiring both is what
-    # keeps this from failing every healthy export.
-    broken = unwalked > 0 and bool(root_parent) and root_parent not in known_uuids
     return {
         'snapshot': snapshot,
         'messages_total': len(all_msgs),
         'messages_walked': len(msgs),
         'messages_unwalked': unwalked,
-        'broken_chain': broken,
+        'orphaned_messages': orphans,
+        'leaf_has_children': leaf_has_children,
+        'truncated': bool(orphans) or leaf_has_children,
         'carried_chars': carried,
         'rendered_chars': rendered,
         # Zero carried is 0%, NOT 100%. An empty payload is the limit case of the
@@ -571,11 +599,18 @@ def main(argv=None):
         elif report['carried_chars'] == 0:
             fatal.append('payload carries no readable content at all — almost certainly '
                          'an empty or failed fetch')
-        if report['broken_chain']:
+        if report['leaf_has_children']:
             fatal.append(
-                f"the message chain is broken: the walk begins at a message whose parent is "
-                f"absent from the payload, so {report['messages_unwalked']} of "
-                f"{report['messages_total']} messages were never even reached")
+                "truncated payload: the declared leaf message has children, so the walk "
+                "stopped short of where the conversation actually ends. Re-fetch — this is "
+                "not a rendering problem.")
+        if report['orphaned_messages']:
+            n = len(report['orphaned_messages'])
+            fatal.append(
+                f"truncated payload: {n} message(s) are orphaned — their ancestry never "
+                f"reaches the active path, so they were neither rendered nor audited. These "
+                f"are NOT abandoned edit branches (those hang off the path); the payload is "
+                f"missing the messages that would connect them. Re-fetch.")
 
         for d in report['dropped_blocks'][:10]:
             fatal.append(f"{d['unit']} ({d['type']}/{d['name'] or '-'}): {d['chars']:,} chars "
@@ -607,7 +642,7 @@ def main(argv=None):
         print(f"fidelity: {report['rendered_chars']:,}/{report['carried_chars']:,} chars rendered "
               f"({report['retention']:.1%}) across {report['messages_walked']} message(s)",
               file=sys.stderr)
-        if report['messages_unwalked'] and not report['broken_chain']:
+        if report['messages_unwalked'] and not report['truncated']:
             print(f"note: {report['messages_unwalked']} message(s) are off the active path "
                   f"(abandoned edit/regeneration branches) — expected, not loss", file=sys.stderr)
         if report['stripped_blocks']:

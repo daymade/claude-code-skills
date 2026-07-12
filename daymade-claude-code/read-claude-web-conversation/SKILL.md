@@ -81,9 +81,14 @@ rather than assume.
 (April 2025) the debugging port is *ignored on the default user-data-dir* — a
 deliberate hardening against malware that used CDP to steal cookies. You may still
 find a listening socket and a stale `DevToolsActivePort` on disk while the
-WebSocket handshake is never answered and `/json/*` returns 404. Verified on Chrome
-150: an endpoint that worked earlier in the same browser session later stopped
-answering, with no way to get a fresh browser id.
+WebSocket handshake is never answered and `/json/*` returns 404.
+
+**And its availability flaps.** Verified on Chrome 150, one machine, one browser
+session: the endpoint worked, then stopped answering entirely, then answered again
+— with no restart in between. So **probe every time and never cache the verdict**.
+"CDP worked five minutes ago" is not evidence that it works now, and "CDP failed
+once" is not evidence that this machine can't use it. The probe is cheap precisely
+so you can afford to re-ask.
 
 The trap is what you'll be tempted to do next. Every fix on the web says "relaunch
 Chrome with `--user-data-dir=/tmp/whatever`". **For this skill that is worse than
