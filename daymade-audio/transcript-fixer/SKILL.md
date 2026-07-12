@@ -25,8 +25,15 @@ uv run scripts/fix_transcription.py --init
 # *_needs_review.md for you / the AI pass to judge, not applied silently.
 uv run scripts/fix_transcription.py --input meeting.md --stage 1
 
-# Apply EVERY risk level (the pre-safe-mode behavior). Higher false-positive
-# risk — only when the dictionary's domain matches this transcript.
+# Trust ONE project domain's rules (recommended for batches): rules of the
+# domain you explicitly pass via --domain apply at every risk level — they were
+# hand-confirmed for this project's vocabulary, so domain match = trust. The
+# roster and everything else keep safe-mode deferral. One pass instead of three
+# (safe run -> review sidecar -> --apply-all rerun).
+uv run scripts/fix_transcription.py --input meeting.md --stage 1 --domain myproject --apply-domain
+
+# Apply EVERY risk level regardless of origin (the pre-safe-mode behavior).
+# Higher false-positive risk — only when you've reviewed ALL loaded rules.
 uv run scripts/fix_transcription.py --input meeting.md --stage 1 --apply-all
 
 # Dry run: preview all Stage 1 changes (with risk levels) without writing *_stage1.md
