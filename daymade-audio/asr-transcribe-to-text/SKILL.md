@@ -1,7 +1,7 @@
 ---
 name: asr-transcribe-to-text
 description: >-
-  Transcribes audio and video to text using Qwen3-ASR, with input handling for local files, direct media URLs, and podcast/web pages. Supports local MLX inference on macOS Apple Silicon and remote OpenAI-compatible ASR endpoints. Use when the user wants to transcribe recordings, podcasts, lectures, interviews, meetings, screen recordings, or any audio/video file; also use for ASR, Qwen ASR, speech-to-text, 转录, 语音转文字, and 录音转文字 requests. Also covers word-level timestamps via mlx-whisper for subtitles and audio-visual alignment (字幕, 时间戳, 音画对齐).
+  Transcribes audio and video to text using Qwen3-ASR, with input handling for local files, direct media URLs, and podcast/web pages. Supports local MLX inference on macOS Apple Silicon and remote OpenAI-compatible ASR endpoints. Use when the user wants to transcribe recordings, podcasts, lectures, interviews, meetings, screen recordings, or any audio/video file; also use for ASR, Qwen ASR, speech-to-text, 转录, 语音转文字, and 录音转文字 requests. Also covers word-level timestamps via mlx-whisper for subtitles and audio-visual alignment (字幕, 时间戳, 音画对齐). For multi-speaker recordings (meetings, interviews, panels, group discussions) it also does speaker diarization (who-said-what) and CAM++ voiceprint speaker identification — use it whenever the user needs speaker labels, a diarized transcript, to know who said what, 说话人分离, 说话人识别, or 谁在说话.
 argument-hint: "[audio-or-video-file-path-or-url ...]"
 ---
 
@@ -17,6 +17,8 @@ Transcribe audio/video to text using Qwen3-ASR. Two inference paths:
 Configuration persists in `${CLAUDE_PLUGIN_DATA}/config.json`.
 
 > **Need timestamps, not just text?** Qwen3-ASR outputs plain text only. For word-level timestamps (subtitles, aligning voiceover to video shots) use the mlx-whisper path instead — see `## Word-Level Timestamps` below.
+>
+> **Multiple speakers — need who-said-what?** Qwen3-ASR gives one flat block with no speaker labels. For meetings / interviews / podcasts, use the diarization + voiceprint path — see `## Speaker Diarization & Identification` below.
 
 ## Step 0: Detect Platform and Load Config
 
@@ -313,6 +315,25 @@ Key facts (full recipe in `references/whisper_word_timestamps.md`):
 - **Segment granularity trap**: on short videos (15–40s) whisper often returns the whole clip as one segment — always work from the word list and assign words to time windows by midpoint.
 - Pairs with ffmpeg scene detection (`select='gt(scene,0.3)'`) for the visual side; avoid PySceneDetect on non-ASCII paths.
 
+## Speaker Diarization & Identification (who said what)
+
+Qwen3-ASR returns one flat block of text with no speaker labels — useless for a
+meeting / interview / podcast / any multi-person recording where you need **who said
+what**. Two bundled paths, both GPU (pyannote @ MPS + CAM++), both needing a
+HuggingFace token for pyannote:
+
+- **Diarization + per-speaker transcription** — `scripts/speaker_transcribe.py`
+  runs pyannote (who spoke when) + Qwen3-ASR (what was said) in one command and
+  writes a speaker-labeled transcript + CSV. Full recipe, the merge-turns step, and
+  production pitfalls: `references/speaker_diarization.md`. (Need just the segments?
+  `scripts/diarize_speakers.py` does diarization alone.)
+- **Voiceprint identification** — diarization labels are anonymous (`SPEAKER_00`…)
+  and per-file. To map them to real names, unify a speaker across files, or collapse
+  diarization's over-segmentation, use CAM++ voiceprints via `scripts/voiceprint_id.py`.
+  Recipe **and the critical acoustic-domain caveat** — a voiceprint built from one
+  mic type matches the same person on a different mic far less well:
+  `references/voiceprint_speaker_id.md`.
+
 ## Troubleshooting
 
 ### Local MLX fails while loading the model
@@ -343,8 +364,13 @@ Some runtimes do not set skill environment variables. Use the absolute path to t
 - `resolve_media_input.py` — Resolve local paths, direct media URLs, and podcast/web pages into validated local media files
 - `transcribe_local_mlx.py` — Local MLX transcription (macOS ARM64, PEP 723 deps)
 - `overlap_merge_transcribe.py` — Chunked transcription with overlap merge (remote API fallback)
+- `diarize_speakers.py` — Speaker diarization (pyannote 3.1 @ MPS) → per-segment JSON
+- `speaker_transcribe.py` — Multi-speaker pipeline: diarize → merge turns → per-turn Qwen3-ASR → speaker-labeled transcript + CSV
+- `voiceprint_id.py` — CAM++ voiceprint enroll/match: map anonymous SPEAKER_xx to real names
 
 **References:**
 - `local_mlx_guide.md` — Performance benchmarks, max_tokens truncation, model compatibility
 - `overlap_merge_strategy.md` — Why naive chunking fails, fuzzy merge algorithm
 - `whisper_word_timestamps.md` — Word-level timestamps via mlx-whisper: alignment recipe, segment-granularity trap, scene-detection pairing
+- `speaker_diarization.md` — Multi-speaker transcription: pyannote + per-turn Qwen3, merge-turns step, production pitfalls
+- `voiceprint_speaker_id.md` — CAM++ speaker ID: enroll/match, threshold+margin gates, the acoustic-domain caveat, bootstrap
