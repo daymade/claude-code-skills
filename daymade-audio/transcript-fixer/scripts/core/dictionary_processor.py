@@ -357,6 +357,12 @@ class DictionaryProcessor:
         meta = self.correction_meta.get(wrong, {})
         confidence = meta.get("confidence", 1.0)
 
+        # --apply-domain marked this rule as belonging to the domain the user
+        # explicitly asserted for this transcript; domain match = trust, so it
+        # auto-applies even in safe mode (see cmd Stage 1 setup).
+        if meta.get("trusted_domain"):
+            return "low"
+
         if wrong in ALL_COMMON_WORDS:
             return "high"
 
