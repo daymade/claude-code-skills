@@ -14,6 +14,7 @@ does not.
 
 - [Endpoints](#endpoints)
 - [Response schema](#response-schema)
+- [Shared-link snapshots](#shared-link-snapshots)
 - [Tool-call blocks: `render_all_tools=true`](#tool-call-blocks-render_all_toolstrue)
 - [Full export script](#full-export-script)
 - [Paging long conversations](#paging-long-conversations)
@@ -33,6 +34,7 @@ conversation and copy the current request.
 | List the organizations the logged-in user belongs to | `GET /api/organizations` |
 | Fetch one full conversation (all messages) | `GET /api/organizations/{orgUuid}/chat_conversations/{convId}?tree=True&rendering_mode=raw` |
 | Fetch conversation **including full tool calls** (agent conversations) | `GET /api/organizations/{orgUuid}/chat_conversations/{convId}?tree=True&rendering_mode=messages&render_all_tools=true` |
+| Fetch a **shared-link snapshot** (`/share/{snapshotId}`) | `GET /api/chat_snapshots/{snapshotId}?rendering_mode=messages&render_all_tools=true` |
 | Download an assistant-produced **image** (original bytes) | `GET /api/organizations/{orgUuid}/files/{fileUuid}/contents` |
 | Image preview (webp-transcoded, smaller) | `GET /api/{orgUuid}/files/{fileUuid}/preview` |
 | Download **user-uploaded files & sandbox outputs** (by sandbox path, NOT uuid) | `GET /api/organizations/{orgUuid}/conversations/{convId}/wiggle/download-file?path=<urlencoded-sandbox-path>` |
@@ -79,6 +81,66 @@ Only the fields this skill relies on are listed; the payload contains more.
 | `content` | Block array. Each block has a `type`: `text`, `thinking`, `tool_use` (carries `name` + `input`), or `tool_result` (carries `content`). Empty/`null` under `rendering_mode=raw` for tool-using turns — see the next section |
 | `files` | Files attached to this message. Human messages: uploads (`file_kind: "blob"`, with `path` like `/mnt/user-data/uploads/<name>` and `size_bytes`). Assistant messages: produced images (`file_kind: "image"`, with `preview_url`/`thumbnail_url`). `size_bytes` is your download-integrity check |
 | `attachments` | Legacy attachment array (older conversations); check both when hunting for files |
+
+## Shared-link snapshots
+
+A `claude.ai/share/{snapshotId}` link is **not** a conversation — it is a frozen
+snapshot with its own id, its own endpoint, and a payload that differs from
+`/chat/` in three ways that each cause silent data loss if you assume otherwise.
+
+```
+GET /api/chat_snapshots/{snapshotId}?rendering_mode=messages&render_all_tools=true
+```
+
+The id in the URL is the **snapshot** id. Passing it to `chat_conversations`
+returns 404 — which means "wrong id", not "no access", and reading it as the
+latter sends you off chasing a permissions problem you don't have.
+
+**1 — Different top-level fields.**
+
+| Field | Note |
+|-------|------|
+| `snapshot_name` | The title. **`name` is `null`** on a snapshot, so a renderer that reads `name` produces "Untitled conversation" |
+| `conversation_uuid` | The ORIGINAL conversation's id — your handle for trying the lossless path (below) |
+| `creator` / `created_by` | Who shared it. Compare against the signed-in account to tell case B from case C |
+| `is_public`, `up_to_date` | Snapshot state |
+| `current_leaf_message_uuid` | **absent** — snapshots are linear, so the leaf/parent walk correctly falls back to array order |
+
+**2 — Different block shapes inside `tool_result.content[]`.** A `/chat/` export
+returns `[{type: 'text', text}]`. A snapshot returns web_search hits as
+**`knowledge`** items:
+
+| Field | Meaning |
+|-------|---------|
+| `type` | `'knowledge'` |
+| `title` / `url` | The source page |
+| `text` | The extracted page body — this is the bulk of the payload |
+| `metadata`, `links` | Site metadata |
+
+A renderer matching only `type === 'text'` returns `''` for every one of these and
+reports no error. Measured on one research conversation: 8k chars rendered out of
+a 173k payload — **4.8% retention, exit code 0**. This is why the bundled renderer
+dumps unknown item types instead of dropping them, and why the fidelity gate
+measures its budget off the raw payload rather than through the parser.
+
+**3 — The platform strips the sharer's private data.** Every tool call that
+touched an uploaded file comes back hollow: `tool_use.input` is `{}` and
+`tool_result.content` is `[]`, leaving ~430 bytes of metadata (`name`,
+`integration_name`, `icon_name`). The tool call is *visible*; its arguments and
+results are *gone*. This is by design — a share link must not leak the sharer's
+files — and it is **not recoverable from the link**.
+
+**The three account cases.** Fetch the snapshot first; it tells you where you are:
+
+| Case | How to detect | What you get |
+|------|---------------|--------------|
+| A · not signed in | `/api/organizations` yields no org | nothing for `/chat/`; ask the user to sign in |
+| B · the conversation is yours | `GET /api/organizations/{org}/chat_conversations/{conversation_uuid}?tree=True&rendering_mode=messages&render_all_tools=true` → **200** | **everything**, attachments included — re-export from here, the snapshot is strictly lossier |
+| C · someone else's share | that fetch 404s; `creator` ≠ your account | the snapshot only, with the holes from (3) — disclose them |
+
+Case B is worth the extra request every single time: it is the difference between
+an archive and an archive with holes. Case C is worth *saying out loud*, because
+the holes are invisible in a rendered transcript unless something announces them.
 
 ## Tool-call blocks: `render_all_tools=true`
 

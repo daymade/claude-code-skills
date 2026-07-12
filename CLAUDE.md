@@ -63,8 +63,13 @@ claude plugin install daymade-skill@daymade-skills
 # Quick validation of a skill
 cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.quick_validate ../skill-name
 
-# Package a skill (includes automatic validation)
-cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.package_skill ../skill-name [output-dir]
+# Existing-skill old-vs-new audit (use git-ref:<ref> for a Git-reconstructed baseline)
+cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.audit_skill_regression snapshot --source ../skill-name --output <old-bundle>
+cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.audit_skill_regression compare --before <old-bundle> --after ../skill-name --output <review.json> --baseline-origin pre-edit-snapshot
+cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.audit_skill_regression verify --before <old-bundle> --after ../skill-name --review <review.json>
+
+# Package a skill (every existing skill requires the completed review; marker alone is insufficient)
+cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.package_skill ../skill-name [output-dir] [--regression-review <review.json>]
 
 # Initialize a new skill from template
 uv run python daymade-skill/skill-creator/scripts/init_skill.py <skill-name> --path <output-directory>
@@ -230,7 +235,7 @@ This applies when you change ANY file under a skill directory:
 
 **Priority Order** (by importance):
 
-1. **skill-creator** ⭐ - **Essential meta-skill** for creating your own skills (with init/validate/package scripts)
+1. **skill-creator** ⭐ - **Essential meta-skill** for creating and improving skills (with init/validate/old-vs-new regression/package scripts)
 2. **github-ops** - GitHub operations via gh CLI and API
 3. **doc-to-markdown** - DOCX/PDF/PPTX → Markdown conversion with CJK post-processing
 4. **mermaid-tools** - Diagram extraction and PNG generation
@@ -283,7 +288,7 @@ This applies when you change ANY file under a skill directory:
 51. **stepfun-tts** - StepFun stepaudio-2.5-tts (Contextual TTS): natural-language `instruction` (≤200 chars) + inline `()` parentheses for句内 prosody. Captures the two TTS-side breaking changes from step-tts-2 (voice_label removal + stricter 2.5-era censorship) with migration playbook
 52. **stepfun-asr** - StepFun stepaudio-2.5-asr (SSE endpoint, 32K context, ~85-101× RTF, 30-min single-call). Hides the #1 trap of the 2.5 ASR family: it does NOT live on `/v1/audio/transcriptions` — the wrong endpoint returns a misleading `model not supported` error. Bundled stdlib CLI handles base64 + nested JSON body + SSE parsing including `error` events
 53. **feishu-doc-scraper** - Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets (including cell-attachment file download), and Minutes (妙记) transcripts into clean high-fidelity local Markdown. Primary path: lark-cli API — programmatic extraction with no LLM rewriting of the body, recursive reference-graph traversal, permission boundaries resolved from error codes; browser-DOM path is the fallback only when lark-cli cannot reach the content. Also covers the permission-denied path (owner-exported .docx → faithful Markdown). Works with both Feishu (feishu.cn) and Lark (larkoffice.com)
-54. **auto-repo-setup** - Automated repository environment configuration, fault diagnosis, and repair for non-technical users. Reads ONBOARDING.md, audits environment gaps (git, ffmpeg, uv, Python, API keys), installs missing dependencies, validates with smoke tests, and safely handles git operations with PII Guard and Push Safety. Includes SessionStart hook initialization, counter-review workflows, and git history sanitization.
+54. **auto-repo-setup** - Evidence-driven repository setup, repair, handoff, and safe Git workflow for Claude Code or Codex. Detects the declared stack from project instructions/manifests, preserves local work during sync/conflicts, diagnoses repeated SessionStart output before changing config, and prefers AGENTS.md/CLAUDE.md or a normal Agent request over hooks for routine startup behavior.
 55. **asr-transcribe-to-text** - Transcribes audio and video files to text using Qwen3-ASR — local MLX inference on Apple Silicon (no API key, 15-27x realtime) or remote vLLM/OpenAI-compatible API, with automatic platform detection and batch-mode guards against music-only repetition-loop hallucinations
 56. **bigdata-skill** - Pull Bigdata.com (RavenPack) financial and news data via the official `bigdata-client` SDK and `/v1/*` REST endpoints — structured financials, prices, analyst estimates, a daily entity-sentiment series, annotated chunk search, and a screener (daymade-financial suite member)
 57. **gangtise-copilot** - Gangtise investment-research OpenAPI skill suite installer and diagnostic tool (daymade-financial suite member)
@@ -301,7 +306,7 @@ This applies when you change ANY file under a skill directory:
 69. **notify-wecom** - Send a single one-off WeCom group-bot message without setting up a reusable notification workflow
 70. **github-sensitive-data-cleanup** - Scan and remove secrets, API keys, private domains/IPs, and PII from GitHub repository history with force-push safety gates
 71. **codex-image-gallery** - Start a self-contained local web gallery for browsing Codex-generated images from `~/.codex/generated_images` or a custom `GALLERY_ROOT`
-72. **frontend-visual-qa** - Reviews rendered frontends, dashboards, HTML slides, generated UIs, and browser-integrated export/share/download/print/PDF flows for visual defects that lint/build miss (awkward line breaks, wrapped controls, horizontal overflow, double scrollbars, unreadable standalone artifacts, blank print previews, AI slop, Chrome/Computer Use verification gaps); use after frontend-design/ui-designer and alongside qa-expert
+72. **frontend-visual-qa** - Audits already-rendered web and desktop UIs with real-browser/native-app journeys, inspected screenshots, DOM geometry, responsive viewports, and a Playwright sweep; covers layout, route/state, overlays, maps, browser outputs, print/PDF, and Electron shells, while remaining audit-only by default and excluding greenfield design/general QA setup
 73. **openclaw** - Manage OpenClaw (龙虾/lobster) instance configs: audit, diff, copy, add-model, list, switch models across openclaw.json files; DeepSeek model patches, default-model/alias management, config validation
 74. **download-gemini-images** - Download images (uploaded files or generated previews) from a Google Gemini conversation page via logged-in Chrome; lightbox-first with pageAssets fallback, ordered ZIP packaging with integrity verification
 75. **wps-doc-scraper** - Faithfully archive public WPS/KDocs/金山文档 links (incl. embedded ProcessOn mind maps and canvases) as raw source data, original SVG/PNG, and Markdown without login; unauthenticated data-API-first with browser-DOM fallback

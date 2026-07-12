@@ -38,6 +38,10 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
+import json
+import sys
+
 from cli import (
     cmd_init,
     cmd_add_correction,
@@ -65,6 +69,16 @@ def main() -> None:
     """Main entry point - parse arguments and dispatch to commands"""
     parser = create_argument_parser()
     args = parser.parse_args()
+
+    # --review is a deprecated no-op kept only for backward compatibility (safe
+    # mode is the Stage 1 default). Announce it on stderr instead of silently
+    # swallowing it so callers can drop it; the run is otherwise unchanged.
+    if getattr(args, "review", False):
+        print(
+            "⚠️  --review is deprecated and does nothing (safe mode is the "
+            "Stage 1 default); remove it from your command.",
+            file=sys.stderr,
+        )
 
     # Dispatch commands
     if args.init:
@@ -126,7 +140,17 @@ def main() -> None:
     elif args.extract_uncertain:
         cmd_extract_uncertain(args)
     elif args.input:
-        cmd_run_correction(args)
+        if getattr(args, "json_output", False):
+            # --json contract: stdout carries ONLY the machine-readable Stage 1
+            # status object so consumers never infer no-op vs failure from whether
+            # a *_stage1.md sidecar exists. Route the human-readable log to stderr
+            # for the run, then emit exactly one JSON line on the real stdout.
+            with contextlib.redirect_stdout(sys.stderr):
+                status = cmd_run_correction(args)
+            if status is not None:
+                print(json.dumps(status, ensure_ascii=False))
+        else:
+            cmd_run_correction(args)
     else:
         parser.print_help()
 

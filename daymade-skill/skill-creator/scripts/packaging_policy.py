@@ -8,7 +8,12 @@ from pathlib import Path
 
 EXCLUDE_DIRS = {"__pycache__", "node_modules", ".pytest_cache", ".venv"}
 EXCLUDE_GLOBS = {"*.pyc"}
-EXCLUDE_FILES = {".DS_Store", ".security-scan-passed"}
+EXCLUDE_FILES = {
+    ".DS_Store",
+    ".security-scan-passed",
+    ".skill-regression-reviewed",
+    ".skill-regression-baseline.json",
+}
 ROOT_EXCLUDE_DIRS = {"evals", "dist", "tests", ".enrich"}
 
 

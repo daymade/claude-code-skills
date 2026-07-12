@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""一键初始化项目的 SessionStart hook。
+"""Manage one guarded Claude Code SessionStart context nudge.
 
-用法:
-    python init_session_start_hook.py --repo /path/to/project [--guide ONBOARDING.md] [--update-gitignore]
+This initializer is intentionally narrow. It does not run environment checks,
+mutate Git, install a Codex hook, or overwrite unrelated Claude settings.
 
-功能:
-    1. 创建 .claude/settings.json（SessionStart hook 配置）
-    2. 创建 .claude/hooks/session-start-check.sh（24h 缓存 + 环境自检提示）
-    3. 可选更新 .gitignore（允许 .claude/settings.json 和 hooks/ 入 git）
+Usage:
+    python init_session_start_hook.py --repo <path> --guide ONBOARDING.md --dry-run
+    python init_session_start_hook.py --repo <path> --guide ONBOARDING.md
+    python init_session_start_hook.py --repo <path> --remove
 
-要求:
-    - 目标目录必须是 git 仓库（或 --force 跳过检查）
-    - 不会覆盖已有配置（除非 --force-overwrite）
+Existing CLI flags are retained for compatibility:
+    --force-overwrite replaces only entries previously managed by this skill.
+    --force-non-git permits a non-Git target.
+    --update-gitignore shares project settings without exposing local settings.
 """
 
 from __future__ import annotations
@@ -19,159 +20,282 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import stat
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from typing import Any
 
 
-SETTINGS_JSON = """\
-{
-  "hooks": {
-    "SessionStart": [
-      {
+MANAGED_MARKER = "[auto-repo-setup]"
+LEGACY_COMMAND = ".claude/hooks/session-start-check.sh"
+FORBIDDEN_GUIDE_CHARS = set("\"'$;&|<>!()%\r\n") | {chr(96)}
+GITIGNORE_RULES = (
+    "!.claude/\n"
+    "!.claude/settings.json\n"
+    ".claude/settings.local.json\n"
+    ".claude/cache/\n"
+    ".claude/debug/\n"
+)
+
+
+class ConfigError(ValueError):
+    """Raised when an existing configuration cannot be changed safely."""
+
+
+def validate_repo(repo: Path, *, force_non_git: bool) -> None:
+    if not repo.exists():
+        raise ConfigError(f"directory does not exist: {repo}")
+    if not repo.is_dir():
+        raise ConfigError(f"path is not a directory: {repo}")
+    if not (repo / ".git").exists() and not force_non_git:
+        raise ConfigError(
+            f"{repo} is not a Git repository; pass --force-non-git only if intentional"
+        )
+
+
+def validate_guide(repo: Path, guide: str) -> str:
+    normalized = guide.replace("\\", "/")
+    path = PurePosixPath(normalized)
+    if path.is_absolute() or ".." in path.parts:
+        raise ConfigError("guide must be a repository-relative path without '..'")
+    if not normalized or any(char in FORBIDDEN_GUIDE_CHARS for char in normalized):
+        raise ConfigError("guide contains shell-sensitive characters")
+    if not (repo / Path(*path.parts)).is_file():
+        raise ConfigError(f"guide does not exist in repository: {normalized}")
+    return normalized
+
+
+def managed_group(guide: str) -> dict[str, Any]:
+    message = (
+        f"{MANAGED_MARKER} Read {guide} before repository setup tasks. "
+        "Do not run unrelated setup on ordinary tasks."
+    )
+    return {
+        "matcher": "startup",
         "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/session-start-check.sh"
-          }
+            {
+                "type": "command",
+                "command": f'echo "{message}"',
+                "timeout": 5,
+            }
+        ],
+    }
+
+
+def group_commands(group: object) -> list[str]:
+    if not isinstance(group, dict):
+        return []
+    handlers = group.get("hooks")
+    if not isinstance(handlers, list):
+        return []
+    commands: list[str] = []
+    for handler in handlers:
+        if isinstance(handler, dict) and isinstance(handler.get("command"), str):
+            commands.append(handler["command"])
+    return commands
+
+
+def is_managed(group: object) -> bool:
+    return any(
+        MANAGED_MARKER in command or command == LEGACY_COMMAND
+        for command in group_commands(group)
+    )
+
+
+def load_settings(path: Path) -> tuple[dict[str, Any], bytes | None]:
+    if not path.exists():
+        return {}, None
+    original = path.read_bytes()
+    try:
+        data = json.loads(original.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ConfigError(f"invalid JSON in {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ConfigError(f"{path} must contain a JSON object")
+    hooks = data.get("hooks")
+    if hooks is not None and not isinstance(hooks, dict):
+        raise ConfigError(f"{path}: hooks must be a JSON object")
+    if isinstance(hooks, dict):
+        session_start = hooks.get("SessionStart")
+        if session_start is not None and not isinstance(session_start, list):
+            raise ConfigError(f"{path}: hooks.SessionStart must be a JSON array")
+    return data, original
+
+
+def update_settings(
+    data: dict[str, Any],
+    *,
+    guide: str | None,
+    remove: bool,
+    force_overwrite: bool,
+) -> tuple[dict[str, Any], str]:
+    updated = json.loads(json.dumps(data))
+    hooks = updated.get("hooks")
+    if hooks is None:
+        if remove:
+            return updated, "No managed SessionStart entry found."
+        hooks = {}
+        updated["hooks"] = hooks
+    if not isinstance(hooks, dict):
+        raise ConfigError("hooks must be a JSON object")
+    groups = hooks.get("SessionStart")
+    if groups is None:
+        if remove:
+            return updated, "No managed SessionStart entry found."
+        groups = []
+        hooks["SessionStart"] = groups
+    if not isinstance(groups, list):
+        raise ConfigError("hooks.SessionStart must be a JSON array")
+
+    managed_indexes = [index for index, group in enumerate(groups) if is_managed(group)]
+
+    if remove:
+        if not managed_indexes:
+            return updated, "No managed SessionStart entry found."
+        hooks["SessionStart"] = [
+            group for index, group in enumerate(groups) if index not in managed_indexes
         ]
-      }
+        if not hooks["SessionStart"]:
+            del hooks["SessionStart"]
+        return updated, f"Removed {len(managed_indexes)} managed SessionStart entry."
+
+    if guide is None:
+        raise ConfigError("guide is required when installing")
+    desired = managed_group(guide)
+
+    if managed_indexes:
+        if len(managed_indexes) == 1 and groups[managed_indexes[0]] == desired:
+            return updated, "Managed SessionStart entry is already current."
+        if not force_overwrite:
+            raise ConfigError(
+                "a legacy or different managed entry exists; inspect it, then pass "
+                "--force-overwrite to replace only that managed entry"
+            )
+        groups = [
+            group for index, group in enumerate(groups) if index not in managed_indexes
+        ]
+
+    groups.append(desired)
+    hooks["SessionStart"] = groups
+    action = (
+        "Replaced managed SessionStart entry."
+        if managed_indexes
+        else "Added managed SessionStart entry."
+    )
+    return updated, action
+
+
+def atomic_write(path: Path, content: bytes, *, original: bytes | None) -> None:
+    if path.exists():
+        current = path.read_bytes()
+        if original is None or current != original:
+            raise ConfigError(f"{path} changed during this run; refusing to overwrite")
+    elif original is not None:
+        raise ConfigError(f"{path} disappeared during this run; refusing to recreate")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.auto-repo-setup.tmp")
+    temporary.write_bytes(content)
+    os.replace(temporary, path)
+
+
+def update_gitignore(repo: Path) -> bool:
+    path = repo / ".gitignore"
+    original = path.read_bytes() if path.exists() else None
+    text = original.decode("utf-8") if original is not None else ""
+    missing = [
+        line
+        for line in GITIGNORE_RULES.splitlines()
+        if line not in text.splitlines()
     ]
-  }
-}
-"""
-
-HOOK_TEMPLATE = """#!/usr/bin/env bash
-# SessionStart hook for {project_name}
-# 24h cache + simplified nudge — agent reads {guide_file} for actual commands.
-
-CACHE_DIR="$HOME/.claude/cache/env-check"
-mkdir -p "$CACHE_DIR"
-
-# Use repo absolute path hash as cache key
-REPO_HASH=$(cd "$(dirname "$0")/../.." && pwd | sha256sum | cut -d' ' -f1)
-CACHE_FILE="$CACHE_DIR/$REPO_HASH"
-
-# Silent if checked within 24h
-if [ -f "$CACHE_FILE" ] && [ "$(find "$CACHE_FILE" -mtime -1 2>/dev/null)" ]; then
-    exit 0
-fi
-
-# Create cache + output concise nudge
-touch "$CACHE_FILE"
-echo "【环境自检】你刚刚进入 {project_name} 仓库。请在执行任何任务前，先阅读 {guide_file} 并按 Step 1-3 验证环境。任一失败则按 {guide_file} 修复。"
-"""
-
-GITIGNORE_RULES = """
-# Allow project-level Claude Code settings + hooks to be shared
-!.claude/settings.json
-!.claude/hooks/
-.claude/settings.local.json
-.claude/cache/
-.claude/debug/
-"""
-
-
-def detect_project_name(repo_path: Path) -> str:
-    """从目录名或 git remote 推断项目名称。"""
-    name = repo_path.name
-    git_config = repo_path / ".git" / "config"
-    if git_config.exists():
-        try:
-            text = git_config.read_text(encoding="utf-8", errors="replace")
-            for line in text.splitlines():
-                if "url =" in line:
-                    url = line.split("=", 1)[1].strip()
-                    # Extract repo name from git@host:owner/repo.git or https://host/owner/repo.git
-                    if "/" in url:
-                        part = url.rsplit("/", 1)[1]
-                        if part.endswith(".git"):
-                            part = part[:-4]
-                        if part:
-                            return part
-        except Exception:
-            pass
-    return name
-
-
-def init_hook(repo_path: Path, guide_file: str, update_gitignore: bool, force_overwrite: bool, force_non_git: bool) -> int:
-    if not repo_path.exists():
-        print(f"❌ 目录不存在: {repo_path}", file=sys.stderr)
-        return 1
-
-    if not (repo_path / ".git").exists() and not force_non_git:
-        print(f"❌ {repo_path} 不是 git 仓库。如需继续，加 --force-non-git", file=sys.stderr)
-        return 1
-
-    project_name = detect_project_name(repo_path)
-    claude_dir = repo_path / ".claude"
-    hooks_dir = claude_dir / "hooks"
-    settings_file = claude_dir / "settings.json"
-    hook_file = hooks_dir / "session-start-check.sh"
-    gitignore_file = repo_path / ".gitignore"
-
-    # Create directories
-    hooks_dir.mkdir(parents=True, exist_ok=True)
-
-    # Write settings.json
-    if settings_file.exists() and not force_overwrite:
-        print(f"⚠️  已存在，跳过: {settings_file}")
-    else:
-        settings_file.write_text(SETTINGS_JSON, encoding="utf-8")
-        print(f"✅ 创建: {settings_file}")
-
-    # Write hook script
-    if hook_file.exists() and not force_overwrite:
-        print(f"⚠️  已存在，跳过: {hook_file}")
-    else:
-        hook_content = HOOK_TEMPLATE.format(project_name=project_name, guide_file=guide_file)
-        hook_file.write_text(hook_content, encoding="utf-8")
-        # Make executable
-        hook_file.chmod(hook_file.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        print(f"✅ 创建: {hook_file}")
-
-    # Update .gitignore
-    if update_gitignore:
-        if gitignore_file.exists():
-            existing = gitignore_file.read_text(encoding="utf-8", errors="replace")
-            # Check if rules already present
-            if "!.claude/settings.json" in existing:
-                print(f"ℹ️  .gitignore 已包含 Claude 规则，跳过")
-            else:
-                with open(gitignore_file, "a", encoding="utf-8") as f:
-                    f.write(GITIGNORE_RULES)
-                print(f"✅ 更新: {gitignore_file}")
-        else:
-            gitignore_file.write_text(GITIGNORE_RULES.lstrip("\n"), encoding="utf-8")
-            print(f"✅ 创建: {gitignore_file}")
-
-    print("\n📋 总结:")
-    print(f"   项目: {project_name}")
-    print(f"   路径: {repo_path}")
-    print(f"   指南: {guide_file}")
-    print(f"   Hook: {hook_file}")
-    if update_gitignore:
-        print(f"   Gitignore: 已更新")
-    print("\n下次 Claude Code 进入此仓库时，SessionStart hook 会自动触发。")
-    return 0
+    if not missing:
+        return False
+    prefix = "" if not text or text.endswith("\n") else "\n"
+    addition = (
+        prefix
+        + "\n# Share Claude Code project settings\n"
+        + "\n".join(missing)
+        + "\n"
+    )
+    atomic_write(path, (text + addition).encode("utf-8"), original=original)
+    return True
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Initialize SessionStart hook for a project")
+    parser = argparse.ArgumentParser(
+        description="Manage a guarded Claude Code startup context nudge"
+    )
     parser.add_argument("--repo", required=True, help="Target repository path")
-    parser.add_argument("--guide", default="ONBOARDING.md", help="Guide file name to reference in hook (default: ONBOARDING.md)")
-    parser.add_argument("--update-gitignore", action="store_true", help="Update .gitignore to allow .claude/ files")
-    parser.add_argument("--force-overwrite", action="store_true", help="Overwrite existing files")
-    parser.add_argument("--force-non-git", action="store_true", help="Allow running on non-git directory")
+    parser.add_argument(
+        "--guide",
+        default="ONBOARDING.md",
+        help="Repository-relative guide path used by the nudge",
+    )
+    parser.add_argument(
+        "--update-gitignore",
+        action="store_true",
+        help="Share .claude/settings.json while leaving local settings ignored",
+    )
+    parser.add_argument(
+        "--force-overwrite",
+        action="store_true",
+        help="Replace only legacy/different entries managed by this skill",
+    )
+    parser.add_argument(
+        "--force-non-git",
+        action="store_true",
+        help="Allow a non-Git target directory",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="Print JSON without writing")
+    parser.add_argument(
+        "--remove",
+        action="store_true",
+        help="Remove only entries managed by this skill",
+    )
     args = parser.parse_args()
 
-    return init_hook(
-        repo_path=Path(args.repo).resolve(),
-        guide_file=args.guide,
-        update_gitignore=args.update_gitignore,
-        force_overwrite=args.force_overwrite,
-        force_non_git=args.force_non_git,
-    )
+    repo = Path(args.repo).expanduser().resolve()
+    settings_path = repo / ".claude" / "settings.json"
+
+    try:
+        validate_repo(repo, force_non_git=args.force_non_git)
+        guide = None if args.remove else validate_guide(repo, args.guide)
+        settings, original = load_settings(settings_path)
+        updated, action = update_settings(
+            settings,
+            guide=guide,
+            remove=args.remove,
+            force_overwrite=args.force_overwrite,
+        )
+        encoded = (
+            json.dumps(updated, ensure_ascii=False, indent=2) + "\n"
+        ).encode("utf-8")
+
+        if args.dry_run:
+            print(action)
+            print(encoded.decode("utf-8"), end="")
+            return 0
+
+        if updated != settings:
+            atomic_write(settings_path, encoded, original=original)
+        gitignore_changed = False
+        if args.update_gitignore and not args.remove:
+            gitignore_changed = update_gitignore(repo)
+
+        print(action)
+        print(f"Settings: {settings_path}")
+        if args.update_gitignore:
+            state = "updated" if gitignore_changed else "already current"
+            print(f"Gitignore: {state}")
+        legacy_file = repo / ".claude" / "hooks" / "session-start-check.sh"
+        if args.remove and legacy_file.exists():
+            print(
+                f"Legacy file left untouched: {legacy_file} "
+                "(remove only after confirming no other setting references it)"
+            )
+        return 0
+    except (ConfigError, OSError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

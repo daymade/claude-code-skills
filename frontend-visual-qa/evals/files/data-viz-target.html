@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generic target</title>
+  <style>
+    body { margin: 0; font: 14px/1.45 Arial, sans-serif; color: #334155; background: #f8fafc; }
+    main { max-width: 1120px; margin: auto; padding: 48px; }
+    h1 { font-size: 24px; }
+    .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .kpi { padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px; background: white; }
+    .value { font-size: 22px; font-weight: 600; color: #334155; }
+    .series-a { color: #ef4444; }
+    .series-b { color: #22c55e; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Campaign closeout</h1>
+    <p>Status report</p>
+    <section class="kpis">
+      <div class="kpi"><div class="value">82%</div><div>Reach</div></div>
+      <div class="kpi"><div class="value">3.4%</div><div>Conversion</div></div>
+      <div class="kpi"><div class="value">12d</div><div>Window</div></div>
+    </section>
+    <p><span class="series-a">Series A</span> <span class="series-b">Series B</span></p>
+  </main>
+</body>
+</html>

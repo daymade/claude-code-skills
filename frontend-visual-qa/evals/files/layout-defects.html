@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Layout defect fixture</title>
+  <style>
+    body { margin: 0; font: 16px/1.4 Arial, sans-serif; color: #202124; }
+    main { box-sizing: border-box; min-width: 760px; padding: 48px; }
+    h1 { width: 205px; font-size: 40px; line-height: 1.05; }
+    .clipped { width: 320px; height: 22px; overflow: hidden; }
+    .action { display: block; width: 72px; padding: 8px; }
+    .toolbar { display: flex; width: 1200px; gap: 16px; }
+    .timeline { position: relative; width: 440px; height: 92px; margin-top: 36px; border-top: 1px solid #bbb; }
+    .event { position: absolute; top: 18px; box-sizing: border-box; height: 46px; padding: 12px; color: #fff; }
+    .event-a { left: 0; width: 270px; background: #1769aa; }
+    .event-b { left: 190px; width: 245px; background: #a33a2b; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Customer insight analysis</h1>
+    <p class="clipped">This important explanatory sentence is clipped by a fixed-height container.</p>
+    <div class="toolbar">
+      <button class="action">Export current report</button>
+      <button>Open details</button>
+    </div>
+    <div class="timeline" aria-label="Crowded schedule">
+      <div class="event event-a">Regional review 09:00–10:00</div>
+      <div class="event event-b">Customer escalation 09:30–10:30</div>
+    </div>
+  </main>
+</body>
+</html>

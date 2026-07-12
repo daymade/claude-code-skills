@@ -1,19 +1,18 @@
 ---
 name: tunnel-doctor
 description: >
-  Diagnoses and fixes conflicts between Tailscale and proxy/VPN tools (Shadowrocket,
-  Clash, Surge, OrbStack/Docker) on macOS — route hijacking, HTTP proxy env vars,
-  system proxy bypass, SSH ProxyCommand double-tunneling, VM/container proxy
-  propagation, and stalled macOS DNS resolution. Use when Tailscale ping works but
-  SSH/HTTP times out, browser returns 503 but curl works, git push fails with "failed
-  to begin relaying via HTTP", Docker pull/build times out behind TUN/VPN, setting up
-  Tailscale SSH to WSL or remote dev over Tailscale, ssh/curl/git hang ~60s resolving
-  a hostname while nslookup is instant, ping to a resolver IP works but dig to it
-  times out, ssh -vvv freezes at "debug2: resolving", raw probes look impossibly fast
-  under a TUN proxy (nc -z 0.00s, sub-ms ping overseas — the TUN fabricates locally),
-  or all domestic/DIRECT-routed sites fail at once (TLS handshake EOF,
+  Diagnoses and fixes Tailscale x proxy/VPN tool conflicts (Shadowrocket,
+  Clash, Surge, OrbStack/Docker) on macOS — route hijacking, proxy env vars, system
+  proxy bypass, SSH ProxyCommand double-tunneling, VM/container proxy propagation,
+  stalled macOS DNS. Use when Tailscale ping works but SSH/HTTP times out, browser
+  returns 503 but curl works, git push fails with "failed to begin relaying via
+  HTTP", Docker pull/build times out behind TUN/VPN, setting up Tailscale SSH to WSL
+  or remote dev over Tailscale, ssh/curl/git hang ~60s resolving a hostname while
+  nslookup is instant, ping to a resolver works but dig times out, ssh -vvv freezes
+  at "debug2: resolving", raw probes impossibly fast under a TUN (nc -z 0.00s), all DIRECT-routed sites fail at once (TLS handshake EOF,
   UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, proxy CONNECT 503) while proxied sites
-  work — TUN DIRECT split-brain.
+  work — TUN DIRECT split-brain — or a Windows host TUN (v2rayN) black-holing the
+  whole machine incl. WSL and Tailscale (event-log forensics prove which action fixed it).
 allowed-tools: Read, Grep, Edit, Bash
 ---
 
@@ -59,6 +58,7 @@ Determine which scenario applies:
 - **TCP port 22 reachable (`nc -z` succeeds) but SSH fails with `kex_exchange_identification: Connection closed`** → Tailscale SSH proxy intercept on WSL (Step 5A)
 - **`tailscale ssh` returns "not available on App Store builds"** → Wrong Tailscale distribution on macOS (Step 5B)
 - **Any tool using system DNS (`ssh`, `curl`, `git`) hangs ~60s before resolving, but `nslookup` returns instantly** → Stalled resolver in `getaddrinfo` chain (Step 2I)
+- **Windows+WSL host: everything offline at once (domestic AND overseas), WSL dead too, "even Tailscale won't come online" — and/or the user tried several recovery actions (switched NICs, toggled TUN) and can't tell which one fixed it** → Windows host TUN cascade + event-log forensics (Step 5C)
 
 **Key distinctions**:
 - SSH does NOT use `http_proxy`/`NO_PROXY` env vars. If SSH works but HTTP doesn't → Layer 2.
@@ -161,14 +161,14 @@ export NO_PROXY=localhost,127.0.0.1,.ts.net,100.64.0.0/10,192.168.*,10.*,172.16.
 
 **NO_PROXY syntax pitfalls** — see [references/proxy_conflict_reference.md](references/proxy_conflict_reference.md) for the compatibility matrix.
 
-**Go `net/http` CIDR caveat**: Go's standard `net/http` does NOT support CIDR notation in `NO_PROXY`. Setting `NO_PROXY=100.64.0.0/10` works for curl and Python, but Go programs (including Tailscale-adjacent tooling) will still send traffic through the proxy. The fix is to use MagicDNS hostnames (e.g., `workstation-4090-wsl`) instead of raw IPs, or add explicit hostnames to `NO_PROXY`:
+**Go `net/http` CIDR caveat**: Go's standard `net/http` does NOT support CIDR notation in `NO_PROXY`. Setting `NO_PROXY=100.64.0.0/10` works for curl and Python, but Go programs (including Tailscale-adjacent tooling) will still send traffic through the proxy. The fix is to use MagicDNS hostnames (e.g., `my-wsl-box`) instead of raw IPs, or add explicit hostnames to `NO_PROXY`:
 
 ```bash
 # WRONG for Go programs — CIDR is silently ignored
 NO_PROXY=100.64.0.0/10 go-program http://100.101.102.103:8002/health  # → goes through proxy
 
 # CORRECT — use hostname (matched as suffix) or explicit IP
-export NO_PROXY=localhost,127.0.0.1,.ts.net,workstation-4090-wsl,100.101.102.103,192.168.*,10.*,172.16.*
+export NO_PROXY=localhost,127.0.0.1,.ts.net,my-wsl-box,100.101.102.103,192.168.*,10.*,172.16.*
 ```
 
 This is especially relevant when accessing Tailscale services from Go-based tools (e.g., custom CLIs, Go test suites hitting remote APIs).
@@ -924,6 +924,16 @@ tailscale version
 tailscale ssh <user>@<hostname>   # Should work now
 ```
 
+### Step 5C: Windows Host TUN Proxy Takes Down the Whole Machine (Including WSL and Its Tailscale)
+
+**Symptom**: On a Windows + WSL2 workstation, everything goes offline at once — domestic and overseas, host and WSL — and Tailscale won't come online either ("even Tailscale is down"). Recovery follows toggling the host's TUN proxy (v2rayN sing-box TUN, Clash TUN) off, not switching NICs.
+
+**Root cause shape**: WSL2 NAT has no network path of its own; a host TUN owns the default route, so a dead proxy node black-holes the host **and** everything behind it, including the WSL tailscaled's control-plane connection. This differs from the macOS split-brain (Step 2J): both planes die, not one.
+
+This scenario has its own reference covering four things this SKILL.md doesn't repeat: the event-log timeline method for proving **which** of several recovery actions actually fixed the network (`Microsoft-Windows-NetworkProfile/Operational` events 10000/10001 name the TUN adapter, e.g. `singbox_tun`), the three WSL→Windows interop pitfalls that silently produce fake "no output" during diagnosis (PATH, GBK codepage, no-tty pipe death), how to tell apart the Windows vs in-WSL tailscaled when only one is really online (APIPA `169.254.x.x` on the Tailscale adapter = engine never came up), and prevention (per-process proxy from WSL instead of host TUN).
+
+Read [references/windows_host_tun_wsl_cascade.md](references/windows_host_tun_wsl_cascade.md) before diagnosing this shape.
+
 ### Step 6: Verify End-to-End
 
 Run a complete connectivity test:
@@ -1118,3 +1128,4 @@ Before starting remote development, verify:
 ## References
 
 - [references/proxy_conflict_reference.md](references/proxy_conflict_reference.md) — Per-tool configuration (Shadowrocket, Clash, Surge), NO_PROXY syntax, SSH ProxyCommand, and conflict architecture
+- [references/windows_host_tun_wsl_cascade.md](references/windows_host_tun_wsl_cascade.md) — Windows host TUN outage cascading into WSL and its Tailscale: event-log timeline forensics, WSL→Windows interop pitfalls, dual-tailscaled disambiguation, prevention
