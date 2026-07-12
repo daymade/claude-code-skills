@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Render an exported claude.ai conversation JSON into a faithful markdown transcript.
 
-Input: the JSON captured by scripts/export_conversation.js (any rendering_mode
-works; render_all_tools=true gives real tool blocks instead of placeholders).
+Input: the JSON captured by scripts/export_conversation.js (a /chat/ conversation)
+or by the shared-snapshot endpoint (a /share/ link). Both shapes are handled — see
+"Two payload shapes" below; always fetch with render_all_tools=true, or the tool
+blocks arrive as placeholders and the export is a shell of the conversation.
 
 Usage:
   uv run python render_transcript.py conversation.json -o transcript.md
@@ -13,12 +15,31 @@ Usage:
 Modes:
   (default)       full markdown transcript: timestamped speaker headers, upload/
                   output file inventories per message, tool_use blocks rendered
-                  per tool type, tool_result folded into <details>.
+                  per tool type, tool_result folded into <details>, web_search
+                  citations collected into a "Sources cited" list.
   --list-files    inventory every downloadable file (uploads / images / sandbox
                   outputs) with the endpoint family each needs.
   --extract-file  reconstruct a sandbox-created file's FINAL content by replaying
                   its create_file block plus every later str_replace in message
                   order — no download needed.
+  --allow-lossy   override the fidelity gate (see below). Rarely correct.
+
+Fidelity gate (why this script refuses to run silently):
+  Rendering loss here is invisible by construction — an unhandled block type
+  renders as '' and the markdown still looks perfectly well-formed. So before
+  writing anything, every block is audited: it carried N characters of text; did
+  the renderer emit anything for it? If any block carried text and produced
+  nothing, the export FAILS (exit 2) instead of handing over a plausible-looking
+  fraction of the conversation. Blocks the platform itself emptied (see below) are
+  tracked separately as a disclosed gap, never counted as loss.
+
+Two payload shapes:
+  /chat/  — `name` holds the title; tool_result.content is a text[] list.
+  /share/ — `name` is null (title lives in `snapshot_name`); web_search results
+            arrive as `knowledge` items (title/url/text), and every tool call that
+            touched the sharer's uploads has its input/content emptied by the
+            platform. Those gaps are real and unrecoverable from the link; they are
+            disclosed in the transcript header rather than passed off as complete.
 """
 import argparse
 import json
@@ -41,11 +62,45 @@ def active_path(conv):
     return path if path else msgs
 
 
+def result_item_text(item):
+    """Text carried by ONE item inside a tool_result's content[].
+
+    The critical property here is that an unrecognized item must never render as
+    the empty string. `tool_result.content[]` is not a fixed schema — a shared
+    snapshot returns web_search hits as `knowledge` items (title/url/text), where
+    a /chat/ export returns plain `text` items. The original code matched only
+    `type == 'text'` and returned '' for everything else, so an export could lose
+    the overwhelming majority of its content and still look perfectly well-formed
+    — verified on a research conversation where the search results were 91% of the
+    payload. Anything unknown is therefore dumped rather than dropped: a future
+    server-side block type should degrade into ugly JSON we can see, never into
+    silence we can't.
+    """
+    if not isinstance(item, dict):
+        return str(item or '')
+    t = item.get('type')
+    if t == 'text':
+        return item.get('text', '')
+    if t == 'knowledge':                       # web_search result
+        title, url = item.get('title', ''), item.get('url', '')
+        head = f'### {title}'.strip()
+        if url:
+            head += f'\n<{url}>'
+        return f'{head}\n\n{item.get("text", "")}'.strip()
+    if t == 'image':                           # binary never rides in the JSON
+        return ''
+    body = item.get('text') or item.get('content')
+    if isinstance(body, str) and body:
+        return body
+    return json.dumps(item, ensure_ascii=False)
+
+
 def result_text(block):
     c = block.get('content')
     if isinstance(c, list):
-        return '\n'.join(i.get('text', '') for i in c
-                         if isinstance(i, dict) and i.get('type') == 'text')
+        return '\n\n'.join(t for t in (result_item_text(i) for i in c) if t)
+    if isinstance(c, str):
+        return c
     return str(c or '')
 
 
@@ -68,6 +123,16 @@ def render_block(b):
     if t == 'tool_use':
         name = b.get('name', '')
         inp = b.get('input') or {}
+        if not inp:
+            # A shared-link snapshot strips the arguments of tool calls that
+            # touched the sharer's private files (a `view` of an upload keeps its
+            # name but loses `path` and the file's content). Say so out loud:
+            # rendering it as "view ()" reads like a bug in this script, and
+            # implies the call did nothing — when in fact the payload is simply
+            # not in this link and never will be. Only the original conversation,
+            # opened by its owner, still has it.
+            return (f'**🔧 {name}** — ⚠️ arguments stripped by the platform '
+                    '(shared-link snapshot; not recoverable from this link)')
         desc = inp.get('description', '')
         if name == 'bash_tool':
             return f'**🔧 bash** — {desc}\n\n' + fence(inp.get('command', ''), 'bash')
@@ -119,14 +184,140 @@ def render_msg(m):
     return '\n\n'.join(parts)
 
 
-def render_transcript(conv, source_url=''):
+def block_source_chars(b):
+    """How much content this block carries IN THE PAYLOAD (0 = it carries none).
+
+    Measured straight off the raw JSON — deliberately never through result_text()
+    or any other rendering-path parser. A gate that asks the parser how much there
+    was to render can only ever confirm the parser's own blind spots: the parser
+    that couldn't see `knowledge` items would have reported a budget of zero for
+    them, and the gate would have cheerfully agreed that losing 91% of the
+    conversation was fine. The budget must come from the payload, the tally from
+    the renderer, and the two must be computed by code that cannot collude.
+    """
+    t = b.get('type')
+    if t == 'text':
+        return len(b.get('text') or '')
+    if t == 'thinking':
+        return len(b.get('thinking') or '')
+    if t == 'tool_use':
+        inp = b.get('input') or {}
+        return len(json.dumps(inp, ensure_ascii=False)) if inp else 0
+    if t == 'tool_result':
+        c = b.get('content')
+        if not c:
+            return 0                                  # genuinely empty => stripped
+        if isinstance(c, list):
+            # Image results legitimately carry no text (the binary never rides in
+            # the JSON), so they are not a budget the renderer failed to meet.
+            textual = [i for i in c
+                       if not (isinstance(i, dict) and i.get('type') == 'image')]
+            return len(json.dumps(textual, ensure_ascii=False)) if textual else 0
+        return len(str(c))
+    return len(json.dumps(b, ensure_ascii=False)) if b else 0
+
+
+def fidelity_report(conv):
+    """Account for every block: did the text in the payload reach the transcript?
+
+    This exists because the failure it catches is SILENT. A renderer that doesn't
+    recognize a block type returns '' and nothing complains — the markdown looks
+    clean, the run exits 0, and the loss is invisible unless you happen to know
+    how long the conversation was. So instead of trusting the renderer, we ask it,
+    block by block: this block carried N characters — did you emit anything at all
+    for it? Any block that carried text and rendered to nothing is a real defect,
+    and the export must fail rather than quietly hand over a plausible-looking
+    fraction of the conversation.
+
+    A block that carries NO text in the payload is a different animal and must not
+    be conflated with loss: shared-link snapshots ship tool calls whose arguments
+    and results the platform removed. Those are counted separately as `stripped` —
+    a known, disclosed, unrecoverable gap rather than a bug in this script.
+    """
+    carried = rendered = 0
+    dropped, stripped = [], []
+    for i, m in enumerate(active_path(conv)):
+        blocks = m.get('content') or []
+        for b in blocks:
+            src = block_source_chars(b)
+            kind = b.get('type')
+            if src == 0:
+                if kind in ('tool_use', 'tool_result'):
+                    stripped.append({'msg': i, 'type': kind, 'name': b.get('name', '')})
+                continue
+            carried += src
+            if render_block(b).strip():
+                rendered += src
+            else:
+                dropped.append({'msg': i, 'type': kind, 'name': b.get('name', ''), 'chars': src})
+        top = m.get('text') or ''
+        seen = {b.get('text') for b in blocks if b.get('type') == 'text' and b.get('text')}
+        if top and top not in seen:
+            carried += len(top)
+            rendered += len(top)      # render_msg always appends it
+    return {
+        'carried_chars': carried,
+        'rendered_chars': rendered,
+        'retention': (rendered / carried) if carried else 1.0,
+        'dropped_blocks': dropped,     # payload had text, renderer emitted nothing => BUG
+        'stripped_blocks': stripped,   # payload itself was emptied by the platform => disclosed gap
+    }
+
+
+def gap_notice(conv, report):
+    """The disclosure banner. A reader must never mistake a snapshot for the whole
+    conversation just because the export ran cleanly."""
+    stripped = report['stripped_blocks']
+    if not stripped:
+        return []
+    names = sorted({s['name'] for s in stripped if s['name']})
+    tools = ', '.join(f'`{n}`' for n in names) or 'tool'
+    return [
+        '', f'> ⚠️ **Known gap — {len(stripped)} tool blocks were emptied by the platform** '
+            f'({tools}). A shared-link snapshot omits the arguments and results of '
+            'calls that touched the sharer\'s uploaded files, so their content is '
+            'absent from this export and **cannot be recovered from this link**. '
+            'This is a platform-side omission, not an export failure. Only the '
+            'original conversation, fetched by the account that owns it, still '
+            'carries them — see the skill\'s account-case table.', '',
+    ]
+
+
+def citation_sources(conv):
+    """web_search citations carry the URLs the answer actually leaned on — the
+    most reusable artifact in a research conversation. They live on text blocks,
+    so a renderer that only walks block bodies throws them away."""
+    urls = []
+    for m in active_path(conv):
+        for b in (m.get('content') or []):
+            for c in (b.get('citations') or []):
+                u = (c.get('details') or {}).get('url')
+                if u and u not in urls:
+                    urls.append(u)
+    if not urls:
+        return ''
+    lines = ['', '## Sources cited', '']
+    lines += [f'{i}. <{u}>' for i, u in enumerate(urls, 1)]
+    return '\n'.join(lines) + '\n'
+
+
+def render_transcript(conv, source_url='', report=None):
     msgs = active_path(conv)
-    head = [f'# {conv.get("name", "Untitled conversation")}', '']
+    # A share payload leaves `name` null and puts the real title in snapshot_name.
+    title = conv.get('name') or conv.get('snapshot_name') or 'Untitled conversation'
+    head = [f'# {title}', '']
     if source_url:
         head.append(f'> Source: {source_url}')
-    head += [f'Created: {conv.get("created_at", "?")}',
-             f'Messages: {len(msgs)}', '', '---', '']
-    return '\n'.join(head) + '\n\n---\n\n'.join(render_msg(m) for m in msgs) + '\n'
+    if conv.get('conversation_uuid'):           # => this is a shared snapshot
+        creator = (conv.get('creator') or {}).get('full_name') or conv.get('created_by') or '?'
+        head.append(f'> Shared-link snapshot of conversation `{conv["conversation_uuid"]}` '
+                    f'(shared by: {creator})')
+    head += [f'Created: {conv.get("created_at", "?")}', f'Messages: {len(msgs)}']
+    if report:
+        head += gap_notice(conv, report)
+    head += ['', '---', '']
+    body = '\n\n---\n\n'.join(render_msg(m) for m in msgs)
+    return '\n'.join(head) + body + '\n' + citation_sources(conv)
 
 
 def list_files(conv):
@@ -190,18 +381,56 @@ def main(argv=None):
     ap.add_argument('--list-files', action='store_true')
     ap.add_argument('--extract-file', metavar='SANDBOX_PATH',
                     help='e.g. /mnt/user-data/outputs/script.py')
+    ap.add_argument('--allow-lossy', action='store_true',
+                    help='write the transcript even if blocks failed to render '
+                         '(default: refuse, because that loss is otherwise silent)')
     args = ap.parse_args(argv)
 
     conv = json.load(open(args.json_path, encoding='utf-8'))
     if args.list_files:
         list_files(conv)
-        return
-    try:
-        out = (extract_file(conv, args.extract_file) if args.extract_file
-               else render_transcript(conv, args.source_url))
-    except ExtractionError as exc:
-        print(f'ERROR: {exc}', file=sys.stderr)
-        return 1
+        return 0
+    if args.extract_file:
+        try:
+            out = extract_file(conv, args.extract_file)
+        except ExtractionError as exc:
+            print(f'ERROR: {exc}', file=sys.stderr)
+            return 1
+    else:
+        report = fidelity_report(conv)
+        out = render_transcript(conv, args.source_url, report)
+
+        if report['dropped_blocks'] and not args.allow_lossy:
+            print('FIDELITY CHECK FAILED — refusing to write a lossy transcript.\n',
+                  file=sys.stderr)
+            for d in report['dropped_blocks'][:10]:
+                print(f"  msg[{d['msg']}] {d['type']}/{d['name'] or '-'}: "
+                      f"{d['chars']:,} chars in the payload, nothing rendered",
+                  file=sys.stderr)
+            extra = len(report['dropped_blocks']) - 10
+            if extra > 0:
+                print(f'  … and {extra} more', file=sys.stderr)
+            print(
+                f"\n{len(report['dropped_blocks'])} block(s) carried text that never reached the\n"
+                f"transcript ({report['retention']:.0%} retention). This is exactly the silent loss\n"
+                f"this check exists to catch — the payload almost certainly contains a block shape\n"
+                f"render_block()/result_item_text() doesn't handle yet. Inspect one:\n"
+                f"    python -c \"import json;d=json.load(open('{args.json_path}'));"
+                f"b=d['chat_messages'][{report['dropped_blocks'][0]['msg']}]['content'];"
+                f"print(json.dumps(b[0],ensure_ascii=False)[:800])\"\n"
+                f"then teach the renderer that shape. Use --allow-lossy only after you have\n"
+                f"decided, explicitly, that losing this content is acceptable.",
+                file=sys.stderr)
+            return 2
+
+        print(f"fidelity: {report['rendered_chars']:,}/{report['carried_chars']:,} chars rendered "
+              f"({report['retention']:.1%})", file=sys.stderr)
+        if report['stripped_blocks']:
+            names = sorted({s['name'] for s in report['stripped_blocks'] if s['name']})
+            print(f"known gap: {len(report['stripped_blocks'])} tool blocks were emptied by the "
+                  f"platform ({', '.join(names) or 'unnamed'}) — disclosed in the transcript header, "
+                  f"NOT recoverable from a shared link", file=sys.stderr)
+
     if args.output:
         open(args.output, 'w', encoding='utf-8').write(out)
         print(f'wrote {len(out)} chars to {args.output}', file=sys.stderr)

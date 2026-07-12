@@ -103,7 +103,7 @@
       "description": "Claude Code operations suite that bundles session history recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full claude.ai conversation extraction with tool-call rendering and file download, plugin marketplace development, multi-provider profile isolation for running Kimi/GLM/DeepSeek/StepFun/Anthropic in separate windows, local source sync for Claude/Codex skill installs, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.9.0",
+      "version": "1.10.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -217,10 +217,10 @@
     },
     {
       "name": "daymade-skill",
-      "description": "Daymade skills core suite. Bundles skill creation, quality review, governance, and marketplace development tooling under one shared namespace. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
+      "description": "Daymade skills core suite. Bundles skill creation, quality review, governance, and marketplace development tooling under one shared namespace. Existing-skill edits use an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.10.0",
+      "version": "1.11.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -993,10 +993,10 @@
     },
     {
       "name": "frontend-visual-qa",
-      "description": "Reviews rendered frontends, enterprise dashboards, HTML slides, design-system specimens/live artifacts, map/GIS canvases, generated UIs, and browser-integrated export/share/download/print/PDF flows for visual and UX defects that lint/build miss: awkward line breaks, overflow, wrong state, route drift, unusable drawers/maps/tables, unreadable standalone artifacts, blank print previews, generic AI slop, and Chrome/Computer Use verification gaps. Use after frontend-design or ui-designer work and alongside qa-expert release gates.",
+      "description": "Audits already-rendered web, landing-page, HTML deck/slide, browser tool/game, dashboard/admin, design-system, and desktop UIs with real-browser or native-app journeys, inspected screenshots, DOM geometry, responsive or projection viewports, and a Playwright sweep. Use after implementation to find typography, wrapping, overlap, overflow, responsive, route, authorization-state, overlay, map, transient-state, data-visualization, runtime-label, browser-output, file-dialog, PDF/print, or Electron-shell defects. Not for greenfield UI design, design-system extraction, general QA-program setup, or nonvisual debugging.",
       "source": "./frontend-visual-qa",
       "strict": false,
-      "version": "1.2.0",
+      "version": "1.3.0",
       "category": "design",
       "keywords": [
         "frontend",
