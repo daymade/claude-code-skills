@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transient error fixture</title>
+  <style>
+    body { font: 16px/1.5 Arial, sans-serif; padding: 40px; }
+    .toast { position: fixed; right: 24px; top: 24px; padding: 12px; background: #222; color: white; }
+  </style>
+</head>
+<body>
+  <h1>登录</h1>
+  <label>密码 <input id="password" type="password" value="wrong"></label>
+  <button id="submit">登录</button>
+  <script>
+    document.querySelector("#submit").addEventListener("click", () => {
+      const toast = document.createElement("div");
+      toast.className = "toast";
+      toast.textContent = "Invalid login credentials: AUTH_401";
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 700);
+    });
+  </script>
+</body>
+</html>

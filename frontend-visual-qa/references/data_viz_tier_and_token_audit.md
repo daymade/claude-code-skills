@@ -10,6 +10,14 @@ Load this when the user says a data page is "not the same level / tier" as a
 reference they made before, when you see hardcoded chart hex, or when you are
 adding series / identity colors to a design system.
 
+## Contents
+
+- Success Is The Actor's Job
+- Verify Data Context And Non-Happy States
+- Benchmark Visual Tier Against The Reference
+- Audit Design-System Color Tokens
+- Validate Categorical Palettes
+
 ## 1. Success = the actor's job, not "it rendered / tests are green"
 
 The cheapest wrong standard is "the page opens, the sections are all present,
@@ -31,17 +39,34 @@ actually carry a severity verdict and a magnitude?), not on the DOM node's
 existence. A rendered page plus green tests is the floor, never the finish line —
 the finish line is a real user completing their job at each stage.
 
-## 2. Visual tier: benchmark against the reference, quantify the gap
+## 2. Verify data context and non-happy states
+
+A chart that renders cleanly can still make the wrong claim. Verify:
+
+- units on KPIs, axes, tooltips, and derived values;
+- data source or provenance, selected time range, and freshness/timezone when
+  they materially change interpretation;
+- distinct loading, genuinely empty, filtered-no-match, permission-denied, and
+  error states;
+- unknown or failed data is never rendered as zero, success, or a completed
+  trend;
+- error and stale-data states explain the next safe action.
+
+A happy-state screenshot cannot verify these branches. Exercise them through
+the project's representative fixture/state controls, or list them as
+unverified rather than granting a full data-page pass.
+
+## 3. Visual tier: benchmark against the reference, quantify the gap
 
 When the user says a data page is "not the same level / tier" as something they
 made before, do not argue from taste. **Open the reference artifact in the
 browser, screenshot it, read its CSS / computed values, and diff quantifiable
-visual parameters side by side.** The recurring gap between a *generic-admin
-tier* and a *reporting-grade tier*:
+visual parameters side by side.** The table below is an illustrative pattern,
+not a universal scale:
 
 | Param | generic-admin tier (low) | reporting-grade tier (high) |
 |---|---|---|
-| Headline numbers | small, single ink color, ~20-22px | large 30-32px, semantic color (good / warn) |
+| Headline numbers | smaller, single ink color | larger display step, deliberate semantic emphasis where appropriate |
 | Verdict / summary | plain text block | key phrases color-coded (red = failure / loss, green = alive / gain, amber = watch) |
 | KPI layout | separate rounded cards | one divided strip of big numbers, each with a 2-line explaining note |
 | Status badge | small bordered chip | solid-fill, large letter-spacing, confident |
@@ -57,20 +82,21 @@ semantic color + 2-line note — reads as generic admin, not reporting-grade.
 ```
 
 A pretty page in the wrong tier still fails a user who has a higher-tier
-reference in mind. Note also: the same token set usually supports both tiers —
-the board just uses the *display* type-scale step and denser composition. A
-hardcoded 29px is usually a missing token reference, not a reason to fork the
-design system.
+reference in mind. Do not copy the example numbers above. Measure the named
+reference and the target in the same viewport and state. One token system may
+support both tiers when it already provides the needed display step and density
+range. Check that contract before adding a one-off size or forking the system.
 
-## 3. Design-system color-token audit (charts especially)
+## 4. Design-system color-token audit (charts especially)
 
-Design systems almost always say "chart colors come from tokens, never inline
-hex" — and chart code is where that rule breaks most, because someone ports a
-one-off HTML chart's hardcoded palette straight in.
+When the project design system says chart colors come from tokens, audit chart
+code as a likely drift point: one-off artifacts are often copied with their
+palette literals intact.
 
-- **Grep for hardcoded hex** in chart / component code: `#[0-9a-fA-F]{6}`
-  outside the token file. White / black are usually fine; **business / series
-  colors are not**. Each such hex is a finding.
+- **Search for hardcoded color literals** in chart/component code, including
+  `#[0-9a-fA-F]{6}`. Classify each hit against the project's token contract;
+  report unexplained business, semantic, or series colors rather than assuming
+  every literal—or every black/white primitive—is automatically right or wrong.
 - **Prove token resolution at runtime** — don't trust the source. In DevTools,
   read the computed color and confirm it resolved from the token, not a stale
   hex left behind after an edit:
@@ -86,7 +112,7 @@ one-off HTML chart's hardcoded palette straight in.
   `--t-display` for KPI numbers) and denser composition. You rarely need a
   second design system.
 
-## 4. Categorical palette must be colorblind-validated
+## 5. Categorical palette must be colorblind-validated
 
 A design system's **semantic** colors (red = alert, green = success, amber =
 watch, blue = neutral — each bound to one meaning) cannot double as
@@ -95,30 +121,39 @@ accounts, platforms, cohorts). If series-3 is "red", it collides with
 "red = alert". Most systems are *missing* a categorical palette, so people
 hardcode one — usually badly (too gray, or colorblind-ambiguous).
 
-When adding or auditing a categorical palette:
+Use standards and an explicit project policy:
 
-- **Validate it, don't eyeball it — compute the four checks numerically.** A
-  categorical palette has to pass four measurable tests, so read the numbers
-  rather than trusting appearance:
-  - **lightness band**: keep every slot within a controlled lightness range so
-    none dominates;
-  - **chroma floor**: no slot so low-chroma it "reads gray" — the classic
-    one-off-chart failure;
-  - **CVD separation**: every adjacent pair keeps ΔE ≥ 12 after simulating
-    protan / deuteran / tritan deficiency (Machado or Brettel model);
-  - **contrast vs the surface**: each slot clears a WCAG contrast ratio on the
-    page background.
-  Approving a palette on how it looks is exactly the eyeball failure these
-  numbers exist to prevent.
+- WCAG 2.2 Use of Color:
+  https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html
+  Do not encode a series, state, or decision with hue alone. Add direct labels,
+  symbols, patterns, line styles, or an equivalent table where needed.
+- WCAG 2.2 Non-text Contrast:
+  https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html
+  Graphical objects required for understanding should reach 3:1 against
+  adjacent colors unless an equivalent presentation makes that object
+  nonessential.
+- ColorBrewer:
+  https://colorbrewer2.org/
+  Prefer an established colorblind-safe qualitative palette when it fits the
+  series count and brand context.
 
-- **Slot ordering is the CVD mechanism, not cosmetic.** If two adjacent slots
-  fail CVD separation, reorder so warm / cool alternate — on one real palette
-  that pushed the worst-adjacent ΔE from 4.5 to 27.7 without changing the hues.
-- **Keep categorical clear of the semantic hues.** Put the identity colors a
-  chart uses most (the first few slots) on hues the semantic palette doesn't own
-  — avoid alert-red and success-green, so a series line never reads as a status
-  and a red failure / ✕ marker on the same chart stays distinct from every
-  series line.
-- A borderline contrast on one slot is acceptable only with the relief rule
-  (legend / direct labels / table view present). A chroma-floor failure or a CVD
-  separation failure must be fixed before the palette ships.
+Then validate the rendered chart:
+
+1. Separate semantic status tokens from categorical identity tokens. A series
+   should not accidentally read as success, warning, or failure.
+2. Simulate protan, deutan, and tritan color-vision deficiencies with an
+   established tool or model.
+3. Measure perceptual distance in one declared color space and record the
+   minimum pairwise result. Use the project's documented threshold when one
+   exists; do not invent a universal ΔE cutoff.
+4. Test series that touch, cross, overlap, or appear adjacent in the actual
+   chart. Palette array order alone is not the visual adjacency.
+5. Check lightness/chroma balance so one identity does not dominate or disappear.
+6. Check default, hover, selected, disabled, and muted states against the real
+   surface.
+7. Confirm direct labels, legend mapping, focus/hover feedback, and an equivalent
+   data view preserve meaning when colors become difficult to distinguish.
+
+Treat simulation and numeric distance as evidence, not a complete accessibility
+verdict. Fix ambiguous pairs, add redundant encodings, or reduce simultaneous
+series before shipping.

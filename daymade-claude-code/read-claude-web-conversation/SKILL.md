@@ -1,31 +1,30 @@
 ---
 name: read-claude-web-conversation
 description: >-
-  Read or export the COMPLETE transcript of a Claude.ai web conversation (a
-  claude.ai/chat/... link) by calling Claude.ai's own internal API from inside
-  the user's logged-in Chrome — and download the conversation's FILES too
-  (uploads, assistant-produced spreadsheets/scripts/charts). Use whenever the
-  user pastes a claude.ai conversation link and asks to read, summarize,
-  export, or extract it — "read this Claude conversation", "导出这个网页版对话",
-  "把对话里的文件也下载下来". curl/WebFetch FAIL (login-gated); get_page_text
-  sees only the last visible message (virtual scrolling); default renderings
-  collapse agent tool calls into placeholders (render_all_tools fixes this).
-  Works even when the claude-in-chrome extension can't pair (signed into a
-  different account) via a macOS AppleScript fallback channel. Scope: ONLINE
-  claude.ai conversations. For LOCAL Claude Code sessions
-  (~/.claude/projects/*.jsonl) use claude-code-history-files-finder; for an
-  already-exported .txt/.json file use claude-export-txt-better.
+  Read or export the COMPLETE transcript of a Claude.ai web conversation — both
+  private claude.ai/chat/... and public claude.ai/share/... links — by calling
+  Claude.ai's internal API from inside the user's logged-in Chrome, and download its
+  FILES too (uploads, deliverables). Use whenever the user pastes a claude.ai
+  conversation or share link and asks to read, summarize, export, archive, or extract
+  it — "read this Claude conversation", "导出这个网页版对话", "把这个对话拉到本地". Every naive
+  approach fails SILENTLY: curl/WebFetch hit a Cloudflare challenge; get_page_text
+  sees only the last message; the default API rendering collapses tool calls into
+  placeholders (~5% of it); a share payload uses block shapes a /chat/-only renderer
+  drops without error. Works even when the claude-in-chrome extension cannot pair
+  (different account), via CDP or a macOS AppleScript fallback. Scope: ONLINE
+  claude.ai. For LOCAL Claude Code sessions use claude-code-history-files-finder; for
+  an exported .txt/.json file use claude-export-txt-better.
 ---
 
 # Read Claude.ai Web Conversation
 
 Pull a Claude.ai **web** conversation into a full, structured transcript — every
-message, not just what is currently on screen.
+message and every tool call, not just what is currently on screen.
 
-Verified against Claude.ai's web API as of June–July 2026. The endpoints below are the
-same private JSON API the Claude.ai front-end itself calls; they are not a
-documented/stable public API, so if a request 404s, re-derive the shape from the
-Network tab (see `references/claude-web-api-extraction.md`).
+Verified against Claude.ai's web API as of July 2026. These are the same private
+JSON endpoints the Claude.ai front-end calls; they are not a documented or
+version-stable public API, so if a request 404s, re-derive the shape from the
+Network tab (see [references/claude-web-api-extraction.md](references/claude-web-api-extraction.md)).
 
 ## This skill vs. its siblings
 
@@ -33,204 +32,320 @@ Pick by the *source you are holding*, not by the word "conversation":
 
 | Source | Use |
 |--------|-----|
-| A live **`claude.ai/chat/…`** URL (online, login-gated) | **This skill** |
+| A live **`claude.ai/chat/…`** or **`claude.ai/share/…`** URL | **This skill** |
 | Local Claude Code sessions (`~/.claude/projects/*.jsonl`) | `claude-code-history-files-finder` |
 | An already-exported `.txt` / `.json` conversation file | `claude-export-txt-better` |
 
 ## Why the obvious approaches fail (read this first)
 
-Two traps make this deceptively hard, and both fail *silently* — they return
-partial data that looks complete, so you only notice the loss if you happen to
-know the conversation was longer:
+Four traps, and **every one of them fails silently** — you get back something
+that looks like a complete export, and you only notice the loss if you happen to
+know how long the conversation really was. Assume you are being lied to by
+default; the fidelity gate in Step 4 exists to make the lies audible.
 
-1. **Login wall.** `curl`, `WebFetch`, and headless browsers get an auth
-   redirect or an empty SPA shell. A Claude.ai conversation is private and gated
-   on the session cookie that lives in the user's logged-in Chrome. You have to
-   run inside *their* browser session.
-2. **Virtual scrolling.** Even with the conversation open, `get_page_text` and
-   DOM scraping only see the few messages currently rendered — often just the
-   last one. A 40-message thread comes back as 1. Programmatically scrolling to
-   force-render every message is slow, flaky, and order-fragile.
+1. **Login wall.** `curl` and `WebFetch` don't get an auth redirect — they get a
+   Cloudflare challenge page (HTTP 403, `Just a moment...`). Nothing you do to
+   the headers fixes this; the page is gated on a session that lives in the
+   user's Chrome. **Never reach for curl here, not even to "just check".**
+2. **Virtual scrolling.** With the conversation open, `get_page_text` and DOM
+   scraping still only see the handful of messages currently rendered — often
+   just the last one. A 40-message thread comes back as 1.
+3. **Default rendering collapses the tool calls.** The API's default rendering
+   turns every tool call into a "not supported on your current device"
+   placeholder. On a research/agent conversation the tool blocks ARE the content:
+   measured on a real one, the default rendering returned **9.4k chars against
+   173k** with `render_all_tools=true` — 5%. Always request the full rendering.
+4. **A /chat/-shaped renderer silently drops /share/ blocks.** A share payload
+   returns web_search hits as `knowledge` items, not `text` items. A renderer
+   that only knows `text` returns the empty string for them and reports no error —
+   the same real conversation rendered to **8k chars instead of 146k (4.8%
+   retention)** and looked completely fine.
 
-**The reliable path:** open the conversation in the user's Chrome, then from
-*inside the page* `fetch` Claude.ai's own conversation JSON (the request inherits
-the login cookie automatically). One call returns the entire message tree.
+**The reliable path:** run JavaScript *inside the user's logged-in page* and let
+`fetch` inherit the session cookie, then render locally through the fidelity gate.
 
-## Method
+## Step 0 — Choose an injection channel
 
-### Step 1 — Load the browser tools
+Three channels can execute JS inside the user's page. They differ only in
+plumbing, and each fails in its own way, so pick in this order and **verify**
+rather than assume.
 
-Load the core claude-in-chrome set in one ToolSearch call:
+| Order | Channel | Use when | Fails when |
+|-------|---------|----------|-----------|
+| 1 | **claude-in-chrome extension** | `list_connected_browsers` returns a browser | Returns `[]` → the extension's claude.ai login ≠ the Claude Code account. This is **structural** — retrying, reinstalling, and `switch_browser` all fail. Move on immediately. |
+| 2 | **CDP** (`scripts/cdp_channel.py probe`) | probe says `available: true` — then it is the best channel there is | Usually unavailable, and that is **normal, not a malfunction** — see below. Probe is cheap; believe its answer and move on. |
+| 3 | **AppleScript** (macOS only) | The realistic fallback when the extension can't pair | See the routing trap below — check for it BEFORE blaming the user |
+| ✗ | **curl / WebFetch** | **never** | Cloudflare 403. There is no header that fixes it. |
+
+**⚠️ Expect CDP to be unavailable, and never try to force it.** Since Chrome 136
+(April 2025) the debugging port is *ignored on the default user-data-dir* — a
+deliberate hardening against malware that used CDP to steal cookies. You may still
+find a listening socket and a stale `DevToolsActivePort` on disk while the
+WebSocket handshake is never answered and `/json/*` returns 404.
+
+**And its availability flaps.** Verified on Chrome 150, one machine, one browser
+session: the endpoint worked, then stopped answering entirely, then answered again
+— with no restart in between. So **probe every time and never cache the verdict**.
+"CDP worked five minutes ago" is not evidence that it works now, and "CDP failed
+once" is not evidence that this machine can't use it. The probe is cheap precisely
+so you can afford to re-ask.
+
+The trap is what you'll be tempted to do next. Every fix on the web says "relaunch
+Chrome with `--user-data-dir=/tmp/whatever`". **For this skill that is worse than
+useless: a fresh profile is signed out, and a signed-out browser cannot read a
+single one of the user's conversations.** The session you need lives in precisely
+the profile Chrome is refusing to expose. So probe, take the answer, and fall
+back — never reconfigure or relaunch the user's browser to chase a port.
+
+CDP *does* work when Chrome was deliberately started on a non-default
+`--user-data-dir` **and** is signed into claude.ai. That happens, and when it does
+this channel beats the others outright (no menu toggle, immune to the Apple Events
+capture below, enumerates every tab, returns the whole payload on stdout). That is
+why it is worth one cheap probe before falling through.
+
+**To try channel 1**, load the extension's tools in a single ToolSearch call
+(they are deferred; the API path needs no `get_page_text` / `read_page`):
 
 ```
 ToolSearch: select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__javascript_tool
 ```
 
-(No `get_page_text` / `read_page` needed — the API path bypasses the DOM.)
+then call `list_connected_browsers`. An empty list is the account mismatch — go to
+channel 2 rather than retrying.
 
-**If the extension cannot connect** — `tabs_context_mcp` errors with "Browser
-extension is not connected", `list_connected_browsers` returns `[]`, and
-`switch_browser` finds nothing — the usual root cause is an **account
-mismatch**: the extension pairs only when its claude.ai login matches the
-Claude Code account. Confirm with the user; if the accounts differ, no retry
-will fix it. On macOS, switch to the **AppleScript channel** — same in-page
-API method, injected via `osascript` instead of the extension — and follow
-[references/applescript_fallback_channel.md](references/applescript_fallback_channel.md)
-(one manual Chrome menu toggle by the user, then Steps 3–4 below run through
-that channel with even better output limits).
+**To try channel 2:**
 
-### Step 2 — Open the conversation in the user's Chrome
-
-`tabs_context_mcp` with `{ "createIfEmpty": true }` to get a tab, then
-`navigate` that tab to the conversation URL. Confirm it loaded **logged-in**: the
-returned tab title should be the conversation's name, not "Log in" / "Claude".
-If it shows a login page, stop and tell the user to sign into claude.ai in Chrome
-first — do not try to automate the login.
-
-### Step 3 — Pull the full transcript via the internal API
-
-**Two paths — pick by what the user needs:**
-
-- **Full export / archival / the conversation used tools or files** → use the
-  bundled pipeline instead of hand-writing JS:
-  1. Run [scripts/export_conversation.js](scripts/export_conversation.js) in
-     the page (javascript_tool, or `scripts/runjs.applescript` on the
-     AppleScript channel). It fetches the JSON with `render_all_tools=true`
-     (real tool blocks) and stores it on `window.__claudeExport` —
-     fire-and-poll instructions are in the file header.
-  2. Get `rawJson` out (stdout-redirect on AppleScript; ~16k `.slice()` windows
-     on javascript_tool) and save as `conversation.json`.
-  3. Render locally:
-     `uv run python scripts/render_transcript.py conversation.json -o transcript.md`
-     — timestamped speaker headers, per-message file inventories, every tool
-     call rendered, tool outputs folded. `--list-files` inventories the
-     downloadable files; `--extract-file <sandbox-path>` reconstructs a
-     sandbox-created file without downloading and fails without writing output
-     if any replayed replacement is missing or ambiguous.
-- **Quick read of a plain chat** (no tool blocks, just need the text now) →
-  the inline snippet below assembles the transcript in-page in one call.
-
-Run the snippet with `mcp__claude-in-chrome__javascript_tool`
-(`action: javascript_exec`) on that tab. It executes in the page, so `fetch`
-carries the user's auth. It derives the conversation id from the open URL —
-**never hard-code an id**:
-
-```js
-// Runs inside the claude.ai page; fetch inherits the logged-in session cookie.
-const orgs = await fetch('/api/organizations', { headers: { accept: 'application/json' } })
-  .then(r => r.json());
-const org = orgs[0].uuid;                            // first org — see Gotchas if the user has several
-const convId = location.pathname.split('/').pop();  // from the open URL; do NOT hard-code
-
-const conv = await fetch(
-  `/api/organizations/${org}/chat_conversations/${convId}?tree=True&rendering_mode=raw`,
-  { headers: { accept: 'application/json' } }
-).then(r => r.json());
-
-// tree=True returns the WHOLE message tree, including branches abandoned by edits
-// or regenerations. Walk the active path from the current leaf up its parents so
-// the transcript is the conversation as actually read — not dead branches in array
-// order. Falls back to raw order if these fields aren't present.
-const raw = conv.chat_messages || [];
-const byId = Object.fromEntries(raw.map(m => [m.uuid, m]));
-const path = [];
-for (let id = conv.current_leaf_message_uuid; id && byId[id]; id = byId[id].parent_message_uuid) {
-  path.unshift(byId[id]);
-}
-const msgs = path.length ? path : raw;          // fallback: leaf walk unavailable → raw order
-
-// A message can carry a top-level m.text AND a content[] array at once (agent turns:
-// thinking + tool_use blocks PLUS a final text answer). Build from content[] first so
-// nothing is dropped, then fold in m.text if not already there — never short-circuit
-// on m.text alone (that silently discards every block whenever m.text is set).
-const blockText = (b) =>
-  b.text || b.thinking
-  || (b.type === 'tool_use'    ? `[tool_use ${b.name || ''}] ${JSON.stringify(b.input || {})}` : '')
-  || (b.type === 'tool_result' ? `[tool_result] ${typeof b.content === 'string' ? b.content : JSON.stringify(b.content || '')}` : '');
-const textOf = (m) => {
-  const blocks = (m.content || []).map(blockText).filter(Boolean);
-  const joined = blocks.join('\n');
-  const contentTexts = new Set((m.content || [])
-    .filter(b => b.type === 'text' && b.text).map(b => b.text));
-  if (m.text && !contentTexts.has(m.text)) return joined ? `${joined}\n${m.text}` : m.text;
-  return joined || m.text || '';
-};
-
-const transcript = msgs
-  .map(m => `## ${m.sender === 'human' ? 'User' : 'Claude'}\n\n${textOf(m)}`)
-  .join('\n\n');
-
-// Return a small summary + the first window of text (large returns get truncated — see Step 4).
-({ title: conv.name, messages: msgs.length, chars: transcript.length, text: transcript.slice(0, 14000) });
+```bash
+uv run --with websockets python scripts/cdp_channel.py probe
 ```
 
-You now have the title, the exact message count, and the transcript. Use the
-count to verify completeness (it is the ground truth — if `get_page_text` earlier
-showed 1 message and this says 40, the API path just saved you 39).
+`probe` answers three questions at once: is CDP available, is it pointed at the
+user's *real* browser (page count, and any claude.ai tabs already open), and are
+there **multiple Chrome instances** running. Its output drives everything below —
+including the AppleScript decision, since the `chrome_instances.automation` list is
+what tells you whether Apple Events will even reach the right browser.
 
-### Step 4 — Page through large conversations
+Exit codes are a contract, so you never have to guess whether to fall back:
 
-`javascript_tool` truncates very large return values, so a long transcript comes
-back cut off. The `chars` field from Step 3 tells you the true length. If
-`chars` exceeds what you received, re-run the snippet but return a later window —
-keep the fetch identical and only change the final line:
+| code | meaning | what to do |
+|------|---------|-----------|
+| 0 | worked | continue |
+| 1 | bad input (unreadable `--js`, etc.) | fix the call |
+| 2 | `TAB_NOT_FOUND` | use `open`, or ask the user to open the page |
+| **3** | **CDP unusable** | **fall back to another channel — this is the normal outcome** |
+| 4 | the browser answered with an error | the command was wrong, or the tab vanished mid-call; falling back won't help |
 
-```js
-// ... identical fetch + transcript build as Step 3 ...
-transcript.slice(14000, 32000);   // next window; repeat (32000, 50000) … until you've covered `chars`
+Exit 3 still prints `chrome_instances`, because that part needs no debugging port.
+It is a routing fact, not an error: read it, fall through to channel 3, and say
+nothing to the user about debugging ports.
+
+### The AppleScript routing trap (read before you blame the user)
+
+AppleScript addresses Chrome by *bundle id*. If a second Chrome instance is
+running — chrome-devtools-mcp, puppeteer, playwright, anything launched with its
+own `--user-data-dir` — Apple Events can land on **that** instance instead, and
+macOS gives you no way to target the first one by pid. There is no workaround.
+
+What makes this genuinely dangerous is how it *presents*: the automation profile
+has "Allow JavaScript from Apple Events" switched off, so your JS attempt fails
+with **"Executing JavaScript through AppleScript is turned off"** — and you will
+conclude the user forgot a menu toggle, and go ask them to flip it, while their
+real browser had it enabled the whole time. Observed exactly this: AppleScript
+reported `windows=1 tabs=1` while the user's actual Chrome had 35 tabs open.
+
+So before falling back to AppleScript, run `probe` (or `chrome_instances()` from
+`cdp_channel.py`) and read the `automation` list. If it is non-empty, say so
+plainly — *"an automation Chrome is holding the Apple Events route, so
+AppleScript will hit the wrong browser"* — and either use CDP, or ask whether
+that instance can be closed. Do not relay a toggle error you cannot attribute.
+
+Channel details and the base64 binary bridge: [references/applescript_fallback_channel.md](references/applescript_fallback_channel.md).
+
+## Step 1 — Identify the account case (this decides what you can even get)
+
+**How much of the conversation exists for you to fetch depends on whose account
+the browser is signed into.** Establish this early — it is the difference between
+a complete archive and one with unrecoverable holes, and the user deserves to
+know which they are getting *before* you hand it over.
+
+| Case | Signal | What you can get |
+|------|--------|------------------|
+| **A · Not signed in** | `/api/organizations` returns no org | Nothing for `/chat/` links. Stop and ask the user to sign into claude.ai in Chrome — never automate a login. |
+| **B · Signed in, conversation belongs to this account** | `GET .../chat_conversations/<conversation-id>` returns 200 | **Everything**, including the content of uploaded attachments. Prefer this path whenever it is available. |
+| **C · Signed in, but it's someone else's share link** | the conversation fetch 404s; the snapshot's `creator` ≠ this account | The snapshot only. **The platform strips the arguments and results of every tool call that touched the sharer's uploads.** Unrecoverable from that link. |
+
+For a `/share/…` link, the snapshot payload itself tells you which case you're
+in: it carries `conversation_uuid` (the original) and `creator`. So fetch the
+snapshot first, then **try the original** with that `conversation_uuid` — if it
+200s you are in case B and should re-export from there, because the snapshot is
+strictly lossier. If it 404s, you are in case C: say so out loud, and let the
+render step disclose the gaps in the transcript header (it does this on its own).
+
+Case C's holes are real and worth naming precisely, because they look like a bug
+in your export when they are not: a `view` of an uploaded file keeps its name but
+loses its `path` and the file's entire content. The user's own copy of that file
+is usually sitting on their disk — the export isn't broken, it just cannot speak
+for a file the platform declined to share.
+
+## Step 2 — Open the conversation
+
+Extension: `tabs_context_mcp` with `{ "createIfEmpty": true }`, then `navigate`.
+CDP: `cdp_channel.py open --url <url>` (reuses an existing tab; waits out the
+Cloudflare interstitial, which the browser clears by itself).
+
+Either way, confirm it actually loaded and is logged in — the tab title should be
+the conversation's name, not "Log in". If you land on a login page, stop and tell
+the user; do not automate a login.
+
+## Step 3 — Fetch the payload
+
+**Always request the full tool rendering.** Without `render_all_tools=true` you
+get placeholders where the analysis was (trap 3 above).
+
+| Link type | Endpoint |
+|-----------|----------|
+| `/chat/<conversation-id>` | `GET /api/organizations/<org-uuid>/chat_conversations/<conversation-id>?tree=True&rendering_mode=messages&render_all_tools=true` |
+| `/share/<snapshot-id>` | `GET /api/chat_snapshots/<snapshot-id>?rendering_mode=messages&render_all_tools=true` |
+
+Note the share endpoint keys on the **snapshot id** from the URL, which is *not*
+the conversation id — feeding a snapshot id to `chat_conversations` 404s, and that
+404 means "wrong id", not "you lack access". Both id families are opaque; always
+derive them from the open URL rather than hard-coding.
+
+- **Extension channel** → run [scripts/export_conversation.js](scripts/export_conversation.js)
+  in the page (fire-and-poll instructions are in its header), then page out
+  `window.__claudeExport.rawJson` in ~16k `.slice()` windows.
+- **CDP channel** → the same JS, no paging dance, result straight to a file:
+  ```bash
+  uv run --with websockets python scripts/cdp_channel.py eval \
+      --match <conversation-or-snapshot-id> --js fetch.js --out conversation.json
+  ```
+  `awaitPromise` resolves the async fetch in one call, and the value comes back on
+  stdout, so a multi-megabyte payload never has to cross a context window.
+- **AppleScript channel** → same JS via `scripts/runjs.applescript`, redirecting
+  stdout to the file (see the channel reference).
+
+For a plain chat with no tool calls, where you just need the text right now, the
+inline snippet in [references/claude-web-api-extraction.md](references/claude-web-api-extraction.md)
+assembles a transcript in-page in a single call.
+
+## Step 4 — Render locally, through the fidelity gate
+
+```bash
+uv run python scripts/render_transcript.py conversation.json -o transcript.md \
+    --source-url <url>
 ```
 
-Stitch the windows together in order. Prefer ~14–18k-char windows; going much
-larger risks hitting the truncation limit again.
+This handles both payload shapes (`/chat/` and `/share/`), renders every tool
+call, folds tool outputs into `<details>`, and collects web_search citations into
+a "Sources cited" list.
+
+**It also refuses to write a lossy transcript.** Before emitting anything it
+audits every block — *this block carried N characters; did the renderer emit
+anything at all for it?* — and exits **2** if any block carried text and produced
+nothing. That is the trap-4 failure, and it is invisible without this check: the
+markdown looks clean, the exit code is 0, and 95% of the conversation is gone.
+The budget is measured off the raw payload, deliberately **not** through the
+rendering path, because a gate that asks the parser how much there was to render
+can only ever confirm the parser's own blind spots.
+
+If it fails, it names the offending block and the command to inspect it: teach
+`result_item_text()`/`render_block()` the new shape. Reach for `--allow-lossy`
+only when you have consciously decided the loss is acceptable — it is almost
+never the right answer, and it is never the right *first* answer.
+
+Blocks the **platform** emptied (case C) are counted separately as a disclosed
+gap, never as loss, and are announced in the transcript header. A clean run
+prints its own accounting:
+
+```
+fidelity: 143,088/143,088 chars rendered (100.0%)
+known gap: 12 tool blocks were emptied by the platform (view) — disclosed in the
+           transcript header, NOT recoverable from a shared link
+```
+
+The gate audits **per item**, not per block — items are the granularity content
+actually gets lost at, and a per-block check credited a whole block as rendered
+whenever *any* part of it came out, so a vanished 38k-char item hid behind a
+16-char sibling and scored 100%. It also covers what a `content[]`-only audit
+structurally cannot see: message-level **attachment bodies** (a pasted document
+lives there, not in a block), the top-level `text`, and messages the active-path
+walk never reached. And a payload with nothing in it scores **0%, not 100%** — an
+empty fetch is the limit case of the very loss this gate exists for.
+
+**If you change the renderer, run the regression suite.** Every case in it is a
+shape that fooled a previous version of the gate:
+
+```bash
+uv run python scripts/selftest_fidelity.py
+```
+
+Other modes, unchanged: `--list-files` inventories every downloadable file with
+the endpoint family each needs; `--extract-file <sandbox-path>` reconstructs a
+sandbox-created file by replaying its `create_file` plus every later
+`str_replace`, and refuses to emit anything if a replacement is missing or
+ambiguous rather than handing back stale content.
+
+## Step 5 — Paging (extension channel only)
+
+`javascript_tool` truncates large return values. Fetch the `chars` count first,
+then re-run returning later windows — keep the fetch identical and change only
+the final expression:
+
+```js
+transcript.slice(14000, 32000);   // then (32000, 50000) … until you've covered `chars`
+```
+
+Prefer ~14–18k windows; larger risks hitting the limit again. **The CDP and
+AppleScript channels don't need any of this** — both return the whole payload on
+stdout, which is a good reason to prefer them for a large archival export.
 
 ## Gotchas
 
 - **`sender` values are `'human'` and `'assistant'`** (not `'user'`/`'claude'`).
 - **A message can have `m.text` AND `m.content[]` at the same time.** Agent turns
-  often carry the final answer in `m.text` plus `thinking` / `tool_use` /
-  `tool_result` blocks in `content[]`. `textOf()` above builds from `content[]`
-  first and folds in `m.text` — do NOT reduce it to `m.text || (content…)`, which
-  short-circuits and silently drops every block whenever `m.text` is set. If a
-  message comes back blank, inspect one raw: `Object.keys(msgs[0])` and
-  `msgs[0].content?.map(b => b.type)`.
+  often carry the final answer in `m.text` plus `thinking`/`tool_use`/`tool_result`
+  blocks in `content[]`. Build from `content[]` first and fold in `m.text` — never
+  `m.text || (content…)`, which short-circuits and drops every block whenever
+  `m.text` is set. If a message renders blank, inspect one raw:
+  `Object.keys(msgs[0])` and `msgs[0].content?.map(b => b.type)`.
+- **A `/share/` payload is shaped differently from `/chat/`.** `name` is null (the
+  title is in `snapshot_name`); web_search results are `knowledge` items
+  (`title`/`url`/`text`), not `text` items; and `citations` hang off the text
+  blocks. The bundled renderer handles all three — a hand-rolled one usually
+  doesn't, which is trap 4.
+- **Empty `input: {}` / `content: []` on a tool block is not a bug** — on a share
+  snapshot it is the platform withholding the sharer's private file contents. Say
+  so; don't render it as a mysterious no-op, and don't count it as data loss.
 - **If `rendering_mode=raw` returns empty or short bodies, retry with
-  `rendering_mode=messages`.** The two modes expose slightly different fields;
-  `messages` is the usual fallback when `raw` looks incomplete.
-- **Transcript full of "This block is not supported on your current device
-  yet."?** The conversation used code execution / file tools, and both `raw`
-  and plain `messages` collapse those into placeholders. Re-fetch with
-  `?tree=True&rendering_mode=messages&render_all_tools=true` — it returns the
-  real `tool_use`/`tool_result` blocks (verified to restore the otherwise
-  missing analysis trace; for an agent conversation the tool blocks ARE the process).
-  Field-by-field schema in the API reference.
-- **The conversation's files are downloadable too** — user uploads, and the
-  deliverables behind Download cards. Two endpoint families, keyed differently
-  (images by uuid, uploads/outputs by sandbox path via
-  `conversations/{convId}/wiggle/download-file`); uuid-guessing 404s for
-  uploads, which looks like — but is not — "unsupported".
-  [scripts/download_files.js](scripts/download_files.js) auto-inventories the
-  conversation and pulls everything through the right endpoint; endpoint
-  details in "Downloading files from the conversation" in the API reference.
-  Don't conclude anything is unavailable before trying it.
-- **`tree=True` returns the whole tree, including abandoned edit/regeneration
-  branches.** The code walks the active path from `conv.current_leaf_message_uuid`
-  via `parent_message_uuid`, so dead branches don't leak into the transcript or
-  inflate the `messages` count. If a payload lacks those fields the walk falls back
-  to raw array order — correct for never-edited (single-chain) conversations.
-- **Multiple organizations:** `orgs[0]` may be the wrong one. If the conversation
-  404s, list them — `orgs.map(o => ({ uuid: o.uuid, name: o.name }))` — and try
-  the org whose name matches the user's account, or loop the fetch across orgs.
-- **`/share/…` links are different.** A public share link is not login-gated and
-  has its own payload; try `get_page_text` or a plain fetch of the share JSON
-  first. The API path above is for private `/chat/…` conversations. (Not deeply
-  verified here — fall back to reading the rendered page if the share API shape
-  differs.)
-- **Just read — don't click.** This skill never needs to interact with the
-  conversation UI; avoid triggering navigation or dialogs mid-fetch.
+  `rendering_mode=messages`.** The two expose slightly different fields.
+- **The conversation's files are downloadable too** — uploads, and the deliverables
+  behind Download cards. Two endpoint families, keyed differently (images by uuid;
+  uploads/outputs by **sandbox path** via `conversations/<id>/wiggle/download-file`).
+  uuid-guessing 404s for uploads, which looks like — but is not — "unsupported".
+  [scripts/download_files.js](scripts/download_files.js) inventories the
+  conversation and pulls each through the right endpoint. Don't conclude anything
+  is unavailable before trying it.
+- **`tree=True` returns the whole tree**, including branches abandoned by edits and
+  regenerations. Walk the active path from `current_leaf_message_uuid` via
+  `parent_message_uuid` so dead branches don't leak into the transcript or inflate
+  the message count. The renderer does this and falls back to array order when
+  those fields are absent (correct for single-chain conversations, and for share
+  snapshots, which are already linear).
+- **Multiple organizations:** `orgs[0]` may be the wrong one. If a conversation
+  404s, list them — `orgs.map(o => ({uuid: o.uuid, name: o.name}))` — and loop the
+  fetch across orgs before concluding it's inaccessible.
+- **Just read — don't click.** This skill never needs to touch the conversation UI;
+  avoid triggering navigation or dialogs mid-fetch.
+- **Never relaunch the user's browser to open a debugging port.** Beyond the usual
+  reason (it's their browser, not yours), it is self-defeating here: Chrome only
+  honours the port on a *non-default* profile, and a fresh profile is **signed
+  out** — so the browser you just launched cannot read any of their conversations.
+  You would be trading the session you need for a port you don't. An unavailable
+  port is a fact to route around, not a setting to change.
 
-For the full reusable script (every block type, an automatic paging loop, and a
-markdown-file export variant) plus the response schema field-by-field, see
-[references/claude-web-api-extraction.md](references/claude-web-api-extraction.md).
+Full endpoint table, response schema field-by-field, the complete export script,
+and a troubleshooting table: [references/claude-web-api-extraction.md](references/claude-web-api-extraction.md).
 
 ## Next Step
 
@@ -238,7 +353,7 @@ Once you have the transcript, suggest the natural follow-up — opt-in, never
 automatic:
 
 ```
-Got the full conversation (<N> messages, "<title>").
+Got the full conversation (<N> messages, "<title>", <retention>% fidelity).
 
 Options:
 A) Clean it up — run transcript-fixer if it's ASR/garbled (only if relevant)
@@ -249,5 +364,7 @@ E) Nothing else — you just needed it read
 ```
 
 If the transcript showed file activity (uploads listed, Download cards,
-`present_files` blocks), mention option D explicitly — users routinely assume
-the files are lost when only the text is exported.
+`present_files` blocks), mention option D explicitly — users routinely assume the
+files are lost when only the text is exported. And if the render reported a known
+gap (case C), lead with that instead: the user needs to know their archive has
+holes the link can never fill, while they still have the originals to hand.

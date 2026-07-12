@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Script evidence edge cases</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.5 Arial, sans-serif; color: #1d2733; }
+    header { min-height: 160px; padding: 28px 32px; background: #f4f6f8; }
+    h1 { margin: 0 0 16px; font-size: 32px; }
+    [role="button"] { display: inline-block; padding: 10px 14px; border: 1px solid #52606d; }
+    .hidden-marker { opacity: 0; position: absolute; inset: 0 auto auto 0; }
+    .clipped-marker-box { position: absolute; width: 220px; height: 20px; overflow: hidden; }
+    .clipped-marker { display: block; margin-top: 40px; }
+    .direct-clipped-marker-box {
+      position: absolute;
+      top: 92px;
+      left: 140px;
+      width: 240px;
+      height: 20px;
+      overflow: hidden;
+      line-height: 20px;
+    }
+    .partial-clipped-marker-box {
+      position: absolute;
+      top: 120px;
+      left: 280px;
+      width: 80px;
+      height: 20px;
+      overflow: hidden;
+      white-space: nowrap;
+      line-height: 20px;
+    }
+    section {
+      position: relative;
+      min-height: 40000px;
+      padding: 760px 32px 32px;
+      background: repeating-linear-gradient(#ffffff 0 239px, #eef2f5 239px 240px);
+    }
+    section h2 { margin: 0; font-size: 28px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Visible state marker</h1>
+    <a role="button" data-testid="anchor-action">Anchor action without href</a>
+    <span class="hidden-marker">Hidden state marker</span>
+    <div class="clipped-marker-box">
+      <span>Visible clipped-box line</span>
+      <span class="clipped-marker">Clipped state marker</span>
+    </div>
+    <div class="direct-clipped-marker-box">Visible direct line<br><br>Direct clipped state marker</div>
+    <div class="partial-clipped-marker-box">Visible prefix Partially clipped state marker</div>
+  </header>
+  <section aria-labelledby="lower-section-title">
+    <h2 id="lower-section-title">Representative lower section</h2>
+    <p>This section is intentionally much taller than a viewport.</p>
+  </section>
+</body>
+</html>

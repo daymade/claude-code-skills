@@ -192,7 +192,7 @@ export NO_PROXY=localhost,127.0.0.1,.ts.net,100.64.0.0/10,192.168.*,10.*,172.16.
 | `100.*` | ✅ | ✅ | ❌ | ✅ | Too broad — covers public IPs `100.0-63.*` and `100.128-255.*` |
 | `workstation-name` | ✅ | ✅ | ✅ | ✅ | Exact hostname match (safest for Go) |
 
-**Go `net/http` warning**: Go's proxy bypass logic (`httpproxy.Config.ProxyFunc`) does not implement CIDR matching. `NO_PROXY=100.64.0.0/10` is silently ignored — Go programs will still route traffic through the proxy. Use MagicDNS hostnames (e.g., `workstation-4090-wsl`) or explicit IPs (e.g., `100.101.102.103`) instead of CIDR ranges when Go programs need to bypass the proxy.
+**Go `net/http` warning**: Go's proxy bypass logic (`httpproxy.Config.ProxyFunc`) does not implement CIDR matching. `NO_PROXY=100.64.0.0/10` is silently ignored — Go programs will still route traffic through the proxy. Use MagicDNS hostnames (e.g., `my-wsl-box`) or explicit IPs (e.g., `100.101.102.103`) instead of CIDR ranges when Go programs need to bypass the proxy.
 
 **Key rule**: Always use `.ts.net` (leading dot, no asterisk) for domain suffix matching. This is the most portable syntax across all HTTP clients.
 

@@ -1,0 +1,49 @@
+{
+  "skill_name": "auto-repo-setup",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "A collaborator uses either Claude Code or Codex in this repository. I want the latest remote changes before work. Can we just tell the agent once instead of making a launcher or a large synchronization service?",
+      "expected_output": "Prefer a natural-language or project-instruction workflow. Use git pull --ff-only only on a clean worktree; do not auto-stash, merge, rebase, or overwrite. Do not propose a hook unless pre-prompt timing is explicitly required.",
+      "files": [],
+      "assertions": [
+        "Does not propose a launcher, shortcut, or custom synchronization daemon",
+        "Uses project instructions or a normal Agent request as the default",
+        "Preserves dirty/diverged work rather than auto-stashing"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I see the same SessionStart message three times. Find out why and tell me what to change. Do not assume there are three registrations.",
+      "expected_output": "Audit all hook scopes and correlate firings with root/resume/compact/subagent sessions before editing. Distinguish duplicate configuration from one hook firing in several agents.",
+      "files": [],
+      "assertions": [
+        "Counts registrations before changing configuration",
+        "Correlates each output with lifecycle source or agent session",
+        "States a verified root cause before proposing a fix"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "This TypeScript repository has package.json and package-lock.json, no Python files, and no ONBOARDING.md. Help me get it running.",
+      "expected_output": "Read AGENTS/CLAUDE/README and Node manifests, use npm because the lockfile declares it, and verify the project-defined start/test path. Do not require ffmpeg, uv, Python, .env, or a new onboarding file without evidence.",
+      "files": [],
+      "assertions": [
+        "Detects npm from package-lock.json",
+        "Does not require Python, uv, ffmpeg, or .env",
+        "Does not stop to ask whether to create ONBOARDING.md"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I explicitly need a dynamic setup reminder injected before the first Claude Code prompt. Install it without touching my existing PreToolUse hooks, and make sure resume and compact do not fire it.",
+      "expected_output": "Pass the hook gate, preview the managed change, preserve unrelated settings, install one SessionStart group with matcher startup, verify with claude --init-only and normal sessions, and provide managed removal.",
+      "files": [],
+      "assertions": [
+        "Uses matcher startup",
+        "Preserves unrelated settings and avoids duplicate managed entries",
+        "Previews, verifies, and documents removal"
+      ]
+    }
+  ]
+}

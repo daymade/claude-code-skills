@@ -49,7 +49,7 @@ This is a **production-hardened fork** of [Anthropic's official skill-creator](h
 | Create a skill interactively | Prose-based instructions | 9 structured AskUserQuestion checkpoints — user never loses context |
 | Avoid common mistakes | No guidance | Cache edit warnings, prerequisite checks, security scan gate |
 | Know the architecture options | Not mentioned | Inline vs Fork decision guide with examples (choosing wrong silently breaks your skill) |
-| Validate before shipping | Basic YAML check | Expanded validator (all frontmatter fields, path reference integrity, whitespace issues) |
+| Validate before shipping | Basic YAML check | Expanded structural validator plus provenance-checked old-vs-new capability audit; packaging re-verifies the completed review instead of trusting a marker |
 | Catch security issues | No tooling | `security_scan.py` with gitleaks integration — hard gate before packaging |
 | Learn from real failures | No failure cases | Battle-tested methodology with documented failure patterns and gotchas |
 | Distill past conversations safely | Not covered | Explicit local manifest, message-level time window, redaction, opaque source IDs, ignored `.enrich/` staging, and manual promotion into references/scripts |
@@ -105,7 +105,7 @@ After installing skill-creator, simply ask Claude Code:
 
 Claude Code, with skill-creator loaded, will guide you through the entire skill creation process - from understanding your requirements to packaging the final skill.
 
-📚 **Full documentation**: [daymade-skill/skill-creator/SKILL.md](./daymade-skill/daymade-skill/skill-creator/SKILL.md)
+📚 **Full documentation**: [daymade-skill/skill-creator/SKILL.md](./daymade-skill/skill-creator/SKILL.md)
 
 ### Live Demos
 
@@ -2168,21 +2168,24 @@ Transcribe Chinese / English audio with `stepaudio-2.5-asr`. Hides the #1 trap o
 
 ### 53. **auto-repo-setup** - Automated Repository Setup & Environment Repair
 
-Turn "it won't run" into "it's running" without requiring users to understand git, uv, ffmpeg, or API keys. Designed for non-technical teammates (editors, business, ops) who need to clone a repo and get it working — and for technical users who want standardized, handoff-ready project onboarding.
+Make a repository runnable and handoff-ready without guessing its stack or changing how collaborators normally work. The skill reads project authority first, repairs the verified gap, and treats startup instructions, lifecycle hooks, and Git mutation as different mechanisms with different safety boundaries.
 
 **When to use:**
-- A non-technical user says "跑不起来", "怎么启动", "环境怎么配", or "帮我设置代码库"
-- Setting up a new machine or onboarding a teammate to a codebase
-- Configuring SessionStart hooks so Claude Code auto-checks environment on entry
+- Someone says "跑不起来", "怎么启动", "环境怎么配", or "帮我设置代码库"
+- Setting up a new machine or creating a durable repository handoff
+- Adding routine startup sync for Claude Code/Codex without auto-stashing local work
+- Diagnosing repeated SessionStart output before changing hook configuration
+- Adding a lifecycle hook only when behavior must occur before the first prompt
 - Sanitizing git history after accidental secret/path leaks
-- Handling merge conflicts or git push failures for users who don't use git daily
+- Handling merge conflicts or git push failures with explicit safety gates
 
 **Key features:**
-- **ONBOARDING.md-first workflow**: reads the project's guide, validates each step, fixes gaps iteratively
-- **SessionStart hook generator**: one-command `init_session_start_hook.py` sets up auto-environment-check on every Claude Code session entry
+- **Outcome router**: separates environment repair, routine sync, handoff, hook diagnosis, and explicit pre-prompt automation
+- **Stack-aware inventory**: `check_env.py` infers only declared toolchains from manifests/lockfiles; it does not assume ffmpeg, uv, Python, or .env
+- **Startup boundary**: defaults stable behavior to AGENTS.md/CLAUDE.md or a normal Agent request; the Claude hook manager is guarded, dry-runnable, idempotent, and removable
 - **Safety guardrails**: Push Safety (visibility verification before any push), PII Guard (4-layer secret scanning), NO FALLBACK principle for env vars, Git Hook Bypass ban
-- **Counter-review workflow**: multi-agent security/code-quality/devops/doc review for significant changes
-- **Bundled scripts**: `check_env.py` (audit git/ffmpeg/uv/python/.env), `sanitize_history.sh` (scan history for secrets/paths/domains), `init_session_start_hook.py`
+- **Counter-review boundary**: reserves multi-agent review for material shared-config/security/destructive changes, not ordinary setup checks
+- **Bundled scripts**: stack-aware inventory, guarded Claude startup-nudge manager, and read-only history candidate scan
 
 **Example usage:**
 ```bash
@@ -2192,11 +2195,13 @@ claude plugin install auto-repo-setup@daymade-skills
 # Then ask Claude naturally
 "我跑不起来这个仓库"
 "帮我设置一下这个项目的环境"
-"初始化 SessionStart hook"
+"进入项目先同步远端；本地有改动不要自动 stash"
+"为什么同一个 SessionStart 输出了三次？先查清来源"
+"只有首条消息前必须注入动态提醒时，才帮我装 hook"
 "git push 被拒了"
 ```
 
-**Requirements**: Python 3.8+, `uv` package manager. No external API keys required for the skill itself.
+**Requirements**: The guidance itself has no runtime dependency. Bundled Python utilities require Python 3.10+; no external API key is required.
 
 ---
 
@@ -2347,6 +2352,7 @@ The essential meta-skill for building your own skills. Guides the full create �
 - Prior-art research across conversation history, local SOPs, installed plugins/MCPs, skills.sh, official plugins, npm/PyPI — to reuse infrastructure and encode only the user's unique methodology
 - The inline-vs-`context: fork` decision guide (subagents can't spawn subagents or call skills) and composable/orthogonal skill design
 - `init_skill.py` scaffolding, `package_skill.py` (auto-validates), and `security_scan.py` (gitleaks-based secret/PII detection)
+- Existing-skill migration gate: tool-attested snapshot or verified Git-commit baseline, runtime-reachability-aware capability audit, explicit dispositions, and package-time re-verification that a clean commit or hand-written marker cannot bypass
 - Eval harness: spawn with-skill + baseline runs, draft assertions, grade, aggregate a benchmark, and review in a generated HTML viewer
 - Mandatory sanitization read-through for public skills — catches no-keyword leaks scanners miss
 - Description-optimization loop (60/40 train/test split, selects best description by held-out score)
@@ -2820,21 +2826,22 @@ Start a self-contained local web gallery for Codex-generated image outputs. The 
 claude plugin install frontend-visual-qa@daymade-skills
 ```
 
-Catch embarrassing rendered UI and share/export defects that normal lint/build checks miss.
+Audit the UI users can actually see, with explicit evidence levels and no source mutation by default.
 
 **When to use:**
-- Reviewing or shipping a frontend, website, dashboard, design-system specimen, or HTML slide page
-- User flags awkward line breaks, cramped text, double scrollbars, overlap, or generic AI slop aesthetics
-- User says the artifact has the wrong type, such as a design system turning into a fake app/workbench
-- Need Chrome/Playwright evidence across desktop and mobile viewports
-- Need to verify export, download, share link, print, or PDF flows from the real browser UI
-- Need to complement `ui-designer`, `frontend-design`, and `qa-expert`
+- Auditing an already-rendered web or desktop UI after implementation
+- Diagnosing typography, wrapping, clipping, overflow, responsive, route/state, overlay, map, or transient-state defects
+- Comparing a rendered artifact with a named visual reference or design-system SSOT
+- Verifying export, download, share, popup, print/PDF, or Electron-shell behavior at the evidence level the claim requires
+- Complementing `ui-designer`/design work and the broader process managed by `qa-expert`
 
 **Key features:**
-- History-derived checklist for recurring line-break, overflow, and typography failures
-- Chrome DevTools first-pass for the user-visible browser viewport, including stale mobile emulation checks
-- Playwright-core audit script for desktop-wide, desktop, and mobile viewports
-- Computer Use / real Chrome journey checks for downloaded files, share URLs, clipboard/new-tab behavior, and nonblank print/PDF previews
+- Audit-only default with scoped profiles and verified / partial / blocked outcomes
+- A–D evidence ladder that prevents headless, renderer-only, or handler-only checks from masquerading as real GUI proof
+- State/viewport-first workflow, including authenticated-but-role-less branches and exact projection/deck canvases, plus inspected screenshots and DOM geometry
+- Hardened Playwright-powered sweep for navigation status, effective mobile viewport, overflow, clipping, custom-control focusability, images, and section evidence
+- Conditional references for core visual checks, complex journeys/page contracts, and data visualization—including units/source/time/freshness, dense collisions, runtime-label truth, and real file-dialog boundaries
+- Public behavior and trigger evals with self-contained fixtures
 
 ### 75. **openclaw** - OpenClaw (龙虾) Config Manager
 

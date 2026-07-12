@@ -49,7 +49,7 @@
 | 交互式创建 skill | 纯文字指令 | 9 个结构化 AskUserQuestion 检查点——用户永远不丢上下文 |
 | 避免常见错误 | 无指引 | 缓存编辑警告、前置依赖检查、安全扫描门禁 |
 | 了解架构选项 | 未提及 | Inline vs Fork 决策指南（选错会静默破坏你的 skill） |
-| 发布前验证 | 基本 YAML 检查 | 扩展验证器（全部 frontmatter 字段、路径引用完整性、空白字符问题） |
+| 发布前验证 | 基本 YAML 检查 | 扩展结构校验 + 带来源核验的现有 skill 新旧能力审计；打包时重验完整 review，不信任 marker 自证 |
 | 安全审查 | 无工具 | `security_scan.py` + gitleaks 集成——打包前硬门禁 |
 | 从真实失败中学习 | 无失败案例 | 实战方法论 + 文档化的失败模式和踩坑记录 |
 | 安全蒸馏历史对话 | 未覆盖 | 显式本地 manifest、消息级时间窗、先脱敏后落盘、匿名 source ID、默认忽略 `.enrich/`，候选只能人工晋升进 references/scripts |
@@ -105,7 +105,7 @@ claude plugin install daymade-skill@daymade-skills
 
 加载了 skill-creator 的 Claude Code 将引导你完成整个技能创建过程——从理解你的需求到打包最终技能。
 
-📚 **完整文档**：[daymade-skill/skill-creator/SKILL.md](./daymade-skill/daymade-skill/skill-creator/SKILL.md)
+📚 **完整文档**：[daymade-skill/skill-creator/SKILL.md](./daymade-skill/skill-creator/SKILL.md)
 
 ### 实时演示
 
@@ -2355,6 +2355,7 @@ claude plugin install daymade-claude-code@daymade-skills
 - 跨会话历史、本地 SOP、已装插件/MCP、skills.sh、官方插件、npm/PyPI 的先验调研——复用基础设施，只把用户独有的方法论编码进技能
 - inline vs `context: fork` 决策指引（subagent 不能 spawn subagent 或调 skill）与可组合/正交的技能设计
 - `init_skill.py` 脚手架、`package_skill.py`（自动校验）、`security_scan.py`（基于 gitleaks 的密钥/PII 检测）
+- 现有 skill 迁移闸门：工具签发的快照或已核验 Git commit 基线、区分运行时可达性的能力审计、逐项 disposition，以及无法被 clean commit 或手写 marker 绕过的打包时重验
 - Eval 工具链：并行 spawn 带技能 + baseline 运行、起草断言、评分、聚合基准、在生成的 HTML viewer 里审阅
 - 面向公开技能的强制语义通读——抓住扫描器漏掉的「无关键词」泄漏
 - description 优化循环（60/40 训练/测试切分，按 held-out 分数选最优 description）
@@ -2543,21 +2544,24 @@ claude plugin install benchmark-due-diligence@daymade-skills
 
 ### 63. **auto-repo-setup** - 自动化仓库配置与环境修复
 
-把"跑不起来"变成"已经在跑"，而不要求用户懂 git、uv、ffmpeg 或 API key。为需要克隆仓库并让它跑起来的非技术同事（编辑、商务、运营）设计——也面向想要标准化、可交接的项目上手流程的技术用户。
+让仓库真正跑起来并可交接，同时不猜技术栈、不改变协作者正常的工作方式。先读项目权威来源，再修已验证的缺口；把启动指令、生命周期 hook 和 Git 状态变更视为三种不同机制。
 
 **使用场景：**
-- 非技术用户说"跑不起来"、"怎么启动"、"环境怎么配"或"帮我设置代码库"
-- 配置新机器，或让同事上手一个代码库
-- 配置 SessionStart hook，让 Claude Code 进入时自动检查环境
+- 有人说"跑不起来"、"怎么启动"、"环境怎么配"或"帮我设置代码库"
+- 配置新机器，或为协作者建立可持续的仓库交接
+- 为 Claude Code/Codex 增加启动同步，同时不自动 stash 本地工作
+- 重复出现 SessionStart 输出时，先查触发来源再改配置
+- 只有行为必须发生在首条消息前时才配置生命周期 hook
 - 误泄漏密钥/路径后清理 git 历史
-- 为不常用 git 的用户处理合并冲突或 git push 失败
+- 在明确安全闸门下处理合并冲突或 git push 失败
 
 **主要功能：**
-- **ONBOARDING.md 优先工作流**：读项目指南，逐步校验，迭代修补缺口
-- **SessionStart hook 生成器**：一条命令 `init_session_start_hook.py` 设好每次 Claude Code 会话进入时的自动环境检查
+- **按目的分流**：区分环境修复、日常同步、仓库交接、hook 诊断和明确的首条消息前自动化
+- **技术栈感知审计**：`check_env.py` 只根据 manifest/lockfile 检查已声明工具，不默认要求 ffmpeg、uv、Python 或 .env
+- **启动边界**：稳定规则默认写 AGENTS.md/CLAUDE.md 或直接告诉 Agent；Claude hook 管理器可预览、幂等、只改自己的配置并可卸载
 - **安全护栏**：Push Safety（任何 push 前验证可见性）、PII Guard（4 层密钥扫描）、环境变量的 NO FALLBACK 原则、Git Hook Bypass 禁令
-- **对抗审查工作流**：对重大改动做多 agent 安全/代码质量/devops/文档审查
-- **内置脚本**：`check_env.py`（审计 git/ffmpeg/uv/python/.env）、`sanitize_history.sh`（扫历史中的密钥/路径/域名）、`init_session_start_hook.py`
+- **对抗审查边界**：只对共享配置、安全策略或破坏性 Git 变更启用，不为普通 setup 强行开多 agent
+- **内置脚本**：技术栈感知审计、受控 Claude 启动提醒管理器、只读历史候选扫描
 
 **示例用法：**
 ```bash
@@ -2567,11 +2571,13 @@ claude plugin install auto-repo-setup@daymade-skills
 # 然后自然地让 Claude 做
 "我跑不起来这个仓库"
 "帮我设置一下这个项目的环境"
-"初始化 SessionStart hook"
+"进入项目先同步远端；本地有改动不要自动 stash"
+"为什么同一个 SessionStart 输出了三次？先查清来源"
+"只有首条消息前必须注入动态提醒时，才帮我装 hook"
 "git push 被拒了"
 ```
 
-**要求**：Python 3.8+、`uv` 包管理器。技能本身无需外部 API key。
+**要求**：方法本身无运行时依赖；内置 Python 工具要求 Python 3.10+。技能本身无需外部 API key。
 
 ---
 
@@ -2859,21 +2865,22 @@ claude plugin install codex-image-gallery@daymade-skills
 claude plugin install frontend-visual-qa@daymade-skills
 ```
 
-捕捉普通 lint/build 检查发现不了的界面排版、视觉和分享/导出错误。
+审计用户真正看到的界面，明确区分证据等级，并默认只审查、不修改源码。
 
 **使用场景：**
-- 审核或交付前端、网站、dashboard、设计系统样张或 HTML 演示页
-- 用户指出不恰当换行、文字挤、双滚动条、重叠或 AI slop 审美
-- 用户指出产物类型错位，例如把设计系统做成假的工作台/业务界面
-- 需要在桌面和移动端用 Chrome/Playwright 留证
-- 需要从真实浏览器 UI 验证导出、下载、分享链接、打印或 PDF 流程
-- 需要补足 `ui-designer`、`frontend-design` 和 `qa-expert` 之间的空档
+- 实现后审计已经渲染的 Web 或桌面 UI
+- 排查字体、换行、裁切、溢出、响应式、route/state、overlay、地图或瞬时状态缺陷
+- 将渲染结果与指定参考图或设计系统 SSOT 做实证对比
+- 按结论所需证据等级验证导出、下载、分享、popup、打印/PDF 或 Electron shell
+- 补足 `ui-designer`/设计阶段与 `qa-expert` 全局 QA 流程之间的渲染验收
 
 **主要功能：**
-- 基于本地历史反馈沉淀的换行、溢出、排版错误清单
-- 优先用 Chrome DevTools 检查用户当前可见浏览器视口，包括残留移动端 emulation
-- Playwright-core 脚本覆盖宽桌面、常规桌面和移动端视口
-- 用 Computer Use / 真实 Chrome 操作检查下载文件、分享 URL、剪贴板/新标签行为，以及非空的打印/PDF 预览
+- 默认 audit-only，按 profile 控制范围，并输出 verified / partial / blocked
+- A–D 证据阶梯，禁止用 headless、renderer 或 handler 结果冒充真实 GUI 验证
+- 先确认 state/viewport（含已登录但无角色状态与精确投影/演示画布），再结合已打开的截图与 DOM 几何取证
+- 加固后的 Playwright 机械扫描：HTTP/final URL、有效移动端视口、溢出、裁切、自定义控件焦点候选、图片和 section 证据
+- 核心视觉、复杂旅程/页面类型、data-viz 三类按需 reference，覆盖单位/来源/时间/新鲜度、密集碰撞、runtime 文案真实性和真实文件选择器边界
+- 自包含公开 fixture 的行为 eval 与触发 eval
 
 ### 75. **openclaw** - OpenClaw (龙虾) 配置管理器
 

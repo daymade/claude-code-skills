@@ -1,168 +1,316 @@
 #!/usr/bin/env python3
-"""环境检查脚本 — 验证代码库运行所需的基础设施。
+"""Read-only, stack-aware repository capability inventory.
 
-用法:
-    python scripts/check_env.py [--fix]
+The script detects toolchains only from explicit repository files. It never
+installs dependencies, runs a package sync, reads secret values, or assumes that
+every repository is Python/video based.
 
-返回码:
-    0 — 全部通过
-    1 — 有缺失，但 --fix 未指定
-    2 — 修复尝试后仍有失败
+Usage:
+    python scripts/check_env.py [--repo PATH] [--json] [--fix]
+
+Exit codes:
+    0 - inferred toolchains are available
+    1 - one or more inferred toolchains are missing
+    2 - the target could not be inspected safely
+
+--fix is retained for CLI compatibility. It prints repair suggestions but does
+not mutate the machine.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass, field
-from typing import List
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 
-@dataclass
+@dataclass(frozen=True)
 class CheckResult:
     name: str
-    passed: bool
-    message: str = ""
-    fix_cmd: str = ""
+    status: str
+    message: str
+    evidence: str = ""
+    repair: str = ""
+
+    @property
+    def blocking(self) -> bool:
+        return self.status in {"missing", "error"}
 
 
-def run_cmd(cmd: list[str]) -> tuple[int, str, str]:
+@dataclass(frozen=True)
+class ToolRequirement:
+    command: str
+    reason: str
+
+
+def run_cmd(
+    command: list[str], *, cwd: Path, timeout: int = 15
+) -> tuple[int, str, str]:
+    """Run one read-only command and preserve its three observable outputs."""
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        return r.returncode, r.stdout, r.stderr
+        completed = subprocess.run(
+            command,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
     except FileNotFoundError:
-        return 127, "", f"command not found: {cmd[0]}"
-    except Exception as e:
-        return 1, "", str(e)
+        return 127, "", f"command not found: {command[0]}"
+    except subprocess.TimeoutExpired as exc:
+        return 124, exc.stdout or "", exc.stderr or "command timed out"
+    return completed.returncode, completed.stdout, completed.stderr
 
 
-def check_git() -> CheckResult:
-    code, out, err = run_cmd(["git", "--version"])
-    if code != 0:
-        return CheckResult("git", False, err or "git not found", "brew install git")
-    return CheckResult("git", True, out.strip().split("\n")[0])
+def detect_toolchains(repo: Path) -> list[ToolRequirement]:
+    """Infer package managers and runtimes from explicit manifests/lockfiles."""
+    requirements: list[ToolRequirement] = []
+
+    if (repo / "uv.lock").exists():
+        requirements.append(ToolRequirement("uv", "uv.lock"))
+    elif (repo / "poetry.lock").exists():
+        requirements.append(ToolRequirement("poetry", "poetry.lock"))
+    elif (repo / "Pipfile").exists():
+        requirements.append(ToolRequirement("pipenv", "Pipfile"))
+    elif (repo / "pyproject.toml").exists() or any(repo.glob("requirements*.txt")):
+        requirements.append(ToolRequirement("python", "Python manifest"))
+
+    if (repo / "pnpm-lock.yaml").exists():
+        requirements.append(ToolRequirement("pnpm", "pnpm-lock.yaml"))
+    elif (repo / "yarn.lock").exists():
+        requirements.append(ToolRequirement("yarn", "yarn.lock"))
+    elif (repo / "bun.lock").exists() or (repo / "bun.lockb").exists():
+        requirements.append(ToolRequirement("bun", "Bun lockfile"))
+    elif (repo / "package-lock.json").exists() or (repo / "package.json").exists():
+        requirements.append(ToolRequirement("npm", "Node manifest"))
+
+    explicit_manifests = (
+        ("cargo", "Cargo.toml"),
+        ("go", "go.mod"),
+        ("bundle", "Gemfile"),
+        ("mvn", "pom.xml"),
+        ("docker", "compose.yaml"),
+        ("docker", "compose.yml"),
+        ("docker", "docker-compose.yaml"),
+        ("docker", "docker-compose.yml"),
+    )
+    for command, manifest in explicit_manifests:
+        if (repo / manifest).exists():
+            requirements.append(ToolRequirement(command, manifest))
+
+    unique: dict[str, ToolRequirement] = {}
+    for requirement in requirements:
+        unique.setdefault(requirement.command, requirement)
+    return list(unique.values())
 
 
-def check_ffmpeg() -> CheckResult:
-    code, out, err = run_cmd(["ffmpeg", "-version"])
-    if code != 0:
-        return CheckResult(
-            "ffmpeg", False, err or "ffmpeg not found", "brew install ffmpeg"
+def inspect_repository(repo: Path) -> tuple[list[CheckResult], list[ToolRequirement]]:
+    results: list[CheckResult] = []
+
+    if not repo.exists():
+        return (
+            [CheckResult("repository", "error", "path does not exist", str(repo))],
+            [],
         )
-    first = out.strip().split("\n")[0]
-    return CheckResult("ffmpeg", True, first)
-
-
-def check_uv() -> CheckResult:
-    code, out, err = run_cmd(["uv", "--version"])
-    if code != 0:
-        return CheckResult(
-            "uv",
-            False,
-            err or "uv not found",
-            "curl -LsSf https://astral.sh/uv/install.sh | sh",
+    if not repo.is_dir():
+        return (
+            [CheckResult("repository", "error", "path is not a directory", str(repo))],
+            [],
         )
-    return CheckResult("uv", True, out.strip())
 
-
-def check_python_via_uv() -> CheckResult:
-    code, out, err = run_cmd(["uv", "run", "python", "--version"])
-    if code != 0:
-        return CheckResult(
-            "python (via uv)",
-            False,
-            err or "python not available via uv",
-            "uv python install",
+    if shutil.which("git") is None:
+        return (
+            [
+                CheckResult(
+                    "git",
+                    "missing",
+                    "git is not available",
+                    repair="Install Git using the target platform's supported method.",
+                )
+            ],
+            [],
         )
-    return CheckResult("python (via uv)", True, out.strip())
 
-
-def check_pyproject_deps() -> CheckResult:
-    code, out, err = run_cmd(["uv", "sync", "--locked"])
-    if code != 0:
-        return CheckResult(
-            "dependencies (uv sync)",
-            False,
-            (err or out)[:200],
-            "uv sync",
+    code, out, err = run_cmd(
+        ["git", "-C", str(repo), "rev-parse", "--is-inside-work-tree"],
+        cwd=repo,
+    )
+    if code != 0 or out.strip() != "true":
+        message = (err or out or "not a Git work tree").strip()
+        return (
+            [
+                CheckResult(
+                    "repository",
+                    "error",
+                    message,
+                    "git rev-parse --is-inside-work-tree",
+                )
+            ],
+            [],
         )
-    return CheckResult("dependencies (uv sync)", True, "lockfile satisfied")
-
-
-def check_dot_env() -> CheckResult:
-    import os
-
-    if not os.path.exists(".env"):
-        return CheckResult(
-            ".env file",
-            False,
-            ".env not found",
-            "cp .env.example .env && edit with real values",
+    results.append(
+        CheckResult(
+            "repository",
+            "ok",
+            "Git work tree detected",
+            "git rev-parse --is-inside-work-tree",
         )
-    with open(".env") as f:
-        content = f.read()
-    placeholders = ["YOUR_KEY_HERE", "REPLACE_ME", "placeholder", "example"]
-    found = [p for p in placeholders if p.lower() in content.lower()]
-    if found:
-        return CheckResult(
-            ".env file",
-            False,
-            f"still contains placeholders: {found}",
-            "edit .env with real values",
+    )
+
+    instruction_files = [
+        name
+        for name in (
+            "AGENTS.override.md",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "ONBOARDING.md",
+            "README.md",
         )
-    return CheckResult(".env file", True, "configured")
+        if (repo / name).exists()
+    ]
+    if instruction_files:
+        results.append(
+            CheckResult(
+                "project instructions",
+                "info",
+                ", ".join(instruction_files),
+                "filesystem",
+            )
+        )
+    else:
+        results.append(
+            CheckResult(
+                "project instructions",
+                "warning",
+                "no common project instruction or onboarding file found",
+                "filesystem",
+                "Infer setup from manifests; create durable onboarding only if requested.",
+            )
+        )
+
+    toolchains = detect_toolchains(repo)
+    if not toolchains:
+        results.append(
+            CheckResult(
+                "toolchains",
+                "info",
+                "no supported package-manager manifest detected",
+                "filesystem",
+            )
+        )
+
+    for requirement in toolchains:
+        executable = shutil.which(requirement.command)
+        if executable:
+            results.append(
+                CheckResult(
+                    requirement.command,
+                    "ok",
+                    f"available at {executable}",
+                    requirement.reason,
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    requirement.command,
+                    "missing",
+                    f"required by {requirement.reason}",
+                    requirement.reason,
+                    f"Install {requirement.command} using the project's documented method.",
+                )
+            )
+
+    env_examples = [
+        name
+        for name in (".env.example", ".env.sample", ".env.template")
+        if (repo / name).exists()
+    ]
+    if env_examples:
+        if (repo / ".env").exists():
+            results.append(
+                CheckResult(
+                    "local environment",
+                    "info",
+                    ".env exists; values were not read",
+                    ", ".join(env_examples),
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    "local environment",
+                    "warning",
+                    f"{env_examples[0]} exists but .env does not",
+                    env_examples[0],
+                    "Confirm whether the project requires a local .env; do not guess values.",
+                )
+            )
+
+    return results, toolchains
+
+
+def render_human(repo: Path, results: list[CheckResult], *, show_repairs: bool) -> None:
+    labels = {
+        "ok": "OK",
+        "info": "INFO",
+        "warning": "WARN",
+        "missing": "MISSING",
+        "error": "ERROR",
+    }
+    print(f"Repository inventory: {repo}")
+    for result in results:
+        print(f"[{labels[result.status]}] {result.name}: {result.message}")
+        if result.evidence:
+            print(f"  evidence: {result.evidence}")
+        if show_repairs and result.repair:
+            print(f"  next: {result.repair}")
+
+    blocking = sum(result.blocking for result in results)
+    warnings = sum(result.status == "warning" for result in results)
+    print(f"Summary: {blocking} blocking, {warnings} warning")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Check repo environment")
-    parser.add_argument("--fix", action="store_true", help="Attempt to auto-fix issues")
+    parser = argparse.ArgumentParser(
+        description="Read-only, stack-aware repository capability inventory"
+    )
+    parser.add_argument("--repo", default=".", help="Repository root (default: cwd)")
+    parser.add_argument("--json", action="store_true", help="Emit structured JSON")
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Compatibility flag: show repair suggestions; never mutate",
+    )
     args = parser.parse_args()
 
-    checks: List[CheckResult] = []
+    repo = Path(args.repo).expanduser().resolve()
+    results, toolchains = inspect_repository(repo)
 
-    # Ordered: system deps → python env → project deps → config
-    checks.append(check_git())
-    checks.append(check_ffmpeg())
-    checks.append(check_uv())
-    checks.append(check_python_via_uv())
-    checks.append(check_pyproject_deps())
-    checks.append(check_dot_env())
+    if args.json:
+        payload = {
+            "repository": str(repo),
+            "detected_tools": [asdict(item) for item in toolchains],
+            "results": [asdict(item) for item in results],
+            "summary": {
+                "blocking": sum(result.blocking for result in results),
+                "warnings": sum(result.status == "warning" for result in results),
+            },
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        render_human(repo, results, show_repairs=args.fix)
 
-    passed = [c for c in checks if c.passed]
-    failed = [c for c in checks if not c.passed]
-
-    print("=" * 50)
-    print("Environment Check Report")
-    print("=" * 50)
-
-    for c in passed:
-        print(f"  ✅ {c.name}: {c.message}")
-
-    for c in failed:
-        print(f"  ❌ {c.name}: {c.message}")
-        if c.fix_cmd:
-            print(f"     Fix: {c.fix_cmd}")
-
-    print("=" * 50)
-    print(f"Result: {len(passed)}/{len(checks)} passed")
-
-    if not failed:
-        print("🎉 All checks passed! You're ready to go.")
-        return 0
-
-    if args.fix:
-        print("\n--fix specified, attempting repairs...")
-        # In practice, auto-fix is limited — we print suggestions
-        for c in failed:
-            if c.fix_cmd:
-                print(f"  Run: {c.fix_cmd}")
-        print("Please re-run after fixing.")
+    if any(result.status == "error" for result in results):
         return 2
-
-    print("\nRun with --fix to see repair commands, or ask Claude Code for help.")
-    return 1
+    if any(result.status == "missing" for result in results):
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

@@ -54,3 +54,22 @@ If you understand the risks and still want to add a flagged rule:
 ```bash
 uv run scripts/fix_transcription.py --add "仿佛" "反复" --domain general --force
 ```
+
+## Re-adding a disabled rule
+
+`--report-false-positive FROM TO` soft-deletes a rule (`is_active=0`) rather than removing it — the row stays so the audit trail is preserved and the exact `(from_text, domain)` can't be silently re-inserted. If you later want that `from_text` back — most often because the disable was really about a **wrong target** (the rule was disabled because it pointed at the wrong correction, and the right fix is a different target) — re-running `--add` does **not** silently resurrect it:
+
+```bash
+# Without --force: reports the disable and refuses, so a deliberate
+# false-positive disable is never un-done by accident.
+uv run scripts/fix_transcription.py --add "小茗" "小明" --domain demo
+# -> Correction '小茗' -> '小名' exists in domain 'demo' but is DISABLED
+#    ([FALSE POSITIVE reported by <user>]), added 2026-01-01 ...
+#    To reactivate it with target '小明', re-run with --force.
+
+# With --force: reactivates (is_active=1) AND updates the target,
+# writing a reactivate_correction audit entry.
+uv run scripts/fix_transcription.py --add "小茗" "小明" --domain demo --force
+```
+
+Reactivating restores the rule to `--apply-all` (and, per its risk grade, safe-mode) behavior, so re-verify it the same way you would a fresh `--add`.
