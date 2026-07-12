@@ -1,89 +1,106 @@
-# Git 操作安全细则
+# Git safety gates
 
-## Push Safety — 推送前必须验证仓库可见性
+## Contents
 
-**任何 `git push`（特别推到 main/master）之前，必须用 `gh` CLI 验证目标仓库的真实可见性。**
+- Inspect before mutation
+- Routine synchronization
+- Commit scope
+- Push safety
+- Conflict handling
+- Hook bypass
+- Secret or PII history cleanup
 
-```bash
-gh repo view <owner>/<repo> --json visibility,isPrivate,stargazerCount,forkCount
-```
+## Inspect before mutation
 
-**决策矩阵**：
+Before pull, commit, merge, rebase, push, or history rewrite, record:
 
-| 可见性 | Stars/Forks | 操作 |
-|--------|-------------|------|
-| public | >0 | 默认走 PR 流程（push feature branch + `gh pr create`） |
-| public | 0 + 用户明确授权 | 可 push main，但仍需 audit 内容 |
-| private/internal | 任意 | push main 需用户确认，风险降一档 |
+~~~bash
+git status --short --branch
+git remote -v
+git log --oneline --decorate -5
+~~~
 
-**禁止**：
-- 凭 URL 形态反推 private/public
-- 凭用户名/目录路径推断
-- 在汇报里写"私人 repo"除非 API 确认 `isPrivate: true`
-- 凭历史汇报或 CLAUDE.md 描述推断
+Use the hosting service as the authority for visibility and permissions. A remote
+URL, directory name, or previous report does not prove those properties.
 
-## Git Hook Bypass 禁令
+## Routine synchronization
 
-**Claude 禁止主动使用 `--no-verify` / `--no-gpg-sign` / `-c commit.gpgsign=false` 等绕过 git hook 的参数。**
+1. Verify the current branch has the intended upstream.
+2. If the working tree is clean, run git pull --ff-only.
+3. If local changes exist, do not auto-stash or pull; report the changed paths.
+4. If histories diverged, show the graph and ask how the local commits should be
+   handled. Do not choose merge/rebase/force by habit.
+5. On network failure, distinguish "remote not checked" from "already current".
 
-- ❌ Hook 失败 → 找根因修好 → **不要**"绕过试试看"
-- ❌ 过去 session / 文档里的历史授权 → 不作数
-- ❌ 用户没明说，但我觉得"应该跳" → 不行，停下来问
-- ✅ 用户本人在当前 session 里**显式输入** `--no-verify` → 照办（只这一次）
+git pull --ff-only only accepts a fast-forward update. Automatic stash/pop is a
+separate operation and can create non-trivial conflicts.
 
-**Why**：pre-commit hook 是拦住 secret/PII/大文件的最后一道系统性防线。AI 自作主张绕过 = 防线退化为"看 AI 心情"。
+## Commit scope
 
-## 历史净化（敏感信息泄露后）
+- Review git diff and git diff --cached.
+- Stage explicit paths, never git add . or git add -A in a shared worktree.
+- Preserve pre-existing staged work that is outside the approved task.
+- Verify the resulting commit and remaining working tree before reporting success.
+- Follow the repository's commit-message and attribution policy; do not invent one.
 
-### 评估影响
+## Push safety
 
-1. 哪些 commit 含敏感信息？
-2. 是否已 push 到 remote？
-3. 是否有其他协作者？
+Before any push, query the hosting service for the repository's real visibility,
+ownership, default branch, and protection state. For GitHub:
 
-### 方法选择
+~~~bash
+gh repo view <owner>/<repository> \
+  --json visibility,isPrivate,stargazerCount,forkCount,defaultBranchRef
+~~~
 
-| 场景 | 方法 | 说明 |
-|------|------|------|
-| 历史可以全部丢弃 | Orphan branch + force push | 最干净，但打断所有协作者 |
-| 需保留部分历史 | BFG Repo-Cleaner | 替换文件中的敏感字符串 |
-| 仅单个文件 | `git filter-branch` / `git filter-repo` | 移除特定文件从历史 |
+Then:
 
-### Orphan branch 流程
+- public repository with downstream users: prefer a feature branch and PR;
+- private/internal repository: push still needs the authority implied by the task;
+- protected or external-owned branch: follow its contribution workflow;
+- force push: require explicit approval for the exact ref and explain the impact.
 
-```bash
-# 1. 创建无历史的新分支
-git checkout --orphan new-history
+Do not describe a repository as private/public until the API output confirms it.
 
-# 2. 添加当前工作区内容
-git add -A
+## Conflict handling
 
-# 3. 提交（注意：此时不要含敏感信息）
-git commit -m "Initial commit: sanitized history"
+1. Read git status and every conflict marker.
+2. Explain what each side represents in project terms.
+3. Resolve from current requirements and source-of-truth files.
+4. Never select "ours" or "theirs" for all files as a generic fix.
+5. Run the relevant tests and inspect the final diff before commit.
 
-# 4. 强制推送到 main（会覆盖远程历史）
-git push --force origin new-history:main
+If the intended resolution depends on a business choice the repository cannot
+answer, ask the user. Syntax conflicts that have one verified project-consistent
+resolution do not need to be outsourced.
 
-# 5. 删除旧分支引用（本地）
-git branch -D main
-git checkout -b main origin/main
-```
+## Hook bypass
 
-**⚠️ 警告**：
-- Force push 会永久删除远程历史，其他协作者需要重新 clone
-- 必须先通知用户并获得确认
-- 如果 secret 已泄露到公开网络，force push 不够——还需 revoke 并轮转 key
+Never add --no-verify, --no-gpg-sign, or equivalent bypasses on your own.
 
-## 提交规范
+- A hook failure is evidence to diagnose.
+- Past authorization does not authorize a new bypass.
+- Only an explicit user instruction for the current operation authorizes it.
+- Fix a false positive in the rule or allowlist; do not make bypass the workflow.
 
-### Commit message
+## Secret or PII history cleanup
 
-- 用中文描述改了什么、为什么改
-- 技术细节可附在正文
-- 结尾加 `Co-Authored-By: Claude <noreply@anthropic.com>`
+Treat this as an incident, not a routine setup option.
 
-### 选择性添加
+1. Revoke and rotate any exposed credential first.
+2. Verify whether the material exists only locally or has reached remote refs,
+   releases, caches, forks, or collaborators.
+3. Create a recoverable backup and record the exact refs before rewriting.
+4. Choose a maintained history-rewrite tool from current authoritative guidance.
+5. Preview the rewrite in an isolated clone and verify the target content is gone
+   while intended history remains.
+6. Obtain explicit approval before replacing remote history.
+7. Verify the remote and communicate the re-clone/rebase requirement to affected
+   collaborators.
 
-- 不要无脑 `git add .`
-- `git status` 后选择性 `git add <file>`
-- 确保 stage 的内容都是意图中的改动
+Do not include a ready-to-run force-push recipe in an ordinary setup flow. The
+specific rewrite depends on exposure scope, collaboration state, and repository
+policy.
+
+For GitHub-focused cleanup, prefer a dedicated current workflow rather than
+extending this general setup skill ad hoc.

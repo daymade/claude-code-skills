@@ -1,55 +1,56 @@
-# PII Guard 规则摘要与应急处理
+# Public-distribution content review
 
-## 三层扫描架构（public repo）
+Use the repository's existing guard as the authority. Do not install a competing
+hook path or copy machine-specific deny-lists into a public skill.
 
-### Layer 1 — gitleaks
+## Four complementary layers
 
-标准 secret + 私有基础设施域名/IP。
+### 1. Secret scanner
 
-**覆盖规则**：
-- LLM provider key：`sk-kimi-` (Moonshot)、`sk-or-v1-` (OpenRouter)、`sk-ant-(api|admin)` (Anthropic)、`sk-(proj|svcacct|admin)-` (OpenAI)
-- Generic `sk-` 兜底（allowlist 了占位符如 `sk-test-`/`sk-example`/`sk-your-`）
-- PII：macOS 绝对路径 `/Users/<user>/`、中国手机号、个人邮箱
-- 私有基础设施：内部域名（`<private-domain>.dev`、`<private-domain>.pro` 等）+ 已知生产 IP
-- 内置：AWS、GitHub PAT、Stripe 等
+Run the repository's configured gitleaks/secret scanner on the actual staged diff
+and, before push, the commits being published. Confirm the scanner configuration
+itself is included in scope.
 
-**⚠️ 注意**：gitleaks 有**熵过滤**——低熵占位符不会拦，只有高熵真实格式才拦。测试时必须用真实格式。
+### 2. Path and generated-artifact scan
 
-### Layer 2 — 路径扫描
+Reject machine-specific absolute paths, credentials files, build caches, archives,
+and generated artifacts that are not part of the deliverable.
 
-禁止本地生成路径（coverage、node_modules 等）。
+### 3. Repository-specific pattern scan
 
-### Layer 3 — bash grep 兜底
+Use local/private pattern sources for organization-specific domains, identities, or
+infrastructure. Do not publish the sensitive deny-list as the way to protect it.
 
-同步 gitleaks 域名/IP 规则 + 已知身份（如中文人名）。gitleaks 不覆盖中文内容，Layer 3 补充拦截。
+### 4. Semantic read-through
 
-### Layer 4 — AI 语义通读
+Read the complete public artifact. For every concrete name, example, transcript
+fragment, hostname, and path, ask:
 
-1-3 全是关键词/正则/grep，只命中"有人列进规则的词"。对**无 keyword 的语义私有结构性盲**（中文人名/项目名、真实转录口语片段、随手举的真实例子）——hook 必漏。
+> Is this a generic placeholder/public entity, or was it lifted from a real
+> private project, person, conversation, or system?
 
-**push public repo 前除 hook 自动扫，必须自己 AI 通读全文做语义判断**："这名词/例子/片段，像通用占位/公开实体，还是从真实项目/人/转录拿的？"
+Replace private material with role-based placeholders that do not encode the
+original value. Scanners cannot detect private meaning that has no known pattern.
 
-"grep/gitleaks 无命中" ≠ 干净。
+## Repository visibility matters
 
-## private repo 规则
+- Public distribution: all four layers are required.
+- Private/internal repository: follow the repository's explicit retention and
+  credential policy; do not impose a public-repository policy by assumption.
+- Any material moving from private to public: treat the destination as public from
+  the moment content is drafted.
 
-- `.env` 可直接提交（项目隔离的 API key）
-- 但仍需清理**个人绝对路径**（`/Users/<name>/`）
-- 仍需清理**内部域名/IP**
-- 仍需清理**中文真实人名/项目名**
+Verify visibility from the hosting service rather than inferring it from a URL or
+owner name.
 
-## 命中后怎么办
+## Findings
 
-| 处理方式 | 是否允许 |
-|---------|---------|
-| 改规则（调 gitleaks.toml）/ 加 allowlist | ✅ |
-| `--no-verify` 绕过 | ❌（除非用户本人当场打） |
-| 仓库追加 `.pii-patterns` 文件定义仓库特有模式 | ✅ |
-| 直接 push 不管 | ❌ |
+| Finding | Action |
+|---|---|
+| Live credential | Remove from content, revoke, rotate, assess exposure |
+| Personal/private example | Replace with a role-based synthetic example |
+| False positive | Fix the rule or add a narrow reviewed allowlist |
+| Scanner is green | Continue to semantic review; green is not proof of privacy |
 
-## 应急处理（secret 已 push）
-
-1. **立即 revoke key** — 在 provider 后台 disable key
-2. **生成新 key** — 用新 key 替换 `.env`
-3. **历史净化** — 按 `git_safety.md` 的 Orphan branch 或 BFG 流程清理
-4. **通知受影响方** — 如果 key 有访问日志，评估影响范围
+Never bypass a guard to make a commit or push succeed unless the user explicitly
+authorizes that exact bypass in the current session.
