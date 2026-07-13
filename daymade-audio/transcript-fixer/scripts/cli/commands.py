@@ -688,9 +688,13 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         # inflate the history count and persist edits that never reached the
         # output. This applied set mirrors the applied_count condition above.
         applied_stage1 = [c for c in stage1_changes if c.risk == "low" or not review_mode]
+        # --domain defaults to None (all domains). Normalize to "general" before it
+        # reaches the history/learning layers: a null domain routes Stage-2
+        # auto-approvable corrections into pending-review (validate_domain(None) raises)
+        # instead of learning them into the catch-all "general" domain.
         service.save_history(
             filename=str(input_path),
-            domain=args.domain,
+            domain=args.domain or "general",
             original_length=len(original_text),
             stage1_changes=len(applied_stage1),
             stage2_changes=len(stage2_changes),
@@ -706,7 +710,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
 
             learning = _get_learning_engine(service)
 
-            stats = learning.analyze_and_auto_approve(stage2_changes, args.domain)
+            stats = learning.analyze_and_auto_approve(stage2_changes, args.domain or "general")
 
             print(f"📊 Analysis Results:")
             print(f"   Total changes: {stats['total_changes']}")
