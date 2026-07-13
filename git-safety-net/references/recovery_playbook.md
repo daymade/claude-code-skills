@@ -26,16 +26,23 @@ one thing that permanently loses work is `gc` running while nothing references i
 ## The authoritative "is anything at risk" check
 
 Before anything else, answer the only question that matters — *is any commit reachable only
-locally, on no remote?* That is the exact at-risk set:
+locally, on no remote?* That is the exact at-risk set. Check **every** place local work hides,
+not just branches:
 
 ```bash
 git fetch --all --quiet
-git log --branches --not --remotes --oneline --decorate
+git log HEAD --branches --tags --not --remotes --oneline --decorate   # HEAD→detached-HEAD work, --tags→tag-only commits
+git stash list                                                         # stashes are local-only too
 ```
 
-- **Empty output = zero loss.** Every local commit is also on a remote; a dead disk loses nothing.
+- **All empty = zero loss.** Every local commit is also on a remote; a dead disk loses nothing.
 - **Non-empty = those exact commits exist only on this machine.** Back them up (below) before any
   branch cleanup.
+
+Why `HEAD --branches --tags`, not just `--branches`: a plain `git log --branches --not --remotes`
+misses a **detached-HEAD** commit (on no branch) and a **tag-only** commit — both classic loss
+vectors. `scripts/git_loss_audit.sh` runs exactly this expanded set plus the stash and dangling
+checks.
 
 Do **not** substitute `git status` or ahead/behind counts for this — they answer different
 questions. To confirm a single commit is safe on a remote:

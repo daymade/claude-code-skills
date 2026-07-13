@@ -43,7 +43,8 @@ git push -u origin <wip-branch>
 ```
 
 It doesn't need to be a PR — just a remote copy. Re-push as you go. Then
-`git log --branches --not --remotes` (the at-risk check) stays empty, which is the state you want.
+`git log HEAD --branches --tags --not --remotes` (the at-risk check) stays empty, which is the
+state you want.
 
 ## Confirm the branch before every commit
 
@@ -69,7 +70,7 @@ head toward gc.
 
 ```bash
 git fetch --all --quiet
-git log --branches --not --remotes --oneline    # empty = nothing to lose; act freely
+git log HEAD --branches --tags --not --remotes --oneline   # empty = nothing to lose; act freely
 ```
 
 Non-empty → preserve those commits (branch/push/patch) before the destructive step.

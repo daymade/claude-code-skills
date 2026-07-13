@@ -36,9 +36,11 @@ you whether anything is actually at risk before you decide what to do.
 
 ## The five load-bearing rules (internalize these; the modes apply them)
 
-1. **`git log --branches --not --remotes` is the ONLY authoritative "what would be lost" check.**
-   It lists commits reachable from a local branch but on *no* remote — the true at-risk set.
-   Empty = zero loss. Ahead/behind counts and `git status` do **not** answer this.
+1. **`git log HEAD --branches --tags --not --remotes` is the authoritative "what would be lost"
+   check** (plus `git stash list`). It lists commits reachable locally — from HEAD (catches
+   detached-HEAD work), a branch, or a tag — but on *no* remote, the true at-risk set. Plain
+   `--branches` misses detached-HEAD and tag-only commits. Empty = zero loss. Ahead/behind counts
+   and `git status` do **not** answer this.
 2. **`git reflog` is the first move for "I lost a commit," not `fsck`.** Reflog records every
    HEAD position (commits, checkouts, resets, rebases) for ~90 days and the lost commit is
    usually in its top few lines. `git fsck` is the deeper net for commits reflog can't reach.
@@ -75,9 +77,12 @@ If reflog doesn't show it (e.g. a dropped stash, an orphan from a rebase), fall 
 scripts/git_loss_audit.sh          # defaults to remote "origin"; pass a remote name to override
 ```
 
-Expected output: a count of **local-only commits** (on a local branch, no remote — the real
-loss risk) and **dangling commits** (orphaned, reflog-reachable now, gc-eligible later), plus a
-one-line verdict. `local-only: 0  dangling: 0` means nothing is at risk.
+Expected output: counts of **local-only commits** (reachable from HEAD/a branch/a tag but on no
+remote — the real loss risk, and it catches detached-HEAD and tag-only work), **stashes**
+(local-only by nature), and **dangling commits** (orphaned, reflog-reachable now, gc-eligible
+later), plus a one-line verdict. `local-only: 0  stashes: 0  dangling: 0` means nothing is at risk.
+Exit is 1 only when local-only commits exist (the surprising, actionable case); stashes and
+danglers are reported but stay exit 0 so a routine stash doesn't cry wolf.
 
 **Step 2 — preserve (additive, gc-proof).** If anything showed up, make it un-loseable *before*
 touching branches or running gc:
@@ -101,13 +106,17 @@ The trap: a stale branch shows "173 commits ahead of main" yet every line is alr
 scripts/git_verify_branch_merged.sh <branch> [<base>]   # base defaults to origin/main
 ```
 
-It reports **MERGED** (content on base — safe to delete) / **UNMERGED** (with the specific files
-whose content is absent from base) using added-file detection, blob comparison, and
-ancestor/`--find-object` checks — the same method that distinguishes "superseded old version"
-from "genuinely missing work." Full technique, plus the **adversarial multi-agent verification**
-pattern for a whole repo of branches (read-only agents, one per batch, each told to *falsify*
-"everything is merged," every finding independently re-checked):
-**[references/merge_verification.md](references/merge_verification.md)**.
+It reports **MERGED (ancestor)** or **MERGED (content contained)** — safe to delete — versus
+**UNMERGED / NEEDS REVIEW**, listing the files the branch would still change. The verdict is sound,
+not heuristic: it does a trial 3-way merge of the branch *into* the base with `git merge-tree`
+(in memory, no checkout) and only says "safe to delete" when that merge changes nothing — so a
+squash-merged branch reads MERGED despite a nonzero commit count, while a revert/edit/new-file the
+base lacks reads UNMERGED. It is **safety-biased**: anything it can't prove contained is reported
+for review, because a false "merged" loses work while a false "unmerged" only costs a look. Full
+technique (and why `--find-object`/blob heuristics are unsound for auto-decisions), plus the
+**adversarial multi-agent verification** pattern for a whole repo of branches (read-only agents,
+one per batch, each told to *falsify* "everything is merged," every finding independently
+re-checked): **[references/merge_verification.md](references/merge_verification.md)**.
 
 ## Mode D — Prevent the disaster
 

@@ -35,10 +35,25 @@ if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
   echo "ERROR: not inside a Git repository." >&2
   exit 2
 fi
+
+# Resolve --patch-dir to an ABSOLUTE path against the caller's CWD BEFORE we cd to the repo root,
+# so a relative --patch-dir means what the user expects (their current directory, not the repo top).
+if [ -n "$PATCH_DIR" ]; then
+  case "$PATCH_DIR" in
+    /*) : ;;                            # already absolute
+    *)  PATCH_DIR="$PWD/$PATCH_DIR" ;;  # relative → anchor to the caller's CWD
+  esac
+fi
+
 cd "$(git rev-parse --show-toplevel)"
 
+# Create the patch dir, but never let a patch-export problem abort the PRIMARY job (pinning). If
+# the directory can't be made, warn and disable patch export; the pinning below still runs.
 if [ -n "$PATCH_DIR" ]; then
-  mkdir -p "$PATCH_DIR"
+  if ! mkdir -p "$PATCH_DIR" 2>/dev/null; then
+    echo "warning: cannot create --patch-dir '$PATCH_DIR'; pinning only, skipping patch export." >&2
+    PATCH_DIR=""
+  fi
 fi
 
 # Collect dangling commit shas. `git fsck --dangling` also reports dangling blobs/trees; we only
@@ -63,11 +78,16 @@ while read -r sha; do
   printf '  pinned %s  %s\n' "$(git rev-parse --short "$sha")" "$SUBJECT"
 
   if [ -n "$PATCH_DIR" ]; then
-    # Stash commits (subject "WIP on …") are diffs against their parent and don't format-patch
-    # cleanly as a standalone commit; skip patch export for them but keep them pinned (the pin is
-    # the real safety). For normal commits, a single-commit patch is a repo-independent backup.
-    if git log -1 --format='%s' "$sha" 2>/dev/null | grep -q '^WIP on '; then
-      printf '    (stash-like commit — pinned only, no patch)\n'
+    # A stash commit (and any merge) has >=2 parents; `git format-patch -1` cannot represent a
+    # merge and will SILENTLY emit a different commit's patch (exit 0), so we would write a wrong
+    # backup and report it as success. Detect by PARENT COUNT, not by the "WIP on " subject —
+    # a `git stash push -m msg` stash reads "On <branch>: msg" (would slip through the old check),
+    # and a real commit titled "WIP on …" would have been wrongly skipped. rev-list --parents
+    # prints "<sha> <parent1> <parent2>…", so >2 tokens means >=2 parents. The pin already made
+    # the object gc-proof; we only skip the (impossible) patch for merges.
+    PARENTS="$(git rev-list --parents -n1 "$sha" 2>/dev/null | wc -w | tr -d ' ')"
+    if [ "${PARENTS:-1}" -gt 2 ]; then
+      printf '    (merge/stash commit — pinned only, no patch)\n'
     else
       SHORT="$(git rev-parse --short "$sha")"
       SLUG="$(git log -1 --format='%f' "$sha" 2>/dev/null | cut -c1-40)"

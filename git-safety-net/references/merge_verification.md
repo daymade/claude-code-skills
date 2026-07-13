@@ -2,9 +2,10 @@
 
 ## Contents
 - Why commit counts lie (the squash-merge illusion)
-- The content-level toolkit (five checks)
+- The sound content check (a trial merge, not a heuristic)
 - Per-branch verdict procedure
-- "Superseded old version" vs "genuinely missing" — don't confuse them
+- Why safety-biased: a false "merged" loses work, a false "unmerged" only costs a look
+- Manual-only investigation hints (do NOT auto-decide on these)
 - Adversarial multi-agent verification (for a whole repo of branches)
 - Rules for the verification agents
 
@@ -22,70 +23,80 @@ already on main. **Never conclude "unmerged" (or "safe to keep this branch") fro
 The same applies to rebased branches: rebasing rewrites shas, so the pre-rebase commits look
 "unmerged" while their content landed long ago.
 
-The only trustworthy question is: **is the branch's file content present on the base?**
+The only trustworthy question is: **is the branch's content already contained in the base?**
 
-## The content-level toolkit (five checks)
+## The sound content check (a trial merge, not a heuristic)
 
-Run these with explicit refs (`origin/main`, `origin/<branch>`) — no checkout needed.
+`scripts/git_verify_branch_merged.sh <branch> [base]` answers that question with Git's own merge
+machinery instead of per-file guesses. Two checks, in order:
 
-1. **Whole files the branch adds that the base lacks** (an unmerged *new* skill/module shows here):
+1. **Ancestor** — the branch is literally in the base's history:
    ```bash
-   git diff origin/main origin/<branch> --diff-filter=A --name-only
-   ```
-   Empty = the branch introduces no file absent from main. Non-empty → inspect each: is it truly
-   absent (`git cat-file -e origin/main:<path>` fails) or just moved/renamed on main?
-
-2. **Per-file blob identity** (is this file byte-identical on both sides?):
-   ```bash
-   git diff --quiet origin/<branch>:<file> origin/main:<file> && echo IDENTICAL || echo DIFFERS
+   git merge-base --is-ancestor origin/<branch> origin/main && echo "MERGED (ancestor)"
    ```
 
-3. **Is this exact file version anywhere in the base's history** (proves main passed through it and
-   moved on — i.e. superseded, not missing):
+2. **Content-contained** — do a trial 3-way merge of the branch *into* the base, in memory, and
+   ask whether it changes anything. If merging the branch produces the base's exact tree, the
+   branch adds nothing the base lacks — which is precisely the squash/rebase case where the count
+   says "ahead" but the content is already upstream:
    ```bash
-   blob=$(git rev-parse origin/<branch>:<file>)
-   git log origin/main --oneline --find-object="$blob" | head
-   ```
-   A hit means main once held this exact content, then rewrote it → superseded, safe.
-
-4. **True ancestor** (the branch is literally in main's history — fully merged, deletable):
-   ```bash
-   git merge-base --is-ancestor origin/<branch> origin/main && echo MERGED-ANCESTOR
+   base_tree=$(git rev-parse "origin/main^{tree}")
+   merged_tree=$(git merge-tree --write-tree origin/main origin/<branch> 2>/dev/null | head -1)
+   [ $? -eq 0 ] && [ "$merged_tree" = "$base_tree" ] && echo "MERGED (content contained)"
    ```
 
-5. **Patch-equivalence for a single commit** (did this commit's change land under a different sha?):
-   ```bash
-   git cherry origin/main <sha>       # '-' prefix = already in main; '+' = not
-   ```
+This is **sound**, not a heuristic, because it *is* Git's merge: a revert, an edit, or a new file
+the base lacks would change the merged tree and fail the equality — so it can never be silently
+mistaken for "merged." (`git merge-tree --write-tree` needs git ≥ 2.38; on older git the script
+cannot prove containment and falls back to reporting NEEDS REVIEW rather than guessing.)
+
+Everything else is **UNMERGED / NEEDS REVIEW**. To show what to review, list the branch's own
+contribution (three-dot = what it changed since diverging), display-safe for Unicode/space paths:
+
+```bash
+git -c core.quotePath=false diff --no-renames --name-status origin/main...origin/<branch> --
+```
+
+`--no-renames` decomposes a rename into add+delete (so a renamed-and-edited file can't hide); the
+`--` guarantees a branch named like a path (e.g. `docs`) is never parsed as a pathspec.
 
 ## Per-branch verdict procedure
 
-For each branch, decide among three outcomes:
+For each branch, the script decides among three outcomes:
 
-- **MERGED (ancestor)** — check 4 passes → in main's history, delete freely.
-- **STALE-SQUASH (merged by content)** — check 1 empty (no unmerged new files) and every modified
-  file resolves via check 2 (identical) or check 3 (superseded old version on main). Content is on
-  main; the commit count is an artifact. Deletable.
-- **UNMERGED** — check 1 lists a file genuinely absent from main, **or** a modified file has branch
-  content that is *not* identical and *not* found in main's history (check 3 empty) and represents
-  real behavior main lacks. Report the specific `file` (and ideally the specific hunk/function).
+- **MERGED (ancestor)** — in the base's history. Delete freely.
+- **MERGED (content contained)** — a trial merge into the base changes nothing; the "commits
+  ahead" count is a squash/rebase artifact. Delete freely.
+- **UNMERGED / NEEDS REVIEW** — a trial merge *would* change the base, so the branch carries
+  content the base does not already have (a genuinely new/edited/reverted/deleted file). Review
+  the listed contribution before deleting.
 
-`scripts/git_verify_branch_merged.sh <branch> [base]` automates checks 1–4 and prints the verdict.
+## Why safety-biased: a false "merged" loses work, a false "unmerged" only costs a look
 
-## "Superseded old version" vs "genuinely missing" — don't confuse them
+The two error directions are not symmetric. A false **UNMERGED** wastes a second look; a false
+**MERGED** tells you to delete a branch whose work then vanishes. So the check is deliberately
+biased: it only says "safe to delete" when it can *prove* containment, and it reports everything
+it cannot prove as NEEDS REVIEW. One real consequence: if a branch was squash-merged **and** the
+base later edited the same lines, the trial merge no longer reproduces the base tree exactly, so
+the script says NEEDS REVIEW rather than MERGED. That over-reporting is the correct trade — you
+look, confirm the lines are redundant, and delete; you never lose work to a confident wrong "yes."
 
-The subtle error is seeing a modified file "differs from main" and calling the branch UNMERGED,
-when in fact **main evolved *past* the branch** (has everything the branch had, plus more). Two
-tells that main is ahead, not behind:
+## Manual-only investigation hints (do NOT auto-decide on these)
 
-- The base file is **larger / a superset**: `git show origin/main:<file> | wc -l` ≫
-  `git show origin/<branch>:<file> | wc -l`, and the branch's distinctive symbols all appear in
-  main (`git show origin/main:<file> | grep -F '<branch-only-symbol>'`).
-- The branch's exact blob appears in main's history (check 3 above) — main held it, then rewrote it.
+These help a **human** investigate a NEEDS-REVIEW branch, but must never drive an automated
+"safe to delete" verdict — each has a false-positive mode that can hide real unmerged work:
 
-Only when the branch has a symbol/function/behavior that is **nowhere in main's current file and
-nowhere in main's history** is it genuinely unmerged. When unsure, quote the specific missing line
-and let the human confirm — a false "unmerged" wastes a re-merge; a false "merged" loses the work.
+- `git log origin/main --oneline --find-object="$blob" -- <path>` — did this exact blob ever
+  appear at this path in the base's history? A hit *suggests* the base passed through this content.
+  **Unsound for auto-decisions:** it also matches a revert (the base *used* to have it but doesn't
+  now — the revert is still unmerged work), so a match does not prove "currently contained."
+- `git cherry origin/main origin/<branch>` — marks each branch commit `-` (patch already upstream)
+  or `+` (not). Useful for cherry-picked/rebased commits, but a squash-merge combines commits into
+  one new patch-id, so cherry shows the originals as `+` even though their content is merged.
+- Superset tells (base file is larger and contains the branch's distinctive symbols) — a hint the
+  base evolved past the branch, to be **confirmed by eye**, not trusted blindly.
+
+When a hint and the trial merge disagree, trust the trial merge; it is the sound one.
 
 ## Adversarial multi-agent verification (for a whole repo of branches)
 
@@ -98,14 +109,16 @@ high-stakes "is *everything* merged?" verdict, fan out:
    branches, local-only-history branches, plus one agent that independently re-runs the loss
    check and re-derives the "should this old branch be merged?" verdict from content).
 2. **Frame each agent adversarially**: "Default to the assumption that these branches still have
-   unmerged unique content, and try to *prove* it. Judge by content (checks above), never by
-   commit count. Report per branch: MERGED / STALE-SQUASH / **UNMERGED (with file:line evidence)**."
+   unmerged unique content, and try to *prove* it. Judge by content (the trial-merge check above),
+   never by commit count. Report per branch: MERGED / **UNMERGED / NEEDS REVIEW (with the file(s)
+   the trial merge would change)**."
 3. **Lock them read-only** (see rules below) so concurrent agents don't corrupt each other's tree.
 4. **Counter-review every finding yourself.** An agent's "UNMERGED" is a *hypothesis*: re-run the
-   specific blob/line check before believing it (agents produce false positives too). An agent's
-   "all merged" is only as good as its method — spot-check that it judged by content, not counts.
-5. **Converge**: everything merged across all agents = strong confirmation; any single content-backed
-   UNMERGED finding = a real gap to land.
+   trial-merge / inspect the specific files before believing it (agents produce false positives
+   too). An agent's "all merged" is only as good as its method — spot-check that it judged by
+   content, not counts.
+5. **Converge**: everything merged across all agents = strong confirmation; any single
+   content-backed UNMERGED finding = a real gap to land.
 
 This is inline orchestration (the skill spawns the agents), so `git-safety-net` must run inline —
 a subagent cannot spawn subagents.
@@ -114,11 +127,12 @@ a subagent cannot spawn subagents.
 
 Put these in every agent's prompt — they are what make parallel verification safe and correct:
 
-- **Read-only, always.** Only `fetch --quiet`, `diff`, `log`, `show`, `cat-file`, `rev-list`,
-  `merge-base`, `ls-tree`, `for-each-ref`, `branch -r --contains`. **Never** `checkout`, `switch`,
-  `reset`, `rebase`, `commit`, `push`, `update-ref`, or `gc`. Multiple agents share one working
-  tree; a single `checkout` corrupts everyone else's run.
+- **Read-only, always.** Only `fetch --quiet`, `merge-base`, `merge-tree`, `diff`, `log`, `show`,
+  `cat-file`, `rev-list`, `rev-parse`, `ls-tree`, `for-each-ref`, `branch -r --contains`. **Never**
+  `checkout`, `switch`, `reset`, `rebase`, `commit`, `push`, `update-ref`, or `gc`. Multiple agents
+  share one working tree; a single `checkout` corrupts everyone else's run.
 - **Explicit refs only** (`origin/main`, `origin/<branch>`) so nothing depends on the current
   checkout.
-- **Judge by content, not counts** — restate checks 1–5 in the prompt.
-- **Return structured per-branch verdicts with file:line evidence for any UNMERGED**, not prose.
+- **Judge by content via the trial merge, not by counts** — restate the check in the prompt.
+- **Return structured per-branch verdicts with the file(s) the trial merge would change for any
+  UNMERGED**, not prose.
