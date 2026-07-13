@@ -3093,6 +3093,40 @@ for source selection, path normalization, privacy boundaries, and diagnostics.
 
 ---
 
+### 87. **git-safety-net** - Prevent & Recover From Local-Git Disasters
+
+> **Install**: `claude plugin install git-safety-net@daymade-skills`
+
+Prevent and recover from the branch/stash/rebase tangles that strand or lose local
+commits, and answer "is everything actually merged?" with content-level proof instead
+of misleading commit counts. Every command is read-only or additive until a step is
+explicitly labeled destructive — recovery never makes the loss worse.
+
+**Key features:**
+- Recovers deleted commits/branches/stashes via `git reflog` and `git fsck` (the ~90-day window)
+- Audits what is truly at risk with `git log --branches --not --remotes` (local-only = the loss set)
+- Pins dangling commits gc-proof under `refs/dangling-backup/` before any cleanup
+- Verifies a branch is merged by CONTENT — defeating the squash-merge "100 commits ahead" illusion
+- Optional adversarial multi-agent verification for a high-stakes "is everything merged?" call
+- Prevention habits: worktrees over stash-juggling, push WIP early, pre-rebase/pre-delete audit
+
+**Example usage:**
+```text
+/git-safety-net
+did I lose any commits after all that branch switching?
+is everything merged into main, or is something still stranded?
+recover the commit I lost after a bad rebase
+```
+
+📚 **Documentation**: See
+[recovery_playbook.md](./git-safety-net/references/recovery_playbook.md),
+[merge_verification.md](./git-safety-net/references/merge_verification.md), and
+[prevention_practices.md](./git-safety-net/references/prevention_practices.md).
+
+**Requirements**: Git and a standard bash shell. No third-party packages or network access.
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
