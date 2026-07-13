@@ -298,6 +298,95 @@ class LocalConversationHistoryTests(unittest.TestCase):
         self.assertIn("Fix \\| table rendering", completed.stdout)
         self.assertRegex(completed.stdout, r"\d{4}-\d{2}-\d{2} \d{2}:\d{2} [+-]\d{2}:\d{2}")
 
+    def test_claude_title_uses_structure_instead_of_text_length(self) -> None:
+        project_dir = claude_project_dir(self.claude_home, self.workspace)
+        image_session_id = "55555555-5555-4555-8555-555555555555"
+        command_session_id = "66666666-6666-4666-8666-666666666666"
+        file_session_id = "77777777-7777-4777-8777-777777777777"
+        ordinary_session_id = "88888888-8888-4888-8888-888888888888"
+        path_tail_session_id = "99999999-9999-4999-8999-999999999999"
+        write_jsonl(
+            project_dir / f"{image_session_id}.jsonl",
+            [
+                claude_user_record(
+                    image_session_id,
+                    self.workspace,
+                    f"[Image #1] {self.root / 'images' / 'error.png'}\n----\n修复这个问题",
+                    "2026-01-13T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{command_session_id}.jsonl",
+            [
+                claude_user_record(
+                    command_session_id,
+                    self.workspace,
+                    "Fix authentication bug\n----\n/transcript-fixer --mode preserve-formatting",
+                    "2026-01-14T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{file_session_id}.jsonl",
+            [
+                claude_user_record(
+                    file_session_id,
+                    self.workspace,
+                    f"{self.root / 'fixtures' / 'input.json'}\n----\n总结这个文件",
+                    "2026-01-15T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{ordinary_session_id}.jsonl",
+            [
+                claude_user_record(
+                    ordinary_session_id,
+                    self.workspace,
+                    "Background context\n----\nKeep this ordinary long request as the title",
+                    "2026-01-16T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{path_tail_session_id}.jsonl",
+            [
+                claude_user_record(
+                    path_tail_session_id,
+                    self.workspace,
+                    "Inspect the referenced location\n----\n/tmp/example/input.json is the source file",
+                    "2026-01-17T08:00:00Z",
+                )
+            ],
+        )
+
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "claude",
+            "--claude-home",
+            str(self.claude_home),
+            "--format",
+            "json",
+        )
+        conversations = json.loads(completed.stdout)["providers"]["claude"][
+            "conversations"
+        ]
+        titles = {item["session_id"]: item["title"] for item in conversations}
+        self.assertEqual(titles[image_session_id], "修复这个问题")
+        self.assertEqual(titles[command_session_id], "Fix authentication bug")
+        self.assertEqual(titles[file_session_id], "总结这个文件")
+        self.assertEqual(
+            titles[ordinary_session_id],
+            "Keep this ordinary long request as the title",
+        )
+        self.assertEqual(
+            titles[path_tail_session_id],
+            "/tmp/example/input.json is the source file",
+        )
+
     def test_codex_raw_rollout_fallback_skips_bad_json(self) -> None:
         session_id = "ffffffff-ffff-4fff-8fff-ffffffffffff"
         rollout = (

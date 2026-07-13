@@ -41,6 +41,11 @@ SESSION_ID_RE = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
     re.IGNORECASE,
 )
+ATTACHMENT_IMAGE_RE = re.compile(
+    r"^(?:<image\b|\[Image\s+#\d+\])", re.IGNORECASE
+)
+FILE_SUFFIX_RE = re.compile(r"\.[A-Za-z0-9]{1,16}$")
+SLASH_COMMAND_RE = re.compile(r"^/[A-Za-z0-9_.:-]+(?:\s|$)")
 
 
 def configure_utf8_streams() -> None:
@@ -101,6 +106,20 @@ class CodexDatabase:
 
 def looks_like_windows_path(value: str) -> bool:
     return bool(WINDOWS_DRIVE_RE.match(value)) or value.startswith("\\\\")
+
+
+def looks_like_attachment_prefix(value: str) -> bool:
+    """Recognize attachment metadata without guessing from prompt length."""
+    stripped = value.strip()
+    if ATTACHMENT_IMAGE_RE.match(stripped):
+        return True
+    if "\n" in stripped:
+        return False
+    candidate = stripped.strip("`'\"")
+    path_like = candidate.startswith(("/", "~/")) or looks_like_windows_path(
+        candidate
+    )
+    return path_like and bool(FILE_SUFFIX_RE.search(candidate))
 
 
 def normalize_workspace(value: str) -> str:
@@ -218,8 +237,15 @@ def is_noise_text(text: str) -> bool:
 def clean_title(text: str, max_chars: int) -> str:
     separator_parts = re.split(r"(?:^|\n)\s*-{4,}\s*(?:\n|$)", text)
     if len(separator_parts) > 1:
+        prefix = separator_parts[0].strip()
         tail = separator_parts[-1].strip()
-        text = tail if len(tail) >= 20 else separator_parts[0]
+        attachment_prefixed = looks_like_attachment_prefix(prefix)
+        if attachment_prefixed and tail:
+            text = tail
+        elif prefix and SLASH_COMMAND_RE.match(tail):
+            text = prefix
+        else:
+            text = tail if len(tail) >= 20 else prefix or tail
     text = re.sub(r"^<image\b[^>]*>\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"</?image>\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"^\[Image\s+#\d+\]\s*", "", text, flags=re.IGNORECASE)
