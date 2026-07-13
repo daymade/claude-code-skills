@@ -80,6 +80,7 @@ def main():
 
         name = os.path.splitext(os.path.basename(audio_path))[0]
         out_dir = args.output_dir or os.path.dirname(audio_path) or "."
+        os.makedirs(out_dir, exist_ok=True)
         output_path = os.path.join(out_dir, f"{name}.txt")
 
         print(f"\nTranscribing: {os.path.basename(audio_path)}", file=sys.stderr, flush=True)
