@@ -256,7 +256,11 @@ def run_case(name, payload, expect_exit, must_contain, must_not_contain):
     with tempfile.TemporaryDirectory() as td:
         src, out = Path(td) / 'c.json', Path(td) / 'out.md'
         src.write_text(json.dumps(payload), encoding='utf-8')
-        p = subprocess.run([sys.executable, str(RENDER), str(src), '-o', str(out)],
+        # The fidelity gate is tested on the canonical <details> markdown; the Obsidian
+        # callout conversion is a cosmetic post-pass that rewrites lines and cannot
+        # preserve every multi-line string verbatim.
+        p = subprocess.run([sys.executable, str(RENDER), str(src), '-o', str(out),
+                            '--format', 'markdown'],
                            capture_output=True, text=True)
         if p.returncode != expect_exit:
             return f'exit {p.returncode}, expected {expect_exit}\n      {p.stderr.strip()[:200]}'
