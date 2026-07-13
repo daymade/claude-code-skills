@@ -1,0 +1,23 @@
+{
+  "skill_name": "local-conversation-history",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "列出当前项目最近的 Claude Code 和 Codex 本地对话。要可读的标题、时间和会话 ID，不要把内部 sub-agent 都列进来。",
+      "expected_output": "Runs the bundled inventory once and returns Chinese Markdown sections for both providers with timezone-qualified timestamps and exclusion counts.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Show only the recent Codex chats for this repository, including archived threads, and give me machine-readable JSON so I can pipe it into another tool.",
+      "expected_output": "Runs the bundled inventory once with Codex-only, archived, and JSON options; does not manually query SQLite or paste transcript bodies.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I moved my Claude and Codex config directories to custom profile folders on Windows. Find the conversations under this workspace and explain clearly if either local store cannot be read.",
+      "expected_output": "Uses explicit provider-home overrides, handles Windows path normalization, and surfaces built-in diagnostics without guessing or modifying local state.",
+      "files": []
+    }
+  ]
+}
