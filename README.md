@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.83.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.84.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -188,9 +188,10 @@ These skills ship as a bundle — there are no separate single-skill plugins. Al
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-This suite bundles the skills that extend Claude Code itself — session recovery, CLAUDE.md tuning, troubleshooting, statusline configuration, export repair, marketplace development, terminal screenshot rendering, usage analysis, multi-provider model switching, and automatic local skill-source sync for Claude Code/Codex installs:
+This suite bundles the skills that extend Claude Code itself — fast local conversation discovery across Claude Code and Codex, session recovery, CLAUDE.md tuning, troubleshooting, statusline configuration, export repair, marketplace development, terminal screenshot rendering, usage analysis, multi-provider model switching, and automatic local skill-source sync for Claude Code/Codex installs:
 
 ```text
+/daymade-claude-code:local-conversation-history
 /daymade-claude-code:claude-code-history-files-finder
 /daymade-claude-code:continue-claude-work
 /daymade-claude-code:claude-skills-troubleshooting
@@ -3059,6 +3060,37 @@ can we merge this contribution and fix the remaining repo bookkeeping ourselves?
 
 **Requirements**: authenticated `gh` CLI, `git` with `merge-tree --write-tree`, and `jq`.
 
+### 86. **local-conversation-history** - Fast Local Claude Code and Codex History
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills`
+> (suite-only — invoked as `daymade-claude-code:local-conversation-history`)
+
+List recent local Claude Code and Codex conversations for the current workspace
+in one read-only command. The output is presentation-ready Markdown or JSON with
+short titles, timezone-qualified timestamps, exact session IDs, and explicit
+diagnostics.
+
+**Key features:**
+- Reads only bounded Claude Code session prefixes and ignores sub-agents by default
+- Selects a compatible Codex state database through schema introspection
+- Visibly falls back to raw Codex rollout JSONL when the database is unavailable
+- Supports custom profile homes, archived threads, recursive/all-project scopes,
+  Windows path normalization, and machine-readable JSON
+- Uses Python's standard library only; performs no network requests or writes
+
+**Example usage:**
+```text
+/daymade-claude-code:local-conversation-history
+list the recent Claude Code and Codex chats for this folder
+show Codex threads including archived conversations as JSON
+```
+
+📚 **Documentation**: See
+[storage_and_portability.md](./daymade-claude-code/local-conversation-history/references/storage_and_portability.md)
+for source selection, path normalization, privacy boundaries, and diagnostics.
+
+**Requirements**: Python 3.10+; no third-party packages or network access.
+
 ---
 
 ## 🎬 Interactive Demo Gallery
@@ -3129,6 +3161,13 @@ Use **claude-code-history-files-finder** to recover deleted files from previous 
 
 ### For Resuming Interrupted Claude Sessions
 Use **continue-claude-work** to recover the last actionable request from local `~/.claude` artifacts and continue implementation without reopening the original session. Combine with **claude-code-history-files-finder** when you need broader cross-session search, statistics, or deleted-file recovery.
+
+### For Fast Local Conversation Discovery
+Use **local-conversation-history** when you need a quick, readable list of recent
+Claude Code and Codex chats for the current workspace. It produces both provider
+inventories in one read-only call and excludes internal agents by default. Move
+to **claude-code-history-files-finder** only when you need full-text search,
+tool-call analysis, or deleted-file recovery from Claude Code transcripts.
 
 ### For Web Extraction & WeChat Articles
 Use **scrapling-skill** to install and validate Scrapling CLI, choose between static and browser-backed fetching, and extract clean Markdown from sites like `mp.weixin.qq.com`. Combine with **deep-research** to turn extracted sources into structured reports or with **docs-cleaner** to normalize captured article content.
@@ -3222,6 +3261,7 @@ Each skill includes:
 - **transcript-fixer**: See `daymade-audio/transcript-fixer/references/workflow_guide.md` for step-by-step workflows and `daymade-audio/transcript-fixer/references/team_collaboration.md` for collaboration patterns
 - **qa-expert**: See `qa-expert/references/master_qa_prompt.md` for autonomous execution (100x speedup) and `qa-expert/references/google_testing_standards.md` for AAA pattern and OWASP testing
 - **prompt-optimizer**: See `prompt-optimizer/references/ears_syntax.md` for EARS transformation patterns, `prompt-optimizer/references/domain_theories.md` for theory catalog, and `prompt-optimizer/references/examples.md` for complete transformations
+- **local-conversation-history**: See `daymade-claude-code/local-conversation-history/references/storage_and_portability.md` for local-store selection, cross-platform paths, privacy boundaries, and diagnostics
 - **claude-code-history-files-finder**: See `daymade-claude-code/claude-code-history-files-finder/references/session_file_format.md` for JSONL structure and `daymade-claude-code/claude-code-history-files-finder/references/workflow_examples.md` for recovery workflows
 - **docs-cleaner**: See `daymade-docs/docs-cleaner/SKILL.md` for consolidation workflows
 - **deep-research**: See `deep-research/references/research_report_template.md` for report structure and `deep-research/references/source_quality_rubric.md` for source triage

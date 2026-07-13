@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.83.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.84.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -188,9 +188,10 @@ claude plugin install daymade-docs@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——会话恢复、CLAUDE.md 调优、故障诊断、statusline 配置、导出修复、marketplace 开发、终端截图渲染、用量分析、多 Provider 模型切换，以及 Claude Code/Codex 安装目录的自动本地 skill 源码同步：
+一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨 Claude Code/Codex 的快速本地对话发现、会话恢复、CLAUDE.md 调优、故障诊断、statusline 配置、导出修复、marketplace 开发、终端截图渲染、用量分析、多 Provider 模型切换，以及 Claude Code/Codex 安装目录的自动本地 skill 源码同步：
 
 ```text
+/daymade-claude-code:local-conversation-history
 /daymade-claude-code:claude-code-history-files-finder
 /daymade-claude-code:continue-claude-work
 /daymade-claude-code:claude-skills-troubleshooting
@@ -3093,6 +3094,35 @@ main 在上次 review 后变了，重新告诉我现在真正会合进去什么
 
 **依赖**：已认证的 `gh` CLI、支持 `merge-tree --write-tree` 的 `git`、`jq`。
 
+### 86. **local-conversation-history** - 快速查看本地 Claude Code 与 Codex 对话
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`
+>（仅作为套件成员发布，调用方式 `daymade-claude-code:local-conversation-history`）
+
+用一次只读命令列出当前工作区最近的 Claude Code 与 Codex 本地对话。
+输出已经是可直接阅读的 Markdown 或 JSON，包含短标题、带时区时间、精确会话
+ID 和明确诊断信息。
+
+**主要能力：**
+- 只读取 Claude Code 会话的有界前缀，默认排除 sub-agent
+- 通过 schema 检查选择兼容的 Codex 状态数据库
+- 数据库不可用时明确告警，再读取原始 Codex rollout JSONL
+- 支持自定义 profile 根目录、归档会话、递归/全部项目、Windows 路径归一化和 JSON
+- 仅使用 Python 标准库，不联网、不写入本地历史
+
+**示例：**
+```text
+/daymade-claude-code:local-conversation-history
+列出当前文件夹最近的 Claude Code 和 Codex 对话
+把包含归档会话的 Codex 记录输出成 JSON
+```
+
+📚 **文档**：参见
+[storage_and_portability.md](./daymade-claude-code/local-conversation-history/references/storage_and_portability.md)
+了解数据源选择、路径归一化、隐私边界和诊断方法。
+
+**依赖**：Python 3.10+；无需第三方包或网络。
+
 ---
 
 ## 🎬 交互式演示画廊
@@ -3162,6 +3192,12 @@ review 后修复/落地时，使用 **github-review-pr**。
 
 ### 续做中断的 Claude 会话
 使用 **continue-claude-work** 从本地 `~/.claude` 产物中恢复最后一个可执行请求，并在不重新打开原始会话的情况下继续实现。若还需要跨会话搜索、统计分析或恢复已删除文件，可与 **claude-code-history-files-finder** 配合使用。
+
+### 快速发现本地对话
+需要快速查看当前工作区最近的 Claude Code 与 Codex 对话时，使用
+**local-conversation-history**。它用一次只读调用输出两个来源的可读清单，
+并默认排除内部 agent。只有在需要全文搜索、分析工具调用或从 Claude Code
+逐字稿恢复文件时，再切换到 **claude-code-history-files-finder**。
 
 ### 网页提取与微信公众号文章
 使用 **scrapling-skill** 安装并验证 Scrapling CLI，判断应使用静态抓取还是浏览器抓取，并从 `mp.weixin.qq.com` 等页面提取干净的 Markdown。可与 **deep-research** 配合，将抓取内容整理为结构化报告，或与 **docs-cleaner** 配合清理抽取后的文章内容。
@@ -3255,6 +3291,7 @@ review 后修复/落地时，使用 **github-review-pr**。
 - **transcript-fixer**：参见 `daymade-audio/transcript-fixer/references/workflow_guide.md` 了解分步工作流和 `daymade-audio/transcript-fixer/references/team_collaboration.md` 了解协作模式
 - **qa-expert**：参见 `qa-expert/references/master_qa_prompt.md` 了解自主执行（100 倍加速）和 `qa-expert/references/google_testing_standards.md` 了解 AAA 模式和 OWASP 测试
 - **prompt-optimizer**：参见 `prompt-optimizer/references/ears_syntax.md` 了解 EARS 转换模式、`prompt-optimizer/references/domain_theories.md` 了解理论目录和 `prompt-optimizer/references/examples.md` 了解完整转换示例
+- **local-conversation-history**：参见 `daymade-claude-code/local-conversation-history/references/storage_and_portability.md` 了解本地数据源选择、跨平台路径、隐私边界和诊断方法
 - **claude-code-history-files-finder**：参见 `daymade-claude-code/claude-code-history-files-finder/references/session_file_format.md` 了解 JSONL 结构和 `daymade-claude-code/claude-code-history-files-finder/references/workflow_examples.md` 了解恢复工作流
 - **docs-cleaner**：参见 `daymade-docs/docs-cleaner/SKILL.md` 了解整合工作流
 - **deep-research**：参见 `deep-research/references/research_report_template.md` 了解报告结构，并参见 `deep-research/references/source_quality_rubric.md` 了解来源分级标准
