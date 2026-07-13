@@ -29,8 +29,14 @@ Usage:
       --diar rec.diarization.json [--csv rec.csv] [--threshold 0.45] [--margin 0.05]
 """
 # /// script
-# dependencies = ["funasr", "torch", "torchaudio", "soundfile", "numpy", "scipy"]
+# requires-python = ">=3.10,<3.12"
+# dependencies = ["funasr", "numba>=0.60", "torch", "torchaudio", "soundfile", "numpy", "scipy"]
 # ///
+# NOTE: requires-python is pinned <3.12 on purpose. funasr pulls
+# umap-learn -> pynndescent -> numba/llvmlite; on Python 3.13 uv backtracks to an
+# ancient llvmlite (0.36.0, source-build, fails), while 3.10/3.11 resolve modern
+# llvmlite (0.47) from wheels. `numba>=0.60` forces that modern, wheel-backed stack.
+# Verified: on 3.11 uv resolves llvmlite 0.47 / numba 0.65 from wheels (no source build).
 import argparse
 import csv as csvmod
 import json
@@ -143,6 +149,7 @@ def cmd_enroll(model, args):
     c = centroid(embs)
     refs = load_refs(args.refs)
     refs["centroids"][args.name] = c.tolist()
+    Path(args.refs).parent.mkdir(parents=True, exist_ok=True)
     Path(args.refs).write_text(json.dumps(refs, ensure_ascii=False, indent=2), encoding="utf-8")
     log(f"Enrolled '{args.name}' from {len(embs)} spans -> {args.refs} "
         f"(now: {list(refs['centroids'])})")
