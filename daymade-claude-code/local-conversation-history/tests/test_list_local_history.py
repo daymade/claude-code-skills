@@ -305,6 +305,7 @@ class LocalConversationHistoryTests(unittest.TestCase):
         file_session_id = "77777777-7777-4777-8777-777777777777"
         ordinary_session_id = "88888888-8888-4888-8888-888888888888"
         path_tail_session_id = "99999999-9999-4999-8999-999999999999"
+        combined_session_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
         write_jsonl(
             project_dir / f"{image_session_id}.jsonl",
             [
@@ -360,6 +361,23 @@ class LocalConversationHistoryTests(unittest.TestCase):
                 )
             ],
         )
+        write_jsonl(
+            project_dir / f"{combined_session_id}.jsonl",
+            [
+                claude_user_record(
+                    combined_session_id,
+                    self.workspace,
+                    (
+                        f"[Image #1] {self.root / 'images' / 'error.png'}\n"
+                        "----\n"
+                        "修复这个问题\n"
+                        "----\n"
+                        "/transcript-fixer --mode preserve-formatting"
+                    ),
+                    "2026-01-18T08:00:00Z",
+                )
+            ],
+        )
 
         completed = self.run_cli(
             "--cwd",
@@ -386,6 +404,7 @@ class LocalConversationHistoryTests(unittest.TestCase):
             titles[path_tail_session_id],
             "/tmp/example/input.json is the source file",
         )
+        self.assertEqual(titles[combined_session_id], "修复这个问题")
 
     def test_codex_raw_rollout_fallback_skips_bad_json(self) -> None:
         session_id = "ffffffff-ffff-4fff-8fff-ffffffffffff"

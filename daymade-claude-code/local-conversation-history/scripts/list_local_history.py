@@ -237,15 +237,15 @@ def is_noise_text(text: str) -> bool:
 def clean_title(text: str, max_chars: int) -> str:
     separator_parts = re.split(r"(?:^|\n)\s*-{4,}\s*(?:\n|$)", text)
     if len(separator_parts) > 1:
-        prefix = separator_parts[0].strip()
-        tail = separator_parts[-1].strip()
-        attachment_prefixed = looks_like_attachment_prefix(prefix)
-        if attachment_prefixed and tail:
-            text = tail
-        elif prefix and SLASH_COMMAND_RE.match(tail):
-            text = prefix
-        else:
-            text = tail if len(tail) >= 20 else prefix or tail
+        candidates = [part.strip() for part in separator_parts if part.strip()]
+        while len(candidates) > 1 and looks_like_attachment_prefix(candidates[0]):
+            candidates.pop(0)
+        while len(candidates) > 1 and SLASH_COMMAND_RE.match(candidates[-1]):
+            candidates.pop()
+        if candidates:
+            prefix = candidates[0]
+            tail = candidates[-1]
+            text = tail if len(tail) >= 20 else prefix
     text = re.sub(r"^<image\b[^>]*>\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"</?image>\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"^\[Image\s+#\d+\]\s*", "", text, flags=re.IGNORECASE)
