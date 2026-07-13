@@ -280,6 +280,24 @@ shape that fooled a previous version of the gate:
 uv run python scripts/selftest_fidelity.py
 ```
 
+### Obsidian output (`--format obsidian`) and navigation (`--toc`)
+
+Obsidian's Live Preview does not render HTML `<details>`, so the collapsible tool
+outputs, thinking, and file bodies land as flat noise there. `--format obsidian`
+rewrites each `<details>` block as a native `> [!info]-` collapsible callout:
+
+```bash
+uv run python scripts/render_transcript.py conversation.json -o transcript.md \
+    --source-url <url> --format obsidian --toc
+```
+
+The conversion runs **only after the fidelity gate has passed** on the `<details>`
+markdown — it is a cosmetic post-pass that touches no payload string, so it can never
+affect the retention proof (don't move it before the gate). `--toc` prepends a linked
+table of contents and inserts per-message anchors (`<a id="turn-N">`) so long
+conversations are navigable. Both are opt-in; the default stays HTML-`<details>`
+markdown, and `--extract-file` output is never reformatted.
+
 Other modes, unchanged: `--list-files` inventories every downloadable file with
 the endpoint family each needs; `--extract-file <sandbox-path>` reconstructs a
 sandbox-created file by replaying its `create_file` plus every later

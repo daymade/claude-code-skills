@@ -60,6 +60,7 @@ Two payload shapes:
 """
 import argparse
 import json
+import re
 import sys
 
 
@@ -814,7 +815,57 @@ def citation_sources(conv):
     return '\n'.join(lines) + '\n'
 
 
-def render_transcript(conv, source_url='', report=None):
+def obsidian_callout(summary, body):
+    """Wrap content in an Obsidian collapsible callout.
+
+    Every line inside the callout must start with '> ' so Obsidian treats the
+    whole block as part of the callout. Code fences, nested markdown, and
+    blank lines are preserved by prefixing each line individually.
+    """
+    lines = [f'> [!info]- {summary}', '>']
+    for raw in body.splitlines():
+        lines.append(f'> {raw}' if raw else '>')
+    return '\n'.join(lines)
+
+
+def details_to_obsidian_callouts(md):
+    """Convert the markdown's HTML <details> blocks into Obsidian callouts.
+
+    Obsidian Live Preview does not render HTML <details>, so the collapsible tool
+    outputs/thinking/files come out as flat noise there. This rewrites each
+    <details><summary>…</summary> … </details> block as a `> [!info]-` callout.
+
+    It runs AFTER the fidelity gate, which audits the verbatim <details> markdown
+    where every payload string is preserved — so this is a cosmetic post-pass that
+    touches no payload string and cannot affect the retention proof.
+    """
+    lines = md.splitlines()
+    out = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = re.match(r'<details><summary>(.*)</summary>', line)
+        if not m:
+            out.append(line)
+            i += 1
+            continue
+        summary = m.group(1)
+        i += 1
+        if i < len(lines) and lines[i].strip() == '':
+            i += 1  # consume optional blank line after the opening tag
+        body_lines = []
+        while i < len(lines) and lines[i].strip() != '</details>':
+            body_lines.append(lines[i])
+            i += 1
+        if i < len(lines) and lines[i].strip() == '</details>':
+            i += 1  # consume the closing tag
+        while body_lines and body_lines[-1].strip() == '':
+            body_lines.pop()  # drop trailing blank lines inside the body
+        out.append(obsidian_callout(summary, '\n'.join(body_lines)))
+    return '\n'.join(out)
+
+
+def render_transcript(conv, source_url='', report=None, toc=False):
     # The disclosure is computed here when the caller didn't supply it, so that no
     # code path can produce a transcript that quietly omits it. Making the banner
     # depend on an optional argument would mean the one function that hides the
@@ -839,7 +890,18 @@ def render_transcript(conv, source_url='', report=None):
     if extra:
         head += ['', extra]
     head += ['', '---', '']
-    body = '\n\n---\n\n'.join(render_msg(m, snapshot) for m in msgs)
+    if toc:
+        toc_lines = ['## Table of contents', '']
+        for i, m in enumerate(msgs, 1):
+            who = 'human' if m.get('sender') == 'human' else 'assistant'
+            ts = m.get('created_at', '')
+            toc_lines.append(f'{i}. [{who} ({ts})](#turn-{i})')
+        head += toc_lines + ['', '---', '']
+    body_parts = []
+    for i, m in enumerate(msgs, 1):
+        anchor = f'<a id="turn-{i}"></a>\n' if toc else ''
+        body_parts.append(anchor + render_msg(m, snapshot))
+    body = '\n\n---\n\n'.join(body_parts)
     return '\n'.join(head) + body + '\n' + citation_sources(conv)
 
 
@@ -907,6 +969,14 @@ def main(argv=None):
     ap.add_argument('--allow-lossy', action='store_true',
                     help='write the transcript even if blocks failed to render '
                          '(default: refuse, because that loss is otherwise silent)')
+    ap.add_argument('--format', choices=['markdown', 'obsidian'], default='markdown',
+                    help='output format: markdown (default, HTML <details>) or obsidian '
+                         '(collapsible > [!info]- callouts — Obsidian Live Preview does not '
+                         'render HTML <details>). Applied only after the fidelity gate passes '
+                         'on the <details> markdown, so it never affects the retention proof.')
+    ap.add_argument('--toc', action='store_true',
+                    help='prepend a linked table of contents and add per-message anchors so '
+                         'long conversations are navigable')
     args = ap.parse_args(argv)
 
     try:
@@ -934,7 +1004,7 @@ def main(argv=None):
             return 1
     else:
         report = fidelity_report(conv)
-        out = render_transcript(conv, args.source_url, report)
+        out = render_transcript(conv, args.source_url, report, toc=args.toc)
 
         # Floors first. An empty or truncated payload is the LIMIT CASE of the very
         # loss this gate exists for — rubber-stamping it at "100%" would be the gate
@@ -1015,6 +1085,14 @@ def main(argv=None):
             print(f"known gap: {len(report['stripped_blocks'])} tool blocks were emptied by the "
                   f"platform ({', '.join(names) or 'unnamed'}) — disclosed in the transcript header, "
                   f"NOT recoverable from a shared link", file=sys.stderr)
+
+        # Obsidian conversion happens ONLY here — after the fidelity gate has run on the
+        # verbatim <details> markdown and passed. Converting to > [!info]- callouts is a
+        # cosmetic post-pass that touches no payload string, so it cannot affect the
+        # retention proof above. (Kept out of the --extract-file branch on purpose: that
+        # emits raw file content, not a transcript.)
+        if args.format == 'obsidian':
+            out = details_to_obsidian_callouts(out)
 
     if args.output:
         open(args.output, 'w', encoding='utf-8').write(out)
