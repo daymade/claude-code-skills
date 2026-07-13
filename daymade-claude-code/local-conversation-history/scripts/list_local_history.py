@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 MAX_PREFIX_BYTES = 2 * 1024 * 1024
 MAX_PREFIX_LINES = 5000
-CODEX_REQUIRED_COLUMNS = {"id", "cwd", "updated_at"}
+CODEX_REQUIRED_COLUMNS = {"id", "cwd", "updated_at", "source", "archived"}
 NOISE_PREFIXES = (
     "# agents.md instructions for ",
     "<app-context",
@@ -37,6 +37,10 @@ AUTOMATED_TITLE_RE = re.compile(
     r"^(?:reply|respond|return|print)\s+(?:with\s+)?exactly\b", re.IGNORECASE
 )
 WINDOWS_DRIVE_RE = re.compile(r"^(?:[/\\]{2}\?[/\\])?[A-Za-z]:[/\\]")
+SESSION_ID_RE = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    re.IGNORECASE,
+)
 
 
 def configure_utf8_streams() -> None:
@@ -53,7 +57,7 @@ class Conversation:
     session_id: str
     title: str
     cwd: str
-    updated_at: float
+    updated_at: Optional[float]
     created_at: Optional[float]
     archived: bool
     kind: str
@@ -63,7 +67,9 @@ class Conversation:
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
-        data["updated_at"] = iso_timestamp(self.updated_at)
+        data["updated_at"] = (
+            iso_timestamp(self.updated_at) if self.updated_at is not None else None
+        )
         data["created_at"] = (
             iso_timestamp(self.created_at) if self.created_at is not None else None
         )
@@ -130,6 +136,8 @@ def parse_timestamp(value: Any) -> Optional[float]:
         return None
     if isinstance(value, (int, float)):
         numeric = float(value)
+        if numeric <= 0:
+            return None
         return numeric / 1000 if numeric > 10_000_000_000 else numeric
     if isinstance(value, str):
         text = value.strip()
@@ -137,6 +145,8 @@ def parse_timestamp(value: Any) -> Optional[float]:
             return None
         try:
             numeric = float(text)
+            if numeric <= 0:
+                return None
             return numeric / 1000 if numeric > 10_000_000_000 else numeric
         except ValueError:
             pass
@@ -206,8 +216,17 @@ def is_noise_text(text: str) -> bool:
 
 
 def clean_title(text: str, max_chars: int) -> str:
+    separator_parts = re.split(r"(?:^|\n)\s*-{4,}\s*(?:\n|$)", text)
+    if len(separator_parts) > 1:
+        tail = separator_parts[-1].strip()
+        text = tail if len(tail) >= 20 else separator_parts[0]
     text = re.sub(r"^<image\b[^>]*>\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"</?image>\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^\[Image\s+#\d+\]\s*", "", text, flags=re.IGNORECASE)
+    home = str(Path.home())
+    for home_variant in {home, home.replace("\\", "/"), home.replace("/", "\\")}:
+        if home_variant:
+            text = text.replace(home_variant, "~")
     text = re.sub(r"[\r\n\t]+", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     if len(text) <= max_chars:
@@ -290,8 +309,10 @@ def parse_claude_session(path: Path, max_chars: int) -> Conversation:
         title = f"(untitled: {session_id})"
     try:
         updated_at = path.stat().st_mtime
+        timestamp_source = "file-mtime"
     except OSError:
-        updated_at = created_at or 0.0
+        updated_at = created_at
+        timestamp_source = "session-record"
     return Conversation(
         provider="claude",
         session_id=session_id,
@@ -303,7 +324,7 @@ def parse_claude_session(path: Path, max_chars: int) -> Conversation:
         kind="subagent" if path.name.startswith("agent-") else "main",
         path=str(path),
         metadata_source="session-jsonl",
-        timestamp_source="file-mtime",
+        timestamp_source=timestamp_source,
     )
 
 
@@ -400,7 +421,10 @@ def collect_claude(args: argparse.Namespace, home: Path) -> ProviderResult:
                 result.excluded_automated += 1
                 continue
             result.conversations.append(conversation)
-    result.conversations.sort(key=lambda item: item.updated_at, reverse=True)
+    result.conversations.sort(
+        key=lambda item: item.updated_at if item.updated_at is not None else float("-inf"),
+        reverse=True,
+    )
     return result
 
 
@@ -419,7 +443,8 @@ def inspect_codex_database(path: Path) -> CodexDatabase:
             missing = ", ".join(sorted(CODEX_REQUIRED_COLUMNS - columns))
             raise ValueError(f"threads schema is missing: {missing}")
         updated_expression = (
-            "COALESCE(MAX(updated_at_ms), MAX(updated_at) * 1000, 0)"
+            "COALESCE(MAX(CASE WHEN updated_at_ms > 0 THEN updated_at_ms "
+            "ELSE updated_at * 1000 END), 0)"
             if "updated_at_ms" in columns
             else "COALESCE(MAX(updated_at) * 1000, 0)"
         )
@@ -548,7 +573,7 @@ def collect_codex_from_database(
                 continue
             updated_at = parse_timestamp(value_or_none(row, "updated_at_ms"))
             if updated_at is None:
-                updated_at = parse_timestamp(value_or_none(row, "updated_at")) or 0.0
+                updated_at = parse_timestamp(value_or_none(row, "updated_at"))
             created_at = parse_timestamp(value_or_none(row, "created_at_ms"))
             if created_at is None:
                 created_at = parse_timestamp(value_or_none(row, "created_at"))
@@ -593,6 +618,15 @@ def codex_meta_from_rollout(path: Path) -> Optional[dict[str, Any]]:
     return None
 
 
+def codex_session_id(meta: dict[str, Any], path: Path) -> Optional[str]:
+    """Read the authoritative ID, with a UUID filename fallback when unambiguous."""
+    value = meta.get("id")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    match = SESSION_ID_RE.search(path.name)
+    return match.group(0) if match else None
+
+
 def codex_prompt_from_rollout(path: Path, max_chars: int) -> Optional[str]:
     short_candidate: Optional[str] = None
     for record in iter_jsonl(path, bounded=True):
@@ -611,7 +645,7 @@ def codex_prompt_from_rollout(path: Path, max_chars: int) -> Optional[str]:
                 candidate = str(payload.get("message") or "")
         if not candidate:
             continue
-        title = first_meaning_title = first_meaningful_title((candidate,), max_chars)
+        title = first_meaningful_title((candidate,), max_chars)
         if not title:
             continue
         if len(title) >= 4:
@@ -629,7 +663,7 @@ def collect_codex_from_rollouts(
     if sessions_dir.is_dir():
         files.extend((path, False) for path in sessions_dir.rglob("rollout-*.jsonl"))
     archived_dir = home / "archived_sessions"
-    if args.include_archived and archived_dir.is_dir():
+    if archived_dir.is_dir():
         files.extend((path, True) for path in archived_dir.rglob("rollout-*.jsonl"))
     if not files:
         result.warnings.append(f"No Codex rollout files found under {home}")
@@ -639,7 +673,10 @@ def collect_codex_from_rollouts(
         if meta is None:
             result.warnings.append(f"Skipping rollout without session_meta: {path}")
             continue
-        session_id = str(meta.get("id") or path.stem.rsplit("-", 1)[-1])
+        session_id = codex_session_id(meta, path)
+        if session_id is None:
+            result.warnings.append(f"Skipping rollout without a session ID: {path}")
+            continue
         cwd = str(meta.get("cwd") or "")
         if not args.all_projects and not workspace_matches(cwd, args.cwd, args.recursive):
             continue
@@ -659,8 +696,10 @@ def collect_codex_from_rollouts(
             continue
         try:
             updated_at = path.stat().st_mtime
+            timestamp_source = "file-mtime"
         except OSError:
-            updated_at = parse_timestamp(meta.get("timestamp")) or 0.0
+            updated_at = parse_timestamp(meta.get("timestamp"))
+            timestamp_source = "session-meta"
         result.conversations.append(
             Conversation(
                 provider="codex",
@@ -673,7 +712,7 @@ def collect_codex_from_rollouts(
                 kind="subagent" if subagent else "main",
                 path=str(path),
                 metadata_source="rollout-jsonl",
-                timestamp_source="file-mtime",
+                timestamp_source=timestamp_source,
             )
         )
 
@@ -704,7 +743,9 @@ def collect_codex(args: argparse.Namespace, home: Path) -> ProviderResult:
         collect_codex_from_rollouts(args, home, result)
     deduplicated = {item.session_id: item for item in result.conversations}
     result.conversations = sorted(
-        deduplicated.values(), key=lambda item: item.updated_at, reverse=True
+        deduplicated.values(),
+        key=lambda item: item.updated_at if item.updated_at is not None else float("-inf"),
+        reverse=True,
     )
     return result
 
@@ -767,8 +808,9 @@ def render_provider_markdown(
     lines.append("| " + " | ".join(headers) + " |")
     lines.append("|" + "---|" * len(headers))
     for item in shown:
+        unknown_time = "未知" if language == "zh" else "unknown"
         row = [
-            format_timestamp(item.updated_at),
+            format_timestamp(item.updated_at) if item.updated_at is not None else unknown_time,
             markdown_escape(item.title),
             f"`{item.session_id}`",
         ]
