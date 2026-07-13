@@ -45,7 +45,7 @@ ATTACHMENT_IMAGE_RE = re.compile(
     r"^(?:<image\b|\[Image\s+#\d+\])", re.IGNORECASE
 )
 FILE_SUFFIX_RE = re.compile(r"\.[A-Za-z0-9]{1,16}$")
-SLASH_COMMAND_RE = re.compile(r"^/[A-Za-z0-9_.:-]+(?:\s|$)")
+SLASH_COMMAND_RE = re.compile(r"^/[A-Za-z0-9_:-]+(?:[ \t].*)?$")
 
 
 def configure_utf8_streams() -> None:
@@ -120,6 +120,24 @@ def looks_like_attachment_prefix(value: str) -> bool:
         candidate
     )
     return path_like and bool(FILE_SUFFIX_RE.search(candidate))
+
+
+def strip_structural_metadata_lines(value: str) -> tuple[str, bool]:
+    """Remove attachment and slash-command wrapper lines around a request."""
+    lines = [line.strip() for line in value.splitlines() if line.strip()]
+    removed_attachment = False
+    while lines:
+        if looks_like_attachment_prefix(lines[0]):
+            removed_attachment = True
+            lines.pop(0)
+            continue
+        if SLASH_COMMAND_RE.fullmatch(lines[0]):
+            lines.pop(0)
+            continue
+        break
+    while lines and SLASH_COMMAND_RE.fullmatch(lines[-1]):
+        lines.pop()
+    return "\n".join(lines).strip(), removed_attachment
 
 
 def normalize_workspace(value: str) -> str:
@@ -237,12 +255,20 @@ def is_noise_text(text: str) -> bool:
 def clean_title(text: str, max_chars: int) -> str:
     separator_parts = re.split(r"(?:^|\n)\s*-{4,}\s*(?:\n|$)", text)
     if len(separator_parts) > 1:
-        candidates = [part.strip() for part in separator_parts if part.strip()]
-        while len(candidates) > 1 and looks_like_attachment_prefix(candidates[0]):
-            candidates.pop(0)
-        while len(candidates) > 1 and SLASH_COMMAND_RE.match(candidates[-1]):
-            candidates.pop()
-        if candidates:
+        raw_candidates = [part.strip() for part in separator_parts if part.strip()]
+        processed_candidates = [
+            strip_structural_metadata_lines(part) for part in raw_candidates
+        ]
+        attachment_requests = [
+            candidate
+            for candidate, removed_attachment in processed_candidates
+            if candidate and removed_attachment
+        ]
+        candidates = [candidate for candidate, _ in processed_candidates if candidate]
+        candidates = candidates or raw_candidates
+        if attachment_requests:
+            text = attachment_requests[-1]
+        elif candidates:
             prefix = candidates[0]
             tail = candidates[-1]
             text = tail if len(tail) >= 20 else prefix

@@ -306,6 +306,10 @@ class LocalConversationHistoryTests(unittest.TestCase):
         ordinary_session_id = "88888888-8888-4888-8888-888888888888"
         path_tail_session_id = "99999999-9999-4999-8999-999999999999"
         combined_session_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        same_segment_session_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        reordered_session_id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        root_path_session_id = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        attachment_tail_session_id = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
         write_jsonl(
             project_dir / f"{image_session_id}.jsonl",
             [
@@ -378,6 +382,66 @@ class LocalConversationHistoryTests(unittest.TestCase):
                 )
             ],
         )
+        write_jsonl(
+            project_dir / f"{same_segment_session_id}.jsonl",
+            [
+                claude_user_record(
+                    same_segment_session_id,
+                    self.workspace,
+                    (
+                        f"[Image #1] {self.root / 'images' / 'error.png'}\n"
+                        "修复这个同段问题\n"
+                        "----\n"
+                        "/transcript-fixer --mode preserve-formatting"
+                    ),
+                    "2026-01-19T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{reordered_session_id}.jsonl",
+            [
+                claude_user_record(
+                    reordered_session_id,
+                    self.workspace,
+                    (
+                        f"[Image #1] {self.root / 'images' / 'error.png'}\n"
+                        "----\n"
+                        "/transcript-fixer --mode preserve-formatting\n"
+                        "----\n"
+                        "修复重新排序的问题"
+                    ),
+                    "2026-01-20T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{root_path_session_id}.jsonl",
+            [
+                claude_user_record(
+                    root_path_session_id,
+                    self.workspace,
+                    "Background context\n----\n/README.md please review this file",
+                    "2026-01-21T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{attachment_tail_session_id}.jsonl",
+            [
+                claude_user_record(
+                    attachment_tail_session_id,
+                    self.workspace,
+                    (
+                        "Background context\n"
+                        "----\n"
+                        f"{self.root / 'fixtures' / 'input.json'}\n"
+                        "总结文件"
+                    ),
+                    "2026-01-22T08:00:00Z",
+                )
+            ],
+        )
 
         completed = self.run_cli(
             "--cwd",
@@ -405,6 +469,13 @@ class LocalConversationHistoryTests(unittest.TestCase):
             "/tmp/example/input.json is the source file",
         )
         self.assertEqual(titles[combined_session_id], "修复这个问题")
+        self.assertEqual(titles[same_segment_session_id], "修复这个同段问题")
+        self.assertEqual(titles[reordered_session_id], "修复重新排序的问题")
+        self.assertEqual(
+            titles[root_path_session_id],
+            "/README.md please review this file",
+        )
+        self.assertEqual(titles[attachment_tail_session_id], "总结文件")
 
     def test_codex_raw_rollout_fallback_skips_bad_json(self) -> None:
         session_id = "ffffffff-ffff-4fff-8fff-ffffffffffff"
