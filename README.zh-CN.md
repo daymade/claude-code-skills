@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.84.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.85.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -3122,6 +3122,35 @@ ID 和明确诊断信息。
 了解数据源选择、路径归一化、隐私边界和诊断方法。
 
 **依赖**：Python 3.10+；无需第三方包或网络。
+
+---
+
+### 87. **git-safety-net** - 预防与恢复本地 Git 灾难
+
+> **安装**：`claude plugin install git-safety-net@daymade-skills`
+
+预防和恢复那些让本地提交滞留、丢失或难以确认是否已合并的分支/stash/rebase 混乱。
+每个命令默认只读或可加，直到明确标注为破坏性操作——恢复不会让损失扩大。
+
+**主要能力：**
+- 通过 `git reflog` 和 `git fsck` 恢复误删的提交、分支、stash（约 90 天窗口）
+- 用 `git log --branches --not --remotes` 审计真正处于丢失风险的内容
+- 在清理前把悬空提交钉到 `refs/dangling-backup/`、避免被 gc 回收
+- 按内容验证分支是否已合并，破解 squash-merge 后“100 commits ahead”的幻觉
+- 高风险“是否真的全部合并了”场景可选对抗性多 agent 验证
+- 预防习惯：优先 worktree 而非 stash  juggling、尽早 push WIP、rebase/删除前审计
+
+**示例：**
+```text
+/git-safety-net
+刚才切了那么多分支，我有没有丢提交？
+main 真的全部合并了吗，还是还有东西被滞留在某个分支？
+帮我恢复那个 bad rebase 后不见的提交
+```
+
+📚 **文档**：参见 [recovery_playbook.md](./git-safety-net/references/recovery_playbook.md)、[merge_verification.md](./git-safety-net/references/merge_verification.md) 和 [prevention_practices.md](./git-safety-net/references/prevention_practices.md)。
+
+**依赖**：已认证的 `gh` CLI、`git`、`jq`。
 
 ---
 
