@@ -334,6 +334,57 @@ HuggingFace token for pyannote:
   mic type matches the same person on a different mic far less well:
   `references/voiceprint_speaker_id.md`.
 
+## Transcript Audit & Review (HTML)
+
+After diarization you get a CSV per file (`file,start,end,duration,speaker,text`). The bundled audit HTML generator turns those CSVs into a single, reader-first review page with audio playback, per-turn flags/notes, speaker aliasing, and export.
+
+Generate it from a speaker-transcribe output directory (run from the skill directory, or replace `<path-to-asr-transcribe-to-text>` with the actual install path):
+
+```bash
+uv run scripts/generate_audit_html.py \
+  OUTPUT_DIR \
+  --output OUTPUT_DIR/audit/index.html \
+  --audio-dir /path/to/original/audio
+```
+
+Defaults assume a flat layout under `PROJECT_DIR`: `PROJECT_DIR/*.csv` transcripts, `PROJECT_DIR/*.diarization.json`, and the original audio files placed next to the outputs. `speaker_transcribe.py` itself writes the CSV, TXT, and diarization files flat under its `OUTPUT_DIR`. If your project uses a different structure, override any of those paths:
+
+```bash
+uv run <path-to-asr-transcribe-to-text>/scripts/generate_audit_html.py \
+  /path/to/project \
+  --output /path/to/project/audit/index.html \
+  --csv-dir /path/to/project/csv \
+  --txt-dir /path/to/project/txt \
+  --diarization-dir /path/to/project/diarization \
+  --audio-dir /path/to/project/audio \
+  --original-dir /path/to/project/original \
+  --manifest /path/to/project/manifest.json \
+  --title "Project Audit" \
+  --subtitle "Speaker-labeled transcript review" \
+  --storage-key "project-audit" \
+  --known-speaker "Speaker A" \
+  --known-speaker "Speaker B"
+```
+
+**Key CLI options:**
+
+| Option | Meaning |
+|--------|---------|
+| `project_dir` | Base project directory (required) |
+| `--output` | Where to write `index.html` |
+| `--csv-dir` | Directory containing `*.csv` transcript files |
+| `--txt-dir` | Directory containing `*.txt` plain-text transcripts (optional) |
+| `--diarization-dir` | Directory containing `*.diarization.json` files |
+| `--audio-dir` | Directory containing playback audio files |
+| `--original-dir` | Directory containing original source media (optional) |
+| `--manifest` | JSON manifest mapping file IDs to metadata (optional) |
+| `--title` / `--subtitle` | Page title and subtitle |
+| `--storage-key` | `localStorage` namespace for state persistence |
+| `--known-speaker` | Repeatable; `"Name"` auto-assigns a color, `"Name=#hex"` sets one explicitly |
+| `--material-final` / `--material-rough` | Repeatable material classification labels used for filtering |
+
+The output is a single self-contained HTML file with no external dependencies. Open it in a browser to review, flag, and annotate turns; the export button produces a report of all flagged rows with reasons and notes.
+
 ## Troubleshooting
 
 ### Local MLX fails while loading the model
@@ -367,6 +418,7 @@ Some runtimes do not set skill environment variables. Use the absolute path to t
 - `diarize_speakers.py` — Speaker diarization (pyannote 3.1 @ MPS) → per-segment JSON
 - `speaker_transcribe.py` — Multi-speaker pipeline: diarize → merge turns → per-turn Qwen3-ASR → speaker-labeled transcript + CSV
 - `voiceprint_id.py` — CAM++ voiceprint enroll/match: map anonymous SPEAKER_xx to real names
+- `generate_audit_html.py` — Build a self-contained HTML audit/review page from speaker-transcribe CSV outputs
 
 **References:**
 - `local_mlx_guide.md` — Performance benchmarks, max_tokens truncation, model compatibility

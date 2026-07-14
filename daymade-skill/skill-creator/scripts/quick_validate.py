@@ -102,7 +102,7 @@ def find_external_absolute_paths(content: str) -> list[tuple[int, str]]:
     """
     issues = []
     # Match /Users/<user>/ and /home/<user>/ patterns
-    pattern = re.compile(r'(/[Uu]sers/[A-Za-z][A-Za-z0-9_-]+/[^\s,;"\']+|/home/[A-Za-z][A-Za-z0-9_-]+/[^\s,;"\']+|C:\\\\Users\\\\[A-Za-z][A-Za-z0-9_-]+\\[^\s,;"\']*)')
+    pattern = re.compile(r'(/[Uu]sers/[A-Za-z][A-Za-z0-9_-]+/[^\s,;"\']+|/home/[A-Za-z][A-Za-z0-9_-]+/[^\s,;"\']+|[A-Za-z]:\\+Users\\+[A-Za-z][A-Za-z0-9_-]+\\+[^\s,;"\']*)')
 
     # Placeholder detection must inspect the USERNAME SEGMENT only. The old check
     # (`'user' in path.lower()`) skipped every macOS path outright — '/Users/' itself
