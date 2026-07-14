@@ -794,10 +794,10 @@
     },
     {
       "name": "windows-remote-desktop-connection-doctor",
-      "description": "Diagnose Windows App (Microsoft Remote Desktop / Azure Virtual Desktop / W365) connection quality issues on macOS. Analyze transport protocol selection (UDP Shortpath vs WebSocket), detect VPN/proxy interference with STUN/TURN negotiation, and parse Windows App logs for Shortpath failures. This skill should be used when VDI connections are slow, when transport shows WebSocket instead of UDP, when RDP Shortpath fails to establish, or when RTT is unexpectedly high.",
+      "description": "Diagnose Windows App (Microsoft Remote Desktop / Azure Virtual Desktop / W365 / direct PC) connection issues on macOS. Analyze transport protocol selection (UDP Shortpath vs WebSocket), detect VPN/proxy interference, parse Windows App logs for Shortpath failures, and resolve stuck \"Configuring remote PC...\" dialogs caused by expired Microsoft accounts, server reboots, or client-side auth poisoning. Use when VDI connections are slow or stuck, when direct PC connections fail to connect, when transport shows WebSocket instead of UDP, when RDP Shortpath fails, or when Windows App is frozen at a progress dialog.",
       "source": "./windows-remote-desktop-connection-doctor",
       "strict": false,
-      "version": "1.0.1",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "rdp",
