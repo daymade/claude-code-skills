@@ -319,6 +319,7 @@ This applies when you change ANY file under a skill directory:
 82. **photo-to-scanned-pdf** - Turn phone photos of paper documents into a scanner-quality A4 PDF with perspective correction, noteshrink enhancement, colored-paper handling, content-based page ordering, and mandatory whole-document visual verification (daymade-docs suite member)
 83. **github-review-pr** - Review one named contributor PR (open or closed under reconsideration) or all open PRs newest-to-oldest against the live base, with immutable OID snapshots, history-discontinuity detection, isolated current-base contribution projection, three-way merge analysis, PR/BASE/SHARED ownership, explicit personal maintainer context, and per-PR review-gated repair or landing
 84. **local-conversation-history** - List recent local Claude Code and Codex conversations for the current workspace in one read-only command, with readable titles, timezone-qualified timestamps, exact session IDs, schema-aware Codex indexing, bounded Claude JSONL reads, and default sub-agent/test filtering (daymade-claude-code suite member)
+85. **git-safety-net** - Prevent and recover from local-Git disasters: commits stranded on the wrong branch, orphaned or dropped stashes, dangling commits about to be garbage-collected, and "is everything actually merged?" uncertainty after squash merges or parallel-agent sessions
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 

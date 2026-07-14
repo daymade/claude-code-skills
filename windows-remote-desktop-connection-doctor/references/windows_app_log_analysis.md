@@ -31,6 +31,8 @@ A new log file is created each day or when the app restarts. Multiple files may 
 ls -lt ~/Library/Containers/com.microsoft.rdc.macos/Data/Library/Logs/Windows\ App/
 ```
 
+**Timestamps are UTC.** Windows App logs on macOS are written in UTC. Convert them to the user's local timezone before comparing with Windows Event logs, screenshots, or the user's description of when the problem occurred.
+
 ## Startup Health Check Block
 
 When the Windows App launches, it runs a health check sequence. A healthy startup produces entries in this order:
@@ -128,9 +130,10 @@ BASIX_DCT(ERR): OSSLClosingException thrown, msg=Certificate validation failed, 
 
 ```
 "-legacy-"(ERR): Channel::StartWrite failed
+"-legacy-"(ERR): GetBuffer failed
 ```
 
-Multiple consecutive `StartWrite failed` errors indicate a connection disruption — the WebSocket or TCP connection to the gateway was interrupted. This is typically followed by a reconnection attempt.
+Multiple consecutive `StartWrite failed` or `GetBuffer failed` errors indicate a connection disruption — the WebSocket or TCP connection to the gateway was interrupted. This is typically followed by a reconnection attempt. On direct PC connections, this pattern appears after the remote PC reboots or the network path changes.
 
 ### Diagnostics Flush Errors
 
@@ -139,6 +142,48 @@ DIAGNOSTICS(ERR): FlushTracesInternal() is called before BeginUpload(). we don't
 ```
 
 This is a benign telemetry error — the diagnostics system tried to upload traces before authentication completed. Does NOT affect connection quality.
+
+### Connection Monitor Drop
+
+```
+RDP_WAN: Client connMonitor goto CMSTATE_DROPPED (total-missed=12)....try reconnect!
+```
+
+The client's connection monitor declared the session dead after missing ~12 heartbeats. This is a **symptom** of a network drop or server reboot. If you see this immediately followed by reconnect failures, check whether the remote Windows PC rebooted (see `references/direct_pc_and_auth_diagnostics.md`).
+
+### OneAuth / Microsoft Account Token Errors
+
+These signatures appear when a signed-in Microsoft work/school account cannot refresh its token. They can poison even direct PC connections.
+
+```
+OneAuthError_InteractionRequired
+No valid refresh tokens available in the cache
+AcquireTokenInteractively
+Exception during credentials callback!: credential completion has been canceled
+User canceled sign in
+GATEWAY(ERR): CWVDTransport::OnOrchestrationHttpError error: UserCancelled(8)
+Fail OnDisconnected call
+```
+
+See `references/direct_pc_and_auth_diagnostics.md` for the full diagnostic and fix.
+
+### MCS Connect Non-Fatal Error
+
+```
+rdpstack.cpp(...): ParseUserData: No data of type 0xc09
+```
+
+This appears in both successful and failed sessions. It means the server did not include an optional user data block in the MCS Connect Response, but the client continued. Its presence is **non-fatal** and actually proves the server answered the MCS Connect phase.
+
+### Live Session Input Events
+
+```
+IHAddMouseEventToPDU
+IHAddMouseWheelEventToPDU
+IHAddKeyboardEventToPDU
+```
+
+These appear when a session is connected and receiving input. Persistent mouse/keyboard events after a "connected" entry mean the session is healthy, even if a stale progress dialog is still visible on another display or Space.
 
 ## Comparing Working vs Broken Sessions
 
