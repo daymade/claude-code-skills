@@ -215,15 +215,18 @@ derive them from the open URL rather than hard-coding.
 - **Extension channel** → run [scripts/export_conversation.js](scripts/export_conversation.js)
   in the page (fire-and-poll instructions are in its header), then page out
   `window.__claudeExport.rawJson` in ~16k `.slice()` windows.
-- **CDP channel** → the same JS, no paging dance, result straight to a file:
+- **CDP channel** → run [scripts/fetch_cdp.js](scripts/fetch_cdp.js), which returns
+  the full conversation JSON directly as a Promise, so `cdp_channel.py eval` resolves
+  it in one call and streams the result to a file:
   ```bash
   uv run --with websockets python scripts/cdp_channel.py eval \
-      --match <conversation-or-snapshot-id> --js fetch.js --out conversation.json
+      --match <conversation-or-snapshot-id> --js scripts/fetch_cdp.js --out conversation.json
   ```
   `awaitPromise` resolves the async fetch in one call, and the value comes back on
   stdout, so a multi-megabyte payload never has to cross a context window.
-- **AppleScript channel** → same JS via `scripts/runjs.applescript`, redirecting
-  stdout to the file (see the channel reference).
+- **AppleScript channel** → run [scripts/export_conversation.js](scripts/export_conversation.js)
+  via [scripts/runjs.applescript](scripts/runjs.applescript), then poll and read out
+  `window.__claudeExport.rawJson` (fire-and-poll; see the channel reference).
 
 For a plain chat with no tool calls, where you just need the text right now, the
 inline snippet in [references/claude-web-api-extraction.md](references/claude-web-api-extraction.md)
@@ -379,12 +382,33 @@ Options:
 A) Clean it up — run transcript-fixer if it's ASR/garbled (only if relevant)
 B) Summarize / extract the decisions and action items
 C) Save it to a file — tell me where
-D) Also download the conversation's files (uploads / deliverables / charts)
+D) Download the conversation's files (uploads / deliverables / charts) — **done by default if files exist**
 E) Nothing else — you just needed it read
 ```
 
-If the transcript showed file activity (uploads listed, Download cards,
-`present_files` blocks), mention option D explicitly — users routinely assume the
-files are lost when only the text is exported. And if the render reported a known
-gap (case C), lead with that instead: the user needs to know their archive has
-holes the link can never fill, while they still have the originals to hand.
+If the transcript showed file activity, start with D; the text export alone is not
+a complete archive.
+
+### Download the conversation's files
+
+Use [scripts/download_files.js](scripts/download_files.js) to inventory and pull
+every upload, assistant image, and sandbox deliverable through the correct
+endpoint family. It is fire-and-poll; for CDP or AppleScript, run it, poll
+`window.__dlStatus`, then read each entry from `window.__dl` as base64:
+
+```bash
+# 1. Fire the inventory/download step
+osascript scripts/runjs.applescript scripts/download_files.js <conversation-id>
+
+# 2. Poll until status is no longer 'pending'
+#    (after a few seconds, run a one-liner that returns window.__dlStatus)
+
+# 3. Extract one file (repeat for each)
+echo "window.__dl['filename.pptx']" > /tmp/read_one.js
+osascript scripts/runjs.applescript /tmp/read_one.js <conversation-id> \
+  2>/dev/null | tr -d '\n' | base64 -d > filename.pptx
+```
+
+Verify each file with `file <name>` and compare its byte size against the
+metadata in the conversation JSON (`files[].size_bytes` for uploads; the
+status line from `download_files.js` for deliverables).

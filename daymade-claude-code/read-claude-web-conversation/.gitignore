@@ -1,0 +1,3 @@
+# Eval prompts are local development artifacts and may contain user-specific
+# paths or project names; do not commit them.
+evals/
