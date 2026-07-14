@@ -103,7 +103,7 @@
       "description": "Claude Code operations suite that bundles fast local conversation discovery across Claude Code and Codex, deep session history recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full claude.ai conversation extraction with tool-call rendering and file download, plugin marketplace development, multi-provider profile isolation for running Kimi/GLM/DeepSeek/StepFun/Anthropic in separate windows, local source sync for Claude/Codex skill installs, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.12.0",
+      "version": "1.13.0",
       "category": "suite",
       "keywords": [
         "suite",
