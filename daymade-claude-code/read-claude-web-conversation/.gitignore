@@ -1,3 +1,7 @@
 # Eval prompts are local development artifacts and may contain user-specific
 # paths or project names; do not commit them.
 evals/
+
+# Local tool-generated status receipts; do not commit.
+.security-scan-passed
+.skill-regression-reviewed
