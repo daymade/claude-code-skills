@@ -4,7 +4,7 @@ Each practice below maps to a specific way work actually gets lost. They are che
 ceremony; adopt the ones whose failure mode you're exposed to.
 
 ## Contents
-- Parallel work: worktrees, not stash-juggling
+- Parallel / multi-branch work: commit before you switch (not stash, not worktree)
 - Push work-in-progress branches early
 - Confirm the branch before every commit
 - Audit before rebase / branch-delete
@@ -13,23 +13,46 @@ ceremony; adopt the ones whose failure mode you're exposed to.
 - Commit-scope hygiene (don't sweep unrelated staged work)
 - Set a wider reflog safety window once
 
-## Parallel work: worktrees, not stash-juggling
+## Parallel / multi-branch work: commit before you switch (not stash, not worktree)
 
 **Failure mode:** the classic disaster is `git stash` → switch branch → work → `git stash` again →
 rebase → switch back. Each `stash` that gets superseded or dropped orphans a commit; after a busy
 session you can have dozens of dangling stash states that `git stash list` no longer shows, one
-`gc` from gone.
+`gc` from gone. The root cause is always the same — **uncommitted work**: a stash that can be
+dropped, or edits a `switch` strands.
 
-**Prevention:** give each parallel line of work its own checkout with `git worktree`:
+**Prevention:** never carry uncommitted work across a branch switch. Commit each line of work to
+its own branch *before* moving, and push that branch early — a committed, pushed branch cannot be
+stashed away or stranded:
 
 ```bash
-git worktree add ../repo-featureB featureB     # a second working dir on branch featureB
-# work in ../repo-featureB with zero stashing; the main checkout stays on your primary branch
-git worktree remove ../repo-featureB           # when done
+# instead of `git stash` before switching:
+git switch -c <branch-for-this-work>              # a branch for this line of work
+git add <the paths for THIS work> && git commit -m "wip: ..."
+git push -u origin <branch-for-this-work>         # early; re-push as you go
+git switch <other-branch>                         # nothing left behind — no stash to drop
 ```
 
-Nothing to stash means nothing to drop. This also stops the "another agent switched my branch
-underneath me" problem — each agent/task gets its own worktree.
+Then bring the work back to wherever you need it **live in the working tree** by merging — not by
+fishing it out of a stash and not from a second checkout:
+
+```bash
+git switch <target-branch>
+git merge <branch-for-this-work>                  # the work is now in THIS working tree too
+```
+
+**Deliberately avoided here — two tempting shortcuts that both cause the loss this skill exists to prevent:**
+
+- **`git stash` + switch juggling** — orphans stashes (the failure mode above). Commit instead; a
+  commit on a branch never silently disappears from `git stash list`.
+- **`git worktree`** — a second checkout is one more place to leave work in and forget, it does
+  **not** copy gitignored dependencies (`node_modules`, `.venv`), so tools/tests run there fail on
+  the missing deps, and it can hand back a stale checkout of an older commit. A shared working tree
+  with disciplined *commit-then-switch* is safer and simpler than juggling worktrees.
+
+The safety comes from **committing early**, not from a second checkout. Once every line of work is
+a pushed commit, `git log HEAD --branches --tags --not --remotes` (the at-risk check) only ever
+lists what you haven't pushed yet — push it and it goes empty.
 
 ## Push work-in-progress branches early
 
