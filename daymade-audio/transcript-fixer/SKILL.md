@@ -88,7 +88,27 @@ Two-phase pipeline with persistent learning:
 - **Report false positives**: `--report-false-positive "错误词" "正确词" -d domain` disables a bad dictionary rule and lowers its confidence.
 - **Audit for risky rules**: `--audit` flags existing rules that look like false-positive sources (common words, ≤2-char, substring collisions, and — with jieba — 4+ char real-word phrases). **It is advisory: it surfaces candidates, it does NOT disable anything.** Disabling is a human decision — review each hit by hand and back up the DB first, because the audit cannot know your context and mislabels a large fraction of good rules (e.g. `GDP 5.5→GPT 5.5` looks wrong generically but is a correct fix for an AI-heavy user). See `references/false_positive_guide.md`.
 
-**After fixing, always save reusable corrections to dictionary.** This is the skill's core value — see `references/iteration_workflow.md` for the complete checklist.
+### When called by another skill (cross-skill invocation contract)
+
+This skill is often wired into another skill's ingest pipeline — e.g. a meeting-sync skill runs Stage 1 as a pre-classify hook before filing the transcript. That caller pipeline changes one assumption that bites silently, so a caller MUST follow this contract or it will run Stage 1, apply almost nothing, and report success.
+
+**The failure mode (verified, reproducible).** Safe mode defers medium/high-risk corrections to `*_needs_review.md` rather than applying them. On a single file you edit by hand, that's fine — you read the sidecar next. But a caller pipeline typically runs transcript-fixer inside a `TemporaryDirectory` and reads only the corrected `transcript.txt` back out. **The `*_needs_review.md` sidecar lives in that temp dir and is deleted with it** — so 95%+ of the dictionary's corrections silently vanish while the run reports "complete." Real measurement on a 95-minute transcript with a 108-rule domain: safe mode applied **2/108**, deferred **106 to a sidecar that was immediately discarded**. The run looked clean; only ~2% of known corrections landed. The user then had to run transcript-fixer a second time by hand to get the other 98%.
+
+**Caller rule — pass `--apply-domain` for hand-confirmed project domains.** The domains a pipeline wires in (its config `domains:` list) are exactly the domains whose rules a human already curated for that project's vocabulary. A domain match there is not a guess — it's a confirmed fix — so the pipeline should trust it the same way a batch run does:
+
+```bash
+# CORRECT for a caller pipeline — trust the configured project domains
+uv run scripts/fix_transcription.py --input "$staged" --stage 1 \
+  --domain "$domain" --apply-domain --json
+```
+
+With `--apply-domain`, the same 108-rule run applies **97/97 at low risk** instead of 2/108. The `general` domain (catch-all, lower curation) can stay in safe mode — only the project-specific domains earned full trust. If a caller cannot pass `--apply-domain`, it MUST instead read `deferred` from the `--json` status object and either persist the `*_needs_review.md` sidecar to a non-temp location for a downstream pass, or surface a non-zero `deferred` count to the user as a failure. Silently dropping deferred corrections and reporting success is the bug.
+
+**The `--json` status line is the contract surface.** It prints `{applied, deferred, output_path, needs_review_path, input_unchanged}` on one stdout line. `deferred` is the number that must not be silently lost. `input_unchanged: true` / `output_path: null` is the authoritative "0 corrections this domain" signal — do NOT infer no-op from whether `*_stage1.md` exists on disk (the file-presence check is what once aborted the whole chain and dropped corrections). Keep these field names and semantics stable; a caller's pre-classify chain depends on them.
+
+**The complementary side: keep the dictionary warm.** A caller pipeline that trusts `--apply-domain` only delivers value to the degree its project domain is populated. Every confirmed correction the downstream native pass makes should be `--add`ed back to that domain (`--add "ASR-variant" "correct" --domain <project>`), so the next ingest auto-fixes it and the native pass keeps getting lighter. A cold domain + `--apply-domain` still applies almost nothing — the fix is `--apply-domain` *and* ongoing `--add` discipline together.
+
+**After fixing, always save reusable corrections to dictionary.** The skill's core value — see `references/iteration_workflow.md` for the complete checklist.
 
 ### Dictionary Addition After Fixing
 
@@ -205,7 +225,21 @@ Note: contexts are consumed by the **native workflow** (the agent reads the file
 
 ## Native AI Correction (Default Mode)
 
-When running inside Claude Code, use Claude's own language understanding for Phase 2 — on high-quality ASR this is where almost all the real correction happens. **Scale the effort to the transcript.** A short, clean recording with no proper nouns (a quick voice memo) just needs steps 1-3 plus one obvious-fix pass; skip the verification / second-pass / subagent / needs-checking machinery below, which earns its keep on long, multi-speaker, domain-heavy, or high-stakes transcripts. Don't turn a 10-second memo into a research project.
+When running inside Claude Code, use Claude's own language understanding for Phase 2 — on high-quality ASR this is where almost all the real correction happens. **Scale the effort to the transcript.** Don't turn a 10-second memo into a research project, but don't starve a 90-minute strategy call either. Pick the tier from the recording's shape, not your mood:
+
+| Signal | **Fast tier** (minutes, not hours) | **Full tier** (the whole ladder earns its keep) |
+|---|---|---|
+| Length | short (≤ ~15 min / a few hundred lines) | long (30+ min / 1000+ lines) |
+| Speakers | one or two, names you already know | 3+ speakers, or unfamiliar names |
+| Vocabulary | plain language, no domain jargon | domain-heavy (finance/medical/legal/project codenames) or many proper nouns |
+| Stakes | internal memo, throwaway | client-facing, committed to a shared repo, drives a decision |
+
+- **Fast tier** — Stage 1 (`--apply-domain`), read the domain context file if one exists, read the whole thing once, fix the obvious one-off errors inline, `--add` any recurring/project-specific term to a `--domain`. **Skip:** the cross-domain name ladder, the second-pass subagent, the needs-checking ceremony. One linear pass, done.
+- **Full tier** — everything below: full triage with the name-verification ladder, the independent second-pass subagent, and an explicit needs-checking list. The effort is justified because a long/domain-heavy transcript has both more errors *and* harder-to-confirm ones, and a wrong proper noun committed to a shared repo propagates.
+
+A recording can be long but still fast-tier (two known speakers, plain language) or short but full-tier (a 5-minute call full of unfamiliar drug names that feed a report). Let the *vocabulary and stakes* call the tier, with length as a tiebreaker — that's where the real work is.
+
+**Correction scope includes the metadata lines, not just the body.** A filed transcript usually carries ASR-derived metadata — a `Keywords:` line, frontmatter, a title — and those lines contain the *same* recognition errors as the spoken body (e.g. a `Keywords:` line still listing `克劳锐` when every body mention was already corrected to `Claude`). Fix them with the same rules. There is no "metadata is sacred, leave it" exception: the metadata is a search/grep surface too, and a keyword left in its ASR-garbled form will silently fail every future `grep Claude` while the body looks clean. When you re-grep the final file to confirm a correction landed, include the metadata lines in that check.
 
 1. Run Stage 1 (dictionary) on all files (parallel if multiple)
 2. Verify Stage 1 — diff against the original. If the dictionary introduced false positives, work from the **original** file instead and apply your edits there
@@ -237,7 +271,11 @@ When running inside Claude Code, use Claude's own language understanding for Pha
    - **Global replacements** (unique non-words like "克劳锐"→"Claude"): if it recurs across transcripts — most product/name garbles do — `--add` it to a `--domain` so it compounds to every future run; for a genuinely one-off term, one `sed -i ''` with multiple `-e` flags
    - **Context-dependent** (a word that's only wrong in one context, like "争"→"蒸" in a distillation discussion): sed with a longer surrounding phrase for uniqueness, or the Edit tool
    - Re-grep each changed term afterward to confirm it landed and didn't hit look-alikes you meant to keep
-6. **Second pass — catch what one read missed.** A single linear read reliably leaves residue: an idiom degraded into a near-homophone, a term wrong in just one spot among many correct ones, an acronym misheard as another. Always re-scan once for leftovers. For a long or high-stakes transcript, *also* spawn an independent subagent (Task) to re-read the corrected file cold — fresh eyes with no memory of your first pass catch what you've read past. Have it report suspected residuals **with line numbers**, then run each back through step-4 triage (fix / search / log). Task works when you're in the main context; if it isn't available — e.g. these instructions are themselves running inside a subagent, which can't spawn another — just do one more thorough independent re-read yourself. Never skip the second pass over a missing tool.
+6. **Second pass — catch what one read missed.** A single linear read reliably leaves residue: an idiom degraded into a near-homophone, a term wrong in just one spot among many correct ones, an acronym misheard as another. Always re-scan once for leftovers. For a long or high-stakes transcript, *also* spawn an independent subagent (Task) to re-read the corrected file cold — fresh eyes with no memory of your first pass catch what you've read past. **The subagent's job is to *return a residual list*, not to re-narrate the transcript.** Give it an output format and a hard cap, because a subagent that thinks aloud line-by-line will blow its own context window before finishing (one real second-pass run on a 1131-line transcript hit the 32k token ceiling mid-scan and returned nothing usable). The correct prompt shape:
+   - Scope it to exactly one file, forbid editing and cross-file grep.
+   - Hand it the already-corrected terms as a do-not-re-report list (you fixed those; only *new* residuals are useful).
+   - Demand a compact table only — `line | original ≤20 chars | suspected | one-line reason | confidence` — and tell it to stop after the list, no prose preamble, no per-line stream-of-consciousness, no re-deriving corrections it has already made.
+   Then run each residual back through step-4 triage (fix / search / log). A second-pass subagent that returns 8 sharp rows beats one that returns 8000 tokens of narration every time. Task works when you're in the main context; if it isn't available — e.g. these instructions are themselves running inside a subagent, which can't spawn another — just do one more thorough independent re-read yourself. Never skip the second pass over a missing tool.
 7. **Emit a needs-checking list** — in your chat summary to the human, not baked into the file — for everything still *Uncertain*: line number, the original text you left in place, what you suspect, and why you couldn't confirm it. This surfaces the few items that need a recording or source to resolve, instead of burying them or papering over them with guesses. If nothing is uncertain, say so.
 8. Verify with diff against the file you actually edited (`diff <original> <your-working-file>`) — every change should trace back to a triage decision
 9. Finalize and archive:
