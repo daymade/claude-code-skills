@@ -7,6 +7,7 @@ ceremony; adopt the ones whose failure mode you're exposed to.
 - Parallel / multi-branch work: commit before you switch (not stash, not worktree)
 - Push work-in-progress branches early
 - Confirm the branch before every commit
+- Relocate your work when a parallel session switched the shared tree under you
 - Audit before rebase / branch-delete
 - Snapshot before any history rewrite
 - Version / lockfile collisions between parallel branches
@@ -83,6 +84,46 @@ git branch --show-current      # is this where this change belongs?
 
 If you commit to the wrong branch anyway, it's recoverable: `git log` the sha, `git branch
 correct-branch <sha>`, then remove it from the wrong branch — but confirming up front is free.
+
+## Relocate your work when a parallel session switched the shared tree under you
+
+**Failure mode:** two agents share one working tree. While you were editing, a *parallel* session
+ran `git switch` and moved the shared tree onto **its** feature branch — so your uncommitted changes
+now sit on top of that branch, mixed with the other session's own uncommitted edits. You never
+switched, so "commit before you switch" never got a chance to fire. A naive `git add -A && git
+commit` here buries your work inside the other branch's PR (wrong attribution, wrong review) and can
+sweep in their file; committing onto their branch also couples your change to their merge.
+
+**Fix — carry your uncommitted work onto a branch off the base, commit only your paths, then put the
+tree back exactly where the other session left it:**
+
+```bash
+# 1. See what the hijacked branch is, and prove YOUR files are safe to carry across the switch.
+git rev-parse --abbrev-ref HEAD                     # you're on their branch, not main
+git log --oneline origin/main..HEAD                 # their extra commits — confirm they're unrelated
+git diff --quiet origin/main HEAD -- <your-file>    # exit 0 = your file is byte-identical on both
+                                                    #   bases, so your edit carries with NO conflict
+
+# 2. Create your branch off the base; the uncommitted edits ride along (no stash, no worktree).
+git checkout origin/main -b fix/your-work
+
+# 3. Commit ONLY your explicit paths — never `git add -A`; the other session's file is still here.
+git add <your-path-1> <your-path-2>
+git diff --cached --name-only                        # verify: only yours, not their file
+git commit -m "…"                                    # then push / PR / merge as normal
+
+# 4. Restore the other session's state: put the shared tree back on their branch.
+git checkout <their-branch>                           # their uncommitted file carries back untouched
+git branch -d fix/your-work                           # safe once merged (the branch tracked origin/main)
+```
+
+**Why this and not the alternatives:** `git stash` to move your edits risks the orphaned-stash loss
+this skill exists to prevent; a `git worktree` won't have your gitignored deps. Step 1's `git diff
+--quiet` is the load-bearing safety check — it proves your files are identical between the hijacked
+branch's tip and the base, which is exactly the condition under which `checkout … -b` carries your
+uncommitted edits with no conflict (if it reports a difference, stop and resolve it deliberately
+rather than forcing the switch). Step 4 is correctness, not just courtesy: the parallel session
+expects to find its own branch checked out with its work intact, exactly as it left it.
 
 ## Audit before rebase / branch-delete
 
