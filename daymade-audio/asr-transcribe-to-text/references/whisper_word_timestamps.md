@@ -1,5 +1,11 @@
 # Word-Level Timestamps with mlx-whisper
 
+> **Note (July 2026):** word timing is now leg 2 of the DEFAULT speaker
+> pipeline — `scripts/word_timestamps_whisper.py` wraps the recipe below and
+> `scripts/align_speakers.py` aligns it with the Qwen3 transcript + pyannote
+> segments (see `references/decoupled_speaker_alignment.md`). This file remains
+> the standalone recipe for subtitle / AV-alignment work outside the pipeline.
+
 Qwen3-ASR (both paths in SKILL.md) decodes plain text with **no timing information**. When the task needs to know *when* each word is spoken — subtitle generation, aligning voiceover lines to video shots, per-clip captioning — switch to a whisper-family model: whisper exposes cross-attention-based word alignment, and `mlx-whisper` runs it natively on Apple Silicon.
 
 ## Recipe
