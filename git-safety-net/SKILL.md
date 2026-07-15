@@ -133,6 +133,10 @@ The habits that keep a branch tangle from ever stranding work:
   the only commit that a dead laptop actually loses.
 - **Confirm the current branch before committing** (`git branch --show-current`) — a fix committed
   onto the wrong feature branch is invisible to its real PR and easy to lose on cleanup.
+- **If a parallel session switched the shared tree onto its branch** and stranded your uncommitted
+  work there, don't commit onto their branch — carry your edits to a branch off the base
+  (`git checkout origin/main -b …`, after `git diff --quiet` proves your files match across bases),
+  commit only your explicit paths, then switch the tree back to their branch to restore their state.
 - **Before any rebase or branch-delete, run the Mode B audit.** Ten seconds; it's the difference
   between "nothing to lose" and finding out after gc.
 - **Before bumping a shared version/lockfile, check the base's current value** so two parallel
