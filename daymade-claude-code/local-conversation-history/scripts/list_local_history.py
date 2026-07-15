@@ -30,6 +30,7 @@ from _core.parse import (  # noqa: E402
     timezone_offset_colon,
     workspace_matches,
 )
+from _core.model import Conversation, ProviderResult, CodexDatabase  # noqa: E402
 
 
 MAX_PREFIX_BYTES = 2 * 1024 * 1024
@@ -71,52 +72,8 @@ def configure_utf8_streams() -> None:
             reconfigure(encoding="utf-8", errors="replace")
 
 
-@dataclass
-class Conversation:
-    provider: str
-    session_id: str
-    title: str
-    cwd: str
-    updated_at: Optional[float]
-    created_at: Optional[float]
-    archived: bool
-    kind: str
-    path: str
-    metadata_source: str
-    timestamp_source: str
-
-    def to_dict(self) -> dict[str, Any]:
-        data = asdict(self)
-        data["updated_at"] = (
-            iso_timestamp(self.updated_at) if self.updated_at is not None else None
-        )
-        data["created_at"] = (
-            iso_timestamp(self.created_at) if self.created_at is not None else None
-        )
-        return data
-
-
-@dataclass
-class ProviderResult:
-    provider: str
-    backend: str
-    home: str
-    conversations: list[Conversation] = field(default_factory=list)
-    excluded_subagents: int = 0
-    excluded_archived: int = 0
-    excluded_automated: int = 0
-    warnings: list[str] = field(default_factory=list)
-
-    @property
-    def total(self) -> int:
-        return len(self.conversations)
-
-
-@dataclass
-class CodexDatabase:
-    path: Path
-    columns: set[str]
-    max_updated_ms: int
+# Conversation / ProviderResult / CodexDatabase now live in the shared
+# _core.model module (imported near the top of this file).
 
 
 def looks_like_attachment_prefix(value: str) -> bool:
