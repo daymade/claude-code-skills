@@ -217,17 +217,17 @@ When running inside Claude Code, use Claude's own language understanding for Pha
    - **Needs verification** — a proper noun you can't confirm from context: a person / company / ticker / product / place name (a misheard drug name in a medical interview, a researcher's surname in a podcast, a ticker on an earnings call), or any term you can't point to a specific source for — even one you think you recognize ("I'm pretty sure" is exactly how wrong names slip in). **Resolve it through a local-first search ladder before asking the user.** For project / personal entities the authoritative spelling almost always already lives on this machine, and WebSearch is near-useless on internal names — it returns wrong same-name people, or nothing — and worse, a fluent wrong guess becomes a confident fix that's hard to catch later. Search in this order:
 
 
-	      0. **People roster** — `people.md` (or wherever `people_roster_path` in
-	         `~/.transcript-fixer/config.json` points). This is your curated SSOT
-	         of long-term recurring people with their ASR variants annotated under
-	         `- **ASR 变体**:`. A garbled name that already maps to a canonical
-	         person here — e.g. `Hollie`→`Holly Yang`, `丛老师`→`聪聪` — is a
-	         Confident fix: apply immediately. **This one step replaces asking the
-	         user for every name they've already documented.** Skip only for
-	         transcripts whose speakers are confirmed NOT in the roster.
+      0. **People roster** — `people.md` (or wherever `people_roster_path` in
+         `~/.transcript-fixer/config.json` points). This is your curated SSOT
+         of long-term recurring people with their ASR variants annotated under
+         `- **ASR 变体**:`. A garbled name that already maps to a canonical
+         person here — e.g. `Hollie`→`Holly Yang`, `丛老师`→`聪聪` — is a
+         Confident fix: apply immediately. **This one step replaces asking the
+         user for every name they've already documented.** Skip only for
+         transcripts whose speakers are confirmed NOT in the roster.
       1. **All domains of `corrections.db`, not just the current `--domain`.** The same entity shatters into different ASR variants across projects, and every prior fix already collapsed them to the canonical name — so the answer is often sitting in another domain you didn't pass to `--stage 1`. Checking only the current domain and giving up is the recurring failure mode.
          `sqlite3 ~/.transcript-fixer/corrections.db "SELECT from_text, to_text, domain FROM active_corrections WHERE to_text LIKE '%<fragment>%' OR from_text LIKE '%<fragment>%';"`
-      2. **Project delivery docs** — cost reports, review sheets, deliverables, PKM notes for that project. These are human-written correct spellings, the strongest possible source. `grep -rl "<fragment>" <project-dir>` then read the hits. (The domain context file from step 3 usually names the project's alias ledger explicitly — start there.)
+      2. **Project delivery docs & the alias ledger** — cost reports, review sheets, deliverables, PKM notes for that project. These are human-written correct spellings, the strongest possible source. `grep -rl "<fragment>" <project-dir>` then read the hits. (The domain context file from step 3 usually names the project's alias ledger explicitly — start there.) **Read every name table the ledger holds, not just the one that looks like "the speaker list."** A project's people are almost always split across role-based tables — internal speakers, external collaborators, client-side, vendor/dealer-side, attendees — and the person you're chasing often lives in a sibling table you didn't open. If a name you end up confirming wasn't reachable from the context file's name-source manifest, that manifest is incomplete: add the missing table to it so the next run can't miss it. (See `domain_context_guide.md` Rule 6 for the failure case this prevents.)
       3. **Memory** (`~/.claude/.../memory/`) — project relationship maps and person profiles often record canonical names explicitly.
       4. **WebSearch** — only for genuinely public entities (a public-company ticker, a known researcher, a drug name). Skip for anything project-internal.
 
