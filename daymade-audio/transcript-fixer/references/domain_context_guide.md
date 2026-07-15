@@ -52,7 +52,13 @@ For each trap:
 - Order by frequency; prune entries that stop recurring.
 
 ## Authoritative name sources (pointers, not copies)
-- Where the project's alias ledger lives (path + section)
+This is a **manifest to be read in full**, not a single hint. A project's people
+are almost always split across several tables by role — internal speakers,
+external collaborators, client-side, vendor/dealer-side, workshop attendees — so
+**enumerate every name-bearing table and read each one completely**. Pointing at
+only the table that looks like "the speaker list" is exactly how a real,
+documented person gets missed (Rule 6).
+- The project's alias ledger — **list every person table it holds** (path + each section), not just the main one
 - Which people-roster sections apply
 - Existing dictionary domains to query first
 ```
@@ -79,8 +85,10 @@ word, so it's a deterministic fix and went to the dictionary via
 `--add "云条" "语音条" --domain clip-production` instead. Only entries whose
 "from" side is real text in some other reading stay in this file.)
 
-## Authoritative name sources
-- Alias ledger: <project-repo>/context.md §speaker-alias-table
+## Authoritative name sources  (read ALL of these — names split by role)
+- Alias ledger: <project-repo>/context.md — 3 person tables, read every one:
+  ① top team directory (internal staff) ② §speaker-alias-table (internal speakers + ASR variants)
+  ③ §client-and-vendor-side (client + dealer-side staff — e.g. the editor whose name ASR keeps garbling)
 - People roster: ~/.transcript-fixer/people.md (team section)
 - Dictionary: corrections.db domain `clip-production` (query before adding)
 ```
@@ -104,3 +112,14 @@ word, so it's a deterministic fix and went to the dictionary via
 5. **Private stays private.** These files may name real people and projects.
    They live in user space precisely so they never ship with the skill; don't
    paste their contents into public repos or shared docs.
+6. **The name-source list is a complete manifest, and it self-corrects.** Names
+   scatter across role-based tables (internal / external / client / vendor /
+   attendees), so the pointer must enumerate *every* table and the reader must
+   read *all* of them — stopping at the first "speaker list"–looking table is the
+   recurring miss. Make the enforcement structural, not willpower: if you ever
+   confirm a project person whose name is NOT reachable from any manifest entry,
+   the manifest is incomplete — add the missing table to it before finishing, so
+   the next run cannot repeat the miss. (2026-07-15: a context file pointed only
+   at one `§speaker-alias-table`; the agent faithfully read that single table and
+   flagged a real editor — documented all along in the sibling dealer-side table
+   — as "unverifiable".)

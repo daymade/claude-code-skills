@@ -75,21 +75,22 @@ Choose the right domain for corrections:
 
 ```bash
 # Domain-specific correction
-uv run scripts/fix_transcription.py --add "股价系统" "框架系统" --domain embodied_ai
+uv run scripts/fix_transcription.py --add "巨升智能" "具身智能" --domain embodied_ai
 uv run scripts/fix_transcription.py --add "片片总" "翩翩总" --domain 火星加速器
 ```
 
 ## Common ASR Error Patterns
 
-Build your dictionary with these common patterns:
+Safe dictionary candidates are **non-words and garbled fragments** — a rule fires the same way every time with zero false-positive risk. Common-word homophones are NOT safe dictionary rules:
 
-| Type | Examples |
-|------|----------|
-| **Homophones** | 赢→营, 减→剪, 被看→被砍, 营业→营的 |
-| **Names** | 片片→翩翩, 亮亮→亮哥 |
-| **Technical** | 巨升智能→具身智能, 股价→框架 |
-| **English** | log→vlog |
-| **Broken words** | 姐弟→结业, 单反→单访 |
+| Type | Examples | Home |
+|------|----------|------|
+| **Broken / non-words** | 姐弟→结业, 单反→单访, 巨升智能→具身智能 | Dictionary (`--add`) — safe |
+| **English garbles** | log→vlog, cloucode→Claude Code | Dictionary — safe |
+| **Person / project names** | 片片→翩翩, 亮亮→亮哥 | Project `--domain` (isolated), not `general` |
+| **Common-word homophones** | 减→剪, 赢→营, 营业→营的 | ❌ NOT the dictionary — the "from" side is a real word (减少/输赢/营业), so a blanket rule corrupts other sentences. Route to the domain **context file** with its disambiguating cue (`domain_context_guide.md`). |
+
+Rule of thumb: if the "from" side is real text in some other reading, it does not belong in the dictionary. (Mirrors SKILL.md's decision matrix + `false_positive_guide.md`.)
 
 ## When GLM API Fails
 
