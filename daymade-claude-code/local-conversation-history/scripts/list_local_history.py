@@ -21,10 +21,7 @@ from _core.homes import discover_claude_homes, home_label  # noqa: E402
 from _core.parse import (  # noqa: E402
     format_timestamp,
     iso_timestamp,
-    looks_like_windows_path,
-    normalize_workspace,
     parse_timestamp,
-    timezone_offset_colon,
     workspace_matches,
 )
 from _core.model import Conversation, ProviderResult  # noqa: E402

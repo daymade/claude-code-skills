@@ -67,9 +67,17 @@ def normalize_path(project_path: str) -> str:
 
 
 def _newest_session_mtime(project_dir: Path) -> float:
-    """Most-recent session-file mtime under a project dir (0.0 if none)."""
+    """Most-recent real session-file mtime under a project dir (0.0 if none).
+
+    Excludes `agent-*.jsonl` sub-agent side-files so a stray sub-agent write can't
+    sway which config home wins the cross-home tiebreak in find_project_dir.
+    """
     return max(
-        (f.stat().st_mtime for f in project_dir.glob("*.jsonl")),
+        (
+            f.stat().st_mtime
+            for f in project_dir.glob("*.jsonl")
+            if not f.name.startswith("agent-")
+        ),
         default=0.0,
     )
 
