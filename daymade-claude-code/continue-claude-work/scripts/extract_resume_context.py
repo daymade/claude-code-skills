@@ -40,7 +40,13 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 CLAUDE_DIR = Path.home() / ".claude"
-PROJECTS_DIR = CLAUDE_DIR / "projects"
+PROJECTS_DIR = CLAUDE_DIR / "projects"  # default home only; discovery below spans all homes
+
+# Multi-home discovery lives in the bundled `_core` package (SSOT:
+# daymade-claude-code/_conversation_core/, copied here by sync_core.py) so a
+# project whose history lives under a per-model profile home is not missed.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _core.homes import discover_claude_homes  # noqa: E402
 
 # Message types that are noise — skip when extracting context
 NOISE_TYPES = {"progress", "queue-operation", "file-history-snapshot", "last-prompt"}
@@ -60,30 +66,67 @@ def normalize_path(project_path: str) -> str:
     return project_path.replace("/", "-")
 
 
+def _newest_session_mtime(project_dir: Path) -> float:
+    """Most-recent session-file mtime under a project dir (0.0 if none)."""
+    return max(
+        (f.stat().st_mtime for f in project_dir.glob("*.jsonl")),
+        default=0.0,
+    )
+
+
 def find_project_dir(project_path: str) -> Optional[Path]:
-    """Find the Claude projects directory for a given project path."""
+    """Find the Claude project dir for a path, searching ALL config homes.
+
+    The default home ~/.claude is only one place history can live; per-model
+    profiles keep theirs under ~/.claude-profiles/<name>/ etc. We look in every
+    home and decide exact-vs-fuzzy GLOBALLY (as the finder skill does): if the
+    exact encoded dir exists in any home, only exact matches count — so a
+    different project that merely shares the basename in another profile is
+    never picked; the substring fallback runs only when NO home has the exact
+    dir. When the same project exists under several homes, the one whose newest
+    session is most recent wins, so "resume my last session" lands on the
+    truly-latest one regardless of which profile it ran under.
+    """
     abs_path = os.path.abspath(project_path)
-
-    # If the path is already inside ~/.claude/projects/, use it directly
-    projects_str = str(PROJECTS_DIR) + "/"
-    if abs_path.startswith(projects_str):
-        candidate = Path(abs_path)
-        if candidate.is_dir():
-            return candidate
-        rel = abs_path[len(projects_str):]
-        top_dir = PROJECTS_DIR / rel.split("/")[0]
-        if top_dir.is_dir():
-            return top_dir
-
     normalized = normalize_path(abs_path)
-    candidate = PROJECTS_DIR / normalized
-    if candidate.is_dir():
-        return candidate
-    # Fallback: search for partial match
-    for d in PROJECTS_DIR.iterdir():
-        if d.is_dir() and normalized in d.name:
-            return d
-    return None
+
+    exact_hits: List[Path] = []
+    fuzzy_hits: List[Path] = []
+    for home in discover_claude_homes():
+        projects_dir = home / "projects"
+        if not projects_dir.is_dir():
+            continue
+
+        # Path already points inside this home's projects/.
+        projects_str = str(projects_dir) + "/"
+        if abs_path.startswith(projects_str):
+            candidate = Path(abs_path)
+            if candidate.is_dir():
+                exact_hits.append(candidate)
+                continue
+            top_dir = projects_dir / abs_path[len(projects_str):].split("/")[0]
+            if top_dir.is_dir():
+                exact_hits.append(top_dir)
+                continue
+
+        # Exact encoded-name match in this home.
+        candidate = projects_dir / normalized
+        if candidate.is_dir():
+            exact_hits.append(candidate)
+            continue
+
+        # Substring fallback — recorded separately and only used when no home
+        # has an exact match, to avoid cross-home basename conflation.
+        for d in projects_dir.iterdir():
+            if d.is_dir() and normalized in d.name:
+                fuzzy_hits.append(d)
+                break
+
+    hits = exact_hits or fuzzy_hits
+    if not hits:
+        return None
+    hits.sort(key=_newest_session_mtime, reverse=True)
+    return hits[0]
 
 
 def load_sessions_index(project_dir: Path) -> List[Dict]:
@@ -718,7 +761,8 @@ def main():
 
     if not project_dir:
         print(f"Error: no Claude session data found for {project_path}", file=sys.stderr)
-        print(f"Looked in: {PROJECTS_DIR / normalize_path(project_path)}", file=sys.stderr)
+        searched = ", ".join(str(h / "projects") for h in discover_claude_homes()) or str(PROJECTS_DIR)
+        print(f"Looked across all config homes: {searched}", file=sys.stderr)
         sys.exit(1)
 
     entries = load_sessions_index(project_dir)
