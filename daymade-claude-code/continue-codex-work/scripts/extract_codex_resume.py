@@ -19,7 +19,6 @@ import argparse
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Optional
@@ -51,24 +50,37 @@ END_REASON_LABELS = {
 # ── Session discovery (reuses the tested _core.codex provider) ────────────────
 
 
-def _discovery_args(project_path: Optional[str], all_projects: bool) -> SimpleNamespace:
-    """Build the argparse-like namespace collect_codex expects."""
+def _discovery_args(
+    project_path: Optional[str], all_projects: bool, *, explicit_id: bool = False
+) -> SimpleNamespace:
+    """Build the argparse-like namespace collect_codex expects.
+
+    For an explicit `--session <id>` (explicit_id=True) the archived / sub-agent /
+    automated filters are turned off: the caller named the exact session and
+    expects it resolved even if it was archived or is a sub-agent thread.
+    """
     return SimpleNamespace(
         cwd=project_path,
         all_projects=all_projects,
         recursive=False,
-        include_archived=False,
-        include_subagents=False,
-        include_automated=False,
+        include_archived=explicit_id,
+        include_subagents=explicit_id,
+        include_automated=explicit_id,
         max_title_chars=100,
     )
 
 
 def list_sessions(
-    project_path: Optional[str], all_projects: bool, exclude_current: Optional[str] = None
+    project_path: Optional[str],
+    all_projects: bool,
+    exclude_current: Optional[str] = None,
+    *,
+    explicit_id: bool = False,
 ) -> tuple[list, list[str]]:
     """Return (conversations newest-first, warnings) for a project or all projects."""
-    result = collect_codex(_discovery_args(project_path, all_projects), CODEX_HOME)
+    result = collect_codex(
+        _discovery_args(project_path, all_projects, explicit_id=explicit_id), CODEX_HOME
+    )
     convs = [c for c in result.conversations if c.session_id != exclude_current]
     return convs, result.warnings
 
@@ -134,10 +146,12 @@ def _detect_end_reason(data: dict) -> str:
         return "abandoned"
     if data["last_sig"] in ("task_complete", "agent_message"):
         return "completed"
-    if data["last_sig"] in ("tool_call", "tool_output", "patch"):
-        return "in_progress"
+    # Check the error cascade before in_progress: a cascade also ends on a
+    # tool_output/patch tail, so testing in_progress first would shadow it.
     if len(data["errors"]) >= 3:
         return "error_cascade"
+    if data["last_sig"] in ("tool_call", "tool_output", "patch"):
+        return "in_progress"
     return "unknown"
 
 
@@ -197,8 +211,13 @@ def parse_codex_rollout(path: Path) -> dict:
                         data["errors"].append(stderr[:300])
                 data["last_sig"] = "patch"
             elif ptype == "task_complete":
+                # last_agent_message repeats the turn's final agent_message
+                # verbatim, so only append it when it is not already the last one.
                 last_message = str(payload.get("last_agent_message") or "").strip()
-                if last_message:
+                if last_message and (
+                    not data["assistant_messages"]
+                    or data["assistant_messages"][-1] != last_message
+                ):
                     data["assistant_messages"].append(last_message)
                 data["last_sig"] = "task_complete"
         elif rtype == "response_item":
@@ -328,7 +347,10 @@ def build_briefing(conv, data: dict, project_path: str) -> str:
                 sections.append(f"```\n{error}\n```")
 
     sections.append("\n## Current Workspace State\n")
-    sections.append(get_git_state(project_path))
+    # Report git state for the session's own cwd, not the invocation dir — a
+    # cross-project `--session` resolves a conv whose cwd may be another repo.
+    git_cwd = meta.get("cwd") or (conv.cwd if conv else None) or project_path
+    sections.append(get_git_state(git_cwd))
 
     return "\n".join(sections)
 
@@ -342,6 +364,47 @@ def _print_session_list(convs: list, limit: int) -> None:
         print(f"- {conv.session_id}  [{updated}]")
         print(f"    {conv.title}")
         print(f"    cwd: {conv.cwd}")
+
+
+def _find_session_by_id(session_id: str, project_path: str):
+    """Resolve an explicit `--session` id across all projects.
+
+    Prefers an exact id match; a substring fragment is accepted only when it is
+    unambiguous (otherwise the fragment silently binds to the newest matching
+    session). Archived / sub-agent / automated sessions are included. Returns the
+    conv, or None after printing why.
+    """
+    convs, _ = list_sessions(project_path, all_projects=True, explicit_id=True)
+    exact = [c for c in convs if c.session_id == session_id]
+    if exact:
+        return exact[0]
+    matches = [c for c in convs if session_id in c.session_id]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        print(
+            f"Error: '{session_id}' is ambiguous — it matches {len(matches)} sessions:",
+            file=sys.stderr,
+        )
+        for conv in matches[:10]:
+            print(f"  {conv.session_id}  {conv.title}", file=sys.stderr)
+        print("Pass the full session id.", file=sys.stderr)
+        return None
+    print(f"Error: no Codex session found for id {session_id}", file=sys.stderr)
+    return None
+
+
+def _first_resumable(convs: list) -> tuple:
+    """Return (conv, rollout) for the newest conv whose rollout file resolves.
+
+    A stale state-DB index can point at a rollout that was pruned or moved; skip
+    such entries instead of aborting on the newest one.
+    """
+    for conv in convs:
+        rollout = resolve_rollout(conv)
+        if rollout is not None:
+            return conv, rollout
+    return None, None
 
 
 def main() -> int:
@@ -385,6 +448,7 @@ def main() -> int:
         return 0
 
     # ── Query mode ──
+    query_match = None
     if args.query:
         convs, _ = list_sessions(project_path, all_projects=True, exclude_current=args.exclude_current)
         needle = args.query.casefold()
@@ -396,18 +460,15 @@ def main() -> int:
             print(f"Codex sessions matching '{args.query}' ({len(matches)} found):\n")
             _print_session_list(matches, args.limit)
             return 0
-        args.session = matches[0].session_id
+        query_match = matches[0]  # reuse directly — no second discovery scan
 
     # ── Extract mode ──
-    conv = None
-    if args.session:
-        convs, _ = list_sessions(project_path, all_projects=True, exclude_current=None)
-        for candidate in convs:
-            if candidate.session_id == args.session or args.session in candidate.session_id:
-                conv = candidate
-                break
+    rollout = None
+    if query_match is not None:
+        conv = query_match
+    elif args.session:
+        conv = _find_session_by_id(args.session, project_path)
         if conv is None:
-            print(f"Error: no Codex session found for id {args.session}", file=sys.stderr)
             return 1
     else:
         convs, warnings = list_sessions(project_path, args.all_projects, args.exclude_current)
@@ -416,12 +477,20 @@ def main() -> int:
             for warning in warnings:
                 print(f"  note: {warning}", file=sys.stderr)
             return 1
-        conv = convs[0]  # newest-first
+        conv, rollout = _first_resumable(convs)
+        if conv is None:
+            print(
+                f"Error: found {len(convs)} session(s) for {project_path} but none had a "
+                f"resolvable rollout under {CODEX_HOME}/sessions (stale state index?).",
+                file=sys.stderr,
+            )
+            return 1
 
-    rollout = resolve_rollout(conv)
     if rollout is None:
-        print(f"Error: rollout file not found for session {conv.session_id}", file=sys.stderr)
-        return 1
+        rollout = resolve_rollout(conv)
+        if rollout is None:
+            print(f"Error: rollout file not found for session {conv.session_id}", file=sys.stderr)
+            return 1
 
     print(f"Parsing Codex session {conv.session_id} "
           f"({rollout.stat().st_size / 1_000_000:.1f} MB)...", file=sys.stderr)
