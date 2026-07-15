@@ -32,6 +32,8 @@ This document describes the SQLite database format used by transcript-fixer v2.0
 
 ## Database Schema
 
+> **The full, authoritative table schema is `database_schema.md`** (8 tables + views) — read that before writing queries. This section summarizes the same tables for storage-format context; if the two ever disagree, `database_schema.md` and `scripts/core/schema.sql` win. Default config values live in `scripts/core/defaults.py`, not copied here.
+
 ### Core Tables
 
 #### corrections

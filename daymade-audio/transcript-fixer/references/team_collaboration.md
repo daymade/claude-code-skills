@@ -45,10 +45,10 @@ Share your corrections with team members:
 
 ```bash
 # Export specific domain
-python scripts/fix_transcription.py --export team_corrections.json --domain embodied_ai
+uv run scripts/fix_transcription.py --export team_corrections.json --domain embodied_ai
 
 # Export general corrections
-python scripts/fix_transcription.py --export team_corrections.json
+uv run scripts/fix_transcription.py --export team_corrections.json
 ```
 
 **Output**: Creates a standalone JSON file with your corrections.
@@ -59,10 +59,10 @@ Two modes: **merge** (combine) or **replace** (overwrite):
 
 ```bash
 # Merge (recommended) - combines with existing corrections
-python scripts/fix_transcription.py --import team_corrections.json --merge
+uv run scripts/fix_transcription.py --import team_corrections.json --merge
 
 # Replace - overwrites existing corrections (dangerous!)
-python scripts/fix_transcription.py --import team_corrections.json
+uv run scripts/fix_transcription.py --import team_corrections.json
 ```
 
 **Merge behavior**:
@@ -75,12 +75,12 @@ python scripts/fix_transcription.py --import team_corrections.json
 **Person A (Domain Expert)**:
 ```bash
 # Build correction dictionary
-python fix_transcription.py --add "巨升" "具身" --domain embodied_ai
-python fix_transcription.py --add "奇迹创坛" "奇绩创坛" --domain embodied_ai
+uv run scripts/fix_transcription.py --add "巨升" "具身" --domain embodied_ai
+uv run scripts/fix_transcription.py --add "奇迹创坛" "奇绩创坛" --domain embodied_ai
 # ... add 50 more corrections ...
 
 # Export for team
-python fix_transcription.py --export ai_corrections.json --domain embodied_ai
+uv run scripts/fix_transcription.py --export ai_corrections.json --domain embodied_ai
 # Send ai_corrections.json to team via Slack/email
 ```
 
@@ -88,89 +88,57 @@ python fix_transcription.py --export ai_corrections.json --domain embodied_ai
 ```bash
 # Receive ai_corrections.json
 # Import and merge with existing corrections
-python fix_transcription.py --import ai_corrections.json --merge
+uv run scripts/fix_transcription.py --import ai_corrections.json --merge
 
 # Now Person B has all 50+ corrections!
 ```
 
 ## Git-Based Collaboration
 
-For teams using Git, version control the entire correction database.
+The local store is a SQLite database (`~/.transcript-fixer/corrections.db`) — **never commit the `.db`** (it is gitignored for a reason; see `best_practices.md` / `file_formats.md`). To version-control corrections in git, commit the **JSON exports**, not the database.
 
 ### Initial Setup
 
-**Person A (First User)**:
+**Person A (first user)** — export the dictionary and commit the JSON to a shared repo (a normal repo, **not** `~/.transcript-fixer`):
 ```bash
-cd ~/.transcript-fixer
-git init
-git add corrections.json context_rules.json config.json
-git add domains/
-git commit -m "Initial correction database"
+uv run scripts/fix_transcription.py --export team_corrections.json
 
-# Push to shared repo
+mkdir ~/transcript-corrections && cd ~/transcript-corrections
+mv ~/path/to/team_corrections.json .
+git init && git add team_corrections.json
+git commit -m "Initial correction export"
 git remote add origin git@github.com:org/transcript-corrections.git
 git push -u origin main
 ```
 
-### Team Members Clone
+### Team Members Clone + Import
 
-**Person B, C, D (Team Members)**:
 ```bash
-# Clone shared corrections
-git clone git@github.com:org/transcript-corrections.git ~/.transcript-fixer
-
-# Now everyone has the same corrections!
+git clone git@github.com:org/transcript-corrections.git ~/transcript-corrections
+uv run scripts/fix_transcription.py --import ~/transcript-corrections/team_corrections.json --merge
+# --merge combines with each person's existing local corrections;
+# --import without --merge overwrites (dangerous).
 ```
 
 ### Ongoing Sync
 
-**Daily workflow**:
 ```bash
-# Morning: Pull team updates
-cd ~/.transcript-fixer
-git pull origin main
+# Morning: pull the shared export, import into your local DB
+cd ~/transcript-corrections && git pull origin main
+uv run scripts/fix_transcription.py --import team_corrections.json --merge
 
-# During day: Add corrections
-python fix_transcription.py --add "错误" "正确"
+# During the day: add corrections to your local DB
+uv run scripts/fix_transcription.py --add "错误" "正确" --domain <domain>
 
-# Evening: Push your additions
-cd ~/.transcript-fixer
-git add corrections.json
-git commit -m "Added 5 new embodied AI corrections"
-git push origin main
+# Evening: re-export and push the updated JSON
+uv run scripts/fix_transcription.py --export ~/transcript-corrections/team_corrections.json
+cd ~/transcript-corrections && git add team_corrections.json
+git commit -m "Add embodied-AI corrections" && git push origin main
 ```
 
 ### Handling Conflicts
 
-When two people add different corrections to same file:
-
-```bash
-cd ~/.transcript-fixer
-git pull origin main
-
-# If conflict occurs:
-# CONFLICT in corrections.json
-
-# Option 1: Manual merge (recommended)
-nano corrections.json  # Edit to combine both changes
-git add corrections.json
-git commit -m "Merged corrections from teammate"
-git push
-
-# Option 2: Keep yours
-git checkout --ours corrections.json
-git add corrections.json
-git commit -m "Kept local corrections"
-git push
-
-# Option 3: Keep theirs
-git checkout --theirs corrections.json
-git add corrections.json
-git commit -m "Used teammate's corrections"
-git push
-```
-
-**Best Practice**: JSON merge conflicts are usually easy - just combine the correction entries from both versions.
+Conflicts live in the **exported JSON**, never in a database. The export is a flat list of correction entries, so a merge conflict just means combining both sides' entries — resolve by hand (`git checkout --ours/--theirs team_corrections.json`, then re-add), or simpler: take either version, then have each person re-run `--import … --merge` so both sets of local additions re-converge into the shared export on the next push.
 
 ## Selective Domain Sharing
 
@@ -179,7 +147,7 @@ Share only specific domains with different teams:
 ### Finance Team
 ```bash
 # Finance team exports their domain
-python fix_transcription.py --export finance_corrections.json --domain finance
+uv run scripts/fix_transcription.py --export finance_corrections.json --domain finance
 
 # Share finance_corrections.json with finance team only
 ```
@@ -187,7 +155,7 @@ python fix_transcription.py --export finance_corrections.json --domain finance
 ### AI Team
 ```bash
 # AI team exports their domain
-python fix_transcription.py --export ai_corrections.json --domain embodied_ai
+uv run scripts/fix_transcription.py --export ai_corrections.json --domain embodied_ai
 
 # Share ai_corrections.json with AI team only
 ```
@@ -195,8 +163,8 @@ python fix_transcription.py --export ai_corrections.json --domain embodied_ai
 ### Individual imports specific domains
 ```bash
 # Alice works on both finance and AI
-python fix_transcription.py --import finance_corrections.json --merge
-python fix_transcription.py --import ai_corrections.json --merge
+uv run scripts/fix_transcription.py --import finance_corrections.json --merge
+uv run scripts/fix_transcription.py --import ai_corrections.json --merge
 ```
 
 ## Git Branching Strategy
@@ -205,12 +173,15 @@ For larger teams, use branches for different domains or workflows:
 
 ### Feature Branches
 ```bash
-# Create branch for major dictionary additions
-git checkout -b add-medical-terms
-python fix_transcription.py --add "医疗术语" "正确术语" --domain medical
+# In the exports repo, branch for a big batch:
+cd ~/transcript-corrections && git checkout -b add-medical-terms
+# Add the corrections to your local DB:
+uv run scripts/fix_transcription.py --add "医疗术语" "正确术语" --domain medical
 # ... add 100 medical corrections ...
-git add domains/medical.json
-git commit -m "Added 100 medical terminology corrections"
+# Re-export and commit the updated JSON:
+uv run scripts/fix_transcription.py --export team_corrections.json
+git add team_corrections.json
+git commit -m "Add 100 medical terminology corrections"
 git push origin add-medical-terms
 
 # Create PR for review
@@ -231,52 +202,47 @@ git push origin domain/finance
 
 ## Automated Sync (Advanced)
 
-Set up automatic Git sync using cron/Task Scheduler:
+Automate the pull cycle on the **exports repo** (never `~/.transcript-fixer`). A `git pull` alone does not touch the local DB — you still `--import` the pulled JSON afterward.
 
 ### macOS/Linux Cron
 ```bash
-# Edit crontab
 crontab -e
-
-# Add daily sync at 9 AM and 6 PM
-0 9,18 * * * cd ~/.transcript-fixer && git pull origin main && git push origin main
+# Pull the shared export twice daily (then import on your own cadence)
+0 9,18 * * * cd ~/transcript-corrections && git pull -q origin main
 ```
 
 ### Windows Task Scheduler
 ```powershell
-# Create scheduled task
-$action = New-ScheduledTaskAction -Execute "git" -Argument "pull origin main" -WorkingDirectory "$env:USERPROFILE\.transcript-fixer"
+$action = New-ScheduledTaskAction -Execute "git" -Argument "pull origin main" -WorkingDirectory "$env:USERPROFILE\transcript-corrections"
 $trigger = New-ScheduledTaskTrigger -Daily -At 9am
 Register-ScheduledTask -Action $action -Trigger $trigger -TaskName "SyncTranscriptCorrections"
 ```
 
 ## Backup and Recovery
 
+The whole store is one SQLite file (`corrections.db`) plus your JSON exports.
+
 ### Backup Strategy
 ```bash
-# Weekly backup to cloud
-cd ~/.transcript-fixer
-tar -czf transcript-corrections-$(date +%Y%m%d).tar.gz corrections.json context_rules.json domains/
+# Weekly backup of the local store + any exports
+tar -czf transcript-corrections-$(date +%Y%m%d).tar.gz \
+  ~/.transcript-fixer/corrections.db ~/transcript-corrections/*.json
 # Upload to Dropbox/Google Drive/S3
 ```
 
 ### Recovery from Backup
 ```bash
-# Extract backup
-tar -xzf transcript-corrections-20250127.tar.gz -C ~/.transcript-fixer/
+# Restore corrections.db back to ~/.transcript-fixer/
+tar -xzf transcript-corrections-20250127.tar.gz
+cp .transcript-fixer/corrections.db ~/.transcript-fixer/corrections.db
 ```
 
-### Recovery from Git
+### Recovery from Git (the exports)
 ```bash
-# View history
-cd ~/.transcript-fixer
-git log corrections.json
-
-# Restore from 3 commits ago
-git checkout HEAD~3 corrections.json
-
-# Or restore specific version
-git checkout abc123def corrections.json
+cd ~/transcript-corrections
+git log team_corrections.json                 # view history
+git checkout HEAD~3 team_corrections.json      # restore an older export
+uv run scripts/fix_transcription.py --import team_corrections.json   # no --merge = replace local with this export
 ```
 
 ## Team Best Practices
@@ -291,36 +257,27 @@ git checkout abc123def corrections.json
 
 ## Integration with CI/CD
 
-For enterprise teams, integrate validation into CI:
+For enterprise teams, validate the **exported JSON** in the shared-exports repo on every PR:
 
 ### GitHub Actions Example
 ```yaml
 # .github/workflows/validate-corrections.yml
 name: Validate Corrections
-
 on:
   pull_request:
-    paths:
-      - 'corrections.json'
-      - 'domains/*.json'
+    paths: ['*.json']
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Validate JSON
+      - uses: actions/checkout@v4
+      - name: Validate JSON is well-formed
         run: |
-          python -m json.tool corrections.json > /dev/null
-          for file in domains/*.json; do
-            python -m json.tool "$file" > /dev/null
-          done
-
-      - name: Check for duplicates
-        run: |
-          python scripts/check_duplicates.py corrections.json
+          for f in *.json; do python -m json.tool "$f" > /dev/null; done
 ```
+
+Duplicate detection is handled by the tool itself: `--import … --merge` de-duplicates against existing corrections, so there is no separate `check_duplicates.py`.
 
 ## Troubleshooting
 
@@ -348,12 +305,12 @@ ssh -T git@github.com
 ### Merge Conflicts Too Complex
 ```bash
 # Nuclear option: Keep one version
-git checkout --ours corrections.json  # Keep yours
+git checkout --ours team_corrections.json  # Keep yours
 # OR
-git checkout --theirs corrections.json  # Keep theirs
+git checkout --theirs team_corrections.json  # Keep theirs
 
 # Then re-import the other version
-python fix_transcription.py --import other_version.json --merge
+uv run scripts/fix_transcription.py --import other_version.json --merge
 ```
 
 ## Security Considerations

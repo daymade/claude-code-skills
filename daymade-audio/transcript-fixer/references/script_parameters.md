@@ -83,9 +83,8 @@ uv run scripts/fix_transcription.py --input meeting.md --stage 1 --output ./meet
 ### Exit Codes
 
 - `0` - Success
-- `1` - Missing required parameters or file not found
-- `2` - API key not configured (Stage 2 or 3 only)
-- `3` - API request failed
+- `1` - Missing required parameters, file not found, or API key not configured (Stage 2/3)
+- API request failures do **not** get a dedicated exit code — the pipeline keeps the original text and prints a warning (see "API Fallback" in SKILL.md)
 
 ## fix_transcript_timestamps.py
 
@@ -226,7 +225,8 @@ Generates four files in the output directory:
 Test dictionary updates before running expensive AI corrections:
 
 ```bash
-# 1. Update CORRECTIONS_DICT in scripts/fix_transcription.py
+# 1. Add the rule (dictionary lives in SQLite, not a source variable):
+#    uv run scripts/fix_transcription.py --add "错误词" "正确词" --domain <domain>
 # 2. Run Stage 1 only
 uv run scripts/fix_transcription.py --input meeting.md --stage 1
 
@@ -255,12 +255,12 @@ Generate and open word-level diff immediately after correction:
 # Run corrections
 uv run scripts/fix_transcription.py --input meeting.md --stage 3
 
-# Generate and open diff
-uv run scripts/generate_word_diff.py meeting.md meeting_stage2.html
+# Generate and open diff (args: original, corrected, output.html)
+uv run scripts/generate_word_diff.py meeting.md meeting_stage2.md meeting_diff.html
 
-open meeting_stage2.diff.html  # macOS
-# xdg-open meeting_stage2.diff.html  # Linux
-# start meeting_stage2.diff.html  # Windows
+open meeting_diff.html  # macOS
+# xdg-open meeting_diff.html  # Linux
+# start meeting_diff.html  # Windows
 ```
 
 ## Environment Variables

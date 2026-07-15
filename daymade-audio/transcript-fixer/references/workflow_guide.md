@@ -2,6 +2,8 @@
 
 Detailed step-by-step workflows for transcript correction and management.
 
+> **Read this first — the primary path is native, not the API stages below.** Inside Claude Code the workflow is: `--stage 1` (dictionary, instant, free) → then Claude reads the output and corrects the rest **natively** (no API key). Stage 1 runs in **safe mode** by default (only low-risk non-word rules auto-apply; risky ones defer to `*_needs_review.md`) and auto-loads your people roster + the domain context file. The API "Stage 2/3" flow documented later is the **backup channel for automation without Claude Code**, not the default. The current authoritative workflow is SKILL.md's "Native AI Correction"; this guide's stage mechanics are still accurate, just no longer the recommended entry point.
+
 ## Table of Contents
 
 - [Pre-Flight Checklist](#pre-flight-checklist)
@@ -307,7 +309,7 @@ uv run scripts/fix_transcription.py --input file.md --stage 3 --domain general
 
 **Output**: Both `file_stage1.md` and `file_stage2.md`.
 
-**Recommended**: Use Stage 3 for most workflows.
+**When to prefer this**: automation / batch runs **without** Claude Code, or reproducible API-based processing. Inside Claude Code, the native path (Stage 1 + Claude's own correction) is the default — see SKILL.md and the note at the top of this guide.
 
 ### 6. Context-Aware Rules
 

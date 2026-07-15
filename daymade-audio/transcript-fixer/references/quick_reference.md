@@ -73,13 +73,14 @@ service = CorrectionService(repository)
 
 # Add corrections
 corrections = [
-    ("巨升智能", "具身智能", "embodied_ai"),
+    ("巨升智能", "具身智能", "embodied_ai"),   # non-word → term: safe
     ("巨升", "具身", "embodied_ai"),
-    ("奇迹创坛", "奇绩创坛", "general"),
-    ("火星营", "火星营", "general"),
-    ("矩阵公司", "初创公司", "general"),
-    ("股价", "框架", "general"),
-    ("三观", "三关", "general"),
+    ("奇迹创坛", "奇绩创坛", "general"),        # garbled proper noun → correct name: safe
+    # NOTE: a common real word that's only wrong in one context (an everyday
+    # homophone, a word that clashes with a ticker/name) does NOT belong here —
+    # a "general" rule on it corrupts every transcript where the word is correct.
+    # Route those to the domain context file (domain_context_guide.md), and
+    # person/project names to a project --domain, never "general".
 ]
 
 for from_text, to_text, domain in corrections:

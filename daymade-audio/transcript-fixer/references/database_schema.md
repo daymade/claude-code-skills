@@ -106,12 +106,7 @@ Key-value configuration store.
 | description | TEXT | What this config does |
 | updated_at | TIMESTAMP | Last update |
 
-**Default configs**:
-- `schema_version`: '2.0'
-- `api_model`: 'GLM-5.2'
-- `learning_frequency_threshold`: 3
-- `learning_confidence_threshold`: 0.8
-- `history_retention_days`: 90
+**Default configs**: the authoritative default set (12 keys) lives in `scripts/core/defaults.py` (`SYSTEM_CONFIG_DEFAULTS`) — don't hand-copy it here, it drifts. Common keys include `schema_version` ('2.0'), `api_model`, `learning_frequency_threshold`, `learning_confidence_threshold`, `history_retention_days`. To see the live values: `SELECT key, value FROM system_config;`
 
 ### audit_log
 
@@ -128,6 +123,19 @@ Comprehensive operations trail.
 | details | TEXT | JSON details |
 | success | BOOLEAN | Success flag |
 | error_message | TEXT | Error if failed |
+
+### suggestion_examples
+
+Per-occurrence context for a learned suggestion (one suggestion → many examples). FK to `learned_suggestions(id)` ON DELETE CASCADE.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER | Primary key |
+| suggestion_id | INTEGER | FK → learned_suggestions.id |
+| filename | TEXT | Source transcript filename |
+| line_number | INTEGER | Where it occurred |
+| context | TEXT | Surrounding text |
+| occurred_at | TIMESTAMP | When observed |
 
 ## Views
 
