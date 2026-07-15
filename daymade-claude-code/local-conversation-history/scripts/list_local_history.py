@@ -15,6 +15,13 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator, Optional
 from urllib.parse import quote
 
+# Multi-home discovery lives in the bundled `_core` package — the single source
+# of truth is daymade-claude-code/_conversation_core/, copied here into
+# scripts/_core/ by sync_core.py. Make this script's own dir importable
+# regardless of how it is invoked, then import.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _core.homes import discover_claude_homes, home_label  # noqa: E402
+
 
 MAX_PREFIX_BYTES = 2 * 1024 * 1024
 MAX_PREFIX_LINES = 5000
@@ -973,6 +980,39 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def merge_claude_results(results: list[ProviderResult]) -> ProviderResult:
+    """Merge per-home Claude results into one, de-duplicating by session id.
+
+    A conversation shared across profile homes (the profile dirs link back to
+    one physical file) appears once; the copy with the newest ``updated_at``
+    wins. Exclusion counts and warnings are summed/combined, and ``home`` becomes
+    a comma-joined list of the profile labels the sessions came from.
+    """
+    real = [r for r in results if r is not None]
+    if not real:
+        return ProviderResult(provider="claude", backend="session-jsonl", home="")
+    if len(real) == 1:
+        return real[0]
+    by_id: dict[str, Conversation] = {}
+    for r in real:
+        for conv in r.conversations:
+            existing = by_id.get(conv.session_id)
+            if existing is None or (conv.updated_at or 0) > (existing.updated_at or 0):
+                by_id[conv.session_id] = conv
+    return ProviderResult(
+        provider=real[0].provider,
+        backend=real[0].backend,
+        home=", ".join(home_label(r.home) for r in real if r.home),
+        conversations=sorted(
+            by_id.values(), key=lambda c: (c.updated_at or 0), reverse=True
+        ),
+        excluded_subagents=sum(r.excluded_subagents for r in real),
+        excluded_archived=sum(r.excluded_archived for r in real),
+        excluded_automated=sum(r.excluded_automated for r in real),
+        warnings=[w for r in real for w in r.warnings],
+    )
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     configure_utf8_streams()
     parser = build_parser()
@@ -996,7 +1036,17 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     results: list[ProviderResult] = []
     if args.source in {"all", "claude"}:
-        results.append(collect_claude(args, claude_home))
+        # An explicit --claude-home / CLAUDE_CONFIG_DIR pins a single home (the
+        # test fixtures rely on this). With neither set, search every config
+        # home so a conversation held under a per-model profile is not missed,
+        # then merge the per-home results into one de-duplicated list.
+        if args.claude_home or os.environ.get("CLAUDE_CONFIG_DIR"):
+            claude_homes = [claude_home]
+        else:
+            claude_homes = discover_claude_homes() or [claude_home]
+        results.append(
+            merge_claude_results([collect_claude(args, h) for h in claude_homes])
+        )
     if args.source in {"all", "codex"}:
         results.append(collect_codex(args, codex_home))
 

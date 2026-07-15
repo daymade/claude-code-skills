@@ -13,7 +13,6 @@ the #1 way a real conversation is wrongly judged "not found".
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -21,92 +20,12 @@ from datetime import datetime
 from collections import defaultdict
 
 
-def discover_claude_homes(explicit=None) -> List[Path]:
-    """Discover every Claude config home that holds a ``projects/`` history dir.
-
-    Claude Code stores session history under ``<home>/projects/``. The default
-    home is ``~/.claude``, but a user who runs third-party models through
-    per-model *profiles* — each profile is its own ``CLAUDE_CONFIG_DIR`` — keeps
-    a parallel history under ``~/.claude-profiles/<name>/`` and sometimes a
-    sibling ``~/.claude-<name>/``. A tool that only looks at ``~/.claude``
-    silently misses every conversation held under a profile, which is the #1
-    reason a real session is wrongly reported as "not found".
-
-    Discovery is dynamic (glob), never a hardcoded profile list, so it adapts to
-    whatever profiles happen to exist on the machine.
-
-    Args:
-        explicit: Optional single path or list of paths. When given, ONLY those
-            homes are used (each must contain a ``projects/`` subdir) and
-            auto-discovery is skipped — this backs the ``--home`` / ``--main-only``
-            flags.
-
-    Returns:
-        De-duplicated, existence-checked list of home ``Path`` objects, each
-        with a ``projects/`` subdirectory.
-    """
-    homes: List[Path] = []
-    seen = set()
-
-    def add(candidate) -> None:
-        try:
-            home = Path(candidate).expanduser()
-        except Exception:
-            return
-        if not (home / "projects").is_dir():
-            return
-        try:
-            key = str(home.resolve())
-        except Exception:
-            key = str(home)
-        if key in seen:
-            return
-        seen.add(key)
-        homes.append(home)
-
-    # An explicit override (single path or list) short-circuits discovery.
-    if explicit:
-        for candidate in (explicit if isinstance(explicit, (list, tuple)) else [explicit]):
-            add(candidate)
-        return homes
-
-    # CLAUDE_CONFIG_DIR wins first when set, then the default home.
-    env_home = os.environ.get("CLAUDE_CONFIG_DIR")
-    if env_home:
-        add(env_home)
-    add(Path.home() / ".claude")
-
-    # Per-model profile homes: ~/.claude-profiles/*/
-    profiles_root = Path.home() / ".claude-profiles"
-    if profiles_root.is_dir():
-        for child in sorted(profiles_root.iterdir()):
-            add(child)
-
-    # Sibling homes: ~/.claude-<name>/ that carry their own projects/
-    for child in sorted(Path.home().glob(".claude-*")):
-        if child.name != ".claude-profiles":
-            add(child)
-
-    return homes
-
-
-def home_label(home) -> str:
-    """Short, human-readable provenance label for a home path.
-
-    ``~/.claude`` -> ``main``; ``~/.claude-profiles/kimi`` -> ``kimi``;
-    ``~/.claude-deepseek`` -> ``claude-deepseek``. Used so search/list output
-    shows which profile a session came from instead of an opaque absolute path.
-    A sibling ``~/.claude-<name>`` home keeps its ``claude-`` prefix so it never
-    collides with a same-named ``~/.claude-profiles/<name>`` profile.
-    """
-    home = Path(home)
-    if home.name == ".claude":
-        return "main"
-    if home.parent.name == ".claude-profiles":
-        return home.name
-    if home.name.startswith(".claude-"):
-        return home.name[len("."):]
-    return home.name
+# Multi-home discovery lives in the bundled `_core` package — the single source
+# of truth is daymade-claude-code/_conversation_core/, copied here into
+# scripts/_core/ by sync_core.py so this skill stays self-contained. Make this
+# script's own dir importable regardless of how it is invoked, then import.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _core.homes import discover_claude_homes, home_label  # noqa: E402
 
 
 class SessionAnalyzer:
