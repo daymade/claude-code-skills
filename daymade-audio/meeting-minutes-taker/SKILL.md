@@ -28,7 +28,7 @@ Transform raw meeting transcripts into comprehensive, evidence-based meeting min
 1. Read the transcript provided by user
 2. Load project-specific context file if provided by user (optional)
 3. **Intelligent file naming**: Auto-generate filename from content (see below)
-4. **Speaker identification**: If transcript has "Speaker 1/2/3", identify speakers before generation
+4. **Speaker identification**: If transcript has "Speaker 1/2/3", FIRST ask the user to label speakers on the source platform and re-export (see Step 1.5 Phase 0); infer from text only as a fallback
 5. **Multi-turn generation**: Use multiple passes or subagents with isolated context, merge using UNION
 6. Self-review using [references/completeness_review_checklist.md](references/completeness_review_checklist.md)
 7. Present draft to user for human line-by-line review
@@ -63,9 +63,11 @@ Meeting Minutes Progress:
 - [ ] Step 0 (Optional): Pre-process transcript with transcript-fixer
 - [ ] Step 1: Read and analyze transcript
 - [ ] Step 1.5: Speaker identification (if transcript has "Speaker 1/2/3")
-  - [ ] Analyze speaker features (word count, style, topic focus)
-  - [ ] Match against context.md team directory (if provided)
-  - [ ] Present speaker mapping to user for confirmation
+  - [ ] Phase 0 FIRST: ask user to label speakers on the source platform (Feishu Minutes / Tencent Meeting), re-export, use labeled transcript
+  - [ ] Fallback only (source labeling unavailable or declined by user):
+    - [ ] Analyze speaker features (word count, style, topic focus)
+    - [ ] Match against context.md team directory (if provided)
+    - [ ] Present speaker mapping with per-speaker evidence to user for confirmation
 - [ ] Step 1.6: Generate intelligent filename, confirm with user
 - [ ] Step 1.7: Quality assessment (optional, affects processing depth)
 - [ ] Step 2: Multi-turn generation (PARALLEL subagents with Task tool)
@@ -98,7 +100,18 @@ Analyze the transcript to identify:
 
 **Trigger**: Transcript only has generic labels like "Speaker 1", "Speaker 2", "发言人1", etc.
 
-**Approach** (inspired by Anker Skill):
+#### Phase 0: Source-Side Labeling (ALWAYS TRY FIRST)
+
+When the transcript comes from a platform that supports manual speaker labeling (Feishu Minutes 飞书妙记, Tencent Meeting 腾讯会议, or any tool with a diarization-editing page), **stop and ask the user to label the speakers at the source, then re-export/re-ingest the labeled transcript** before generating minutes. Send the user the source page link — it is usually in the transcript's frontmatter (`minute_url`, meeting URL).
+
+Why this beats inference:
+- Platform labeling is a human listening to the actual voices — the authoritative source. Text-based inference can only resolve speakers who happen to get name-called during the meeting; everyone else stays a guess.
+- Diarization-merged segments (multiple people collapsed into one label) are unrecoverable from text alone — no amount of inference fixes them, but source-side relabeling does.
+- Inference output forces `[inferred]` markers everywhere plus a per-speaker human review round; source labeling produces clean ground truth once.
+
+Fall back to Phase A–C below **only when**: (a) the user explicitly says to proceed by inference, or (b) the source cannot be labeled (raw audio file with no platform page, no edit permission). In the fallback, every mapping must carry evidence and a confidence level, unresolved labels stay as-is (never force-assign), and when the user later labels the source, go back and correct the minutes.
+
+**Fallback approach** (inspired by Anker Skill):
 
 #### Phase A: Feature Analysis (Pattern Recognition)
 
@@ -625,6 +638,7 @@ Round 4: Update to use "Annotation" instead of "Note"
 
 ## Anti-Patterns
 
+- ❌ **Inferring speaker identity from text when the source platform supports labeling** - Ask the user to label speakers in Feishu Minutes / Tencent Meeting and re-export FIRST (Step 1.5 Phase 0); text inference only resolves name-called speakers and cannot recover diarization-merged segments
 - ❌ **Single-pass generation** - One turn through transcript will absolutely lose content
 - ❌ **Divided sections without overlap** - Each pass must cover FULL transcript, not split by sections
 - ❌ **Narrow-focused passes** - Each pass must generate COMPLETE minutes (all sections), not just one section type (wastes tokens, causes bias)
