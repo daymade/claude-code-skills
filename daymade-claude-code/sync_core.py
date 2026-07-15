@@ -30,6 +30,7 @@ TARGET_SKILLS = [
     "claude-code-history-files-finder",
     "local-conversation-history",
     "continue-claude-work",
+    "continue-codex-work",
 ]
 
 HERE = Path(__file__).resolve().parent
