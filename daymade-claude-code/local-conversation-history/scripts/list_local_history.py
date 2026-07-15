@@ -21,6 +21,15 @@ from urllib.parse import quote
 # regardless of how it is invoked, then import.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _core.homes import discover_claude_homes, home_label  # noqa: E402
+from _core.parse import (  # noqa: E402
+    format_timestamp,
+    iso_timestamp,
+    looks_like_windows_path,
+    normalize_workspace,
+    parse_timestamp,
+    timezone_offset_colon,
+    workspace_matches,
+)
 
 
 MAX_PREFIX_BYTES = 2 * 1024 * 1024
@@ -43,7 +52,6 @@ NOISE_PREFIXES = (
 AUTOMATED_TITLE_RE = re.compile(
     r"^(?:reply|respond|return|print)\s+(?:with\s+)?exactly\b", re.IGNORECASE
 )
-WINDOWS_DRIVE_RE = re.compile(r"^(?:[/\\]{2}\?[/\\])?[A-Za-z]:[/\\]")
 SESSION_ID_RE = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
     re.IGNORECASE,
@@ -111,10 +119,6 @@ class CodexDatabase:
     max_updated_ms: int
 
 
-def looks_like_windows_path(value: str) -> bool:
-    return bool(WINDOWS_DRIVE_RE.match(value)) or value.startswith("\\\\")
-
-
 def looks_like_attachment_prefix(value: str) -> bool:
     """Recognize attachment metadata without guessing from prompt length."""
     stripped = value.strip()
@@ -147,75 +151,12 @@ def strip_structural_metadata_lines(value: str) -> tuple[str, bool]:
     return "\n".join(lines).strip(), removed_attachment
 
 
-def normalize_workspace(value: str) -> str:
-    """Normalize a persisted cwd without guessing Windows/WSL equivalence."""
-    value = os.path.expandvars(os.path.expanduser(str(value).strip()))
-    if looks_like_windows_path(value):
-        normalized = value.replace("\\", "/")
-        if normalized.startswith("//?/"):
-            normalized = normalized[4:]
-        normalized = re.sub(r"/+", "/", normalized).rstrip("/")
-        return normalized.casefold()
-    normalized = os.path.abspath(os.path.normpath(value)).rstrip(os.sep)
-    if sys.platform == "darwin":
-        return normalized.casefold()
-    return os.path.normcase(normalized)
+# looks_like_windows_path / normalize_workspace / workspace_matches now live in
+# the shared _core.parse module (imported near the top of this file).
 
 
-def workspace_matches(candidate: str, target: Optional[str], recursive: bool) -> bool:
-    if target is None:
-        return True
-    normalized_candidate = normalize_workspace(candidate)
-    normalized_target = normalize_workspace(target)
-    if normalized_candidate == normalized_target:
-        return True
-    if not recursive:
-        return False
-    separator = "/" if "/" in normalized_target else os.sep
-    return normalized_candidate.startswith(normalized_target.rstrip(separator) + separator)
-
-
-def parse_timestamp(value: Any) -> Optional[float]:
-    if value is None or value == "":
-        return None
-    if isinstance(value, (int, float)):
-        numeric = float(value)
-        if numeric <= 0:
-            return None
-        return numeric / 1000 if numeric > 10_000_000_000 else numeric
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            numeric = float(text)
-            if numeric <= 0:
-                return None
-            return numeric / 1000 if numeric > 10_000_000_000 else numeric
-        except ValueError:
-            pass
-        try:
-            return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
-        except ValueError:
-            return None
-    return None
-
-
-def timezone_offset_colon(value: str) -> str:
-    if len(value) == 5 and value[0] in "+-":
-        return value[:3] + ":" + value[3:]
-    return value
-
-
-def format_timestamp(value: float) -> str:
-    local = datetime.fromtimestamp(value).astimezone()
-    return local.strftime("%Y-%m-%d %H:%M ") + timezone_offset_colon(
-        local.strftime("%z")
-    )
-
-
-def iso_timestamp(value: float) -> str:
-    return datetime.fromtimestamp(value).astimezone().isoformat(timespec="seconds")
+# parse_timestamp / timezone_offset_colon / format_timestamp / iso_timestamp now
+# live in the shared _core.parse module (imported near the top of this file).
 
 
 def iter_jsonl(path: Path, *, bounded: bool = False) -> Iterator[dict[str, Any]]:
