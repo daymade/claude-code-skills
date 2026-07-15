@@ -31,37 +31,32 @@ from _core.parse import (  # noqa: E402
     workspace_matches,
 )
 from _core.model import Conversation, ProviderResult, CodexDatabase  # noqa: E402
+from _core.text import (  # noqa: E402
+    ATTACHMENT_IMAGE_RE,
+    AUTOMATED_TITLE_RE,
+    FILE_SUFFIX_RE,
+    MAX_PREFIX_BYTES,
+    MAX_PREFIX_LINES,
+    NOISE_PREFIXES,
+    SLASH_COMMAND_RE,
+    clean_title,
+    extract_text,
+    first_meaningful_title,
+    is_automated_title,
+    is_noise_text,
+    iter_jsonl,
+    looks_like_attachment_prefix,
+    strip_structural_metadata_lines,
+)
 
 
-MAX_PREFIX_BYTES = 2 * 1024 * 1024
-MAX_PREFIX_LINES = 5000
+# Title / noise / attachment / JSONL-bound constants now live in the shared
+# _core.text module (imported near the top of this file).
 CODEX_REQUIRED_COLUMNS = {"id", "cwd", "updated_at", "source", "archived"}
-NOISE_PREFIXES = (
-    "# agents.md instructions for ",
-    "<app-context",
-    "<collaboration_mode",
-    "<command-message",
-    "<command-name",
-    "<codex_internal_context",
-    "<environment_context",
-    "<local-command-caveat",
-    "<local-command-stdout",
-    "<permissions instructions",
-    "<recommended_plugins",
-    "<system-reminder",
-)
-AUTOMATED_TITLE_RE = re.compile(
-    r"^(?:reply|respond|return|print)\s+(?:with\s+)?exactly\b", re.IGNORECASE
-)
 SESSION_ID_RE = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
     re.IGNORECASE,
 )
-ATTACHMENT_IMAGE_RE = re.compile(
-    r"^(?:<image\b|\[Image\s+#\d+\])", re.IGNORECASE
-)
-FILE_SUFFIX_RE = re.compile(r"\.[A-Za-z0-9]{1,16}$")
-SLASH_COMMAND_RE = re.compile(r"^/[A-Za-z0-9_:-]+(?:[ \t].*)?$")
 
 
 def configure_utf8_streams() -> None:
@@ -76,36 +71,8 @@ def configure_utf8_streams() -> None:
 # _core.model module (imported near the top of this file).
 
 
-def looks_like_attachment_prefix(value: str) -> bool:
-    """Recognize attachment metadata without guessing from prompt length."""
-    stripped = value.strip()
-    if ATTACHMENT_IMAGE_RE.match(stripped):
-        return True
-    if "\n" in stripped:
-        return False
-    candidate = stripped.strip("`'\"")
-    path_like = candidate.startswith(("/", "~/")) or looks_like_windows_path(
-        candidate
-    )
-    return path_like and bool(FILE_SUFFIX_RE.search(candidate))
-
-
-def strip_structural_metadata_lines(value: str) -> tuple[str, bool]:
-    """Remove attachment and slash-command wrapper lines around a request."""
-    lines = [line.strip() for line in value.splitlines() if line.strip()]
-    removed_attachment = False
-    while lines:
-        if looks_like_attachment_prefix(lines[0]):
-            removed_attachment = True
-            lines.pop(0)
-            continue
-        if SLASH_COMMAND_RE.fullmatch(lines[0]):
-            lines.pop(0)
-            continue
-        break
-    while lines and SLASH_COMMAND_RE.fullmatch(lines[-1]):
-        lines.pop()
-    return "\n".join(lines).strip(), removed_attachment
+# looks_like_attachment_prefix / strip_structural_metadata_lines now live in the
+# shared _core.text module (imported near the top of this file).
 
 
 # looks_like_windows_path / normalize_workspace / workspace_matches now live in
@@ -116,100 +83,9 @@ def strip_structural_metadata_lines(value: str) -> tuple[str, bool]:
 # live in the shared _core.parse module (imported near the top of this file).
 
 
-def iter_jsonl(path: Path, *, bounded: bool = False) -> Iterator[dict[str, Any]]:
-    consumed = 0
-    lines = 0
-    try:
-        with path.open("r", encoding="utf-8", errors="replace") as handle:
-            for line in handle:
-                consumed += len(line.encode("utf-8", errors="replace"))
-                lines += 1
-                if bounded and (consumed > MAX_PREFIX_BYTES or lines > MAX_PREFIX_LINES):
-                    return
-                try:
-                    value = json.loads(line)
-                except (json.JSONDecodeError, TypeError):
-                    continue
-                if isinstance(value, dict):
-                    yield value
-    except (OSError, UnicodeError):
-        return
-
-
-def extract_text(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if not isinstance(content, list):
-        return ""
-    parts: list[str] = []
-    for item in content:
-        if not isinstance(item, dict):
-            continue
-        if item.get("type") in {"text", "input_text"} and isinstance(
-            item.get("text"), str
-        ):
-            parts.append(item["text"])
-    return " ".join(parts)
-
-
-def is_noise_text(text: str) -> bool:
-    lowered = text.lstrip().casefold()
-    return not lowered or any(lowered.startswith(prefix) for prefix in NOISE_PREFIXES)
-
-
-def clean_title(text: str, max_chars: int) -> str:
-    separator_parts = re.split(r"(?:^|\n)\s*-{4,}\s*(?:\n|$)", text)
-    if len(separator_parts) > 1:
-        raw_candidates = [part.strip() for part in separator_parts if part.strip()]
-        processed_candidates = [
-            strip_structural_metadata_lines(part) for part in raw_candidates
-        ]
-        attachment_requests = [
-            candidate
-            for candidate, removed_attachment in processed_candidates
-            if candidate and removed_attachment
-        ]
-        candidates = [candidate for candidate, _ in processed_candidates if candidate]
-        candidates = candidates or raw_candidates
-        if attachment_requests:
-            text = attachment_requests[-1]
-        elif candidates:
-            prefix = candidates[0]
-            tail = candidates[-1]
-            text = tail if len(tail) >= 20 else prefix
-    text = re.sub(r"^<image\b[^>]*>\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"</?image>\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"^\[Image\s+#\d+\]\s*", "", text, flags=re.IGNORECASE)
-    home = str(Path.home())
-    for home_variant in {home, home.replace("\\", "/"), home.replace("/", "\\")}:
-        if home_variant:
-            text = text.replace(home_variant, "~")
-    text = re.sub(r"[\r\n\t]+", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    if len(text) <= max_chars:
-        return text
-    return text[: max_chars - 1].rstrip() + "…"
-
-
-def is_automated_title(title: str) -> bool:
-    return bool(AUTOMATED_TITLE_RE.match(title.strip()))
-
-
-def first_meaningful_title(
-    candidates: Iterable[Any], max_chars: int
-) -> Optional[str]:
-    short_candidate: Optional[str] = None
-    for candidate in candidates:
-        if not isinstance(candidate, str):
-            continue
-        cleaned = clean_title(candidate, max_chars)
-        if is_noise_text(cleaned):
-            continue
-        if len(cleaned) >= 4:
-            return cleaned
-        if cleaned and short_candidate is None:
-            short_candidate = cleaned
-    return short_candidate
+# iter_jsonl / extract_text / is_noise_text / clean_title / is_automated_title /
+# first_meaningful_title now live in the shared _core.text module (imported near
+# the top of this file).
 
 
 def encode_claude_workspace(value: str) -> set[str]:
