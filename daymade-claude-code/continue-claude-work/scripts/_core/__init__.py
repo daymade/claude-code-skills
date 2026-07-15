@@ -9,8 +9,28 @@ implementation.
 
 Modules:
     homes  — discover every Claude config home (main + per-model profiles).
+    parse  — pure parsing/formatting helpers (timestamps, and more over time).
 """
 
 from .homes import discover_claude_homes, home_label
+from .parse import (
+    format_timestamp,
+    iso_timestamp,
+    looks_like_windows_path,
+    normalize_workspace,
+    parse_timestamp,
+    timezone_offset_colon,
+    workspace_matches,
+)
 
-__all__ = ["discover_claude_homes", "home_label"]
+__all__ = [
+    "discover_claude_homes",
+    "home_label",
+    "parse_timestamp",
+    "timezone_offset_colon",
+    "format_timestamp",
+    "iso_timestamp",
+    "looks_like_windows_path",
+    "normalize_workspace",
+    "workspace_matches",
+]

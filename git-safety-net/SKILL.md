@@ -123,9 +123,12 @@ re-checked): **[references/merge_verification.md](references/merge_verification.
 The habits that keep a branch tangle from ever stranding work:
 **[references/prevention_practices.md](references/prevention_practices.md)**. The load-bearing few:
 
-- **Use `git worktree` for parallel work, not stash+switch.** Repeated `git stash` → switch →
-  rebase is what orphans stashes; a worktree gives each line of work its own checkout with
-  nothing to drop.
+- **Commit before you switch — neither `git stash` nor `git worktree`.** Uncommitted work is what
+  gets stranded: a `git stash` you later can't find, or edits a `switch` buries. Commit each line
+  of work to its own branch and push it early (a committed, pushed branch can't be orphaned), then
+  bring it where you need it *live* by merging — not by stashing, and not by spinning up a second
+  `git worktree` checkout (which is one more place to forget work and won't even have your
+  gitignored deps). A shared working tree with commit-then-switch discipline is the safe default.
 - **Push a work-in-progress branch to a remote early.** The one commit only on a local branch is
   the only commit that a dead laptop actually loses.
 - **Confirm the current branch before committing** (`git branch --show-current`) — a fix committed

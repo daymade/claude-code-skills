@@ -472,15 +472,14 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
             _m["trusted_domain"] = True
 
     # Merge person-name ASR variants from the people roster (if configured).
-    # Source: args.people_roster > env TRANSCRIPT_FIXER_PEOPLE_ROSTER > config.json paths.people_roster_path.
+    # Source: env TRANSCRIPT_FIXER_PEOPLE_ROSTER > config.json paths.people_roster_path (there is no --people-roster CLI flag).
     # The roster is the curated SSOT for important recurring people; DB entries (catch-all,
     # including minor/one-off names and generic terms) win on conflict so the roster never
     # silently overrides a hand-tuned DB entry. Roster corrections are in-memory only —
     # never written to the DB, per the "one SSOT + DB stays" design.
     from pathlib import Path as _Path
     from utils.config import get_config
-    roster_path = (getattr(args, 'people_roster', None)
-                   or os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER")
+    roster_path = (os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER")
                    or get_config().paths.people_roster_path)
     if roster_path:
         roster_path = _Path(roster_path).expanduser()
