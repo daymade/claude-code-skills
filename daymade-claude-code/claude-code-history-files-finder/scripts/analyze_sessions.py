@@ -4,10 +4,15 @@ Analyze Claude Code session files to find relevant sessions and statistics.
 
 This script helps locate sessions containing specific keywords, analyze
 session activity, and generate reports about session content.
+
+History is searched across EVERY Claude config home, not just ~/.claude:
+users who run third-party models through per-model profiles keep parallel
+history under ~/.claude-profiles/<name>/ (each profile is its own
+CLAUDE_CONFIG_DIR). Searching only ~/.claude silently misses those sessions —
+the #1 way a real conversation is wrongly judged "not found".
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -15,25 +20,41 @@ from datetime import datetime
 from collections import defaultdict
 
 
-class SessionAnalyzer:
-    """Analyze Claude Code session history files."""
+# Multi-home discovery lives in the bundled `_core` package — the single source
+# of truth is daymade-claude-code/_conversation_core/, copied here into
+# scripts/_core/ by sync_core.py so this skill stays self-contained. Make this
+# script's own dir importable regardless of how it is invoked, then import.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _core.homes import discover_claude_homes, home_label  # noqa: E402
 
-    def __init__(self, projects_dir: Optional[Path] = None):
+
+class SessionAnalyzer:
+    """Analyze Claude Code session history files across all config homes."""
+
+    def __init__(self, homes: Optional[List[Path]] = None):
         """
         Initialize analyzer.
 
         Args:
-            projects_dir: Path to Claude projects directory
-                         (default: ~/.claude/projects)
+            homes: List of Claude config home directories to search (each must
+                contain a ``projects/`` subdir). Pass ``None`` (the default) to
+                auto-discover all homes (``~/.claude`` plus every
+                ``~/.claude-profiles/*`` and ``~/.claude-*`` profile home). Pass
+                an explicit list to restrict the search — an EMPTY list means
+                "search nothing", it must NOT silently fall back to full
+                discovery (that would turn a scope-narrowing flag into the
+                widest possible scope).
         """
-        if projects_dir:
-            self.projects_dir = Path(projects_dir)
-        else:
-            self.projects_dir = Path.home() / ".claude" / "projects"
+        self.homes = discover_claude_homes() if homes is None else list(homes)
 
-    def find_project_sessions(self, project_path: str) -> List[Path]:
+    def find_project_sessions(self, project_path: str) -> List[Dict[str, Any]]:
         """
-        Find all session files for a specific project.
+        Find all session files for a project ACROSS every discovered home.
+
+        Sessions are de-duplicated by session id (the ``.jsonl`` filename), so a
+        conversation shared across profiles (profile dirs link back to one
+        physical file) is reported once, attributed to every home it appears in.
+        Agent side-files (``agent-*.jsonl``) are excluded.
 
         Args:
             project_path: The project's working directory. An absolute path, a
@@ -42,84 +63,132 @@ class SessionAnalyzer:
                 (basename) is also accepted and matched via reverse lookup.
 
         Returns:
-            List of session file paths (empty if the project has no history)
+            List of dicts ``{"path", "homes", "mtime"}`` sorted by mtime (newest
+            first). ``homes`` is the list of home Paths the session was found in
+            — its provenance. Empty if the project has no history anywhere.
         """
-        project_dir = self._resolve_project_dir(project_path)
-        if project_dir is None or not project_dir.exists():
-            return []
+        by_id: Dict[str, Dict[str, Any]] = {}
+        for home, project_dir in self._resolve_project_dirs(project_path):
+            for file in project_dir.glob("*.jsonl"):
+                if file.name.startswith("agent-"):
+                    continue
+                try:
+                    mtime = file.stat().st_mtime
+                except OSError:
+                    continue
+                sid = file.name
+                entry = by_id.get(sid)
+                if entry is None:
+                    by_id[sid] = {"path": file, "homes": [home], "mtime": mtime}
+                else:
+                    if home not in entry["homes"]:
+                        entry["homes"].append(home)
+                    # Keep the copy with the latest mtime (usually the same file).
+                    if mtime > entry["mtime"]:
+                        entry["path"] = file
+                        entry["mtime"] = mtime
 
-        # Find all session JSONL files (exclude agent files)
-        sessions = []
-        for file in project_dir.glob("*.jsonl"):
-            if not file.name.startswith("agent-"):
-                sessions.append(file)
+        return sorted(by_id.values(), key=lambda e: e["mtime"], reverse=True)
 
-        return sorted(sessions, key=lambda p: p.stat().st_mtime, reverse=True)
-
-    def _resolve_project_dir(self, project_path: str) -> Optional[Path]:
+    def _resolve_project_dirs(self, project_path: str) -> List[tuple]:
         """
-        Resolve a project path to its encoded directory under projects_dir.
+        Resolve a project path to its encoded dir under EACH home's projects/.
 
         Claude Code encodes the project's ABSOLUTE working-directory path by
         replacing every ``/`` with ``-`` (e.g. ``/Users/<name>/app`` ->
         ``-Users-<name>-app``). The directory name is NOT the basename, so a
         bare name or an unexpanded ``~`` path never matches directly — the #1
-        reason a real history is mistaken for "no sessions".
+        reason a real history is mistaken for "no sessions". The same project
+        has a same-named encoded dir under every home that holds history for it.
 
-        Strategy:
-        1. Expand ``~`` and resolve to an absolute path, then encode it.
-        2. If that misses, treat the input as a basename and reverse-look-up
-           any encoded dir ending in ``-<basename>``. Return the single match;
-           on multiple matches, list them and return None (never guess).
+        Strategy (the exact-vs-fallback decision is GLOBAL, not per-home):
+        1. Try the exact encoded dir in every home. If it matches in ANY home,
+           the project identity is known precisely — return those exact matches
+           only. A home lacking the exact dir contributes nothing; it is NOT
+           fuzzy-matched, so a different project that merely shares the basename
+           in another profile home can never be conflated in.
+        2. Only if NO home has the exact dir, treat the input as a bare basename
+           and reverse-look-up ``-<basename>`` across all homes. Require a SINGLE
+           distinct encoded name; if the basename maps to two different projects
+           (within OR across homes), that is ambiguous — warn and return nothing
+           rather than guess.
+
+        Returns:
+            List of ``(home, encoded_dir)`` pairs — one per home where the
+            resolved project dir exists.
         """
-        # 1. Exact: expand ~ and resolve to an absolute path, then encode
+        # Encode the resolved absolute path once (for exact matching).
+        exact_name: Optional[str] = None
         try:
             abs_path = Path(project_path).expanduser().resolve()
-            exact = self.projects_dir / str(abs_path).replace("/", "-")
-            if exact.exists():
-                return exact
+            exact_name = str(abs_path).replace("/", "-")
         except (OSError, RuntimeError):
-            pass
-
-        # 2. Reverse lookup by basename (handles bare names and ~ paths)
+            exact_name = None
         base = Path(project_path).name
-        if base and self.projects_dir.exists():
-            candidates = [
-                d
-                for d in self.projects_dir.iterdir()
-                if d.is_dir() and d.name.endswith("-" + base)
-            ]
-            if len(candidates) == 1:
-                return candidates[0]
-            if len(candidates) > 1:
-                print(
-                    f"Ambiguous project name '{base}' — {len(candidates)} matches. "
-                    "Re-run with the full absolute path:",
-                    file=sys.stderr,
-                )
-                for d in sorted(candidates):
-                    print(f"  {d.name}", file=sys.stderr)
-                return None
 
-        return None
+        # Pass 1 — exact encoded-dir match across ALL homes. A single exact hit
+        # anywhere fixes the project identity, so we never fuzzy-fall-back.
+        if exact_name is not None:
+            exact_hits = [
+                (home, home / "projects" / exact_name)
+                for home in self.homes
+                if (home / "projects" / exact_name).is_dir()
+            ]
+            if exact_hits:
+                return exact_hits
+
+        # Pass 2 — no exact match anywhere: reverse-look-up the bare basename,
+        # but bind only ONE distinct project so same-basename projects living in
+        # different homes are never conflated together.
+        if not base:
+            return []
+        by_name: Dict[str, List[tuple]] = {}
+        for home in self.homes:
+            projects_dir = home / "projects"
+            if not projects_dir.is_dir():
+                continue
+            for d in projects_dir.iterdir():
+                if d.is_dir() and d.name.endswith("-" + base):
+                    by_name.setdefault(d.name, []).append((home, d))
+
+        if not by_name:
+            return []
+        if len(by_name) > 1:
+            print(
+                f"Ambiguous project name '{base}' — {len(by_name)} distinct "
+                "projects match across homes; re-run with the full absolute path:",
+                file=sys.stderr,
+            )
+            for name in sorted(by_name):
+                homes_str = ", ".join(home_label(h) for h, _ in by_name[name])
+                print(f"  {name}  [{homes_str}]", file=sys.stderr)
+            return []
+        # Exactly one distinct project — use it wherever it exists.
+        return next(iter(by_name.values()))
 
     def search_sessions(
-        self, sessions: List[Path], keywords: List[str], case_sensitive: bool = False
-    ) -> Dict[Path, Dict[str, Any]]:
+        self,
+        session_refs: List[Dict[str, Any]],
+        keywords: List[str],
+        case_sensitive: bool = False,
+    ) -> List[Dict[str, Any]]:
         """
         Search sessions for keywords.
 
         Args:
-            sessions: List of session file paths
-            keywords: Keywords to search for
-            case_sensitive: Whether to perform case-sensitive search
+            session_refs: Session refs from ``find_project_sessions`` (each a
+                dict with ``path`` and ``homes``).
+            keywords: Keywords to search for.
+            case_sensitive: Whether to perform case-sensitive search.
 
         Returns:
-            Dict mapping session paths to match information
+            List of match dicts (session ref + match counts), most mentions
+            first.
         """
-        matches = {}
+        matches: List[Dict[str, Any]] = []
 
-        for session_file in sessions:
+        for ref in session_refs:
+            session_file = ref["path"]
             keyword_counts = defaultdict(int)
             total_mentions = 0
 
@@ -128,33 +197,24 @@ class SessionAnalyzer:
                     for line in f:
                         try:
                             data = json.loads(line.strip())
-
-                            # Extract text content from message
-                            text_content = self._extract_text_content(data)
-
-                            # Search for keywords
-                            search_text = (
-                                text_content if case_sensitive else text_content.lower()
-                            )
-                            for keyword in keywords:
-                                search_keyword = (
-                                    keyword if case_sensitive else keyword.lower()
-                                )
-                                count = search_text.count(search_keyword)
-                                if count > 0:
-                                    keyword_counts[keyword] += count
-                                    total_mentions += count
-
                         except json.JSONDecodeError:
                             continue
 
-                if total_mentions > 0:
-                    matches[session_file] = {
-                        "total_mentions": total_mentions,
-                        "keyword_counts": dict(keyword_counts),
-                        "modified_time": session_file.stat().st_mtime,
-                        "size": session_file.stat().st_size,
-                    }
+                        # Extract text content from message
+                        text_content = self._extract_text_content(data)
+
+                        # Search for keywords
+                        search_text = (
+                            text_content if case_sensitive else text_content.lower()
+                        )
+                        for keyword in keywords:
+                            search_keyword = (
+                                keyword if case_sensitive else keyword.lower()
+                            )
+                            count = search_text.count(search_keyword)
+                            if count > 0:
+                                keyword_counts[keyword] += count
+                                total_mentions += count
 
             except Exception as e:
                 print(
@@ -162,6 +222,19 @@ class SessionAnalyzer:
                 )
                 continue
 
+            if total_mentions > 0:
+                matches.append(
+                    {
+                        "path": session_file,
+                        "homes": ref["homes"],
+                        "total_mentions": total_mentions,
+                        "keyword_counts": dict(keyword_counts),
+                        "modified_time": ref["mtime"],
+                        "size": session_file.stat().st_size,
+                    }
+                )
+
+        matches.sort(key=lambda m: m["total_mentions"], reverse=True)
         return matches
 
     def get_session_stats(self, session_file: Path) -> Dict[str, Any]:
@@ -276,6 +349,58 @@ class SessionAnalyzer:
         return " ".join(text_parts)
 
 
+def _add_home_flags(subparser) -> None:
+    """Attach the shared home-scoping flags to a subparser (list / search)."""
+    subparser.add_argument(
+        "--home",
+        action="append",
+        metavar="DIR",
+        help="Restrict to a specific Claude home dir (repeatable). Default: "
+        "search ~/.claude PLUS every ~/.claude-profiles/* profile home.",
+    )
+    subparser.add_argument(
+        "--main-only",
+        action="store_true",
+        help="Search only ~/.claude, skipping all profile homes.",
+    )
+
+
+def _homes_for(args) -> tuple:
+    """Resolve the home list from CLI flags (used by list / search).
+
+    Returns ``(homes, narrowed)``. ``narrowed`` is True when the user passed
+    ``--home`` / ``--main-only``, so the caller can treat an empty result as a
+    real "your selection matched no home with history" error instead of
+    silently widening back to searching every home.
+    """
+    if getattr(args, "main_only", False):
+        return discover_claude_homes([Path.home() / ".claude"]), True
+    explicit = getattr(args, "home", None)
+    if explicit:
+        return discover_claude_homes(explicit), True
+    return discover_claude_homes(), False
+
+
+def _analyzer_or_exit(args) -> "SessionAnalyzer":
+    """Build a SessionAnalyzer, erroring out if a narrowing flag matched no home.
+
+    Without this, an explicit ``--home``/``--main-only`` that resolves to no
+    home-with-history would (via an empty list) either search nothing or, worse,
+    reintroduce full discovery — turning a scope-narrowing flag into the widest
+    possible scope. We fail loudly instead.
+    """
+    homes, narrowed = _homes_for(args)
+    if narrowed and not homes:
+        print(
+            "No Claude home with a projects/ dir matched your --home/--main-only "
+            "selection (a --home value must be a config home such as ~/.claude "
+            "or ~/.claude-profiles/<name>, not its projects/ subdir).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return SessionAnalyzer(homes)
+
+
 def main():
     """Main entry point."""
     import argparse
@@ -292,6 +417,7 @@ def main():
     list_parser.add_argument(
         "--limit", type=int, default=10, help="Max sessions to show (default: 10)"
     )
+    _add_home_flags(list_parser)
 
     # Search command
     search_parser = subparsers.add_parser("search", help="Search sessions for keywords")
@@ -302,6 +428,7 @@ def main():
     search_parser.add_argument(
         "--case-sensitive", action="store_true", help="Case-sensitive search"
     )
+    _add_home_flags(search_parser)
 
     # Stats command
     stats_parser = subparsers.add_parser("stats", help="Get session statistics")
@@ -316,33 +443,50 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    analyzer = SessionAnalyzer()
-
     if args.command == "list":
+        analyzer = _analyzer_or_exit(args)
+        home_summary = ", ".join(home_label(h) for h in analyzer.homes)
         sessions = analyzer.find_project_sessions(args.project_path)
         if not sessions:
             print(f"No sessions found for project: {args.project_path}")
+            print(
+                f"(searched {len(analyzer.homes)} home(s): {home_summary})",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
-        print(f"Found {len(sessions)} session(s) for {args.project_path}\n")
+        print(f"Found {len(sessions)} session(s) for {args.project_path}")
+        print(f"Searched {len(analyzer.homes)} home(s): {home_summary}\n")
         print(f"Showing {min(args.limit, len(sessions))} most recent:\n")
 
-        for i, session in enumerate(sessions[: args.limit], 1):
-            mtime = datetime.fromtimestamp(session.stat().st_mtime)
+        for i, ref in enumerate(sessions[: args.limit], 1):
+            session = ref["path"]
+            mtime = datetime.fromtimestamp(ref["mtime"])
             size_kb = session.stat().st_size / 1024
+            labels = ", ".join(home_label(h) for h in ref["homes"])
             print(f"{i}. {session.name}")
             print(f"   Modified: {mtime.strftime('%Y-%m-%d %H:%M:%S')}")
             print(f"   Size: {size_kb:.1f} KB")
+            print(f"   Profile: {labels}")
             print(f"   Path: {session}")
             print()
 
     elif args.command == "search":
+        analyzer = _analyzer_or_exit(args)
+        home_summary = ", ".join(home_label(h) for h in analyzer.homes)
         sessions = analyzer.find_project_sessions(args.project_path)
         if not sessions:
             print(f"No sessions found for project: {args.project_path}")
+            print(
+                f"(searched {len(analyzer.homes)} home(s): {home_summary})",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
-        print(f"Searching {len(sessions)} session(s) for: {', '.join(args.keywords)}\n")
+        print(
+            f"Searching {len(sessions)} session(s) across {len(analyzer.homes)} "
+            f"home(s) [{home_summary}] for: {', '.join(args.keywords)}\n"
+        )
 
         matches = analyzer.search_sessions(
             sessions, args.keywords, args.case_sensitive
@@ -352,19 +496,19 @@ def main():
             print("No matches found.")
             sys.exit(0)
 
-        # Sort by total mentions
-        sorted_matches = sorted(
-            matches.items(), key=lambda x: x[1]["total_mentions"], reverse=True
-        )
-
         print(f"Found {len(matches)} session(s) with matches:\n")
 
-        for session, info in sorted_matches:
+        for info in matches:
+            session = info["path"]
             mtime = datetime.fromtimestamp(info["modified_time"])
+            labels = ", ".join(home_label(h) for h in info["homes"])
             print(f"📄 {session.name}")
             print(f"   Date: {mtime.strftime('%Y-%m-%d %H:%M')}")
+            print(f"   Profile: {labels}")
             print(f"   Total mentions: {info['total_mentions']}")
-            print(f"   Keywords: {', '.join(f'{k}({v})' for k, v in info['keyword_counts'].items())}")
+            print(
+                f"   Keywords: {', '.join(f'{k}({v})' for k, v in info['keyword_counts'].items())}"
+            )
             print(f"   Path: {session}")
             print()
 
@@ -375,6 +519,7 @@ def main():
 
         print(f"Analyzing session: {args.session_file}\n")
 
+        analyzer = SessionAnalyzer()
         stats = analyzer.get_session_stats(args.session_file)
 
         print("=" * 60)
