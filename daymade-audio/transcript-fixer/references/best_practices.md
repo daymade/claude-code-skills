@@ -68,17 +68,16 @@ uv run scripts/fix_transcription.py --review-learned
 
 ### Use Domain Separation
 
-**Prevent conflicts**: Same phonetic error might have different corrections in different domains.
+**Prevent conflicts**: a fix that's right for *your* project can be wrong in someone else's transcript, so isolate it under a project domain instead of the global `general`. A rule added with `--domain <project>` only fires when you pass that domain.
 
-**Example**:
-- Finance domain: "股价" (stock price) is correct
-- General domain: "股价" → "框架" (framework) ASR error
+**Example** (person name): the ASR keeps garbling a teammate's name as `<garbled-name>` → `<Name>`. That's right in your project — but `<garbled-name>` might be a real, differently-spelled person elsewhere, so it must NOT go in `general`:
 
 ```bash
-# Domain-specific corrections
-uv run scripts/fix_transcription.py --add "股价" "框架" --domain general
-# No correction needed in finance domain - "股价" is correct there
+# Isolated — only fires when you pass --domain <project>
+uv run scripts/fix_transcription.py --add "<garbled-name>" "<Name>" --domain <project>
 ```
+
+Never put a common real word into `general` — that silently corrupts every future transcript where the word is correct. Common-word / context-dependent homophones belong in the domain **context file** (with a disambiguating cue), not the dictionary — see `false_positive_guide.md` + `domain_context_guide.md`.
 
 **Available domains**:
 - `general` (default) - General-purpose corrections
@@ -86,7 +85,7 @@ uv run scripts/fix_transcription.py --add "股价" "框架" --domain general
 - `finance` - Financial terminology
 - `medical` - Medical terminology
 
-**Custom domains**: Any string matching `^[a-z0-9_]+$` (lowercase, numbers, underscore).
+**Custom domains**: Any string matching `^[\w一-鿿぀-ゟ゠-ヿ가-힯-]+$` — Unicode letters (including CJK / kana / hangul), digits, underscore, hyphen. So a Chinese/Japanese/Korean project slug is a valid domain name (e.g. `--domain 火星加速器`).
 
 ### Domain Selection Strategy
 

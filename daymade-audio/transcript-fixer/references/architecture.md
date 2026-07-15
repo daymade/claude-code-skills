@@ -148,11 +148,6 @@ All business-logic modules are kept small and single-purpose. The authoritative 
 │   Data Access Layer (SQLite-based)      │
 │                                         │
 │  ┌──────────────────────────────────┐  │
-│  │ CorrectionManager (Facade)       │  │
-│  │ - Backward-compatible API        │  │
-│  └──────────────┬───────────────────┘  │
-│                 │                       │
-│  ┌──────────────▼───────────────────┐  │
 │  │ CorrectionService                │  │
 │  │ - Business logic                 │  │
 │  │ - Validation                     │  │
@@ -477,7 +472,7 @@ class ValidationRules:
     max_text_length: int = 1000
     min_text_length: int = 1
     max_domain_length: int = 50
-    allowed_domain_pattern: str = r'^[a-zA-Z0-9_-]+$'
+    allowed_domain_pattern: str = r'^[\w一-鿿぀-ゟ゠-ヿ가-힯-]+$'  # Unicode letters incl. CJK/kana/hangul
 ```
 
 ### CLI Integration (commands.py)
@@ -596,8 +591,8 @@ confidence = (
 **Key Methods**:
 ```python
 analyze_and_suggest()     # Main analysis pipeline
-approve_suggestion()      # Move to corrections.json
-reject_suggestion()       # Move to rejected.json
+approve_suggestion()      # Insert into the corrections table (SQLite)
+reject_suggestion()       # Mark rejected (pending list lives in learned/pending_review.json)
 list_pending()           # Get all suggestions
 ```
 
@@ -780,7 +775,7 @@ class SpellCheckProcessor:
 
 ### Adding New Export Formats
 
-1. Add method to `CorrectionManager`
+1. Add method to `CorrectionService`
 2. Support new file format
 3. Add CLI command
 
