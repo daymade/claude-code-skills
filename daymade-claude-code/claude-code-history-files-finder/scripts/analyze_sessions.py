@@ -118,12 +118,15 @@ class SessionAnalyzer:
 
         Args:
             homes: List of Claude config home directories to search (each must
-                contain a ``projects/`` subdir). When omitted, all homes are
-                auto-discovered (default ``~/.claude`` plus every
-                ``~/.claude-profiles/*`` and ``~/.claude-*`` profile home), so
-                sessions held under a third-party-model profile are not missed.
+                contain a ``projects/`` subdir). Pass ``None`` (the default) to
+                auto-discover all homes (``~/.claude`` plus every
+                ``~/.claude-profiles/*`` and ``~/.claude-*`` profile home). Pass
+                an explicit list to restrict the search — an EMPTY list means
+                "search nothing", it must NOT silently fall back to full
+                discovery (that would turn a scope-narrowing flag into the
+                widest possible scope).
         """
-        self.homes = list(homes) if homes else discover_claude_homes()
+        self.homes = discover_claude_homes() if homes is None else list(homes)
 
     def find_project_sessions(self, project_path: str) -> List[Dict[str, Any]]:
         """
@@ -179,18 +182,23 @@ class SessionAnalyzer:
         reason a real history is mistaken for "no sessions". The same project
         has a same-named encoded dir under every home that holds history for it.
 
-        Strategy (applied per home):
-        1. Expand ``~`` and resolve to an absolute path, then encode it.
-        2. If that misses, treat the input as a basename and reverse-look-up any
-           encoded dir ending in ``-<basename>``. A single match is used; an
-           ambiguous basename in a given home is skipped with a warning (never
-           guessed).
+        Strategy (the exact-vs-fallback decision is GLOBAL, not per-home):
+        1. Try the exact encoded dir in every home. If it matches in ANY home,
+           the project identity is known precisely — return those exact matches
+           only. A home lacking the exact dir contributes nothing; it is NOT
+           fuzzy-matched, so a different project that merely shares the basename
+           in another profile home can never be conflated in.
+        2. Only if NO home has the exact dir, treat the input as a bare basename
+           and reverse-look-up ``-<basename>`` across all homes. Require a SINGLE
+           distinct encoded name; if the basename maps to two different projects
+           (within OR across homes), that is ambiguous — warn and return nothing
+           rather than guess.
 
         Returns:
             List of ``(home, encoded_dir)`` pairs — one per home where the
-            project dir exists.
+            resolved project dir exists.
         """
-        # Pre-compute the exact encoded name once (shared across homes).
+        # Encode the resolved absolute path once (for exact matching).
         exact_name: Optional[str] = None
         try:
             abs_path = Path(project_path).expanduser().resolve()
@@ -199,37 +207,45 @@ class SessionAnalyzer:
             exact_name = None
         base = Path(project_path).name
 
-        results: List[tuple] = []
+        # Pass 1 — exact encoded-dir match across ALL homes. A single exact hit
+        # anywhere fixes the project identity, so we never fuzzy-fall-back.
+        if exact_name is not None:
+            exact_hits = [
+                (home, home / "projects" / exact_name)
+                for home in self.homes
+                if (home / "projects" / exact_name).is_dir()
+            ]
+            if exact_hits:
+                return exact_hits
+
+        # Pass 2 — no exact match anywhere: reverse-look-up the bare basename,
+        # but bind only ONE distinct project so same-basename projects living in
+        # different homes are never conflated together.
+        if not base:
+            return []
+        by_name: Dict[str, List[tuple]] = {}
         for home in self.homes:
             projects_dir = home / "projects"
             if not projects_dir.is_dir():
                 continue
+            for d in projects_dir.iterdir():
+                if d.is_dir() and d.name.endswith("-" + base):
+                    by_name.setdefault(d.name, []).append((home, d))
 
-            matched: Optional[Path] = None
-            if exact_name is not None:
-                exact = projects_dir / exact_name
-                if exact.exists():
-                    matched = exact
-
-            if matched is None and base:
-                candidates = [
-                    d
-                    for d in projects_dir.iterdir()
-                    if d.is_dir() and d.name.endswith("-" + base)
-                ]
-                if len(candidates) == 1:
-                    matched = candidates[0]
-                elif len(candidates) > 1:
-                    print(
-                        f"Ambiguous project name '{base}' in home '{home_label(home)}' "
-                        f"— {len(candidates)} matches; skipping (use the full absolute path).",
-                        file=sys.stderr,
-                    )
-
-            if matched is not None:
-                results.append((home, matched))
-
-        return results
+        if not by_name:
+            return []
+        if len(by_name) > 1:
+            print(
+                f"Ambiguous project name '{base}' — {len(by_name)} distinct "
+                "projects match across homes; re-run with the full absolute path:",
+                file=sys.stderr,
+            )
+            for name in sorted(by_name):
+                homes_str = ", ".join(home_label(h) for h, _ in by_name[name])
+                print(f"  {name}  [{homes_str}]", file=sys.stderr)
+            return []
+        # Exactly one distinct project — use it wherever it exists.
+        return next(iter(by_name.values()))
 
     def search_sessions(
         self,
@@ -430,12 +446,40 @@ def _add_home_flags(subparser) -> None:
     )
 
 
-def _homes_for(args) -> List[Path]:
-    """Resolve the home list from CLI flags (used by list / search)."""
+def _homes_for(args) -> tuple:
+    """Resolve the home list from CLI flags (used by list / search).
+
+    Returns ``(homes, narrowed)``. ``narrowed`` is True when the user passed
+    ``--home`` / ``--main-only``, so the caller can treat an empty result as a
+    real "your selection matched no home with history" error instead of
+    silently widening back to searching every home.
+    """
     if getattr(args, "main_only", False):
-        return discover_claude_homes([Path.home() / ".claude"])
+        return discover_claude_homes([Path.home() / ".claude"]), True
     explicit = getattr(args, "home", None)
-    return discover_claude_homes(explicit) if explicit else discover_claude_homes()
+    if explicit:
+        return discover_claude_homes(explicit), True
+    return discover_claude_homes(), False
+
+
+def _analyzer_or_exit(args) -> "SessionAnalyzer":
+    """Build a SessionAnalyzer, erroring out if a narrowing flag matched no home.
+
+    Without this, an explicit ``--home``/``--main-only`` that resolves to no
+    home-with-history would (via an empty list) either search nothing or, worse,
+    reintroduce full discovery — turning a scope-narrowing flag into the widest
+    possible scope. We fail loudly instead.
+    """
+    homes, narrowed = _homes_for(args)
+    if narrowed and not homes:
+        print(
+            "No Claude home with a projects/ dir matched your --home/--main-only "
+            "selection (a --home value must be a config home such as ~/.claude "
+            "or ~/.claude-profiles/<name>, not its projects/ subdir).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return SessionAnalyzer(homes)
 
 
 def main():
@@ -481,7 +525,7 @@ def main():
         sys.exit(1)
 
     if args.command == "list":
-        analyzer = SessionAnalyzer(_homes_for(args))
+        analyzer = _analyzer_or_exit(args)
         home_summary = ", ".join(home_label(h) for h in analyzer.homes)
         sessions = analyzer.find_project_sessions(args.project_path)
         if not sessions:
@@ -509,7 +553,7 @@ def main():
             print()
 
     elif args.command == "search":
-        analyzer = SessionAnalyzer(_homes_for(args))
+        analyzer = _analyzer_or_exit(args)
         home_summary = ", ".join(home_label(h) for h in analyzer.homes)
         sessions = analyzer.find_project_sessions(args.project_path)
         if not sessions:
