@@ -1,13 +1,17 @@
 ---
 name: asr-transcribe-to-text
 description: >-
-  Transcribes audio and video to text using Qwen3-ASR, with input handling for local files, direct media URLs, and podcast/web pages. Supports local MLX inference on macOS Apple Silicon and remote OpenAI-compatible ASR endpoints. Use when the user wants to transcribe recordings, podcasts, lectures, interviews, meetings, screen recordings, or any audio/video file; also use for ASR, Qwen ASR, speech-to-text, 转录, 语音转文字, and 录音转文字 requests. Also covers word-level timestamps via mlx-whisper for subtitles and audio-visual alignment (字幕, 时间戳, 音画对齐). For multi-speaker recordings (meetings, interviews, panels, group discussions) it also does speaker diarization (who-said-what) and CAM++ voiceprint speaker identification — use it whenever the user needs speaker labels, a diarized transcript, to know who said what, 说话人分离, 说话人识别, or 谁在说话.
+  Transcribes audio and video to speaker-labeled text: Qwen3-ASR full-audio transcription + whisper word timing + pyannote diarization, aligned into a who-said-what transcript BY DEFAULT (decoupled WhisperX-style — the audio is never cut before ASR). Handles local files, direct media URLs, and podcast/web pages; local MLX inference on macOS Apple Silicon or remote OpenAI-compatible ASR endpoints. Use when the user wants to transcribe recordings, podcasts, lectures, interviews, meetings, screen recordings, or any audio/video file; also use for ASR, Qwen ASR, speech-to-text, 转录, 语音转文字, 录音转文字, speaker diarization, who said what, 说话人分离, 说话人识别, 谁在说话 — speaker labels are the default, plain text is the opt-out. Also covers word-level timestamps via mlx-whisper for subtitles and audio-visual alignment (字幕, 时间戳, 音画对齐) and CAM++ voiceprint speaker identification.
 argument-hint: "[audio-or-video-file-path-or-url ...]"
 ---
 
 # ASR Transcribe to Text
 
-Transcribe audio/video to text using Qwen3-ASR. Two inference paths:
+Transcribe audio/video to **speaker-labeled** text. Default pipeline (decoupled,
+WhisperX-style): Qwen3-ASR transcribes the full audio with context intact,
+mlx-whisper supplies a word-level timing lattice, pyannote supplies speaker
+segments, and an aligner merges the three — the audio is never cut before ASR,
+so transcription quality stays at full-audio fidelity.
 
 | Mode | When | Speed | Cost |
 |------|------|-------|------|
@@ -16,9 +20,14 @@ Transcribe audio/video to text using Qwen3-ASR. Two inference paths:
 
 Configuration persists in `${CLAUDE_PLUGIN_DATA}/config.json`.
 
-> **Need timestamps, not just text?** Qwen3-ASR outputs plain text only. For word-level timestamps (subtitles, aligning voiceover to video shots) use the mlx-whisper path instead — see `## Word-Level Timestamps` below.
+> **Speaker labels are the default.** Every run produces `[start-end] SPEAKER_xx: text`
+> + CSV. Plain-text-only output is the opt-out (`--no-diarization`) for monologues,
+> podcasts, or when you just want a summary — see Step 3.
 >
-> **Multiple speakers — need who-said-what?** Qwen3-ASR gives one flat block with no speaker labels. For meetings / interviews / podcasts, use the diarization + voiceprint path — see `## Speaker Diarization & Identification` below.
+> **One-time setup for diarization:** pyannote is a gated HuggingFace model — it
+> needs a token once (`## Speaker Diarization & Identification` below). First run
+> without it FAILS with setup steps; after setup, full capability is permanent
+> and auto-detected.
 
 ## Step 0: Detect Platform and Load Config
 
@@ -84,6 +93,9 @@ config = {
     'endpoint': 'URL',        # remote only
     'noproxy': True,
     'max_timeout': 900        # remote only
+    # 'diarization_declined': True  # set only after the user explicitly declines
+    #   the pyannote setup in Step 3 — every run then warns + goes plain-text
+    #   until an HF token appears (auto-detected)
 }
 with open('${CLAUDE_PLUGIN_DATA}/config.json', 'w') as f:
     json.dump(config, f, indent=2)
@@ -141,40 +153,102 @@ ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:no
 
 **Cleanup**: After transcription succeeds, delete extracted WAV files to save disk space.
 
-## Step 3: Transcribe
+## Step 3: Transcribe (speaker labels by default)
 
-### Path A: Local MLX (macOS Apple Silicon)
+### Path A: Local MLX (macOS Apple Silicon) — default
 
-Use the bundled script — it handles dependency pins, model loading, chunking, and the critical `max_tokens` parameter. If `${CLAUDE_PLUGIN_ROOT}` is empty, use the absolute path to the `asr-transcribe-to-text` skill directory you just read.
+Run the decoupled speaker pipeline — it handles dependency pins, model loading,
+and the critical `max_tokens` parameter internally. If `${CLAUDE_PLUGIN_ROOT}`
+is empty, use the absolute path to this skill directory.
 
-Before a long first run, load the model once:
+```bash
+uv run ${CLAUDE_PLUGIN_ROOT}/scripts/speaker_transcribe.py \
+  INPUT_AUDIO [INPUT_AUDIO2 ...] OUTPUT_DIR
+```
+
+Expected output (per file):
+
+```text
+Device: mps
++ uv run .../transcribe_local_mlx.py ...        (leg 1: full-audio text)
++ uv run .../word_timestamps_whisper.py ...     (leg 2: timing lattice)
+... diarization ...                             (leg 3: pyannote segments)
+STEM: 42 turns, speakers=['SPEAKER_00', 'SPEAKER_01'], anchored_ratio=0.93
+Wrote STEM.txt, STEM.csv, STEM.alignment.json
+```
+
+Outputs per input: `<stem>.txt` (`[MM:SS - MM:SS] SPEAKER_xx` + text),
+`<stem>.csv` (`file,start,end,duration,speaker,text` — feeds review UIs and
+voiceprint ID), `<stem>.diarization.json`, `<stem>.alignment.json` (provenance
++ `anchored_ratio` trust signal; < 0.5 prints a loud warning — verify labels
+against the audio before trusting them). Intermediate legs are cached in
+`OUTPUT_DIR/_align/` so re-runs are cheap (`--force` redoes them).
+
+Before a long first run, smoke-test the Qwen3 leg once:
 
 ```bash
 uv run ${CLAUDE_PLUGIN_ROOT}/scripts/transcribe_local_mlx.py --smoke-test
 ```
 
-Expected output includes:
-```text
-Dependency stack: mlx-audio 0.3.1, mlx-lm 0.30.5, transformers 5.0.0rc3
-Model loaded in ...
-Smoke test OK: model loaded
+Expected output includes `Dependency stack: mlx-audio 0.3.1, mlx-lm 0.30.5,
+transformers 5.0.0rc3` and `Smoke test OK`. For performance details and the
+max_tokens truncation issue, see `references/local_mlx_guide.md`.
+
+**How it works (and why):** full-audio Qwen3-ASR text + mlx-whisper word
+timestamps + pyannote speaker segments, aligned after the fact — the audio is
+never cut before transcription, so ASR keeps full context. Architecture,
+alignment algorithm, and failure modes: `references/decoupled_speaker_alignment.md`.
+
+**First run: pyannote needs a one-time HuggingFace token.** If the script exits
+with the setup hint (exit code 3), STOP and use **AskUserQuestion**:
+
+```
+Speaker diarization needs a one-time setup (gated model, free):
+  1. Accept terms at https://hf.co/pyannote/speaker-diarization-3.1
+  2. Run `huggingface-cli login` (or set HF_TOKEN)
+
+Options:
+A) Set it up now — I'll wait, then rerun with full speaker labels (Recommended)
+B) Continue without speakers this time — plain text only
 ```
 
-Then transcribe:
+- **A** → after the user confirms login, rerun the same command. The token is
+  auto-detected every run; full capability is permanent from then on.
+- **B** → persist the choice (`diarization_declined: true` in config.json) and
+  rerun with `--no-diarization`. On EVERY later run while the token is still
+  missing: show a one-line warning with the two setup steps, then continue
+  plain-text. When the token appears, diarization resumes automatically —
+  mention this so the user knows setup is all that's needed.
+
+**Plain-text fast path** (monologue, podcast, "just summarize it"):
 
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/scripts/transcribe_local_mlx.py \
-  INPUT_AUDIO [INPUT_AUDIO2 ...] \
-  --output-dir OUTPUT_DIR
+uv run ${CLAUDE_PLUGIN_ROOT}/scripts/speaker_transcribe.py \
+  INPUT_AUDIO OUTPUT_DIR --no-diarization
 ```
 
-The script loads the model once and transcribes all files sequentially (no GPU contention). For details on performance, dependency pins, model compatibility, and the max_tokens truncation issue, see `references/local_mlx_guide.md`.
+**Remote/pre-made ASR text** (e.g. from Path B, or another ASR service): skip
+the Qwen3 leg and align that text instead:
 
-**Before batching many short files** (promo clips, montage cuts — anything that may contain music-only audio), read `## Batch Transcription (many short files)` below: one music-only clip can stall the whole batch for 10+ minutes.
+```bash
+uv run ${CLAUDE_PLUGIN_ROOT}/scripts/speaker_transcribe.py \
+  INPUT_AUDIO OUTPUT_DIR --text-file TRANSCRIPT.txt
+```
 
-**Critical**: The upstream `mlx-audio` default `max_tokens=8192` silently truncates audio longer than ~40 minutes. The bundled script defaults to `200000`. If calling `model.generate()` directly, always pass `max_tokens=200000`.
+**Non-Apple-Silicon machines:** the whisper timing leg is MLX-only. Without it
+there is no timing lattice to align speakers onto — run with `--no-diarization`
+and tell the user speaker mode currently requires Apple Silicon (cloud ASR with
+built-in diarization, e.g. Feishu Minutes, is the no-local-GPU alternative).
+
+**Before batching many short files** (promo clips, montage cuts — anything that
+may contain music-only audio), read `## Batch Transcription (many short files)`
+below: one music-only clip can stall the whole batch for 10+ minutes.
 
 ### Path B: Remote API
+
+The remote endpoint returns plain text only — speakers are added locally by
+aligning that text (leg 1) with the local timing + diarization legs. So Path B
+= fetch text remotely, then run Path A's pipeline with `--text-file`.
 
 **Health check first** (skip if already verified this session):
 ```bash
@@ -228,6 +302,13 @@ os.unlink(output_json)
 " > OUTPUT.txt
 ```
 
+Then attach speakers locally (Apple Silicon + pyannote token required):
+
+```bash
+uv run ${CLAUDE_PLUGIN_ROOT}/scripts/speaker_transcribe.py \
+  INPUT_AUDIO OUTPUT_DIR --text-file OUTPUT.txt
+```
+
 **If remote health check fails**, diagnose in order:
 1. Network: `ping -c 1 HOST` or `tailscale status | grep HOST`
 2. Service: `tailscale ssh USER@HOST "curl -s localhost:PORT/v1/models"`
@@ -241,6 +322,7 @@ After transcription, check for truncation — the most common failure mode:
 2. Check character count is plausible (~400 chars/min for Chinese, ~200 words/min for English)
 3. Check the **ending** — does it trail off mid-sentence? If so, `max_tokens` was exhausted
 4. Show user the first and last ~200 characters as preview
+5. **Speaker path**: check the alignment report — `anchored_ratio` should be ≥ 0.5 (the script warns when lower), the speaker count should be plausible for the recording (a two-person interview showing 5 speakers, or a monologue split into 2+, means diarization over-segmented — see `references/speaker_diarization.md` for when to distrust labels)
 
 If truncated or wrong, use **AskUserQuestion**:
 ```
@@ -307,7 +389,9 @@ Passing many files to one `transcribe_local_mlx.py` invocation is efficient (mod
 
 ## Word-Level Timestamps (subtitles, audio-visual alignment)
 
-Qwen3-ASR is an LLM-decoder ASR: it emits plain text with no alignment information, on both local and remote paths. When the task needs to know *when* each word is spoken — subtitle generation, aligning narration to shot boundaries, per-clip captioning — use `mlx-whisper` with `word_timestamps=True` instead. Whisper's cross-attention word alignment is the de-facto local solution for this class of task.
+mlx-whisper's word timing is now the **timing leg of the default speaker pipeline** (leg 2 — `scripts/word_timestamps_whisper.py` runs it automatically). This section is for using word timestamps STANDALONE: subtitle generation, aligning narration to shot boundaries, per-clip captioning.
+
+Qwen3-ASR is an LLM-decoder ASR: it emits plain text with no alignment information, on both local and remote paths. When the task needs to know *when* each word is spoken, use `mlx-whisper` with `word_timestamps=True`. Whisper's cross-attention word alignment is the de-facto local solution for this class of task.
 
 Key facts (full recipe in `references/whisper_word_timestamps.md`):
 
@@ -317,22 +401,35 @@ Key facts (full recipe in `references/whisper_word_timestamps.md`):
 
 ## Speaker Diarization & Identification (who said what)
 
-Qwen3-ASR returns one flat block of text with no speaker labels — useless for a
-meeting / interview / podcast / any multi-person recording where you need **who said
-what**. Two bundled paths, both GPU (pyannote @ MPS + CAM++), both needing a
-HuggingFace token for pyannote:
+Speaker labels are the DEFAULT output of Step 3 (decoupled architecture:
+full-audio Qwen3-ASR text + whisper timing lattice + pyannote segments,
+aligned — never cut-then-transcribe). This section covers the pieces.
 
-- **Diarization + per-speaker transcription** — `scripts/speaker_transcribe.py`
-  runs pyannote (who spoke when) + Qwen3-ASR (what was said) in one command and
-  writes a speaker-labeled transcript + CSV. Full recipe, the merge-turns step, and
-  production pitfalls: `references/speaker_diarization.md`. (Need just the segments?
-  `scripts/diarize_speakers.py` does diarization alone.)
-- **Voiceprint identification** — diarization labels are anonymous (`SPEAKER_00`…)
-  and per-file. To map them to real names, unify a speaker across files, or collapse
-  diarization's over-segmentation, use CAM++ voiceprints via `scripts/voiceprint_id.py`.
-  Recipe **and the critical acoustic-domain caveat** — a voiceprint built from one
-  mic type matches the same person on a different mic far less well:
+- **The pipeline** — `scripts/speaker_transcribe.py` runs all three legs +
+  alignment in one command and writes the speaker-labeled transcript + CSV.
+  Architecture, alignment algorithm, trust signals (`anchored_ratio`), and
+  failure modes: `references/decoupled_speaker_alignment.md`. Production
+  pitfalls (over-segmentation, mic-domain effects, when to distrust labels):
+  `references/speaker_diarization.md`.
+- **Diarization alone** — `scripts/diarize_speakers.py` emits just the
+  `speaker × time` segments (no transcription).
+- **Legacy cascade** — `scripts/speaker_transcribe_cascade.py` is the old
+  cut-then-transcribe variant (diarize → slice audio per turn → ASR each
+  slice). It breaks ASR context at every cut and lowers text quality; kept
+  only for extremely noisy / heavy-overlap audio where per-slice isolation of
+  a dominant near-field speaker beats full-audio ASR. Everything else uses
+  the decoupled default.
+- **Voiceprint identification** — diarization labels are anonymous
+  (`SPEAKER_00`…) and per-file. To map them to real names, unify a speaker
+  across files, or collapse diarization's over-segmentation, use CAM++
+  voiceprints via `scripts/voiceprint_id.py`. Recipe **and the critical
+  acoustic-domain caveat** — a voiceprint built from one mic type matches the
+  same person on a different mic far less well:
   `references/voiceprint_speaker_id.md`.
+
+**One-time pyannote setup** (gated model): accept terms at
+`hf.co/pyannote/speaker-diarization-3.1`, then `huggingface-cli login` once
+(or set `HF_TOKEN`). Auto-detected on every run afterward.
 
 ## Transcript Audit & Review (HTML)
 
@@ -414,15 +511,19 @@ Some runtimes do not set skill environment variables. Use the absolute path to t
 **Scripts:**
 - `resolve_media_input.py` — Resolve local paths, direct media URLs, and podcast/web pages into validated local media files
 - `transcribe_local_mlx.py` — Local MLX transcription (macOS ARM64, PEP 723 deps)
-- `overlap_merge_transcribe.py` — Chunked transcription with overlap merge (remote API fallback)
-- `diarize_speakers.py` — Speaker diarization (pyannote 3.1 @ MPS) → per-segment JSON
-- `speaker_transcribe.py` — Multi-speaker pipeline: diarize → merge turns → per-turn Qwen3-ASR → speaker-labeled transcript + CSV
+- `speaker_transcribe.py` — **DEFAULT pipeline**: decoupled multi-speaker transcription (full-audio Qwen3-ASR + whisper word timing + pyannote diarization, aligned) → speaker-labeled transcript + CSV; `--no-diarization` plain-text fast path; `--text-file` for remote/pre-made ASR text
+- `align_speakers.py` — Decoupled alignment core (stdlib): maps full transcript onto whisper word lattice + pyannote segments; usable standalone for debugging
+- `word_timestamps_whisper.py` — mlx-whisper word-level timestamps → JSON timing lattice (Apple Silicon)
+- `speaker_transcribe_cascade.py` — LEGACY cut-then-transcribe variant (extremely noisy / heavy-overlap audio only)
+- `diarize_speakers.py` — Speaker diarization alone (pyannote 3.1 @ MPS) → per-segment JSON
 - `voiceprint_id.py` — CAM++ voiceprint enroll/match: map anonymous SPEAKER_xx to real names
+- `overlap_merge_transcribe.py` — Chunked transcription with overlap merge (remote API fallback)
 - `generate_audit_html.py` — Build a self-contained HTML audit/review page from speaker-transcribe CSV outputs
 
 **References:**
-- `local_mlx_guide.md` — Performance benchmarks, max_tokens truncation, model compatibility
-- `overlap_merge_strategy.md` — Why naive chunking fails, fuzzy merge algorithm
-- `whisper_word_timestamps.md` — Word-level timestamps via mlx-whisper: alignment recipe, segment-granularity trap, scene-detection pairing
-- `speaker_diarization.md` — Multi-speaker transcription: pyannote + per-turn Qwen3, merge-turns step, production pitfalls
+- `decoupled_speaker_alignment.md` — The default architecture: why decouple, alignment algorithm, trust signals, failure modes
+- `speaker_diarization.md` — Production pitfalls: over-segmentation, mic-domain effects, when to distrust labels; legacy cascade notes
 - `voiceprint_speaker_id.md` — CAM++ speaker ID: enroll/match, threshold+margin gates, the acoustic-domain caveat, bootstrap
+- `local_mlx_guide.md` — Performance benchmarks, max_tokens truncation, model compatibility
+- `whisper_word_timestamps.md` — mlx-whisper word timing: the timing leg of the default pipeline; standalone subtitle/AV-alignment recipe
+- `overlap_merge_strategy.md` — Why naive chunking fails, fuzzy merge algorithm
