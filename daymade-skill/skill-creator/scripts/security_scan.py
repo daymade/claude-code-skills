@@ -17,6 +17,7 @@ USAGE:
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -437,12 +438,15 @@ def create_security_marker(skill_path: Path) -> None:
     marker_file = skill_path / ".security-scan-passed"
     content_hash = calculate_skill_hash(skill_path)
 
-    marker_file.write_text(
+    # Atomic write (methodology §4.5): package_skill reads this marker concurrently.
+    marker_tmp = marker_file.with_name(marker_file.name + ".tmp")
+    marker_tmp.write_text(
         f"Security scan passed\n"
         f"Scanned at: {datetime.now(timezone.utc).isoformat()}\n"
         f"Tool: gitleaks + pattern-based validation\n"
         f"Content hash: {content_hash}\n"
     )
+    os.replace(marker_tmp, marker_file)
     print(f"{GREEN}✓ Security marker created: {marker_file.name}{RESET}")
 
 

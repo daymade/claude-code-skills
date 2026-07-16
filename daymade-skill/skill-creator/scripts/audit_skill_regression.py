@@ -1084,7 +1084,8 @@ def create_regression_marker(after: Path, review_path: Path) -> Path:
     after_hash = tree_hash(after)
     attestation = _attestation_digest(before_hash, after_hash, review_hash)
     marker = after / REGRESSION_MARKER
-    marker.write_text(
+    marker_tmp = marker.with_name(marker.name + ".tmp")
+    marker_tmp.write_text(
         "Skill regression review passed\n"
         f"Schema version: {SCHEMA_VERSION}\n"
         f"Before tree hash: {before_hash}\n"
@@ -1094,6 +1095,7 @@ def create_regression_marker(after: Path, review_path: Path) -> Path:
         f"Reviewed at: {datetime.now(timezone.utc).isoformat()}\n",
         encoding="utf-8",
     )
+    os.replace(marker_tmp, marker)  # atomic (methodology §4.5): packaging reads it concurrently
     return marker
 
 

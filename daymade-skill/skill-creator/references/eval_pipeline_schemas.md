@@ -1,6 +1,6 @@
-# JSON Schemas
+# Eval Pipeline JSON Schemas
 
-This document defines the JSON schemas used by skill-creator.
+This document defines the JSON schemas used by skill-creator's evaluation pipeline (evals, grading, benchmark, feedback).
 
 ## Contents
 

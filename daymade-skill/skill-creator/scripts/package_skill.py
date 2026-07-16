@@ -22,6 +22,7 @@ Notes:
 """
 
 import argparse
+import os
 import re
 import sys
 import zipfile
@@ -177,9 +178,12 @@ def package_skill(
 
     skill_filename = output_path / f"{skill_name}.skill"
 
-    # Create the .skill file (zip format)
+    # Create the .skill file (zip format). Build to a temp path and os.replace()
+    # on success (methodology §4.5): a failure mid-write must not leave a
+    # half-written .skill at the final path where it looks distributable.
+    zip_tmp = skill_filename.with_name(skill_filename.name + ".tmp")
     try:
-        with zipfile.ZipFile(skill_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        with zipfile.ZipFile(zip_tmp, 'w', zipfile.ZIP_DEFLATED) as zipf:
             # Walk through the skill directory, excluding build artifacts
             for file_path in skill_path.rglob('*'):
                 if not file_path.is_file():
@@ -191,12 +195,14 @@ def package_skill(
                 zipf.write(file_path, arcname)
                 print(f"  Added: {arcname}")
 
+        os.replace(zip_tmp, skill_filename)
         print(f"\nDistribution artifact created: {skill_filename}")
         print(f"  Source of truth (kept in git): {skill_path}")
         print(f"  The .skill file is a disposable zip bundle; delete it after distribution if desired.")
         return skill_filename
 
     except Exception as e:
+        zip_tmp.unlink(missing_ok=True)
         print(f"Error creating .skill file: {e}")
         return None
 

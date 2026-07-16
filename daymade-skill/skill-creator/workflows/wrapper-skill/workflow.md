@@ -2,6 +2,10 @@
 
 A **retrospective distillation** workflow. Reads the current conversation and turns it into a reusable wrapper skill for a third-party CLI tool. Opposite of skill-creator's main workflow, which is prospective (design first, build, test).
 
+## Contents
+
+When it applies → canonical reference → Step 1 confirm scope → Step 2 mine history → Step 3 scaffold → Steps 4-9 fill (SKILL.md / install / known_issues / diagnose / references / config) → Step 10 verify
+
 ## When this workflow applies
 
 Use this workflow **at the end of a session** where all of the following happened in the conversation history:

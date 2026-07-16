@@ -2,6 +2,14 @@
 
 综合 Anthropic 官方最佳实践、skill-creator 工作流、社区经验和实战教训的完整方法论。
 
+## Contents
+
+- Phase 1 先手动解决问题 · Phase 2 并行调研 · Phase 3 真实数据验证（3.1 完整性 / 3.2 记录失败 / 3.3 隔离复现+反证+权威源）
+- Phase 4 写作补充（4.1 不能做什么 / 4.2 失败过什么 / 4.3 安全 / 4.4 console 示例 / 4.5 脚本健壮性 / 4.6 三资产分流）
+- Phase 5 测试迭代（5.1 删竞争旧 skill / 5.2 量化对比 / 5.3 grep 断言误判 / 5.4 baseline 揭示事实错误 / 5.5 增量为 0 / 5.6 完整性两道闸）
+- Phase 6 Counter Review（6.1 视角 / 6.2 final gate / 6.3 常见发现 / 6.4 findings 过滤 / 6.5 多层验证）
+- Phase 7 & 8 Description + Packaging · Phase 9 实战案例库（Case 1-16）· 来源
+
 本文档只包含 SKILL.md 中**没有覆盖**的内容。SKILL.md 已经详细描述的流程（Prior Art 8 渠道表、决策矩阵、Inline vs Fork、测试用例格式、描述优化循环等）不在此重复——请直接参考 SKILL.md 对应章节。
 
 ## Phase 1: 先手动解决问题，不要上来就建 skill
