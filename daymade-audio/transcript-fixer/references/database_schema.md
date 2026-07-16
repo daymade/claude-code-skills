@@ -137,6 +137,45 @@ Per-occurrence context for a learned suggestion (one suggestion → many example
 | context | TEXT | Surrounding text |
 | occurred_at | TIMESTAMP | When observed |
 
+### review_items
+
+Persistent queue of uncertain corrections awaiting a human verdict (native-pass
+uncertain items, Stage 1 safe-mode deferrals, manual entries). Behavior and
+workflow live in SKILL.md's "Review Queue" section; this is the storage shape.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | INTEGER | Primary key |
+| created_at | TIMESTAMP | Enqueue time |
+| source | TEXT | 'native_pass', 'stage1_deferred', 'learned_suggestion', 'manual' (CHECK) |
+| domain | TEXT | Correction domain (default 'general') |
+| file_path | TEXT | Anchored transcript file (nullable) |
+| line_number | INTEGER | 1-based line hint for anchor disambiguation |
+| context_snippet | TEXT | Line content recorded at enqueue time (content check on resolve) |
+| original_text | TEXT | Text as it stands in the transcript (NOT NULL) |
+| suggested_text | TEXT | Pre-filled suggestion (nullable — unknown-entity questions) |
+| kind | TEXT | 'entity', 'homophone', 'wording', 'unknown' (CHECK; drives priority) |
+| evidence | TEXT | Why suspected / what the search ladder found |
+| actions_json | TEXT | JSON action pack (file_edit / dict_add / append_note) |
+| priority | INTEGER | Queue order, higher first (entity 100 > unknown 90 > homophone 30 > wording 10) |
+| status | TEXT | 'pending', 'accepted', 'overridden', 'kept_original', 'skipped' (CHECK) |
+| decided_at | TIMESTAMP | Verdict time |
+| decided_by | TEXT | Reviewer name |
+| decision_note | TEXT | Free-text note recorded with the verdict |
+| resolved_text | TEXT | Final text (suggestion or override) |
+| applied_at | TIMESTAMP | When the action pack executed |
+| apply_log | TEXT | JSON per-action execution log |
+
+**No UNIQUE constraint** — dedupe is enforced at enqueue time on
+(file_path, original_text, suggested_text, domain, line_number) across ALL
+statuses, so an answered question is never re-asked. `reopen` is a decision
+verb, not a status: it reverts applied edits and sets the row back to 'pending'.
+
+Indexes: `status`, `domain`, `priority DESC`, `file_path`.
+
+Audit trail: enqueue/resolve/reopen write `audit_log` rows with
+`entity_type='review_item'`.
+
 ## Views
 
 ### active_corrections
