@@ -98,6 +98,46 @@ These help a **human** investigate a NEEDS-REVIEW branch, but must never drive a
 
 When a hint and the trial merge disagree, trust the trial merge; it is the sound one.
 
+## Supersession triage — "is this leftover a live WIP or a superseded draft?" (Mode E's method)
+
+Retiring old stashes/backup-branches asks a *different* question than "is this branch merged":
+the leftover is often an **early draft of work that later landed in a better form**, so a trial
+merge can't clear it (its old lines genuinely differ from the base's evolved lines), yet
+restoring it would be a regression, not a recovery. Judge supersession by escalating evidence:
+
+1. **`git cherry <base> <branch>`** — patch-content equivalence. Handles rebases/rewords; every
+   `-` is proven-on-base. Only the `+` commits proceed to the next rungs. (For a squash-merged
+   backup branch, expect all `+` — that's the squash artifact, not evidence of unmerged work;
+   compare *statistics per file* next.)
+2. **Same-file superset comparison** — for each file the leftover touches, extract both versions
+   and compare shape and content:
+
+   ```bash
+   git cat-file -p <leftover-ref>:<path> | wc -l     # vs
+   git cat-file -p <base>:<path> | wc -l
+   diff <(git show <leftover-ref>:<path>) <(git show <base>:<path>) | grep '^<' | head
+   ```
+
+   The `^<` lines are what the leftover has that the base lacks. If they are only *older
+   signatures* of things the base now does better (e.g. the same function without a parameter
+   the base later added), the leftover is a superseded draft. Real case: a stash the author
+   had labeled "unfinished development — handle later" held a 1128-line renderer; the base's
+   was 1151 lines — every function present *plus* a later-added `base_url` image-rendering
+   parameter. The scary label was stale; the stash was an early draft of already-landed work.
+3. **Distinctive-marker probe** — grep the base for the leftover's unique additions (new function
+   names, constants, error strings). All present → the work was absorbed (perhaps into a
+   refactor that moved it to a different file — search repo-wide, not just the original path).
+   Real case: a backup branch's hardening (a required-columns check + a `COALESCE` timestamp
+   fix) had been absorbed verbatim into a new shared `_core/` module the refactor created;
+   the original file was gone but every marker line lived on at the new path.
+
+**The label on the leftover is not evidence.** Stash messages and branch names describe intent
+*at creation time* ("unfinished", "backup", "wip") — they never get updated when the work later
+lands through another path. Judge by content against the current base, never by how urgent the
+name sounds.
+
+Same safety bias as everywhere else in this skill: prove supersession per item, or keep the item.
+
 ## Adversarial multi-agent verification (for a whole repo of branches)
 
 A single reviewer scanning a dozen branches reliably misses one real gap (it happened in the
