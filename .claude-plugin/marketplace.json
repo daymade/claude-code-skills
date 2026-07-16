@@ -403,7 +403,7 @@
       "description": "Prevent and recover from local-Git disasters: commits stranded on the wrong or unpushed branch, orphaned or dropped stashes, dangling commits about to be garbage-collected, work that looks lost after heavy branch/stash/rebase juggling or parallel-agent sessions, and \"is everything actually merged?\" uncertainty. Recovers deleted commits/branches/stashes via reflog and fsck, audits what is at risk with `git log --branches --not --remotes`, pins dangling commits gc-proof before cleanup, and verifies a branch is merged by CONTENT (defeating the squash-merge \"100 commits ahead\" illusion) rather than by commit count — optionally with adversarial multi-agent verification. Use when the user fears they lost code, asks to recover a deleted commit/branch/stash, wonders what is still unmerged, needs to prove nothing was dropped after rebasing or deleting branches, resolves a version/lockfile collision between two branches, or wants habits so a branch mess never loses work again. Triggers on \"did I lose work\", \"recover lost commit\", \"restore deleted branch\", \"stash disappeared\", \"is everything merged\", \"what's not merged\", \"git reflog\", \"dangling commits\", \"分支灾难\", \"误删分支/commit\", \"stash 丢了\", \"确认全部合并了\". This is LOCAL-Git safety and forensics — distinct from GitHub PR/API operations (github-ops) and routine repo setup/sync (auto-repo-setup).",
       "source": "./git-safety-net",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": [
         "git",

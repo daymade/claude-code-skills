@@ -30,6 +30,7 @@ until a step is explicitly labeled destructive — recovery must never make the 
 | "did I lose anything?", after a messy rebase / branch-delete / parallel-agent session | **Mode B — Audit & preserve** |
 | "is everything merged?", "what's still not on main?", before deleting old branches | **Mode C — Verify merged** |
 | "so this never happens again", starting parallel/multi-branch work | **Mode D — Prevent** |
+| "clean up these old stashes/branches", "which of these still matter?", retiring leftovers | **Mode E — Retire safely** |
 
 When in doubt, **run Mode B first** (`git_loss_audit.sh`) — it is cheap, read-only, and tells
 you whether anything is actually at risk before you decide what to do.
@@ -143,6 +144,57 @@ The habits that keep a branch tangle from ever stranding work:
   branches don't both claim the same bump (a silent collision that blocks the later change from
   shipping).
 
+## Mode E — Retire stale stashes & branches safely
+
+The opposite worry from Mode A: not "I lost something" but "these leftovers are piling up —
+which can I destroy?" Deleting is trivial; **proving each item is superseded is the work**.
+Run the triage per item, backup, then destroy:
+
+**Step 1 — classify each leftover: live WIP, or superseded draft?** Evidence ladder, strongest first:
+
+1. **`git cherry <base> <branch>`** — judges by *patch content*, not message text. Every commit
+   showing `-` is already on the base (survives rebases and reworded messages); any `+` needs
+   the next rungs. Never grep commit messages to decide this — the same work often lands under
+   a different message.
+2. **Same-file supersession check** — for a stash or `+` commit touching files that were later
+   reworked on the base: extract its version of the file and compare with the base's current
+   version (`git show <ref>:<path> | wc -l` vs `git show <base>:<path> | wc -l`, then spot-diff).
+   If the base's version is a **superset** (has everything the leftover has, plus later work),
+   the leftover is a superseded draft. Real case: a stash labeled "unfinished dev" held a 1128-line
+   renderer; main's version was 1151 lines — the same functions *plus* a later feature parameter.
+   Restoring that stash would have been a regression, not a recovery.
+3. **Function/marker-level probe** — grep the base for the leftover's distinctive additions
+   (`def new_helper`, a constant, an error string). All present on the base → superseded.
+   This catches "absorbed into a refactor" cases where file shapes changed too much for rung 2.
+
+Anything you cannot prove superseded stays alive (same safety bias as Mode C: a false "superseded"
+loses work; a false "still live" costs a branch name). One warning that changes verdicts: **the
+leftover's label is not evidence** — a stash named "unfinished development" can be a fully-landed
+early draft; judge content against the current base, never the name. Worked examples of all three
+rungs (including the squash-artifact and absorbed-into-refactor cases):
+**[references/merge_verification.md](references/merge_verification.md)** § Supersession triage.
+
+**Step 2 — backup everything you're about to destroy, in one command:**
+
+```bash
+scripts/git_export_before_drop.sh --all-stashes --branch <b1> --branch <b2>
+```
+
+Expected output: one `.patch` per stash, one `-untracked.tar` per stash that carries untracked
+files, one verified `branches.bundle`, and the backup directory path. The script is additive-only —
+it never drops or deletes; you do that yourself in Step 3 once the exports look right.
+
+**Step 3 — destroy, in the safe order:**
+
+- Stashes: drop from the **highest index down** (`drop stash@{2}` before `stash@{1}`) — indices
+  shift as you drop, and top-down keeps every number meaning what your backup filenames say.
+- Local branches: prefer `git branch -d` (refuses unmerged); use `-D` only for items Step 1
+  proved superseded. Remote: `git push origin --delete <branch>` after re-checking
+  `git branch -r --merged <base>` lists it.
+
+**Recovery, if you regret it:** patches re-apply with `git apply`; the untracked tar extracts
+in place; the bundle restores full history via `git fetch <file>.bundle <branch>:restored/<branch>`.
+
 ## Scripts (execute these; they are read-only unless noted)
 
 | Script | Does | Mutates? |
@@ -150,11 +202,12 @@ The habits that keep a branch tangle from ever stranding work:
 | `scripts/git_loss_audit.sh [remote]` | Report local-only + dangling commits; verdict | No (read-only) |
 | `scripts/git_preserve_danglers.sh [--patch-dir DIR]` | Pin danglers to `refs/dangling-backup/`, optional patches | Adds refs only (never deletes/gc) |
 | `scripts/git_verify_branch_merged.sh <branch> [base]` | Content-level MERGED/UNMERGED verdict for one branch | No (read-only) |
+| `scripts/git_export_before_drop.sh [--all-stashes] [--stash N] [--branch B] [--out DIR]` | Export stashes (patch + untracked tar) and branches (verified bundle) before destruction | Writes backup files only (never drops/deletes) |
 
-All three run from the repository root. They only ever `fetch`, `log`, `diff`, `show`,
-`cat-file`, `rev-list`, `fsck`, `for-each-ref`, and (preserve only) `update-ref` — never
-`checkout`, `reset`, `push`, or `gc`, so they are safe to run in a dirty tree or alongside
-other agents.
+All four run from the repository root. They only ever `fetch`, `log`, `diff`, `show`,
+`cat-file`, `rev-list`, `fsck`, `for-each-ref`, `stash show`, `archive`, `bundle create/verify`,
+and (preserve only) `update-ref` — never `checkout`, `reset`, `push`, `stash drop`, `branch -d`,
+or `gc`, so they are safe to run in a dirty tree or alongside other agents.
 
 ## Troubleshooting
 

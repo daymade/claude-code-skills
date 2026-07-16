@@ -86,6 +86,34 @@ git branch rescue/stash <stash-sha>                   # park it on a branch
 Stash commits have a distinctive message (`WIP on <branch>: …`), which helps identify them among
 fsck output.
 
+**The third parent — untracked files a stash silently carries.** A stash made with
+`git stash -u` (or `-a`) stores untracked files in a **third parent commit** (`stash@{N}^3`),
+and `git stash show -p` **does not display them** — it only shows the tracked diff. Two
+consequences that bite in real recoveries:
+
+- **Inspecting**: judging a stash by `stash show -p` alone under-reports what it holds. Check for
+  the third parent explicitly, and list what's inside:
+
+  ```bash
+  git rev-parse -q --verify 'stash@{0}^3' && git ls-tree -r --name-only 'stash@{0}^3'
+  ```
+
+- **Exporting**: a `.patch` backup of the stash loses the untracked half. Export both parts —
+  patch for the tracked diff, `git archive` for the third-parent tree:
+
+  ```bash
+  git stash show -p --binary 'stash@{0}' > stash0.patch
+  git archive 'stash@{0}^3' -o stash0-untracked.tar     # only if ^3 exists
+  ```
+
+  `scripts/git_export_before_drop.sh` does both automatically for every stash it exports.
+  (Real case: a "finish later" stash carried 10 untracked files — 929 insertions including a
+  545-line test file — that a patch-only backup would have dropped without a word.)
+
+**Index-shift trap when dropping several stashes**: indices renumber on every drop —
+after `drop stash@{0}`, the old `stash@{1}` *becomes* `stash@{0}`. Drop from the **highest
+index down** so each name still means what your backups say it means.
+
 ## Ladder step 3 — detached-HEAD work
 
 Committing while on a detached HEAD (after `git checkout <sha>`), then switching away, orphans
