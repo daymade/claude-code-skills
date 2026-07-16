@@ -681,3 +681,110 @@ def test_valid_marker_is_informational_and_cannot_bypass_packaging_review(tmp_pa
 
     assert required is True
     assert "informational only" in reason
+
+
+def test_classify_fills_dispositions_and_verify_passes(tmp_path):
+    before = _make_skill(
+        tmp_path / "before",
+        "- Verify the signed-in unauthorized branch with a genuinely role-less account.",
+    )
+    after = _make_skill(
+        tmp_path / "after",
+        "- Reworded: verify the signed-in unauthorized branch using a genuinely role-less account.",
+    )
+    report = build_report(before, after)
+    assert report["candidates"], "fixture must produce at least one candidate"
+    review_path = _write_review(tmp_path / "review.json", report)
+    map_path = tmp_path / "map.json"
+    map_path.write_text(
+        json.dumps(
+            {
+                "0": {
+                    "destination": "SKILL.md",
+                    "needle": "verify the signed-in unauthorized branch using a genuinely role-less account",
+                    "reason": "guidance sentence reworded in place; the unauthorized-branch check survives in SKILL.md",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    from scripts.audit_skill_regression import classify_review
+
+    classified, unclassified = classify_review(review_path, after, map_path, "tester")
+
+    assert classified == 1
+    assert unclassified == []
+    ok, errors = verify_review(before, after, review_path)
+    assert ok, errors
+
+
+def test_classify_fail_fast_writes_nothing_on_bad_map(tmp_path):
+    before = _make_skill(
+        tmp_path / "before",
+        "- Verify the signed-in unauthorized branch with a genuinely role-less account.",
+    )
+    after = _make_skill(
+        tmp_path / "after",
+        "- Completely different replacement guidance for the fixture skill body.",
+    )
+    report = build_report(before, after)
+    assert report["candidates"]
+    review_path = _write_review(tmp_path / "review.json", report)
+    original = review_path.read_text(encoding="utf-8")
+    map_path = tmp_path / "map.json"
+    map_path.write_text(
+        json.dumps(
+            {
+                "0": {
+                    "destination": "SKILL.md",
+                    "needle": "this quote exists nowhere in the destination file",
+                    "reason": "long enough reason but the needle cannot be located anywhere",
+                },
+                "99": {
+                    "destination": "SKILL.md",
+                    "needle": "irrelevant",
+                    "reason": "long enough reason for a key that matches no candidate",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    from scripts.audit_skill_regression import classify_review
+
+    with pytest.raises(ValueError) as excinfo:
+        classify_review(review_path, after, map_path, "tester")
+
+    message = str(excinfo.value)
+    assert "needle not found" in message
+    assert "matches no candidate" in message
+    assert review_path.read_text(encoding="utf-8") == original
+
+
+def test_classify_rejects_short_reason(tmp_path):
+    before = _make_skill(
+        tmp_path / "before",
+        "- Verify the signed-in unauthorized branch with a genuinely role-less account.",
+    )
+    after = _make_skill(
+        tmp_path / "after",
+        "- Reworded: verify the signed-in unauthorized branch using a genuinely role-less account.",
+    )
+    report = build_report(before, after)
+    review_path = _write_review(tmp_path / "review.json", report)
+    map_path = tmp_path / "map.json"
+    map_path.write_text(
+        json.dumps(
+            {
+                "0": {
+                    "destination": "SKILL.md",
+                    "needle": "genuinely role-less account",
+                    "reason": "too short",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    from scripts.audit_skill_regression import classify_review
+
+    with pytest.raises(ValueError, match="reason needs >= 20"):
+        classify_review(review_path, after, map_path, "tester")

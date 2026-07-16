@@ -99,7 +99,11 @@ When the source material is *past* session transcripts (the JSONL files under th
 1. What should this skill enable Claude to do?
 2. When should this skill trigger? (what user phrases/contexts)
 3. What's the expected output format?
-4. Should we set up test cases to verify the skill works? Skills with objectively verifiable outputs (file transforms, data extraction, code generation, fixed workflow steps) benefit from test cases. Skills with subjective outputs (writing style, art) often don't need them. Suggest the appropriate default based on the skill type, but let the user decide.
+4. Should we set up test cases to verify the skill works? Skills with objectively verifiable outputs (file transforms, data extraction, code generation, fixed workflow steps) benefit from test cases. Skills with subjective outputs (writing style, art, taste-calibrated reports) often can't use assertions — but "no assertions" is not "no verification". Their verification paths, in order of cost:
+   - **Historical-task replay**: re-run one real prompt the skill has served before, old vs new skill, and compare outputs against the specific rules that changed ("does the new output actually follow the tokens / title grammar this update introduced?"). Cheap, catches "the rule was written but nothing reads it".
+   - **Production-as-eval**: acknowledge that the real test is the user's next actual use — then make the loop explicit: every user correction afterward is an incident to fold back (the skill's own "迭代/活文档" section), every approval is corpus material. A taste skill that ships without this write-back habit doesn't improve; one that has it converges without ever running a formal eval.
+   - **Render + human review** for visual outputs (the skill's own visual-QA gates), never a grep assertion pretending to measure aesthetics.
+   Suggest the appropriate default based on the skill type, but let the user decide.
 
 After extracting answers from conversation history (or asking questions 1-3), use **AskUserQuestion** to confirm the skill type and testing strategy:
 
@@ -159,10 +163,25 @@ Signals it does **not** apply (use the generic workflow above instead):
 - The user wants a wrapper around a third-party CLI tool they just installed (use the wrapper-skill workflow above).
 - There is no local conversation history to mine and no transcript exports to process.
 - The mined content is one-time personal notes that should live in `memory/` rather than a reusable reference file.
+- The source material is a batch of finished artifacts the user has endorsed, rather than dialogue — use the artifact-corpus-distillation workflow below.
 
 When the conversation-mining workflow applies, **do not** continue reading the generic sections below. Jump to [`workflows/conversation-mining/workflow.md`](workflows/conversation-mining/workflow.md) and follow that workflow end-to-end. It is a **retrospective distillation** workflow: it discovers local Claude Code project sessions, Codex transcripts, and command histories, redacts them, partitions them into agent-sized chunks, runs mining agents, and promotes the resulting candidate references into the target skill's `references/` after validation.
 
 The conversation-mining workflow has its own architecture contract, agent prompts, templates, and verification protocol. It is the canonical way to turn real conversation history into a skill's reusable knowledge base.
+
+### Specialized Workflow: Distill User Preferences from an Approved-Artifact Corpus
+
+Before committing to the generic flow, check whether the session is asking to **extract the user's real preferences from a batch of finished artifacts they have endorsed** — approved HTML report pages, generated documents, designs. This is the third distillation source, distinct from the two above: the material is **products, not conversations**, and the output is **taste made executable** (explicit principles, quantified parameters, vocabulary), not knowledge or install fixes.
+
+Signals this applies (any one is enough):
+
+- The user lists finished artifacts and says "这些都是我认可的样例" / "你来学到底什么是我想要的" / "extract my preferences from these approved examples".
+- A taste-calibration skill (report generator, doc styler, deck builder) has an approved-sample corpus that keeps growing, and the user asks to make the skill *learn* from it rather than just index it.
+- The user complains that a previous update "只加了示例" — only cataloged samples without changing skill behavior.
+
+Signals it does **not** apply: the source material is dialogue/corrections rather than endorsed products (use conversation-mining); the samples are not personally approved by the user (approval is the admission gate — ask first).
+
+When it applies, jump to [`workflows/artifact-corpus-distillation/workflow.md`](workflows/artifact-corpus-distillation/workflow.md). Its core discipline, which also applies any time you add material to an existing skill: **cataloging ≠ distillation** — registering a sample in a corpus table changes nothing about the skill's next run; ask of every addition "*does this change a decision rule?*", and do not declare a distillation session done while the answer is no for everything written (methodology Case 15). The workflow's spine: script-extracted quantitative comparison across ALL artifacts (≥3-artifact threshold per pattern, checked exception lists per claimed constant) → layered induction with evidence anchors → write to the decision-rule layer (separating invariants from register-dependent variables) → independent completeness audit (standing discipline #5) → regression audit.
 
 ### Prior Art Research (Do Not Skip)
 
@@ -680,7 +699,7 @@ Write an `eval_metadata.json` for each test case (assertions can be empty for no
 
 Don't just wait for the runs to finish — you can use this time productively. Draft quantitative assertions for each test case and explain them to the user. If assertions already exist in `evals/evals.json`, review them and explain what they check.
 
-Good assertions are objectively verifiable and have descriptive names — they should read clearly in the benchmark viewer so someone glancing at the results immediately understands what each one checks. Subjective skills (writing style, design quality) are better evaluated qualitatively — don't force assertions onto things that need human judgment.
+Good assertions are objectively verifiable and have descriptive names — they should read clearly in the benchmark viewer so someone glancing at the results immediately understands what each one checks. Subjective skills (writing style, design quality) are better evaluated qualitatively — don't force assertions onto things that need human judgment; their real verification paths (historical-task replay, production-as-eval with a write-back habit, render + human review) are listed under question 4 of "Capture Intent".
 
 Update the `eval_metadata.json` files and `evals/evals.json` with the assertions once drafted. Also explain to the user what they'll see in the viewer — both the qualitative outputs and the quantitative benchmark.
 
@@ -971,6 +990,16 @@ find . -path '*/SKILL.md' -maxdepth 4 | rg '(^|/)<skill-name>/SKILL.md$'
 
 If the available-skills list points at `~/.codex/skills`, `~/.claude/skills`, or a plugin cache, do not assume that path is source. Locate the repository-backed source first, edit it, validate it, and only then sync the installed copy when the user needs immediate local runtime use.
 
+### Concurrent sessions on the same skill repo
+
+Power users run several Claude sessions at once, and skill repos are exactly where they collide: while you edit skill A, a sibling session may commit skill B (or even an earlier round of skill A) under you. One real session hit all three symptoms inside an hour — a `Write` rejected because the file changed after reading, and HEAD moving twice mid-task (methodology Case 16). The failure isn't the collision; it's a stale baseline or a clobbering write that silently mixes two sessions' work. Standing rules:
+
+1. **Baseline from a git ref, not from the working tree**, whenever the repo is clean at task start: `git archive <HEAD-sha> <skill-dir> | tar -x -C <workspace>/skill-before` and pass `--baseline-origin git-ref:<sha>` to the audit. A tree snapshot taken minutes before someone else's commit is a baseline for a tree that no longer exists.
+2. **Re-read before write** when a write is rejected or any time has passed: diff what changed (`git log --oneline -3`, `git show <new-commit> --stat`), fold the other session's intent into your version — their edit usually has a reason — and only then write.
+3. **Check HEAD before committing** (`git log --oneline -1`): if it moved since your baseline, re-run the regression `compare` against the new ref before `verify` — the audit tool will reject a stale review anyway ("after skill changed"), so catching it yourself saves a round.
+4. **Stage only your own paths** (`git add <skill-dir> <registry-file>`), never `git add .` — the sibling session's uncommitted work must not ride along. (Already the rule for packaging; doubly load-bearing under concurrency.)
+5. **One version bump per session outcome**, not per editing round: consecutive same-session rounds on one skill collapse into a single bump — unless an intermediate state was already consumed (committed + pulled by the user or another session), which makes each consumed state its own version.
+
 ---
 
 ## Skill Creation Process (Step-by-Step)
@@ -1075,6 +1104,27 @@ When editing, remember that the skill is being created for another instance of C
    verifier can locate nearby. File-level candidates use the current file
    fingerprint plus a named semantic review explaining why behavior survived—the
    fingerprint alone proves file identity, not capability preservation.
+
+   Don't hand-edit the review JSON or rewrite the same filler script each round —
+   the `classify` subcommand does the mechanical part (locates the quote's line
+   in the destination file, fills evidence/semantic_review, fail-fasts on a
+   missing quote or a too-short reason). You still author every disposition and
+   reason; it only types them in:
+
+   ```bash
+   uv run --with PyYAML python -m scripts.audit_skill_regression classify \
+     --review <workspace>/skill-regression-review.json \
+     --after <path/to/skill-folder> \
+     --map <workspace>/dispositions.json \
+     --reviewer "<who-reviewed>"
+   ```
+
+   where `dispositions.json` maps candidate index (or id) to
+   `{"destination": "<rel-file>", "needle": "<verbatim current quote>",
+   "reason": "<why this counts as preserved/sanitized/…>",
+   "disposition": "preserved_or_moved"}` (disposition defaults to
+   `preserved_or_moved`; file-level candidates need only destination + a 40+
+   char reason — the fingerprint is computed for you).
 5. Verify the completed review. Hashes make the review stale after any further
    edit, so regenerate and reclassify when the candidate changes. A passing
    verification writes `.skill-regression-reviewed`, a content-bound local status

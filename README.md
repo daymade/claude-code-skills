@@ -53,6 +53,8 @@ This is a **production-hardened fork** of [Anthropic's official skill-creator](h
 | Catch security issues | No tooling | `security_scan.py` with gitleaks integration — hard gate before packaging |
 | Learn from real failures | No failure cases | Battle-tested methodology with documented failure patterns and gotchas |
 | Distill past conversations safely | Not covered | Explicit local manifest, message-level time window, redaction, opaque source IDs, ignored `.enrich/` staging, and manual promotion into references/scripts |
+| Turn approved artifacts into skill behavior | Not covered | Artifact-corpus distillation workflow: script-measured pattern extraction (≥3-artifact threshold), cataloging≠distillation gate, invariant-vs-register boundary, independent completeness audit |
+| Survive concurrent sessions on one skill repo | Not covered | git-ref baselines, re-read-before-write, HEAD check before commit, own-paths-only staging, one-bump-per-outcome versioning |
 | Ground knowledge skills in evidence | General advice | Authority ladder from real calls and machine-readable specs through production code, plus executable-example smoke checks and evidence-boundary rules |
 | Have both installed at once | Coin flip — the two descriptions are near-identical | Detects the clash on trigger and offers a one-command, reversible SessionStart routing hook (only ever installed when both coexist); the official plugin stays usable by explicit request |
 | Your own skill collides with an installed plugin | Not covered | `generate_supersede_kit.py` stamps the same conditional routing kit into your skill, plus a measured precedence decision guide (rename → description tiebreaker → hook → disable) |
