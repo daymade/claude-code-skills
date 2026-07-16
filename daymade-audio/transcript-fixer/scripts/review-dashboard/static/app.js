@@ -1,7 +1,7 @@
 /* 转写修正审核台 — Prodigy-style single-focus review.
  * Reads /api/queue; every verdict POSTs /api/resolve which shells to the CLI
- * (the state SSOT). Keyboard: A accept / R keep original / O override /
- * S skip / U undo last / ↑↓ or J K navigate. */
+ * (the state SSOT). Keyboard: A accept / R keep original / W override /
+ * S skip / Z undo last / Q play / ↑↓ or J K navigate. */
 
 const KIND_LABEL = { entity: "实体", unknown: "待认", homophone: "同音", wording: "措辞" };
 const SOURCE_LABEL = {
@@ -125,7 +125,7 @@ async function renderCard() {
       <span>#${it.id}</span>
       <span class="badge ${kindClass(it.kind)}">${KIND_LABEL[it.kind] || esc(it.kind)}</span>
       <span>${esc(it.domain)}</span>
-      <span>${SOURCE_LABEL[it.source] || it.source}</span>
+      <span>${SOURCE_LABEL[it.source] || esc(it.source)}</span>
       ${it.file_name ? `<span class="file-chip">${esc(it.file_name)}${Number(it.line_number) ? ":" + Number(it.line_number) : ""}</span>` : ""}
       <span style="margin-left:auto">${STATUS_LABEL[it.status] || esc(it.status)}</span>
     </div>
@@ -147,9 +147,9 @@ async function renderCard() {
     <div class="decide-bar">
       <button class="btn accept" data-decide="accepted" ${it.suggested_text ? "" : "disabled"}><kbd>A</kbd>接受建议</button>
       <button class="btn keep" data-decide="kept_original"><kbd>R</kbd>原文正确</button>
-      <button class="btn" data-decide="override"><kbd>O</kbd>改成…</button>
+      <button class="btn" data-decide="override"><kbd>W</kbd>改成…</button>
       <button class="btn" data-decide="skipped"><kbd>S</kbd>跳过/不认识</button>
-      <button class="btn" data-decide="undo" ${state.undoStack.length ? "" : "disabled"}><kbd>U</kbd>撤销上次</button>
+      <button class="btn" data-decide="undo" ${state.undoStack.length ? "" : "disabled"}><kbd>Z</kbd>撤销上次</button>
     </div>
     <div class="override-row" id="override-row">
       <input id="override-input" placeholder="正确写法…（回车确认，Esc 取消）">
@@ -159,7 +159,7 @@ async function renderCard() {
       <input id="note-input" placeholder="备注（可选，随裁定记录）">
     </div>` : `
     <div class="decide-bar">
-      <button class="btn" data-decide="reopen"><kbd>U</kbd>撤销此裁定（reopen）</button>
+      <button class="btn" data-decide="reopen"><kbd>Z</kbd>撤销此裁定（reopen）</button>
     </div>`}
   </div>`;
   loadContext(it.id);
@@ -175,11 +175,18 @@ function renderResolved(it) {
     </div>${logs ? `<div class="apply-log">${logs}</div>` : ""}`;
 }
 
+let contextSeq = 0;
+
 async function loadContext(id) {
   const box = $("#context-box");
+  // Stale-response guard: rapid J/K navigation fires overlapping fetches; a
+  // late response for a PREVIOUS card must never paint this card's context —
+  // nor rebind audioState to the old item (Q would play the wrong utterance).
+  const seq = ++contextSeq;
   try {
     const res = await fetch(`/api/context/${id}`);
     const data = await res.json();
+    if (seq !== contextSeq) return;
     renderAudio(id, data.audio);
     if (!data.lines || !data.lines.length) {
       box.innerHTML = `<div class="ctx-note">${esc(data.note || "无上下文")}</div>`;
@@ -197,7 +204,7 @@ async function loadContext(id) {
     const anchor = box.querySelector(".anchor");
     if (anchor) anchor.scrollIntoView({ block: "center" });
   } catch {
-    box.innerHTML = `<div class="ctx-note">上下文加载失败</div>`;
+    if (seq === contextSeq) box.innerHTML = `<div class="ctx-note">上下文加载失败</div>`;
   }
 }
 
@@ -217,7 +224,7 @@ function renderAudio(itemId, audio) {
   audioState.clip = audio;
   audioState.pad = 0;
   row.innerHTML = `
-    <button class="btn play" data-audio="toggle" id="play-btn"><kbd>P</kbd>▶ 听这句</button>
+    <button class="btn play" data-audio="toggle" id="play-btn"><kbd>Q</kbd>▶ 听这句</button>
     <button class="btn" data-audio="wider">± 前后多听 3s</button>
     <span class="audio-range">${fmtTime(audio.start)} – ${fmtTime(audio.end)}</span>`;
 }
@@ -231,7 +238,7 @@ function fmtTime(sec) {
 function toggleClip() {
   if (!audioState.clip) return;
   if (!audioState.el || audioState.el.dataset.itemId !== String(audioState.itemId)) {
-    if (audioState.el) { audioState.el.pause(); audioState.el.remove(); }
+    releaseAudio();
     const el = new Audio(`/api/audio/${audioState.itemId}`);
     el.dataset.itemId = String(audioState.itemId);
     el.preload = "auto";
@@ -255,11 +262,26 @@ function toggleClip() {
 
 function setPlayLabel(playing) {
   const btn = $("#play-btn");
-  if (btn) btn.innerHTML = playing ? `<kbd>P</kbd>⏸ 停` : `<kbd>P</kbd>▶ 听这句`;
+  if (btn) btn.innerHTML = playing ? `<kbd>Q</kbd>⏸ 停` : `<kbd>Q</kbd>▶ 听这句`;
 }
 
 function stopAudio() {
   if (audioState.el) { audioState.el.pause(); setPlayLabel(false); }
+}
+
+function releaseAudio() {
+  if (audioState.el) {
+    audioState.el.pause();
+    audioState.el.removeAttribute("src");
+    audioState.el.load();
+    audioState.el = null;
+  }
+}
+
+function setStatusFilter(status) {
+  state.status = status;
+  document.querySelectorAll("#status-chips .chip").forEach((c) =>
+    c.classList.toggle("active", c.dataset.status === status));
 }
 
 /* ── actions ── */
@@ -286,6 +308,11 @@ async function resolve(id, decision, overrideTo) {
     if (decision === "reopen") {
       state.undoStack = state.undoStack.filter((x) => x !== id);
       state.doneCount = Math.max(0, state.doneCount - 1);
+      // A reopened item goes back to pending — if the current filter can't
+      // show it, follow it there instead of leaving the user on a blank card.
+      if (state.status !== "pending" && state.status !== "all") {
+        setStatusFilter("pending");
+      }
       toast(`已撤销 #${id}${logs.length ? " · " + logs.join("；") : ""}`);
     } else {
       state.undoStack.push(id);
@@ -299,15 +326,18 @@ async function resolve(id, decision, overrideTo) {
 }
 
 async function advanceAfter(id, decision) {
-  // Refresh, then focus the next pending item after the one just decided.
-  const prevIndex = state.items.findIndex((i) => i.id === id);
-  await fetchQueue();
-  if (decision === "reopen") { state.selectedId = id; render(); return; }
-  if (state.status === "pending") {
-    const next = state.items[Math.min(prevIndex, state.items.length - 1)];
-    state.selectedId = next ? next.id : null;
+  if (decision === "reopen") {
+    await fetchQueue();
+    state.selectedId = id;
     render();
+    return;
   }
+  // Pick the next item BEFORE the refresh, so fetchQueue's keep-selection
+  // logic lands on it in a single render (no double context fetch).
+  const prevIndex = state.items.findIndex((i) => i.id === id);
+  const next = state.items[prevIndex + 1] || state.items[prevIndex - 1] || null;
+  state.selectedId = next ? next.id : null;
+  await fetchQueue();
 }
 
 function showOverride() {
@@ -348,9 +378,8 @@ function esc(s) {
 document.addEventListener("click", (e) => {
   const chip = e.target.closest("[data-status]");
   if (chip) {
-    state.status = chip.dataset.status;
-    document.querySelectorAll("#status-chips .chip").forEach((c) =>
-      c.classList.toggle("active", c === chip));
+    stopAudio();
+    setStatusFilter(chip.dataset.status);
     fetchQueue();
     return;
   }
@@ -410,18 +439,26 @@ document.addEventListener("keydown", (e) => {
   const key = e.key.toLowerCase();
   if (key === "a" && it && it.status === "pending" && it.suggested_text) resolve(it.id, "accepted");
   else if (key === "r" && it && it.status === "pending") resolve(it.id, "kept_original");
-  else if (key === "o" && it && it.status === "pending") { e.preventDefault(); showOverride(); }
+  else if (key === "w" && it && it.status === "pending") { e.preventDefault(); showOverride(); }
   else if (key === "s" && it && it.status === "pending") resolve(it.id, "skipped");
-  else if (key === "u") {
-    // On a decided item, U reopens THAT item (works across sessions); the
+  else if (key === "z") {
+    // On a decided item, Z reopens THAT item (works across sessions); the
     // session undo-stack is only the fallback for the pending view.
     if (it && it.status !== "pending") resolve(it.id, "reopen");
     else undoLast();
   }
-  else if (key === "p") { e.preventDefault(); toggleClip(); }
+  else if (key === "q") { e.preventDefault(); toggleClip(); }
   else if (key === "arrowdown" || key === "j") { e.preventDefault(); stopAudio(); move(1); }
   else if (key === "arrowup" || key === "k") { e.preventDefault(); stopAudio(); move(-1); }
 });
 
 fetchQueue();
-setInterval(() => { if (!document.hidden) fetchQueue(); }, 30000);
+setInterval(() => {
+  if (document.hidden) return;
+  // Never repaint under the user's hands: typing a note/override or listening
+  // to a clip must not be wiped by the background refresh.
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA")) return;
+  if (audioState.el && !audioState.el.paused) return;
+  fetchQueue();
+}, 30000);

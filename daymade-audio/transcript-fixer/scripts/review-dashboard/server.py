@@ -23,6 +23,7 @@ equal writers of the same queue.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sqlite3
@@ -47,7 +48,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 from utils.config import get_config  # noqa: E402
 
 DB_PATH = get_config().database.path
-PORT = 8767
+PORT = int(os.environ.get("REVIEW_DASHBOARD_PORT", "8767"))
 
 app = FastAPI(title="转写修正审核台")
 
@@ -215,22 +216,43 @@ _AUDIO_MIME = {".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav",
 
 
 def _frontmatter_audio(md_path: Path) -> Path | None:
-    """Return the Path declared in the transcript's frontmatter `audio:` field."""
+    """Return the audio file declared in the transcript's frontmatter `audio:` field.
+
+    Only a value inside a PROPERLY CLOSED frontmatter block counts (an unclosed
+    `---` means the "field" is really body text). The value is unquoted,
+    `~`-expanded, and — when relative — resolved against the TRANSCRIPT's
+    directory (never the server's cwd, which would make the same file play
+    different audio depending on where the server was started). Anything that
+    is not an existing regular file yields None: a ghost play button that 500s
+    on click is worse than no button.
+    """
     try:
         with open(md_path, encoding="utf-8", errors="replace") as f:
-            first = f.readline()
-            if first.strip() != "---":
+            if f.readline().strip() != "---":
                 return None
-            for _ in range(60):
+            audio_raw: str | None = None
+            closed = False
+            for _ in range(200):
                 line = f.readline()
-                if not line or line.strip() == "---":
-                    return None
+                if not line:
+                    break
+                if line.strip() == "---":
+                    closed = True
+                    break
                 if line.startswith("audio:"):
-                    p = Path(line.split(":", 1)[1].strip())
-                    return p if p.exists() else None
+                    audio_raw = line.split(":", 1)[1].strip()
     except OSError:
         return None
-    return None
+    if not closed or not audio_raw:
+        return None
+    if (audio_raw[0] == audio_raw[-1] and audio_raw[0] in "'\"" and len(audio_raw) >= 2):
+        audio_raw = audio_raw[1:-1].strip()
+    if not audio_raw:
+        return None
+    p = Path(audio_raw).expanduser()
+    if not p.is_absolute():
+        p = (md_path.parent / p).resolve()
+    return p if p.is_file() else None
 
 
 def _ts_to_seconds(m: re.Match) -> float:
@@ -266,8 +288,8 @@ def api_audio(item_id: int):
     if not row or not row["file_path"]:
         raise HTTPException(404, "item has no file anchor")
     audio = _frontmatter_audio(Path(row["file_path"]))
-    if audio is None:
-        raise HTTPException(404, "transcript declares no audio: frontmatter field")
+    if audio is None or not audio.is_file():
+        raise HTTPException(404, "transcript declares no playable audio: frontmatter field")
     media_type = _AUDIO_MIME.get(audio.suffix.lower(), "application/octet-stream")
     # FileResponse handles HTTP Range, so <audio> can seek without full download.
     return FileResponse(audio, media_type=media_type)
@@ -342,6 +364,7 @@ if __name__ == "__main__":
     import uvicorn
 
     _preflight()
-    Timer(1.0, lambda: webbrowser.open(f"http://127.0.0.1:{PORT}")).start()
+    if not os.environ.get("REVIEW_DASHBOARD_NO_BROWSER"):
+        Timer(1.0, lambda: webbrowser.open(f"http://127.0.0.1:{PORT}")).start()
     print(f"转写修正审核台 → http://127.0.0.1:{PORT}   (DB: {DB_PATH})")
     uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
