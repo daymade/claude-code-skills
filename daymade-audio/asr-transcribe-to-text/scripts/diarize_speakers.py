@@ -31,37 +31,44 @@ import torch
 from pyannote.audio import Pipeline
 
 
-def diarize(wav_path, output_json, device=None):
-    wav_path, output_json = Path(wav_path), Path(output_json)
+def pick_device(device=None):
+    """Auto-pick cuda > mps > cpu. CPU is a per-file fallback only, never primary."""
+    if device:
+        return device
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
-    # Prefer GPU/NPU. pyannote on CPU is far slower, so auto-pick cuda > mps >
-    # cpu and treat CPU only as a per-file fallback when a specific MPS op is
-    # unimplemented (the except branch below) — never as the primary path.
-    if device is None:
-        if torch.cuda.is_available():
-            device = "cuda"
-        elif torch.backends.mps.is_available():
-            device = "mps"
-        else:
-            device = "cpu"
+
+def load_pipeline(device=None):
+    """Load the pyannote diarization pipeline ONCE (expensive) so a batch caller
+    can reuse it across many files instead of reloading per file. Raises if the
+    gated model can't be downloaded (missing HF token / terms not accepted) —
+    callers catch and print the setup hint."""
+    device = pick_device(device)
     print(f"Using device: {device}", file=sys.stderr, flush=True)
-
     pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
     pipeline.to(torch.device(device))
+    return pipeline, device
 
+
+def run_pipeline(pipeline, wav_path, device):
+    """Run diarization on one file with an already-loaded pipeline; MPS->CPU
+    fallback for THIS file if a specific op is unimplemented. Returns segments
+    sorted by start."""
+    wav_path = Path(wav_path)
     print(f"Diarizing {wav_path}...", file=sys.stderr, flush=True)
     try:
         result = pipeline(wav_path)
     except RuntimeError as e:
-        # A specific MPS op may be unimplemented for some audio; fall back to
-        # CPU for THIS file rather than crash. If already on CPU, it's a real error.
         if device != "cpu":
             print(f"{device} failed ({e}); retrying on cpu", file=sys.stderr, flush=True)
             pipeline.to(torch.device("cpu"))
             result = pipeline(wav_path)
         else:
             raise
-
     diarization = result.exclusive_speaker_diarization
     segments = [
         {
@@ -73,7 +80,10 @@ def diarize(wav_path, output_json, device=None):
         for seg, _, label in diarization.itertracks(yield_label=True)
     ]
     segments.sort(key=lambda s: s["start"])
+    return segments
 
+
+def write_diarization_json(segments, wav_path, device, output_json):
     output = {
         "wav_path": str(wav_path),
         "device": device,
@@ -81,10 +91,22 @@ def diarize(wav_path, output_json, device=None):
         "num_speakers": len(set(s["speaker"] for s in segments)),
         "segments": segments,
     }
+    output_json = Path(output_json)
     output_json.parent.mkdir(parents=True, exist_ok=True)
     output_json.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Saved {len(segments)} segments, {output['num_speakers']} speakers -> {output_json}",
           file=sys.stderr, flush=True)
+
+
+def diarize(wav_path, output_json, device=None):
+    """CLI entry: load pipeline, run one file, write JSON.
+
+    Batch callers (e.g. speaker_transcribe.py) should call load_pipeline() once
+    and run_pipeline() per file instead, to avoid reloading the pipeline."""
+    wav_path, output_json = Path(wav_path), Path(output_json)
+    pipeline, device = load_pipeline(device)
+    segments = run_pipeline(pipeline, wav_path, device)
+    write_diarization_json(segments, wav_path, device, output_json)
 
 
 def main():
