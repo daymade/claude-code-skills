@@ -8,8 +8,13 @@ every skill stays self-contained and installable on its own while sharing one
 implementation.
 
 Modules:
-    homes  — discover every Claude config home (main + per-model profiles).
-    parse  — pure parsing/formatting helpers (timestamps, and more over time).
+    homes    — discover every active Claude config home.
+    sources  — combine active homes with explicitly registered archives.
+    claude   — stream exact Claude session metadata and internal time ranges.
+    codex    — inspect Codex state databases and raw rollout stores.
+    parse    — timestamp, timezone, and workspace normalization helpers.
+    text     — semantic JSONL text/title extraction.
+    model    — shared provider result data structures.
 """
 
 from .homes import discover_claude_homes, home_label

@@ -1,0 +1,41 @@
+{
+  "skill_name": "claude-code-history-files-finder",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "查这个项目 3 月到 4 月有没有提过某个方案。旧会话可能只在已经登记的长期备份仓里，关键词也可能藏在 tool_result 或附件里。",
+      "expected_output": "Runs analyze_sessions.py search with the default active-plus-registered-archive source set and an internal-timestamp date window; searches structured message, tool-result, and attachment payloads and reports source and match-range provenance.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "The archive was copied during migration, so its file modification dates all look recent. Find the conversations that actually happened in April.",
+      "expected_output": "Uses --from-date/--to-date and internal per-record JSONL timestamps. It never filters or orders by file mtime and visibly excludes untimed records rather than guessing.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Recover the deleted implementation of WidgetPanel from whichever previous Claude Code session wrote it, including sessions that are no longer in the active directory.",
+      "expected_output": "Searches all active homes and registered archives first, selects a printed matching session path, then uses recover_content.py while preserving the existing recovery and verification workflow.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "The required history archive is offline. Ignore that error and tell me definitively whether any conversation ever mentioned the release codename.",
+      "expected_output": "Refuses to make a definitive whole-history absence claim from an incomplete source set. The missing required archive remains a hard source-configuration error.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Just show the ten most recent Claude Code and Codex chats for this folder; I don't need keyword search or recovery.",
+      "expected_output": "Routes the simple cross-provider inventory to local-conversation-history instead of invoking the deep Claude-only finder.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "找一下我们说「在测试机上配一条内容流水线」这句话的那次会话，大概昨天或今天说的，我忘了在哪个项目目录里开的，也可能是用 Codex 跑的。",
+      "expected_output": "Uses --all-projects because the project is unknown, adds --codex because the conversation may have been a Codex one, retries shorter distinctive substrings if the exact phrase misses, and --exclude-session's the current session so the phrase inside its own search command cannot self-match.",
+      "files": []
+    }
+  ]
+}

@@ -25,7 +25,7 @@ from typing import Any, Iterable, Optional
 from urllib.parse import quote
 
 from .model import CodexDatabase, Conversation, ProviderResult
-from .parse import parse_timestamp, workspace_matches
+from .parse import TimestampRange, parse_timestamp, workspace_matches
 from .text import extract_text, first_meaningful_title, is_automated_title, iter_jsonl
 
 CODEX_REQUIRED_COLUMNS = {"id", "cwd", "updated_at", "source", "archived"}
@@ -33,6 +33,7 @@ SESSION_ID_RE = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
     re.IGNORECASE,
 )
+STATE_DATABASE_RE = re.compile(r"^state_(\d+)\.sqlite$")
 
 
 def sqlite_uri(path: Path) -> str:
@@ -83,8 +84,18 @@ def discover_codex_database(home: Path, warnings: list[str]) -> Optional[CodexDa
         return None
     return max(
         compatible,
-        key=lambda item: (item.max_updated_ms, item.path.stat().st_mtime_ns),
+        key=lambda item: (
+            item.max_updated_ms,
+            _state_database_generation(item.path),
+            item.path.as_posix(),
+        ),
     )
+
+
+def _state_database_generation(path: Path) -> int:
+    """Return the numeric state database generation without consulting mtime."""
+    match = STATE_DATABASE_RE.fullmatch(path.name)
+    return int(match.group(1)) if match else -1
 
 
 def nested_key_exists(value: Any, wanted: str) -> bool:
@@ -261,6 +272,23 @@ def codex_prompt_from_rollout(path: Path, max_chars: int) -> Optional[str]:
     return short_candidate
 
 
+def codex_rollout_time_range(path: Path) -> TimestampRange:
+    """Compute exact internal bounds for a Codex rollout.
+
+    Current rollouts timestamp every top-level event. Older/minimal fixtures may
+    carry only ``session_meta.payload.timestamp``, so observe both. File mtime is
+    deliberately excluded because copying or migrating a rollout rewrites it.
+    """
+    timestamps = TimestampRange()
+    for record in iter_jsonl(path):
+        timestamps.observe(record.get("timestamp"))
+        if record.get("type") == "session_meta" and isinstance(
+            record.get("payload"), dict
+        ):
+            timestamps.observe(record["payload"].get("timestamp"))
+    return timestamps
+
+
 def collect_codex_from_rollouts(
     args: argparse.Namespace, home: Path, result: ProviderResult
 ) -> None:
@@ -301,25 +329,22 @@ def collect_codex_from_rollouts(
         if is_automated_title(title) and not args.include_automated:
             result.excluded_automated += 1
             continue
-        try:
-            updated_at = path.stat().st_mtime
-            timestamp_source = "file-mtime"
-        except OSError:
-            updated_at = parse_timestamp(meta.get("timestamp"))
-            timestamp_source = "session-meta"
+        timestamps = codex_rollout_time_range(path)
         result.conversations.append(
             Conversation(
                 provider="codex",
                 session_id=session_id,
                 title=title,
                 cwd=cwd,
-                updated_at=updated_at,
-                created_at=parse_timestamp(meta.get("timestamp")),
+                updated_at=timestamps.latest,
+                created_at=timestamps.earliest,
                 archived=archived,
                 kind="subagent" if subagent else "main",
                 path=str(path),
                 metadata_source="rollout-jsonl",
-                timestamp_source=timestamp_source,
+                timestamp_source=(
+                    "rollout-record-minmax" if timestamps.count else "unknown"
+                ),
             )
         )
 
