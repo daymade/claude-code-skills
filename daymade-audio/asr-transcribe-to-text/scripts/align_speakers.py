@@ -48,6 +48,12 @@ SEG_EDGE_TOLERANCE = 1.0
 # Below this anchored-char ratio the alignment is untrustworthy: the two
 # transcripts diverged too much (wrong audio, heavy ASR failure on one side).
 MIN_ANCHOR_RATIO = 0.5
+# Above this many normalized chars, difflib's anchor search (Ratcliff-Obershelp,
+# near-quadratic) may take minutes on a single global call. Real transcripts of
+# the SAME audio are ~90% similar so difflib is fast in practice (the worst case
+# is adversarial inputs, not real double-transcribed audio), but warn at scale
+# rather than hang silently. For multi-hour recordings, split the audio.
+ALIGN_LEN_WARN = 25000
 
 
 def log(msg):
@@ -207,6 +213,10 @@ def align(qwen_text, whisper_words, diar_segments, max_gap=MAX_GAP_DEFAULT):
         raise ValueError("transcript normalizes to empty — cannot align")
     if not w_chars:
         raise ValueError("whisper word lattice is empty — cannot align")
+    if len(qwen_chars) > ALIGN_LEN_WARN:
+        log(f"WARNING: large transcript ({len(qwen_chars)} chars) — anchor alignment "
+            "is near-quadratic and may take minutes. For multi-hour recordings, "
+            "split the audio into smaller files.")
     anchors = anchor_align(qwen_chars, w_chars)
     times, ratio = assign_times(qwen_chars, w_times, anchors)
     speakers = assign_speakers(times, diar_segments)
