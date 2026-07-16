@@ -61,6 +61,10 @@ from cli import (
     cmd_report_false_positive,
     cmd_load_presets,
     cmd_extract_uncertain,
+    cmd_enqueue_review,
+    cmd_list_review,
+    cmd_show_review,
+    cmd_resolve_review,
     create_argument_parser,
 )
 
@@ -139,6 +143,14 @@ def main() -> None:
         cmd_load_presets(args)
     elif args.extract_uncertain:
         cmd_extract_uncertain(args)
+    elif args.enqueue_review:
+        cmd_enqueue_review(args)
+    elif args.list_review:
+        cmd_list_review(args)
+    elif args.show_review is not None:
+        cmd_show_review(args)
+    elif args.resolve_review is not None:
+        cmd_resolve_review(args)
     elif args.input:
         if getattr(args, "json_output", False):
             # --json contract: stdout carries ONLY the machine-readable Stage 1

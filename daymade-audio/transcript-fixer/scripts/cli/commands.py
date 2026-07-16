@@ -61,6 +61,53 @@ def _get_learning_engine(service: CorrectionService | None = None):
     )
 
 
+def _enqueue_deferrals(changes, input_path: Path, original_text: str, domain: str) -> int:
+    """Persist Stage 1 safe-mode deferrals into the review queue.
+
+    Returns how many items were actually enqueued (dedup + temp-dir anchors are
+    skipped inside the queue). Never raises: the correction run's primary job
+    already succeeded — a queue hiccup is warned loudly, not fatal.
+    """
+    try:
+        lines = original_text.splitlines()
+        items = []
+        for c in changes:
+            context = ""
+            if c.line_number and 1 <= c.line_number <= len(lines):
+                context = lines[c.line_number - 1].strip()[:200]
+            items.append({
+                "source": "stage1_deferred",
+                "domain": domain,
+                "file": str(input_path.resolve()),
+                "line": c.line_number,
+                "context": context,
+                "original": c.from_text,
+                "suggested": c.to_text,
+                "kind": "homophone",
+                "evidence": (
+                    f"Stage 1 safe-mode deferral: rule '{c.from_text}→{c.to_text}' "
+                    f"({c.rule_type}: {c.rule_name}), risk={c.risk}"
+                ),
+                "priority": 20 if c.risk == "medium" else 10,
+            })
+        if not items:
+            return 0
+        queue = _get_review_queue()
+        result = queue.enqueue(items)
+        n = len(result["added"])
+        if n:
+            print(f"📥 {n} deferral(s) enqueued to the review queue "
+                  f"(--list-review, or the review dashboard)")
+        if result["skipped_temp"]:
+            print(f"   ↷ {result['skipped_temp']} not enqueued: input is a temp-dir staging "
+                  f"copy — the queue would hold a dead pointer. The --json 'deferred' "
+                  f"count still reports them to the caller.")
+        return n
+    except Exception as e:  # noqa: BLE001 — additive feature must not fail the run
+        print(f"⚠️  review-queue enqueue failed (corrections unaffected): {e}", file=sys.stderr)
+        return 0
+
+
 def _format_changes_report(
     changes,
     original_text: str,
@@ -451,6 +498,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                 "output_path": None if dry_run else str(input_path),
                 "needs_review_path": None,
                 "input_unchanged": bool(dry_run),
+                "review_enqueued": 0,
             }
 
     # Initialize service
@@ -545,6 +593,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     skipped_count = 0
     stage1_output_written: Path | None = None
     needs_review_written: Path | None = None
+    review_enqueued = 0
     if args.stage >= 1:
         print("=" * 60)
         print("🔧 Stage 1: Dictionary Corrections")
@@ -625,6 +674,16 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                     f.write(review_report)
                 print(f"🟡 Needs review: {review_file_path}")
                 needs_review_written = review_file_path
+
+                # Also enqueue the deferrals into the persistent review queue.
+                # The sidecar above is ephemeral by design — callers running in
+                # temp dirs discard it (real incident: 106/108 deferred corrections
+                # silently lost) — the queue survives. Failure here must not fail
+                # the correction run: warn loudly, continue.
+                review_enqueued = _enqueue_deferrals(
+                    needs_review, input_path, original_text,
+                    getattr(args, "domain", None) or "general",
+                )
 
         else:
             # Dry run: write a changes report so the user can preview. Mark which
@@ -766,6 +825,9 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         "output_path": str(stage1_output_written) if stage1_output_written else None,
         "needs_review_path": str(needs_review_written) if needs_review_written else None,
         "input_unchanged": stage1_text == original_text,
+        # Additive field (existing consumers read by name and are unaffected):
+        # how many deferrals landed in the persistent review queue this run.
+        "review_enqueued": review_enqueued,
     }
 
 
@@ -1205,3 +1267,188 @@ def get_available_presets() -> list:
     """Return available preset domain names."""
     from data.tech_presets import get_preset_names
     return get_preset_names()
+
+
+# ==================== Review Queue Commands ====================
+
+def _get_review_queue():
+    """Construct a ReviewQueue with the dictionary-add handler wired in.
+
+    _get_service() runs first so CorrectionRepository applies schema.sql
+    (idempotent) — guaranteeing review_items exists before the queue opens.
+    dict_add goes through the service layer with force=True: by the time an
+    action pack runs, a human has explicitly confirmed the mapping, so safety
+    warnings are informational, not blocking (they still print to stderr).
+    """
+    from core.review_queue import ReviewQueue
+
+    service = _get_service()
+    config = get_config()
+
+    def dict_add(from_text: str, to_text: str, domain: str, note: str) -> None:
+        service.add_correction(from_text, to_text, domain, notes=note, force=True)
+
+    return ReviewQueue(config.database.path, dict_add_fn=dict_add)
+
+
+def _emit_json(payload) -> None:
+    print(json.dumps(payload, ensure_ascii=False))
+
+
+def _queue_cmd_error(args: argparse.Namespace, kind: str, message: str, code: int = 1) -> None:
+    """Uniform error channel for the review-queue commands: with --json the
+    machine-readable {error, message} object goes to stdout (consumers parse
+    stdout only); without it, plain text goes to stderr. Exits `code`."""
+    if getattr(args, "json_output", False):
+        _emit_json({"error": kind, "message": message})
+    else:
+        print(f"Error: {message}", file=sys.stderr)
+    sys.exit(code)
+
+
+def cmd_enqueue_review(args: argparse.Namespace) -> None:
+    """Enqueue review items from a JSON file or stdin."""
+    from core.review_queue import ReviewQueueError
+
+    if getattr(args, "input", None):
+        print("⚠️  --input is ignored when --enqueue-review is given "
+              "(run the correction separately)", file=sys.stderr)
+
+    raw_path = args.enqueue_review
+    try:
+        if raw_path == "-":
+            payload = json.load(sys.stdin)
+        else:
+            with open(raw_path, encoding="utf-8") as f:
+                payload = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        _queue_cmd_error(args, "read_error", f"reading items JSON failed: {e}")
+
+    items = payload if isinstance(payload, list) else payload.get("items")
+    if not isinstance(items, list) or not items:
+        _queue_cmd_error(args, "bad_payload",
+                         'expected a JSON array of items (or {"items": [...]})')
+
+    # A shared default domain saves repeating it per item.
+    default_domain = getattr(args, "domain", None)
+    if default_domain:
+        for it in items:
+            it.setdefault("domain", default_domain)
+
+    queue = _get_review_queue()
+    try:
+        result = queue.enqueue(items)
+    except ReviewQueueError as e:
+        _queue_cmd_error(args, "review_queue_error", str(e))
+
+    if getattr(args, "json_output", False):
+        _emit_json(result)
+    else:
+        print(f"✅ Enqueued {len(result['added'])} item(s): ids {result['added']}")
+        if result["skipped_duplicates"]:
+            print(f"   ↷ {result['skipped_duplicates']} duplicate(s) skipped (already queued/answered)")
+        if result["skipped_temp"]:
+            print(f"   ↷ {result['skipped_temp']} item(s) skipped: file anchor in a temp dir "
+                  f"(would be a dead pointer — enqueue against the final filed path instead)")
+
+
+def cmd_list_review(args: argparse.Namespace) -> None:
+    """List review-queue items."""
+    queue = _get_review_queue()
+    status = getattr(args, "review_status", "pending")
+    items = queue.list_items(
+        status=None if status == "all" else status,
+        domain=getattr(args, "domain", None),
+        source=getattr(args, "review_source", None),
+    )
+    stats = queue.stats()
+
+    if getattr(args, "json_output", False):
+        _emit_json({"items": [i.to_dict() for i in items], "stats": stats})
+        return
+
+    if not items:
+        print(f"No review items with status '{status}'.")
+        print(f"   Queue totals: {stats['by_status'] or '{}'}")
+        return
+
+    print(f"📋 Review queue — {len(items)} item(s) [{status}] "
+          f"(pending total: {stats['pending_total']})")
+    print("=" * 70)
+    for item in items:
+        anchor = ""
+        if item.file_path:
+            anchor = f"  {Path(item.file_path).name}"
+            if item.line_number:
+                anchor += f":{item.line_number}"
+        suggestion = f" → {item.suggested_text!r}" if item.suggested_text else " → (no suggestion)"
+        print(f"#{item.id:<4} [{item.kind}/{item.domain}] {item.original_text!r}{suggestion}{anchor}")
+    print()
+    print("Resolve: --resolve-review ID --decision accepted|kept_original|overridden|skipped")
+
+
+def cmd_show_review(args: argparse.Namespace) -> None:
+    """Show one review item in full."""
+    queue = _get_review_queue()
+    item = queue.get(args.show_review)
+    if item is None:
+        _queue_cmd_error(args, "not_found", f"review item {args.show_review} not found")
+    if getattr(args, "json_output", False):
+        _emit_json(item.to_dict())
+        return
+    d = item.to_dict()
+    for key in ("id", "status", "kind", "domain", "source", "priority", "created_at",
+                "file_path", "line_number", "original_text", "suggested_text",
+                "evidence", "context_snippet"):
+        print(f"{key:>16}: {d[key]}")
+    if item.actions:
+        print(f"{'actions':>16}: {json.dumps(item.actions, ensure_ascii=False, indent=2)}")
+    if item.status != "pending":
+        for key in ("decided_at", "decided_by", "decision_note", "resolved_text", "applied_at"):
+            print(f"{key:>16}: {d[key]}")
+        if item.apply_log:
+            print(f"{'apply_log':>16}: {json.dumps(item.apply_log, ensure_ascii=False, indent=2)}")
+
+
+def cmd_resolve_review(args: argparse.Namespace) -> None:
+    """Record a verdict for a review item and execute its action pack."""
+    from core.review_queue import ReAnchorNeeded, ReviewQueueError
+
+    decision = getattr(args, "review_decision", None)
+    if not decision:
+        _queue_cmd_error(args, "missing_decision", "--resolve-review requires --decision")
+
+    queue = _get_review_queue()
+    try:
+        result = queue.resolve(
+            args.resolve_review,
+            decision,
+            override_to=getattr(args, "review_override_to", None),
+            note=getattr(args, "review_note", None),
+            by=getattr(args, "review_by", None),
+        )
+    except ReAnchorNeeded as e:
+        if getattr(args, "json_output", False):
+            _emit_json({"error": "re_anchor_needed", "message": str(e)})
+        else:
+            print(f"🛑 Nothing applied — {e}", file=sys.stderr)
+        sys.exit(2)
+    except ReviewQueueError as e:
+        if getattr(args, "json_output", False):
+            _emit_json({"error": "review_queue_error", "message": str(e)})
+        else:
+            print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if getattr(args, "json_output", False):
+        _emit_json(result)
+        return
+
+    item = result["item"]
+    print(f"✅ #{item['id']} → {item['status']}")
+    for entry in result.get("apply_log") or []:
+        mark = "✓" if entry.get("ok") else "✗"
+        print(f"   {mark} {entry.get('msg')}")
+    for entry in result.get("revert_log") or []:
+        mark = "✓" if entry.get("ok") else "⚠"
+        print(f"   {mark} {entry.get('msg')}")

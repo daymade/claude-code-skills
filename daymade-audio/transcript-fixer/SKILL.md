@@ -82,7 +82,7 @@ Two-phase pipeline with persistent learning:
 - **Safe mode is the Stage 1 default**: only low-risk (non-word, high-confidence) corrections auto-apply; medium/high-risk ones (common words, ≤2-char, real-word fragments) are tracked to `*_needs_review.md` instead of being applied silently. So **`Applied: 0` on a clean transcript is correct, not a bug** — the risky rules are waiting in `*_needs_review.md` for you or the AI pass to judge. Pass `--apply-all` to apply every risk level (the old behavior); `--review` is kept as a deprecated no-op. This reconnects the risk classifier that was being computed and then ignored — but it does NOT eliminate every false positive: rules whose `from_text` is a 4+ char valid phrase are still graded low and auto-apply (see `references/false_positive_guide.md` → "The 4+ char real-word blind spot").
 - **Preview changes before applying**: `--dry-run` writes `*_dryrun.md` with every planned Stage 1 change and its risk level.
 - **Always-on changes report**: `--changes-file` writes `*_changes.md` with before/after/risk for every correction (on by default in safe mode).
-- **Machine-readable status for callers** (`--json`): prints ONE line of `{applied, deferred, output_path, needs_review_path, input_unchanged}` on stdout (the human-readable log is routed to stderr for that run). Consumers read this instead of inferring a no-op from whether `*_stage1.md` exists on disk — `input_unchanged: true` (or `output_path: null`) **is** the authoritative no-op signal for a domain. This is a cross-skill contract (a caller's pre-classify chain consumes it); keep the field names and semantics stable. Without `--json` the human-readable output is unchanged.
+- **Machine-readable status for callers** (`--json`): prints ONE line of `{applied, deferred, output_path, needs_review_path, input_unchanged, review_enqueued}` on stdout (the human-readable log is routed to stderr for that run). Consumers read this instead of inferring a no-op from whether `*_stage1.md` exists on disk — `input_unchanged: true` (or `output_path: null`) **is** the authoritative no-op signal for a domain. This is a cross-skill contract (a caller's pre-classify chain consumes it); keep the field names and semantics stable (`review_enqueued` was added additively: how many safe-mode deferrals landed in the persistent review queue — see "Review Queue & Dashboard"). Without `--json` the human-readable output is unchanged.
 - **Extract uncertain ASR tokens**: `--extract-uncertain -i file.md` writes `*_uncertain.md` with likely errors (short all-caps tokens, transliteration fragments, repeated words) without changing the file.
 - **Load domain presets**: `--load-presets tech` imports a curated set of tech/Claude Code ASR corrections.
 - **Report false positives**: `--report-false-positive "错误词" "正确词" -d domain` disables a bad dictionary rule and lowers its confidence.
@@ -128,6 +128,73 @@ uv run scripts/fix_transcription.py --add "错误1" "正确1" --domain tech
 uv run scripts/fix_transcription.py --add "错误2" "正确2" --domain business
 # Chain with && for efficiency
 ```
+
+## Review Queue & Dashboard (uncertain items → one-keystroke verdicts)
+
+Confirmed corrections compound through the dictionary; **uncertain** ones used to
+evaporate — the native pass listed them in chat (gone when the session ends),
+safe-mode deferrals sat in a `*_needs_review.md` sidecar (discarded by temp-dir
+callers), and learned suggestions waited behind a CLI nobody ran. The review
+queue gives all three one persistent home in `corrections.db` (`review_items`),
+and the dashboard makes deciding them nearly free — that friction is what stood
+between "AI suspects an error" and "the dictionary learns the answer."
+
+**Queue CLI** (all support `--json`):
+
+```bash
+# Enqueue uncertain items (native pass step 7 does this; '-' reads stdin)
+uv run scripts/fix_transcription.py --enqueue-review items.json
+# Inspect
+uv run scripts/fix_transcription.py --list-review            # pending, priority-sorted
+uv run scripts/fix_transcription.py --show-review 12         # full evidence + action pack
+# Decide (agent path — humans use the dashboard)
+uv run scripts/fix_transcription.py --resolve-review 12 --decision accepted --by reviewer
+uv run scripts/fix_transcription.py --resolve-review 12 --decision overridden --override-to "正确词" --note "<evidence>"
+uv run scripts/fix_transcription.py --resolve-review 12 --decision kept_original   # transcript was right
+uv run scripts/fix_transcription.py --resolve-review 12 --decision reopen          # undo (reverts applied edits)
+```
+
+Each item carries: the original text (left untouched in the file), a pre-filled
+suggestion, `kind` (`entity`/`unknown` lead the queue — they compound into
+dictionary+roster; `homophone`/`wording` trail), the evidence your search ladder
+produced, and an optional **action pack** executed on accept: `file_edit`
+(replace in the transcript), `dict_add` (add to a `--domain` dictionary),
+`append_note` (add a trap line to a domain context file). No action pack + a
+file anchor = the default single `file_edit`.
+
+**Fail-closed anchor guard**: the whole action pack is planned in memory
+against the CURRENT file state (each edit validated against the content as the
+pack's previous actions left it), and only when every action plans successfully
+does anything reach disk — original text missing (file edited since enqueue),
+ambiguous (multiple occurrences with no unique winner near the line hint), or a
+drifted context (no nearby line matches the snippet recorded at enqueue) →
+nothing is written, the CLI exits 2 with a `{"error": "re_anchor_needed"}`
+status object, and the item stays pending. A wrong auto-edit is worse than a
+missed one. Machine callers should parse the stdout `error` field rather than
+the bare return code (argparse usage errors also exit 2). On `overridden`, only
+retargeted `file_edit`s run — suggestion-specific `dict_add`/`append_note`
+actions are dropped (they were planned for a suggestion the human rejected).
+
+**Dashboard** (single reviewer, local):
+
+```bash
+uv run scripts/review-dashboard/server.py   # opens http://127.0.0.1:8767
+```
+
+Prodigy-style single-focus card: live file context with the anchor line
+highlighted, suggestion pre-filled, evidence shown, keyboard-first —
+`A` accept · `R` original-is-correct · `O` override (type the right text) ·
+`S` skip/can't judge · `U` undo · `↑↓`/`J K` navigate. Reads go straight to
+the DB (read-only); **every write shells out to the CLI**, so the state
+machine, anchor guards, and audit log stay the single source of truth, and
+agent (CLI) and human (page) are equal writers.
+
+**Stage 1 integration**: safe-mode deferrals are auto-enqueued
+(`source: stage1_deferred`) at run time, so a caller discarding the sidecar no
+longer loses them. Exception: an input under the OS temp dir is NOT enqueued
+(the anchor would be a dead pointer once the staging copy vanishes) — the
+`--json` `deferred` count still reports those to the caller, and the additive
+`review_enqueued` field says how many landed in the queue.
 
 ## False Positive Prevention
 
@@ -276,7 +343,7 @@ A recording can be long but still fast-tier (two known speakers, plain language)
    - Hand it the already-corrected terms as a do-not-re-report list (you fixed those; only *new* residuals are useful).
    - Demand a compact table only — `line | original ≤20 chars | suspected | one-line reason | confidence` — and tell it to stop after the list, no prose preamble, no per-line stream-of-consciousness, no re-deriving corrections it has already made.
    Then run each residual back through step-4 triage (fix / search / log). A second-pass subagent that returns 8 sharp rows beats one that returns 8000 tokens of narration every time. Task works when you're in the main context; if it isn't available — e.g. these instructions are themselves running inside a subagent, which can't spawn another — just do one more thorough independent re-read yourself. Never skip the second pass over a missing tool.
-7. **Emit a needs-checking list** — in your chat summary to the human, not baked into the file — for everything still *Uncertain*: line number, the original text you left in place, what you suspect, and why you couldn't confirm it. This surfaces the few items that need a recording or source to resolve, instead of burying them or papering over them with guesses. If nothing is uncertain, say so.
+7. **Emit a needs-checking list AND enqueue it** — the chat summary alone evaporates when the session ends, so every *Uncertain* item gets dual-written: (a) in your chat summary to the human — line number, the original text you left in place, what you suspect, why you couldn't confirm it; (b) into the persistent review queue via `--enqueue-review items.json` (see "Review Queue & Dashboard" below) with the same fields plus a proposed action pack, so the human can one-keystroke-resolve it later in the dashboard — or a later agent session can close it with new evidence (`--resolve-review ID --decision … --note "<evidence>"`). Entity/name questions get `kind: entity` (they compound into the dictionary/roster, so they lead the queue); pure phrasing doubts get `kind: wording`. If nothing is uncertain, say so.
 8. Verify with diff against the file you actually edited (`diff <original> <your-working-file>`) — every change should trace back to a triage decision
 9. Finalize and archive:
    - **Primary path (recommended):** Re-run `--stage 1` on the original `file.md` — **plain, without `--apply-all`** (an explicit `--apply-all` always runs corrections and never finalizes, so a stale sidecar can't silently swallow the run). If `file_stage1.md` is newer than `file.md`, transcript-fixer automatically promotes it to `file.md` and removes the intermediate sidecars (`_stage1.md`, `_stage2.md`, `_dryrun.md`, `_changes.md`, `_needs_review.md`, `_uncertain.md`, `_对比.html`). This is the default way to finalize; it is atomic, preserves manual edits (it skips promotion when `file.md` is newer), and avoids macOS `mv` alias hazards.

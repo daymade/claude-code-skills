@@ -132,8 +132,10 @@ def create_argument_parser() -> argparse.ArgumentParser:
         dest="json_output",
         help="Emit a machine-readable Stage 1 status object as the ONLY thing on stdout "
              "(the human-readable log is routed to stderr). Fields: applied, deferred, "
-             "output_path, needs_review_path, input_unchanged. Lets consumers stop inferring "
-             "no-op vs failure from whether a *_stage1.md sidecar exists."
+             "output_path, needs_review_path, input_unchanged, review_enqueued. Lets "
+             "consumers stop inferring no-op vs failure from whether a *_stage1.md "
+             "sidecar exists. Also applies to the review-queue commands "
+             "(--enqueue-review/--list-review/--show-review/--resolve-review)."
     )
 
     # Learning commands
@@ -310,6 +312,74 @@ def create_argument_parser() -> argparse.ArgumentParser:
         dest="verify_only",
         action="store_true",
         help="Verify archive integrity without restoring (for restore command)"
+    )
+
+    # Review queue: persistent store for uncertain corrections awaiting a human
+    # verdict (native-pass uncertain items, Stage 1 safe-mode deferrals).
+    parser.add_argument(
+        "--enqueue-review",
+        metavar="JSON_PATH",
+        dest="enqueue_review",
+        help="Enqueue review items from a JSON file ('-' = stdin). Each item: "
+             "{original, suggested?, file?, line?, context?, kind?, domain?, "
+             "evidence?, actions?, priority?, source?}"
+    )
+    parser.add_argument(
+        "--list-review",
+        action="store_true",
+        dest="list_review",
+        help="List review-queue items (filter with --review-status/--domain/--review-source)"
+    )
+    parser.add_argument(
+        "--review-status",
+        dest="review_status",
+        choices=["pending", "accepted", "overridden", "kept_original", "skipped", "all"],
+        default="pending",
+        help="Status filter for --list-review (default: pending)"
+    )
+    parser.add_argument(
+        "--review-source",
+        dest="review_source",
+        choices=["native_pass", "stage1_deferred", "learned_suggestion", "manual"],
+        help="Source filter for --list-review"
+    )
+    parser.add_argument(
+        "--show-review",
+        metavar="ID",
+        type=int,
+        dest="show_review",
+        help="Show one review item in full (evidence + proposed action pack)"
+    )
+    parser.add_argument(
+        "--resolve-review",
+        metavar="ID",
+        type=int,
+        dest="resolve_review",
+        help="Record a verdict for a review item and execute its action pack "
+             "(requires --decision)"
+    )
+    parser.add_argument(
+        "--decision",
+        dest="review_decision",
+        choices=["accepted", "overridden", "kept_original", "skipped", "reopen"],
+        help="Verdict for --resolve-review: accepted (apply suggestion), overridden "
+             "(apply --override-to text), kept_original (transcript is correct), "
+             "skipped (can't judge), reopen (undo a recorded verdict)"
+    )
+    parser.add_argument(
+        "--override-to",
+        dest="review_override_to",
+        help="Replacement text when --decision overridden"
+    )
+    parser.add_argument(
+        "--note",
+        dest="review_note",
+        help="Free-text note recorded with the verdict"
+    )
+    parser.add_argument(
+        "--by",
+        dest="review_by",
+        help="Reviewer name recorded with the verdict"
     )
 
     return parser
