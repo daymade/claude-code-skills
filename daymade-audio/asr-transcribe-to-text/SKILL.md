@@ -1,7 +1,7 @@
 ---
 name: asr-transcribe-to-text
 description: >-
-  Transcribes audio and video to speaker-labeled text: Qwen3-ASR full-audio transcription + whisper word timing + pyannote diarization, aligned into a who-said-what transcript BY DEFAULT (decoupled WhisperX-style — the audio is never cut before ASR). Handles local files, direct media URLs, and podcast/web pages; local MLX inference on macOS Apple Silicon or remote OpenAI-compatible ASR endpoints. Use when the user wants to transcribe recordings, podcasts, lectures, interviews, meetings, screen recordings, or any audio/video file; also use for ASR, Qwen ASR, speech-to-text, 转录, 语音转文字, 录音转文字, speaker diarization, who said what, 说话人分离, 说话人识别, 谁在说话 — speaker labels are the default, plain text is the opt-out. Also covers word-level timestamps via mlx-whisper for subtitles and audio-visual alignment (字幕, 时间戳, 音画对齐) and CAM++ voiceprint speaker identification.
+  Transcribes audio and video to speaker-labeled text: Qwen3-ASR full-audio transcription + whisper word timing + pyannote diarization, aligned into a who-said-what transcript BY DEFAULT (decoupled WhisperX-style — the audio is never cut before ASR). Handles local files, direct media URLs, and podcast/web pages; local MLX inference on macOS Apple Silicon or remote OpenAI-compatible ASR endpoints. Use when the user wants to transcribe recordings, podcasts, lectures, interviews, meetings, screen recordings, or any audio/video file; also use for ASR, Qwen ASR, speech-to-text, 转录, 语音转文字, 录音转文字, speaker diarization, who said what, 说话人分离, 说话人识别, 谁在说话 — speaker labels are the default, plain text is the opt-out. Also covers word-level timestamps via mlx-whisper for subtitles and audio-visual alignment (字幕, 时间戳, 音画对齐) and CAM++ voiceprint speaker identification. Also preprocesses: merging multi-segment recorder dumps (多段录音合并/拼接) and pitch-preserved speedup for metered-ASR quota uploads (飞书妙记/Feishu Minutes).
 argument-hint: "[audio-or-video-file-path-or-url ...]"
 ---
 
@@ -152,6 +152,54 @@ ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:no
 ```
 
 **Cleanup**: After transcription succeeds, delete extracted WAV files to save disk space.
+
+## Preprocess: Merge Segments & Shrink Metered Uploads (optional)
+
+Run this BEFORE transcription when either applies:
+
+- **The recording is a multi-segment dump** — body mics and field recorders split
+  sessions into fixed-length files (e.g. `TX02_MIC024_....wav`, `TX02_MIC025_....wav`).
+  Merge them and transcribe the merged file: full-audio context is the quality basis
+  of the decoupled pipeline (Step 3), so transcribing segments separately throws away
+  exactly what the architecture buys.
+- **The audio goes to a metered ASR** (Feishu Minutes, any per-minute quota) — a
+  pitch-PRESERVED speedup cuts billed duration directly, and modern ASR does not care:
+  1.3x was user-verified on Feishu Minutes (2026-07-16) with no perceptible recognition
+  difference, and public Whisper benchmarks show no sharp WER drop until 2.0x
+  (≤1.5x = safe zone, ~3% WER increase at 1.5x; >2x unusable).
+
+Use the bundled script — it merges, normalizes to 16 kHz mono, optionally speeds up,
+and verifies its own output instead of trusting the ffmpeg exit code:
+
+```bash
+uv run ${CLAUDE_PLUGIN_ROOT}/scripts/prepare_asr_input.py SEG1.wav SEG2.wav -o merged.wav   # merge only
+uv run ${CLAUDE_PLUGIN_ROOT}/scripts/prepare_asr_input.py SEG*.wav -o upload.m4a --speed 1.3  # merge + quota-saving speedup
+```
+
+Expected output:
+
+```text
+Merge order:
+  1. SEG1.wav  [pcm_s24le 48000Hz ch=1 1800.14s]
+  2. SEG2.wav  [pcm_s24le 48000Hz ch=1 1800.15s]
+[OK] duration: 4946.19s vs expected 4946.18s (delta +0.00s)
+[OK] boundary 1 @ 1384.7s: max_volume -15.5 dB
+[info] overall: mean_volume -38.3 dB, max_volume 0.0 dB
+Wrote upload.m4a
+```
+
+- Segments sort by the `YYYYMMDD_HHMMSS` timestamp embedded in their filenames when
+  every file has one (recorder dumps do); otherwise the given order is kept with a note —
+  eyeball the printed merge order before transcribing.
+- Self-verification: output duration must equal Σsegments ÷ speed (±1.5 s, hard FAIL
+  otherwise); each splice gets a 10 s volume spot-check (dead air at a boundary = wrong
+  order or a missing segment); overall loudness prints for comparison with the source.
+- Speedup must be `atempo`-style pitch-preserved stretch — never sample-rate trickery,
+  which shifts pitch and breaks both ASR accuracy and diarization voiceprints.
+- Codec by extension: `.m4a` (AAC 48k — the metered-upload choice; ~30% smaller than mp3
+  at equal speech quality), `.wav` (pcm_s16le, local pipeline default), `.flac` (lossless
+  archive master, ~50% of WAV), `.mp3` (compatibility fallback only).
+- Keep the originals until the transcript passes Step 4 verification.
 
 ## Step 3: Transcribe (speaker labels by default)
 
@@ -515,6 +563,7 @@ Some runtimes do not set skill environment variables. Use the absolute path to t
 
 **Scripts:**
 - `resolve_media_input.py` — Resolve local paths, direct media URLs, and podcast/web pages into validated local media files
+- `prepare_asr_input.py` — Merge multi-segment recordings + normalize for ASR (16 kHz mono), optional pitch-preserved speedup for metered uploads; self-verifies duration math and splice boundaries
 - `transcribe_local_mlx.py` — Local MLX transcription (macOS ARM64, PEP 723 deps)
 - `speaker_transcribe.py` — **DEFAULT pipeline**: decoupled multi-speaker transcription (full-audio Qwen3-ASR + whisper word timing + pyannote diarization, aligned) → speaker-labeled transcript + CSV; `--no-diarization` plain-text fast path; `--text-file` for remote/pre-made ASR text
 - `align_speakers.py` — Decoupled alignment core (stdlib): maps full transcript onto whisper word lattice + pyannote segments; usable standalone for debugging
