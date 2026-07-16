@@ -207,61 +207,49 @@ def diarize_all(wavs, out_dir, device, force):
         write_diarization_json(segments, wav, dev, diar_json)
 
 
+def _run_batched_leg(wavs, work_root, script, staging_name, staging_suffix,
+                     dest_for, extra_args, force, timeout, cache_label, missing_label):
+    """Shared staging+move ceremony for legs 1 and 2: run `script` once on all
+    uncached inputs (it writes flat <stem><staging_suffix> into a staging dir),
+    then move each output to dest_for(stem). One model load per leg, not per file."""
+    todo = [w for w in wavs if force or not dest_for(w.stem).exists()]
+    if not todo:
+        log(f"{cache_label}: all cached")
+        return
+    staging = work_root / staging_name
+    cmd = ["uv", "run", str(HERE / script), "--output-dir", str(staging)] + extra_args + [str(w) for w in todo]
+    run(cmd, timeout=timeout)
+    for w in todo:
+        staged = staging / f"{w.stem}{staging_suffix}"
+        if not staged.exists():
+            log(f"WARNING: {missing_label} {w.name} — alignment will fail for this file")
+            continue
+        dest = dest_for(w.stem)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        staged.replace(dest)
+
+
 def leg_text(wavs, work_root, language, force, timeout):
     """Leg 1: full-audio Qwen3 transcript (one model load for the batch)."""
-    todo = []
-    for wav in wavs:
-        tpath = work_root / wav.stem / f"{wav.stem}.qwen.txt"
-        if tpath.exists() and not force:
-            continue
-        todo.append((wav, tpath))
-    if not todo:
-        log("Leg 1 (Qwen3 full text): all cached")
-        return
-    # transcribe_local_mlx.py loads the model once for all inputs and writes
-    # flat <stem>.txt into --output-dir; stage then move to per-file dirs.
-    staging = work_root / "_qwen"
-    run(["uv", "run", str(HERE / "transcribe_local_mlx.py"),
-         "--output-dir", str(staging), "--language", language]
-        + [str(w) for w, _ in todo], timeout=timeout)
-    for wav, tpath in todo:
-        staged = staging / f"{wav.stem}.txt"
-        if not staged.exists():
-            log(f"WARNING: no Qwen3 transcript for {wav.name} — alignment will fail for this file")
-            continue
-        tpath.parent.mkdir(parents=True, exist_ok=True)
-        staged.replace(tpath)
+    # transcribe_local_mlx.py writes flat <stem>.txt into --output-dir; stage then
+    # move to work_root/<stem>/<stem>.qwen.txt (different name — the .qwen. prefix).
+    _run_batched_leg(
+        wavs, work_root, "transcribe_local_mlx.py", "_qwen", ".txt",
+        dest_for=lambda stem: work_root / stem / f"{stem}.qwen.txt",
+        extra_args=["--language", language], force=force, timeout=timeout,
+        cache_label="Leg 1 (Qwen3 full text)", missing_label="no Qwen3 transcript for")
 
 
 def leg_words(wavs, work_root, language, initial_prompt, force, timeout):
     """Leg 2: whisper word lattice, one model load for the whole batch."""
-    lang_code = _whisper_lang(language)
-    todo = []
-    for wav in wavs:
-        wpath = work_root / wav.stem / f"{wav.stem}.words.json"
-        if wpath.exists() and not force:
-            continue
-        todo.append((wav, wpath))
-    if not todo:
-        log("Leg 2 (whisper word lattice): all cached")
-        return
-    # word_timestamps_whisper.py writes to a flat --output-dir; stage per-file
-    # dirs via a shared staging dir then move.
-    staging = work_root / "_words"
-    cmd = ["uv", "run", str(HERE / "word_timestamps_whisper.py"),
-           "--output-dir", str(staging)]
-    cmd += ["--language", lang_code]  # ALWAYS forward the real language (fixes silent-zh-on-English)
+    extra = ["--language", _whisper_lang(language)]  # ALWAYS forward the real language (fixes silent-zh-on-English)
     if initial_prompt:
-        cmd += ["--initial-prompt", initial_prompt]
-    cmd += [str(w) for w, _ in todo]
-    run(cmd, timeout=timeout)
-    for wav, wpath in todo:
-        staged = staging / f"{wav.stem}.words.json"
-        if not staged.exists():
-            log(f"WARNING: no word lattice for {wav.name} — alignment will fail for this file")
-            continue
-        wpath.parent.mkdir(parents=True, exist_ok=True)
-        staged.replace(wpath)
+        extra += ["--initial-prompt", initial_prompt]
+    _run_batched_leg(
+        wavs, work_root, "word_timestamps_whisper.py", "_words", ".words.json",
+        dest_for=lambda stem: work_root / stem / f"{stem}.words.json",
+        extra_args=extra, force=force, timeout=timeout,
+        cache_label="Leg 2 (whisper word lattice)", missing_label="no word lattice for")
 
 
 def leg_align(wavs, out_dir, work_root, max_gap, text_file=None):
