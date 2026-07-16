@@ -61,8 +61,11 @@ def categorize_file(path):
     if suffix in data_exts:
         return ('Data File', '📊', 'Archive or compress if historical data')
 
-    # Log files
-    if suffix == '.log' or 'log' in path.name.lower():
+    # Log files: match by extension only. A substring check on the whole
+    # name misclassifies catalog.pdf, dialog.wav, blog.zip, Prologue.mp4,
+    # analog.avi, etc. as "safe to delete" logs.
+    log_exts = {'.log', '.log1', '.log2'}
+    if suffix in log_exts or path.name.lower().endswith('.log.gz'):
         return ('Log File', '📝', 'Safe to delete old logs')
 
     # Build artifacts
