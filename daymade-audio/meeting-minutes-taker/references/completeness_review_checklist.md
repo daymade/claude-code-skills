@@ -1,5 +1,7 @@
 # Meeting Minutes Review Checklist
 
+> **Scope note**: this checklist is a same-context self-review — the reviewer holds the draft it just built while re-reading the transcript, so a blind spot shared by generation and review (e.g., a narrative-voiced directive none of the passes classified as a decision) survives every phase below. That structural gap is covered separately by SKILL.md **Step 3.5 Retrieval Self-Test** (fresh-context extractor that never sees the draft); run both — this checklist is not a substitute for it, nor vice versa.
+
 ## Contents
 - Completeness Review Process (4 phases: structural, content depth, quotes, action items)
 - Common Omission Patterns (technical, business logic, process items)
