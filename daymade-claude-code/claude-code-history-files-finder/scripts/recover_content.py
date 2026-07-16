@@ -8,10 +8,8 @@ from Claude Code's JSONL session history files.
 
 import json
 import sys
-import os
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from datetime import datetime
 
 
 class SessionContentRecovery:
@@ -160,8 +158,8 @@ class SessionContentRecovery:
                 original_path = Path(file_path)
 
                 # Handle absolute paths: extract meaningful relative path
-                # e.g., /Users/username/project/src/file.py -> src/file.py
-                # e.g., /home/user/workspace/project/lib/module.py -> lib/module.py
+                # e.g., <home>/project/src/file.py -> src/file.py
+                # e.g., <home>/workspace/project/lib/module.py -> lib/module.py
                 path_parts = original_path.parts
                 if len(path_parts) > 1 and path_parts[0] == "/":
                     # For absolute paths, try to find a project-like directory

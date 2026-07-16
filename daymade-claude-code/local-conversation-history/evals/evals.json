@@ -18,6 +18,24 @@
       "prompt": "I moved my Claude and Codex config directories to custom profile folders on Windows. Find the conversations under this workspace and explain clearly if either local store cannot be read.",
       "expected_output": "Uses explicit provider-home overrides, handles Windows path normalization, and surfaces built-in diagnostics without guessing or modifying local state.",
       "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "列出这个项目 3 月到 4 月的 Claude Code 对话。旧对话在我已经登记的长期备份里，迁移过机器，文件修改时间不可信。",
+      "expected_output": "Runs the default Claude inventory with --from-date and --to-date so both active homes and every registered archive are included; reports source provenance and uses internal JSONL timestamp ranges without consulting file mtime.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Show my recent Claude history. The registered archive disk is currently unavailable, but just ignore it and tell me what's local.",
+      "expected_output": "Does not make a whole-history claim from the active directory alone. A required registered archive remains a visible hard error unless the user deliberately changes the registry or asks for an explicitly partial diagnostic scope.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "Search every old Claude conversation for a keyword that may only appear inside a tool result, then recover the file that was written in that session.",
+      "expected_output": "Routes the request to claude-code-history-files-finder instead of using the recent-inventory command, because the task requires full-event keyword search and recovery.",
+      "files": []
     }
   ]
 }
