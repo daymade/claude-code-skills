@@ -194,6 +194,7 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:local-conversation-history
 /daymade-claude-code:claude-code-history-files-finder
 /daymade-claude-code:continue-claude-work
+/daymade-claude-code:continue-codex-work
 /daymade-claude-code:claude-skills-troubleshooting
 /daymade-claude-code:claude-md-progressive-disclosurer
 /daymade-claude-code:statusline-generator
@@ -912,16 +913,21 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-code-history-files-finder`）
 
-从存储在 `~/.claude/projects/` 的 Claude Code 会话历史文件中查找和恢复内容。
+从所有活跃配置目录和 `~/.claude/history-sources.json` 已登记的长期备份中，
+查找并恢复 Claude Code 会话历史内容。
 
 **使用场景：**
 - 从之前的 Claude Code 会话中恢复已删除或丢失的文件
 - 在对话历史中搜索特定代码
 - 跨多个会话跟踪文件修改
 - 查找包含特定关键字或实现的会话
+- 机器迁移后按真实对话日期核查历史，不信文件 mtime
 
 **主要功能：**
-- **会话搜索**：按关键字查找会话并按频率排名
+- **完整来源集**：默认同时检索活跃目录与已登记备份
+- **副本安全并集**：同一会话 ID 的所有副本都参与检索，相同记录不重复计数
+- **内部时间检索**：按 JSONL 记录时间过滤，不用文件 mtime
+- **结构化检索**：覆盖消息、thinking、工具输入/结果、队列、附件与摘要
 - **内容恢复**：从 Write 工具调用中提取文件并去重
 - **统计分析**：消息计数、工具使用明细、文件操作
 - **批量操作**：使用关键字过滤处理多个会话
@@ -933,10 +939,11 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 python3 scripts/analyze_sessions.py list /path/to/project
 
 # 搜索包含关键字的会话
-python3 scripts/analyze_sessions.py search /path/to/project "ComponentName" "featureX"
+python3 scripts/analyze_sessions.py search /path/to/project \
+  "ComponentName" "featureX" --from-date 2026-03-01 --to-date 2026-04-30
 
-# 从会话中恢复已删除的文件
-python3 scripts/recover_content.py ~/.claude/projects/.../session.jsonl -k DeletedComponent -o ./recovered/
+# 从 search 输出的精确路径恢复已删除文件
+python3 scripts/recover_content.py <printed-session-path> -k DeletedComponent -o ./recovered/
 
 # 获取会话统计信息
 python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
@@ -3104,10 +3111,12 @@ main 在上次 review 后变了，重新告诉我现在真正会合进去什么
 ID 和明确诊断信息。
 
 **主要能力：**
-- 只读取 Claude Code 会话的有界前缀，默认排除 sub-agent
+- 默认合并所有活跃 Claude 配置目录与已登记的长期备份
+- 流式读完整 Claude JSONL 与 Codex raw rollout，计算精确内部时间范围；排序和筛选绝不使用文件 mtime
+- 按会话 ID 去重、合并各副本的内部时间范围，同时保留活跃目录/备份来源信息
 - 通过 schema 检查选择兼容的 Codex 状态数据库
 - 数据库不可用时明确告警，再读取原始 Codex rollout JSONL
-- 支持自定义 profile 根目录、归档会话、递归/全部项目、Windows 路径归一化和 JSON
+- 支持内部时间日期范围、精确单目录诊断、Codex 归档会话、递归/全部项目、Windows 路径归一化和 JSON
 - 仅使用 Python 标准库，不联网、不写入本地历史
 
 **示例：**
@@ -3125,7 +3134,29 @@ ID 和明确诊断信息。
 
 ---
 
-### 87. **git-safety-net** - 预防与恢复本地 Git 灾难
+### 87. **continue-codex-work** - 续做中断的 Codex 工作
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`
+>（仅作为套件成员发布，调用方式 `daymade-claude-code:continue-codex-work`）
+
+从本地 Codex CLI rollout 中恢复可执行上下文，在当前对话继续工作，无需用
+`codex resume` 重放整个旧会话。内置提取器支持按会话 ID、标题关键词、当前
+项目最近活动或列表定位，并在续做前报告结束原因、遗留请求、近期工具与文件、
+错误和当前工作区状态。
+
+```text
+/daymade-claude-code:continue-codex-work 019f66...
+Codex 上次做到一半中断了，读取 rollout 后把工作做完
+```
+
+📚 **文档**：参见
+[continue-codex-work/SKILL.md](./daymade-claude-code/continue-codex-work/SKILL.md)。
+
+**依赖**：Python 3.10+ 与本地 Codex rollout 文件。
+
+---
+
+### 88. **git-safety-net** - 预防与恢复本地 Git 灾难
 
 > **安装**：`claude plugin install git-safety-net@daymade-skills`
 
@@ -3221,6 +3252,9 @@ review 后修复/落地时，使用 **github-review-pr**。
 
 ### 续做中断的 Claude 会话
 使用 **continue-claude-work** 从本地 `~/.claude` 产物中恢复最后一个可执行请求，并在不重新打开原始会话的情况下继续实现。若还需要跨会话搜索、统计分析或恢复已删除文件，可与 **claude-code-history-files-finder** 配合使用。
+
+若旧工作来自 Codex CLI，则改用 **continue-codex-work**；它从本地 Codex
+rollout 重建简报，不会把完整旧会话重新灌入上下文。
 
 ### 快速发现本地对话
 需要快速查看当前工作区最近的 Claude Code 与 Codex 对话时，使用
@@ -3342,6 +3376,7 @@ review 后修复/落地时，使用 **github-review-pr**。
 - **excel-automation**：参见 `excel-automation/SKILL.md` 了解创建/解析/控制工作流，参见 `excel-automation/references/formatting-reference.md` 了解格式规范
 - **capture-screen**：参见 `capture-screen/SKILL.md` 了解基于 CGWindowID 的 macOS 截图流程
 - **continue-claude-work**：参见 `daymade-claude-code/continue-claude-work/SKILL.md` 了解本地会话产物恢复、漂移检查与续做流程
+- **continue-codex-work**：参见 `daymade-claude-code/continue-codex-work/SKILL.md` 了解 Codex rollout 定位、结束原因诊断与续做流程
 - **scrapling-skill**：参见 `scrapling-skill/SKILL.md` 了解 CLI 工作流，参见 `scrapling-skill/references/troubleshooting.md` 了解已验证的 Scrapling 故障模式
 - **ima-copilot**：参见 `ima-copilot/SKILL.md` 了解包装层架构与路由规则，参见 `ima-copilot/references/installation_flow.md` 了解安装流程细节，参见 `ima-copilot/references/known_issues.md` 了解已知问题清单与修复命令，参见 `ima-copilot/references/search_best_practices.md` 了解扇出搜索策略与 100 条截断处理
 - **claude-export-txt-better**：参见 `daymade-claude-code/claude-export-txt-better/SKILL.md` 了解工作流，参见 `daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py` 了解重建算法，参见 `daymade-claude-code/claude-export-txt-better/evals/` 查看真实回归 fixture

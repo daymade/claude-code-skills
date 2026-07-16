@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 
@@ -97,14 +98,44 @@ class LocalConversationHistoryTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def run_cli(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+    def run_cli(
+        self, *arguments: str, env: dict[str, str] | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        process_env = os.environ.copy()
+        if env:
+            process_env.update(env)
         return subprocess.run(
             [sys.executable, str(SCRIPT), *arguments],
             text=True,
             encoding="utf-8",
             capture_output=True,
             check=True,
+            env=process_env,
         )
+
+    def write_history_sources(
+        self, config_home: Path, archive_home: Path, *, required: bool = True
+    ) -> Path:
+        manifest = config_home / "history-sources.json"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "sources": [
+                        {
+                            "provider": "claude",
+                            "kind": "archive",
+                            "label": "full-backup",
+                            "home": str(archive_home),
+                            "required": required,
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return manifest
 
     def seed_claude(self) -> None:
         project_dir = claude_project_dir(self.claude_home, self.workspace)
@@ -492,6 +523,7 @@ class LocalConversationHistoryTests(unittest.TestCase):
             [
                 "not-json",
                 {
+                    "timestamp": "2026-01-15T10:00:00Z",
                     "type": "session_meta",
                     "payload": {
                         "id": session_id,
@@ -501,6 +533,7 @@ class LocalConversationHistoryTests(unittest.TestCase):
                     },
                 },
                 {
+                    "timestamp": "2026-01-15T12:30:00Z",
                     "type": "response_item",
                     "payload": {
                         "type": "message",
@@ -512,6 +545,8 @@ class LocalConversationHistoryTests(unittest.TestCase):
                 },
             ],
         )
+        # Migration/copy time must not become conversation time.
+        os.utime(rollout, (1, 1))
         archived_session_id = "abababab-abab-4bab-8bab-abababababab"
         write_jsonl(
             self.codex_home
@@ -550,7 +585,17 @@ class LocalConversationHistoryTests(unittest.TestCase):
         self.assertEqual(payload["backend"], "rollout-jsonl")
         self.assertEqual(payload["total"], 1)
         self.assertEqual(payload["excluded"]["archived"], 1)
-        self.assertEqual(payload["conversations"][0]["title"], "Fallback conversation")
+        conversation = payload["conversations"][0]
+        self.assertEqual(conversation["title"], "Fallback conversation")
+        self.assertEqual(conversation["timestamp_source"], "rollout-record-minmax")
+        self.assertEqual(
+            datetime.fromisoformat(conversation["created_at"]).timestamp(),
+            datetime.fromisoformat("2026-01-15T10:00:00+00:00").timestamp(),
+        )
+        self.assertEqual(
+            datetime.fromisoformat(conversation["updated_at"]).timestamp(),
+            datetime.fromisoformat("2026-01-15T12:30:00+00:00").timestamp(),
+        )
 
     def test_codex_unknown_database_schema_reports_visible_fallback(self) -> None:
         self.codex_home.mkdir(parents=True)
@@ -718,6 +763,260 @@ class LocalConversationHistoryTests(unittest.TestCase):
         self.assertTrue(
             any("without a session ID" in item for item in provider["warnings"])
         )
+
+    def test_registered_archive_uses_internal_range_and_deduplicates(self) -> None:
+        user_home = self.root / "user-home"
+        active_home = user_home / ".claude"
+        archive_home = self.root / "conversation-archive"
+        active_project = claude_project_dir(active_home, self.workspace)
+        archive_project = claude_project_dir(archive_home, self.workspace)
+        duplicate_id = "10101010-1010-4010-8010-101010101010"
+        archive_only_id = "20202020-2020-4020-8020-202020202020"
+        active_only_id = "30303030-3030-4030-8030-303030303030"
+
+        write_jsonl(
+            active_project / f"{duplicate_id}.jsonl",
+            [
+                claude_user_record(
+                    duplicate_id,
+                    self.workspace,
+                    "Active copy wins the tie",
+                    "2026-03-05T08:00:00Z",
+                ),
+                {
+                    "type": "assistant",
+                    "sessionId": duplicate_id,
+                    "cwd": str(self.workspace),
+                    "timestamp": "2026-03-06T09:30:00Z",
+                    "message": {"role": "assistant", "content": "done"},
+                },
+            ],
+        )
+        write_jsonl(
+            archive_project / f"{duplicate_id}.jsonl",
+            [
+                claude_user_record(
+                    duplicate_id,
+                    self.workspace,
+                    "Older archive copy",
+                    "2026-03-04T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            archive_project / f"{archive_only_id}.jsonl",
+            [
+                claude_user_record(
+                    archive_only_id,
+                    self.workspace,
+                    "Archive-only April conversation",
+                    "2026-04-20T10:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            active_project / f"{active_only_id}.jsonl",
+            [
+                claude_user_record(
+                    active_only_id,
+                    self.workspace,
+                    "Active March conversation",
+                    "2026-03-20T10:00:00Z",
+                )
+            ],
+        )
+
+        # Deliberately make mtimes contradict the internal chronology. A migrated
+        # archive can have a fresh mtime even when its conversation is older.
+        os.utime(archive_project / f"{archive_only_id}.jsonl", (1, 1))
+        os.utime(
+            active_project / f"{active_only_id}.jsonl",
+            (2_000_000_000, 2_000_000_000),
+        )
+        self.write_history_sources(active_home, archive_home)
+
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "claude",
+            "--format",
+            "json",
+            env={"HOME": str(user_home), "CLAUDE_CONFIG_DIR": str(active_home)},
+        )
+        provider = json.loads(completed.stdout)["providers"]["claude"]
+        conversations = provider["conversations"]
+        self.assertEqual(
+            [item["session_id"] for item in conversations],
+            [archive_only_id, active_only_id, duplicate_id],
+        )
+        duplicate = next(
+            item for item in conversations if item["session_id"] == duplicate_id
+        )
+        self.assertEqual(duplicate["title"], "Active copy wins the tie")
+        self.assertEqual(
+            datetime.fromisoformat(duplicate["created_at"]).timestamp(),
+            datetime.fromisoformat("2026-03-04T08:00:00+00:00").timestamp(),
+        )
+        self.assertEqual(
+            datetime.fromisoformat(duplicate["updated_at"]).timestamp(),
+            datetime.fromisoformat("2026-03-06T09:30:00+00:00").timestamp(),
+        )
+        self.assertEqual(duplicate["timestamp_source"], "session-record-minmax")
+        self.assertEqual(
+            duplicate["source_labels"],
+            ["active:main", "archive:full-backup"],
+        )
+        archive_only = next(
+            item for item in conversations if item["session_id"] == archive_only_id
+        )
+        self.assertEqual(archive_only["source_kind"], "archive")
+        self.assertEqual(archive_only["source_labels"], ["archive:full-backup"])
+
+    def test_date_filter_uses_session_overlap_and_excludes_unknown_time(self) -> None:
+        project_dir = claude_project_dir(self.claude_home, self.workspace)
+        spanning_id = "40404040-4040-4040-8040-404040404040"
+        outside_id = "50505050-5050-4050-8050-505050505050"
+        unknown_id = "60606060-6060-4060-8060-606060606060"
+        write_jsonl(
+            project_dir / f"{spanning_id}.jsonl",
+            [
+                claude_user_record(
+                    spanning_id,
+                    self.workspace,
+                    "Conversation spanning the boundary",
+                    "2026-03-31T10:00:00Z",
+                ),
+                {
+                    "type": "assistant",
+                    "sessionId": spanning_id,
+                    "cwd": str(self.workspace),
+                    "timestamp": "2026-04-01T00:01:00Z",
+                    "message": {"role": "assistant", "content": "done"},
+                },
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{outside_id}.jsonl",
+            [
+                claude_user_record(
+                    outside_id,
+                    self.workspace,
+                    "Outside the requested window",
+                    "2026-05-01T00:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{unknown_id}.jsonl",
+            [
+                {
+                    "type": "user",
+                    "sessionId": unknown_id,
+                    "cwd": str(self.workspace),
+                    "message": {"role": "user", "content": "Unknown time"},
+                }
+            ],
+        )
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "claude",
+            "--claude-home",
+            str(self.claude_home),
+            "--from-date",
+            "2026-03-01",
+            "--to-date",
+            "2026-03-31",
+            "--format",
+            "json",
+        )
+        provider = json.loads(completed.stdout)["providers"]["claude"]
+        self.assertEqual(
+            [item["session_id"] for item in provider["conversations"]],
+            [spanning_id],
+        )
+        self.assertTrue(
+            any(
+                "without an internal timestamp" in warning
+                for warning in provider["warnings"]
+            )
+        )
+
+    def test_explicit_claude_home_does_not_silently_add_registered_archives(self) -> None:
+        user_home = self.root / "user-home"
+        active_home = user_home / ".claude"
+        archive_home = self.root / "conversation-archive"
+        active_project = claude_project_dir(active_home, self.workspace)
+        archive_project = claude_project_dir(archive_home, self.workspace)
+        active_id = "70707070-7070-4070-8070-707070707070"
+        archive_id = "80808080-8080-4080-8080-808080808080"
+        write_jsonl(
+            active_project / f"{active_id}.jsonl",
+            [
+                claude_user_record(
+                    active_id,
+                    self.workspace,
+                    "Explicit active home",
+                    "2026-04-01T00:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            archive_project / f"{archive_id}.jsonl",
+            [
+                claude_user_record(
+                    archive_id,
+                    self.workspace,
+                    "Must stay outside explicit scope",
+                    "2026-04-02T00:00:00Z",
+                )
+            ],
+        )
+        self.write_history_sources(active_home, archive_home)
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "claude",
+            "--claude-home",
+            str(active_home),
+            "--format",
+            "json",
+            env={"HOME": str(user_home)},
+        )
+        conversations = json.loads(completed.stdout)["providers"]["claude"][
+            "conversations"
+        ]
+        self.assertEqual([item["session_id"] for item in conversations], [active_id])
+
+    def test_missing_required_registered_archive_fails_loudly(self) -> None:
+        user_home = self.root / "user-home"
+        active_home = user_home / ".claude"
+        claude_project_dir(active_home, self.workspace)
+        self.write_history_sources(
+            active_home, self.root / "missing-archive", required=True
+        )
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "claude",
+                "--format",
+                "json",
+            ],
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+            env={**os.environ, "HOME": str(user_home)},
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("required history source", completed.stderr.lower())
 
 
 if __name__ == "__main__":

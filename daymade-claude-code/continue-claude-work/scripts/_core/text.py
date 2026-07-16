@@ -4,14 +4,15 @@ These turn raw session content into a readable one-line title and iterate JSONL
 transcripts safely. Both the Claude and Codex providers use them, so they live in
 the shared core (SSOT: `daymade-claude-code/_conversation_core/`, bundled into
 each skill's `scripts/_core/` by `sync_core.py`). Keeping them here lets the Codex
-provider and a future `continue-codex-work` skill reuse one implementation instead
-of re-deriving title/noise heuristics that would drift apart.
+provider and `continue-codex-work` reuse one implementation instead of
+re-deriving title/noise heuristics that would drift apart.
 """
 
 from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Optional
 
@@ -41,6 +42,14 @@ ATTACHMENT_IMAGE_RE = re.compile(
 )
 FILE_SUFFIX_RE = re.compile(r"\.[A-Za-z0-9]{1,16}$")
 SLASH_COMMAND_RE = re.compile(r"^/[A-Za-z0-9_:-]+(?:[ \t].*)?$")
+
+
+@dataclass(frozen=True)
+class SearchSegment:
+    """One searchable text field with its semantic provenance."""
+
+    source: str
+    text: str
 
 
 def looks_like_attachment_prefix(value: str) -> bool:
@@ -109,6 +118,117 @@ def extract_text(content: Any) -> str:
         ):
             parts.append(item["text"])
     return " ".join(parts)
+
+
+def _flatten_search_strings(value: Any) -> Iterator[str]:
+    """Yield string values while excluding structural/signature metadata."""
+    if isinstance(value, str):
+        if value:
+            yield value
+        return
+    if isinstance(value, list):
+        for item in value:
+            yield from _flatten_search_strings(item)
+        return
+    if not isinstance(value, dict):
+        return
+    for key, child in value.items():
+        if key in {"type", "id", "tool_use_id", "signature"}:
+            continue
+        yield from _flatten_search_strings(child)
+
+
+def searchable_segments(record: dict[str, Any]) -> list[SearchSegment]:
+    """Extract user-visible/search-relevant fields from one Claude event.
+
+    Raw JSON serialization is intentionally not searched: keys, UUIDs, and
+    cryptographic thinking signatures create false positives. Instead this
+    covers message text, thinking text, tool inputs/results, queue content,
+    last-prompt/system summaries, and attachment payloads with a source label for
+    every segment.
+    """
+    segments: list[SearchSegment] = []
+
+    def add(source: str, value: Any) -> None:
+        for text_value in _flatten_search_strings(value):
+            segments.append(SearchSegment(source=source, text=text_value))
+
+    event_type = record.get("type")
+    message = record.get("message")
+    content: Any
+    if isinstance(message, dict):
+        content = message.get("content", [])
+    elif isinstance(message, str):
+        content = message
+    elif event_type in {"user", "assistant"} or record.get("role") in {
+        "user",
+        "assistant",
+    }:
+        content = record.get("content", [])
+    else:
+        content = []
+
+    if isinstance(content, str):
+        add("message", content)
+    elif isinstance(content, list):
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            block_type = block.get("type")
+            if block_type in {"text", "input_text"}:
+                add("message", block.get("text"))
+            elif block_type == "thinking":
+                add("thinking", block.get("thinking"))
+            elif block_type == "tool_use":
+                tool_name = block.get("name")
+                source = (
+                    f"tool_input:{tool_name}"
+                    if isinstance(tool_name, str) and tool_name
+                    else "tool_input"
+                )
+                add(source, block.get("input"))
+            elif block_type == "tool_result":
+                add("tool_result", block.get("content"))
+            else:
+                # Preserve textual payloads of future/older block types without
+                # indexing structural keys or binary image data.
+                add("message", {key: block.get(key) for key in ("text", "content")})
+
+    if event_type == "queue-operation":
+        add("queue-operation", record.get("content"))
+    elif event_type == "attachment":
+        attachment = record.get("attachment")
+        if isinstance(attachment, dict):
+            add(
+                "attachment",
+                {
+                    key: attachment.get(key)
+                    for key in (
+                        "content",
+                        "prompt",
+                        "path",
+                        "displayPath",
+                        "command",
+                        "stdout",
+                        "stderr",
+                    )
+                },
+            )
+    elif event_type == "last-prompt":
+        add("last-prompt", record.get("lastPrompt"))
+    elif event_type == "system":
+        add("system", record.get("content"))
+    elif event_type == "summary":
+        add("summary", {"content": record.get("content"), "summary": record.get("summary")})
+    elif event_type == "custom-title":
+        add(
+            "custom-title",
+            {"title": record.get("title"), "customTitle": record.get("customTitle")},
+        )
+
+    # Some event variants mirror the same payload in more than one compatible
+    # field. Count each semantic source/text pair once per record.
+    return list(dict.fromkeys(segments))
 
 
 def is_noise_text(text: str) -> bool:

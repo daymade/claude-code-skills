@@ -11,8 +11,8 @@ Detailed workflow examples for common session history recovery scenarios.
 python3 scripts/analyze_sessions.py search /path/to/project \
     DeletedComponent ModelScreen RemovedFeature
 
-# 2. Recover content from most relevant session
-python3 scripts/recover_content.py ~/.claude/projects/.../session-id.jsonl \
+# 2. Copy the exact Path printed for the most relevant active/archive session
+python3 scripts/recover_content.py <printed-session-path> \
     -k DeletedComponent ModelScreen \
     -o ./recovered/
 
@@ -52,7 +52,8 @@ find ./v1/ -name "componentName.jsx" -exec diff {} ./v2/{} \;
 ```bash
 # Search for distinctive keywords from that implementation
 python3 scripts/analyze_sessions.py search /path/to/project \
-    "useModelStatus" "downloadProgress" "ModelScope"
+    "useModelStatus" "downloadProgress" "ModelScope" \
+    --from-date 2026-03-01 --to-date 2026-04-30
 
 # Review top match
 python3 scripts/analyze_sessions.py stats <top-result-session.jsonl>
@@ -65,7 +66,7 @@ python3 scripts/analyze_sessions.py stats <top-result-session.jsonl>
 ```bash
 # Find relevant sessions
 sessions=$(python3 scripts/analyze_sessions.py search /path/to/project \
-    keyword --limit 999 | grep "Path:" | awk '{print $2}')
+    keyword | grep "Path:" | awk '{print $2}')
 
 # Recover from each session
 for session in $sessions; do
@@ -74,9 +75,32 @@ for session in $sessions; do
 done
 ```
 
+The default `list` and `search` commands cover active homes plus registered
+archives. Do not add `--main-only` or `--home` to these workflows unless the
+task is explicitly to diagnose one store. A required missing archive stops the
+search instead of silently returning a partial result.
+
+## Verify a Topic Across a Migrated History
+
+**Scenario**: A machine migration reset file mtimes, and older sessions may live
+only in a registered archive.
+
+```bash
+python3 scripts/analyze_sessions.py search /path/to/project \
+    "distinctive topic" "library-name" \
+    --from-date 2026-03-01 --to-date 2026-04-30
+```
+
+Verify three fields before reporting absence: the `Searched ... source(s)` line
+includes the expected `archive:<label>`, the command did not emit a source
+configuration error, and the date window was applied to internal matching-record
+timestamps. File mtime is not evidence.
+
 ## Custom Extraction from Raw JSONL
 
-For extraction needs not covered by bundled scripts:
+For extraction needs not covered by bundled scripts, first use the analyzer to
+locate the exact active/archive session. A one-file custom extractor is not a
+replacement for whole-history source discovery:
 
 ```python
 import json
@@ -84,6 +108,6 @@ import json
 with open('session.jsonl', 'r') as f:
     for line in f:
         data = json.loads(line)
-        # Custom extraction logic
+        # Custom extraction logic; use data.get("timestamp") for time evidence.
         # See references/session_file_format.md for structure
 ```

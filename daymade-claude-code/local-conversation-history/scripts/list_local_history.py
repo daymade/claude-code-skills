@@ -17,17 +17,22 @@ from typing import Optional
 # scripts/_core/ by sync_core.py. Make this script's own dir importable
 # regardless of how it is invoked, then import.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _core.homes import discover_claude_homes, home_label  # noqa: E402
+from _core.claude import scan_claude_session  # noqa: E402
+from _core.homes import home_label  # noqa: E402
 from _core.parse import (  # noqa: E402
     format_timestamp,
     iso_timestamp,
-    parse_timestamp,
+    parse_date_boundary,
+    range_overlaps_window,
     workspace_matches,
 )
 from _core.model import Conversation, ProviderResult  # noqa: E402
+from _core.sources import (  # noqa: E402
+    HistorySource,
+    HistorySourceConfigError,
+    discover_claude_sources,
+)
 from _core.text import (  # noqa: E402
-    extract_text,
-    first_meaningful_title,
     is_automated_title,
     iter_jsonl,
 )
@@ -68,63 +73,39 @@ def claude_session_files(project_dir: Path, include_subagents: bool) -> list[Pat
     return files
 
 
-def parse_claude_session(path: Path, max_chars: int) -> Conversation:
-    session_id = path.stem
-    cwd = ""
-    created_at: Optional[float] = None
-    prompt_candidates: list[str] = []
-    for record in iter_jsonl(path, bounded=True):
-        if isinstance(record.get("sessionId"), str):
-            session_id = record["sessionId"]
-        if not cwd and isinstance(record.get("cwd"), str):
-            cwd = record["cwd"]
-        if created_at is None:
-            created_at = parse_timestamp(record.get("timestamp"))
-        if record.get("type") != "user" or record.get("isMeta") is True:
-            continue
-        message = record.get("message")
-        if not isinstance(message, dict) or message.get("role") != "user":
-            continue
-        text = extract_text(message.get("content"))
-        if text:
-            prompt_candidates.append(text)
-            title = first_meaningful_title(prompt_candidates, max_chars)
-            if title and len(title) >= 4:
-                break
-    title = first_meaningful_title(prompt_candidates, max_chars)
-    if not title:
-        title = f"(untitled: {session_id})"
-    try:
-        updated_at = path.stat().st_mtime
-        timestamp_source = "file-mtime"
-    except OSError:
-        updated_at = created_at
-        timestamp_source = "session-record"
+def parse_claude_session(
+    path: Path, max_chars: int, source: HistorySource
+) -> Conversation:
+    summary = scan_claude_session(path, max_chars)
     return Conversation(
         provider="claude",
-        session_id=session_id,
-        title=title,
-        cwd=cwd,
-        updated_at=updated_at,
-        created_at=created_at,
+        session_id=summary.session_id,
+        title=summary.title,
+        cwd=summary.cwd,
+        updated_at=summary.updated_at,
+        created_at=summary.created_at,
         archived=False,
         kind="subagent" if path.name.startswith("agent-") else "main",
         path=str(path),
         metadata_source="session-jsonl",
-        timestamp_source=timestamp_source,
+        timestamp_source=(
+            "session-record-minmax" if summary.timestamp_count else "unknown"
+        ),
+        source_kind=source.kind,
+        source_labels=[source.display_label],
     )
 
 
 def peek_claude_project_cwd(project_dir: Path) -> str:
     try:
         files = sorted(
-            (path for path in project_dir.glob("*.jsonl") if not path.name.startswith("agent-")),
-            key=lambda path: path.stat().st_mtime,
-            reverse=True,
+            path
+            for path in project_dir.glob("*.jsonl")
+            if not path.name.startswith("agent-")
         )
     except OSError:
         return ""
-    for path in files[:3]:
+    for path in files:
         for record in iter_jsonl(path, bounded=True):
             if isinstance(record.get("cwd"), str) and record["cwd"]:
                 return record["cwd"]
@@ -176,9 +157,10 @@ def discover_claude_project_dirs(
     return matched
 
 
-def collect_claude(args: argparse.Namespace, home: Path) -> ProviderResult:
+def collect_claude(args: argparse.Namespace, source: HistorySource) -> ProviderResult:
+    home = source.home
     result = ProviderResult(
-        provider="claude", backend="session-jsonl", home=str(home)
+        provider="claude", backend="session-jsonl", home=source.display_label
     )
     project_dirs = discover_claude_project_dirs(
         home / "projects",
@@ -196,7 +178,7 @@ def collect_claude(args: argparse.Namespace, home: Path) -> ProviderResult:
             except OSError:
                 pass
         for path in claude_session_files(project_dir, args.include_subagents):
-            conversation = parse_claude_session(path, args.max_title_chars)
+            conversation = parse_claude_session(path, args.max_title_chars, source)
             if not args.all_projects and conversation.cwd and not workspace_matches(
                 conversation.cwd, args.cwd, args.recursive
             ):
@@ -240,6 +222,10 @@ def conversation_flags(item: Conversation, language: str) -> str:
     return ", ".join(values) if values else "—"
 
 
+def conversation_source(item: Conversation) -> str:
+    return ", ".join(item.source_labels) if item.source_labels else "—"
+
+
 def render_provider_markdown(
     result: ProviderResult, args: argparse.Namespace, language: str
 ) -> list[str]:
@@ -254,6 +240,7 @@ def render_provider_markdown(
         )
         updated_label, title_label = "最近更新", "主题"
         id_label, flags_label, project_label = "会话 ID", "标记", "项目"
+        source_label = "来源"
     else:
         lines = [f"## {provider_name} — {result.total} conversations", ""]
         lines.append(
@@ -264,11 +251,14 @@ def render_provider_markdown(
         )
         updated_label, title_label = "Updated", "Title"
         id_label, flags_label, project_label = "Session ID", "Flags", "Project"
+        source_label = "Source"
     lines.append("")
     include_project = args.all_projects or args.recursive
     headers = [updated_label, title_label, id_label]
     if include_project:
         headers.append(project_label)
+    if result.provider == "claude":
+        headers.append(source_label)
     headers.append(flags_label)
     lines.append("| " + " | ".join(headers) + " |")
     lines.append("|" + "---|" * len(headers))
@@ -281,11 +271,16 @@ def render_provider_markdown(
         ]
         if include_project:
             row.append(f"`{markdown_escape(display_project(item.cwd))}`")
+        if result.provider == "claude":
+            row.append(markdown_escape(conversation_source(item)))
         row.append(conversation_flags(item, language))
         lines.append("| " + " | ".join(row) + " |")
     if not shown:
         empty = "未找到匹配的对话。" if language == "zh" else "No matching conversations found."
-        lines.append(f"| — | {empty} | — |" + (" — |" if include_project else "") + " — |")
+        extra_columns = int(include_project) + int(result.provider == "claude")
+        lines.append(
+            f"| — | {empty} | — |" + (" — |" * extra_columns) + " — |"
+        )
     if result.warnings:
         lines.append("")
         heading = "诊断" if language == "zh" else "Diagnostics"
@@ -379,7 +374,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--language", choices=("auto", "en", "zh"), default="auto"
     )
     parser.add_argument("--claude-home", help="Override the Claude configuration root")
+    parser.add_argument(
+        "--history-sources",
+        metavar="FILE",
+        help=(
+            "History source registry (default: ~/.claude/history-sources.json "
+            "when present). Incompatible with --claude-home."
+        ),
+    )
     parser.add_argument("--codex-home", help="Override the Codex configuration root")
+    parser.add_argument(
+        "--from-date",
+        help="Inclusive start: YYYY-MM-DD (local day) or timezone-qualified ISO datetime",
+    )
+    parser.add_argument(
+        "--to-date",
+        help="Inclusive end: YYYY-MM-DD (local day) or timezone-qualified ISO datetime",
+    )
     parser.add_argument(
         "--max-title-chars", type=int, default=120, help="Maximum title length"
     )
@@ -389,26 +400,68 @@ def build_parser() -> argparse.ArgumentParser:
 def merge_claude_results(results: list[ProviderResult]) -> ProviderResult:
     """Merge per-home Claude results into one, de-duplicating by session id.
 
-    A conversation shared across profile homes (the profile dirs link back to
-    one physical file) appears once; the copy with the newest ``updated_at``
-    wins. Exclusion counts and warnings are summed/combined, and ``home`` becomes
-    a comma-joined list of the profile labels the sessions came from.
+    A conversation shared across active homes and archives appears once. The
+    title/path come from the copy with the greatest internal maximum timestamp;
+    a tie prefers the active copy. The displayed session range is the union of
+    every copy, and every matching source label remains attached as provenance.
     """
     real = [r for r in results if r is not None]
     if not real:
         return ProviderResult(provider="claude", backend="session-jsonl", home="")
-    if len(real) == 1:
-        return real[0]
     by_id: dict[str, Conversation] = {}
     for r in real:
         for conv in r.conversations:
             existing = by_id.get(conv.session_id)
-            if existing is None or (conv.updated_at or 0) > (existing.updated_at or 0):
+            if existing is None:
                 by_id[conv.session_id] = conv
+                continue
+            labels = list(dict.fromkeys(existing.source_labels + conv.source_labels))
+            existing_time = (
+                existing.updated_at
+                if existing.updated_at is not None
+                else float("-inf")
+            )
+            candidate_time = (
+                conv.updated_at if conv.updated_at is not None else float("-inf")
+            )
+            candidate_wins = candidate_time > existing_time or (
+                candidate_time == existing_time
+                and conv.source_kind == "active"
+                and existing.source_kind != "active"
+            )
+            created_values = [
+                value
+                for value in (existing.created_at, conv.created_at)
+                if value is not None
+            ]
+            updated_values = [
+                value
+                for value in (existing.updated_at, conv.updated_at)
+                if value is not None
+            ]
+            union_created = min(created_values) if created_values else None
+            union_updated = max(updated_values) if updated_values else None
+            union_timestamp_source = (
+                "session-record-minmax"
+                if "session-record-minmax"
+                in {existing.timestamp_source, conv.timestamp_source}
+                else "unknown"
+            )
+            if candidate_wins:
+                conv.source_labels = labels
+                conv.created_at = union_created
+                conv.updated_at = union_updated
+                conv.timestamp_source = union_timestamp_source
+                by_id[conv.session_id] = conv
+            else:
+                existing.source_labels = labels
+                existing.created_at = union_created
+                existing.updated_at = union_updated
+                existing.timestamp_source = union_timestamp_source
     return ProviderResult(
         provider=real[0].provider,
         backend=real[0].backend,
-        home=", ".join(home_label(r.home) for r in real if r.home),
+        home=", ".join(dict.fromkeys(r.home for r in real if r.home)),
         conversations=sorted(
             by_id.values(), key=lambda c: (c.updated_at or 0), reverse=True
         ),
@@ -417,6 +470,35 @@ def merge_claude_results(results: list[ProviderResult]) -> ProviderResult:
         excluded_automated=sum(r.excluded_automated for r in real),
         warnings=[w for r in real for w in r.warnings],
     )
+
+
+def apply_date_filter(
+    result: ProviderResult,
+    from_timestamp: Optional[float],
+    to_timestamp: Optional[float],
+) -> ProviderResult:
+    if from_timestamp is None and to_timestamp is None:
+        return result
+    kept: list[Conversation] = []
+    unknown = 0
+    for conversation in result.conversations:
+        if conversation.created_at is None or conversation.updated_at is None:
+            unknown += 1
+            continue
+        if range_overlaps_window(
+            conversation.created_at,
+            conversation.updated_at,
+            from_timestamp,
+            to_timestamp,
+        ):
+            kept.append(conversation)
+    result.conversations = kept
+    if unknown:
+        result.warnings.append(
+            f"Excluded {unknown} conversation(s) without an internal timestamp "
+            "because a date filter is active. File mtime was not used as a fallback."
+        )
+    return result
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -429,32 +511,72 @@ def main(argv: Optional[list[str]] = None) -> int:
         parser.error("--max-title-chars must be at least 20")
     if args.all_projects and args.cwd:
         parser.error("--cwd cannot be combined with --all-projects")
+    if args.claude_home and args.history_sources:
+        parser.error("--claude-home cannot be combined with --history-sources")
     if not args.all_projects:
         args.cwd = args.cwd or os.getcwd()
-    claude_home = Path(
-        args.claude_home
-        or os.environ.get("CLAUDE_CONFIG_DIR")
-        or (Path.home() / ".claude")
-    ).expanduser()
+    try:
+        from_timestamp = (
+            parse_date_boundary(args.from_date) if args.from_date else None
+        )
+        to_timestamp = (
+            parse_date_boundary(args.to_date, end=True) if args.to_date else None
+        )
+    except ValueError as error:
+        parser.error(str(error))
+    if (
+        from_timestamp is not None
+        and to_timestamp is not None
+        and from_timestamp > to_timestamp
+    ):
+        parser.error("--from-date must not be later than --to-date")
     codex_home = Path(
         args.codex_home or os.environ.get("CODEX_HOME") or (Path.home() / ".codex")
     ).expanduser()
 
     results: list[ProviderResult] = []
     if args.source in {"all", "claude"}:
-        # An explicit --claude-home / CLAUDE_CONFIG_DIR pins a single home (the
-        # test fixtures rely on this). With neither set, search every config
-        # home so a conversation held under a per-model profile is not missed,
-        # then merge the per-home results into one de-duplicated list.
-        if args.claude_home or os.environ.get("CLAUDE_CONFIG_DIR"):
-            claude_homes = [claude_home]
-        else:
-            claude_homes = discover_claude_homes() or [claude_home]
+        try:
+            if args.claude_home:
+                explicit_home = Path(args.claude_home).expanduser()
+                claude_sources = [
+                    HistorySource(
+                        provider="claude",
+                        kind="active",
+                        label=home_label(explicit_home),
+                        home=explicit_home,
+                    )
+                ]
+                source_warnings: list[str] = []
+            else:
+                claude_sources, source_warnings = discover_claude_sources(
+                    manifest_path=args.history_sources
+                )
+                if not claude_sources:
+                    default_home = Path.home() / ".claude"
+                    claude_sources = [
+                        HistorySource(
+                            provider="claude",
+                            kind="active",
+                            label="main",
+                            home=default_home,
+                        )
+                    ]
+        except HistorySourceConfigError as error:
+            parser.error(str(error))
+        claude_result = merge_claude_results(
+            [collect_claude(args, source) for source in claude_sources]
+        )
+        claude_result.warnings = source_warnings + claude_result.warnings
         results.append(
-            merge_claude_results([collect_claude(args, h) for h in claude_homes])
+            apply_date_filter(claude_result, from_timestamp, to_timestamp)
         )
     if args.source in {"all", "codex"}:
-        results.append(collect_codex(args, codex_home))
+        results.append(
+            apply_date_filter(
+                collect_codex(args, codex_home), from_timestamp, to_timestamp
+            )
+        )
 
     output = render_json(results, args) if args.format == "json" else render_markdown(results, args)
     sys.stdout.write(output)

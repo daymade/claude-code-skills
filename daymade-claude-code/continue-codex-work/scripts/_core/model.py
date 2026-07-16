@@ -3,8 +3,8 @@
 `Conversation` / `ProviderResult` / `CodexDatabase` are used by both the Claude
 and Codex providers and by the renderers, so they live in the shared core (SSOT:
 `daymade-claude-code/_conversation_core/`, bundled into each skill's
-`scripts/_core/` by `sync_core.py`). Extracting them here lets a skill like
-`continue-codex-work` reuse the same model without re-declaring it.
+`scripts/_core/` by `sync_core.py`). This lets `continue-codex-work` and the
+inventory/search skills reuse the same model without re-declaring it.
 """
 
 from __future__ import annotations
@@ -29,6 +29,8 @@ class Conversation:
     path: str
     metadata_source: str
     timestamp_source: str
+    source_kind: str = ""
+    source_labels: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
