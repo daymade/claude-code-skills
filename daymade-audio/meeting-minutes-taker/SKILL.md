@@ -79,6 +79,11 @@ Meeting Minutes Progress:
   - [ ] Merge: UNION all versions, AGGRESSIVELY include ALL diagrams → draft_minutes.md
   - [ ] Final: Compare draft against transcript, add omissions
 - [ ] Step 3: Self-review for completeness
+- [ ] Step 3.5: Retrieval Self-Test (consumption-side verification)
+  - [ ] Fresh-context subagent extracts future-query claims list from transcript ONLY (never sees draft) → intermediate/<transcript-name>/retrieval-claims.md
+  - [ ] Hit-test each claim against retrievable layer (Key Decisions / Action Items / Parking Lot / Open Questions), by component, with lexical anchors
+  - [ ] Revocation scan before ANY promotion; promote with [self-test promoted] tag + greppable verbatim quote; uncertain → Open Questions
+  - [ ] Report "enumerated N / hits M / promoted K / uncertain list" (never a binary pass); fail-open with visible NOT-RUN note if extraction fails
 - [ ] Step 4: Present draft to user for human review
 - [ ] Step 5: Cross-AI comparison (if human provides external AI output)
 - [ ] Step 6: Iterate on human feedback (expect multiple rounds)
@@ -268,6 +273,7 @@ Main Agent: Read all versions → UNION merge, consolidate duplicates → draft_
 4. Reference images/documents if provided by user
 5. Output language requirement (match user's language preference, preserve technical terms in English)
 6. Quote formatting requirement (see Quote Formatting Requirements section below)
+7. Decision-recognition rule: identify decisions by **elements, not phrasing** — an instruction embedded in narrative/case-review speech is still a decision if it has an authority (who), an action (do what), and optionally a condition (until when). Precision guardrail: when unsure whether something is a real decision, route it to Open Questions instead of Key Decisions (never inflate the decision table).
 
 **Why multiple complete passes work:**
 - Each pass independently analyzes the SAME content
@@ -361,6 +367,7 @@ Final Review:
 - **Always use multiple passes** - Single turn is guaranteed to lose content
 - **Normalize equivalent terminology** - Treat trivial variations (e.g., "backend architecture" vs "backend", "API endpoint" vs "endpoint") as equivalent; do NOT point out or highlight such differences between speakers
 - **Single source of truth** - Place each piece of information in ONE location only; avoid duplicating tables, lists, or summaries across sections (e.g., API list belongs in Discussion OR Reference, not both)
+- **Decisions are identified by elements, not phrasing** - "We decided X" is not required; a narrative-voiced instruction with who + do-what (+ condition) belongs in Key Decisions, not buried in Discussion prose
 
 ### Step 3: Self-Review for Completeness
 
@@ -378,6 +385,30 @@ Completeness Checklist:
 ```
 
 If gaps found, add missing content silently without mentioning what was missed.
+
+### Step 3.5: Retrieval Self-Test (Consumption-Side Verification)
+
+**Why this step exists.** The three generation subagents share one prompt and one implicit model of "what a decision looks like" — their errors are correlated, so UNION merge protects against content *loss* but not against a shared blind spot. Step 3's checklist verifies the decisions you already identified; it cannot find what none of the passes classified as a decision. Meanwhile, minutes are consumed by *retrieval*: weeks later someone asks "did X ever say we must do Y?" and scans the Key Decisions / Action Items tables. A directive that lives only in Discussion prose fails that query even though no content was "lost". This step tests that terminal property directly. (Honest scope: it is a second, partially-decorrelated recall layer — not an oracle. Known blind spots it does NOT cover: assertions whose pragmatic force contradicts their phrasing ("fine, do it without load-testing, just don't say I didn't warn you" = an on-record objection), and silent-consent moments that produce no utterance at all.)
+
+**Procedure** (after merge, before presenting the draft):
+
+1. **Reverse-extract a future-query claims list.** Spawn ONE fresh-context subagent that reads ONLY the transcript — it must NOT see the draft minutes (a speaker-name mapping is fine; the anchoring risk comes from the draft's structure, not from a roster). Its task:
+   > Imagine project members returning 1–8 weeks from now to verify: "did [person] ever instruct / promise / decide / veto / commit-a-number on X?" Enumerate every such claim. Each claim = who + type (instruction / promise / decision / veto / number-commitment / conditional-consensus) + content + scope (+ expiry condition if any) + timestamp. Include only claims with a clear owner; skip opinions and background narration.
+   
+   For long transcripts (roughly > 60k characters or > 90 minutes), extract in overlapping chunks and merge — a single pass inherits lost-in-the-middle attention decay exactly where long meetings bury directives. Write the list to `<output_dir>/intermediate/<transcript-name>/retrieval-claims.md` (auditable evidence that the check ran, and reviewable by the human later).
+
+2. **Hit-test each claim against the retrievable layer** (main agent): the retrievable layer = Key Decisions titles + Decision lines, Action Items table, Parking Lot, Open Questions — a hit means a reader scanning ONLY those finds the claim, no prose reading required. Judge hits **by component**: who / action / deadline / expiry-condition each need to be present (a table row that names the task but drops the expiry condition is a partial miss). Require **lexical anchors** — the row must share the claim's key actor/action words; do not accept purely semantic "an LLM could argue they match" equivalence, because the future reader is a hurried human, not a charitable model.
+
+3. **Disposition for misses.** Before promoting anything, run a **revocation scan**: grep the transcript for later reversals / modifications / conditioning of the same topic ("earlier we said air-freight — hold that until customs confirms"). A claim that was superseded in-meeting must NOT be promoted as-is; record the final state instead. This scan is mandatory — promoting a revoked decision is the one way this step can make minutes *worse* than not running it. Then:
+   - Miss + genuinely an instruction/promise/decision → promote into Key Decisions or Action Items, tagged `[self-test promoted]`, with a verbatim quote + timestamp that can be grepped back to the transcript (a promotion without a greppable quote is rejected — this caps hallucinated-claim risk).
+   - Miss + uncertain → route to Open Questions / Parking Lot. Never let uncertain promotions inflate the decision table; its precision IS its retrievability.
+   - Miss + genuinely just detail → leave in Discussion, but be able to say why it won't be queried.
+
+4. **Report, never a binary "passed".** Output: `enumerated N / hits M / promoted K / uncertain list` and show it alongside the draft. Promoted rows are exactly what the human should review hardest — unlike Step 3's silent gap-filling, promotions are never silent.
+
+5. **Fail-open.** If the extraction subagent stalls or fails, deliver the minutes anyway with a visible note "Retrieval Self-Test: NOT RUN". This gate must never block delivery — a gate that falsely blocks healthy runs trains its operator to skip it permanently.
+
+6. **On iteration rounds** (Step 6 feedback cycles, cross-AI merges): re-run at least the hit-test against the final version before delivery — content added in later rounds otherwise bypasses the check entirely.
 
 ### Step 4: Present to User for Human Review
 
@@ -639,6 +670,9 @@ Round 4: Update to use "Annotation" instead of "Note"
 ## Anti-Patterns
 
 - ❌ **Inferring speaker identity from text when the source platform supports labeling** - Ask the user to label speakers in Feishu Minutes / Tencent Meeting and re-export FIRST (Step 1.5 Phase 0); text inference only resolves name-called speakers and cannot recover diarization-merged segments
+- ❌ **Self-reviewing with the same mental model that generated the draft** - Step 3's checklist can only verify what the passes already classified; a shared blind spot (e.g., narrative-voiced directives) survives it. Run Step 3.5's fresh-context Retrieval Self-Test; its extractor must never see the draft
+- ❌ **Promoting a self-test miss without the revocation scan** - a decision reversed later in the meeting, promoted as-is, writes a false decision into the table: the one way the self-test makes minutes worse than skipping it
+- ❌ **Reporting the self-test as a binary "passed"** - always report "enumerated N / hits M / promoted K / uncertain list"; a green light with no numbers trains humans to stop reading
 - ❌ **Single-pass generation** - One turn through transcript will absolutely lose content
 - ❌ **Divided sections without overlap** - Each pass must cover FULL transcript, not split by sections
 - ❌ **Narrow-focused passes** - Each pass must generate COMPLETE minutes (all sections), not just one section type (wastes tokens, causes bias)
