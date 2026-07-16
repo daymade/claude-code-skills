@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -945,6 +946,124 @@ def verify_review(before: Path, after: Path, review_path: Path) -> tuple[bool, l
     return not errors, errors
 
 
+def classify_review(
+    review_path: Path,
+    after: Path,
+    map_path: Path,
+    reviewer: str,
+) -> tuple[int, list[str]]:
+    """Fill candidate dispositions mechanically from an author-supplied map.
+
+    The author still decides every disposition and reason; this subcommand only
+    does the typing ``verify`` would otherwise force into a hand-written filler
+    script each round: locate the quoted evidence line in the destination file,
+    compute file fingerprints for file-level candidates, and write entries in
+    the exact shape ``verify`` validates. Fail-fast: any problem in the map
+    aborts before anything is written, so a half-classified review never lands.
+    """
+    after = after.resolve()
+    review = _load_review(review_path)
+    candidates = review.get("candidates")
+    if not isinstance(candidates, list):
+        raise ValueError("regression review has no candidates list")
+    try:
+        mapping = json.loads(map_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read disposition map {map_path}: {error}") from error
+    if not isinstance(mapping, dict) or not mapping:
+        raise ValueError(
+            "disposition map must be a non-empty JSON object keyed by candidate index or id"
+        )
+    reviewer = reviewer.strip()
+    if not reviewer:
+        raise ValueError("--reviewer must not be blank; verify requires an attributable reviewer")
+
+    by_id = {c.get("id"): c for c in candidates if isinstance(c, dict)}
+    errors: list[str] = []
+    staged: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for key, entry in mapping.items():
+        candidate = by_id.get(key)
+        if candidate is None:
+            try:
+                candidate = candidates[int(key)]
+            except (ValueError, IndexError):
+                errors.append(f"map key {key!r} matches no candidate index or id")
+                continue
+        if not isinstance(entry, dict):
+            errors.append(f"map[{key}] must be an object")
+            continue
+        disposition = entry.get("disposition", "preserved_or_moved")
+        if disposition not in VALID_DISPOSITIONS:
+            errors.append(
+                f"map[{key}].disposition {disposition!r} is not one of {sorted(VALID_DISPOSITIONS)}"
+            )
+            continue
+        reason = str(entry.get("reason", "")).strip()
+        destination = str(entry.get("destination", "")).strip()
+        kind = str(candidate.get("kind", ""))
+        file_candidate = kind.endswith("_file") or kind.endswith("_file_changed")
+        min_reason = 40 if file_candidate else 20
+        if len(reason) < min_reason:
+            errors.append(f"map[{key}].reason needs >= {min_reason} characters (got {len(reason)})")
+            continue
+        if not destination or Path(destination).is_absolute() or ".." in Path(destination).parts:
+            errors.append(f"map[{key}].destination must be a safe path relative to the after skill")
+            continue
+        target = after / destination
+        if not target.is_file():
+            errors.append(f"map[{key}].destination does not exist under after: {destination}")
+            continue
+        if file_candidate:
+            evidence: list[dict[str, Any]] = [
+                {"path": destination, "sha256": _file_fingerprint(target)}
+            ]
+        else:
+            needle = str(entry.get("needle", "")).strip()
+            if not needle:
+                errors.append(f"map[{key}].needle is required for non-file candidates")
+                continue
+            line_no = None
+            try:
+                for i, line in enumerate(target.read_text(encoding="utf-8").splitlines(), 1):
+                    if needle in line:
+                        line_no = i
+                        break
+            except (OSError, UnicodeDecodeError):
+                errors.append(f"map[{key}] destination is not readable text: {destination}")
+                continue
+            if line_no is None:
+                errors.append(f"map[{key}].needle not found in {destination}: {needle[:60]!r}")
+                continue
+            evidence = [{"path": destination, "line": line_no, "contains": needle}]
+        staged.append(
+            (
+                candidate,
+                {
+                    "disposition": disposition,
+                    "reason": reason,
+                    "destination": destination,
+                    "evidence": evidence,
+                    "semantic_review": {"reviewer": reviewer, "rationale": reason},
+                },
+            )
+        )
+
+    if errors:
+        raise ValueError("disposition map has problems; nothing was written:\n- " + "\n- ".join(errors))
+
+    for candidate, fields in staged:
+        candidate.update(fields)
+    tmp = review_path.with_name(review_path.name + ".tmp")
+    tmp.write_text(json.dumps(review, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    os.replace(tmp, review_path)
+    unclassified = [
+        f"{c.get('id')} ({c.get('kind')})"
+        for c in candidates
+        if isinstance(c, dict) and c.get("disposition") == "unclassified"
+    ]
+    return len(staged), unclassified
+
+
 def _attestation_digest(before_hash: str, after_hash: str, review_hash: str) -> str:
     value = f"{SCHEMA_VERSION}\0{before_hash}\0{after_hash}\0{review_hash}".encode("ascii")
     return hashlib.sha256(value).hexdigest()
@@ -1099,6 +1218,24 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--after", required=True, type=Path)
     verify.add_argument("--review", required=True, type=Path)
     verify.add_argument("--json", action="store_true", help="print a machine-readable result")
+    classify = subparsers.add_parser(
+        "classify",
+        help="fill dispositions from an author-supplied map (does the typing, not the judging)",
+    )
+    classify.add_argument("--review", required=True, type=Path)
+    classify.add_argument("--after", required=True, type=Path)
+    classify.add_argument(
+        "--map",
+        dest="map_path",
+        required=True,
+        type=Path,
+        help='JSON object: candidate index or id -> {"destination", "needle", "reason", "disposition"?}',
+    )
+    classify.add_argument(
+        "--reviewer",
+        required=True,
+        help="attributable reviewer recorded in semantic_review (you, not the tool)",
+    )
     return parser
 
 
@@ -1135,6 +1272,16 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 _print_compare(report, args.output)
             return 1 if report["candidates"] else 0
+        if args.command == "classify":
+            classified, unclassified = classify_review(
+                args.review, args.after, args.map_path, args.reviewer
+            )
+            print(f"Classified {classified} candidate(s).")
+            if unclassified:
+                print(f"Still unclassified: {len(unclassified)}")
+                for item in unclassified:
+                    print(f"- {item}")
+            return 1 if unclassified else 0
         ok, errors = verify_review(args.before, args.after, args.review)
         result = {"status": "pass" if ok else "fail", "errors": errors}
         if args.json:
