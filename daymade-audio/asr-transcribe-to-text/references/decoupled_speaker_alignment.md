@@ -72,6 +72,55 @@ who-spoke-when.
 | one person split into SPEAKER_00/01 | diarization over-segmentation (noisy/far-field) | expected; run `voiceprint_id.py` to collapse |
 | music-only clip, looping whisper words | whisper hallucination with confident timestamps | unique-word-ratio warning in leg 2; anchored_ratio will also be low |
 
+## Code-review lessons (anti-regression)
+
+A high-effort `/code-review` of the decoupled pipeline (commit `3ea5f5c`) found
+12 bugs. They were not random — they cluster into generalizable traps. Each is
+now guarded in code; this section exists so a future edit doesn't quietly
+remove a guard and reintroduce the trap.
+
+1. **A leg succeeding ≠ the output being correct.** With zero difflib anchors
+   the char-time list was all-None; `times[i] or 0` coerced those to `0`, and
+   the pipeline shipped a transcript where every turn was stamped `[00:00.000]`
+   — it "ran green" but the deliverable was meaningless. → the `anchored_ratio`
+   trust signal gates writing; untrusted alignments are skipped, not written.
+   (The local instance of "pipeline连通 ≠ 产品正确".)
+2. **A flag accepted but silently ignored is worse than no flag.** `--language
+   English` was parsed by the orchestrator but never forwarded to the whisper
+   leg, which defaulted to `zh` and force-decoded English as Chinese. → forward
+   every flag end-to-end (or reject it); never let a default in a callee
+   silently override a caller's explicit choice.
+3. **A docstring/prose promise not backed by code is a lie.** Two were found:
+   "pyannote once for the batch" (it reloaded per file) and the missing-token
+   "warn-and-continue" (only ever `exit 3`). → if behavior is documented, the
+   code must enforce it — prose doesn't reach a batch script or a fresh session
+   that skips the doc.
+4. **One bad input must not abort the batch.** A single empty transcript raised
+   `ValueError` out of `align()` and killed alignment for every remaining file.
+   → per-item `try/except` + a `failed` list; one file's failure is recorded,
+   not fatal.
+5. **Don't ship untrustworthy intermediates to downstream consumers.** A
+   sub-threshold alignment wrote CSV/txt structurally identical to a good run;
+   the audit HTML and voiceprint steps would ingest it as authoritative. →
+   skip-and-record, never write-and-warn-on-stderr-only.
+6. **A flat output contract (`<stem>.*`) can't disambiguate duplicate stems.**
+   `dirA/meeting.wav` + `dirB/meeting.wav` silently overwrote each other. →
+   refuse loudly at input validation; don't try to "handle" an
+   undisambiguable collision.
+7. **Classifying errors by substring-sniffing the message is fragile.** The
+   "is this a pyannote token/terms error?" check matched literal words;
+   upstream rewording would turn a setup prompt into a raw traceback. →
+   broaden the keywords AND keep an authoritative fallback (the actual
+   `load_pipeline` failure path).
+8. **A subprocess leg with no timeout is an infinite hang waiting for the
+   known stall modes** (mlx-audio repetition loops, model-download stalls).
+   → always pass `timeout`.
+
+The meta-lesson: the decoupled architecture is sound, but its correctness
+boundary is at the *deliverable* (does the CSV mean what its consumers think?),
+not at the *pipeline* (did each leg return 0?). Most fixes above are about
+making a silent-wrong-output path fail fast instead.
+
 ## Alternatives & context (July 2026)
 
 - **Cloud ASR with built-in diarization** (Feishu Minutes, iFlytek,
