@@ -171,3 +171,59 @@ class TestStatusFeatureMatrix:
         assert data["lines"]
         assert data["audio"] is None
         assert env["client"].get(f"/api/audio/{item_id}").status_code == 404
+
+
+class TestFrontmatterAudioParsing:
+    """Adversarial-probe regressions: six bugs once lived in this one function
+    (empty value → Path('.') → 500; directory → 500; quoted path silently
+    dropped; relative path resolved against server cwd; unclosed frontmatter
+    parsed as valid; silent 60-line scan cap)."""
+
+    @pytest.fixture()
+    def parse(self, env):
+        import server
+        return server._frontmatter_audio
+
+    def _md(self, tmp_path, fm_lines, name="t.md", close=True):
+        body = ["---", *fm_lines] + (["---"] if close else []) + ["", "正文行"]
+        p = tmp_path / name
+        p.write_text("\n".join(body), encoding="utf-8")
+        return p
+
+    def test_empty_value_yields_none_not_cwd(self, parse, tmp_path):
+        md = self._md(tmp_path, ["audio:"])
+        assert parse(md) is None  # was: Path('.') → FileResponse(dir) → 500
+
+    def test_directory_value_yields_none(self, parse, tmp_path):
+        d = tmp_path / "somedir"; d.mkdir()
+        md = self._md(tmp_path, [f"audio: {d}"])
+        assert parse(md) is None  # was: exists()=True for dirs → 500
+
+    def test_quoted_path_is_unquoted(self, parse, tmp_path):
+        wav = tmp_path / "a.wav"; wav.write_bytes(b"\x00")
+        md = self._md(tmp_path, [f'audio: "{wav}"'])
+        assert parse(md) == wav  # was: quotes kept → silent None
+
+    def test_relative_path_resolves_against_transcript_dir(self, parse, tmp_path):
+        sub = tmp_path / "sub"; sub.mkdir()
+        wav = sub / "rec.wav"; wav.write_bytes(b"\x00")
+        md = self._md(sub, ["audio: rec.wav"])
+        assert parse(md) == wav.resolve()  # was: resolved against server cwd
+
+    def test_tilde_is_expanded(self, parse, tmp_path, monkeypatch):
+        home = tmp_path / "home"; home.mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        wav = home / "h.wav"; wav.write_bytes(b"\x00")
+        md = self._md(tmp_path, ["audio: ~/h.wav"])
+        assert parse(md) == wav
+
+    def test_unclosed_frontmatter_is_not_frontmatter(self, parse, tmp_path):
+        wav = tmp_path / "a.wav"; wav.write_bytes(b"\x00")
+        md = self._md(tmp_path, [f"audio: {wav}"], close=False)
+        assert parse(md) is None  # was: body text parsed as a live field
+
+    def test_long_frontmatter_within_cap_is_found(self, parse, tmp_path):
+        wav = tmp_path / "a.wav"; wav.write_bytes(b"\x00")
+        filler = [f"k{i}: v{i}" for i in range(80)]
+        md = self._md(tmp_path, filler + [f"audio: {wav}"])
+        assert parse(md) == wav  # was: silent 60-line cap
