@@ -1,6 +1,6 @@
 ---
 name: claude-switch-models-setup
-description: Set up multiple isolated Claude Code CLI profiles so students and power users can run different LLM providers (Kimi, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time. Use this skill whenever the user asks about multi-provider Claude setup, multiple Claude Code windows, switching models, CLAUDE_CONFIG_DIR, post-class profile installation, or running Kimi/GLM/DeepSeek/StepFun alongside Anthropic in Claude Code.
+description: Set up multiple isolated Claude Code CLI profiles so students and power users can run different LLM providers (Kimi K3, Kimi K2.7 highspeed, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time. Use this skill whenever the user asks about multi-provider Claude setup, multiple Claude Code windows, switching models, CLAUDE_CONFIG_DIR, post-class profile installation, or running Kimi/GLM/DeepSeek/StepFun alongside Anthropic in Claude Code.
 ---
 
 # Claude Code Multi-Provider Profiles
@@ -41,7 +41,7 @@ When the user says something like "set up Claude Code profiles" or "I want to us
 
 3. **Add shell integration**
    - Source the profile manager in `~/.zshrc` or `~/.bashrc`
-   - Add aliases: `csk`, `csd`, `csg`, `css`, `cssp`
+   - Add aliases: `csk`, `csks`, `csd`, `csg`, `css`, `cssp`
    - Tell the user to run `source ~/.zshrc` (or open a new terminal)
 
 4. **Generate provider settings files**
@@ -77,7 +77,8 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    - This watches default Claude install state plus local marketplace manifests and repairs Claude/Codex installed copies automatically after install/uninstall or plugin topology changes
 
 8. **Show the user how to launch**
-   - `csk` → Kimi window
+   - `csk` → Kimi K3 window
+   - `csks` → Kimi K2.7 highspeed window
    - `csd` → DeepSeek window
    - `csg` → GLM window
    - `css` → StepFun window
@@ -108,7 +109,8 @@ These are not day-to-day commands. Normal source edits are live through symlinks
 
 Templates live in `templates/`:
 
-- `kimi.json`
+- `kimi.json` — Kimi K3 (1M context, `k3[1m]`)
+- `kimi-highspeed.json` — Kimi K2.7 highspeed (legacy 200K context)
 - `glm.json`
 - `deepseek.json`
 - `stepfun.json`
@@ -231,4 +233,4 @@ Fix: Set `CLAUDE_CODE_SUBAGENT_MODEL` to the same value as `ANTHROPIC_MODEL` in 
 
 ## Next Step
 
-After setup, the user can immediately test by opening two terminals and running `csk` in one and `csd` in the other. Each window is independent.
+After setup, the user can immediately test by opening two terminals and running `csk` (Kimi K3) in one and `csd` in the other. Each window is independent.

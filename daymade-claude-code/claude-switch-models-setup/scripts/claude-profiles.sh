@@ -463,7 +463,8 @@ Environment:
   DAYMADE_SKILL_SOURCE_REPOS  Optional colon-separated local source repos
 
 Shell aliases (add to ~/.zshrc or ~/.bashrc):
-  alias csk='claude-profile kimi'
+  alias csk='claude-profile kimi'              # Kimi K3 (1M context)
+  alias csks='claude-profile kimi-highspeed'   # Kimi K2.7 highspeed
   alias csd='claude-profile deepseek'
   alias csg='claude-profile glm'
   alias css='claude-profile stepfun'
