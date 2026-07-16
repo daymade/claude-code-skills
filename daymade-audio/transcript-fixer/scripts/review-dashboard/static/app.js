@@ -140,6 +140,7 @@ async function renderCard() {
       ${actions.map((a) => `<span class="action-chip">${ACTION_LABEL[a.type] || esc(a.type)}</span>`).join("")}
     </div>
     ${it.evidence ? `<div class="evidence"><b>证据：</b>${esc(it.evidence)}</div>` : ""}
+    <div class="audio-row" id="audio-row"></div>
     <div class="context" id="context-box"><div class="ctx-note">加载上下文…</div></div>
     ${!pending ? renderResolved(it) : ""}
     ${pending ? `
@@ -179,6 +180,7 @@ async function loadContext(id) {
   try {
     const res = await fetch(`/api/context/${id}`);
     const data = await res.json();
+    renderAudio(id, data.audio);
     if (!data.lines || !data.lines.length) {
       box.innerHTML = `<div class="ctx-note">${esc(data.note || "无上下文")}</div>`;
       return;
@@ -198,9 +200,71 @@ async function loadContext(id) {
   }
 }
 
+/* ── audio: play the anchored utterance (timestamps from the transcript) ── */
+
+const audioState = { el: null, itemId: null, clip: null, stopAt: 0, pad: 0 };
+
+function renderAudio(itemId, audio) {
+  const row = $("#audio-row");
+  if (!row) return;
+  if (!audio || !audio.available) {
+    row.innerHTML = "";
+    audioState.clip = null;
+    return;
+  }
+  audioState.itemId = itemId;
+  audioState.clip = audio;
+  audioState.pad = 0;
+  row.innerHTML = `
+    <button class="btn play" data-audio="toggle" id="play-btn"><kbd>P</kbd>▶ 听这句</button>
+    <button class="btn" data-audio="wider">± 前后多听 3s</button>
+    <span class="audio-range">${fmtTime(audio.start)} – ${fmtTime(audio.end)}</span>`;
+}
+
+function fmtTime(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+  return (h ? h + ":" : "") + String(m).padStart(2, "0") + ":" + String(x).padStart(2, "0");
+}
+
+function toggleClip() {
+  if (!audioState.clip) return;
+  if (!audioState.el || audioState.el.dataset.itemId !== String(audioState.itemId)) {
+    if (audioState.el) { audioState.el.pause(); audioState.el.remove(); }
+    const el = new Audio(`/api/audio/${audioState.itemId}`);
+    el.dataset.itemId = String(audioState.itemId);
+    el.preload = "auto";
+    el.addEventListener("timeupdate", () => {
+      if (audioState.stopAt && el.currentTime >= audioState.stopAt) {
+        el.pause();
+        setPlayLabel(false);
+      }
+    });
+    el.addEventListener("error", () => toast("音频加载失败", true));
+    audioState.el = el;
+  }
+  const el = audioState.el;
+  if (!el.paused) { el.pause(); setPlayLabel(false); return; }
+  const start = Math.max(0, audioState.clip.start - audioState.pad);
+  audioState.stopAt = audioState.clip.end + audioState.pad;
+  const kick = () => { el.currentTime = start; el.play(); setPlayLabel(true); };
+  if (el.readyState >= 1) kick();
+  else el.addEventListener("loadedmetadata", kick, { once: true });
+}
+
+function setPlayLabel(playing) {
+  const btn = $("#play-btn");
+  if (btn) btn.innerHTML = playing ? `<kbd>P</kbd>⏸ 停` : `<kbd>P</kbd>▶ 听这句`;
+}
+
+function stopAudio() {
+  if (audioState.el) { audioState.el.pause(); setPlayLabel(false); }
+}
+
 /* ── actions ── */
 
 async function resolve(id, decision, overrideTo) {
+  stopAudio();
   const note = $("#note-input") ? $("#note-input").value.trim() : "";
   const body = { id, decision };
   if (overrideTo) body.override_to = overrideTo;
@@ -292,7 +356,17 @@ document.addEventListener("click", (e) => {
   const dchip = e.target.closest("[data-domain]");
   if (dchip) { state.domain = dchip.dataset.domain; fetchQueue(); return; }
   const rail = e.target.closest(".rail-item");
-  if (rail) { state.selectedId = parseInt(rail.dataset.id, 10); render(); return; }
+  if (rail) { stopAudio(); state.selectedId = parseInt(rail.dataset.id, 10); render(); return; }
+  const audioBtn = e.target.closest("[data-audio]");
+  if (audioBtn) {
+    if (audioBtn.dataset.audio === "toggle") toggleClip();
+    else if (audioBtn.dataset.audio === "wider") {
+      audioState.pad += 3;
+      stopAudio();
+      toggleClip();
+    }
+    return;
+  }
   const btn = e.target.closest("[data-decide]");
   if (btn && !btn.disabled) {
     const it = selected();
@@ -338,8 +412,9 @@ document.addEventListener("keydown", (e) => {
   else if (key === "o" && it && it.status === "pending") { e.preventDefault(); showOverride(); }
   else if (key === "s" && it && it.status === "pending") resolve(it.id, "skipped");
   else if (key === "u") undoLast();
-  else if (key === "arrowdown" || key === "j") { e.preventDefault(); move(1); }
-  else if (key === "arrowup" || key === "k") { e.preventDefault(); move(-1); }
+  else if (key === "p") { e.preventDefault(); toggleClip(); }
+  else if (key === "arrowdown" || key === "j") { e.preventDefault(); stopAudio(); move(1); }
+  else if (key === "arrowup" || key === "k") { e.preventDefault(); stopAudio(); move(-1); }
 });
 
 fetchQueue();
