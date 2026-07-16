@@ -320,7 +320,10 @@ def validate_skill(skill_path):
     # /Users/<name>/ path shipped inside a reference file passed validation for
     # a full review round because this loop used to look at SKILL.md alone.
     scan_targets = [(skill_md.name, content)]
-    for sub in ("references", "scripts"):
+    # workflows/, agents/, assets/ joined the sweep after the same blind spot
+    # recurred in directory form: 7 workflow docs (incl. the largest file in the
+    # bundle) were outside the scan.
+    for sub in ("references", "scripts", "workflows", "agents", "assets"):
         sub_dir = skill_path / sub
         if not sub_dir.is_dir():
             continue
@@ -355,7 +358,11 @@ def validate_skill(skill_path):
 
         # Warn about broken skill-internal references inside reference docs
         # (SKILL.md gets the hard-fail check above; references get a warning).
-        if rel_name != skill_md.name and rel_name.endswith(".md"):
+        # Scoped to references/ only: workflows/ and agents/ docs teach the
+        # layout of *generated or other* skills, so bare paths there are
+        # examples, not bundle references — checking them misfires on healthy
+        # teaching prose ("scripts/install_<tool>.sh", "better scripts/tools").
+        if rel_name != skill_md.name and rel_name.endswith(".md") and rel_name.startswith("references/"):
             _, missing = validate_internal_paths(skill_path, file_content)
             if missing:
                 print(f"{chr(9992)}  WARNING: {rel_name} references missing skill files: {', '.join(missing[:5])}")

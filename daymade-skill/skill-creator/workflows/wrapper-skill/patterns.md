@@ -4,6 +4,10 @@ Copy-pasteable templates for every file a generated wrapper skill ships. Each te
 
 Rule of thumb: when adapting these templates, remove anything the original session didn't actually need. Don't leave placeholder sections that apply to other wrappers but not yours.
 
+## Contents
+
+Per-file templates in bundle order: SKILL.md (overview / principles / routing / capabilities / refusals / layout) → scripts/install_<tool>.sh → scripts/diagnose.sh → references/known_issues.md
+
 ## File: SKILL.md
 
 ```markdown
