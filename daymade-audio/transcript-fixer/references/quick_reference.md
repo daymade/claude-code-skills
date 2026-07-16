@@ -119,6 +119,28 @@ sqlite3 ~/.transcript-fixer/corrections.db "SELECT * FROM correction_statistics;
 sqlite3 ~/.transcript-fixer/corrections.db "SELECT pattern, replacement, priority FROM context_rules WHERE is_active = 1 ORDER BY priority DESC;"
 ```
 
+## Review Queue
+
+Uncertain corrections wait in a persistent queue for a human verdict (full
+semantics: SKILL.md "Review Queue"; storage shape: `database_schema.md`).
+
+```bash
+# What's waiting? (priority-sorted: entity names first)
+uv run scripts/fix_transcription.py --list-review
+
+# Inspect one item (evidence + proposed action pack)
+uv run scripts/fix_transcription.py --show-review 12
+
+# Verdicts
+uv run scripts/fix_transcription.py --resolve-review 12 --decision accepted --by reviewer
+uv run scripts/fix_transcription.py --resolve-review 12 --decision overridden --override-to "正确词"
+uv run scripts/fix_transcription.py --resolve-review 12 --decision kept_original   # transcript was right
+uv run scripts/fix_transcription.py --resolve-review 12 --decision reopen          # undo
+
+# Enqueue from a JSON file or stdin
+uv run scripts/fix_transcription.py --enqueue-review items.json --json
+```
+
 ## See Also
 
 - `references/file_formats.md` - Complete database schema documentation

@@ -43,6 +43,14 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 - `--dry-run` (optional): Preview Stage 1 changes to `*_dryrun.md` without writing `*_stage1.md`.
 - `--changes-file` (optional): Always write `*_changes.md` (already on by default in safe mode).
 
+**Review queue** (persistent store for uncertain corrections; semantics in SKILL.md "Review Queue"):
+
+- `--enqueue-review JSON_PATH`: Enqueue items from a JSON file (`-` = stdin). Item fields: `{original, suggested?, file?, line?, context?, kind?, domain?, evidence?, actions?, priority?, source?}`
+- `--list-review`: List queue items, priority-sorted (filters: `--review-status pending|accepted|overridden|kept_original|skipped|all` default pending; `--domain`; `--review-source native_pass|stage1_deferred|learned_suggestion|manual`)
+- `--show-review ID`: One item in full (evidence + proposed action pack)
+- `--resolve-review ID --decision accepted|overridden|kept_original|skipped|reopen`: Record a verdict and execute the action pack (`overridden` requires `--override-to TEXT`; `--note` free-text evidence; `--by` reviewer name; `reopen` reverts applied edits and re-pends the item)
+- `--json` works with all four: one machine-readable result line on stdout
+
 ### Usage Examples
 
 **Run dictionary corrections only:**
@@ -84,6 +92,7 @@ uv run scripts/fix_transcription.py --input meeting.md --stage 1 --output ./meet
 
 - `0` - Success
 - `1` - Missing required parameters, file not found, or API key not configured (Stage 2/3)
+- `2` - `--resolve-review` refused because the anchor text no longer matches the target file (re-anchor needed; nothing was applied — fail closed)
 - API request failures do **not** get a dedicated exit code — the pipeline keeps the original text and prints a warning (see "API Fallback" in SKILL.md)
 
 ## fix_transcript_timestamps.py

@@ -183,13 +183,16 @@ uv run scripts/review-dashboard/server.py   # opens http://127.0.0.1:8767
 
 Prodigy-style single-focus card: live file context with the anchor line
 highlighted, suggestion pre-filled, evidence shown, keyboard-first —
-`P` play the utterance · `A` accept · `R` original-is-correct · `O` override
-(type the right text) · `S` skip/can't judge · `U` undo · `↑↓`/`J K` navigate.
+`Q` play the utterance · `A` accept · `R` original-is-correct · `W` override
+(type the right text) · `S` skip/can't judge · `Z` undo · `↑↓`/`J K` navigate
+(verdict keys deliberately cluster on the left hand; the right hand stays on
+the mouse). Env knobs: `REVIEW_DASHBOARD_PORT` (default 8767),
+`REVIEW_DASHBOARD_NO_BROWSER=1` to skip auto-opening a browser tab.
 Reads go straight to the DB (read-only); **every write shells out to the CLI**,
 so the state machine, anchor guards, and audit log stay the single source of
 truth, and agent (CLI) and human (page) are equal writers.
 
-**Audio playback (`P`)** — often the reviewer can't judge a garbled utterance
+**Audio playback (`Q`)** — often the reviewer can't judge a garbled utterance
 from text alone; hearing the original second settles it. A transcript opts in
 by declaring its recording EXPLICITLY in frontmatter (no implicit directory
 scanning — if the field is absent, the card simply has no play button):
