@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>转写修正审核台</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="header-left">
+      <h1>转写修正审核台</h1>
+      <div class="subtitle">AI 找到的存疑修正 · 你一键裁定 · 裁定自动落地（改文件 / 进词典 / 补语境）</div>
+    </div>
+    <div class="header-stats" id="header-stats"></div>
+  </header>
+
+  <div class="toolbar">
+    <div class="chip-row" id="status-chips">
+      <span class="chip active" data-status="pending">待裁定</span>
+      <span class="chip" data-status="all">全部</span>
+      <span class="chip" data-status="accepted">已接受</span>
+      <span class="chip" data-status="kept_original">原文正确</span>
+      <span class="chip" data-status="overridden">已改写</span>
+      <span class="chip" data-status="skipped">已跳过</span>
+    </div>
+    <div class="chip-row" id="domain-chips"></div>
+    <div class="kbd-hint">
+      <kbd>A</kbd>接受 <kbd>R</kbd>原文正确 <kbd>O</kbd>改成… <kbd>S</kbd>跳过 <kbd>U</kbd>撤销 <kbd>↑↓</kbd>切换
+    </div>
+  </div>
+
+  <div class="main">
+    <aside class="queue-rail" id="queue-rail"></aside>
+    <main class="focus-area" id="focus-area">
+      <div class="empty-state">队列为空 — 没有待裁定的修正 🎉</div>
+    </main>
+  </div>
+</div>
+<div class="toast-wrap" id="toast-wrap"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

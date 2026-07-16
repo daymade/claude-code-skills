@@ -25,6 +25,10 @@ from .commands import (
     cmd_report_false_positive,
     cmd_load_presets,
     cmd_extract_uncertain,
+    cmd_enqueue_review,
+    cmd_list_review,
+    cmd_show_review,
+    cmd_resolve_review,
 )
 from .argument_parser import create_argument_parser
 
@@ -47,5 +51,9 @@ __all__ = [
     'cmd_report_false_positive',
     'cmd_load_presets',
     'cmd_extract_uncertain',
+    'cmd_enqueue_review',
+    'cmd_list_review',
+    'cmd_show_review',
+    'cmd_resolve_review',
     'create_argument_parser',
 ]

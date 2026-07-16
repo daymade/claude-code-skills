@@ -120,6 +120,38 @@ CREATE TABLE IF NOT EXISTS suggestion_examples (
 
 CREATE INDEX IF NOT EXISTS idx_examples_suggestion_id ON suggestion_examples(suggestion_id);
 
+-- Table: review_items
+-- Persistent queue of uncertain corrections awaiting a human verdict.
+-- Unifies three previously-lossy flows: native AI-pass uncertain items,
+-- Stage 1 safe-mode deferrals, and learned-suggestion review.
+CREATE TABLE IF NOT EXISTS review_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    source TEXT NOT NULL CHECK(source IN ('native_pass', 'stage1_deferred', 'learned_suggestion', 'manual')),
+    domain TEXT NOT NULL DEFAULT 'general',
+    file_path TEXT,
+    line_number INTEGER,
+    context_snippet TEXT,
+    original_text TEXT NOT NULL,
+    suggested_text TEXT,
+    kind TEXT NOT NULL DEFAULT 'wording' CHECK(kind IN ('entity', 'homophone', 'wording', 'unknown')),
+    evidence TEXT,
+    actions_json TEXT,
+    priority INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'overridden', 'kept_original', 'skipped')),
+    decided_at TIMESTAMP,
+    decided_by TEXT,
+    decision_note TEXT,
+    resolved_text TEXT,
+    applied_at TIMESTAMP,
+    apply_log TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_items_status ON review_items(status);
+CREATE INDEX IF NOT EXISTS idx_review_items_domain ON review_items(domain);
+CREATE INDEX IF NOT EXISTS idx_review_items_priority ON review_items(priority DESC);
+CREATE INDEX IF NOT EXISTS idx_review_items_file ON review_items(file_path);
+
 -- Table: system_config
 -- System configuration and preferences
 CREATE TABLE IF NOT EXISTS system_config (
