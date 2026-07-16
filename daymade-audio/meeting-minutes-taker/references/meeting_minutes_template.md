@@ -65,9 +65,11 @@ sequenceDiagram
 
 ### 5. Action Items
 
-| # | Task | Owner | Priority | Due Date |
-|---|------|-------|----------|----------|
-| 1 | Task description | Person Name | P1/P2/P3 | YYYY-MM-DD |
+| # | Task | Owner | Priority | Due Date | Notes (conditions/expiry) |
+|---|------|-------|----------|----------|---------------------------|
+| 1 | Task description | Person Name | P1/P2/P3 | YYYY-MM-DD | e.g. "slips to Tue if env not ready" |
+
+The Notes column exists because conditional commitments ("report due Friday, slips to Tuesday if the environment isn't ready") lose their expiry condition in a four-column row — and the condition is exactly what a future reader queries when the deadline passes. Leave it empty when a task is unconditional; never bury a stated condition in Discussion prose only.
 
 ### 6. Parking Lot (Deferred Items)
 
