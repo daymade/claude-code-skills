@@ -183,11 +183,31 @@ uv run scripts/review-dashboard/server.py   # opens http://127.0.0.1:8767
 
 Prodigy-style single-focus card: live file context with the anchor line
 highlighted, suggestion pre-filled, evidence shown, keyboard-first —
-`A` accept · `R` original-is-correct · `O` override (type the right text) ·
-`S` skip/can't judge · `U` undo · `↑↓`/`J K` navigate. Reads go straight to
-the DB (read-only); **every write shells out to the CLI**, so the state
-machine, anchor guards, and audit log stay the single source of truth, and
-agent (CLI) and human (page) are equal writers.
+`P` play the utterance · `A` accept · `R` original-is-correct · `O` override
+(type the right text) · `S` skip/can't judge · `U` undo · `↑↓`/`J K` navigate.
+Reads go straight to the DB (read-only); **every write shells out to the CLI**,
+so the state machine, anchor guards, and audit log stay the single source of
+truth, and agent (CLI) and human (page) are equal writers.
+
+**Audio playback (`P`)** — often the reviewer can't judge a garbled utterance
+from text alone; hearing the original second settles it. A transcript opts in
+by declaring its recording EXPLICITLY in frontmatter (no implicit directory
+scanning — if the field is absent, the card simply has no play button):
+
+```yaml
+audio: /absolute/path/to/recording.m4a   # MUST be the SAME timeline the
+                                         # transcript timestamps refer to (e.g.
+                                         # the exact file fed to the ASR — a
+                                         # 1.3x-speed ASR input pairs with a
+                                         # transcript on the 1.3x timeline)
+```
+
+The dashboard derives the clip window from the speaker-timestamp lines
+(`<speaker> HH:MM:SS.mmm`) around the anchor, streams the file with HTTP Range
+(instant seek, no full download), and plays just that utterance; `± 3s` widens
+the window when the cut lands mid-sentence. Verify the timeline pairing once
+per recording source (`ffprobe` duration ≈ the transcript's last timestamp) —
+a mismatched speed rate plays the wrong seconds everywhere.
 
 **Stage 1 integration**: safe-mode deferrals are auto-enqueued
 (`source: stage1_deferred`) at run time, so a caller discarding the sidecar no

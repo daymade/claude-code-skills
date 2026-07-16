@@ -23,6 +23,7 @@ equal writers of the same queue.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sqlite3
 import sys
@@ -166,11 +167,88 @@ def api_context(item_id: int, window: int = 12):
                 "note": "原文在文件中已找不到（文件已被修改，需要重新锚定）"}
     start = max(0, line_no - 1 - window)
     end = min(len(lines), line_no + window)
+    audio_info = None
+    if _frontmatter_audio(path) is not None:
+        win = _clip_window(lines, line_no - 1)
+        if win:
+            audio_info = {"available": True, "start": round(win[0], 3), "end": round(win[1], 3)}
     return {
         "lines": [{"no": i + 1, "text": lines[i][:2000], "is_anchor": (i + 1) == line_no}
                   for i in range(start, end)],
         "anchor_line": line_no,
+        "audio": audio_info,
     }
+
+
+# ── audio playback ──────────────────────────────────────────────────────────
+# A transcript declares its recording EXPLICITLY via a frontmatter `audio:`
+# field (absolute path). No implicit directory scanning: if the field is
+# absent, the card simply has no play button. Speaker-timestamp lines
+# (`<speaker> HH:MM:SS.mmm`) around the anchor line give the clip window.
+
+_TS_LINE = re.compile(r"^\S.*?\s(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*$")
+_AUDIO_MIME = {".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav",
+               ".flac": "audio/flac", ".opus": "audio/ogg", ".ogg": "audio/ogg",
+               ".aac": "audio/aac"}
+
+
+def _frontmatter_audio(md_path: Path) -> Path | None:
+    """Return the Path declared in the transcript's frontmatter `audio:` field."""
+    try:
+        with open(md_path, encoding="utf-8", errors="replace") as f:
+            first = f.readline()
+            if first.strip() != "---":
+                return None
+            for _ in range(60):
+                line = f.readline()
+                if not line or line.strip() == "---":
+                    return None
+                if line.startswith("audio:"):
+                    p = Path(line.split(":", 1)[1].strip())
+                    return p if p.exists() else None
+    except OSError:
+        return None
+    return None
+
+
+def _ts_to_seconds(m: re.Match) -> float:
+    h, mi, s, ms = (int(m.group(i)) for i in range(1, 5))
+    return h * 3600 + mi * 60 + s + ms / 1000
+
+
+def _clip_window(lines: list[str], anchor_idx: int) -> tuple[float, float] | None:
+    """Clip = [nearest speaker timestamp above the anchor, next one below]."""
+    start = None
+    for i in range(anchor_idx, -1, -1):
+        m = _TS_LINE.match(lines[i])
+        if m:
+            start = _ts_to_seconds(m)
+            break
+    if start is None:
+        return None
+    end = start + 30.0
+    for i in range(anchor_idx + 1, min(len(lines), anchor_idx + 80)):
+        m = _TS_LINE.match(lines[i])
+        if m:
+            end = _ts_to_seconds(m)
+            break
+    return max(0.0, start - 0.3), end + 0.3
+
+
+@app.get("/api/audio/{item_id}")
+def api_audio(item_id: int):
+    with _connect_ro() as conn:
+        row = conn.execute(
+            "SELECT file_path FROM review_items WHERE id = ?", (item_id,)
+        ).fetchone()
+    if not row or not row["file_path"]:
+        raise HTTPException(404, "item has no file anchor")
+    audio = _frontmatter_audio(Path(row["file_path"]))
+    if audio is None:
+        raise HTTPException(404, "transcript declares no audio: frontmatter field")
+    media_type = _AUDIO_MIME.get(audio.suffix.lower(), "application/octet-stream")
+    # FileResponse handles HTTP Range, so <audio> can seek without full download.
+    return FileResponse(audio, media_type=media_type)
 
 
 class ResolveBody(BaseModel):
