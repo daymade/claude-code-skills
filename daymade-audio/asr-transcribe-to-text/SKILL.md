@@ -215,10 +215,13 @@ B) Continue without speakers this time — plain text only
 - **A** → after the user confirms login, rerun the same command. The token is
   auto-detected every run; full capability is permanent from then on.
 - **B** → persist the choice (`diarization_declined: true` in config.json) and
-  rerun with `--no-diarization`. On EVERY later run while the token is still
-  missing: show a one-line warning with the two setup steps, then continue
-  plain-text. When the token appears, diarization resumes automatically —
-  mention this so the user knows setup is all that's needed.
+  rerun the SAME command. The script detects the flag, prints a one-line warning
+  with the two setup steps, and auto-falls back to plain text for that run —
+  no need to pass `--no-diarization` (the fallback is automatic now, enforced in
+  the script not just the doc). The same warn-and-continue happens on every
+  later run while the token is still missing. When a token later appears,
+  diarization resumes automatically (the flag is ignored once a token is
+  present) — mention this so the user knows setup is all that's needed.
 
 **Plain-text fast path** (monologue, podcast, "just summarize it"):
 
@@ -228,7 +231,9 @@ uv run ${CLAUDE_PLUGIN_ROOT}/scripts/speaker_transcribe.py \
 ```
 
 **Remote/pre-made ASR text** (e.g. from Path B, or another ASR service): skip
-the Qwen3 leg and align that text instead:
+the Qwen3 leg and align that text instead. `--text-file` pairs ONE transcript
+with ONE input wav — passing multiple inputs is rejected (one transcript can't
+be aligned to several files):
 
 ```bash
 uv run ${CLAUDE_PLUGIN_ROOT}/scripts/speaker_transcribe.py \
