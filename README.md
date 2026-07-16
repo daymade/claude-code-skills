@@ -194,6 +194,7 @@ This suite bundles the skills that extend Claude Code itself — fast local conv
 /daymade-claude-code:local-conversation-history
 /daymade-claude-code:claude-code-history-files-finder
 /daymade-claude-code:continue-claude-work
+/daymade-claude-code:continue-codex-work
 /daymade-claude-code:claude-skills-troubleshooting
 /daymade-claude-code:claude-md-progressive-disclosurer
 /daymade-claude-code:statusline-generator
@@ -869,16 +870,23 @@ Transform vague prompts into precise, well-structured specifications using EARS 
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-code-history-files-finder`)
 
-Find and recover content from Claude Code session history files stored in `~/.claude/projects/`.
+Find and recover content from Claude Code session history across all active
+config homes and the long-term archives registered in
+`~/.claude/history-sources.json`.
 
 **When to use:**
 - Recovering deleted or lost files from previous Claude Code sessions
 - Searching for specific code across conversation history
 - Tracking file modifications across multiple sessions
 - Finding sessions containing specific keywords or implementations
+- Verifying date-bounded topics after a machine migration without trusting mtime
 
 **Key features:**
-- **Session search**: Find sessions by keywords with frequency ranking
+- **Complete source set**: Search active homes and registered archives by default
+- **Cross-project sweep**: `--all-projects` searches every project when the project is unknown; `--codex` also covers Codex rollout history; `--exclude-session` skips self-matches
+- **Copy-safe union**: Search distinct records from every copy of a session ID without double-counting identical records
+- **Internal-time search**: Filter matching records by JSONL timestamps, never file mtime
+- **Structured search**: Cover messages, thinking, tools, results, queues, attachments, and summaries
 - **Content recovery**: Extract files from Write tool calls with deduplication
 - **Statistics analysis**: Message counts, tool usage breakdown, file operations
 - **Batch operations**: Process multiple sessions with keyword filtering
@@ -890,10 +898,11 @@ Find and recover content from Claude Code session history files stored in `~/.cl
 python3 scripts/analyze_sessions.py list /path/to/project
 
 # Search sessions for keywords
-python3 scripts/analyze_sessions.py search /path/to/project "ComponentName" "featureX"
+python3 scripts/analyze_sessions.py search /path/to/project \
+  "ComponentName" "featureX" --from-date 2026-03-01 --to-date 2026-04-30
 
-# Recover deleted files from a session
-python3 scripts/recover_content.py ~/.claude/projects/.../session.jsonl -k DeletedComponent -o ./recovered/
+# Recover deleted files from the exact path printed by search
+python3 scripts/recover_content.py <printed-session-path> -k DeletedComponent -o ./recovered/
 
 # Get session statistics
 python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
@@ -3071,11 +3080,14 @@ short titles, timezone-qualified timestamps, exact session IDs, and explicit
 diagnostics.
 
 **Key features:**
-- Reads only bounded Claude Code session prefixes and ignores sub-agents by default
+- Combines active Claude homes with every registered long-term archive by default
+- Streams complete Claude JSONL and raw Codex rollout files to compute exact
+  internal timestamp ranges; never orders or filters conversations by file mtime
+- De-duplicates copied session IDs, unions their internal ranges, and retains active/archive provenance
 - Selects a compatible Codex state database through schema introspection
 - Visibly falls back to raw Codex rollout JSONL when the database is unavailable
-- Supports custom profile homes, archived threads, recursive/all-project scopes,
-  Windows path normalization, and machine-readable JSON
+- Supports internal-time date windows, custom exact-scope diagnostics, archived
+  Codex threads, recursive/all-project scopes, Windows path normalization, and JSON
 - Uses Python's standard library only; performs no network requests or writes
 
 **Example usage:**
@@ -3093,7 +3105,30 @@ for source selection, path normalization, privacy boundaries, and diagnostics.
 
 ---
 
-### 87. **git-safety-net** - Prevent & Recover From Local-Git Disasters
+### 87. **continue-codex-work** - Resume Interrupted Codex Work
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills`
+> (suite-only — invoked as `daymade-claude-code:continue-codex-work`)
+
+Recover actionable context from a prior Codex CLI rollout and continue in the
+current conversation without replaying the full session through `codex resume`.
+The bundled extractor can select a session by ID, title query, latest project
+activity, or list view; it reports the end reason, surviving requests, recent
+tools/files, errors, and current workspace state before work resumes.
+
+```text
+/daymade-claude-code:continue-codex-work 019f66...
+Codex was cut off mid-task; recover that rollout and finish the work
+```
+
+📚 **Documentation**: See
+[continue-codex-work/SKILL.md](./daymade-claude-code/continue-codex-work/SKILL.md).
+
+**Requirements**: Python 3.10+ and local Codex rollout files.
+
+---
+
+### 88. **git-safety-net** - Prevent & Recover From Local-Git Disasters
 
 > **Install**: `claude plugin install git-safety-net@daymade-skills`
 
@@ -3195,6 +3230,9 @@ Use **claude-code-history-files-finder** to recover deleted files from previous 
 
 ### For Resuming Interrupted Claude Sessions
 Use **continue-claude-work** to recover the last actionable request from local `~/.claude` artifacts and continue implementation without reopening the original session. Combine with **claude-code-history-files-finder** when you need broader cross-session search, statistics, or deleted-file recovery.
+
+For a prior Codex CLI run, use **continue-codex-work** instead; it reconstructs a
+briefing from local Codex rollout files without replaying the full session.
 
 ### For Fast Local Conversation Discovery
 Use **local-conversation-history** when you need a quick, readable list of recent
@@ -3317,6 +3355,7 @@ Each skill includes:
 - **excel-automation**: See `excel-automation/SKILL.md` for create/parse/control workflows and `excel-automation/references/formatting-reference.md` for formatting standards
 - **capture-screen**: See `capture-screen/SKILL.md` for CGWindowID-based screenshot workflows on macOS
 - **continue-claude-work**: See `daymade-claude-code/continue-claude-work/SKILL.md` for local artifact recovery, drift checks, and resume workflow
+- **continue-codex-work**: See `daymade-claude-code/continue-codex-work/SKILL.md` for Codex rollout discovery, end-reason diagnosis, and continuation workflow
 - **scrapling-skill**: See `scrapling-skill/SKILL.md` for the CLI workflow and `scrapling-skill/references/troubleshooting.md` for verified Scrapling failure modes
 - **ima-copilot**: See `ima-copilot/SKILL.md` for the wrapper architecture and routing, `ima-copilot/references/installation_flow.md` for the install deep dive, `ima-copilot/references/known_issues.md` for the issue registry and repair commands, and `ima-copilot/references/search_best_practices.md` for the fan-out strategy and 100-result truncation details
 - **claude-export-txt-better**: See `daymade-claude-code/claude-export-txt-better/SKILL.md` for the workflow, `daymade-claude-code/claude-export-txt-better/scripts/fix-claude-export.py` for the reconstruction algorithm, and `daymade-claude-code/claude-export-txt-better/evals/` for real regression fixtures

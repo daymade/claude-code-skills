@@ -1,19 +1,39 @@
 """Shared parsing / formatting helpers for the conversation-history skills.
 
-Pure, self-contained utilities that every skill re-implements otherwise. Bundled
-into each skill's ``scripts/_core/`` by ``sync_core.py`` (see homes.py for why
-bundling rather than importing a sibling). This is the parsing counterpart to
-``homes.py``; more helpers (text/title extraction, workspace matching, JSONL
-iteration) move here in later phases as they are de-duplicated from the skills.
+Pure, self-contained utilities that every skill would otherwise re-implement.
+Bundled into each skill's ``scripts/_core/`` by ``sync_core.py`` (see homes.py
+for why bundling is used instead of importing a sibling).
 """
 
 import os
 import re
 import sys
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import date, datetime, time
 from typing import Any, Optional
 
 WINDOWS_DRIVE_RE = re.compile(r"^(?:[/\\]{2}\?[/\\])?[A-Za-z]:[/\\]")
+DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+@dataclass
+class TimestampRange:
+    """Minimum/maximum valid internal timestamp observed while streaming."""
+
+    earliest: Optional[float] = None
+    latest: Optional[float] = None
+    count: int = 0
+
+    def observe(self, value: Any) -> Optional[float]:
+        parsed = parse_timestamp(value)
+        if parsed is None:
+            return None
+        self.count += 1
+        if self.earliest is None or parsed < self.earliest:
+            self.earliest = parsed
+        if self.latest is None or parsed > self.latest:
+            self.latest = parsed
+        return parsed
 
 
 def parse_timestamp(value: Any) -> Optional[float]:
@@ -66,6 +86,61 @@ def format_timestamp(value: float) -> str:
 def iso_timestamp(value: float) -> str:
     """ISO-8601 local timestamp (seconds precision, with offset)."""
     return datetime.fromtimestamp(value).astimezone().isoformat(timespec="seconds")
+
+
+def parse_date_boundary(value: str, *, end: bool = False) -> float:
+    """Parse a date-only local boundary or a timezone-qualified ISO datetime.
+
+    Date-only input uses the machine's local timezone and covers the full day.
+    Datetime input must carry ``Z`` or an explicit UTC offset; accepting a naive
+    datetime would make a cross-machine history query change meaning silently.
+    """
+    text_value = value.strip()
+    if DATE_ONLY_RE.fullmatch(text_value):
+        parsed_date = date.fromisoformat(text_value)
+        wall_time = time.max if end else time.min
+        return datetime.combine(parsed_date, wall_time).astimezone().timestamp()
+    try:
+        parsed = datetime.fromisoformat(text_value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError(
+            f"invalid ISO date/time {value!r}; use YYYY-MM-DD or include a timezone offset"
+        ) from error
+    if parsed.tzinfo is None:
+        raise ValueError(
+            f"datetime {value!r} has no timezone; use Z or an explicit UTC offset"
+        )
+    return parsed.timestamp()
+
+
+def timestamp_in_window(
+    value: Optional[float],
+    from_timestamp: Optional[float],
+    to_timestamp: Optional[float],
+) -> bool:
+    if value is None:
+        return from_timestamp is None and to_timestamp is None
+    if from_timestamp is not None and value < from_timestamp:
+        return False
+    if to_timestamp is not None and value > to_timestamp:
+        return False
+    return True
+
+
+def range_overlaps_window(
+    earliest: Optional[float],
+    latest: Optional[float],
+    from_timestamp: Optional[float],
+    to_timestamp: Optional[float],
+) -> bool:
+    """Whether an internal session range overlaps an inclusive query window."""
+    if earliest is None or latest is None:
+        return from_timestamp is None and to_timestamp is None
+    if from_timestamp is not None and latest < from_timestamp:
+        return False
+    if to_timestamp is not None and earliest > to_timestamp:
+        return False
+    return True
 
 
 def looks_like_windows_path(value: str) -> bool:

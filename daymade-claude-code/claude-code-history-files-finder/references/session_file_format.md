@@ -4,13 +4,22 @@
 
 Claude Code stores conversation history in JSONL (JSON Lines) format, where each line is a complete JSON object representing a message or event in the conversation.
 
+Codex uses a different JSONL store — see "Codex Rollout File Format" at the
+end of this document.
+
 ## File Locations
 
 ### Session Files
 
+```text
+<history-root>/projects/<normalized-project-path>/<session-id>.jsonl
 ```
-~/.claude/projects/<normalized-project-path>/<session-id>.jsonl
-```
+
+The default source set combines auto-discovered active roots with every archive
+registered in `~/.claude/history-sources.json`. A registry entry points at a
+Claude-style root containing `projects/`, not at `projects/` itself. Use the
+bundled analyzer rather than hardcoding one root when making a completeness
+claim.
 
 **Path normalization**: the project's **absolute** working-directory path is encoded by replacing every `/` with `-`. It is the full absolute path, **not** the basename — a bare project name never matches.
 
@@ -18,10 +27,12 @@ Example:
 - Project (absolute): `/Users/<username>/Workspace/js/myproject`
 - Directory: `~/.claude/projects/-Users-<username>-Workspace-js-myproject/`
 
-To locate a project's directory, reverse-look-up the encoded name instead of guessing — a failed `ls` of the basename does NOT mean the history is absent:
+To locate a project's directory, let the bundled analyzer resolve the full
+absolute path across every configured source. A failed `ls` of the basename does
+not mean the history is absent:
 
 ```bash
-ls ~/.claude/projects/ | grep -i <project-name>
+python3 scripts/analyze_sessions.py list /absolute/path/to/project
 ```
 
 ### File Types
@@ -61,7 +72,17 @@ Conversation messages are the lines you usually want. In current Claude Code (>=
 
 ### Non-message event lines
 
-Recent sessions also interleave non-conversation event lines. Their `type` is one of `attachment`, `system`, `summary`, `last-prompt`, `queue-operation`, `custom-title`, `mode`, etc. These carry no `message.role` and no recoverable text/tool content — extractors should skip any line whose role is neither `user` nor `assistant` (the bundled scripts skip them naturally, so counts stay correct).
+Recent sessions also interleave non-message event lines. Their `type` can be
+`attachment`, `system`, `summary`, `last-prompt`, `queue-operation`,
+`custom-title`, `mode`, and others. They carry no `message.role`, but several do
+carry search-relevant or recoverable text. A conversation-message counter may
+skip them; a history search must inspect their known payload fields.
+
+The bundled search extracts semantic text segments instead of searching raw JSON
+serialization. It covers message text, thinking text, tool inputs/results,
+queue-operation content, attachment payloads, last prompts, system/summary
+content, and custom titles. Structural keys, UUIDs, tool-use IDs, and thinking
+signatures are excluded to avoid false positives.
 
 ### Content Types
 
@@ -193,6 +214,13 @@ content = data.get("content") or data.get("message", {}).get("content", [])
 timestamp = data.get("timestamp", "")
 ```
 
+Treat valid top-level record timestamps as the only conversation-time evidence.
+Physical line order is not guaranteed to be chronological, so session bounds are
+the minimum and maximum values observed across the entire JSONL. File mtime is
+not a fallback: copying or migrating a history changes it. A date-bounded keyword
+search applies the window to each matching record's timestamp, not merely to the
+file or the session's overall range.
+
 ## Common Use Cases
 
 ### Recover Deleted Files
@@ -209,9 +237,16 @@ timestamp = data.get("timestamp", "")
 
 ### Search Conversations
 
-1. Extract all `text` content from messages
-2. Search for keywords or patterns
-3. Return matching sessions
+1. Stream every valid record.
+2. Extract only semantic, search-relevant segments from messages, tool blocks,
+   and supported non-message events.
+3. If a date window is active, retain only records whose internal timestamp is
+   within the window; report untimed exclusions.
+4. Search segments for keywords and retain their field provenance.
+5. When the same session ID exists in multiple roots, union distinct records
+   from every physical copy; identical records count once, but every matching
+   copy remains visible as provenance.
+6. Return matching sessions with both session and match timestamp ranges.
 
 ### Analyze Tool Usage
 
@@ -270,9 +305,10 @@ with open(session_file, 'r') as f:
 
 ### Search Optimization
 
-- Early exit when keyword count threshold met
-- Case-insensitive search: normalize once
-- Use `in` operator for substring matching
+- Stream line by line; do not load a session into memory.
+- Case-insensitive search: normalize each segment and keyword consistently.
+- Count substring occurrences per semantic segment rather than serializing the
+  whole record and matching JSON keys or signatures.
 
 ### Deduplication
 
@@ -301,3 +337,39 @@ Before sharing extracted content:
 2. Redact sensitive information
 3. Use placeholders for usernames
 4. Verify no credentials present
+
+## Codex Rollout File Format
+
+Codex keeps its own conversation store, outside the Claude history registry:
+
+```text
+<codex-home>/sessions/<YYYY>/<MM>/<DD>/rollout-<timestamp>-<session-id>.jsonl
+<codex-home>/archived_sessions/rollout-<timestamp>-<session-id>.jsonl
+```
+
+The codex home is `$CODEX_HOME` or `~/.codex`. A rollout is also JSONL, but the
+record schema is not the Claude one. Every top-level record carries an ISO
+`timestamp`; the shapes below were observed on a current (2026-07) rollout:
+
+| Record `type` | `payload.type` | Searchable content |
+|---|---|---|
+| `session_meta` | — (once, first record) | none — carries `id`, `cwd`, `timestamp` used for identity and project filtering |
+| `response_item` | `message` | `content[]` blocks of type `input_text` (user) / `output_text` (assistant) |
+| `response_item` | `reasoning` | `summary[]` blocks of type `summary_text` |
+| `response_item` | `function_call`, `custom_tool_call` | `name` + `arguments` / `input` |
+| `response_item` | `function_call_output`, `custom_tool_call_output` | `output` |
+| `compacted` | — | `message` (summary of compacted earlier context) |
+| `event_msg` | `user_message`, `agent_message` | strict mirrors of `response_item` message text — skip or counts double (verified subset on a real rollout, 2026-07-16) |
+| `event_msg` | `token_count`, `task_started`, … | none |
+| `turn_context`, `world_state` | — | none |
+
+Notes:
+
+- The same rollout can exist under both `sessions/` and `archived_sessions/`;
+  de-duplicate by `session_meta.payload.id` (fall back to the UUID in the
+  filename).
+- Project filtering uses `session_meta.payload.cwd` with a recursive workspace
+  match — a rollout belongs to the project whose path is, or is a parent of,
+  that cwd.
+- `analyze_sessions.py search --codex` implements exactly this table; prefer
+  it over hand-rolled grep so mirrors and duplicates stay handled.

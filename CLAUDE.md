@@ -253,7 +253,7 @@ This applies when you change ANY file under a skill directory:
 16. **video-comparer** - Video comparison and quality analysis with interactive HTML reports
 17. **qa-expert** - Comprehensive QA testing infrastructure with autonomous LLM execution and Google Testing Standards
 18. **prompt-optimizer** - Transform vague prompts into precise EARS specifications with domain theory grounding
-19. **claude-code-history-files-finder** - Find and recover content from Claude Code session history files
+19. **claude-code-history-files-finder** - Search messages, thinking, tool inputs/results, queues, attachments, and summaries across active Claude homes plus registered long-term archives using internal JSONL timestamps; sweep every project with --all-projects or include Codex rollouts with --codex; recover prior files and analyze session operations
 20. **docs-cleaner** - Consolidate redundant documentation while preserving valuable content
 21. **pdf-creator** - Create PDF documents from markdown with Chinese font support using weasyprint
 22. **claude-md-progressive-disclosurer** - Optimize CLAUDE.md files using progressive disclosure principles
@@ -318,8 +318,9 @@ This applies when you change ANY file under a skill directory:
 81. **skill-governance** - Enforce source-of-truth discipline for Claude Code skill marketplaces and caches: check source/cache drift, sync through official plugin commands, clean old cache versions, and switch marketplace entries to local source (daymade-skill suite member)
 82. **photo-to-scanned-pdf** - Turn phone photos of paper documents into a scanner-quality A4 PDF with perspective correction, noteshrink enhancement, colored-paper handling, content-based page ordering, and mandatory whole-document visual verification (daymade-docs suite member)
 83. **github-review-pr** - Review one named contributor PR (open or closed under reconsideration) or all open PRs newest-to-oldest against the live base, with immutable OID snapshots, history-discontinuity detection, isolated current-base contribution projection, three-way merge analysis, PR/BASE/SHARED ownership, explicit personal maintainer context, and per-PR review-gated repair or landing
-84. **local-conversation-history** - List recent local Claude Code and Codex conversations for the current workspace in one read-only command, with readable titles, timezone-qualified timestamps, exact session IDs, schema-aware Codex indexing, bounded Claude JSONL reads, and default sub-agent/test filtering (daymade-claude-code suite member)
-85. **git-safety-net** - Prevent and recover from local-Git disasters: commits stranded on the wrong branch, orphaned or dropped stashes, dangling commits about to be garbage-collected, and "is everything actually merged?" uncertainty after squash merges or parallel-agent sessions
+84. **local-conversation-history** - List recent local Claude Code and Codex conversations in one read-only command; Claude inventory combines active homes with registered archives, de-duplicates session IDs, and both providers use internal stored timestamps rather than file mtime (daymade-claude-code suite member)
+85. **continue-codex-work** - Recover actionable context from prior Codex CLI rollout files and continue interrupted work without running `codex resume` (daymade-claude-code suite member)
+86. **git-safety-net** - Prevent and recover from local-Git disasters: commits stranded on the wrong branch, orphaned or dropped stashes, dangling commits about to be garbage-collected, and "is everything actually merged?" uncertainty after squash merges or parallel-agent sessions
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
