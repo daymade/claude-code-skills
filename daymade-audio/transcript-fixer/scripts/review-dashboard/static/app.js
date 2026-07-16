@@ -185,11 +185,12 @@ async function loadContext(id) {
       box.innerHTML = `<div class="ctx-note">${esc(data.note || "无上下文")}</div>`;
       return;
     }
-    const it = selected();
-    box.innerHTML = data.lines.map((l) => {
+    const markText = data.mark_text;
+    box.innerHTML = (data.note
+      ? `<div class="ctx-note">${esc(data.note)}</div>` : "") + data.lines.map((l) => {
       let text = esc(l.text);
-      if (l.is_anchor && it) {
-        text = text.split(esc(it.original_text)).join(`<mark>${esc(it.original_text)}</mark>`);
+      if (l.is_anchor && markText) {
+        text = text.split(esc(markText)).join(`<mark>${esc(markText)}</mark>`);
       }
       return `<div class="ctx-line ${l.is_anchor ? "anchor" : ""}"><span class="no">${l.no}</span><span>${text || "&nbsp;"}</span></div>`;
     }).join("");
@@ -411,7 +412,12 @@ document.addEventListener("keydown", (e) => {
   else if (key === "r" && it && it.status === "pending") resolve(it.id, "kept_original");
   else if (key === "o" && it && it.status === "pending") { e.preventDefault(); showOverride(); }
   else if (key === "s" && it && it.status === "pending") resolve(it.id, "skipped");
-  else if (key === "u") undoLast();
+  else if (key === "u") {
+    // On a decided item, U reopens THAT item (works across sessions); the
+    // session undo-stack is only the fallback for the pending view.
+    if (it && it.status !== "pending") resolve(it.id, "reopen");
+    else undoLast();
+  }
   else if (key === "p") { e.preventDefault(); toggleClip(); }
   else if (key === "arrowdown" || key === "j") { e.preventDefault(); stopAudio(); move(1); }
   else if (key === "arrowup" || key === "k") { e.preventDefault(); stopAudio(); move(-1); }

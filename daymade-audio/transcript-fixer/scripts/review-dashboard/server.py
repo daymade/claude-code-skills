@@ -133,6 +133,15 @@ def api_queue(status: str = "pending", domain: str = "", source: str = "", kind:
     }
 
 
+def _find_anchor_line(lines: list[str], needle: str, line_hint: int | None) -> int | None:
+    """1-based line containing `needle`, preferring the hinted line."""
+    if not needle:
+        return None
+    if line_hint and 1 <= line_hint <= len(lines) and needle in lines[line_hint - 1]:
+        return line_hint
+    return next((i + 1 for i, l in enumerate(lines) if needle in l), None)
+
+
 @app.get("/api/context/{item_id}")
 def api_context(item_id: int, window: int = 12):
     with _connect_ro() as conn:
@@ -143,27 +152,38 @@ def api_context(item_id: int, window: int = 12):
         raise HTTPException(404, "item not found")
     item = _row_to_dict(row)
     if not item.get("file_path"):
-        return {"lines": [], "anchor_line": None, "note": "此条目没有文件锚点"}
+        return {"lines": [], "anchor_line": None, "audio": None, "note": "此条目没有文件锚点"}
     path = Path(item["file_path"])
     if not path.exists():
-        return {"lines": [], "anchor_line": None,
+        return {"lines": [], "anchor_line": None, "audio": None,
                 "note": f"文件已不在原处：{path}（需要重新锚定）"}
     if path.stat().st_size > 20 * 1024 * 1024:
-        return {"lines": [], "anchor_line": None,
+        return {"lines": [], "anchor_line": None, "audio": None,
                 "note": "文件超过 20MB，不在页面内联展示——请在编辑器中打开核对"}
     text = path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
-    # Prefer the recorded line hint; fall back to first occurrence of the anchor
-    # text. line_number is coerced defensively: SQLite columns are dynamically
-    # typed, so a string could sit where an int is expected.
+    # line_number is coerced defensively: SQLite columns are dynamically typed.
     try:
-        line_no = int(item.get("line_number") or 0) or None
+        line_hint = int(item.get("line_number") or 0) or None
     except (TypeError, ValueError):
-        line_no = None
-    if not line_no or not (1 <= line_no <= len(lines)) or item["original_text"] not in lines[line_no - 1]:
-        line_no = next((i + 1 for i, l in enumerate(lines) if item["original_text"] in l), None)
+        line_hint = None
+    # Anchor fallback chain: the ORIGINAL text (pending / kept_original items) →
+    # the RESOLVED text (accepted/overridden items — the file now carries the
+    # verdict, so the original is legitimately gone; that is not drift) → the
+    # bare line hint (real drift: still show the neighborhood + audio, flagged).
+    note = None
+    mark_text = item["original_text"]
+    line_no = _find_anchor_line(lines, item["original_text"], line_hint)
+    if line_no is None and item.get("resolved_text"):
+        line_no = _find_anchor_line(lines, item["resolved_text"], line_hint)
+        if line_no is not None:
+            mark_text = item["resolved_text"]
+    if line_no is None and line_hint and 1 <= line_hint <= len(lines):
+        line_no = line_hint
+        mark_text = None
+        note = "原文与终裁文本都未命中——按登记行号显示附近内容（文件可能已漂移）"
     if line_no is None:
-        return {"lines": [], "anchor_line": None,
+        return {"lines": [], "anchor_line": None, "audio": None,
                 "note": "原文在文件中已找不到（文件已被修改，需要重新锚定）"}
     start = max(0, line_no - 1 - window)
     end = min(len(lines), line_no + window)
@@ -176,7 +196,9 @@ def api_context(item_id: int, window: int = 12):
         "lines": [{"no": i + 1, "text": lines[i][:2000], "is_anchor": (i + 1) == line_no}
                   for i in range(start, end)],
         "anchor_line": line_no,
+        "mark_text": mark_text,
         "audio": audio_info,
+        "note": note,
     }
 
 
