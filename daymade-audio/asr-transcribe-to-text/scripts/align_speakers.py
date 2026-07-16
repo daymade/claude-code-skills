@@ -72,6 +72,8 @@ def whisper_char_lattice(words):
         token = (w.get("word") or "").strip()
         if not token:
             continue
+        if w.get("start") is None or w.get("end") is None:
+            continue  # malformed word (no timing) — skip, don't crash the whole alignment
         start, end = float(w["start"]), float(w["end"])
         kept = [c for c in token if c not in _DROP]
         if not kept:
@@ -129,6 +131,9 @@ def assign_speakers(times, segments):
     SEG_EDGE_TOLERANCE, else previous char's speaker."""
     if not segments:
         return ["SPEAKER_00"] * len(times)
+    # bisect_right needs starts sorted ascending; sort defensively so a
+    # hand-edited or externally-produced diarization.json can't mislabel every char.
+    segments = sorted(segments, key=lambda s: s["start"])
     starts = [s["start"] for s in segments]
     speakers = []
     prev = segments[0]["speaker"]
@@ -185,7 +190,9 @@ def build_turns(qwen_raw, raw_idx, times, speakers, max_gap):
         out.append({
             "start": times[lo],
             "end": times[hi - 1],
-            "duration": round((times[hi - 1] or 0) - (times[lo] or 0), 3),
+            # Clamp >=0: overlapping whisper word spans can make end<start locally;
+            # a negative duration would confuse downstream consumers.
+            "duration": round(max(0.0, (times[hi - 1] or 0) - (times[lo] or 0)), 3),
             "speaker": sp,
             "text": text,
         })
