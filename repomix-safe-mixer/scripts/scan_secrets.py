@@ -28,11 +28,24 @@ SECRET_PATTERNS = {
     'oauth_secret': r'(?i)(?:client_secret|oauth).{0,20}[=:]\s*["\']?([0-9a-zA-Z_\-]{20,})["\']?',
 }
 
-# File extensions to scan
+# File extensions to scan.
 SCANNABLE_EXTENSIONS = {
     '.ts', '.tsx', '.js', '.jsx', '.py', '.md', '.json', '.yaml', '.yml',
-    '.env', '.env.example', '.env.local', '.env.production', '.env.development',
     '.sh', '.bash', '.zsh', '.sql', '.go', '.java', '.rb', '.php', '.cs'
+}
+
+# Full filenames that must be scanned regardless of Path.suffix. Dotenv
+# files break suffix matching: Path('.env').suffix == '' and
+# Path('.env.local').suffix == '.local', so scanning by extension alone
+# silently skips the most common places secrets end up.
+SCANNABLE_FILENAMES = {
+    '.env',
+    '.env.example',
+    '.env.local',
+    '.env.production',
+    '.env.development',
+    '.env.test',
+    '.env.staging',
 }
 
 # Directories to skip
@@ -125,8 +138,11 @@ def scan_directory(directory: Path, exclude_patterns: List[str] = None) -> List[
         for file in files:
             file_path = root_path / file
 
-            # Only scan relevant file types
-            if file_path.suffix not in SCANNABLE_EXTENSIONS:
+            # Only scan relevant file types.
+            if (
+                file_path.suffix not in SCANNABLE_EXTENSIONS
+                and file_path.name not in SCANNABLE_FILENAMES
+            ):
                 continue
 
             # Skip if matches exclude pattern
