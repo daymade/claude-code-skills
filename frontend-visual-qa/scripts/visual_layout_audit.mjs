@@ -68,6 +68,7 @@ const usage = [
   "  [--wait-until domcontentloaded|load|networkidle|commit] [--ready-selector <css>]",
   "  [--settle-ms 750] [--forbid <regex>]... [--require <regex>]...",
   "  [--expected-window-width 1920] [--content-selector main] [--media-selector .hero]",
+  "  [--scroll-visible-media] (visit rendered media rows to trigger lazy loading)",
   "  [--section-selector section] [--screenshot-sections] [--max-section-screenshots 4]",
   "  [--out <new-empty-directory>] [--fail-on-warning]",
 ].join("\n");
@@ -85,7 +86,9 @@ function validateKnownFlags() {
     "--content-selector", "--media-selector", "--section-selector",
     "--max-section-screenshots", "--viewport",
   ]);
-  const booleanFlags = new Set(["--help", "-h", "--screenshot-sections", "--fail-on-warning"]);
+  const booleanFlags = new Set([
+    "--help", "-h", "--screenshot-sections", "--scroll-visible-media", "--fail-on-warning",
+  ]);
   for (let index = 2; index < process.argv.length; index += 1) {
     const arg = process.argv[index];
     if (valueFlags.has(arg)) {
@@ -153,6 +156,7 @@ const maxSectionScreenshots = parsePositiveInt(
   getArg("--max-section-screenshots", pageType === "deck" ? "50" : "4"),
 );
 const screenshotSections = process.argv.includes("--screenshot-sections");
+const scrollVisibleMedia = process.argv.includes("--scroll-visible-media");
 const failOnWarning = process.argv.includes("--fail-on-warning");
 
 const url = normalizeTarget(target);
@@ -202,7 +206,7 @@ const report = {
     "page and section overflow",
     "rendered text wrapping and clipping candidates",
     "custom interactive-role focusability candidates",
-    "image load and aspect candidates",
+    "rendered image request/load state and aspect candidates",
     "page-type contract heuristics",
     "viewport and optional section screenshots",
   ],
@@ -213,6 +217,7 @@ const report = {
     "complete WCAG conformance",
     "GIS interaction behavior",
     "subjective reference parity",
+    ...(!scrollVisibleMedia ? ["below-the-fold lazy-media activation"] : []),
   ],
   viewports: [],
   issues: [],
@@ -232,6 +237,9 @@ for (const viewport of viewports) {
       throw new Error("Navigation returned HTTP " + httpStatus + " for " + page.url());
     }
     await waitForVisualReadiness(page, readySelector, settleMs);
+  const mediaPreparation = scrollVisibleMedia
+    ? await primeVisibleMedia(page, mediaSelector, settleMs)
+    : null;
   await page.evaluate(() => window.scrollTo(0, 0));
   const screenshot = `${outDir}/${viewport.name}.png`;
   await page.screenshot({ path: screenshot, fullPage: false });
@@ -245,9 +253,27 @@ for (const viewport of viewports) {
     expectedWindowWidth,
     contentSelector,
     mediaSelector,
+    mediaWalkRequested: scrollVisibleMedia,
     sectionSelector,
     screenshotSections,
   });
+  result.meta.mediaPreparation = mediaPreparation;
+  if (mediaPreparation?.truncated) {
+    result.issues.push({
+      viewport: viewport.name,
+      type: "media-scroll-coverage-truncated",
+      severity: "warning",
+      detail: `Lazy-media preparation visited ${mediaPreparation.visitedRows}/${mediaPreparation.renderedRows} rendered media row(s); narrow the media scope or use the product harness for complete coverage.`,
+    });
+  }
+  if (mediaPreparation?.failures?.length) {
+    result.issues.push({
+      viewport: viewport.name,
+      type: "media-scroll-preparation-failed",
+      severity: "warning",
+      detail: `${mediaPreparation.failures.length} rendered media row(s) could not be visited before the audit.`,
+    });
+  }
   const sectionScreenshots = screenshotSections
     ? await captureSectionScreenshots(
       page,
@@ -327,7 +353,10 @@ for (const viewport of report.viewports) {
   const sections = viewport.sections
     ? `sections=${viewport.sections.count}, worstSectionOverflowX=${viewport.sections.worstOverflowX}`
     : "";
-  console.log(`${viewport.viewport}: outer=${viewport.outerWidth}x${viewport.outerHeight}, inner=${viewport.width}x${viewport.height}, outerMinusInner=${viewport.outerMinusInner}, client=${viewport.clientWidth}, scroll=${viewport.scrollWidth}, overflowX=${viewport.overflowX}${visual}${content}${primaryImage}${typography}, title="${viewport.title}", h1="${viewport.h1}", screenshot=${viewport.screenshot}`);
+  const media = viewport.media
+    ? `, media=${viewport.media.loaded} loaded/${viewport.media.broken} broken/${viewport.media.stillLoading} loading/${viewport.media.deferredLazy} deferred/${viewport.media.notRendered} not-rendered`
+    : "";
+  console.log(`${viewport.viewport}: outer=${viewport.outerWidth}x${viewport.outerHeight}, inner=${viewport.width}x${viewport.height}, outerMinusInner=${viewport.outerMinusInner}, client=${viewport.clientWidth}, scroll=${viewport.scrollWidth}, overflowX=${viewport.overflowX}${visual}${content}${primaryImage}${typography}${media}, title="${viewport.title}", h1="${viewport.h1}", screenshot=${viewport.screenshot}`);
   if (sections) console.log(`  sectionAudit: ${sections}`);
   if (viewport.sectionScreenshots?.length) {
     const captured = viewport.sectionScreenshots.map((item) => item.screenshot).filter(Boolean);
@@ -448,10 +477,107 @@ async function waitForVisualReadiness(page, selector, delayMs) {
   }
   await page.evaluate(async () => {
     if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const loadedImages = [...document.images].filter((image) => image.complete);
     await Promise.all(loadedImages.map((image) => image.decode?.().catch(() => {})));
   });
   if (delayMs > 0) await page.waitForTimeout(delayMs);
+}
+
+async function primeVisibleMedia(page, selector, delayMs) {
+  const plan = await page.evaluate(({ selector, maximumRows }) => {
+    function isRendered(element) {
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return false;
+      if (typeof element.checkVisibility === "function") {
+        return element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+      }
+      const style = getComputedStyle(element);
+      return style.display !== "none"
+        && style.visibility !== "hidden"
+        && Number.parseFloat(style.opacity || "1") > 0;
+    }
+
+    let selected;
+    try {
+      if (!selector) {
+        selected = [...document.images];
+      } else {
+        const roots = [...document.querySelectorAll(selector)];
+        selected = [...new Set(roots.flatMap((root) => (
+          root.tagName === "IMG" ? [root] : [...root.querySelectorAll("img")]
+        )))];
+      }
+    } catch (error) {
+      return {
+        renderedImages: 0,
+        notRenderedImages: 0,
+        renderedRows: 0,
+        visitedRows: 0,
+        truncated: false,
+        indices: [],
+        selectorError: error.message,
+      };
+    }
+
+    const allImages = [...document.images];
+    const rendered = selected
+      .filter(isRendered)
+      .map((image) => {
+        const rect = image.getBoundingClientRect();
+        return {
+          index: allImages.indexOf(image),
+          documentTop: Math.round(rect.top + window.scrollY),
+        };
+      })
+      .filter((item) => item.index >= 0)
+      .sort((a, b) => a.documentTop - b.documentTop);
+
+    const rows = [];
+    for (const item of rendered) {
+      const sameRow = rows.find((row) => Math.abs(row.documentTop - item.documentTop) <= 8);
+      if (!sameRow) rows.push(item);
+    }
+
+    return {
+      renderedImages: rendered.length,
+      notRenderedImages: selected.length - rendered.length,
+      renderedRows: rows.length,
+      visitedRows: Math.min(rows.length, maximumRows),
+      truncated: rows.length > maximumRows,
+      indices: rows.slice(0, maximumRows).map((item) => item.index),
+      selectorError: null,
+    };
+  }, { selector, maximumRows: 200 });
+
+  const failures = [];
+  for (const index of plan.indices) {
+    try {
+      await page.evaluate((imageIndex) => {
+        document.images[imageIndex]?.scrollIntoView({ block: "center", inline: "nearest" });
+      }, index);
+      await page.waitForTimeout(60);
+    } catch (error) {
+      failures.push({ index, message: error?.message || String(error) });
+    }
+  }
+
+  await page.evaluate(async () => {
+    window.scrollTo(0, 0);
+    const completeImages = [...document.images].filter((image) => image.complete && image.naturalWidth > 0);
+    await Promise.all(completeImages.map((image) => image.decode?.().catch(() => {})));
+  });
+  if (delayMs > 0) await page.waitForTimeout(Math.min(Math.max(delayMs, 100), 2_000));
+
+  return {
+    renderedImages: plan.renderedImages,
+    notRenderedImages: plan.notRenderedImages,
+    renderedRows: plan.renderedRows,
+    visitedRows: plan.visitedRows,
+    truncated: plan.truncated,
+    selectorError: plan.selectorError,
+    failures,
+  };
 }
 
 async function captureSectionScreenshots(page, viewport, outDir, sectionSelector, maxCount, includeFirstViewport = false) {
@@ -569,7 +695,7 @@ function collectScreenshotSections({ sectionSelector, maxCount, includeFirstView
   }
 }
 
-function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, requirePatterns, pageType, expectedWindowWidth, contentSelector, mediaSelector, sectionSelector, screenshotSections }) {
+function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, requirePatterns, pageType, expectedWindowWidth, contentSelector, mediaSelector, mediaWalkRequested, sectionSelector, screenshotSections }) {
   const issues = [];
   const forbiddenTerms = forbidPatterns.map((pattern) => new RegExp(pattern, "g"));
   const requiredTerms = requirePatterns.map((pattern) => new RegExp(pattern, "g"));
@@ -626,6 +752,9 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
   meta.firstViewportContent = measureFirstViewportContent(contentSelector);
   meta.primaryImage = measurePrimaryImage(mediaSelector);
   meta.typography = measureTypography();
+  const mediaAudit = auditMedia({ viewportName, mediaSelector, mediaWalkRequested });
+  meta.media = mediaAudit.meta;
+  issues.push(...mediaAudit.issues);
   const sectionAudit = auditSections(sectionSelector);
   meta.sections = sectionAudit.meta;
   issues.push(...sectionAudit.issues);
@@ -842,37 +971,6 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
   }
 
   auditSameRowFields();
-
-  for (const img of selectedImages(mediaSelector).filter(isVisible)) {
-    if (!img.complete || img.naturalWidth === 0) {
-      issues.push({ viewport: viewportName, selector: describe(img), type: "image-not-loaded", severity: "error", text: img.alt || img.src });
-      continue;
-    }
-
-    const imageMetrics = measureImage(img);
-    if (!imageMetrics || imageMetrics.area < 10_000) continue;
-
-    const ratioDelta = Math.abs(imageMetrics.displayedRatio / imageMetrics.naturalRatio - 1);
-    if (!["cover", "contain", "scale-down"].includes(imageMetrics.objectFit) && ratioDelta > 0.08) {
-      issues.push({
-        viewport: viewportName,
-        selector: describe(img),
-        type: "image-aspect-mismatch",
-        severity: "error",
-        text: img.alt || img.src,
-        detail: `Image displays at ratio ${imageMetrics.displayedRatio} but natural ratio is ${imageMetrics.naturalRatio}; object-fit is "${imageMetrics.objectFit}".`,
-      });
-    } else if (imageMetrics.objectFit === "cover" && ratioDelta > 0.25) {
-      issues.push({
-        viewport: viewportName,
-        selector: describe(img),
-        type: "image-heavy-crop",
-        severity: "warning",
-        text: img.alt || img.src,
-        detail: `Image container ratio ${imageMetrics.displayedRatio} differs from natural ratio ${imageMetrics.naturalRatio}. Inspect whether important content is cropped.`,
-      });
-    }
-  }
 
   issues.push(...auditImageOverlays({ viewportName, mediaSelector }));
 
@@ -1211,7 +1309,7 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
   function selectedImages(selector) {
     if (!selector) return [...document.images];
     try {
-      const roots = [...document.querySelectorAll(selector)].filter(isVisible);
+      const roots = [...document.querySelectorAll(selector)];
       return [...new Set(roots.flatMap((root) => {
         if (root.tagName === "IMG") return [root];
         return [...root.querySelectorAll("img")];
@@ -1219,6 +1317,112 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
     } catch {
       return [...document.images];
     }
+  }
+
+  function auditMedia({ viewportName, mediaSelector, mediaWalkRequested }) {
+    const found = [];
+    const selected = selectedImages(mediaSelector);
+    const rendered = selected.filter(isVisible);
+    const states = {
+      selected: selected.length,
+      rendered: rendered.length,
+      notRendered: selected.length - rendered.length,
+      loaded: 0,
+      broken: 0,
+      stillLoading: 0,
+      deferredLazy: 0,
+      missingSource: 0,
+    };
+
+    for (const img of rendered) {
+      const rect = img.getBoundingClientRect();
+      const inViewport = rect.bottom > 0
+        && rect.right > 0
+        && rect.top < window.innerHeight
+        && rect.left < window.innerWidth;
+      const source = img.currentSrc || img.getAttribute("src")?.trim() || "";
+      const hasDeferredSource = Boolean(
+        img.getAttribute("data-src")
+        || img.getAttribute("data-lazy-src")
+        || img.getAttribute("data-original"),
+      );
+      const isLazy = img.loading === "lazy" || hasDeferredSource;
+      const isDeferred = !mediaWalkRequested
+        && !inViewport
+        && isLazy
+        && (!img.complete || img.naturalWidth === 0 || !source);
+
+      if (isDeferred) {
+        states.deferredLazy += 1;
+        continue;
+      }
+
+      if (!source) {
+        states.missingSource += 1;
+        found.push({
+          viewport: viewportName,
+          selector: describe(img),
+          type: "image-source-missing",
+          severity: "error",
+          text: img.alt || "",
+          detail: "Rendered image has no requested source. If it is lazy-loaded, visit its visible row before judging the asset.",
+        });
+        continue;
+      }
+
+      if (img.complete && img.naturalWidth === 0) {
+        states.broken += 1;
+        found.push({
+          viewport: viewportName,
+          selector: describe(img),
+          type: "image-broken",
+          severity: "error",
+          text: img.alt || source,
+          detail: "The image request completed without decodable natural dimensions.",
+        });
+        continue;
+      }
+
+      if (!img.complete || img.naturalWidth === 0) {
+        states.stillLoading += 1;
+        found.push({
+          viewport: viewportName,
+          selector: describe(img),
+          type: "image-still-loading",
+          severity: "error",
+          text: img.alt || source,
+          detail: "The rendered image had not completed loading when evidence was captured; this is not yet proof of a broken asset.",
+        });
+        continue;
+      }
+
+      states.loaded += 1;
+      const imageMetrics = measureImage(img);
+      if (!imageMetrics || imageMetrics.area < 10_000) continue;
+
+      const ratioDelta = Math.abs(imageMetrics.displayedRatio / imageMetrics.naturalRatio - 1);
+      if (!["cover", "contain", "scale-down"].includes(imageMetrics.objectFit) && ratioDelta > 0.08) {
+        found.push({
+          viewport: viewportName,
+          selector: describe(img),
+          type: "image-aspect-mismatch",
+          severity: "error",
+          text: img.alt || source,
+          detail: `Image displays at ratio ${imageMetrics.displayedRatio} but natural ratio is ${imageMetrics.naturalRatio}; object-fit is "${imageMetrics.objectFit}".`,
+        });
+      } else if (imageMetrics.objectFit === "cover" && ratioDelta > 0.25) {
+        found.push({
+          viewport: viewportName,
+          selector: describe(img),
+          type: "image-heavy-crop",
+          severity: "warning",
+          text: img.alt || source,
+          detail: `Image container ratio ${imageMetrics.displayedRatio} differs from natural ratio ${imageMetrics.naturalRatio}. Inspect whether important content is cropped.`,
+        });
+      }
+    }
+
+    return { meta: states, issues: found };
   }
 
   function measureImage(img) {

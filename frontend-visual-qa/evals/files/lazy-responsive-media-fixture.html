@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lazy responsive media fixture</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.5 Arial, sans-serif; color: #17312a; }
+    header { padding: 28px 32px; background: #eef7f3; }
+    h1 { margin: 0; font-size: 30px; }
+    .branch { padding: 24px 32px 80px; }
+    .media-row { display: flex; gap: 16px; align-items: center; min-height: 140px; }
+    .media-row + .media-row { margin-top: 1100px; }
+    img { width: 160px; height: 90px; object-fit: cover; background: #dce9e3; }
+    .mobile-branch { display: none; }
+    @media (max-width: 600px) {
+      .desktop-branch { display: none; }
+      .mobile-branch { display: block; }
+      .branch { padding-inline: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <header><h1>Lazy media evidence</h1></header>
+
+  <main>
+    <section class="branch desktop-branch" aria-label="Desktop media">
+      <div class="media-row">
+        <img loading="lazy" data-src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180'%3E%3Crect width='320' height='180' fill='%230f7b5c'/%3E%3C/svg%3E" alt="Desktop first cover">
+        <p>Desktop first row</p>
+      </div>
+      <div class="media-row">
+        <img loading="lazy" data-src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180'%3E%3Crect width='320' height='180' fill='%231f8a70'/%3E%3C/svg%3E" alt="Desktop lower cover">
+        <p>Desktop lower row</p>
+      </div>
+    </section>
+
+    <section class="branch mobile-branch" aria-label="Mobile media">
+      <div class="media-row">
+        <img loading="lazy" data-src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180'%3E%3Crect width='320' height='180' fill='%232d6f90'/%3E%3C/svg%3E" alt="Mobile first cover">
+        <p>Mobile first row</p>
+      </div>
+      <div class="media-row">
+        <img loading="lazy" data-src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='180'%3E%3Crect width='320' height='180' fill='%233d7fa0'/%3E%3C/svg%3E" alt="Mobile lower cover">
+        <p>Mobile lower row</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const image = entry.target;
+        image.src = image.dataset.src;
+        delete image.dataset.src;
+        observer.unobserve(image);
+      }
+    }, { rootMargin: '80px' });
+
+    document.querySelectorAll('img[data-src]').forEach((image) => observer.observe(image));
+  </script>
+</body>
+</html>
