@@ -164,6 +164,13 @@ For a scripted sweep, first prove the target state is reproducible with one of:
 
 Otherwise label the run a **fresh-session diagnostic**, not a pass.
 
+When the audit must sign in to a SPA, when scripted login fails or bounces back
+to the auth route, or when the target runs on localhost behind shell proxies,
+load
+[references/auth-session-and-environment-traps.md](references/auth-session-and-environment-traps.md)
+before filing any login/network finding — those failures are usually the
+driving harness or the environment impersonating a product defect.
+
 ### 4. Capture And Inspect Rendered Evidence
 
 Capture the whole visible composition before zooming into a local defect. Then
@@ -184,6 +191,9 @@ Check at minimum:
   owners, sticky overlap, dense data-driven collisions, and same-row alignment;
 - image load, crop, natural/display ratio, focal point, and overlay collisions;
 - mobile preservation of identity, status, decision fields, and primary action;
+- status-semantic density on list/queue pages: alarm-toned chips repeated across
+  rows, one global fact re-rendered per row, and unlabeled numeric/graphic cells
+  (contract details in the journey/page-contract reference);
 - keyboard focus visibility, focus obstruction, and target size/spacing when
   accessibility is in scope;
 - parity with the named reference and the project's tokens/assets before
@@ -335,6 +345,9 @@ check the available agent tools can perform.
   catalog plus standards-backed checks.
 - references/journey-and-page-contracts.md — state, route, overlay,
   browser-output, native-shell, and page-type contracts.
+- references/auth-session-and-environment-traps.md — authenticated-SPA login
+  driving traps and environment hijack diagnostics (proxy, CSP entry point,
+  server-log triangulation).
 - references/data_viz_tier_and_token_audit.md — conditional data-viz,
   reference-tier, token, and palette audit.
 - evals/evals.json and evals/trigger-evals.json — behavior and routing
