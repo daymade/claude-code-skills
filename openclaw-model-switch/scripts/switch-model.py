@@ -3,17 +3,20 @@
 OpenClaw Model Switch Script
 
 Safely switch the default AI model for OpenClaw by modifying openclaw.json.
-- Backs up current config before changes
+- Discovers the real config path(s) instead of assuming one hardcoded location
+- Backs up every config it touches before changes
 - Adds model definition if missing
 - Updates default model reference
+- Syncs mirror configs (e.g. ~/.openclaw and ~/.kimi/kimi-claw)
 - Optionally restarts the gateway
 
 Usage:
-    python3 switch-model.py <model-id> [--config PATH] [--restart]
+    python3 switch-model.py <model-id> [--provider NAME] [--config PATH] [--restart]
 
 Example:
-    python3 switch-model.py kimi-k2.7-code --restart
-    python3 switch-model.py k2p6
+    python3 switch-model.py k3 --restart
+    python3 switch-model.py k3 --provider kimi-relay --restart
+    python3 switch-model.py k2p6 --config ~/.openclaw/openclaw.json
 """
 
 import argparse
@@ -22,12 +25,20 @@ import os
 import shutil
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Known Kimi model definitions (update as new models release)
 # These are used when a model is requested but not yet defined in the config.
 KNOWN_MODELS = {
+    "k3": {
+        "id": "k3",
+        "name": "k3",
+        "reasoning": True,
+        "input": ["text", "image"],
+        "contextWindow": 1048576,
+        "maxTokens": 32768,
+    },
     "k2p6": {
         "id": "k2p6",
         "name": "k2p6",
@@ -46,13 +57,34 @@ KNOWN_MODELS = {
     },
 }
 
-DEFAULT_CONFIG_PATH = Path.home() / ".kimi_openclaw" / "openclaw.json"
+# Candidate config locations, in priority order. The first existing one is the
+# primary edit target; every other existing candidate is treated as a mirror and
+# synced identically (some installs keep two files in sync — editing only one
+# gets your fix overwritten by the next sync).
+CONFIG_CANDIDATES = [
+    Path.home() / ".openclaw" / "openclaw.json",
+    Path.home() / ".kimi" / "kimi-claw" / "openclaw.json",
+    Path.home() / ".kimi_openclaw" / "openclaw.json",
+]
+
+
+def discover_configs(explicit: Path | None) -> list[Path]:
+    """Return the configs to edit: the explicit one, or every existing candidate."""
+    if explicit:
+        if not explicit.exists():
+            print(f"Error: Config file not found: {explicit}", file=sys.stderr)
+            sys.exit(1)
+        return [explicit]
+    found = [p for p in CONFIG_CANDIDATES if p.exists()]
+    if not found:
+        tried = "\n  ".join(str(p) for p in CONFIG_CANDIDATES)
+        print(f"Error: No openclaw.json found. Tried:\n  {tried}", file=sys.stderr)
+        print("Pass --config PATH to specify the location manually.", file=sys.stderr)
+        sys.exit(1)
+    return found
 
 
 def load_config(path: Path) -> dict:
-    if not path.exists():
-        print(f"Error: Config file not found: {path}", file=sys.stderr)
-        sys.exit(1)
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -72,17 +104,8 @@ def backup_config(path: Path) -> Path:
     return backup_path
 
 
-def get_provider(config: dict) -> dict:
-    providers = config.get("models", {}).get("providers", {})
-    # Find the first provider that has a models list; prefer kimi-coding.
-    for name in ["kimi-coding", "openai", "anthropic"]:
-        if name in providers:
-            return providers[name]
-    # Fallback: return the first provider with a models key.
-    for p in providers.values():
-        if isinstance(p, dict) and "models" in p:
-            return p
-    return {}
+def get_provider(config: dict, provider_name: str) -> dict:
+    return config.get("models", {}).get("providers", {}).get(provider_name, {})
 
 
 def model_exists(provider: dict, model_id: str) -> bool:
@@ -124,12 +147,11 @@ def guess_provider_name(config: dict) -> str:
 def restart_gateway() -> bool:
     """Attempt to restart OpenClaw gateway."""
     try:
-        # Try openclaw CLI first.
         result = subprocess.run(
             ["openclaw", "gateway", "restart"],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=60,
         )
         if result.returncode == 0:
             print("Gateway restarted successfully via 'openclaw gateway restart'.")
@@ -139,77 +161,76 @@ def restart_gateway() -> bool:
     except Exception as e:
         print(f"Restart attempt failed: {e}", file=sys.stderr)
 
-    # Fallback: try gateway tool via Python module if available.
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "openclaw", "gateway", "restart"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode == 0:
-            print("Gateway restarted successfully via python -m openclaw.")
-            return True
-    except Exception:
-        pass
-
     print("Warning: Could not restart gateway automatically.", file=sys.stderr)
-    print("Please restart manually (e.g., 'openclaw gateway restart' or restart Kimi desktop).", file=sys.stderr)
+    print("Please restart manually: openclaw gateway restart", file=sys.stderr)
     return False
 
 
 def main():
     parser = argparse.ArgumentParser(description="Switch OpenClaw default model")
-    parser.add_argument("model_id", help="Target model ID (e.g., kimi-k2.7-code)")
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH, help="Path to openclaw.json")
+    parser.add_argument("model_id", help="Target model ID (e.g., k3, k2p6)")
+    parser.add_argument("--provider", help="Provider key to switch within (default: auto-guess, prefers kimi-coding)")
+    parser.add_argument("--config", type=Path, default=None,
+                        help="Explicit openclaw.json path (skips discovery; edits only this file)")
     parser.add_argument("--restart", action="store_true", help="Restart gateway after switching")
     args = parser.parse_args()
 
-    config_path = args.config
     model_id = args.model_id
+    configs = discover_configs(args.config)
 
-    # Load current config
-    config = load_config(config_path)
+    if len(configs) > 1:
+        print(f"Found {len(configs)} config files; will edit and sync all:")
+        for p in configs:
+            print(f"  - {p}")
 
-    # Determine provider
-    provider_name = guess_provider_name(config)
-    provider = get_provider(config)
-    if not provider:
-        print("Error: No model provider found in config.", file=sys.stderr)
-        sys.exit(1)
+    for config_path in configs:
+        config = load_config(config_path)
 
-    # Backup
-    backup_path = backup_config(config_path)
-    print(f"Config backed up to: {backup_path}")
+        # Determine provider
+        provider_name = args.provider or guess_provider_name(config)
+        provider = get_provider(config, provider_name)
+        if not provider:
+            print(f"Error: Provider '{provider_name}' not found in {config_path}.", file=sys.stderr)
+            print("Create the provider block first (see references/troubleshooting-model-config.md "
+                  "for the custom-provider pattern), or pass --provider with an existing key.",
+                  file=sys.stderr)
+            sys.exit(1)
 
-    # Ensure model definition exists
-    if not model_exists(provider, model_id):
-        added = add_model_definition(provider, model_id)
-        if added:
-            print(f"Added model definition for '{model_id}'.")
-        else:
-            print(
-                f"Warning: Model '{model_id}' is not defined in config and not in built-in known models.",
-                file=sys.stderr,
-            )
-            print("Switching anyway; ensure the model ID is correct.", file=sys.stderr)
+        # Backup
+        backup_path = backup_config(config_path)
+        print(f"[{config_path}] backed up to: {backup_path}")
 
-    # Update default model
-    update_default_model(config, provider_name, model_id)
-    print(f"Default model switched to: {provider_name}/{model_id}")
+        # Ensure model definition exists
+        if not model_exists(provider, model_id):
+            added = add_model_definition(provider, model_id)
+            if added:
+                print(f"Added model definition for '{model_id}'.")
+            else:
+                print(
+                    f"Warning: Model '{model_id}' is not defined in config and not in built-in known models.",
+                    file=sys.stderr,
+                )
+                print("Switching anyway; ensure the model ID is correct and probe it first "
+                      "(SKILL.md Step 2).", file=sys.stderr)
 
-    # Update meta timestamp
-    config.setdefault("meta", {})["lastTouchedAt"] = datetime.utcnow().isoformat() + "Z"
-    config["meta"]["lastTouchedVersion"] = config["meta"].get("lastTouchedVersion", "unknown")
+        # Update default model
+        update_default_model(config, provider_name, model_id)
+        print(f"[{config_path}] default model switched to: {provider_name}/{model_id}")
 
-    # Save
-    save_config(config_path, config)
-    print(f"Config saved to: {config_path}")
+        # Update meta timestamp
+        config.setdefault("meta", {})["lastTouchedAt"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        config["meta"]["lastTouchedVersion"] = config["meta"].get("lastTouchedVersion", "unknown")
+
+        # Save
+        save_config(config_path, config)
 
     # Restart
     if args.restart:
         print("Restarting gateway...")
         restart_gateway()
+        print("\nNOTE: Verify end-to-end before calling this done (SKILL.md Step 4):")
+        print("  openclaw agent --local --json --agent main --session-id verify-$(date +%s) -m ping")
+        print('  → expect "result": "success" and "fallbackUsed": false')
     else:
         print("NOTE: You must restart the gateway for changes to take effect.")
         print("      Run with --restart or execute: openclaw gateway restart")
