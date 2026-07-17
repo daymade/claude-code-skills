@@ -111,7 +111,7 @@ Accept local files, direct media URLs, or web/podcast episode pages.
 - **Local file, direct media URL, or page URL fallback**: run the bundled resolver. It extracts media from common page metadata (`og:audio`, media tags, JSON-LD, RSS-style enclosure links), downloads URLs with atomic temp-file replacement, verifies remote `Content-Length` when present, computes SHA-256, and validates the result with `ffprobe`.
 
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/scripts/resolve_media_input.py \
+uv run ${CLAUDE_SKILL_DIR}/scripts/resolve_media_input.py \
   INPUT_FILE_OR_URL [INPUT_FILE_OR_URL2 ...] \
   --output-dir OUTPUT_DIR \
   --manifest OUTPUT_DIR/media_manifest.json
@@ -120,7 +120,7 @@ uv run ${CLAUDE_PLUGIN_ROOT}/scripts/resolve_media_input.py \
 For suspicious or high-value downloads, add `--decode-check` to make `ffmpeg` decode the whole file before transcription:
 
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/scripts/resolve_media_input.py \
+uv run ${CLAUDE_SKILL_DIR}/scripts/resolve_media_input.py \
   "https://www.xiaoyuzhoufm.com/episode/EPISODE_ID" \
   --output-dir OUTPUT_DIR \
   --manifest OUTPUT_DIR/media_manifest.json \
@@ -134,7 +134,7 @@ Downloaded ... bytes in ...s -> OUTPUT_DIR/episode-title.m4a
 OUTPUT_DIR/episode-title.m4a
 ```
 
-Use the printed local path as `INPUT_AUDIO` in later steps. If `${CLAUDE_PLUGIN_ROOT}` is empty, use the absolute path to this skill directory.
+Use the printed local path as `INPUT_AUDIO` in later steps. If your runtime shows the literal `${CLAUDE_SKILL_DIR}` instead of a substituted path, resolve the skill directory per the Troubleshooting entry at the bottom of this document.
 
 For third-party public podcasts or copyrighted media, save the transcript as a local file for the user's personal analysis. Do not paste a full long transcript into chat; provide a path, previews, summaries, or short excerpts instead.
 
@@ -172,8 +172,8 @@ Use the bundled script — it merges, normalizes to 16 kHz mono, optionally spee
 and verifies its own output instead of trusting the ffmpeg exit code:
 
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/scripts/prepare_asr_input.py SEG1.wav SEG2.wav -o merged.wav   # merge only
-uv run ${CLAUDE_PLUGIN_ROOT}/scripts/prepare_asr_input.py SEG*.wav -o upload.m4a --speed 1.3  # merge + quota-saving speedup
+uv run ${CLAUDE_SKILL_DIR}/scripts/prepare_asr_input.py SEG1.wav SEG2.wav -o merged.wav   # merge only
+uv run ${CLAUDE_SKILL_DIR}/scripts/prepare_asr_input.py SEG*.wav -o upload.m4a --speed 1.3  # merge + quota-saving speedup
 ```
 
 Expected output:
@@ -196,9 +196,14 @@ Wrote upload.m4a
   order or a missing segment); overall loudness prints for comparison with the source.
 - Speedup must be `atempo`-style pitch-preserved stretch — never sample-rate trickery,
   which shifts pitch and breaks both ASR accuracy and diarization voiceprints.
-- Codec by extension: `.m4a` (AAC 48k — the metered-upload choice; ~30% smaller than mp3
-  at equal speech quality), `.wav` (pcm_s16le, local pipeline default), `.flac` (lossless
-  archive master, ~50% of WAV), `.mp3` (compatibility fallback only).
+- **Pick the output format by destination** — codec follows the file extension:
+
+  | Destination | Format | Why |
+  |---|---|---|
+  | Local MLX pipeline (Path A) | `.wav` or `.m4a` | Both feed the pipeline directly (m4a verified 2026-07-18: a 3-min slice transcribed cleanly). M4A is ~5x smaller — 324 MB WAV → 63 MB M4A on a 2h49m merge, duration identical to the second |
+  | Metered upload (Feishu Minutes, per-minute quota) | `.m4a` + `--speed 1.3` | AAC 48k is speech-transparent for ASR, ~30% smaller than mp3 at equal speech quality; speedup cuts billed duration ~23% |
+  | Lossless archive | `.flac` | ~50% of WAV, bit-perfect |
+  | Only when the target rejects the above | `.mp3` | Compatibility fallback |
 - Keep the originals until the transcript passes Step 4 verification.
 
 ## Step 3: Transcribe (speaker labels by default)
@@ -206,11 +211,10 @@ Wrote upload.m4a
 ### Path A: Local MLX (macOS Apple Silicon) — default
 
 Run the decoupled speaker pipeline — it handles dependency pins, model loading,
-and the critical `max_tokens` parameter internally. If `${CLAUDE_PLUGIN_ROOT}`
-is empty, use the absolute path to this skill directory.
+and the critical `max_tokens` parameter internally.
 
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/scripts/speaker_transcribe.py \
+uv run ${CLAUDE_SKILL_DIR}/scripts/speaker_transcribe.py \
   INPUT_AUDIO [INPUT_AUDIO2 ...] OUTPUT_DIR
 ```
 
@@ -235,7 +239,7 @@ against the audio before trusting them). Intermediate legs are cached in
 Before a long first run, smoke-test the Qwen3 leg once:
 
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/scripts/transcribe_local_mlx.py --smoke-test
+uv run ${CLAUDE_SKILL_DIR}/scripts/transcribe_local_mlx.py --smoke-test
 ```
 
 Expected output includes `Dependency stack: mlx-audio 0.3.1, mlx-lm 0.30.5,
@@ -274,7 +278,7 @@ B) Continue without speakers this time — plain text only
 **Plain-text fast path** (monologue, podcast, "just summarize it"):
 
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/scripts/speaker_transcribe.py \
+uv run ${CLAUDE_SKILL_DIR}/scripts/speaker_transcribe.py \
   INPUT_AUDIO OUTPUT_DIR --no-diarization
 ```
 
@@ -284,7 +288,7 @@ with ONE input wav — passing multiple inputs is rejected (one transcript can't
 be aligned to several files):
 
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/scripts/speaker_transcribe.py \
+uv run ${CLAUDE_SKILL_DIR}/scripts/speaker_transcribe.py \
   INPUT_AUDIO OUTPUT_DIR --text-file TRANSCRIPT.txt
 ```
 
@@ -358,7 +362,7 @@ os.unlink(output_json)
 Then attach speakers locally (Apple Silicon + pyannote token required):
 
 ```bash
-uv run ${CLAUDE_PLUGIN_ROOT}/scripts/speaker_transcribe.py \
+uv run ${CLAUDE_SKILL_DIR}/scripts/speaker_transcribe.py \
   INPUT_AUDIO OUTPUT_DIR --text-file OUTPUT.txt
 ```
 
@@ -396,7 +400,7 @@ D) Abort
 If single remote request fails (timeout, OOM), fall back to chunked transcription:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/overlap_merge_transcribe.py \
+python3 ${CLAUDE_SKILL_DIR}/scripts/overlap_merge_transcribe.py \
   --config "${CLAUDE_PLUGIN_DATA}/config.json" \
   INPUT_AUDIO OUTPUT.txt
 ```
@@ -488,10 +492,10 @@ aligned — never cut-then-transcribe). This section covers the pieces.
 
 After diarization you get a CSV per file (`file,start,end,duration,speaker,text`). The bundled audit HTML generator turns those CSVs into a single, reader-first review page with audio playback, per-turn flags/notes, speaker aliasing, and export.
 
-Generate it from a speaker-transcribe output directory (run from the skill directory, or replace `<path-to-asr-transcribe-to-text>` with the actual install path):
+Generate it from a speaker-transcribe output directory:
 
 ```bash
-uv run scripts/generate_audit_html.py \
+uv run ${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py \
   OUTPUT_DIR \
   --output OUTPUT_DIR/audit/index.html \
   --audio-dir /path/to/original/audio
@@ -500,7 +504,7 @@ uv run scripts/generate_audit_html.py \
 Defaults assume a flat layout under `PROJECT_DIR`: `PROJECT_DIR/*.csv` transcripts, `PROJECT_DIR/*.diarization.json`, and the original audio files placed next to the outputs. `speaker_transcribe.py` itself writes the CSV, TXT, and diarization files flat under its `OUTPUT_DIR`. If your project uses a different structure, override any of those paths:
 
 ```bash
-uv run <path-to-asr-transcribe-to-text>/scripts/generate_audit_html.py \
+uv run ${CLAUDE_SKILL_DIR}/scripts/generate_audit_html.py \
   /path/to/project \
   --output /path/to/project/audit/index.html \
   --csv-dir /path/to/project/csv \
@@ -555,9 +559,15 @@ transformers 5.0.0rc3
 
 Run the bundled `--smoke-test` command and confirm the dependency stack line matches. Do not start a long transcription until the smoke test succeeds.
 
-### `${CLAUDE_PLUGIN_ROOT}` is empty
+### `${CLAUDE_SKILL_DIR}` is not substituted
 
-Some runtimes do not set skill environment variables. Use the absolute path to the skill directory that contains this `SKILL.md`, then run `scripts/transcribe_local_mlx.py` from there.
+Script paths in this skill use `${CLAUDE_SKILL_DIR}` — the skill's own directory, which Claude Code substitutes when the skill loads. If a command reaches you with the literal `${CLAUDE_SKILL_DIR}` (some runtimes don't substitute), resolve the skill directory in this order:
+
+1. The skill-load envelope: `Base directory for this skill: <path>` → `<path>` is the skill directory.
+2. No envelope → find candidates and pick the one this session's available-skills list points to (installed copies can lag a source checkout):
+   `find ~/.claude ~/.claude-profiles ~/.codex ~/workspace -maxdepth 7 -type d -name asr-transcribe-to-text 2>/dev/null | head -5`
+
+Substitute the resolved absolute path for `${CLAUDE_SKILL_DIR}` everywhere in this document.
 
 ## Bundled Resources
 
