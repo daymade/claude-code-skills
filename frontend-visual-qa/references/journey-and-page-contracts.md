@@ -273,6 +273,8 @@ Expected:
   range, and distinct loading, empty, permission, and error states.
 - data-boundary or constraint copy attached to the affected data as a terse chip,
   column label, status tag, or inline note rather than a paragraph wall.
+- status chips whose tone comes from the project's status dictionary, with
+  alarm/error tones reserved for genuine failures.
 
 Flag:
 
@@ -282,6 +284,24 @@ Flag:
 - a generic permanent side rail that steals canvas width;
 - a desktop table merely squeezed into a phone viewport;
 - a drawer that blocks unrelated work by accident.
+
+Also audit **status-semantic density** on list/queue pages — each row can pass
+its own component checks while the page reads as a disaster:
+
+- an alarm-toned (red/error) chip repeated on most rows. Either the fleet is
+  genuinely on fire, or a neutral fact was misclassified upstream into a failure
+  state — "the platform does not provide this metric" is `not supported`, not
+  `check failed`. Read the chip's copy against what actually happened and trace
+  the classification before treating the styling as correct; a page of red reads
+  as an incident and trains users to ignore alarms.
+- the same global fact (data not yet imported, module not connected, feature
+  flag off) re-rendered as a per-row chip on every row. One page-level notice or
+  a column-header annotation carries the same information without turning a
+  ledger into a wall of warnings.
+- a numeric or graphic cell with no visible label — sparkline triplets, bare
+  counts, unlabeled gauges. An aria-label satisfies the accessibility tree but
+  not the sighted reader; if the audit cannot say what a number means from the
+  rendered page alone, neither can the user.
 
 ## Design-System Artifacts
 
