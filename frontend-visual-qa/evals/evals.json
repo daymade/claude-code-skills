@@ -176,6 +176,32 @@
         "Before closing, re-walks the path as a tired user and identifies likely misunderstanding, blocked recovery, internal language/manual burden, and the regression guard needed"
       ],
       "files": []
+    },
+    {
+      "id": 14,
+      "name": "post-login-navigation-contract-drift",
+      "prompt": "Audit an authenticated admin workspace. Login succeeds, but the remembered sidebar label is absent and the automation times out. The landing page exposes a differently named visible entry that may lead to the target. Decide whether this is a product defect or a stale harness, and state the evidence sequence before continuing. Audit only.",
+      "expected_output": "A post-login contract check that inventories the actual landing state, follows the rendered canonical entry, and withholds a product finding until route/state evidence distinguishes navigation failure from harness drift.",
+      "expectations": [
+        "Records the final URL, visible landing-page excerpt, and available visible links/buttons before retrying a remembered locator",
+        "Follows the visible canonical entry and proves the target with pathname plus a rendered state marker",
+        "Treats the absent remembered label as harness or navigation-contract drift when another visible path reaches the target",
+        "Files a product navigation finding only if neither the visible entry path nor the product's supported direct route can reach the promised workspace"
+      ],
+      "files": []
+    },
+    {
+      "id": 15,
+      "name": "lazy-media-and-responsive-branch-evidence",
+      "prompt": "Audit evals/files/lazy-responsive-media-fixture.html at 1440x900 and 390x844 with the bundled visual_layout_audit.mjs and an existing Playwright driver. First run without media scrolling, then run with --scroll-visible-media. Do not install dependencies or edit the fixture.",
+      "expected_output": "A media-state audit that distinguishes deferred lazy covers from broken assets, primes only the CSS-rendered desktop/mobile branch, and proves the requested visible covers load after their rows are visited.",
+      "expectations": [
+        "Without media scrolling, reports below-the-fold lazy covers as deferred coverage rather than image-broken or image-source-missing",
+        "With --scroll-visible-media, visits rendered media rows and reports the current viewport's covers loaded with no deferred or broken images",
+        "Counts the inactive responsive branch as not rendered and never waits for, scrolls to, or requires its images to load",
+        "Records commands, exit codes, report paths, and screenshot inspection; uses no dependency installation or project mutation"
+      ],
+      "files": ["evals/files/lazy-responsive-media-fixture.html"]
     }
   ]
 }

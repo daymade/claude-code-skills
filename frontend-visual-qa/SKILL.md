@@ -171,6 +171,13 @@ load
 before filing any login/network finding — those failures are usually the
 driving harness or the environment impersonating a product defect.
 
+After authentication, do not drive from remembered sidebar labels or assume the
+target navigation is already mounted. Record the final URL, a short visible body
+excerpt, and the currently available links/buttons; then follow the canonical
+entry the rendered landing page actually exposes. If an expected locator is
+absent, treat navigation-contract or harness drift as the leading diagnosis
+until the target route/state is independently proven.
+
 ### 4. Capture And Inspect Rendered Evidence
 
 Capture the whole visible composition before zooming into a local defect. Then
@@ -219,6 +226,13 @@ the default responsive matrix:
     node <skill-root>/scripts/visual_layout_audit.mjs \
       --file deck.html --page-type deck --viewport 1920x1080 \
       --screenshot-sections
+
+For a long page whose evidence depends on below-the-fold covers or thumbnails,
+add --scroll-visible-media. It visits rendered media rows before capture so lazy
+loading can start, while excluding CSS-hidden responsive alternatives. Without
+that flag, offscreen lazy media is reported as deferred coverage rather than a
+broken asset. In either mode, inspect the screenshots: “not requested,” “still
+loading,” and “request completed but undecodable” are different states.
 
 Use repeated --forbid patterns only for project-specific stale names or rendered
 terms that the current product contract explicitly prohibits. Do not encode
@@ -339,15 +353,15 @@ check the available agent tools can perform.
 
 ## Bundled Resources
 
-- scripts/visual_layout_audit.mjs — Playwright-powered mechanical viewport and
-  layout sweep with screenshots and JSON evidence.
+- scripts/visual_layout_audit.mjs — Playwright-powered mechanical viewport,
+  layout, and media-state sweep with screenshots and JSON evidence.
 - references/history-derived-checklist.md — core visual/responsive defect
   catalog plus standards-backed checks.
 - references/journey-and-page-contracts.md — state, route, overlay,
   browser-output, native-shell, and page-type contracts.
-- references/auth-session-and-environment-traps.md — authenticated-SPA login
-  driving traps and environment hijack diagnostics (proxy, CSP entry point,
-  server-log triangulation).
+- references/auth-session-and-environment-traps.md — authenticated-SPA login and
+  post-login navigation driving traps plus environment hijack diagnostics
+  (proxy, CSP entry point, server-log triangulation).
 - references/data_viz_tier_and_token_audit.md — conditional data-viz,
   reference-tier, token, and palette audit.
 - evals/evals.json and evals/trigger-evals.json — behavior and routing

@@ -10,6 +10,7 @@ environment.
 ## Contents
 
 - Login Driving Traps
+- Post-Login Navigation Contract Drift
 - Environment Hijack Diagnostics
 - Fixed-Overlay Screenshot Collapse
 
@@ -62,6 +63,35 @@ to disappear before capturing. Fresh headless profiles have no stored session
 at all, so an unauthenticated headless hit on a guarded route always shows
 either the interstitial or the login page — that is the guard working, not a
 defect.
+
+## Post-Login Navigation Contract Drift
+
+A successful login does not prove that a remembered sidebar item exists on the
+landing page. Products add home cards, rename entries, or mount navigation only
+after entering a workspace. A hard-coded label can therefore time out while the
+product is healthy.
+
+Before filing a missing-navigation finding, capture the post-login contract:
+
+    () => ({
+      href: location.href,
+      visibleText: document.body.innerText.replace(/\s+/g, " ").trim().slice(0, 600),
+      entries: [...document.querySelectorAll('a[href],button')]
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return rect.width > 0 && rect.height > 0
+            && style.display !== 'none' && style.visibility !== 'hidden';
+        })
+        .map((element) => element.textContent?.replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .slice(0, 40),
+    })
+
+Follow the visible canonical entry path, then prove the target with its pathname
+and a state marker. If the expected locator is absent but another visible entry
+reaches the target, the harness was stale. If no visible entry or direct route
+can reach the promised workspace, then the product has a navigation defect.
 
 ## Environment Hijack Diagnostics
 
