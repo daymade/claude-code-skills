@@ -86,5 +86,9 @@
   {
     "query": "只审 Storybook 组件的 TypeScript props API、泛型和导出命名，不渲染 story。",
     "should_trigger": false
+  },
+  {
+    "query": "列表里有些封面像是坏了，但页面用了懒加载，而且桌面表格和手机卡片都留在 DOM 里。请在两个宽度实际滚动检查，别把没触发的图片当坏图。",
+    "should_trigger": true
   }
 ]

@@ -176,13 +176,34 @@ modal surfaces.
 
 Verify:
 
-- image completion and nonzero natural dimensions;
+- image request/load state and nonzero natural dimensions;
 - displayed ratio versus natural ratio;
 - intentional object-fit and focal position;
 - crop severity at each relevant viewport;
 - text/badge/caption collision with important image content;
 - asset relevance to the product/domain;
 - use of approved logo, imagery, and design-system assets.
+
+Classify media before calling it broken:
+
+- **not requested** — a rendered but offscreen lazy image has not entered its
+  loading threshold; visit the audited row/section before judging the asset;
+- **still loading** — a requested image has not completed at capture time;
+  record incomplete evidence rather than inventing a network or asset cause;
+- **broken** — the request completed but the image has zero natural dimensions
+  or cannot decode.
+
+Responsive implementations may keep desktop and mobile branches in the DOM at
+the same time. Scope image readiness, geometry, scrolling, and interaction to
+the branch that is CSS-rendered at the current viewport. Do not wait for or
+scroll to images inside display:none, visibility:hidden, zero-size, or otherwise
+inactive alternatives. Audit hidden alternatives separately only when they can
+remain focusable or intercept input.
+
+For a full-page media audit, scroll the relevant rendered rows or sections to
+trigger lazy loading, wait for those requests to settle, then inspect completion
+and natural dimensions. A blanket document.images.every(img => img.complete)
+wait is invalid because offscreen lazy media may correctly remain untouched.
 
 Flag default stretching and accidental heavy crop. Do not infer safe crop from
 object-fit: cover alone; inspect the focal content.
@@ -228,6 +249,7 @@ product domain, actor's job, or established project rules.
 | wrong scroll owner | wheel/keyboard journey | min-height contract and scoped overflow |
 | same-row drift | sibling bounding boxes | shared anatomy or reserved helper slot |
 | dense-item collision | opened dense-state screenshot + affected bounding boxes | collision-aware layout, reserved lanes, stacking, or a responsive alternative |
+| deferred/broken image | request state + visible-branch screenshot + natural dimensions | trigger the lazy row, then repair the actual asset or loader |
 | image ratio/crop | natural/display ratio + screenshot | matching aspect ratio and deliberate object-fit |
 | underfilled first viewport | inner/outer widths + content bounds | reset emulation or repair container/grid |
 | focus obstruction | keyboard traversal + screenshot | scroll-padding, overlay position, or modal contract |
