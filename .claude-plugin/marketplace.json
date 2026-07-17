@@ -1126,22 +1126,26 @@
     },
     {
       "name": "openclaw-model-switch",
-      "description": "Switch the default AI model for an OpenClaw instance (e.g., Kimi K2.6 to K2.7) by safely editing openclaw.json with automatic backup, model validation, and optional gateway restart. Use when upgrading models, switching between reasoning and non-reasoning models, rolling back after testing, or modifying the default model configuration.",
+      "description": "Switch or repair the model configuration of an OpenClaw instance (e.g., Kimi k2p6 → k3): change the default model, add model definitions, and fix model-config failures — 401 \"Invalid token\", \"No available channel / model not found\", thinking-level rejections, and config edits that don't take effect. Ships a config-discovering switch script with backup + mirror sync, an endpoint probe protocol, and a field-tested trap catalog (env-var key hijack, provider-plugin thinking restrictions, relay availability).",
       "source": "./openclaw-model-switch",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "claude-code",
       "keywords": [
-        "openclaw",
-        "lobster",
-        "model-switch",
-        "kimi",
-        "k2.7",
-        "deepseek",
+        "claude-code",
         "config",
-        "model-management",
+        "deepseek",
         "gateway",
-        "claude-code"
+        "k2.7",
+        "k3",
+        "kimi",
+        "lobster",
+        "model-management",
+        "model-repair",
+        "model-switch",
+        "openclaw",
+        "relay",
+        "thinking-levels"
       ]
     }
   ]

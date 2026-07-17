@@ -1,69 +1,106 @@
 ---
 name: openclaw-model-switch
-description: 'Switch the default AI model for OpenClaw (e.g., Kimi K2.6 to K2.7). Use when the user wants to change the active LLM model, upgrade to a newer model version, switch between reasoning and non-reasoning models, or modify the openclaw.json model configuration. Triggers on phrases like "switch model", "change model", "upgrade to k2.7", "use k2.7", "模型切换", "切换模型".'
+description: >-
+  Switch or repair the model configuration of an OpenClaw instance (e.g. Kimi k2p6 → k3):
+  change the default model, add model definitions, and fix model-config failures — 401
+  "Invalid token", "No available channel / model not found", thinking-level rejections
+  ("Thinking level X is not supported"), and config edits that don't take effect.
+  Use whenever the user wants to switch/upgrade/rollback the OpenClaw model (切换模型/换模型/
+  升级模型), or says the OpenClaw/龙虾 bot's model is misconfigured (模型配的错了),
+  or the bot falls back / errors on LLM calls.
 ---
 
 # OpenClaw Model Switch
 
-Switch the default AI model used by OpenClaw by safely modifying `openclaw.json`.
+Switch or repair an OpenClaw instance's model configuration by safely editing `openclaw.json`.
 
-## Quick Start
+**Diagnose before you edit.** Model failures on OpenClaw are usually NOT the model id —
+they are key routing (env hijack), provider-plugin restrictions, or endpoint/model mismatch.
+Changing the model id without checking these first is how a 5-minute fix becomes a 2-hour
+debugging session. The full trap catalog with discovery commands lives in
+[references/troubleshooting-model-config.md](references/troubleshooting-model-config.md) — read it
+the moment anything errors.
 
-Run the switch script:
+## Step 1 — Find the real config file(s)
+
+Do NOT assume a hardcoded path. Candidate locations (check all, edit all that exist):
+
+1. `~/.openclaw/openclaw.json` — the gateway's live config on most installs
+2. `~/.kimi/kimi-claw/openclaw.json` — Kimi Claw mirror, kept in sync on some installs
+3. `~/.kimi_openclaw/openclaw.json` — legacy desktop path
+
+Confirm which one the gateway actually reads: `openclaw gateway status` prints
+`Config (service): <path>`. If several exist, treat them as mirrors: **edit all of them
+identically**, otherwise the next sync overwrites your fix.
+
+## Step 2 — Probe the endpoint + model BEFORE touching config
+
+Never trust a relay's model listing (`GET /v1/models` on new-api style relays is frequently
+incomplete — a model can be absent from the list yet serve fine). The only authority is a
+real completion probe **from the host that will run the bot**:
+
+```bash
+curl -sS -o /tmp/probe.json -w "HTTP %{http_code}\n" \
+  -X POST "<baseUrl>/v1/messages" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "Content-Type: application/json" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{"model":"<model-id>","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}'
+```
+
+Expected: `HTTP 200` and a `content` array in the body. `401 Invalid token` with a token you
+just verified works elsewhere → the wire key is being hijacked (see trap #1 in the
+troubleshooting reference). `503 No available channel` → the model is not served for this
+token/group **from this network** (trap #3) — pick a served model or fix the relay, don't
+blind-switch.
+
+## Step 3 — Switch the model
 
 ```bash
 python3 scripts/switch-model.py <model-id> --restart
+# target a specific provider instead of the guessed one:
+python3 scripts/switch-model.py k3 --provider kimi-relay --restart
+# explicit config path (skips discovery):
+python3 scripts/switch-model.py k3 --config ~/.openclaw/openclaw.json --restart
 ```
 
-Example — upgrade to K2.7:
+The script: discovers and backs up every candidate config to `<config-dir>/config-backups/`,
+adds the model definition if known, sets `agents.defaults.model.primary`, syncs mirror
+files, and restarts the gateway with `--restart`.
+
+## Step 4 — Verify end-to-end (mandatory)
+
+A restarted gateway proves nothing. Run one real agent turn and read the result metadata:
+
 ```bash
-python3 scripts/switch-model.py kimi-k2.7-code --restart
+openclaw agent --local --json --agent main --session-id verify-$(date +%s) -m "ping"
 ```
 
-Example — roll back to K2.6:
-```bash
-python3 scripts/switch-model.py k2p6 --restart
-```
+Success looks like: `"result": "success"`, `"fallbackUsed": false`, and the gateway log shows
+`agent model: <provider>/<model> (thinking=...)`. `"result": "success"` with
+`fallbackUsed: true` means your target failed and a fallback saved the turn — the config is
+still wrong.
 
-## What This Script Does
+## Common failures → read the troubleshooting reference
 
-1. **Backs up** the current `openclaw.json` to `~/.kimi_openclaw/config-backups/`
-2. **Adds** the target model definition to the provider's `models` array (if missing)
-3. **Updates** `agents.defaults.model.primary` to point to the new model
-4. **Restarts** the OpenClaw gateway (with `--restart` flag)
+| Symptom | Most likely trap |
+|---|---|
+| `LLM error new_api_error: Invalid token`, but the token works in curl | Trap #1 — env `KIMI_API_KEY` hijacks the provider's wire key |
+| `Thinking level "max" is not supported ... Use one of: off, on` | Trap #2 — kimi-provider plugin hardcodes binary thinking; bypass with a custom provider |
+| `Thinking level ... Use one of: off, minimal, low, medium, high` | Trap #2 variant — anthropic-messages base profile; unlock via `params.canonicalModelId` |
+| `503 No available channel for model X under group default` | Trap #3 — model not served for this group/network; listing ≠ availability |
+| Edit saved + gateway restarted, nothing changed | Trap #5 — edited the wrong file / mirror not synced |
 
-## When to Use
+## Safety rules
 
-- Upgrading to a newly released model (e.g., K2.6 → K2.7)
-- Switching between models for different tasks
-- Rolling back after testing a new model
-- Adding a model definition that the user knows exists but isn't configured
-
-## Workflow
-
-### Manual Switch (if script unavailable)
-
-1. Read `~/.kimi_openclaw/openclaw.json`
-2. Back it up manually to `config-backups/`
-3. Add model definition to `models.providers.kimi-coding.models` (see [references/kimi-models.md](references/kimi-models.md))
-4. Set `agents.defaults.model.primary` to `kimi-coding/<model-id>`
-5. Save valid JSON
-6. Restart gateway: `openclaw gateway restart` (or restart Kimi desktop)
-
-### Verification
-
-After restart, confirm the active model via:
-- System prompt metadata: check `model=` and `default_model=` fields
-- Or run: `openclaw status` (if available)
-
-## Safety Rules
-
-- **Always backup** before editing `openclaw.json`
-- **Preserve** existing `apiKey`, `headers`, and plugin configurations
-- **Validate JSON** after manual edits (use `python3 -m json.tool openclaw.json`)
+- **Always backup** before editing (the script does this; manual edits: copy to `config-backups/` first)
+- **Preserve** existing `apiKey`, `headers`, plugin configs, and `env` blocks — retype only the fields you mean to change
+- **Validate JSON** after manual edits: `python3 -m json.tool openclaw.json > /dev/null`
 - **Do not** commit config files containing API keys to version control
+- After changing anything, redo the Step-4 verification — and if it fails, restore the newest backup before trying something else
 
 ## Resources
 
-- **scripts/switch-model.py** — Automated model switcher with backup and restart
-- **references/kimi-models.md** — Model specs, config snippets, and troubleshooting
+- **scripts/switch-model.py** — model switcher with config discovery, backup, mirror sync, and restart
+- **references/kimi-models.md** — known model specs (k3, k2p6, kimi-k2.7-code) and config snippets
+- **references/troubleshooting-model-config.md** — the trap catalog: env key hijack, plugin binary thinking, canonicalModelId, relay availability, config discovery. Read on any error.
