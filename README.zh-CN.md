@@ -3160,16 +3160,17 @@ Codex 上次做到一半中断了，读取 rollout 后把工作做完
 
 > **安装**：`claude plugin install git-safety-net@daymade-skills`
 
-预防和恢复那些让本地提交滞留、丢失或难以确认是否已合并的分支/stash/rebase 混乱。
-每个命令默认只读或可加，直到明确标注为破坏性操作——恢复不会让损失扩大。
+预防和恢复让本地提交、detached/脏 worktree 滞留或难以确认是否已合并的
+分支/stash/rebase 混乱。每个命令默认非破坏性或只增加保护性产物，破坏性步骤会显式标注。
 
 **主要能力：**
 - 通过 `git reflog` 和 `git fsck` 恢复误删的提交、分支、stash（约 90 天窗口）
-- 用 `git log --branches --not --remotes` 审计真正处于丢失风险的内容
+- 审计每个 worktree HEAD、脏 checkout、本地独有提交、stash 与悬空提交
 - 在清理前把悬空提交钉到 `refs/dangling-backup/`、避免被 gc 回收
 - 按内容验证分支是否已合并，破解 squash-merge 后“100 commits ahead”的幻觉
+- 删除 linked worktree 前证明其 HEAD 已被吸收，并把全部 refs 导出为校验过的 bundle
 - 高风险“是否真的全部合并了”场景可选对抗性多 agent 验证
-- 预防习惯：优先 worktree 而非 stash  juggling、尽早 push WIP、rebase/删除前审计
+- 预防习惯：切分支前先提交、尽早 push WIP、删除前审计每一个 checkout
 
 **示例：**
 ```text
@@ -3177,11 +3178,12 @@ Codex 上次做到一半中断了，读取 rollout 后把工作做完
 刚才切了那么多分支，我有没有丢提交？
 main 真的全部合并了吗，还是还有东西被滞留在某个分支？
 帮我恢复那个 bad rebase 后不见的提交
+证明这个 worktree 可以删除而且不会丢东西
 ```
 
 📚 **文档**：参见 [recovery_playbook.md](./git-safety-net/references/recovery_playbook.md)、[merge_verification.md](./git-safety-net/references/merge_verification.md) 和 [prevention_practices.md](./git-safety-net/references/prevention_practices.md)。
 
-**依赖**：已认证的 `gh` CLI、`git`、`jq`。
+**依赖**：Git 与标准 Bash shell；无需第三方包。核对最新远端状态时需要网络，离线审计则使用缓存的远端跟踪 refs。
 
 ---
 
