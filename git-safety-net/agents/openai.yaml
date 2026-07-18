@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Safety Net"
+  short_description: "Audit, recover, and retire local Git state safely"
+  default_prompt: "Use $git-safety-net to prove all valuable local Git work is preserved before cleaning up worktrees, stashes, or branches."

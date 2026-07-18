@@ -3,6 +3,7 @@
 ## Contents
 - Mental model: nothing is gone until gc runs
 - The authoritative "is anything at risk" check
+- Linked worktrees and detached worktree HEADs
 - Ladder step 1 — `git reflog` (first move, ~90% of recoveries)
 - Ladder step 2 — dropped stashes
 - Ladder step 3 — detached-HEAD work
@@ -25,24 +26,23 @@ one thing that permanently loses work is `gc` running while nothing references i
 
 ## The authoritative "is anything at risk" check
 
-Before anything else, answer the only question that matters — *is any commit reachable only
-locally, on no remote?* That is the exact at-risk set. Check **every** place local work hides,
-not just branches:
+Before anything else, answer the only question that matters — *is any committed or uncommitted
+state present only locally?* Check **every** place local work hides, including linked worktrees:
 
 ```bash
-git fetch --all --quiet
-git log HEAD --branches --tags --not --remotes --oneline --decorate   # HEAD→detached-HEAD work, --tags→tag-only commits
-git stash list                                                         # stashes are local-only too
+scripts/git_loss_audit.sh
 ```
 
-- **All empty = zero loss.** Every local commit is also on a remote; a dead disk loses nothing.
-- **Non-empty = those exact commits exist only on this machine.** Back them up (below) before any
-  branch cleanup.
+- **A completely empty verdict = no reported local state is stranded off-remote.** That means no
+  local-only commits, dirty/unavailable worktrees, stashes, or dangling commits.
+- **Any reported item = inspect it before cleanup.** Local-only commits and dirty/unavailable
+  worktrees make the script exit 1; stashes/danglers stay exit 0 but still need triage or
+  preservation before branch, stash, or worktree deletion.
 
-Why `HEAD --branches --tags`, not just `--branches`: a plain `git log --branches --not --remotes`
-misses a **detached-HEAD** commit (on no branch) and a **tag-only** commit — both classic loss
-vectors. `scripts/git_loss_audit.sh` runs exactly this expanded set plus the stash and dangling
-checks.
+Why the script instead of only `git log HEAD --branches --tags --not --remotes`: that command
+catches the current detached HEAD and tag-only commits, but misses a detached HEAD in a different
+linked worktree and every uncommitted tracked/untracked file. The script enumerates all worktree
+HEADs and inspects each checkout directly.
 
 Do **not** substitute `git status` or ahead/behind counts for this — they answer different
 questions. To confirm a single commit is safe on a remote:
@@ -50,6 +50,15 @@ questions. To confirm a single commit is safe on a remote:
 ```bash
 git branch -r --contains <sha>       # lists remote branches that contain it (empty = local-only)
 ```
+
+## Linked worktrees and detached worktree HEADs
+
+Treat each path from `git worktree list --porcelain` as a separate working tree. Run status with
+`git -C <path>` against that exact path. A detached linked worktree can carry a unique commit even
+when every named branch is on a remote; `git_loss_audit.sh` includes those HEADs explicitly.
+
+Before removal, require clean status, exact HEAD capture, content containment proof, a verified
+all-refs bundle, and only then non-forced `git worktree remove`.
 
 ## Ladder step 1 — `git reflog` (first move)
 
@@ -195,5 +204,6 @@ Recovery is easiest when the operation that "lost" the work was itself reversibl
 ## Sources
 
 - Pro Git — Data Recovery (reflog / fsck / dangling objects): <https://git-scm.com/book/en/v2/Git-Internals-Maintenance-and-Data-Recovery>
-- `git reflog` recovery guides (2026): <https://devtoolbox.dedyn.io/blog/git-reflog-recover-lost-commits-guide>, <https://oneuptime.com/blog/post/2026-01-24-git-reflog-recovery/view>
-- Detached HEAD recovery: <https://circleci.com/blog/git-detached-head-state/>
+- Git `worktree` documentation: <https://git-scm.com/docs/git-worktree>
+- Git `bundle` documentation: <https://git-scm.com/docs/git-bundle>
+- Git `merge-tree` documentation: <https://git-scm.com/docs/git-merge-tree>

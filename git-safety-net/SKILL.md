@@ -1,25 +1,22 @@
 ---
 name: git-safety-net
 description: >-
-  Prevent and recover from local-Git disasters — commits stranded on the wrong or
-  unpushed branch, orphaned/dropped stashes, dangling commits about to be
-  garbage-collected, work that seems lost after heavy branch/stash/rebase juggling
-  or parallel-agent work, and "is everything actually merged?" uncertainty. Use
-  whenever the user fears they lost code, asks to recover a deleted commit / branch
-  / stash, wonders what is still unmerged, needs to prove nothing was dropped after
-  rebasing or deleting branches, resolves a version/lockfile collision between two
-  branches, or wants habits so a branch mess never loses work again. Triggers on
-  "did I lose work", "recover lost commit", "restore deleted branch", "stash
-  disappeared", "is everything merged", "what's not merged", "git reflog", "dangling
-  commits", "分支灾难", "误删分支/commit", "stash 丢了", "确认全部合并了". This is
-  LOCAL-Git safety and forensics — distinct from GitHub PR/API operations (github-ops)
-  and routine repo setup/sync (auto-repo-setup).
+  Audits, preserves, recovers, and safely retires local Git state: unpushed or
+  wrong-branch commits, dirty or detached worktrees, orphaned/dropped stashes,
+  dangling commits, stale branches, and squash/rebase merge uncertainty. Use when
+  the user fears work was lost; asks to recover a commit, branch, stash, or reflog
+  state; asks whether a worktree can be deleted; wants all valuable state converged
+  onto main; or needs proof that cleanup/rebase/branch deletion will not drop work.
+  Triggers on "did I lose work", "is everything merged", "safe to delete this
+  worktree", "clean up old branches/stashes/worktrees", "git reflog", "dangling
+  commits", "分支灾难", "误删分支/commit", "worktree 能删吗", "确认全部合并了".
+  Covers local-Git forensics, not GitHub PR/API operations or routine repository sync.
 ---
 
 # Git Safety Net
 
 Prevent losing work in a tangle of branches/stashes/rebases, and recover it forensically
-when something already went sideways. The commands here are all **read-only or additive**
+when something already went sideways. The commands here are all **non-destructive or additive**
 until a step is explicitly labeled destructive — recovery must never make the loss worse.
 
 ## Entry router — pick the mode from what the user is worried about
@@ -27,21 +24,21 @@ until a step is explicitly labeled destructive — recovery must never make the 
 | The user says / needs… | Go to |
 |---|---|
 | "I think I lost a commit / branch / stash", "recover the deleted X", "git reflog" | **Mode A — Recover** |
-| "did I lose anything?", after a messy rebase / branch-delete / parallel-agent session | **Mode B — Audit & preserve** |
+| "did I lose anything?", "what worktrees/stashes/branches remain?", after a messy session | **Mode B — Audit & preserve** |
 | "is everything merged?", "what's still not on main?", before deleting old branches | **Mode C — Verify merged** |
 | "so this never happens again", starting parallel/multi-branch work | **Mode D — Prevent** |
-| "clean up these old stashes/branches", "which of these still matter?", retiring leftovers | **Mode E — Retire safely** |
+| "clean up worktrees/stashes/branches", "converge everything onto main" | **Mode E — Retire safely** |
 
-When in doubt, **run Mode B first** (`git_loss_audit.sh`) — it is cheap, read-only, and tells
+When in doubt, **run Mode B first** (`git_loss_audit.sh`) — it is cheap, non-destructive, and tells
 you whether anything is actually at risk before you decide what to do.
 
 ## The five load-bearing rules (internalize these; the modes apply them)
 
-1. **`git log HEAD --branches --tags --not --remotes` is the authoritative "what would be lost"
-   check** (plus `git stash list`). It lists commits reachable locally — from HEAD (catches
-   detached-HEAD work), a branch, or a tag — but on *no* remote, the true at-risk set. Plain
-   `--branches` misses detached-HEAD and tag-only commits. Empty = zero loss. Ahead/behind counts
-   and `git status` do **not** answer this.
+1. **Run `git_loss_audit.sh` for the authoritative "what would be lost" check.** It compares the
+   current HEAD, every linked-worktree HEAD, local branches, and tags against every remote, then
+   inspects each worktree for tracked/untracked changes plus stashes and dangling commits. The
+   shorter `git log HEAD --branches --tags --not --remotes` misses a detached HEAD in a different
+   worktree and all uncommitted files. Ahead/behind counts do **not** answer this.
 2. **`git reflog` is the first move for "I lost a commit," not `fsck`.** Reflog records every
    HEAD position (commits, checkouts, resets, rebases) for ~90 days and the lost commit is
    usually in its top few lines. `git fsck` is the deeper net for commits reflog can't reach.
@@ -72,18 +69,18 @@ If reflog doesn't show it (e.g. a dropped stash, an orphan from a rebase), fall 
 
 ## Mode B — Audit what's at risk, then preserve it
 
-**Step 1 — audit (read-only).** What, if anything, is at risk of loss right now:
+**Step 1 — audit (non-destructive).** What, if anything, is at risk of loss right now:
 
 ```bash
 scripts/git_loss_audit.sh          # defaults to remote "origin"; pass a remote name to override
 ```
 
-Expected output: counts of **local-only commits** (reachable from HEAD/a branch/a tag but on no
-remote — the real loss risk, and it catches detached-HEAD and tag-only work), **stashes**
-(local-only by nature), and **dangling commits** (orphaned, reflog-reachable now, gc-eligible
-later), plus a one-line verdict. `local-only: 0  stashes: 0  dangling: 0` means nothing is at risk.
-Exit is 1 only when local-only commits exist (the surprising, actionable case); stashes and
-danglers are reported but stay exit 0 so a routine stash doesn't cry wolf.
+Expected output: every worktree with branch/detached state and cleanliness, plus counts of
+**local-only commits**, **dirty/unavailable worktrees**, **stashes**, and **dangling commits**.
+Exit is 1 when commits exist on no remote or a worktree is dirty/uninspectable; stashes and
+danglers remain visible but do not alone make the audit fail. Exit 0 is therefore not permission
+to delete a visible stash/dangler: triage or preserve every reported item. Do not claim cleanup is
+safe until the named worktree is clean and its HEAD is proven contained or deliberately preserved.
 
 **Step 2 — preserve (additive, gc-proof).** If anything showed up, make it un-loseable *before*
 touching branches or running gc:
@@ -144,11 +141,12 @@ The habits that keep a branch tangle from ever stranding work:
   branches don't both claim the same bump (a silent collision that blocks the later change from
   shipping).
 
-## Mode E — Retire stale stashes & branches safely
+## Mode E — Retire worktrees, stashes, and branches safely
 
 The opposite worry from Mode A: not "I lost something" but "these leftovers are piling up —
 which can I destroy?" Deleting is trivial; **proving each item is superseded is the work**.
-Run the triage per item, backup, then destroy:
+Start with `git_loss_audit.sh` and `git worktree list --porcelain`; treat every checkout as an
+independent place where uncommitted or detached work can hide. Then triage, backup, and retire:
 
 **Step 1 — classify each leftover: live WIP, or superseded draft?** Evidence ladder, strongest first:
 
@@ -174,35 +172,40 @@ early draft; judge content against the current base, never the name. Worked exam
 rungs (including the squash-artifact and absorbed-into-refactor cases):
 **[references/merge_verification.md](references/merge_verification.md)** § Supersession triage.
 
-**Step 2 — backup everything you're about to destroy, in one command:**
+**Step 2 — pin true orphans, then back up every addressable ref:**
 
 ```bash
-scripts/git_export_before_drop.sh --all-stashes --branch <b1> --branch <b2>
+scripts/git_preserve_danglers.sh --patch-dir <backup-dir>/dangling-patches
+scripts/git_export_before_drop.sh --all-stashes --all-refs --out <backup-dir>
 ```
 
-Expected output: one `.patch` per stash, one `-untracked.tar` per stash that carries untracked
-files, one verified `branches.bundle`, and the backup directory path. The script is additive-only —
-it never drops or deletes; you do that yourself in Step 3 once the exports look right.
+The first command makes unreferenced commits reachable; `--all-refs` then captures branch, stash,
+hidden-backup, and linked-worktree HEAD refs in one verified bundle. For a small targeted cleanup,
+use repeated `--branch` instead. The exporter never drops or deletes anything.
 
 **Step 3 — destroy, in the safe order:**
 
 - Stashes: drop from the **highest index down** (`drop stash@{2}` before `stash@{1}`) — indices
   shift as you drop, and top-down keeps every number meaning what your backup filenames say.
+- Linked worktrees: require a clean `git -C <path> status --short --branch`, record its exact HEAD,
+  prove that HEAD is contained/superseded, then use `git worktree remove <absolute-path>` **without
+  `--force`** and re-run `git worktree list`. Never remove the primary/current checkout. Follow
+  **[references/merge_verification.md](references/merge_verification.md)** § Worktree retirement.
 - Local branches: prefer `git branch -d` (refuses unmerged); use `-D` only for items Step 1
-  proved superseded. Remote: `git push origin --delete <branch>` after re-checking
-  `git branch -r --merged <base>` lists it.
+  proved superseded, backed up, and the user authorized deleting. Delete remote branches only
+  after re-verifying the exact remote and repository visibility/ownership.
 
 **Recovery, if you regret it:** patches re-apply with `git apply`; the untracked tar extracts
 in place; the bundle restores full history via `git fetch <file>.bundle <branch>:restored/<branch>`.
 
-## Scripts (execute these; they are read-only unless noted)
+## Scripts (execute these; they are non-destructive unless noted)
 
 | Script | Does | Mutates? |
 |---|---|---|
-| `scripts/git_loss_audit.sh [remote]` | Report local-only + dangling commits; verdict | No (read-only) |
+| `scripts/git_loss_audit.sh [remote]` | Refresh one remote, then report every worktree, local-only commit, stash, and dangler | Remote-tracking refs only |
 | `scripts/git_preserve_danglers.sh [--patch-dir DIR]` | Pin danglers to `refs/dangling-backup/`, optional patches | Adds refs only (never deletes/gc) |
-| `scripts/git_verify_branch_merged.sh <branch> [base]` | Content-level MERGED/UNMERGED verdict for one branch | No (read-only) |
-| `scripts/git_export_before_drop.sh [--all-stashes] [--stash N] [--branch B] [--out DIR]` | Export stashes (patch + untracked tar) and branches (verified bundle) before destruction | Writes backup files only (never drops/deletes) |
+| `scripts/git_verify_branch_merged.sh <branch> [base]` | Refresh remotes, then give a content-level MERGED/UNMERGED verdict | Remote-tracking refs only |
+| `scripts/git_export_before_drop.sh [--all-stashes] [--stash N] [--branch B] [--all-refs] [--out DIR]` | Export stashes plus selected branches or every current ref into verified bundles | Writes backup files only (never drops/deletes) |
 
 All four run from the repository root. They only ever `fetch`, `log`, `diff`, `show`,
 `cat-file`, `rev-list`, `fsck`, `for-each-ref`, `stash show`, `archive`, `bundle create/verify`,
@@ -221,6 +224,9 @@ or `gc`, so they are safe to run in a dirty tree or alongside other agents.
 - **You're on a detached HEAD after checking out a commit** — that commit is safe as long as you
   `git switch -c <branch> HEAD` (or the reflog remembers it for ~90 days). Don't leave important
   new work on a detached HEAD across a `gc`.
+- **Only one worktree remains after cleanup** — `git worktree list` always includes the primary
+  repository checkout. Do not delete it merely to make the count zero; the goal is one maintained
+  checkout, not no checkout.
 - **`refs/dangling-backup/*` refs are cluttering things later** — once you've confirmed (Mode C)
   their content is on a remote, delete them with `git for-each-ref --format='%(refname)'
   refs/dangling-backup/ | xargs -n1 git update-ref -d`. Only after you've verified.
