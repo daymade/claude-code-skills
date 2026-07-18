@@ -6,6 +6,7 @@
 - Per-branch verdict procedure
 - Why safety-biased: a false "merged" loses work, a false "unmerged" only costs a look
 - Manual-only investigation hints (do NOT auto-decide on these)
+- Worktree retirement — prove the checkout is disposable before removal
 - Adversarial multi-agent verification (for a whole repo of branches)
 - Rules for the verification agents
 
@@ -28,7 +29,8 @@ The only trustworthy question is: **is the branch's content already contained in
 ## The sound content check (a trial merge, not a heuristic)
 
 `scripts/git_verify_branch_merged.sh <branch> [base]` answers that question with Git's own merge
-machinery instead of per-file guesses. Two checks, in order:
+machinery instead of per-file guesses. It rejects the base ref itself as a deletion target, then
+runs two checks in order:
 
 1. **Ancestor** — the branch is literally in the base's history:
    ```bash
@@ -41,8 +43,10 @@ machinery instead of per-file guesses. Two checks, in order:
    says "ahead" but the content is already upstream:
    ```bash
    base_tree=$(git rev-parse "origin/main^{tree}")
-   merged_tree=$(git merge-tree --write-tree origin/main origin/<branch> 2>/dev/null | head -1)
-   [ $? -eq 0 ] && [ "$merged_tree" = "$base_tree" ] && echo "MERGED (content contained)"
+   if merge_output=$(git merge-tree --write-tree origin/main origin/<branch> 2>&1); then
+     merged_tree=$(printf '%s\n' "$merge_output" | head -1)
+     [ "$merged_tree" = "$base_tree" ] && echo "MERGED (content contained)"
+   fi
    ```
 
 This is **sound**, not a heuristic, because it *is* Git's merge: a revert, an edit, or a new file
@@ -137,6 +141,32 @@ lands through another path. Judge by content against the current base, never by 
 name sounds.
 
 Same safety bias as everywhere else in this skill: prove supersession per item, or keep the item.
+
+## Worktree retirement — prove the checkout is disposable before removal
+
+A linked worktree is both a checkout and a ref boundary. A clean branch elsewhere does not prove
+the worktree itself has no uncommitted files, and a detached worktree HEAD is absent from ordinary
+`--branches` checks. Retire one only after this sequence:
+
+1. **Inventory and identify the primary checkout:** run `git worktree list --porcelain`. Keep the
+   first/primary checkout; select only the exact linked path the user intends to retire.
+2. **Inspect the linked checkout itself:** run `git -C <worktree-path> status --short --branch`.
+   Any tracked or untracked output blocks removal. Do not substitute the primary checkout's status.
+3. **Record the exact identity:** copy `git -C <worktree-path> rev-parse HEAD` and
+   `git -C <worktree-path> branch --show-current`. An empty branch means detached HEAD, not "no
+   work". Confirm the recorded HEAD appears in the all-worktree loss audit.
+4. **Prove containment:** run `scripts/git_verify_branch_merged.sh <recorded-head> <base>`. An
+   ancestor/content-contained verdict proves the committed state is on the base; NEEDS REVIEW
+   requires manual supersession triage or preserving the commit under a branch/ref.
+5. **Back up before deletion:** pin dangling commits, then run
+   `scripts/git_export_before_drop.sh --all-refs --out <backup-dir>` and verify the bundle. `--all`
+   includes linked-worktree HEAD refs; truly dangling objects appear only after pinning.
+6. **Remove through Git, without force:** run `git worktree remove <absolute-worktree-path>` and
+   re-run `git worktree list --porcelain`. Never use `rm -rf` or `git worktree remove --force` to
+   make a dirty/uninspectable worktree disappear.
+7. **Retire its branch separately:** prefer `git branch -d <branch>`. If Git refuses after a
+   proven squash/supersession case, require the verified backup and explicit deletion authority
+   before `-D`. A worktree removal does not itself prove a remote branch may be deleted.
 
 ## Adversarial multi-agent verification (for a whole repo of branches)
 

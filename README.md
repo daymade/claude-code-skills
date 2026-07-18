@@ -3135,17 +3135,18 @@ Codex was cut off mid-task; recover that rollout and finish the work
 > **Install**: `claude plugin install git-safety-net@daymade-skills`
 
 Prevent and recover from the branch/stash/rebase tangles that strand or lose local
-commits, and answer "is everything actually merged?" with content-level proof instead
-of misleading commit counts. Every command is read-only or additive until a step is
-explicitly labeled destructive — recovery never makes the loss worse.
+commits, detached or dirty worktrees, and answer "is everything actually merged?" with
+content-level proof instead of misleading commit counts. Every command is non-destructive or
+additive until a step is explicitly labeled destructive.
 
 **Key features:**
 - Recovers deleted commits/branches/stashes via `git reflog` and `git fsck` (the ~90-day window)
-- Audits what is truly at risk with `git log --branches --not --remotes` (local-only = the loss set)
+- Audits every linked worktree HEAD, dirty checkout, local-only commit, stash, and dangling commit
 - Pins dangling commits gc-proof under `refs/dangling-backup/` before any cleanup
 - Verifies a branch is merged by CONTENT — defeating the squash-merge "100 commits ahead" illusion
+- Proves a linked worktree safe before non-forced removal and exports all refs in one verified bundle
 - Optional adversarial multi-agent verification for a high-stakes "is everything merged?" call
-- Prevention habits: worktrees over stash-juggling, push WIP early, pre-rebase/pre-delete audit
+- Prevention habits: commit before switching, push WIP early, audit every checkout before deletion
 
 **Example usage:**
 ```text
@@ -3153,6 +3154,7 @@ explicitly labeled destructive — recovery never makes the loss worse.
 did I lose any commits after all that branch switching?
 is everything merged into main, or is something still stranded?
 recover the commit I lost after a bad rebase
+prove this worktree can be deleted without losing anything
 ```
 
 📚 **Documentation**: See
@@ -3160,7 +3162,8 @@ recover the commit I lost after a bad rebase
 [merge_verification.md](./git-safety-net/references/merge_verification.md), and
 [prevention_practices.md](./git-safety-net/references/prevention_practices.md).
 
-**Requirements**: Git and a standard bash shell. No third-party packages or network access.
+**Requirements**: Git and a standard Bash shell. No third-party packages; current remote status
+requires network access, while offline audits use cached remote-tracking refs.
 
 ---
 

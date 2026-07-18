@@ -9,6 +9,7 @@ ceremony; adopt the ones whose failure mode you're exposed to.
 - Confirm the branch before every commit
 - Relocate your work when a parallel session switched the shared tree under you
 - Audit before rebase / branch-delete
+- Audit every existing worktree before retirement
 - Snapshot before any history rewrite
 - Version / lockfile collisions between parallel branches
 - Commit-scope hygiene (don't sweep unrelated staged work)
@@ -51,9 +52,9 @@ git merge <branch-for-this-work>                  # the work is now in THIS work
   the missing deps, and it can hand back a stale checkout of an older commit. A shared working tree
   with disciplined *commit-then-switch* is safer and simpler than juggling worktrees.
 
-The safety comes from **committing early**, not from a second checkout. Once every line of work is
-a pushed commit, `git log HEAD --branches --tags --not --remotes` (the at-risk check) only ever
-lists what you haven't pushed yet — push it and it goes empty.
+The safety comes from **committing early**, not from a second checkout. Confirm the state with
+`scripts/git_loss_audit.sh`: unlike a raw branch-only log, it also inspects detached linked
+worktree HEADs and uncommitted files.
 
 ## Push work-in-progress branches early
 
@@ -66,9 +67,8 @@ actually loses. Everything on a remote is safe.
 git push -u origin <wip-branch>
 ```
 
-It doesn't need to be a PR — just a remote copy. Re-push as you go. Then
-`git log HEAD --branches --tags --not --remotes` (the at-risk check) stays empty, which is the
-state you want.
+It doesn't need to be a PR — just a remote copy. Re-push as you go, then use
+`scripts/git_loss_audit.sh` to confirm there are no other local-only commits or dirty worktrees.
 
 ## Confirm the branch before every commit
 
@@ -133,11 +133,21 @@ head toward gc.
 **Prevention:** run the ten-second at-risk check first (see recovery_playbook.md):
 
 ```bash
-git fetch --all --quiet
-git log HEAD --branches --tags --not --remotes --oneline   # empty = nothing to lose; act freely
+scripts/git_loss_audit.sh
 ```
 
-Non-empty → preserve those commits (branch/push/patch) before the destructive step.
+Local-only commits or dirty/unavailable worktrees → preserve them before the destructive step.
+
+## Audit every existing worktree before retirement
+
+**Failure mode:** checking `git status` in the primary checkout and assuming a linked worktree is
+also clean. The linked checkout may hold untracked files or a detached commit that no branch names.
+
+**Prevention:** run `git_loss_audit.sh`, then inspect the selected path with
+`git -C <worktree-path> status --short --branch`. Record its exact HEAD, prove containment against
+the maintained base, and create a verified all-refs bundle before non-forced removal. Never reduce
+the worktree count with `rm -rf` or `git worktree remove --force`; the safe target is one maintained
+primary checkout, not zero checkouts.
 
 ## Snapshot before any history rewrite
 

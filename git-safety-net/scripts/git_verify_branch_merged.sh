@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# git_verify_branch_merged.sh — is a branch's CONTENT already on the base? READ-ONLY.
+# git_verify_branch_merged.sh — is a branch's CONTENT already on the base? NON-DESTRUCTIVE.
 #
 # Commit counts lie: after a squash-merge, `main..branch` shows all the branch's original commits
 # as "unmerged" even though every line is on main. This judges by CONTENT using Git's own merge
@@ -16,8 +16,8 @@
 #      the base lacks -> MERGED (content contained) — this is what defeats the squash-merge count.
 #   3. Otherwise -> UNMERGED / NEEDS REVIEW, listing the branch's contribution to inspect.
 #
-# It runs only fetch/merge-base/merge-tree/rev-parse/diff against explicit refs — no checkout, no
-# mutation — so it is safe in a dirty tree and alongside other agents.
+# It refreshes remote-tracking refs, then runs merge-base/merge-tree/rev-parse/diff against explicit
+# refs. It never changes working files, commits, branches, stashes, or user-authored refs.
 #
 # Usage (run from anywhere inside the repo):
 #   git_verify_branch_merged.sh <branch> [base]     # base defaults to origin/main
@@ -57,6 +57,11 @@ BRANCH_REF="$(resolve_ref "$BRANCH_ARG")" || { echo "ERROR: cannot resolve branc
 if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
   echo "ERROR: cannot resolve base ref '$BASE'." >&2; exit 2
 fi
+BASE_SYMBOLIC="$(git rev-parse --symbolic-full-name "$BASE" 2>/dev/null || true)"
+if [ -n "$BASE_SYMBOLIC" ] && [ "$BRANCH_REF" = "$BASE_SYMBOLIC" ]; then
+  echo "ERROR: target '$BRANCH_REF' is the base ref itself; refusing to label the base deletable." >&2
+  exit 2
+fi
 
 echo "Verifying '$BRANCH_REF'  vs base '$BASE'  (by content, not commit count)"
 # If a local branch and its remote-tracking copy disagree, say which one we judged (the local one,
@@ -79,8 +84,16 @@ fi
 #     where the count says "ahead" but the content is already upstream). This is sound: it is
 #     exactly Git's merge, so a revert/edit the base lacks WOULD change the tree and fail this. ---
 BASE_TREE="$(git rev-parse "$BASE^{tree}")"
-MERGED_TREE="$(git merge-tree --write-tree "$BASE" "$BRANCH_REF" 2>/dev/null | head -1)"
-MT_RC="${PIPESTATUS[0]}"
+MERGE_OUTPUT=""
+# A real conflict makes merge-tree exit 1. Capture that status inside an `if`: unlike a bare
+# command substitution, this cannot trigger `set -e` and silently terminate before the script
+# prints its conservative NEEDS REVIEW verdict.
+if MERGE_OUTPUT="$(git merge-tree --write-tree "$BASE" "$BRANCH_REF" 2>&1)"; then
+  MT_RC=0
+else
+  MT_RC=$?
+fi
+MERGED_TREE="$(printf '%s\n' "$MERGE_OUTPUT" | head -1)"
 if [ "$MT_RC" -ge 128 ]; then
   # `git merge-tree --write-tree` needs git >= 2.38. Older git can't prove containment, so stay
   # safe: fall through to UNMERGED / NEEDS REVIEW rather than guess "merged".
