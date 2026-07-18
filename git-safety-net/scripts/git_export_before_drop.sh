@@ -13,17 +13,21 @@
 #                                          `git stash -u` / `-a`. `git stash
 #                                          show -p` does NOT display these, so
 #                                          a patch alone silently loses them.
-#   branches  -> branches.bundle           full history, verified with
-#                                          `git bundle verify` before we report
-#                                          success.
+#   branches  -> branches.bundle           selected branch history, verified
+#   all refs  -> all-refs.bundle           every current ref, including stash,
+#                                          hidden backup refs, and linked-worktree
+#                                          HEADs; truly dangling objects must be
+#                                          pinned first.
 #
 # Usage:
-#   git_export_before_drop.sh [--out DIR] [--all-stashes] [--stash N]... [--branch NAME]...
+#   git_export_before_drop.sh [--out DIR] [--all-stashes] [--stash N]... [--branch NAME]... [--all-refs]
 #
 #   --out DIR       output directory (default: ~/.git-backups/<date>-<repo>)
 #   --all-stashes   export every stash in `git stash list`
 #   --stash N       export stash@{N} (repeatable)
 #   --branch NAME   include NAME in branches.bundle (repeatable)
+#   --all-refs      create all-refs.bundle from `git bundle create --all`; use before
+#                   repo/worktree convergence. Mutually exclusive with --branch.
 #
 # Recovery later:
 #   patch:     git apply <file>.patch            (or `git am` for mail-format)
@@ -43,6 +47,7 @@ git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
 REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
 OUT=""
 ALL_STASHES=0
+ALL_REFS=0
 STASH_ARGS=()
 BRANCH_ARGS=()
 
@@ -52,10 +57,15 @@ while [ $# -gt 0 ]; do
     --all-stashes)  ALL_STASHES=1; shift ;;
     --stash)        STASH_ARGS+=("${2:?--stash needs an index}"); shift 2 ;;
     --branch)       BRANCH_ARGS+=("${2:?--branch needs a name}"); shift 2 ;;
+    --all-refs)     ALL_REFS=1; shift ;;
     -h|--help)      grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)              die "unknown argument: $1 (see --help)" ;;
   esac
 done
+
+if [ "$ALL_REFS" = 1 ] && [ ${#BRANCH_ARGS[@]} -gt 0 ]; then
+  die "--all-refs and --branch are mutually exclusive"
+fi
 
 [ -z "$OUT" ] && OUT="$HOME/.git-backups/$(date +%Y-%m-%d)-$REPO_NAME"
 mkdir -p "$OUT"
@@ -89,7 +99,13 @@ for i in "${STASH_LIST[@]}"; do
   fi
 done
 
-if [ ${#BRANCH_ARGS[@]} -gt 0 ]; then
+if [ "$ALL_REFS" = 1 ]; then
+  bundle="$OUT/all-refs.bundle"
+  git bundle create "$bundle" --all
+  git bundle verify "$bundle" >/dev/null
+  echo "exported: $bundle (verified; all current refs, including worktree HEADs)"
+  EXPORTED=$((EXPORTED+1))
+elif [ ${#BRANCH_ARGS[@]} -gt 0 ]; then
   bundle="$OUT/branches.bundle"
   git bundle create "$bundle" "${BRANCH_ARGS[@]}"
   git bundle verify "$bundle" >/dev/null
@@ -98,7 +114,7 @@ if [ ${#BRANCH_ARGS[@]} -gt 0 ]; then
 fi
 
 if [ "$EXPORTED" = 0 ]; then
-  echo "nothing selected — pass --all-stashes, --stash N, or --branch NAME (see --help)"
+  echo "nothing selected — pass --all-stashes, --stash N, --branch NAME, or --all-refs (see --help)"
   exit 1
 fi
 

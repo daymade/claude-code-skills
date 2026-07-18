@@ -320,7 +320,7 @@ This applies when you change ANY file under a skill directory:
 83. **github-review-pr** - Review one named contributor PR (open or closed under reconsideration) or all open PRs newest-to-oldest against the live base, with immutable OID snapshots, history-discontinuity detection, isolated current-base contribution projection, three-way merge analysis, PR/BASE/SHARED ownership, explicit personal maintainer context, and per-PR review-gated repair or landing
 84. **local-conversation-history** - List recent local Claude Code and Codex conversations in one read-only command; Claude inventory combines active homes with registered archives, de-duplicates session IDs, and both providers use internal stored timestamps rather than file mtime (daymade-claude-code suite member)
 85. **continue-codex-work** - Recover actionable context from prior Codex CLI rollout files and continue interrupted work without running `codex resume` (daymade-claude-code suite member)
-86. **git-safety-net** - Prevent and recover from local-Git disasters: commits stranded on the wrong branch, orphaned or dropped stashes, dangling commits about to be garbage-collected, and "is everything actually merged?" uncertainty after squash merges or parallel-agent sessions
+86. **git-safety-net** - Audit, preserve, recover, and safely retire local Git state across branches, linked/detached worktrees, stashes, dangling commits, and squash/rebase merge uncertainty
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
