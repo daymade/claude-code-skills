@@ -1151,6 +1151,23 @@
         "relay",
         "thinking-levels"
       ]
+    },
+    {
+      "name": "langfuse-trace-tagging",
+      "description": "Tag Langfuse traces/sessions via the ingestion API. Use when the user asks to tag a Langfuse session, review/apply topic tags for a coding session, or manage trace tags. Handles credential discovery/setup generically, and works around Langfuse's tags-are-append-only-union API limitation by always getting a proposed tag table confirmed before applying anything (since applied tags cannot be removed or replaced).",
+      "source": "./langfuse-trace-tagging",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "developer-tools",
+      "keywords": [
+        "langfuse",
+        "observability",
+        "tracing",
+        "tags",
+        "llm-observability",
+        "api",
+        "claude-code"
+      ]
     }
   ]
 }
