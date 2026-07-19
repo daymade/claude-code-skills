@@ -3465,11 +3465,11 @@ claude plugin install skill-name@daymade-skills
 
 ## 🤝 贡献
 
-欢迎贡献！请随时：
+本仓库是我们自己的精选 skill 合集——完整政策见 [CONTRIBUTING.md](./CONTRIBUTING.md)。简言之：
 
-1. 为错误或功能请求开启问题
-2. 提交带有改进的拉取请求
-3. 分享关于技能质量的反馈
+1. **欢迎 bug 报告和 bug 修复 PR**——先开 issue 确认，再提交最小化修复
+2. **不接受新 skill PR**——格式是开放的，欢迎发布你自己的 marketplace
+3. 随时欢迎对 skill 质量的反馈
 
 ### 技能质量标准
 

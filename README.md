@@ -3449,11 +3449,11 @@ We recommend using [CC-Switch](https://github.com/farion1231/cc-switch) to manag
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to:
+This is a curated marketplace of our own skills — see [CONTRIBUTING.md](./CONTRIBUTING.md) for the full policy. In short:
 
-1. Open issues for bugs or feature requests
-2. Submit pull requests with improvements
-3. Share feedback on skill quality
+1. **Bug reports and bug-fix PRs are welcome** — open an issue first, then a scoped fix
+2. **New-skill PRs are not accepted** — publish your own marketplace instead (the format is open)
+3. Feedback on skill quality is always appreciated
 
 ### Skill Quality Standards
 
