@@ -209,6 +209,32 @@ Check at minimum:
 Load [references/history-derived-checklist.md](references/history-derived-checklist.md)
 for the core visual/responsive defect catalog and standards-backed checks.
 
+Some defects produce no diagnostic anywhere: a global reset outranking a
+component's own styles, a library renaming its internal DOM classes so whole
+rule groups match nothing, a font family declared but never shipped, geometry
+written into theme config where source scans cannot see it, and per-element
+compliance that still reads as "no design system" in aggregate. Source review,
+type checks and geometry assertions are structurally blind to these — the
+artifacts are valid and simply do nothing. When a page looks cheap while every
+gate is green, that combination is the signature. Load
+[references/silent-degradation-and-evidence.md](references/silent-degradation-and-evidence.md)
+for the detection method per class, and probe the two highest-yield ones
+mechanically:
+
+    node <skill-root>/scripts/silent_degradation_probe.mjs font \
+      --url http://127.0.0.1:5173/ --family "Brand Sans"
+
+    node <skill-root>/scripts/silent_degradation_probe.mjs class \
+      --css path/to/bridge.css --library-css node_modules/<lib>/dist/<lib>.css
+
+A declared font that never loads is the single highest-yield check, because it
+degrades every screen simultaneously and both obvious tests give false
+positives: computed `fontFamily` returns the declared name, and
+`document.fonts.check()` returns true even with no `@font-face` at all. Only
+comparing rendered width against a deliberately nonexistent family is decisive,
+and the probe string must contain Latin characters — CJK is full-width in every
+font and cannot reveal a substitution.
+
 Run the bundled sweep from the audited project so it can resolve the project's
 existing Playwright dependency:
 
@@ -293,6 +319,24 @@ guard that would let the same defect recur. This is a falsification pass, not an
 excuse to expand a local visual-only audit into every profile.
 
 ### 6. Report, Fix, And Re-run
+
+**Every appearance claim ships with the pixels that show it.** A reader who
+cannot see the defect cannot decide anything about it, and cannot check whether
+the finding is even real. Crop to the affected element with just enough
+surrounding context to locate it — a full-page screenshot proves nothing about a
+14px misalignment, and prose alone ("the buttons look cheap") is unactionable no
+matter how accurate. `scripts/silent_degradation_probe.mjs shot` crops one
+element plus padding for exactly this.
+
+Four rules that decide whether the evidence survives contact with a reader:
+comparisons must be **scale-matched** (two full-width regions placed side by side
+shrink until the 3px difference under discussion vanishes — crop both to the same
+component at the same width instead); dimensions are reported in **CSS px, never
+device px** (a DPR-2 capture has twice the pixel count, and quoting that as page
+height has produced a false "20 screens long" finding); a capture taken before a
+fix is **labeled with the commit it shows** rather than presented as current; and
+findings resting on a **code count** rather than a photograph are **marked as
+such**, so the reader knows which parts of the list are equally evidenced.
 
 Separate **impact** from **category**. Follow the project's severity taxonomy
 when one exists. Otherwise use:
