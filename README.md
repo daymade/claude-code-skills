@@ -3174,39 +3174,6 @@ requires network access, while offline audits use cached remote-tracking refs.
 
 ---
 
-### 89. **langfuse-trace-tagging** - Langfuse Trace Tagging
-
-> **Install**: `claude plugin install langfuse-trace-tagging@daymade-skills`
-
-Tag Langfuse traces/sessions via the ingestion API, designed around a real Langfuse
-API limitation most people find out about the hard way: trace tags can be **added**
-via the API, but never removed or replaced (confirmed "not planned" by Langfuse —
-[langfuse/langfuse#8937](https://github.com/langfuse/langfuse/issues/8937)). This
-skill always builds a full proposed tag table and gets it confirmed by the user
-*before* touching the API, since a mistaken tag is permanent.
-
-**When to use:**
-- Tagging a Langfuse session's traces with topic/issue labels
-- Reviewing or applying tags for a coding session's traces
-- Any Langfuse trace-tag management task
-
-**Key features:**
-- Credential discovery/setup: public key shared in chat is fine (not secret); secret
-  key goes through a scratch-file → OS secret-store flow, never pasted directly into
-  chat, never persisted without explicit confirmation
-- Proposes `topic:issue`-style tags as a markdown table, grouped by trace/turn range,
-  confirmed before anything is applied
-- Fetches trace metadata safely — deliberately avoids pulling raw trace `input`/`output`
-  content to disk, since it can contain secrets pasted during a session
-- Applies tags via batched ingestion API calls, computing the full tag union
-  client-side since the API can't replace/remove
-- Written agent-agnostically: each step states the underlying requirement first, with
-  a concrete Claude Code implementation as an illustrative callout
-
-**Requirements**: `curl`/Python for HTTP calls, and (for the Claude Code callouts) macOS Keychain access.
-
----
-
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
