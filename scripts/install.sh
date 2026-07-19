@@ -39,8 +39,8 @@ if [ -t 0 ]; then
     # Interactive mode
     echo "What would you like to install?"
     echo ""
-    echo "1) skill-creator only (RECOMMENDED - enables you to create your own skills)"
-    echo "2) All skills"
+    echo "1) daymade-skill only (RECOMMENDED - bundles skill-creator and friends)"
+    echo "2) All plugins"
     echo "3) Custom selection"
     echo "4) Exit"
     echo ""
@@ -48,7 +48,7 @@ if [ -t 0 ]; then
 else
     # Non-interactive mode (piped from curl)
     echo -e "${YELLOW}Running in non-interactive mode.${NC}"
-    echo "Defaulting to option 1: skill-creator only (RECOMMENDED)"
+    echo "Defaulting to option 1: daymade-skill only (RECOMMENDED)"
     echo ""
     echo "To run interactively, download and run directly:"
     echo "  curl -fsSL https://raw.githubusercontent.com/daymade/claude-code-skills/main/scripts/install.sh -o install.sh"
@@ -60,12 +60,12 @@ fi
 case $choice in
     1)
         echo ""
-        echo -e "${CYAN}Installing skill-creator...${NC}"
+        echo -e "${CYAN}Installing daymade-skill (bundles skill-creator)...${NC}"
         echo ""
         echo "Run these commands in Claude Code:"
         echo ""
         echo -e "${YELLOW}claude plugin marketplace add https://github.com/daymade/claude-code-skills${NC}"
-        echo -e "${YELLOW}claude plugin install skill-creator@daymade-skills${NC}"
+        echo -e "${YELLOW}claude plugin install daymade-skill@daymade-skills${NC}"
         echo ""
         echo -e "${GREEN}After installation, ask Claude Code:${NC}"
         echo "  \"Create a new skill called my-awesome-skill in ~/my-skills\""
@@ -76,33 +76,31 @@ case $choice in
         ;;
     2)
         echo ""
-        echo -e "${CYAN}Installing all skills...${NC}"
+        echo -e "${CYAN}Installing all featured plugins...${NC}"
         echo ""
         echo "Run these commands in Claude Code:"
         echo ""
         echo -e "${YELLOW}claude plugin marketplace add https://github.com/daymade/claude-code-skills${NC}"
         echo ""
-        for skill in skill-creator github-ops markdown-tools mermaid-tools statusline-generator teams-channel-post-writer repomix-unmixer llm-icon-finder; do
+        # Only publish plugin names that actually exist in .claude-plugin/marketplace.json.
+        for skill in daymade-skill github-ops teams-channel-post-writer repomix-unmixer llm-icon-finder; do
             echo -e "${YELLOW}claude plugin install ${skill}@daymade-skills${NC}"
         done
         ;;
     3)
         echo ""
-        echo "Available skills:"
-        echo "  1) skill-creator (meta-skill for creating skills)"
+        echo "Available plugins:"
+        echo "  1) daymade-skill (bundles skill-creator and friends)"
         echo "  2) github-ops (GitHub operations)"
-        echo "  3) markdown-tools (document conversion)"
-        echo "  4) mermaid-tools (diagram generation)"
-        echo "  5) statusline-generator (statusline customization)"
-        echo "  6) teams-channel-post-writer (Teams communication)"
-        echo "  7) repomix-unmixer (repomix extraction)"
-        echo "  8) llm-icon-finder (AI/LLM icons)"
+        echo "  3) teams-channel-post-writer (Teams communication)"
+        echo "  4) repomix-unmixer (repomix extraction)"
+        echo "  5) llm-icon-finder (AI/LLM icons)"
         echo ""
 
         if [ -t 0 ]; then
-            read -p "Enter skill numbers separated by spaces (e.g., '1 2 3'): " selections
+            read -p "Enter plugin numbers separated by spaces (e.g., '1 2 3'): " selections
         else
-            echo -e "${YELLOW}Non-interactive mode: Installing skill-creator only${NC}"
+            echo -e "${YELLOW}Non-interactive mode: Installing daymade-skill only${NC}"
             selections="1"
         fi
 
@@ -111,10 +109,10 @@ case $choice in
         echo ""
         echo -e "${YELLOW}claude plugin marketplace add https://github.com/daymade/claude-code-skills${NC}"
         echo ""
-        SKILLS=(skill-creator github-ops markdown-tools mermaid-tools statusline-generator teams-channel-post-writer repomix-unmixer llm-icon-finder)
+        SKILLS=(daymade-skill github-ops teams-channel-post-writer repomix-unmixer llm-icon-finder)
         for num in $selections; do
             idx=$((num-1))
-            if [ $idx -ge 0 ] && [ $idx -lt 8 ]; then
+            if [ $idx -ge 0 ] && [ $idx -lt ${#SKILLS[@]} ]; then
                 echo -e "${YELLOW}claude plugin install ${SKILLS[$idx]}@daymade-skills${NC}"
             fi
         done
