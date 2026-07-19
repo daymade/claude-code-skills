@@ -843,10 +843,10 @@
     },
     {
       "name": "debugging-network-issues",
-      "description": "Evidence-driven investigation for network, streaming, and protocol-layer bugs. Use when debugging connection resets, SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, client-side proxy/VPN/TUN misrouting, CNAME-based rule overrides, or any incident where symptoms do not match the obvious cause. Applies falsification-first methodology with layered isolation experiments, env-gated runtime instrumentation, and counter-review agent teams. Cognitive-trap catalog includes reverse-path / directional asymmetry and proxy-node DNS ≠ client DNS. Also triages certificate-verification errors (UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, wrong-site certificate) hitting some domains while others work, and teaches that a green health check certifies only the path it probes.",
+      "description": "Evidence-driven investigation for network, streaming, and protocol-layer bugs. Use when debugging connection resets, SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, client-side proxy/VPN/TUN misrouting, CNAME-based rule overrides, or any incident where symptoms do not match the obvious cause. Applies falsification-first methodology with layered isolation experiments, env-gated runtime instrumentation, and counter-review agent teams. Cognitive-trap catalog includes reverse-path / directional asymmetry and proxy-node DNS ≠ client DNS. Also triages certificate-verification errors (UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, wrong-site certificate) hitting some domains while others work, teaches that a green health check certifies only the path it probes, and covers LAN-layer traps: fingerprint ≠ identity (banners and MAC OUIs mislead; SSH host keys and AirPlay /info are decisive), unreachable on one segment ≠ dead, and topology changes orphaning manual-IP devices.",
       "source": "./debugging-network-issues",
       "strict": false,
-      "version": "1.4.0",
+      "version": "1.5.0",
       "category": "developer-tools",
       "keywords": [
         "debugging",
@@ -863,7 +863,9 @@
         "tun",
         "vpn",
         "cname",
-        "dns"
+        "dns",
+        "lan",
+        "mdns"
       ]
     },
     {
