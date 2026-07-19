@@ -81,7 +81,7 @@ The wrapper uses a **single canonical install + one symlink per agent** layout:
 Benefits:
 
 - **One update, every agent gets it.** When you upgrade a skill (re-run the installer), the canonical location changes and every symlink instantly points at the new version. No per-agent re-install.
-- **Credentials propagate automatically.** The shared `.authorization` file (`~/.config/gangtise/authorization.json`) is symlinked from each skill's `scripts/.authorization`. Rotating the credential means editing one file; every skill in every agent picks up the new value on next use.
+- **Credentials propagate automatically.** The shared `.authorization` file (`~/.config/gangtise/authorization.json`) is symlinked from each installed skill's own `<gangtise-skill-dir>/scripts/.authorization`. Rotating the credential means editing one file; every skill in every agent picks up the new value on next use.
 - **Safer than `cp -r`.** If you re-run the installer with a different `--preset`, the canonical location is rewritten and all symlinks continue to work. A `cp -r`-based install would leave stale copies in each agent's directory.
 
 The canonical root can be overridden with `GANGTISE_COPILOT_HOME` for test isolation:

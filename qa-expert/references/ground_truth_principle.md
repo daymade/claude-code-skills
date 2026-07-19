@@ -149,7 +149,7 @@ if __name__ == "__main__":
 
 **Usage**:
 ```bash
-python scripts/validate_test_ids.py \
+python <your-project>/scripts/validate_test_ids.py \
   tests/docs/02-CLI-TEST-CASES.md \
   tests/docs/templates/TEST-EXECUTION-TRACKING.csv
 
@@ -222,7 +222,7 @@ When you discover a sync issue:
 ### Step 1: Assess Severity
 ```bash
 # Run ID validation script
-python scripts/validate_test_ids.py <doc> <csv>
+python <your-project>/scripts/validate_test_ids.py <doc> <csv>
 
 # Consistency Rate:
 #   100%:   ✅ No action needed

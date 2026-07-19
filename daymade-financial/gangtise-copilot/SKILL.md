@@ -65,7 +65,8 @@ ln -sf <gangtise-copilot-source-dir> <openclaw-skills-dir>/gangtise-copilot
 
 # Enable in OpenClaw gateway config (if the agent supports skill entries in config)
 # Run: openclaw config set 'skills.entries.gangtise-copilot' '{}'
-# Then restart the gateway: sh scripts/restart.sh
+# Then restart the gateway using OpenClaw's own script, not this skill's:
+# sh <openclaw-install-dir>/scripts/restart.sh
 ```
 
 ### Step 3 — Install all 19 Gangtise official skills
@@ -98,7 +99,7 @@ bash <gangtise-copilot-dir>/scripts/configure_auth.sh \
 1. Writes `~/.config/gangtise/authorization.json` (mode 600)
 2. Performs live auth call to verify credentials work
 3. Writes `~/.GTS_AUTHORIZATION` runtime token
-4. **Creates symlinks** from every installed skill's `scripts/.authorization` to the shared credential file
+4. **Creates symlinks** from each installed skill's own `<gangtise-skill-dir>/scripts/.authorization` to the shared credential file
 
 > ⚠️ **Critical**: After Step 3, `diagnose.sh` may report "19 skill(s) missing .authorization" even if credentials exist. Run Step 4 even when `~/.config/gangtise/authorization.json` already exists — `configure_auth.sh` creates the missing symlinks.
 
