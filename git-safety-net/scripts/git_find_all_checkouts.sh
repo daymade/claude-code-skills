@@ -19,6 +19,16 @@
 #   untracked files in a sibling clone. The repository's own audit was clean, every branch
 #   was pushed, and the work was still one `rm -rf` away from being gone for good.
 #
+# THE SECOND AXIS — FRESHNESS:
+#   `unpushed` below is measured against this checkout's `origin/*` refs, which are a CACHED
+#   SNAPSHOT from its last fetch, not the remote. So every checkout also reports how long ago
+#   it last heard from its remote, and a stale one is called out explicitly.
+#
+#   Read the number in the right direction. For "what would be lost" a stale cache is safe:
+#   it can only over-report unpushed work, never hide it. For "is this already upstream?" it
+#   fails the other way — work the remote already has reads as unique, and re-shipping it can
+#   revert whatever was built on top of it in the meantime. Fetch before that second question.
+#
 # NON-DESTRUCTIVE: runs only `find` plus read-only Git queries. Repository-provided
 # fsmonitor commands are disabled and optional index refreshes are suppressed before
 # inspecting discovered checkouts. It never fetches, writes refs, stages, or touches a
@@ -30,7 +40,8 @@
 #   With no arguments it searches the parent and grandparent of this repository — where
 #   sibling clones actually accumulate (`~/workspace/js/repo` plus `~/workspace/repo-hotfix`).
 #   Pass explicit roots to widen (`~`) or narrow the sweep. Set DEPTH=<n> to change how deep
-#   each root is scanned (default 4; raise it for deeply nested layouts).
+#   each root is scanned (default 4; raise it for deeply nested layouts). Set STALE_AFTER=<s>
+#   to change when a checkout's cached remote refs are called stale (default 3600 seconds).
 #
 # EXIT: 0 when no OTHER checkout holds at-risk work; 1 when any other checkout has
 # uncommitted changes, untracked files, or unpushed commits; 2 if not run inside a Git repo.
@@ -38,6 +49,7 @@
 set -uo pipefail
 
 DEPTH="${DEPTH:-4}"
+STALE_AFTER="${STALE_AFTER:-3600}"
 
 safe_git() {
   GIT_OPTIONAL_LOCKS=0 git --no-pager \
@@ -49,6 +61,42 @@ safe_git() {
 
 canonical_dir() {
   (cd "$1" 2>/dev/null && pwd -P)
+}
+
+# BSD (macOS) and GNU stat disagree on the mtime flag, and they disagree destructively:
+# to GNU, `-f` means --file-system, so `stat -f %m` does not simply fail there. It dumps
+# filesystem info to stdout *and then* exits nonzero, so a plain `A || B` fallback returns
+# that dump concatenated with B's answer — a multi-line string that blows up the arithmetic
+# downstream. Validate that what came back is actually an integer, on every branch.
+file_mtime() {
+  local mtime
+  mtime="$(stat -f %m "$1" 2>/dev/null)"
+  case "$mtime" in ''|*[!0-9]*) mtime="$(stat -c %Y "$1" 2>/dev/null)" ;; esac
+  case "$mtime" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s\n' "$mtime"
+}
+
+# How long ago a checkout last heard from its remote. FETCH_HEAD's mtime is the right
+# signal: git rewrites it on every fetch even when nothing changed, whereas a
+# remote-tracking reflog only gains an entry when the remote actually moved — so a
+# reflog-based age reads "old" after a fetch that found no news, which is the opposite
+# of what we need. Prints seconds; returns 1 when this checkout has never fetched.
+fetch_age_seconds() {
+  local gitdir fetch_head mtime
+  gitdir="$(safe_git -C "$1" rev-parse --git-dir 2>/dev/null)" || return 1
+  case "$gitdir" in /*) ;; *) gitdir="$1/$gitdir" ;; esac
+  fetch_head="$gitdir/FETCH_HEAD"
+  [ -f "$fetch_head" ] || return 1
+  mtime="$(file_mtime "$fetch_head")" || return 1
+  [ -n "$mtime" ] || return 1
+  echo $(( $(date +%s) - mtime ))
+}
+
+human_age() {
+  if   [ "$1" -lt 3600 ]  ; then echo "$(( $1 / 60 ))m ago"
+  elif [ "$1" -lt 86400 ] ; then echo "$(( $1 / 3600 ))h ago"
+  else                           echo "$(( $1 / 86400 ))d ago"
+  fi
 }
 
 safe_git rev-parse --git-dir >/dev/null 2>&1 || {
@@ -131,6 +179,7 @@ done
 AT_RISK=0
 FOUND=0
 FOUND_SELF=0
+STALE_SEEN=0
 SEEN=""
 
 for gitpath in "${CANDIDATES[@]}"; do
@@ -182,6 +231,20 @@ for gitpath in "${CANDIDATES[@]}"; do
   [ -n "$head_sha" ] || head_sha='?'
   [ -n "$unpushed" ] || unpushed='unknown'
 
+  # Staleness is reported, never escalated to AT RISK: a cached ref can only over-report
+  # unpushed work, so flagging it as danger would cry wolf on healthy checkouts and teach
+  # people to ignore the marker that does mean something.
+  if fetch_age="$(fetch_age_seconds "$checkout")"; then
+    freshness="last fetched $(human_age "$fetch_age")"
+    if [ "$fetch_age" -gt "$STALE_AFTER" ]; then
+      freshness="${freshness}   <-- STALE, fetch before judging 'already merged'"
+      STALE_SEEN=$((STALE_SEEN + 1))
+    fi
+  else
+    freshness="never fetched in this checkout"
+    STALE_SEEN=$((STALE_SEEN + 1))
+  fi
+
   if [ "$checkout" = "$SELF_ROOT" ]; then
     FOUND_SELF=1
     marker="  (this repository)"
@@ -199,7 +262,8 @@ for gitpath in "${CANDIDATES[@]}"; do
   echo "${checkout}${marker}"
   echo "    kind:      ${kind}"
   echo "    branch:    ${branch} @ ${head_sha}"
-  echo "    modified:  ${modified}   untracked: ${untracked}   unpushed: ${unpushed}"
+  echo "    modified:  ${modified}   untracked: ${untracked}   unpushed: ${unpushed} (vs cached refs)"
+  echo "    remote:    ${freshness}"
   if [ "${untracked:-0}" -gt 0 ] && [ "$checkout" != "$SELF_ROOT" ]; then
     echo "    NOTE: untracked files are unreachable by bundle/archive/format-patch."
     echo "          Copy them out directly — that disk copy is the only copy."
@@ -209,6 +273,22 @@ done
 
 echo "------------------------------------------------------------"
 echo "Checkouts found: ${FOUND}    At-risk (excluding this one): ${AT_RISK}"
+
+if [ "$STALE_SEEN" -gt 0 ]; then
+  cat <<'FRESHNESS'
+
+FRESHNESS: some checkout above has not fetched recently, so its `unpushed` count was measured
+against a cached snapshot of the remote. That direction is safe for "what would be lost" — a
+stale cache over-reports unpushed work, it cannot hide it. It is NOT safe for the opposite
+question. Before concluding a branch is unmerged, or that local work still needs shipping:
+
+  git fetch --all --prune
+
+Skipping that has a specific failure shape: work the remote already has reads as unique, so it
+gets re-shipped — and if the remote improved it in the meantime, the "restore" reverts those
+improvements while looking like a rescue.
+FRESHNESS
+fi
 
 if [ "$AT_RISK" -gt 0 ]; then
   cat <<'GUIDANCE'
