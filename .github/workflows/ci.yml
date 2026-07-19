@@ -1,0 +1,131 @@
+name: CI
+
+# Every job here was measured against main before being turned on, so a red result means
+# "this pull request broke something", never "this repo has always been like that". A gate
+# that fails for reasons the author did not cause is worse than no gate: people learn to
+# ignore it, and then it also stops catching the real thing.
+#
+# The logic lives in scripts/ci/, not inline here, so contributors can run exactly what CI
+# runs before pushing — and so the checks themselves are reviewable.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Read-only, and no secrets are used. Pull requests from forks therefore run safely: the
+# trigger is `pull_request` (fork code checked out WITHOUT repo credentials), never
+# `pull_request_target`.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  structure:
+    name: Marketplace manifest and shell syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The manifest every `/plugin marketplace add` reads. A source that no longer
+      # resolves breaks installation for everyone, and no skill imports this file, so
+      # nothing else in the repo would notice.
+      - name: Marketplace manifest resolves
+        run: python3 scripts/ci/check_marketplace.py
+
+      # Skills ship scripts users execute directly, usually mid-incident.
+      - name: Shell scripts parse
+        run: scripts/ci/check_shell_syntax.sh
+
+  skills:
+    name: Touched skills still validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The check compares against the merge base; a shallow clone has no such base,
+          # and comparing against a base you do not actually have is how you get a
+          # confident wrong answer.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install validator dependency
+        run: python3 -m pip install --quiet pyyaml
+
+      - name: Validate skills touched by this change
+        env:
+          # Every value crosses into the shell through the environment, never through
+          # ${{ }} interpolation inside run:, so a ref name can never become part of the
+          # command line. github.head_ref — the one a fork actually controls — is not used
+          # anywhere in this workflow.
+          BASE_REF: ${{ github.base_ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          target="${BASE_REF:-${DEFAULT_BRANCH:-main}}"
+          # checkout gives full history but not necessarily a remote-tracking ref for the
+          # base branch, and the comparison is worthless without one.
+          git fetch --no-tags origin "+refs/heads/${target}:refs/remotes/origin/${target}"
+          scripts/ci/validate_changed_skills.sh "origin/${target}"
+
+  tests:
+    name: Registered test suites (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Suites shell out to git; without an identity, commit-creating fixtures fail with an
+      # error that looks like a product bug.
+      - name: Configure git identity for fixtures
+        run: |
+          git config --global user.email ci@example.invalid
+          git config --global user.name "CI"
+          git config --global init.defaultBranch main
+
+      # Running on Linux is the point of this job, not a detail. A shell script can parse
+      # identically on both platforms and still only work on one: `stat -f %m` reads an
+      # mtime on BSD/macOS and means --file-system to GNU, where it prints filesystem
+      # output and exits nonzero. That bug shipped green from a macOS-only test run.
+      - name: Run registered suites
+        run: scripts/ci/run_registered_tests.sh
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the same version .pre-commit-config.yaml uses, so local and CI agree.
+      # A pinned binary rather than a third-party action: one less thing in the supply
+      # chain of a public repository, and the version cannot move underneath us.
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.0
+        run: |
+          set -euo pipefail
+          curl -sSfL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      # --no-git scans the tree as it stands. Scanning history instead would re-litigate
+      # every commit ever made on every pull request, and would fail on things no author
+      # of a current pull request can fix.
+      - name: Scan working tree
+        run: gitleaks detect --no-git --config .gitleaks.toml --redact --verbose

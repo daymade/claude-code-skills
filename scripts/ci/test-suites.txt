@@ -1,0 +1,20 @@
+# Test suites CI runs, declared explicitly — one per line: <runner> <path>
+#
+# WHY A REGISTRY AND NOT AUTO-DISCOVERY:
+#   Globbing for `tests/` and running whatever turns up is the "put the file there and it
+#   executes" pattern: unreviewable, and it silently conscripts suites that need network
+#   access, API keys, or heavy dependencies, which then fail for reasons that have nothing
+#   to do with the pull request. A gate that fails for unrelated reasons gets ignored, and
+#   an ignored gate is worse than no gate. Adding a line here is a reviewable decision.
+#
+# ADMISSION CRITERIA — a suite belongs here only if all four hold:
+#   1. standard library only (no pip/npm install beyond the runner itself)
+#   2. no network, no credentials, no paths outside its own temp directory
+#   3. deterministic — same result on a rerun
+#   4. verified green on Linux before being added, not just on the author's machine
+#
+# RUNNERS:
+#   python-unittest   python3 -m unittest discover -s <path>
+#   node-test         node --test <path>
+
+python-unittest  git-safety-net/tests
