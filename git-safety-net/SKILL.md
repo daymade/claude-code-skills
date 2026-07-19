@@ -48,6 +48,15 @@ When in doubt, **run Mode B first**, beginning with `git_find_all_checkouts.sh` 
    otherwise a clean audit means "clean in this one directory," which is not the question the
    user asked. Real incident: a repository audited clean, every branch pushed, while 440 lines of
    a working feature sat as untracked files in a sibling clone one `rm -rf` from gone.
+   **Scope has a second axis: TIME.** Every `origin/*` ref is a cached snapshot from your last
+   fetch, not the remote — so `git fetch --all --prune` before you trust any verdict that depends
+   on one. Read a stale cache in the right direction: for *"what would be lost"* it errs safe
+   (it can over-report unpushed work, never hide it), which is why the scripts here still run
+   offline. For *"is this already upstream?"* it fails the other way — work the remote already
+   has reads as unique, so you re-ship it, and if the remote improved it meanwhile your "restore"
+   silently **reverts** those improvements while looking like a rescue. Real incident: a
+   comparison base one day old made an already-merged change look unshipped; the rescue PR would
+   have reverted three fixes a later review added on top, one of them a security fix.
 2. **Run `git_loss_audit.sh` for the authoritative "what would be lost" check *within a
    checkout*.** It compares the current HEAD, every linked-worktree HEAD, local branches, and tags
    against every remote, then inspects each worktree for tracked/untracked changes plus stashes and
@@ -169,6 +178,14 @@ The trap: a stale branch shows "173 commits ahead of main" yet every line is alr
 ```bash
 scripts/git_verify_branch_merged.sh <branch> [<base>]   # base defaults to origin/main
 ```
+
+This mode is the one direction where a stale base is *unsafe* (rule 1): judged against yesterday's
+`origin/main`, a branch whose content landed hours ago still reads UNMERGED, and "rescuing" it
+re-applies an older version over whatever was built on top. The script fetches first for exactly
+that reason — but if the fetch fails it falls back to cached refs and says so **on stderr only**.
+Treat that line as a blocker, not a footnote: rerun once the network is back before acting on the
+verdict. Comparing by hand (`git diff origin/main <branch>`, `git log origin/main..<branch>`) has
+no such safety net at all — fetch yourself first, every time.
 
 It reports **MERGED (ancestor)** or **MERGED (content contained)** — safe to delete — versus
 **UNMERGED / NEEDS REVIEW**, listing the files the branch would still change. The verdict is sound,
@@ -293,7 +310,7 @@ in place; the bundle restores full history via `git fetch <file>.bundle <branch>
 
 | Script | Does | Mutates? |
 |---|---|---|
-| `scripts/git_find_all_checkouts.sh [root ...]` | Find every checkout of this repo on the machine — including independent clones invisible to `git worktree list` — and flag those holding uncommitted/untracked/unpushed work | Nothing (read-only, no fetch) |
+| `scripts/git_find_all_checkouts.sh [root ...]` | Find every checkout of this repo on the machine — including independent clones invisible to `git worktree list` — and flag those holding uncommitted/untracked/unpushed work, plus how stale each one's cached remote refs are (`STALE_AFTER=<s>`, default 3600) | Nothing (read-only, no fetch) |
 | `scripts/git_loss_audit.sh [remote]` | Refresh one remote, then report every worktree, local-only commit, stash, and dangler | Remote-tracking refs only |
 | `scripts/git_preserve_danglers.sh [--patch-dir DIR]` | Pin danglers to `refs/dangling-backup/`, optional patches | Adds refs only (never deletes/gc) |
 | `scripts/git_verify_branch_merged.sh <branch> [base]` | Refresh remotes, then give a content-level MERGED/UNMERGED verdict | Remote-tracking refs only |
@@ -325,8 +342,17 @@ it works offline and behind a proxy.
   want them past the gc window, then inspect with `git show <sha>` at leisure.
 - **A branch shows huge "commits ahead" but you suspect it's merged** — trust
   `git_verify_branch_merged.sh` (content), not the count. See Mode C.
-- **`git fetch` in a script hangs behind a proxy / offline** — the audit still works on cached
-  remote refs; pass an already-fetched state or skip the fetch. Loss detection uses local refs.
+- **`git fetch` in a script hangs behind a proxy / offline** — loss detection still works on
+  cached remote refs, because a stale cache can only over-report unpushed work. Merge and
+  supersession verdicts (Mode C, Mode E) are the exception and genuinely need a fetch; without
+  one, say so in the report rather than presenting the verdict as settled.
+- **Your work looks unmerged, but the repository moved while you were working** — check the clock
+  before you rescue anything: `git_find_all_checkouts.sh` prints when each checkout last fetched,
+  and `git log --oneline <cached-base>..origin/main` after a fresh fetch shows what arrived
+  meanwhile. A long session is the risk window — the base you compared against at the start can be
+  many hours old by the end. Symptom to recognise: a change you know you committed appears absent
+  upstream, so you prepare to re-ship it. Fetch first, then compare by content; if it did land,
+  check whether anyone improved it before re-applying your version over theirs.
 - **You're on a detached HEAD after checking out a commit** — that commit is safe as long as you
   `git switch -c <branch> HEAD` (or the reflog remembers it for ~90 days). Don't leave important
   new work on a detached HEAD across a `gc`.
