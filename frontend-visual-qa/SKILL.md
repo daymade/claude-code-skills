@@ -209,6 +209,47 @@ Check at minimum:
 Load [references/history-derived-checklist.md](references/history-derived-checklist.md)
 for the core visual/responsive defect catalog and standards-backed checks.
 
+Some defects produce no diagnostic anywhere: a global reset outranking a
+component's own styles, a library renaming its internal DOM classes so whole
+rule groups match nothing, a font family declared but never shipped, geometry
+written into theme config where source scans cannot see it, a new design token
+reusing a name the file already spent, a property that cannot apply because the
+rule never set the layout mode it presupposes, and per-element compliance that
+still reads as "no design system" in aggregate. Source review, type checks and
+geometry assertions are structurally blind to these — the artifacts are valid
+and simply do nothing. When a page looks cheap while every gate is green, that
+combination is the signature. Load
+[references/silent-degradation-and-evidence.md](references/silent-degradation-and-evidence.md)
+for the detection method per class, and probe the two highest-yield ones
+mechanically:
+
+    node <skill-root>/scripts/silent_degradation_probe.mjs font \
+      --url http://127.0.0.1:5173/ --weight 700 \
+      --family "Brand Sans" --family "Fallback Sans"
+
+    node <skill-root>/scripts/silent_degradation_probe.mjs class \
+      --css path/to/bridge.css --library-css node_modules/<lib>/dist/<lib>.css
+
+Pass every family in the stack and the weight the page really uses. The probe
+answers with five verdicts — platform generic / healthy / host-provided-only /
+broken asset / absent here — and only host-provided-only and broken asset are
+defects. CSS generic families such as `system-ui` are intentionally supplied by
+the platform; never tell users to bundle or remove them. Do not compress the
+remaining outcomes into "working or dead": a bundled fallback and a
+never-shipped family look identical until the fonts are loaded, and reporting
+the first as the second sends the reader to delete the thing that was protecting
+them.
+
+A declared font that never loads is the single highest-yield check, because it
+degrades every screen simultaneously and both obvious tests give false
+positives: computed `fontFamily` returns the declared name, and
+`document.fonts.check()` returns true even with no `@font-face` at all. Only
+comparing rendered width against a deliberately nonexistent family is decisive,
+and the probe string must contain Latin characters — CJK is full-width in every
+font and cannot reveal a substitution. Width comparison has its own trap: fonts
+load lazily, so measure only after awaiting `document.fonts.load()` for each
+candidate, or a perfectly good bundled fallback reads as dead.
+
 Run the bundled sweep from the audited project so it can resolve the project's
 existing Playwright dependency:
 
@@ -254,6 +295,18 @@ manager and canonical browser harness. If Playwright is absent, continue with
 available Level A/B evidence and report the omitted Level C sweep; install a
 dependency only when dependency changes are authorized.
 
+For an authenticated page, pass repeated `--header "Name: value"` flags only
+when needed. The probe applies them exclusively to the `--url` origin and strips
+them from cross-origin redirects and requests. TLS verification stays enabled;
+use `--ignore-https-errors` only for an explicitly trusted self-signed test
+origin.
+
+Run the probe regressions from a project that already provides Playwright:
+
+```bash
+node --test <skill-root>/tests/test_silent_degradation_probe.mjs
+```
+
 ### 5. Exercise Journeys And Outputs
 
 Exercise only the relevant transition matrix:
@@ -293,6 +346,24 @@ guard that would let the same defect recur. This is a falsification pass, not an
 excuse to expand a local visual-only audit into every profile.
 
 ### 6. Report, Fix, And Re-run
+
+**Every appearance claim ships with the pixels that show it.** A reader who
+cannot see the defect cannot decide anything about it, and cannot check whether
+the finding is even real. Crop to the affected element with just enough
+surrounding context to locate it — a full-page screenshot proves nothing about a
+14px misalignment, and prose alone ("the buttons look cheap") is unactionable no
+matter how accurate. `scripts/silent_degradation_probe.mjs shot` crops one
+element plus padding for exactly this.
+
+Four rules that decide whether the evidence survives contact with a reader:
+comparisons must be **scale-matched** (two full-width regions placed side by side
+shrink until the 3px difference under discussion vanishes — crop both to the same
+component at the same width instead); dimensions are reported in **CSS px, never
+device px** (a DPR-2 capture has twice the pixel count, and quoting that as page
+height has produced a false "20 screens long" finding); a capture taken before a
+fix is **labeled with the commit it shows** rather than presented as current; and
+findings resting on a **code count** rather than a photograph are **marked as
+such**, so the reader knows which parts of the list are equally evidenced.
 
 Separate **impact** from **category**. Follow the project's severity taxonomy
 when one exists. Otherwise use:
@@ -334,6 +405,21 @@ In **audit-only** mode, stop after the evidence-backed report. In
 3. Re-run the same route, state, viewport, journey, and recipient output.
 4. Add or update the smallest regression guard that would catch the confirmed
    failure class.
+
+Three habits keep the fix pass from manufacturing its own defects — each has
+produced one:
+
+- **Shoot the "before" while the defect still exists.** After the rebuild it is
+  unreproducible, and a closure report can then only assert the improvement.
+  Reuse the identical crop window for the after-shot so the pair differs by one
+  variable.
+- **Grep a new shared name before introducing it.** A token named after a word
+  the file already spent (`rail`, `bar`, `card`) silently overrides or gets
+  overridden depending on definition order, changing two subsystems at once
+  (silent-degradation class 1f).
+- **Prove the repaired assertion can fail.** Reintroduce the defect, watch it go
+  red with the expected magnitude, then remove it. An assertion that stayed
+  green through the whole bug does not become a guard by being rewritten.
 
 ## Completion Gate
 

@@ -16,7 +16,7 @@
     {
       "id": 3,
       "prompt": "Recover the deleted implementation of WidgetPanel from whichever previous Claude Code session wrote it, including sessions that are no longer in the active directory.",
-      "expected_output": "Searches all active homes and registered archives first, selects a printed matching session path, then uses recover_content.py while preserving the existing recovery and verification workflow.",
+      "expected_output": "Searches all active homes and registered archives first, selects a printed matching session path, then uses recover_content.py. It prefers the latest valid file-history checkpoint for exact bytes, labels Write-only recovery as lower fidelity, and verifies source provenance plus SHA-256 from the report.",
       "files": []
     },
     {
@@ -35,6 +35,24 @@
       "id": 6,
       "prompt": "找一下我们说「在测试机上配一条内容流水线」这句话的那次会话，大概昨天或今天说的，我忘了在哪个项目目录里开的，也可能是用 Codex 跑的。",
       "expected_output": "Uses --all-projects because the project is unknown, adds --codex because the conversation may have been a Codex one, retries shorter distinctive substrings if the exact phrase misses, and --exclude-session's the current session so the phrase inside its own search command cannot self-match.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "这几个 file:///.../.claude/jobs/<job>/tmp/*.html 链接昨天还能打开，今天临时目录没了。请把最终版本恢复出来；文件创建后又被 Edit 和命令行改过，不要只给我最初 Write 的版本。",
+      "expected_output": "Searches all projects with the filenames as multiple keywords, excludes the current self-match, selects the original session, and runs recover_content.py. It maps file-history-snapshot trackedFileBackups entries to the companion file-history store, restores the newest captured bytes including post-Write changes, reports version and SHA-256, and aborts visibly if referenced backup bytes are unavailable instead of silently substituting stale Write content.",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "The active JSONL only has an old Write, but a registered archive may contain a richer copy of the same session and its file-history bytes. Recover the best checkpoint, including a file that was later deleted.",
+      "expected_output": "Unions same-ID JSONL copies and file-history roots from active homes and registered archives. It restores the highest available exact checkpoint; if a later null backupFileName records deletion, the report labels the recovered bytes as the last pre-deletion checkpoint and states the later deletion.",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "I found the phrase with --codex. Pass that Codex rollout to the recovery command and restore its files.",
+      "expected_output": "Explains that --codex is a search-only widening. recover_content.py fails fast because Codex rollouts do not use Claude Write/file-history recovery records; it does not return an empty success or imply that files were restored.",
       "files": []
     }
   ]
