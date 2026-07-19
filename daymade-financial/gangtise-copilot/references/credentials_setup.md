@@ -4,7 +4,7 @@ Deep-dive documentation for `scripts/configure_auth.sh`. Read this to understand
 
 ## Credential shapes
 
-Every Gangtise skill's `scripts/utils.py` looks for `scripts/.authorization` and accepts one of two shapes:
+Every Gangtise skill's own `<gangtise-skill-dir>/scripts/utils.py` looks for `<gangtise-skill-dir>/scripts/.authorization` and accepts one of two shapes:
 
 ### Shape A — accessKey + secretAccessKey (recommended)
 
@@ -49,7 +49,7 @@ Each Gangtise skill (19 of them) has its own `scripts/` subdirectory, and each o
 2. **Drift is easy.** If even one file gets out of sync during rotation, one skill will fail while the others work, and debugging it is miserable.
 3. **Security surface is larger.** 19 files means 19 places a leak can happen.
 
-The wrapper solves this by writing a single file to the XDG location and then creating **symlinks** from each skill's `scripts/.authorization` to the shared file:
+The wrapper solves this by writing a single file to the XDG location and then creating **symlinks** from each skill's own `<gangtise-skill-dir>/scripts/.authorization` to the shared file:
 
 ```
 ~/.local/share/gangtise-copilot/skills/
