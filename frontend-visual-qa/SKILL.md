@@ -222,10 +222,18 @@ for the detection method per class, and probe the two highest-yield ones
 mechanically:
 
     node <skill-root>/scripts/silent_degradation_probe.mjs font \
-      --url http://127.0.0.1:5173/ --family "Brand Sans"
+      --url http://127.0.0.1:5173/ --weight 700 \
+      --family "Brand Sans" --family "Fallback Sans"
 
     node <skill-root>/scripts/silent_degradation_probe.mjs class \
       --css path/to/bridge.css --library-css node_modules/<lib>/dist/<lib>.css
+
+Pass every family in the stack and the weight the page really uses. The probe
+answers with four verdicts — healthy / host-provided-only / broken asset /
+absent here — and only the middle two are defects. Do not compress that into
+"working or dead": a bundled fallback and a never-shipped family look identical
+until the fonts are loaded, and reporting the first as the second sends the
+reader to delete the thing that was protecting them.
 
 A declared font that never loads is the single highest-yield check, because it
 degrades every screen simultaneously and both obvious tests give false
@@ -233,7 +241,9 @@ positives: computed `fontFamily` returns the declared name, and
 `document.fonts.check()` returns true even with no `@font-face` at all. Only
 comparing rendered width against a deliberately nonexistent family is decisive,
 and the probe string must contain Latin characters — CJK is full-width in every
-font and cannot reveal a substitution.
+font and cannot reveal a substitution. Width comparison has its own trap: fonts
+load lazily, so measure only after awaiting `document.fonts.load()` for each
+candidate, or a perfectly good bundled fallback reads as dead.
 
 Run the bundled sweep from the audited project so it can resolve the project's
 existing Playwright dependency:

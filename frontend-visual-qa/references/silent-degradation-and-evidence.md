@@ -95,7 +95,11 @@ because the fallback is what both had always seen — there was no control group
 **Detect:**
 
     node <skill-root>/scripts/silent_degradation_probe.mjs font \
-      --url http://127.0.0.1:5173/ --family "Brand Sans" --family "Brand Mono"
+      --url http://127.0.0.1:5173/ --weight 700 \
+      --family "Brand Sans" --family "Brand Mono" --family "Fallback Sans"
+
+List **every entry in the stack**, not just the first — the whole point is to
+learn which one customers actually land on.
 
 **The probe string must contain Latin characters.** CJK glyphs are full-width in
 essentially every font, so an all-CJK probe measures the same width whatever
@@ -105,6 +109,36 @@ false "font not working" reading on an app where it *was* working.
 Also check the whole stack, not just the first family: a `--font-mono` whose
 first entry is a platform-only face (`DIN Alternate` on macOS) renders one way
 for the team and another for everyone else.
+
+**Measure only after `document.fonts.load()` — otherwise the probe condemns
+healthy fallbacks.** A webfont is fetched when something *uses* it, not when the
+`@font-face` is parsed. A bundled fallback that the audited page happens not to
+use is therefore still unloaded at probe time, measures identical to the
+sentinel, and looks exactly like a font that was never shipped. Ask for each
+candidate explicitly (`await document.fonts.load('700 16px "X"', probeString)`,
+then `await document.fonts.ready`) before measuring. Pass the **weight the page
+actually uses**: faces are declared per weight, and a stack whose 700 is missing
+while 400 loads fine is a real defect that a 400-only probe cannot see.
+
+The first version of this probe skipped that wait and reported a correctly
+bundled, correctly working Latin fallback as "never renders; every glyph falls
+back." The reading went into a report as "this is a dead stack entry, delete
+it" — advice that would have removed the one face standing between the product
+and a 25%-wider fallback on every non-macOS machine. **A checker that condemns
+healthy input is worse than no checker**: it teaches the reader to stop
+believing the output, and this one pointed at the wrong repair.
+
+So report four outcomes, never pass/fail:
+
+| shipped | renders | verdict |
+|---|---|---|
+| yes | yes | healthy — leave it alone |
+| no | yes | **host-provided only** — works for the team, falls back for customers |
+| yes | no | **broken asset** — 404, bad path, rejected format, or an unbuilt weight |
+| no | no | absent on this host — may still be an intentional face for an OS you did not test |
+
+Only the middle two are defects. The fourth needs the OS you ran on stated
+alongside it, or the next reader deletes a deliberate Windows or Android entry.
 
 ### 1d. Geometry values that live in theme config
 

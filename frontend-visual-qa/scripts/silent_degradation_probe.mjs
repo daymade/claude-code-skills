@@ -12,6 +12,12 @@
  *           deliberately nonexistent family tells the truth — and the probe
  *           string must contain Latin characters, since CJK glyphs are
  *           full-width in every font and cannot reveal a substitution.
+ *           Measuring also has to happen AFTER document.fonts.load(): a webfont
+ *           is fetched only when used, so a healthy bundled fallback that this
+ *           page happens not to use measures exactly like one that was never
+ *           shipped. Reports four outcomes rather than pass/fail, because
+ *           "bundled and working" and "never shipped" must not be conflated —
+ *           acting on that confusion means deleting a fallback that works.
  *
  *   class   A component library renames its internal DOM classes on a major
  *           version. Every stylesheet rule targeting the old names silently
@@ -89,16 +95,29 @@ async function openPage() {
 if (mode === 'font') {
   const families = flags('family');
   if (!families.length) { process.stderr.write('at least one --family is required\n'); process.exit(2); }
+  const weight = flag('weight', '400');
   const { browser, page } = await openPage();
-  const result = await page.evaluate((fams) => {
+  const result = await page.evaluate(async ({ fams, weight: wt }) => {
     // Latin characters are mandatory: CJK is full-width in every font, so an
     // all-CJK probe measures identical widths whatever font actually renders.
     const PROBE = 'Handgloves 0123456789 幅';
     const measure = (family) => {
       const c = document.createElement('canvas').getContext('2d');
-      c.font = `16px ${family}`;
+      c.font = `${wt} 16px ${family}`;
       return c.measureText(PROBE).width;
     };
+
+    // A webfont is fetched only when something on the page uses it. Measuring a
+    // bundled-but-not-yet-used @font-face therefore returns the fallback width
+    // and looks exactly like a font that was never shipped. Ask for each family
+    // explicitly and wait, or this probe condemns healthy fallbacks.
+    const loadErrors = {};
+    await Promise.all(fams.map(async (f) => {
+      try { await document.fonts.load(`${wt} 16px "${f}"`, PROBE); }
+      catch (e) { loadErrors[f] = String(e).slice(0, 120); }
+    }));
+    await document.fonts.ready;
+
     const sentinel = measure('"NoSuchFamily__PROBE__"');
     return {
       fontFaceRules: Array.from(document.styleSheets).flatMap((s) => {
@@ -106,31 +125,42 @@ if (mode === 'font') {
       }).filter((r) => r.constructor.name === 'CSSFontFaceRule').length,
       documentFonts: document.fonts.size,
       sentinelWidth: sentinel,
+      weightProbed: wt,
       families: fams.map((f) => {
         const w = measure(`"${f}"`);
         // Does the page itself ship this family, or is it merely present on
         // this machine? A face that renders only because the auditor's OS has
         // it will fall back on every machine that does not — the classic
         // "works for the team, broken for the customer" case.
-        const shipped = Array.from(document.fonts).some((ff) => ff.family.replace(/^["']|["']$/g, '') === f);
+        const faces = Array.from(document.fonts)
+          .filter((ff) => ff.family.replace(/^["']|["']$/g, '') === f);
         return {
           family: f,
           width: w,
           // check() is reported for contrast only — it returns true with no
           // @font-face at all, which is exactly the false positive to expose.
-          checkSaysAvailable: document.fonts.check(`16px "${f}"`),
+          checkSaysAvailable: document.fonts.check(`${wt} 16px "${f}"`),
           actuallyRenders: Math.abs(w - sentinel) > 0.5,
-          shippedByPage: shipped,
+          shippedByPage: faces.length > 0,
+          faceStatus: faces.map((ff) => `${ff.weight}:${ff.status}`).join(' ') || null,
+          loadError: loadErrors[f] || null,
         };
       }),
     };
-  }, families);
+  }, { fams: families, weight });
   await browser.close();
-  const dead = result.families.filter((f) => !f.actuallyRenders);
+  // Four distinct outcomes. Only two of them are defects, and conflating the
+  // healthy-bundled case with the never-shipped case is worse than not checking
+  // at all: it tells the reader to delete a fallback that works.
+  const healthy = result.families.filter((f) => f.actuallyRenders && f.shippedByPage);
   const hostOnly = result.families.filter((f) => f.actuallyRenders && !f.shippedByPage);
+  const brokenAsset = result.families.filter((f) => !f.actuallyRenders && f.shippedByPage);
+  const absent = result.families.filter((f) => !f.actuallyRenders && !f.shippedByPage);
   process.stdout.write(JSON.stringify({ mode: 'font', ...result,
-    degraded: dead.map((f) => f.family),
-    hostProvidedOnly: hostOnly.map((f) => f.family) }, null, 2) + '\n');
+    healthy: healthy.map((f) => f.family),
+    hostProvidedOnly: hostOnly.map((f) => f.family),
+    declaredButUnusable: brokenAsset.map((f) => f.family),
+    absentStackEntries: absent.map((f) => f.family) }, null, 2) + '\n');
   if (hostOnly.length) {
     process.stderr.write(`\n${hostOnly.length} family/families render here but are NOT shipped by the page:\n`
       + hostOnly.map((f) => `  - ${f.family}`).join('\n')
@@ -138,14 +168,21 @@ if (mode === 'font') {
       + `them gets a fallback, and no probe run on a developer machine will ever reveal it.\n`
       + `Ship the face with the app, or drop it from the stack.\n`);
   }
-  if (dead.length) {
-    process.stderr.write(`\n${dead.length} declared family/families never render; every glyph falls back:\n`
-      + dead.map((f) => `  - ${f.family} (width ${f.width} === sentinel ${result.sentinelWidth}`
-        + `${f.checkSaysAvailable ? '; document.fonts.check() reported true — a false positive' : ''})`).join('\n')
-      + `\nShip the font with the app, or reduce the stack to families the host actually has.\n`);
-    process.exit(1);
+  if (brokenAsset.length) {
+    process.stderr.write(`\n${brokenAsset.length} family/families are declared by the page but still do not render:\n`
+      + brokenAsset.map((f) => `  - ${f.family} (faces ${f.faceStatus}`
+        + `${f.loadError ? `; load error ${f.loadError}` : ''})`).join('\n')
+      + `\nThe @font-face exists, so this is a broken asset — a 404, a bad path, a format the\n`
+      + `browser rejected, or a weight that was never built. Check the network panel.\n`);
   }
-  process.exit(0);
+  if (absent.length) {
+    process.stderr.write(`\n${absent.length} stack entry/entries neither ship nor resolve on this host:\n`
+      + absent.map((f) => `  - ${f.family} (width ${f.width} === sentinel ${result.sentinelWidth}`
+        + `${f.checkSaysAvailable ? '; document.fonts.check() reported true — a false positive' : ''})`).join('\n')
+      + `\nThese contribute nothing on this machine. They may still be intentional (a platform face\n`
+      + `for an OS you are not testing on) — confirm before deleting, and note which OS you ran on.\n`);
+  }
+  process.exit(hostOnly.length || brokenAsset.length ? 1 : 0);
 }
 
 // --------------------------------------------------------------- class
