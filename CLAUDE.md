@@ -440,6 +440,18 @@ See README.md section "🇨🇳 中文用户指南" for details.
 
 Decline all third-party marketplace promotion requests. For policy, response template, and precedents, see [references/promotion-policy.md](./references/promotion-policy.md).
 
+## External Contributor PRs (Curation Policy)
+
+This is a **curated marketplace of our own skills**, not a community collection. Standing policy for external pull requests:
+
+- **Bug fixes to existing skills: welcome.** Review the fix for correctness, then ensure the repo's own bookkeeping lands with it (version bump in `marketplace.json`, CHANGELOG entry, README sync where applicable) — contributor PRs usually lack these; add them in a maintainer follow-up commit.
+- **New skills or new features from external contributors: not accepted.** Close politely with the standing message below. If an outside skill is genuinely compelling, the path is re-authoring it ourselves under our conventions — never merging theirs.
+- **Agents never merge external PRs unilaterally.** Every external-PR merge decision goes to the user first, no matter how small or obviously-correct the fix looks. (2026-07-19: an agent batch-merged 4 external PRs under an ambiguous "merge what's left" instruction, including a whole new contributor skill that repo policy would never have accepted — it had to be reverted. Ambiguous instruction + other people's work = ask first, always.)
+
+Standing close message for new-skill PRs:
+
+> Thanks for taking the time to build this! This repository is a curated marketplace of our own skills — we only accept bug fixes to existing skills, not new-skill PRs. You're very welcome to publish it as your own marketplace.
+
 ## Best Practices Reference
 
 Always consult Anthropic's skill authoring best practices before creating or updating skills:
