@@ -18,3 +18,8 @@
 #   node-test         node --test <path>
 
 python-unittest  git-safety-net/tests
+python-unittest  tests
+python-unittest  auto-repo-setup/tests
+python-unittest  llm-wiki-setup/tests
+python-unittest  daymade-claude-code/local-conversation-history/tests
+python-unittest  daymade-claude-code/claude-code-history-files-finder/tests
