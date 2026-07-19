@@ -26,7 +26,9 @@
         "Requires real Chrome print preview with nonblank pages for a print/PDF pass; when that evidence is available, identifies the about:blank print target as defective",
         "Marks unavailable GUI-owned evidence partial or blocked instead of claiming it was clicked or verified"
       ],
-      "files": ["evals/files/browser-output-fixture.html"]
+      "files": [
+        "evals/files/browser-output-fixture.html"
+      ]
     },
     {
       "id": 3,
@@ -52,7 +54,9 @@
         "Flags the brief lifetime, raw English/backend wording, missing alert semantics, and unchanged recovery state",
         "Reports actual tool evidence and does not rely only on source reading"
       ],
-      "files": ["evals/files/transient-fixture.html"]
+      "files": [
+        "evals/files/transient-fixture.html"
+      ]
     },
     {
       "id": 5,
@@ -82,7 +86,9 @@
         "Measures or directly inspects dense marker target size/spacing and obstruction by labels or the drawer",
         "Captures the open mobile drawer state and reports width, close-path, overflow, and scroll ownership evidence"
       ],
-      "files": ["evals/files/gis-fixture.html"]
+      "files": [
+        "evals/files/gis-fixture.html"
+      ]
     },
     {
       "id": 7,
@@ -95,7 +101,9 @@
         "Tests refresh, a direct deep link, and back/forward rather than inferring addressability",
         "Reports route-state drift with exact state and evidence"
       ],
-      "files": ["evals/files/route-state-fixture.html"]
+      "files": [
+        "evals/files/route-state-fixture.html"
+      ]
     },
     {
       "id": 8,
@@ -108,7 +116,9 @@
         "When screenshots are generated, opens and inspects the desktop and mobile screenshots and identifies the deliberately overlapping schedule events even if the mechanical report does not flag arbitrary element collisions",
         "Keeps the result audit-only, does not install a driver, and distinguishes mechanical findings or a blocked sweep from a full GUI verdict"
       ],
-      "files": ["evals/files/layout-defects.html"]
+      "files": [
+        "evals/files/layout-defects.html"
+      ]
     },
     {
       "id": 9,
@@ -121,7 +131,9 @@
         "Ties each finding to visible image evidence and user impact",
         "Explicitly marks DOM geometry, responsive behavior, routes, focus, and interaction as unverified"
       ],
-      "files": ["evals/files/static-review.png"]
+      "files": [
+        "evals/files/static-review.png"
+      ]
     },
     {
       "id": 10,
@@ -135,7 +147,9 @@
         "When section evidence is generated, records viewport-slice capture mode and verifies every screenshot is bounded to the configured viewport rather than a tens-of-thousands-pixel element image",
         "When no driver exists, marks the Level C check blocked with the exact prerequisite error instead of claiming a visual pass"
       ],
-      "files": ["evals/files/script-evidence-edge-cases.html"]
+      "files": [
+        "evals/files/script-evidence-edge-cases.html"
+      ]
     },
     {
       "id": 11,
@@ -149,7 +163,9 @@
         "Records body and key-heading font family, size, weight, line height, letter spacing, smallest important text, and relevant text-column width",
         "Does not invent values or force an unrelated mobile audit for this projection-only contract"
       ],
-      "files": ["evals/files/deck-fixture.html"]
+      "files": [
+        "evals/files/deck-fixture.html"
+      ]
     },
     {
       "id": 12,
@@ -201,7 +217,25 @@
         "Counts the inactive responsive branch as not rendered and never waits for, scrolls to, or requires its images to load",
         "Records commands, exit codes, report paths, and screenshot inspection; uses no dependency installation or project mutation"
       ],
-      "files": ["evals/files/lazy-responsive-media-fixture.html"]
+      "files": [
+        "evals/files/lazy-responsive-media-fixture.html"
+      ]
+    },
+    {
+      "id": 16,
+      "name": "interaction-state-defects-invisible-in-default-screenshot",
+      "prompt": "Audit evals/files/focus-and-motion-fixture.html with the bundled visual_layout_audit.mjs and report what a plain screenshot of this page would miss. Say explicitly whether a keyboard user can tell where focus is, and whether the page respects a reduced-motion preference.",
+      "expected_output": "An audit that reports focus-indicator-suppressed as an error (the stylesheet kills the outline with no :focus/:focus-visible replacement, so the page is keyboard-unusable despite every control being focusable) and motion-without-reduced-motion-fallback as a warning, explains that neither defect is visible in a default screenshot, and does not claim the page passed on the basis of screenshots alone.",
+      "files": [
+        "evals/files/focus-and-motion-fixture.html"
+      ],
+      "expectations": [
+        "Reports focus-indicator-suppressed at error severity and attributes it to outline suppression without a :focus/:focus-visible replacement",
+        "Reports motion-without-reduced-motion-fallback and recommends degrading motion while keeping the end state, not deleting the feedback",
+        "Distinguishes 'element is focusable' from 'focus is visible' rather than treating the existing non-focusable-* checks as covering this",
+        "States that these defects cannot be seen in a default screenshot, so a screenshot-only pass would have reported the page as clean",
+        "Records the exact command, exit code, and report path; installs no dependencies into the audited project"
+      ]
     }
   ]
 }
