@@ -2,7 +2,7 @@
 #
 # configure_auth.sh — Set up Gangtise OpenAPI credentials + verify against
 # the live authentication server + symlink each installed skill's
-# scripts/.authorization to the shared XDG config file.
+# <gangtise-skill-dir>/scripts/.authorization to the shared XDG config file.
 #
 # Flow:
 #   1. Read accessKey + secretAccessKey (from env vars, from flag, or
@@ -12,7 +12,7 @@
 #   4. Perform a live auth call against open.gangtise.com to verify
 #      the credentials actually work (body-shape check, not just HTTP code)
 #   5. Scan the canonical install location for installed skills
-#   6. Create or refresh each skill's scripts/.authorization as a symlink to
+#   6. Create or refresh each skill's <gangtise-skill-dir>/scripts/.authorization as a symlink to
 #      the shared XDG file
 #
 # Re-run safely — every step is idempotent.
@@ -292,7 +292,7 @@ EOF
 fi
 
 # ============================================================================
-# Symlink every installed Gangtise skill's scripts/.authorization
+# Symlink every installed Gangtise skill's <gangtise-skill-dir>/scripts/.authorization
 # ============================================================================
 
 if [ ! -d "$CANONICAL_SKILLS_DIR" ]; then

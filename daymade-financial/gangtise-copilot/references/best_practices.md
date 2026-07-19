@@ -63,15 +63,15 @@ If your account is missing a scope, the affected scripts will return an error at
 ```bash
 # Tier: rag (should work)
 cd ~/.local/share/gangtise-copilot/skills/gangtise-kb-client
-python3 scripts/kb.py -q "test" -l 1
+python3 <gangtise-skill-dir>/scripts/kb.py -q "test" -l 1
 
 # Tier: data (fails if no data scope)
 cd ../gangtise-data-client
-python3 scripts/quote.py --securities 宁德时代 -sd 2026-04-01 -ed 2026-04-10
+python3 <gangtise-skill-dir>/scripts/quote.py --securities 宁德时代 -sd 2026-04-01 -ed 2026-04-10
 
 # Tier: file (fails if no file scope)
 cd ../gangtise-file-client
-python3 scripts/report.py -k 宁德时代 -l 3
+python3 <gangtise-skill-dir>/scripts/report.py -k 宁德时代 -l 3
 ```
 
 ## Working around the OBS LIST block

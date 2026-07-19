@@ -104,7 +104,7 @@ Same file-type coverage as `gangtise-file-client` for the 6 core types (reports,
 | Operation | Use for |
 |---|---|
 | List pools | See what watchlists your account has |
-| Create pool | `scripts/create_stockpool.py --name "新能源车" --stocks "比亚迪,宁德时代"` |
+| Create pool | `<gangtise-skill-dir>/scripts/create_stockpool.py --name "新能源车" --stocks "比亚迪,宁德时代"` |
 | Add to pool | Append stocks to an existing pool |
 | Remove from pool | Remove by code |
 | Delete pool | Delete entirely |
