@@ -231,11 +231,14 @@ mechanically:
       --css path/to/bridge.css --library-css node_modules/<lib>/dist/<lib>.css
 
 Pass every family in the stack and the weight the page really uses. The probe
-answers with four verdicts — healthy / host-provided-only / broken asset /
-absent here — and only the middle two are defects. Do not compress that into
-"working or dead": a bundled fallback and a never-shipped family look identical
-until the fonts are loaded, and reporting the first as the second sends the
-reader to delete the thing that was protecting them.
+answers with five verdicts — platform generic / healthy / host-provided-only /
+broken asset / absent here — and only host-provided-only and broken asset are
+defects. CSS generic families such as `system-ui` are intentionally supplied by
+the platform; never tell users to bundle or remove them. Do not compress the
+remaining outcomes into "working or dead": a bundled fallback and a
+never-shipped family look identical until the fonts are loaded, and reporting
+the first as the second sends the reader to delete the thing that was protecting
+them.
 
 A declared font that never loads is the single highest-yield check, because it
 degrades every screen simultaneously and both obvious tests give false
@@ -291,6 +294,18 @@ Do not mutate the audited project merely to run the sweep. Reuse its package
 manager and canonical browser harness. If Playwright is absent, continue with
 available Level A/B evidence and report the omitted Level C sweep; install a
 dependency only when dependency changes are authorized.
+
+For an authenticated page, pass repeated `--header "Name: value"` flags only
+when needed. The probe applies them exclusively to the `--url` origin and strips
+them from cross-origin redirects and requests. TLS verification stays enabled;
+use `--ignore-https-errors` only for an explicitly trusted self-signed test
+origin.
+
+Run the probe regressions from a project that already provides Playwright:
+
+```bash
+node --test <skill-root>/tests/test_silent_degradation_probe.mjs
+```
 
 ### 5. Exercise Journeys And Outputs
 

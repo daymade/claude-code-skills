@@ -15,7 +15,7 @@
  *           Measuring also has to happen AFTER document.fonts.load(): a webfont
  *           is fetched only when used, so a healthy bundled fallback that this
  *           page happens not to use measures exactly like one that was never
- *           shipped. Reports four outcomes rather than pass/fail, because
+ *           shipped. Reports five outcomes rather than pass/fail, because
  *           "bundled and working" and "never shipped" must not be conflated —
  *           acting on that confusion means deleting a fallback that works.
  *
@@ -35,7 +35,8 @@
  *   node silent_degradation_probe.mjs shot  --url <url> --select "<css>" --out <dir> [--name x] [--pad 12] [--dpr 3]
  *
  * Common flags: --browser <chrome-executable>  --viewport WxH  --wait <ms>
- *   --header "k: v" (repeatable)  --storage <playwright-storage-state.json>
+ *   --header "k: v" (repeatable, target origin only)
+ *   --storage <playwright-storage-state.json>  --ignore-https-errors
  *
  * Exit: 0 clean · 1 degradation found · 2 invalid input / runtime failure.
  */
@@ -48,6 +49,50 @@ const mode = argv[0];
 const flag = (n, d = null) => { const i = argv.indexOf(`--${n}`); return i > -1 ? argv[i + 1] : d; };
 const flags = (n) => argv.reduce((a, v, i) => (v === `--${n}` ? [...a, argv[i + 1]] : a), []);
 const has = (n) => argv.includes(`--${n}`);
+
+const CSS_GENERIC_FAMILIES = new Set([
+  'serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui',
+  'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji',
+  'fangsong',
+]);
+
+function normalizedFamily(family) {
+  return family.trim().replace(/^['"]|['"]$/g, '').toLowerCase();
+}
+
+function stripCssComments(css) {
+  let output = '';
+  let quote = null;
+  for (let index = 0; index < css.length; index += 1) {
+    const char = css[index];
+    const next = css[index + 1];
+    if (quote) {
+      output += char;
+      if (char === '\\' && index + 1 < css.length) {
+        output += css[index + 1];
+        index += 1;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      output += char;
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      index += 2;
+      while (index < css.length && !(css[index] === '*' && css[index + 1] === '/')) {
+        if (css[index] === '\n' || css[index] === '\r') output += css[index];
+        index += 1;
+      }
+      continue;
+    }
+    output += char;
+  }
+  return output;
+}
 
 if (!mode || has('help') || !['font', 'class', 'shot'].includes(mode)) {
   process.stdout.write(readFileSync(new URL(import.meta.url)).toString().split('*/')[0].replace(/^\/\*\*?/, '') + '\n');
@@ -71,21 +116,55 @@ async function loadPlaywright() {
 }
 
 async function openPage() {
-  const pw = await loadPlaywright();
-  const [w, h] = (flag('viewport', '1440x900')).split('x').map(Number);
-  const browser = await pw.chromium.launch({ executablePath: flag('browser') || undefined });
-  const ctx = await browser.newContext({
-    ignoreHTTPSErrors: true,
-    viewport: { width: w, height: h },
-    deviceScaleFactor: Number(flag('dpr', '2')),
-    storageState: flag('storage') || undefined,
-    extraHTTPHeaders: Object.fromEntries(flags('header').map((s) => {
-      const i = s.indexOf(':'); return [s.slice(0, i).trim(), s.slice(i + 1).trim()];
-    })),
-  });
-  const page = await ctx.newPage();
   const url = flag('url');
   if (!url) { process.stderr.write('--url is required\n'); process.exit(2); }
+  let targetOrigin;
+  try { targetOrigin = new URL(url).origin; }
+  catch { process.stderr.write(`invalid --url: ${url}\n`); process.exit(2); }
+  const extraHeaders = {};
+  for (const spec of flags('header')) {
+    const separator = typeof spec === 'string' ? spec.indexOf(':') : -1;
+    const name = separator > 0 ? spec.slice(0, separator).trim().toLowerCase() : '';
+    if (!name) {
+      process.stderr.write(`invalid --header (expected "name: value"): ${spec ?? '<missing>'}\n`);
+      process.exit(2);
+    }
+    extraHeaders[name] = spec.slice(separator + 1).trim();
+  }
+  const [w, h] = (flag('viewport', '1440x900')).split('x').map(Number);
+  const dpr = Number(flag('dpr', '2'));
+  if (![w, h, dpr].every(Number.isFinite) || w <= 0 || h <= 0 || dpr <= 0) {
+    process.stderr.write('--viewport must be positive WxH and --dpr must be positive\n');
+    process.exit(2);
+  }
+  const pw = await loadPlaywright();
+  const browser = await pw.chromium.launch({ executablePath: flag('browser') || undefined });
+  const ctx = await browser.newContext({
+    ignoreHTTPSErrors: has('ignore-https-errors'),
+    viewport: { width: w, height: h },
+    deviceScaleFactor: dpr,
+    storageState: flag('storage') || undefined,
+  });
+  if (Object.keys(extraHeaders).length) {
+    await ctx.route('**/*', async (route) => {
+      const requestHeaders = { ...route.request().headers() };
+      for (const name of Object.keys(extraHeaders)) delete requestHeaders[name];
+      let requestOrigin = null;
+      try { requestOrigin = new URL(route.request().url()).origin; } catch {}
+      if (requestOrigin === targetOrigin) {
+        Object.assign(requestHeaders, extraHeaders);
+        // route.continue() applies header overrides to automatic redirects too,
+        // which can forward a target-origin credential to another origin before
+        // interception runs again. Fetch exactly one hop, then fulfill it so the
+        // browser issues any redirect as a fresh, independently filtered request.
+        const response = await route.fetch({ headers: requestHeaders, maxRedirects: 0 });
+        await route.fulfill({ response });
+      } else {
+        await route.continue({ headers: requestHeaders });
+      }
+    });
+  }
+  const page = await ctx.newPage();
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForTimeout(Number(flag('wait', '1200')));
   return { browser, page };
@@ -149,14 +228,17 @@ if (mode === 'font') {
     };
   }, { fams: families, weight });
   await browser.close();
-  // Four distinct outcomes. Only two of them are defects, and conflating the
+  // Five distinct outcomes. Only two of them are defects, and conflating the
   // healthy-bundled case with the never-shipped case is worse than not checking
   // at all: it tells the reader to delete a fallback that works.
-  const healthy = result.families.filter((f) => f.actuallyRenders && f.shippedByPage);
-  const hostOnly = result.families.filter((f) => f.actuallyRenders && !f.shippedByPage);
-  const brokenAsset = result.families.filter((f) => !f.actuallyRenders && f.shippedByPage);
-  const absent = result.families.filter((f) => !f.actuallyRenders && !f.shippedByPage);
+  const platformGeneric = result.families.filter((f) => CSS_GENERIC_FAMILIES.has(normalizedFamily(f.family)));
+  const custom = result.families.filter((f) => !CSS_GENERIC_FAMILIES.has(normalizedFamily(f.family)));
+  const healthy = custom.filter((f) => f.actuallyRenders && f.shippedByPage);
+  const hostOnly = custom.filter((f) => f.actuallyRenders && !f.shippedByPage);
+  const brokenAsset = custom.filter((f) => !f.actuallyRenders && f.shippedByPage);
+  const absent = custom.filter((f) => !f.actuallyRenders && !f.shippedByPage);
   process.stdout.write(JSON.stringify({ mode: 'font', ...result,
+    platformGeneric: platformGeneric.map((f) => f.family),
     healthy: healthy.map((f) => f.family),
     hostProvidedOnly: hostOnly.map((f) => f.family),
     declaredButUnusable: brokenAsset.map((f) => f.family),
@@ -189,8 +271,8 @@ if (mode === 'font') {
 if (mode === 'class') {
   const cssPath = flag('css'), libPath = flag('library-css');
   if (!cssPath || !libPath) { process.stderr.write('--css and --library-css are required\n'); process.exit(2); }
-  const own = readFileSync(resolve(cssPath), 'utf8');
-  const lib = readFileSync(resolve(libPath), 'utf8');
+  const own = stripCssComments(readFileSync(resolve(cssPath), 'utf8'));
+  const lib = stripCssComments(readFileSync(resolve(libPath), 'utf8'));
   const prefix = flag('prefix', 'ant');
   const referenced = [...new Set([...own.matchAll(new RegExp(`\\.(${prefix}-[a-z0-9-]+)`, 'g'))].map((m) => m[1]))].sort();
   const rows = referenced.map((name) => {

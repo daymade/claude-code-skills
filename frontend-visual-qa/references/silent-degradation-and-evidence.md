@@ -140,17 +140,19 @@ and a 25%-wider fallback on every non-macOS machine. **A checker that condemns
 healthy input is worse than no checker**: it teaches the reader to stop
 believing the output, and this one pointed at the wrong repair.
 
-So report four outcomes, never pass/fail:
+So report five outcomes, never pass/fail:
 
-| shipped | renders | verdict |
-|---|---|---|
-| yes | yes | healthy — leave it alone |
-| no | yes | **host-provided only** — works for the team, falls back for customers |
-| yes | no | **broken asset** — 404, bad path, rejected format, or an unbuilt weight |
-| no | no | absent on this host — may still be an intentional face for an OS you did not test |
+| family kind | shipped | renders | verdict |
+|---|---|---|---|
+| CSS generic (`system-ui`, `serif`, etc.) | no | platform-dependent | platform generic — healthy by design |
+| custom | yes | yes | healthy — leave it alone |
+| custom | no | yes | **host-provided only** — works for the team, falls back for customers |
+| custom | yes | no | **broken asset** — 404, bad path, rejected format, or an unbuilt weight |
+| custom | no | no | absent on this host — may still be an intentional face for an OS you did not test |
 
-Only the middle two are defects. The fourth needs the OS you ran on stated
-alongside it, or the next reader deletes a deliberate Windows or Android entry.
+Only host-provided-only and broken asset are defects. An absent custom family
+needs the OS you ran on stated alongside it, or the next reader deletes a
+deliberate Windows or Android entry.
 
 ### 1d. Geometry values that live in theme config
 

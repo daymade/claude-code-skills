@@ -19,9 +19,10 @@
 #   untracked files in a sibling clone. The repository's own audit was clean, every branch
 #   was pushed, and the work was still one `rm -rf` away from being gone for good.
 #
-# NON-DESTRUCTIVE: runs only `find`, `git rev-parse`, `git remote`, `git status`,
-# `git rev-list`, `git config`. It never fetches, writes refs, stages, or touches a file.
-# Safe to run in a dirty tree and alongside other agents.
+# NON-DESTRUCTIVE: runs only `find` plus read-only Git queries. Repository-provided
+# fsmonitor commands are disabled and optional index refreshes are suppressed before
+# inspecting discovered checkouts. It never fetches, writes refs, stages, or touches a
+# file. Safe to run in a dirty tree and alongside other agents.
 #
 # USAGE:
 #   scripts/git_find_all_checkouts.sh [search-root ...]
@@ -38,12 +39,28 @@ set -uo pipefail
 
 DEPTH="${DEPTH:-4}"
 
-git rev-parse --git-dir >/dev/null 2>&1 || {
+safe_git() {
+  GIT_OPTIONAL_LOCKS=0 git --no-pager \
+    -c core.fsmonitor=false \
+    -c core.untrackedCache=false \
+    -c status.submoduleSummary=false \
+    "$@"
+}
+
+canonical_dir() {
+  (cd "$1" 2>/dev/null && pwd -P)
+}
+
+safe_git rev-parse --git-dir >/dev/null 2>&1 || {
   echo "not inside a Git repository" >&2
   exit 2
 }
 
-SELF_ROOT="$(git rev-parse --show-toplevel)"
+SELF_ROOT_RAW="$(safe_git rev-parse --show-toplevel)"
+SELF_ROOT="$(canonical_dir "$SELF_ROOT_RAW")" || {
+  echo "cannot resolve this repository's working tree" >&2
+  exit 2
+}
 
 # Normalize a remote URL so the SSH and HTTPS forms of the same repository compare equal:
 #   git@github.com:owner/repo.git  ->  github.com/owner/repo
@@ -52,14 +69,14 @@ normalize_remote() {
   printf '%s' "${1:-}" | sed -E 's#^[a-z+]+://##; s#^[^@/]+@##; s#:#/#; s#\.git/?$##; s#/+$##'
 }
 
-SELF_REMOTE_RAW="$(git remote get-url origin 2>/dev/null | head -1 || true)"
+SELF_REMOTE_RAW="$(safe_git remote get-url origin 2>/dev/null | head -1 || true)"
 SELF_REMOTE="$(normalize_remote "$SELF_REMOTE_RAW")"
 
 # Identity fallback: the ROOT COMMIT, never the directory name. Independent clones are
 # usually named differently from the original (`repo` vs `repo-hotfix`) — exactly the case
 # this script exists to catch — so name matching fails precisely when it matters most.
 # Every clone of a repository shares its root commit, whatever the directory is called.
-SELF_ROOTCOMMIT="$(git rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 || true)"
+SELF_ROOTCOMMIT="$(safe_git rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 || true)"
 
 if [ -n "$SELF_REMOTE" ]; then
   MATCH_MODE="remote"
@@ -100,49 +117,69 @@ done
 
 AT_RISK=0
 FOUND=0
+FOUND_SELF=0
 SEEN=""
 
 for gitpath in "${CANDIDATES[@]}"; do
-  checkout="$(dirname "$gitpath")"
+  checkout_raw="$(dirname "$gitpath")"
+  checkout="$(canonical_dir "$checkout_raw")" || continue
 
   # De-duplicate: two search roots commonly overlap.
   case "$SEEN" in *"|$checkout|"*) continue ;; esac
   SEEN="$SEEN|$checkout|"
 
   if [ "$MATCH_MODE" = "remote" ]; then
-    other_remote="$(normalize_remote "$(git -C "$checkout" remote get-url origin 2>/dev/null | head -1 || true)")"
-    [ "$other_remote" = "$SELF_REMOTE" ] || continue
+    other_remote="$(normalize_remote "$(safe_git -C "$checkout" remote get-url origin 2>/dev/null | head -1 || true)")"
+    if [ -n "$other_remote" ]; then
+      [ "$other_remote" = "$SELF_REMOTE" ] || continue
+    else
+      # A copied checkout may deliberately or accidentally lose its origin. It is
+      # still the same repository when its root commit matches, and is exactly the
+      # kind of hidden work this scanner exists to find.
+      other_root="$(safe_git -C "$checkout" rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 || true)"
+      [ -n "$other_root" ] && [ "$other_root" = "$SELF_ROOTCOMMIT" ] || continue
+    fi
   else
-    other_root="$(git -C "$checkout" rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 || true)"
+    other_root="$(safe_git -C "$checkout" rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 || true)"
     [ -n "$other_root" ] && [ "$other_root" = "$SELF_ROOTCOMMIT" ] || continue
   fi
 
   FOUND=$((FOUND + 1))
 
-  if [ -d "$gitpath" ]; then
+  if [ -d "$checkout/.git" ]; then
     kind="independent clone"
-  elif grep -q 'worktrees/' "$gitpath" 2>/dev/null; then
+  elif grep -q 'worktrees/' "$checkout/.git" 2>/dev/null; then
     kind="linked worktree"
   else
     kind="gitlink (submodule?)"
   fi
 
-  branch="$(git -C "$checkout" rev-parse --abbrev-ref HEAD 2>/dev/null | head -1)"
-  head_sha="$(git -C "$checkout" rev-parse --short HEAD 2>/dev/null | head -1)"
-  modified="$(git -C "$checkout" status --porcelain 2>/dev/null | grep -cv '^??' || true)"
-  untracked="$(git -C "$checkout" status --porcelain 2>/dev/null | grep -c '^??' || true)"
-  unpushed="$(git -C "$checkout" rev-list --count '@{u}..HEAD' 2>/dev/null | head -1)"
+  branch="$(safe_git -C "$checkout" rev-parse --abbrev-ref HEAD 2>/dev/null | head -1)"
+  head_sha="$(safe_git -C "$checkout" rev-parse --short HEAD 2>/dev/null | head -1)"
+  if status_output="$(safe_git -C "$checkout" status --porcelain=v1 --untracked-files=all --ignore-submodules=all 2>/dev/null)"; then
+    modified="$(printf '%s' "$status_output" | grep -cv '^??' || true)"
+    untracked="$(printf '%s' "$status_output" | grep -c '^??' || true)"
+  else
+    modified='unknown'
+    untracked='unknown'
+  fi
+  # Upstream configuration is not a preservation boundary. A detached or
+  # no-upstream HEAD is safe when every commit is already reachable from some
+  # locally known remote-tracking ref.
+  unpushed="$(safe_git -C "$checkout" rev-list --count HEAD --not --remotes 2>/dev/null | head -1)"
   [ -n "$branch" ] || branch='?'
   [ -n "$head_sha" ] || head_sha='?'
-  [ -n "$unpushed" ] || unpushed='no-upstream'
+  [ -n "$unpushed" ] || unpushed='unknown'
 
   if [ "$checkout" = "$SELF_ROOT" ]; then
+    FOUND_SELF=1
     marker="  (this repository)"
   else
     marker=""
-    if [ "${modified:-0}" -gt 0 ] || [ "${untracked:-0}" -gt 0 ] \
-       || { [ "$unpushed" != "no-upstream" ] && [ "${unpushed:-0}" -gt 0 ]; } \
-       || [ "$unpushed" = "no-upstream" ]; then
+    if [ "$modified" = 'unknown' ] || [ "$untracked" = 'unknown' ] \
+       || [ "$unpushed" = 'unknown' ] \
+       || [ "${modified:-0}" -gt 0 ] || [ "${untracked:-0}" -gt 0 ] \
+       || [ "${unpushed:-0}" -gt 0 ]; then
       AT_RISK=$((AT_RISK + 1))
       marker="  <-- AT RISK"
     fi
@@ -165,10 +202,10 @@ echo "Checkouts found: ${FOUND}    At-risk (excluding this one): ${AT_RISK}"
 if [ "$AT_RISK" -gt 0 ]; then
   cat <<'GUIDANCE'
 
-Each AT-RISK checkout holds work that exists nowhere else. Before deleting any of them:
+Each AT-RISK checkout may hold work that is not proven preserved elsewhere. Before deleting it:
   1. Untracked files      -> copy them out of the tree (nothing in git can reach them).
   2. Uncommitted changes  -> `git -C <checkout> diff > <backup>/uncommitted.diff`.
-  3. Unpushed commits     -> `git -C <checkout> bundle create <backup>/history.bundle origin/main..HEAD`
+  3. Unpushed commits     -> `git -C <checkout> bundle create <backup>/history.bundle HEAD --not --remotes`
                              (verify it: `git bundle verify <backup>/history.bundle`).
 Then judge each item by CONTENT against the surviving repository — a branch name, a commit
 message, or "it looks old" is not evidence that the work already landed.
@@ -176,7 +213,11 @@ GUIDANCE
   exit 1
 fi
 
-if [ "$FOUND" -le 1 ]; then
+if [ "$FOUND" -eq 0 ]; then
+  echo "No matching checkout was found under the requested search roots."
+elif [ "$FOUND" -eq 1 ] && [ "$FOUND_SELF" -eq 1 ]; then
   echo "Only this checkout exists — no hidden clone is holding work."
+elif [ "$FOUND_SELF" -eq 0 ]; then
+  echo "Note: the current repository was outside the requested search roots."
 fi
 exit 0

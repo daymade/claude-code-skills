@@ -371,6 +371,91 @@ class SessionRecoveryTests(unittest.TestCase):
         )
         self.assertNotIn("Later state:", completed.stdout)
 
+    def test_write_after_snapshot_and_tombstone_recovers_recreated_bytes(self) -> None:
+        backup_name = "before-recreate@v2"
+        write_jsonl(
+            self.session_file,
+            [
+                snapshot_record(
+                    str(self.original), backup_name, 2, "2026-07-01T19:20:00Z"
+                ),
+                snapshot_record(str(self.original), None, 3, "2026-07-01T19:25:00Z"),
+                write_record(
+                    str(self.original), "recreated-new", "2026-07-01T19:30:00Z"
+                ),
+            ],
+        )
+        self.backup_path(backup_name).write_bytes(b"pre-delete-old")
+
+        completed = self.run_cli(str(self.session_file), "-o", str(self.output_dir))
+
+        self.assertEqual(
+            self.expected_output().read_text(encoding="utf-8"), "recreated-new"
+        )
+        self.assertIn("Source: Write", completed.stdout)
+        self.assertNotIn("Later state:", completed.stdout)
+
+    def test_unrelated_write_conflict_does_not_abort_keyword_recovery(self) -> None:
+        unrelated = self.root / "jobs" / "task" / "unrelated.txt"
+        write_jsonl(
+            self.session_file,
+            [
+                write_record(
+                    str(self.original), "wanted-content", "2026-07-01T19:31:00Z"
+                ),
+                write_record(str(unrelated), "noise-a", "2026-07-01T19:32:00Z"),
+                write_record(str(unrelated), "noise-b", "2026-07-01T19:32:00Z"),
+            ],
+        )
+
+        self.run_cli(
+            str(self.session_file),
+            "-k",
+            "artifact.bin",
+            "-o",
+            str(self.output_dir),
+        )
+
+        self.assertEqual(
+            self.expected_output().read_text(encoding="utf-8"), "wanted-content"
+        )
+
+    def test_newer_snapshot_makes_older_write_conflict_irrelevant(self) -> None:
+        backup_name = "after-conflict@v2"
+        write_jsonl(
+            self.session_file,
+            [
+                write_record(str(self.original), "draft-a", "2026-07-01T19:33:00Z"),
+                write_record(str(self.original), "draft-b", "2026-07-01T19:33:00Z"),
+                snapshot_record(
+                    str(self.original), backup_name, 2, "2026-07-01T19:34:00Z"
+                ),
+            ],
+        )
+        self.backup_path(backup_name).write_bytes(b"exact-after-conflict")
+
+        self.run_cli(str(self.session_file), "-o", str(self.output_dir))
+
+        self.assertEqual(self.expected_output().read_bytes(), b"exact-after-conflict")
+
+    def test_older_write_conflict_is_superseded_by_unique_later_write(self) -> None:
+        write_jsonl(
+            self.session_file,
+            [
+                write_record(str(self.original), "draft-a", "2026-07-01T19:35:00Z"),
+                write_record(str(self.original), "draft-b", "2026-07-01T19:35:00Z"),
+                write_record(
+                    str(self.original), "final-write", "2026-07-01T19:36:00Z"
+                ),
+            ],
+        )
+
+        self.run_cli(str(self.session_file), "-o", str(self.output_dir))
+
+        self.assertEqual(
+            self.expected_output().read_text(encoding="utf-8"), "final-write"
+        )
+
     def test_write_before_tombstone_reports_the_later_deletion(self) -> None:
         write_jsonl(
             self.session_file,

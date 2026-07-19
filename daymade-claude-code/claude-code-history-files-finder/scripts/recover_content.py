@@ -837,30 +837,66 @@ class SessionContentRecovery:
         write_time = _timestamp_rank(write.get("timestamp"))
         return tombstone_time > write_time
 
+    @staticmethod
+    def _write_follows_tombstone(
+        write: Dict[str, Any], tombstone: Dict[str, Any]
+    ) -> bool:
+        write_time = _timestamp_rank(write.get("timestamp"))
+        tombstone_time = _timestamp_rank(
+            tombstone.get("backup_time") or tombstone.get("snapshot_time")
+        )
+        return write_time > tombstone_time
+
+    @staticmethod
+    def _write_follows_snapshot(
+        write: Dict[str, Any], snapshot: Dict[str, Any]
+    ) -> bool:
+        write_time = _timestamp_rank(write.get("timestamp"))
+        snapshot_time = max(
+            _timestamp_rank(snapshot.get("backup_time")),
+            _timestamp_rank(snapshot.get("snapshot_time")),
+        )
+        return (
+            write_time != float("-inf")
+            and snapshot_time != float("-inf")
+            and write_time > snapshot_time
+        )
+
     def _select_writes(
         self, writes: List[Dict[str, Any]]
-    ) -> tuple[Dict[str, Dict[str, Any]], List[str]]:
-        selected: Dict[str, Dict[str, Any]] = {}
-        failures: List[str] = []
+    ) -> tuple[Dict[str, Dict[str, Any]], Dict[str, str]]:
+        calls_by_path: Dict[str, List[Dict[str, Any]]] = {}
         for call in writes:
             file_path = call["file_path"]
-            if not file_path:
-                continue
-            previous = selected.get(file_path)
-            if previous is None:
-                selected[file_path] = call
-                continue
-            rank = _timestamp_rank(call.get("timestamp"))
-            previous_rank = _timestamp_rank(previous.get("timestamp"))
-            if rank > previous_rank:
-                selected[file_path] = call
-            elif rank == previous_rank and call["content"] != previous["content"]:
-                failures.append(
+            if file_path:
+                calls_by_path.setdefault(file_path, []).append(call)
+
+        selected: Dict[str, Dict[str, Any]] = {}
+        conflicts: Dict[str, str] = {}
+        for file_path, calls in calls_by_path.items():
+            latest_rank = max(_timestamp_rank(call.get("timestamp")) for call in calls)
+            latest = [
+                call
+                for call in calls
+                if _timestamp_rank(call.get("timestamp")) == latest_rank
+            ]
+            latest.sort(key=lambda call: (str(call["source_file"]), call["line"]))
+            selected[file_path] = latest[0]
+            conflict = next(
+                (
+                    call
+                    for call in latest[1:]
+                    if call["content"] != latest[0]["content"]
+                ),
+                None,
+            )
+            if conflict is not None:
+                conflicts[file_path] = (
                     "Conflicting Write checkpoints have the same timestamp for "
-                    f"{file_path}: {previous['source_file']}:{previous['line']} and "
-                    f"{call['source_file']}:{call['line']}"
+                    f"{file_path}: {latest[0]['source_file']}:{latest[0]['line']} and "
+                    f"{conflict['source_file']}:{conflict['line']}"
                 )
-        return selected, failures
+        return selected, conflicts
 
     def recover_files(
         self, keywords: Optional[List[str]] = None
@@ -870,10 +906,12 @@ class SessionContentRecovery:
         snapshots: Dict[str, Dict[str, Any]] = scan["snapshots"]
         tombstones: Dict[str, Dict[str, Any]] = scan["tombstones"]
         snapshot_errors: Dict[str, str] = scan["snapshot_errors"]
-        writes_by_path, failures = self._select_writes(scan["writes"])
+        writes_by_path, write_conflicts = self._select_writes(scan["writes"])
+        failures: List[str] = []
 
         all_paths = (
             set(writes_by_path)
+            | set(write_conflicts)
             | set(snapshots)
             | set(tombstones)
             | set(snapshot_errors)
@@ -896,15 +934,40 @@ class SessionContentRecovery:
 
             snapshot = snapshots.get(original_path)
             tombstone = tombstones.get(original_path)
+            write = writes_by_path.get(original_path)
             later_state: Optional[str] = None
+            latest_tombstone = (
+                tombstone
+                if tombstone is not None
+                and (
+                    snapshot is None
+                    or _entry_rank(tombstone) > _entry_rank(snapshot)
+                )
+                else None
+            )
+            write_supersedes_snapshot = bool(
+                write is not None
+                and snapshot is not None
+                and (
+                    self._write_follows_snapshot(write, snapshot)
+                    or (
+                        latest_tombstone is not None
+                        and self._write_follows_tombstone(write, latest_tombstone)
+                    )
+                )
+            )
             if (
                 snapshot
-                and tombstone
-                and _entry_rank(tombstone) > _entry_rank(snapshot)
+                and latest_tombstone
+                and not write_supersedes_snapshot
             ):
-                later_state = self._tombstone_note(tombstone)
+                later_state = self._tombstone_note(latest_tombstone)
 
-            if not self.write_only and snapshot is not None:
+            if (
+                not self.write_only
+                and snapshot is not None
+                and not write_supersedes_snapshot
+            ):
                 try:
                     backup_path, digest, size, lines = self._read_snapshot_backup(
                         snapshot, roots, scan["session_ids"]
@@ -934,7 +997,6 @@ class SessionContentRecovery:
                 )
                 continue
 
-            write = writes_by_path.get(original_path)
             if write is None:
                 if self.write_only and (snapshot is not None or tombstone is not None):
                     self.warnings.append(
@@ -948,11 +1010,15 @@ class SessionContentRecovery:
                     )
                 continue
 
+            if original_path in write_conflicts:
+                failures.append(write_conflicts[original_path])
+                continue
+
             content = write["content"].encode("utf-8")
-            if tombstone is not None and self._tombstone_follows_write(
-                tombstone, write
+            if latest_tombstone is not None and self._tombstone_follows_write(
+                latest_tombstone, write
             ):
-                later_state = self._tombstone_note(tombstone)
+                later_state = self._tombstone_note(latest_tombstone)
             planned.append(
                 {
                     "original_path": original_path,
