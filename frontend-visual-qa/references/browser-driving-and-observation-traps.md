@@ -2,7 +2,7 @@
 
 Failure modes that belong to *the auditor*, not to the page. Each one makes a
 healthy page look broken or a broken page look healthy, and every one of them has
-produced a wrong verdict: at best a wasted round, at worst an "fix" applied to
+produced a wrong verdict: at best a wasted round, at worst a "fix" applied to
 code that was already correct.
 
 Read this before driving a real browser, and again whenever an observation
