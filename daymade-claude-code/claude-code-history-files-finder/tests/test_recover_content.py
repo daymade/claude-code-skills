@@ -29,18 +29,43 @@ def write_jsonl(path: Path, records: list[object]) -> None:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
-def write_record(path: str, content: str, timestamp: str) -> dict:
+def write_record(
+    path: str,
+    content: str,
+    timestamp: str,
+    tool_use_id: str | None = None,
+) -> dict:
+    tool_use = {
+        "type": "tool_use",
+        "name": "Write",
+        "input": {"file_path": path, "content": content},
+    }
+    if tool_use_id is not None:
+        tool_use["id"] = tool_use_id
     return {
         "type": "assistant",
         "sessionId": SESSION_ID,
         "timestamp": timestamp,
         "message": {
             "role": "assistant",
+            "content": [tool_use],
+        },
+    }
+
+
+def tool_result_record(tool_use_id: str, is_error: bool, timestamp: str) -> dict:
+    return {
+        "type": "user",
+        "sessionId": SESSION_ID,
+        "timestamp": timestamp,
+        "message": {
+            "role": "user",
             "content": [
                 {
-                    "type": "tool_use",
-                    "name": "Write",
-                    "input": {"file_path": path, "content": content},
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "is_error": is_error,
+                    "content": "permission denied" if is_error else "write complete",
                 }
             ],
         },
@@ -394,6 +419,33 @@ class SessionRecoveryTests(unittest.TestCase):
         )
         self.assertIn("Source: Write", completed.stdout)
         self.assertNotIn("Later state:", completed.stdout)
+
+    def test_failed_later_write_does_not_override_exact_snapshot(self) -> None:
+        backup_name = "confirmed-before-failure@v2"
+        write_jsonl(
+            self.session_file,
+            [
+                snapshot_record(
+                    str(self.original), backup_name, 2, "2026-07-01T19:30:00Z"
+                ),
+                write_record(
+                    str(self.original),
+                    "never-written",
+                    "2026-07-01T19:35:00Z",
+                    "toolu_failed_write",
+                ),
+                tool_result_record(
+                    "toolu_failed_write", True, "2026-07-01T19:35:01Z"
+                ),
+            ],
+        )
+        self.backup_path(backup_name).write_bytes(b"confirmed-exact")
+
+        completed = self.run_cli(str(self.session_file), "-o", str(self.output_dir))
+
+        self.assertEqual(self.expected_output().read_bytes(), b"confirmed-exact")
+        self.assertIn("Source: file-history v2", completed.stdout)
+        self.assertNotIn("never-written", completed.stdout)
 
     def test_unrelated_write_conflict_does_not_abort_keyword_recovery(self) -> None:
         unrelated = self.root / "jobs" / "task" / "unrelated.txt"

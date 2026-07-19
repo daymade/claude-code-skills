@@ -246,8 +246,10 @@ shell-driven changes and can recover binary files or files without a Write tool
 call. A later `backupFileName: null` is a deletion tombstone: the last available
 checkpoint is recovered with the later deletion stated in the report. If a path
 has no usable snapshot checkpoint, the script recovers the latest Write call and
-labels it as lower fidelity in `recovery_report.txt`. Original directory
-structure is preserved under `./recovered_content/`.
+labels it as lower fidelity in `recovery_report.txt`. A Write whose matching
+`tool_result` explicitly has `is_error: true` is skipped; an attempted write is
+not a checkpoint. Original directory structure is preserved under
+`./recovered_content/`.
 
 **Filtering by keywords**:
 
@@ -307,7 +309,8 @@ file-history version for each original path, and uses checkpoint timestamps for
 ties. A later deletion tombstone does not erase an earlier recoverable backup;
 it changes the reported state. For paths with no usable checkpoint, recovery
 keeps the latest internally timestamped Write call. Physical JSONL line order
-across copies is not treated as sufficient time evidence.
+across copies is not treated as sufficient time evidence, and an explicitly
+failed Write tool result excludes that attempted Write from recovery.
 
 ### Keyword Selection
 

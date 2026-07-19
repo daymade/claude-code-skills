@@ -40,7 +40,20 @@ class CheckoutDiscoveryTests(unittest.TestCase):
             tree,
             input_text="fixture\n",
         ).stdout.strip()
-        self.git("-C", str(self.seed), "update-ref", "refs/heads/main", commit)
+        head = self.git(
+            "-C",
+            str(self.seed),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit-tree",
+            tree,
+            "-p",
+            commit,
+            input_text="second fixture\n",
+        ).stdout.strip()
+        self.git("-C", str(self.seed), "update-ref", "refs/heads/main", head)
         self.git("clone", "-q", str(self.seed), str(self.current))
         self.git("clone", "-q", str(self.seed), str(self.candidate))
 
@@ -70,7 +83,7 @@ class CheckoutDiscoveryTests(unittest.TestCase):
             env={**os.environ, "DEPTH": "3"},
         )
 
-    def test_clone_without_origin_is_still_found_by_root_commit(self) -> None:
+    def test_clone_without_origin_is_still_found_by_shared_history(self) -> None:
         self.git("-C", str(self.candidate), "remote", "remove", "origin")
         (self.candidate / "untracked-proof.txt").write_text(
             "only copy", encoding="utf-8"
@@ -80,6 +93,26 @@ class CheckoutDiscoveryTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
         self.assertIn(str(self.candidate.resolve()), completed.stdout)
+        self.assertIn("untracked: 1", completed.stdout)
+        self.assertIn("AT RISK", completed.stdout)
+
+    def test_shallow_clone_without_origin_is_found_by_shared_history(self) -> None:
+        shallow = self.checkouts / "shallow"
+        self.git(
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            self.seed.resolve().as_uri(),
+            str(shallow),
+        )
+        self.git("-C", str(shallow), "remote", "remove", "origin")
+        (shallow / "untracked-proof.txt").write_text("only copy", encoding="utf-8")
+
+        completed = self.run_scanner(self.checkouts)
+
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn(str(shallow.resolve()), completed.stdout)
         self.assertIn("untracked: 1", completed.stdout)
         self.assertIn("AT RISK", completed.stdout)
 

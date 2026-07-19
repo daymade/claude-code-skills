@@ -213,6 +213,7 @@ class SessionContentRecovery:
             "duplicate_records_skipped": 0,
             "session_copies": 0,
             "write_calls": 0,
+            "failed_write_calls_skipped": 0,
             "edit_calls": 0,
             "snapshot_records": 0,
             "snapshot_paths": 0,
@@ -425,6 +426,7 @@ class SessionContentRecovery:
             return self._scan_result
 
         writes: List[Dict[str, Any]] = []
+        failed_tool_use_ids: set[str] = set()
         edit_summaries: deque[Dict[str, Any]] = deque(maxlen=5)
         snapshots: Dict[str, Dict[str, Any]] = {}
         tombstones: Dict[str, Dict[str, Any]] = {}
@@ -499,12 +501,23 @@ class SessionContentRecovery:
                         message.get("role") if isinstance(message, dict) else None
                     )
                     role = data.get("role") or nested_role
-                    if role != "assistant":
-                        continue
                     content = data.get("content")
                     if content is None and isinstance(message, dict):
                         content = message.get("content", [])
                     if not isinstance(content, list):
+                        continue
+
+                    for item in content:
+                        if (
+                            isinstance(item, dict)
+                            and item.get("type") == "tool_result"
+                            and item.get("is_error") is True
+                        ):
+                            tool_use_id = item.get("tool_use_id")
+                            if isinstance(tool_use_id, str) and tool_use_id:
+                                failed_tool_use_ids.add(tool_use_id)
+
+                    if role != "assistant":
                         continue
 
                     for item in content:
@@ -526,6 +539,11 @@ class SessionContentRecovery:
                                         "file_path": file_path,
                                         "content": file_content,
                                         "timestamp": data.get("timestamp", ""),
+                                        "tool_use_id": (
+                                            item.get("id")
+                                            if isinstance(item.get("id"), str)
+                                            else None
+                                        ),
                                     }
                                 )
                                 self.stats["write_calls"] += 1
@@ -541,6 +559,19 @@ class SessionContentRecovery:
                             self.stats["edit_calls"] += 1
 
             record_hashes_from_prior_copies.update(copy_record_hashes)
+
+        usable_writes: List[Dict[str, Any]] = []
+        for write in writes:
+            tool_use_id = write.get("tool_use_id")
+            if tool_use_id and tool_use_id in failed_tool_use_ids:
+                self.stats["failed_write_calls_skipped"] += 1
+                self.warnings.append(
+                    "Skipped Write checkpoint with an explicit failed tool result: "
+                    f"{write['file_path']} ({write['source_file']}:{write['line']})"
+                )
+                continue
+            usable_writes.append(write)
+        writes = usable_writes
 
         if saw_codex_signature and not saw_claude_signature:
             raise RecoveryError(
@@ -1100,6 +1131,8 @@ class SessionContentRecovery:
             f"  Total lines processed: {self.stats['total_lines']:,}",
             f"  Duplicate records skipped: {self.stats['duplicate_records_skipped']}",
             f"  Write tool calls found: {self.stats['write_calls']}",
+            "  Failed Write tool calls skipped: "
+            f"{self.stats['failed_write_calls_skipped']}",
             f"  Edit tool calls found: {self.stats['edit_calls']}",
             f"  File-history snapshot records: {self.stats['snapshot_records']}",
             f"  Paths with snapshot metadata: {self.stats['snapshot_paths']}",

@@ -22,7 +22,8 @@ cat ./recovered/recovery_report.txt
 
 `Source: file-history` means exact bytes from the named captured checkpoint.
 `Source: Write` means a lower-fidelity Write checkpoint whose later Edit or
-shell changes may be absent.
+shell changes may be absent. Write calls with an explicit failed `tool_result`
+are excluded because their requested content was not confirmed written.
 
 ## Recover Vanished Temporary Job Artifacts
 

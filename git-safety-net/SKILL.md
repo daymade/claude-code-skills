@@ -100,15 +100,16 @@ DEPTH=6 scripts/git_find_all_checkouts.sh ~    # widen when clones live far from
 ```
 
 It matches sibling checkouts by normalized remote URL (so the SSH and HTTPS forms of one
-repository compare equal), falling back to **shared root commit** whenever either the current or a
-candidate checkout has no `origin` — never by directory name, because an independent clone is
-usually named differently from the original (`repo` vs `repo-hotfix`), which is exactly when name
-matching fails. It canonicalizes path aliases before identifying the current checkout, disables
-repository-provided fsmonitor commands while inspecting candidates, and treats commits reachable
-from any locally known remote-tracking ref as pushed even when a branch has no upstream. Exit is 1
-when any *other* checkout holds uncommitted, untracked, unpushed, or uninspectable work. Run Steps
-1–2 in **each** checkout it reports, then treat "nothing at risk" as a claim about all of them, not
-just this one.
+repository compare equal), falling back to **any shared commit history** whenever either the current
+or a candidate checkout has no `origin`. That history check works for shallow clones that cannot
+see the repository's true root. It never matches by directory name, because an independent clone
+is usually named differently from the original (`repo` vs `repo-hotfix`), which is exactly when
+name matching fails. It canonicalizes path aliases before identifying the current checkout,
+disables repository-provided fsmonitor commands while inspecting candidates, and treats commits
+reachable from any locally known remote-tracking ref as pushed even when a branch has no upstream.
+Exit is 1 when any *other* checkout holds uncommitted, untracked, unpushed, or uninspectable work.
+Run Steps 1–2 in **each** checkout it reports, then treat "nothing at risk" as a claim about all of
+them, not just this one.
 
 ### Maintainer verification
 

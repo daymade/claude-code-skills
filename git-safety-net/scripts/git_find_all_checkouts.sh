@@ -72,19 +72,32 @@ normalize_remote() {
 SELF_REMOTE_RAW="$(safe_git remote get-url origin 2>/dev/null | head -1 || true)"
 SELF_REMOTE="$(normalize_remote "$SELF_REMOTE_RAW")"
 
-# Identity fallback: the ROOT COMMIT, never the directory name. Independent clones are
-# usually named differently from the original (`repo` vs `repo-hotfix`) — exactly the case
-# this script exists to catch — so name matching fails precisely when it matters most.
-# Every clone of a repository shares its root commit, whatever the directory is called.
-SELF_ROOTCOMMIT="$(safe_git rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 || true)"
+# Identity fallback: any shared commit, never the directory name. A shallow clone
+# cannot see the repository's true root, but it still carries at least its shallow
+# boundary and HEAD. Checking the candidate's reachable commits against this
+# repository therefore works for full, shallow, detached, and differently named
+# copies without trusting a mutable path label.
+shares_commit_with_self() {
+  local checkout="$1"
+  local oid
+  while IFS= read -r oid; do
+    [ -n "$oid" ] || continue
+    if safe_git -C "$SELF_ROOT" cat-file -e "${oid}^{commit}" 2>/dev/null; then
+      return 0
+    fi
+  done < <(safe_git -C "$checkout" rev-list --all HEAD 2>/dev/null)
+  return 1
+}
+
+SELF_HEAD="$(safe_git rev-parse --verify HEAD 2>/dev/null | head -1 || true)"
 
 if [ -n "$SELF_REMOTE" ]; then
   MATCH_MODE="remote"
   IDENTITY="$SELF_REMOTE"
-elif [ -n "$SELF_ROOTCOMMIT" ]; then
-  MATCH_MODE="rootcommit"
-  IDENTITY="root commit ${SELF_ROOTCOMMIT}"
-  echo "note: no 'origin' remote here — identifying sibling checkouts by shared root commit instead."
+elif [ -n "$SELF_HEAD" ]; then
+  MATCH_MODE="history"
+  IDENTITY="history shared with ${SELF_HEAD}"
+  echo "note: no 'origin' remote here — identifying sibling checkouts by shared commit history instead."
 else
   echo "cannot identify this repository: it has no 'origin' remote and no commits yet." >&2
   exit 2
@@ -134,14 +147,12 @@ for gitpath in "${CANDIDATES[@]}"; do
       [ "$other_remote" = "$SELF_REMOTE" ] || continue
     else
       # A copied checkout may deliberately or accidentally lose its origin. It is
-      # still the same repository when its root commit matches, and is exactly the
-      # kind of hidden work this scanner exists to find.
-      other_root="$(safe_git -C "$checkout" rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 || true)"
-      [ -n "$other_root" ] && [ "$other_root" = "$SELF_ROOTCOMMIT" ] || continue
+      # still related when it shares any commit, even if it is shallow and cannot
+      # see the true root. That is exactly the hidden work this scanner targets.
+      shares_commit_with_self "$checkout" || continue
     fi
   else
-    other_root="$(safe_git -C "$checkout" rev-list --max-parents=0 HEAD 2>/dev/null | tail -1 || true)"
-    [ -n "$other_root" ] && [ "$other_root" = "$SELF_ROOTCOMMIT" ] || continue
+    shares_commit_with_self "$checkout" || continue
   fi
 
   FOUND=$((FOUND + 1))
