@@ -212,11 +212,13 @@ for the core visual/responsive defect catalog and standards-backed checks.
 Some defects produce no diagnostic anywhere: a global reset outranking a
 component's own styles, a library renaming its internal DOM classes so whole
 rule groups match nothing, a font family declared but never shipped, geometry
-written into theme config where source scans cannot see it, and per-element
-compliance that still reads as "no design system" in aggregate. Source review,
-type checks and geometry assertions are structurally blind to these — the
-artifacts are valid and simply do nothing. When a page looks cheap while every
-gate is green, that combination is the signature. Load
+written into theme config where source scans cannot see it, a new design token
+reusing a name the file already spent, a property that cannot apply because the
+rule never set the layout mode it presupposes, and per-element compliance that
+still reads as "no design system" in aggregate. Source review, type checks and
+geometry assertions are structurally blind to these — the artifacts are valid
+and simply do nothing. When a page looks cheap while every gate is green, that
+combination is the signature. Load
 [references/silent-degradation-and-evidence.md](references/silent-degradation-and-evidence.md)
 for the detection method per class, and probe the two highest-yield ones
 mechanically:
@@ -388,6 +390,21 @@ In **audit-only** mode, stop after the evidence-backed report. In
 3. Re-run the same route, state, viewport, journey, and recipient output.
 4. Add or update the smallest regression guard that would catch the confirmed
    failure class.
+
+Three habits keep the fix pass from manufacturing its own defects — each has
+produced one:
+
+- **Shoot the "before" while the defect still exists.** After the rebuild it is
+  unreproducible, and a closure report can then only assert the improvement.
+  Reuse the identical crop window for the after-shot so the pair differs by one
+  variable.
+- **Grep a new shared name before introducing it.** A token named after a word
+  the file already spent (`rail`, `bar`, `card`) silently overrides or gets
+  overridden depending on definition order, changing two subsystems at once
+  (silent-degradation class 1f).
+- **Prove the repaired assertion can fail.** Reintroduce the defect, watch it go
+  red with the expected magnitude, then remove it. An assertion that stayed
+  green through the whole bug does not become a guard by being rewritten.
 
 ## Completion Gate
 

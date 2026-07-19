@@ -38,8 +38,20 @@ that should have an affordance. `backgroundColor: rgba(0,0,0,0)` plus
 `borderStyle: none` on something that is semantically a button is the signature.
 
 **Do not** fix by adding `!important` at the call site — that inverts the
-cascade for everyone downstream. Narrow the reset (`button:not([class])`) or
-raise the primitive's specificity within its own layer.
+cascade for everyone downstream.
+
+**Prefer zeroing the reset's specificity over narrowing its match.** Wrapping
+the whole selector in `:where(...)` keeps it matching exactly the same elements
+at specificity `0-0-0`, so any authored class wins while bare elements still get
+the reset:
+
+    :where(.app-surface button:not([class*="ant-"])) { border: none; background: none; }
+
+Narrowing the match instead (`button:not([class])`) looks equivalent and is not.
+In React, `className={cond ? 'is-active' : ''}` renders `class=""` — the
+attribute is *present*, so `:not([class])` skips those buttons and they fall
+back to the browser's default chrome. The narrowing fix trades one silent defect
+for another; the `:where()` fix changes only who wins, never who matches.
 
 ### 1b. Library rename — a whole rule group stops matching
 
@@ -169,6 +181,58 @@ semantic object (clickable, count, status marker, filter control), enumerate the
 distinct implementations across the app. More than one is the finding; the
 target is one primitive per concept.
 
+Count *distinct shapes*, not raw declarations. Deduplicate by geometry signature
+(width × height × radius): 33 declarations that collapse to 18 shapes is the real
+finding, and the largest group is often a single component's tone variants —
+legitimate reuse, not drift. Reporting the raw count inflates the problem and
+invites a reader to dismiss the whole finding once they spot the variants.
+
+### 1f. Token namespace collision — the new name was already taken
+
+Adding a design token whose name already exists elsewhere in the same scope is
+not an error. The later definition simply wins, and every consumer of *both*
+names silently changes.
+
+Real instance: a rail primitive was introduced as `--rail-w: 4px`. A layout
+section further down the same `:root` already defined `--rail-w: 188px` (a
+sidebar column width, consumed by four grid rules). Later definition wins, so
+all 33 migrated rails would have rendered 188px wide *and* the four grids would
+have kept working by accident — one edit, two subsystems, no diagnostic.
+
+**Detect:** grep the token name across the whole scope *before* introducing it,
+not after. A build-time token generator makes this nearly free: it emits one
+entry per name, so a collision shows up as the wrong value next to your new
+name. Without a generator, `rg -n '\-\-your-token-name\s*:'` is the whole check.
+
+**Name defensively.** Generic geometry words (`rail`, `bar`, `line`, `gap`,
+`card`) are exactly the ones a mature token file has already spent. Pick the
+narrower noun for the narrower concept (`marker` for a 4px state stripe, leaving
+`rail` to the 188px layout column), and say in a comment which neighbour you
+were avoiding — the next author reaching for the obvious name needs that.
+
+### 1g. A property that cannot apply — valid, inert, silent
+
+CSS accepts a declaration whose formatting context makes it meaningless. It
+produces no warning and no effect, and the source reads as if the intent were
+implemented.
+
+Real instance: a container carried `min-height` and `align-content: center` but
+never `display: grid`. `align-content` only applies to grid/flex containers, so
+it did nothing; the two children stayed inline-level and butted together — a
+32px number and its 12px caption sharing a baseline with no gap, on the most
+prominent element of the page. Every reviewer read `align-content` and assumed
+a grid.
+
+The tell is a declaration that *presupposes* a layout mode the rule never sets.
+`align-content` / `justify-items` / `place-items` / `gap` / `order` /
+`flex-basis` all imply grid or flex; `vertical-align` implies inline or
+table-cell.
+
+**Detect:** these cannot be caught by reading intent — the intent is right there
+in the property name. Screenshot the element and compare against what the
+declaration claims. Or check computed layout directly:
+`getComputedStyle(el).display` on a container whose rule sets `align-content`.
+
 ## Part 2 — Evidence a visual finding must carry
 
 A finding the reader cannot see is a finding they cannot act on. The rule:
@@ -192,6 +256,19 @@ A finding the reader cannot see is a finding they cannot act on. The rule:
   (seven rails, four count styles) are weaker than photographed ones until they
   too are captured. Mark which is which rather than letting the reader assume
   the whole list is equally evidenced.
+- **Capture the "before" before you fix — it is unreproducible afterwards.**
+  Once the build is rebuilt on the fixed code, the defect no longer exists
+  anywhere you can point a browser at, and a before/after pair becomes
+  impossible to assemble honestly. Shoot every finding at audit time even when
+  no one has asked for a fix report yet; the cost is one script run, and the
+  alternative is a closure report that can only assert the improvement.
+  Reuse the *identical* crop window for the after-shot (same selector, same
+  width/height, same DPR) so the pair differs by exactly one variable: the code.
+- **Watch for confounders inside a matched crop.** Two runs of the same selector
+  can land on different data — a table's first row, a rotating metric — so a
+  font-weight or colour difference in the pair may come from content, not from
+  the change. Say so in the caption and point the reader at the part that is
+  actually comparable.
 
 ## Part 3 — Assertions have blind spots too; state what yours cannot see
 
@@ -206,6 +283,19 @@ text node (`Range.getBoundingClientRect()`) sees what the eye sees.
 When adding an assertion, write down what it would *not* catch. That sentence is
 usually where the next defect lives.
 
+**A repaired assertion is unproven until it fails on the defect it missed.**
+Rewriting the measurement and watching the suite stay green proves nothing — it
+was green before, with the bug shipping. Reintroduce the old behaviour
+temporarily (paste the removed rule back at the end of the stylesheet), run the
+assertion, and confirm it goes red with the expected magnitude; then remove the
+temporary rule and confirm green again. In the alignment case above the repaired
+assertion reported `479.0 vs 465.0` across three viewports — the exact 14px the
+decoration was contributing, which is also how you know it is measuring the
+right thing and not merely something.
+
+Budget one minute for this. It is the only step that distinguishes "I changed
+the assertion" from "the assertion now guards the line."
+
 ## Fast triage
 
 When a page "looks cheap" but every gate is green, check in this order — cheapest
@@ -218,3 +308,9 @@ and highest-yield first:
    border? Cascade override is the usual cause.
 4. **Syntax count** — how many ways is the same concept expressed on one screen?
 5. **Theme config geometry** — off-scale values invisible to source scans.
+6. **Inert declarations** — any `align-content` / `gap` / `justify-items` on a
+   container that never sets `display`.
+
+And when *fixing* rather than auditing, two more that only bite on the way out:
+grep the token name before you add it (1f), and prove the repaired assertion can
+fail (Part 3).
