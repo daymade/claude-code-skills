@@ -2126,6 +2126,7 @@ Falsification-first methodology for network, streaming, and protocol-layer bugs 
 - Client-side proxy / VPN / TUN misrouting (e.g. `ERR_CONNECTION_CLOSED`, `SSL_ERROR_SYSCALL`, fake TUN DNS IPs, CNAME-based rule overrides)
 - Certificate-verification errors (`UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`, wrong-site certificate)
 - Any "works sometimes / fails after N seconds" pattern
+- LAN-layer mysteries: unknown devices on the local network, devices silenced by a subnet change, hosts "dead" on one segment but alive on another
 - Multi-hop systems (client → CDN → LB → reverse proxy → app → upstream) where a symptom could plausibly come from several layers
 
 **Key features:**

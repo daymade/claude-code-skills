@@ -2165,6 +2165,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - 客户端代理 / VPN / TUN 错路由（如 `ERR_CONNECTION_CLOSED`、`SSL_ERROR_SYSCALL`、假 TUN DNS IP、CNAME 规则覆盖）
 - 证书校验错误（`UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`、证书发错站点）
 - "时灵时不灵 / N 秒后必断"模式
+- LAN 层谜题：识别局域网里的未知设备、换网段后失联的设备、在一个网段"死了"却在另一个网段活着的主机
 - 多跳系统（client → CDN → LB → reverse proxy → app → upstream）症状可能来自多层
 
 **主要功能：**
