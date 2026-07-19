@@ -590,6 +590,7 @@ class SessionAnalyzer:
             excluded_untimed_count = 0
             excluded_untimed_from_prior_copies: set[str] = set()
             matched_records_from_prior_copies: set[str] = set()
+            matched_file_history_paths: set[str] = set()
             matching_copies: List[Dict[str, Any]] = []
 
             copies = ref.get("copies") or [
@@ -612,6 +613,15 @@ class SessionAnalyzer:
                     for data in records:
                         record_identity = _record_identity(data)
                         record_timestamp = parse_timestamp(data.get("timestamp"))
+                        if (
+                            record_timestamp is None
+                            and data.get("type") == "file-history-snapshot"
+                        ):
+                            snapshot = data.get("snapshot")
+                            if isinstance(snapshot, dict):
+                                record_timestamp = parse_timestamp(
+                                    snapshot.get("timestamp")
+                                )
                         if from_timestamp is not None or to_timestamp is not None:
                             if record_timestamp is None:
                                 if record_identity not in excluded_untimed_from_prior_copies:
@@ -622,6 +632,44 @@ class SessionAnalyzer:
                                 record_timestamp, from_timestamp, to_timestamp
                             ):
                                 continue
+
+                        if data.get("type") == "file-history-snapshot":
+                            snapshot = data.get("snapshot")
+                            tracked = (
+                                snapshot.get("trackedFileBackups")
+                                if isinstance(snapshot, dict)
+                                else None
+                            )
+                            if isinstance(tracked, dict):
+                                for original_path in tracked:
+                                    if not isinstance(original_path, str):
+                                        continue
+                                    path_text = (
+                                        original_path
+                                        if case_sensitive
+                                        else original_path.casefold()
+                                    )
+                                    path_counts = {
+                                        keyword: 1
+                                        for keyword, search_keyword in search_keywords
+                                        if search_keyword in path_text
+                                    }
+                                    if not path_counts:
+                                        continue
+                                    copy_had_match = True
+                                    matching_source_labels.add(source.display_label)
+                                    match_sources.add("file_history_path")
+                                    if record_timestamp is not None:
+                                        match_timestamps.observe(record_timestamp)
+                                    if original_path in matched_file_history_paths:
+                                        continue
+                                    matched_file_history_paths.add(original_path)
+                                    path_mentions = sum(path_counts.values())
+                                    for keyword, count in path_counts.items():
+                                        keyword_counts[keyword] += count
+                                    total_mentions += path_mentions
+                                    copy_new_mentions += path_mentions
+
                         record_counts = defaultdict(int)
                         record_sources: set[str] = set()
                         for segment in searchable_segments(data):
@@ -923,6 +971,28 @@ def _validate_project_scope(args, parser) -> None:
         )
 
 
+def _normalize_search_scope(args, parser) -> None:
+    """Resolve the search positional grammar without argparse ambiguity.
+
+    ``project_path?`` followed by ``keywords+`` is ambiguous when
+    ``--all-projects`` is active: argparse consumes the first of two keywords as
+    the optional project. Parse one term list instead, then apply the scope the
+    caller selected.
+    """
+    terms = list(args.search_terms)
+    if args.all_projects:
+        args.project_path = None
+        args.keywords = terms
+        return
+    if len(terms) < 2:
+        parser.error(
+            "search requires a project path followed by at least one keyword; "
+            "use --all-projects when the project is unknown"
+        )
+    args.project_path = terms[0]
+    args.keywords = terms[1:]
+
+
 def _collect_sessions(analyzer: "SessionAnalyzer", args) -> List[Dict[str, Any]]:
     """Collect session refs for the requested scope, applying exclusions."""
     if args.all_projects:
@@ -1015,12 +1085,13 @@ def main():
     # Search command
     search_parser = subparsers.add_parser("search", help="Search sessions for keywords")
     search_parser.add_argument(
-        "project_path",
-        nargs="?",
-        help="Project path (omit when using --all-projects)",
-    )
-    search_parser.add_argument(
-        "keywords", nargs="+", help="Keywords to search for"
+        "search_terms",
+        nargs="+",
+        metavar="PROJECT_OR_KEYWORD",
+        help=(
+            "Project path followed by keywords, or only keywords with "
+            "--all-projects"
+        ),
     )
     search_parser.add_argument(
         "--all-projects",
@@ -1065,6 +1136,9 @@ def main():
     if not args.command:
         parser.print_help()
         sys.exit(1)
+
+    if args.command == "search":
+        _normalize_search_scope(args, parser)
 
     if args.command == "list":
         _validate_project_scope(args, parser)

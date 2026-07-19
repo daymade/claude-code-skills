@@ -335,7 +335,7 @@ class SessionAnalyzerTests(unittest.TestCase):
                 user_record(
                     first_id,
                     self.workspace,
-                    "cross-project-marker",
+                    "cross-project-marker second-marker",
                     "2026-04-20T10:00:00Z",
                 )
             ],
@@ -346,7 +346,7 @@ class SessionAnalyzerTests(unittest.TestCase):
                 user_record(
                     second_id,
                     other_workspace,
-                    "cross-project-marker",
+                    "cross-project-marker second-marker",
                     "2026-04-21T10:00:00Z",
                 )
             ],
@@ -355,6 +355,7 @@ class SessionAnalyzerTests(unittest.TestCase):
             "search",
             "--all-projects",
             "cross-project-marker",
+            "second-marker",
             "--home",
             str(self.active_home),
             "--home",
@@ -364,6 +365,7 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertIn(second_id, completed.stdout)
         self.assertIn("Project:", completed.stdout)
         self.assertIn("2 project(s)", completed.stdout)
+        self.assertIn("cross-project-marker(1), second-marker(1)", completed.stdout)
 
         listed = self.run_cli(
             "list",
@@ -376,13 +378,12 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertIn("across 2 project(s)", listed.stdout)
         self.assertIn("== ", listed.stdout)
 
-    def test_project_scope_is_required_and_exclusive(self) -> None:
+    def test_project_scope_is_required_and_list_scope_is_exclusive(self) -> None:
         neither = self.run_cli("search", "anything", check=False)
         self.assertEqual(neither.returncode, 2)
         both = self.run_cli(
-            "search",
+            "list",
             str(self.workspace),
-            "anything",
             "--all-projects",
             check=False,
         )
@@ -456,6 +457,48 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertNotIn("--all-projects", widened.stderr)
         self.assertNotIn("--codex (", widened.stderr)
         self.assertIn("substrings", widened.stderr)
+
+    def test_search_finds_snapshot_only_original_path_once_across_copies(self) -> None:
+        session_id = "abababab-abab-4bab-8bab-abababababab"
+        original_path = "/tmp/generated/snapshot-only.bin"
+        record = {
+            "type": "file-history-snapshot",
+            "snapshot": {
+                "timestamp": "2026-04-22T10:00:00Z",
+                "trackedFileBackups": {
+                    original_path: {
+                        "backupFileName": "snapshot@v2",
+                        "version": 2,
+                        "backupTime": "2026-04-22T10:00:00Z",
+                    }
+                },
+            },
+        }
+        write_jsonl(
+            project_dir(self.active_home, self.workspace) / f"{session_id}.jsonl",
+            [record, record],
+        )
+        write_jsonl(
+            project_dir(self.archive_home, self.workspace) / f"{session_id}.jsonl",
+            [record],
+        )
+
+        completed = self.run_cli(
+            "search",
+            str(self.workspace),
+            "snapshot-only.bin",
+            "--from-date",
+            "2026-04-22",
+            "--to-date",
+            "2026-04-22",
+            "--history-sources",
+            str(self.manifest),
+        )
+
+        self.assertIn(session_id, completed.stdout)
+        self.assertIn("snapshot-only.bin(1)", completed.stdout)
+        self.assertIn("file_history_path", completed.stdout)
+        self.assertIn("active:main, archive:full-backup", completed.stdout)
 
     def seed_codex_rollout(
         self,

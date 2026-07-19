@@ -16,9 +16,45 @@ python3 scripts/recover_content.py <printed-session-path> \
     -k DeletedComponent ModelScreen \
     -o ./recovered/
 
-# 3. Review recovered files
-ls -lh ./recovered/
+# 3. Review provenance before treating a file as final
+cat ./recovered/recovery_report.txt
 ```
+
+`Source: file-history` means exact bytes from the named captured checkpoint.
+`Source: Write` means a lower-fidelity Write checkpoint whose later Edit or
+shell changes may be absent.
+
+## Recover Vanished Temporary Job Artifacts
+
+**Scenario**: Browser URLs point into an expired Claude job directory, and the
+original files are gone.
+
+```bash
+# 1. The project is uncertain, so every positional after --all-projects is a keyword
+python3 scripts/analyze_sessions.py search --all-projects \
+    artifact-a.html artifact-b.html \
+    --exclude-session <current-session-id>
+
+# 2. Recover exact captured checkpoints from the best matching session
+python3 scripts/recover_content.py <printed-session-path> \
+    -k artifact-a.html artifact-b.html \
+    -o ./restored-artifacts/
+
+# 3. Confirm source, checkpoint version, byte count, and SHA-256
+cat ./restored-artifacts/recovery_report.txt
+```
+
+Recovery automatically unions same-ID JSONL copies and companion roots from all
+active homes and registered archives. If exact-backup lookup still reports that
+bytes are missing, locate an unregistered checkpoint root and add
+`--file-history-root /path/to/file-history`. Do not silently call a stale Write
+checkpoint the final file. `--write-only` is an explicit lower-fidelity choice,
+not an automatic fallback. If the report says `Later state: recorded deleted`,
+the bytes are the last available pre-deletion checkpoint, not the current state.
+
+Codex rollout hits can be found with `--codex`, but they cannot be passed to
+`recover_content.py`: Codex search and Claude file recovery are separate
+capabilities.
 
 ## Track File Evolution Across Sessions
 
@@ -35,7 +71,7 @@ for session in session1.jsonl session2.jsonl session3.jsonl; do
         grep "componentName.jsx"
 done
 
-# 3. Recover all versions
+# 3. Recover the best captured version from each session
 python3 scripts/recover_content.py session1.jsonl -k componentName -o ./v1/
 python3 scripts/recover_content.py session2.jsonl -k componentName -o ./v2/
 python3 scripts/recover_content.py session3.jsonl -k componentName -o ./v3/

@@ -888,8 +888,9 @@ config homes and the long-term archives registered in
 - **Cross-project sweep**: `--all-projects` searches every project when the project is unknown; `--codex` also covers Codex rollout history; `--exclude-session` skips self-matches
 - **Copy-safe union**: Search distinct records from every copy of a session ID without double-counting identical records
 - **Internal-time search**: Filter matching records by JSONL timestamps, never file mtime
-- **Structured search**: Cover messages, thinking, tools, results, queues, attachments, and summaries
-- **Content recovery**: Extract files from Write tool calls with deduplication
+- **Structured search**: Cover messages, thinking, tools, results, queues, attachments, summaries, and original file-history paths
+- **Exact checkpoint recovery**: Union same-session copies and companion roots, then restore captured bytes after Write/Edit/shell changes, including binaries and pre-deletion checkpoints
+- **Fail-visible fidelity**: Label Write-only checkpoints as lower fidelity and abort when exact metadata points to missing bytes instead of silently guessing
 - **Statistics analysis**: Message counts, tool usage breakdown, file operations
 - **Batch operations**: Process multiple sessions with keyword filtering
 - **Streaming processing**: Handle large session files (>100MB) efficiently
@@ -905,6 +906,11 @@ python3 scripts/analyze_sessions.py search /path/to/project \
 
 # Recover deleted files from the exact path printed by search
 python3 scripts/recover_content.py <printed-session-path> -k DeletedComponent -o ./recovered/
+
+# Search every project for multiple vanished job artifacts
+python3 scripts/analyze_sessions.py search --all-projects \
+  artifact-a.html artifact-b.html \
+  --exclude-session <current-session-id>
 
 # Get session statistics
 python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
