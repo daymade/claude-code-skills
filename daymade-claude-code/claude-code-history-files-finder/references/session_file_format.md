@@ -67,22 +67,72 @@ Conversation messages are the lines you usually want. In current Claude Code (>=
 }
 ```
 
-- **Role lives in `message.role`**; the top-level `type` only labels the line. Older sessions stored `role`/`content` at the top level, so a robust extractor reads both locations, e.g. `role = data.get("role") or data.get("message", {}).get("role")` (the bundled scripts do this).
+- **Role lives in `message.role`**; the top-level `type` only labels the line. Older sessions stored `role`/`content` at the top level, and some records carry `message: null`, so first type-check the nested object: `message = data.get("message"); role = data.get("role") or (message.get("role") if isinstance(message, dict) else None)` (the bundled scripts do this).
 - `message.content` is either a string or an array of content blocks (`text`, `tool_use`, `tool_result`, ...).
 
 ### Non-message event lines
 
 Recent sessions also interleave non-message event lines. Their `type` can be
 `attachment`, `system`, `summary`, `last-prompt`, `queue-operation`,
-`custom-title`, `mode`, and others. They carry no `message.role`, but several do
-carry search-relevant or recoverable text. A conversation-message counter may
-skip them; a history search must inspect their known payload fields.
+`custom-title`, `mode`, `file-history-snapshot`, and others. They carry no
+`message.role`, but several carry search-relevant text or recovery metadata. A
+conversation-message counter may skip them; a history search or recovery tool
+must inspect its relevant known payload fields.
 
 The bundled search extracts semantic text segments instead of searching raw JSON
 serialization. It covers message text, thinking text, tool inputs/results,
 queue-operation content, attachment payloads, last prompts, system/summary
 content, and custom titles. Structural keys, UUIDs, tool-use IDs, and thinking
 signatures are excluded to avoid false positives.
+
+### File-history snapshot
+
+Current Claude Code sessions can record a path-to-backup map separate from tool
+calls:
+
+```json
+{
+  "type": "file-history-snapshot",
+  "snapshot": {
+    "timestamp": "2026-07-01T10:05:00.000Z",
+    "trackedFileBackups": {
+      "/absolute/path/to/artifact.html": {
+        "backupFileName": "opaque-hash@v3",
+        "version": 3,
+        "backupTime": "2026-07-01T10:04:59.000Z"
+      }
+    }
+  }
+}
+```
+
+The referenced bytes normally live at
+`<claude-home>/file-history/<session-id>/<backupFileName>`. This is a companion
+store: a copied JSONL can outlive or move independently from its backup files.
+The schema is runtime-observed, not a documented stability contract. Parse
+unknown record types tolerantly, but validate every selected snapshot entry.
+
+`backupFileName: null` with a valid version is not malformed metadata. It is a
+no-payload deletion tombstone: the path existed at an earlier checkpoint but
+was recorded as deleted at that version. Recovery should preserve the latest
+earlier backup when available and state the later deletion explicitly.
+
+For each original path:
+
+1. Compare all valid entries, preferring the highest numeric `version`.
+2. Use `backupTime`, then the enclosing snapshot timestamp, as tie-breakers.
+3. Resolve the opaque name strictly inside `<file-history-root>/<session-id>/`.
+4. If duplicate roots contain that name, require byte-identical content.
+5. If metadata exists but its backup is missing, report a fidelity error. Do not
+   silently replace it with an older Write call.
+6. Union same-ID JSONL copies and their companion roots across active homes and
+   registered archives before selecting a checkpoint.
+7. Treat a later tombstone as state evidence, not as a malformed entry that
+   poisons a valid earlier checkpoint.
+
+Because the backup is byte-oriented, it can preserve binary files and the
+result of Edit or shell-driven changes that a Write-only extractor cannot
+reconstruct.
 
 ### Content Types
 
@@ -199,13 +249,19 @@ Due to schema variations, some fields may appear in different locations:
 ### Role Field
 
 ```python
-role = data.get("role") or data.get("message", {}).get("role")
+message = data.get("message")
+role = data.get("role") or (
+    message.get("role") if isinstance(message, dict) else None
+)
 ```
 
 ### Content Field
 
 ```python
-content = data.get("content") or data.get("message", {}).get("content", [])
+message = data.get("message")
+content = data.get("content")
+if content is None and isinstance(message, dict):
+    content = message.get("content", [])
 ```
 
 ### Timestamp Field
@@ -225,9 +281,15 @@ file or the session's overall range.
 
 ### Recover Deleted Files
 
-1. Search for `Write` tool calls with matching file path
-2. Extract `input.content` from latest occurrence
-3. Save to disk with original filename
+1. Search semantic content and original paths in `file-history-snapshot` maps.
+2. Union all known physical copies of the session and their companion roots.
+3. Recover the highest available snapshot version as exact bytes.
+4. If a later deletion tombstone exists, recover the prior checkpoint and
+   record the deletion as the later state.
+5. Only when no usable snapshot checkpoint exists, recover the latest
+   internally timestamped Write call and label it as lower fidelity.
+6. Save under a preflighted output root with original path provenance and
+   SHA-256.
 
 ### Track File Changes
 
@@ -295,12 +357,19 @@ with open(session_file, 'r') as f:
         process_line(line)
 ```
 
+Streaming does not make all memory use constant. Cross-copy de-duplication keeps
+record fingerprints, and Write recovery retains valid Write payloads. Exact
+file-history payloads should be hashed and copied in chunks; Edit old/new text
+is not needed for recovery and should not be retained.
+
 ## Performance Tips
 
 ### Memory Efficiency
 
 - Process files line-by-line (streaming)
-- Don't load entire file into memory
+- Do not load the entire JSONL or exact backup blob into memory
+- Retain only lightweight summaries for Edit calls
+- Expect record fingerprints and Write payloads to scale with the session
 - Use generators for large result sets
 
 ### Search Optimization
@@ -312,13 +381,19 @@ with open(session_file, 'r') as f:
 
 ### Deduplication
 
-When recovering files, keep latest version only:
+When recovering Write-only checkpoints, parse the ISO timestamps and keep the
+latest call rather than assuming physical line order is chronological:
 
 ```python
 files_by_path = {}
 for call in write_calls:
-    files_by_path[file_path] = call  # Overwrites earlier versions
+    previous = files_by_path.get(call["file_path"])
+    if previous is None or parse_timestamp(call["timestamp"]) > parse_timestamp(previous["timestamp"]):
+        files_by_path[call["file_path"]] = call
 ```
+
+For file-history entries, compare numeric versions first. Never de-duplicate
+different bytes merely because their opaque backup filenames match.
 
 ## Security Considerations
 
@@ -373,3 +448,6 @@ Notes:
   that cwd.
 - `analyze_sessions.py search --codex` implements exactly this table; prefer
   it over hand-rolled grep so mirrors and duplicates stay handled.
+- Codex support is search-only. `recover_content.py` requires Claude's Write or
+  file-history records and fails fast on a Codex rollout instead of returning
+  an empty success.

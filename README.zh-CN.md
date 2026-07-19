@@ -925,10 +925,12 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 
 **主要功能：**
 - **完整来源集**：默认同时检索活跃目录与已登记备份
+- **跨项目扩搜**：项目未知时用 `--all-projects` 一次检索全部项目；可同时传多个关键词
 - **副本安全并集**：同一会话 ID 的所有副本都参与检索，相同记录不重复计数
 - **内部时间检索**：按 JSONL 记录时间过滤，不用文件 mtime
-- **结构化检索**：覆盖消息、thinking、工具输入/结果、队列、附件与摘要
-- **内容恢复**：从 Write 工具调用中提取文件并去重
+- **结构化检索**：覆盖消息、thinking、工具输入/结果、队列、附件、摘要与 file-history 原始路径
+- **精确检查点恢复**：联合同一会话的多个副本与配套备份根，恢复 Write/Edit/命令行修改后捕获的原始字节，包括二进制与删除前检查点
+- **保真度显式可见**：Write-only 结果标为低保真；元数据指向的精确字节缺失时直接报错，不静默猜测
 - **统计分析**：消息计数、工具使用明细、文件操作
 - **批量操作**：使用关键字过滤处理多个会话
 - **流式处理**：高效处理大型会话文件（>100MB）
@@ -944,6 +946,11 @@ python3 scripts/analyze_sessions.py search /path/to/project \
 
 # 从 search 输出的精确路径恢复已删除文件
 python3 scripts/recover_content.py <printed-session-path> -k DeletedComponent -o ./recovered/
+
+# 项目未知时一次查找多个已消失的临时任务产物
+python3 scripts/analyze_sessions.py search --all-projects \
+  artifact-a.html artifact-b.html \
+  --exclude-session <current-session-id>
 
 # 获取会话统计信息
 python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files

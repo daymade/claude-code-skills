@@ -1,17 +1,18 @@
 ---
 name: claude-code-history-files-finder
 description: >-
-  Searches and recovers content from Claude Code JSONL session history across
-  all active config homes and every long-term archive registered in
-  ~/.claude/history-sources.json — sweeping every project at once with
-  --all-projects when the project is unknown, and optionally covering Codex
-  rollout history with --codex. Uses internal record timestamps rather than
-  file mtime and searches message text, thinking, tool inputs/results,
-  queue-operation content, attachments, summaries, and titles. Use for keyword
-  or date-bounded history search, prior-conversation forensics, deleted-file
-  recovery, tool/file-operation analysis, or requests mentioning session
-  history, find in history, previous conversation, or .claude/projects. Do not
-  use for a simple recent Claude+Codex inventory; use local-conversation-history.
+  Searches and recovers Claude Code JSONL history across all active config homes
+  and archives registered in ~/.claude/history-sources.json. Use --all-projects
+  when the project is unknown and --codex to include Codex rollout search. Uses
+  internal timestamps and searches messages, thinking, tool inputs/results,
+  queues, attachments, summaries, titles, and file-history paths. Recovers exact
+  captured bytes from Claude file-history snapshots, including post-Write edits
+  and binary files; otherwise labels Write checkpoints as lower fidelity. Use
+  for keyword/date-bounded history search, prior-conversation forensics,
+  deleted-file recovery, vanished ~/.claude/jobs artifacts, tool/file-operation
+  analysis, or requests mentioning session history, find in history, previous
+  conversation, or .claude/projects. For a recent Claude+Codex inventory, use
+  local-conversation-history instead.
 ---
 
 # Claude Code History Files Finder
@@ -21,7 +22,8 @@ homes and explicitly registered long-term archives.
 
 ## Capabilities
 
-- Recover deleted or lost files from previous sessions
+- Recover exact captured bytes for deleted or lost files from file-history
+  snapshots, including files changed after their original Write call
 - Search for specific code or content across conversation history
 - Analyze file modifications across past sessions
 - Track tool usage and file operations over time
@@ -65,6 +67,16 @@ Each Claude history root stores sessions at
 `<history-root>/projects/<encoded-project-path>/<session-id>.jsonl`. Active roots
 are discovered automatically. Durable archive roots are configured once in
 `~/.claude/history-sources.json` and then included by default.
+
+Claude may also keep checkpoint payloads at
+`<history-root>/file-history/<session-id>/<opaque-backup-name>`. The JSONL's
+`file-history-snapshot.snapshot.trackedFileBackups` map connects each original
+path to its opaque backup name and version. This companion store is separate
+from `projects/`: copying only a JSONL into a long-term archive does not prove
+its checkpoint bytes were copied too. The format is an observed Claude Code
+runtime detail rather than a documented stable API, so the bundled recovery
+parser validates the selected mapping, version/name agreement, path containment,
+and byte identity, then fails visibly when those facts disagree.
 
 **The directory name is the project's ABSOLUTE working-directory path with every `/` replaced by `-` — never the basename.** For example `/Users/<name>/Desktop/my-app` becomes `-Users-<name>-Desktop-my-app`, so a bare `my-app` cannot match a directory directly.
 
@@ -160,8 +172,9 @@ Returns sessions ranked by keyword frequency with:
 - Primary matching path plus any other matching copies
 
 Search covers messages, thinking text (not signatures), tool inputs/results,
-queue-operation content, attachments, last prompts, system/summary content, and
-custom titles. Optional: `--case-sensitive` for exact casing; `--from-date` and
+queue-operation content, attachments, last prompts, system/summary content,
+custom titles, and original paths in file-history snapshots. Optional:
+`--case-sensitive` for exact casing; `--from-date` and
 `--to-date` constrain matching records by their own internal timestamps, not by
 session mtime. `--exclude-session <id>` (repeatable) drops sessions — pass the
 current session's id whenever you search for a phrase you just typed, because
@@ -181,6 +194,10 @@ sweep every project instead (`list` accepts the same flag):
 ```bash
 python3 scripts/analyze_sessions.py search --all-projects 'some phrase'
 ```
+
+With `--all-projects`, every positional term is a keyword, so multi-keyword
+search is valid: `search --all-projects keyword1 keyword2`. Without that flag,
+the first positional is the project path and the remaining terms are keywords.
 
 Expected output: one pass over every project's sessions across all sources,
 with a `Project:` line naming the encoded project dir on each hit. This is a
@@ -205,19 +222,34 @@ every rollout is searched. `event_msg` message mirrors are strict duplicates
 of `response_item` message text and are counted once. Rollout record shapes
 are documented in `references/session_file_format.md`.
 
+`--codex` widens **search only**. Codex rollouts do not carry Claude's
+file-history mapping, so `recover_content.py` rejects a Codex rollout with a
+clear boundary error instead of returning an empty, apparently successful
+recovery.
+
 The zero-match hint printed by the script already suggests whichever of
 `--all-projects` / `--codex` / shorter substrings was not yet applied — read
 stderr before concluding anything is absent.
 
 ### 3. Recover Deleted Content
 
-Extract files from session history:
+Recover files from the selected session:
 
 ```bash
 python3 scripts/recover_content.py <session-path-from-search>
 ```
 
-Extracts all Write tool calls and saves files to `./recovered_content/`, preserving the original directory structure.
+For each path, the default mode unions every known copy of the same session ID,
+selects the newest valid file-history checkpoint, and restores its exact bytes
+from active or registered-archive companion stores. That captures later Edit or
+shell-driven changes and can recover binary files or files without a Write tool
+call. A later `backupFileName: null` is a deletion tombstone: the last available
+checkpoint is recovered with the later deletion stated in the report. If a path
+has no usable snapshot checkpoint, the script recovers the latest Write call and
+labels it as lower fidelity in `recovery_report.txt`. A Write whose matching
+`tool_result` explicitly has `is_error: true` is skipped; an attempted write is
+not a checkpoint. Original directory structure is preserved under
+`./recovered_content/`.
 
 **Filtering by keywords**:
 
@@ -233,6 +265,21 @@ Recovers only files matching any keyword in their path.
 ```bash
 python3 scripts/recover_content.py <session-path-from-search> -o ./my_recovery/
 ```
+
+Registered archive roots and same-ID JSONL copies are included automatically.
+If an unregistered companion checkpoint store lives elsewhere, add the root
+that directly contains `<session-id>/` directories:
+
+```bash
+python3 scripts/recover_content.py <session-path-from-search> \
+  --file-history-root /path/to/file-history \
+  -o ./my_recovery/
+```
+
+Snapshot metadata without its referenced backup is a fidelity error: recovery
+aborts before writing any selected files instead of silently substituting stale
+Write content. Use `--write-only` only when the user explicitly accepts that
+later Edit or shell changes may be absent.
 
 ### 4. Analyze Session Statistics
 
@@ -257,7 +304,13 @@ For detailed workflow examples including file recovery, tracking file evolution,
 
 ### Deduplication
 
-`recover_content.py` automatically keeps only the latest version of each file. If a file was written multiple times in a session, only the final version is saved.
+`recover_content.py` unions same-ID session copies, keeps the highest
+file-history version for each original path, and uses checkpoint timestamps for
+ties. A later deletion tombstone does not erase an earlier recoverable backup;
+it changes the reported state. For paths with no usable checkpoint, recovery
+keeps the latest internally timestamped Write call. Physical JSONL line order
+across copies is not treated as sufficient time evidence, and an explicitly
+failed Write tool result excludes that attempted Write from recovery.
 
 ### Keyword Selection
 
@@ -291,30 +344,42 @@ find ./recovered_content/ -type f
 # Read recovery report (shows full output paths)
 cat ./recovered_content/recovery_report.txt
 
-# Spot-check content (use actual path from report)
+# Spot-check content and compare the report's SHA-256 with the source backup
 head -20 ./recovered_content/src/components/ImportantFile.jsx
 ```
+
+Treat `Source: file-history` plus its SHA-256 as exact captured-checkpoint
+evidence. Treat `Source: Write` as a recoverable checkpoint, not proof of the
+file's final state.
 
 ## Limitations
 
 ### What Can Be Recovered
 
-✅ Files written using Write tool
-✅ Code shown in markdown blocks (partial extraction)
-✅ File paths from Edit/Read operations
+✅ Exact bytes referenced by available file-history snapshots
+✅ Binary files present in the companion file-history store
+✅ Files changed by Edit or shell commands once a later checkpoint captured them
+✅ Files written using Write when no snapshot metadata exists (lower fidelity)
+✅ Text explicitly present in messages or tool results (manual extraction)
 
 ### What Cannot Be Recovered
 
 ❌ Files never written to disk (only discussed)
 ❌ Files deleted before session start
-❌ Binary files (images, PDFs) - only paths available
+❌ Snapshot payloads that were deleted or not copied with an archived JSONL
 ❌ External tool outputs not captured in session
+
+Edit/Read records can reveal a path and Edit delta, but they are not themselves
+a full-file recovery source.
 
 ### File Versions
 
-- Only captures state when Write tool was called
-- Intermediate edits between Write calls are lost
-- Edit operations show deltas, not full content
+- A file-history backup is an exact captured checkpoint, not a guarantee that
+  no uncheckpointed filesystem change happened afterward.
+- Without a file-history entry, Write recovery cannot reconstruct later Edit or
+  shell changes; Edit records contain deltas rather than the full resulting file.
+- The file-history JSONL/store contract is runtime-observed and may evolve;
+  malformed or conflicting metadata must fail visibly rather than be guessed.
 
 ## Troubleshooting
 
@@ -341,21 +406,26 @@ widening ladder from the Completeness invariant section: `--all-projects` →
 ### Empty Recovery
 
 Possible causes:
-- Files were edited (Edit tool) but never written (Write tool)
 - Keywords don't match file paths in session
 - Session predates file creation
+- The path was never captured by either file-history or Write
 
 Solutions:
 - Try `--show-edits` flag to see Edit operations
 - Broaden keyword search
 - Search adjacent sessions
+- If an exact-backup error names a missing companion store, locate it and pass
+  `--file-history-root`; do not claim the stale Write checkpoint is final
 
 ### Large Session Files
 
 For sessions >100MB:
-- Scripts use streaming (line-by-line processing)
-- Memory usage remains constant
-- Processing may take 1-2 minutes
+- Search streams JSONL line by line instead of loading whole sessions.
+- Recovery copies exact backup bytes in chunks and retains only five lightweight
+  Edit summaries, never full Edit old/new payloads.
+- Recovery still retains valid Write payloads and record fingerprints needed for
+  copy union, so memory is not constant. Use `-k` to limit recovery scope and
+  expect runtime to scale with every discovered physical copy.
 
 ## Security & Privacy
 
@@ -369,12 +439,15 @@ Session files may contain:
 Always sanitize before sharing:
 
 ```bash
-# Remove absolute paths
-sed -i '' 's|~/|<home>/|g' file.js
-
-# Verify no credentials
-grep -i "api_key\|password\|token" recovered_content/*
+# Read-only audit; review every hit before creating a separate redacted copy.
+rg -n --hidden -S \
+  '(api[_-]?key|password|token|secret|/Users/[^/]+/|/home/[^/]+/)' \
+  recovered_content/
 ```
+
+`recovery_report.txt` is sensitive too: it records requested session copies,
+original absolute paths, checkpoint locations, and output paths. Audit and
+redact the report together with the recovered files; do not share it by default.
 
 ### Safe Storage
 

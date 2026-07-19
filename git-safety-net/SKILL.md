@@ -2,15 +2,18 @@
 name: git-safety-net
 description: >-
   Audits, preserves, recovers, and safely retires local Git state: unpushed or
-  wrong-branch commits, dirty or detached worktrees, orphaned/dropped stashes,
-  dangling commits, stale branches, and squash/rebase merge uncertainty. Use when
-  the user fears work was lost; asks to recover a commit, branch, stash, or reflog
-  state; asks whether a worktree can be deleted; wants all valuable state converged
-  onto main; or needs proof that cleanup/rebase/branch deletion will not drop work.
-  Triggers on "did I lose work", "is everything merged", "safe to delete this
-  worktree", "clean up old branches/stashes/worktrees", "git reflog", "dangling
-  commits", "分支灾难", "误删分支/commit", "worktree 能删吗", "确认全部合并了".
-  Covers local-Git forensics, not GitHub PR/API operations or routine repository sync.
+  wrong-branch commits, dirty or detached worktrees, forgotten duplicate clones of the
+  same repo, untracked work no bundle can back up, orphaned stashes, dangling commits,
+  stale branches, and squash/rebase merge uncertainty. Use when the user fears work was
+  lost; asks to recover a commit or branch; asks whether a worktree, clone, or scratch
+  directory can be deleted; wants everything converged onto one main branch; or
+  needs proof that cleanup will not drop work. Use it even after an audit reported clean
+  — the usual gap is scope: every in-repo command is blind to a second clone elsewhere
+  on disk. Triggers on "did I lose work", "is everything merged", "is anything else
+  lost", "safe to delete this clone", "clean up old branches/stashes", "only keep one
+  main branch", "git reflog", "dangling commits", "分支灾难", "误删分支/commit",
+  "worktree 能删吗", "还有没有丢的东西", "只保留一个主分支".
+  Covers local-Git forensics, not GitHub PR/API operations or routine sync.
 ---
 
 # Git Safety Net
@@ -27,30 +30,49 @@ until a step is explicitly labeled destructive — recovery must never make the 
 | "did I lose anything?", "what worktrees/stashes/branches remain?", after a messy session | **Mode B — Audit & preserve** |
 | "is everything merged?", "what's still not on main?", before deleting old branches | **Mode C — Verify merged** |
 | "so this never happens again", starting parallel/multi-branch work | **Mode D — Prevent** |
-| "clean up worktrees/stashes/branches", "converge everything onto main" | **Mode E — Retire safely** |
+| "clean up worktrees/stashes/branches", "converge everything onto main", "only keep one main branch" | **Mode E — Retire safely** |
+| "an audit already said it's clean, but is anything *else* lost?", "check again" | **Mode B, starting at Step 0** — a repeat request usually means the first pass had the wrong scope, not that it looked carelessly |
 
-When in doubt, **run Mode B first** (`git_loss_audit.sh`) — it is cheap, non-destructive, and tells
-you whether anything is actually at risk before you decide what to do.
+When in doubt, **run Mode B first**, beginning with `git_find_all_checkouts.sh` (Step 0) and then
+`git_loss_audit.sh` in each checkout it finds. Both are cheap and non-destructive, and they answer
+"is anything at risk" for the whole machine rather than for whichever directory you started in.
 
-## The five load-bearing rules (internalize these; the modes apply them)
+## The six load-bearing rules (internalize these; the modes apply them)
 
-1. **Run `git_loss_audit.sh` for the authoritative "what would be lost" check.** It compares the
-   current HEAD, every linked-worktree HEAD, local branches, and tags against every remote, then
-   inspects each worktree for tracked/untracked changes plus stashes and dangling commits. The
-   shorter `git log HEAD --branches --tags --not --remotes` misses a detached HEAD in a different
-   worktree and all uncommitted files. Ahead/behind counts do **not** answer this.
-2. **`git reflog` is the first move for "I lost a commit," not `fsck`.** Reflog records every
+1. **Get the SCOPE right before you trust any verdict: every instrument here only sees the
+   repository it runs in.** `git worktree list`, `git branch -a`, `git fsck`, `git stash list`,
+   `git log --not --remotes` — all of them are structurally blind to an **independent clone** of
+   the same repository elsewhere on the machine. A linked worktree (`git worktree add`) has a
+   gitlink *file* pointing home, so it shows up; a second `git clone` has its own complete `.git`
+   and no back-reference, so it shows up in **nothing**. Run `git_find_all_checkouts.sh` first —
+   otherwise a clean audit means "clean in this one directory," which is not the question the
+   user asked. Real incident: a repository audited clean, every branch pushed, while 440 lines of
+   a working feature sat as untracked files in a sibling clone one `rm -rf` from gone.
+2. **Run `git_loss_audit.sh` for the authoritative "what would be lost" check *within a
+   checkout*.** It compares the current HEAD, every linked-worktree HEAD, local branches, and tags
+   against every remote, then inspects each worktree for tracked/untracked changes plus stashes and
+   dangling commits. The shorter `git log HEAD --branches --tags --not --remotes` misses a detached
+   HEAD in a different worktree and all uncommitted files. Ahead/behind counts do **not** answer
+   this. Run it once per checkout that rule 1 turned up, not just in the one you happen to be in.
+3. **`git reflog` is the first move for "I lost a commit," not `fsck`.** Reflog records every
    HEAD position (commits, checkouts, resets, rebases) for ~90 days and the lost commit is
    usually in its top few lines. `git fsck` is the deeper net for commits reflog can't reach.
-3. **Preserve before you clean up.** Pin at-risk/dangling commits somewhere garbage collection
-   can't reach them *before* deleting a branch, running `gc`, or force-pushing. Cleanup is
-   reversible only while a ref (or the reflog window) still points at the work.
-4. **Verify "merged" by CONTENT, never by commit count.** After a squash-merge, `main..branch`
+4. **Preserve before you clean up — and know which backup tool can actually reach the work.**
+   Pin at-risk/dangling commits somewhere garbage collection can't reach them *before* deleting a
+   branch, running `gc`, or force-pushing. Cleanup is reversible only while a ref (or the reflog
+   window) still points at the work. **Critical asymmetry: `bundle`, `archive`, and `format-patch`
+   can only reach objects git already knows about.** An untracked file that was never `git add`ed
+   and never `stash -u`ed is invisible to all three — the copy on disk is the only copy, so
+   preserving it means literally copying the file out. Backing up "the repository" and believing
+   untracked work came along is how a clean-looking backup silently omits the only thing at risk.
+5. **Verify "merged" by CONTENT, never by commit count.** After a squash-merge, `main..branch`
    shows the branch's original commits as "unmerged" even though their content is on main —
    often 100+ phantom commits. Judge with file/blob comparison, not counts (Mode C).
-5. **For a high-stakes "is everything merged?" call, verify adversarially — ideally with a
+6. **For a high-stakes "is everything merged?" call, verify adversarially — ideally with a
    fan-out of independent agents each trying to *disprove* it.** One reviewer (human or model)
-   scanning many branches reliably misses a real gap; independent cross-checks catch it.
+   scanning many branches reliably misses a real gap; independent cross-checks catch it. Give at
+   least one agent the explicit job of widening the *scope* (rule 1) rather than re-checking the
+   branches already on the table — scope gaps hide from reviewers who accept the given frame.
 
 ## Mode A — Recover lost work
 
@@ -68,6 +90,34 @@ If reflog doesn't show it (e.g. a dropped stash, an orphan from a rebase), fall 
 `git fsck --dangling` — see the playbook.
 
 ## Mode B — Audit what's at risk, then preserve it
+
+**Step 0 — establish the scope (rule 1).** Find every checkout of this repository on the machine,
+including the independent clones no in-repo command can see:
+
+```bash
+scripts/git_find_all_checkouts.sh              # defaults to this repo's parent + grandparent
+DEPTH=6 scripts/git_find_all_checkouts.sh ~    # widen when clones live far from each other
+```
+
+It matches sibling checkouts by normalized remote URL (so the SSH and HTTPS forms of one
+repository compare equal), falling back to **any shared commit history** whenever either the current
+or a candidate checkout has no `origin`. That history check works for shallow clones that cannot
+see the repository's true root. It never matches by directory name, because an independent clone
+is usually named differently from the original (`repo` vs `repo-hotfix`), which is exactly when
+name matching fails. It canonicalizes path aliases before identifying the current checkout,
+disables repository-provided fsmonitor commands while inspecting candidates, and treats commits
+reachable from any locally known remote-tracking ref as pushed even when a branch has no upstream.
+Exit is 1 when any *other* checkout holds uncommitted, untracked, unpushed, or uninspectable work.
+Run Steps 1–2 in **each** checkout it reports, then treat "nothing at risk" as a claim about all of
+them, not just this one.
+
+### Maintainer verification
+
+Run the isolated regression suite after changing checkout discovery:
+
+```bash
+uv run python -m unittest discover -s tests -p 'test_*.py'
+```
 
 **Step 1 — audit (non-destructive).** What, if anything, is at risk of loss right now:
 
@@ -94,6 +144,22 @@ reach a referenced commit) without cluttering `git branch`, and optionally write
 non-stash commit. For a *specific* important commit, also give it the full treatment — local
 branch **and** a pushed remote branch **and** a `git format-patch` file — so a single disk or a
 single `git gc` can't take it. Details + why triple-backup: **[references/recovery_playbook.md](references/recovery_playbook.md)**.
+
+**Untracked files need a different tool — plain copying (rule 4).** Everything above moves *git
+objects*; a file git was never told about is not one. Preserve those explicitly, and keep the
+three channels separate so a later reader knows what each restores:
+
+```bash
+git -C <checkout> status --porcelain | grep '^??'                     # what is untracked
+cp <each-untracked-path> <backup>/                                    # the ONLY copy — plain cp
+git -C <checkout> diff > <backup>/uncommitted.diff                    # tracked-but-uncommitted
+git -C <checkout> bundle create <backup>/history.bundle origin/main..HEAD   # unpushed commits
+git bundle verify <backup>/history.bundle                             # prove it restores
+```
+
+Write a one-paragraph `README` beside them saying where they came from, which branch, and when the
+session stopped. A backup nobody can interpret six weeks later is only slightly better than none —
+and the person reading it will not be the person who made it.
 
 ## Mode C — Verify everything is merged (without being fooled by counts)
 
@@ -127,6 +193,14 @@ The habits that keep a branch tangle from ever stranding work:
   bring it where you need it *live* by merging — not by stashing, and not by spinning up a second
   `git worktree` checkout (which is one more place to forget work and won't even have your
   gitignored deps). A shared working tree with commit-then-switch discipline is the safe default.
+- **If you truly need a second checkout, make it a worktree — never a second `git clone`.** Both
+  are extra places to forget work, which is why commit-then-switch above is still the default. But
+  the failure modes are not equal: a linked worktree announces itself in `git worktree list`, so
+  every audit finds it, while an independent clone is invisible to every command run from the
+  original repository. Choosing `clone` for a few days of parallel work quietly opts out of all
+  the safety tooling. When a clone already exists (a colleague made it, a script made it, you
+  inherited it), register it somewhere the team actually reads and retire it the day it's done —
+  and until then, treat it as an audit target in its own right, not as a scratch directory.
 - **Push a work-in-progress branch to a remote early.** The one commit only on a local branch is
   the only commit that a dead laptop actually loses.
 - **Confirm the current branch before committing** (`git branch --show-current`) — a fix committed
@@ -145,8 +219,10 @@ The habits that keep a branch tangle from ever stranding work:
 
 The opposite worry from Mode A: not "I lost something" but "these leftovers are piling up —
 which can I destroy?" Deleting is trivial; **proving each item is superseded is the work**.
-Start with `git_loss_audit.sh` and `git worktree list --porcelain`; treat every checkout as an
-independent place where uncommitted or detached work can hide. Then triage, backup, and retire:
+Start with `git_find_all_checkouts.sh` — `git worktree list --porcelain` alone will not show an
+independent clone, and those are the leftovers most likely to be forgotten — then `git_loss_audit.sh`
+inside each checkout it reports. Treat every checkout as an independent place where uncommitted or
+detached work can hide. Then triage, backup, and retire:
 
 **Step 1 — classify each leftover: live WIP, or superseded draft?** Evidence ladder, strongest first:
 
@@ -194,6 +270,21 @@ use repeated `--branch` instead. The exporter never drops or deletes anything.
 - Local branches: prefer `git branch -d` (refuses unmerged); use `-D` only for items Step 1
   proved superseded, backed up, and the user authorized deleting. Delete remote branches only
   after re-verifying the exact remote and repository visibility/ownership.
+- **Independent clones: there is no safe git-level command — only `rm -rf`, which git cannot
+  undo.** `git worktree remove` does not apply (it isn't a worktree) and refuses to help, so the
+  usual "the tool will stop me if it's unsafe" backstop is absent here. Make the check explicit
+  instead: gate the deletion on the backup actually existing, so a missing file aborts rather
+  than being noticed afterwards.
+
+  ```bash
+  for f in <backup>/<untracked-file> <backup>/uncommitted.diff <backup>/history.bundle; do
+    [ -s "$f" ] || { echo "MISSING: $f — refusing to delete"; exit 1; }
+  done
+  rm -rf <clone-path>
+  ```
+
+  Prefer deleting one clone at a time with its own verification over a loop across several — a
+  glob that deletes five directories has five chances to be wrong and reports none of them.
 
 **Recovery, if you regret it:** patches re-apply with `git apply`; the untracked tar extracts
 in place; the bundle restores full history via `git fetch <file>.bundle <branch>:restored/<branch>`.
@@ -202,18 +293,33 @@ in place; the bundle restores full history via `git fetch <file>.bundle <branch>
 
 | Script | Does | Mutates? |
 |---|---|---|
+| `scripts/git_find_all_checkouts.sh [root ...]` | Find every checkout of this repo on the machine — including independent clones invisible to `git worktree list` — and flag those holding uncommitted/untracked/unpushed work | Nothing (read-only, no fetch) |
 | `scripts/git_loss_audit.sh [remote]` | Refresh one remote, then report every worktree, local-only commit, stash, and dangler | Remote-tracking refs only |
 | `scripts/git_preserve_danglers.sh [--patch-dir DIR]` | Pin danglers to `refs/dangling-backup/`, optional patches | Adds refs only (never deletes/gc) |
 | `scripts/git_verify_branch_merged.sh <branch> [base]` | Refresh remotes, then give a content-level MERGED/UNMERGED verdict | Remote-tracking refs only |
 | `scripts/git_export_before_drop.sh [--all-stashes] [--stash N] [--branch B] [--all-refs] [--out DIR]` | Export stashes plus selected branches or every current ref into verified bundles | Writes backup files only (never drops/deletes) |
 
-All four run from the repository root. They only ever `fetch`, `log`, `diff`, `show`,
-`cat-file`, `rev-list`, `fsck`, `for-each-ref`, `stash show`, `archive`, `bundle create/verify`,
-and (preserve only) `update-ref` — never `checkout`, `reset`, `push`, `stash drop`, `branch -d`,
-or `gc`, so they are safe to run in a dirty tree or alongside other agents.
+All five run from the repository root. They only ever `find`, `fetch`, `log`, `diff`, `show`,
+`status`, `cat-file`, `rev-list`, `rev-parse`, `fsck`, `for-each-ref`, `remote get-url`,
+`stash show`, `archive`, `bundle create/verify`, and (preserve only) `update-ref` — never
+`checkout`, `reset`, `push`, `stash drop`, `branch -d`, or `gc`, so they are safe to run in a
+dirty tree or alongside other agents. `git_find_all_checkouts.sh` additionally never fetches, so
+it works offline and behind a proxy.
 
 ## Troubleshooting
 
+- **An audit came back clean but the user still thinks something is missing** — believe them and
+  suspect **scope, not thoroughness**. The in-repo instruments were probably all correct about the
+  one directory they could see. Run Step 0 (`git_find_all_checkouts.sh`) before re-running anything
+  you already ran; repeating a correctly-executed check in the wrong scope returns the same clean
+  answer with more confidence behind it, which is worse than the first pass.
+- **`git_find_all_checkouts.sh` finds nothing, but you're fairly sure another copy exists** — three
+  likely causes, in order: (1) the copy lives outside the default roots (pass an explicit root such
+  as `~`, and raise `DEPTH`); (2) it sits under a pruned path — the sweep skips `node_modules`,
+  `.venv`, `vendor`, `.terraform`; (3) its `origin` points somewhere else entirely (a fork, or a
+  path remote), so remote matching rejects it — check with `git -C <suspect> remote -v` and compare
+  root commits by hand: `git rev-list --max-parents=0 HEAD`. A copy made by `cp -r` before the repo
+  had any remote will only match on root commit.
 - **`git_loss_audit.sh` reports dangling commits that look like old stashes** — expected after
   stash-heavy work. They're reflog-reachable now; pin them with `git_preserve_danglers.sh` if you
   want them past the gc window, then inspect with `git show <sha>` at leisure.
