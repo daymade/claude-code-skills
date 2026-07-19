@@ -898,6 +898,82 @@ function auditPage({ viewportName, requestedWidth, isMobile, forbidPatterns, req
     });
   }
 
+  // Focus indicator + motion fallback: both are invisible in a default screenshot,
+  // so they survive every visual pass unless something inspects the stylesheets.
+  // A page can pass "is it focusable" (above) and still be unusable by keyboard
+  // because the focus ring was suppressed and never replaced.
+  {
+    let focusRuleCount = 0;
+    let outlineSuppressed = 0;
+    let reducedMotionQuery = 0;
+    let styleSheetsReadable = 0;
+    // Do NOT branch on `rule.cssRules` to mean "this is a grouping rule": since CSS
+    // Nesting shipped, a plain CSSStyleRule also exposes an (empty) cssRules list,
+    // and an empty CSSRuleList is still truthy — that branch silently skips every
+    // ordinary rule, so the audit below can never fire. Handle both facets instead.
+    const walkRules = (rules) => {
+      for (const rule of rules) {
+        const sel = rule.selectorText || "";
+        if (sel) {
+          const text = rule.cssText || "";
+          if (/:focus(-visible|-within)?\b/.test(sel)) focusRuleCount += 1;
+          if (/outline\s*:\s*(none|0(px)?)\s*[;}]/i.test(text)) outlineSuppressed += 1;
+        }
+        const cond = rule.conditionText || rule.media?.mediaText || "";
+        if (/prefers-reduced-motion/i.test(cond)) reducedMotionQuery += 1;
+        if (rule.cssRules && rule.cssRules.length) walkRules(rule.cssRules);
+      }
+    };
+    for (const sheet of document.styleSheets) {
+      try {
+        if (!sheet.cssRules) continue;
+        styleSheetsReadable += 1;
+        walkRules(sheet.cssRules);
+      } catch { /* cross-origin sheet: unreadable, not a defect */ }
+    }
+
+    const focusables = [...document.querySelectorAll(
+      'a[href],button,input,select,textarea,summary,[tabindex]:not([tabindex^="-"])'
+    )].filter(isVisible);
+
+    if (styleSheetsReadable > 0 && focusables.length >= 3 && outlineSuppressed > 0 && focusRuleCount === 0) {
+      issues.push({
+        viewport: viewportName,
+        selector: ":root",
+        type: "focus-indicator-suppressed",
+        severity: "error",
+        text: `${focusables.length} focusable elements`,
+        detail: `Stylesheets suppress the outline (${outlineSuppressed} rule(s)) without defining any :focus/:focus-visible replacement. Keyboard users cannot see where focus is. Add a visible focus style distinct from the selected/hover state.`,
+      });
+    } else if (styleSheetsReadable > 0 && focusables.length >= 8 && focusRuleCount === 0) {
+      issues.push({
+        viewport: viewportName,
+        selector: ":root",
+        type: "focus-indicator-default-only",
+        severity: "warning",
+        text: `${focusables.length} focusable elements`,
+        detail: "No :focus/:focus-visible rule exists, so focus relies entirely on the UA default ring, which is often invisible against custom backgrounds. Verify the ring is actually visible on this palette.",
+      });
+    }
+
+    const animated = [...document.querySelectorAll("*")].filter(isVisible).some((el) => {
+      const st = getComputedStyle(el);
+      const dur = parseFloat(st.transitionDuration) || 0;
+      const anim = st.animationName && st.animationName !== "none";
+      return dur > 0.15 || anim;
+    });
+    if (styleSheetsReadable > 0 && animated && reducedMotionQuery === 0) {
+      issues.push({
+        viewport: viewportName,
+        selector: ":root",
+        type: "motion-without-reduced-motion-fallback",
+        severity: "warning",
+        text: "transitions/animations present",
+        detail: "The page animates but defines no @media (prefers-reduced-motion: reduce) block. Degrade transforms/keyframes for users who request reduced motion; keep the end state (e.g. keep the highlight, drop the flash).",
+      });
+    }
+  }
+
   for (const el of [...document.querySelectorAll(textSelector)].filter(isVisible)) {
     const text = clean(el.textContent || "");
     if (!text || text.length < 2) continue;

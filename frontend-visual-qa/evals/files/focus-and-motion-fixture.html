@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Focus + motion state fixture</title>
+<style>
+  /* Defect 1: the focus ring is suppressed and never replaced.
+     Every control below is focusable, so a "can it be focused" audit passes —
+     but a keyboard user cannot see where focus is. */
+  * { outline: none; }
+  button, a { outline: 0; }
+
+  /* Defect 2: the page animates but declares no reduced-motion fallback. */
+  .card { transition: transform .28s ease, box-shadow .28s ease; }
+  .card:hover { transform: translateY(-3px); }
+  .pulse { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .55 } }
+
+  body { font-family: Georgia, serif; background: #FBF9F4; color: #211D17; margin: 0; padding: 40px; }
+  .card { background: #fff; border: 1px solid #E7DFCF; border-radius: 8px; padding: 18px; margin-bottom: 14px; }
+  button { font: inherit; padding: 8px 16px; border: 1px solid #D8CDB6; border-radius: 5px; background: #fff; cursor: pointer; }
+  h1 { font-size: 22px; margin: 0 0 18px; }
+</style>
+</head>
+<body>
+  <h1>Interactive states that a screenshot cannot show</h1>
+
+  <div class="card">
+    <p class="pulse">This element animates continuously.</p>
+    <button type="button">Primary action</button>
+    <button type="button">Secondary action</button>
+    <a href="#somewhere">A linked anchor</a>
+  </div>
+
+  <div class="card">
+    <label for="q">Search</label>
+    <input id="q" type="text" placeholder="type here">
+    <select><option>One</option><option>Two</option></select>
+    <textarea rows="2"></textarea>
+  </div>
+
+  <div class="card">
+    <button type="button">Third</button>
+    <button type="button">Fourth</button>
+    <button type="button">Fifth</button>
+  </div>
+</body>
+</html>
