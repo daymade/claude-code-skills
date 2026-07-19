@@ -136,6 +136,25 @@ git commit -m "message"
 git push
 ```
 
+### Local `main` Is a Read-Only Mirror
+
+Squash-merged PRs rewrite commits under new SHAs, so every direct commit to
+local `main` guarantees divergence the moment its PR merges. Two rules keep
+`main` clean:
+
+1. **Never commit directly to local `main`.** All work starts on a feature
+   branch (`git checkout -b <topic>`), ships via PR, and lands by squash merge.
+2. **After every merge, run the 30-second ritual:** `git checkout main && git pull --ff-only`.
+   A successful ff-only pull proves nobody broke rule 1. If it fails, someone
+   committed to local `main` — inspect `git log origin/main..main` and rebase
+   the stray commits onto a feature branch; do not merge or force-push `main`.
+
+If local `main` has already diverged: do not `reset --hard` until every stray
+commit is proven superseded — mechanical test: cherry-pick them onto
+`origin/main` resolving conflicts toward the upstream version; an empty net
+result means the content already shipped. Back up first
+(`git bundle create /tmp/main-backup.bundle main` and verify it restores).
+
 ## Skill Writing Requirements
 
 ### Writing Style
