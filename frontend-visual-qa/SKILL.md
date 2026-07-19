@@ -133,6 +133,17 @@ exact missing evidence and mark the affected claim **partial** or **blocked**.
 Use the project's canonical launcher and existing fixture/auth path. Do not
 invent a new server command or silently seed a different state.
 
+Two driving constraints decide what evidence is even obtainable, so settle them
+before capturing anything. **Extension-based browser control generally cannot
+open `file://`** — a local artifact needs a local HTTP server before it can be
+driven interactively, and the two schemes differ in CORS behavior, so name which
+one produced the evidence. And **after any edit, assume the browser is showing
+you the previous build**: cache-bust the URL and verify a visible freshness
+anchor (version stamp / build time) before judging content, or you will chase a
+defect you already fixed. Both traps, plus the click/screenshot/emulation ones,
+are in
+[references/browser-driving-and-observation-traps.md](references/browser-driving-and-observation-traps.md).
+
 Record this state from the rendered page:
 
     () => ({
@@ -202,7 +213,22 @@ Check at minimum:
   rows, one global fact re-rendered per row, and unlabeled numeric/graphic cells
   (contract details in the journey/page-contract reference);
 - keyboard focus visibility, focus obstruction, and target size/spacing when
-  accessibility is in scope;
+  accessibility is in scope. A default screenshot cannot show this: an element
+  can pass "is it focusable" and still leave the user lost, because a global
+  `outline:none` suppressed the ring and nothing replaced it. The sweep reports
+  `focus-indicator-suppressed` (error) and `focus-indicator-default-only`
+  (warning); confirm visually that the focus state is also distinguishable from
+  the *selected* and *hover* states, which a stylesheet audit cannot judge;
+- motion that ignores user preference — the sweep reports
+  `motion-without-reduced-motion-fallback` when the page animates but declares no
+  `@media (prefers-reduced-motion: reduce)`. Degrading means keeping the end
+  state and dropping the travel (keep the highlight, drop the flash), not
+  removing the feedback;
+- states that only exist off the default path: a wrapped narrow-viewport row
+  screenshotted *with a selection active*, a scroll container at a height that
+  actually scrolls, an expanded/error/empty variant. Default-state evidence is
+  partial evidence — say which states the report covers
+  ([references/browser-driving-and-observation-traps.md](references/browser-driving-and-observation-traps.md) §6);
 - parity with the named reference and the project's tokens/assets before
   applying generic taste rules.
 
@@ -450,5 +476,10 @@ check the available agent tools can perform.
   (proxy, CSP entry point, server-log triangulation).
 - references/data_viz_tier_and_token_audit.md — conditional data-viz,
   reference-tier, token, and palette audit.
+- references/browser-driving-and-observation-traps.md — the auditor's own failure
+  modes: misread clicks, stale caches, `file://` limits, viewport-vs-page
+  screenshots, width-resize vs device emulation, and states a default screenshot
+  cannot show. Read it before driving a real browser, and whenever an observation
+  surprises you.
 - evals/evals.json and evals/trigger-evals.json — behavior and routing
   regression cases; excluded from packaged runtime content.
