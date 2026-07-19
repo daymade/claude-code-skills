@@ -1,118 +1,50 @@
 # Contributing to Claude Code Skills Marketplace
 
-Thank you for your interest in contributing! This marketplace aims to provide high-quality, production-ready skills for Claude Code users.
+Thank you for your interest in contributing! This is a **curated marketplace of our own skills**, not a community collection — please read "What We Don't Accept" before opening a pull request.
 
-## How to Contribute
+## What We Accept
 
-### Reporting Issues
+### 🐛 Bug Reports
+
+Always welcome:
 
 1. Check if the issue already exists
 2. Provide clear description and reproduction steps
 3. Include Claude Code version and environment details
 4. Add relevant error messages or screenshots
 
-### Suggesting New Skills
+### 🔧 Bug Fixes to Existing Skills
 
-1. Open an issue with the `skill-request` label
-2. Describe the skill's purpose and use cases
-3. Explain why it would benefit the community
-4. Provide examples of when it would activate
+Welcome. To submit a fix:
 
-### Submitting Skills
+1. **Open an issue describing the bug first**, so we can confirm it's a real defect rather than intended behavior
+2. Fork the repository and make your change on a branch
+3. Test thoroughly — if the skill has evals or a registered test suite, run them
+4. Submit a pull request referencing the issue
 
-To submit a new skill to this marketplace:
+Notes:
 
-#### 1. Skill Quality Requirements
+- **Keep the fix minimal and scoped to the bug.** Drive-by refactors, reformatting, or unrelated "improvements" will be asked to be split into separate PRs.
+- **Don't worry about version numbers, CHANGELOG, or README bookkeeping** — the maintainer handles those in a follow-up commit (repo rules require a `marketplace.json` version bump for every skill-file change, and contributor PRs almost never include it).
 
-All skills must meet these standards:
+## What We Don't Accept
 
-**Required Structure:**
-- ✅ `SKILL.md` with valid YAML frontmatter (`name` and `description`)
-- ✅ Imperative/infinitive writing style (verb-first instructions)
-- ✅ Clear "When to Use This Skill" section
-- ✅ Proper resource organization (`scripts/`, `references/`, `assets/`)
+### 🚫 New Skills (or major new features) via PR
 
-**Quality Standards:**
-- ✅ Comprehensive documentation
-- ✅ Working code examples
-- ✅ Tested functionality
-- ✅ No TODOs or placeholder text
-- ✅ Proper cross-referencing of bundled resources
+We do not accept new-skill submissions, even excellent ones. This marketplace is a curated collection of skills we build and maintain ourselves; merging outside skills would make us responsible for code we didn't write and can't stand behind at our quality bar.
 
-**Best Practices:**
-- ✅ Progressive disclosure pattern (metadata → SKILL.md → references)
-- ✅ No duplication between SKILL.md and references
-- ✅ Scripts have proper shebangs and are executable
-- ✅ Clear activation criteria in description
+If you've built a skill worth sharing:
 
-#### 2. Validation
+- **Publish it as your own marketplace.** The format is open — anyone can add your repo with `claude plugin marketplace add <your-repo>` exactly the way this one is added. Our [marketplace-dev](https://github.com/daymade/claude-code-skills/tree/main/daymade-claude-code/marketplace-dev) skill automates the marketplace.json generation, validation, and packaging if you want it.
+- **Think it belongs here specifically?** Open an issue describing what it does and why. If we're convinced, we'll **re-author it ourselves** under our conventions rather than merge your PR.
 
-Before submitting, validate your skill:
+New-skill PRs are closed with this standing message:
 
-```bash
-# Use skill-creator validation
-~/.claude/plugins/marketplaces/anthropics-skills/skill-creator/scripts/quick_validate.py /path/to/your-skill
+> Thanks for taking the time to build this! This repository is a curated marketplace of our own skills — we only accept bug fixes to existing skills, not new-skill PRs. You're very welcome to publish it as your own marketplace.
 
-# Test in Claude Code
-# 1. Copy skill to ~/.claude/skills/your-skill
-# 2. Restart Claude Code
-# 3. Verify skill activates correctly
-```
+## Guidelines That Apply to Bug Fixes
 
-#### 3. Submission Process
-
-1. **Fork this repository**
-
-2. **Add your skill:**
-   ```bash
-   # Create skill directory
-   mkdir your-skill-name
-
-   # Add SKILL.md and resources
-   # Follow the structure of existing skills
-   ```
-
-3. **Update marketplace.json:**
-   ```json
-   {
-     "skills": [
-       // ... existing skills
-       "./your-skill-name"
-     ]
-   }
-   ```
-
-4. **Update README.md:**
-   - Add skill description to "Included Skills" section
-   - Follow the existing format
-
-5. **Test locally:**
-   ```bash
-   # Add your fork as marketplace
-   claude plugin marketplace add https://github.com/your-username/claude-code-skills
-   # Marketplace name comes from .claude-plugin/marketplace.json
-
-   # Install and test
-   claude plugin install productivity-skills@your-marketplace-name
-   ```
-
-6. **Submit Pull Request:**
-   - Clear title describing the skill
-   - Description explaining the skill's purpose
-   - Link to any relevant documentation
-   - Screenshots or examples (if applicable)
-
-### Improving Existing Skills
-
-To improve an existing skill:
-
-1. Open an issue describing the improvement
-2. Fork the repository
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request referencing the issue
-
-## Skill Authoring Guidelines
+The standards below govern any change you make to an existing skill (they were originally written for skill authors, and a fix must not degrade them).
 
 ### Writing Style
 
@@ -128,31 +60,6 @@ Extract files from a repomix file using the bundled script.
 You should extract files from a repomix file by using the script.
 ```
 
-### Documentation Structure
-
-Follow this pattern:
-
-```markdown
----
-name: skill-name
-description: Clear description with activation triggers. Activates when...
----
-
-# Skill Name
-
-## Overview
-[1-2 sentence explanation]
-
-## When to Use This Skill
-[Bullet list of activation scenarios]
-
-## Core Workflow
-[Step-by-step instructions]
-
-## Resources
-[Reference bundled files]
-```
-
 ### Bundled Resources
 
 - **scripts/**: Executable code (Python/Bash) for automation
@@ -165,7 +72,7 @@ Keep SKILL.md lean (~100-500 lines). Move detailed content to `references/`.
 
 ### Python Scripts
 
-- Use Python 3.6+ compatible syntax
+- Use Python 3.10+ compatible syntax
 - Include proper shebang: `#!/usr/bin/env python3`
 - Add docstrings for functions
 - Follow PEP 8 style guidelines
@@ -180,26 +87,24 @@ Keep SKILL.md lean (~100-500 lines). Move detailed content to `references/`.
 
 ## Testing Checklist
 
-Before submitting, verify:
+Before submitting a fix, verify:
 
-- [ ] Skill has valid YAML frontmatter
-- [ ] Description includes activation triggers
+- [ ] The bug reproduces on current `main` without your change, and is gone with it
+- [ ] YAML frontmatter of any touched SKILL.md is still valid
 - [ ] All referenced files exist
 - [ ] Scripts are executable and working
-- [ ] No absolute paths (use relative or `~/.claude/skills/`)
-- [ ] Tested in actual Claude Code session
-- [ ] Documentation is clear and complete
+- [ ] No absolute paths or user-specific information
+- [ ] Tested in an actual Claude Code session
 - [ ] No sensitive information (API keys, passwords, etc.)
 
 ## Review Process
 
-Pull requests will be reviewed for:
+Bug-fix PRs are reviewed for:
 
-1. **Functionality**: Does the skill work as described?
-2. **Quality**: Does it meet our quality standards?
-3. **Documentation**: Is it well-documented?
-4. **Originality**: Is it distinct from existing skills?
-5. **Value**: Does it benefit the community?
+1. **Correctness**: does it fix the reported bug without regressions?
+2. **Scope**: is it minimal — only the fix?
+3. **Convention fit**: does it follow the existing style of that skill?
+4. **Evidence**: for behavior changes, before/after output or a test.
 
 ## Questions?
 
