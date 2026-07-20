@@ -1,9 +1,14 @@
 ---
 name: transcript-fixer
-description: Corrects speech-to-text transcription errors using dictionary rules and AI-powered analysis. Builds personalized correction databases that learn from each fix, auto-loads person-name ASR variants from your people roster, and reads per-domain context files that prime the AI pass for context-dependent homophones. Triggers when working with ASR/STT output containing recognition errors, homophones, garbled technical terms, person-name errors, or Chinese/English mixed content. Also triggers on requests to clean up meeting notes, lecture transcripts, interview recordings, or any text produced by speech recognition. Use this skill even when the user just says "fix this transcript", "clean up these meeting notes", or mentions garbled names without invoking ASR specifically.
+description: >-
+  Corrects speech-to-text transcription errors using dictionary rules and Claude's built-in AI (no external API key required — Native AI Correction is the DEFAULT). Stage 3 API is a backup for automation without Claude Code. Builds personalized correction databases that learn from each fix, auto-loads person-name ASR variants from your people roster, and reads per-domain context files that prime the AI pass for context-dependent homophones. Triggers when working with ASR/STT output containing recognition errors, homophones, garbled technical terms, person-name errors, or Chinese/English mixed content. Also triggers on requests to clean up meeting notes, lecture transcripts, interview recordings, or any text produced by speech recognition. Use this skill even when the user just says "fix this transcript", "clean up these meeting notes", or mentions garbled names without invoking ASR specifically.
 ---
 
 # Transcript Fixer
+
+**默认模式：Claude 内置 AI（Native AI Correction）——无需任何外部 API key。**
+Stage 1 字典纠错（免费、即时）→ Claude 自己读原文做智能纠错 → compound 进字典。
+Stage 3 API 仅用于无 Claude Code 的自动化批处理场景（备选）。
 
 Two-phase correction pipeline: deterministic dictionary rules (instant, free) followed by AI-powered error detection. Corrections accumulate in `~/.transcript-fixer/corrections.db`, improving accuracy over time.
 
@@ -52,11 +57,13 @@ After Stage 1, Claude reads the output and fixes remaining ASR errors natively (
 
 See `references/example_session.md` for a concrete input/output walkthrough.
 
-**Alternative: API batch processing** (for automation without Claude Code):
+### ⚠️ Stage 3 API — 备选方案（仅限无 Claude Code 的自动化批处理）
+
+**如果你正在 Claude Code 里运行此 skill，跳过本节——直接用上面的 Stage 1 + Native AI Correction，不要跑 `--stage 3`。**
+Stage 3 是给 CI/脚本/无 Claude 环境的批量自动化用的，需要额外配置 GLM API key。
+
 ```bash
-# Recommended: store the key in the config directory
-# Edit ~/.transcript-fixer/config.json and set api.api_key
-# Or override with an environment variable:
+# 备选: 仅限无 Claude Code 的批处理
 export GLM_API_KEY="<api-key>"  # From https://open.bigmodel.cn/
 uv run scripts/fix_transcript_enhanced.py input.md --output ./corrected
 ```
@@ -70,7 +77,7 @@ Two-phase pipeline with persistent learning:
 1. **Initialize** (once): `uv run scripts/fix_transcription.py --init`
 2. **Add domain corrections**: `--add "错误词" "正确词" --domain <domain>`
 3. **Phase 1 — Dictionary**: `--input file.md --stage 1` (instant, free)
-4. **Phase 2 — AI Correction**: Claude reads output and fixes errors natively, or `--stage 3` with the API key configured in `~/.transcript-fixer/config.json` for API mode
+4. **Phase 2 — AI Correction（默认: Claude 内置 AI）**: Claude reads the Stage 1 output and fixes remaining errors natively — **this is the primary path, no API key needed**. The full method is under **Native AI Correction** below. 备选: `--stage 3` API 模式仅限无 Claude Code 的自动化批处理(需额外配置 GLM API key——见上方 §⚠️ Stage 3 API)。**在 Claude Code 内不要跑 `--stage 3`。**
 5. **Save stable patterns**: `--add "错误词" "正确词"` after each session
 6. **Review learned patterns**: `--review-learned` and `--approve` high-confidence suggestions
 
@@ -383,8 +390,9 @@ A recording can be long but still fast-tier (two known speakers, plain language)
      ```
    - Keep or move the original `.txt` to the archive if you want it; otherwise delete it.
    - Re-grep the final file for a correction you know you applied to confirm the corrected version landed.
-10. Save stable patterns to the dictionary (see "Dictionary Addition" below)
-11. Strip any remaining Stage 1 false positives from the final file before archiving
+10. **Filename hygiene — rename machine-generated gibberish before archiving.** A transcript whose filename is a raw ASR artifact, device tag, or opaque timestamp hash (`TX02_MIC021_20260720_095909_1.3x.md`, `soundcore Work_01-01 10-36.md`, `07-12-2026 20.07.md`) is not a useful artifact. Rename it to a human-readable form before the file enters a shared repo: `YYYY-MM-DD-HH-MM-<topic-or-speaker-summary>.md`, using Chinese or short English as appropriate to the project. The bar: a human should be able to identify the meeting from the filename alone. If the content clearly belongs to one business line, also encode that in the slug when the repo convention allows it.
+11. Save stable patterns to the dictionary (see "Dictionary Addition" below)
+12. Strip any remaining Stage 1 false positives from the final file before archiving
 
 ### Common ASR Error Patterns
 
