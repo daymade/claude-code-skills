@@ -589,10 +589,27 @@ Files not intended to be loaded into context, but rather used within the output 
 - **When to include**: When the skill needs files that will be used in the final output
 - **Examples**: `assets/logo.png` for brand assets, `assets/slides.pptx` for PowerPoint templates
 - **Use cases**: Templates, images, icons, boilerplate code, fonts, sample documents
+- **Component shelf**: for artifact-generating skills, a `components` subfolder under `assets/` holds user-approved verbatim-embed fragments with frozen behavior contracts and a registry reference — see the Component-shelf check in Step 4
 
 ##### Privacy and Path References
 
-**CRITICAL**: Skills intended for public distribution must not contain user-specific or company-specific information:
+**Decide the destination before applying any of this.** Everything below describes what
+breaks when a skill ships to strangers. For a skill that lives in the author's own private
+repo, the same "violations" are usually why it works — a real absolute path is what makes
+the script runnable, a real account in a template is what saves the next run from re-filling
+it. `quick_validate` auto-detects this (it asks `gh` whether the containing repo is private)
+and downgrades portability/identifier findings to notes there; `--audience=public` forces the
+strict pass when a private skill is being prepared for release.
+
+**In a private skill, these findings are the owner's call, not yours.** Do not placeholder a
+real path, rewrite a hardcoded credential, or "sanitize" an example without asking — you will
+break a working tool to satisfy a rule written for a destination it was never going to. If
+you think something should change, say what you found and let the owner decide. (The design
+precedent is npm's `"private": true`: a declared destination that changes what the tooling
+enforces, added because people kept publishing things by accident.)
+
+**CRITICAL for skills intended for public distribution** — these must not contain
+user-specific or company-specific information:
 
 - **Forbidden**: Absolute paths to user directories (for example, user home directories)
 - **Forbidden**: Personal usernames, company names, product names
@@ -833,6 +850,8 @@ This is the heart of the loop. You've run the test cases, the user has reviewed 
 3. **Explain the why.** Try hard to explain the **why** behind everything you're asking the model to do. Today's LLMs are *smart*. They have good theory of mind and when given a good harness can go beyond rote instructions and really make things happen. Even if the feedback from the user is terse or frustrated, try to actually understand the task and why the user is writing what they wrote, and what they actually wrote, and then transmit this understanding into the instructions. If you find yourself writing ALWAYS or NEVER in all caps, or using super rigid structures, that's a yellow flag — if possible, reframe and explain the reasoning so that the model understands why the thing you're asking for is important. That's a more humane, powerful, and effective approach.
 
 4. **Look for repeated work — in the eval transcripts AND in whatever conversation the skill was distilled from.** Read the transcripts from the test runs and notice if the subagents all independently wrote similar helper scripts or took the same multi-step approach to something. If all 3 test cases resulted in the subagent writing a `create_docx.py` or a `build_chart.py`, that's a strong signal the skill should bundle that script. Write it once, put it in `scripts/`, and tell the skill to use it. This saves every future invocation from reinventing the wheel. The same signal hides in a source conversation you distilled a skill from — code that session wrote even once is code every future run must rewrite; don't wait for eval runs to prove the repetition (skills whose eval loop is skipped never get that proof — the Scripts check in Step 4 of the creation process is the catch-point for those).
+
+5. **Fold corrections back verbatim — same session, both levels.** For taste-calibrated skills the user's corrections ARE the eval set, but only if they land where a future run will read them. Two properties make the write-back converge: (a) **record the correction verbatim**, not paraphrased — exact words carry calibration signal a summary flattens ("绝对禁止这种东西" teaches a hard boundary; "user prefers fewer jumps" does not). Quote the words inside the rule they correct, with a date. (b) **Write back in the same session the correction happens, at both levels** — fix the artifact AND the skill's rule/reference/component; a correction that only fixes the artifact is invisible to every future run, and one deferred to "later" usually never lands. While writing it back, check whether the skill's own text *taught* the anti-pattern just banned — a correction often falsifies an existing instruction, and leaving the old advice standing guarantees recurrence (real case: a decision-page contract advised jump-style "goto anchors to the referenced figure"; the user banned exactly that, so the write-back had to amend the old sentence, not just add a new rule beside it). When the corrected thing is an interaction fragment, the write-back's final step is shelf promotion — see the Component-shelf check in Step 4.
 
 This task is pretty important (we are trying to create billions a year in economic value here!) and your thinking time is not the blocker; take your time and really mull things over. I'd suggest writing a draft revision and then looking at it anew and making improvements. Really do your best to get into the head of the user and understand what they want and need.
 
@@ -1193,6 +1212,8 @@ not a replacement.
 
 **Scripts check**: Before calling the edit done, ask: *what code did the source conversation (or the eval transcripts) write — that every future invocation would otherwise rewrite?* Bundle it into `scripts/` (parameterized, sanitized) and change the docs to point at it. The division of labor: **scripts carry the execution, docs carry the understanding** — a skill whose method lives only in prose re-pays the full authoring cost on every run. This check exists here, in the edit step, precisely because paths that skip the eval loop (conversation distillation, direct edits) never reach the eval-transcript version of this check in "Improving the skill".
 
+**Component-shelf check (the same question, asked of artifact-EMBEDDED fragments)**: the Scripts check covers code the *skill* executes; artifact-generating skills (report pages, decks, documents) also accumulate fragments their *outputs* embed — an image-overlay widget, a sticky nav, a chart config, a CSS block. If successive outputs each hand-write a similar fragment, that is the same repetition signal pointing at a different shelf: a dedicated `components` subfolder under the skill's `assets/` directory, plus a registry reference. What turns a snippet into a shelf component is the contract around it: (a) **verbatim-embed block** — BEGIN/END markers copied whole into the artifact, zero dependencies, so single-file artifacts stay self-contained; (b) **registry entry** stating the interaction contract (triggers, key bindings, close behavior, edge cases) and provenance — which delivered artifact it came from, when the user approved it; (c) **admission gate** — only fragments the user has actually used and approved enter (the approved-corpus discipline applied to interactions; unapproved-but-pretty stays out); (d) **behavior frozen, skin adjustable** — calibrated behavior and key bindings are the contract and must not drift between runs, while colors and sizing may follow the artifact's register; (e) **write-back loop** — a fragment invented for one artifact is promoted to the shelf in the same session its approval lands. The reason this matters beyond token savings: hand-rewritten fragments *drift* — each rewrite subtly changes key bindings, close behavior, counters — and for a user who reads these artifacts daily, interaction consistency IS the product experience. In the user's founding words for the first such shelf: 交互形式要沉淀下来、可复用、有复利，代表一致的交互喜好 (2026-07). Real instance (project fingerprints removed): a report-page skill's lightbox-gallery component (image overlay: ←/→ cycles the group, ESC closes, in-place zoom, n/N counter) with its interaction-components registry reference — extracted the same session the user corrected jump-style references, and verified with an automated click-through test before shipping. See methodology Case 17.
+
 **Pipeline check**: Consider whether this skill's output naturally feeds into another skill. If so, add a "Next Step" handoff section (see "Pipeline Handoff" in the Skill Writing Guide). Also check if any existing skill should chain *into* this one.
 
 ### Step 5: Sanitization Review (mandatory for any public skill)
@@ -1201,7 +1222,14 @@ not a replacement.
 
 **Scope the pass by destination, not by topic.** Only the artifact that ships publicly — the skill bundle itself — gets sanitized. Companion documents that stay in a private repo (the incident report the skill was distilled from, internal runbooks, the project's CLAUDE.md) keep their real hostnames, paths, and timestamps: redacting those destroys their audit value, and you will end up reverting it. One distillation session went through three rounds of rework precisely because the redaction pass was applied to everything the source material touched instead of just the public skill.
 
-Use **AskUserQuestion** to confirm the depth (not whether to do it):
+**Check the destination first, and let it pre-fill the recommendation.** Run
+`gh repo view --json isPrivate` on the repo the skill will live in (or read the note
+`quick_validate` already printed). A private destination makes option C the default
+recommendation rather than an afterthought — "assume public unless told otherwise" is
+what turns a private skill's working paths into placeholders nobody asked for.
+
+Use **AskUserQuestion** to confirm the depth (for a public destination, confirm the depth,
+not whether to do it; for a private one, confirm whether it is wanted at all):
 
 ```
 This skill will be public. I'll do a sanitization pass — the core of it is
@@ -1255,6 +1283,12 @@ brew install gitleaks
 - `2` - Critical issues (MUST fix before distribution)
 - `3` - gitleaks not installed
 - `4` - Scan error
+
+**In a private skill, a finding is information, not a work order.** The scanner cannot
+tell a leaked credential from a credential that is *supposed* to be there — a template whose
+whole value is that it comes pre-filled, a script pointing at the one machine it runs on.
+Never auto-fix in a private repo: report what was found and let the owner choose. Option A
+below ("fix automatically") is for skills headed somewhere public.
 
 **If issues are found**, present them via **AskUserQuestion**:
 

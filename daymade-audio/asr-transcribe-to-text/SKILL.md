@@ -158,7 +158,9 @@ ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:no
 Run this BEFORE transcription when either applies:
 
 - **The recording is a multi-segment dump** — body mics and field recorders split
-  sessions into fixed-length files (e.g. `TX02_MIC024_....wav`, `TX02_MIC025_....wav`).
+  sessions into fixed-length files (e.g. `TX02_MIC024_....wav`, `TX02_MIC025_....wav`;
+  `TX01/TX02` = DJI MIC MINI 2S internal recording — device roster and the
+  recorder→Feishu-Minutes paths: the meeting-ingest skill's `meeting-ingest/references/architecture.md` §①-L0).
   Merge them and transcribe the merged file: full-audio context is the quality basis
   of the decoupled pipeline (Step 3), so transcribing segments separately throws away
   exactly what the architecture buys.
