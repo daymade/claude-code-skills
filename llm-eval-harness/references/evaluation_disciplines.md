@@ -47,6 +47,13 @@ the cross-fleet distribution. A real protocol probe saw **0/10 with keep-alive v
 `Connection: close`** on the same endpoint — keep-alive made a partially-working feature look
 completely broken. Force a fresh connection per request whenever you're measuring a rate.
 
+This is the single most independently-rediscovered rule in this file: four unrelated codebases
+(a protocol probe, two cache investigations, a system-prompt delivery investigation) each hit it
+separately before it was written down. Whatever property you measure — thinking-block rate, cache
+hits, field delivery — if it can vary per replica or per channel, connection reuse will hide the
+variance. Treat "fresh connection per request" as the default for every rate measurement, not an
+option to remember.
+
 ## 5. `trust_env=False` — isolate the endpoint from your proxy
 
 If the environment has an HTTP/SOCKS proxy set, the client library will route every request
@@ -116,3 +123,87 @@ Comparing two models only means something if the probes ran with identical flags
 concurrency levels, same use-case set, same max_tokens, same proxy treatment, ideally the same
 time window (load varies by hour). Change one variable and the "winner" may just be the one you
 tested at 3am.
+
+## 9. Availability verdicts: what a failed call does and does not prove
+
+Four traps, each of which has shipped a false conclusion into a real document:
+
+- **A generous `max_tokens` is part of the probe, not a tuning detail.** Reasoning models spend
+  the budget on thinking BEFORE emitting text; a cap of a few dozen tokens returns HTTP 200 with
+  empty content, which reads as "model broken". Probe with thousands (the availability probe
+  defaults to 8192), and treat 200-with-empty-content as a budget artifact until proven otherwise.
+- **"My invented ID returned 404" is not evidence of a missing capability.** A 404/400 on an ID
+  that never existed tells you nothing about the vendor. Before writing any "unavailable" list,
+  confirm each ID against the vendor's or model developer's official docs — current-generation
+  names live past your training data, and suffixes (dated variants, `-preview`, tier names) decide
+  routability. An "unavailable" list where half the IDs were invented is worse than no list.
+- **The `/v1/models` listing is not the availability truth.** Real gateways route models the
+  listing omits (and list models that error). Probe the IDs you care about directly.
+- **A model's self-reported identity is worthless as routing evidence.** Models mis-identify
+  themselves constantly — deny having a system prompt they received, claim to be a different
+  vendor's model. Never write "the gateway serves a different model than advertised" on the
+  strength of asking the model who it is.
+
+## 10. Calibrate the meter before believing it
+
+Any instrument you use to judge delivery — token accounting, a log field, a usage counter — must
+itself be validated **on the exact dimension you will read**, before its readings count as
+evidence. Calibrating an adjacent dimension does not transfer: in one real investigation,
+`input_tokens` was proven sensitive to user-message length, then trusted to judge system-prompt
+delivery — but that gateway forwarded the system prompt while NOT counting it in usage, so the
+"meter" branded a perfectly working model as 38%-broken and flipped the customer recommendation
+backwards. A wrongly-oriented instrument is worse than a small sample: every repeat errs in the
+same direction, so repetition only inflates confidence in the wrong answer. Behavioral evidence
+(the canary echo) is the verdict; accounting evidence corroborates. When they disagree, say so in
+the report — the disagreement is itself a finding (billing and forwarding out of sync).
+
+## 11. Neutral canaries — identity and obedience probes carry confounds
+
+To test whether an instruction channel (system prompt) is delivered, plant a fact the model could
+never guess and ask for it back. But the fact must be **external to the model's identity**:
+"your internal codename is X" collides with assistant identity/safety training, and some model
+families will deny having a codename EVEN WHEN the system prompt arrived — indistinguishable from
+non-delivery. Obedience probes ("reply with only the word OK") fail the other way: compliance
+varies with the model's stylistic training, so non-compliance is temperament, not transport.
+Neutral external facts ("this session's project number is X") get relayed without resistance.
+When a probe involves the model's self-concept or its willingness to obey, the probe measures the
+model's personality entangled with the channel — redesign it until refusing is not an option.
+
+## 12. Time-varying systems: a single time slice is not a steady state
+
+Gateways route across multiple upstream channels whose weights change. A delivery/compliance rate
+measured once — even with a clean N≥10 — describes that hour, not the system: the same
+model+format combination has measured 6/16, then 12/12, then 1/6 across one day (and the token
+counts were strictly bimodal — payload fully counted or not at all, no middle — the signature of
+mixed routing rather than noise). Two rules follow. (1) Before publishing any rate, re-sample in
+a separate time window; write "unstable, varies by time" rather than freezing one window's number
+into a doc that outlives it. (2) When two careful measurements disagree, FIRST check whether they
+measured the same metric the same way (behavioral vs accounting, §10) — inventing "it must vary
+over time" to reconcile a metric mismatch is how one investigation papered over its own
+instrument error; time-variance must be demonstrated with same-metric multi-window data, never
+assumed to make contradictions comfortable.
+
+## 13. The probe is a suspect too
+
+Before a probe's failure means anything, the probe must pass on a known-good control. This is §7's
+forensic stance turned on your own tooling, and it recurs: a resident canary "detected an outage"
+that was its own too-short fixed sleep; a shell pipeline "detected empty content" that was its own
+quote-mangling of JSON (move JSON through files or direct HTTP libraries, never through shell
+string interpolation); a cache A/B tool permanently FAILs one vendor whose API reports
+cache_creation=0 unconditionally — a judging assumption that simply doesn't hold there. Two
+habits: run every new probe against a model/vendor where the answer is known before pointing it
+at the suspect; and when reusing a probe on a new vendor, re-verify its pass/fail assumptions
+against that vendor's API semantics (then write the exclusion into the probe's NOT-FOR header so
+the next person doesn't rediscover it).
+
+## 14. Report the failure MODE, not just the failure rate
+
+"90% success at concurrency 10" and "hard ceiling at 50 with instant clean 429s" can describe the
+same vendor — and the second is far more usable. Failure modes differ in user impact by an order
+of magnitude: a fast explicit 429 is retriable and nearly invisible; a silent TCP drop that hangs
+20 seconds before timing out stalls a room full of workshop attendees. When a probe fails, record
+HOW: status code vs hang, time-to-failure, retriable-or-not. And separate the ceiling's SHAPE:
+a sharp knee (stable 100% → cliff) locates a hard limit; a gradual slide suggests load-dependent
+degradation. Translate the number back into the real workload before concluding ("your peak is
+6-8 concurrent; the knee is at 50 → 6-8x headroom") — a benchmark that stops at the number has
+not answered the question that motivated it.
