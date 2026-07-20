@@ -226,6 +226,23 @@ The habits that keep a branch tangle from ever stranding work:
   work there, don't commit onto their branch — carry your edits to a branch off the base
   (`git checkout origin/main -b …`, after `git diff --quiet` proves your files match across bases),
   commit only your explicit paths, then switch the tree back to their branch to restore their state.
+- **If a parallel session is *actively* writing the shared tree** — files keep appearing while you
+  work — don't `switch`, `add`, or `reset` at all: each would either strand their uncommitted work
+  or trip a worktree guard. When your own change is self-contained (new files, or edits that belong
+  on `origin/main` rather than on their in-progress tree), build the commit with plumbing that never
+  touches the working tree, then push it to a branch and open a PR:
+  ```bash
+  export GIT_INDEX_FILE=$(mktemp)     # a scratch index — the tree's real index is untouched
+  git read-tree origin/main           # start from the pushed base, not the dirty tree
+  git update-index --add --cacheinfo 100644,"$(git hash-object -w path/to/file)",path/to/file
+  tree=$(git write-tree)
+  commit=$(git commit-tree "$tree" -p origin/main -m "…")   # HEAD does not move
+  unset GIT_INDEX_FILE
+  git push origin "$commit":refs/heads/<branch>             # open the PR from here
+  ```
+  The sequence reads and writes only the object store and a throwaway index, so `git status` in the
+  shared tree is byte-for-byte unchanged and the other session never sees a ripple. This is the
+  escape hatch for when commit-then-switch is off the table because someone else holds the tree.
 - **Before any rebase or branch-delete, run the Mode B audit.** Ten seconds; it's the difference
   between "nothing to lose" and finding out after gc.
 - **Before bumping a shared version/lockfile, check the base's current value** so two parallel
@@ -285,8 +302,13 @@ use repeated `--branch` instead. The exporter never drops or deletes anything.
   `--force`** and re-run `git worktree list`. Never remove the primary/current checkout. Follow
   **[references/merge_verification.md](references/merge_verification.md)** § Worktree retirement.
 - Local branches: prefer `git branch -d` (refuses unmerged); use `-D` only for items Step 1
-  proved superseded, backed up, and the user authorized deleting. Delete remote branches only
-  after re-verifying the exact remote and repository visibility/ownership.
+  proved superseded, backed up, and the user authorized deleting. **A squash-merge is the usual
+  reason `-d` refuses a branch whose content is fully merged**: `-d` judges by commit ancestry, and
+  the squash replaced the branch's commits with one new-SHA commit, so ancestry is broken even
+  though every line landed. That is not license to reach for `-D` reflexively — it means fall back
+  to Step 1's *content* check (`git cherry`, superset diff) and only `-D` once that proves
+  containment. Delete remote branches only after re-verifying the exact remote and repository
+  visibility/ownership.
 - **Independent clones: there is no safe git-level command — only `rm -rf`, which git cannot
   undo.** `git worktree remove` does not apply (it isn't a worktree) and refuses to help, so the
   usual "the tool will stop me if it's unsafe" backstop is absent here. Make the check explicit
@@ -302,6 +324,25 @@ use repeated `--branch` instead. The exporter never drops or deletes anything.
 
   Prefer deleting one clone at a time with its own verification over a loop across several — a
   glob that deletes five directories has five chances to be wrong and reports none of them.
+
+**Step 4 — after the delete, re-check by content, not by filename.** When a cleanup (or a batch of
+squash-merges) is already done and the question becomes "did any of it drop work?", the naming-based
+check that felt sufficient — `comm` over `git ls-tree` filenames, "every file is still on main" — is
+not enough: identical filenames say nothing about identical *content*. A file the deleted branch and
+the survivor both have can still differ line-for-line. Re-verify at blob level, and read the diff in
+the right direction:
+
+```bash
+git diff <survivor-ref> <deleted-or-merged-tip>    # survivor first, the gone thing second
+```
+
+Lines marked `-` are on the survivor but not the tip → the survivor is a **superset** (safe: it has
+everything the tip had, and more). Lines marked `+` are on the tip but not the survivor → **candidate
+loss** — run each through Step 1's ladder: is that symbol on the survivor under a different shape (a
+rename or refactor, not a deletion)? A diff that is mostly `-` with a few `+` is the fingerprint of
+"the survivor moved on and the deleted branch was an older version" — a merge that succeeded, not
+work lost. Apply the same test to any preserved backup: byte-identical or survivor-superset is safe;
+a line the survivor genuinely lacks anywhere is the one to escalate.
 
 **Recovery, if you regret it:** patches re-apply with `git apply`; the untracked tar extracts
 in place; the bundle restores full history via `git fetch <file>.bundle <branch>:restored/<branch>`.
