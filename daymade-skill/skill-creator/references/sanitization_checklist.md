@@ -2,6 +2,41 @@
 
 When extracting a skill from a business project for public distribution, systematically remove all business-specific content to make it generic and reusable.
 
+## Step 0: decide the destination — this checklist may not apply at all
+
+Everything in this file describes what goes wrong when a skill reaches people who are not
+the author. **A skill living in the author's own private repo is a different artifact with a
+different failure mode**, and running this checklist against it does damage:
+
+| | Public destination | Private destination |
+|---|---|---|
+| A real absolute path | breaks on every other machine | **is why the script runs** |
+| A pre-filled credential / entity in a template | leak | saves the next run from re-filling it |
+| A real project name in an example | leak | the example everyone there recognizes |
+| Correct action | sanitize | **report, and let the owner decide** |
+
+How to tell: `gh repo view --json isPrivate` on the repo the skill lives in. `quick_validate`
+does this automatically and prints a `🔒 audience: private` note when it applies; pass
+`--audience=public` to force the strict pass when preparing a private skill for release.
+
+**Why this matters more than it looks.** A checker that flags healthy input teaches people to
+ignore it. The research is unambiguous: ~90% of developers accept a false-positive rate up to
+5%, only 24% tolerate 20%, and developers actively **prefer tools that find fewer real bugs
+over tools that cry wolf** — false positives are the dominant barrier to static-analysis
+adoption ([Chou, *False Positives Over Time*](https://www.cs.umd.edu/~pugh/BugWorkshop05/papers/34-chou.pdf);
+[Why do or why don't developers use static analysis tools](https://ceur-ws.org/Vol-4077/paper17.pdf)).
+Sanitizing a private skill's working paths is exactly that failure: the owner learns the
+checker costs them a working tool, and turns it off everywhere — including on the public
+skill where it was the only thing standing between them and a real leak.
+
+**Real incident (2026-07-19):** a validator warning about an absolute path in a *private*
+skill was read as a defect. The path was replaced with `<project-root>/合同/<合同名>` and the
+script stopped running. The same pass rewrote a hardcoded assertion "to make it reusable" and
+silently dropped one branch of an `or`, so a case that used to pass began failing. The owner's
+words: 「这是我的私人仓库啊，按照我们已有的规则，不要管它，不然的话你反而去影响我自己的正常使用。」
+Everything was reverted. The warning had never said to fix it — it said `Skill is valid!` —
+the escalation from *warning* to *work order* was the whole error.
+
 ## The rule that matters most: read it yourself, don't just grep
 
 Scanners — gitleaks, the grep patterns below, `security_scan.py` — only match what you **thought to list**: known secret formats, a name list you wrote, specific path shapes. They are blind to the most dangerous leak of all: **real content with no proper noun to catch.** A verbatim spoken line from a real transcript (a casual aside with no name in it), a specific real-world example dropped into an illustration, a real meeting or project mentioned in passing, a codename you simply forgot to add to the word list — none of these have a keyword for grep to hit, so every scanner sails right past them.

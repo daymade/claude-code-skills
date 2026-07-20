@@ -478,8 +478,10 @@ check the available agent tools can perform.
   reference-tier, token, and palette audit.
 - references/browser-driving-and-observation-traps.md — the auditor's own failure
   modes: misread clicks, stale caches, `file://` limits, viewport-vs-page
-  screenshots, width-resize vs device emulation, and states a default screenshot
-  cannot show. Read it before driving a real browser, and whenever an observation
+  screenshots, width-resize vs device emulation, states a default screenshot
+  cannot show, hidden-tab media deferral, virtual-time false negatives,
+  `--dump-dom` timing (and the title-encoded interaction probe done right), and
+  Range-server media stalls. Read it before driving a real browser, and whenever an observation
   surprises you.
 - evals/evals.json and evals/trigger-evals.json — behavior and routing
   regression cases; excluded from packaged runtime content.

@@ -94,6 +94,50 @@ def find_internal_path_references(content: str) -> list[str]:
     return list(unique_paths)
 
 
+def detect_audience(skill_path: Path) -> tuple[str, str]:
+    """Is this skill headed somewhere public, or is it the user's own private tooling?
+
+    Several checks below (absolute home paths, personal identifiers) describe real
+    problems *for a skill that ships to strangers* and describe nothing at all for a
+    skill that lives in the author's private repo — there, a real absolute path is
+    usually the reason the script runs at all, and "fixing" it breaks the tool.
+
+    Auto-detected rather than flag-driven, per this skill's own "Auto-Detection Over
+    Manual Flags" principle: the destination repo already knows whether it is public,
+    and `gh` already has to be consulted before any push (Push Safety). Returns
+    ('public' | 'private' | 'unknown', how-we-know).
+    """
+    import json as _json
+    import shutil as _shutil
+    import subprocess as _subprocess
+
+    root = Path(skill_path).resolve()
+    for candidate in [root, *root.parents]:
+        if (candidate / ".git").exists():
+            root = candidate
+            break
+    else:
+        return "unknown", "not inside a git repository"
+
+    if not _shutil.which("gh"):
+        return "unknown", "gh CLI not installed"
+    try:
+        out = _subprocess.run(
+            ["gh", "repo", "view", "--json", "isPrivate,nameWithOwner"],
+            cwd=root, capture_output=True, text=True, timeout=8,
+        )
+    except (OSError, _subprocess.SubprocessError):
+        return "unknown", "gh invocation failed"
+    if out.returncode != 0:
+        return "unknown", "no GitHub remote resolvable"
+    try:
+        data = _json.loads(out.stdout)
+    except ValueError:
+        return "unknown", "unparseable gh output"
+    name = data.get("nameWithOwner", "repo")
+    return ("private" if data.get("isPrivate") else "public"), f"gh: {name}"
+
+
 def find_external_absolute_paths(content: str) -> list[tuple[int, str]]:
     """
     Find absolute paths that contain user home directories.
@@ -225,7 +269,7 @@ ALLOWED_PROPERTIES = {
 }
 
 
-def validate_skill(skill_path):
+def validate_skill(skill_path, audience=None):
     """Basic validation of a skill"""
     skill_path = Path(skill_path)
 
@@ -342,9 +386,18 @@ def validate_skill(skill_path):
         abs_paths = find_external_absolute_paths(file_content)
         if abs_paths:
             path_list = "; ".join(f"line {ln}: {p}" for ln, p in abs_paths[:5])
-            print(f"{chr(9992)}  WARNING: Found absolute user paths in {rel_name}:")
-            print(f"   {path_list}")
-            print(f"   These won't work on other machines. Use relative paths or config placeholders instead.")
+            if audience == "private":
+                print(f"{chr(128274)} note: absolute user paths in {rel_name}:")
+                print(f"   {path_list}")
+                print(f"   This skill lives in a PRIVATE repo, so this is informational only.")
+                print(f"   A real path is often why the script runs as-is — do not placeholder it")
+                print(f"   without asking the owner. Only matters if this skill later goes public.")
+            else:
+                print(f"{chr(9992)}  WARNING: Found absolute user paths in {rel_name}:")
+                print(f"   {path_list}")
+                print(f"   These won't work on other machines. Use relative paths or config placeholders instead.")
+                print(f"   If this skill is private tooling and the real path is what makes it run,")
+                print(f"   that is a legitimate reason to keep it — ask the owner before rewriting.")
 
         # Warn about personal identifiers (profiles, tokens, names).
         # Markdown only: scripts legitimately contain long hex/token-shaped
@@ -352,9 +405,14 @@ def validate_skill(skill_path):
         personal = find_personal_identifiers(file_content) if rel_name.endswith(".md") else []
         if personal:
             personal_list = "; ".join(f"line {ln}: {cat}={val!r}" for ln, val, cat in personal[:5])
-            print(f"{chr(9992)}  WARNING: Found personal/project-specific identifiers in {rel_name}:")
-            print(f"   {personal_list}")
-            print(f"   These are fine for private projects but should be reviewed before sharing.")
+            if audience == "private":
+                print(f"{chr(128274)} note: personal/project-specific identifiers in {rel_name}:")
+                print(f"   {personal_list}")
+                print(f"   PRIVATE repo — informational. Review only if this skill later goes public.")
+            else:
+                print(f"{chr(9992)}  WARNING: Found personal/project-specific identifiers in {rel_name}:")
+                print(f"   {personal_list}")
+                print(f"   These are fine for private projects but should be reviewed before sharing.")
 
         # Warn about broken skill-internal references inside reference docs
         # (SKILL.md gets the hard-fail check above; references get a warning).
@@ -371,10 +429,28 @@ def validate_skill(skill_path):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python quick_validate.py <skill_directory>")
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    flags = [a for a in sys.argv[1:] if a.startswith("--")]
+    if len(args) != 1:
+        print("Usage: python quick_validate.py <skill_directory> [--audience public|private|auto]")
+        print("  --audience  who this skill ships to. Default 'auto' asks gh whether the")
+        print("              containing repo is private. Private skills get portability and")
+        print("              identifier findings as notes, not warnings — there, a real path")
+        print("              or credential is usually load-bearing, not a defect.")
         sys.exit(1)
 
-    valid, message = validate_skill(sys.argv[1])
+    audience = "auto"
+    for f in flags:
+        if f.startswith("--audience"):
+            audience = f.split("=", 1)[1] if "=" in f else "auto"
+    if audience not in {"public", "private", "auto"}:
+        print(f"Unknown --audience {audience!r}; expected public, private, or auto")
+        sys.exit(1)
+
+    if audience == "auto":
+        audience, how = detect_audience(Path(args[0]))
+        if audience == "private":
+            print(f"{chr(128274)} audience: private ({how}) — portability/identifier findings are notes, not defects")
+    valid, message = validate_skill(args[0], audience=audience)
     print(message)
     sys.exit(0 if valid else 1)

@@ -224,7 +224,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, governance, and marketplace development tooling under one shared namespace. Existing-skill edits use an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.13.0",
+      "version": "1.14.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -487,7 +487,7 @@
       "description": "Evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four dimensions — speed (TTFT + thinking-aware tokens/sec), concurrency/stability (success rate, p50/p90, breaking point), Anthropic protocol compliance (thinking-block trigger rate), and quality regression against your own accumulated use cases (blind-judge precision). Use to benchmark a model, verify a tokens-per-second claim, compare models head-to-head, or vet a newly released model before adopting it.",
       "source": "./llm-eval-harness",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "developer-tools",
       "keywords": [
         "llm",
@@ -499,7 +499,12 @@
         "protocol-compliance",
         "tokens-per-second",
         "ttft",
-        "thinking-aware"
+        "thinking-aware",
+        "availability",
+        "fidelity",
+        "system-prompt",
+        "gateway-testing",
+        "vendor-bug-report"
       ]
     },
     {
@@ -1025,7 +1030,7 @@
       "description": "Audits already-rendered web, landing-page, HTML deck/slide, browser tool/game, dashboard/admin, design-system, and desktop UIs with real-browser or native-app journeys, inspected screenshots, DOM geometry, responsive or projection viewports, and a Playwright sweep. Use after implementation to find typography, wrapping, overlap, overflow, responsive, route, authorization-state, overlay, map, transient-state, data-visualization, runtime-label, browser-output, file-dialog, PDF/print, or Electron-shell defects. Not for greenfield UI design, design-system extraction, general QA-program setup, or nonvisual debugging.",
       "source": "./frontend-visual-qa",
       "strict": false,
-      "version": "1.9.0",
+      "version": "1.10.0",
       "category": "design",
       "keywords": [
         "frontend",

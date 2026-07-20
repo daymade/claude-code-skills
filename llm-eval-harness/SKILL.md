@@ -1,18 +1,18 @@
 ---
 name: llm-eval-harness
 description: >-
-  Evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four
-  dimensions: speed (TTFT + thinking-aware tokens/sec), concurrency/stability (success
-  rate, p50/p90 latency, the level where it breaks), Anthropic protocol compliance
-  (thinking-block trigger rate), and quality regression against your own accumulated
-  use cases (blind-judge precision). Use whenever someone wants to benchmark, 测评, or
-  压测 a model, verify a vendor's tokens-per-second claim, compare two
-  models head-to-head, decide whether a newly released model is fast/stable/good enough
-  before adopting it, measure TTFT or decode throughput, probe concurrency limits before
-  a workshop or batch job, or check whether an "Anthropic-compatible" endpoint really
-  implements thinking blocks. Triggers on "benchmark this model", "测一下这个模型的速度/
-  质量", "is X tok/s real", "compare model A vs B", "这个模型能不能扛住并发", "接入新模型
-  先测一下", even without the word "eval".
+  Test and evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across
+  six dimensions: availability (which model IDs work, without max_tokens false
+  negatives), request fidelity (does the system prompt / tools / history actually REACH
+  the model or does the gateway silently drop it), speed (thinking-aware TTFT + tok/s),
+  concurrency/stability, Anthropic protocol compliance, and quality regression with
+  blind judges. Also: vendor bug reports with deflection-proof evidence, deployment
+  gates, resident canaries. Use whenever someone tests/benchmarks/测评/压测 a model or
+  API endpoint, onboards a new gateway/provider, writes a supported-models list, debugs
+  "model ignores my system prompt", verifies a tok/s claim, compares models, or probes
+  concurrency before a workshop. Triggers on "benchmark this model", "测一下这个模型",
+  "测试这个 API", "接入新模型先测一下", "system prompt 不生效", "给厂商反馈 bug", even
+  without the word "eval".
 ---
 
 # LLM Eval Harness
@@ -20,16 +20,38 @@ description: >-
 ## Overview
 
 Give this skill an endpoint (`base_url` + `model` + an API key in an env var) and it
-measures whether the model is actually fast, stable, protocol-correct, and good enough —
-instead of trusting the vendor's headline numbers. It unifies four evaluation dimensions
-that are usually scattered across ad-hoc scripts:
+measures whether the endpoint actually works and whether the model is fast, stable,
+protocol-correct, and good enough — instead of trusting the vendor's headline numbers.
+Six dimensions, usually scattered across ad-hoc scripts that get rewritten (with the
+same bugs) every time:
 
 | Dimension | Script | Answers |
 |---|---|---|
+| **Availability** | `scripts/availability_probe.py` | which model IDs work here, with 3-state error classification |
+| **Request fidelity** | `scripts/fidelity_probe.py` | do system prompt / tools / history actually REACH the model? |
 | **Speed** | `scripts/speed_probe.py` | TTFT + sustained decode tok/s, **thinking-aware** |
 | **Concurrency / stability** | `scripts/concurrency_probe.py` | success rate, p50/p90 latency, where it breaks |
 | **Protocol compliance** | `scripts/protocol_probe.py` | does the Anthropic `thinking` block actually fire (N≥10)? |
 | **Quality / use-case regression** | `scripts/usecase_runner.py` + blind judges | does it pass *your* accumulated cases? |
+
+## Which dimensions to run
+
+Route from what the user is actually doing:
+
+- "接入新模型/新网关先测一下" / onboarding a provider → **Availability → Fidelity**,
+  then speed/concurrency if adoption looks likely
+- "这个 ID 能不能用 / 写个支持列表" → **Availability** (and read disciplines §9 before
+  writing any "unavailable" verdict)
+- "模型不听 system prompt / agent 行为怪但没报错" → **Fidelity** (system canary)
+- "快不快 / tok/s 是真的吗" → **Speed**; "扛不扛得住" → **Concurrency**
+- "这个兼容端点是真兼容吗" → **Protocol** + Fidelity's tools/auth checks
+- "换模型质量会不会掉" → **Quality regression**
+- "要给厂商报 bug" → run the relevant probe with `--output`, then follow
+  [references/vendor_evidence_protocol.md](references/vendor_evidence_protocol.md)
+- "部署闸门 / 常驻监控 / 告警老误报" →
+  [references/production_testing_patterns.md](references/production_testing_patterns.md)
+
+Don't run all six ritually — pick what answers the user's question.
 
 **Key handling (non-negotiable):** every script takes the API key by **env-var name**
 (`--key-env MY_KEY`), never the key value on the command line — so it stays out of `ps`,
@@ -59,8 +81,56 @@ uv run --with aiohttp python scripts/concurrency_probe.py \
 ```
 
 If the endpoint is Anthropic-Messages-shaped (`/v1/messages`), also run the protocol probe
-(below). Pick dimensions by what the user actually asked — don't run all four if they only
+(below). Pick dimensions by what the user actually asked — don't run all six if they only
 asked "is it fast?".
+
+## Dimension 0 — Availability (which model IDs actually work)
+
+```bash
+uv run --with aiohttp python scripts/availability_probe.py \
+  --base-url <base> --key-env <ENV> --format both \
+  --models model-a vendor/model-b @models.txt --output /tmp/avail.json
+```
+
+- Verdicts are 3-state per failure, not pass/fail: `no-channel` (no route for this
+  ID), `upstream-error` (route exists, upstream failing — retry later), `empty-content`
+  (usually a max_tokens artifact on reasoning models, NOT a broken model). The probe
+  keeps `--max-tokens` at 8192 by default precisely so thinking models don't read as
+  dead — do not "optimize" it downward.
+- **Before writing any "unavailable" list**: verify each failing ID exists in official
+  docs. Current-generation model names postdate your training data — WebSearch the
+  vendor's / model developer's model page instead of enumerating guesses; suffixes
+  (`-preview`, dated variants, tier names) decide routability. Full traps: disciplines §9.
+- The gateway's `/v1/models` listing is one input, never the verdict — real gateways
+  route models the listing omits.
+
+## Dimension 0.5 — Request fidelity (does your payload reach the model?)
+
+```bash
+uv run --with aiohttp python scripts/fidelity_probe.py \
+  --base-url <base> --model <model> --key-env <ENV> \
+  --format anthropic --check all --repeat 10 --output /tmp/fidelity.json
+```
+
+- Four checks: `system` (canary code planted in the system prompt — can the model echo
+  it back?), `tools` (full round-trip including returning a tool result and verifying
+  the final answer uses it), `multiturn` (plant facts across turns, recall them all),
+  `auth` (x-api-key vs Bearer on both protocol endpoints — gateways commonly accept
+  both on one path and only one on the other, and the wrong-header 401 reads exactly
+  like a dead key).
+- This is the dimension that catches the nastiest gateway failure: **everything returns
+  200 and chats fluently, but the system prompt never reached the model** — so any tool
+  whose rules live in the system prompt silently misbehaves with no error anywhere. On
+  one real gateway, one model alias never delivered the system prompt in 100+ samples
+  across every legal way of sending it, while sibling aliases delivered intermittently
+  with rates that changed by the hour.
+- Delivery through routed gateways is **probabilistic and time-varying** — hence
+  `--repeat` (default 10) and a three-state verdict (delivered / intermittent k-of-N /
+  not-delivered). A clean single-window result is still just that window: re-sample in
+  another time slice before publishing a number (disciplines §12).
+- The probe reports token-accounting corroboration but never trusts it alone —
+  behavioral evidence rules; see disciplines §10 (calibrate the meter) and §11 (why the
+  canary is a neutral external fact, not an identity or obedience test).
 
 ## Dimension 1 — Speed (thinking-aware)
 
@@ -177,19 +247,33 @@ When the user says "evaluate / benchmark this model", the typical flow is:
 
 1. **Identify the shape** — OpenAI-compatible (`/v1/chat/completions`) or Anthropic-Messages
    (`/v1/messages`)? Hit `GET /v1/models` or read the vendor docs; don't assume. This decides
-   which probes apply (protocol probe is Anthropic-only).
-2. **Run the dimensions the user cares about** — speed and concurrency for "is it fast/stable",
+   which probes apply (protocol probe is Anthropic-only). Remember the listing is incomplete
+   evidence either way (disciplines §9).
+2. **For a new endpoint, availability and fidelity come first** — speed numbers for a model
+   whose system prompt never arrives are answering the wrong question.
+3. **Run the dimensions the user cares about** — speed and concurrency for "is it fast/stable",
    add protocol for an Anthropic vendor, add quality when they have a use-case suite. Write each
    probe's `--output` JSON to a run directory.
-3. **Report honestly, separating measured from inferred.** Lead with the headline the user
+4. **Report honestly, separating measured from inferred.** Lead with the headline the user
    asked about (e.g. "sustained decode ceiling exceeds the vendor's claimed tok/s, while
    real-task throughput runs lower").
    If a number looks impossible (e.g. throughput far above the vendor claim, or a single-sample
    protocol verdict), treat it as a measurement artifact to investigate, not a result — that
-   skepticism is the whole point of this harness.
-4. **Comparing two models?** Run the identical probes against each with the same flags, and put
+   skepticism is the whole point of this harness. Rates on routed gateways are additionally
+   time-varying: re-sample another window before freezing any number into a document
+   (disciplines §12).
+5. **Comparing two models?** Run the identical probes against each with the same flags, and put
    the two JSON outputs side by side. Keep the test conditions identical (same concurrency
    levels, same use cases) or the comparison is meaningless.
+6. **Found a vendor bug worth reporting?** Don't paste raw probe output at their support
+   channel — build the evidence package per
+   [references/vendor_evidence_protocol.md](references/vendor_evidence_protocol.md)
+   (self-audit first, observation wording, request-id table, pre-registered thresholds,
+   adversarial counter-review).
+
+For tests that will run repeatedly against a live system — deployment gates, resident
+canaries, fault-injection mocks, and the monitoring statistics that lie — see
+[references/production_testing_patterns.md](references/production_testing_patterns.md).
 
 ## Next step
 

@@ -92,7 +92,10 @@ recovered_deep_research/
 .opencli/
 
 # Eval / runtime workspaces (test data, snapshots — never committed)
+# Bare `*-workspace/` only matches the repo root; `**/` also covers nested skills
+# like daymade-skill/skill-creator-workspace and daymade-audio/*-workspace.
 *-workspace/
+**/*-workspace/
 .skill-regression-reviewed
 .skill-regression-baseline.json
 .gstack/

@@ -2,7 +2,7 @@
 
 Failure modes that belong to *the auditor*, not to the page. Each one makes a
 healthy page look broken or a broken page look healthy, and every one of them has
-produced a wrong verdict: at best a wasted round, at worst a "fix" applied to
+produced a wrong verdict: at best a wasted round, at worst an "fix" applied to
 code that was already correct.
 
 Read this before driving a real browser, and again whenever an observation
@@ -17,6 +17,10 @@ surprises you.
 - [5. Resizing a headless window is not device emulation](#5-resizing-a-headless-window-is-not-device-emulation)
 - [6. Default state hides whole categories of defect](#6-default-state-hides-whole-categories-of-defect)
 - [7. Mid-run state is not final state](#7-mid-run-state-is-not-final-state)
+- [8. A hidden tab defers media loads — the request is never sent](#8-a-hidden-tab-defers-media-loads--the-request-is-never-sent)
+- [9. Virtual time fast-forwards timers, not I/O](#9-virtual-time-fast-forwards-timers-not-io)
+- [10. `--dump-dom` captures at load, not after your injected test](#10---dump-dom-captures-at-load-not-after-your-injected-test)
+- [11. A media stall may be the test server: Range support × moov position](#11-a-media-stall-may-be-the-test-server-range-support--moov-position)
 
 ---
 
@@ -84,6 +88,10 @@ When an audit needs real interaction on a local file, serve it:
 python3 -m http.server <port> --bind 127.0.0.1
 # then drive http://127.0.0.1:<port>/<artifact>.html
 ```
+
+One caveat: this server is fine for pages, scripts, and images, but it does **not**
+support HTTP Range requests — a page containing `<video>` can stall on it while
+everything else loads (see trap 11 before concluding the player is broken).
 
 Serving over HTTP also removes a second class of confusion: `file://` has
 distinct CORS behavior, so a page that fetches anything at runtime behaves
@@ -164,3 +172,81 @@ Before concluding "these were skipped / found nothing", wait for the process to
 exit and check its exit status. "Not reached yet" and "no result" are
 indistinguishable from the outside, and reporting the former as the latter is a
 fabricated negative.
+
+## 8. A hidden tab defers media loads — the request is never sent
+
+Driving a tab through extension tooling usually means the tab is **not visible**
+(`document.visibilityState === "hidden"`): the window is behind others, minimized,
+or belongs to a browser instance that is not frontmost. Chrome defers `<video>` /
+`<audio>` loading in hidden tabs — the media request is **never issued at all**.
+
+The signature is distinctive, and reads exactly like a broken player if you don't
+know it: `video.networkState = 2` (LOADING) forever, `readyState = 0`,
+`video.error = null`, the request **absent from the network log** — while a
+page-context `fetch()` of the same URL succeeds instantly. Every component of the
+stack is healthy; the scheduler simply hasn't started the load.
+
+Order of investigation: check `document.visibilityState` **first**, before any
+server-side or codec theory. If it is `hidden`, verify media in a context that is
+visible — a headless run (headless pages count as visible to the scheduler) or a
+tab actually brought to the foreground. Two sub-traps while escaping: OS-level
+scripting (e.g. AppleScript's application object) may not see the automation
+window at all when it belongs to another profile/instance — don't burn rounds
+trying to raise it; and per trap 9, don't verify the escape under virtual time.
+
+## 9. Virtual time fast-forwards timers, not I/O
+
+`--virtual-time-budget=N` makes `setTimeout`-based test scripts complete
+instantly — and starves everything that needs **wall-clock** time: network
+transfers, disk reads, media buffering. An injected probe that waits 3 virtual
+seconds and then reads `video.readyState` gets `0` on a perfectly healthy video,
+because zero real milliseconds of buffering have happened. That is a fabricated
+negative, produced by the harness (one real session shipped exactly this wrong
+verdict before catching it interactively).
+
+Rule of thumb: **virtual time for DOM-and-interaction assertions** (clicks,
+dialog open/close, class toggles, counters, `src` swaps — all synchronous or
+timer-driven); **real time and a visible context for anything that loads**
+(media readiness, lazy images, network-dependent states).
+
+## 10. `--dump-dom` captures at load, not after your injected test
+
+Headless `--dump-dom` serializes the DOM when the page finishes loading. An
+injected async test that runs after a delay and writes its verdict later (a
+common pattern: `document.title = "RESULT:" + JSON.stringify(state)`) finishes
+*after* the dump — so the dump contains the test's **source code**, and a grep
+for the marker happily matches the marker inside your own `<script>` text. The
+output looks like a result and is nothing of the sort.
+
+Two mechanics fix it, chosen by trap 9's rule: a virtual-time budget (DOM-only
+tests), or arranging the test to finish inside the load window (real-time tests —
+lazy-loading assets conveniently extend it). And make the grep match something
+only the **executed** result can contain — `RESULT:{"` with the opening brace —
+never the bare marker that the source also contains.
+
+Used correctly this title-encoding pattern is the cheapest interaction probe
+available without a debugging protocol: inject script → perform interactions →
+assert on **state** (`dialog.open`, counter text, `src` changed — a dispatched
+click alone proves nothing, per trap 1) → encode the assertion results into
+`document.title` → dump and grep the marker-plus-brace.
+
+## 11. A media stall may be the test server: Range support × moov position
+
+MP4s whose `moov` atom sits at the **tail** (common for phone recordings and
+editor exports) require byte-range access before metadata can be read. Browser
+media stacks fetch them with Range requests; `python3 -m http.server` — the very
+server trap 3 recommends — **ignores Range and returns 200 with the whole
+body**, and the media element stalls at `readyState 0` indefinitely. Meanwhile
+`fetch()` with a bounded Range header "succeeds" (the server just ignores the
+header), and a full GET downloads fine — every probe short of the media stack
+itself says the server is healthy. The page gets blamed; nothing on the page is
+wrong.
+
+Diagnose in two commands: `curl -sI -H "Range: bytes=0-100" <url>` — a `200`
+with full `Content-Length` instead of `206` means no Range support; and locate
+`moov` vs `mdat` byte offsets in the file (tail-moov + no-Range = guaranteed
+stall). Escapes: a range-capable static server (many exist; verify with the same
+curl — expect `206` and a `Content-Range`), or `file://` for pure rendering
+checks (native random access, no server), or serving faststart-remuxed copies.
+Keep the original files untouched; remux copies are a serving concern, not an
+asset edit.
