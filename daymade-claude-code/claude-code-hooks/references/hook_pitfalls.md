@@ -127,6 +127,40 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
   the outer command (`bash test_hook.sh`) doesn't contain the trigger, so it isn't
   self-blocked; the triggers live inside the file where the PreToolUse hook
   doesn't see them. This is what `scripts/test_hook.sh` is for.
+- **The same trap bites your own `git commit`.** A commit message that merely
+  *mentions* the trigger — e.g. a fix whose message quotes `foo|TRIGGER` as an
+  example — is parsed by the live hook and blocked: the heredoc message text
+  reaches the walker as if it were a command. (This skill's own qlmanage-guard
+  blocked its own fix commit exactly this way.) So a real guard should **exempt
+  git write segments** (`git commit` / `rebase` / `tag` / `am` / `cherry-pick`):
+  a commit message legitimately contains arbitrary words, domains, and a
+  `Co-Authored-By` trailer. `proxy-guard` and `git-worktree-guard` both skip these
+  segments — a Bash guard that inspects command strings must do the same or it
+  false-blocks your commits. (Stop-gap if the exemption isn't there yet: phrase the
+  message so the trigger never lands in a command position — but add the exemption,
+  don't rely on careful phrasing.)
+
+---
+
+## 8. `set -e` + `pipefail` silently kills a hook that promised "ALWAYS exit 0"
+
+- **Symptom:** a PostToolUse / SessionStart hook that's supposed to never block
+  reports a failure — the CLI shows only `Failed with non-blocking status code:
+  No stderr output`, no error text, and the hook's own "always exit 0" contract
+  is broken with **zero signal** to debug from.
+- **Cause:** `set -euo pipefail` + a git (or any) **pipe** whose left side can
+  fail — e.g. `git diff --cached --name-only | wc -l` in a non-repo /
+  dubious-ownership / bad-`cd`-path context. pipefail propagates the left
+  command's non-zero exit through the pipe, `set -e` kills the whole script, and
+  the `2>/dev/null` already swallowed the stderr.
+- **Fix:** every command feeding a substitution needs a `|| <fallback>` — the
+  pipe included: `STAGED=$(git diff … | wc -l || echo '?')`. (2026-07-21 in
+  git-commit-headcheck.)
+- **Why it's insidious:** it only fires in *edge* contexts (bad path, not-a-repo),
+  so it passes every test in a healthy repo and breaks in the field — same class
+  as #1 (stdin) and #3 (poisoning): a promise broken, hard to locate. If your hook
+  does I/O that can fail on some machines, either drop `set -e` (use `set -uo
+  pipefail`) or `||`-guard every such command.
 
 ---
 
