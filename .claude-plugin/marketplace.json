@@ -484,10 +484,10 @@
     },
     {
       "name": "llm-eval-harness",
-      "description": "Evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four dimensions — speed (TTFT + thinking-aware tokens/sec), concurrency/stability (success rate, p50/p90, breaking point), Anthropic protocol compliance (thinking-block trigger rate), and quality regression against your own accumulated use cases (blind-judge precision). Use to benchmark a model, verify a tokens-per-second claim, compare models head-to-head, or vet a newly released model before adopting it.",
+      "description": "Test and evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across six dimensions: availability (which model IDs work, without max_tokens false negatives), request fidelity (does the system prompt / tools / history actually REACH the model or does the gateway silently drop it), speed (thinking-aware TTFT + tok/s), concurrency/stability, Anthropic protocol compliance, and quality regression with blind judges. Also: vendor bug reports with deflection-proof evidence, deployment gates, resident canaries. Use whenever someone tests/benchmarks/测评/压测 a model or API endpoint, onboards a new gateway/provider, writes a supported-models list, debugs \"model ignores my system prompt\", verifies a tok/s claim, compares models, or probes concurrency before a workshop. Triggers on \"benchmark this model\", \"测一下这个模型\", \"测试这个 API\", \"接入新模型先测一下\", \"system prompt 不生效\", \"给厂商反馈 bug\", even without the word \"eval\".",
       "source": "./llm-eval-harness",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": [
         "llm",
