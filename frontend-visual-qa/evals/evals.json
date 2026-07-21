@@ -240,17 +240,17 @@
     {
       "id": 17,
       "name": "dead-affordance-thumbnails-look-clickable-do-nothing",
-      "prompt": "Audit only; do not edit code. This delivery report page shows a three-thumbnail gallery under a heading 'click any thumbnail to enlarge'; each thumbnail has a zoom cursor and a corner enlarge badge. A working expander sits below. Verify the interactions and give the verdict.",
-      "expected_output": "A report that actually triggers each interactive-looking element, finds the thumbnails are a false affordance (a dead click: zoom cursor and badge but no lightbox/handler), confirms the expander really toggles, and refuses to pass the thumbnails on the basis of the cursor, the badge, or their presence in the DOM.",
+      "prompt": "Audit only; do not edit code. This delivery report page shows a three-thumbnail gallery under a heading 'click any thumbnail to enlarge'; each thumbnail has a zoom cursor and a corner enlarge badge, and the page ships a complete-looking lightbox script. A working expander sits below. Verify the interactions and give the verdict.",
+      "expected_output": "A report that actually triggers each interactive-looking element and finds the thumbnails are a false affordance: the lightbox script is bound to a stale selector, so despite the zoom cursor, the badge, and a wired-looking source, the click is dead. It confirms the expander really toggles, and refuses to pass the thumbnails on the basis of the cursor, the badge, or the presence of a plausible lightbox script.",
       "files": [
         "evals/files/dead-affordance-fixture.html"
       ],
       "expectations": [
-        "Actually clicks the thumbnails at Level A/B rather than inferring behavior from the zoom cursor, the enlarge badge, or the element's presence in the DOM",
-        "Flags the thumbnails as a false affordance / dead click: they carry interactive signifiers but no handler is bound, so clicking produces no response",
+        "Actually clicks the thumbnails at Level A/B rather than inferring behavior from the zoom cursor, the enlarge badge, or the presence of a lightbox script in the source",
+        "Flags the thumbnails as a false affordance / dead click: the handler is bound to a stale selector (.thumb) that matches none of the .shot thumbnails, so no listener ever reaches them and clicking produces no response",
         "Triggers the expander and confirms it toggles, distinguishing genuine behavior from the dead thumbnails",
-        "Notes that a screenshot and a markup/DOM scan both pass here, so the defect is a Level C/D blind spot only a real trigger exposes",
-        "Connects the finding to the 'click to enlarge' promise in the heading: the signifier advertises an action the page never delivers"
+        "Recognizes the source is misleading here (a complete lightbox script is present) and a screenshot passes, so static reasoning can hypothesize but not verify the behavior; only a real trigger confirms the click is dead",
+        "Confirms the click actually registered before concluding the handler is dead (asserts on resulting state, rules out event delegation / hydration / a mis-dispatched click) rather than reading a non-response as proof"
       ]
     }
   ]
