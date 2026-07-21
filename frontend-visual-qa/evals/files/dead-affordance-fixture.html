@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dead-affordance fixture</title>
+  <style>
+    body { margin: 0; font: 15px/1.5 Arial, sans-serif; color: #202124; padding: 32px; }
+    h2 { font-size: 18px; margin: 0 0 12px; }
+    /* Gallery: every thumbnail carries interactive signifiers (zoom cursor + a
+       corner badge) but NO click handler is ever bound — a false affordance.
+       Clicking does nothing: a dead click. Screenshot + DOM both look fine. */
+    .gal { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 720px; }
+    .shot { position: relative; border: 1px solid #d4cbb6; border-radius: 8px; overflow: hidden; }
+    .shot img { width: 100%; display: block; cursor: zoom-in; }
+    .shot::after { content: "\2922"; position: absolute; top: 6px; right: 7px; width: 22px; height: 22px;
+      border-radius: 5px; background: rgba(20,16,12,.6); color: #fff; display: flex;
+      align-items: center; justify-content: center; font-size: 12px; }
+    .cap { font-size: 11px; color: #5b5349; padding: 6px 8px; }
+    /* Contrast: a real, working expander — actually toggles on click. A correct
+       audit must trigger BOTH and distinguish the live one from the dead ones,
+       not infer behavior from the cursor/badge/markup. */
+    .exp { max-width: 720px; margin-top: 24px; border: 1px solid #d4cbb6; border-radius: 8px; }
+    .exp summary { cursor: pointer; padding: 10px 12px; font-weight: 700; }
+    .exp .body { padding: 0 12px 12px; }
+  </style>
+</head>
+<body>
+  <h2>Delivery screenshots — click any thumbnail to enlarge</h2>
+  <div class="gal">
+    <div class="shot"><img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='150'><rect width='240' height='150' fill='%23c9d6c9'/><text x='120' y='80' font-size='16' text-anchor='middle' fill='%23334'>screen 1</text></svg>" alt="screen 1"><div class="cap">Upload page</div></div>
+    <div class="shot"><img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='150'><rect width='240' height='150' fill='%23d6cbc9'/><text x='120' y='80' font-size='16' text-anchor='middle' fill='%23334'>screen 2</text></svg>" alt="screen 2"><div class="cap">Review queue</div></div>
+    <div class="shot"><img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='150'><rect width='240' height='150' fill='%23c9cdd6'/><text x='120' y='80' font-size='16' text-anchor='middle' fill='%23334'>screen 3</text></svg>" alt="screen 3"><div class="cap">Library</div></div>
+  </div>
+
+  <details class="exp">
+    <summary>Working expander (real behavior) — toggles on click</summary>
+    <div class="body">This section actually expands and collapses. A correct audit
+    confirms it works by triggering it, and separately confirms the thumbnails above
+    do nothing when clicked — the difference is invisible in a screenshot.</div>
+  </details>
+
+  <!-- No script anywhere. The thumbnails look clickable (zoom cursor + badge +
+       "click to enlarge" heading) but have no lightbox and no handler. -->
+</body>
+</html>
