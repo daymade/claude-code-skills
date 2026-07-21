@@ -403,7 +403,7 @@
       "description": "Audits, preserves, recovers, and safely retires local Git state: unpushed or wrong-branch commits, dirty or detached worktrees, forgotten duplicate clones of the same repo, untracked work no bundle can back up, orphaned stashes, dangling commits, stale branches, and squash/rebase merge uncertainty. Use when the user fears work was lost; asks to recover a commit or branch; asks whether a worktree, clone, or scratch directory can be deleted; wants everything converged onto one main branch; or needs proof that cleanup will not drop work. Use it even after an audit reported clean — the usual gap is scope: every in-repo command is blind to a second clone elsewhere on disk. Triggers on \"did I lose work\", \"is everything merged\", \"is anything else lost\", \"safe to delete this clone\", \"clean up old branches/stashes\", \"only keep one main branch\", \"git reflog\", \"dangling commits\", \"分支灾难\", \"误删分支/commit\", \"worktree 能删吗\", \"还有没有丢的东西\", \"只保留一个主分支\". Covers local-Git forensics, not GitHub PR/API operations or routine sync.",
       "source": "./git-safety-net",
       "strict": false,
-      "version": "1.5.0",
+      "version": "1.6.0",
       "category": "developer-tools",
       "keywords": [
         "git",
@@ -1155,6 +1155,23 @@
         "openclaw",
         "relay",
         "thinking-levels"
+      ]
+    },
+    {
+      "name": "design-style-picker",
+      "description": "Batch-generate and compare visual design directions so a user can choose the style they actually want. Use when the user says they cannot describe an abstract visual style, asks for many style options, wants to choose from generated UI/design-system images, rejects outputs as too colorful/too dead/too generic, or needs an existing UI/design system evolved without discarding current assets.",
+      "source": "./design-style-picker",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "design",
+      "keywords": [
+        "design",
+        "style",
+        "ui",
+        "visual-direction",
+        "moodboard",
+        "设计",
+        "风格"
       ]
     }
   ]
