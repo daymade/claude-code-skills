@@ -3230,6 +3230,64 @@ memory has grown bloated with content that should live in docs
 
 ---
 
+### 91. **docx-creator** - Produce Production-Grade Word Documents
+
+> **Install**: `claude plugin install daymade-docs@daymade-skills`
+> (suite-only — invoked as `daymade-docs:docx-creator`)
+
+A thin incremental layer over `minimax-skills:minimax-docx` — not a document
+engine itself. Adds the layer the underlying OpenXML engine doesn't ship: a
+verified markdown-to-docx generator for Chinese formal documents, the
+alignment-layering rule that stops justified text from stretching 甲方/乙方
+info blocks and signature blocks into garbage, per-list numbering restart,
+CJK font dual-slot setup, and a mandatory LibreOffice-to-PDF-to-PNG visual
+verification chain (qlmanage thumbnails are banned — they hide exactly the
+bugs that matter).
+
+**Key features:**
+- Division of labor: the OpenXML SDK engine stays in `minimax-docx`; this skill owns Chinese formal-document typography rules and the CLI-vs-C# routing decision
+- Verified markdown-to-docx generator (`scripts/Program.cs`) for contracts, agreements, and 公文 with 甲乙方 info blocks, numbered clauses, signature blocks, and tables
+- Mandatory real-render visual verification (LibreOffice → PDF → PNG), not a Quick Look thumbnail
+- Routes plain prose to the minimax-docx CLI instead of duplicating it
+
+**Example usage:**
+```text
+/daymade-docs:docx-creator
+生成 Word 文档
+写合同 docx
+把 markdown 转成 Word
+give me a Word file for this labor contract
+```
+
+---
+
+### 92. **claude-code-hooks** - Write, Test, and Debug Claude Code Hooks
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills`
+> (suite-only — invoked as `daymade-claude-code:claude-code-hooks`)
+
+How to write, test, register, and debug Claude Code hooks — PreToolUse /
+PostToolUse / SessionStart / Stop Bash guards that enforce a rule the model
+would otherwise talk itself past. A prose rule in CLAUDE.md is a suggestion
+the completion drive can override; a hook is a wall.
+
+**Key features:**
+- Five runnable pattern skeletons — PreToolUse block, human-confirmation release gate, SessionStart health check, PostToolUse context injection, and a Stop hook that reacts to the model's own output — plus the shlex command-position walker for token-level command matching
+- Four hard-won rules: shlex over awk-splitting so a healthy command is never false-blocked, `bash -n` + real-JSON end-to-end testing before registering, SSOT + symlink so a reinstall can't silently disarm a guard, and per-profile registration convergence with human-confirmation release gates
+- Nine cataloged failure modes with symptom → cause → fix, including the UserPromptSubmit-vs-Stop category mistake (only Stop can see what the model itself wrote) and a literal quote/backtick inside a Python comment silently corrupting an embedded `python3 -c` block
+- Bundled end-to-end test harness (`scripts/test_hook.sh`)
+
+**Example usage:**
+```text
+/daymade-claude-code:claude-code-hooks
+make a hook that blocks git push --force
+turn this rule I keep forgetting into a hard gate
+my hook is false-blocking a healthy command
+debug this hook that's poisoning my session
+```
+
+---
+
 ## 🎬 Interactive Demo Gallery
 
 Want to see all demos in one place with click-to-enlarge functionality? Check out our [interactive demo gallery](./demos/index.html) or browse the [demos directory](./demos/).
