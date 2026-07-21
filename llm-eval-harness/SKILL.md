@@ -204,14 +204,17 @@ uv run python scripts/protocol_probe.py \
   thinking block came back as input, killing the session on every subsequent turn. Passing
   generation told us nothing about this; they're orthogonal failure modes (response
   generation vs. request validation).
-- **Don't conclude "vendor/reseller X is broken" from one cross-axis comparison.** The first
-  (wrong) diagnosis compared a different model AND a different reseller at once and blamed
-  the reseller. The comparison that held up changed **one axis** — same reseller, same
-  payload, only the model varied — and it turned out to track a **documented, named vendor
-  parameter** (Moonshot's own `preserve_thinking`, default on/off varies by model), not the
-  reseller. See disciplines §17 (single-axis comparisons) and §18 (check vendor docs for a
-  named parameter before ad-hoc probing) before writing an "X doesn't support thinking"
-  conclusion into anything.
+- **Don't conclude "vendor/reseller X is broken" from one cross-axis comparison — and don't
+  stop at the first single-axis comparison that confirms a vendor-documented parameter either.**
+  This took three rounds to get right, kept in disciplines §§17-19 as the canonical cautionary
+  tale: round 1 compared a different model AND a different reseller at once and (wrongly)
+  blamed the reseller. Round 2 fixed that — same reseller, only the model varied — and the
+  result matched a documented, named vendor parameter (Moonshot's own `preserve_thinking`), which
+  looked like confirmation. Round 2 was STILL wrong: the probe never left that one reseller, so
+  it couldn't see that the vendor's own direct/native endpoint handled the "rejected" model fine
+  — real production traffic proved it. Read §19 before treating any single-reseller-confirmed
+  result as final; check the vendor's own endpoint or real traffic for the actual channel in
+  question before writing an "X doesn't support thinking" conclusion into anything.
 - **Compliance is often probabilistic, not binary, for BOTH checks.** One real vendor honored
   the thinking block on only ~13% of generation requests (vs 100% for two competitors). That's
   why `--repeat` defaults to 10; generation's verdict has three states (`fully-implemented`,

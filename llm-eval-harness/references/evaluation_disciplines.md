@@ -271,7 +271,8 @@ model, only... no — same reseller, byte-identical payload, **only the model va
 isolated test showed the earlier "different reseller" model ALSO failed on the SAME reseller as
 the original failure, and a THIRD model on that same reseller worked fine — pinning the cause to
 the model, not the reseller, and revealing (§18) that it tracked a documented per-model vendor
-parameter.
+parameter. **This second conclusion was ALSO wrong — see §19.** The single-axis fix below is
+still correct as far as it goes; it just doesn't go far enough on its own.
 
 **The fix**: before concluding "X is why A differs from B," list every axis that differs between
 your two samples. If more than one does, that comparison is inadmissible as evidence — go run
@@ -286,12 +287,13 @@ reach for whatever's convenient to test next.
 An unexplained accept/reject split across models or resellers is often not a mystery to solve
 by more probing — it may already be a documented, named parameter in the vendor's own API
 reference, one probe-round away from being found if you'd searched first. The Kimi/Moonshot
-case in §17 resolved the instant the vendor's own model-integration guide was read: it names a
-`preserve_thinking` parameter, defaulting ON for some models and OFF for others, and the
-per-model defaults it lists correlate exactly with which models accepted vs. rejected the
-replayed thinking block in the single-axis test. Reading that ONE paragraph would have replaced
-several rounds of ad-hoc cross-reseller/cross-model curl probing with a five-minute WebFetch of
-the vendor's own docs.
+case in §17 APPEARED to resolve the instant the vendor's own model-integration guide was read:
+it names a `preserve_thinking` parameter, defaulting ON for some models and OFF for others, and
+the per-model defaults it lists correlated exactly with which models accepted vs. rejected the
+replayed thinking block in the single-axis test. **This correlation was a coincidence, not the
+real mechanism — see §19 for how real production data overturned it.** The technique below
+(search vendor docs before ad-hoc probing) is still sound practice; the specific conclusion
+drawn from it in this case was not.
 
 **The fix**: when a compatibility question feels vendor/model-specific ("why does this one model
 behave differently"), search the vendor's own API reference for a named parameter governing that
@@ -301,4 +303,44 @@ Before You Produce applied to compatibility debugging specifically: the vendor h
 certainly already documented the axis you're trying to reverse-engineer through trial and error.
 Empirical probing (§17) is still how you VERIFY the documented parameter actually behaves as
 claimed on YOUR specific model/reseller/version — it's a confirmation step, not a replacement for
-reading the docs first.
+reading the docs first. **But "confirms on the reseller you tested" is not "confirms in general"
+— read §19 before treating any single-reseller confirmation as the final answer.**
+
+## 19. A single-axis test only rules out variation along the axis you actually varied
+
+§17 and §18 together produced a plausible, evidence-backed, WRONG conclusion — worth keeping as
+the canonical cautionary tale because every step in the chain looked individually correct. The
+recap: §17's single-axis probe (same reseller — Qiniu — vary only the model) showed kimi-k2.6
+rejecting a replayed thinking block and kimi-k2.7-code accepting it. §18 found this matched
+Alibaba Bailian's documented `preserve_thinking` per-model default (off for k2.6, on for
+k2.7-code). Both steps were real, reproducible observations. The conclusion drawn — "this is a
+Moonshot-model-intrinsic property, so it applies wherever these models are accessed" — was
+still wrong, and testing it against REAL PRODUCTION TRAFFIC is what caught it: scanning every
+archived request to the vendor's OWN direct native endpoint (not a reseller) for the "rejecting"
+model, with a genuine thinking block already in history, showed 982 of 1163 real requests
+succeeding — the model was fine all along. The reseller (Qiniu) was the actual point of failure;
+the "vendor-documented parameter" correlation had been a coincidence of Qiniu's own internal
+per-model handling, not a universal property of the model itself.
+
+**Why the single-axis test couldn't catch this**: holding an axis constant to isolate a variable
+(§17) proves which axis matters *within the value you held it at*. It proves nothing about what
+happens if that held-constant value changes. "Same reseller, vary the model" tells you the model
+matters *when accessed through that one reseller* — it is silent on whether the reseller itself
+also matters, because the reseller was never varied. A vendor-documented parameter correlating
+with your result (§18) raises the confidence that the axis you tested is real, but a
+reseller-side implementation detail can produce the identical-looking correlation for entirely
+its own reasons (e.g. the reseller might route different models through different internal code
+paths with different bugs) — the correlation does not distinguish "this is the vendor's real
+behavior" from "this reseller's bug happens to track the vendor's documented default."
+
+**The fix**: when a probe is confined to one endpoint/reseller/environment and something more
+authoritative is available — the vendor's own direct/native endpoint, real production traffic,
+an independent second reseller — check it before writing "this is a model/vendor property" into
+anything, even when the single-axis result already matches vendor documentation. Rank evidence
+by authority, highest first: (1) real production traffic against the specific channel in
+question, (2) a direct probe against the vendor's own native endpoint, (3) a probe against a
+third-party reseller/gateway, even a clean single-axis one. A synthetic probe at rung 3 that
+matches vendor docs is still just a rung-3 result — it does not promote itself to rung 1 by
+sounding well-designed. If rung 1 evidence exists (it usually does, in the form of your own
+system's logs or request archives), go read it before finalizing a conclusion built entirely on
+rung 3.
