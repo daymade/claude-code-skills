@@ -143,6 +143,15 @@ Four traps, each of which has shipped a false conclusion into a real document:
   themselves constantly — deny having a system prompt they received, claim to be a different
   vendor's model. Never write "the gateway serves a different model than advertised" on the
   strength of asking the model who it is.
+- **The error's CLASS tells you what the gateway knows about the ID.** When a model fails
+  on its native endpoint, fire the same model name at the vendor's *other* protocol
+  endpoint and read the error class: a 400 whose message names the model ("this model is
+  not enabled for the Chat Completions API, please use the Messages API") proves the ID is
+  registered and routed — an unregistered ID earns a generic not-found / no-channel error
+  instead. A closed-beta model once 500'd on its Messages endpoint while returning that
+  naming 400 on the Chat Completions endpoint, which pinned the outage to the inference
+  engine without ever asking the vendor "is this ID right?". Distinguish the classes
+  before concluding: `engine_error` ≠ `not_found` ≠ `wrong_endpoint`.
 
 ## 10. Calibrate the meter before believing it
 
@@ -207,3 +216,27 @@ a sharp knee (stable 100% → cliff) locates a hard limit; a gradual slide sugge
 degradation. Translate the number back into the real workload before concluding ("your peak is
 6-8 concurrent; the knee is at 50 → 6-8x headroom") — a benchmark that stops at the number has
 not answered the question that motivated it.
+
+## 15. Interleave the control INSIDE the failure window
+
+A control run once *before* the target batch leaves a rebuttal door open: "the endpoint was
+having a bad hour when you measured the target — your control just missed it." Round-robin the
+control **between** target samples instead (target, target, control, repeat × N). The control
+then demonstrates endpoint/key/account health at the exact minutes the target was failing, and
+"the endpoint flapped" stops being an available explanation. One batch of 30 requests —
+10 × (target-plan-endpoint, target-payg-endpoint, control) — took under a minute and produced
+20/20 target failures against 10/10 control passes; "20/20 vs 10/10 inside the same 50-second
+window" reads as a single-glance proof instead of two claims about two different hours. This
+strengthens §13's control discipline, not replaces it: the control still has to be a known-good
+model on the same endpoint and key, and each request still gets a fresh connection (§4).
+
+## 16. Reproduce from an independent network before blaming the vendor
+
+"Your side is broken" always earns "your IP or account is throttled" as the counter. Two
+requests — the failing target plus one control — re-run from a second egress (home broadband
+vs the datacenter server, a phone hotspot vs office fiber) close that door for almost zero
+cost. Same key, same payload, different source IP and ISP path: if both networks reproduce
+the failure and both pass the control, IP-blocking, account-level routing, and path-specific
+middleboxes are excluded in one stroke. Handle the key on the second machine the same way as
+everywhere else (§1): a curl `--config` file with 0600 permissions keeps it out of `ps` and
+shell history there too.
