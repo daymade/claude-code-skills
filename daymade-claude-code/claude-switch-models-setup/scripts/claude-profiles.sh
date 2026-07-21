@@ -64,10 +64,26 @@ _is_profile_name_valid() {
 # ---------------------------------------------------------------------------
 
 claude-profiles-init() {
+    local repair=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --repair) repair=true ;;
+            -h|--help)
+                echo "Usage: claude-profiles-init [--repair]"
+                echo "  (no flag)  scan + create missing symlinks; report real-dir drift without touching it"
+                echo "  --repair   also archive real-dir drift (.pre-symlink-bak-<ts>) and replace with symlinks"
+                return 0
+                ;;
+            *) echo "claude-profiles-init: unknown argument: $1" >&2; return 1 ;;
+        esac
+        shift
+    done
+
     mkdir -p "$CLAUDE_PROFILES_DIR"
 
     local count=0
     local skipped=0
+    local repaired=0
 
     for settings_file in "$CLAUDE_BASE_DIR/$SETTINGS_DIR"/*.json; do
         [ -f "$settings_file" ] || continue
@@ -119,7 +135,25 @@ claude-profiles-init() {
             fi
 
             local target="$profile_dir/$subname"
-            if [ ! -L "$target" ] && [ ! -e "$target" ]; then
+            if [ -L "$target" ]; then
+                : # already a symlink — correct
+            elif [ -e "$target" ]; then
+                # Real directory/file residue — the profile predates the symlink-
+                # convergence design (or was hand-created). This is silent drift:
+                # this profile's $subname diverges from the main ~/.claude copy.
+                # 2026-07-21: legacy profiles carried real projects/ dirs this way.
+                # Default: WARN only, never touch user data without --repair.
+                # --repair: archive to .pre-symlink-bak-<ts>, then symlink.
+                if [ "$repair" = true ]; then
+                    local bak="$target.pre-symlink-bak-$(date +%Y%m%d-%H%M%S)"
+                    mv "$target" "$bak"
+                    ln -s "$subdir_path" "$target"
+                    echo "[INIT] $profile: REPAIRED $subname (real dir archived → $(basename "$bak"), symlinked)"
+                    repaired=$((repaired + 1))
+                else
+                    echo "[INIT] $profile: WARN $subname is a real dir, not a symlink (run: claude-profiles-init --repair)" >&2
+                fi
+            else
                 ln -s "$subdir_path" "$target"
                 echo "[INIT] $profile: symlinked $subname"
             fi
@@ -144,7 +178,19 @@ claude-profiles-init() {
 
         # settings/ is shared because the profile JSON files live there
         local settings_target="$profile_dir/$SETTINGS_DIR"
-        if [ ! -L "$settings_target" ] && [ ! -e "$settings_target" ]; then
+        if [ -L "$settings_target" ]; then
+            :
+        elif [ -e "$settings_target" ]; then
+            if [ "$repair" = true ]; then
+                local sbak="$settings_target.pre-symlink-bak-$(date +%Y%m%d-%H%M%S)"
+                mv "$settings_target" "$sbak"
+                ln -s "$CLAUDE_BASE_DIR/$SETTINGS_DIR" "$settings_target"
+                echo "[INIT] $profile: REPAIRED $SETTINGS_DIR (archived → $(basename "$sbak"))"
+                repaired=$((repaired + 1))
+            else
+                echo "[INIT] $profile: WARN $SETTINGS_DIR is a real dir, not a symlink (run: claude-profiles-init --repair)" >&2
+            fi
+        else
             ln -s "$CLAUDE_BASE_DIR/$SETTINGS_DIR" "$settings_target"
             echo "[INIT] $profile: symlinked $SETTINGS_DIR"
         fi
@@ -220,8 +266,11 @@ with open(p, 'w') as f:
     fi
 
     echo ""
-    echo "Done. Initialized/verified $skipped profile(s), created $count new .claude.json."
+    echo "Done. Initialized/verified $skipped profile(s), created $count new .claude.json${repair:+, repaired $repaired drift item(s)}."
     echo "Profiles directory: $CLAUDE_PROFILES_DIR"
+    if [ "$repaired" -gt 0 ] 2>/dev/null; then
+        echo "Re-run claude-profiles-doctor to confirm no drift remains."
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -337,13 +386,39 @@ claude-profiles-doctor() {
             fi
         done
 
+        # Drift detection: every shared content subdir (skills/projects/hooks/
+        # agents/commands/...) MUST be a symlink back into ~/.claude. A real
+        # directory here means the profile predates the symlink-convergence
+        # design (or was created by hand) and is silently drifting — its
+        # skills/projects/hooks/agents diverge from the main ~/.claude copy,
+        # undetectable by the broken-symlink check above.
+        # 2026-07-21: legacy profiles carried real projects/ dirs for months;
+        # doctor reported "OK" the whole time because this check didn't exist.
+        # plugins/ is the one legitimate real dir (per-profile known_marketplaces.json
+        # lives inside it; its content sub-items are themselves symlinked).
+        for item in "$profile_dir"/*; do
+            [ -d "$item" ] || continue
+            [ -L "$item" ] && continue
+            local dname
+            dname=$(basename "$item")
+            case "$dname" in
+                plugins|plugins.pre-sync-*|*.pre-symlink-bak-*)
+                    continue
+                    ;;
+            esac
+            echo "[$profile] WARN: $dname is a real directory (expected symlink to $CLAUDE_BASE_DIR/$dname) — drift; run: claude-profiles-init --repair"
+            profile_issues=$((profile_issues + 1))
+        done
+
         for item in "$profile_dir"/*; do
             [ -e "$item" ] || continue
             local name
             name=$(basename "$item")
             if [ -f "$item" ]; then
+                # Expected real files: per-profile state + Claude Code runtime +
+                # backups written by this skill's own sync scripts.
                 case "$name" in
-                    "$CLAUDE_JSON"|claude.json|settings.json|settings.json.bak.*|history.jsonl|daemon.log|stats-cache.json|mcp-needs-auth-cache.json|.last-cleanup|.last-update-result.json|.claude.claude.json.bak-*)
+                    "$CLAUDE_JSON"|claude.json|settings.json|history.jsonl|daemon.log|daemon.lock|daemon.status.json|stats-cache.json|gh-pr-status-cache.json|mcp-needs-auth-cache.json|.last-cleanup|.last-update-result.json|.claude.claude.json.bak-*|settings.json.bak*|settings.json.sync-backup)
                         continue
                         ;;
                 esac
@@ -362,7 +437,7 @@ claude-profiles-doctor() {
     if [ $issues -eq 0 ]; then
         echo "All profiles healthy."
     else
-        echo "Found $issues issue(s). Run: claude-profiles-init to fix."
+        echo "Found $issues issue(s). Run: claude-profiles-init --repair to fix drift."
         return 1
     fi
 }
@@ -448,10 +523,10 @@ claude-profiles-help() {
 Claude Code Profile Isolation Manager
 
 Commands:
-  claude-profiles-init              Initialize/verify all profiles
+  claude-profiles-init [--repair]   Initialize/verify profiles; --repair fixes drift
   claude-profile <name>            Launch a profile
   claude-profiles-ls                List profiles
-  claude-profiles-doctor            Health check
+  claude-profiles-doctor            Health check (detects symlink drift)
   claude-profile-rm <name>         Remove a profile's isolation directory
   claude-profiles-help              Show this help
 
