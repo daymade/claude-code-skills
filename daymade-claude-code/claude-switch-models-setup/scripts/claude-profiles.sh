@@ -373,6 +373,21 @@ claude-profiles-doctor() {
         profile=$(basename "$profile_dir")
         local profile_issues=0
 
+        # Orphan profile: the claude-profiles/ directory exists but there is no
+        # settings/<profile>.json to drive it. init only processes profiles with
+        # a settings file, so this profile's symlinks are never maintained and
+        # `claude-profile <name>` will fail to launch (settings not found).
+        # Skip the rest — symlink/drift checks are moot when init won't maintain
+        # the profile at all.
+        # 2026-07-22: a dead profile carried real data (history/skill-workspaces
+        # /usage-data) for months; doctor reported drift but init could never fix
+        # it because the profile had no settings file — misleading signal.
+        if [ ! -f "$CLAUDE_BASE_DIR/$SETTINGS_DIR/$profile.json" ]; then
+            echo "[$profile] WARN: orphan profile — no $SETTINGS_DIR/$profile.json; claude-profile $profile fails. Run: claude-profile-rm $profile (or recreate settings)"
+            issues=$((issues + 1))
+            continue
+        fi
+
         if [ ! -f "$profile_dir/$CLAUDE_JSON" ]; then
             echo "[$profile] ERROR: Missing $CLAUDE_JSON"
             profile_issues=$((profile_issues + 1))
