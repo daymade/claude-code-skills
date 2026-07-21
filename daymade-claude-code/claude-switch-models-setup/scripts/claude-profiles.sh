@@ -406,6 +406,11 @@ claude-profiles-doctor() {
                     continue
                     ;;
             esac
+            # Only flag as drift when the main ~/.claude actually has this dir to
+            # symlink back to. A real dir with NO main counterpart is profile-local
+            # data this profile alone produced (a skill workspace, a usage report),
+            # not drift — init cannot repair it (no source) and must not touch it.
+            [ -e "$CLAUDE_BASE_DIR/$dname" ] || continue
             echo "[$profile] WARN: $dname is a real directory (expected symlink to $CLAUDE_BASE_DIR/$dname) — drift; run: claude-profiles-init --repair"
             profile_issues=$((profile_issues + 1))
         done
