@@ -72,6 +72,21 @@ broken" — so close those doors first, and SAY you closed them in the report:
 - The contrast pair when the failure is intermittent: two adjacent requests,
   same body, one working and one failing, both IDs. Nothing shortens a
   routing investigation like "these two, 25 seconds apart".
+- **The outage window, bracketed.** "When did it break?" is the vendor's
+  first question, so answer it before they ask: last-known-good (timestamp
+  +TZ and its evidence — a deploy-gate pass, a smoke test, a prior probe)
+  and first-known-bad (the earliest failing request in your logs). State the
+  unobservable gap between them honestly ("no traffic for this model between
+  X and Y, so onset is somewhere in this window") — an over-precise onset
+  claim is a free credibility loss.
+- **The exclusion table.** One line per alternative hypothesis you already
+  ruled out (our gateway config, the other billing endpoint, wrong model ID,
+  key/account, egress IP, request format, a single bad replica) with the
+  evidence for each. This pre-answers the vendor's first round of deflection
+  questions inside the initial message — the difference between a same-day
+  escalation and a week of "have you tried…" ping-pong. The strongest single
+  row is the interleaved control (disciplines §15): target and control
+  sampled round-robin in the same minutes, failing and passing respectively.
 
 ## Pre-register the verdict thresholds
 
@@ -117,10 +132,16 @@ Title: <feature> not taking effect on <model(s)> — 100% reproducible on <entry
 Problem: <2-3 sentences: what was sent, what was observed, rate over N samples,
 control group result>
 
+Timeline: last-known-good <timestamp+TZ, with the evidence> → first-known-bad
+<timestamp+TZ>; onset somewhere in between (state the unobserved gap honestly)
+
 Reproduction: <one curl, runnable as-is, expected vs actual>
 
 Self-audit already done: <payload SHA-256 identical / thresholds exceeded /
 retries=0 / trust_env off / probe validated on control>
+
+Exclusions already tested: <one line per ruled-out hypothesis: other endpoint,
+model-ID registration, key/account, egress IP, single replica, request format>
 
 Log pointers: <table: timestamp+TZ, model, key metric, request id> — include
 one failing and one succeeding adjacent pair when intermittent
