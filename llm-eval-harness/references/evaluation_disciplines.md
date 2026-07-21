@@ -152,6 +152,22 @@ Four traps, each of which has shipped a false conclusion into a real document:
   naming 400 on the Chat Completions endpoint, which pinned the outage to the inference
   engine without ever asking the vendor "is this ID right?". Distinguish the classes
   before concluding: `engine_error` ≠ `not_found` ≠ `wrong_endpoint`.
+- **A client-side marker is not a real model ID — never send it to a raw endpoint.** Some
+  CLI clients append a suffix to the model-name *string in their own local config* that the
+  client itself parses and strips before constructing the actual request — it never
+  reaches the wire. Claude Code's `[1m]` is a concrete case: setting
+  `ANTHROPIC_MODEL=some-model[1m]` makes Claude Code strip `[1m]` and add
+  `context-1m-2025-08-07` to the `anthropic-beta` header, but the literal string
+  `some-model[1m]` is never the value of the `model` field in the request body. Probing
+  `--models some-model[1m]` against a raw endpoint tests a string that was never supposed
+  to exist at that layer — the resulting `no-channel` verdict says nothing about the
+  vendor and nothing about whether `[1m]`-style large-context handling works; it only
+  proves the endpoint doesn't understand a client-internal token, which was never in
+  question. If the goal is verifying large-context behavior, probe context capacity
+  directly (a real needle-in-haystack request near the claimed limit, using the bare
+  model ID) instead of round-tripping a client marker through the API. `availability_probe.py`
+  warns on this pattern (bracket-suffixed IDs) but cannot catch every client's private
+  convention — know which layer a string belongs to before you probe with it.
 
 ## 10. Calibrate the meter before believing it
 
@@ -240,3 +256,49 @@ the failure and both pass the control, IP-blocking, account-level routing, and p
 middleboxes are excluded in one stroke. Handle the key on the second machine the same way as
 everywhere else (§1): a curl `--config` file with 0600 permissions keeps it out of `ps` and
 shell history there too.
+
+## 17. Change one axis at a time — a comparison across two axes proves nothing
+
+When endpoint A behaves differently from endpoint B, it is tempting to explain the gap with
+whatever also differs between them — but if TWO things differ at once (which model, which
+reseller/gateway, which region, which SDK version…), the comparison cannot tell you which one
+caused it. This produced a real wrong conclusion: a Kimi/Moonshot model via reseller X rejected
+a `thinking` block replayed in history; the same model FAMILY (a different specific model) via
+reseller Y accepted it. That comparison changed BOTH the model and the reseller at once, and it
+was read as "reseller Y's gateway is just better" — a plausible-sounding, entirely wrong
+conclusion. The comparison that actually held up changed **one axis**: same reseller, same
+model, only... no — same reseller, byte-identical payload, **only the model varied**. That
+isolated test showed the earlier "different reseller" model ALSO failed on the SAME reseller as
+the original failure, and a THIRD model on that same reseller worked fine — pinning the cause to
+the model, not the reseller, and revealing (§18) that it tracked a documented per-model vendor
+parameter.
+
+**The fix**: before concluding "X is why A differs from B," list every axis that differs between
+your two samples. If more than one does, that comparison is inadmissible as evidence — go run
+the single-axis version (same reseller/gateway/region, vary only the suspected cause) before
+writing the conclusion down. This is the same discipline as changing one variable in any
+controlled experiment; the compatibility-probing setting just makes it easy to forget, because
+"try a different vendor" and "try a different model" often happen in the same breath as you
+reach for whatever's convenient to test next.
+
+## 18. Check the vendor's own documentation for a NAMED parameter before ad-hoc probing
+
+An unexplained accept/reject split across models or resellers is often not a mystery to solve
+by more probing — it may already be a documented, named parameter in the vendor's own API
+reference, one probe-round away from being found if you'd searched first. The Kimi/Moonshot
+case in §17 resolved the instant the vendor's own model-integration guide was read: it names a
+`preserve_thinking` parameter, defaulting ON for some models and OFF for others, and the
+per-model defaults it lists correlate exactly with which models accepted vs. rejected the
+replayed thinking block in the single-axis test. Reading that ONE paragraph would have replaced
+several rounds of ad-hoc cross-reseller/cross-model curl probing with a five-minute WebFetch of
+the vendor's own docs.
+
+**The fix**: when a compatibility question feels vendor/model-specific ("why does this one model
+behave differently"), search the vendor's own API reference for a named parameter governing that
+behavior BEFORE spending probe cycles guessing at it empirically — `WebSearch "<vendor> API
+<capability> parameter"` or `WebFetch` the vendor's model-integration page. This is Retrieve
+Before You Produce applied to compatibility debugging specifically: the vendor has almost
+certainly already documented the axis you're trying to reverse-engineer through trial and error.
+Empirical probing (§17) is still how you VERIFY the documented parameter actually behaves as
+claimed on YOUR specific model/reseller/version — it's a confirmation step, not a replacement for
+reading the docs first.

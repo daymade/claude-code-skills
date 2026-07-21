@@ -1,18 +1,19 @@
 ---
 name: llm-eval-harness
 description: >-
-  Test and evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across
-  six dimensions: availability (which model IDs work, without max_tokens false
-  negatives), request fidelity (does the system prompt / tools / history actually REACH
-  the model or does the gateway silently drop it), speed (thinking-aware TTFT + tok/s),
-  concurrency/stability, Anthropic protocol compliance, and quality regression with
-  blind judges. Also: vendor bug reports with deflection-proof evidence, deployment
-  gates, resident canaries. Use whenever someone tests/benchmarks/测评/压测 a model or
-  API endpoint, onboards a new gateway/provider, writes a supported-models list, debugs
-  "model ignores my system prompt", verifies a tok/s claim, compares models, or probes
-  concurrency before a workshop. Triggers on "benchmark this model", "测一下这个模型",
-  "测试这个 API", "接入新模型先测一下", "system prompt 不生效", "给厂商反馈 bug", even
-  without the word "eval".
+  Test/evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint:
+  availability (max_tokens-aware), request fidelity (does system prompt/tools/history
+  REACH the model, or does the gateway silently drop it), speed (TTFT+tok/s),
+  concurrency (before a workshop), Anthropic protocol compliance, quality regression,
+  vendor bug reports, deployment gates, resident canaries. Reach for this BEFORE
+  hand-rolling a curl loop against any LLM endpoint — that instinct is the trap: it
+  skips the N=10 sampling, Connection:close, and env-var key handling this bakes in. Use when someone tests/benchmarks/测评/压测 a model/endpoint, onboards a
+  provider, decides whether to switch or temporarily fail over to an alternate channel
+  (e.g. outage or quota exhaustion), writes a supported-models list, debugs "model
+  ignores system prompt", or verifies a tok/s claim. Triggers on "benchmark this
+  model", "测一下这个模型/渠道/API", "接入新模型先测一下", "system prompt 不生效",
+  "这个渠道能不能用/稳不稳", "临时切换过去顶一阵子" — even without "eval", even wrapped
+  in business narrative.
 ---
 
 # LLM Eval Harness
@@ -31,7 +32,7 @@ same bugs) every time:
 | **Request fidelity** | `scripts/fidelity_probe.py` | do system prompt / tools / history actually REACH the model? |
 | **Speed** | `scripts/speed_probe.py` | TTFT + sustained decode tok/s, **thinking-aware** |
 | **Concurrency / stability** | `scripts/concurrency_probe.py` | success rate, p50/p90 latency, where it breaks |
-| **Protocol compliance** | `scripts/protocol_probe.py` | does the Anthropic `thinking` block actually fire (N≥10)? |
+| **Protocol compliance** | `scripts/protocol_probe.py` | does the Anthropic `thinking` block actually fire when requested, AND does the endpoint accept one already sitting in history on a later turn (N≥10, both are separate checks — see Dimension 3)? |
 | **Quality / use-case regression** | `scripts/usecase_runner.py` + blind judges | does it pass *your* accumulated cases? |
 
 ## Which dimensions to run
@@ -45,6 +46,9 @@ Route from what the user is actually doing:
 - "模型不听 system prompt / agent 行为怪但没报错" → **Fidelity** (system canary)
 - "快不快 / tok/s 是真的吗" → **Speed**; "扛不扛得住" → **Concurrency**
 - "这个兼容端点是真兼容吗" → **Protocol** + Fidelity's tools/auth checks
+- "这个模型/渠道用着用着就 400 了 / session 断了 / continue 不下去了" (extended-thinking client,
+  multi-turn session) → **Protocol `--check history-replay`** specifically — this symptom is the
+  generation check passing while history-replay silently doesn't; don't stop at generation
 - "换模型质量会不会掉" → **Quality regression**
 - "要给厂商报 bug" → run the relevant probe with `--output`, then follow
   [references/vendor_evidence_protocol.md](references/vendor_evidence_protocol.md)
@@ -101,6 +105,13 @@ uv run --with aiohttp python scripts/availability_probe.py \
   docs. Current-generation model names postdate your training data — WebSearch the
   vendor's / model developer's model page instead of enumerating guesses; suffixes
   (`-preview`, dated variants, tier names) decide routability. Full traps: disciplines §9.
+- **Never probe a client-side marker as if it were a real model ID.** Bracket-suffixed
+  strings like `some-model[1m]` are frequently a CLI client's own local convention (Claude
+  Code parses and strips `[1m]` before the request is ever built — see
+  claude-switch-models-setup's "Configuring Context Window Size" section for the full
+  mechanism) — they never appear on the wire. The probe warns when it sees one, but the
+  discipline is yours: probe the bare model ID the vendor actually documents, not a string
+  copied out of a Claude Code `ANTHROPIC_MODEL` env var.
 - The gateway's `/v1/models` listing is one input, never the verdict — real gateways
   route models the listing omits.
 
@@ -171,20 +182,43 @@ uv run --with aiohttp python scripts/concurrency_probe.py \
 - Distinguish failure modes from the output: HTTP 429 (clean throttle, retriable) vs a TCP
   drop that hangs to timeout (much worse for UX) vs 5xx. They imply very different fixes.
 
-## Dimension 3 — Protocol compliance (Anthropic thinking block)
+## Dimension 3 — Protocol compliance (Anthropic thinking block: generation AND history-replay)
 
 ```bash
 uv run python scripts/protocol_probe.py \
-  --url <…/v1/messages> --model <model> --key-env <ENV> --repeat 10 --output /tmp/proto.json
+  --url <…/v1/messages> --model <model> --key-env <ENV> --check all --repeat 10 --output /tmp/proto.json
 ```
 
-- Only relevant for endpoints claiming Anthropic `/v1/messages` compatibility. It checks
-  whether `thinking: {type: enabled}` actually produces `thinking_delta` / `signature_delta`
-  SSE events.
-- **Compliance is often probabilistic, not binary.** One real vendor honored the thinking
-  block on only ~13% of requests (vs 100% for two competitors). That's why `--repeat`
-  defaults to 10 and the verdict has three states: `fully-implemented`, `intermittent
-  (k/N)`, `not-implemented`. Never conclude from a single sample.
+- Only relevant for endpoints claiming Anthropic `/v1/messages` compatibility. `--check all`
+  (default) runs BOTH sub-checks — they test different code paths and a vendor can pass one
+  while hard-failing the other:
+  - **generation**: does `thinking: {type: enabled}` actually produce `thinking_delta` /
+    `signature_delta` SSE events when you request it? (the original check)
+  - **history-replay**: does the endpoint ACCEPT a `type: "thinking"` block that's already
+    sitting in a prior assistant turn, when that history is replayed back on a later turn —
+    exactly what Claude Code and every other agentic client does on every continuation?
+    (`--check history-replay` to run just this one)
+- **Real incident (2026-07-21) that motivated the history-replay check**: a Kimi/Moonshot
+  model via a China reseller passed generation fine (emits thinking correctly when asked) but
+  hard-rejected history-replay — 400 "invalid part type: thinking" the instant a prior
+  thinking block came back as input, killing the session on every subsequent turn. Passing
+  generation told us nothing about this; they're orthogonal failure modes (response
+  generation vs. request validation).
+- **Don't conclude "vendor/reseller X is broken" from one cross-axis comparison.** The first
+  (wrong) diagnosis compared a different model AND a different reseller at once and blamed
+  the reseller. The comparison that held up changed **one axis** — same reseller, same
+  payload, only the model varied — and it turned out to track a **documented, named vendor
+  parameter** (Moonshot's own `preserve_thinking`, default on/off varies by model), not the
+  reseller. See disciplines §17 (single-axis comparisons) and §18 (check vendor docs for a
+  named parameter before ad-hoc probing) before writing an "X doesn't support thinking"
+  conclusion into anything.
+- **Compliance is often probabilistic, not binary, for BOTH checks.** One real vendor honored
+  the thinking block on only ~13% of generation requests (vs 100% for two competitors). That's
+  why `--repeat` defaults to 10; generation's verdict has three states (`fully-implemented`,
+  `intermittent (k/N)`, `not-implemented`), history-replay's has its own three-plus states
+  (`accepts-thinking-in-history`, `rejects-thinking-in-history`, `inconsistent`, or
+  `inconclusive` when errors look unrelated to thinking at all). Never conclude from a single
+  sample.
 - It forces `Connection: close` per request so a load balancer can't pin all samples to one
   replica and hide the real distribution (a real probe saw 0/10 with keep-alive vs 17/90
   with close on the same endpoint).
