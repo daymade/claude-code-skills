@@ -115,6 +115,28 @@ def main() -> int:
                 "and no .claude-plugin/plugin.json"
             )
 
+        # Suite member reconciliation — a member skill on disk that is missing from the
+        # suite's `skills` array is an orphan one level down: users install the suite and
+        # the skill silently never loads (found live: claude-migrate-memory-to-doc sat
+        # unlisted inside daymade-claude-code while every top-level check passed).
+        if directory.is_dir() and "skills" in plugin:
+            declared = {str(s).lstrip("./") for s in plugin["skills"]}
+            on_disk = {
+                child.name
+                for child in directory.iterdir()
+                if child.is_dir() and (child / "SKILL.md").exists()
+            }
+            for member in sorted(on_disk - declared):
+                failures.append(
+                    f"{label}: member skill '{member}/' exists on disk but is not listed "
+                    "in the suite's skills array — add it there, not as a standalone plugin"
+                )
+            for member in sorted(declared - on_disk):
+                failures.append(
+                    f"{label}: skills array declares '{member}' but no member directory "
+                    "with a SKILL.md exists at that name"
+                )
+
     for name, count in seen.items():
         if count > 1:
             failures.append(f"{name}: declared {count} times — plugin names must be unique")

@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (fast local conversation discovery across Claude Code and Codex, session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-financial, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.85.0"
+    "version": "1.86.0"
   },
   "plugins": [
     {
@@ -100,10 +100,10 @@
     },
     {
       "name": "daymade-claude-code",
-      "description": "Claude Code operations suite that bundles archive-aware local conversation discovery across Claude Code and Codex, internal-timestamp full-event session search and recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full claude.ai conversation extraction with tool-call rendering and file download, plugin marketplace development, multi-provider profile isolation for running Kimi/GLM/DeepSeek/StepFun/Anthropic in separate windows, local source sync for Claude/Codex skill installs, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
+      "description": "Claude Code operations suite that bundles archive-aware local conversation discovery across Claude Code and Codex, internal-timestamp full-event session search and recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full claude.ai conversation extraction with tool-call rendering and file download, plugin marketplace development, multi-provider profile isolation for running Kimi/GLM/DeepSeek/StepFun/Anthropic in separate windows, local source sync for Claude/Codex skill installs, personal-memory migration into tool-agnostic AGENTS.md reference docs, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.18.0",
+      "version": "1.19.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -120,7 +120,8 @@
         "terminal-screenshot",
         "usage-analyst",
         "web-conversation-export",
-        "conversation-file-download"
+        "conversation-file-download",
+        "memory-migration"
       ],
       "skills": [
         "./local-conversation-history",
@@ -135,7 +136,8 @@
         "./terminal-screenshot",
         "./claude-usage-analyst",
         "./claude-switch-models-setup",
-        "./read-claude-web-conversation"
+        "./read-claude-web-conversation",
+        "./claude-migrate-memory-to-doc"
       ]
     },
     {

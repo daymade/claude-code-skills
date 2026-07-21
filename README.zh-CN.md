@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.85.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.86.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -3192,6 +3192,59 @@ main 真的全部合并了吗，还是还有东西被滞留在某个分支？
 📚 **文档**：参见 [recovery_playbook.md](./git-safety-net/references/recovery_playbook.md)、[merge_verification.md](./git-safety-net/references/merge_verification.md) 和 [prevention_practices.md](./git-safety-net/references/prevention_practices.md)。
 
 **依赖**：Git 与标准 Bash shell；无需第三方包。核对最新远端状态时需要网络，离线审计则使用缓存的远端跟踪 refs。
+
+---
+
+### 89. **design-style-picker** - 批量生成并对比视觉设计方向
+
+> **安装**：`claude plugin install design-style-picker@daymade-skills`
+
+把说不清的审美偏好变成具体的视觉选项。不再靠猜一个"最终设计"，而是批量生成
+一组结构化的设计方向，让用户亲眼挑出真正想要的风格——目标是快速摸清审美边界。
+
+**主要能力：**
+- 批量生成多个设计方向并并排对比
+- 面向"没法用语言描述抽象视觉风格"的用户
+- 基于生成的 UI / 设计系统图片工作；"太花哨 / 太死气 / 太通用"就再给一批方向
+- 在现有 UI / 设计系统上演进，不抛弃已有资产
+- 附带选型 playbook 与可复用的 prompt 模式
+
+**示例：**
+```text
+/design-style-picker
+我说不清想要什么风格，给我一批选项看看
+这版太花哨也太通用了，再生成一些方向
+在现有设计系统基础上演进，别丢掉已有资产
+```
+
+📚 **文档**：参见 [selection-playbook.md](./design-style-picker/selection-playbook.md)。
+
+---
+
+### 90. **claude-migrate-memory-to-doc** - 把 Claude 记忆迁移为工具无关文档
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`
+> （仅随套件提供 — 以 `daymade-claude-code:claude-migrate-memory-to-doc` 调用）
+
+把 Claude Code 的个人记忆（每个项目的 `memory/` 目录）迁移为工具无关的 reference
+文档，让在同一目录工作的其他 AI CLI（主要是会自动加载 `AGENTS.md` 的 Codex；该架构
+同样适用于 Cursor 等）也能读到同一份用户画像与协作偏好，而不是对它们一无所知。
+
+**主要能力：**
+- 解决工具锁定：memory 不受版本控制，对 Claude 之外的所有工具不可见
+- 两层架构：`references/` + CLAUDE.md 内联 + AGENTS.md symlink，按各工具真实的
+  自动加载机制设计（纯文本指针在两个工具里都只是按需加载）
+- 完整流程：诊断、多 agent 评审、用 `codex` 实测验证、memory 清理
+- memory 退化为薄薄的交接缓存，不再当 SSOT
+- 内联运行，直接编排评审 subagent 并调用 `codex`
+
+**示例：**
+```text
+/daymade-claude-code:claude-migrate-memory-to-doc
+迁移我的记忆——Codex 不知道我是谁
+我的 memory 被锁在 Claude Code 里，让它工具无关
+memory 膨胀了，把该共享的内容迁到文档里
+```
 
 ---
 
