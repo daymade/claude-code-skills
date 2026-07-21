@@ -1,0 +1,22 @@
+[
+  {"query": "我想开两个终端窗口，一个用 Kimi K3 一个用 DeepSeek 跑 Claude Code，怎么配？", "should_trigger": true},
+  {"query": "我在 zshrc 里看到 csk、csd、csg 这些别名，想再加一个 stepfun 的 css", "should_trigger": true},
+  {"query": "CLAUDE_CONFIG_DIR 这个环境变量是干嘛的，为什么我机器上有 ~/.claude-profiles 这个目录", "should_trigger": true},
+  {"query": "给学生装的 Claude Code，要让他们在自己电脑上同时跑 Kimi 和 GLM，课后还能各自隔离", "should_trigger": true},
+  {"query": "我的 kimi profile 里 hook 没生效，但默认 anthropic profile 的 PreToolUse guard 是好的", "should_trigger": true},
+  {"query": "能不能在一台 mac 上跑多个 Claude Code 进程，每个走不同的 ANTHROPIC_BASE_URL", "should_trigger": true},
+  {"query": "claude-profiles-init 跑完提示有个 profile 的 projects 是 real directory 不是 symlink", "should_trigger": true},
+  {"query": "帮我把 StepFun 也加到我的多模型 Claude 配置里，模板怎么填", "should_trigger": true},
+  {"query": "deepseek profile 看不到我在默认 profile 装的那个 skill，是怎么回事", "should_trigger": true},
+  {"query": "想让 Kimi K3 用上 1M 上下文，那个 [1m] 标记加在哪几个字段", "should_trigger": true},
+  {"query": "帮我写个 Python 脚本，根据用户输入切换调 OpenAI 还是 Anthropic 的 API", "should_trigger": false},
+  {"query": "OpenRouter 怎么在一个请求里同时让多个模型回答做对比", "should_trigger": false},
+  {"query": "Claude Code 在公司代理后面报 ECONNREFUSED 连不上 api.anthropic.com", "should_trigger": false},
+  {"query": "我想给 Claude Code 加一个自定义的 PreToolUse hook，在每次 git commit 前跑 lint", "should_trigger": false},
+  {"query": "我的 anthropic API key 在环境变量里配好了但 claude 说 401", "should_trigger": false},
+  {"query": "帮我把几个 skill 打包成一个 marketplace 发到 GitHub", "should_trigger": false},
+  {"query": "Claude Code 的 statusline 想显示当前 git 分支和 token 用量，怎么自定义", "should_trigger": false},
+  {"query": "调 Kimi 的 API 一直返回 401 invalid api key", "should_trigger": false},
+  {"query": "在 VS Code 里想同时用 Copilot 和 Cursor 的 AI 补全", "should_trigger": false},
+  {"query": "换新 mac 了，怎么把 ~/.claude 整个迁过去", "should_trigger": false}
+]

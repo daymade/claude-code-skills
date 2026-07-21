@@ -1,6 +1,17 @@
 ---
 name: claude-switch-models-setup
-description: Set up multiple isolated Claude Code CLI profiles so students and power users can run different LLM providers (Kimi K3, Kimi K2.7 highspeed, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time. Use this skill whenever the user asks about multi-provider Claude setup, multiple Claude Code windows, switching models, CLAUDE_CONFIG_DIR, post-class profile installation, or running Kimi/GLM/DeepSeek/StepFun alongside Anthropic in Claude Code.
+description: >-
+  Set up and maintain multiple isolated Claude Code CLI profiles so students and
+  power users can run different LLM providers (Kimi K3, Kimi K2.7 highspeed, GLM,
+  DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time.
+  Use this skill whenever the user asks about multi-provider Claude setup,
+  multiple Claude Code windows, switching models or the csk/csd/csg aliases,
+  CLAUDE_CONFIG_DIR, the ~/.claude-profiles directory, or running
+  Kimi/GLM/DeepSeek/StepFun alongside Anthropic. It also owns profile-drift
+  troubleshooting — a third-party profile missing skills/hooks/plugins the default
+  profile has, claude-profiles-doctor reporting a real directory where a symlink
+  belongs, or settings not converging — and per-provider context-window
+  configuration (the [1m] marker or explicit CLAUDE_CODE_MAX_CONTEXT_TOKENS).
 ---
 
 # Claude Code Multi-Provider Profiles
@@ -50,6 +61,7 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    - For each provider the user wants, create `~/.claude/settings/<provider>.json`
    - Use the templates in `assets/templates/` as a starting point
    - Prompt the user for their API key and base URL; **never hardcode defaults**
+   - Set the context window correctly for this specific provider — `[1m]` suffix vs explicit `CLAUDE_CODE_MAX_CONTEXT_TOKENS`/`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, see "Configuring Context Window Size" below. Do this explicitly for every new profile rather than copying whatever the nearest template happens to already have — the nearest template not needing it is not evidence that this one doesn't either.
    - Include the required isolation flags:
      - `CLAUDE_CODE_SUBAGENT_MODEL` (same as `ANTHROPIC_MODEL`)
      - `ENABLE_TOOL_SEARCH: "false"`
@@ -97,7 +109,9 @@ When the user says something like "set up Claude Code profiles" or "I want to us
 After setup, the user can run:
 
 ```bash
-claude-profiles-init          # Re-scan settings/*.json and create missing profiles
+claude-profiles-init          # Re-scan settings/*.json, create missing profiles;
+                               # reports symlink drift (real dirs that should be symlinks).
+                               # Add --repair to archive drift and replace with symlinks.
 claude-profile <name>         # Launch a specific profile
 claude-profiles-ls            # List profiles
 claude-profiles-doctor        # Check symlink health
@@ -120,7 +134,7 @@ These are not day-to-day commands. Normal source edits are live through symlinks
 
 Templates live in `assets/templates/`:
 
-- `kimi.json` — Kimi K3 (1M context, `k3[1m]`)
+- `kimi.json` — Kimi K3 (1M context via the `[1m]` marker — see "Configuring Context Window Size" below)
 - `kimi-highspeed.json` — Kimi K2.7 highspeed (legacy 200K context)
 - `glm.json`
 - `deepseek.json`
@@ -128,6 +142,30 @@ Templates live in `assets/templates/`:
 - `anthropic.json`
 
 Each template has placeholders for `<API_KEY>` and `<BASE_URL>`. Ask the user for real values; do not guess or reuse values from the current machine unless the user explicitly provides them.
+
+## Configuring Context Window Size
+
+Every provider template sets the model's context window one of two ways — get this wrong and Claude Code doesn't know how much context the model can actually hold. Undershoot and it compacts (summarizes, drops old detail) far earlier than the provider actually requires; overshoot and it won't compact until the real limit is already blown past.
+
+The full client-side mechanism of the `[1m]` marker — what it strips off the model
+field, what it adds to the `anthropic-beta` header, and why a missing `[1m]` does
+*not* mean the provider can't hold a big prompt — is documented in
+`references/context-window-config.md`. Reach for it when a context number looks
+wrong, not at template-writing time.
+
+### Decision rule
+
+When writing a new provider's `settings/<name>.json`, pick based on the provider's real, verified context window — not the model's marketing name, and not by copying whatever the nearest template happens to do:
+
+| Provider's real context window | What to set | Example template |
+|---|---|---|
+| ~1M tokens, explicitly confirmed (not assumed from the model's tier/name) | `[1m]` suffix on every `ANTHROPIC_MODEL` / `ANTHROPIC_DEFAULT_*_MODEL` / `CLAUDE_CODE_SUBAGENT_MODEL` value. Must be the exact 4 characters `[1m]` — Claude Code matches this literal string, not a made-up marker like `[1million]` or `[max]`. | `kimi.json` |
+| A known, smaller size (e.g. 200K) | Explicit `CLAUDE_CODE_MAX_CONTEXT_TOKENS` and/or `CLAUDE_CODE_AUTO_COMPACT_WINDOW` set to the real number — no `[1m]`. | `kimi-highspeed.json` (`200000`) |
+| Unknown / not yet verified | Don't guess, and don't copy another provider's number just because a template needs *something* there. Ask the user to check the provider's own docs/console first. An unverified `[1m]` or an unverified large `CLAUDE_CODE_AUTO_COMPACT_WINDOW` just moves the failure from "compacts too early" to "doesn't compact until well past the real limit" — worse, because it's silent until a request actually fails. |
+
+`deepseek.json` and `glm.json` set **both** `[1m]` and an explicit `CLAUDE_CODE_AUTO_COMPACT_WINDOW: "1000000"`. That's belt-and-suspenders, not redundant filler to strip out — the exact precedence between the marker and the explicit override hasn't been independently reverse-engineered, so if you're copying one of those two templates, keep both rather than dropping one.
+
+The full step-2-16k template-correctness war-story (why an internally-consistent-looking context value is not the same as a currently-correct one — cross-check the model name against the provider's live docs, not just the numbers around it), plus a reusable recipe to verify whether any env var actually changes the bytes sent over the wire (a local `http.server` capture, since `--debug api` only shows internal state), live in `references/context-window-config.md`.
 
 ### Common base URLs (verify with your provider)
 
@@ -158,6 +196,41 @@ Each template has placeholders for `<API_KEY>` and `<BASE_URL>`. Ask the user fo
 | Provider settings | `~/.claude/settings/<name>.json` | Shared source, loaded per profile |
 
 ## Troubleshooting
+
+### A shared directory (skills/projects/hooks/agents/...) shows as a real directory, not a symlink
+
+Symptom: `claude-profiles-doctor` reports
+`<name> is a real directory (expected symlink to ~/.claude/<name>) — drift; run: claude-profiles-init --repair`.
+
+Cause: the profile was created before the symlink-convergence design landed (or
+was hand-created), so a shared content directory ended up as a real per-profile
+directory instead of a symlink. That profile's copy now silently diverges from the
+main `~/.claude/` copy — its skills/projects/hooks/agents are not the same as every
+other profile's. The broken-symlink check cannot see this (a real directory is not
+a broken link); on a real machine this drift went undetected for months until the
+dedicated real-directory check was added (2026-07-21: legacy profiles created
+before this check existed carried real `projects/` dirs for months, undetected).
+
+Fix (reversible — data is archived, never deleted):
+
+```bash
+claude-profiles-init --repair
+```
+
+For each drifted directory this archives the real dir to
+`<name>.pre-symlink-bak-<timestamp>` inside the profile directory, then creates the
+symlink that should have been there. Run `claude-profiles-doctor` again to confirm
+a clean bill. If an archive turns out to hold data you need, it is sitting right
+there — nothing was destroyed.
+
+Note on what gets shared: after repair, that directory points at the main
+`~/.claude/<name>` copy, so the profile sees the same skills/projects/etc. as the
+default profile — which is the entire point of the shared-symlink design. The
+per-profile state that must stay isolated (`.claude.json`, `settings.json`
+identity keys like `model`/provider env, `plugins/known_marketplaces.json`) is
+never one of these symlinked dirs, so repair never touches it. Inspect the archive
+before discarding it if the profile held session/history data you care about —
+those would now resolve to the shared copy.
 
 ### Marketplace says "corrupted installLocation"
 
@@ -245,11 +318,20 @@ Fix: Ensure the profile's `settings.json` sets:
 Symptom: Subagents inside a Kimi window call `claude-opus-4-7`.
 Fix: Set `CLAUDE_CODE_SUBAGENT_MODEL` to the same value as `ANTHROPIC_MODEL` in the profile's `settings.json`.
 
+### A huge-context provider compacts/summarizes way too early, or the statusline context number looks wrong
+
+Symptom: a provider whose own docs claim ~1M tokens of context gets auto-compacted by Claude Code well below that — long sessions get summarized when there's clearly no real need to yet, or the context percentage in the statusline tracks like it's looking at a ~200K model instead of the real ceiling.
+
+Cause: the profile's `ANTHROPIC_MODEL` (and its `ANTHROPIC_DEFAULT_*_MODEL` / `CLAUDE_CODE_SUBAGENT_MODEL` siblings) is missing the `[1m]` marker. Claude Code has no other way to learn the provider's real context size — the request itself succeeding with a huge prompt doesn't tell Claude Code anything, since that's a property of the upstream provider, not of the client. See `references/context-window-config.md` for the full mechanism.
+
+Fix: add the literal `[1m]` suffix to `ANTHROPIC_MODEL`, every `ANTHROPIC_DEFAULT_*_MODEL`, and `CLAUDE_CODE_SUBAGENT_MODEL` in the profile's `settings.json` (match `kimi.json`'s pattern). Restart the affected window.
+
 ## Adding a New Provider Later
 
 1. Create `~/.claude/settings/<new-provider>.json` using a template.
-2. Run `claude-profiles-init`.
-3. Add an alias to the shell rc file if desired.
+2. Check the provider's real, verified context window and configure it — `[1m]` marker or explicit `CLAUDE_CODE_MAX_CONTEXT_TOKENS`/`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, see "Configuring Context Window Size" below and `references/context-window-config.md`. Don't skip this because the template you copied from happened not to need it.
+3. Run `claude-profiles-init`.
+4. Add an alias to the shell rc file if desired.
 
 ## Security Notes
 
