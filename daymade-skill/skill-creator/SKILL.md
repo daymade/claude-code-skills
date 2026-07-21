@@ -114,7 +114,7 @@ When the source material is *past* session transcripts (the JSONL files under th
 4. Should we set up test cases to verify the skill works? Skills with objectively verifiable outputs (file transforms, data extraction, code generation, fixed workflow steps) benefit from test cases. Skills with subjective outputs (writing style, art, taste-calibrated reports) often can't use assertions — but "no assertions" is not "no verification". Their verification paths, in order of cost:
    - **Historical-task replay**: re-run one real prompt the skill has served before, old vs new skill, and compare outputs against the specific rules that changed ("does the new output actually follow the tokens / title grammar this update introduced?"). Cheap, catches "the rule was written but nothing reads it".
    - **Production-as-eval**: acknowledge that the real test is the user's next actual use — then make the loop explicit: every user correction afterward is an incident to fold back (the skill's own "迭代/活文档" section), every approval is corpus material. A taste skill that ships without this write-back habit doesn't improve; one that has it converges without ever running a formal eval.
-   - **Render + human review** for visual outputs (the skill's own visual-QA gates), never a grep assertion pretending to measure aesthetics.
+   - **Render + human review** for visual outputs (the skill's own visual-QA gates), never a grep assertion pretending to measure aesthetics. **And the renderer you verify with must be the same engine the deliverable will be consumed in** — whatever previewer is conveniently installed is not a substitute. A thumbnailer whose layout engine differs from the target application will silently *hide* the exact defects you are looking for, and a green verification on the wrong engine is worse than no verification, because it buys false confidence. Real case (2026-07): a .docx was "visually verified" through macOS Quick Look thumbnails, which do not reproduce justified-text stretching; Word showed the document's info blocks blown apart the moment the user opened it. The fix was to install the Word-compatible engine (LibreOffice), convert to PDF, rasterize per page, and read every page. Match the engine, or the verification is theater.
    Suggest the appropriate default based on the skill type, but let the user decide.
 
 After extracting answers from conversation history (or asking questions 1-3), use **AskUserQuestion** to confirm the skill type and testing strategy:
@@ -135,6 +135,20 @@ D) Skip testing for now — just build the skill and iterate by feel
 ```
 
 This upfront classification drives the entire evaluation strategy downstream. Get it right here to avoid wasted effort later.
+
+### The extend-vs-create check — runs BEFORE any specialized branch
+
+Each of the three specialized workflows below ends with "**do not** continue reading the sections below", and *Prior Art Research* happens to sit after them. **That ordering is layout, not execution order.** The extend-vs-create judgment applies to every branch, and skipping it is exactly how a session ships a skill that duplicates one already installed.
+
+So before routing into wrapper-skill / conversation-mining / artifact-corpus, answer one question: **does a skill already exist that this capability belongs to?** Sweep the real install roots — the source repos (a `claude-code-skills` checkout and any `-pro` sibling), `~/.claude/plugins/marketplaces/` (marketplace-installed suites — easy to forget, since nothing in the source repos hints they are there), `~/.claude/skills/`, `~/.codex/skills`, `~/.agents/skills`. If something overlaps:
+
+- **The overlap is a third party's skill** (a marketplace suite, an official plugin): **do not re-implement its capability.** Write a *thin increment* that drives it correctly — the pitfalls you hit, the correct invocation, the verified helper script — and **reference it by namespaced name**. Cloning someone else's engine into your bundle is the expensive mistake: their upgrades stop reaching you, and the two copies drift apart silently.
+- **The overlap is your own skill**: extend it, or add a sibling inside its existing suite. A standalone that competes for the same triggers helps nobody.
+- **Some related skill already points at the gap you're filling** (e.g. its description says "for X, use Y"): after you build, close the loop — update that pointer, or you have left a dangling reference behind.
+
+Only when nothing overlaps do you build standalone.
+
+**Why this check earns its place at the top:** a real 2026-07 session spent a day getting a third-party docx engine to produce correct Chinese business documents, then reached for the wrapper-skill branch — which skips straight past Prior Art Research. The shape it was about to ship was a fresh skill re-carrying that engine's capability. The correct shape was a **three-layer reference chain**: third-party engine untouched → a thin increment skill holding the correct usage plus the verified generator script → the domain-workflow skill calling that increment. The user had to catch it twice before it landed, with the second correction being the sharper one: *"don't copy an extra one — write the correct usage on top of theirs, and reference their skill; that's what skill-as-code means."*
 
 ### Specialized Workflow: Wrapper Skills for Third-Party CLI Tools
 
