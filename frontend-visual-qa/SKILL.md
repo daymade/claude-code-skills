@@ -121,6 +121,9 @@ Do not promote a lower level into a stronger conclusion:
 - A fresh headless empty state cannot verify the user's populated state.
 - A renderer URL cannot verify an Electron/native shell.
 - A handler call cannot verify Chrome print preview, popup, or download UI.
+- A pointer cursor, hover style, or "click to X" badge cannot verify the click
+  does anything: a signifier without a working handler is a dead click, confirmed
+  only by triggering it (step 5).
 - Device emulation is an approximation; use a real device when device-specific
   behavior is material.
 
@@ -334,6 +337,24 @@ node --test <skill-root>/tests/test_silent_degradation_probe.mjs
 ```
 
 ### 5. Exercise Journeys And Outputs
+
+**A visible signifier is not proof of behavior — trigger every interactive-looking
+element and confirm the response.** An element carrying interactive signifiers —
+pointer cursor, hover state, a zoom/expand/copy badge, button styling — may be a
+*false affordance*: the handler was never bound, or a refactor left it bound to a
+stale selector, so the click does nothing (a *dead click*). The screenshot passes
+and the source can be misleading — a plausible lightbox script may be present yet
+wired to nothing — so static reasoning can *hypothesize* a dead click but cannot
+*verify* the behavior; only a real Level A/B trigger confirms it. This is the
+mirror image of the missing-cue defect in the silent-degradation reference (a
+genuinely clickable control stripped of its visible signifier): there the behavior
+is present and the cue is gone, here the cue is present and the behavior is
+missing. It is highest-yield on the interactions a page adds last and tests least —
+"click to enlarge" galleries and lightboxes, thumbnail grids, and copy buttons.
+Before concluding the handler is dead, confirm the click actually registered:
+assert on the resulting state, not the dispatch, and rule out event delegation, a
+hydration-timing gap, or a trusted-gesture gate — a non-response can be a misread
+click, not a dead one (browser-driving-and-observation-traps.md trap 1).
 
 Exercise only the relevant transition matrix:
 
