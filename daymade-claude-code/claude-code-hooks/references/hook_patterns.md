@@ -1,6 +1,6 @@
 # Hook Patterns — runnable skeletons
 
-Four battle-tested shapes plus the shlex command-position walker. Every snippet
+Battle-tested shapes plus the shlex command-position walker. Every snippet
 here is distilled from a hook that has run in production. Copy, rename the
 TRIGGER, keep the structure.
 
@@ -11,7 +11,8 @@ TRIGGER, keep the structure.
 4. [Pattern B — PreToolUse with a human-confirmation release gate](#pattern-b--pretooluse-with-a-human-confirmation-release-gate)
 5. [Pattern C — SessionStart health check](#pattern-c--sessionstart-health-check)
 6. [Pattern D — PostToolUse context injection](#pattern-d--posttooluse-context-injection)
-7. [Registration](#registration)
+7. [Pattern E — Stop hook: react to Claude's own output](#pattern-e--stop-hook-react-to-claudes-own-output)
+8. [Registration](#registration)
 
 ---
 
@@ -52,6 +53,19 @@ import os, json
 data = json.loads(os.environ.get("HOOK_JSON") or "{}")
 PY
 ```
+
+**This form has a second benefit beyond fixing stdin consumption: a QUOTED
+heredoc delimiter (`<<'PY'`, not `<<PY`) makes the whole body inert literal
+text to bash** — no variable expansion, no command substitution, no
+quote-parsing. Compare that to the also-common `python3 -c "…multi-line…"`
+form, where the embedded Python is still subject to bash's own double-quote
+parsing: a single stray `"` or `` ` `` **anywhere** inside — including inside
+what looks like a harmless Python `#` comment, since bash has no idea it's a
+comment — silently truncates or splices the outer string. Prefer the quoted
+heredoc for any multi-line embedded Python; reserve `python3 -c "…"` for
+one-liners with no room for a comment to hide a stray character in. Full
+failure mode and why `bash -n` doesn't reliably catch it:
+[hook_pitfalls.md](hook_pitfalls.md#9-a-literal-quote-or-backtick-inside-a-python-comment-corrupts-a-hook-silently).
 
 **Not every hook guards Bash — pick the match technique from the input's TYPE.**
 An `Agent` matcher's `tool_input.prompt` is **free natural-language text**, not a
@@ -323,6 +337,143 @@ Injected truth beats "I think the commit worked."
 
 ---
 
+## Pattern E — Stop hook: react to Claude's own output
+
+The only pattern here that inspects the **model's own generated text**, not a
+tool call or a file. Use it for a rule about what the model itself *writes* —
+"never invent a shorthand name for something unverified", "always cite a
+source" — never for a rule about what the model writes **into** a file or a
+shell command (that's PreToolUse on `Write`/`Edit`/`Bash` instead; Stop only
+sees plain chat text). Getting the event wrong here isn't a tuning problem —
+`UserPromptSubmit` structurally cannot see the model's own text, so a hook
+built on it will never once fire for what it was built to catch, while still
+false-blocking the user's own unrelated typing whenever it happens to contain
+the trigger pattern (a real, shipped incident).
+
+```bash
+#!/usr/bin/env bash
+# Stop hook: block the model from ending its turn if its own last reply
+# contains <BANNED PATTERN>.
+set -uo pipefail                                # no -e: every risky step below
+INPUT=$(cat)                                     # is explicitly ||-guarded instead
+
+# Anti-loop, and the field this pattern is most likely to get wrong: compare
+# by IDENTITY to the JSON boolean, not by Python truthiness. `bool("false")`
+# is True (any non-empty string is truthy) — if stop_hook_active ever arrives
+# as the JSON *string* "false" instead of the boolean, a naive `bool(...)`
+# check treats it as an already-blocked retry and silently, permanently
+# disarms the guard for that turn. Test this explicitly: a payload with
+# `"stop_hook_active": "false"` (string) must NOT be treated as active.
+ACTIVE=$(HOOK_JSON="$INPUT" python3 - <<'PY'
+import json, os
+print(json.loads(os.environ['HOOK_JSON']).get('stop_hook_active') is True)
+PY
+) 2>/dev/null || exit 0
+[ "$ACTIVE" = "True" ] && exit 0
+
+# Prefer last_assistant_message (official docs: use it INSTEAD OF the
+# transcript — transcript_path is written asynchronously and may not yet
+# include the current turn's newest message when Stop fires). Its documented
+# shape is a plain string, but defensive extraction costs nothing and the
+# SAME helper is genuinely required for the transcript fallback below, where
+# message.content really is a list of typed blocks in practice.
+TEXT=$(HOOK_JSON="$INPUT" python3 - <<'PY'
+import json, os, sys
+
+d = json.loads(os.environ['HOOK_JSON'])
+
+def extract_text(node):
+    if isinstance(node, str):
+        return node
+    if isinstance(node, list):
+        return ' '.join(
+            b['text'] for b in node
+            if isinstance(b, dict) and b.get('type') == 'text'   # skip thinking/tool_use
+        )
+    if isinstance(node, dict) and 'content' in node:
+        return extract_text(node['content'])
+    return ''
+
+text = extract_text(d.get('last_assistant_message'))
+
+if not text:
+    tp = d.get('transcript_path', '')
+    try:
+        with open(tp, 'rb') as f:
+            tail = f.read().splitlines()[-80:]      # tail only — a long session's
+        for line in reversed(tail):                  # transcript can be 100s of MB;
+            try:                                      # a bounded backward chunked
+                obj = json.loads(line)                 # read scales this to O(80
+            except Exception:                          # lines) instead of O(file size)
+                continue
+            if not isinstance(obj, dict):             # a syntactically-valid but
+                continue                                # non-dict line (rare) must
+            if obj.get('type') == 'assistant':          # NOT abort the whole scan via
+                t = extract_text(obj.get('message', {}).get('content'))  # an uncaught
+                if t:                                   # AttributeError on .get() —
+                    text = t                            # that would silently discard
+                    break                                # an older, still-unscanned
+    except Exception:                                    # line that has the violation
+        text = ''
+
+print(text)
+PY
+) 2>/dev/null || exit 0
+[ -n "$TEXT" ] || exit 0
+
+printf '%s' "$TEXT" | grep -qw 'TRIGGER' || exit 0    # fast path, same idea as Pattern A —
+# but NOT the shlex walker below this line: TEXT is free-form prose, not a
+# shell command, so match with substring/regex per the JSON event contract's
+# "shlex is for shell commands" rule above.
+HIT=$(HOOK_TEXT="$TEXT" python3 - <<'PY'
+import os, re
+t = os.environ['HOOK_TEXT']
+# ... precise detection here — regex/substring over free text ...
+for m in re.finditer(r'TRIGGER', t):
+    print(m.group(0))
+    break
+PY
+) 2>/dev/null || HIT=''
+
+if [ -n "$HIT" ]; then
+  # This message is read by the MODEL, not the user — once Stop blocks, the
+  # model sees this text and must act on it before it can actually stop.
+  # Write it as an instruction ("rewrite X"), not a user-facing explanation.
+  echo "BLOCKED: your last reply contains <BANNED THING> (\"$HIT\"). WHY: ...
+FIX: rewrite it using <the correct alternative>, then finish this turn." >&2
+  exit 2
+fi
+exit 0
+```
+
+Three things worth calling out beyond what the comments above already say:
+
+- **This skeleton uses `python3 - <<'PY' ... PY` (a QUOTED heredoc) everywhere,
+  never `python3 -c "…multi-line…"`.** With a quoted delimiter, bash treats
+  the entire body as inert literal text — no variable expansion, no command
+  substitution, no quote-parsing at all — so a stray `"` or `` ` `` **inside a
+  comment** (which is exactly where one tends to sneak in unnoticed, since
+  bash doesn't know it's "just a comment" the way Python does) cannot corrupt
+  anything. This is the same technique the JSON event contract section above
+  uses to avoid the stdin-consumption trap, and it happens to close the
+  quote-embedding hazard too — see
+  [hook_pitfalls.md](hook_pitfalls.md#9-a-literal-quote-or-backtick-inside-a-python-comment-corrupts-a-hook-silently)
+  for what goes wrong with the `-c "…"` form instead, and why `bash -n` alone
+  doesn't always catch it.
+- **`stop_hook_active` is the single most safety-critical field in this
+  pattern.** Every other mistake in this hook fails toward "block too much" or
+  "miss one case"; getting this one wrong in the permissive direction fails
+  toward "silently do nothing, forever, with zero error signal."
+- **Wrap every python3 subprocess call in the same `2>/dev/null || <fallback>`
+  pattern, not just some of them.** An inconsistency here doesn't change the
+  block-vs-allow decision (a hook built this defensively is already fail-open
+  by construction — nothing prints before a match succeeds), but the
+  unguarded call leaks a raw Python traceback straight to the model's stderr
+  on any internal crash, instead of degrading cleanly to "no match" like the
+  guarded calls do.
+
+---
+
 ## Registration
 
 `settings.json` groups hooks by event, then by `matcher` (the tool name):
@@ -337,10 +488,14 @@ Injected truth beats "I think the commit worked."
       { "matcher": "Agent", "hooks": [ /* scope guards on subagent prompts */ ] }
     ],
     "PostToolUse":  [ { "matcher": "Bash", "hooks": [ { "type": "command", "command": "~/.claude/hooks/headcheck.sh" } ] } ],
-    "SessionStart": [ { "hooks": [ { "type": "command", "command": "~/.claude/hooks/hook-health-check.sh" } ] } ]
+    "SessionStart": [ { "hooks": [ { "type": "command", "command": "~/.claude/hooks/hook-health-check.sh" } ] } ],
+    "Stop":         [ { "hooks": [ { "type": "command", "command": "~/.claude/hooks/my-stop-guard.sh" } ] } ]
   }
 }
 ```
+
+Note `Stop` (like `SessionStart`) has no `matcher` key — it isn't scoped to a
+tool, so its `hooks` array sits directly under the event.
 
 Add to an existing `matcher: "Bash"` entry's `hooks` array (don't create a second
 Bash entry). Then **converge every profile** — a guard registered only in the

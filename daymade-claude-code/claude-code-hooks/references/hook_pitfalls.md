@@ -164,6 +164,51 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
 
 ---
 
+## 9. A literal quote or backtick inside a Python comment corrupts a hook silently
+
+- **Symptom:** you edit a multi-line Python block embedded in the hook (the
+  `python3 -c "…many lines…"` form), `bash -n` passes clean, you register the
+  hook — and a specific case that should block now silently allows (or a case
+  that should pass now silently blocks), with no error anywhere. Unlike #3,
+  there is no syntax error and no session-wide poisoning — just one wrong
+  answer in one narrow code path, which makes it far easier to miss.
+- **Cause:** the whole embedded Python source is one long bash **double-quoted
+  string**. Bash's parser scans that string for its own terminator (`"`) and
+  for `` ` `` (legacy command substitution) and unescaped `$` — it has no
+  concept of a Python `#` comment, so a literal `"` or `` ` `` typed inside
+  what you intend as a harmless Python comment still ends or splices the
+  outer bash string right there. The result can easily still be
+  *syntactically valid* bash (the stray quote happens to pair up with another
+  nearby one, just scoping a differently-shaped string than you meant) — so
+  `bash -n` finds nothing wrong, and only a real end-to-end test that exercises
+  the exact affected code path reveals the corruption.
+  (2026-07-21, `group-name-guard.sh`: while fixing one bug, a Chinese-language
+  comment explaining the fix used a literal `"` to quote an example — inside
+  the very block whose job was catching literal-quote citations — and the
+  regex logic after it silently stopped matching. `bash -n` passed both times
+  this happened; only re-running the real JSON test suite caught it.)
+- **Fix — structural (preferred):** don't use `python3 -c "…multi-line…"` at
+  all for anything with room for a comment. Use a **quoted heredoc**
+  (`python3 - <<'PY'` — note the quotes around `PY`) instead, passing input
+  via an env var. A quoted delimiter makes the entire body inert literal text
+  to bash: no quote-parsing, no `` ` `` substitution, no `$` expansion — the
+  bug class becomes impossible, not just less likely. See the heredoc note in
+  [hook_patterns.md](hook_patterns.md#json-event-contract) and
+  [Pattern E](hook_patterns.md#pattern-e--stop-hook-react-to-claudes-own-output)
+  for the full working shape.
+- **Fix — if you're stuck with `-c "…"`:** every literal `"` and `` ` `` in
+  the embedded source — code AND comments — must be backslash-escaped
+  (`\"`, `` \` ``); for CJK prose comments, prefer corner brackets `「」` or
+  book-title marks `《》` over straight quotes — they read naturally in
+  Chinese and aren't bash-special, so there's nothing to remember to escape.
+  Before registering, audit the embedded span directly rather than trusting a
+  visual read: `awk 'NR==<start>,NR==<end>' hook.sh | grep -n '"\|`'` (and
+  `grep -nF '$'` for stray dollar signs) — a clean grep on the exact span is
+  stronger evidence than "I re-read it and it looked fine," which is
+  precisely the check that failed twice in the incident above.
+
+---
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:
@@ -171,3 +216,7 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
 2. Is it **blocking a healthy command**? → awk-split / presence-not-position (#2).
 3. Did **unrelated Bash calls** break right after you touched it? → corruption (#3), run `bash -n`.
 4. Does the **banned action still happen**? → escape hatch (#4) or wrong profile (#5) or dead symlink (#6).
+5. Is `bash -n` clean but **one specific case still gives the wrong answer**
+   (and you recently edited an embedded `python3 -c "…"` block, code or
+   comments)? → quote/backtick corruption (#9) — `bash -n` cannot see this one,
+   only a real-JSON test of that exact case will.
