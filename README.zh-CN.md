@@ -3248,6 +3248,62 @@ memory 膨胀了，把该共享的内容迁到文档里
 
 ---
 
+### 91. **docx-creator** - 生成生产级 Word 文档
+
+> **安装**：`claude plugin install daymade-docs@daymade-skills`
+> （仅随套件提供 — 以 `daymade-docs:docx-creator` 调用）
+
+`minimax-skills:minimax-docx` OpenXML 引擎之上的薄增量层——本身不是文档
+引擎。补上底层引擎没提供的那一层：面向中文正式文档、经过验证的
+markdown-to-docx 生成器,阻止两端对齐把甲方/乙方信息块和签字栏拉散的对齐
+分层规则,列表编号分组重启,中英文双字体槽位设置,以及强制的
+LibreOffice→PDF→PNG 视觉验证链（禁止用 qlmanage 缩略图——它恰恰会把真正
+要命的问题藏起来）。
+
+**核心能力：**
+- 职责划分：OpenXML SDK 引擎留在 `minimax-docx`，本 skill 只管中文正式文档排版规则和 CLI-vs-C# 路径选择
+- 经过验证的 markdown-to-docx 生成器（`scripts/Program.cs`），适用于带甲乙方信息块、编号条款、签字栏、表格的合同/协议/公文
+- 强制的真实渲染视觉验证（LibreOffice → PDF → PNG），不是 Quick Look 缩略图
+- 纯文字类文档路由给 minimax-docx CLI，不重复造轮子
+
+**使用示例：**
+```text
+/daymade-docs:docx-creator
+生成 Word 文档
+写合同 docx
+把 markdown 转成 Word
+给我一份劳动合同的 docx
+```
+
+---
+
+### 92. **claude-code-hooks** - 编写、测试、调试 Claude Code Hook
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`
+> （仅随套件提供 — 以 `daymade-claude-code:claude-code-hooks` 调用）
+
+如何编写、测试、注册、调试 Claude Code hook——PreToolUse / PostToolUse /
+SessionStart / Stop 这几类会强制执行某条规则的 Bash 守卫，用来管那些光靠
+提示词、模型自己讲着讲着就会绕过去的规则。CLAUDE.md 里的散文规则只是建议，
+completion drive 随时能盖过它；hook 才是一堵墙。
+
+**核心能力：**
+- 五套可直接运行的模式骨架（PreToolUse 拦截、带人工确认放行闸的 PreToolUse、SessionStart 健康检查、PostToolUse 上下文注入、对模型自己输出做反应的 Stop hook），外加 token 级命令匹配的 shlex 位置遍历器
+- 四条用真实事故换来的铁律：shlex 而非 awk 拆分（绝不误杀健康命令）、注册前必须 `bash -n` + 真实 JSON 端到端测试、SSOT + symlink 防止重装后静默失效、按 profile 逐个收敛注册 + 人工确认放行闸
+- 九类已归档的失败模式（症状→根因→修法），包括 UserPromptSubmit 与 Stop 选错事件这类范畴性错误（只有 Stop 能看到模型自己写的内容），以及嵌入的 `python3 -c` 代码块里一个字面引号/反引号（哪怕藏在注释里）会怎样悄悄把逻辑改坏
+- 自带端到端测试脚手架（`scripts/test_hook.sh`）
+
+**使用示例：**
+```text
+/daymade-claude-code:claude-code-hooks
+写一个拦截 git push --force 的 hook
+把这条我老是忘记的规则做成硬性拦截
+我的 hook 把正常命令也误杀了
+调试这个把 session 搞坏的 hook
+```
+
+---
+
 ## 🎬 交互式演示画廊
 
 想要在一个地方查看所有演示并具有点击放大功能？访问我们的[交互式演示画廊](./demos/index.html)或浏览[演示目录](./demos/)。
