@@ -101,6 +101,19 @@ false-blocks is matching on the raw command string.
   [references/hook_patterns.md](references/hook_patterns.md).
 - Corollary: `echo "…TRIGGER…"`, `grep TRIGGER`, `# TRIGGER`, `man TRIGGER` must
   all pass. Your test set MUST include these mention-not-execute cases.
+- **But shlex isn't a silver bullet, and *what* you detect changes whether
+  fail-open is safe.** `shlex.split()` itself throws `ValueError` on an unbalanced
+  quote — a multi-line `git commit -m "…` message with a `#` or an unclosed quote
+  is the classic trigger. The `except ValueError: cmd.split()` fallback then
+  *allows*, which is right when you're detecting a **banned modifier** (does this
+  carry `--no-verify`? — missing it errs safe, Rule 1's direction), but
+  **dangerous when you're detecting whether the command IS your target at all**
+  (is this a `git commit`? — a ValueError there means the guard never recognises
+  the commit and silently doesn't fire; a real cross-domain commit shipped with no
+  confirmation dialog this way). For the *is-this-the-command* decision, prefer a
+  narrow **regex** (`git` and `commit` as separate words, any flag tokens between)
+  that's immune to multi-line-quote breakage; reserve the shlex walker for the
+  *command-position / modifier* checks where fail-open is the safe direction.
 
 ### 2. Test with **bash -n + a real JSON event, end-to-end, BEFORE registering**
 

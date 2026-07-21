@@ -40,10 +40,12 @@ run() {
 # Trigger cases (want 2):
 run "execute"        '{"tool_name":"Bash","tool_input":{"command":"TRIGGER -x arg"}}' 2
 run "after-pipe"     '{"tool_name":"Bash","tool_input":{"command":"ls | TRIGGER -x"}}' 2
+run "no-space-pipe"  '{"tool_name":"Bash","tool_input":{"command":"ls|TRIGGER -x"}}' 2
 run "after-&&"       '{"tool_name":"Bash","tool_input":{"command":"foo && TRIGGER x"}}' 2
 run "env-prefix"     '{"tool_name":"Bash","tool_input":{"command":"FOO=1 TRIGGER x"}}' 2
 # Healthy-lookalike cases (want 0) — THESE are what prove you don't false-block:
 run "grep-regex-arg" '{"tool_name":"Bash","tool_input":{"command":"grep -E \"a|TRIGGER|b\" file"}}' 0
+run "redirect-target" '{"tool_name":"Bash","tool_input":{"command":"echo x > TRIGGER"}}' 0
 run "sed-arg"        '{"tool_name":"Bash","tool_input":{"command":"sed s/TRIGGER/x/ file"}}' 0
 run "echo-mention"   '{"tool_name":"Bash","tool_input":{"command":"echo do not use TRIGGER"}}' 0
 run "grep-search"    '{"tool_name":"Bash","tool_input":{"command":"grep TRIGGER file"}}' 0
