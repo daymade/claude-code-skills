@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.85.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.86.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -3171,6 +3171,62 @@ prove this worktree can be deleted without losing anything
 
 **Requirements**: Git and a standard Bash shell. No third-party packages; current remote status
 requires network access, while offline audits use cached remote-tracking refs.
+
+---
+
+### 89. **design-style-picker** - Batch-Compare Visual Design Directions
+
+> **Install**: `claude plugin install design-style-picker@daymade-skills`
+
+Turn vague taste into concrete visual choices. Instead of guessing one final design,
+batch-generate a structured set of visual directions so the user picks the style they
+actually want — the goal is exposing the taste boundary quickly, not reading minds.
+
+**Key features:**
+- Batch-generates and compares multiple design directions side by side
+- For users who cannot describe an abstract visual style in words
+- Works from generated UI / design-system images; rejects "too colorful / too dead / too generic" with more options
+- Evolves an existing UI or design system without discarding current assets
+- Ships a selection playbook and reusable prompt patterns
+
+**Example usage:**
+```text
+/design-style-picker
+I can't describe the style I want — show me a batch of options
+this draft is too colorful and too generic, generate more directions
+evolve our current design system without throwing away existing assets
+```
+
+📚 **Documentation**: See [selection-playbook.md](./design-style-picker/selection-playbook.md).
+
+---
+
+### 90. **claude-migrate-memory-to-doc** - Migrate Claude Memory to Tool-Agnostic Docs
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills`
+> (suite-only — invoked as `daymade-claude-code:claude-migrate-memory-to-doc`)
+
+Migrate Claude Code personal memory (the per-project `memory/` directory) into
+tool-agnostic reference docs, so other AI CLIs that auto-load `AGENTS.md` (Codex
+primarily; the architecture transfers to Cursor and others) working in the same
+directory read the same user profile and collaboration preferences instead of being
+blind to them.
+
+**Key features:**
+- Solves tool lock-in: memory is not version-controlled and is invisible to every non-Claude tool
+- Two-layer architecture: `references/` + CLAUDE.md-inline + AGENTS.md-symlink, designed around
+  what each tool actually auto-loads (plain-text pointers are on-demand in both tools)
+- Full workflow: diagnosis, multi-agent review, empirical `codex` verification, and memory cleanup
+- Leaves memory as a thin handoff cache instead of the SSOT
+- Runs inline, orchestrating review subagents and invoking `codex` directly
+
+**Example usage:**
+```text
+/daymade-claude-code:claude-migrate-memory-to-doc
+migrate my memory — Codex doesn't know who I am
+my memory is locked to Claude Code, make it tool-agnostic
+memory has grown bloated with content that should live in docs
+```
 
 ---
 

@@ -340,6 +340,8 @@ This applies when you change ANY file under a skill directory:
 84. **local-conversation-history** - List recent local Claude Code and Codex conversations in one read-only command; Claude inventory combines active homes with registered archives, de-duplicates session IDs, and both providers use internal stored timestamps rather than file mtime (daymade-claude-code suite member)
 85. **continue-codex-work** - Recover actionable context from prior Codex CLI rollout files and continue interrupted work without running `codex resume` (daymade-claude-code suite member)
 86. **git-safety-net** - Audit, preserve, recover, and safely retire local Git state across branches, linked/detached worktrees, stashes, dangling commits, and squash/rebase merge uncertainty
+87. **design-style-picker** - Batch-generate and compare visual design directions so a user can choose the style they actually want, instead of guessing one final design
+88. **claude-migrate-memory-to-doc** - Migrate Claude Code personal memory into tool-agnostic reference docs so other AI CLIs (Codex/Cursor) auto-loading AGENTS.md read the same user profile (daymade-claude-code suite member)
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
