@@ -267,6 +267,19 @@ def main():
             models.append(item)
     args.model_list = models
 
+    # Client-side markers (e.g. Claude Code's "[1m]") get parsed and stripped by
+    # the CLI locally — they never reach a real endpoint, so a raw probe of the
+    # literal string tests something that was never supposed to exist at this
+    # layer. A no-channel verdict here proves nothing about the vendor. See
+    # references/evaluation_disciplines.md §9 for the full explanation.
+    bracket_suffixed = [m for m in models if re.search(r"\[[^\]]+\]$", m)]
+    if bracket_suffixed:
+        print(f"WARNING: {bracket_suffixed} look like client-side markers "
+              f"(bracket suffix), not real API model IDs — e.g. Claude Code's "
+              f"[1m] never reaches the wire, it's stripped locally before the "
+              f"request is built. Probing it here tests the wrong layer.",
+              file=sys.stderr)
+
     results = asyncio.run(run(args, key))
 
     by_model: dict[str, list] = {}
