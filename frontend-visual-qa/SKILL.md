@@ -121,6 +121,9 @@ Do not promote a lower level into a stronger conclusion:
 - A fresh headless empty state cannot verify the user's populated state.
 - A renderer URL cannot verify an Electron/native shell.
 - A handler call cannot verify Chrome print preview, popup, or download UI.
+- A pointer cursor, hover style, or "click to X" badge cannot verify the click
+  does anything: a signifier without a bound handler is a dead click that only a
+  real Level A/B trigger exposes (§5).
 - Device emulation is an approximation; use a real device when device-specific
   behavior is material.
 
@@ -334,6 +337,21 @@ node --test <skill-root>/tests/test_silent_degradation_probe.mjs
 ```
 
 ### 5. Exercise Journeys And Outputs
+
+**A visible signifier is not proof of behavior — trigger every interactive-looking
+element and watch the response.** An element carrying interactive signifiers —
+pointer cursor, hover state, a zoom/expand/copy badge, button styling — may be a
+*false affordance*: the handler was never bound, or a refactor silently broke it,
+so the click does nothing (a *dead click*). The screenshot and the DOM both pass —
+the element is present, correctly styled, and simply inert — so no markup scan,
+geometry assertion, or Level C/D static pass can catch it; only a real Level A/B
+trigger can. Click it and confirm the promised response actually happens (the
+overlay opens, the value copies, the row expands); never infer working behavior
+from the cursor, the badge, or the element's presence. This is the mirror image of
+the missing-affordance defect in §4 (a real control with no signifier) — here the
+signifier is present and the behavior is missing, and it is highest-yield on the
+interactions a page adds last and tests least: "click to enlarge" galleries and
+lightboxes, thumbnail grids, expanders/accordions, and copy buttons.
 
 Exercise only the relevant transition matrix:
 
