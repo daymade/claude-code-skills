@@ -197,6 +197,26 @@ The full step-2-16k template-correctness war-story (why an internally-consistent
 
 ## Troubleshooting
 
+### A profile directory exists but claude-profiles-doctor reports it as an "orphan profile"
+
+Symptom: `claude-profiles-doctor` reports
+`WARN: orphan profile — no settings/<name>.json; claude-profile <name> fails. Run: claude-profile-rm <name>`.
+
+Cause: the profile isolation directory exists under `~/.claude-profiles/` but
+the corresponding `~/.claude/settings/<name>.json` provider config file is
+missing. `claude-profiles-init` only scans `settings/*.json`, so an orphan
+profile's symlinks are never created or maintained, and `claude-profile <name>`
+will fail to launch with "Error: Settings file not found." The profile directory
+may still contain useful per-profile data (`history.jsonl`, `.claude.json` with
+provider credentials, `settings.json`, skill workspaces).
+
+Fix:
+- **If the profile is no longer needed**: `claude-profile-rm <name>` — this
+  safely removes the isolation directory (it checks for unexpected files first).
+- **If you want to revive it**: recreate the settings file at
+  `~/.claude/settings/<name>.json` (use a provider template from
+  `assets/templates/`), then run `claude-profiles-init`.
+
 ### A shared directory (skills/projects/hooks/agents/...) shows as a real directory, not a symlink
 
 Symptom: `claude-profiles-doctor` reports
