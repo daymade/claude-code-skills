@@ -25,12 +25,16 @@ nothing about the other:
 Real incident that motivated check 2: a Kimi/Moonshot model, accessed through a China
 reseller's Anthropic-compatible endpoint, 400'd with "invalid part type: thinking" the
 moment a prior assistant turn's thinking block was replayed back — killing every
-subsequent request in that session. The determining factor turned out to be a
-DOCUMENTED, per-model vendor parameter (Moonshot's own ``preserve_thinking``, default
-on/off varies by model) — not the reseller, not the protocol layer in general. See
-references/evaluation_disciplines.md for the single-variable-testing methodology that
-found this (an earlier, confounded comparison — different model AND different reseller
-at once — produced a wrong conclusion first).
+subsequent request in that session. The investigation took three rounds to land on the
+real cause, and each wrong answer looked well-evidenced at the time: round 1 blamed the
+reseller (confounded model+reseller comparison); round 2 blamed a documented per-model
+vendor parameter (Moonshot's own ``preserve_thinking``) after a clean single-axis probe
+matched it; round 3 — real production traffic against the vendor's own direct/native
+endpoint — showed the "culprit" model works fine there, meaning it WAS the reseller's
+own implementation all along, not a model property. See references/evaluation_disciplines.md
+§§17-19 for the full chain, including why a clean single-axis probe (round 2) still
+wasn't enough on its own: it only proves what varies within the reseller you tested,
+not whether the reseller itself matters, because that axis was never varied.
 
 The catch, for BOTH checks, is that vendor behavior is often PROBABILISTIC, not binary.
 One real vendor returned thinking blocks on only ~13% of generation requests (vs 100%
@@ -320,9 +324,12 @@ def run_history_replay(args, api_key):
         print("  → every real agentic client (Claude Code, Cursor, Cline) resends full history on")
         print("    every turn, thinking blocks included. This endpoint will 400 and KILL every")
         print("    session the moment a thinking-capable turn happens once. Before concluding this")
-        print("    is a blanket vendor/model-family limitation, check for a documented per-model")
-        print("    vendor parameter first (e.g. Moonshot's `preserve_thinking`, default varies by")
-        print("    model) — see references/evaluation_disciplines.md.")
+        print("    is a model/vendor-family limitation: (1) check the vendor's own docs for a named")
+        print("    parameter that might explain it, but (2) do NOT stop there — that correlation can")
+        print("    be a coincidence of THIS reseller's own implementation, not the model. If a")
+        print("    different reseller or the vendor's own direct/native endpoint is reachable, or if")
+        print("    real production traffic for this exact channel already exists, check those before")
+        print("    writing the conclusion down — see references/evaluation_disciplines.md §19.")
 
     return {"n": n, "accepted": accepted, "rejected_as_thinking_type": rejected_thinking,
             "rejected_other": rejected_other, "transport_fail": transport_fail,
