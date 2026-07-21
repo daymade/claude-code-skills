@@ -2,18 +2,20 @@
 name: claude-code-hooks
 description: >-
   How to write, test, register, and debug Claude Code hooks — PreToolUse /
-  PostToolUse / SessionStart Bash guards that enforce a rule the model would
-  otherwise talk itself past. Use whenever the user wants to create a hook,
-  block or intercept a tool call, turn a repeatedly-violated prose rule into a
+  PostToolUse / SessionStart / Stop Bash guards that enforce a rule the model
+  would otherwise talk itself past. Use whenever the user wants to create a
+  hook, block/intercept a tool call, turn a repeatedly-violated rule into a
   hard gate, add a guard rail, debug a hook that misfires or "poisons the
-  session", register a hook across profiles, or mentions hooks / PreToolUse /
-  拦截 / 守卫 / 钩子 / 拦下. Bakes in the hard-won pitfalls: token-level shlex
-  matching (never awk splitting) so healthy commands aren't false-blocked,
-  bash -n + real-JSON end-to-end testing BEFORE registering (a corrupted
-  PreToolUse hook poisons every Bash call in the session), SSOT + symlink so a
-  ~/.claude reinstall can't lose it, multi-profile registration convergence,
-  and human-confirmation release gates. Reach for this even when the user just
-  says "make it stop doing X" — a durable stop is a hook, not a reminder.
+  session", register a hook across profiles, or mentions hooks /
+  PreToolUse / Stop hook / 拦截 / 守卫 / 钩子 / 拦下. Bakes in the hard-won
+  pitfalls: UserPromptSubmit only ever sees user input, never Claude's own
+  text — a rule about Claude's own output belongs on Stop instead;
+  token-level shlex matching (never awk splitting); bash -n + real-JSON
+  end-to-end testing BEFORE registering (a corrupted PreToolUse hook poisons
+  every Bash call); SSOT + symlink so a ~/.claude reinstall can't lose it;
+  multi-profile convergence; and human-confirmation release gates. Reach for
+  this even for "make it stop doing X" — a durable stop is a hook, not a
+  reminder.
 ---
 
 # Claude Code Hooks
@@ -45,6 +47,7 @@ match tokens/patterns; it can't judge whether a design is good).
 | **PreToolUse** | before a tool runs | allow | **block** the call (stderr → shown to model as guidance) | non-blocking error |
 | **PostToolUse** | after a tool ran | quiet | inject feedback (can't un-run the tool) | — |
 | **SessionStart** | session begins | proceed | — | **always exit 0** — never block a session |
+| **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | must check `stop_hook_active` or it can loop |
 
 - **PreToolUse** is the workhorse — the only one that can *stop* an action.
   `matcher` selects the tool (`Bash`, `Agent`, `WebFetch`, …). Exit 2 blocks and
@@ -55,8 +58,22 @@ match tokens/patterns; it can't judge whether a design is good).
   and surface it — the model can't "believe it committed" against injected truth).
 - **SessionStart** is for **health checks of the guard rails themselves** —
   silent when healthy, warn on breakage, always exit 0.
+- **Stop is the odd one out, and the one most often reached for by mistake**:
+  it's the *only* hook type that can react to what the model **itself just
+  generated** (its own reply text). Every other hook type — including
+  `UserPromptSubmit`, which sounds like a plausible place to police "what gets
+  said" — only ever sees the **user's** input; it structurally cannot see the
+  model's own output. A rule like "the model must not invent a shorthand name
+  for something it hasn't verified" belongs on Stop; put it on
+  `UserPromptSubmit` instead and it will (a) never once catch what it was
+  built for, since that text never flows through that event, and (b)
+  false-block the user's own unrelated typing whenever it happens to contain
+  the trigger pattern. This is a category mistake, not a tuning problem — no
+  amount of regex refinement on the wrong event fixes it. Full contract
+  (`last_assistant_message` vs `transcript_path`, the anti-loop check) in
+  Pattern E below.
 
-Full runnable skeletons for all four: [references/hook_patterns.md](references/hook_patterns.md).
+Full runnable skeletons: [references/hook_patterns.md](references/hook_patterns.md).
 
 ## The skeleton (PreToolUse Bash guard)
 
@@ -137,6 +154,22 @@ command — the live hook blocks your test command. Put the cases in a **script
 file** and run `bash test_hook.sh`; the outer command doesn't contain the
 trigger, so it isn't self-blocked.
 
+**Once a hook has caused one real incident (a false-block or a silent miss),
+solo re-reading the code is not enough** — a same-day rewrite of a Stop-hook
+guard was itself re-broken twice by the author while fixing the first bug (a
+quote inside a Python comment, invisible on re-read, only surfaced by running
+the actual failing JSON case). The escalation is a multi-lens agent-team
+review where every finding must be reproduced by *executing* a real payload
+against the live script, not by reading the code and agreeing — this is the
+general Counter Review methodology
+([skill-development-methodology.md](../../daymade-skill/skill-creator/references/skill-development-methodology.md)
+Phase 6), applied to a hook instead of a skill. In one such pass, 3 lenses (matching
+logic / shell-embedding safety / event-contract robustness) surfaced 13
+confirmed, independently-reproduced bugs and 1 finding whose own cited
+evidence turned out to be a hallucinated doc quote — caught only because the
+verifier was required to curl the raw source and grep for the exact string
+rather than trust the citation.
+
 ### 3. SSOT + symlink so a reinstall can't silently disarm the guard
 
 Real script in a version-controlled dir, **symlinked** into the hooks dir Claude reads:
@@ -180,10 +213,13 @@ signal** — which is why a SessionStart health check exists (rule 4).
 Full catalog with symptom → cause → fix: [references/hook_pitfalls.md](references/hook_pitfalls.md).
 Headliners: `stdin` consumed by a `python3 - <<PY` heredoc (hook silently allows
 everything), awk-split false-blocks (rule 1), corrupted hook poisoning the session
-(rule 2), static env escape hatch (rule 4), multi-profile under-registration.
+(rule 2), a quote or backtick inside a Python *comment* silently corrupting a
+`python3 -c "…"` block with no syntax error (pitfall #9 — use the quoted-heredoc
+form from Pattern E instead), static env escape hatch (rule 4), multi-profile
+under-registration.
 
 ## Reference material
 
-- [references/hook_patterns.md](references/hook_patterns.md) — runnable skeletons for all four hook types, the shlex command-position walker, and the JSON event contract.
+- [references/hook_patterns.md](references/hook_patterns.md) — runnable skeletons for every hook type covered here, the shlex command-position walker, and the JSON event contract.
 - [references/hook_pitfalls.md](references/hook_pitfalls.md) — every real failure mode with symptom → cause → fix.
 - [scripts/test_hook.sh](scripts/test_hook.sh) — end-to-end test harness; copy it next to any new hook.

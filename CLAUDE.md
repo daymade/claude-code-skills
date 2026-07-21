@@ -342,6 +342,8 @@ This applies when you change ANY file under a skill directory:
 86. **git-safety-net** - Audit, preserve, recover, and safely retire local Git state across branches, linked/detached worktrees, stashes, dangling commits, and squash/rebase merge uncertainty
 87. **design-style-picker** - Batch-generate and compare visual design directions so a user can choose the style they actually want, instead of guessing one final design
 88. **claude-migrate-memory-to-doc** - Migrate Claude Code personal memory into tool-agnostic reference docs so other AI CLIs (Codex/Cursor) auto-loading AGENTS.md read the same user profile (daymade-claude-code suite member)
+89. **docx-creator** - Produce production-grade Word (.docx) documents, especially Chinese ones, by driving the minimax-docx OpenXML engine correctly — alignment-layering rule, per-list numbering restart, and other corrections the underlying engine doesn't ship (daymade-docs suite member)
+90. **claude-code-hooks** - Write, test, register, and debug Claude Code hooks — PreToolUse/PostToolUse/SessionStart/Stop Bash guards that enforce a rule the model would otherwise talk itself past, with token-level shlex matching, bash -n + real-JSON end-to-end testing discipline, and multi-profile registration convergence (daymade-claude-code suite member)
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
