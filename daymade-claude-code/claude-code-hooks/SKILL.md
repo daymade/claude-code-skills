@@ -48,7 +48,7 @@ match tokens/patterns; it can't judge whether a design is good).
 | Type | Fires | Exit 0 | Exit 2 | Other |
 |---|---|---|---|---|
 | **PreToolUse** | before a tool runs | allow | **block** the call (stderr → shown to model as guidance) | any other exit = "non-blocking error" → **the call proceeds** |
-| **PostToolUse** | after a tool ran | quiet | inject feedback (can't un-run the tool) | — |
+| **PostToolUse** | after a tool ran | quiet **unless it prints a `hookSpecificOutput` JSON on stdout — that is how context injection works, and it happens at exit 0** | feedback to the model (can't un-run the tool) | — |
 | **SessionStart** | session begins | proceed | — | **always exit 0** — never block a session |
 | **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | must check `stop_hook_active` or it can loop |
 
@@ -61,6 +61,13 @@ match tokens/patterns; it can't judge whether a design is good).
   and surface it — the model can't "believe it committed" against injected truth).
 - **SessionStart** is for **health checks of the guard rails themselves** —
   silent when healthy, warn on breakage, always exit 0.
+- **`set -euo pipefail` vs `set -uo pipefail` — pick by contract, not by habit.**
+  A hook that may block (PreToolUse) wants `-e`: an unexpected failure aborting the
+  script is survivable, because the caller treats a non-0/2 exit as "proceed". A hook
+  whose contract is **ALWAYS exit 0** (PostToolUse injectors, SessionStart checks)
+  must drop `-e` — with it, one `grep` that legitimately finds nothing kills the hook
+  mid-way and the CLI surfaces a bare `Failed with non-blocking status code`. Rule of
+  thumb: **`-e` for hooks that decide, no `-e` for hooks that report** (pitfall #8).
 - **Stop is the odd one out, and the one most often reached for by mistake**:
   it's the *only* hook type that can react to what the model **itself just
   generated** (its own reply text). Every other hook type — including

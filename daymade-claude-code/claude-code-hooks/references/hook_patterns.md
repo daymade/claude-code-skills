@@ -84,7 +84,9 @@ the shlex walker to natural language is a category error.
 The workhorse: inspect a Bash command, block if it does the banned thing. This is
 the shape of `qlmanage-guard`. (`proxy-guard` predates the shlex walker and still
 awk-splits the raw string — the very approach pitfall #2 warns against; it's a
-migration candidate, not a model to copy.)
+migration candidate, not a model to copy. (Pitfall #7 cites the same hook approvingly
+for a *different* property — it correctly exempts git write segments. Both are true:
+copy its segment-exemption logic, not its awk splitting.))
 
 ```bash
 #!/usr/bin/env bash
@@ -211,16 +213,36 @@ stamp() { printf '%s\t%s\t%s\n' "$(date '+%F %T')" "$1" "${CMD:0:80}" >> "$BYPAS
 
 # Channel 1: native macOS dialog — the model cannot click a button.
 if command -v osascript >/dev/null 2>&1; then
-  DLG_BODY="display dialog \"Allow <ACTION>?\n\n$CMD\" buttons {\"拒绝\",\"允许\"} default button \"拒绝\" cancel button \"拒绝\" with icon stop giving up after 40 with title \"my-guard\""
-  # CRITICAL: attach the dialog to the FRONTMOST app (the terminal the user is
+  # CRITICAL #1 — NEVER splice text into the AppleScript source. `$CMD` (and any
+  # file path or name you show) is attacker-controlled: the model chooses it. A
+  # payload containing a newline and a quote escapes the string literal and becomes
+  # a statement, so `return "button returned:允许"` makes osascript hand back an
+  # approval the human never gave. Measured 2026-07-22 against a guard that *did*
+  # escape quotes with sed — the escaper assumed single-line input and a filename
+  # with an embedded newline walked straight through it. The gate that exists so the
+  # model cannot approve its own action was approving it.
+  # The fix is parameterization, not better escaping: keep the script a CONSTANT and
+  # pass text through `on run argv` (same principle as a prepared statement).
+  DLG_FRONT='"'"'on run argv
+  tell application (path to frontmost application as text)
+    display dialog (item 1 of argv) buttons {"拒绝","允许"} default button "拒绝" cancel button "拒绝" with icon stop giving up after 40 with title "my-guard"
+  end tell
+end run'"'"'
+  DLG_PLAIN='"'"'on run argv
+  display dialog (item 1 of argv) buttons {"拒绝","允许"} default button "拒绝" cancel button "拒绝" with icon stop giving up after 40 with title "my-guard"
+end run'"'"'
+  MSG="Allow <ACTION>?
+
+$CMD"
+  # CRITICAL #2: attach the dialog to the FRONTMOST app (the terminal the user is
   # looking at) so it pops up *in front of them*. A bare `osascript -e "$DLG"`
   # opens on some other desktop/Space in fullscreen setups — the user never sees
   # it, it times out at 40s, and the log misreads "declined" (a real 2026-07-21
   # bug this exact snippet used to have). Fall back to the bare form only on a
   # NON-cancel error (some frontmost apps don't support `tell`).
   ERR=$(mktemp); DLG=""
-  if DLG=$(osascript -e "tell application (path to frontmost application as text) to $DLG_BODY" 2>"$ERR"); then :
-  elif ! grep -qiE 'user canceled|-128' "$ERR"; then DLG=$(osascript -e "$DLG_BODY" 2>"$ERR") || true
+  if DLG=$(osascript -e "$DLG_FRONT" "$MSG" 2>"$ERR"); then :
+  elif ! grep -qiE 'user canceled|-128' "$ERR"; then DLG=$(osascript -e "$DLG_PLAIN" "$MSG" 2>"$ERR") || true
   fi
   if printf '%s' "$DLG" | grep -q 'button returned:允许'; then
     stamp "gui-allow"; rm -f "$ERR"; exit 0
@@ -260,8 +282,9 @@ it. Any gate the model can satisfy by itself is not a gate.)
 
 **Make the gate testable — route both channels through overridable names.** A gate
 whose confirmation path can't be exercised automatically is a gate nobody ever
-verifies: an automated run either hangs on `/dev/tty`, or pops a real dialog at a
-human who isn't there. Read both endpoints from a variable with the production value
+verifies: an automated run pops a real dialog at a human who isn't there (the tty channel
+itself is already safe — its `(exec 3<>/dev/tty)` probe fails in a non-tty context
+and falls through to block rather than hanging). Read both endpoints from a variable with the production value
 as the default:
 
 ```bash

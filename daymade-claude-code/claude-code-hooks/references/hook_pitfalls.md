@@ -71,6 +71,19 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
 - **Fix (detection):** a SessionStart health check that `bash -n`s every hook and
   checks symlinks (Pattern C) surfaces this class at startup instead of after
   hours of misdiagnosis.
+- **Fix (escape hatch) — you cannot Bash your way out of a broken Bash guard.**
+  Every repair you'd reach for (`rm` the symlink, re-`ln -s`, edit `settings.json`
+  with sed) is itself a Bash call, and a corrupted PreToolUse Bash hook inspects
+  those too. Routes that do **not** go through the Bash tool, cheapest first:
+  1. **Edit `settings.json` with the Edit/Write tool** (file tools don't fire the
+     Bash matcher) and delete the hook's entry — instant disarm, no shell needed.
+  2. **Start a session with a different config home**: `CLAUDE_CONFIG_DIR=<other>`
+     — a profile whose settings never registered the broken hook. (Set it when
+     launching the CLI, i.e. outside the poisoned session.)
+  3. **Fix from outside**: any terminal not running under the agent, since the hook
+     only exists on the agent's tool path, not on your shell's.
+  This is also the argument for the SSOT+symlink layout: repair is one `ln -s` you
+  can run from an ordinary terminal, not surgery on a live config.
 
 ---
 
@@ -279,7 +292,14 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
    (and you recently edited an embedded `python3 -c "…"` block, code or
    comments)? → quote/backtick corruption (#9) — `bash -n` cannot see this one,
    only a real-JSON test of that exact case will.
-6. Does it work when you run the command **in place**, but never fire when the
+6. Did it stop mid-run with **`Failed with non-blocking status code: No stderr
+   output`**, in a hook whose contract is always-exit-0? → `set -e` + `pipefail`
+   killing it on a legitimately-empty `grep`/`wc` (#8). Distinct symptom, distinct
+   fix: drop `-e`, or `||`-guard every such pipeline.
+7. Did your **own test command** get blocked while you were testing the guard you
+   just registered? → self-block (#7); move the cases into a script file so the
+   outer command doesn't carry the trigger.
+8. Does it work when you run the command **in place**, but never fire when the
    command `cd`s somewhere first (or uses `~`, a variable, a glob)? → the guard is
    parsing command text and got an unexpanded string (#10). Note this one has **no
    symptom of its own** when the hook fails open — you find it by testing the
