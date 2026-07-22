@@ -4,6 +4,7 @@
 - Why commit counts lie (the squash-merge illusion)
 - The sound content check (a trial merge, not a heuristic)
 - Per-branch verdict procedure
+- Pick the diff FORM from the question you're asking (two-dot vs three-dot)
 - Why safety-biased: a false "merged" loses work, a false "unmerged" only costs a look
 - Manual-only investigation hints (do NOT auto-decide on these)
 - Worktree retirement — prove the checkout is disposable before removal
@@ -64,6 +65,10 @@ git -c core.quotePath=false diff --no-renames --name-status origin/main...origin
 `--no-renames` decomposes a rename into add+delete (so a renamed-and-edited file can't hide); the
 `--` guarantees a branch named like a path (e.g. `docs`) is never parsed as a pathspec.
 
+Three-dot is correct **here** — the question is "what did this branch contribute", and hiding the
+base's parallel work is the point. It is the wrong form for "what does the base lack"; see
+[Pick the diff FORM](#pick-the-diff-form-from-the-question-youre-asking-two-dot-vs-three-dot).
+
 ## Per-branch verdict procedure
 
 For each branch, the script decides among three outcomes:
@@ -74,6 +79,36 @@ For each branch, the script decides among three outcomes:
 - **UNMERGED / NEEDS REVIEW** — a trial merge *would* change the base, so the branch carries
   content the base does not already have (a genuinely new/edited/reverted/deleted file). Review
   the listed contribution before deleting.
+
+## Pick the diff FORM from the question you're asking (two-dot vs three-dot)
+
+`git diff base...ref` and `git diff base ref` answer **different questions**, and reaching for the
+wrong one produces a confidently wrong "nothing is missing." Both are content-level, so the usual
+"don't judge by counts" instinct does not catch the mistake.
+
+| Question | Form | Why |
+|---|---|---|
+| "What did this branch *change* since it diverged?" (reviewing a PR's contribution) | **three-dot** `base...ref` | Diffs from the **merge base** to `ref` — deliberately hides everything `base` did in parallel, which is what makes a PR diff readable. |
+| "What does `base` **lack** that `ref` has?" (auditing a retired/archived ref for lost work) | **two-dot** `base ref` | Compares the two trees **as they are now**. This is the loss question. |
+
+Three-dot is wrong for the loss question because a file that existed at the merge base and was
+later deleted from `base` is *not* part of "what the branch changed" — so it never appears, even
+though `base` genuinely lacks it today. Real incident: auditing three archive tags with
+`git diff origin/main...<tag> --diff-filter=A` reported **1** file missing from main; the same
+audit with the two-dot form reported **5** (the extras included a real 107-line script). The
+three-dot answer was not a rounding error — it was a different question, answered correctly.
+
+```bash
+# "What would I lose by deleting this ref?" — always two-dot:
+git diff <base> <ref> --name-only --diff-filter=A     # files ONLY on <ref>
+git diff <base> <ref> --stat | tail -1                # aggregate direction
+```
+
+Read the aggregate direction as triage, not verdict: **base-only lines ≫ ref-only lines** is the
+fingerprint of "base evolved past this ref" (safe); it does not by itself clear the ref-only lines,
+which still need the supersession ladder below. In that same audit the archive tags showed ~58,000
+base-only vs ~3,700 ref-only lines — overwhelmingly superseded, yet the ~3,700 still hid the one
+file worth investigating.
 
 ## Why safety-biased: a false "merged" loses work, a false "unmerged" only costs a look
 
@@ -135,10 +170,45 @@ restoring it would be a regression, not a recovery. Judge supersession by escala
    fix) had been absorbed verbatim into a new shared `_core/` module the refactor created;
    the original file was gone but every marker line lived on at the new path.
 
+4. **Ask the base why it removed this — grep for the leftover's own name/path.** Rungs 1–3 all ask
+   "is this content somewhere on the base?" and go quiet when the honest answer is *no*. But "the
+   base does not have it" has two opposite causes, and only one is a loss:
+
+   ```bash
+   git grep -n "<basename-of-the-missing-file>" <base>     # who mentions it now?
+   git log <base> --oneline --diff-filter=D -- <path>      # which commit removed it?
+   ```
+
+   A replacement usually **documents the supersession in prose**, and that prose is stronger
+   evidence than any marker probe because it states intent rather than resemblance. Real case: a
+   107-line `fix-marketplace-paths.py` existed on three archive tags and nowhere on the base — by
+   rungs 1–3 a textbook "unique work, rescue it." Grepping the base for its filename surfaced its
+   successor saying, in comments: *"replaces the old fix-marketplace-paths.py"*, *"made this worse,
+   not better"*, and *"CAUSED the corruption by rewriting the shared file."* The script had been
+   **deliberately excised because it was harmful** — the corruption it claimed to fix was its own.
+   Restoring it would have reintroduced a known bug while looking like a careful rescue.
+
+   Two removal causes, opposite verdicts:
+
+   | The base's history says | Verdict |
+   |---|---|
+   | A later commit removed it, and something on the base names it as replaced / harmful / merged-in | **Superseded — do not restore.** Restoring reverts a deliberate decision. |
+   | Nothing on the base mentions it; it vanished in a bulk rewrite (`filter-repo`, mass revert, history cleanup) with no successor | **Candidate loss — escalate.** Collateral damage looks identical to intentional removal in the tree; only the surrounding evidence separates them. |
+
+   Also classify what the missing file *is* before escalating: **generated artifacts are not
+   work.** Scan markers, lockfiles, and build outputs (anything carrying a timestamp + content
+   hash of its own inputs) legitimately differ or vanish between refs and are regenerated on
+   demand — three of the "missing" files in that same audit were `.security-scan-passed` markers,
+   and their skills were all present on the base, one of them simply moved to another suite
+   directory. Check for a **relocation** (`git ls-tree -r <base> --name-only | grep <basename>`)
+   before concluding a path's absence means the thing is gone.
+
 **The label on the leftover is not evidence.** Stash messages and branch names describe intent
 *at creation time* ("unfinished", "backup", "wip") — they never get updated when the work later
 lands through another path. Judge by content against the current base, never by how urgent the
-name sounds.
+name sounds. The same applies in reverse to *size*: a substantial-looking file the base lacks
+(rung 4's 107-line script) reads as "obviously valuable" and is exactly the shape of leftover
+most likely to be restored on instinct.
 
 Same safety bias as everywhere else in this skill: prove supersession per item, or keep the item.
 
