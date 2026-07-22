@@ -281,10 +281,28 @@ That inversion is what makes the gate assertable: **`exit 2` under forced-declin
 positive evidence the guard reached its blocking branch**, which is exactly the fact
 a fail-open bug (pitfall #10) hides. Pair it with a negative control in the same run
 — one input that *shouldn't* trigger, asserted `exit 0` — because "blocks everything"
-and "blocks the right thing" are otherwise indistinguishable. Keep the override names
-namespaced to the hook and never let them *grant* permission: they may only steer
-which channel is consulted, never stand in for the human's YES — an env var the model
-can set to say "approved" is the retired anti-pattern above, wearing a test-shaped hat.
+and "blocks the right thing" are otherwise indistinguishable. **Be honest about what this costs — the override is itself a bypass surface, and
+prose does not close it.** Pointing `GIT_GUARD_TTY` at a file containing `YES`, or
+`GIT_GUARD_OSASCRIPT` at a script that echoes the approval string, *grants* approval.
+Saying "these may only steer which channel is consulted" is an assertion, not an
+enforcement — exactly the shape rule 4 retired (`GUARD_OK=1`), wearing a test-shaped
+hat. Either accept that and constrain it, or don't ship the override:
+
+```bash
+# Refuse the override outside a test context, and refuse a *granting* one always.
+if [ -n "${GIT_GUARD_TTY:-}" ] || [ -n "${GIT_GUARD_OSASCRIPT:-}" ]; then
+  [ "${GIT_GUARD_TEST:-}" = "1" ] || { echo "override outside test context" >&2; exit 2; }
+  # only decline-shaped targets are honored; anything else is treated as decline
+  case "${GIT_GUARD_TTY:-/dev/null}" in /dev/null|/dev/zero) : ;; *) TTYDEV=/dev/null ;; esac
+  case "${GIT_GUARD_OSASCRIPT:-false}" in false|/usr/bin/false) : ;; *) OSASCRIPT_BIN=false ;; esac
+fi
+```
+
+The residual risk is `GIT_GUARD_TEST=1` itself, which the model can also set — but
+now every path it opens leads to **decline**, so setting it buys a block, not a pass.
+That is the property worth having: **the escape hatch may only make the gate stricter.**
+If you can't get there, prefer no override and test the gate manually — an
+unverifiable gate that cannot be bypassed beats a verifiable one that can.
 
 ---
 

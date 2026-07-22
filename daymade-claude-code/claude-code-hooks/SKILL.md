@@ -34,6 +34,9 @@ behavior recurred anyway — because at the moment of action, attention is 100%
 on "get the thing done" and the reminder loses. That recurrence is the signal
 to move the rule from prose (advisory) to a hook (enforced). Governance rule of
 thumb: *Tier-0 irreversible action + only prose, no hook → it should be a hook.*
+(**Tier-0** here = an action whose damage cannot be undone from inside the session:
+destroying uncommitted work, pushing secrets to a remote, deleting files, publishing
+something outward. The test is reversibility, not severity.)
 
 Do **not** reach for a hook when: the rule has never actually recurred (don't
 pre-build guards for hypothetical mistakes — cost with no proven benefit), or
@@ -44,7 +47,7 @@ match tokens/patterns; it can't judge whether a design is good).
 
 | Type | Fires | Exit 0 | Exit 2 | Other |
 |---|---|---|---|---|
-| **PreToolUse** | before a tool runs | allow | **block** the call (stderr → shown to model as guidance) | non-blocking error |
+| **PreToolUse** | before a tool runs | allow | **block** the call (stderr → shown to model as guidance) | any other exit = "non-blocking error" → **the call proceeds** |
 | **PostToolUse** | after a tool ran | quiet | inject feedback (can't un-run the tool) | — |
 | **SessionStart** | session begins | proceed | — | **always exit 0** — never block a session |
 | **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | must check `stop_hook_active` or it can loop |
@@ -110,7 +113,13 @@ false-blocks is matching on the raw command string.
   `|` *inside the quoted regex*, `TRIGGER` becomes a phantom command, and the
   guard blocks a plain grep. (Shipped 2026-07-21; the guard's very first real use
   was a false-block on my own grep.)
-- **Right**: parse the whole command with `shlex.split()` in python. A quoted
+- **Right**: tokenize the whole command with the **`shlex.shlex` class**, not the
+  `shlex.split()` function — `split()` only treats `| ; & < >` as separators when
+  they are space-separated, so `ls|TRIGGER x` tokenizes to `['ls|TRIGGER', 'x']` and
+  your command-position check never sees `TRIGGER` at all (measured; the class with
+  `punctuation_chars=True` yields `['ls', '|', 'TRIGGER', 'x']`). Use the walker in
+  [references/hook_patterns.md](references/hook_patterns.md#the-shlex-command-position-walker)
+  verbatim rather than reaching for the one-liner. A quoted
   `"a|TRIGGER|b"` stays **one token**, so a regex argument is never mistaken for
   a command. Then check whether your target is in a **command position**
   (token[0], or right after a `;`/`&&`/`||`/`|` separator, skipping `VAR=val`
@@ -199,9 +208,14 @@ signal** — which is why a SessionStart health check exists (rule 4).
 
 ### 5. Decide the failure **direction**, and test *that* — not just the happy path
 
-A guard has two ways to be wrong and they are **not symmetric**. Rule 1 covers one
-(false-blocking a healthy command). The other is worse and nearly invisible: the
-guard **cannot obtain the thing it judges on** — a parse throws, a path doesn't
+Rule 1 ranked *detection-tuning* errors: given that the guard ran, false-blocking a
+healthy command beats missing a rare bad one, because a guard people must bypass
+gets bypassed reflexively. **This rule is about a different axis — the guard's
+machinery not running at all** — so "which is worse" is not being reversed here;
+the two rankings never meet. A tuning miss costs you one case; this costs you the
+guard, silently, on every input of that shape.
+
+The failure: the guard **cannot obtain the thing it judges on** — a parse throws, a path doesn't
 resolve, a dependency is missing, a subprocess times out — and the very
 `2>/dev/null || true` that stops the hook from crashing quietly converts *"I could
 not check"* into *"nothing to report."* The hook exits 0. **That output is identical
@@ -219,16 +233,27 @@ unparseable command on purpose and assert it still does what you decided. A suit
 where every row passes *because the hook silently allowed everything* is
 indistinguishable from a suite that passes.
 
-**Read those results carefully — not every `exit 0` is a bug.** `cd ~/no-such-dir &&
-git commit` *correctly* returns 0: `cd` fails, `&&` short-circuits, no commit ever
-happens, so there is nothing to guard. The failure you are hunting is the other
-shape — **the command would really have run and the guard didn't see it**: an
-unbalanced quote makes `shlex.split()` throw, the fallback allows, and a genuine
-cross-domain commit ships with no dialog (rule 1's ValueError note). So ask of every
-allowed row: *would this command actually have done the thing?* If no, the allow is
-correct and you are chasing a ghost. Running this exact probe against a real guard
-produced one of each on the first pass — which is the point: the probe finds things,
-and then you have to think.
+**Read those results carefully — the same input has opposite correct answers for
+different guard classes.** Take `cd ~/no-such-dir && TRIGGER`:
+
+| Guard class | Judges on | Correct exit | Why |
+|---|---|---|---|
+| **Token matcher** (is this a banned command form?) | the command text alone | **2, block** | `TRIGGER` is right there in the text; an unresolvable `cd` doesn't make it not-a-trigger, and if the guard goes quiet here it will also go quiet on `cd ~/real-dir && TRIGGER` |
+| **State deriver** (does the repo's staged set span domains?) | state read from disk | **0, allow** | `cd` fails, `&&` short-circuits, no commit ever happens — there is nothing to guard |
+
+So decide which class your hook is *before* writing the row, and the harness's
+`unresolvable path` template row expects **2** because that template targets the
+token-matcher class. Getting this backwards produces a confident FAIL against a
+correct guard. For a state-deriving guard the failure you are hunting is: **the command would really
+have run and the guard didn't see it** — an unbalanced quote makes tokenizing throw,
+the fallback allows, and a genuine cross-domain commit ships with no dialog (rule 1's
+ValueError note). Ask of every allowed row: *would this command actually have done
+the thing?* If no, the allow is correct.
+
+Running this exact probe against a real state-deriving guard returned two allows on
+the first pass: one was correct (the short-circuit above) and one was a genuine
+fail-open. **The probe finds things; you still have to classify what it found** —
+which is why the class table above comes before the rows.
 
 Real case (2026-07-22): a scope guard read staged files via `git -C "$REPO_DIR"`
 with `REPO_DIR` parsed out of the **command text** — so `cd ~/repo && git commit`
@@ -241,7 +266,7 @@ nothing ever looked wrong. Anatomy + the shared-library twist: pitfall #10.
 1. **Confirm it's a real recurrence**, not hypothetical — else don't build it.
 2. Write the script in the SSOT dir; `chmod +x`.
 3. **Detection** with shlex token-level matching (rule 1).
-4. **`bash -n` + `test_hook.sh`** with trigger AND healthy-lookalike cases (rule 2) — do not register until green. Include the shapes that carry an unexpanded path (`cd ~/elsewhere && …`) and, if the hook has a human gate, a forced-decline row (rule 5).
+4. **`bash -n` + `test_hook.sh`** with trigger AND healthy-lookalike cases (rule 2) — do not register until green. Include the shapes that carry an unexpanded path (`cd ~/elsewhere && …`, rule 5) and, if the hook has a human gate, a forced-decline row (Pattern B, "Make the gate testable").
 5. **Symlink** into `~/.claude/hooks/` (rule 3).
 6. **Register** in main `settings.json` + converge profiles (rule 4).
 7. For a Tier-0/irreversible action, add the **human-confirmation release gate** (rule 4).
@@ -271,15 +296,19 @@ hook's whitelist):
    backslash-quote; `json.loads` throws, the hook's `2>/dev/null || exit 0` swallows
    it, every case "passes".
 3. **A test case the rule legitimately exempts.** The baseline string used
-   `X 群里` while the regex deliberately excludes `群里/群内/群聊` — so the one row
-   meant to prove the guard still bites didn't bite.
+   a string the rule *deliberately exempts* (the guard flagged coined nicknames of the
+   form `<name> Group`, but exempted the ordinary phrases `in the group` / `group chat`
+   — and the baseline row happened to use one of those). The one row meant to prove
+   the guard still bites didn't bite, and the whole suite read green.
 
 The common shape: **all-cases-agree is a smell, not a green light.** `test_hook.sh`
-resists all three because it asserts an explicit `expected-exit` per row (not "did
-it print something") and forces trigger rows alongside healthy-lookalike rows — a
-trigger row that returns 0 fails loudly instead of blending in. Always assert a
-known-good trigger *first*; if it doesn't fire, fix the harness before touching the
-hook's logic.
+catches #1 and #2 structurally — it asserts an explicit `expected-exit` per row
+(not "did it print something") and forces trigger rows alongside healthy-lookalike
+ones, so a trigger row that returns 0 fails loudly instead of blending in. It
+**cannot** catch #3: whether a row's content accidentally lands in an exemption is a
+property of what you wrote, and no harness knows your rule's intent. That one is
+caught only by the habit — assert a known-good trigger *first*, and when it doesn't
+fire, suspect the row before the hook.
 
 ## Reference material
 
