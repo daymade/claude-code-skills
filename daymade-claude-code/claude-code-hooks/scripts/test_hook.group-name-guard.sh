@@ -36,22 +36,17 @@ run() {
   else printf 'FAIL exit=%s want=%s [%s]\n' "$e" "$3" "$1"; fail=$((fail+1)); fi
 }
 
-# ── EXAMPLE TABLE — replace TRIGGER with your banned command ──────────────────
-# Trigger cases (want 2):
-run "execute"        '{"tool_name":"Bash","tool_input":{"command":"TRIGGER -x arg"}}' 2
-run "after-pipe"     '{"tool_name":"Bash","tool_input":{"command":"ls | TRIGGER -x"}}' 2
-run "no-space-pipe"  '{"tool_name":"Bash","tool_input":{"command":"ls|TRIGGER -x"}}' 2
-run "after-&&"       '{"tool_name":"Bash","tool_input":{"command":"foo && TRIGGER x"}}' 2
-run "env-prefix"     '{"tool_name":"Bash","tool_input":{"command":"FOO=1 TRIGGER x"}}' 2
-# Healthy-lookalike cases (want 0) — THESE are what prove you don't false-block:
-run "grep-regex-arg" '{"tool_name":"Bash","tool_input":{"command":"grep -E \"a|TRIGGER|b\" file"}}' 0
-run "redirect-target" '{"tool_name":"Bash","tool_input":{"command":"echo x > TRIGGER"}}' 0
-run "sed-arg"        '{"tool_name":"Bash","tool_input":{"command":"sed s/TRIGGER/x/ file"}}' 0
-run "echo-mention"   '{"tool_name":"Bash","tool_input":{"command":"echo do not use TRIGGER"}}' 0
-run "grep-search"    '{"tool_name":"Bash","tool_input":{"command":"grep TRIGGER file"}}' 0
-run "comment"        '{"tool_name":"Bash","tool_input":{"command":"echo hi # TRIGGER bad"}}' 0
-run "unrelated"      '{"tool_name":"Bash","tool_input":{"command":"ls -la /tmp"}}' 0
-run "non-bash-tool"  '{"tool_name":"Read","tool_input":{"file_path":"/x/TRIGGER.txt"}}' 0
+# ── group-name-guard (Stop event) ────────────────────────────────────────────
+# Trigger rows = BASELINE. If these return 0 the harness is wrong, not the hook.
+run "self-coined shorthand" '{"last_assistant_message":"这条消息是 Zeta 群发出来的"}' 2
+# Healthy-lookalike rows (want 0):
+run "fix: 单群"        '{"last_assistant_message":"可以只同步单群，不必 --groups all"}' 0
+run "fix: 跨群"        '{"last_assistant_message":"支持跨群检索历史消息"}' 0
+run "quantifier 多群"  '{"last_assistant_message":"多群并行拉取没问题"}' 0
+run "pronoun 该群"     '{"last_assistant_message":"该群全称未确认，先按该群处理"}' 0
+run "2-char 微信群"    '{"last_assistant_message":"微信群消息已经同步完成"}' 0
+run "verb 退群"        '{"last_assistant_message":"退群之后就收不到了"}' 0
+run "exempt 群里"      '{"last_assistant_message":"我在 Zeta 群里看到的"}' 0
 # ──────────────────────────────────────────────────────────────────────────────
 #
 # ── EVENT SHAPES OTHER THAN PreToolUse (the payload differs per event) ────────
