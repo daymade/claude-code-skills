@@ -258,6 +258,34 @@ is the guards' one collective failure mode, so the audit trail is what keeps it
 honest. (Retired anti-pattern: a static `GUARD_OK=1` env var — the model just adds
 it. Any gate the model can satisfy by itself is not a gate.)
 
+**Make the gate testable — route both channels through overridable names.** A gate
+whose confirmation path can't be exercised automatically is a gate nobody ever
+verifies: an automated run either hangs on `/dev/tty`, or pops a real dialog at a
+human who isn't there. Read both endpoints from a variable with the production value
+as the default:
+
+```bash
+OSASCRIPT_BIN="${GIT_GUARD_OSASCRIPT:-osascript}"
+TTYDEV="${GIT_GUARD_TTY:-/dev/tty}"
+```
+
+In production nothing changes. In a test you point them at things that deterministically
+decline, and the run stays headless and non-interactive:
+
+```bash
+GIT_GUARD_OSASCRIPT=false GIT_GUARD_TTY=/dev/null   # dialog "fails", tty reads nothing
+#   → both channels decline → the gate must exit 2
+```
+
+That inversion is what makes the gate assertable: **`exit 2` under forced-decline is
+positive evidence the guard reached its blocking branch**, which is exactly the fact
+a fail-open bug (pitfall #10) hides. Pair it with a negative control in the same run
+— one input that *shouldn't* trigger, asserted `exit 0` — because "blocks everything"
+and "blocks the right thing" are otherwise indistinguishable. Keep the override names
+namespaced to the hook and never let them *grant* permission: they may only steer
+which channel is consulted, never stand in for the human's YES — an env var the model
+can set to say "approved" is the retired anti-pattern above, wearing a test-shaped hat.
+
 ---
 
 ## Pattern C — SessionStart health check

@@ -94,7 +94,7 @@ fi
 exit 0
 ```
 
-## Four rules that separate a working guard from a session-poisoning one
+## Five rules that separate a working guard from a session-poisoning one
 
 Not style preferences — each is a specific failure we shipped and traced back.
 
@@ -197,12 +197,51 @@ signal** — which is why a SessionStart health check exists (rule 4).
   refuse/cancel/timeout = hard NO; log every prompt/bypass to an audit file.
   Pattern in [references/hook_patterns.md](references/hook_patterns.md).
 
+### 5. Decide the failure **direction**, and test *that* — not just the happy path
+
+A guard has two ways to be wrong and they are **not symmetric**. Rule 1 covers one
+(false-blocking a healthy command). The other is worse and nearly invisible: the
+guard **cannot obtain the thing it judges on** — a parse throws, a path doesn't
+resolve, a dependency is missing, a subprocess times out — and the very
+`2>/dev/null || true` that stops the hook from crashing quietly converts *"I could
+not check"* into *"nothing to report."* The hook exits 0. **That output is identical
+to a real pass**, which is why this survives for weeks.
+
+So at every point where the hook *obtains* something (parses the command, reads
+staged files, queries a service), decide explicitly: **if this comes back empty, does
+that mean allow or block?** — and write the answer next to the branch. Fail-open is
+often right for a *modifier* check (does this carry `--no-verify`? missing it costs
+you one case). Fail-closed is usually right for the *is-this-even-the-thing* check
+(is this a cross-domain commit? an empty answer means the guard never fired at all).
+
+**Then test the direction, not the happy path**: hand it an unresolvable path or an
+unparseable command on purpose and assert it still does what you decided. A suite
+where every row passes *because the hook silently allowed everything* is
+indistinguishable from a suite that passes.
+
+**Read those results carefully — not every `exit 0` is a bug.** `cd ~/no-such-dir &&
+git commit` *correctly* returns 0: `cd` fails, `&&` short-circuits, no commit ever
+happens, so there is nothing to guard. The failure you are hunting is the other
+shape — **the command would really have run and the guard didn't see it**: an
+unbalanced quote makes `shlex.split()` throw, the fallback allows, and a genuine
+cross-domain commit ships with no dialog (rule 1's ValueError note). So ask of every
+allowed row: *would this command actually have done the thing?* If no, the allow is
+correct and you are chasing a ghost. Running this exact probe against a real guard
+produced one of each on the first pass — which is the point: the probe finds things,
+and then you have to think.
+
+Real case (2026-07-22): a scope guard read staged files via `git -C "$REPO_DIR"`
+with `REPO_DIR` parsed out of the **command text** — so `cd ~/repo && git commit`
+handed it a literal `~/repo`, `git -C` failed, staged came back empty, and the guard
+concluded "no cross-domain files, allow." Every cross-repo commit went unguarded and
+nothing ever looked wrong. Anatomy + the shared-library twist: pitfall #10.
+
 ## Build order (in sequence)
 
 1. **Confirm it's a real recurrence**, not hypothetical — else don't build it.
 2. Write the script in the SSOT dir; `chmod +x`.
 3. **Detection** with shlex token-level matching (rule 1).
-4. **`bash -n` + `test_hook.sh`** with trigger AND healthy-lookalike cases (rule 2) — do not register until green.
+4. **`bash -n` + `test_hook.sh`** with trigger AND healthy-lookalike cases (rule 2) — do not register until green. Include the shapes that carry an unexpanded path (`cd ~/elsewhere && …`) and, if the hook has a human gate, a forced-decline row (rule 5).
 5. **Symlink** into `~/.claude/hooks/` (rule 3).
 6. **Register** in main `settings.json` + converge profiles (rule 4).
 7. For a Tier-0/irreversible action, add the **human-confirmation release gate** (rule 4).
@@ -216,7 +255,9 @@ everything), awk-split false-blocks (rule 1), corrupted hook poisoning the sessi
 (rule 2), a quote or backtick inside a Python *comment* silently corrupting a
 `python3 -c "…"` block with no syntax error (pitfall #9 — use the quoted-heredoc
 form from Pattern E instead), static env escape hatch (rule 4), multi-profile
-under-registration.
+under-registration, and a path parsed from command text keeping its literal `~` so
+the guard fails **open** with no symptom at all (#10 — the one you cannot wait to
+notice, because silence is its only sign).
 
 **The harness is the hidden variable — use `scripts/test_hook.sh`, don't hand-roll
 one.** Every hand-rolled failure mode below produces the *same* output as a clean

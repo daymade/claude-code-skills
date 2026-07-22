@@ -209,6 +209,58 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
 
 ---
 
+## 10. A path parsed from command text keeps its literal `~` — guard fails **open**
+
+**Symptom.** The guard never fires for commands that `cd` somewhere first. No error,
+no log line, no misbehavior you can see — it just silently allows. In the case that
+surfaced it, two sibling hooks shared one parsing helper and degraded *differently*:
+a PostToolUse context-injector kept emitting its own fallback string
+(`"cannot read HEAD — not a git repo or bad path"`) for weeks, which everyone read as
+"that hook is noisy again"; the PreToolUse scope guard beside it gave **no signal at
+all** — it simply stopped guarding. Same root cause, one visible-but-dismissed
+symptom and one invisible.
+
+**Cause.** Tilde expansion is done by the **shell**, before a command ever runs. A
+hook that determines its target by *parsing the command text* (`cd X && git commit`,
+`git -C X commit`) never goes through a shell, so it receives the literal string
+`~/repo`. Then:
+
+```bash
+git -C "~/repo" log -1        # fatal: cannot change to '~/repo': No such file or directory
+git -C "~/repo" diff --cached --name-only   # → empty, exit non-zero, swallowed by 2>/dev/null
+```
+
+The headcheck degraded to a visible-but-ignorable message. The scope guard did
+something worse: empty staged list → "zero files, so zero cross-domain files" →
+**allow**. Rule 5's failure direction, in the wild.
+
+**Fix.** Expand in the parser, once, at the shared source:
+
+```python
+repo_dir = os.path.expanduser(repo_dir) if repo_dir else repo_dir
+```
+
+`expanduser` is the identity function for paths that don't start with `~`, and safe
+on the empty string — so it needs no conditional beyond the empty guard.
+
+**The shared-library twist — this is the part that bites twice.** The parser was a
+common helper (`lib-git-commit-detect.sh`) used by three hooks. Fixing it fixed all
+three at once, which is why the SSOT structure is right — but it also means
+**"I verified the fix" must mean "I verified every caller."** In the real incident
+the author fixed the library, verified two callers (a form guard and the headcheck),
+declared it done — and the *third* caller, the scope guard, went unverified. It was
+both the one that fails open and the only one of the three that actually blocks. It
+took the user asking "so did you fix it?" for the gap to surface. When you patch a
+shared helper, enumerate its callers (`grep -l '<lib-name>' *.sh`) and put every one
+of them in the test table.
+
+**Generalization (not git-specific).** Any hook that reconstructs state by *reading
+the command instead of running it* inherits the whole class: `~` unexpanded, `$VARS`
+uninterpolated, `$(cmd)` unexecuted, globs unmatched, relative paths resolved against
+the wrong cwd. If your hook takes a path out of command text and hands it to a real
+command, expand what the shell would have expanded — or decide, per rule 5, that an
+unresolvable path means **block**.
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:
@@ -220,3 +272,8 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
    (and you recently edited an embedded `python3 -c "…"` block, code or
    comments)? → quote/backtick corruption (#9) — `bash -n` cannot see this one,
    only a real-JSON test of that exact case will.
+6. Does it work when you run the command **in place**, but never fire when the
+   command `cd`s somewhere first (or uses `~`, a variable, a glob)? → the guard is
+   parsing command text and got an unexpanded string (#10). Note this one has **no
+   symptom of its own** when the hook fails open — you find it by testing the
+   `cd ~/elsewhere && …` shape explicitly, not by waiting for something to look wrong.
