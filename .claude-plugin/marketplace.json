@@ -103,7 +103,7 @@
       "description": "Claude Code operations suite that bundles archive-aware local conversation discovery across Claude Code and Codex, internal-timestamp full-event session search and recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full claude.ai conversation extraction with tool-call rendering and file download, plugin marketplace development, writing/testing/debugging Claude Code hooks, multi-provider profile isolation for running Kimi/GLM/DeepSeek/StepFun/Anthropic in separate windows, local source sync for Claude/Codex skill installs, personal-memory migration into tool-agnostic AGENTS.md reference docs, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.23.1",
+      "version": "1.23.2",
       "category": "suite",
       "keywords": [
         "suite",
@@ -204,7 +204,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, speaker diarization and CAM++ voiceprint identification for multi-speaker recordings, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.11.0",
+      "version": "1.12.0",
       "category": "suite",
       "keywords": [
         "suite",
