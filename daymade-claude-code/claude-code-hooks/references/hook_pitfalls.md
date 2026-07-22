@@ -36,8 +36,12 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
   (`gsub(/&&|\|\||;|\|/,"\n")`). awk doesn't understand shell quoting, so the `|`
   *inside the quoted regex* is treated as a pipe, the string splits, and
   `TRIGGER` lands at a segment head → looks like a command.
-- **Fix:** parse with `shlex.split()` (quotes honored — the regex stays one
-  token) and check **command position**, not mere presence. See the walker in
+- **Fix:** tokenize with the **`shlex.shlex` class** (`punctuation_chars=True`,
+  `whitespace_split=True`) — NOT the `shlex.split()` function, which leaves
+  `ls|TRIGGER x` as `['ls|TRIGGER', 'x']` and hides the trigger from a
+  command-position check entirely. Both forms honor quotes (the regex stays one
+  token); only the class also splits unspaced separators. Then check **command
+  position**, not mere presence — walker in
   [hook_patterns.md](hook_patterns.md#the-shlex-command-position-walker).
 - **Why this is the worst class of bug:** *误杀健康输入比漏报更糟* — a guard that
   blocks healthy input trains the operator (human or model) to bypass it
@@ -67,6 +71,19 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
 - **Fix (detection):** a SessionStart health check that `bash -n`s every hook and
   checks symlinks (Pattern C) surfaces this class at startup instead of after
   hours of misdiagnosis.
+- **Fix (escape hatch) — you cannot Bash your way out of a broken Bash guard.**
+  Every repair you'd reach for (`rm` the symlink, re-`ln -s`, edit `settings.json`
+  with sed) is itself a Bash call, and a corrupted PreToolUse Bash hook inspects
+  those too. Routes that do **not** go through the Bash tool, cheapest first:
+  1. **Edit `settings.json` with the Edit/Write tool** (file tools don't fire the
+     Bash matcher) and delete the hook's entry — instant disarm, no shell needed.
+  2. **Start a session with a different config home**: `CLAUDE_CONFIG_DIR=<other>`
+     — a profile whose settings never registered the broken hook. (Set it when
+     launching the CLI, i.e. outside the poisoned session.)
+  3. **Fix from outside**: any terminal not running under the agent, since the hook
+     only exists on the agent's tool path, not on your shell's.
+  This is also the argument for the SSOT+symlink layout: repair is one `ln -s` you
+  can run from an ordinary terminal, not surgery on a live config.
 
 ---
 
@@ -209,6 +226,61 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
 
 ---
 
+## 10. A path parsed from command text keeps its literal `~` — guard fails **open**
+
+**Symptom.** The guard never fires for commands that `cd` somewhere first. No error,
+no log line, no misbehavior you can see — it just silently allows. In the case that
+surfaced it, two sibling hooks shared one parsing helper and degraded *differently*:
+a PostToolUse context-injector kept emitting its own fallback string
+(`"cannot read HEAD — not a git repo or bad path"`) for weeks, which everyone read as
+"that hook is noisy again"; the PreToolUse scope guard beside it gave **no signal at
+all** — it simply stopped guarding. Same root cause, one visible-but-dismissed
+symptom and one invisible.
+
+**Cause.** Tilde expansion is done by the **shell**, before a command ever runs. A
+hook that determines its target by *parsing the command text* (`cd X && git commit`,
+`git -C X commit`) never goes through a shell, so it receives the literal string
+`~/repo`. Then:
+
+```bash
+git -C "~/repo" log -1        # fatal: cannot change to '~/repo': No such file or directory
+git -C "~/repo" diff --cached --name-only   # → empty, exit non-zero, swallowed by 2>/dev/null
+```
+
+The headcheck degraded to a visible-but-ignorable message. The scope guard did
+something worse: empty staged list → "zero files, so zero cross-domain files" →
+**allow**. Rule 5's failure direction, in the wild.
+
+**Fix.** Expand in the parser, once, at the shared source. (The helper here is a `.sh` file whose parsing core is an embedded `python3` block — Pattern A's shape — so the fix is Python even though the file is shell:)
+
+```python
+repo_dir = os.path.expanduser(repo_dir) if repo_dir else repo_dir
+```
+
+`expanduser` is the identity function for anything not starting with `~`, and
+`expanduser('') == ''` — so the `if repo_dir else` guard above is belt-and-braces, not
+required; `repo_dir = os.path.expanduser(repo_dir)` alone is correct. Keep whichever
+reads better in your parser; the load-bearing part is that the expansion happens
+**inside the parser**, so every caller inherits it.
+
+**The shared-library twist — this is the part that bites twice.** The parser was a
+common helper (`lib-git-commit-detect.sh`) used by three hooks. Fixing it fixed all
+three at once, which is why the SSOT structure is right — but it also means
+**"I verified the fix" must mean "I verified every caller."** In the real incident
+the author fixed the library, verified two callers (a commit-form guard and the PostToolUse context-injector),
+declared it done — and the *third* caller, the scope guard, went unverified. It was
+both the one that fails open and the only one of the three that actually blocks. It
+took the user asking "so did you fix it?" for the gap to surface. When you patch a
+shared helper, enumerate its callers (`grep -l '<lib-name>' *.sh`) and put every one
+of them in the test table.
+
+**Generalization (not git-specific).** Any hook that reconstructs state by *reading
+the command instead of running it* inherits the whole class: `~` unexpanded, `$VARS`
+uninterpolated, `$(cmd)` unexecuted, globs unmatched, relative paths resolved against
+the wrong cwd. If your hook takes a path out of command text and hands it to a real
+command, expand what the shell would have expanded — or decide, per rule 5, that an
+unresolvable path means **block**.
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:
@@ -220,3 +292,15 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
    (and you recently edited an embedded `python3 -c "…"` block, code or
    comments)? → quote/backtick corruption (#9) — `bash -n` cannot see this one,
    only a real-JSON test of that exact case will.
+6. Did it stop mid-run with **`Failed with non-blocking status code: No stderr
+   output`**, in a hook whose contract is always-exit-0? → `set -e` + `pipefail`
+   killing it on a legitimately-empty `grep`/`wc` (#8). Distinct symptom, distinct
+   fix: drop `-e`, or `||`-guard every such pipeline.
+7. Did your **own test command** get blocked while you were testing the guard you
+   just registered? → self-block (#7); move the cases into a script file so the
+   outer command doesn't carry the trigger.
+8. Does it work when you run the command **in place**, but never fire when the
+   command `cd`s somewhere first (or uses `~`, a variable, a glob)? → the guard is
+   parsing command text and got an unexpanded string (#10). Note this one has **no
+   symptom of its own** when the hook fails open — you find it by testing the
+   `cd ~/elsewhere && …` shape explicitly, not by waiting for something to look wrong.

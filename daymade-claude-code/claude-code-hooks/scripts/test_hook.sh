@@ -52,6 +52,22 @@ run "grep-search"    '{"tool_name":"Bash","tool_input":{"command":"grep TRIGGER 
 run "comment"        '{"tool_name":"Bash","tool_input":{"command":"echo hi # TRIGGER bad"}}' 0
 run "unrelated"      '{"tool_name":"Bash","tool_input":{"command":"ls -la /tmp"}}' 0
 run "non-bash-tool"  '{"tool_name":"Read","tool_input":{"file_path":"/x/TRIGGER.txt"}}' 0
+#
+# ── FAILURE-DIRECTION ROWS — add these whenever the hook derives state from the
+#    command text (a path, a repo, a target). They assert the hook still behaves
+#    when it CANNOT resolve what it parsed. Omit them and a fail-open bug looks
+#    exactly like a clean pass (pitfall #10):
+# run "trigger behind cd ~"  '{"tool_name":"Bash","tool_input":{"command":"cd ~/somewhere && TRIGGER -x"}}' 2
+# run "trigger behind cd abs" '{"tool_name":"Bash","tool_input":{"command":"cd /tmp && TRIGGER -x"}}' 2
+# run "unresolvable path"    '{"tool_name":"Bash","tool_input":{"command":"cd ~/no-such-dir && TRIGGER -x"}}' 2
+#
+# ── HUMAN-GATE ROWS — if the hook releases via a confirmation dialog / tty YES,
+#    force both channels to decline so the run stays headless, and assert it
+#    BLOCKS. Requires the hook to read its channels from overridable names
+#    (see Pattern B "Make the gate testable"):
+#      GIT_GUARD_OSASCRIPT=false GIT_GUARD_TTY=/dev/null bash test_hook.sh <hook>
+#    Never provide an env var that *grants* approval — that recreates the retired
+#    static-escape-hatch anti-pattern.
 # ──────────────────────────────────────────────────────────────────────────────
 #
 # ── EVENT SHAPES OTHER THAN PreToolUse (the payload differs per event) ────────
