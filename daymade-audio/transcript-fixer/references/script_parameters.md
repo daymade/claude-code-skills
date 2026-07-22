@@ -9,6 +9,7 @@ Detailed command-line parameters and usage examples for transcript-fixer Python 
   - [Correction Management](#correction-management)
   - [Correction Workflow](#correction-workflow)
   - [Learning Commands](#learning-commands)
+  - [Review Queue Item Schema](#review-queue-item-schema)
 - [fix_transcript_timestamps.py](#fix_transcript_timestampspy) - Normalize/repair speaker timestamps
 - [split_transcript_sections.py](#split_transcript_sectionspy) - Split transcript into named sections
 - [generate_word_diff.py](#generate_word_diffpy) - Generate word-level HTML diff
@@ -45,11 +46,31 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 
 **Review queue** (persistent store for uncertain corrections; semantics in SKILL.md "Review Queue"):
 
-- `--enqueue-review JSON_PATH`: Enqueue items from a JSON file (`-` = stdin). Item fields: `{original, suggested?, file?, line?, context?, kind?, domain?, evidence?, actions?, priority?, source?}`
+- `--enqueue-review JSON_PATH`: Enqueue items from a JSON file (`-` = stdin). Item fields: `{original, suggested?, file?, line?, context?, kind?, domain?, evidence?, actions?, priority?, source?}` — full field/alias table + gotchas in [Review Queue Item Schema](#review-queue-item-schema) below
 - `--list-review`: List queue items, priority-sorted (filters: `--review-status pending|accepted|overridden|kept_original|skipped|all` default pending; `--domain`; `--review-source native_pass|stage1_deferred|learned_suggestion|manual`)
 - `--show-review ID`: One item in full (evidence + proposed action pack)
 - `--resolve-review ID --decision accepted|overridden|kept_original|skipped|reopen`: Record a verdict and execute the action pack (`overridden` requires `--override-to TEXT`; `--note` free-text evidence; `--by` reviewer name; `reopen` reverts applied edits and re-pends the item)
 - `--json` works with all four: one machine-readable result line on stdout
+
+### Review Queue Item Schema
+
+`--enqueue-review` accepts a JSON array of items (or `{"items": [...]}`). Only `original` is required. **Unknown keys are silently ignored** — a typo'd field name (e.g. `line_hint` instead of `line`) drops the value with no warning, and the item enqueues without that anchor. If the anchor matters, spot-check with `--show-review <id>` after enqueueing (real incident: an item enqueued with `line_hint` lost its line anchor silently).
+
+| Canonical field | Alias | Required | Notes |
+|---|---|---|---|
+| `original_text` | `original` | ✅ | The transcript text left in place (non-whitespace) |
+| `suggested_text` | `suggested` | | Pre-filled verdict; may be empty for a pure "is this right?" item |
+| `file` | `file_path` | | Transcript the item anchors to; items anchored to **temp-dir paths are skipped entirely** — never enqueued (the anchor would be a dead pointer once the staging copy vanishes) |
+| `line` | `line_number` | | Integer line hint for the anchor window |
+| `context` | `context_snippet` | | Nearby text used to re-anchor if the file drifted since enqueue |
+| `kind` | | | `entity` / `unknown` lead (compound into dict/roster); `homophone` / `wording` trail |
+| `domain` | | | Default `general`; CLI `--domain` supplies it only for items that don't set their own (per-item `domain` wins — the CLI uses `setdefault`) |
+| `source` | | | Default `manual`; `stage1_deferred` is set by Stage 1 safe mode |
+| `evidence` | | | What the search ladder found (rendered on the review card) |
+| `actions` | | | Action pack (`file_edit` / `dict_add` / `append_note`) run on accept; empty + file anchor + non-empty `suggested` = a single `file_edit` on accept (an empty `suggested` with no action pack errors at resolve time, not enqueue time) |
+| `priority` | | | Default derived from `kind` |
+
+Dedup key: `(file_path, original_text, suggested_text, domain, line_number)` — the same correction on two different lines is **two distinct review questions** (each gets its own window-scoped edit); re-enqueueing an already-answered item is skipped as a duplicate.
 
 ### Usage Examples
 
