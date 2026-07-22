@@ -49,6 +49,13 @@ Use adjacent skills by stage:
 - Use qa-expert for a full test strategy, defect program, and release metrics.
 - Use both this skill and qa-expert only when rendered visual evidence is one
   part of a broader QA gate.
+- This skill audits whether an artifact **renders** correctly, not whether it
+  **communicates**. A page can pass every check here while its labels are opaque
+  internal abbreviations and its numbers contradict each other between sections.
+  Route copy, terminology and audience fit to a content/writing-discipline skill,
+  and never let a green visual pass be reported as "a first-time reader can
+  follow this" — that is a different question, answered by a reader, not by a
+  rendering.
 
 ## Required Outcome
 
@@ -200,6 +207,35 @@ Include lower sections for long pages; a clean hero does not validate the rest.
 
 Open every screenshot with an image viewer and record what you saw. Use DOM
 geometry to explain a visible problem, not to replace visual judgment.
+
+**Calibrate the instrument before you trust it — a capture can both invent a
+defect and hide one.** A screenshot is not a neutral window onto the page: pixel
+evidence is notoriously noisy from anti-aliasing, sub-pixel positioning and font
+smoothing, and a frame captured at a different device scale factor than the
+viewport it claims to represent will crop or letterbox what you see.
+
+- **Before filing "content is clipped / overflowing", falsify it against DOM
+  geometry.** If `document.documentElement.scrollWidth === clientWidth` and the
+  suspect element's `getBoundingClientRect().right` sits inside `clientWidth`,
+  the page fits and the clipping lives in your capture, not in the product. This
+  is the one direction where DOM geometry *overrides* the visual impression
+  instead of explaining it — report the reverse and you send someone to "fix"
+  CSS that was already correct.
+- **Pin the scale factor** (`--force-device-scale-factor=1`) so the captured
+  frame and the CSS viewport agree, and capture only after fonts have loaded and
+  animation/network have settled; those are the standard sources of diff noise.
+- **A false pass is the worse failure, so the engine you capture with must be the
+  engine the reader will view in.** Headless rendering follows standardized
+  software paths while headed rendering uses host GPU and OS font hinting, so
+  subtle layout shift, font substitution, z-index and animation defects are
+  exactly the class headless most reliably *hides*. Never accept a thumbnailer or
+  preview renderer whose layout engine differs from the target application as
+  evidence — a green check on the wrong engine manufactures confidence, which is
+  worse than having run no check at all.
+
+Extent and device-emulation traps specific to headless capture are catalogued in
+[references/browser-driving-and-observation-traps.md](references/browser-driving-and-observation-traps.md)
+§4–§5.
 
 Check at minimum:
 
