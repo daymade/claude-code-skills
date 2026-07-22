@@ -218,6 +218,28 @@ everything), awk-split false-blocks (rule 1), corrupted hook poisoning the sessi
 form from Pattern E instead), static env escape hatch (rule 4), multi-profile
 under-registration.
 
+**The harness is the hidden variable — use `scripts/test_hook.sh`, don't hand-roll
+one.** Every hand-rolled failure mode below produces the *same* output as a clean
+pass, so it reads as success (2026-07-22, three in one sitting while fixing a Stop
+hook's whitelist):
+
+1. **Wrong event shape.** A Stop hook reads `last_assistant_message` /
+   `transcript_path`, not `tool_name`/`tool_input`. Feed a PreToolUse-shaped event
+   and it finds no text → exits 0 → "no false blocks!"
+2. **JSON quoting.** `'{\"a\":1}'` inside single quotes emits a literal
+   backslash-quote; `json.loads` throws, the hook's `2>/dev/null || exit 0` swallows
+   it, every case "passes".
+3. **A test case the rule legitimately exempts.** The baseline string used
+   `X 群里` while the regex deliberately excludes `群里/群内/群聊` — so the one row
+   meant to prove the guard still bites didn't bite.
+
+The common shape: **all-cases-agree is a smell, not a green light.** `test_hook.sh`
+resists all three because it asserts an explicit `expected-exit` per row (not "did
+it print something") and forces trigger rows alongside healthy-lookalike rows — a
+trigger row that returns 0 fails loudly instead of blending in. Always assert a
+known-good trigger *first*; if it doesn't fire, fix the harness before touching the
+hook's logic.
+
 ## Reference material
 
 - [references/hook_patterns.md](references/hook_patterns.md) — runnable skeletons for every hook type covered here, the shlex command-position walker, and the JSON event contract.
