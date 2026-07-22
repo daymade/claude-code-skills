@@ -74,9 +74,16 @@ When in doubt, **run Mode B first**, beginning with `git_find_all_checkouts.sh` 
    and never `stash -u`ed is invisible to all three — the copy on disk is the only copy, so
    preserving it means literally copying the file out. Backing up "the repository" and believing
    untracked work came along is how a clean-looking backup silently omits the only thing at risk.
-5. **Verify "merged" by CONTENT, never by commit count.** After a squash-merge, `main..branch`
-   shows the branch's original commits as "unmerged" even though their content is on main —
-   often 100+ phantom commits. Judge with file/blob comparison, not counts (Mode C).
+5. **Verify "merged" by CONTENT, never by commit count — and know that most content checks are
+   also unsound.** After a squash-merge, `main..branch` shows the branch's original commits as
+   "unmerged" even though their content is on main — often 100+ phantom commits. But swapping
+   counts for the *nearest* content check is not enough: in one audit, three successive
+   "surely this is content-level now" instruments each returned a wrong answer — `git cherry`
+   (squash rewrites patch-ids → false UNMERGED), a **three-dot** `diff base...ref` used to ask
+   "what does base lack" (three-dot answers a different question and **under-reported missing
+   files by 5×**), and a file-level existence check (a file present on base can still be missing
+   the ref's lines). Only the trial merge (`git merge-tree`, what `git_verify_branch_merged.sh`
+   runs) was right every time. Diff-form and rung-by-rung reliability: **[references/merge_verification.md](references/merge_verification.md)**.
 6. **For a high-stakes "is everything merged?" call, verify adversarially — ideally with a
    fan-out of independent agents each trying to *disprove* it.** One reviewer (human or model)
    scanning many branches reliably misses a real gap; independent cross-checks catch it. Give at
@@ -222,6 +229,22 @@ The habits that keep a branch tangle from ever stranding work:
   the only commit that a dead laptop actually loses.
 - **Confirm the current branch before committing** (`git branch --show-current`) — a fix committed
   onto the wrong feature branch is invisible to its real PR and easy to lose on cleanup.
+- **In a shared tree, never aim a destructive command at "the current branch" — name the branch
+  explicitly.** `reset --hard`, `merge`, and `rebase` all act on *whatever is checked out at the
+  instant they run*, so a branch check is stale the moment it returns: a parallel session can
+  `switch` in between, and your command lands on **their** branch. This is the inverse of the
+  bullet below (that one protects *your* work from *their* switch; this one protects *theirs*
+  from *your* command), and re-checking harder does not fix it — the race is inherent. Use the
+  checkout-independent forms instead, which name their target and never touch the working tree:
+  ```bash
+  git branch -f <branch> <target>          # instead of: switch <branch> && reset --hard <target>
+  git fetch origin <branch>:<branch>       # fast-forward a branch you are not on
+  git push origin <sha>:refs/heads/<branch>
+  ```
+  Real incident: a `reset --hard origin/main` issued seconds after `git branch --show-current`
+  said `main` landed on a parallel session's feature branch and moved it back two commits; the
+  follow-up "repair" then missed *again* because the tree had been switched a second time.
+  `git branch -f` fixed both in one shot precisely because it never consults the checkout.
 - **If a parallel session switched the shared tree onto its branch** and stranded your uncommitted
   work there, don't commit onto their branch — carry your edits to a branch off the base
   (`git checkout origin/main -b …`, after `git diff --quiet` proves your files match across bases),
