@@ -5,11 +5,10 @@ Detailed command-line parameters and usage examples for transcript-fixer Python 
 ## Table of Contents
 
 - [fix_transcription.py](#fixtranscriptionpy) - Main correction pipeline
-  - [Setup Commands](#setup-commands)
-  - [Correction Management](#correction-management)
-  - [Correction Workflow](#correction-workflow)
-  - [Learning Commands](#learning-commands)
+  - [Syntax](#syntax)
+  - [Parameters](#parameters)
   - [Review Queue Item Schema](#review-queue-item-schema)
+  - [Usage Examples](#usage-examples)
 - [fix_transcript_timestamps.py](#fix_transcript_timestampspy) - Normalize/repair speaker timestamps
 - [split_transcript_sections.py](#split_transcript_sectionspy) - Split transcript into named sections
 - [generate_word_diff.py](#generate_word_diffpy) - Generate word-level HTML diff
