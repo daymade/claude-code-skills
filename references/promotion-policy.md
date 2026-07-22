@@ -58,3 +58,4 @@ Your marketplace can succeed on its own merits. Good luck with {project-name}!
 
 - **Issue #7**: "Add Community Marketplaces section - Protocol Thunderdome" → Declined, closed as "not planned"
 - **PR #5**: "Add Trail of Bits Security Skills to Related Resources" → Declined, closed
+- **Issue #123**: "Docs option: quick first run for competitors-analysis" — asked to embed a UTM-tracked link (`utm_campaign=skill_outreach_*`) to the ClawMama/Hermes hosted skill catalog inside the `competitors-analysis` skill docs → Declined per policy, closed as "not planned"
