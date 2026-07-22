@@ -125,7 +125,7 @@ When the source material is *past* session transcripts (the JSONL files under th
 3. What's the expected output format?
 4. Should we set up test cases to verify the skill works? Skills with objectively verifiable outputs (file transforms, data extraction, code generation, fixed workflow steps) benefit from test cases. Skills with subjective outputs (writing style, art, taste-calibrated reports) often can't use assertions — but "no assertions" is not "no verification". Their verification paths, in order of cost:
    - **Historical-task replay**: re-run one real prompt the skill has served before, old vs new skill, and compare outputs against the specific rules that changed ("does the new output actually follow the tokens / title grammar this update introduced?"). Cheap, catches "the rule was written but nothing reads it".
-   - **Production-as-eval**: acknowledge that the real test is the user's next actual use — then make the loop explicit: every user correction afterward is an incident to fold back (the skill's own "迭代/活文档" section), every approval is corpus material. A taste skill that ships without this write-back habit doesn't improve; one that has it converges without ever running a formal eval.
+   - **Production-as-eval**: acknowledge that the real test is the user's next actual use — then make the loop explicit: every user correction afterward is an incident to fold back (the skill's own "迭代/活文档" section), every approval is corpus material. A taste skill that ships without this write-back habit doesn't improve; one that has it converges without ever running a formal eval. **And when the skill's output is something that keeps running — a guard, a monitor, a scheduled job, a hook — its own telemetry is eval data, and the highest-signal record in it is the first false alarm.** A user correction requires a user to notice and bother; a deployed mechanism reports on itself unprompted, often within a day, and a false positive is the sharpest form of that report because it proves a rule you wrote is wrong in a way no amount of re-reading would have shown. Treat the first one as a scheduled eval result rather than an annoyance: check it before assuming the mechanism misbehaved, because the more likely finding is that the *instruction* was too absolute. (Real instance: a skill prescribed a fail-loud check, the deployed check fired once overnight on a perfectly healthy condition, and the fix was to correct the over-absolute sentence in the skill — nobody complained; the telemetry did.)
    - **Render + human review** for visual outputs (the skill's own visual-QA gates), never a grep assertion pretending to measure aesthetics. **And the renderer you verify with must be the same engine the deliverable will be consumed in** — whatever previewer is conveniently installed is not a substitute. A thumbnailer whose layout engine differs from the target application will silently *hide* the exact defects you are looking for, and a green verification on the wrong engine is worse than no verification, because it buys false confidence. Real case (2026-07): a .docx was "visually verified" through macOS Quick Look thumbnails, which do not reproduce justified-text stretching; Word showed the document's info blocks blown apart the moment the user opened it. The fix was to install the Word-compatible engine (LibreOffice), convert to PDF, rasterize per page, and read every page. Match the engine, or the verification is theater.
    Suggest the appropriate default based on the skill type, but let the user decide.
 
@@ -318,6 +318,8 @@ Based on the user interview, fill in these components:
 
 - **name**: Skill identifier
 - **description**: When to trigger, what it does. This is the primary triggering mechanism - include both what the skill does AND specific contexts for when to use it. All "when to use" info goes here, not in the body. Note: currently Claude has a tendency to "undertrigger" skills -- to not use them when they'd be useful. To combat this, please make the skill descriptions a little bit "pushy". So for instance, instead of "How to build a simple fast dashboard to display internal Anthropic data.", you might write "How to build a simple fast dashboard to display internal Anthropic data. Make sure to use this skill whenever the user mentions dashboards, data visualization, internal metrics, or wants to display any kind of company data, even if they don't explicitly ask for a 'dashboard.'"
+
+  **Budget it: the description has a hard 1024-character ceiling, and validation rejects anything longer.** This is in direct tension with the "pushy" advice above — every trigger phrase you add for coverage spends budget — so measure before you expand rather than after: `len(description)`, not vibes. The trap is not the first draft (which is rarely near the limit) but the *update years later* that adds triggers for newly-covered scope: a mature description often sits within a few dozen characters of the ceiling, at which point **adding a trigger is zero-sum — you are deleting an existing one to pay for it.** Make that trade consciously and say so in the commit, because a silently-dropped trigger phrase is a real narrowing of when the skill fires, and nobody will notice until it stops triggering for someone. (Seen in practice: an update added triggers for a newly-covered failure mode, pushed the description to 1280 characters, and took two rounds of compression to reach 1003 — the price was three pre-existing trigger phrases, which is a decision that deserved to be explicit rather than discovered while fighting a validator.) When you must cut, prefer phrases whose scenario is still reachable through a synonym or a sibling phrase, keep the ones with no other route in, and remember that qualifiers inside the prose ("on platform X and Y", parenthetical enumerations) are usually cheaper to drop than a distinct trigger phrase — the prose is re-derivable from the body, a trigger phrase is not.
 - **compatibility**: Required tools, dependencies (optional, rarely needed)
 - **the rest of the skill :)**
 
@@ -1058,13 +1060,30 @@ find . -path '*/SKILL.md' -maxdepth 4 | rg '(^|/)<skill-name>/SKILL.md$'
 
 If the available-skills list points at `~/.codex/skills`, `~/.claude/skills`, or a plugin cache, do not assume that path is source. Locate the repository-backed source first, edit it, validate it, and only then sync the installed copy when the user needs immediate local runtime use.
 
+**Then answer the follow-up question that decides whether "sync the installed copy" is even work: does the runtime already read the source?** Three installs behave differently, and guessing wrong either wastes a sync or ships an edit the user's next session never sees:
+
+```bash
+ls -la ~/.claude/skills/<name>                       # a symlink into the repo? -> edits are live already
+grep -A3 '"<marketplace-name>"' ~/.claude/plugins/known_marketplaces.json   # "source": "directory" -> reads the repo in place
+```
+
+- **Symlinked** into the source tree → the edit *is* the runtime. Nothing to sync.
+- **Marketplace with `source: directory`** pointing at the repo → same: it reads the working tree, so a version bump is bookkeeping for other consumers, not a local activation step.
+- **Anything cached/copied** (git-sourced marketplace, a `cp -r` install) → the runtime is a separate copy and genuinely needs the official update command before the new content is live.
+
+**And verify activation by content, not by a version string.** A registry can record a path or version that does not exist on disk — one session read a plugin record naming a cache directory with the *new* version number in it and nearly reported the update as live; that directory had never been created, and the real runtime path was a symlink to the source all along. The authoritative check is to grep the runtime file for something only the new version contains:
+
+```bash
+grep -c "<a phrase unique to the new content>" <resolved-runtime-path>/SKILL.md   # 0 = not live
+```
+
 ### Concurrent sessions on the same skill repo
 
 Power users run several Claude sessions at once, and skill repos are exactly where they collide: while you edit skill A, a sibling session may commit skill B (or even an earlier round of skill A) under you. One real session hit all three symptoms inside an hour — a `Write` rejected because the file changed after reading, and HEAD moving twice mid-task (methodology Case 16). The failure isn't the collision; it's a stale baseline or a clobbering write that silently mixes two sessions' work. Standing rules:
 
 1. **Baseline from a git ref, not from the working tree**, whenever the repo is clean at task start: `git archive <HEAD-sha> <skill-dir> | tar -x -C <workspace>/skill-before` and pass `--baseline-origin git-ref:<sha>` to the audit. A tree snapshot taken minutes before someone else's commit is a baseline for a tree that no longer exists.
 2. **Re-read before write** when a write is rejected or any time has passed: diff what changed (`git log --oneline -3`, `git show <new-commit> --stat`), fold the other session's intent into your version — their edit usually has a reason — and only then write.
-3. **Check HEAD before committing** (`git log --oneline -1`): if it moved since your baseline, re-run the regression `compare` against the new ref before `verify` — the audit tool will reject a stale review anyway ("after skill changed"), so catching it yourself saves a round.
+3. **Check HEAD *and which branch you are on* before committing.** `git log --oneline -1` catches a moved SHA: if it moved since your baseline, re-run the regression `compare` against the new ref before `verify` — the audit tool will reject a stale review anyway ("after skill changed"), so catching it yourself saves a round. But a sibling session can do something worse than advance HEAD: **it can switch the branch out from under you**, because a checkout is worktree-wide. Real sequence — `checkout -b feat/x`, edit for a while, and meanwhile another session ran `checkout main` + `pull`; the commit then landed on **main**, violating the repo's "never commit directly to local main" rule while the feature branch still pointed at the old base. So add `git branch --show-current` to the pre-commit check, not just the SHA. When it has already happened, `git reflog` is the authoritative reconstruction (it records each `checkout: moving from X to Y` with order), and the repair — **given a clean worktree** — is `git checkout -B <feature> <your-sha>` followed by `git branch -f main origin/main`: both are ref moves that never touch the working tree, so neither can destroy a parallel session's uncommitted work the way `reset --hard` would.
 4. **Stage only your own paths** (`git add <skill-dir> <registry-file>`), never `git add .` — the sibling session's uncommitted work must not ride along. (Already the rule for packaging; doubly load-bearing under concurrency.)
 5. **One version bump per session outcome**, not per editing round: consecutive same-session rounds on one skill collapse into a single bump — unless an intermediate state was already consumed (committed + pulled by the user or another session), which makes each consumed state its own version.
 
@@ -1390,6 +1409,25 @@ After packaging, update the marketplace registry to include the new or updated s
 ```
 
 **For updated skills**, bump the version in `plugins[].version` following semver. Any change to a skill's files — even a one-line typo fix — needs a bump: without it, `marketplace update` sees no new version, so **already-installed copies never refresh** and users keep running the old skill while your fix sits unshipped.
+
+**Keep the registry diff minimal — it is the single file every skill shares.** A marketplace manifest is the one place where every concurrent editor collides, so an unrelated formatting change there is far more expensive than the same change anywhere else: it turns a clean three-line bump into a conflict for whoever else is mid-edit. When you script the update (parsing to JSON, mutating, writing back), the rewrite silently normalizes things the file may not have used — trailing newline, indent width, key order, unicode escaping. Round-trip discipline: re-read the file afterwards and run `git diff --stat` on it; **the only lines that may appear are the fields you meant to change.** If extra lines show up, restore the file's original convention rather than shipping the normalization (a scripted bump once added a trailing newline to a manifest that had never had one — one wasted diff line, in the file most likely to be edited by someone else at the same moment). The same instinct applies to any shared registry a skill touches: lockfiles, catalogs, index documents.
+
+**When a PR outlives a few merges, rebase — then prove you didn't eat anyone's work.** The same property that makes the manifest a collision hotspot makes it the thing that goes stale: an open PR touching the registry and the changelog will conflict as soon as anything else lands, so expect `mergeable: CONFLICTING` rather than treating it as a surprise (one PR hit it after main moved 7 commits in an afternoon). Rebase rather than merge if the repo squash-merges — a merge commit in a squashed history buys nothing. The conflicts themselves are almost always **additive**: two authors each appended their own entry in the same section, so the resolution is to **keep both**, never `--ours`/`--theirs`, which silently discards a colleague's line.
+
+The step people skip is the one that catches a bad resolution — **after resolving, prove the only difference from the base is yours:**
+
+```bash
+# Every version the base has vs. what your branch has; the diff must contain
+# ONLY the entry you bumped. Anything else means the resolution ate someone's work.
+python3 -c "
+import json,subprocess
+mine=json.load(open('<manifest>'))
+base=json.loads(subprocess.run(['git','show','origin/main:<manifest>'],capture_output=True,text=True).stdout)
+b={p['name']:p['version'] for p in base['plugins']}; m={p['name']:p['version'] for p in mine['plugins']}
+print({k:(b.get(k),m.get(k)) for k in set(b)|set(m) if b.get(k)!=m.get(k)})"
+```
+
+Then push with `--force-with-lease`, never a bare `--force`: the lease makes the push fail if the remote moved since you last fetched, which is exactly the case where someone else pushed to your branch and a plain force would erase them.
 
 **Plugin boundaries are not this skill's domain.** Whether to split skills into
 separate plugins, how to lay out `source`/`skills`, and whether users can toggle
