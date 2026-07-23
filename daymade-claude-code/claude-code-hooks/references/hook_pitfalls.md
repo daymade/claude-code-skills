@@ -43,6 +43,10 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
   token); only the class also splits unspaced separators. Then check **command
   position**, not mere presence — walker in
   [hook_patterns.md](hook_patterns.md#the-shlex-command-position-walker).
+- **Caveat — `whitespace_split=True` also swallows newlines.** If your commands
+  can be multiline (`cd x\ngit add\ngit push`), tokenizing the whole string
+  collapses every line into one segment and hides everything but the first line's
+  head. Split on newlines as text *first*; see #11.
 - **Why this is the worst class of bug:** *误杀健康输入比漏报更糟* — a guard that
   blocks healthy input trains the operator (human or model) to bypass it
   reflexively, and a reflexively-bypassed guard protects nothing. When choosing
@@ -281,6 +285,55 @@ the wrong cwd. If your hook takes a path out of command text and hands it to a r
 command, expand what the shell would have expanded — or decide, per rule 5, that an
 unresolvable path means **block**.
 
+## 11. Newline-blind segmentation misses the multiline command (fixtures pass, real corpus barely fires)
+
+- **Symptom:** the hook passes every synthetic fixture (`git push origin main`,
+  `cd x && git push`) yet fires far less than expected on real transcripts — in one
+  incident its replayed trigger rate was **0** where the targeted population should
+  have shown ~5%.
+- **Cause:** the git operations this kind of guard targets are usually written as
+  *multiline* blocks — `cd /repo\ngit add -A\ngit commit -m x\ngit push`. A
+  segmenter built on `shlex.shlex(..., whitespace_split=True)` — the very tokenizer
+  #2 recommends for quoting-safety — treats the **newline as ordinary whitespace and
+  drops it**, so the lines collapse into ONE token stream with no separator token,
+  yielding a single segment whose head is `cd`. The `git push` further down is no
+  longer at a segment head, and the command-position check (#2) never sees it.
+  Single-line fixtures cannot expose this: they have no newline to swallow.
+- **Fix — two stages, and the order matters.** First split on **newlines only, as
+  text** (`cmd.split("\n")`). Then, *within each line*, use #2's `shlex` tokenizer
+  to segment on `;`/`&&`/`|` and walk for command position. This defeats the common
+  #2 trap: a `|` inside `grep -E "a|git push|b"`, or an `&&` inside a *single-line*
+  `git commit -m "… && git push"`, stays inside one `shlex` token, so no phantom
+  `git push` segment is manufactured. Do **not** instead do the whole job with one
+  quote-blind split like `re.split(r"[\n;]|&&|\|\||[|&]", cmd)`: that cuts those same
+  separators *inside* quotes — pitfall #2, the worst bug in this file — and orphans
+  the inner text from its `git commit` head, defeating #7's exemption.
+- **Name its residual, don't hide it.** The text `cmd.split("\n")` is itself
+  quote-blind about *newlines*: a newline **inside** a quoted string or a heredoc
+  body still fragments. The clean witness is a heredoc — `git commit -F - <<'MSG'`
+  whose body contains a bare `git push` line splits that line off and reads it as a
+  command it isn't. (A multiline `-m "…\ngit push"` message fragments too, but its
+  torn line has an unbalanced quote, so whether it over- or under-fires depends on how
+  you handle the `shlex` `ValueError` — a witness for the same residual, less clean.)
+  So the two-stage is not "#2-proof", only *less* exposed than the one-shot regex.
+  Whether that residual is acceptable follows the same **bias-to-under** call as #2:
+  for a **fail-open reminder** an extra over-fire costs nothing — declare it and move
+  on; for a **fail-closed blocker** it re-creates #2's false-block, so you must lift
+  #7's `git commit`/heredoc exemption to the **whole-command** level *before*
+  splitting, or parse with a real shell grammar.
+- **Why you only catch it with real data:** this is the `合成 fixture 全绿 ≠ 正确`
+  trap — the fixtures you invent share the blind spot that wrote the bug (you think
+  in one-liners; production is multiline). So replay the hook over a **real corpus**
+  before shipping. And when a replay returns "0 / clean", treat the **harness
+  itself** as a suspect too: a random-sample replay can read 0 purely because the
+  sample was diluted (measure the *population that can possibly fire*, not a uniform
+  sample), and a mutation test can report "survived" because the mutation never
+  applied. Both are the same failure as the hook's own — the instrument lying in the
+  safe-looking direction. Confirm the harness can report "dirty" on an input you have
+  *independently proven* should fire, before you believe any "clean".
+
+---
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:
@@ -304,3 +357,9 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
    parsing command text and got an unexpanded string (#10). Note this one has **no
    symptom of its own** when the hook fails open — you find it by testing the
    `cd ~/elsewhere && …` shape explicitly, not by waiting for something to look wrong.
+9. Does it pass every fixture but **barely fire on a real corpus** — and the missed
+   commands are **multiline / newline-separated** (as opposed to #10's single-line
+   `cd ~/x && …` with an unexpanded `~`)? → newline-blind segmentation (#11): the
+   tokenizer drops the newline in real multiline commands, so the head is `cd`. Also
+   suspect the replay/mutation **harness** itself — make it report "dirty" on a
+   known-positive before trusting its "clean".
