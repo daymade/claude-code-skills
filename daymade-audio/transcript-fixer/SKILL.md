@@ -342,42 +342,41 @@ A recording can be long but still fast-tier (two known speakers, plain language)
 1. Run Stage 1 (dictionary) on all files (parallel if multiple)
 2. Verify Stage 1 — diff against the original. If the dictionary introduced false positives, work from the **original** file instead and apply your edits there
 3. **Load the domain's priors, then read the entire transcript.** If `~/.transcript-fixer/contexts/<domain>.md` exists for this transcript's domain, read it first — it primes which homophone traps to suspect and names the authoritative sources for step 4's ladder (see "Domain Correction Contexts" above). Then read the **entire** transcript before proposing corrections — later context disambiguates earlier errors (a name garbled near the start often becomes obvious later). For large files, read in chunks but finish the whole thing before deciding anything
-4. **Triage each candidate error into one of three buckets** — this triage is the part that takes judgment. **First override two reflexes that repeatedly misfile names** (both are real, recurring failures — they send a fixable name straight to "ask the user"):
+4. **Triage each candidate error into one of three buckets** — this triage is the part that takes judgment. **First override three reflexes that repeatedly misfile names** (all three are real, recurring failures — they send a fixable name straight to "ask the user"):
+   - **Speaker labels first — the transcript usually already holds the names.**
+     Before searching anywhere, collect the set of speaker labels in the file;
+     if a garbled token matches one by SOUND, it is almost certainly that same
+     person, and the label carries the spelling — a label is copied from a name
+     *registry* (a human annotating the recording, or the attendee list /
+     voiceprint enrollment a diarizer matched against), while the body is raw
+     ASR of a spoken sound. Three things decide how far that gets you.
+     **(a) Match against ALL labels, not the one above the block** — people
+     rarely say their own name, so a garbled name usually sits in a block
+     spoken by someone else (`A` greeting `B`). **(b) The label settles WHO;
+     the roster still settles the canonical spelling** — a hand-typed `Joe`
+     normalizes to the roster's `Jo`. **(c) Labels annotated by a human are a
+     human identification: apply them, and do NOT put that name on the
+     needs-checking list or ask the user to confirm it — they answered it by
+     labeling it.** (Real case: walked the whole ladder on a name printed above
+     every one of that speaker's blocks, found nothing, then asked the user to
+     confirm it. They had labeled it themselves.)
+     When you cannot tell whether labels were hand-annotated or auto-assigned,
+     **assume auto-assigned**: voiceprint matching can attach a perfectly
+     spelled name to the wrong speaker, and that never looks garbled — so treat
+     the label as a strong candidate to confirm through the ladder, not as a
+     stop condition. Fall through to the ladder for `说话人 N` / `Speaker N`,
+     role labels (`主持人` / `Interviewer`), a third party who is not one of the
+     speakers, or a label that is itself visibly garbled. Fix the **body** only
+     — never edit a label or reassign who said what — keep the edit minimal
+     (do not expand a given name into a full name nobody said), and `--add` the
+     confirmed variant to a `--domain` so the next transcript fixes it free.
    - **Judge ASR errors by SOUND, not by glyphs.** Chinese ASR errors are homophone / near-homophone substitutions, so decide "same entity?" by pronunciation, not by whether the characters match exactly. A name that comes through as `X小Y` when the roster or dictionary already holds `X晓Y` (小/晓 are the same sound) is the **same person → Confident fix** — do NOT downgrade it to Uncertain just because 小≠晓 on the page. Same logic for a foreign name whose syllables all map by sound to a near-homophone transliteration. The dictionary having a sound-alike canonical is *evidence for* the fix, not a mismatch to be dismissed.
    - **A name you can't place defaults to the search ladder below, NOT to asking the user.** "Only the user knows this name" is the single most common wrong reflex. The canonical spelling is almost always already on this machine under a **different project's domain** — so you must query **all** domains at once (the cross-domain SQL in the ladder below), not the one domain you happened to pass to `--stage 1`, which may be brand-new and empty. Querying only that one and giving up looks exactly like "I checked" while finding nothing that was right there.
    - **Confident fix** — non-words, obvious garbling, product-name variants you already recognize, or a homophone that's unambiguous in context (`their`→`there` where context forces it; `彭波`→`彭博` when every other mention already reads `彭博`). Apply directly (step 5).
    - **Needs verification** — a proper noun you can't confirm from context: a person / company / ticker / product / place name (a misheard drug name in a medical interview, a researcher's surname in a podcast, a ticker on an earnings call), or any term you can't point to a specific source for — even one you think you recognize ("I'm pretty sure" is exactly how wrong names slip in). **Resolve it through a local-first search ladder before asking the user.** For project / personal entities the authoritative spelling almost always already lives on this machine, and WebSearch is near-useless on internal names — it returns wrong same-name people, or nothing — and worse, a fluent wrong guess becomes a confident fix that's hard to catch later. Search in this order:
 
 
-      0. **The transcript's OWN speaker labels — read them before you search
-         anything.** A diarized transcript already carries its speakers' names:
-         the label above each block. When the body garbles a name that a label
-         spells out — the body shatters one speaker into three homophone
-         spellings, the label prints it once, identically, above every block
-         that speaker says — **the label wins.** Not because labels are
-         magically accurate, but because of where each string came from: a
-         label is copied from a name *registry* (a human annotating the
-         recording, or the attendee list / voiceprint enrollment the diarizer
-         matched against), while the body is raw ASR of a spoken sound. Apply
-         the label as a Confident fix and stop; do not walk the rest of the
-         ladder hunting for a name already printed on screen. **This step costs
-         one glance, so it runs in every tier including fast.**
-         **When the labels were annotated by hand, they are a human
-         identification — outranking every source below, including the roster.
-         Do not put such a name on the needs-checking list and do not ask the
-         user to confirm it: they answered it by labeling it, and asking again
-         reads as not having looked.** (Real case: ran the entire ladder —
-         local dictionaries, project documents, a company registry, a chat
-         archive — on a name printed at the top of every one of that speaker's
-         blocks, found nothing, then asked the user to confirm it. They had
-         labeled it themselves.)
-         This corrects the **body text** to match the label; it never edits the
-         label, and never reassigns who said what. Fall through to the search
-         below when the label is `说话人 N` / `Speaker N`, when the garbled name
-         belongs to someone who is not one of the speakers (a third party
-         mentioned in passing), or when a label is itself visibly ASR-garbled —
-         an auto-assigned label is only as good as the roster it matched.
-      1. **People roster** — `people.md` (or wherever `people_roster_path` in
+      0. **People roster** — `people.md` (or wherever `people_roster_path` in
          `~/.transcript-fixer/config.json` points). This is your curated SSOT
          of long-term recurring people with their ASR variants annotated under
          `- **ASR 变体**:`. A garbled name that already maps to a canonical
@@ -385,11 +384,11 @@ A recording can be long but still fast-tier (two known speakers, plain language)
          Confident fix: apply immediately. **This one step replaces asking the
          user for every name they've already documented.** Skip only for
          transcripts whose speakers are confirmed NOT in the roster.
-      2. **All domains of `corrections.db`, not just the current `--domain`.** The same entity shatters into different ASR variants across projects, and every prior fix already collapsed them to the canonical name — so the answer is often sitting in another domain you didn't pass to `--stage 1`. Checking only the current domain and giving up is the recurring failure mode.
+      1. **All domains of `corrections.db`, not just the current `--domain`.** The same entity shatters into different ASR variants across projects, and every prior fix already collapsed them to the canonical name — so the answer is often sitting in another domain you didn't pass to `--stage 1`. Checking only the current domain and giving up is the recurring failure mode.
          `sqlite3 ~/.transcript-fixer/corrections.db "SELECT from_text, to_text, domain FROM active_corrections WHERE to_text LIKE '%<fragment>%' OR from_text LIKE '%<fragment>%';"`
-      3. **Project delivery docs & the alias ledger** — cost reports, review sheets, deliverables, PKM notes for that project. These are human-written correct spellings, the strongest possible source. `grep -rl "<fragment>" <project-dir>` then read the hits. (The domain context file you loaded before triage usually names the project's alias ledger explicitly — start there.) **Read every name table the ledger holds, not just the one that looks like "the speaker list."** A project's people are almost always split across role-based tables — internal speakers, external collaborators, client-side, vendor/dealer-side, attendees — and the person you're chasing often lives in a sibling table you didn't open. If a name you end up confirming wasn't reachable from the context file's name-source manifest, that manifest is incomplete: add the missing table to it so the next run can't miss it. (See `domain_context_guide.md` Rule 6 for the failure case this prevents.)
-      4. **Memory** (`~/.claude/.../memory/`) — project relationship maps and person profiles often record canonical names explicitly.
-      5. **WebSearch** — only for genuinely public entities (a public-company ticker, a known researcher, a drug name). Skip for anything project-internal.
+      2. **Project delivery docs & the alias ledger** — cost reports, review sheets, deliverables, PKM notes for that project. These are human-written correct spellings, the strongest possible source. `grep -rl "<fragment>" <project-dir>` then read the hits. (The domain context file you loaded before triage usually names the project's alias ledger explicitly — start there.) **Read every name table the ledger holds, not just the one that looks like "the speaker list."** A project's people are almost always split across role-based tables — internal speakers, external collaborators, client-side, vendor/dealer-side, attendees — and the person you're chasing often lives in a sibling table you didn't open. If a name you end up confirming wasn't reachable from the context file's name-source manifest, that manifest is incomplete: add the missing table to it so the next run can't miss it. (See `domain_context_guide.md` Rule 6 for the failure case this prevents.)
+      3. **Memory** (`~/.claude/.../memory/`) — project relationship maps and person profiles often record canonical names explicitly.
+      4. **WebSearch** — only for genuinely public entities (a public-company ticker, a known researcher, a drug name). Skip for anything project-internal.
 
       Only after all of these strike out do you ask the user — and by then you've shown the entity isn't already recorded on this machine, which makes the ask legitimate. A confirmed result becomes a Confident fix; if the search *can't* confirm it, it drops to Uncertain. **Batch these**: collect the unique unknowns and run the ladder once per unique entity, not once per occurrence.
 
