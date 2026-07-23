@@ -349,14 +349,23 @@ A recording can be long but still fast-tier (two known speakers, plain language)
      person, and the label carries the spelling — a label is copied from a name
      *registry* (a human annotating the recording, or the attendee list /
      voiceprint enrollment a diarizer matched against), while the body is raw
-     ASR of a spoken sound. Three things decide how far that gets you.
-     **(a) Match against ALL labels, not the one above the block** — people
-     rarely say their own name, so a garbled name usually sits in a block
-     spoken by someone else (`A` greeting `B`). **(b) The label settles WHO;
-     the roster still settles the canonical spelling** — a hand-typed `Joe`
-     normalizes to the roster's `Jo`. **(c) Labels annotated by a human are a
-     human identification: apply them, and do NOT put that name on the
-     needs-checking list or ask the user to confirm it — they answered it by
+     ASR of a spoken sound. Four qualifiers, and the first one is not optional.
+     **(a) Apply it only to a name being ADDRESSED or SELF-INTRODUCED, never one
+     being REFERRED TO.** "hi, <token>" and "my name is <token>" identify a
+     speaker; "I'll ask <token> from the bank" identifies a third party who may
+     merely *sound* like one — and rewriting them to a speaker's name corrupts a
+     real person, the exact hazard the dictionary table calls "Real name →
+     different real name ❌ Never a rule". Two acoustically identical tokens in
+     one file can need opposite answers for this reason alone, so a referred-to
+     name keeps walking the ladder rather than resolving here.
+     **(b) Match against ALL labels — including, but not limited to, the one
+     above the block** — a garbled name usually sits in a block spoken by
+     someone else (`A` greeting `B`), and sometimes in that speaker's own block
+     (a self-introduction). **(c) The label settles WHO; the roster still
+     settles the canonical spelling** — a hand-typed `Joe` normalizes to the
+     roster's `Jo`, spelling only, never length. **(d) Labels annotated by a
+     human are a human identification: apply them, and do NOT put that name on
+     the needs-checking list or ask the user to confirm it — they answered it by
      labeling it.** (Real case: walked the whole ladder on a name printed above
      every one of that speaker's blocks, found nothing, then asked the user to
      confirm it. They had labeled it themselves.)
