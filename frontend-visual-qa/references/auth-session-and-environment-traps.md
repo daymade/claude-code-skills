@@ -125,11 +125,25 @@ is a fresh-session diagnostic at best.
 
 ### 3. Triangulate browser events against server logs
 
-Wire the three listeners before reproducing a login/network failure:
+Wire listeners before reproducing a login/network failure, but never log raw
+credential, query, or fragment values. Keep the exact URL in browser memory;
+persist only a redacted structural URL plus a hash when identity comparison is
+needed:
 
-    page.on('console',        m => m.type() === 'error' && console.log('CONSOLE:', m.text()));
-    page.on('requestfailed',  r => console.log('FAILED:', r.failure()?.errorText, r.url()));
-    page.on('request',        r => console.log('REQ:', r.method(), r.url()));
+    const safeUrl = (raw) => {
+      try {
+        const u = new URL(raw);
+        const keys = [...new Set(u.searchParams.keys())];
+        const query = keys.length
+          ? '?' + keys.map((key) => `${encodeURIComponent(key)}=<redacted>`).join('&')
+          : '';
+        return `${u.origin}${u.pathname === '/' ? '/' : '/<redacted-path>'}${query}${u.hash ? '#<redacted-fragment>' : ''}`;
+      } catch { return '<redacted-url>'; }
+    };
+    const safeText = (text) => text.replace(/https?:\/\/[^\s"'<>]+/g, safeUrl);
+    page.on('console',       m => m.type() === 'error' && console.log('CONSOLE:', safeText(m.text())));
+    page.on('requestfailed', r => console.log('FAILED:', r.failure()?.errorText, safeUrl(r.url())));
+    page.on('request',       r => console.log('REQ:', r.method(), safeUrl(r.url())));
 
 Then check the backend/gateway access log for the same window. The decisive
 signal is an *absence*: if the server log shows zero auth requests arriving
