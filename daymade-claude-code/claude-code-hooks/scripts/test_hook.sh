@@ -36,6 +36,33 @@ run() {
   else printf 'FAIL exit=%s want=%s [%s]\n' "$e" "$3" "$1"; fail=$((fail+1)); fi
 }
 
+# says <label> <json-event> <grep-pattern> <yes|no>
+#   Asserts on the hook's stderr TEXT, not its exit code. Needed whenever the
+#   hook's real product is its guidance message — a PreToolUse explanation, a Stop
+#   reminder. Break the wording, invert an optional paragraph's condition, let a
+#   heredoc swallow a section: the exit code is unchanged and every `run` row still
+#   passes, so an exit-code-only suite is structurally blind to it (pitfall #14).
+#   Assert BOTH polarities, across two fixtures: the paragraph appears for the
+#   input it targets (want=yes), and is absent for the lookalike it must skip
+#   (want=no). A want=no row alone passes vacuously when the hook prints nothing
+#   at all — so it is only meaningful next to a want=yes row proving the hook
+#   speaks. Do not try to put both polarities on ONE fixture: a healthy input is
+#   supposed to be silent, so it has no want=yes partner — its partner is the
+#   trigger fixture.
+says() {
+  local out hit=no
+  out=$(printf '%s' "$2" | "$HOOK" 2>&1 >/dev/null) || true
+  # -F (fixed string), NOT a regex: the patterns you actually want to assert are
+  # literal phrases, and the most useful ones contain brackets — a hook that tags
+  # `path [skill]` is the motivating case. As a BRE, "[skill]" is a CHARACTER
+  # CLASS: it matches any text containing s, k, i or l, so `says … "[skill]" yes`
+  # is true of almost any English output and the row is decorative. Measured.
+  # Need a real regex? call grep -qE explicitly in a copy of this helper.
+  printf '%s' "$out" | grep -qF -- "$3" && hit=yes
+  if [ "$hit" = "$4" ]; then printf 'PASS text=%s [%s]\n' "$hit" "$1"; pass=$((pass+1))
+  else printf 'FAIL text=%s want=%s [%s]\n' "$hit" "$4" "$1"; fail=$((fail+1)); fi
+}
+
 # ── EXAMPLE TABLE — replace TRIGGER with your banned command ──────────────────
 # Trigger cases (want 2):
 run "execute"        '{"tool_name":"Bash","tool_input":{"command":"TRIGGER -x arg"}}' 2
@@ -60,6 +87,23 @@ run "non-bash-tool"  '{"tool_name":"Read","tool_input":{"file_path":"/x/TRIGGER.
 # run "trigger behind cd ~"  '{"tool_name":"Bash","tool_input":{"command":"cd ~/somewhere && TRIGGER -x"}}' 2
 # run "trigger behind cd abs" '{"tool_name":"Bash","tool_input":{"command":"cd /tmp && TRIGGER -x"}}' 2
 # run "unresolvable path"    '{"tool_name":"Bash","tool_input":{"command":"cd ~/no-such-dir && TRIGGER -x"}}' 2
+#
+# ── CONTENT ROWS — assert the MESSAGE, when the message is the product ────────
+# run rows prove the hook decided correctly; says rows prove it said the right
+# thing. Both polarities on conditional paragraphs (pitfall #14):
+# says "explains alternative" '{"tool_name":"Bash","tool_input":{"command":"TRIGGER x"}}' "USE INSTEAD" yes
+# says "quiet on healthy"     '{"tool_name":"Bash","tool_input":{"command":"ls -la"}}'    "BLOCKED"     no
+#
+# ── PROVE THE SUITE CAN FAIL (mutation) — do this once per assertion you add ──
+# A green suite carries ZERO information until you have watched it go red for the
+# right reason. For each assertion, copy the hook, inject the exact bug that
+# assertion claims to catch, and confirm THAT row dies — ideally only that one:
+#     cp "$HOOK" /tmp/mutant.sh
+#     # invert a branch condition / delete a fact-check / revert to a display-string match
+#     bash test_hook.sh /tmp/mutant.sh     # expect exactly the intended row to FAIL
+# If the mutant still passes, the assertion is decorative — it is testing something
+# other than what its label claims. Two real bugs once lived in a hook through a
+# fully green 24-case suite because every row looked only at exit codes.
 #
 # ── HUMAN-GATE ROWS — if the hook releases via a confirmation dialog / tty YES,
 #    force both channels to decline so the run stays headless, and assert it
