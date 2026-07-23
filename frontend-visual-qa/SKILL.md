@@ -20,7 +20,8 @@ and uninspected screenshot files as supporting signals, never as visual proof.
 
 Default to **audit-only**. Do not edit implementation, add tests, install
 dependencies, or update snapshots unless the user explicitly asks to fix or
-change the UI.
+change the UI. Permission to fix source does not authorize rebuilding,
+restarting, or deploying any target.
 
 ## Scope And Routing
 
@@ -61,14 +62,15 @@ Use adjacent skills by stage:
 
 Produce all of the following:
 
-1. A scope contract naming the artifact, actor, job, exact route/state, relevant
-   viewports, affected journeys, reference/SSOT, and audit-only versus
-   fix-and-verify authorization.
+1. A scope contract naming the artifact, actor, job, target kind and canonical
+   target identity, conditional state, viewports, affected journeys,
+   reference/SSOT, and authorization.
 2. A verification status: **verified**, **partial**, or **blocked**.
 3. Findings tied to visible evidence, impact, state, viewport, and reproduction.
 4. A list of what was actually exercised and what remains unverified.
-5. When authorized to fix, a same-state/same-viewport re-run and a proportionate
-   regression guard.
+5. When freshness or deployment is claimed, a separate delivery status and its
+   identity evidence; when target mutation is explicitly authorized, identity
+   before/after, a same-target/state/viewport re-run, and a regression guard.
 
 Never downgrade the user's real objective to whatever evidence was easiest to
 collect.
@@ -79,7 +81,7 @@ Track this checklist for nontrivial audits:
 
     - [ ] 1. Establish the audit contract and authorization
     - [ ] 2. Select the required evidence level and canonical harness
-    - [ ] 3. Prove the route, state, data, and viewport are the intended ones
+    - [ ] 3. Prove the target, state, data, viewport, and claimed freshness
     - [ ] 4. Capture and inspect macro, local, and responsive evidence
     - [ ] 5. Exercise the affected journeys and recipient outputs
     - [ ] 6. Report findings; fix and re-run only when authorized
@@ -91,13 +93,21 @@ launcher/test SOP, and the changed code. Then write a falsifiable contract:
 
     Artifact/page type:
     Actor and job:
-    Exact route + conditional state:
+    Target kind + canonical identity:
+      web = exact in-browser URL (query/fragment included) + named environment
+      single file/image = canonical path + content hash + rendering scheme
+      multi-resource artifact = canonical entry + dependency/manifest digest + renderer
+      native = installed artifact fingerprint + build/version + process/window + renderer route
+    Conditional state:
+    Delivery identity/status, only when freshness/deployment is claimed:
     Reference or design-system SSOT:
     Relevant viewport/device matrix:
     Intended projection/canvas size, if any:
     Affected interactions and outputs:
     Audit profiles:
-    Authorization: audit-only | fix-and-verify
+    Source authorization: audit-only | fix-and-verify
+    Interaction/action authority: read-only navigation | fixture-safe state changes | <named actions>
+    Target mutation authority: none | isolated diagnostic | local target | deploy <named environment>
     Anti-goals / must-not-become:
     Pass condition:
 
@@ -138,44 +148,49 @@ If the required Level A surface is unavailable or another session owns the GUI,
 continue only with evidence that does not pretend to replace it. Report the
 exact missing evidence and mark the affected claim **partial** or **blocked**.
 
-### 3. Prove State And Viewport
+### 3. Prove Target, State And Viewport
 
-Use the project's canonical launcher and existing fixture/auth path. Do not
-invent a new server command or silently seed a different state.
+Read project-authoritative status before launching anything. Use the canonical
+launcher only when each side effect fits its own authority: lifecycle permission
+covers rebuild/restart/deploy, while seed or transactional data changes require
+interaction/action authority. Never infer one from the other. An authorized
+isolated diagnostic server is labeled non-target.
 
-Two driving constraints decide what evidence is even obtainable, so settle them
-before capturing anything. **Extension-based browser control generally cannot
-open `file://`** — a local artifact needs a local HTTP server before it can be
-driven interactively, and the two schemes differ in CORS behavior, so name which
-one produced the evidence. And **after any edit, assume the browser is showing
-you the previous build**: cache-bust the URL and verify a visible freshness
-anchor (version stamp / build time) before judging content, or you will chase a
-defect you already fixed. Both traps, plus the click/screenshot/emulation ones,
-are in
-[references/browser-driving-and-observation-traps.md](references/browser-driving-and-observation-traps.md).
+Keep an exact web URL in browser memory, but persist only a redacted structural
+URL plus a stable digest/query-key list. Single files/images use path, content
+hash, and renderer; multi-resource HTML/decks require an authoritative resource
+manifest or dependency-closure digest. Native UI needs an installed-artifact
+fingerprint/code signature plus build, process/window, and renderer route.
+A renderer dev URL is diagnostic only. Treat raw screenshots as temporary local
+sensitive evidence; share/commit only a minimal redacted derivative.
 
-Record this state from the rendered page:
+When a claim concerns a source change, freshness, or deployment, additionally
+close the source-to-target chain:
 
-    () => ({
-      href: location.href,
-      title: document.title,
-      h1: document.querySelector("h1")?.textContent?.replace(/\s+/g, " ").trim() || null,
-      inner: [innerWidth, innerHeight],
-      outer: [outerWidth, outerHeight],
-      clientWidth: document.documentElement.clientWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-      overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      visualViewport: visualViewport
-        ? [visualViewport.width, visualViewport.height, visualViewport.scale]
-        : null,
-      dpr: devicePixelRatio,
-      metaViewport: document.querySelector('meta[name="viewport"]')?.content || null,
-    })
+1. take the expected identity from the target's release contract, not local HEAD
+   unless that target is supposed to run HEAD;
+2. read project-authoritative runtime build/image/release status;
+3. map browser/data-plane evidence to that expected artifact—a hashed filename
+   alone proves nothing unless an expected manifest maps it;
+4. prove the intended route, actor, data, conditional state, and viewport.
 
-Compare outerWidth, innerWidth, visualViewport, and clientWidth before blaming
-CSS for blank space or mobile layout. Reset stale zoom/device emulation and
-re-capture after display or scale changes. Restore the user's expected viewport
-when finished.
+Without identity mapping, a freshness/deployment claim is **unprovable**; when
+neither is claimed, use **not applicable**. Current pixels remain independently verifiable.
+If a source fix and target differ, its closure stays **partial — source fixed,
+verification target stale**. Audit-only work continues inspecting the live
+target without mutation. Source fix authority alone does not permit a target
+lifecycle; with separately authorized target mutation, record identity before
+the action, run only the named canonical lifecycle, re-prove identity, and
+repeat the same target/state/viewport. If lifecycle ownership is unresolved,
+that mutation path is **blocked**.
+
+Prefer a cache-disabled reload/fresh context. Change the query only when the
+project declares it semantically inert, preserve existing query/fragment, and
+run final evidence on the original URL. The detailed page-state probe,
+`file://` boundary, cache rules, redirects, and viewport comparison are in
+[references/browser-driving-and-observation-traps.md](references/browser-driving-and-observation-traps.md)
+§2–§5. Record the final URL and dimensions before CSS diagnosis, then restore
+the user's expected viewport when finished.
 
 For a scripted sweep, first prove the target state is reproducible with one of:
 
@@ -201,75 +216,20 @@ until the target route/state is independently proven.
 
 ### 4. Capture And Inspect Rendered Evidence
 
-Capture the whole visible composition before zooming into a local defect. Then
-inspect the affected component and at least one relevant responsive width.
-Include lower sections for long pages; a clean hero does not validate the rest.
+Capture the whole visible composition before zooming into the defect, then the
+affected component, relevant responsive widths, and lower sections. Open every
+screenshot with an image viewer and record what you saw; an uninspected file is
+not evidence.
 
-Open every screenshot with an image viewer and record what you saw. Use DOM
-geometry to explain a visible problem, not to replace visual judgment.
+Calibrate the capture before trusting it. Falsify apparent clipping against DOM
+geometry, pin device scale where supported, wait for fonts/network/animation,
+and use the engine the recipient actually views. DOM evidence explains pixels;
+it does not replace them.
 
-**Calibrate the instrument before you trust it — a capture can both invent a
-defect and hide one.** A screenshot is not a neutral window onto the page: pixel
-evidence is notoriously noisy from anti-aliasing, sub-pixel positioning and font
-smoothing, and a frame captured at a different device scale factor than the
-viewport it claims to represent will crop or letterbox what you see.
-
-- **Before filing "content is clipped / overflowing", falsify it against DOM
-  geometry.** If `document.documentElement.scrollWidth === clientWidth` and the
-  suspect element's `getBoundingClientRect().right` sits inside `clientWidth`,
-  the page fits and the clipping lives in your capture, not in the product. This
-  is the one direction where DOM geometry *overrides* the visual impression
-  instead of explaining it — report the reverse and you send someone to "fix"
-  CSS that was already correct.
-- **Pin the scale factor** (`--force-device-scale-factor=1`) so the captured
-  frame and the CSS viewport agree, and capture only after fonts have loaded and
-  animation/network have settled; those are the standard sources of diff noise.
-- **A false pass is the worse failure, so the engine you capture with must be the
-  engine the reader will view in.** Headless rendering follows standardized
-  software paths while headed rendering uses host GPU and OS font hinting, so
-  subtle layout shift, font substitution, z-index and animation defects are
-  exactly the class headless most reliably *hides*. Never accept a thumbnailer or
-  preview renderer whose layout engine differs from the target application as
-  evidence — a green check on the wrong engine manufactures confidence, which is
-  worse than having run no check at all.
-
-Extent and device-emulation traps specific to headless capture are catalogued in
+The full capture-calibration protocol and minimum inspection set are in
 [references/browser-driving-and-observation-traps.md](references/browser-driving-and-observation-traps.md)
-§4–§5.
-
-Check at minimum:
-
-- macro hierarchy, balance, density, repeated context, and page-type fit;
-- type family, size, weight, line height, tracking, column width, and semantic
-  line breaks;
-- computed body/key-heading typography, relevant control/text-column/rail
-  widths, and the smallest important text when DOM evidence is available;
-- wrapped controls, clipped content, unexpected overflow, competing scroll
-  owners, sticky overlap, dense data-driven collisions, and same-row alignment;
-- image load, crop, natural/display ratio, focal point, and overlay collisions;
-- mobile preservation of identity, status, decision fields, and primary action;
-- status-semantic density on list/queue pages: alarm-toned chips repeated across
-  rows, one global fact re-rendered per row, and unlabeled numeric/graphic cells
-  (contract details in the journey/page-contract reference);
-- keyboard focus visibility, focus obstruction, and target size/spacing when
-  accessibility is in scope. A default screenshot cannot show this: an element
-  can pass "is it focusable" and still leave the user lost, because a global
-  `outline:none` suppressed the ring and nothing replaced it. The sweep reports
-  `focus-indicator-suppressed` (error) and `focus-indicator-default-only`
-  (warning); confirm visually that the focus state is also distinguishable from
-  the *selected* and *hover* states, which a stylesheet audit cannot judge;
-- motion that ignores user preference — the sweep reports
-  `motion-without-reduced-motion-fallback` when the page animates but declares no
-  `@media (prefers-reduced-motion: reduce)`. Degrading means keeping the end
-  state and dropping the travel (keep the highlight, drop the flash), not
-  removing the feedback;
-- states that only exist off the default path: a wrapped narrow-viewport row
-  screenshotted *with a selection active*, a scroll container at a height that
-  actually scrolls, an expanded/error/empty variant. Default-state evidence is
-  partial evidence — say which states the report covers
-  ([references/browser-driving-and-observation-traps.md](references/browser-driving-and-observation-traps.md) §6);
-- parity with the named reference and the project's tokens/assets before
-  applying generic taste rules.
+§12. Extent and device-emulation traps specific to headless capture are
+catalogued in the same reference at §4–§5.
 
 Load [references/history-derived-checklist.md](references/history-derived-checklist.md)
 for the core visual/responsive defect catalog and standards-backed checks.
@@ -295,31 +255,17 @@ mechanically:
     node <skill-root>/scripts/silent_degradation_probe.mjs class \
       --css path/to/bridge.css --library-css node_modules/<lib>/dist/<lib>.css
 
-Pass every family in the stack and the weight the page really uses. The probe
-answers with five verdicts — platform generic / healthy / host-provided-only /
-broken asset / absent here — and only host-provided-only and broken asset are
-defects. CSS generic families such as `system-ui` are intentionally supplied by
-the platform; never tell users to bundle or remove them. Do not compress the
-remaining outcomes into "working or dead": a bundled fallback and a
-never-shipped family look identical until the fonts are loaded, and reporting
-the first as the second sends the reader to delete the thing that was protecting
-them.
-
-A declared font that never loads is the single highest-yield check, because it
-degrades every screen simultaneously and both obvious tests give false
-positives: computed `fontFamily` returns the declared name, and
-`document.fonts.check()` returns true even with no `@font-face` at all. Only
-comparing rendered width against a deliberately nonexistent family is decisive,
-and the probe string must contain Latin characters — CJK is full-width in every
-font and cannot reveal a substitution. Width comparison has its own trap: fonts
-load lazily, so measure only after awaiting `document.fonts.load()` for each
-candidate, or a perfectly good bundled fallback reads as dead.
+Pass every family in the stack and the weight the page really uses. Interpret
+all five verdicts exactly; platform generics are healthy, while only
+host-provided-only and broken asset are defects. The reference explains why
+computed family names, `document.fonts.check()`, unloaded candidates, and
+CJK-only width probes otherwise create false conclusions.
 
 Run the bundled sweep from the audited project so it can resolve the project's
 existing Playwright dependency:
 
     node <skill-root>/scripts/visual_layout_audit.mjs \
-      --url http://127.0.0.1:5173/ \
+      --url 'http://127.0.0.1:5173/?state=fixture#/ready' \
       --page-type app \
       --require "Expected state marker" \
       --screenshot-sections
@@ -350,21 +296,21 @@ The script exits:
 - 1 when errors remain, or warnings remain with --fail-on-warning;
 - 2 for invalid input, missing prerequisites, or runtime/setup failure.
 
-The script writes viewport screenshots and frontend-visual-qa-report.json to a
-unique temporary run directory by default. An explicit --out directory must be
-new or empty so stale screenshots cannot masquerade as current evidence. It is a
-Level C sweep, not the final verdict.
+The script writes screenshots and its JSON report to a unique temporary run
+directory; explicit --out must be new or empty. It is a Level C sweep, not the
+final verdict. Never commit/share raw evidence: reports hash rendered labels and
+redact target-derived values, while derivative screenshots need identifying
+pixels redacted. Its target-string fingerprint and single-file byte hash do not
+compute a multi-resource closure/native identity; supply the project contract.
 
 Do not mutate the audited project merely to run the sweep. Reuse its package
 manager and canonical browser harness. If Playwright is absent, continue with
 available Level A/B evidence and report the omitted Level C sweep; install a
 dependency only when dependency changes are authorized.
 
-For an authenticated page, pass repeated `--header "Name: value"` flags only
-when needed. The probe applies them exclusively to the `--url` origin and strips
-them from cross-origin redirects and requests. TLS verification stays enabled;
-use `--ignore-https-errors` only for an explicitly trusted self-signed test
-origin.
+Pass headers through `--header-env "Name: ENV_NAME"`; argv contains only the
+header/env names, never the value. Raw `--header` is disabled. Values stay on the
+target origin; TLS stays enabled except for an explicitly trusted self-signed origin.
 
 Run the probe regressions from a project that already provides Playwright:
 
@@ -374,23 +320,16 @@ node --test <skill-root>/tests/test_silent_degradation_probe.mjs
 
 ### 5. Exercise Journeys And Outputs
 
-**A visible signifier is not proof of behavior — trigger every interactive-looking
-element and confirm the response.** An element carrying interactive signifiers —
-pointer cursor, hover state, a zoom/expand/copy badge, button styling — may be a
-*false affordance*: the handler was never bound, or a refactor left it bound to a
-stale selector, so the click does nothing (a *dead click*). The screenshot passes
-and the source can be misleading — a plausible lightbox script may be present yet
-wired to nothing — so static reasoning can *hypothesize* a dead click but cannot
-*verify* the behavior; only a real Level A/B trigger confirms it. This is the
-mirror image of the missing-cue defect in the silent-degradation reference (a
-genuinely clickable control stripped of its visible signifier): there the behavior
-is present and the cue is gone, here the cue is present and the behavior is
-missing. It is highest-yield on the interactions a page adds last and tests least —
-"click to enlarge" galleries and lightboxes, thumbnail grids, and copy buttons.
-Before concluding the handler is dead, confirm the click actually registered:
-assert on the resulting state, not the dispatch, and rule out event delegation, a
-hydration-timing gap, or a trusted-gesture gate — a non-response can be a misread
-click, not a dead one (browser-driving-and-observation-traps.md trap 1).
+**A visible signifier is not proof of behavior — trigger every relevant control
+whose side effects fit the explicit action authority, confirm the response, and
+mark the rest unverified.** Pointer/hover/button styling can be a false affordance:
+the handler is absent or stale, while screenshots and plausible source both pass.
+Only a real Level A/B trigger verifies behavior. Prioritize late-added lightboxes,
+thumbnail grids, and copy actions. Assert the resulting state—not dispatch—and
+rule out delegation, hydration timing, or trusted-gesture gates before calling a
+dead click (browser-driving-and-observation-traps.md trap 1). A missing visible
+cue around working behavior is the inverse failure in the silent-degradation
+reference.
 
 Exercise only the relevant transition matrix:
 
@@ -465,11 +404,20 @@ severity levels.
 
 Report with this compact schema:
 
-    Status: verified | partial | blocked
-    Scope: <artifact, route/state, viewports, profiles>
+    Current-render status: verified | partial | blocked
+    Delivery status: matched | mismatched | unprovable | not applicable
+    Fix-closure status: verified | partial | blocked | not applicable
+    Target: <web: redacted requested/final + target-string fingerprint/query keys/redirects | single-file/image: redacted canonical path + content hash + renderer | multi-resource: entry + authoritative manifest/dependency-closure digest + renderer | native: installed-artifact fingerprint/signature + build/version + process/window + renderer route>
+    Environment: <verified name or unverified>
+    Delivery identity: <expected; observed before -> after; evidence>
+    Actor/job; reference/pass condition; affected journeys:
+    Authorization: <source scope; interaction/action scope; target-mutation scope>
+    Scope: <state, viewports, profiles>
 
     Findings:
     - Major · browser-output · PDF action · desktop
+      Impact/state/viewport/reproduction:
+      Evidence artifact/crop:
       Evidence: clicking the visible control opens about:blank; print preview has no page.
       Fix: use a user-gesture-safe print path and re-test the recipient preview.
 
@@ -479,14 +427,17 @@ Report with this compact schema:
     Not verified:
     - <missing surface/evidence and why>
 
-In **audit-only** mode, stop after the evidence-backed report. In
-**fix-and-verify** mode:
+In **audit-only** mode, continue read-only evidence gathering but make no source
+or target mutation. In **fix-and-verify** mode:
 
 1. Fix the root cause rather than hiding overflow, shrinking all type, changing
    selectors to evade the detector, or removing a feature.
 2. Preview subjective alternatives live before committing a shared visual token.
-3. Re-run the same route, state, viewport, journey, and recipient output.
-4. Add or update the smallest regression guard that would catch the confirmed
+3. Update a target only under its separate named mutation authority; otherwise
+   report source-fixed/target-unverified without expanding scope.
+4. Re-run the same canonical target and re-prove identity, route, state,
+   viewport, journey, and recipient output.
+5. Add or update the smallest regression guard that would catch the confirmed
    failure class.
 
 Three habits keep the fix pass from manufacturing its own defects — each has
@@ -506,16 +457,20 @@ produced one:
 
 ## Completion Gate
 
-Call the audit **verified** only when:
+Call **current-render status** verified only when:
 
-- the intended route, branch, data, and actor state are proven;
+- the canonical target kind/identity, final target, data, and actor state are
+  proven;
+- delivery is matched, mismatched, or unprovable when freshness is claimed,
+  otherwise not applicable;
 - every screenshot cited in the report was opened and inspected;
 - relevant viewports and lower sections were covered;
 - affected interactions and outputs were exercised at the required evidence
   level;
 - no unresolved Blocker/Major finding contradicts the pass;
-- remaining limitations are explicit;
-- an authorized fix was rechecked in the same conditions.
+- remaining limitations are explicit.
+
+Call **fix-closure status** verified only after an authorized fix is rechecked against the same canonical target/state/viewport; otherwise use partial or blocked.
 
 Otherwise report **partial** or **blocked**. Never ask the user to perform a
 check the available agent tools can perform.
@@ -538,7 +493,7 @@ check the available agent tools can perform.
   screenshots, width-resize vs device emulation, states a default screenshot
   cannot show, hidden-tab media deferral, virtual-time false negatives,
   `--dump-dom` timing (and the title-encoded interaction probe done right), and
-  Range-server media stalls. Read it before driving a real browser, and whenever an observation
-  surprises you.
+  Range-server media stalls. Read it before driving a real browser, and whenever
+  an observation surprises you.
 - evals/evals.json and evals/trigger-evals.json — behavior and routing
   regression cases; excluded from packaged runtime content.

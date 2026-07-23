@@ -35,7 +35,7 @@
  *   node silent_degradation_probe.mjs shot  --url <url> --select "<css>" --out <dir> [--name x] [--pad 12] [--dpr 3]
  *
  * Common flags: --browser <chrome-executable>  --viewport WxH  --wait <ms>
- *   --header "k: v" (repeatable, target origin only)
+ *   --header-env "k: ENV_NAME" (repeatable, target origin only)
  *   --storage <playwright-storage-state.json>  --ignore-https-errors
  *
  * Exit: 0 clean · 1 degradation found · 2 invalid input / runtime failure.
@@ -50,12 +50,14 @@ const flag = (n, d = null) => { const i = argv.indexOf(`--${n}`); return i > -1 
 const flags = (n) => argv.reduce((a, v, i) => (v === `--${n}` ? [...a, argv[i + 1]] : a), []);
 const has = (n) => argv.includes(`--${n}`);
 
+process.on('uncaughtException', failRuntime);
+process.on('unhandledRejection', failRuntime);
+
 const CSS_GENERIC_FAMILIES = new Set([
   'serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui',
   'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji',
   'fangsong',
 ]);
-
 function normalizedFamily(family) {
   return family.trim().replace(/^['"]|['"]$/g, '').toLowerCase();
 }
@@ -120,16 +122,32 @@ async function openPage() {
   if (!url) { process.stderr.write('--url is required\n'); process.exit(2); }
   let targetOrigin;
   try { targetOrigin = new URL(url).origin; }
-  catch { process.stderr.write(`invalid --url: ${url}\n`); process.exit(2); }
+  catch { process.stderr.write('invalid --url\n'); process.exit(2); }
   const extraHeaders = {};
-  for (const spec of flags('header')) {
+  if (argv.some((value) => value === '--header' || value.startsWith('--header='))) {
+    process.stderr.write('--header is disabled; use --header-env for every header value\n');
+    process.exit(2);
+  }
+  if (argv.some((value) => value.startsWith('--header-env='))) {
+    process.stderr.write('invalid --header-env; pass "name: ENV_NAME" as the next argument\n');
+    process.exit(2);
+  }
+  for (const spec of flags('header-env')) {
     const separator = typeof spec === 'string' ? spec.indexOf(':') : -1;
     const name = separator > 0 ? spec.slice(0, separator).trim().toLowerCase() : '';
-    if (!name) {
-      process.stderr.write(`invalid --header (expected "name: value"): ${spec ?? '<missing>'}\n`);
+    const envName = separator > 0 ? spec.slice(separator + 1).trim() : '';
+    if (
+      !/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(name)
+      || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(envName)
+    ) {
+      process.stderr.write('invalid --header-env (expected "name: ENV_NAME")\n');
       process.exit(2);
     }
-    extraHeaders[name] = spec.slice(separator + 1).trim();
+    if (!(envName in process.env)) {
+      process.stderr.write(`missing environment variable for --header-env: ${envName}\n`);
+      process.exit(2);
+    }
+    extraHeaders[name] = process.env[envName];
   }
   const [w, h] = (flag('viewport', '1440x900')).split('x').map(Number);
   const dpr = Number(flag('dpr', '2'));
@@ -165,9 +183,41 @@ async function openPage() {
     });
   }
   const page = await ctx.newPage();
-  await page.goto(url, { waitUntil: 'networkidle' });
+  try {
+    await page.goto(url, { waitUntil: 'networkidle' });
+  } catch (error) {
+    await browser.close().catch(() => {});
+    process.stderr.write(`probe navigation failed: ${redactUrlsInText(error?.message || String(error))}\n`);
+    process.exit(2);
+  }
   await page.waitForTimeout(Number(flag('wait', '1200')));
   return { browser, page };
+}
+
+function failRuntime(error) {
+  process.stderr.write(`probe runtime failed: ${redactUrlsInText(error?.stack || error?.message || String(error))}\n`);
+  process.exit(2);
+}
+
+function redactUrlsInText(value) {
+  return String(value).replace(/\b(?:https?|file|data):[^\s"'<>]+/gi, redactUrlForEvidence);
+}
+
+function redactUrlForEvidence(value) {
+  try {
+    const parsed = new URL(String(value));
+    if (parsed.protocol === 'data:') return 'data:<redacted>';
+    if (parsed.protocol === 'file:') return 'file:///<redacted-path>';
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '<redacted-target>';
+    const pathLabel = parsed.pathname === '/' ? '/' : '/<redacted-path>';
+    const queryKeys = [...new Set(parsed.searchParams.keys())];
+    const query = queryKeys.length
+      ? `?${queryKeys.map((key) => `${encodeURIComponent(key)}=<redacted>`).join('&')}`
+      : '';
+    return `${parsed.origin}${pathLabel}${query}${parsed.hash ? '#<redacted-fragment>' : ''}`;
+  } catch {
+    return '<redacted-target>';
+  }
 }
 
 // ---------------------------------------------------------------- font

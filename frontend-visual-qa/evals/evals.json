@@ -252,6 +252,66 @@
         "Recognizes the source is misleading here (a complete lightbox script is present) and a screenshot passes, so static reasoning can hypothesize but not verify the behavior; only a real trigger confirms the click is dead",
         "Confirms the click actually registered before concluding the handler is dead (asserts on resulting state, rules out event delegation / hydration / a mis-dispatched click) rather than reading a non-response as proof"
       ]
+    },
+    {
+      "id": 18,
+      "name": "exact-target-stale-after-source-fix",
+      "prompt": "In the named local-UAT environment, a user reports that https://localhost:9443/login?tenant=fixture#/password still shows a visual defect. The source fix and unit tests are green, and http://localhost:5173/login looks correct. Canonical UAT status reports an older release than the expected fix; after a cache-disabled reload, the exact UAT URL loads JS/CSS hashes mapped to that older release manifest. The user authorized a source fix, but did not authorize rebuilding or restarting local UAT. Give the audit verdict and the authorized next actions.",
+      "expected_output": "A three-status report that treats the complete UAT URL, including query and fragment, as canonical in browser memory; persists only redacted requested/final structures plus digests and environment; marks delivery mismatched and the source-fix closure partial while still permitting a verified-as-observed current-render verdict for the stale live pixels. It refuses to use dev/test evidence as deployment proof or to mutate UAT under source-fix authority. If local-UAT mutation is later authorized separately, it uses that target's canonical lifecycle, proves before/after runtime plus data-plane identity, and repeats the original exact URL, state, viewport, pixels, and computed-style check before claiming closure.",
+      "files": [],
+      "expectations": [
+        "Preserves the complete requested URL including tenant query and hash route for navigation, but persists only redacted requested/final structures plus digests and verifies the named environment; another port or dev server is diagnostic only",
+        "Maps runtime status and browser-loaded hashes through the expected release manifest instead of treating a content-hashed filename, visible stamp, or local HEAD as self-proving identity",
+        "Does not infer deployment from source state, build success, unit tests, HMR, or a correct page at another URL",
+        "Keeps visual status and delivery status separate: it may inspect the stale live pixels, but source-fix closure stays partial with delivery mismatched",
+        "Does not rebuild, restart, or deploy local UAT under source-fix authority; target mutation requires separate explicit authorization for that named environment",
+        "After separate local-target authorization, records identity before/after, uses only the canonical lifecycle, reloads with cache disabled, and performs final evidence on the original URL/state/viewport rather than a query-busted substitute",
+        "Distinguishes a stale target from a current target that still renders the defect, and marks the mutation path blocked if lifecycle ownership cannot be established"
+      ]
+    },
+    {
+      "id": 19,
+      "name": "source-less-live-url-remains-visually-verifiable",
+      "prompt": "Audit only the current rendered state of https://example.invalid/report?account=42#/queue. No repository, release manifest, version endpoint, or deployment access is available. The page is reachable in the intended browser and the user asks whether the visible queue layout is broken now, not whether a source fix was deployed. Define the target and verdict boundaries.",
+      "expected_output": "A scoped visual audit that preserves the exact query/fragment in browser memory, persists only redacted structural URLs plus digests, records environment as unverified if it cannot be established, and permits verified current-render findings from inspected pixels/journeys. Delivery status is not applicable because no freshness/deployment claim exists; the lack of source/deploy metadata does not block the visual verdict.",
+      "files": [],
+      "expectations": [
+        "Treats the full requested URL, redirect/final URL, browser state, and viewport as the target without requiring local source HEAD or a build/image status",
+        "Reports delivery status not applicable and environment unverified, rather than inventing a freshness claim or release identity",
+        "Allows the current-render visual claim to be verified when its required browser evidence is complete, while keeping deployment/freshness claims unverified",
+        "Does not append a cache-busting query that changes account or hash-route state and performs final evidence on the original URL",
+        "Makes no source, launcher, restart, or deployment mutation in audit-only mode",
+        "Triggers only interactions covered by explicit action or fixture authority; transactional controls such as delete, purchase, or send remain unverified rather than being clicked"
+      ]
+    },
+    {
+      "id": 20,
+      "name": "non-url-target-identities",
+      "prompt": "Explain the verification-target contract for two existing artifacts: a local HTML deck opened from a canonical file and a packaged Electron app whose renderer dev server is also running. Neither task asks whether a deployment is current.",
+      "expected_output": "A target-kind-specific contract: the multi-resource deck uses canonical entry, authoritative resource manifest or dependency-closure digest, rendering scheme, exact canvas, and inspected frames; the Electron target uses an installed-artifact fingerprint or code signature plus build/version, running process/window, and renderer route. An HTTP copy of the deck and the renderer dev URL are labeled diagnostic surfaces, not silent substitutes, and no source-to-deployment chain is demanded for the scoped current-render claims.",
+      "files": [],
+      "expectations": [
+        "Does not invent host/port/environment fields for a canonical file target or use an HTTP diagnostic copy as the target without saying the scheme changed",
+        "Rejects a root-HTML hash as sufficient when CSS, scripts, fonts, or images can change independently; uses an authoritative resource manifest or dependency-closure digest plus rendering scheme and exact canvas",
+        "Rejects an unchanged declared version as sufficient after an in-place rebuild; identifies the native app by installed artifact fingerprint or code signature plus build/version, live process/window, and renderer route",
+        "Does not require build/image/release freshness evidence when neither claim concerns source change or deployment currency",
+        "Keeps any diagnostic server or dev renderer explicitly non-target"
+      ]
+    },
+    {
+      "id": 21,
+      "name": "sensitive-target-evidence-stays-local-and-redacted",
+      "prompt": "Audit https://example.invalid/reset/path-secret?code=oauth-secret&state=account-42&tab=queue#/detail/fragment-route-secret?token=fragment-query-secret in a fixture account. Authentication is available only through an X-Access-Token credential, and the visible error row contains a customer email. Define how to invoke the probe, preserve exact target semantics, and hand off evidence without exposing credentials or PII.",
+      "expected_output": "The complete URL is passed as one quoted/opaque argv and kept exact only for browser navigation/comparison. Persistent reports redact path, query values, and the whole fragment while retaining safe structural metadata, query-key list, and stable target-string fingerprint; every header value comes from an environment variable through --header-env rather than argv; raw screenshots stay in a fresh temporary local directory; any shared evidence is a minimal crop with identifying pixels redacted and is explicitly labeled as a derivative.",
+      "files": [],
+      "expectations": [
+        "Quotes the complete URL as one opaque shell argument so &, ?, and # cannot be globbed, split, or backgrounded",
+        "Never writes or echoes credential, path, query-value, hash-route, or fragment-query secrets, including navigation errors or values reflected into title/heading metadata; persistent identity uses redacted structure plus a stable target-string fingerprint/query-key list",
+        "Uses --header-env or an equivalent non-argv channel for every header value and never relies on a denylist of familiar credential names",
+        "Treats the raw screenshot/report directory as temporary local sensitive evidence and never commits or broadly shares it",
+        "Creates only a minimal redacted derivative when evidence must be handed off, preserving the visible defect while removing customer identifiers",
+        "Keeps current-render, delivery, and fix-closure statuses separate; privacy redaction does not authorize substituting another target"
+      ]
     }
   ]
 }

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 function loadPlaywright() {
   // Resolve a Playwright browser driver across install layouts. Under a pnpm workspace,
@@ -160,6 +161,13 @@ const scrollVisibleMedia = process.argv.includes("--scroll-visible-media");
 const failOnWarning = process.argv.includes("--fail-on-warning");
 
 const url = normalizeTarget(target);
+if (fileTarget) {
+  try {
+    if (!fs.existsSync(fileURLToPath(url))) failUsage("--file target does not exist.");
+  } catch {
+    failUsage("Invalid --file target.");
+  }
+}
 for (const pattern of forbidPatterns) validatePattern(pattern, "--forbid");
 for (const pattern of requirePatterns) validatePattern(pattern, "--require");
 validatePageType(pageType);
@@ -195,7 +203,7 @@ const viewports = customViewports.length ? customViewports : defaultViewports;
   });
 
 const report = {
-  url,
+  target: targetEvidence(url),
   createdAt: new Date().toISOString(),
   pageType,
   requiredPatterns: requirePatterns,
@@ -234,7 +242,9 @@ for (const viewport of viewports) {
     const response = await page.goto(url, { waitUntil, timeout: 30_000 });
     const httpStatus = response?.status() ?? null;
     if (httpStatus !== null && httpStatus >= 400) {
-      throw new Error("Navigation returned HTTP " + httpStatus + " for " + page.url());
+      throw new Error(
+        "Navigation returned HTTP " + httpStatus + " for " + targetEvidence(page.url()).redacted,
+      );
     }
     await waitForVisualReadiness(page, readySelector, settleMs);
   const mediaPreparation = scrollVisibleMedia
@@ -257,6 +267,7 @@ for (const viewport of viewports) {
     sectionSelector,
     screenshotSections,
   });
+  result.meta.href = targetEvidence(result.meta.href);
   result.meta.mediaPreparation = mediaPreparation;
   if (mediaPreparation?.truncated) {
     result.issues.push({
@@ -313,16 +324,18 @@ for (const viewport of viewports) {
       });
     }
   }
+  const protectedResult = protectRenderedEvidence(result, url);
+  const protectedSectionScreenshots = protectSectionEvidence(sectionScreenshots, url);
   report.viewports.push({
-    ...result.meta,
-    requestedUrl: url,
-    finalUrl: page.url(),
+    ...protectedResult.meta,
+    requestedTarget: targetEvidence(url),
+    finalTarget: targetEvidence(page.url()),
     httpStatus,
     redirected: page.url() !== url,
     screenshot,
-    sectionScreenshots,
+    sectionScreenshots: protectedSectionScreenshots,
   });
-  report.issues.push(...result.issues);
+  report.issues.push(...protectedResult.issues);
   } finally {
     await page.close();
   }
@@ -356,13 +369,13 @@ for (const viewport of report.viewports) {
   const media = viewport.media
     ? `, media=${viewport.media.loaded} loaded/${viewport.media.broken} broken/${viewport.media.stillLoading} loading/${viewport.media.deferredLazy} deferred/${viewport.media.notRendered} not-rendered`
     : "";
-  console.log(`${viewport.viewport}: outer=${viewport.outerWidth}x${viewport.outerHeight}, inner=${viewport.width}x${viewport.height}, outerMinusInner=${viewport.outerMinusInner}, client=${viewport.clientWidth}, scroll=${viewport.scrollWidth}, overflowX=${viewport.overflowX}${visual}${content}${primaryImage}${typography}${media}, title="${viewport.title}", h1="${viewport.h1}", screenshot=${viewport.screenshot}`);
+  console.log(`${viewport.viewport}: outer=${viewport.outerWidth}x${viewport.outerHeight}, inner=${viewport.width}x${viewport.height}, outerMinusInner=${viewport.outerMinusInner}, client=${viewport.clientWidth}, scroll=${viewport.scrollWidth}, overflowX=${viewport.overflowX}${visual}${content}${primaryImage}${typography}${media}, title=${formatTextEvidence(viewport.titleEvidence)}, h1=${formatTextEvidence(viewport.h1Evidence)}, screenshot=${viewport.screenshot}`);
   if (sections) console.log(`  sectionAudit: ${sections}`);
   if (viewport.sectionScreenshots?.length) {
     const captured = viewport.sectionScreenshots.map((item) => item.screenshot).filter(Boolean);
     const failed = viewport.sectionScreenshots.filter((item) => !item.screenshot);
     if (captured.length) console.log(`  sectionScreenshots: ${captured.join(", ")}`);
-    for (const item of failed) console.log(`  sectionScreenshotFailed: ${item.label}: ${item.error}`);
+    for (const item of failed) console.log(`  sectionScreenshotFailed: ${formatTextEvidence(item.labelEvidence)}: ${item.error}`);
   }
 }
 
@@ -370,7 +383,7 @@ if (report.issues.length) {
   console.log(`\nIssues: ${errors.length} error(s), ${warnings.length} warning(s). Report: ${reportPath}`);
   for (const issue of report.issues) {
     console.log(`- ${issue.severity.toUpperCase()} ${issue.viewport} ${issue.type} ${issue.selector || ""}`);
-    if (issue.text) console.log(`  text: ${issue.text}`);
+    if (issue.textEvidence) console.log(`  text: ${formatTextEvidence(issue.textEvidence)}`);
     if (issue.detail) console.log(`  ${issue.detail}`);
   }
 } else {
@@ -379,13 +392,14 @@ if (report.issues.length) {
 
 process.exitCode = errors.length || (failOnWarning && warnings.length) ? 1 : 0;
 } catch (error) {
-  console.error("Visual audit failed: " + (error?.stack || error?.message || String(error)));
+  const safeError = redactUrlsInText(error?.stack || error?.message || String(error));
+  console.error("Visual audit failed: " + safeError);
   if (outputPrepared) {
     const errorReport = {
-      url,
+      target: targetEvidence(url, false),
       createdAt: new Date().toISOString(),
       status: "run-error",
-      runErrors: [error?.message || String(error)],
+      runErrors: [redactUrlsInText(error?.message || String(error))],
     };
     fs.writeFileSync(
       path.join(outDir, "frontend-visual-qa-report.json"),
@@ -402,6 +416,176 @@ function normalizeTarget(value) {
   const resolved = path.resolve(value);
   if (fs.existsSync(resolved)) return pathToFileURL(resolved).href;
   return value;
+}
+
+function targetEvidence(value, includeFileContent = true) {
+  const exactTarget = String(value);
+  const targetStringSha256 = createHash("sha256").update(exactTarget).digest("hex");
+  try {
+    const parsed = new URL(exactTarget);
+    if (parsed.protocol === "file:") {
+      const canonicalFileUrl = new URL(parsed.href);
+      canonicalFileUrl.search = "";
+      canonicalFileUrl.hash = "";
+      return {
+        kind: "single-file",
+        redactedCanonicalPath: "file:///<redacted-path>",
+        targetStringSha256,
+        contentSha256: includeFileContent
+          ? createHash("sha256").update(fs.readFileSync(fileURLToPath(canonicalFileUrl))).digest("hex")
+          : null,
+        rendererScheme: "file:",
+      };
+    }
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return {
+        kind: "web",
+        redacted: redactUrlForEvidence(exactTarget),
+        targetStringSha256,
+        queryKeys: [...new Set(parsed.searchParams.keys())],
+        fragmentPresent: Boolean(parsed.hash),
+      };
+    }
+    if (parsed.protocol === "data:") {
+      return {
+        kind: "inline-data",
+        redacted: "data:<redacted>",
+        targetStringSha256,
+      };
+    }
+  } catch {
+    // The exact target remains represented by a one-way fingerprint while all
+    // human-readable evidence fails closed to a generic label.
+  }
+  return {
+    kind: "unknown",
+    redacted: "<redacted-target>",
+    targetStringSha256,
+  };
+}
+
+function redactUrlForEvidence(value) {
+  try {
+    const parsed = new URL(String(value));
+    if (parsed.protocol === "data:") return "data:<redacted>";
+    if (parsed.protocol === "file:") return "file:///<redacted-path>";
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return "<redacted-target>";
+    }
+    const pathLabel = parsed.pathname === "/" ? "/" : "/<redacted-path>";
+    const queryKeys = [...new Set(parsed.searchParams.keys())];
+    const query = queryKeys.length
+      ? "?" + queryKeys.map((key) => `${encodeURIComponent(key)}=<redacted>`).join("&")
+      : "";
+    const fragment = parsed.hash ? "#<redacted-fragment>" : "";
+    return `${parsed.origin}${pathLabel}${query}${fragment}`;
+  } catch {
+    return "<redacted-target>";
+  }
+}
+
+function redactUrlsInText(value) {
+  return String(value).replace(
+    /\b(?:https?|file|data):[^\s"'<>]+/gi,
+    (candidate) => redactUrlForEvidence(candidate),
+  );
+}
+
+function protectRenderedEvidence(result, exactTarget) {
+  const protectedResult = redactTargetValuesDeep(result, exactTarget);
+  protectedResult.meta.titleEvidence = textEvidence(protectedResult.meta.title);
+  protectedResult.meta.h1Evidence = textEvidence(protectedResult.meta.h1);
+  delete protectedResult.meta.title;
+  delete protectedResult.meta.h1;
+  for (const heading of protectedResult.meta.typography?.keyHeadings || []) {
+    heading.textEvidence = textEvidence(heading.text);
+    delete heading.text;
+  }
+  for (const issue of protectedResult.issues || []) {
+    if (typeof issue.text !== "string") continue;
+    issue.textEvidence = textEvidence(issue.text);
+    delete issue.text;
+  }
+  return protectedResult;
+}
+
+function protectSectionEvidence(sections, exactTarget) {
+  return redactTargetValuesDeep(sections, exactTarget).map((section) => {
+    const protectedSection = {
+      ...section,
+      labelEvidence: textEvidence(section.label),
+    };
+    delete protectedSection.label;
+    delete protectedSection.slug;
+    return protectedSection;
+  });
+}
+
+function textEvidence(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const text = String(value);
+  return {
+    sha256: createHash("sha256").update(text).digest("hex"),
+    length: [...text].length,
+  };
+}
+
+function formatTextEvidence(evidence) {
+  return evidence ? `sha256:${evidence.sha256}/length:${evidence.length}` : "none";
+}
+
+function redactTargetValuesDeep(value, exactTarget) {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactTargetValuesDeep(item, exactTarget));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, redactTargetValuesDeep(item, exactTarget)]),
+    );
+  }
+  if (typeof value !== "string") return value;
+  let protectedText = redactUrlsInText(value);
+  for (const token of targetSensitiveTokens(exactTarget)) {
+    const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const tokenPattern = /^[\p{L}\p{N}_-]+$/u.test(token)
+      ? `(?<![\\p{L}\\p{N}_-])${escaped}(?![\\p{L}\\p{N}_-])`
+      : escaped;
+    protectedText = protectedText.replace(new RegExp(tokenPattern, "gu"), "<redacted-target-value>");
+  }
+  return protectedText;
+}
+
+function targetSensitiveTokens(value) {
+  const tokens = new Set();
+  const add = (candidate) => {
+    if (!candidate) return;
+    const raw = String(candidate);
+    tokens.add(raw);
+    try { tokens.add(decodeURIComponent(raw)); } catch {}
+    try { tokens.add(encodeURIComponent(raw)); } catch {}
+  };
+  try {
+    const parsed = new URL(String(value));
+    add(parsed.username);
+    add(parsed.password);
+    for (const segment of parsed.pathname.split("/")) add(segment);
+    for (const queryValue of parsed.searchParams.values()) add(queryValue);
+    if (parsed.hash) {
+      const fragment = parsed.hash.slice(1);
+      add(fragment);
+      const queryIndex = fragment.indexOf("?");
+      const route = queryIndex >= 0 ? fragment.slice(0, queryIndex) : fragment;
+      for (const segment of route.split("/")) add(segment);
+      if (queryIndex >= 0) {
+        for (const fragmentValue of new URLSearchParams(fragment.slice(queryIndex + 1)).values()) {
+          add(fragmentValue);
+        }
+      }
+    }
+  } catch {}
+  return [...tokens]
+    .filter((token) => token && token !== "/" && token.toUpperCase() !== "%2F")
+    .sort((left, right) => right.length - left.length);
 }
 
 function validatePattern(pattern, flagName) {
@@ -591,7 +775,7 @@ async function captureSectionScreenshots(page, viewport, outDir, sectionSelector
     const section = sections[index];
     const locator = page.locator(sectionSelector).nth(section.domIndex);
     if (await locator.count() === 0) continue;
-    const file = `${outDir}/${viewport.name}-section-${String(index + 1).padStart(2, "0")}-${section.slug}.png`;
+    const file = `${outDir}/${viewport.name}-section-${String(index + 1).padStart(2, "0")}.png`;
     try {
       if (section.height > viewport.height * 1.5) {
         const scrollY = await page.evaluate(({ top, height }) => {

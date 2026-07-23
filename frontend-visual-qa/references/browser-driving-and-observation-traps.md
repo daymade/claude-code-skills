@@ -21,6 +21,7 @@ surprises you.
 - [9. Virtual time fast-forwards timers, not I/O](#9-virtual-time-fast-forwards-timers-not-io)
 - [10. `--dump-dom` captures at load, not after your injected test](#10---dump-dom-captures-at-load-not-after-your-injected-test)
 - [11. A media stall may be the test server: Range support × moov position](#11-a-media-stall-may-be-the-test-server-range-support--moov-position)
+- [12. Calibrate capture and inspect the minimum surface](#12-calibrate-capture-and-inspect-the-minimum-surface)
 
 ---
 
@@ -54,6 +55,49 @@ reference exists.
 
 ## 2. The page you are looking at may not be the page you just changed
 
+For a source-change or deployment claim, visual verification is a chain:
+
+    source edit → built artifact → deployed runtime → exact URL → inspected pixels
+
+Each arrow can be stale while the previous step is correct. A passing test or
+correct dev server proves neither the deployed runtime nor the user-supplied
+URL. Preserve its full query and fragment in browser memory, but persist only
+URLs with path/query values/the entire fragment redacted, plus stable
+target-string fingerprints and query-key lists for the requested URL, redirects,
+and final URL. Hash rendered labels and scrub target-derived values from errors
+or metadata before persistence. Another port or local server changes the target.
+
+Other targets use other identities:
+
+- single file/image: canonical path + content hash + actual renderer;
+- multi-resource HTML/deck: canonical entry + authoritative resource manifest
+  or dependency-closure digest + renderer;
+- native app: installed artifact fingerprint/code signature + build/version +
+  running process/window + renderer route.
+
+These identities prove what was inspected. They do not require a deployment
+chain when the claim is only “this exact target currently renders this way.”
+The bundled layout sweep computes the web target-string fingerprint and
+single-file byte hash only; it cannot infer a resource-closure or native identity.
+
+For authorized target mutation, collect identity before and after. Prefer two
+independent signals where the project exposes them:
+
+- **runtime identity** from the canonical status/lifecycle command: source
+  revision or working-tree fingerprint, release/image/container identity, and
+  whether it reports stale;
+- **data-plane identity** from the exact target: assets mapped to an expected
+  manifest, a release header/version endpoint, or a visible build stamp.
+
+If they do not match the expected source, the **source-fix closure** is **partial
+— source fixed, verification target stale** and delivery is mismatched. The
+older target's current-render verdict remains independently scoped to what was
+actually inspected. Source-edit permission does not authorize target mutation.
+Only separately authorized target mutation may run the named canonical
+lifecycle; if ownership is unresolved, the mutation path is blocked. If no
+identity mapping exists, report delivery identity unprovable while keeping the
+current-render visual verdict scoped to what was actually observed.
+
 Browsers cache aggressively, and **`file://` is cached too** — reloading the tab
 after editing the file frequently re-renders the *old* build. This produces the
 worst class of QA error: "I fixed it, but the screenshot still shows the bug",
@@ -61,18 +105,43 @@ which sends you chasing a phantom.
 
 Two habits remove it:
 
-- **Cache-bust the URL** when re-opening after an edit: append a changing query
-  (`?v=<timestamp>`) so the browser treats it as a new resource.
-- **Give the artifact a visible freshness anchor** and check it *before*
-  judging any content: a version stamp, a build time, a generation timestamp
-  rendered on the page. Then "is this stale?" is answerable in one glance rather
-  than by inference.
+- **Prefer a cache-disabled reload or fresh context.** Append a changing query
+  only when the project declares it semantically inert; preserve the original
+  query/fragment and make the final evidence pass on the original exact URL.
+- **Use a visible freshness anchor as a cue, never identity proof.** Check the
+  version/build/generation stamp before judging content, then corroborate it
+  against the release contract and runtime/manifest mapping.
 
 The anchor has to be one you actually keep current. A stamp that is updated in
 one place (say, an on-page badge) but not another (the `<title>`) creates a
 second-order trap: the reader checks the *stale* one, concludes "this is the old
 version", and dismisses a change that did ship. If an artifact carries a version
 in more than one place, they must be written together.
+
+Record this state from the rendered page:
+
+```js
+() => ({
+  href: location.href,
+  title: document.title,
+  h1: document.querySelector("h1")?.textContent?.replace(/\s+/g, " ").trim() || null,
+  inner: [innerWidth, innerHeight],
+  outer: [outerWidth, outerHeight],
+  clientWidth: document.documentElement.clientWidth,
+  scrollWidth: document.documentElement.scrollWidth,
+  overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  visualViewport: visualViewport
+    ? [visualViewport.width, visualViewport.height, visualViewport.scale]
+    : null,
+  dpr: devicePixelRatio,
+  metaViewport: document.querySelector('meta[name="viewport"]')?.content || null,
+})
+```
+
+Compare outerWidth, innerWidth, visualViewport, and clientWidth before blaming
+CSS for blank space or mobile layout. Reset stale zoom/device emulation and
+re-capture after display or scale changes. Restore the user's expected viewport
+when finished.
 
 ## 3. `file://` is not drivable by browser-extension tooling
 
@@ -81,7 +150,8 @@ Extension-based browser automation generally cannot navigate to `file://` URLs
 *can* open `file://`, so a local artifact is inspectable but not necessarily
 *interactive* through the same channel.
 
-When an audit needs real interaction on a local file, serve it:
+When an audit needs real interaction on a local file, serve it only under
+explicit isolated-diagnostic authority:
 
 ```bash
 # from the artifact's directory
@@ -250,3 +320,70 @@ curl — expect `206` and a `Content-Range`), or `file://` for pure rendering
 checks (native random access, no server), or serving faststart-remuxed copies.
 Keep the original files untouched; remux copies are a serving concern, not an
 asset edit.
+
+## 12. Calibrate capture and inspect the minimum surface
+
+Capture the whole visible composition before zooming into a local defect. Then
+inspect the affected component and at least one relevant responsive width.
+Include lower sections for long pages; a clean hero does not validate the rest.
+
+Open every screenshot with an image viewer and record what you saw. Use DOM
+geometry to explain a visible problem, not to replace visual judgment.
+
+**Calibrate the instrument before you trust it — a capture can both invent a
+defect and hide one.** A screenshot is not a neutral window onto the page: pixel
+evidence is notoriously noisy from anti-aliasing, sub-pixel positioning and font
+smoothing, and a frame captured at a different device scale factor than the
+viewport it claims to represent will crop or letterbox what you see.
+
+- **Before filing "content is clipped / overflowing", falsify it against DOM
+  geometry.** If `document.documentElement.scrollWidth === clientWidth` and the
+  suspect element's `getBoundingClientRect().right` sits inside `clientWidth`,
+  the page fits and the clipping lives in your capture, not in the product. This
+  is the one direction where DOM geometry *overrides* the visual impression
+  instead of explaining it — report the reverse and you send someone to "fix"
+  CSS that was already correct.
+- **Pin the scale factor** (`--force-device-scale-factor=1`) so the captured
+  frame and the CSS viewport agree, and capture only after fonts have loaded and
+  animation/network have settled; those are the standard sources of diff noise.
+- **A false pass is the worse failure, so the engine you capture with must be the
+  engine the reader will view in.** Headless rendering follows standardized
+  software paths while headed rendering uses host GPU and OS font hinting, so
+  subtle layout shift, font substitution, z-index and animation defects are
+  exactly the class headless most reliably *hides*. Never accept a thumbnailer or
+  preview renderer whose layout engine differs from the target application as
+  evidence — a green check on the wrong engine manufactures confidence, which is
+  worse than having run no check at all.
+
+Check at minimum:
+
+- macro hierarchy, balance, density, repeated context, and page-type fit;
+- type family, size, weight, line height, tracking, column width, and semantic
+  line breaks;
+- computed body/key-heading typography, relevant control/text-column/rail
+  widths, and the smallest important text when DOM evidence is available;
+- wrapped controls, clipped content, unexpected overflow, competing scroll
+  owners, sticky overlap, dense data-driven collisions, and same-row alignment;
+- image load, crop, natural/display ratio, focal point, and overlay collisions;
+- mobile preservation of identity, status, decision fields, and primary action;
+- status-semantic density on list/queue pages: alarm-toned chips repeated across
+  rows, one global fact re-rendered per row, and unlabeled numeric/graphic cells
+  (contract details in the journey/page-contract reference);
+- keyboard focus visibility, focus obstruction, and target size/spacing when
+  accessibility is in scope. A default screenshot cannot show this: an element
+  can pass "is it focusable" and still leave the user lost, because a global
+  `outline:none` suppressed the ring and nothing replaced it. The sweep reports
+  `focus-indicator-suppressed` (error) and `focus-indicator-default-only`
+  (warning); confirm visually that the focus state is also distinguishable from
+  the *selected* and *hover* states, which a stylesheet audit cannot judge;
+- motion that ignores user preference — the sweep reports
+  `motion-without-reduced-motion-fallback` when the page animates but declares no
+  `@media (prefers-reduced-motion: reduce)`. Degrading means keeping the end
+  state and dropping the travel (keep the highlight, drop the flash), not
+  removing the feedback;
+- states that only exist off the default path: a wrapped narrow-viewport row
+  screenshotted *with a selection active*, a scroll container at a height that
+  actually scrolls, an expanded/error/empty variant. Default-state evidence is
+  partial evidence — say which states the report covers;
+- parity with the named reference and the project's tokens/assets before
+  applying generic taste rules.
