@@ -104,7 +104,7 @@ fi
 exit 0
 ```
 
-## Five rules that separate a working guard from a session-poisoning one
+## Six rules that separate a working guard from a session-poisoning one
 
 Not style preferences — each is a specific failure we shipped and traced back.
 
@@ -268,6 +268,34 @@ handed it a literal `~/repo`, `git -C` failed, staged came back empty, and the g
 concluded "no cross-domain files, allow." Every cross-repo commit went unguarded and
 nothing ever looked wrong. Anatomy + the shared-library twist: pitfall #10.
 
+### 6. Judge on a fact the world can answer — never on your own rendering, never on a naming habit
+
+Rules 1 and 5 are about *how* you match and *which way* you fail. This one is
+about **where the thing you match on came from**, and it has two failure shapes
+that both go silent:
+
+- **Never branch on a string you formatted for a human.** If the hook builds a
+  report — sorted, joined, truncated to the first N with a `(+M more)` tail — and
+  then pattern-matches its own decision against that report, the branch inherits
+  the rendering's losses. Items past the cutoff simply do not exist to it, so the
+  branch works on every small fixture and stops firing on exactly the large
+  sessions it was built for. Emit the machine fact on its own channel (one
+  untruncated `KINDS:a,b,c` line) and match *that*. A rendering is an output, not
+  a data source (pitfall #12).
+- **Prefer a checkable fact over a naming convention.** Classifying by path shape
+  (`/skills?/[^/]+/references/`) encodes one directory layout; a repo laid out any
+  other way is classified `None` — silently, forever. The fix is *not* to widen the
+  pattern, which trades a silent miss for machine-wide false positives (rule 1
+  forbids exactly that trade); it is to ask a question the filesystem can answer —
+  *is there a `SKILL.md` beside this `references/` directory?* Facts survive
+  layout changes; conventions do not. (When the candidate **is** a `SKILL.md`,
+  there is no sibling to ask about — classify by basename; #13 explains why that
+  is a spec-defined fact and not the naming habit this rule warns against.)
+
+The tell for both: a branch that has never once fired in production while its
+tests are green. Print the raw pre-formatting classification and you will see
+which of the two you have.
+
 ## Build order (in sequence)
 
 1. **Confirm it's a real recurrence**, not hypothetical — else don't build it.
@@ -289,7 +317,10 @@ everything), awk-split false-blocks (rule 1), corrupted hook poisoning the sessi
 form from Pattern E instead), static env escape hatch (rule 4), multi-profile
 under-registration, and a path parsed from command text keeping its literal `~` so
 the guard fails **open** with no symptom at all (#10 — the one you cannot wait to
-notice, because silence is its only sign).
+notice, because silence is its only sign), a branch reading the hook's own
+truncated display string (#12) or keyed on a naming convention this repo doesn't
+follow (#13) — both invisible while the suite asserts only exit codes (#14) — and
+command text that merely *contains* a redirect counted as a write (#15).
 
 **The harness is the hidden variable — use `scripts/test_hook.sh`, don't hand-roll
 one.** Every hand-rolled failure mode below produces the *same* output as a clean
@@ -308,8 +339,26 @@ hook's whitelist):
    — and the baseline row happened to use one of those). The one row meant to prove
    the guard still bites didn't bite, and the whole suite read green.
 
+**And if the hook's product is its message, exit codes cannot test it.** A
+blocking hook's contract is mostly its exit code, so `run` rows cover it. But a
+hook that exists to *say* something — a PreToolUse explanation of the correct
+alternative, a Stop reminder — has a second output channel the codes never see:
+break the wording, invert a conditional paragraph, let a heredoc swallow a
+section, and the exit code stays exactly 2 while every row passes. Add
+`says <label> <event> <pattern> <yes|no>` rows from `scripts/test_hook.sh`,
+asserting **both polarities across two fixtures** (present for the input it
+targets, absent for the lookalike it skips) — a lone `want=no` passes vacuously
+when the hook prints nothing at all, so it only means something beside a
+`want=yes` row proving the hook speaks. Match **fixed strings**, not regexes: the
+phrases worth asserting often contain brackets, and as a BRE `[skill]` is a
+character class matching any text with an s, k, i or l in it. Then **mutate to prove the rows can die**: copy the hook, inject
+the exact bug each row claims to catch, and confirm that row goes red. A green
+suite carries zero information until you have watched it fail for the right
+reason — two real bugs once survived a fully green 24-case suite because every
+row looked only at exit codes (pitfall #14).
+
 The common shape: **all-cases-agree is a smell, not a green light.** `test_hook.sh`
-catches #1 and #2 structurally — it asserts an explicit `expected-exit` per row
+catches shapes 1 and 2 above structurally — it asserts an explicit `expected-exit` per `run` row
 (not "did it print something") and forces trigger rows alongside healthy-lookalike
 ones, so a trigger row that returns 0 fails loudly instead of blending in. It
 **cannot** catch #3: whether a row's content accidentally lands in an exemption is a

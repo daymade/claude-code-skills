@@ -334,6 +334,144 @@ unresolvable path means **block**.
 
 ---
 
+## 12. The decision reads the string built for humans — and that string is lossy
+
+- **Symptom:** a conditional branch inside the hook works in every test and
+  silently stops firing in production. Nothing errors; the branch just never
+  matches, so a whole paragraph of guidance (or a whole check) disappears for
+  exactly the sessions that needed it most.
+- **Cause:** the hook computed a **display string** first — sorted, joined,
+  truncated to the first N with a `(+M more)` tail — and then pattern-matched
+  its own decision against that string. Truncation is lossy by design, so any
+  item past the cutoff is invisible to the branch. The tests never showed it
+  because a fixture has two or three items and a real session has ten.
+  Real case (2026-07-23): a Stop hook reported `path [kind], path [kind], … (+N
+  more)` and then did `case "$REPORT" in *"[skill]"*)`. A session that touched six
+  artifacts with the skill sorting sixth dropped the `[skill]` tag out of the
+  rendered list, and the skill-specific guidance vanished — in a hook whose entire
+  target population is large multi-artifact sessions.
+- **Fix:** emit the machine-readable fact on its own channel, never re-derive it
+  from the rendering. One extra line is enough — a `KINDS:a,b,c` header line that
+  is never truncated, with the human list below it, and the branch matches the
+  header. General form: **a rendering is an output, not a data source.** If you
+  find yourself grepping something your own code formatted for a reader, you have
+  a second, undeclared parser of your own display format — and it will drift the
+  moment you change how things look.
+- **Test that pins it:** a fixture with **more items than the display cutoff**,
+  where the item the branch cares about sorts *after* the cutoff. Without that
+  row the bug is invisible; with it, reverting to the display-string match fails
+  loudly.
+
+---
+
+## 13. Classification keyed on a naming convention the real layout doesn't follow
+
+- **Symptom:** a whole category of input is never detected. Not misdetected —
+  *absent*. The hook reports nothing for it, which is indistinguishable from
+  "there was nothing to report."
+- **Cause:** the classifier matched a path shape (`/skills?/[^/]+/(references|scripts|assets)/`)
+  that encodes one directory convention. Real repositories use others. Real case:
+  a marketplace repo lays skills out as `claude-code-skills/<suite>/<skill>/references/…`
+  — not one path segment equals `skills`, so every edit to a skill's reference or
+  script files was classified `None`. The pattern had been in the table for
+  months, tested only against `~/.claude/skills/<name>/…`, which does match.
+- **Fix — do NOT just widen the regex.** Widening to `/[^/]+/(references|scripts|assets)/`
+  makes every repository on the machine with a `scripts/` directory match, trading a
+  silent miss for pervasive false positives — the trade rule 1 explicitly forbids
+  (误杀健康输入比漏报更糟). Key the decision on a **verifiable fact** instead: *is
+  there a `SKILL.md` next to this `references/` directory?* One `os.path.exists`
+  against the filesystem is layout-independent, cannot fire on an unrelated
+  project, and stays correct when someone invents a new directory convention
+  tomorrow. Wrap it so an `OSError` falls to the safe direction (rule 5).
+- **When the candidate IS the anchor.** The question above is "is there a
+  `SKILL.md` beside this `references/` directory", which has no answer for a path
+  that *is* `…/myskill/SKILL.md`. Classify that one by basename — and note why
+  that is not the naming-habit trap this entry warns about: `SKILL.md` is a name
+  the platform's spec defines and the loader actually keys on, whereas
+  `/skills?/` was a habit of one directory layout. The test is whether something
+  outside your head enforces the name.
+- **The general rule:** when a hook classifies a resource, prefer a check the
+  world can answer (does this file exist, what does the API return, what is the
+  actual git ref) over a check that only your naming habit can answer. Conventions
+  are per-repo and per-era; facts are not. Reach for a name pattern only when
+  there is no fact to query — and then say so in a comment, so the next reader
+  knows it is a heuristic standing in for evidence.
+
+---
+
+## 14. The self-test asserts exit codes — but this hook's product is its text
+
+- **Symptom:** the suite is green, the hook exits with the right codes on every
+  row, and the message it prints is wrong, missing a paragraph, or emitting a
+  section that should have been conditional. Nobody notices until a human reads
+  the output.
+- **Cause:** for a **blocking** hook the exit code *is* most of the contract, so
+  exit-code assertions cover it. But a hook whose real product is the **stderr
+  guidance** — a PreToolUse message explaining the correct alternative, a Stop
+  reminder telling the model what to do next — has a second output channel that
+  exit codes cannot see. Break the message body, invert the condition on an
+  optional paragraph, let a heredoc swallow a section: the exit code stays
+  exactly 2, and every row still passes. The suite is structurally blind to the
+  only thing that hook produces.
+- **Fix:** add content assertions alongside the exit-code rows. Use the `says`
+  helper shipped in [scripts/test_hook.sh](../scripts/test_hook.sh) rather than
+  re-typing one here — a copy in prose drifts from the one people actually run
+  (this entry shipped with a copy that had no pass/fail counters, so a failing
+  content row printed FAIL and the suite still ended "ALL PASS"). It captures
+  stderr, matches a **fixed string** (a BRE `[skill]` is a character class, so
+  bracket-tagged output makes the row vacuously true), and counts into the same
+  gate as the exit-code rows. Assert **both polarities across two fixtures**:
+  present for the input it targets, absent for the lookalike it skips — a lone
+  `want=no` passes vacuously when the hook prints nothing at all.
+- **Then prove the assertions are not vacuous — mutate and confirm they die.**
+  A passing suite carries **zero information** until you have seen it fail for
+  the right reason. Copy the hook, inject the specific bug each assertion claims
+  to catch (invert the branch condition, delete the fact-check, revert to the
+  display-string match), and confirm *that* assertion goes red — and ideally only
+  that one. Real case: four separate mutations each killed exactly their intended
+  row; the same suite had previously been green while two real bugs (#12, #13)
+  were live in the file, because no row looked at the text.
+
+---
+
+## 15. Command text that merely *contains* a write, treated as a write
+
+- **Symptom:** a forensic hook (one that scans a transcript or command history to
+  decide what a session touched) reports a file nobody wrote — sometimes a path
+  that is obviously not a path, like `$AD/SKILL.md`.
+- **Cause:** the hook extracts write targets from **command text**, and command
+  text routinely carries *data that looks like commands*: a heredoc body being
+  written into another file, a fixture string inside a `python3 -` script, a
+  snippet of shell being embedded in documentation. The redirect it "found" was
+  never executed in this process — it was cargo.
+- **Cheap filter, and be honest that it under-reports.** Dropping any candidate
+  path that still contains an unexpanded variable or a backtick —
+  ``re.compile(r"[$\x60]")`` against the candidate — kills the common cargo case
+  in one line. But **do not tell yourself this has no false negatives.** Command
+  text is *pre-expansion* (that is #10's whole thesis), so a genuine
+  `cat > "$OUT/file"` with `$OUT` set writes a real file whose path arrives with
+  the `$` still in it — this filter drops that too. You are trading *missing some
+  real writes* for *not inventing fake ones*, which is the right trade for a
+  **fail-open reporter** and the wrong one for anything that blocks. Say which you
+  are in a comment next to the filter.
+- **The same class has a sibling this filter does not cover:** a literal `~`
+  survives it, then silently fails whatever you do with the path afterwards —
+  `cat > ~/skills/x/references/a.md` passes the `$` filter and then makes an
+  `os.path.exists` check (#13) return False for a file that plainly exists. Run
+  `os.path.expanduser` before any filesystem check, exactly as #10 requires.
+- **The deeper case has no cheap fix, and #11 does not solve it either.** A
+  fully-literal path inside a heredoc body needs real heredoc boundary tracking;
+  #11 lists that same residual as *unsolved* on its own axis and points at "parse
+  with a real shell grammar". So for a blocking hook the over-report is a false
+  block and you owe it that parse; for a reporter, accept the noise and say so.
+- **Why it matters beyond noise:** a false entry does not just add a line. If
+  the hook branches on *kind* (#12), one phantom path of the wrong kind switches
+  on guidance the session never needed — the reader is handed a procedure for
+  work they did not do, which is exactly the "误杀" that trains people to stop
+  reading the hook's output.
+
+---
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:
@@ -363,3 +501,15 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
    tokenizer drops the newline in real multiline commands, so the head is `cd`. Also
    suspect the replay/mutation **harness** itself — make it report "dirty" on a
    known-positive before trusting its "clean".
+10. Is one **branch** of the hook — an optional paragraph, a kind-specific check —
+    never firing, while everything else works? → either the branch is reading the
+    hook's own **display string** and the item fell past a truncation (#12), or the
+    **classifier** never produced that kind at all because it keys on a naming
+    convention this repo doesn't follow (#13). Distinguish by printing the raw
+    classification before it is formatted: present-but-truncated is #12,
+    never-classified is #13.
+11. Is the suite **green while the output is visibly wrong**? → the assertions only
+    check exit codes and this hook's product is its text (#14). Add both-polarity
+    content assertions, then mutate to prove they can die.
+12. Does it report a file **nobody wrote** — especially one containing a literal
+    `$VAR`? → it is reading command text as if every redirect in it executed (#15).
