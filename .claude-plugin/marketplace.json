@@ -230,7 +230,7 @@
       "description": "Daymade skills core suite. Bundles skill creation, quality review, governance, and marketplace development tooling under one shared namespace. Existing-skill edits use an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.14.0",
+      "version": "1.15.0",
       "category": "suite",
       "keywords": [
         "suite",
