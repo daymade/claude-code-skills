@@ -349,7 +349,29 @@ A recording can be long but still fast-tier (two known speakers, plain language)
    - **Needs verification** — a proper noun you can't confirm from context: a person / company / ticker / product / place name (a misheard drug name in a medical interview, a researcher's surname in a podcast, a ticker on an earnings call), or any term you can't point to a specific source for — even one you think you recognize ("I'm pretty sure" is exactly how wrong names slip in). **Resolve it through a local-first search ladder before asking the user.** For project / personal entities the authoritative spelling almost always already lives on this machine, and WebSearch is near-useless on internal names — it returns wrong same-name people, or nothing — and worse, a fluent wrong guess becomes a confident fix that's hard to catch later. Search in this order:
 
 
-      0. **People roster** — `people.md` (or wherever `people_roster_path` in
+      0. **The transcript's OWN speaker labels — check these before you search
+         anything.** A diarized transcript already carries names: the speaker
+         label on each block. When a label is a **real name** (not `说话人 N` /
+         `Speaker N`), someone put it there deliberately — most often the user,
+         labeling the voices on the minute page by hand — which makes it a
+         **human identification, the single strongest source in this whole
+         ladder**, above the roster, above any document. So when the body text
+         garbles a name that the label spells out (the body shatters one person
+         into three different homophone spellings; the label prints it once,
+         correctly, above every block she speaks), the label **is** the answer: apply it as a
+         Confident fix and stop. Do not run the rest of the ladder, and above
+         all **do not put that name on the needs-checking list and ask the user
+         for it** — they already answered by labeling it, and asking again reads
+         as not having looked. (2026-07-23: did exactly this — ran roster / DB /
+         PKM / qcc / chatlog on a name that was printed at the top of every one
+         of that speaker's blocks, then asked the user to confirm it.)
+         The existing rule "never infer speaker identity, never revert a manual
+         label" is about protecting labels as *output*; this step is its other
+         half — labels are also authoritative *input*. Only when the label
+         itself is `说话人 N`, or the garbled name belongs to someone who is
+         **not** one of the speakers (a third party mentioned in passing), does
+         the search below apply.
+      1. **People roster** — `people.md` (or wherever `people_roster_path` in
          `~/.transcript-fixer/config.json` points). This is your curated SSOT
          of long-term recurring people with their ASR variants annotated under
          `- **ASR 变体**:`. A garbled name that already maps to a canonical
@@ -357,11 +379,11 @@ A recording can be long but still fast-tier (two known speakers, plain language)
          Confident fix: apply immediately. **This one step replaces asking the
          user for every name they've already documented.** Skip only for
          transcripts whose speakers are confirmed NOT in the roster.
-      1. **All domains of `corrections.db`, not just the current `--domain`.** The same entity shatters into different ASR variants across projects, and every prior fix already collapsed them to the canonical name — so the answer is often sitting in another domain you didn't pass to `--stage 1`. Checking only the current domain and giving up is the recurring failure mode.
+      2. **All domains of `corrections.db`, not just the current `--domain`.** The same entity shatters into different ASR variants across projects, and every prior fix already collapsed them to the canonical name — so the answer is often sitting in another domain you didn't pass to `--stage 1`. Checking only the current domain and giving up is the recurring failure mode.
          `sqlite3 ~/.transcript-fixer/corrections.db "SELECT from_text, to_text, domain FROM active_corrections WHERE to_text LIKE '%<fragment>%' OR from_text LIKE '%<fragment>%';"`
-      2. **Project delivery docs & the alias ledger** — cost reports, review sheets, deliverables, PKM notes for that project. These are human-written correct spellings, the strongest possible source. `grep -rl "<fragment>" <project-dir>` then read the hits. (The domain context file from step 3 usually names the project's alias ledger explicitly — start there.) **Read every name table the ledger holds, not just the one that looks like "the speaker list."** A project's people are almost always split across role-based tables — internal speakers, external collaborators, client-side, vendor/dealer-side, attendees — and the person you're chasing often lives in a sibling table you didn't open. If a name you end up confirming wasn't reachable from the context file's name-source manifest, that manifest is incomplete: add the missing table to it so the next run can't miss it. (See `domain_context_guide.md` Rule 6 for the failure case this prevents.)
-      3. **Memory** (`~/.claude/.../memory/`) — project relationship maps and person profiles often record canonical names explicitly.
-      4. **WebSearch** — only for genuinely public entities (a public-company ticker, a known researcher, a drug name). Skip for anything project-internal.
+      3. **Project delivery docs & the alias ledger** — cost reports, review sheets, deliverables, PKM notes for that project. These are human-written correct spellings, the strongest possible source. `grep -rl "<fragment>" <project-dir>` then read the hits. (The domain context file from step 3 usually names the project's alias ledger explicitly — start there.) **Read every name table the ledger holds, not just the one that looks like "the speaker list."** A project's people are almost always split across role-based tables — internal speakers, external collaborators, client-side, vendor/dealer-side, attendees — and the person you're chasing often lives in a sibling table you didn't open. If a name you end up confirming wasn't reachable from the context file's name-source manifest, that manifest is incomplete: add the missing table to it so the next run can't miss it. (See `domain_context_guide.md` Rule 6 for the failure case this prevents.)
+      4. **Memory** (`~/.claude/.../memory/`) — project relationship maps and person profiles often record canonical names explicitly.
+      5. **WebSearch** — only for genuinely public entities (a public-company ticker, a known researcher, a drug name). Skip for anything project-internal.
 
       Only after all of these strike out do you ask the user — and by then you've shown the entity isn't already recorded on this machine, which makes the ask legitimate. A confirmed result becomes a Confident fix; if the search *can't* confirm it, it drops to Uncertain. **Batch these**: collect the unique unknowns and run the ladder once per unique entity, not once per occurrence.
 
