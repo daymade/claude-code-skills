@@ -357,7 +357,15 @@ def validate_skill(skill_path, audience=None):
     # Absolute paths (e.g., /Users/<user>/...) are external and NOT checked here.
     paths_valid, missing_paths = validate_internal_paths(skill_path, content)
     if not paths_valid:
-        return False, f"Missing internal skill files: {', '.join(missing_paths)}"
+        return False, (
+            f"Missing internal skill files: {', '.join(missing_paths)}\n"
+            "  A bare `scripts/...` / `references/...` / `assets/...` reference always means\n"
+            "  'inside this skill's own bundle'. Two ways to resolve:\n"
+            "  1. The file belongs to the bundle → create it at that path inside the skill.\n"
+            "  2. The prose points at a file in the TARGET project (not the bundle) →\n"
+            "     qualify it with a placeholder prefix, e.g. `<project-root>/scripts/x.sh`\n"
+            "     (paths preceded by `/` are not treated as bundle-internal)."
+        )
 
     # Scan SKILL.md AND bundled text files (references/, scripts/) for portability
     # issues. Scanning only SKILL.md is a proven blind spot: a hardcoded
