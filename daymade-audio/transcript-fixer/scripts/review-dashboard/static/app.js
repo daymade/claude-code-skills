@@ -152,6 +152,7 @@ async function renderCard() {
       <button class="btn" data-decide="undo" ${state.undoStack.length ? "" : "disabled"}><kbd>Z</kbd>撤销上次</button>
     </div>
     <div class="override-row" id="override-row">
+      <div class="override-scope" id="override-scope"></div>
       <input id="override-input" placeholder="正确写法…（回车确认，Esc 取消）">
       <button class="btn accept" data-decide="overridden">确认改写</button>
     </div>
@@ -348,6 +349,23 @@ function showOverride() {
   input.value = selected()?.suggested_text || "";
   input.focus();
   input.select();
+  updateOverrideScope();
+}
+
+/* 整段替换范围明示（2026-07-25 #24 战例：original 拖了整句（约 6 字），
+ * 用户 override 一个 3 字品牌名 → 整句被吞。override 的 file_edit 永远把
+ * original_text 整段换成输入值，所以输入框上方必须始终显示范围；短替换
+ * （输入 ≤ 原文一半）多半是只想换其中一个词，加警告引导输入完整片段。 */
+function updateOverrideScope() {
+  const el = $("#override-scope");
+  const it = selected();
+  if (!el || !it) return;
+  const orig = it.original_text || "";
+  const v = ($("#override-input")?.value || "").trim();
+  const risky = orig.length >= 5 && v && v.length <= orig.length / 2;
+  el.className = "override-scope" + (risky ? " warn" : "");
+  el.innerHTML = `替换范围（整段）：「${esc(orig)}」` +
+    (risky ? `<br>⚠️ 你输入的「${esc(v)}」远短于原文，将整段吞掉上下文——只想换其中一个词？请输入替换后的完整片段` : "");
 }
 
 function move(delta) {
@@ -419,6 +437,10 @@ function undoLast() {
   if (!last) { toast("本次会话还没有可撤销的裁定", true); return; }
   resolve(last, "reopen");
 }
+
+document.addEventListener("input", (e) => {
+  if (e.target.id === "override-input") updateOverrideScope();
+});
 
 document.addEventListener("keydown", (e) => {
   const tag = e.target.tagName;
