@@ -514,7 +514,6 @@ unresolvable path means **block**.
 ---
 
 ## 17. A Stop guard that reports only the first violation loses the rest (the retry round is a full pass-through)
-
 - **Symptom:** a Stop hook correctly blocks on finding X in the model's reply;
   the model fixes X and stops again — and the reply still contains violation Y
   from the same original turn, never reported, never caught.
@@ -535,6 +534,57 @@ unresolvable path means **block**.
   the first and ended the turn with the second intact. Found by an independent
   reviewer, fixed by collecting all matches (cap 5); regression row
   "多命中一次报全" pins it.
+
+---
+
+## 18. A blocked compound command silently discards the innocent segments' side effects
+
+- **Symptom:** you fixed something and ran the gated command in the SAME Bash
+  call (`fix_thing && gated_command`); the guard blocked it; next round the
+  SAME error reappears — as if your fix never happened. You re-diagnose,
+  "discover" the fix is missing, and only then realize why.
+- **Cause:** a PreToolUse block prevents the **whole** command from running —
+  including innocent segments (a heredoc updating a file, a map write, an edit)
+  chained before or after the gated one. The block error names the gated
+  segment, so all attention goes there; the innocent write's silent absence
+  leaves no signal of its own.
+- **Fix — two habits, one on each side of the block:** when *building*
+  commands, put state-changing steps (file writes, edits, map updates) in their
+  **own** Bash call, never bundled with a command a guard might block; when
+  *recovering* from a block, re-verify every write you *assumed* had landed
+  before the block (`grep` for the change) — "the error named the other
+  segment" is exactly the situation where your side effect is gone. Real case
+  (2026-07-25, twice in one session): a needle-fix heredoc bundled with the
+  validation command; the tooling guard blocked the bundle; the validator
+  re-reported byte-identical errors because the fix never landed — diagnosed
+  only on the second identical failure.
+
+---
+
+## 19. A block whose remediation demands cross-call memory re-fires all session
+
+- **Symptom:** the hook blocks, its message teaches the correct form, you
+  comply — and get blocked again for the same reason. And again. (One session
+  measured **10** blocks for the identical cause, plus 3 sibling failures —
+  including a feature branch created in the *wrong repository*.)
+- **Cause:** the remediation the hook demands is a **habit change across tool
+  calls** — e.g. "always prefix this command family with `cd <tool-root>`" —
+  but the working directory does not persist across Bash calls and attention
+  resets with each one. The lesson is re-read and re-forgotten every time; the
+  hook is correct every time, and it does not matter. This is not carelessness —
+  it is a property of the *class*: the remediation's success depends on the
+  weakest link (cross-call memory), so the block re-fires until the session
+  ends or the environment changes.
+- **Fix — pick the guard's answer deliberately, knowing the class:** (a) put
+  the corrective *in the environment* instead of the message (a wrapper script
+  that doesn't care about cwd, an env var, a `PYTHONPATH`) so the habit is no
+  longer required — strongest, because it removes the dependency; (b) convert
+  the block to a fail-open reminder for habit-class rules (a noisy PreToolUse
+  block trains bypass exactly as #2 warns); (c) accept and *measure* the
+  repetition as the cost of enforcement — 10 blocks can mean "guard working,
+  loudly", but then say so in the header so nobody "fixes" it. What does not
+  work: making the block message clearer. It was clear every one of the 10
+  times.
 
 ---
 
@@ -589,3 +639,12 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
     from the same reply**? → first-only reporting (#17): the honored retry round
     is a full pass-through, so collect every finding before printing and assert
     both hits in a two-violations fixture.
+15. Did the **same block error return after you "fixed" it** — and your fix was
+    bundled into the same command as the gated one? → innocent-segment
+    side effects swallowed (#18): separate state changes from gated commands
+    into their own Bash call, and after any block re-verify writes you assumed
+    had landed.
+16. Are you blocked **repeatedly for the same thing despite complying** each
+    time? → the remediation demands cross-call memory (#19): it's a class
+    property, not carelessness — fix the environment, downgrade to a reminder,
+    or accept-and-measure; a clearer message was never the missing piece.
