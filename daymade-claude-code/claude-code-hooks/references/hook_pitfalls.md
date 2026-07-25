@@ -37,10 +37,9 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
   *inside the quoted regex* is treated as a pipe, the string splits, and
   `TRIGGER` lands at a segment head → looks like a command.
 - **Fix:** tokenize with the **`shlex.shlex` class** (`punctuation_chars=True`,
-  `whitespace_split=True`) — NOT the `shlex.split()` function, which leaves
-  `ls|TRIGGER x` as `['ls|TRIGGER', 'x']` and hides the trigger from a
-  command-position check entirely. Both forms honor quotes (the regex stays one
-  token); only the class also splits unspaced separators. Then check **command
+  `whitespace_split=True`) — NOT the `shlex.split()` function (the `ls|TRIGGER x`
+  divergence is measured in [hook_patterns.md](hook_patterns.md#the-shlex-command-position-walker),
+  whose code comments carry it verbatim). Then check **command
   position**, not mere presence — walker in
   [hook_patterns.md](hook_patterns.md#the-shlex-command-position-walker).
 - **Caveat — `whitespace_split=True` also swallows newlines.** If your commands
@@ -97,10 +96,11 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
   set an env var to wave itself through.
 - **Cause:** the release valve was a static `GUARD_OK=1` / `SCOPE_OK=1` env var.
   Anything the model can add to its own command is not a gate.
-- **Fix:** a **human-confirmation gate** the model physically can't drive — a
-  native macOS `osascript` dialog (can't click) and/or a typed `YES` on
-  `/dev/tty` (can't type into the user's terminal); refuse/cancel/timeout = hard
-  NO; log every bypass. Pattern B in [hook_patterns.md](hook_patterns.md#pattern-b--pretooluse-with-a-human-confirmation-release-gate).
+- **Fix:** a **human-confirmation gate** the model physically can't drive —
+  full two-channel pattern (native dialog / typed YES, hard-NO semantics,
+  audit log, testability) in
+  [hook_patterns.md](hook_patterns.md#pattern-b--pretooluse-with-a-human-confirmation-release-gate)
+  and the rule-of-thumb form in SKILL.md rule 4.
   (Both `WORKTREE_GUARD_OK` and `GIT_COMMIT_SCOPE_OK` were retired to this in
   2026-07.)
 - **Nuance — an ack marker that's a real acknowledgement, not a free pass:** the
@@ -145,9 +145,8 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
 - **Cause:** the hook is already live in the session, so any Bash command you
   issue that contains the trigger token is inspected (and blocked) before it runs.
 - **Fix:** put the test cases in a **script file** and run `bash test_hook.sh` —
-  the outer command (`bash test_hook.sh`) doesn't contain the trigger, so it isn't
-  self-blocked; the triggers live inside the file where the PreToolUse hook
-  doesn't see them. This is what `scripts/test_hook.sh` is for.
+  the outer command carries no trigger, so it isn't self-blocked (mechanism in
+  SKILL.md rule 2 and the harness header comment).
 - **The same trap bites your own `git commit`.** A commit message that merely
   *mentions* the trigger — e.g. a fix whose message quotes `foo|TRIGGER` as an
   example — is parsed by the live hook and blocked: the heredoc message text
@@ -174,9 +173,15 @@ Every entry here is a bug that shipped. When a hook misbehaves, match the
   dubious-ownership / bad-`cd`-path context. pipefail propagates the left
   command's non-zero exit through the pipe, `set -e` kills the whole script, and
   the `2>/dev/null` already swallowed the stderr.
-- **Fix:** every command feeding a substitution needs a `|| <fallback>` — the
-  pipe included: `STAGED=$(git diff … | wc -l || echo '?')`. (2026-07-21 in
-  git-commit-headcheck.)
+- **Fix:** every command feeding a substitution needs a `|| <fallback>` — the pipe
+  included, and the `||` goes **OUTSIDE** the `$(…)`: `STAGED=$(git diff … | wc -l
+  | tr -d ' ') || STAGED='?'`. Put it inside (`… | wc -l || echo '?'`) and `wc`
+  still prints `0` when git fails, yielding the malformed two-line value `0\n?`.
+  (2026-07-21 in git-commit-headcheck.)
+- **Alternative shape — keep `-e` and trap the contract:** `set -euo pipefail` +
+  `trap 'exit 0' ERR` converts every failure to exit 0 while `-e` keeps guarding
+  the plumbing (git-commit-headcheck's production form; the choice between this
+  and dropping `-e` is SKILL.md's "-e or trap" bullet).
 - **Why it's insidious:** it only fires in *edge* contexts (bad path, not-a-repo),
   so it passes every test in a healthy repo and breaks in the field — same class
   as #1 (stdin) and #3 (poisoning): a promise broken, hard to locate. If your hook
@@ -413,19 +418,17 @@ unresolvable path means **block**.
   optional paragraph, let a heredoc swallow a section: the exit code stays
   exactly 2, and every row still passes. The suite is structurally blind to the
   only thing that hook produces.
-- **Fix:** add content assertions alongside the exit-code rows. Use the `says`
-  helper shipped in [scripts/test_hook.sh](../scripts/test_hook.sh) rather than
-  re-typing one here — a copy in prose drifts from the one people actually run
-  (this entry shipped with a copy that had no pass/fail counters, so a failing
-  content row printed FAIL and the suite still ended "ALL PASS"). It captures
-  stderr, matches a **fixed string** (a BRE `[skill]` is a character class, so
-  bracket-tagged output makes the row vacuously true), and counts into the same
-  gate as the exit-code rows. Assert **both polarities across two fixtures**:
-  present for the input it targets, absent for the lookalike it skips — a lone
-  `want=no` passes vacuously when the hook prints nothing at all.
+- **Fix:** add content assertions alongside the exit-code rows, with the `says`
+  helper shipped in [scripts/test_hook.sh](../scripts/test_hook.sh) — its header
+  comment carries the full doctrine (both polarities across two fixtures,
+  fixed-string matching because a BRE `[skill]` is a character class, and the
+  mutation pass that proves each row can die), which SKILL.md's harness section
+  repeats at rule length. Use the shipped helper rather than re-typing one — a
+  copy in prose drifts from the one people actually run (this entry shipped with
+  a copy that had no pass/fail counters, so a failing content row printed FAIL
+  and the suite still ended "ALL PASS").
 - **Then prove the assertions are not vacuous — mutate and confirm they die.**
-  A passing suite carries **zero information** until you have seen it fail for
-  the right reason. Copy the hook, inject the specific bug each assertion claims
+  Copy the hook, inject the specific bug each assertion claims
   to catch (invert the branch condition, delete the fact-check, revert to the
   display-string match), and confirm *that* assertion goes red — and ideally only
   that one. Real case: four separate mutations each killed exactly their intended
