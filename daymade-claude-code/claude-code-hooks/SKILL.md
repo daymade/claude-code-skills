@@ -50,7 +50,7 @@ match tokens/patterns; it can't judge whether a design is good).
 | **PreToolUse** | before a tool runs | allow | **block** the call (stderr → shown to model as guidance) | any other exit = "non-blocking error" → **the call proceeds** |
 | **PostToolUse** | after a tool ran | quiet **unless it prints a `hookSpecificOutput` JSON on stdout — that is how context injection works, and it happens at exit 0** | feedback to the model (can't un-run the tool) | — |
 | **SessionStart** | session begins | proceed | — | **always exit 0** — never block a session |
-| **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | check `stop_hook_active` — necessary, **not** sufficient (rule 7) |
+| **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | loop safety is **two layers**: the hook checks `stop_hook_active` (necessary, **not** sufficient — rule 7), and the harness itself **ends the turn after 8 consecutive blocks** regardless. All Stop hooks for an event run **in parallel** — one block round can carry several hooks' feedback |
 
 - **PreToolUse** is the workhorse — the only one that can *stop* an action.
   `matcher` selects the tool (`Bash`, `Agent`, `WebFetch`, …). Exit 2 blocks and
@@ -82,6 +82,24 @@ match tokens/patterns; it can't judge whether a design is good).
   amount of regex refinement on the wrong event fixes it. Full contract
   (`last_assistant_message` vs `transcript_path`, the anti-loop check) in
   Pattern E below.
+- **Stop has two block channels with identical loop protections — pick by
+  intent, and make the first (only) block carry everything.** `decision:
+  "block"` + `reason`, or plain exit 2 + stderr, shows as a hook *error* — for
+  hard gates ("this must not stand"). `hookSpecificOutput.additionalContext`
+  shows as neutral "Stop hook feedback" with no error notification — for
+  coaching and reminders the model should weigh, not gates. Both count toward
+  the same 8-consecutive-block ceiling from the table above, so the choice is
+  tone, not safety. What the ceiling means for message design: a blocked retry
+  round (`stop_hook_active: true`) is let through **with whatever violations
+  remain**, and after 8 blocks the harness ends the turn the same way — so a
+  Stop guard gets exactly **one** informed bite. Report *all* findings in that
+  one block (a guard that prints only the first loses the rest permanently —
+  pitfall #17), and write the message as an escape manual naming the exact
+  acceptable fix, not a verdict — the model converges in one round or it burns
+  the cap guessing. v2.1.145+ inputs `background_tasks` / `session_crons` let a
+  blocking hook tell "the session is done" from "the session is merely paused
+  waiting for background work" — blocking a pause forces pointless
+  continuations and wastes the same cap.
 
 Full runnable skeletons: [references/hook_patterns.md](references/hook_patterns.md).
 
@@ -309,9 +327,14 @@ than people reach for it.)
 condition T is true → hook demands remediation R → model performs R → T checked again
 ```
 
-**If completing R can make T true again, the loop does not terminate.** Nothing
-errors, nothing crashes; it just burns round after round until a human
-interrupts. `stop_hook_active` does *not* save you here — that field covers
+**If completing R can make T true again, the loop does not converge.** Nothing
+errors, nothing crashes; it burns round after round until the harness's
+8-consecutive-block ceiling ends the turn — or a human interrupts first, which
+is what usually happens because each round is a *complete* remediation cycle
+(dispatch, wait, adopt, edit), not a cheap retry. That ceiling is a backstop
+against a runaway session, not a design: reaching it means the turn ends with
+the violation still standing and the model's last 8 rounds spent on work nobody
+asked for. "It eventually stops" is not termination in any sense you want. `stop_hook_active` does *not* save you here — that field covers
 exactly **one layer of re-entry** ("the stop I just blocked is being retried").
 It says nothing about the *cross-turn* case, where the model genuinely goes off
 and does R (real work, many tool calls), then stops naturally: that is a brand
