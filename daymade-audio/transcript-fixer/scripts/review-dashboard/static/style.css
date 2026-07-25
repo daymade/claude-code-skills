@@ -151,7 +151,12 @@ kbd {
 .btn kbd { margin-right: 4px; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .override-row { display: none; gap: 8px; padding: 0 16px 14px; }
-.override-row.visible { display: flex; }
+.override-row.visible { display: flex; flex-wrap: wrap; }
+.override-scope {
+  flex-basis: 100%; font-size: 12px; color: var(--text-2); line-height: 1.5;
+  word-break: break-all;
+}
+.override-scope.warn { color: var(--amber); }
 .override-row input {
   flex: 1; padding: 7px 10px; border: 1px solid var(--accent); border-radius: 6px; font-size: 14px;
 }
