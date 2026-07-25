@@ -119,24 +119,62 @@ printf '%s' "$CMD" | grep -qw 'TRIGGER' || exit 0     # fast path: token absent 
 HOOK_CMD="$CMD" python3 - <<'PY'
 import os, sys, shlex, re
 cmd = os.environ["HOOK_CMD"]
+SEPS = {";","&&","||","|","&","(",")","{","}","|&"}   # NOT <> — a redirect target is a filename, not a command
+ENV = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+GIT_WRITES = {"commit","rebase","tag","am","cherry-pick"}
+
 def toks(c):
     lex = shlex.shlex(c, posix=True, punctuation_chars=True); lex.whitespace_split = True
     return list(lex)                       # |;&<>() are boundaries even without spaces
-try: TS = toks(cmd)
-except ValueError: TS = cmd.split()        # unbalanced quotes → best effort (SKILL.md Rule 1 nuance)
-SEPS = {";","&&","||","|","&","(",")","{","}","|&"}   # NOT <> — a redirect target is a filename, not a command
-ENV = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
-at_cmd = True
-for t in TS:
-    if t in SEPS: at_cmd = True; continue
-    if at_cmd:
-        if ENV.match(t): continue          # VAR=val prefix, command is still ahead
-        if t == "TRIGGER":                 # command-position hit → print guidance + block
+
+def segments(line):
+    """(head, tokens) per command segment in ONE line (shlex keeps quotes atomic)."""
+    try: TS = toks(line)
+    except ValueError: TS = line.split()   # unbalanced quotes → best effort (SKILL.md Rule 1 nuance)
+    at_cmd, head, cur = True, "", []
+    for t in TS:
+        if t in SEPS:
+            if head: yield head, cur
+            at_cmd, head, cur = True, "", []
+            continue
+        if at_cmd and ENV.match(t): continue   # VAR=val prefix, command is still ahead
+        if at_cmd: head = t; at_cmd = False
+        cur.append(t)
+    if head: yield head, cur
+
+def is_git_write(seg):
+    # seg[0]=="git"; the subcommand is the first non-flag token (skip flag values)
+    skip = False
+    for t in seg[1:]:
+        if skip: skip = False; continue
+        if t in ("-C","-c","--git-dir","--work-tree"): skip = True; continue
+        if t.startswith("-"): continue
+        return t in GIT_WRITES
+    return False
+
+# Pitfall #7 (whole command, BEFORE any splitting): a git *write*'s message is DATA —
+# `git commit -F - <<EOF` whose body quotes `foo|TRIGGER` reaches the walk below as
+# pseudo-command-text and the guard blocks its own fix commit (this skill's own
+# qlmanage-guard shipped exactly that). Exempt the whole command when any segment is
+# a git write. Bias-to-under (pitfall #11): this also lets `git commit -m x &&
+# TRIGGER` through — the rare miss is the deliberate trade for a blocker; stricter
+# needs a real shell grammar (production: lib-git-commit-detect's adjacency check).
+if any(h == "git" and is_git_write(seg) for h, seg in segments(cmd)):
+    sys.exit(0)
+
+# Pitfall #11: shlex treats newlines as ordinary whitespace, so a multiline command
+# (`cd /x\ngit add\nTRIGGER -y`) collapses into ONE segment whose head is `cd` and
+# the trigger is never in command position — replayed trigger rate 0 on real
+# transcripts. Split on newlines as TEXT first, then walk each line. Residual (same
+# entry): a heredoc body still fragments — for a fail-open reminder declare it; the
+# whole-command git exemption above is what keeps heredoc commits safe here.
+for line in cmd.split("\n"):
+    for head, seg in segments(line):
+        if head == "TRIGGER":                # command-position hit → print guidance + block
             sys.stderr.write("BLOCKED: <BANNED THING> is not allowed here.\n"
                              "WHY: <the failure mode this prevents>.\n"
                              "USE INSTEAD: <the correct command / workflow>.\n")
             sys.exit(2)
-        at_cmd = False                     # this token is the command; rest are args
 sys.exit(0)
 PY
 # set -e propagates python's exit 2 straight out of the hook — nothing left for
@@ -174,16 +212,30 @@ def _tokens(cmd: str):
     lex.whitespace_split = True
     return list(lex)
 
-def executes(cmd: str, target: str) -> bool:
-    try: toks = _tokens(cmd)             # quotes honored, # comment dropped, |;& are boundaries
-    except ValueError: toks = cmd.split()# unbalanced quotes → best effort (see SKILL.md Rule 1 nuance)
-    at_cmd = True                        # start of line is a command slot
+def _segments(line: str):
+    """(head, tokens) per command segment in ONE physical line."""
+    try: toks = _tokens(line)            # quotes honored, # comment dropped, |;& are boundaries
+    except ValueError: toks = line.split()  # unbalanced quotes → best effort (see SKILL.md Rule 1 nuance)
+    at_cmd, head, cur = True, "", []
     for t in toks:
-        if t in SEPS: at_cmd = True; continue   # separator → next token is a command
-        if at_cmd:
-            if ENV.match(t): continue           # skip VAR=val prefixes
-            if t == target: return True         # command-position match
-            at_cmd = False                      # this is the command; args follow
+        if t in SEPS:
+            if head: yield head, cur
+            at_cmd, head, cur = True, "", []
+            continue
+        if at_cmd and ENV.match(t): continue  # skip VAR=val prefixes
+        if at_cmd: head = t; at_cmd = False
+        cur.append(t)
+    if head: yield head, cur
+
+def executes(cmd: str, target: str) -> bool:
+    # Two stages, order matters (pitfall #11): shlex swallows newlines as ordinary
+    # whitespace, so a multiline block (`cd /x\ngit add\nTRIGGER -y`) would
+    # collapse into ONE segment headed by `cd` and hide the trigger. Split on
+    # newlines as TEXT first, then shlex-walk each line — a quoted `a|TRIGGER|b`
+    # still stays one token inside its line, so no phantom command is made.
+    for line in cmd.split("\n"):
+        for head, _seg in _segments(line):
+            if head == target: return True      # command-position match
     return False
 ```
 
@@ -196,9 +248,12 @@ Why each piece matters:
   miss it — a real, silent bypass). `whitespace_split=True` stops it from also
   splitting inside flags/paths.
 - Comments (`# TRIGGER`) are dropped by the posix lexer, so they don't match.
-- The `at_cmd` flag + `SEPS` means `ls | TRIGGER x` matches (after the pipe) but
+- The per-segment walk means `ls | TRIGGER x` matches (after the pipe) but
   `grep TRIGGER f` does not (TRIGGER is grep's argument).
 - `ENV` skip means `FOO=1 TRIGGER` matches (TRIGGER is still the command).
+- The outer `cmd.split("\n")` means `cd /x\ngit add\nTRIGGER -y` matches (its own
+  line) — without it the newline collapses into whitespace and the head stays
+  `cd` (pitfall #11: replayed trigger rate 0 on real transcripts).
 
 **What it deliberately does NOT catch:** `$(TRIGGER)` / backtick command
 substitution. A raw-string regex for `$(TRIGGER` would misfire on a *quoted*
@@ -206,6 +261,18 @@ literal `'$(TRIGGER)'` (which doesn't execute). Since the real use of most
 banned commands is a direct call, missing the rare substitution case beats
 false-positives. If you truly need it, detect it in a context that distinguishes
 single- from double-quotes — usually not worth it.
+
+**What it splits but cannot fully parse:** a newline **inside** a quoted string
+or heredoc body — the text-level `split("\n")` is quote-blind about newlines, so
+`git commit -F - <<'MSG'` whose body quotes a trigger-looking line fragments
+into a phantom command. That residual is pitfall #11's: for a fail-open
+reminder, declare it and move on; for a fail-closed blocker, lift the git-write
+exemption (pitfall #7) to the whole command BEFORE this walk — exactly the
+order Pattern A shows. But note the exemption's name: it rescues **git**
+heredocs only. A non-git one (`cat <<'EOF'` whose body contains
+trigger-looking data) still false-blocks a fail-closed guard, and for that
+shape the honest options are declare-it-fail-open or a real shell grammar —
+there is no cheap middle ground.
 
 ---
 
@@ -386,7 +453,13 @@ later hallucination can't stand. This is `git-commit-headcheck`: after any real
 ```bash
 #!/usr/bin/env bash
 # PostToolUse (matcher: Bash): after a real `git commit`, inject the true HEAD.
+# Contract: ALWAYS exit 0 — a reporter, not a decider. Kept TWO ways in
+# production: drop -e entirely (Pattern E's shape), or keep -e and convert every
+# failure to exit 0 with `trap 'exit 0' ERR` (git-commit-headcheck's shape —
+# used here so set -e still guards the plumbing). See SKILL.md's "-e or trap"
+# bullet for the choice.
 set -euo pipefail
+trap 'exit 0' ERR
 INPUT=$(cat)
 CMD=$(printf '%s' "$INPUT" | python3 -c "import sys,json;print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null||echo "")
 printf '%s' "$CMD" | grep -qE '(^|[^[:alnum:]])git[[:space:]].*commit([[:space:]]|$)' || exit 0
@@ -397,21 +470,32 @@ printf '%s' "$CMD" | grep -q -- '--dry-run' && exit 0
 # *as if it were truth* — the exact failure this pattern exists to prevent. A
 # real hook must extract the `-C`/`cd` target from $CMD (sed) and run
 # `git -C "$dir" …`; kept minimal here on purpose.
-# CRITICAL with `set -euo pipefail`: a git PIPE is a trap. If git fails (not a
-# repo / dubious ownership / bad `cd`-path), pipefail propagates git's exit code,
-# `set -e` kills the WHOLE script, and this hook's "ALWAYS exit 0" promise breaks
-# SILENTLY — the CLI shows only "Failed with non-blocking status code: No stderr
-# output" (a real 2026-07-21 bug). EVERY git command feeding output MUST have a
-# `|| <fallback>`, including the pipe.
+# CRITICAL: a git PIPE is a trap under pipefail — see pitfall #8. The `||` goes
+# OUTSIDE the $(…): `wc` prints 0 even when git fails, so `… | wc -l || echo '?'`
+# INSIDE the substitution yields the malformed two-line value `0\n?`.
 HEAD=$(git rev-parse --short HEAD 2>/dev/null || echo "?")
 SUBJ=$(git log -1 --format='%s' 2>/dev/null || echo "?")
-STAGED=$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ' || echo '?')
-echo "[headcheck] real HEAD = $HEAD $SUBJ | staged remaining = $STAGED" >&2
+STAGED=$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ') || STAGED='?'
+
+# The injection channel is `hookSpecificOutput` JSON on STDOUT, not stderr:
+# at exit 0 the CLI routes stderr nowhere the model sees (it only reaches the
+# model at exit 2), while a hookSpecificOutput payload is added to the model's
+# context as "additional context". Emitting the line below via `>&2` — as an
+# earlier version of this pattern did — delivers it to NO ONE. Production
+# (git-commit-headcheck) emits exactly this shape.
+CTX="[headcheck] real HEAD = $HEAD $SUBJ | staged remaining = $STAGED"
+python3 -c "import json,sys; print(json.dumps({'hookSpecificOutput':{'hookEventName':'PostToolUse','additionalContext':sys.argv[1]}}, ensure_ascii=False))" "$CTX"
 exit 0
 ```
 
 The value is that the model **cannot forget a check that runs automatically**.
 Injected truth beats "I think the commit worked."
+
+**Testing note:** the `says` helper in `scripts/test_hook.sh` captures **stderr**
+— right for blocking hooks (their contract text lives there) but blind for this
+pattern, whose payload is stdout JSON. For an exit-0 injector, assert on stdout
+instead (`out=$(printf '%s' "$2" | "$HOOK" 2>/dev/null)`) and match a fixed
+string from `additionalContext`, or stay with `run` rows for the exit contract.
 
 ---
 
@@ -422,11 +506,9 @@ tool call or a file. Use it for a rule about what the model itself *writes* —
 "never invent a shorthand name for something unverified", "always cite a
 source" — never for a rule about what the model writes **into** a file or a
 shell command (that's PreToolUse on `Write`/`Edit`/`Bash` instead; Stop only
-sees plain chat text). Getting the event wrong here isn't a tuning problem —
-`UserPromptSubmit` structurally cannot see the model's own text, so a hook
-built on it will never once fire for what it was built to catch, while still
-false-blocking the user's own unrelated typing whenever it happens to contain
-the trigger pattern (a real, shipped incident).
+sees plain chat text). Getting the event wrong here is a category mistake, not
+a tuning problem — full argument (why `UserPromptSubmit` structurally cannot
+substitute, and the shipped incident) in SKILL.md's Stop bullet.
 
 ```bash
 #!/usr/bin/env bash
@@ -532,44 +614,25 @@ exit 0
 Three things worth calling out beyond what the comments above already say:
 
 - **This skeleton uses `python3 - <<'PY' ... PY` (a QUOTED heredoc) everywhere,
-  never `python3 -c "…multi-line…"`.** With a quoted delimiter, bash treats
-  the entire body as inert literal text — no variable expansion, no command
-  substitution, no quote-parsing at all — so a stray `"` or `` ` `` **inside a
-  comment** (which is exactly where one tends to sneak in unnoticed, since
-  bash doesn't know it's "just a comment" the way Python does) cannot corrupt
-  anything. This is the same technique the JSON event contract section above
-  uses to avoid the stdin-consumption trap, and it happens to close the
-  quote-embedding hazard too — see
-  [hook_pitfalls.md](hook_pitfalls.md#9-a-literal-quote-or-backtick-inside-a-python-comment-corrupts-a-hook-silently)
-  for what goes wrong with the `-c "…"` form instead, and why `bash -n` alone
-  doesn't always catch it.
+  never `python3 -c "…multi-line…"`.** The quoted delimiter makes the body inert
+  literal text to bash — mechanism in the JSON event contract section above;
+  what goes wrong with the `-c "…"` form (a stray quote *inside a comment*
+  silently corrupts the block, and `bash -n` can't see it) is
+  [hook_pitfalls.md](hook_pitfalls.md#9-a-literal-quote-or-backtick-inside-a-python-comment-corrupts-a-hook-silently).
 - **`stop_hook_active` is the single most safety-critical field in this
   pattern.** Every other mistake in this hook fails toward "block too much" or
   "miss one case"; getting this one wrong in the permissive direction fails
   toward "silently do nothing, forever, with zero error signal."
-- **…and the two other loop-safety layers the flag does NOT give you, both
-  documented facts of the runtime (2026-07-25 verified against the official
-  hooks reference).** One: the harness itself **ends the turn after 8
-  consecutive blocks** — a guard whose message the model cannot act on does not
-  loop forever, it bounces 8 times and the violation passes anyway, so the cap
-  is a ceiling to stay far below, never a design target; the message is the
-  escape manual (name the exact acceptable fix) and the first block must carry
-  **all** findings, since the honored retry round passes with whatever was not
-  reported (the skeleton above collects them; pitfall #17 is the failure
-  shape). Two: **all Stop hooks for an event run in parallel** — your block
-  shares the round with every other Stop hook's feedback, so write the message
-  to compose (state your finding and your fix), not to own the channel. The
-  same Stop input also carries `background_tasks` / `session_crons`
-  (v2.1.145+): a blocking hook can tell "session is done" from "session merely
-  paused for background work" — blocking a pause burns the cap on pointless
-  continuations. One ownership nuance the docs state and the flag's name
-  hides: `stop_hook_active` is set by **any** stop hook's block, not
-  specifically yours ("already continuing as a result of **a** stop hook") —
-  with several Stop hooks registered, another guard's block consumes the same
-  retry round, one more reason the first block must be complete: you cannot
-  count on a second one. For the gate-vs-guidance channel choice
-  (`decision:"block"`/exit 2 vs `hookSpecificOutput.additionalContext`), see
-  SKILL.md's Stop bullet — both share these same protections.
+- **The flag is set by ANY stop hook's block, not specifically yours** —
+  "already continuing as a result of **a** stop hook": with several Stop hooks
+  registered, another guard's block consumes the shared retry round, so your
+  first block must be complete (the skeleton above collects all findings —
+  pitfall #17 is the failure shape of reporting only the first). The other
+  loop-safety layers (the 8-consecutive-block harness ceiling, all Stop hooks
+  running in parallel per event, the `background_tasks` / `session_crons` pause
+  signal in v2.1.145+, and the gate-vs-guidance channel choice) are covered in
+  SKILL.md's hook-types table and Stop bullet — both share these same
+  protections.
 - **…and handling it correctly still does not make the hook terminate.** The
   field covers **one layer of re-entry** — the stop you just blocked being
   retried. It does nothing for the *cross-turn* loop, where the model actually
@@ -585,16 +648,16 @@ Three things worth calling out beyond what the comments above already say:
   SKILL.md rule 7 and
   [hook_pitfalls.md](hook_pitfalls.md#16-the-remediation-the-hook-demands-re-arms-the-hook-a-loop-with-no-variant).
 - **Wrap every python3 subprocess call with the same `2>/dev/null` + `|| <fallback>`
-  guard, and put the `2>/dev/null` INSIDE the `$(...)` on the python3 call.** The
-  outer form `X=$(python3 … ) 2>/dev/null || fallback` only suppresses on bash ≥5;
-  on bash 3.2 (macOS system bash) the redirection does not reach the command
-  substitution and a crash leaks the raw traceback to the model's stderr
-  (independent-review measurement, 2026-07-25: same snippet, 5.3.15 silent /
-  3.2.57 leaks). Placement costs nothing on new bash and is the only portable
-  form. The guard itself is unchanged either way: an inconsistency here doesn't
-  change the block-vs-allow decision (the hook is already fail-open by
-  construction), it only decides whether a crash degrades to "no match" cleanly
-  or noisily.
+  guard, and put the `2>/dev/null` INSIDE the `$(...)`.** The outer form
+  `X=$(python3 … ) 2>/dev/null || fallback` leaks the raw traceback to the
+  model's stderr on **both** bash 3.2.57 (macOS system bash) and bash 5.x —
+  reproduced on both 2026-07-25 (an earlier note here claiming the outer form
+  "only suppresses on bash ≥5" was wrong; the redirection after a command
+  substitution does not reliably reach it on either). Inside placement costs
+  nothing and is the only portable form. The guard itself is unchanged either
+  way: an inconsistency here doesn't change the block-vs-allow decision (the
+  hook is already fail-open by construction), it only decides whether a crash
+  degrades to "no match" cleanly or noisily.
 
 ---
 

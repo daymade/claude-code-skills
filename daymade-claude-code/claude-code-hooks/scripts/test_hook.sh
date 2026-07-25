@@ -14,7 +14,8 @@
 #   3. Fill the `run` table: trigger cases (want exit 2) + healthy-lookalike
 #      cases (want exit 0). The healthy-lookalike rows are the important ones —
 #      they prove you don't false-block (误杀健康输入比漏报更糟).
-#   4. bash test_hook.sh   # NOT ./test_hook.sh through a live hook's shell
+#   4. bash test_hook.sh   # run it through bash, not ./test_hook.sh: the copy
+#      may not carry an exec bit, and `bash <file>` works regardless.
 #
 # It runs `bash -n` (syntax — a corrupted PreToolUse hook poisons the whole
 # session) then every case, and reports pass/fail.
@@ -49,6 +50,10 @@ run() {
 #   speaks. Do not try to put both polarities on ONE fixture: a healthy input is
 #   supposed to be silent, so it has no want=yes partner — its partner is the
 #   trigger fixture.
+#   CHANNEL NOTE: `says` captures STDERR (right for blocking hooks — their
+#   contract text lives there). An exit-0 injector (PostToolUse emitting
+#   hookSpecificOutput JSON on STDOUT, Pattern D) is invisible to it — assert on
+#   stdout instead: out=$(printf '%s' "$2" | "$HOOK" 2>/dev/null).
 says() {
   local out hit=no
   out=$(printf '%s' "$2" | "$HOOK" 2>&1 >/dev/null) || true
@@ -70,6 +75,11 @@ run "after-pipe"     '{"tool_name":"Bash","tool_input":{"command":"ls | TRIGGER 
 run "no-space-pipe"  '{"tool_name":"Bash","tool_input":{"command":"ls|TRIGGER -x"}}' 2
 run "after-&&"       '{"tool_name":"Bash","tool_input":{"command":"foo && TRIGGER x"}}' 2
 run "env-prefix"     '{"tool_name":"Bash","tool_input":{"command":"FOO=1 TRIGGER x"}}' 2
+run "multiline"      '{"tool_name":"Bash","tool_input":{"command":"cd /x && ls\nTRIGGER -y"}}' 2
+#   ↑ the multiline row is not optional: shlex treats newlines as whitespace, so
+#   a one-stage walker collapses the block into one segment headed by `cd` and
+#   never sees TRIGGER (pitfall #11). It only passes if your hook splits on
+#   newlines as text FIRST (Pattern A / the walker section both do).
 # Healthy-lookalike cases (want 0) — THESE are what prove you don't false-block:
 run "grep-regex-arg" '{"tool_name":"Bash","tool_input":{"command":"grep -E \"a|TRIGGER|b\" file"}}' 0
 run "redirect-target" '{"tool_name":"Bash","tool_input":{"command":"echo x > TRIGGER"}}' 0
@@ -83,7 +93,13 @@ run "non-bash-tool"  '{"tool_name":"Read","tool_input":{"file_path":"/x/TRIGGER.
 # ── FAILURE-DIRECTION ROWS — add these whenever the hook derives state from the
 #    command text (a path, a repo, a target). They assert the hook still behaves
 #    when it CANNOT resolve what it parsed. Omit them and a fail-open bug looks
-#    exactly like a clean pass (pitfall #10):
+#    exactly like a clean pass (pitfall #10).
+#    ⚠️ These rows expect 2 because this template targets the TOKEN-MATCHER
+#    class (the banned thing is right there in the command text). A STATE-
+#    DERIVING guard (does staged state span domains?) has the OPPOSITE correct
+#    answer for `cd ~/no-such-dir && …` — the && short-circuits, nothing ever
+#    runs, allow is correct. Derive your expected exits from SKILL.md rule 5's
+#    guard-class table BEFORE writing the row, or you'll fail a correct guard.
 # run "trigger behind cd ~"  '{"tool_name":"Bash","tool_input":{"command":"cd ~/somewhere && TRIGGER -x"}}' 2
 # run "trigger behind cd abs" '{"tool_name":"Bash","tool_input":{"command":"cd /tmp && TRIGGER -x"}}' 2
 # run "unresolvable path"    '{"tool_name":"Bash","tool_input":{"command":"cd ~/no-such-dir && TRIGGER -x"}}' 2
