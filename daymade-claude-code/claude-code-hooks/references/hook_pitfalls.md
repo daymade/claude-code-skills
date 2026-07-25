@@ -510,6 +510,31 @@ unresolvable path means **block**.
 
 ---
 
+## 17. A Stop guard that reports only the first violation loses the rest (the retry round is a full pass-through)
+
+- **Symptom:** a Stop hook correctly blocks on finding X in the model's reply;
+  the model fixes X and stops again — and the reply still contains violation Y
+  from the same original turn, never reported, never caught.
+- **Cause:** the hook printed the first finding and stopped looking. The retry
+  round arrives with `stop_hook_active: true`, which the hook (correctly)
+  honors by letting the turn end — so everything it did not say in round one
+  sails through permanently. The anti-loop field that saves you from infinite
+  re-entry is precisely what makes the first block your only informed bite.
+  (The harness separately ends the turn after 8 consecutive blocks — banking
+  on "I'll catch it next round" burns that cap and loses anyway.)
+- **Fix:** collect *all* findings before printing (cap the list — five is
+  plenty — so a pathological reply can't flood the model's context), and write
+  the message as an escape manual: each finding plus the exact acceptable fix.
+  Test it: a two-violations fixture must exit 2 with BOTH in stderr — a suite
+  that only ever feeds one violation per case structurally cannot see this.
+- **Real case (2026-07-25):** a group-name guard reported only the first
+  coined shorthand in a reply that coined two; the honored retry round fixed
+  the first and ended the turn with the second intact. Found by an independent
+  reviewer, fixed by collecting all matches (cap 5); regression row
+  "多命中一次报全" pins it.
+
+---
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:

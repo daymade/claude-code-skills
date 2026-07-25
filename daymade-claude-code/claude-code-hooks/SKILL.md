@@ -389,15 +389,23 @@ stop.
 
 Two things make this hard to see. **The comparison looks perfectly reasonable in
 isolation** — "the review must be newer than the last edit" is exactly what you'd
-write. And that sentence is the **pass** condition, so the moment you write the
-code you are one negation away from stating T backwards; keep T oriented as the
-**fire** condition or you will reason about the wrong operand. Run the checklist
+write. And that sentence is the **pass** condition — T is its negation. Copy it
+into your head as-is, without that negation, and you are reasoning about the
+wrong operand for the rest of the analysis; keep T oriented as the **fire**
+condition. (Writing the *code* as an early-exit guard clause — `… && exit 0` — is
+normal shell style and not what this is about; the discipline is about which
+orientation you reason in. And note equality: same-second mtimes land on the pass
+side, i.e. fail-open, which matches what this rule requires of state reads below.) Run the checklist
 above and it falls out mechanically: R changes `last_edit` (Q1); `last_edit` is
 an operand of T (Q2); the smallest input that re-fires T is the remediation's own
 output (Q3) → no V.
 
-**Converging mechanisms, most to least reliable. Check them in this order — the
-first two remove the loop instead of taming it.**
+**Pick by axis first, then by order — these are not five strengths of one thing.**
+0 decides *whether to block at all*; 1 decides *which event to hang it on*; 2–4
+are the *predicate's shape* (choose 1 and you still need one of 2–4). The 0→4
+order is "how completely the loop is removed", and it runs **inversely to how
+much you can enforce** — so take the first one that still gives you the
+enforcement you actually need, not simply the first one.
 
 0. **Don't block — inject.** If the demand is advisory (you want the model to
    *consider* R, not to be unable to finish without it), print it and exit 0.
@@ -405,21 +413,45 @@ first two remove the loop instead of taming it.**
    for anything short of Tier-0, and the cost is honest: a reminder can be
    ignored, so say in the header that it is fail-open — rule 4's point stands,
    a gate the subject can walk past is not a gate. If you need a *gate*, use 2
-   and pay for the receipt. (Injection channel: see Pattern D — a plain
-   `echo … >&2; exit 0` reaches the model, which is what the shipped
-   PostToolUse injectors here use.)
+   and pay for the receipt. Injection channel: Pattern D.
+   ⚠️ **This option does not exist on Stop** — and rule 7's main subject *is*
+   Stop, so read this before reaching for it. On Stop, `exit 0` means "let the
+   turn end", so there is no later reasoning step for the text to land in; and
+   `hookSpecificOutput.additionalContext` counts toward the same 8-block ceiling
+   as `exit 2` (see the hook-types section), i.e. it is also a block. Stop has
+   exactly two modes: gate, or silence. Choosing mechanism 0 on Stop therefore
+   means **changing the event** — hang the injection on the tool call that
+   produced the artifact (PostToolUse, Pattern D) — or admitting you wanted a
+   gate after all, and going to mechanism 2.
+   ⚠️ **"No loop" holds only if R isn't your own matcher's target.** An injector
+   on `Bash` that tells the model to run `git ls-remote` fires again on that very
+   command, and re-injects. Same shape, softer — the model can ignore it, so
+   there is no forced iteration, but it is broadcast-on-repeat rather than
+   nothing. Check that the R you recommend is not an action this hook matches.
 
 1. **Move the check to the action boundary.** If what you want to gate is an
    *action* — a push, a publish, a delete — guard **the action** with PreToolUse
-   instead of guarding **the turn** with Stop. A PreToolUse block is evaluated
-   once per attempt: block → R → the model re-issues the command → the guard now
-   sees a satisfied instance. Nothing re-fires across turns, so the variant is
-   trivial (`V` = attempts remaining on this command). **Stop-hook remediation
-   loops are usually action gates attached to the wrong event** — and note the
-   counter-example above is exactly that shape ("before … could be **pushed**",
-   implemented on Stop). Check this before reaching for a receipt; it is the
-   concrete case of "Stop is the odd one out, and the one most often reached for
-   by mistake" from the hook-types section.
+   instead of guarding **the turn** with Stop. **Stop-hook remediation loops are
+   often action gates attached to the wrong event**, and this is the concrete
+   case of "Stop is the odd one out, and the one most often reached for by
+   mistake" from the hook-types section.
+   **Be precise about what this buys.** PreToolUse only re-fires when the model
+   *voluntarily retries the gated action*, and the model can always decline and
+   end its turn normally. So it guarantees **the turn terminates** — the worst
+   case drops from "the turn can't end" to "this action doesn't happen". It does
+   **not** make a non-converging predicate converge: take the counter-example
+   above, move it to PreToolUse unchanged, and the loop survives intact (push →
+   blocked → review → findings adopted → new edits → retry → `last_edit` is ahead
+   again → blocked). That case is sick in its **predicate**, not in its event, so
+   you still pick a shape from 2–4. Note also that PreToolUse has **no** harness
+   backstop — the 8-block ceiling in the hook-types table is Stop-only — so a
+   self-resetting predicate moved here has *fewer* safety nets, not more.
+   ⚠️ Two shapes where this mechanism is the wrong answer: **R has to be done
+   with the very tool you gated** (a guard on `Edit` demanding you fix a file
+   header first — deadlock, nothing can ever satisfy it), and **an action that
+   recurs within one session** (a `git push` gate in a session that pushes five
+   repos = five full demands; that is the density problem in the war story
+   below, and mechanism 1 doesn't exempt you from it).
 
 2. **Make "already remediated" an existence fact, not a temporal one — and key it
    on the thing that needed remediating.** Have R land an artifact and test *does
@@ -467,6 +499,14 @@ first two remove the loop instead of taming it.**
    `stat -f %m` on BSD/macOS, `stat -c %Y` on GNU — as are the other snippets
    here). Right for conditions that *oscillate around a threshold*; **wrong** for
    conditions that remediation **resets** — those need 2 or 3.
+   ⚠️ **Hysteresis supplies no V — it is a rate limiter, not a termination
+   proof.** The loop ends only if the condition subsides on its own, and what
+   ends it then is the world, not your hook. So its `# TERMINATION:` line has to
+   name that external fact ("by the time the stamp expires, X has been resolved
+   by &lt;whom&gt;"). If you can't write that line honestly, what you needed was 2
+   or 3. (Family resemblance worth seeing: mechanism 0 is the limit case of both
+   — mechanism 3 with the ceiling set to 0, or mechanism 4 with the window set to
+   ∞. They differ in enforcement, not in termination.)
 
 **Failure direction for the state itself (rule 5): fail *open*.** If the receipt
 or counter can't be read or written — unwritable `TMPDIR`, sandbox, full disk —
@@ -506,8 +546,8 @@ and the predicate needs replacing.) Three independent remediation cycles back-to
 indistinguishable from a loop from the outside. The variant-proof settles the
 mechanism; it says nothing about **how many distinct remediations a session can
 demand**. If your domain produces that density (compounding artifacts ship
-several times a day here), consider pairing mechanism 1 with mechanism 2 (a
-session-scoped ceiling), or accept the optics deliberately and say so in the
+several times a day here), consider pairing mechanism 2 (the existence fact) with
+mechanism 3 (a session-scoped ceiling), or accept the optics deliberately and say so in the
 hook's output — "reminder 2 of at most N" reads as progress, an unadorned
 repeat reads as a loop.
 

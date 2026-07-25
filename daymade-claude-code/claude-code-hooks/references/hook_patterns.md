@@ -503,22 +503,27 @@ printf '%s' "$TEXT" | grep -qw 'TRIGGER' || exit 0    # fast path, same idea as 
 # but NOT the shlex walker below this line: TEXT is free-form prose, not a
 # shell command, so match with substring/regex per the JSON event contract's
 # "shlex is for shell commands" rule above.
-HIT=$(HOOK_TEXT="$TEXT" python3 - <<'PY'
+HITS=$(HOOK_TEXT="$TEXT" python3 - <<'PY'
 import os, re
 t = os.environ['HOOK_TEXT']
 # ... precise detection here — regex/substring over free text ...
-for m in re.finditer(r'TRIGGER', t):
-    print(m.group(0))
-    break
+# Collect EVERY finding, not just the first: the blocked retry round
+# (stop_hook_active: true) passes with whatever you did not report, so a
+# first-only report loses the rest permanently (pitfall #17). Cap the list so
+# a pathological text cannot flood the model's context.
+hits = [m.group(0) for m in re.finditer(r'TRIGGER', t)]
+print(' / '.join(hits[:5]))
 PY
-) 2>/dev/null || HIT=''
+) 2>/dev/null || HITS=''
 
-if [ -n "$HIT" ]; then
+if [ -n "$HITS" ]; then
   # This message is read by the MODEL, not the user — once Stop blocks, the
   # model sees this text and must act on it before it can actually stop.
-  # Write it as an instruction ("rewrite X"), not a user-facing explanation.
-  echo "BLOCKED: your last reply contains <BANNED THING> (\"$HIT\"). WHY: ...
-FIX: rewrite it using <the correct alternative>, then finish this turn." >&2
+  # Write it as an instruction ("rewrite X"), not a user-facing explanation,
+  # and name the exact acceptable fix — the model converges in one round or it
+  # burns the 8-consecutive-block harness cap guessing.
+  echo "BLOCKED: your last reply contains <BANNED THING> (\"$HITS\"). WHY: ...
+FIX: rewrite each one using <the correct alternative>, then finish this turn." >&2
   exit 2
 fi
 exit 0
@@ -542,6 +547,24 @@ Three things worth calling out beyond what the comments above already say:
   pattern.** Every other mistake in this hook fails toward "block too much" or
   "miss one case"; getting this one wrong in the permissive direction fails
   toward "silently do nothing, forever, with zero error signal."
+- **…and the two other loop-safety layers the flag does NOT give you, both
+  documented facts of the runtime (2026-07-25 verified against the official
+  hooks reference).** One: the harness itself **ends the turn after 8
+  consecutive blocks** — a guard whose message the model cannot act on does not
+  loop forever, it bounces 8 times and the violation passes anyway, so the cap
+  is a ceiling to stay far below, never a design target; the message is the
+  escape manual (name the exact acceptable fix) and the first block must carry
+  **all** findings, since the honored retry round passes with whatever was not
+  reported (the skeleton above collects them; pitfall #17 is the failure
+  shape). Two: **all Stop hooks for an event run in parallel** — your block
+  shares the round with every other Stop hook's feedback, so write the message
+  to compose (state your finding and your fix), not to own the channel. The
+  same Stop input also carries `background_tasks` / `session_crons`
+  (v2.1.145+): a blocking hook can tell "session is done" from "session merely
+  paused for background work" — blocking a pause burns the cap on pointless
+  continuations. For the gate-vs-guidance channel choice
+  (`decision:"block"`/exit 2 vs `hookSpecificOutput.additionalContext`), see
+  SKILL.md's Stop bullet — both share these same protections.
 - **…and handling it correctly still does not make the hook terminate.** The
   field covers **one layer of re-entry** — the stop you just blocked being
   retried. It does nothing for the *cross-turn* loop, where the model actually
@@ -551,8 +574,9 @@ Three things worth calling out beyond what the comments above already say:
   must converge: prefer an **existence test** on an artifact the remediation
   lands (`does the record exist` — sets once, can't be unset) over a **temporal
   test** (fire when `last_offense > last_remediation`), because the remediation
-  you asked for is usually what moves the operand you are comparing against. Full analysis, the three
-  converging mechanisms, and the self-test case that catches it:
+  you asked for is usually what moves the operand you are comparing against. Full
+  analysis, the converging mechanisms (ordered by how completely each removes the
+  loop rather than taming it), and the self-test case that catches it:
   SKILL.md rule 7 and
   [hook_pitfalls.md](hook_pitfalls.md#16-the-remediation-the-hook-demands-re-arms-the-hook-a-loop-with-no-variant).
 - **Wrap every python3 subprocess call in the same `2>/dev/null || <fallback>`
