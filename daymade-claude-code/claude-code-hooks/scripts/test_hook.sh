@@ -112,6 +112,36 @@ run "non-bash-tool"  '{"tool_name":"Read","tool_input":{"file_path":"/x/TRIGGER.
 #      GIT_GUARD_OSASCRIPT=false GIT_GUARD_TTY=/dev/null bash test_hook.sh <hook>
 #    Never provide an env var that *grants* approval — that recreates the retired
 #    static-escape-hatch anti-pattern.
+#
+# ── AFTER-REMEDIATION ROWS (mechanism 2 / receipt-shaped) — required whenever the
+#    hook DEMANDS something (rule 7).
+#    Point-in-time fixtures are structurally blind to non-termination: each `run`
+#    row asks "given this event, fire or not?", while non-termination is a property
+#    of the SEQUENCE. This pair is the only row type that can see it.
+#    A plain `run` line is NOT enough — the state the hook judges lives OUTSIDE the
+#    JSON (on the filesystem), so the rows need setup/teardown around them:
+#
+#      EVT='{"last_assistant_message":"…text that triggers the demand…"}'
+#      RECEIPT="…"                       # ← MUST be the key YOUR hook computes
+#      rm -f "$RECEIPT";  run "demands R (no receipt)"       "$EVT" 2
+#      : > "$RECEIPT";    run "quiet after R (receipt present)" "$EVT" 0
+#      rm -f "$RECEIPT"
+#
+#    ⚠️ FIRST prove your RECEIPT string is the one the hook actually computes —
+#    temporarily `echo "$RECEIPT" >&2` inside the hook, run one case, and compare.
+#    There is no universal key: rule 7's sample hook uses `git rev-parse HEAD`,
+#    a content-keyed guard hashes the reviewed text, yours may use neither. Copying
+#    a key from an example is the most likely reason row 2 fails.
+#    ONLY after the paths match does the diagnosis below apply: if row 2 STILL
+#    returns 2, the predicate is temporal rather than existence-based and it WILL
+#    loop in production (pitfall #16) — fix the predicate, not the fixture.
+#
+#    Other mechanisms need a differently-shaped pair:
+#      • mechanism 3 (ceiling): no receipt to touch — feed the SAME event N+1 times
+#        and assert the last one is 0. `rm -f "$CNT"` before AND after, or a stale
+#        counter makes the whole suite pass/fail depending on run history.
+#      • mechanism 1 (PreToolUse gate): the second row isn't "receipt present", it
+#        is "the world now satisfies the demand" — same command, state fixed.
 # ──────────────────────────────────────────────────────────────────────────────
 #
 # ── EVENT SHAPES OTHER THAN PreToolUse (the payload differs per event) ────────
@@ -122,8 +152,16 @@ run "non-bash-tool"  '{"tool_name":"Read","tool_input":{"file_path":"/x/TRIGGER.
 #   Stop / SubagentStop — hook reads the assistant's final message:
 #     run "stop-trigger" '{"last_assistant_message":"...text under test..."}' 2
 #     (fallback path: '{"transcript_path":"/abs/path.jsonl"}' where the file has a
-#      line {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}};
-#      also honors {"stop_hook_active":true} as an early no-op exit)
+#      line {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}})
+#     REQUIRED anti-loop row for every blocking Stop hook — the one field that
+#     bounds re-entry (Pattern E); the hook must exit 0 on it:
+#       run "stop_hook_active" '{"stop_hook_active":true,"last_assistant_message":"...trigger text..."}' 0
+#     And if the guard can find MULTIPLE violations in one reply: a
+#     two-violations row asserting BOTH appear in stderr — the blocked retry
+#     round passes unreported findings permanently (pitfall #17). Use two
+#     clearly distinct tokens (TRIGGER2 CONTAINS "TRIGGER" — a substring-style
+#     detector would make this row pass for the wrong reason):
+#       says "reports all hits" '{"last_assistant_message":"TRIGGER and SECONDHIT"}' "SECONDHIT" yes
 #
 #   UserPromptSubmit — hook reads the user's prompt:
 #     run "prompt-trigger" '{"prompt":"...text under test..."}' 2

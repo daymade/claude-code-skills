@@ -23,10 +23,19 @@ The hook reads one JSON object on **stdin**. The fields you care about:
 ```jsonc
 // PreToolUse / PostToolUse
 {
+  "session_id": "…",                         // stable for the whole session
+  "cwd": "…",
+  "hook_event_name": "PreToolUse",
   "tool_name": "Bash",                       // or "Agent", "WebFetch", "Edit", …
   "tool_input": { "command": "…" }           // Bash: .command; Agent: .prompt; Edit: .file_path/.new_string
 }
 ```
+
+**`session_id` is the only correct key for per-session state** a hook keeps
+(counters, cool-downs — rule 7 mechanisms 3 and 4). Nothing else is stable:
+`$$` / `$PPID` change on every invocation because each hook run is a fresh
+process, and a fixed path makes the state global, which turns a one-shot guard
+into a permanently dead one.
 
 Extract them defensively (never assume the shape — a parse failure should
 **allow**, not crash):
@@ -433,11 +442,11 @@ INPUT=$(cat)                                     # is explicitly ||-guarded inst
 # check treats it as an already-blocked retry and silently, permanently
 # disarms the guard for that turn. Test this explicitly: a payload with
 # `"stop_hook_active": "false"` (string) must NOT be treated as active.
-ACTIVE=$(HOOK_JSON="$INPUT" python3 - <<'PY'
+ACTIVE=$(HOOK_JSON="$INPUT" python3 - 2>/dev/null <<'PY'
 import json, os
 print(json.loads(os.environ['HOOK_JSON']).get('stop_hook_active') is True)
 PY
-) 2>/dev/null || exit 0
+) || exit 0
 [ "$ACTIVE" = "True" ] && exit 0
 
 # Prefer last_assistant_message (official docs: use it INSTEAD OF the
@@ -446,7 +455,7 @@ PY
 # shape is a plain string, but defensive extraction costs nothing and the
 # SAME helper is genuinely required for the transcript fallback below, where
 # message.content really is a list of typed blocks in practice.
-TEXT=$(HOOK_JSON="$INPUT" python3 - <<'PY'
+TEXT=$(HOOK_JSON="$INPUT" python3 - 2>/dev/null <<'PY'
 import json, os, sys
 
 d = json.loads(os.environ['HOOK_JSON'])
@@ -487,29 +496,34 @@ if not text:
 
 print(text)
 PY
-) 2>/dev/null || exit 0
+) || exit 0
 [ -n "$TEXT" ] || exit 0
 
 printf '%s' "$TEXT" | grep -qw 'TRIGGER' || exit 0    # fast path, same idea as Pattern A —
 # but NOT the shlex walker below this line: TEXT is free-form prose, not a
 # shell command, so match with substring/regex per the JSON event contract's
 # "shlex is for shell commands" rule above.
-HIT=$(HOOK_TEXT="$TEXT" python3 - <<'PY'
+HITS=$(HOOK_TEXT="$TEXT" python3 - 2>/dev/null <<'PY'
 import os, re
 t = os.environ['HOOK_TEXT']
 # ... precise detection here — regex/substring over free text ...
-for m in re.finditer(r'TRIGGER', t):
-    print(m.group(0))
-    break
+# Collect EVERY finding, not just the first: the blocked retry round
+# (stop_hook_active: true) passes with whatever you did not report, so a
+# first-only report loses the rest permanently (pitfall #17). Cap the list so
+# a pathological text cannot flood the model's context.
+hits = [m.group(0) for m in re.finditer(r'TRIGGER', t)]
+print(' / '.join(hits[:5]))
 PY
-) 2>/dev/null || HIT=''
+) || HITS=''
 
-if [ -n "$HIT" ]; then
+if [ -n "$HITS" ]; then
   # This message is read by the MODEL, not the user — once Stop blocks, the
   # model sees this text and must act on it before it can actually stop.
-  # Write it as an instruction ("rewrite X"), not a user-facing explanation.
-  echo "BLOCKED: your last reply contains <BANNED THING> (\"$HIT\"). WHY: ...
-FIX: rewrite it using <the correct alternative>, then finish this turn." >&2
+  # Write it as an instruction ("rewrite X"), not a user-facing explanation,
+  # and name the exact acceptable fix — the model converges in one round or it
+  # burns the 8-consecutive-block harness cap guessing.
+  echo "BLOCKED: your last reply contains <BANNED THING> (\"$HITS\"). WHY: ...
+FIX: rewrite each one using <the correct alternative>, then finish this turn." >&2
   exit 2
 fi
 exit 0
@@ -533,13 +547,54 @@ Three things worth calling out beyond what the comments above already say:
   pattern.** Every other mistake in this hook fails toward "block too much" or
   "miss one case"; getting this one wrong in the permissive direction fails
   toward "silently do nothing, forever, with zero error signal."
-- **Wrap every python3 subprocess call in the same `2>/dev/null || <fallback>`
-  pattern, not just some of them.** An inconsistency here doesn't change the
-  block-vs-allow decision (a hook built this defensively is already fail-open
-  by construction — nothing prints before a match succeeds), but the
-  unguarded call leaks a raw Python traceback straight to the model's stderr
-  on any internal crash, instead of degrading cleanly to "no match" like the
-  guarded calls do.
+- **…and the two other loop-safety layers the flag does NOT give you, both
+  documented facts of the runtime (2026-07-25 verified against the official
+  hooks reference).** One: the harness itself **ends the turn after 8
+  consecutive blocks** — a guard whose message the model cannot act on does not
+  loop forever, it bounces 8 times and the violation passes anyway, so the cap
+  is a ceiling to stay far below, never a design target; the message is the
+  escape manual (name the exact acceptable fix) and the first block must carry
+  **all** findings, since the honored retry round passes with whatever was not
+  reported (the skeleton above collects them; pitfall #17 is the failure
+  shape). Two: **all Stop hooks for an event run in parallel** — your block
+  shares the round with every other Stop hook's feedback, so write the message
+  to compose (state your finding and your fix), not to own the channel. The
+  same Stop input also carries `background_tasks` / `session_crons`
+  (v2.1.145+): a blocking hook can tell "session is done" from "session merely
+  paused for background work" — blocking a pause burns the cap on pointless
+  continuations. One ownership nuance the docs state and the flag's name
+  hides: `stop_hook_active` is set by **any** stop hook's block, not
+  specifically yours ("already continuing as a result of **a** stop hook") —
+  with several Stop hooks registered, another guard's block consumes the same
+  retry round, one more reason the first block must be complete: you cannot
+  count on a second one. For the gate-vs-guidance channel choice
+  (`decision:"block"`/exit 2 vs `hookSpecificOutput.additionalContext`), see
+  SKILL.md's Stop bullet — both share these same protections.
+- **…and handling it correctly still does not make the hook terminate.** The
+  field covers **one layer of re-entry** — the stop you just blocked being
+  retried. It does nothing for the *cross-turn* loop, where the model actually
+  goes and does what you demanded (many tool calls, a natural stop afterwards)
+  and arrives at a **fresh** Stop with `stop_hook_active: false`. If this hook
+  **demands a remediation** rather than merely reporting, the predicate itself
+  must converge: prefer an **existence test** on an artifact the remediation
+  lands (`does the record exist` — sets once, can't be unset) over a **temporal
+  test** (fire when `last_offense > last_remediation`), because the remediation
+  you asked for is usually what moves the operand you are comparing against. Full
+  analysis, the converging mechanisms (ordered by how completely each removes the
+  loop rather than taming it), and the self-test case that catches it:
+  SKILL.md rule 7 and
+  [hook_pitfalls.md](hook_pitfalls.md#16-the-remediation-the-hook-demands-re-arms-the-hook-a-loop-with-no-variant).
+- **Wrap every python3 subprocess call with the same `2>/dev/null` + `|| <fallback>`
+  guard, and put the `2>/dev/null` INSIDE the `$(...)` on the python3 call.** The
+  outer form `X=$(python3 … ) 2>/dev/null || fallback` only suppresses on bash ≥5;
+  on bash 3.2 (macOS system bash) the redirection does not reach the command
+  substitution and a crash leaks the raw traceback to the model's stderr
+  (independent-review measurement, 2026-07-25: same snippet, 5.3.15 silent /
+  3.2.57 leaks). Placement costs nothing on new bash and is the only portable
+  form. The guard itself is unchanged either way: an inconsistency here doesn't
+  change the block-vs-allow decision (the hook is already fail-open by
+  construction), it only decides whether a crash degrades to "no match" cleanly
+  or noisily.
 
 ---
 

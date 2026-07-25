@@ -472,6 +472,69 @@ unresolvable path means **block**.
 
 ---
 
+## 16. The remediation the hook demands re-arms the hook (a loop with no variant)
+
+- **Symptom:** a Stop hook fires, the model does exactly what it asked, the hook
+  fires again on the same grounds. Repeat until a human interrupts. No error, no
+  crash, green self-test, and `stop_hook_active` **is** handled correctly.
+- **Cause:** the hook's condition is a **temporal comparison** whose operand is
+  moved by the very remediation it demands. Canonical **fire** condition:
+  `last_offending_action > last_remediation`. Remediation that is worth doing
+  produces work — findings get adopted, files get edited — so
+  `last_offending_action` jumps back ahead and the condition re-arms.
+  (Watch the orientation: what you naturally *write* is the **pass** condition —
+  "the review must be newer than the last edit". T is its negation. State T as
+  the fire condition or you will reason about the wrong operand.) The loop has
+  no [variant](https://en.wikipedia.org/wiki/Loop_variant): nothing strictly
+  decreases per cycle, so nothing forces termination.
+- **Why `stop_hook_active` doesn't cover it.** It means "the stop I just blocked
+  is being retried" — one layer of re-entry inside one stop attempt. This loop is
+  *cross-turn* (real work, then a fresh Stop with the field `false`). Handling it
+  is necessary and buys nothing here. Full contract: SKILL.md rule 7.
+- **Fix — change the shape of the predicate, not its threshold.** In order:
+  (a) if what you're gating is an **action**, move the gate onto that action with
+  PreToolUse instead of onto the turn with Stop — one evaluation per attempt, no
+  cross-turn re-fire; (b) else test an **existence fact keyed on the thing that
+  needed remediating** (`V = 1 - exists` per key — a global key kills the hook
+  forever, a time-based key is the temporal predicate again); (c) else a
+  per-session **repetition ceiling** (`V = N - fired`), crude but finite. Cool-down
+  windows (hysteresis) fix a *different* problem — a condition oscillating around
+  a threshold — not one that remediation **resets**. Runnable snippets and the
+  design-time `# TERMINATION:` convention: SKILL.md rule 7.
+- **The self-test row pair that can see it.** Same event, receipt absent → fires;
+  receipt present → quiet, with `rm -f` / `: >` around them (the state lives on the
+  filesystem, so a plain `run` row cannot express it). Template in
+  [../scripts/test_hook.sh](../scripts/test_hook.sh), "AFTER-REMEDIATION ROWS". If
+  the second row also fires, the predicate is temporal — fix the predicate, not
+  the fixture.
+
+---
+
+## 17. A Stop guard that reports only the first violation loses the rest (the retry round is a full pass-through)
+
+- **Symptom:** a Stop hook correctly blocks on finding X in the model's reply;
+  the model fixes X and stops again — and the reply still contains violation Y
+  from the same original turn, never reported, never caught.
+- **Cause:** the hook printed the first finding and stopped looking. The retry
+  round arrives with `stop_hook_active: true`, which the hook (correctly)
+  honors by letting the turn end — so everything it did not say in round one
+  sails through permanently. The anti-loop field that saves you from infinite
+  re-entry is precisely what makes the first block your only informed bite.
+  (The harness separately ends the turn after 8 consecutive blocks — banking
+  on "I'll catch it next round" burns that cap and loses anyway.)
+- **Fix:** collect *all* findings before printing (cap the list — five is
+  plenty — so a pathological reply can't flood the model's context), and write
+  the message as an escape manual: each finding plus the exact acceptable fix.
+  Test it: a two-violations fixture must exit 2 with BOTH in stderr — a suite
+  that only ever feeds one violation per case structurally cannot see this.
+- **Real case (2026-07-25):** a group-name guard reported only the first
+  coined shorthand in a reply that coined two; the honored retry round fixed
+  the first and ended the turn with the second intact. Found by an independent
+  reviewer, fixed by collecting all matches (cap 5); regression row
+  "多命中一次报全" pins it.
+
+---
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:
@@ -513,3 +576,13 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
     content assertions, then mutate to prove they can die.
 12. Does it report a file **nobody wrote** — especially one containing a literal
     `$VAR`? → it is reading command text as if every redirect in it executed (#15).
+13. Does it fire **again right after you did exactly what it asked**? → its
+    condition is a temporal comparison that the remediation itself moves (#16).
+    Not a tuning problem: change the predicate's *shape* — move the gate to the
+    action with PreToolUse, or test an existence fact keyed on the thing that
+    needed remediating — and add the after-remediation row pair that a
+    point-in-time suite structurally cannot have.
+14. Did it catch the first violation and **silently never mention the second one
+    from the same reply**? → first-only reporting (#17): the honored retry round
+    is a full pass-through, so collect every finding before printing and assert
+    both hits in a two-violations fixture.

@@ -50,7 +50,7 @@ match tokens/patterns; it can't judge whether a design is good).
 | **PreToolUse** | before a tool runs | allow | **block** the call (stderr → shown to model as guidance) | any other exit = "non-blocking error" → **the call proceeds** |
 | **PostToolUse** | after a tool ran | quiet **unless it prints a `hookSpecificOutput` JSON on stdout — that is how context injection works, and it happens at exit 0** | feedback to the model (can't un-run the tool) | — |
 | **SessionStart** | session begins | proceed | — | **always exit 0** — never block a session |
-| **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | must check `stop_hook_active` or it can loop |
+| **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | loop safety is **two layers**: the hook checks `stop_hook_active` (necessary, **not** sufficient — rule 7), and the harness itself **ends the turn after 8 consecutive blocks** regardless. All Stop hooks for an event run **in parallel** — one block round can carry several hooks' feedback |
 
 - **PreToolUse** is the workhorse — the only one that can *stop* an action.
   `matcher` selects the tool (`Bash`, `Agent`, `WebFetch`, …). Exit 2 blocks and
@@ -82,6 +82,24 @@ match tokens/patterns; it can't judge whether a design is good).
   amount of regex refinement on the wrong event fixes it. Full contract
   (`last_assistant_message` vs `transcript_path`, the anti-loop check) in
   Pattern E below.
+- **Stop has two block channels with identical loop protections — pick by
+  intent, and make the first (only) block carry everything.** `decision:
+  "block"` + `reason`, or plain exit 2 + stderr, shows as a hook *error* — for
+  hard gates ("this must not stand"). `hookSpecificOutput.additionalContext`
+  shows as neutral "Stop hook feedback" with no error notification — for
+  coaching and reminders the model should weigh, not gates. Both count toward
+  the same 8-consecutive-block ceiling from the table above, so the choice is
+  tone, not safety. What the ceiling means for message design: a blocked retry
+  round (`stop_hook_active: true`) is let through **with whatever violations
+  remain**, and after 8 blocks the harness ends the turn the same way — so a
+  Stop guard gets exactly **one** informed bite. Report *all* findings in that
+  one block (a guard that prints only the first loses the rest permanently —
+  pitfall #17), and write the message as an escape manual naming the exact
+  acceptable fix, not a verdict — the model converges in one round or it burns
+  the cap guessing. v2.1.145+ inputs `background_tasks` / `session_crons` let a
+  blocking hook tell "the session is done" from "the session is merely paused
+  waiting for background work" — blocking a pause forces pointless
+  continuations and wastes the same cap.
 
 Full runnable skeletons: [references/hook_patterns.md](references/hook_patterns.md).
 
@@ -104,7 +122,7 @@ fi
 exit 0
 ```
 
-## Six rules that separate a working guard from a session-poisoning one
+## Rules that separate a working guard from a session-poisoning one
 
 Not style preferences — each is a specific failure we shipped and traced back.
 
@@ -247,6 +265,7 @@ different guard classes.** Take `cd ~/no-such-dir && TRIGGER`:
 |---|---|---|---|
 | **Token matcher** (is this a banned command form?) | the command text alone | **2, block** | `TRIGGER` is right there in the text; an unresolvable `cd` doesn't make it not-a-trigger, and if the guard goes quiet here it will also go quiet on `cd ~/real-dir && TRIGGER` |
 | **State deriver** (does the repo's staged set span domains?) | state read from disk | **0, allow** | `cd` fails, `&&` short-circuits, no commit ever happens — there is nothing to guard |
+| **Termination-state reader** (has the remediation already happened?) | a receipt / counter file (rule 7) | **0, allow** | an unreadable state file means the hook cannot know it already fired; failing closed here blocks forever with no remediation possible and no human-visible cause — that *is* the loop, and it is the one failure worse than a missed case |
 
 So decide which class your hook is *before* writing the row, and the harness's
 `unresolvable path` template row expects **2** because that template targets the
@@ -296,12 +315,297 @@ The tell for both: a branch that has never once fired in production while its
 tests are green. Print the raw pre-formatting classification and you will see
 which of the two you have.
 
+### 7. If the hook **demands remediation**, prove the loop terminates
+
+A hook that **blocks** (exit 2) until X is done — Stop hooks especially, since
+they re-fire on every subsequent stop — is not a check, it's a **feedback loop**.
+(A hook that merely *injects* a demand and exits 0 has no loop at all: nothing
+re-evaluates. That is mechanism 0 below, and it is the right default more often
+than people reach for it.)
+
+```
+condition T is true → hook demands remediation R → model performs R → T checked again
+```
+
+**If completing R can make T true again, the loop does not converge.** Nothing
+errors, nothing crashes; it burns round after round until the harness's
+8-consecutive-block ceiling ends the turn — or a human interrupts first, which
+is what usually happens because each round is a *complete* remediation cycle
+(dispatch, wait, adopt, edit), not a cheap retry. That ceiling is a backstop
+against a runaway session, not a design: reaching it means the turn ends with
+the violation still standing and the model's last 8 rounds spent on work nobody
+asked for. "It eventually stops" is not termination in any sense you want. `stop_hook_active` does *not* save you here — that field covers
+exactly **one layer of re-entry** ("the stop I just blocked is being retried").
+It says nothing about the *cross-turn* case, where the model genuinely goes off
+and does R (real work, many tool calls), then stops naturally: that is a brand
+new Stop, the field is `false`, and the hook fires again on the same grounds.
+
+**The test, borrowed from termination proofs in program verification** — a [loop
+variant / ranking function](https://en.wikipedia.org/wiki/Loop_variant): write
+down a quantity **V** mapping into a well-founded order (usually just ℕ), and
+show that **V strictly decreases across every `trigger → remediate → re-check`
+cycle**. No V, no termination proof — don't register the hook.
+
+**V is a design-time obligation, not code** — you never compute it in the hook.
+What ships is the *predicate* (the mechanisms below); V is the argument that the
+predicate converges. Put it where the next reader will trip over it — the script
+header:
+
+```bash
+# TERMINATION: V = 1 - exists(<receipt path>)
+# decreased by: R writes the receipt; nothing R does afterwards can remove it.
+```
+
+"Show it decreases" is three concrete questions, and the answers go in that
+comment:
+
+1. **What does R change?** Name the exact file / field / timestamp.
+2. **Is that thing an operand of T?** If yes, and R moves it back toward "fire" →
+   there is no V.
+3. **After R, what is the smallest input that makes T true again?** If the answer
+   is "the same input I just fired on" → there is no V. Redesign the predicate;
+   do not retune the threshold.
+
+**A real counter-example.** A Stop hook required an independent review before
+compounding artifacts (rule files, skills, other hooks) could be pushed:
+
+- **T** (the condition that makes the hook **fire**) = "there are edits no review
+  has covered", implemented as the timestamp comparison
+  `last_edit > last_review` (`last_edit` = newest mtime across the artifact set,
+  `last_review` = mtime of the review record — two single numbers, which is
+  exactly what makes the comparison feel safe)
+- **R** = dispatch an independent reviewer
+
+But a review that is worth running **has output**: its findings get adopted **by
+the same agent, immediately, before it next tries to stop** → that produces new
+edits → `last_edit` moves past `last_review` → **T is true again**. (If a human
+adopted them later, out of band, there would be no loop — the loop needs the
+remediation and the re-check inside one agent's turn, which is exactly what a
+Stop hook guarantees.) There is no V — remediation doesn't decrease a quantity, it *resets*
+one. The only escape is "review, then change nothing," which is precisely the
+case where dispatching the reviewer was pointless. Observed: three consecutive
+rounds, each a complete review-and-adopt cycle, exited only by the user saying
+stop.
+
+Two things make this hard to see. **The comparison looks perfectly reasonable in
+isolation** — "the review must be newer than the last edit" is exactly what you'd
+write. And that sentence is the **pass** condition — T is its negation. Copy it
+into your head as-is, without that negation, and you are reasoning about the
+wrong operand for the rest of the analysis; keep T oriented as the **fire**
+condition. (Writing the *code* as an early-exit guard clause — `… && exit 0` — is
+normal shell style and not what this is about; the discipline is about which
+orientation you reason in. And note equality: same-second mtimes land on the pass
+side, i.e. fail-open, which matches what this rule requires of state reads below.) Run the checklist
+above and it falls out mechanically: R changes `last_edit` (Q1); `last_edit` is
+an operand of T (Q2); the smallest input that re-fires T is the remediation's own
+output (Q3) → no V.
+
+**Pick by axis first, then by order — these are not five strengths of one thing.**
+0 decides *whether to block at all*; 1 decides *which event to hang it on*; 2–4
+are the *predicate's shape* (choose 1 and you still need one of 2–4). The 0→4
+order is "how completely the loop is removed", and it runs **inversely to how
+much you can enforce** — so take the first one that still gives you the
+enforcement you actually need, not simply the first one.
+
+0. **Don't block — inject.** If the demand is advisory (you want the model to
+   *consider* R, not to be unable to finish without it), print it and exit 0.
+   Nothing re-evaluates, so there is no loop to prove terminating. Right default
+   for anything short of Tier-0, and the cost is honest: a reminder can be
+   ignored, so say in the header that it is fail-open — rule 4's point stands,
+   a gate the subject can walk past is not a gate. If you need a *gate*, use 2
+   and pay for the receipt. Injection channel: Pattern D.
+   ⚠️ **This option does not exist on Stop** — and rule 7's main subject *is*
+   Stop, so read this before reaching for it. On Stop, `exit 0` means "let the
+   turn end", so there is no later reasoning step for the text to land in; and
+   `hookSpecificOutput.additionalContext` counts toward the same 8-block ceiling
+   as `exit 2` (see the hook-types section), i.e. it is also a block. Stop has
+   exactly two modes: gate, or silence. Choosing mechanism 0 on Stop therefore
+   means **changing the event** — hang the injection on the tool call that
+   produced the artifact (PostToolUse, Pattern D) — or admitting you wanted a
+   gate after all, and going to mechanism 2.
+   ⚠️ **"No loop" holds only if R isn't your own matcher's target.** An injector
+   on `Bash` that tells the model to run `git ls-remote` fires again on that very
+   command, and re-injects. Same shape, softer — the model can ignore it, so
+   there is no forced iteration, but it is broadcast-on-repeat rather than
+   nothing. Check that the R you recommend is not an action this hook matches.
+
+1. **Move the check to the action boundary.** If what you want to gate is an
+   *action* — a push, a publish, a delete — guard **the action** with PreToolUse
+   instead of guarding **the turn** with Stop. **Stop-hook remediation loops are
+   often action gates attached to the wrong event**, and this is the concrete
+   case of "Stop is the odd one out, and the one most often reached for by
+   mistake" from the hook-types section.
+   **Be precise about what this buys.** PreToolUse only re-fires when the model
+   *voluntarily retries the gated action*, and the model can always decline and
+   end its turn normally. So it guarantees **the turn terminates** — the worst
+   case drops from "the turn can't end" to "this action doesn't happen". It does
+   **not** make a non-converging predicate converge: take the counter-example
+   above, move it to PreToolUse unchanged, and the loop survives intact (push →
+   blocked → review → findings adopted → new edits → retry → `last_edit` is ahead
+   again → blocked). That case is sick in its **predicate**, not in its event, so
+   you still pick a shape from 2–4. Note also that PreToolUse has **no** harness
+   backstop — the 8-block ceiling in the hook-types table is Stop-only — so a
+   self-resetting predicate moved here has *fewer* safety nets, not more.
+   ⚠️ Two shapes where this mechanism is the wrong answer: **R has to be done
+   with the very tool you gated** (a guard on `Edit` demanding you fix a file
+   header first — deadlock, nothing can ever satisfy it), and **an action that
+   recurs within one session** (a `git push` gate in a session that pushes five
+   repos = five full demands; that is the density problem in the war story
+   below, and mechanism 1 doesn't exempt you from it).
+
+2. **Make "already remediated" an existence fact, not a temporal one — and key it
+   on the thing that needed remediating.** Have R land an artifact and test *does
+   it exist*; the key is what makes this work:
+
+   ```bash
+   KEY=$(git rev-parse HEAD 2>/dev/null || printf 'nogit')   # or a hash of the
+   RECEIPT="${TMPDIR:-/tmp}/my-guard.${KEY}.ok"              # reviewed content
+   [ -f "$RECEIPT" ] && exit 0            # V = 1 - exists, for THIS key
+   ```
+
+   `V = 1 - exists` is **per key**: it decreases exactly once per key and can
+   never be pushed back up *for that key*. New work mints a *new* key — that is a
+   new demand, not a re-arm. Both naive keyings fail: one global path makes the
+   hook fire once per machine and then sit dead forever with zero signal, and a
+   time-based key is the temporal predicate this rule exists to forbid. **A
+   temporal predicate is almost always the wrong shape**, because the remediation
+   you demanded is usually what moves the operand you compare against.
+   ⚠️ If the **model** can create the receipt, this is rule 4's retired
+   `GUARD_OK=1` escape hatch wearing a new hat. Have it written by something the
+   model doesn't drive (the reviewer subagent's own output file, a git note), or
+   accept that the hook is advisory and say so in its header.
+
+3. **A ceiling on repetitions.** At most N reminders per session per target —
+   `session_id` is the only stable key for this (it is on every event; see the
+   JSON contract in Pattern references):
+
+   ```bash
+   SID=$(printf '%s' "$INPUT" | python3 -c "import sys,json;print(json.load(sys.stdin).get('session_id','nosid'))" 2>/dev/null || echo nosid)
+   CNT="${TMPDIR:-/tmp}/my-guard.${SID}.count"
+   N=$(cat "$CNT" 2>/dev/null || echo 0); N=$((N+1)); printf '%s' "$N" > "$CNT"
+   [ "$N" -gt 3 ] && exit 0                # V = 3 - N, reaches 0 and stays
+   ```
+
+   Crude, and deliberately blind to whether R actually happened — but *finite*,
+   which is the property that was missing. Do **not** substitute `$$` or `$PPID`:
+   each hook run is a fresh process, so those change every invocation and the
+   counter never accumulates. Print the count ("reminder 2 of 3") — see the war
+   story below for why that wording earns its place.
+
+4. **Hysteresis / a cool-down window** (the control-theory answer to
+   [alert flapping](https://utcc.utoronto.ca/~cks/space/blog/sysadmin/HysteresisMeaningAndAlerts)):
+   after firing, suppress re-evaluation for a window — a stamp file plus
+   `[ $(( $(date +%s) - <stamp mtime> )) -lt 900 ] && exit 0` (mtime is
+   `stat -f %m` on BSD/macOS, `stat -c %Y` on GNU — as are the other snippets
+   here). Right for conditions that *oscillate around a threshold*; **wrong** for
+   conditions that remediation **resets** — those need 2 or 3.
+   ⚠️ **Hysteresis supplies no V — it is a rate limiter, not a termination
+   proof.** The loop ends only if the condition subsides on its own, and what
+   ends it then is the world, not your hook. So its `# TERMINATION:` line has to
+   name that external fact ("by the time the stamp expires, X has been resolved
+   by &lt;whom&gt;"). If you can't write that line honestly, what you needed was 2
+   or 3. (Family resemblance worth seeing: mechanism 0 is the limit case of both
+   — mechanism 3 with the ceiling set to 0, or mechanism 4 with the window set to
+   ∞. They differ in enforcement, not in termination.)
+
+**Failure direction for the state itself (rule 5): fail *open*.** If the receipt
+or counter can't be read or written — unwritable `TMPDIR`, sandbox, full disk —
+**allow the stop**. This is the one place in this skill where fail-open is
+mandatory rather than a judgement call: a termination mechanism that cannot read
+its own state and blocks anyway *is* the loop, now with no human-visible cause.
+
+**Prose in the demand text does not substitute for a converging predicate.** A
+hook whose message says "if you judge this unnecessary, just finish again" still
+costs a full remediation cycle every round, because a model that has been told it
+must do X will usually do X. The escape hatch has to be in the **predicate**, not
+in the advice.
+
+**The testing requirement, and the easiest thing here to skip:** the self-test
+needs an **"after remediation"** case — not just "fires when it should," but
+**"stops firing once R is complete."** Without it, non-termination is
+*structurally invisible*: every fixture is one isolated point-in-time judgment,
+while non-termination is a property of the **sequence**. A suite that only
+checks single points has zero coverage of convergence no matter how many cases
+it has — which is how a hook can ship with a green self-test and still loop on
+its first real encounter. The row pair that *can* see it (receipt absent → fires,
+receipt present → quiet, with the setup/teardown a plain `run` row can't express)
+is templated in `scripts/test_hook.sh` under "AFTER-REMEDIATION ROWS"; symptom →
+cause → fix is pitfall #16.
+
+**Termination proved ≠ it *feels* terminated (2026-07-25 war story).** A Stop
+hook with a correct existence-fact V fired three times in one session — each
+fire a legitimate *new* push from a *different* completed task, the mechanism
+working exactly as designed — and the user's experience was still "why is this
+thing stuck in a loop?" (No contradiction with mechanism 2's "nothing R does can
+push it back up": **V is per key** — three distinct keys, three separate one-way
+decreases. That is also the diagnostic when you can't tell which situation you
+are in: if each fire carries a *new* key, the mechanism is right and the density
+is the problem; if repeated fires share the *same* key — or the predicate has no
+key at all because it compares timestamps — you are in the counter-example above
+and the predicate needs replacing.) Three independent remediation cycles back-to-back are
+indistinguishable from a loop from the outside. The variant-proof settles the
+mechanism; it says nothing about **how many distinct remediations a session can
+demand**. If your domain produces that density (compounding artifacts ship
+several times a day here), consider pairing mechanism 2 (the existence fact) with
+mechanism 3 (a session-scoped ceiling), or accept the optics deliberately and say so in the
+hook's output — "reminder 2 of at most N" reads as progress, an unadorned
+repeat reads as a loop.
+
+### 8. Waiting needs the same proof — notifications are advisory, polling must carry a budget
+
+Rule 7 covers loops a *hook* creates. The same shape recurs with no hook
+involved: **an agent polling for an asynchronous result** — a subagent's
+report, a background task's completion notice, a CI status. Real session
+(2026-07-25): subagent completion notices arrive through a mailbox that can
+delay or drop them; three separate agents finished their work while the
+notification sat undelivered, and the waiting agent burned a dozen
+`sleep 240` + nag cycles over ~40 minutes until the human asked what it was
+even doing. Nothing errored; the loop just had no variant.
+
+Rule 7's mechanisms map over — the first two directly; hysteresis has no
+analogue (a wait doesn't oscillate), and its slot is taken by a trap specific to
+waiting:
+
+1. **Poll the artifact, not the notification.** If what you actually need is a
+   result (a file, a git ref, an API state, a row in a DB), wait on *that*, not
+   on "did it say it's done." The notification is a hint; the artifact is the
+   fact. An existence check terminates the moment the fact lands, regardless of
+   whether any message ever arrives.
+2. **Every wait carries a budget, chosen when the loop is written.** Max rounds
+   × interval (e.g. 3 × 4 min), and a degradation path that exists *before* the
+   first sleep: do it yourself, ask the user, or mark it pending and move on to
+   other work. "Wait indefinitely and see" is not a degradation path — it's
+   the loop.
+3. **Delivery protocols are advisory, not mechanism.** "Report back via
+   SendMessage when done — silence counts as incomplete" is worth writing, but
+   it governs whether the agent *sends*, not whether the mailbox *delivers*.
+   Three agents with the protocol in their prompt all went silent in one
+   session. Design the wait as if the notification may never arrive — because
+   it may not.
+
+Two adjacent traps, both paid for in the same session: **TaskStopping a
+"stuck" agent that is actually mid-work** — mailbox delay is not idleness;
+one reviewer doing 20 minutes of real corpus testing was killed as "stuck"
+minutes before delivering. And **`--dry-run`-style probes of the wait itself**:
+before concluding the other side is silent, confirm your own observation
+channel works (in that session, System Events window-counting returned a
+confident 0 for a dialog that was on screen — a permission failure masquerading
+as evidence).
+
 ## Build order (in sequence)
 
 1. **Confirm it's a real recurrence**, not hypothetical — else don't build it.
+   If the hook will **demand a remediation** rather than just block, write its
+   termination variant **V** into the script header as a `# TERMINATION:` line
+   (rule 7) before any logic — and first check whether the thing you're gating is
+   an *action*, in which case a PreToolUse guard on that action removes the loop
+   instead of taming it. Can't name a quantity that strictly decreases per
+   `trigger → remediate → re-check` cycle? The design is non-terminating — fix the
+   design, not the regex.
 2. Write the script in the SSOT dir; `chmod +x`.
-3. **Detection** with shlex token-level matching (rule 1).
-4. **`bash -n` + `test_hook.sh`** with trigger AND healthy-lookalike cases (rule 2) — do not register until green. Include the shapes that carry an unexpanded path (`cd ~/elsewhere && …`, rule 5) and, if the hook has a human gate, a forced-decline row (Pattern B, "Make the gate testable").
+3. **Detection** with shlex token-level matching (rule 1), keyed on a fact the
+   world can answer rather than your own rendering or a naming convention (rule 6).
+4. **`bash -n` + `test_hook.sh`** with trigger AND healthy-lookalike cases (rule 2) — do not register until green. Include the shapes that carry an unexpanded path (`cd ~/elsewhere && …`, rule 5); if the hook has a human gate, a forced-decline row (Pattern B, "Make the gate testable"); and if it demands remediation, the **after-remediation row pair** — fires without the receipt, quiet with it (template in `scripts/test_hook.sh`; rule 7 — point-in-time fixtures structurally cannot see non-termination).
 5. **Symlink** into `~/.claude/hooks/` (rule 3).
 6. **Register** in main `settings.json` + converge profiles (rule 4).
 7. For a Tier-0/irreversible action, add the **human-confirmation release gate** (rule 4).
@@ -319,8 +623,11 @@ under-registration, and a path parsed from command text keeping its literal `~` 
 the guard fails **open** with no symptom at all (#10 — the one you cannot wait to
 notice, because silence is its only sign), a branch reading the hook's own
 truncated display string (#12) or keyed on a naming convention this repo doesn't
-follow (#13) — both invisible while the suite asserts only exit codes (#14) — and
-command text that merely *contains* a redirect counted as a write (#15).
+follow (#13) — both invisible while the suite asserts only exit codes (#14) —
+command text that merely *contains* a redirect counted as a write (#15), and a
+hook whose **demanded remediation re-arms it**, looping with a green self-test
+because point-in-time fixtures structurally cannot see non-termination (#16,
+rule 7).
 
 **The harness is the hidden variable — use `scripts/test_hook.sh`, don't hand-roll
 one.** Every hand-rolled failure mode below produces the *same* output as a clean
