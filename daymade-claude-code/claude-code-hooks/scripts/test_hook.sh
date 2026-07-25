@@ -112,6 +112,25 @@ run "non-bash-tool"  '{"tool_name":"Read","tool_input":{"file_path":"/x/TRIGGER.
 #      GIT_GUARD_OSASCRIPT=false GIT_GUARD_TTY=/dev/null bash test_hook.sh <hook>
 #    Never provide an env var that *grants* approval — that recreates the retired
 #    static-escape-hatch anti-pattern.
+#
+# ── AFTER-REMEDIATION ROWS — required whenever the hook DEMANDS something (rule 7).
+#    Point-in-time fixtures are structurally blind to non-termination: each `run`
+#    row asks "given this event, fire or not?", while non-termination is a property
+#    of the SEQUENCE. This pair is the only row type that can see it.
+#    A plain `run` line is NOT enough — the state the hook judges lives OUTSIDE the
+#    JSON (on the filesystem), so the rows need setup/teardown around them:
+#
+#      EVT='{"last_assistant_message":"…text that triggers the demand…"}'
+#      RECEIPT="${TMPDIR:-/tmp}/my-guard.$(printf %s "$EVT" | shasum | cut -c1-12).ok"
+#      rm -f "$RECEIPT";  run "demands R (no receipt)"       "$EVT" 2
+#      : > "$RECEIPT";    run "quiet after R (receipt present)" "$EVT" 0
+#      rm -f "$RECEIPT"
+#
+#    Derive RECEIPT with the SAME key the hook uses. If you can't work out that key
+#    from the hook's source, the key is undiscoverable — and that is the bug, not a
+#    testing inconvenience. If the second row ALSO returns 2, the predicate is
+#    temporal rather than existence-based: it WILL loop in production (pitfall #16).
+#    Fix the predicate, not the fixture.
 # ──────────────────────────────────────────────────────────────────────────────
 #
 # ── EVENT SHAPES OTHER THAN PreToolUse (the payload differs per event) ────────

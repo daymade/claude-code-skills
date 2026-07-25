@@ -23,10 +23,19 @@ The hook reads one JSON object on **stdin**. The fields you care about:
 ```jsonc
 // PreToolUse / PostToolUse
 {
+  "session_id": "…",                         // stable for the whole session
+  "cwd": "…",
+  "hook_event_name": "PreToolUse",
   "tool_name": "Bash",                       // or "Agent", "WebFetch", "Edit", …
   "tool_input": { "command": "…" }           // Bash: .command; Agent: .prompt; Edit: .file_path/.new_string
 }
 ```
+
+**`session_id` is the only correct key for per-session state** a hook keeps
+(counters, cool-downs — rule 7 mechanisms 3 and 4). Nothing else is stable:
+`$$` / `$PPID` change on every invocation because each hook run is a fresh
+process, and a fixed path makes the state global, which turns a one-shot guard
+into a permanently dead one.
 
 Extract them defensively (never assume the shape — a parse failure should
 **allow**, not crash):
@@ -533,6 +542,19 @@ Three things worth calling out beyond what the comments above already say:
   pattern.** Every other mistake in this hook fails toward "block too much" or
   "miss one case"; getting this one wrong in the permissive direction fails
   toward "silently do nothing, forever, with zero error signal."
+- **…and handling it correctly still does not make the hook terminate.** The
+  field covers **one layer of re-entry** — the stop you just blocked being
+  retried. It does nothing for the *cross-turn* loop, where the model actually
+  goes and does what you demanded (many tool calls, a natural stop afterwards)
+  and arrives at a **fresh** Stop with `stop_hook_active: false`. If this hook
+  **demands a remediation** rather than merely reporting, the predicate itself
+  must converge: prefer an **existence test** on an artifact the remediation
+  lands (`does the record exist` — sets once, can't be unset) over a **temporal
+  test** (fire when `last_offense > last_remediation`), because the remediation
+  you asked for is usually what moves the operand you are comparing against. Full analysis, the three
+  converging mechanisms, and the self-test case that catches it:
+  SKILL.md rule 7 and
+  [hook_pitfalls.md](hook_pitfalls.md#16-the-remediation-the-hook-demands-re-arms-the-hook-a-loop-with-no-variant).
 - **Wrap every python3 subprocess call in the same `2>/dev/null || <fallback>`
   pattern, not just some of them.** An inconsistency here doesn't change the
   block-vs-allow decision (a hook built this defensively is already fail-open
