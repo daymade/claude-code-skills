@@ -352,8 +352,8 @@ function showOverride() {
   updateOverrideScope();
 }
 
-/* 整段替换范围明示（2026-07-25 #24 战例：original 拖了整句（约 6 字），
- * 用户 override 一个 3 字品牌名 → 整句被吞。override 的 file_edit 永远把
+/* 整段替换范围明示（2026-07-25 #24 战例：original 拖了整句，
+ * 用户 override 一个短品牌名 → 整句被吞。override 的 file_edit 永远把
  * original_text 整段换成输入值，所以输入框上方必须始终显示范围；短替换
  * （输入 ≤ 原文一半）多半是只想换其中一个词，加警告引导输入完整片段。 */
 function updateOverrideScope() {
