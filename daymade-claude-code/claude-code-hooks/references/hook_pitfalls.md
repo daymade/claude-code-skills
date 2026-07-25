@@ -582,3 +582,7 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
     action with PreToolUse, or test an existence fact keyed on the thing that
     needed remediating — and add the after-remediation row pair that a
     point-in-time suite structurally cannot have.
+14. Did it catch the first violation and **silently never mention the second one
+    from the same reply**? → first-only reporting (#17): the honored retry round
+    is a full pass-through, so collect every finding before printing and assert
+    both hits in a two-violations fixture.

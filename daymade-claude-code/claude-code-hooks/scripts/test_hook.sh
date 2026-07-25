@@ -158,8 +158,10 @@ run "non-bash-tool"  '{"tool_name":"Read","tool_input":{"file_path":"/x/TRIGGER.
 #       run "stop_hook_active" '{"stop_hook_active":true,"last_assistant_message":"...trigger text..."}' 0
 #     And if the guard can find MULTIPLE violations in one reply: a
 #     two-violations row asserting BOTH appear in stderr — the blocked retry
-#     round passes unreported findings permanently (pitfall #17):
-#       says "reports all hits" '{"last_assistant_message":"TRIGGER and TRIGGER2"}' "TRIGGER2" yes
+#     round passes unreported findings permanently (pitfall #17). Use two
+#     clearly distinct tokens (TRIGGER2 CONTAINS "TRIGGER" — a substring-style
+#     detector would make this row pass for the wrong reason):
+#       says "reports all hits" '{"last_assistant_message":"TRIGGER and SECONDHIT"}' "SECONDHIT" yes
 #
 #   UserPromptSubmit — hook reads the user's prompt:
 #     run "prompt-trigger" '{"prompt":"...text under test..."}' 2

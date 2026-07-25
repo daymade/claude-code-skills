@@ -442,11 +442,11 @@ INPUT=$(cat)                                     # is explicitly ||-guarded inst
 # check treats it as an already-blocked retry and silently, permanently
 # disarms the guard for that turn. Test this explicitly: a payload with
 # `"stop_hook_active": "false"` (string) must NOT be treated as active.
-ACTIVE=$(HOOK_JSON="$INPUT" python3 - <<'PY'
+ACTIVE=$(HOOK_JSON="$INPUT" python3 - 2>/dev/null <<'PY'
 import json, os
 print(json.loads(os.environ['HOOK_JSON']).get('stop_hook_active') is True)
 PY
-) 2>/dev/null || exit 0
+) || exit 0
 [ "$ACTIVE" = "True" ] && exit 0
 
 # Prefer last_assistant_message (official docs: use it INSTEAD OF the
@@ -455,7 +455,7 @@ PY
 # shape is a plain string, but defensive extraction costs nothing and the
 # SAME helper is genuinely required for the transcript fallback below, where
 # message.content really is a list of typed blocks in practice.
-TEXT=$(HOOK_JSON="$INPUT" python3 - <<'PY'
+TEXT=$(HOOK_JSON="$INPUT" python3 - 2>/dev/null <<'PY'
 import json, os, sys
 
 d = json.loads(os.environ['HOOK_JSON'])
@@ -496,14 +496,14 @@ if not text:
 
 print(text)
 PY
-) 2>/dev/null || exit 0
+) || exit 0
 [ -n "$TEXT" ] || exit 0
 
 printf '%s' "$TEXT" | grep -qw 'TRIGGER' || exit 0    # fast path, same idea as Pattern A —
 # but NOT the shlex walker below this line: TEXT is free-form prose, not a
 # shell command, so match with substring/regex per the JSON event contract's
 # "shlex is for shell commands" rule above.
-HITS=$(HOOK_TEXT="$TEXT" python3 - <<'PY'
+HITS=$(HOOK_TEXT="$TEXT" python3 - 2>/dev/null <<'PY'
 import os, re
 t = os.environ['HOOK_TEXT']
 # ... precise detection here — regex/substring over free text ...
@@ -514,7 +514,7 @@ t = os.environ['HOOK_TEXT']
 hits = [m.group(0) for m in re.finditer(r'TRIGGER', t)]
 print(' / '.join(hits[:5]))
 PY
-) 2>/dev/null || HITS=''
+) || HITS=''
 
 if [ -n "$HITS" ]; then
   # This message is read by the MODEL, not the user — once Stop blocks, the
@@ -562,7 +562,12 @@ Three things worth calling out beyond what the comments above already say:
   same Stop input also carries `background_tasks` / `session_crons`
   (v2.1.145+): a blocking hook can tell "session is done" from "session merely
   paused for background work" — blocking a pause burns the cap on pointless
-  continuations. For the gate-vs-guidance channel choice
+  continuations. One ownership nuance the docs state and the flag's name
+  hides: `stop_hook_active` is set by **any** stop hook's block, not
+  specifically yours ("already continuing as a result of **a** stop hook") —
+  with several Stop hooks registered, another guard's block consumes the same
+  retry round, one more reason the first block must be complete: you cannot
+  count on a second one. For the gate-vs-guidance channel choice
   (`decision:"block"`/exit 2 vs `hookSpecificOutput.additionalContext`), see
   SKILL.md's Stop bullet — both share these same protections.
 - **…and handling it correctly still does not make the hook terminate.** The
@@ -579,13 +584,17 @@ Three things worth calling out beyond what the comments above already say:
   loop rather than taming it), and the self-test case that catches it:
   SKILL.md rule 7 and
   [hook_pitfalls.md](hook_pitfalls.md#16-the-remediation-the-hook-demands-re-arms-the-hook-a-loop-with-no-variant).
-- **Wrap every python3 subprocess call in the same `2>/dev/null || <fallback>`
-  pattern, not just some of them.** An inconsistency here doesn't change the
-  block-vs-allow decision (a hook built this defensively is already fail-open
-  by construction — nothing prints before a match succeeds), but the
-  unguarded call leaks a raw Python traceback straight to the model's stderr
-  on any internal crash, instead of degrading cleanly to "no match" like the
-  guarded calls do.
+- **Wrap every python3 subprocess call with the same `2>/dev/null` + `|| <fallback>`
+  guard, and put the `2>/dev/null` INSIDE the `$(...)` on the python3 call.** The
+  outer form `X=$(python3 … ) 2>/dev/null || fallback` only suppresses on bash ≥5;
+  on bash 3.2 (macOS system bash) the redirection does not reach the command
+  substitution and a crash leaks the raw traceback to the model's stderr
+  (independent-review measurement, 2026-07-25: same snippet, 5.3.15 silent /
+  3.2.57 leaks). Placement costs nothing on new bash and is the only portable
+  form. The guard itself is unchanged either way: an inconsistency here doesn't
+  change the block-vs-allow decision (the hook is already fail-open by
+  construction), it only decides whether a crash degrades to "no match" cleanly
+  or noisily.
 
 ---
 
