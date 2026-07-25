@@ -61,13 +61,20 @@ match tokens/patterns; it can't judge whether a design is good).
   and surface it — the model can't "believe it committed" against injected truth).
 - **SessionStart** is for **health checks of the guard rails themselves** —
   silent when healthy, warn on breakage, always exit 0.
-- **`set -euo pipefail` vs `set -uo pipefail` — pick by contract, not by habit.**
-  A hook that may block (PreToolUse) wants `-e`: an unexpected failure aborting the
-  script is survivable, because the caller treats a non-0/2 exit as "proceed". A hook
-  whose contract is **ALWAYS exit 0** (PostToolUse injectors, SessionStart checks)
-  must drop `-e` — with it, one `grep` that legitimately finds nothing kills the hook
-  mid-way and the CLI surfaces a bare `Failed with non-blocking status code`. Rule of
-  thumb: **`-e` for hooks that decide, no `-e` for hooks that report** (pitfall #8).
+- **`set -euo pipefail` vs `set -uo pipefail` — pick by contract, and know there
+  are two ways to keep an always-exit-0 contract.** A hook that may block
+  (PreToolUse) wants `-e`: an unexpected failure aborting the script is
+  survivable, because the caller treats a non-0/2 exit as "proceed". A hook whose
+  contract is **ALWAYS exit 0** (PostToolUse injectors, SessionStart checks) has
+  two honest shapes: (a) **drop `-e`** and `||`-guard every risky command —
+  with `-e` on, one `grep` that legitimately finds nothing kills the hook
+  mid-way and the CLI surfaces a bare `Failed with non-blocking status code`
+  (pitfall #8, Pattern E's shape); or (b) **keep `-e` and add `trap 'exit 0' ERR`**
+  so any failure still converts to exit 0 while `-e` keeps guarding the plumbing
+  (`git-commit-headcheck`'s production shape, Pattern D). Either is correct;
+  what you cannot do is `-e` alone with no trap and no `||`-guards. Rule of
+  thumb: **`-e` for hooks that decide; for hooks that report, drop `-e` or trap
+  it** (pitfall #8).
 - **Stop is the odd one out, and the one most often reached for by mistake**:
   it's the *only* hook type that can react to what the model **itself just
   generated** (its own reply text). Every other hook type — including
@@ -81,7 +88,7 @@ match tokens/patterns; it can't judge whether a design is good).
   the trigger pattern. This is a category mistake, not a tuning problem — no
   amount of regex refinement on the wrong event fixes it. Full contract
   (`last_assistant_message` vs `transcript_path`, the anti-loop check) in
-  Pattern E below.
+  Pattern E in [references/hook_patterns.md](references/hook_patterns.md).
 - **Stop has two block channels with identical loop protections — pick by
   intent, and make the first (only) block carry everything.** `decision:
   "block"` + `reason`, or plain exit 2 + stderr, shows as a hook *error* — for
@@ -152,6 +159,22 @@ false-blocks is matching on the raw command string.
   [references/hook_patterns.md](references/hook_patterns.md).
 - Corollary: `echo "…TRIGGER…"`, `grep TRIGGER`, `# TRIGGER`, `man TRIGGER` must
   all pass. Your test set MUST include these mention-not-execute cases.
+- **Corollary — exempt `git` write segments before they reach the walker.** A
+  commit message is arbitrary data, and the whole message text reaches your
+  command-position walk as pseudo-command-text — `git commit -F - <<EOF` with a
+  body quoting `foo|TRIGGER` lands `TRIGGER` in command position, and the guard
+  blocks its own fix commit (pitfall #7 is exactly this, shipped). Any Bash guard
+  that inspects command strings must skip segments whose head is `git` +
+  `commit`/`rebase`/`tag`/`am`/`cherry-pick` — and do it at the whole-command
+  level, before any line splitting (Pattern A shows the order; the production
+  version is `lib-git-commit-detect`'s adjacency check).
+- **Corollary — the walker is two-stage for a reason.** `whitespace_split=True`
+  treats newlines as ordinary whitespace, so a multiline block
+  (`cd /x\ngit add\nTRIGGER -y`) collapses into one segment headed by `cd` and
+  the trigger is never in command position — replayed trigger rate 0 on real
+  transcripts (pitfall #11). Split on newlines as text first, then shlex-walk
+  each line (both Pattern A and the walker section already do this); the
+  heredoc-body residual and when to accept it are #11's call.
 - **But shlex isn't a silver bullet, and *what* you detect changes whether
   fail-open is safe.** `shlex.split()` itself throws `ValueError` on an unbalanced
   quote — a multi-line `git commit -m "…` message with a `#` or an unclosed quote
@@ -165,6 +188,11 @@ false-blocks is matching on the raw command string.
   narrow **regex** (`git` and `commit` as separate words, any flag tokens between)
   that's immune to multi-line-quote breakage; reserve the shlex walker for the
   *command-position / modifier* checks where fail-open is the safe direction.
+  (The boundary: regex when the predicate is "is this a specific common command
+  at all" — `git commit`, `git push` — whose own message/arguments are what breaks
+  tokenizing; walker when the predicate is "is a *banned* command or modifier in
+  command position" — there the banned thing is rare and a ValueError fail-open
+  errs safe, Rule 1's direction.)
 
 ### 2. Test with **bash -n + a real JSON event, end-to-end, BEFORE registering**
 
@@ -196,8 +224,8 @@ the actual failing JSON case). The escalation is a multi-lens agent-team
 review where every finding must be reproduced by *executing* a real payload
 against the live script, not by reading the code and agreeing — this is the
 general Counter Review methodology
-([skill-development-methodology.md](../../daymade-skill/skill-creator/references/skill-development-methodology.md)
-Phase 6), applied to a hook instead of a skill. In one such pass, 3 lenses (matching
+(skill-creator's `skill-development-methodology` reference, Phase 6), applied to
+a hook instead of a skill. In one such pass, 3 lenses (matching
 logic / shell-embedding safety / event-contract robustness) surfaced 13
 confirmed, independently-reproduced bugs and 1 finding whose own cited
 evidence turned out to be a hallucinated doc quote — caught only because the
@@ -208,22 +236,30 @@ rather than trust the citation.
 
 Real script in a version-controlled dir, **symlinked** into the hooks dir Claude reads:
 ```
-~/scripts/claude-hooks/<name>.sh      # SSOT (git: private repo)
+~/scripts/claude-hooks/<name>.sh      # SSOT (this setup: a private git repo)
 ~/.claude/hooks/<name>.sh             # symlink → SSOT
+
+# install / recover:
+ln -s ~/scripts/claude-hooks/<name>.sh ~/.claude/hooks/<name>.sh
 ```
 A `~/.claude` reinstall wipes the hooks dir; the symlink target survives, and
 recovery is one `ln -s`. A dangling symlink disables a Tier-0 guard with **zero
-signal** — which is why a SessionStart health check exists (rule 4).
+signal** — which is why a SessionStart health check exists (rule 4; runnable
+skeleton: Pattern C in [references/hook_patterns.md](references/hook_patterns.md)).
 
 ### 4. Registration is per-profile — converge ALL profiles, release via a HUMAN gate
 
 - A hook in `~/.claude/hooks/` protects **nothing** if the *active profile's*
   `settings.json` doesn't call it. Multi-profile users ran with zero guards until
-  every profile was converged. Register in the **main** profile's `settings.json`
-  (PreToolUse → matcher `Bash` → your hook), then converge the rest (this setup
+  every profile was converged. Register in the **main** profile's settings
+  (`~/.claude/settings.json` in this setup; the Registration section of
+  [references/hook_patterns.md](references/hook_patterns.md) has the exact jsonc
+  shape) — PreToolUse → matcher `Bash` → your hook — then converge the rest (this setup
   uses `sync-profile-settings.py --all`, owned by the `claude-switch-models-setup`
   skill). A SessionStart health check greps each profile for the Tier-0 guards to
-  catch drift.
+  catch drift. Settings edits are picked up by the CLI's file watcher (official
+  hooks docs), so registration is live without a restart — confirm by watching
+  the guard fire on a safe probe, or at next session's health-check line.
 - **If the guard needs a release valve, make it a *human* gate, not an env var.**
   A static `GUARD_OK=1` escape hatch is no gate — the model can set the env var
   itself. Replace with: a native macOS dialog (`osascript` — model can't click)
@@ -619,7 +655,9 @@ everything), awk-split false-blocks (rule 1), corrupted hook poisoning the sessi
 (rule 2), a quote or backtick inside a Python *comment* silently corrupting a
 `python3 -c "…"` block with no syntax error (pitfall #9 — use the quoted-heredoc
 form from Pattern E instead), static env escape hatch (rule 4), multi-profile
-under-registration, and a path parsed from command text keeping its literal `~` so
+under-registration, a commit message reaching the walker as pseudo-command-text
+and false-blocking your own fix commit unless `git` write segments are exempted
+(#7), and a path parsed from command text keeping its literal `~` so
 the guard fails **open** with no symptom at all (#10 — the one you cannot wait to
 notice, because silence is its only sign), a branch reading the hook's own
 truncated display string (#12) or keyed on a naming convention this repo doesn't
@@ -678,3 +716,4 @@ fire, suspect the row before the hook.
 - [references/hook_patterns.md](references/hook_patterns.md) — runnable skeletons for every hook type covered here, the shlex command-position walker, and the JSON event contract.
 - [references/hook_pitfalls.md](references/hook_pitfalls.md) — every real failure mode with symptom → cause → fix.
 - [scripts/test_hook.sh](scripts/test_hook.sh) — end-to-end test harness; copy it next to any new hook.
+- [scripts/test_hook.group-name-guard.sh](scripts/test_hook.group-name-guard.sh) — a worked harness instance for a real Stop guard (event shapes, `says` rows, both polarities).
