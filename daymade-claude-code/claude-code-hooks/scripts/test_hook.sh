@@ -76,6 +76,13 @@ run "no-space-pipe"  '{"tool_name":"Bash","tool_input":{"command":"ls|TRIGGER -x
 run "after-&&"       '{"tool_name":"Bash","tool_input":{"command":"foo && TRIGGER x"}}' 2
 run "env-prefix"     '{"tool_name":"Bash","tool_input":{"command":"FOO=1 TRIGGER x"}}' 2
 run "multiline"      '{"tool_name":"Bash","tool_input":{"command":"cd /x && ls\nTRIGGER -y"}}' 2
+run "wrapper-sudo"   '{"tool_name":"Bash","tool_input":{"command":"sudo TRIGGER -x"}}' 2
+run "wrapper-timeout" '{"tool_name":"Bash","tool_input":{"command":"timeout 5 TRIGGER -x"}}' 2
+run "abs-path"       '{"tool_name":"Bash","tool_input":{"command":"/usr/bin/TRIGGER -x"}}' 2
+run "comment-merge"  '{"tool_name":"Bash","tool_input":{"command":"echo hi # it'\''s fine\nTRIGGER -x"}}' 2
+#   ↑ wrapper/abs-path rows prove the walk is wrapper-aware (a bare-head check
+#   passes these); comment-merge proves word-start `#` comments don't open a
+#   phantom quote (`# it's` used to glue TRIGGER into echo's args → miss).
 #   ↑ the multiline row is not optional: shlex treats newlines as whitespace, so
 #   a one-stage walker collapses the block into one segment headed by `cd` and
 #   never sees TRIGGER (pitfall #11). It only passes if your hook splits on
@@ -90,6 +97,11 @@ run "redirect-target" '{"tool_name":"Bash","tool_input":{"command":"echo x > TRI
 run "sed-arg"        '{"tool_name":"Bash","tool_input":{"command":"sed s/TRIGGER/x/ file"}}' 0
 run "echo-mention"   '{"tool_name":"Bash","tool_input":{"command":"echo do not use TRIGGER"}}' 0
 run "grep-search"    '{"tool_name":"Bash","tool_input":{"command":"grep TRIGGER file"}}' 0
+run "introspect"     '{"tool_name":"Bash","tool_input":{"command":"command -v TRIGGER"}}' 0
+run "function-def"   '{"tool_name":"Bash","tool_input":{"command":"TRIGGER() { echo stub; }"}}' 0
+#   ↑ introspect row: `command -v` is a query, not an execution — a wrapper-aware
+#   walk without the introspection exception blocks it (the WORST direction).
+#   function-def row: `TRIGGER()` is a definition, not a call (measured false-block).
 run "comment"        '{"tool_name":"Bash","tool_input":{"command":"echo hi # TRIGGER bad"}}' 0
 run "unrelated"      '{"tool_name":"Bash","tool_input":{"command":"ls -la /tmp"}}' 0
 run "non-bash-tool"  '{"tool_name":"Read","tool_input":{"file_path":"/x/TRIGGER.txt"}}' 0
