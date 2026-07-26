@@ -155,21 +155,40 @@ Each of the three specialized workflows below ends with "**do not** continue rea
 
 So before routing into wrapper-skill / conversation-mining / artifact-corpus, answer one question: **does a skill already exist that this capability belongs to?**
 
-**Discover the roots, don't recall them.** A hand-maintained list of install locations is exactly the artifact that goes stale, and the root you forget is the one that bites. Run a search instead, then read what it finds:
+**Discover the roots, don't recall them.** A hand-maintained list of install locations is exactly the artifact that goes stale, and the root you forget is the one that bites.
+
+**Search for the file, not for a directory named `skills`.** Skill directories are named after the *skill* (`skill-creator/`, `<suite>/<skill>/`), so a source repo, a marketplace clone and a plugin cache contain no directory called `skills` at all — searching for that name silently skips them while appearing to work. Every skill has a `SKILL.md`; that is the layout-agnostic handle.
 
 ```bash
-# every skill directory on the machine, including per-project ones
-find ~ -maxdepth 6 -type d \( -name skills -path '*/.claude/*' -o -name skills -path '*/.codex/*' -o -name skills -path '*/.agents/*' \) 2>/dev/null
-# then grep their SKILL.md for the capability's vocabulary, not just its name
+# 1) discover
+find ~ -type f -name SKILL.md -not -path '*/node_modules/*' -not -path '*/.git/*' > /tmp/all-skills.txt
+
+# 2) VERIFY COVERAGE BEFORE TRUSTING IT — `2>/dev/null` and permission denials hide gaps
+#    silently, which is exactly how a sweep reports "nothing found" from a root it never
+#    entered. A 0 on any line you expect means the search did not go there:
+for r in '/.claude/skills/' '/plugins/marketplaces/' '/plugins/cache/' '/.claude-profiles/'; do
+  printf '%6s  %s\n' "$(grep -c "$r" /tmp/all-skills.txt)" "$r"
+done
+# ...and grep for your own skill source repos by path; they must appear too.
+
+# 3) filter by capability VOCABULARY, not by skill name — in every language the target
+#    skill might be written in (a skill whose body is Chinese will not match English terms):
+xargs grep -li -e '<domain-term>' -e '<域内术语>' < /tmp/all-skills.txt
 ```
 
-The roots that search reaches and a from-memory list usually misses: the source repos (a `claude-code-skills` checkout and any `-pro` sibling), `~/.claude/plugins/marketplaces/` (marketplace-installed suites — nothing in the source repos hints they are there), `~/.claude/skills/`, `~/.codex/skills`, `~/.agents/skills`, per-profile config homes, and — the one with no signposts at all — **every project's own `.claude/skills/`**.
+Expect step 3 to take a few seconds and to still return more than you want; narrow with terms specific to the capability rather than generic ones (`chart` matches everything, `stacked bar` does not).
+
+The roots this reaches — and that a from-memory list usually misses: the skill source repos (a `claude-code-skills` checkout and any `-pro` sibling), `~/.claude/plugins/marketplaces/` and `~/.claude/plugins/cache/` (marketplace-installed suites — nothing in the source repos hints they are there), `~/.claude/skills/`, `~/.codex/skills`, `~/.agents/skills`, per-profile config homes (`~/.claude-profiles/<name>/`), and — the one with no signposts at all — **every project's own `.claude/skills/`**. Step 2 is what makes that a claim you verified rather than one you inherited.
 
 **Per-project skills are structurally invisible.** They live inside an unrelated project's working tree, so they appear in no marketplace, no global skill list, and no source-repo listing; nothing you would normally open while planning a new skill mentions them. Real case (2026-07): a session built a global skill for a domain, swept the source repos, the global dirs and the other-agent dirs, found nothing, and shipped. A later conversation-history search turned up a mature project-level skill for that exact domain, a month old, sitting in one project's `.claude/skills/` — carrying eight rules the new skill lacked, including one the user had personally dictated. Every root had been checked except the per-project one, and the sweep reported "no prior art" with complete confidence.
+
+**What to do when the overlap *is* a project-level skill in an unrelated project** — the case that war story lands you in, and the one the three bullets below do not cover: you cannot add a sibling to a suite it has none of, and "extend it" would mean editing an unrelated project's working tree. The move that worked: **harvest its rules into the skill you are building, then retire the project-local one with the owner's consent** — it was written against real work, so treat it as the more mature source and reconcile *toward* it, not away from it. Retiring someone's working skill is the owner's decision, not a side effect of your build.
 
 **Search by capability vocabulary, not by skill name.** That project skill would not have matched a name search for the new skill's title; it matched on the domain terms inside its body. Grep the candidate roots for the *concepts* the new skill will handle.
 
 If something overlaps:
+
+**Deciding which bullet applies — whose skill is it?** A filesystem hit does not carry ownership. Read the marketplace's `.claude-plugin/marketplace.json` `owner` field, or `git remote -v` in the containing repo; a hit under `~/.claude/plugins/marketplaces/` can just as easily be your *own* marketplace installed back onto your machine.
 
 - **The overlap is a third party's skill** (a marketplace suite, an official plugin): **do not re-implement its capability.** Write a *thin increment* that drives it correctly — the pitfalls you hit, the correct invocation, the verified helper script — and **reference it by namespaced name**. Cloning someone else's engine into your bundle is the expensive mistake: their upgrades stop reaching you, and the two copies drift apart silently.
 - **The overlap is your own skill**: extend it, or add a sibling inside its existing suite. A standalone that competes for the same triggers helps nobody.
@@ -259,7 +278,7 @@ The user's private methodology — their domain rules, workflow decisions, compe
 
 Channels 1-3 surface the user's own proven patterns and existing integrations. Channels 4-8 find public infrastructure. The user's private SOP always takes precedence — public tools are building blocks, not replacements. In competitive domains (finance, trading, proprietary operations), the valuable methodology will never be public.
 
-**Bias toward merge/extend over create-new, and sweep EVERY skill root — not just `~/.claude`.** When channels 1-3 turn up an existing skill that overlaps the requested domain, the usual right move is to extend or merge into it (one real "new skill" task became "make the existing extractor the extract-phase of the new archiver"), not to ship a parallel skill that competes for the same triggers — two overlapping skills fight over triggering and confuse users. When searching, **discover the install roots with a `find` rather than recalling a list** (the command and the roots it reaches are in the extend-vs-create check above) — that sweep covers the skill source repos, other agents' skill dirs, per-profile homes, and **every project's own `.claude/skills/`**, which is the root a from-memory list reliably drops because nothing outside that project references it. A skill the user already installed *anywhere* is the strongest prior art there is, and a project-local one is often the most mature: it was written against real work.
+**Bias toward merge/extend over create-new, and sweep EVERY skill root — not just `~/.claude`.** When channels 1-3 turn up an existing skill that overlaps the requested domain, the usual right move is to extend or merge into it (one real "new skill" task became "make the existing extractor the extract-phase of the new archiver"), not to ship a parallel skill that competes for the same triggers — two overlapping skills fight over triggering and confuse users. When searching, **discover the install roots rather than recalling a list** — use the `SKILL.md` sweep and its coverage self-check from the extend-vs-create section above (searching for a directory named `skills` misses source repos, marketplace clones and plugin caches entirely, because their skill directories are named after the skill). Run the coverage check rather than trusting this sentence: **every project's own `.claude/skills/`** is the root a from-memory list reliably drops, because nothing outside that project references it. A skill the user already installed *anywhere* is the strongest prior art there is, and a project-local one is often the most mature: it was written against real work.
 
 **If a public MCP server or skill is found, clone it and verify — don't trust the README:**
 
