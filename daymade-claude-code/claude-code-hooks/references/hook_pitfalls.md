@@ -662,6 +662,58 @@ unresolvable path means **block**.
 
 ---
 
+## 22. A hook fleet on every tool call is a fork multiplier — the irrelevant path must cost zero forks
+
+- **Symptom:** the machine runs hot and the battery drops fast under several
+  parallel agent sessions; a spawn-rate recorder shows a sustained 40–130+
+  forks/sec all day, and `syspolicyd` (Gatekeeper) tops the all-day
+  CPU-integrated ranking with NO single runaway process. Nothing is "broken" —
+  every process has a legitimate owner. Treating this as "normal because it's
+  owned" is the mistake: an unthrottled loop and a runaway are structurally
+  identical to the system underneath.
+- **Cause:** each PreToolUse Bash hook that opens with `INPUT=$(cat)` plus one
+  or more `printf … | python3 -c …` parses costs 2–3 forks **even when the
+  command is irrelevant to that guard**. With ~13 hooks on the Bash matcher ×
+  several parallel agent sessions × sub-second tool-call cadence, that alone
+  is 40–200 forks/sec of pure guard overhead, and every `exec` also bills
+  `syspolicyd` a Gatekeeper evaluation — which is how a distributed,
+  by-design load lands on one system daemon's CPU total. The fleet is fine;
+  the per-call cost of the *irrelevant* path is the bug.
+- **Fix — the 0-fork fast path, with semantics preserved per guard type:**
+  1. Replace `INPUT=$(cat)` with the builtin `IFS= read -rd '' INPUT || true`
+     (stdin can only be read once — hand the captured var to the existing
+     code, do not leave a later `$(cat)` to read EOF).
+  2. Coarse-filter with a **builtin** `case`/`[[ == ]]` on the raw JSON and
+     `exit 0` before paying for python3/jq. The filter must be *broader* than
+     the hook's decision domain and **never flag-level**: shell normalization
+     (`--no-\verify`, `-n` short forms, `VAR=val` prefixes) produces real
+     flags that byte-matching cannot see — filter only on "is this command
+     even about X" (e.g. `*git*`; `*openrouter*|*claude.ai*` for a domain
+     guard, matched against the SAME case-sensitivity as the real check).
+  3. **Fail-closed guards need a legitimate-payload gate on the fast path.**
+     A bare coarse filter exits 0 on malformed input that the original
+     fail-closed parse layer would have blocked — measured: `'not json'`
+     sailed through the first cut of this fix and the guard's contract
+     silently changed from block-unknown to allow-unknown. Only let inputs
+     carrying the payload marker (`*tool_name*`) take the fast exit; empty
+     or marker-less input MUST fall through to the original parser. Record
+     the accepted residual blind spot (a JSON `\uXXXX`-escaped keyword
+     defeats any raw-byte filter; the real harness never emits one) in a
+     comment, or it will be "found" again as a new bug.
+  4. Verify per hook with the six-case suite — irrelevant / blocking /
+     allowed / empty / malformed / keyword-present-but-irrelevant — plus a
+     `python3`-stubbed `PATH` for fail-closed guards (their contract is
+     exit 2 exactly there). Measure the floor: `bash` startup + builtin
+     `case` ≈ 6.6 ms/call; the guards that used to cost 45–57 ms per
+     irrelevant call now cost ~6, and that is the entire win — the
+     blocking path is intentionally unchanged.
+- **Why not a dispatcher instead:** merging N guards into one process saves
+  the same forks but couples their blast radius (one corrupted shared file
+  poisons every Bash call) and breaks per-guard SSOT/test ownership. Slim
+  each guard; keep the fleet.
+
+---
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:
@@ -740,3 +792,8 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
     families need enumeration + arity, and segment state machines need the last
     NON-EMPTY head — and only a fixture containing the colliding pair proves
     resolution, a singleton proves nothing.
+19. Is the **machine itself** hot under parallel agent sessions — spawn rate
+    sustained at 40+/s, `syspolicyd` atop the all-day CPU ranking, and NO
+    runaway process anywhere? → fork multiplier (#22): the fleet's per-call
+    irrelevant path is the load. Slim every guard's fast path to zero forks;
+    do not "fix" it by deleting guards.
