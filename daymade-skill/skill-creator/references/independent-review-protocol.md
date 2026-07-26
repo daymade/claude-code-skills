@@ -153,7 +153,7 @@ load-bearing operational mechanism the skill kept referencing but never showed h
 
 ## The review file
 
-Write `<workspace>/independent-review.md`:
+Write `<your-private-knowledge-repo>/skill-reviews/<skill-name>/independent-review.md` — a private, git-tracked location you own. Two forbidden locations: **NOT** in `<skill>-workspace/` (gitignored scratch dirs that get wiped — this file is cross-session review evidence and must survive them) and **NOT** in the reviewed skill's own repo (review content inherently quotes private paths, real names, and project details; that repo may be public or get distributed with the skill):
 
 ```markdown
 # Independent review — <artifact>, <date>
