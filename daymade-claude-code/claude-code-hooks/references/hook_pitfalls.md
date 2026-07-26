@@ -665,9 +665,10 @@ unresolvable path means **block**.
 ## 22. A hook fleet on every tool call is a fork multiplier — the irrelevant path must cost zero forks
 
 - **Symptom:** the machine runs hot and the battery drops fast under several
-  parallel agent sessions; a spawn-rate recorder shows a sustained 40–130+
-  forks/sec all day, and `syspolicyd` (Gatekeeper) tops the all-day
-  CPU-integrated ranking with NO single runaway process. Nothing is "broken" —
+  parallel agent sessions; a spawn-rate recorder shows a sustained 40–177
+  forks/sec (peak, scaling with session count and agent activity) all day,
+  and `syspolicyd` (Gatekeeper) tops the all-day CPU-integrated ranking with
+  NO single runaway process. Nothing is "broken" —
   every process has a legitimate owner. Treating this as "normal because it's
   owned" is the mistake: an unthrottled loop and a runaway are structurally
   identical to the system underneath.
@@ -689,23 +690,50 @@ unresolvable path means **block**.
      (`--no-\verify`, `-n` short forms, `VAR=val` prefixes) produces real
      flags that byte-matching cannot see — filter only on "is this command
      even about X" (e.g. `*git*`; `*openrouter*|*claude.ai*` for a domain
-     guard, matched against the SAME case-sensitivity as the real check).
-  3. **Fail-closed guards need a legitimate-payload gate on the fast path.**
-     A bare coarse filter exits 0 on malformed input that the original
-     fail-closed parse layer would have blocked — measured: `'not json'`
-     sailed through the first cut of this fix and the guard's contract
-     silently changed from block-unknown to allow-unknown. Only let inputs
-     carrying the payload marker (`*tool_name*`) take the fast exit; empty
-     or marker-less input MUST fall through to the original parser. Record
-     the accepted residual blind spot (a JSON `\uXXXX`-escaped keyword
-     defeats any raw-byte filter; the real harness never emits one) in a
-     comment, or it will be "found" again as a new bug.
+     guard). Case-handling: **never narrower in case than the real check** —
+     a case-sensitive coarse filter feeding a case-insensitive real check
+     silently under-blocks; broader case (e.g. `nocasematch`, or glob bracket
+     classes on bash 3.2) is always safe, it only costs a fall-through.
+  3. **Fail-closed guards need a legitimate-payload gate — and a marker
+     substring alone is NOT enough.** A bare coarse filter exits 0 on
+     malformed input the original fail-closed parse layer would have blocked
+     — measured: `'not json'` sailed through the first cut of this fix and
+     the guard's contract silently changed from block-unknown to
+     allow-unknown. But a `*tool_name*` substring gate re-opens the same
+     hole from the other side: `echo 'tool_name'` (marker present, not
+     parseable, no keyword) ALSO exits 0 where the original blocked
+     (independent review, reproduced). The gate that actually closed it
+     requires BOTH: the `*tool_name*` marker AND a payload that — after
+     trimming trailing whitespace — ends in `}`. The `}` rule is not
+     cosmetic: `read -d ''` stops at the first NUL, so a truncated payload
+     like `{"tool_name":"Bash",` carries the marker but no keyword and must
+     NOT be trusted (measured: old=2 → new=0 without it). Documented
+     residue, disclosed not fixed: a malformed payload that still ends in
+     `}` (`{"tool_name": invalid}`) passes the gate — it is a heuristic,
+     not a validity proof, and the harness never emits one.
+  3b. **Disclose the raw-byte blind spot in EVERY blocking guard's comment,
+     not just one.** A JSON `\uXXXX`-escaped keyword defeats any raw-byte
+     filter — reproduced end-to-end: a fully-escaped `git commit -am`,
+     `git reset --hard`, or proxied domain exits 0 through the fast path
+     where the original layer decoded and blocked (construct the payload
+     with octal `printf '\134'` or a generator that never decodes — two of
+     three first attempts accidentally produced literal text and a false
+     negative). The harness JSON encoder never escapes ASCII letters, so
+     accept the risk — but write the acceptance into **every** blocking
+     guard's fast-path comment: fail-closed guards, AND parse-fail-open /
+     verdict-blocking hybrids (a form/bypass/proxy guard exits 0 on
+     unparseable input yet exit 2 on a matched verdict — the blind spot
+     hits their verdict layer, direction block→allow). Pure informational
+     hooks (always-exit-0 by contract) are exempt: both paths allow anyway.
   4. Verify per hook with the six-case suite — irrelevant / blocking /
      allowed / empty / malformed / keyword-present-but-irrelevant — plus a
      `python3`-stubbed `PATH` for fail-closed guards (their contract is
-     exit 2 exactly there). Measure the floor: `bash` startup + builtin
+     exit 2 exactly there) and the three malformed-marker forms from step 3
+     (`echo 'tool_name'`, `["tool_name"]`, NUL-truncated payload). Measure
+     the floor: `bash` startup + builtin
      `case` ≈ 6.6 ms/call; the guards that used to cost 45–57 ms per
-     irrelevant call now cost ~6, and that is the entire win — the
+     irrelevant call now cost ~6 (independently re-measured at 4.7 ms on
+     the heaviest one), and that is the entire win — the
      blocking path is intentionally unchanged.
 - **Why not a dispatcher instead:** merging N guards into one process saves
   the same forks but couples their blast radius (one corrupted shared file
