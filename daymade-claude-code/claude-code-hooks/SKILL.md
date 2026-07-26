@@ -439,6 +439,28 @@ above and it falls out mechanically: R changes `last_edit` (Q1); `last_edit` is
 an operand of T (Q2); the smallest input that re-fires T is the remediation's own
 output (Q3) → no V.
 
+**A second failure form: the predicate can't see the remediation at all
+(observability gap).** The counter-example above is a temporal predicate that
+remediation *moves*. A quieter failure of the same family: remediation happens,
+but the channel the predicate reads it through doesn't exist in this
+environment. Real case (2026-07-26, found by a full-fleet loop audit): a Stop
+hook detected "an independent review happened" by scanning tool_results for
+`agentId: <hex>` and reading `subagents/agent-<hex>.jsonl` — correct on the
+main profile. Team-mode sessions use a different schema entirely (spawn
+receipts `agent_id: <name>@session-<uuid>`, deliveries as `teammate_id`
+teammate messages, files `agent-a<name>-<hex>.jsonl`) — zero matches, ever,
+so `last_review` stayed `None` forever and every compounding-edit∧push turn
+re-fired the demand: a false-positive loop, bounded to one block per stop
+sequence but unbounded across turns, and its "2/2 fires" that session were
+both on fully-reviewed work. Same family, different medicine: the temporal
+loop needs a better *predicate*; the observability loop needs a better
+*channel*. Add a fourth question to the checklist — **Q4: in every environment
+this hook will run in, can the predicate actually SEE R happen?** For
+transcript-reading hooks that means parsing a real session from each
+profile/mode, not fixture-testing one schema. (The repair for the case above:
+multi-schema detection + teammate deliveries excluded from turn boundaries so
+they can't truncate the detection window — pitfall #20.)
+
 **Pick by axis first, then by order — these are not five strengths of one thing.**
 0 decides *whether to block at all*; 1 decides *which event to hang it on*; 2–4
 are the *predicate's shape* (choose 1 and you still need one of 2–4). The 0→4
@@ -588,7 +610,10 @@ demand**. If your domain produces that density (compounding artifacts ship
 several times a day here), consider pairing mechanism 2 (the existence fact) with
 mechanism 3 (a session-scoped ceiling), or accept the optics deliberately and say so in the
 hook's output — "reminder 2 of at most N" reads as progress, an unadorned
-repeat reads as a loop.
+repeat reads as a loop. **(2026-07-26 sequel: the same hook's fires that looked
+like this density problem turned out to be 100% false positives — its review
+channel was schema-blind in team mode; see the observability form above. Before
+accepting density as "legitimate", verify the fires are evidence-based at all.)**
 
 ### 8. Waiting needs the same proof — notifications are advisory, polling must carry a budget
 
