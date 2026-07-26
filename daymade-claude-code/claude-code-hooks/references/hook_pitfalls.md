@@ -635,6 +635,33 @@ unresolvable path means **block**.
 
 ---
 
+## 21. Prefix-based resolution must anchor on a typed tail
+
+- **Symptom:** the hook resolves an entity by glob/prefix (a file, a name, a
+  token family) and silently picks the WRONG one — a verdict meant for agent A
+  lands on agent B, and the decision is inverted: a delegated write-and-push
+  gets the "independent review" stamp, or a genuine review reads as delegation.
+  Nothing looks wrong because each file in isolation is valid.
+- **Cause:** prefix matching ignores that names are **prefixes of other names**.
+  Real case (2026-07-26, reproduced both directions): a review-detection hook
+  resolved agent transcripts with `agent-a<name>-*.jsonl` — the agent pair
+  `r4-final-reviewer` and `r4-final-reviewer-2` (which really coexisted in the
+  session) both matched, and "newest by mtime" made the review read the wrong
+  agent's file. Sibling shapes in the same audit: a bundle-arity blind spot
+  (`-mn` = `-m n`, not `-n`), a flag-family table (`-am"msg"` attached value),
+  and a trailing-separator reset (a state machine whose `first` slot is
+  re-zeroed by a trailing `;` or comment line, losing the last real segment).
+- **Fix — anchor the typed tail, never the bare prefix:** for filenames,
+  require the delimiter + a typed suffix (`agent-a<name>-[0-9a-f]{8,}.jsonl`,
+  not `agent-a<name>-*`); for flag families, enumerate the family (`-aXXX`
+  bundled counts as `-a`) AND model arity (after a valued flag, the next thing
+  is data); for segment state machines, keep the last NON-EMPTY segment's head
+  (`last_first`), never the current slot after a trailing separator. Then pin
+  the colliding pair in a fixture — a singleton passing proves nothing about
+  resolution (compounding-edit-review's selftest grew exactly these).
+
+---
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:
@@ -706,3 +733,10 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
     environment-schema drift blinds the review channel (rule 7's observability
     form — verify the predicate can see R in EVERY environment, not just the
     one you fixture-tested).
+18. Does a resolution step hand you the **wrong entity** — a verdict meant for
+    A landing on B, or a decision inverted (delegation stamped as review /
+    review read as delegation)? → prefix resolution without a typed tail (#21):
+    globs must anchor on delimiter+type (name-hex.jsonl, not name-*), flag
+    families need enumeration + arity, and segment state machines need the last
+    NON-EMPTY head — and only a fixture containing the colliding pair proves
+    resolution, a singleton proves nothing.
