@@ -320,7 +320,13 @@ unresolvable path means **block**.
   command it isn't. (A multiline `-m "…\ngit push"` message fragments too, but its
   torn line has an unbalanced quote, so whether it over- or under-fires depends on how
   you handle the `shlex` `ValueError` — a witness for the same residual, less clean.)
-  So the two-stage is not "#2-proof", only *less* exposed than the one-shot regex.
+  **2026-07-26 refinement (production qlmanage-guard, three review rounds with
+  100+ executed probes):** split shell-aware instead — `split_shell_lines`
+  (walker section / Pattern A) tracks quote state, backslash continuations, and
+  `$'…'` ANSI-C escapes, which removes the *quoted-string* half of the residual
+  (the `gh pr create -b "…\nTRIGGER…"` shape — more common than heredocs in real
+  tool calls). What remains is heredoc bodies only: they are not quote syntax,
+  so no quote-state machine can see them.
   Whether that residual is acceptable follows the same **bias-to-under** call as #2:
   for a **fail-open reminder** an extra over-fire costs nothing — declare it and move
   on; for a **fail-closed blocker** it re-creates #2's false-block, so you must lift

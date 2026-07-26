@@ -172,9 +172,12 @@ false-blocks is matching on the raw command string.
   treats newlines as ordinary whitespace, so a multiline block
   (`cd /x\ngit add\nTRIGGER -y`) collapses into one segment headed by `cd` and
   the trigger is never in command position — replayed trigger rate 0 on real
-  transcripts (pitfall #11). Split on newlines as text first, then shlex-walk
-  each line (both Pattern A and the walker section already do this); the
-  heredoc-body residual and when to accept it are #11's call.
+  transcripts (pitfall #11). Split into lines **shell-aware** first (quote state
+  and backslash continuations honored, so quoted multiline strings don't
+  fragment), then shlex-walk each line — both Pattern A and the walker section
+  ship that splitter (`split_shell_lines`, production-proven in qlmanage-guard).
+  What even it cannot parse is a heredoc body (not quote syntax); when to accept
+  that residual is #11's call.
 - **But shlex isn't a silver bullet, and *what* you detect changes whether
   fail-open is safe.** `shlex.split()` itself throws `ValueError` on an unbalanced
   quote — a multi-line `git commit -m "…` message with a `#` or an unclosed quote

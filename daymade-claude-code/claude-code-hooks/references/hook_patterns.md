@@ -122,6 +122,7 @@ cmd = os.environ["HOOK_CMD"]
 SEPS = {";","&&","||","|","&","(",")","{","}","|&"}   # NOT <> — a redirect target is a filename, not a command
 ENV = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 GIT_WRITES = {"commit","rebase","tag","am","cherry-pick"}
+WRAPPERS = {"command","env","sudo","time","timeout","nice","stdbuf","nohup","builtin","exec","xargs"}
 
 def toks(c):
     lex = shlex.shlex(c, posix=True, punctuation_chars=True); lex.whitespace_split = True
@@ -152,23 +153,72 @@ def is_git_write(seg):
         return t in GIT_WRITES
     return False
 
+def eff_head_idx(toks):
+    """Effective command index: skip ENV prefixes and transparent wrappers (their
+    flags included — production carries per-wrapper valued-flag tables; kept
+    compact here). Without it the exemption below only sees a literal `git` head
+    and false-blocks `sudo git commit` (its own commit message!) — qlmanage-guard
+    Finding 1."""
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if ENV.match(t): i += 1; continue
+        if t in WRAPPERS:
+            i += 1
+            while i < len(toks) and toks[i].startswith("-"): i += 1
+            continue
+        return i
+    return -1
+
+def split_shell_lines(c):
+    r"""Split on newlines as SHELL sees them: quote state tracked (a newline
+    inside '…' or "…" does not split — `gh pr create -b "…\nTRIGGER…"` never
+    executes it), backslash-newline joined (posix), and `$'…'` ANSI-C escapes
+    honored (`\'` does not close). Heredoc bodies are not quote syntax and
+    still fragment (the declared residual, pitfall #11)."""
+    lines, cur, quote, ansi, i = [], [], None, False, 0
+    n = len(c)
+    while i < n:
+        ch = c[i]
+        if ch == "\\" and i + 1 < n:
+            nx = c[i + 1]
+            if nx == "\n" and (quote != "'" or ansi): i += 2; continue
+            if quote == '"' and nx in ('"', "\\", "$", "`"): cur.append(ch); cur.append(nx); i += 2; continue
+            if quote is None and nx in ("'", '"', "\\"): cur.append(ch); cur.append(nx); i += 2; continue
+            if quote == "'" and ansi: cur.append(ch); cur.append(nx); i += 2; continue
+        if quote is None and ch in ("'", '"'):
+            quote = ch; ansi = ch == "'" and len(cur) > 0 and cur[-1] == "$"
+        elif quote == ch:
+            quote = None; ansi = False
+        if ch == "\n" and quote is None:
+            lines.append("".join(cur)); cur = []
+        else:
+            cur.append(ch)
+        i += 1
+    lines.append("".join(cur))
+    return lines
+
 # Pitfall #7 (whole command, BEFORE any splitting): a git *write*'s message is DATA —
 # `git commit -F - <<EOF` whose body quotes `foo|TRIGGER` reaches the walk below as
 # pseudo-command-text and the guard blocks its own fix commit (this skill's own
-# qlmanage-guard shipped exactly that). Exempt the whole command when any segment is
-# a git write. Bias-to-under (pitfall #11): this also lets `git commit -m x &&
-# TRIGGER` through — the rare miss is the deliberate trade for a blocker; stricter
-# needs a real shell grammar (production: lib-git-commit-detect's adjacency check).
-if any(h == "git" and is_git_write(seg) for h, seg in segments(cmd)):
+# qlmanage-guard shipped exactly that). Exempt the whole command when any segment's
+# EFFECTIVE command is a git write. Bias-to-under (pitfall #11): this also lets
+# `git commit -m x && TRIGGER` through — the rare miss is the deliberate trade for
+# a blocker; stricter needs a real shell grammar (production: qlmanage-guard's
+# eff_head_idx + lib-git-commit-detect's adjacency check).
+if any(
+    (idx := eff_head_idx(seg[1])) >= 0
+    and (seg[1][idx] == "git" or seg[1][idx].endswith("/git"))
+    and is_git_write(seg[1][idx:])
+    for seg in segments(cmd)
+):
     sys.exit(0)
 
 # Pitfall #11: shlex treats newlines as ordinary whitespace, so a multiline command
 # (`cd /x\ngit add\nTRIGGER -y`) collapses into ONE segment whose head is `cd` and
 # the trigger is never in command position — replayed trigger rate 0 on real
-# transcripts. Split on newlines as TEXT first, then walk each line. Residual (same
-# entry): a heredoc body still fragments — for a fail-open reminder declare it; the
-# whole-command git exemption above is what keeps heredoc commits safe here.
-for line in cmd.split("\n"):
+# transcripts. Split shell-aware FIRST, then walk each line.
+for line in split_shell_lines(cmd):
     for head, seg in segments(line):
         if head == "TRIGGER":                # command-position hit → print guidance + block
             sys.stderr.write("BLOCKED: <BANNED THING> is not allowed here.\n"
@@ -227,13 +277,57 @@ def _segments(line: str):
         cur.append(t)
     if head: yield head, cur
 
+def split_shell_lines(c: str):
+    r"""Split on newlines as SHELL sees them (production: qlmanage-guard).
+    - Newlines inside single/double quotes do NOT split — `gh pr create -b
+      "line1\nTRIGGER was the culprit\nline3"` never executes TRIGGER, and a
+      text-level split would put it at a line head and false-block (a more
+      common shape than heredocs).
+    - Backslash-newline continuations are deleted and joined (posix), so
+      `echo a \⏎TRIGGER` keeps TRIGGER as an argument of echo.
+    - `$'…'` ANSI-C quoting is tracked: `\'` inside it is an escaped quote,
+      not a close — `$'a\'⏎TRIGGER'` does not execute TRIGGER.
+    Heredoc bodies are not quote syntax: they still fragment (residual below)."""
+    lines, cur, quote, ansi, i = [], [], None, False, 0
+    n = len(c)
+    while i < n:
+        ch = c[i]
+        if ch == "\\" and i + 1 < n:
+            nx = c[i + 1]
+            if nx == "\n" and (quote != "'" or ansi):
+                i += 2
+                continue
+            if quote == '"' and nx in ('"', "\\", "$", "`"):
+                cur.append(ch); cur.append(nx); i += 2
+                continue
+            if quote is None and nx in ("'", '"', "\\"):
+                cur.append(ch); cur.append(nx); i += 2
+                continue
+            if quote == "'" and ansi:
+                cur.append(ch); cur.append(nx); i += 2
+                continue
+        if quote is None and ch in ("'", '"'):
+            quote = ch
+            ansi = ch == "'" and len(cur) > 0 and cur[-1] == "$"
+        elif quote == ch:
+            quote = None
+            ansi = False
+        if ch == "\n" and quote is None:
+            lines.append("".join(cur)); cur = []
+        else:
+            cur.append(ch)
+        i += 1
+    lines.append("".join(cur))
+    return lines
+
 def executes(cmd: str, target: str) -> bool:
     # Two stages, order matters (pitfall #11): shlex swallows newlines as ordinary
     # whitespace, so a multiline block (`cd /x\ngit add\nTRIGGER -y`) would
-    # collapse into ONE segment headed by `cd` and hide the trigger. Split on
-    # newlines as TEXT first, then shlex-walk each line — a quoted `a|TRIGGER|b`
-    # still stays one token inside its line, so no phantom command is made.
-    for line in cmd.split("\n"):
+    # collapse into ONE segment headed by `cd` and hide the trigger. Split into
+    # lines shell-aware FIRST (quote state + continuations), then shlex-walk
+    # each line — a quoted `a|TRIGGER|b` still stays one token inside its line,
+    # so no phantom command is made.
+    for line in split_shell_lines(cmd):
         for head, _seg in _segments(line):
             if head == target: return True      # command-position match
     return False
@@ -251,9 +345,11 @@ Why each piece matters:
 - The per-segment walk means `ls | TRIGGER x` matches (after the pipe) but
   `grep TRIGGER f` does not (TRIGGER is grep's argument).
 - `ENV` skip means `FOO=1 TRIGGER` matches (TRIGGER is still the command).
-- The outer `cmd.split("\n")` means `cd /x\ngit add\nTRIGGER -y` matches (its own
+- The outer `split_shell_lines(cmd)` means `cd /x\ngit add\nTRIGGER -y` matches (its own
   line) — without it the newline collapses into whitespace and the head stays
-  `cd` (pitfall #11: replayed trigger rate 0 on real transcripts).
+  `cd` (pitfall #11: replayed trigger rate 0 on real transcripts). Being
+  quote-state-aware it also leaves `gh pr create -b "…\nTRIGGER…"` alone
+  (quoted, never executed) and joins `echo a \⏎TRIGGER` back into one line.
 
 **What it deliberately does NOT catch:** `$(TRIGGER)` / backtick command
 substitution. A raw-string regex for `$(TRIGGER` would misfire on a *quoted*
@@ -262,10 +358,12 @@ banned commands is a direct call, missing the rare substitution case beats
 false-positives. If you truly need it, detect it in a context that distinguishes
 single- from double-quotes — usually not worth it.
 
-**What it splits but cannot fully parse:** a newline **inside** a quoted string
-or heredoc body — the text-level `split("\n")` is quote-blind about newlines, so
-`git commit -F - <<'MSG'` whose body quotes a trigger-looking line fragments
-into a phantom command. That residual is pitfall #11's: for a fail-open
+**What it splits but cannot fully parse:** a newline **inside a heredoc body** —
+a heredoc is not quote syntax, so `git commit -F - <<'MSG'` whose body quotes a
+trigger-looking line still fragments into a phantom command even with
+quote-state-aware splitting. (Multiline *quoted strings* used to be in this
+list too; `split_shell_lines` handles those — the residual is heredoc-only.)
+That residual is pitfall #11's: for a fail-open
 reminder, declare it and move on; for a fail-closed blocker, lift the git-write
 exemption (pitfall #7) to the whole command BEFORE this walk — exactly the
 order Pattern A shows. But note the exemption's name: it rescues **git**
