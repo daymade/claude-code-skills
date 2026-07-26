@@ -108,7 +108,15 @@ TOOL=$(printf '%s' "$INPUT" | python3 -c "import sys,json;print(json.load(sys.st
 [ "$TOOL" != "Bash" ] && exit 0
 CMD=$(printf '%s' "$INPUT" | python3 -c "import sys,json;print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null||echo "")
 [ -z "$CMD" ] && exit 0
-printf '%s' "$CMD" | grep -qw 'TRIGGER' || exit 0     # fast path: token absent → allow
+printf '%s' "$CMD" | grep -qw 'TRIGGER' || {
+  # Quote-splice is the standard evasion: `TRIG''GER` EXECUTES but contains no
+  # literal token, so the raw substring check above misses it and the walker
+  # would never run (final-review F1 — bash executes `ec''ho MARKER` just fine).
+  # The fast path must be a SUPERSET filter: de-splice (strip quotes/backslashes)
+  # and check again. A false positive here only costs one python run — the
+  # walker arbitrates; a false negative is a full bypass.
+  printf '%s' "$CMD" | tr -d "\\'\"\\\\" | grep -qw 'TRIGGER' || exit 0
+}
 
 # Precise detection AND the guidance message BOTH live inside python — so `set -e`
 # can't swallow the message. If the BLOCKED text sat in a SECOND bash step after
@@ -129,8 +137,14 @@ GIT_WRITES = {"commit","rebase","tag","am","cherry-pick"}
 WRAPPERS = {"command","env","sudo","time","timeout","nice","stdbuf","nohup","builtin","exec","xargs"}
 # Introspection flags make a wrapper a QUERY, not an execution — `command -v
 # TRIGGER` is the standard existence probe (health checks use it); blocking it
-# is a false-block.
+# is a false-block. Bundled single-dash flags count too (`command -vp` = -v -p).
 INTROSPECT = {"command": {"-v","-V"}, "sudo": {"-l","-V","--list","--version","--help"}}
+INTROSPECT_CLUSTER = {"command": "vV", "sudo": "lV"}
+
+def _is_introspect(wrapper_base, flag):
+    if flag in INTROSPECT.get(wrapper_base, ()): return True
+    return (flag.startswith("-") and not flag.startswith("--")
+            and any(c in INTROSPECT_CLUSTER.get(wrapper_base, "") for c in flag[1:]))
 
 def toks(c):
     lex = shlex.shlex(c, posix=True, punctuation_chars=True); lex.whitespace_split = True
@@ -170,8 +184,8 @@ def eff_head_idx(toks):
         "sudo":  {"-u","-g","-p","-C","-U","-r","-t","-D","-T","-h",
                   "--user","--group","--prompt","--close-from","--role","--type",
                   "--other-user","--chdir","--command-timeout","--host"},
-        "env":   {"-u","--unset","--chdir","-C"},
-        "xargs": {"-n","-P","-I","-d","-a","-E","-s","-L",
+        "env":   {"-u","--unset","--chdir","-C","-S","--split-string"},
+        "xargs": {"-n","-P","-I","-d","-a","-E","-s","-L","-R",
                   "--max-args","--max-procs","--replace","--delimiter","--arg-file"},
         "timeout": {"-k","-s","--kill-after","--signal"},
         "nice":  {"-n","--adjustment"},
@@ -182,10 +196,12 @@ def eff_head_idx(toks):
     while i < len(toks):
         t = toks[i]
         if ENV.match(t): i += 1; continue
-        if t in WRAPPERS:
-            w = t; i += 1
+        if t in WRAPPERS or t.rsplit("/", 1)[-1] in WRAPPERS:   # /usr/bin/sudo 同效
+            w = t.rsplit("/", 1)[-1]; i += 1
             while i < len(toks) and toks[i].startswith("-"):
                 if toks[i] in WRAPPER_VALUED.get(w, ()):
+                    if toks[i] in ("-S", "--split-string") and w == "env" and i + 1 < len(toks):
+                        toks[i+1:i+2] = toks[i+1].split()   # env -S 的值本身是一行命令,展开再扫
                     i += 2            # flag + its value (not the command)
                 else:
                     i += 1
@@ -254,8 +270,9 @@ def blocks(seg_toks):
     are transparent; their introspection flags are queries, not executions)."""
     idx = eff_head_idx(seg_toks)
     if idx < 0: return False
-    for w in (t for t in seg_toks[:idx] if t in INTROSPECT):
-        if any(f in INTROSPECT[w] for f in seg_toks[1:idx]): return False
+    for w in (t for t in seg_toks[:idx] if t.rsplit("/", 1)[-1] in INTROSPECT):
+        wb = w.rsplit("/", 1)[-1]
+        if any(_is_introspect(wb, f) for f in seg_toks[1:idx]): return False
     head = seg_toks[idx]
     if head != "TRIGGER" and not head.endswith("/TRIGGER"):
         return False
@@ -339,12 +356,24 @@ def _eff_head_idx(toks):
     while i < len(toks):
         t = toks[i]
         if ENV.match(t): i += 1; continue
-        if t in _WRAPPERS:
+        if t in _WRAPPERS or t.rsplit("/", 1)[-1] in _WRAPPERS:
             i += 1
             while i < len(toks) and toks[i].startswith("-"): i += 1
             continue
         return i
     return -1
+
+_INTROSPECT = {"command": "vV", "sudo": "lV"}
+
+def _is_query(seg, idx):
+    """Wrapper introspection (`command -v TRIGGER`, `sudo -l`, incl. bundled
+    `-vp` clusters) is a probe, not an execution."""
+    for w in (t for t in seg[:idx] if t.rsplit("/", 1)[-1] in _INTROSPECT):
+        wb = w.rsplit("/", 1)[-1]
+        for f in seg[1:idx]:
+            if f.startswith("-") and not f.startswith("--") and any(c in _INTROSPECT[wb] for c in f[1:]):
+                return True
+    return False
 
 def split_shell_lines(c: str):
     r"""Split on newlines as SHELL sees them (production: qlmanage-guard).
@@ -403,8 +432,9 @@ def executes(cmd: str, target: str) -> bool:
     for line in split_shell_lines(cmd):
         for _head, seg in _segments(line):
             idx = _eff_head_idx(seg)          # wrappers are transparent —
-            if idx < 0: continue              # `sudo TRIGGER` IS a hit, and
-            head = seg[idx]                   # `command -v TRIGGER` is NOT
+            if idx < 0 or _is_query(seg, idx):  # `sudo TRIGGER` IS a hit, and
+                continue                      # `command -v TRIGGER` is NOT
+            head = seg[idx]
             if head == target or head.endswith("/" + target):
                 # `TRIGGER()` starts a function definition, not a call
                 nxt = seg[idx+1] if idx + 1 < len(seg) else ""
@@ -442,20 +472,28 @@ this note claimed the opposite). The genuine misses: **backticks**
 (`<(TRIGGER …)`). If you truly need those, detect them in a context that
 distinguishes single- from double-quotes — usually not worth it.
 
-**Known gaps by declaration (measured 2026-07-26, all currently exit-allow):**
-heredoc bodies (not quote syntax — see below); shell keyword frames
-(`if TRIGGER; then`, `for … do TRIGGER`, `! TRIGGER`, `coproc TRIGGER`);
-redirect PREFIX (`2>/dev/null TRIGGER -t x` — `<>` stays out of SEPS, so the
-prefix takes the command slot; a natural retry-after-block shape, worth a
-WRAPPER-style fix later); `bash -c 'TRIGGER'` / `eval TRIGGER` / `ssh host
-TRIGGER` / `find . -exec TRIGGER` (string payloads need recursive parsing);
-multiline `case` patterns (`TRIGGER)` at a line head is a pattern, not a call —
-currently a false-block); a mid-word `#` (`TRIGGER#frag` — shlex's posix lexer
-starts a comment there, bash doesn't); and variables-as-commands
-(`CMD=TRIGGER; $CMD -t x`). Production qlmanage-guard shares most of these;
-each is declared rather than patched because every one of them is miss-side
-(bias-to-under) — if yours is a fail-closed guard, close the ones you need
-with a real shell grammar.
+**Known gaps by declaration (measured 2026-07-26) — miss-direction (allow when
+execution is real):** heredoc bodies are only half-handled — *quoted-string*
+newlines and comments are fine, but a heredoc body still fragments (see below);
+shell keyword frames (`if TRIGGER; then`, `for … do TRIGGER`, `! TRIGGER`,
+`coproc TRIGGER`); redirect PREFIX (`2>/dev/null TRIGGER -t x` — `<>` stays out
+of SEPS, so the prefix takes the command slot; a natural retry-after-block
+shape, worth a WRAPPER-style fix later); `bash -c 'TRIGGER'` / `eval TRIGGER` /
+`ssh host TRIGGER` / `find . -exec TRIGGER` (string payloads need recursive
+parsing); backticks, quoted substitutions, and process substitution (above);
+variables-as-commands (`CMD=TRIGGER; $CMD -t x`); and mid-word `#` in the
+*miss* direction (`foo=#x TRIGGER` — bash treats it as an assignment and DOES
+run TRIGGER, shlex's commenter eats the line instead).
+
+**False-block-direction (currently blocks — declared, not patched):** non-git
+heredoc bodies (the residual below); multiline `case` patterns (`TRIGGER)` at a
+line head is a pattern, not a call); and `TRIGGER#frag` (shlex's posix lexer
+starts a comment at the mid-word `#`, bash doesn't — though in that shape bash
+itself errors command-not-found, so the practical harm is low).
+
+Each miss-side entry is declared rather than patched per bias-to-under; each
+block-side entry is declared because fixing it takes real shell grammar, not
+more heuristics. Production qlmanage-guard shares most of these.
 
 **What it splits but cannot fully parse:** a newline **inside a heredoc body** —
 a heredoc is not quote syntax, so `git commit -F - <<'MSG'` whose body quotes a
