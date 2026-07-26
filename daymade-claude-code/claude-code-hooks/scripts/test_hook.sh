@@ -81,6 +81,10 @@ run "multiline"      '{"tool_name":"Bash","tool_input":{"command":"cd /x && ls\n
 #   never sees TRIGGER (pitfall #11). It only passes if your hook splits on
 #   newlines as text FIRST (Pattern A / the walker section both do).
 # Healthy-lookalike cases (want 0) — THESE are what prove you don't false-block:
+run "quoted-multiline" '{"tool_name":"Bash","tool_input":{"command":"echo \"line1\nTRIGGER was the culprit\nline3\""}}' 0
+#   ↑ quoted-multiline is the trap sibling of "multiline": a text-level line
+#   split fragments it and false-blocks (pitfall #11 residual); only a
+#   quote-state-aware splitter (split_shell_lines) passes it.
 run "grep-regex-arg" '{"tool_name":"Bash","tool_input":{"command":"grep -E \"a|TRIGGER|b\" file"}}' 0
 run "redirect-target" '{"tool_name":"Bash","tool_input":{"command":"echo x > TRIGGER"}}' 0
 run "sed-arg"        '{"tool_name":"Bash","tool_input":{"command":"sed s/TRIGGER/x/ file"}}' 0
