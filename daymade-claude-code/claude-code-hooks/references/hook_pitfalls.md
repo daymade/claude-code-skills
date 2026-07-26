@@ -742,6 +742,98 @@ unresolvable path means **block**.
 
 ---
 
+## 23. A "skip the next token" table that no one checked against the real tool's arity swallows the banned flag as "data"
+
+- **Symptom:** a blocking guard keeps a table of "flags whose next token is a
+  value, not a flag" (to avoid false positives on `-m "-a"`-style data). One
+  day a probe shows the banned form sailing through: `git commit -e -a`
+  exits 0, `git commit -e --no-verify` exits 0 through **two independent
+  guards at once** — the PII-defense line is pierced while every table entry
+  "looks right" and every fixture passes.
+- **Cause:** a **boolean** flag was sitting in the valued-flag table, so the
+  scanner skipped the token AFTER it — and that token was the banned flag
+  itself. Real case (2026-07-26, R7终审 with scratch-repo ground truth):
+  git's `-e` is boolean `--edit` (takes NO value — `git commit -e --no-verify
+  --dry-run` parses both flags independently), yet `-e` was in THREE tables
+  across two files: a form guard's skip set, a bypass guard's DATA_FLAGS, and
+  a bundle-arity character set (`-en` read as "e's value is n" — actually
+  `-e -n`). The tables were each written by reasoning from flag *names*, not
+  by checking arity; the same wrong assumption in two files means
+  cross-reviewing one file against the other finds agreement, not truth.
+- **Fix — every skip-table entry must trace to the tool's real arity, not
+  the flag's vibe:** (1) verify with ground truth (scratch repo / `--help` /
+  parsing experiment) — for git commit the valued short flags are `m F C c t
+  G` and `-u` with its ATTACHED optional value (`-uall` = `--untracked-files
+  =all`, so `u` also absorbs the rest of a bundle); (2) model bundles by
+  walking characters left to right and STOPPING at the first valued char —
+  `-ma` is message "a" (allow), `-eam` hits `a` before `m` (block), the old
+  `startswith("-a")` catches `-am"x"` but misses `-ea`; (3) when the same
+  table exists in two guards, fix both in one commit and write the ground-
+  truth command into each comment, or the next editor re-derives the error
+  from the sibling file.
+
+---
+
+## 24. Every character in a boundary regex's negated class is a blind-spot decision — derive it from the entity's syntax
+
+- **Symptom:** after a "fix the boundary" patch, the guard now blocks the
+  impostor (`notclaude.ai`) correctly — but a probe finds the REAL thing
+  (`api.claude.ai`, the actual API endpoint a Tier-0 rule exists to cover)
+  exiting 0. The fixture list (block impostor ✓, allow bare domain ✓) is
+  all green; the regression is invisible because nobody probed the legal
+  subdomain.
+- **Cause:** the lookbehind `(?<![A-Za-z0-9.-])` added `.` to the negated
+  class. A dot before the domain means "subdomain of the SAME zone" —
+  exactly what the rule covers (`*.claude.ai`) — and the patch excluded it.
+  Each character in that class is a claim about what may precede the needle
+  while still being the same entity; adding one silently re-scopes the rule.
+  Real case (2026-07-26): this was itself a regression introduced while
+  fixing a different boundary complaint — the old substring matcher blocked
+  subdomains fine, the "improved" boundary traded one hole for a worse one.
+- **Fix — derive the class from the entity's grammar, and probe all three
+  cells:** for DNS, a label is `[A-Za-z0-9-]` and `.` is the hierarchy
+  separator, so the boundary is exactly `(?<![A-Za-z0-9-])`. Then probe the
+  full truth table: impostor-prefixed (`notclaude.ai` → allow), legal
+  subdomain (`api.claude.ai` → block), suffix-impostor (`claude.ai.evil.com`
+  → block), bare (`claude.ai` → block). A boundary patch that only re-runs
+  the fixtures it was written for will green-light its own regression.
+  Sibling shape: `startswith("core.hookspath")` key matching eats
+  `core.hooksPathValue` — the same "boundary not derived from the entity"
+  mistake in plain-string form; match the key exactly.
+
+---
+
+## 25. Blocking a "write" without modeling the tool's read forms blocks the guard's own health check
+
+- **Symptom:** a guard that must stop *persistent* config tampering blocks
+  `git config core.hooksPath` — a READ-only query — so the operator (or the
+  agent) cannot inspect the very configuration the guard exists to protect.
+  The failure direction is the worst one: healthy input killed, reflexive
+  bypass trained. Meanwhile `GIT_CONFIG_COUNT=1 make test` — no git anywhere
+  in the segment — is also blocked, because the env-injection scan fires
+  before anyone checked the segment even runs git.
+- **Cause:** mode detection recognized only explicit read flags
+  (`--get/--list/-l`), but git's most natural read form is `git config
+  <key>` with NO value argument (1 arg = query, ≥2 args = write) — a form
+  the flag-list model classifies as "set". And the env-injection detector
+  returned its hit the moment it saw a dangerous VAR=val, before the
+  git-entry check two sections later; the layers were ordered by where the
+  code was added, not by "is this segment even the tool I guard".
+  Both found 2026-07-26 by r7 review probes against real git semantics.
+- **Fix — model the tool's read/write grammar, and gate side detectors on
+  target presence:** (1) enumerate the read forms from the tool's actual
+  semantics (`config <key>` no-value = query, `--get-all/--get-regexp/
+  --get-urlmatch` are reads too; skip valued flags like `--file` when
+  counting args), then classify writes as "≥2 non-flag args or an `--unset`
+  family flag"; (2) a side-channel detector (env injection, wrapper smuggle)
+  must NOTE its hit and only return it after confirming the segment's
+  effective command is the guarded tool — `VAR=x make test` is not your
+  jurisdiction; (3) add the tool's own health-check command
+  (`git config core.hooksPath`) to the allow fixtures — if the guard blocks
+  the command you'd run to debug it, the table is wrong by construction.
+
+---
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:
