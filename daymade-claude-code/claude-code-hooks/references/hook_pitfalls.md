@@ -606,6 +606,35 @@ unresolvable path means **block**.
 
 ---
 
+## 20. Agent deliveries counted as turn boundaries truncate the detection window
+
+- **Symptom:** a turn-scoped transcript hook (one that judges "did X happen
+  THIS turn") goes **quiet** even though unremediated work is sitting right
+  there — or its review-tracking never registers completed reviews. Nothing
+  errors; the reports just stop matching reality.
+- **Cause:** agent deliveries (teammate messages / completion receipts) arrive
+  as `type: "user"` records in the transcript. A turn-boundary rule that treats
+  every user message as a new turn lets **every delivery start a new "turn"** —
+  work done *before* the delivery falls outside the window. Real audit
+  (2026-07-26): the last turn-start in a long session sat 6 lines from the
+  transcript tail — the entire audit's edits and pushes were outside the window,
+  so a compounding-artifact hook reported nothing. The twin blind spot in the
+  same incident: the review channel itself was built on one schema
+  (`agentId: <hex>` in tool_results) while the environment used another
+  (`agent_id: <name>@session-<uuid>` + `teammate_id` deliveries), so no review
+  ever registered either — false quiet and false fire coexisting in one hook.
+- **Fix:** treat deliveries as events *inside* the turn, not as boundaries.
+  Exclude them by wrapper form — content starting `"Another Claude session sent
+  a message:"` / `<teammate-message` — in **both** content branches (string and
+  list), and audit every other system record the same way (isMeta injections,
+  interrupt receipts — compounding-edit-review's `is_turn_start` is the working
+  example; its selftest ⑰ pins "teammate must not truncate the window"). And
+  validate the *channel* per environment: parse a real transcript from every
+  profile/mode you run in — fixture-testing a single schema is how the twin
+  blind spot shipped (rule 7's observability form, SKILL.md).
+
+---
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:
@@ -670,3 +699,10 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
     → the remediation demands cross-call memory (#19): it's a class
     property, not carelessness — fix the environment, downgrade to a reminder,
     or accept-and-measure; a clearer message was never the missing piece.
+17. Does a turn-scoped hook see **neither the work nor the review** that should
+    bound it — quiet when it should fire, or firing when the review already
+    happened? → the window/channel logic is eating system records: agent
+    deliveries counted as turn starts truncate the detection window (#20), and
+    environment-schema drift blinds the review channel (rule 7's observability
+    form — verify the predicate can see R in EVERY environment, not just the
+    one you fixture-tested).
