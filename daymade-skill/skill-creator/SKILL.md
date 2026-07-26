@@ -54,6 +54,12 @@ Six standing disciplines apply throughout, because these failure modes ship conv
    - **A check that misfires on healthy input is worse than no check.** The failure above is a check that passes when it should fail; this is its mirror — a check that fails when it should pass. It is the more expensive one, because it teaches the operator to bypass reflexively (`--no-verify`, `SKIP=1`, `--force`), and once that reflex exists the gate is off for *every* input, including the ones it was built for. So when authoring a fail-closed check, **false positives outrank false negatives**: missing one real problem costs you that instance, while killing one healthy input costs you the entire gate.
      Watch for the tell: **the frustration of having hit the same trap repeatedly is itself the risk signal** — it is exactly the state in which an author ships a defense that was never calibrated against healthy input. Real case: after stepping on one formatting trap three times in a day, the author added a regex check to a linter; it killed **33 healthy inputs** on the project's own corpus and was reverted the same hour. Calibrate before you arm it — run any fail-closed check across real, known-good material and confirm zero false positives; prefer loosening it until it occasionally misses over letting it ever misfire.
    - **Make each item a falsifiable observation, not a self-assessment.** "Background is self-sufficient" cannot be failed by the person who wrote it; "cover the rest of the page, read one card alone, and state what it is deciding" can. Prefer checks that yield an artifact — a command's output, a quoted line, a screenshot — over checks that yield an opinion.
+   - **The same suspicion applies to the checks you *run*, not just the ones you write.** The four rules above govern checks that ship inside a skill. But the greps, finds and one-off scripts you use to verify your **own** work are instruments too, and a wrong instrument reports a clean result just as confidently as a right one. In one 2026-07 session five separate verification commands lied in both directions: a `find` without `-L` reported an installed skill's files missing (they were behind a symlink); a `grep --exclude-dir=<name>` hid a second copy of the very thing being audited; an inverted shell condition raised a false alarm that a removal had not happened; a regex spanning newlines invented 55 "lost quotations"; and a search over two of five files reported two rules missing that were present in the third. **Every one of them was believed at first, and every one was caught only by re-running a differently-shaped check.**
+
+     The fix is the oldest one in experimental practice: **run the instrument on a case whose answer you already know before trusting it on the case you don't.** Grepping for a string you expect to be absent? First grep for one you know is present, in the same command shape — if that returns 0 too, the command is broken, not the file. This costs one line and converts "I checked" into "I checked with an instrument I calibrated."
+
+     Two specific shapes worth memorizing, because both appeared above and both fail *silently*: `find` does not follow symlinks without `-L` (and skill installs are frequently symlinks into a source repo), and `--exclude-dir` matches by basename everywhere in the tree, not just at the path you had in mind.
+
    - **Use what mature checklist practice already settled.** Decide whether a list is **READ-DO** (execute while reading — for low-frequency or unfamiliar procedures) or **DO-CONFIRM** (work from expertise, then stop at a defined **pause point** and confirm — for experienced operators under time pressure), and anchor it at a real pause point rather than "somewhere in the workflow." Keep it to the **killer items** — critical *and* commonly missed under pressure, roughly five to nine; everything beyond that dilutes compliance ([Gawande, *The Checklist Manifesto*](https://www.shortform.com/blog/types-of-checklists/)). And prefer Shingo's **control** over **warning** ([poka-yoke](https://en.wikipedia.org/wiki/Poka-yoke)): a prose reminder depends on vigilance and loses to completion-drive, while a step that blocks progress or forces an artifact needs no vigilance at all. Where a skill can only warn, at least put the warning where the decision gets made — **a rule filed in a reference the executing context never opens is not, in practice, a rule.**
 
 On the other hand, maybe they already have a draft of the skill. In this case you can go straight to the eval/iterate part of the loop.
@@ -187,8 +193,23 @@ The roots this reaches — and that a from-memory list usually misses: the skill
 Four things that sentence leaves out, each of which will stop you:
 
 - **"Reconcile toward it" is a rebuttable presumption, not a rule.** Two standard exits: the project skill may be *stale* (rules written months ago against a system that moved), and it may be *project-specific* (rules that only hold under that project's constraints — importing them wholesale makes your skill narrow, which this file elsewhere tells you not to do). Harvested rules are another author's memory, so **re-verify each one** the way discipline #1 requires of anything you write into a skill.
-- **"Retire" needs a mechanism.** Deleting the directory is the easy half; first `grep` that project for references to it — the third bullet below is about exactly the dangling pointers this creates. Leaving a one-line `superseded by <skill>` stub is usually kinder than a bare deletion.
-- **Identify the owner with the ownership test below** (it applies here too: a project-level skill has no `marketplace.json`, but the project's `git remote` still tells you whose it is). When the owner is the person you are talking to, "consent" is one `AskUserQuestion`. **When the owner is unreachable, harvest only — do not retire.**
+- **"Retire" needs a mechanism, and its first step is not the one you reach for.** In order:
+
+  1. **`find` the skill's *bodies*, before grepping for its *references*.** A skill routinely has more than one copy in the same repo — `.claude/skills/<name>/` and `.agents/skills/<name>/` are both loaded, by different tools, from the same working tree. Grep answers "who mentions it"; only `find` answers "how many of it are there".
+     ```bash
+     find <project> -type d -name '<skill-name>' -not -path '*/.git/*'
+     ```
+     **Do not put the skill's own name in `--exclude-dir`** (it matches by basename, so it hides every same-named directory including the copy you have not found — see the instrument rule in discipline #6). Real case (2026-07): a retirement did exactly that, fixed all five references it found, and left a second full copy under `.agents/skills/` — git-tracked, no retirement marker, a stale snapshot missing the newest rule — which the other tool would still load as live.
+  2. **Verify the new home is actually reachable from where the old one was**, *before* deleting anything — a marketplace skill you just pushed is not installed until the marketplace is updated and the plugin installed, and retiring first leaves a window with neither:
+     ```bash
+     claude plugin marketplace update <marketplace>   # your push is not their cache
+     claude plugin install <skill>@<marketplace>
+     find -L ~/.claude/plugins/cache -path '*<skill>*' -name '*.md'   # -L: installs are often symlinks
+     ```
+     The `-L` is not optional — plugin caches frequently symlink into a source repo, and a bare `find` reports the files missing (see the instrument rule in discipline #6).
+  3. **Then** grep for references and repoint the live ones. Distinguish **live instructions** (a skill list, a cross-reference, a handoff doc telling the next agent what to use) from **historical records** (a decision log entry saying "on date X we shipped this") — rewriting the second destroys an audit trail to fix a problem it does not have.
+  4. **Then** replace each body with a `superseded by <skill>` stub rather than a bare deletion, and make every copy's stub byte-identical. **Keep the YAML frontmatter** — a `SKILL.md` without it may fail to load rather than fail informatively — but rewrite the `description` so the stub announces its own retirement instead of advertising the old triggers; otherwise it keeps winning the routing it no longer serves. The body needs only: where the capability went, and one line on why it moved.
+- **Identify the owner with the ownership test below** (it applies here too: a project-level skill has no `marketplace.json`, but the project's `git remote` still tells you whose it is). When the owner is the person you are talking to, "consent" is one `AskUserQuestion`. **When the owner is unreachable, harvest only — do not retire** (which leaves both skills live and competing for the trigger, same end state as a declined retirement — see Coexistence & Precedence below).
 - **If the owner declines to retire it**, you now have two skills competing for the same trigger; that is the Coexistence & Precedence problem below, not a failure.
 
 **Search by capability vocabulary, not by skill name.** That project skill would not have matched a name search for the new skill's title; it matched on the domain terms inside its body. Grep the candidate roots for the *concepts* the new skill will handle.
@@ -1293,7 +1314,9 @@ not a replacement.
 
 ### Step 5: Sanitization Review (mandatory for any public skill)
 
-**Before this gate: discipline #5's independent pass must have run**, and `independent-review.md` (in your private git-tracked knowledge repo — not the wiped workspace, not any repo that is or may become public or distributed) must exist. This is the first step where anything leaves your hands, so it is where that discipline is actually enforced rather than merely stated — a rule that lives 1000 lines above the point of use, with nothing checking it, loses to completion-drive every time.
+**Before this gate: discipline #5's independent pass must have run**, and `independent-review.md` (in your private git-tracked knowledge repo — not the wiped workspace, not any repo that is or may become public or distributed) must exist. For a **new** skill this is the first step where anything leaves your hands, so it is where that discipline is actually enforced rather than merely stated — a rule that lives 1000 lines above the point of use, with nothing checking it, loses to completion-drive every time.
+
+**For an edit to an already-published skill, the moment it leaves your hands is the push, not this step.** This gate can be answered "internal-only, skip" in one sentence, and packaging may never run at all for a docs-only change — so anchoring the review here means a skill edit can reach a public branch having passed no independent eye. Real case (2026-07): a change to this very file shipped a discovery command that could not reach three of the roots the prose beside it claimed it covered; it was merged, and only a review commissioned *afterwards* caught it. **So for an existing skill: the independent pass and its recorded artifact are due before `git push` / opening the PR — the gates that run at push (regression audit, validation, scans) all check structure, and none of them can tell you the instructions are wrong.** This inherits discipline #5's threshold unchanged: it is due when *a rule, contract, or number changed*, not for a typo or a pure reformat. Making a spelling fix wait on a review round would teach exactly the reflex #6 warns about — "this one's small" becomes the universal exemption, and then it covers the changes that mattered too.
 
 **Not optional for a skill going to a public repo.** Private content leaks into public skills all the time, and the leaks a scanner misses are the dangerous ones — a real name in a non-English language, a verbatim line from a real transcript, a real example dropped into an illustration. Skip only if the skill is genuinely internal-only.
 
@@ -1304,6 +1327,28 @@ not a replacement.
 `quick_validate` already printed). A private destination makes option C the default
 recommendation rather than an afterthought — "assume public unless told otherwise" is
 what turns a private skill's working paths into placeholders nobody asked for.
+
+**The trigger for sanitizing is the destination's `isPrivate`, not how much the task
+feels like publishing.** These come apart, and when they do the feeling wins unless you
+name it. Moving content *into a marketplace skill* feels like publishing — marketplaces
+are where things get distributed — so the sanitizing reflex fires even when both the
+source and the destination are private repos and nothing is going anywhere. Real case
+(2026-07): a migration from a project-level skill into a private marketplace skill
+generalized a real config path, a real hex value and a real named example into
+placeholders. `quick_validate` had printed `🔒 audience: private` on **every** run;
+the author read it every time and sanitized anyway, because the *activity* read as
+publication. The cost is not cosmetic — a real path is what lets the next reader go
+check the value; "the project's own token file" cannot be opened.
+
+So make it a lookup, not a judgment: **read `isPrivate` for the destination, and if it
+is `true`, sanitizing requires the owner to ask for it.** A private→private move is a
+move, not a release. **When neither probe answers** (no remote yet, `quick_validate` not
+run), you have no lookup — fall back to treating it as public *and say so*, because the
+asymmetry runs that way: an unnecessary question costs a sentence, an unnecessary leak
+does not come back. And `isPrivate` reports the destination's state **today** — a skill
+sitting in a private repo on its way to release gets its sanitization pass on the push
+that publishes it, not on this one. If you find yourself reasoning about whether something "should"
+be generalized in a private destination, that reasoning is the tell.
 
 Use **AskUserQuestion** to confirm the depth (for a public destination, confirm the depth,
 not whether to do it; for a private one, confirm whether it is wanted at all):
@@ -1453,7 +1498,7 @@ when an entry disappears, leaving dangling installs that error on every `marketp
 update`. Treat such changes like an API deprecation: ship a migration note in the
 changelog, and follow marketplace-dev's guidance for the mechanics.
 
-**If you commit/push the skill repo yourself:** stage only the skill's explicit paths (`git add <skill-dir> .claude-plugin/marketplace.json`) — never `git add .`; the working tree is usually full of unrelated churn that will otherwise ride into the commit (one commit swept in a pile of unrelated transcript files and had to be `git reset` and re-staged). Before pushing, confirm the repo's real visibility with `gh repo view --json visibility,isPrivate` instead of assuming from the path — a public skill repo deserves a PR + review, not a direct push to main.
+**If you commit/push the skill repo yourself — for an *existing* skill, confirm `independent-review.md` exists before you push** (Step 5's "before this gate" note explains why the push, not Step 5, is the real moment for an edit to something already published; a docs-only change may never reach Step 5 or packaging at all). Then: stage only the skill's explicit paths (`git add <skill-dir> .claude-plugin/marketplace.json`) — never `git add .`; the working tree is usually full of unrelated churn that will otherwise ride into the commit (one commit swept in a pile of unrelated transcript files and had to be `git reset` and re-staged). Before pushing, confirm the repo's real visibility with `gh repo view --json visibility,isPrivate` instead of assuming from the path — a public skill repo deserves a PR + review, not a direct push to main.
 
 ### Step 9: Ship or Iterate
 
