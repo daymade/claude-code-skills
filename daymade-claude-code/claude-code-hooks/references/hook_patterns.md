@@ -116,6 +116,10 @@ printf '%s' "$CMD" | grep -qw 'TRIGGER' || exit 0     # fast path: token absent 
 # instant python exits 2, and you'd get a bare exit 2 with ZERO guidance — a real
 # bug (SKILL.md's whole point is that stderr IS the message the model sees). One
 # process: print, then exit.
+# (Size ceiling worth knowing: HOOK_CMD travels as an env var, so a command near
+# the kernel's ARG_MAX (~1-2MB) makes python3 fail to start with E2BIG — the hook
+# exits 126, a non-2 code, i.e. fail-open; it also leaks one raw shell line to
+# stderr. Pathological input, but declare it.)
 HOOK_CMD="$CMD" python3 - <<'PY'
 import os, sys, shlex, re
 cmd = os.environ["HOOK_CMD"]
@@ -123,6 +127,10 @@ SEPS = {";","&&","||","|","&","(",")","{","}","|&"}   # NOT <> — a redirect ta
 ENV = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 GIT_WRITES = {"commit","rebase","tag","am","cherry-pick"}
 WRAPPERS = {"command","env","sudo","time","timeout","nice","stdbuf","nohup","builtin","exec","xargs"}
+# Introspection flags make a wrapper a QUERY, not an execution — `command -v
+# TRIGGER` is the standard existence probe (health checks use it); blocking it
+# is a false-block.
+INTROSPECT = {"command": {"-v","-V"}, "sudo": {"-l","-V","--list","--version","--help"}}
 
 def toks(c):
     lex = shlex.shlex(c, posix=True, punctuation_chars=True); lex.whitespace_split = True
@@ -154,32 +162,55 @@ def is_git_write(seg):
     return False
 
 def eff_head_idx(toks):
-    """Effective command index: skip ENV prefixes and transparent wrappers (their
-    flags included — production carries per-wrapper valued-flag tables; kept
-    compact here). Without it the exemption below only sees a literal `git` head
-    and false-blocks `sudo git commit` (its own commit message!) — qlmanage-guard
-    Finding 1."""
+    """Effective command index: skip ENV prefixes and transparent wrappers —
+    including their VALUED flags and positional args, or `sudo -u root git
+    commit` (value 'root' would become the "command") and `timeout 5 git commit`
+    ('5' would) slip past. Tables mirror production qlmanage-guard's."""
+    WRAPPER_VALUED = {
+        "sudo":  {"-u","-g","-p","-C","-U","-r","-t","-D","-T","-h",
+                  "--user","--group","--prompt","--close-from","--role","--type",
+                  "--other-user","--chdir","--command-timeout","--host"},
+        "env":   {"-u","--unset","--chdir","-C"},
+        "xargs": {"-n","-P","-I","-d","-a","-E","-s","-L",
+                  "--max-args","--max-procs","--replace","--delimiter","--arg-file"},
+        "timeout": {"-k","-s","--kill-after","--signal"},
+        "nice":  {"-n","--adjustment"},
+        "stdbuf": {"-i","-o","-e","--input","--output","--error"},
+    }
+    WRAPPER_POSITIONAL = {"timeout": 1}
     i = 0
     while i < len(toks):
         t = toks[i]
         if ENV.match(t): i += 1; continue
         if t in WRAPPERS:
-            i += 1
-            while i < len(toks) and toks[i].startswith("-"): i += 1
+            w = t; i += 1
+            while i < len(toks) and toks[i].startswith("-"):
+                if toks[i] in WRAPPER_VALUED.get(w, ()):
+                    i += 2            # flag + its value (not the command)
+                else:
+                    i += 1
+            i += WRAPPER_POSITIONAL.get(w, 0)   # timeout's DURATION
             continue
         return i
     return -1
 
 def split_shell_lines(c):
-    r"""Split on newlines as SHELL sees them: quote state tracked (a newline
-    inside '…' or "…" does not split — `gh pr create -b "…\nTRIGGER…"` never
-    executes it), backslash-newline joined (posix), and `$'…'` ANSI-C escapes
-    honored (`\'` does not close). Heredoc bodies are not quote syntax and
-    still fragment (the declared residual, pitfall #11)."""
+    r"""Split on newlines as SHELL sees them:
+    - quote state tracked (a newline inside '…' or "…" does not split —
+      `gh pr create -b "…\nTRIGGER…"` never executes it), `$'…'` ANSI-C
+      escapes honored (`\'` does not close), backslash-newline joined (posix);
+    - a word-start `#` starts a comment that ends at the physical newline —
+      quotes INSIDE comments are inert, so `# it's fine` must not open a
+      phantom quote that glues the next line's real command into the previous
+      one (Finding: `echo hi # it's fine⏎TRIGGER` really executes TRIGGER).
+    Heredoc bodies are not quote syntax and still fragment (declared residual)."""
     lines, cur, quote, ansi, i = [], [], None, False, 0
     n = len(c)
     while i < n:
         ch = c[i]
+        if quote is None and ch == "#" and (i == 0 or c[i-1] in " \t\n;&|(){}"):
+            while i < n and c[i] != "\n": i += 1
+            ch = c[i] if i < n else ""
         if ch == "\\" and i + 1 < n:
             nx = c[i + 1]
             if nx == "\n" and (quote != "'" or ansi): i += 2; continue
@@ -203,9 +234,13 @@ def split_shell_lines(c):
 # pseudo-command-text and the guard blocks its own fix commit (this skill's own
 # qlmanage-guard shipped exactly that). Exempt the whole command when any segment's
 # EFFECTIVE command is a git write. Bias-to-under (pitfall #11): this also lets
-# `git commit -m x && TRIGGER` through — the rare miss is the deliberate trade for
-# a blocker; stricter needs a real shell grammar (production: qlmanage-guard's
-# eff_head_idx + lib-git-commit-detect's adjacency check).
+# `git commit -m x && TRIGGER` — and the multiline form (`git commit -m x`⏎`TRIGGER`) —
+# through; the rare miss is the deliberate trade for a blocker.
+# Declared hole in the same trade: git's own argv EXECUTIONS are not data —
+# `git rebase --exec 'TRIGGER'` and `git -c core.editor=TRIGGER commit` have git run
+# the string for real, and the whole-command exemption swallows them (production
+# shares this hole; narrowing it is heuristics-on-heuristics, so it is declared,
+# not patched).
 if any(
     (idx := eff_head_idx(seg[1])) >= 0
     and (seg[1][idx] == "git" or seg[1][idx].endswith("/git"))
@@ -214,13 +249,30 @@ if any(
 ):
     sys.exit(0)
 
+def blocks(seg_toks):
+    """Is TRIGGER executed in this segment — wrapper-aware (sudo/env/xargs/timeout
+    are transparent; their introspection flags are queries, not executions)."""
+    idx = eff_head_idx(seg_toks)
+    if idx < 0: return False
+    for w in (t for t in seg_toks[:idx] if t in INTROSPECT):
+        if any(f in INTROSPECT[w] for f in seg_toks[1:idx]): return False
+    head = seg_toks[idx]
+    if head != "TRIGGER" and not head.endswith("/TRIGGER"):
+        return False
+    # `TRIGGER()` starts a function DEFINITION, not a call (measured false-block;
+    # punctuation_chars groups `()` into ONE token, so check both forms).
+    nxt = seg_toks[idx+1] if idx + 1 < len(seg_toks) else ""
+    if nxt == "()" or (nxt == "(" and idx + 2 < len(seg_toks) and seg_toks[idx+2] == ")"):
+        return False
+    return True
+
 # Pitfall #11: shlex treats newlines as ordinary whitespace, so a multiline command
 # (`cd /x\ngit add\nTRIGGER -y`) collapses into ONE segment whose head is `cd` and
 # the trigger is never in command position — replayed trigger rate 0 on real
 # transcripts. Split shell-aware FIRST, then walk each line.
 for line in split_shell_lines(cmd):
-    for head, seg in segments(line):
-        if head == "TRIGGER":                # command-position hit → print guidance + block
+    for _head, seg in segments(line):
+        if blocks(seg):                        # execution hit → print guidance + block
             sys.stderr.write("BLOCKED: <BANNED THING> is not allowed here.\n"
                              "WHY: <the failure mode this prevents>.\n"
                              "USE INSTEAD: <the correct command / workflow>.\n")
@@ -277,6 +329,23 @@ def _segments(line: str):
         cur.append(t)
     if head: yield head, cur
 
+_WRAPPERS = {"command","env","sudo","time","timeout","nice","stdbuf","nohup","builtin","exec","xargs"}
+
+def _eff_head_idx(toks):
+    """Effective command index: skip ENV prefixes and transparent wrappers.
+    Compact form — Pattern A carries the full per-wrapper valued-flag tables
+    (`sudo -u root`, `timeout 5`); use those if your targets ride wrappers often."""
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if ENV.match(t): i += 1; continue
+        if t in _WRAPPERS:
+            i += 1
+            while i < len(toks) and toks[i].startswith("-"): i += 1
+            continue
+        return i
+    return -1
+
 def split_shell_lines(c: str):
     r"""Split on newlines as SHELL sees them (production: qlmanage-guard).
     - Newlines inside single/double quotes do NOT split — `gh pr create -b
@@ -292,6 +361,10 @@ def split_shell_lines(c: str):
     n = len(c)
     while i < n:
         ch = c[i]
+        if quote is None and ch == "#" and (i == 0 or c[i-1] in " \t\n;&|(){}"):
+            # word-start comment → EOL; quotes inside comments are inert
+            while i < n and c[i] != "\n": i += 1
+            ch = c[i] if i < n else ""
         if ch == "\\" and i + 1 < n:
             nx = c[i + 1]
             if nx == "\n" and (quote != "'" or ansi):
@@ -324,12 +397,20 @@ def executes(cmd: str, target: str) -> bool:
     # Two stages, order matters (pitfall #11): shlex swallows newlines as ordinary
     # whitespace, so a multiline block (`cd /x\ngit add\nTRIGGER -y`) would
     # collapse into ONE segment headed by `cd` and hide the trigger. Split into
-    # lines shell-aware FIRST (quote state + continuations), then shlex-walk
-    # each line — a quoted `a|TRIGGER|b` still stays one token inside its line,
-    # so no phantom command is made.
+    # lines shell-aware FIRST (quote state + continuations + comments), then
+    # shlex-walk each line — a quoted `a|TRIGGER|b` still stays one token inside
+    # its line, so no phantom command is made.
     for line in split_shell_lines(cmd):
-        for head, _seg in _segments(line):
-            if head == target: return True      # command-position match
+        for _head, seg in _segments(line):
+            idx = _eff_head_idx(seg)          # wrappers are transparent —
+            if idx < 0: continue              # `sudo TRIGGER` IS a hit, and
+            head = seg[idx]                   # `command -v TRIGGER` is NOT
+            if head == target or head.endswith("/" + target):
+                # `TRIGGER()` starts a function definition, not a call
+                nxt = seg[idx+1] if idx + 1 < len(seg) else ""
+                if nxt == "()" or (nxt == "(" and idx + 2 < len(seg) and seg[idx+2] == ")"):
+                    continue
+                return True
     return False
 ```
 
@@ -351,18 +432,38 @@ Why each piece matters:
   quote-state-aware it also leaves `gh pr create -b "…\nTRIGGER…"` alone
   (quoted, never executed) and joins `echo a \⏎TRIGGER` back into one line.
 
-**What it deliberately does NOT catch:** `$(TRIGGER)` / backtick command
-substitution. A raw-string regex for `$(TRIGGER` would misfire on a *quoted*
-literal `'$(TRIGGER)'` (which doesn't execute). Since the real use of most
-banned commands is a direct call, missing the rare substitution case beats
-false-positives. If you truly need it, detect it in a context that distinguishes
-single- from double-quotes — usually not worth it.
+**What it catches for free, and what it misses (measured, not guessed):**
+unquoted `$(TRIGGER)` IS caught — `(` is in SEPS, so command position resets
+right after it and the token lands at a head (`OUT=$(TRIGGER -t x)` blocks;
+production shipped this exact correction 2026-07-23 after an earlier version of
+this note claimed the opposite). The genuine misses: **backticks**
+(`` `TRIGGER` `` — no `(` token), **quoted substitutions** (`"$(TRIGGER)"` and
+`'$(TRIGGER)'` — quoted, so never a command), and **process substitution**
+(`<(TRIGGER …)`). If you truly need those, detect them in a context that
+distinguishes single- from double-quotes — usually not worth it.
+
+**Known gaps by declaration (measured 2026-07-26, all currently exit-allow):**
+heredoc bodies (not quote syntax — see below); shell keyword frames
+(`if TRIGGER; then`, `for … do TRIGGER`, `! TRIGGER`, `coproc TRIGGER`);
+redirect PREFIX (`2>/dev/null TRIGGER -t x` — `<>` stays out of SEPS, so the
+prefix takes the command slot; a natural retry-after-block shape, worth a
+WRAPPER-style fix later); `bash -c 'TRIGGER'` / `eval TRIGGER` / `ssh host
+TRIGGER` / `find . -exec TRIGGER` (string payloads need recursive parsing);
+multiline `case` patterns (`TRIGGER)` at a line head is a pattern, not a call —
+currently a false-block); a mid-word `#` (`TRIGGER#frag` — shlex's posix lexer
+starts a comment there, bash doesn't); and variables-as-commands
+(`CMD=TRIGGER; $CMD -t x`). Production qlmanage-guard shares most of these;
+each is declared rather than patched because every one of them is miss-side
+(bias-to-under) — if yours is a fail-closed guard, close the ones you need
+with a real shell grammar.
 
 **What it splits but cannot fully parse:** a newline **inside a heredoc body** —
 a heredoc is not quote syntax, so `git commit -F - <<'MSG'` whose body quotes a
 trigger-looking line still fragments into a phantom command even with
 quote-state-aware splitting. (Multiline *quoted strings* used to be in this
-list too; `split_shell_lines` handles those — the residual is heredoc-only.)
+list too; `split_shell_lines` handles those, and it also strips word-start
+`#` comments so a quote inside a comment can't glue lines together —
+`echo hi # it's fine⏎TRIGGER` still blocks. The residual is heredoc-only.)
 That residual is pitfall #11's: for a fail-open
 reminder, declare it and move on; for a fail-closed blocker, lift the git-write
 exemption (pitfall #7) to the whole command BEFORE this walk — exactly the
