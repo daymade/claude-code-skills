@@ -834,6 +834,70 @@ unresolvable path means **block**.
 
 ---
 
+## 26. A hook that activates mid-session only guards what happens AFTER it — in-flight work from before stays uninspected
+
+- **Symptom:** a hook ships mid-session specifically because a systemic
+  anti-pattern was just caught, and it works exactly as designed — every
+  later attempt at the pattern gets blocked. It is tempting to treat the
+  problem as closed for the whole session. It isn't: anything already
+  running, already dispatched, or already reported before the hook existed
+  sat outside anything the hook could ever have inspected.
+- **Why this belongs in a "bug that shipped" catalog when the hook itself
+  didn't misbehave:** every other entry here is a broken guard; this one is
+  a correctly-working guard paired with a wrong assumption about what it
+  covers. It earns a slot anyway because it's exactly the mistake a hook
+  author makes in the minutes right after shipping a fix — "I closed this"
+  instead of "I closed this going forward" — and the file's own triage
+  method ("match the symptom") won't route a reader here unless they
+  already suspect coverage, not correctness, is the question.
+- **Cause:** a PreToolUse-style gate only ever sees the tool call in front
+  of it, at the moment it fires. It has no transcript access and no
+  mechanism to scan backward: not the background processes already
+  launched under the old pattern, not results already returned and
+  believed, not commands already dispatched from earlier in the same
+  session. (This is a property of tool-call gates specifically, not of
+  every hook type — a Stop hook with transcript access, like the one
+  behind entry 20, can and does look backward within a turn; the claim
+  here is scoped to hooks that only ever see one tool call at a time.)
+  "The guard is now live" and "every prior instance this session is
+  accounted for" are two independent facts; shipping the hook only ever
+  establishes the first.
+- **Real case (2026-07-21 to 2026-07-27, six days, one session):**
+  `bg-exitcode-guard` blocks backgrounded Bash commands whose last
+  statement is `echo`/`printf` after the script already captured `$?` — the
+  always-zero echo/printf exit code overwrites the real command's exit code
+  in the task-notification summary. The same session used that exact shape
+  13 times before the hook went live. Once, on day one, it produced a
+  genuinely misleading "completed (exit code 0)" notification for a deploy
+  that had actually failed — and the operator caught it ten seconds later,
+  same turn, by habitually re-grepping the real log instead of trusting the
+  notification text. That was a near miss, not a believed-and-acted-on
+  failure — but the near miss alone didn't stop anything: the same shape
+  recurred another 12 times over the following six days. Only the hook's
+  activation actually closed it (zero recurrences after). And the hook,
+  once live, could do nothing about the 13 uses that already happened — it
+  does not reach backward, per Cause above.
+- **Fix:** don't treat "I have a habit of double-checking" as equivalent to
+  "this is closed" — a habit is a per-instance save, not a guarantee, and
+  this exact case shows a real habit still needing 13 repetitions and 6
+  days before something durable (the hook) actually ended it. Once the hook
+  is live, two concrete checks, not just a resolution to be careful:
+  (1) look for backgrounded tasks that are already running or already
+  dispatched from before the hook existed — the harness's own task
+  list/tracker is the right place to check, not a manual re-read of the
+  transcript, since those tasks can still complete and report *after* the
+  hook exists and the hook will never see them; (2) if the session or
+  environment already runs some later, broader check (an end-of-session
+  review, a periodic audit), confirm it actually covers this exact gap
+  rather than assuming it does — in the case above, that later check is
+  literally what surfaced the true count of 13 uses, days after the hook
+  activated, not any deliberate sweep done at the moment the hook shipped.
+  If either check turns up an instance that was actually acted on, not just
+  printed, treat it as its own live incident — verify what state it left
+  behind before moving on, not just log it as another near miss.
+
+---
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:
