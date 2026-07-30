@@ -18,6 +18,8 @@ Two-phase correction pipeline: deterministic dictionary rules (instant, free) fo
 
 All scripts use PEP 723 inline metadata — `uv run` auto-installs dependencies. Requires `uv` ([install guide](https://docs.astral.sh/uv/getting-started/installation/)).
 
+The commands below use relative `scripts/...` paths — run them from the skill directory. In agent harnesses whose shell resets the working directory between calls, substitute the absolute script path (e.g. `$CLAUDE_SKILL_DIR/scripts/fix_transcription.py`) — otherwise `uv` fails with `Failed to spawn: scripts/fix_transcription.py`.
+
 ## Quick Start
 
 ```bash
@@ -220,6 +222,20 @@ the window when the cut lands mid-sentence. Verify the timeline pairing once
 per recording source (`ffprobe` duration ≈ the transcript's last timestamp) —
 a mismatched speed rate plays the wrong seconds everywhere.
 
+**Wiring audio for a Feishu-minute transcript** (the common case when the
+transcript came from a minutes-sync pipeline): `cd` to a cache/state directory
+first (a media blob should not ride into a docs repo's git), then download the
+media with `lark-cli minutes +download --minute-tokens <token> --output
+./audio.m4a` — note `--output` only accepts a **relative** path inside the
+current directory (`../` is refused too), which is why the `cd` has to come
+first. If lark-cli's SSRF guard refuses the download host (`blocked download
+URL: local/internal host is not allowed` — Feishu's signed-download domain is
+literally named `internal-api-drive-stream.feishu.cn`, and its `internal-`
+prefix is what trips the guard), fetch the signed URL yourself: `--url-only`
+prints a JSON envelope — pull its `download_url` field, then `curl -sSL -o
+audio.m4a "<download_url>"`. Run the ffprobe duration check above, then
+declare `audio:` in the transcript's frontmatter.
+
 **Stage 1 integration**: safe-mode deferrals are auto-enqueued
 (`source: stage1_deferred`) at run time, so a caller discarding the sidecar no
 longer loses them. Exception: an input under the OS temp dir is NOT enqueued
@@ -340,7 +356,8 @@ A recording can be long but still fast-tier (two known speakers, plain language)
 **Correction scope includes the metadata lines, not just the body.** A filed transcript usually carries ASR-derived metadata — a `Keywords:` line, frontmatter, a title — and those lines contain the *same* recognition errors as the spoken body (e.g. a `Keywords:` line still listing `克劳锐` when every body mention was already corrected to `Claude`). Fix them with the same rules. There is no "metadata is sacred, leave it" exception: the metadata is a search/grep surface too, and a keyword left in its ASR-garbled form will silently fail every future `grep Claude` while the body looks clean. When you re-grep the final file to confirm a correction landed, include the metadata lines in that check.
 
 1. Run Stage 1 (dictionary) on all files (parallel if multiple)
-2. Verify Stage 1 — diff against the original. If the dictionary introduced false positives, work from the **original** file instead and apply your edits there
+2. Verify Stage 1 — diff against the original. If the dictionary introduced false positives, work from the **original** file instead and apply your edits there.
+   **And when the input already passed through an automated corrector** (a sync pipeline's pre-classify stage, a previous Stage 3 API run), your input is NOT raw ASR — upstream corrections are baked in with no evidence trail. Before triaging, diff against the raw source (the caller's raw transcript — sync engines typically keep one alongside the corrected copy, e.g. `transcript_raw.txt` — or re-pull from the source API). Two things fall out of that diff, in opposite directions: **(a)** every upstream entity swap is itself a suspect in step 4's triage, because an upstream AI "correction" can be a fluent wrong guess — real case: raw ASR 「新的车辆」 was "smoothed" by a pipeline AI into 「新出来的反馈」 (grammatical, plausible, wrong: the speaker said a near-homophone name), and only the raw diff caught it; **(b)** what upstream already fixed correctly is settled — check the diff *before* proposing a fix that's already applied, or you redo work and risk "fixing" a correct form back to a wrong one
 3. **Load the domain's priors, then read the entire transcript.** If `~/.transcript-fixer/contexts/<domain>.md` exists for this transcript's domain, read it first — it primes which homophone traps to suspect and names the authoritative sources for step 4's ladder (see "Domain Correction Contexts" above). Then read the **entire** transcript before proposing corrections — later context disambiguates earlier errors (a name garbled near the start often becomes obvious later). For large files, read in chunks but finish the whole thing before deciding anything
 4. **Triage each candidate error into one of three buckets** — this triage is the part that takes judgment. **First override three reflexes that repeatedly misfile names** (all three are real, recurring failures — they send a fixable name straight to "ask the user"):
    - **Speaker labels first — the transcript usually already holds the names.**
