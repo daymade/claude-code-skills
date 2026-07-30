@@ -834,6 +834,42 @@ unresolvable path means **block**.
 
 ---
 
+## 26. A hook that activates mid-session only guards what happens AFTER it — in-flight work from before stays uninspected
+
+- **Symptom:** a hook ships mid-session specifically because a systemic
+  anti-pattern was just caught, and it works exactly as designed — every
+  later attempt at the pattern gets blocked. It is tempting to treat the
+  problem as closed for the whole session. It isn't: anything already
+  running, already queued, or already reported before the hook existed sat
+  outside anything the hook could ever have inspected.
+- **Cause:** a hook is a gate on the tool-call path from the moment it is
+  registered onward. It has no mechanism to scan backward — not the
+  background processes already launched under the old pattern, not results
+  already returned and already believed, not commands still queued from
+  earlier in the same session. "The guard is now live" and "every prior
+  instance this session is accounted for" are two independent facts;
+  shipping the hook only ever establishes the first.
+- **Real case (2026-07-27):** `bg-exitcode-guard` was written and registered
+  mid-session to block backgrounded Bash commands whose last statement is
+  `echo`/`printf` after capturing `$?` (the always-zero echo exit code masks
+  the command's real failure). The SAME session had already used that exact
+  anti-pattern 13+ times before the hook existed — one of those had already
+  produced a false-success task-notification that had already been believed
+  and acted on. The hook, functioning correctly from that point on, blocked
+  every later attempt at the pattern; it did nothing about, and structurally
+  could not have done anything about, the 13 that already ran.
+- **Fix:** when a hook is born specifically because a systemic anti-pattern
+  was just caught mid-session, add one deliberate step right after
+  registering it: a one-time sweep of the session's own recent history for
+  the same pattern — grep prior background-command invocations for the same
+  shape, and independently re-verify (per Evidence Discipline — not by
+  re-reading the same task-notification) any "success" that was taken at
+  face value while the pattern was still live. Do this once, right after the
+  hook activates; do not rely on the hook itself to have covered it, because
+  by construction it cannot reach backward in time.
+
+---
+
 ## Meta-principle: the ordering of these fixes
 
 When a guard is misbehaving, check in this order — cheapest and most common first:
