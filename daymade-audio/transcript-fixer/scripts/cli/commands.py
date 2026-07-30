@@ -108,6 +108,36 @@ def _enqueue_deferrals(changes, input_path: Path, original_text: str, domain: st
         return 0
 
 
+def _format_domain_hint(total_changes: int, domain: str | None, domain_stats: dict) -> str | None:
+    """Explain a 0-correction run honestly when --domain was passed.
+
+    Two different realities must read differently, because they call for
+    opposite operator responses:
+    - the domain HAS rules but none matched this transcript (fine — the text
+      is clean for this domain's vocabulary; nothing to do) vs
+    - the domain name has NO rules at all (likely a typo'd or wrong domain —
+      the operator should check the name).
+
+    The old message said "no rules in domain" for both, which sent operators
+    investigating why their loaded domain was "empty". The Available list
+    deliberately excludes the requested domain (it lists *other* domains).
+    """
+    if total_changes != 0 or not domain or not domain_stats:
+        return None
+    other = {d: n for d, n in domain_stats.items() if d != domain}
+    if not other:
+        return None
+    parts = ", ".join(f"{d} ({n})" for d, n in sorted(other.items()))
+    total = sum(domain_stats.values())
+    loaded = domain_stats.get(domain, 0)
+    if loaded:
+        first = (f"hint: 0 of {loaded} rules in domain '{domain}' matched this transcript. "
+                 f"Other domains: {parts}")
+    else:
+        first = f"hint: no rules in domain '{domain}'. Available: {parts}"
+    return f"{first}\nhint: run without --domain to use all {total} rules"
+
+
 def _format_changes_report(
     changes,
     original_text: str,
@@ -699,13 +729,9 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
             print(f"🔍 Dry-run preview: {preview_path}")
 
         # Hint when 0 corrections and other domains have rules
-        if summary['total_changes'] == 0 and args.domain and domain_stats:
-            other = {d: n for d, n in domain_stats.items() if d != args.domain}
-            if other:
-                parts = ", ".join(f"{d} ({n})" for d, n in sorted(other.items()))
-                total = sum(other.values())
-                print(f"hint: no rules in domain '{args.domain}'. Available: {parts}")
-                print(f"hint: run without --domain to use all {total} rules")
+        hint = _format_domain_hint(summary['total_changes'], args.domain, domain_stats)
+        if hint:
+            print(hint)
         print()
 
     # Stage 2: AI corrections
