@@ -1,22 +1,36 @@
 ---
 name: photo-to-scanned-pdf
 description: >-
-  Turn phone photos of paper documents (contracts, stamped certificates, receipts,
-  forms, handwritten notes) into a clean scanner-quality PDF: perspective
-  rectification + noteshrink background-whitening + A4 PDF assembly, with
-  colored-paper white-balance handling and a mandatory whole-document visual
-  check. Use this skill whenever the user has photos of paper documents and wants
-  them as a PDF / 扫描件 / scan — trigger on "把照片做成扫描件", "photos to
-  scanned PDF", "make this look scanned", "手机拍的文档转 PDF", "盖章文件扫描",
-  replacing pages inside an existing scanned PDF, or any CamScanner-like request.
-  Do NOT hand-roll levels/contrast enhancement for scan-look output — that path
-  was tried and rejected twice; this skill's pipeline is the proven one.
+  Two pipelines ending at a scanner-look PDF. (1) Phone photos of paper
+  documents (contracts, stamped certificates, receipts, forms, handwritten
+  notes) → clean scanner-quality PDF: perspective rectification + noteshrink
+  whitening + A4 assembly + mandatory whole-document check. Trigger: "把照片
+  做成扫描件", "photos to scanned PDF", "make this look scanned", "手机拍的
+  文档转 PDF", "盖章文件扫描", replacing pages in an existing scanned PDF,
+  any CamScanner-like request. (2) A digital document with no signature yet
+  (rendered docx/PDF, confirmation form, contract draft) → make it look
+  hand-signed and scanned: synthesize a handwriting-style signature, composite
+  it onto the signature line, apply the same scan-look post-processing.
+  Trigger: "帮我做个手写签名", "生成签名盖到这份文件上", "做成签过字的扫描件",
+  "synthesize a signature", any request for a document that needs to look
+  signed without a real photographed signature. Do NOT hand-roll
+  levels/contrast enhancement for scan-look — tried and rejected twice; this
+  skill's pipeline is the proven one.
 ---
 
 # Photo → Scanned PDF
 
-Phone photos of documents → scanner-look PDF. The pipeline that works, and the
-failure modes that ship wrong PDFs if skipped.
+Two related pipelines, same destination look, different starting point:
+phone photos of paper documents, or a digital document that needs a synthetic
+signature before it looks signed. The pipelines that work, and the failure
+modes that ship wrong PDFs if skipped.
+
+**Which one do you need?**
+
+| The input is... | Use |
+|---|---|
+| Phone photos of an already-signed/stamped paper document | This file, main pipeline below |
+| A digital document (docx/PDF) with **no signature yet**, and you need to make it look hand-signed | [references/digital-signature-synthesis.md](references/digital-signature-synthesis.md) |
 
 ```
 photos ──► rectify (photo_to_scan.py --raw)
@@ -30,7 +44,8 @@ photos ──► rectify (photo_to_scan.py --raw)
 **Division of labor**: scripts carry execution; you (the agent) carry the two
 judgment steps — content-based page ordering, and whole-document verification.
 Neither can be automated away: filenames lie about order, and per-page spot
-checks miss wrong-slot bugs.
+checks miss wrong-slot bugs. The digital-signature branch shares this same
+philosophy with its own two judgment calls — see the reference file.
 
 ## Step 0 — Dependencies
 
