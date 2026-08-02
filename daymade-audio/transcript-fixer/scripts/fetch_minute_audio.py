@@ -19,12 +19,14 @@ Exit codes (the frontmatter line goes to stdout, diagnostics to stderr, so the
 status is what tells you whether anything was actually verified):
     0  verified — audio and transcript share a timeline
     1  timeline mismatch — a file WAS downloaded, but do NOT wire it
-    2  downloaded, pairing unverified (no ffprobe or it failed, no --transcript,
-       or the transcript has no `<speaker> HH:MM:SS.mmm` lines). argparse also
-       exits 2 for a malformed invocation — its message says so.
-    3  operational failure, nothing usable downloaded (lark-cli failed, the
-       profile cannot read this minute, curl failed, the file is too small).
-       The most common cause is the wrong --profile, not a bad token.
+    2  downloaded, pairing unverified — ffprobe absent or its output unusable,
+       no --transcript, the transcript has no `<speaker> HH:MM:SS.mmm` lines, or
+       every one of those timestamps is 00:00:00 (no timeline to compare with).
+       argparse also exits 2 for a malformed invocation — its message says so.
+    3  operational failure, nothing usable produced (bad --transcript path or an
+       unreadable one, an un-writable --output directory, lark-cli failed, curl
+       failed, the download was too small, or the profile cannot read this
+       minute — that last one is the most common and is not a bad token).
 
 Requires: lark-cli (authenticated for the profile that OWNS the minute), curl,
 and optionally ffprobe for the duration check.
@@ -116,7 +118,10 @@ def fetch_signed_url(token: str, profile: str) -> str:
 
 
 def download(url: str, output: Path) -> None:
-    output.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        fail(f"cannot create output directory {output.parent}: {exc}")
     # --noproxy '*': same domestic-service reason as above. -L: the signed URL
     # redirects, and without it you save a ~100-byte redirect body that looks
     # like a successful download until playback fails.
@@ -128,17 +133,23 @@ def download(url: str, output: Path) -> None:
         fail(f"Downloaded file is {size} bytes — too small to be audio; the URL may have expired.")
 
 
-def audio_duration_seconds(path: Path) -> float | None:
+def audio_duration_seconds(path: Path) -> tuple[float | None, str]:
+    """(duration, reason). reason is "" on success, else why it is unknown.
+
+    The two failure causes need different words: telling an operator to install
+    ffprobe when ffprobe just ran and emitted something unparseable sends them
+    after the wrong thing.
+    """
     if not shutil.which("ffprobe"):
-        return None
+        return None, "ffprobe not installed"
     proc = run([
         "ffprobe", "-v", "quiet", "-show_entries", "format=duration",
         "-of", "csv=p=0", str(path),
     ])
     try:
-        return float(proc.stdout.strip())
+        return float(proc.stdout.strip()), ""
     except (ValueError, AttributeError):
-        return None
+        return None, f"ffprobe ran but returned no usable duration ({proc.stdout.strip()[:60]!r})"
 
 
 def last_timestamp_seconds(transcript: Path) -> float | None:
@@ -149,7 +160,13 @@ def last_timestamp_seconds(transcript: Path) -> float | None:
     belongs to a different clock and would corrupt the comparison.
     """
     best: float | None = None
-    for line in transcript.read_text(encoding="utf-8", errors="ignore").splitlines():
+    try:
+        content = transcript.read_text(encoding="utf-8", errors="ignore")
+    except OSError as exc:
+        # is_file() is true for an unreadable file, so the pre-flight check does
+        # not cover this. Uncaught it would exit 1 — "timeline mismatch".
+        fail(f"cannot read --transcript {transcript}: {exc}")
+    for line in content.splitlines():
         match = SPEAKER_TS_LINE.match(line)
         if not match:
             continue
@@ -168,6 +185,11 @@ def main() -> int:
     ap.add_argument("--transcript", type=Path, help="Transcript to verify the timeline against")
     args = ap.parse_args()
 
+    # Validate inputs BEFORE any network work: exit 3 means "nothing usable was
+    # produced", so it must not be reachable after a good file is already on disk.
+    if args.transcript is not None and not args.transcript.is_file():
+        fail(f"--transcript path does not exist: {args.transcript}")
+
     print(f"→ Requesting signed URL for {args.token} …", file=sys.stderr)
     url = fetch_signed_url(args.token, args.profile)
     print(f"→ Downloading to {args.output} …", file=sys.stderr)
@@ -181,9 +203,9 @@ def main() -> int:
     #   0 = verified   1 = timeline mismatch   2 = unverified   3 = op failure
     unverified = False
 
-    duration = audio_duration_seconds(args.output)
+    duration, why = audio_duration_seconds(args.output)
     if duration is None:
-        print("⚠ ffprobe unavailable — timeline pairing NOT verified.", file=sys.stderr)
+        print(f"⚠ {why} — timeline pairing NOT verified.", file=sys.stderr)
         unverified = True
     else:
         print(f"  audio duration: {duration:.0f}s", file=sys.stderr)
@@ -191,10 +213,6 @@ def main() -> int:
     if args.transcript is None:
         print("⚠ No --transcript given — timeline pairing NOT verified.", file=sys.stderr)
         unverified = True
-    elif not args.transcript.is_file():
-        # Without this the read raised an uncaught FileNotFoundError, which
-        # surfaces as exit 1 — indistinguishable from a real timeline mismatch.
-        fail(f"--transcript path does not exist: {args.transcript}")
 
     if args.transcript and duration is not None:
         last = last_timestamp_seconds(args.transcript)
@@ -206,18 +224,18 @@ def main() -> int:
                 file=sys.stderr,
             )
             unverified = True
+        elif last <= 0:
+            # Every speaker line reads 00:00:00.000 — there is no timeline to
+            # compare against. Falling through to the shared ending (rather than
+            # returning here) keeps the frontmatter line and its bare-value
+            # warning identical across every outcome.
+            print(
+                "⚠ All speaker timestamps are 00:00:00 — no usable timeline; "
+                "pairing NOT verified.",
+                file=sys.stderr,
+            )
+            unverified = True
         else:
-            if last <= 0:
-                # Every speaker line reads 00:00:00.000 — there is no timeline
-                # to compare against. The old code skipped the check here and
-                # still printed "pairing looks correct", a false verified.
-                print(
-                    "⚠ All speaker timestamps are 00:00:00 — no usable timeline; "
-                    "pairing NOT verified.",
-                    file=sys.stderr,
-                )
-                print(f"audio: {args.output.resolve()}")
-                return 2
             drift = duration - last
             print(f"  transcript ends at: {last:.0f}s   (audio − transcript = {drift:+.0f}s)", file=sys.stderr)
             # A speed-rate mismatch (e.g. a transcript produced from a 1.3x
