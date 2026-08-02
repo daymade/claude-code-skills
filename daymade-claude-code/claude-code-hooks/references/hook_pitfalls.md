@@ -499,7 +499,11 @@ unresolvable path means **block**.
 - **Why `stop_hook_active` doesn't cover it.** It means "the stop I just blocked
   is being retried" — one layer of re-entry inside one stop attempt. This loop is
   *cross-turn* (real work, then a fresh Stop with the field `false`). Handling it
-  is necessary and buys nothing here. Full contract: SKILL.md rule 7.
+  is necessary and buys nothing here. Full contract: SKILL.md rule 7. **Nor does
+  the harness's consecutive-block ceiling cover it** — that counter resets on any
+  continuation that executed tools, and remediation worth demanding is made of
+  tool calls, so it stays pinned at 1 (#27). Both runtime protections are blind
+  to exactly this loop; the bound has to be yours.
 - **Fix — change the shape of the predicate, not its threshold.** In order:
   (a) if what you're gating is an **action**, move the gate onto that action with
   PreToolUse instead of onto the turn with Stop — one evaluation per attempt, no
@@ -895,6 +899,76 @@ unresolvable path means **block**.
   If either check turns up an instance that was actually acted on, not just
   printed, treat it as its own live incident — verify what state it left
   behind before moving on, not just log it as another near miss.
+
+---
+
+## 27. A Stop hook's two runtime loop-protections both have blind spots — and a tool-calling remediation lands in both
+
+- **Symptom:** a Stop hook fires several times inside what the user experiences
+  as one request. Nothing errors. `stop_hook_active` is handled correctly. The
+  documented consecutive-block ceiling never arrives.
+- **Cause — the ceiling counts something narrower than its name suggests.**
+  Claude Code caps consecutive Stop-hook blocks (default **8**, overridable via
+  `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`; **setting it to `0` disables the cap
+  rather than forbidding blocks** — the guard is `cap > 0 &&`). None of this is
+  in the docs; it is readable from the shipped binary. The counter driving it is
+  **reset to 0 on every continuation that executed tools** — verified across all
+  six continuation branches in 2.1.220, each of which writes the counter back as
+  `0`; only the block branch increments it. So the cap's real meaning is *"blocked
+  eight times in a row without the model doing anything in between"* — it catches
+  a model that has stalled, not one that is diligently oscillating. **Any hook
+  whose remediation involves tool calls keeps the counter pinned at 1 forever.**
+  That is most Stop hooks worth writing: run the tests, dispatch the review,
+  regenerate the artifact. Note also that when the cap *does* fire, the turn ends
+  with `reason:"completed"` — the harness does not distinguish "forced abort"
+  from "genuinely done" (contrast OpenHands, whose goal controller carries an
+  explicit `complete` / `capped` split).
+- **Cause — the other protection is one bit, not a counter.** `stop_hook_active`
+  is a boolean: *"this turn has been blocked by a stop hook at least once."* The
+  hook cannot learn how many times it has fired, so "let the third one through"
+  is not expressible from the input alone. (Cursor hands its stop hook a numeric
+  `loop_count` plus a configurable `loop_limit`; Claude Code hands you the bit.)
+  The field is also undocumented — absent from the hooks reference, present in
+  the SDK's type declaration with no prose. Within one query loop it behaves as a
+  **latch**: once true it stays true.
+- **What is NOT the cause (tested, so you don't repeat the experiment):**
+  asynchronous background completions arriving *inside* the blocked window do
+  **not** clear the latch. Measured over 7 headless runs on 2.1.220 — three with
+  the notification verifiably landing after the block, including a real
+  subagent reply — the latch held `true` every time. A plausible-sounding
+  mechanism is not evidence; this one was wrong.
+- **Honest boundary:** one observed session had a Stop hook block **four** times
+  within a span containing a single real user message, each time with the latch
+  `false` — so *something* started a fresh query loop between them, and the above
+  rules out the obvious candidate. **The mechanism is unresolved.** That
+  uncertainty is itself the argument for the fix: do not hang termination on a
+  protection whose reset conditions you cannot predict.
+- **Fix:**
+  1. **Carry your own bound.** Neither runtime protection is one. If your hook
+     demands a remediation, key a counter on something the hook computes itself
+     (the turn-start offset it already derives, plus the session id) rather than
+     on a runtime field.
+  2. **Suppress the fires that are certainly useless — this is free.** The Stop
+     input carries `background_tasks[]`, which lists still-running subagents
+     (`type`, `status`, `agent_type`) and empties when they finish. If your
+     remediation is "dispatch an agent," firing while that agent is still
+     running is pure noise, and noise is what trains readers to ignore the hook
+     (#2). Going quiet on non-empty `background_tasks` / `session_crons` is a
+     **fact test, not a heuristic** — categorically unlike the semantic
+     stuck-detection SWE-agent tried and abandoned for false positives. It
+     defers rather than suppresses: the agent's return opens a new turn and the
+     hook fires then.
+  3. Sanity-check the shape first: #16 (is the predicate temporal, so the
+     remediation re-arms it?) and #19 (does the remediation require memory that
+     does not survive the call boundary?). This entry is about the layer
+     underneath both — what the runtime does *not* do for you either way.
+- **Self-test rows that see it:** same must-fire input three ways —
+  `background_tasks` non-empty → quiet; `background_tasks: []` → still fires;
+  `session_crons` non-empty → quiet. The middle row is the one people skip, and
+  without it you cannot distinguish "gate works" from "gate swallows
+  everything." Verified by mutation: forcing the gate true fails many rows,
+  forcing it false fails **exactly** the two quiet rows — proving no pre-existing
+  fixture covered the gate.
 
 ---
 
