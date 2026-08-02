@@ -531,17 +531,29 @@ class ReviewQueue:
                 "type": "file_edit", "path": item.file_path,
                 "old": item.original_text, "new": item.suggested_text,
             }]
-        if override and item.file_path:
-            # Retarget file edits; drop suggestion-specific actions.
-            retargeted = []
-            for a in actions:
-                if a["type"] == "file_edit":
-                    retargeted.append({**a, "new": resolved_text})
-            if not retargeted:
+        if override:
+            # Retarget file edits to what the human actually typed; drop
+            # suggestion-specific actions unconditionally.
+            #
+            # The drop must NOT be gated on item.file_path. dict_add and
+            # append_note were planned around the suggestion the human just
+            # rejected, so executing them writes the rejected answer — and a
+            # dictionary rule then auto-applies it to every future transcript
+            # in that domain. An item with such an action and no file anchor
+            # used to skip this whole block and do exactly that, reporting
+            # "dictionary rule added" as if it had succeeded.
+            retargeted = [
+                {**a, "new": resolved_text}
+                for a in actions
+                if a["type"] == "file_edit"
+            ]
+            if not retargeted and item.file_path:
                 retargeted = [{
                     "type": "file_edit", "path": item.file_path,
                     "old": item.original_text, "new": resolved_text,
                 }]
+            # No file edit to perform: the verdict is still recorded, and the
+            # human's text is in resolved_text for a deliberate --add.
             actions = retargeted
 
         # Phase 1: plan everything against in-memory content.
