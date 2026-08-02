@@ -254,6 +254,29 @@ class TestOverrideKeepSkip:
         assert dict_calls == []
         assert queue.get(ids[0]).resolved_text == "HumanTruth"
 
+    def test_override_retargets_file_edit_when_item_has_no_file_anchor(
+        self, queue, tmp_path
+    ):
+        # Sibling of the dict_add case above, and the worse symptom: the same
+        # file_path gate meant an anchor-less item carrying an explicit
+        # file_edit wrote the REJECTED suggestion into the transcript.
+        target = tmp_path / "anchorless.md"
+        target.write_text("A 00:00:01.000\nGARBLED spoke\n", encoding="utf-8")
+        ids = queue.enqueue([{
+            "original_text": "GARBLED",
+            "suggested_text": "WrongGuess",
+            "kind": "entity",
+            "domain": "testdom",
+            "actions": [
+                {"type": "file_edit", "path": str(target),
+                 "old": "GARBLED", "new": "WrongGuess"},
+            ],
+        }])["added"]
+        queue.resolve(ids[0], "overridden", override_to="HumanTruth")
+        text = target.read_text(encoding="utf-8")
+        assert "HumanTruth" in text
+        assert "WrongGuess" not in text
+
     def test_override_requires_text(self, queue, transcript):
         ids = queue.enqueue([_item(transcript)])["added"]
         with pytest.raises(ReviewQueueError, match="override-to"):
