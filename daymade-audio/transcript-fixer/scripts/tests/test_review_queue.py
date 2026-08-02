@@ -543,3 +543,55 @@ class TestReanchor:
         queue.resolve(ids[0], "kept_original")
         with pytest.raises(ReviewQueueError, match="pending"):
             queue.reanchor(ids[0])
+
+    def test_line_shift_prefers_context_over_distance(self, queue, tmp_path):
+        """Discriminating case: after inserting a line above, the recorded
+        context still identifies the right occurrence — a distance-only pick
+        would land on the wrong line (the review-round-2 'test was vacuous' fix)."""
+        f = tmp_path / "work" / "multi.md"
+        f.parent.mkdir(exist_ok=True)
+        f.write_text("甲说：重复词。\n乙说：重复词，继续。\n丙说：重复词。\n",
+                     encoding="utf-8")
+        ids = queue.enqueue([_item(f, original="重复词", line=2,
+                                   context="乙说：重复词，继续。")])["added"]
+        f.write_text("插入一行在最顶上。\n" + f.read_text(encoding="utf-8"),
+                     encoding="utf-8")  # target shifts 2→3; distance-0 line 2 is 甲
+        r = queue.reanchor(ids[0])
+        assert r["line_number"] == 3
+        queue.resolve(ids[0], "accepted")
+        body = f.read_text(encoding="utf-8")
+        assert "乙说：汪晓明，继续。" in body
+        assert "甲说：重复词。" in body
+
+    def test_equidistant_tie_refused(self, queue, tmp_path):
+        """No context discrimination + equidistant tie = fail closed (same
+        standard as resolve), never a fabricated context."""
+        f = tmp_path / "work" / "tie.md"
+        f.parent.mkdir(exist_ok=True)
+        f.write_text("重复词 出现在这。\n中间隔一行。\n重复词 又出现。\n",
+                     encoding="utf-8")
+        ids = queue.enqueue([_item(f, original="重复词", line=2,
+                                   context="中间隔一行。")])["added"]
+        # Drift the recorded context line so it no longer discriminates,
+        # leaving two equidistant occurrences.
+        f.write_text(f.read_text(encoding="utf-8").replace("中间隔一行。", "整行全换了。"),
+                     encoding="utf-8")
+        with pytest.raises(ReviewQueueError, match="equally near"):
+            queue.reanchor(ids[0])
+
+    def test_in_place_reanchor_refreshes_expect_line(self, queue, tmp_path):
+        """Ping-pong regression: stale pack expect_line outranks the item's
+        refreshed line at resolve — it must follow any in-place line move."""
+        f = tmp_path / "work" / "pack.md"
+        f.parent.mkdir(exist_ok=True)
+        f.write_text("别的内容一。\n锚词在这里。\n别的内容二。\n", encoding="utf-8")
+        ids = queue.enqueue([_item(
+            f, original="锚词", line=2,
+            actions=[{"type": "file_edit", "path": str(f),
+                      "old": "锚词", "new": "定词", "expect_line": 2}])])["added"]
+        pad = "\n".join(f"上方插入第{i}行。" for i in range(10)) + "\n"
+        f.write_text(pad + f.read_text(encoding="utf-8"),
+                     encoding="utf-8")  # target drifts 2→12
+        queue.reanchor(ids[0])
+        queue.resolve(ids[0], "accepted")  # must NOT bounce on stale expect_line=2
+        assert "定词在这里。" in f.read_text(encoding="utf-8")

@@ -221,12 +221,6 @@ class ReviewQueue:
                             "reason": reason,
                         })
                         continue
-                    if item.get("_hint_repaired_to") is not None:
-                        repaired_hints.append({
-                            "original": item["original_text"][:80],
-                            "from": raw.get("line") or raw.get("line_number"),
-                            "to": item["_hint_repaired_to"],
-                        })
                 # Dedup key includes the line: two occurrences of the same
                 # correction on different lines are DISTINCT review questions —
                 # collapsing them would silently drop coverage of the second
@@ -245,6 +239,14 @@ class ReviewQueue:
                 if dup:
                     skipped_dup += 1
                     continue
+                if item.get("_hint_repaired_to") is not None:
+                    # Report only for items actually enqueued — a dedup-skipped
+                    # item must not claim its hint was "repaired" (it wasn't).
+                    repaired_hints.append({
+                        "original": item["original_text"][:80],
+                        "from": raw.get("line") or raw.get("line_number"),
+                        "to": item["_hint_repaired_to"],
+                    })
                 cur = conn.execute(
                     """INSERT INTO review_items
                        (source, domain, file_path, line_number, context_snippet,
@@ -390,14 +392,23 @@ class ReviewQueue:
             # 0 or >1 context matches: fall through to distance — the context
             # itself may be the drifted part; distance is the remaining signal.
         old_hint = item.line_number if item.line_number is not None else matches[0]
-        line_no = min(matches, key=lambda h: (abs(h - old_hint), h))
+        ordered = sorted(matches, key=lambda h: (abs(h - old_hint), h))
+        if len(ordered) > 1 and abs(ordered[0] - old_hint) == abs(ordered[1] - old_hint):
+            # Same standard as the resolve-time guard: an equidistant tie has
+            # no honest winner. Overwriting context_snippet here would
+            # fabricate one — refuse instead.
+            raise ReviewQueueError(
+                f"two occurrences are equally near the old hint "
+                f"(lines {ordered[0]} and {ordered[1]}) — ambiguous; "
+                f"re-enqueue with a discriminating context")
+        line_no = ordered[0]
         new_context = lines[line_no - 1].strip()
         # A re-point must not collide with another pending item's dedup key —
         # that would strand a permanently unresolvable duplicate in the queue.
         with self._connect() as conn:
             collision = conn.execute(
                 """SELECT id FROM review_items
-                   WHERE id != ? AND status = 'pending'
+                   WHERE id != ?
                      AND COALESCE(file_path,'') = ?
                      AND original_text = ?
                      AND COALESCE(suggested_text,'') = COALESCE(?, '')
@@ -409,7 +420,7 @@ class ReviewQueue:
             ).fetchone()
             if collision:
                 raise ReviewQueueError(
-                    f"re-anchor would collide with pending item #{collision['id']} "
+                    f"re-anchor would collide with item #{collision['id']} "
                     f"(same file/original/suggested/domain/line) — resolve or skip "
                     f"that one first")
             # Mirror resolve's concurrency guard: never overwrite an anchor of
@@ -421,17 +432,20 @@ class ReviewQueue:
             if cur.rowcount != 1:
                 raise ReviewQueueError(
                     f"item {item_id} changed status while re-anchoring — re-read and retry")
-            if repointed and item.actions:
-                # Explicit action packs carry their own file paths; without
-                # rewriting them the pack would still edit (or fail on) the
-                # OLD file after a successful re-anchor.
+            # Explicit action packs carry their own file paths/line hints.
+            # file_edit.expect_line must follow ANY line move — not just
+            # re-points: a stale expect_line OUTRANKS item.line_number at
+            # resolve, so leaving it creates a reanchor✅/resolve🛑 ping-pong.
+            if item.actions and (repointed or line_no != item.line_number):
                 new_actions = []
                 for action in item.actions:
                     a = dict(action)
                     if a.get("type") == "file_edit" and "path" in a:
-                        a["path"] = str(path)
-                        a["expect_line"] = line_no
-                    elif a.get("type") == "append_note" and "path" in a:
+                        if repointed:
+                            a["path"] = str(path)
+                        if repointed or a.get("expect_line") is not None:
+                            a["expect_line"] = line_no
+                    elif a.get("type") == "append_note" and "path" in a and repointed:
                         a["path"] = str(path)
                     new_actions.append(a)
                 conn.execute(
