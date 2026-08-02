@@ -64,6 +64,7 @@ from cli import (
     cmd_enqueue_review,
     cmd_list_review,
     cmd_show_review,
+    cmd_reanchor_review,
     cmd_resolve_review,
     create_argument_parser,
 )
@@ -149,6 +150,8 @@ def main() -> None:
         cmd_list_review(args)
     elif args.show_review is not None:
         cmd_show_review(args)
+    elif args.reanchor_review:
+        cmd_reanchor_review(args)
     elif args.resolve_review is not None:
         cmd_resolve_review(args)
     elif args.input:

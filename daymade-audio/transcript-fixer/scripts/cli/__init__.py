@@ -28,6 +28,7 @@ from .commands import (
     cmd_enqueue_review,
     cmd_list_review,
     cmd_show_review,
+    cmd_reanchor_review,
     cmd_resolve_review,
 )
 from .argument_parser import create_argument_parser
@@ -54,6 +55,7 @@ __all__ = [
     'cmd_enqueue_review',
     'cmd_list_review',
     'cmd_show_review',
+    'cmd_reanchor_review',
     'cmd_resolve_review',
     'create_argument_parser',
 ]

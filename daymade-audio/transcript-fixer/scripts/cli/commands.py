@@ -1376,6 +1376,48 @@ def cmd_enqueue_review(args: argparse.Namespace) -> None:
         if result["skipped_temp"]:
             print(f"   ↷ {result['skipped_temp']} item(s) skipped: file anchor in a temp dir "
                   f"(would be a dead pointer — enqueue against the final filed path instead)")
+    rejected = result.get("rejected_unanchored") or []
+    if rejected:
+        for r in rejected:
+            print(f"🛑 rejected (anchor not verbatim): {r['original']!r}\n"
+                  f"   file: {r['file']}\n   reason: {r['reason']}", file=sys.stderr)
+        # Anchor validation exists to surface authoring errors at enqueue time;
+        # swallowing them under a 0 exit would recreate the drift bug downstream.
+        # (Items in result['added'] WERE enqueued — the run fails only to force
+        # the rejected half to be fixed and re-enqueued.)
+        sys.exit(3)
+    for r in result.get("repaired_hints") or []:
+        print(f"   ↷ line hint repaired: {r['original']!r} line {r['from']} → {r['to']}",
+              file=sys.stderr)
+
+
+def cmd_reanchor_review(args: argparse.Namespace) -> None:
+    """Re-anchor pending items whose transcript drifted or moved since enqueue."""
+    from core.review_queue import ReviewQueueError
+
+    queue = _get_review_queue()
+    roots = getattr(args, "reanchor_root", None) or []
+    reanchor_to = getattr(args, "reanchor_to", None)
+    results: list[dict] = []
+    failures: list[dict] = []
+    for item_id in args.reanchor_review:
+        try:
+            results.append(queue.reanchor(item_id, search_roots=roots,
+                                          reanchor_to=reanchor_to))
+        except ReviewQueueError as e:
+            failures.append({"id": item_id, "error": str(e)})
+
+    if getattr(args, "json_output", False):
+        _emit_json({"reanchored": results, "failed": failures,
+                    **({"error": "reanchor_failed"} if failures and not results else {})})
+    else:
+        for r in results:
+            tag = " (file re-pointed)" if r["file_repointed"] else ""
+            print(f"✅ #{r['id']} re-anchored → {Path(r['file_path']).name}:{r['line_number']}{tag}")
+        for f in failures:
+            print(f"🛑 #{f['id']}: {f['error']}", file=sys.stderr)
+    if failures and not results:
+        sys.exit(2)
 
 
 def cmd_list_review(args: argparse.Namespace) -> None:
