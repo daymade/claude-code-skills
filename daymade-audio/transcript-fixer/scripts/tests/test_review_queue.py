@@ -232,6 +232,28 @@ class TestOverrideKeepSkip:
         # fresh plan, so it must not fire with stale text
         assert dict_calls == []
 
+    def test_override_skips_dict_add_when_item_has_no_file_anchor(
+        self, queue, dict_calls
+    ):
+        # Regression: the retarget/drop block used to be gated on
+        # item.file_path, so an anchor-less item (file is optional in the
+        # enqueue schema) skipped it entirely and executed dict_add with the
+        # REJECTED suggestion — writing the answer the human just refused into
+        # a dictionary that then auto-applies it to every future transcript.
+        ids = queue.enqueue([{
+            "original_text": "GARBLED",
+            "suggested_text": "WrongGuess",
+            "kind": "entity",
+            "domain": "testdom",
+            "actions": [
+                {"type": "dict_add", "from": "GARBLED",
+                 "to": "WrongGuess", "domain": "testdom"},
+            ],
+        }])["added"]
+        queue.resolve(ids[0], "overridden", override_to="HumanTruth")
+        assert dict_calls == []
+        assert queue.get(ids[0]).resolved_text == "HumanTruth"
+
     def test_override_requires_text(self, queue, transcript):
         ids = queue.enqueue([_item(transcript)])["added"]
         with pytest.raises(ReviewQueueError, match="override-to"):

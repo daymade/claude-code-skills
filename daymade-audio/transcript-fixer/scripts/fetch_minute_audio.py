@@ -18,9 +18,13 @@ last speaker timestamp and prints the exact `audio:` frontmatter line to add.
 Exit codes (the frontmatter line goes to stdout, diagnostics to stderr, so the
 status is what tells you whether anything was actually verified):
     0  verified — audio and transcript share a timeline
-    1  timeline mismatch — do NOT wire this file
-    2  downloaded, but pairing unverified (no ffprobe, no --transcript, or the
-       transcript has no `<speaker> HH:MM:SS.mmm` lines)
+    1  timeline mismatch — a file WAS downloaded, but do NOT wire it
+    2  downloaded, pairing unverified (no ffprobe or it failed, no --transcript,
+       or the transcript has no `<speaker> HH:MM:SS.mmm` lines). argparse also
+       exits 2 for a malformed invocation — its message says so.
+    3  operational failure, nothing usable downloaded (lark-cli failed, the
+       profile cannot read this minute, curl failed, the file is too small).
+       The most common cause is the wrong --profile, not a bad token.
 
 Requires: lark-cli (authenticated for the profile that OWNS the minute), curl,
 and optionally ffprobe for the duration check.
@@ -35,6 +39,7 @@ import re
 import shutil
 import subprocess
 import sys
+import typing
 from pathlib import Path
 
 # Mirrors `_TS_LINE` in scripts/review-dashboard/server.py — deliberately the
@@ -48,6 +53,18 @@ SPEAKER_TS_LINE = re.compile(r"^\S.*?\s(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*$")
 
 def run(cmd: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, env=env)
+
+
+def fail(message: str) -> "typing.NoReturn":
+    """Operational failure — nothing usable was produced.
+
+    Exits 3 so a caller can tell it apart from exit 1 (a real file downloaded,
+    but its timeline does not match the transcript). Conflating the two sends
+    the operator hunting for a different recording when the actual problem was
+    a wrong --profile.
+    """
+    print(f"✗ {message}", file=sys.stderr)
+    raise SystemExit(3)
 
 
 def fetch_signed_url(token: str, profile: str) -> str:
@@ -72,18 +89,18 @@ def fetch_signed_url(token: str, profile: str) -> str:
         env=env,
     )
     if proc.returncode != 0:
-        sys.exit(f"lark-cli failed (exit {proc.returncode}):\n{proc.stderr.strip()[:800]}")
+        fail(f"lark-cli failed (exit {proc.returncode}):\n{proc.stderr.strip()[:800]}")
 
     # The CLI may prepend/append human-readable lines; isolate the JSON object.
     raw = proc.stdout
     start = raw.find("{")
     end = raw.rfind("}")
     if start == -1 or end == -1:
-        sys.exit(f"No JSON object in lark-cli output:\n{raw[:800]}")
+        fail(f"No JSON object in lark-cli output:\n{raw[:800]}")
     try:
         payload = json.loads(raw[start : end + 1])
     except json.JSONDecodeError as exc:
-        sys.exit(f"Could not parse lark-cli JSON: {exc}\n{raw[:800]}")
+        fail(f"Could not parse lark-cli JSON: {exc}\n{raw[:800]}")
 
     url = (payload.get("data") or {}).get("download_url")
     if not url:
@@ -91,7 +108,7 @@ def fetch_signed_url(token: str, profile: str) -> str:
         # profile rather than the token: a minute is a per-tenant, per-user
         # resource, so a profile from another tenant (or one the minute was
         # never shared with) authenticates fine and still cannot read it.
-        sys.exit(
+        fail(
             "No data.download_url in the response — the profile likely cannot "
             f"read this minute. Envelope:\n{json.dumps(payload, ensure_ascii=False)[:800]}"
         )
@@ -105,10 +122,10 @@ def download(url: str, output: Path) -> None:
     # like a successful download until playback fails.
     proc = run(["curl", "-sSL", "--noproxy", "*", "-o", str(output), url])
     if proc.returncode != 0:
-        sys.exit(f"curl failed (exit {proc.returncode}): {proc.stderr.strip()[:400]}")
+        fail(f"curl failed (exit {proc.returncode}): {proc.stderr.strip()[:400]}")
     if not output.exists() or output.stat().st_size < 10_000:
         size = output.stat().st_size if output.exists() else 0
-        sys.exit(f"Downloaded file is {size} bytes — too small to be audio; the URL may have expired.")
+        fail(f"Downloaded file is {size} bytes — too small to be audio; the URL may have expired.")
 
 
 def audio_duration_seconds(path: Path) -> float | None:
@@ -161,7 +178,7 @@ def main() -> int:
     # Exit codes carry the verification result because the diagnostics go to
     # stderr while the frontmatter line goes to stdout — a caller capturing
     # stdout would otherwise see a clean-looking success for an unverified file.
-    #   0 = verified   1 = timeline mismatch   2 = downloaded but unverified
+    #   0 = verified   1 = timeline mismatch   2 = unverified   3 = op failure
     unverified = False
 
     duration = audio_duration_seconds(args.output)
@@ -174,6 +191,10 @@ def main() -> int:
     if args.transcript is None:
         print("⚠ No --transcript given — timeline pairing NOT verified.", file=sys.stderr)
         unverified = True
+    elif not args.transcript.is_file():
+        # Without this the read raised an uncaught FileNotFoundError, which
+        # surfaces as exit 1 — indistinguishable from a real timeline mismatch.
+        fail(f"--transcript path does not exist: {args.transcript}")
 
     if args.transcript and duration is not None:
         last = last_timestamp_seconds(args.transcript)
@@ -186,12 +207,23 @@ def main() -> int:
             )
             unverified = True
         else:
+            if last <= 0:
+                # Every speaker line reads 00:00:00.000 — there is no timeline
+                # to compare against. The old code skipped the check here and
+                # still printed "pairing looks correct", a false verified.
+                print(
+                    "⚠ All speaker timestamps are 00:00:00 — no usable timeline; "
+                    "pairing NOT verified.",
+                    file=sys.stderr,
+                )
+                print(f"audio: {args.output.resolve()}")
+                return 2
             drift = duration - last
             print(f"  transcript ends at: {last:.0f}s   (audio − transcript = {drift:+.0f}s)", file=sys.stderr)
             # A speed-rate mismatch (e.g. a transcript produced from a 1.3x
             # ASR input) shows up as a large proportional gap, which would make
             # every clip play the wrong seconds.
-            if last > 0 and abs(drift) > max(60.0, last * 0.05):
+            if abs(drift) > max(60.0, last * 0.05):
                 print(
                     "✗ TIMELINE MISMATCH — the audio and transcript are probably on "
                     "different timelines (speed-rate or wrong recording). Do NOT wire "
