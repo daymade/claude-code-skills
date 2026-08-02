@@ -18,7 +18,7 @@ Two-phase correction pipeline: deterministic dictionary rules (instant, free) fo
 
 All scripts use PEP 723 inline metadata — `uv run` auto-installs dependencies. Requires `uv` ([install guide](https://docs.astral.sh/uv/getting-started/installation/)).
 
-The commands below use relative script paths (`scripts/<name>.py`), so they only work from the skill's own directory — and in agent harnesses the shell's working directory resets between calls, which surfaces as `Failed to spawn: scripts/fix_transcription.py` on the very first command. **Take the skill directory from the "Base directory for this skill" line printed when this skill was invoked**, and either `cd` there in the same command or prefix every script path with it. Do not rely on `$CLAUDE_SKILL_DIR` — it is unset in at least some harnesses (verified 2026-08), so a command built on it fails with the same error it was meant to prevent. If you no longer have the invocation line, `find -L ~/.claude ~/.codex -name SKILL.md -path '*transcript-fixer*'` locates the bundle — but it returns every installed *version* plus backup and pre-edit snapshots (24 hits on one real machine), and the first hit is not the newest. Sort them and take the highest version directory, and skip anything under a path containing `skill-before`, `-workspace` or `source-sync-backups`.
+The commands below use relative script paths (`scripts/<name>.py`), so they only work from the skill's own directory — and in agent harnesses the shell's working directory resets between calls, which surfaces as `Failed to spawn: scripts/fix_transcription.py` on the very first command. **Take the skill directory from the "Base directory for this skill" line printed when this skill was invoked**, and either `cd` there in the same command or prefix every script path with it. Do not rely on `$CLAUDE_SKILL_DIR` — it is unset in at least some harnesses (verified 2026-08), so a command built on it fails with the same error it was meant to prevent. If you no longer have the invocation line, `find -L ~/.claude ~/.codex -name SKILL.md -path '*transcript-fixer*'` locates the bundle — but it returns dozens of hits — every installed *version*, plus backups, staging copies and pre-edit snapshots — and the first is not the newest. Skip any path containing `skill-before`, `-workspace`, `source-sync-backups`, `.tmp` or `.staging`. Among what remains, prefer the highest version directory; some installs (a marketplace checkout, another agent's skills dir) carry no version at all, so if you end up choosing between those, take the one with the newest mtime and sanity-check it against this file's content before trusting it.
 
 ## Quick Start
 
@@ -308,11 +308,16 @@ scanning — if the field is absent, the card simply has no play button):
 
 ```yaml
 ---
-date: 2026-08-02              # ← the transcript's EXISTING frontmatter block
+date: 2026-08-02
 minute_token: abc123
-audio: /absolute/path/to/recording.m4a     # ← add this one line into it
+audio: /absolute/path/to/recording.m4a
 ---
 ```
+
+The `audio:` line is the one you add; the others stand for whatever the
+transcript already carries. It is written **bare on purpose** — see below, and
+note that this example is copied verbatim often enough that a trailing `#`
+annotation on that line has shipped as a real bug more than once.
 
 **Add the line to the block the transcript already has — do not append a second
 one.** A synced transcript normally arrives with frontmatter (`date`,
@@ -371,8 +376,8 @@ usable-looking line.
 |---|---|
 | `0` | verified — audio and transcript share a timeline |
 | `1` | timeline mismatch: a file downloaded, but do **not** wire it |
-| `2` | downloaded, pairing unverified — no `ffprobe`, no `--transcript`, or the transcript has no `<speaker> HH:MM:SS.mmm` lines (argparse also exits 2 on a malformed invocation; its message says so) |
-| `3` | operational failure, nothing usable downloaded — most often the **wrong `--profile`**, not a bad token |
+| `2` | downloaded, pairing unverified — `ffprobe` absent or its output unusable, no `--transcript`, the transcript has no `<speaker> HH:MM:SS.mmm` lines, or every one of them is `00:00:00` (argparse also exits 2 on a malformed invocation; its message says so) |
+| `3` | nothing usable produced — bad `--transcript` path (checked before any network work), or the fetch failed: lark-cli errored, curl failed, the download was too small, or **the `--profile` cannot read this minute**, which is the most common cause and is not a bad token |
 
 A `2` caused by missing speaker-timestamp lines is worth stopping for rather than
 working around: the dashboard builds its clip windows from those same lines, so
@@ -391,7 +396,11 @@ LARK_CLI_NO_PROXY=1 lark-cli minutes +download \
 # truncates the URL at its first parameter:
 URL=$(LARK_CLI_NO_PROXY=1 lark-cli minutes +download \
         --minute-tokens <token> --profile <profile> --url-only \
-      | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"]["download_url"])')
+      | python3 -c 'import sys,json
+raw = sys.stdin.read()                      # the CLI may print prose around the
+s, e = raw.find("{"), raw.rfind("}")        # JSON, so isolate the object first
+print(json.loads(raw[s:e+1])["data"]["download_url"])')
+[ -n "$URL" ] || { echo "no download_url — check the profile"; exit 3; }
 curl -sSL --noproxy '*' -o audio.m4a "$URL"
 # Verify the pairing yourself: compare the duration against the transcript's
 # LAST speaker timestamp. Treat a gap over max(60s, 5% of that timestamp) as a
@@ -628,7 +637,7 @@ A recording can be long but still fast-tier (two known speakers, plain language)
    - Demand a compact table only — `line | original ≤20 chars | suspected | one-line reason | confidence` — and tell it to stop after the list, no prose preamble, no per-line stream-of-consciousness, no re-deriving corrections it has already made.
    Then adjudicate each residual — the subagent's list is **candidates, not conclusions** (one real run: 10 rows → 4 accepted). Run each through step-4 triage, plus these heuristics, all production-validated:
    - **Accept — near-homophone + in-document self-proof.** `利智回购`→`离职回购` when the same table of contents a few lines earlier already reads `离职回购`: near-sound plus the correct form inside the same file settles it. Referent-locked homophones likewise (`他`→`它` when the antecedent is a document, not a person).
-   - **Reject — sound distance falsifies too.** The sound test cuts both ways: near-sound is evidence *for* a fix (step 4); implausible-sound is evidence *against*. `代号`→`代码` (hào/mǎ) and `一撮`→`一坨` (cuō/tuó) are not swaps ASR makes — that candidate is the reviewer over-reading, not the engine mishearing. **The exception is step 4's cross-language proper-noun class**: a foreign name spoken inside another language can legitimately land far from its canonical sound. Don't reject those here — route them to the queue for audio verification instead. The exception is defined by *kind*, not by rarity: it covers cross-language proper nouns and nothing else, so this rejection rule still governs every common word, every same-language homophone, and every residual whose sound distance is the whole objection.
+   - **Reject — sound distance falsifies too.** The sound test cuts both ways: near-sound is evidence *for* a fix (step 4); implausible-sound is evidence *against*. `代号`→`代码` (hào/mǎ) and `一撮`→`一坨` (cuō/tuó) are not swaps ASR makes — that candidate is the reviewer over-reading, not the engine mishearing. **The exception is step 4's cross-language proper-noun class**: a foreign name spoken inside another language can legitimately land far from its canonical sound. Don't reject those here — route them to the queue for audio verification instead. The exception is defined by *kind*, not by rarity, and it takes **both** of step 4's conditions: the candidate is a proper noun that could have been spoken in a different language from the one being transcribed, **and** it sits in the slot of someone the project already knows. Both → route it to the queue whatever the sound distance. Either one missing → this rejection rule applies, as it does to every common word and every same-language homophone.
    - **Reject — the ASR-capability counter-check (a strong prior, not a proof).** If the same engine rendered the word correctly elsewhere in the same transcript, the word is demonstrably inside this engine's recognition range for this audio — so a different rendering nearby is *more likely* what the speaker actually said, and the bar for "fixing" it jumps. (Candidate `一条`→`一坨`: `一坨` was recognized correctly a few lines earlier, and `一条` is itself a colloquially valid measure phrase — the two together reject the fix.) Keep it probabilistic: the same engine genuinely can shatter one name into a dozen variants (see Project-Specific corrections) — the counter-check weighs most when both the correct form and the candidate are common words the engine handles routinely, least when they're rare proper nouns.
    - **Reject — intelligible real words.** `一撮` is a perfectly good measure word; don't rewrite readable speech just to make a running metaphor consistent. Only fix what the speaker plausibly didn't say.
    - **Reject — evidence-free reconstruction.** A proposed fix with no phonetic basis (`半`→`分`) is a guess about meaning, not a correction.
