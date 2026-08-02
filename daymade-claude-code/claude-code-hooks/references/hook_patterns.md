@@ -865,11 +865,12 @@ Three things worth calling out beyond what the comments above already say:
   registered, another guard's block consumes the shared retry round, so your
   first block must be complete (the skeleton above collects all findings —
   pitfall #17 is the failure shape of reporting only the first). The other
-  loop-safety layers (the 8-consecutive-block harness ceiling, all Stop hooks
-  running in parallel per event, the `background_tasks` / `session_crons` pause
-  signal in v2.1.145+, and the gate-vs-guidance channel choice) are covered in
-  SKILL.md's hook-types table and Stop bullet — both share these same
-  protections.
+  loop-safety layers (the consecutive-block harness ceiling — which only lands
+  when the remediation involves no tool calls, see
+  [hook_pitfalls.md#27](hook_pitfalls.md), all Stop hooks running in parallel
+  per event, the `background_tasks` / `session_crons` pause signal in
+  v2.1.145+, and the gate-vs-guidance channel choice) are covered in SKILL.md's
+  hook-types table and Stop bullet — both share these same protections.
 - **…and handling it correctly still does not make the hook terminate.** The
   field covers **one layer of re-entry** — the stop you just blocked being
   retried. It does nothing for the *cross-turn* loop, where the model actually
