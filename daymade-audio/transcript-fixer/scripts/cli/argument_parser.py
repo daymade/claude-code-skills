@@ -351,6 +351,33 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Show one review item in full (evidence + proposed action pack)"
     )
     parser.add_argument(
+        "--reanchor-review",
+        metavar="ID",
+        type=int,
+        nargs="+",
+        dest="reanchor_review",
+        help="Re-anchor pending item(s) whose transcript drifted or moved since "
+             "enqueue: refresh line/context verbatim from the current file; when "
+             "the file is gone, search --reanchor-root (and the recorded parent "
+             "dir) for *.md containing the original text and re-point it"
+    )
+    parser.add_argument(
+        "--reanchor-root",
+        metavar="DIR",
+        action="append",
+        dest="reanchor_root",
+        help="Extra search root(s) for --reanchor-review when the file is gone "
+             "(repeatable; the recorded parent dir is always searched first)"
+    )
+    parser.add_argument(
+        "--reanchor-to",
+        metavar="FILE",
+        dest="reanchor_to",
+        help="Explicit re-point target for --reanchor-review when content search "
+             "is ambiguous (the caller picks the file; refused if the original "
+             "text is not in it)"
+    )
+    parser.add_argument(
         "--resolve-review",
         metavar="ID",
         type=int,

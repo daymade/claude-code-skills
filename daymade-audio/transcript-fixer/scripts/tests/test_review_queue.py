@@ -121,7 +121,7 @@ class TestEnqueue:
             _item(transcript, original="要重新来", suggested="要重新录",
                   kind="homophone", line=5),
             _item(transcript),  # entity
-            _item(transcript, original="小王", suggested=None, kind="unknown", line=5),
+            _item(transcript, original="重新来", suggested=None, kind="unknown", line=5),
         ])
         kinds = [i.kind for i in queue.list_items(status="pending")]
         assert kinds == ["entity", "unknown", "homophone"]
@@ -197,7 +197,7 @@ class TestAccept:
         assert dict_calls == []  # nothing beyond the file edit
 
     def test_accept_without_suggestion_refused(self, queue, transcript):
-        ids = queue.enqueue([_item(transcript, original="小王", suggested=None,
+        ids = queue.enqueue([_item(transcript, original="重新来", suggested=None,
                                    kind="unknown", line=5)])["added"]
         with pytest.raises(ReviewQueueError, match="no suggestion"):
             queue.resolve(ids[0], "accepted")
@@ -418,3 +418,128 @@ class TestAudit:
         conn.close()
         assert ("review_enqueue", ids[0], None) in rows
         assert ("review_resolve", ids[0], "tester") in rows
+
+
+# ==================== anchor validation + reanchor (2026-08-03) ====================
+
+
+class TestAnchorValidation:
+    """Enqueue verbatim-anchor validation: authoring errors die at enqueue."""
+
+    def test_reject_paraphrased_context(self, queue, transcript):
+        result = queue.enqueue([_item(transcript, context="我写的转述不是原文")])
+        assert result["added"] == []
+        assert len(result["rejected_unanchored"]) == 1
+        assert "逐字" in result["rejected_unanchored"][0]["reason"]
+
+    def test_reject_original_not_in_file(self, queue, transcript):
+        result = queue.enqueue([_item(transcript, original="不存在的词")])
+        assert result["added"] == []
+        assert len(result["rejected_unanchored"]) == 1
+
+    def test_stage1_deferred_exempt(self, queue, transcript):
+        """Engine-evolved from_text legitimately absent from the input file."""
+        result = queue.enqueue([_item(transcript, original="演化后的文本",
+                                      source="stage1_deferred")])
+        assert len(result["added"]) == 1
+        assert result["rejected_unanchored"] == []
+
+    def test_hint_within_window_kept(self, queue, transcript):
+        """A hint inside the ±3 resolve window is functional — never rewrite it."""
+        result = queue.enqueue([_item(transcript, line=1)])  # original on line 2
+        assert result["repaired_hints"] == []
+
+    def test_hint_outside_window_repaired_and_reported(self, queue, transcript):
+        result = queue.enqueue([_item(transcript, line=100)])  # original on line 2
+        assert result["repaired_hints"] == [
+            {"original": "王晓明", "from": 100, "to": 2}]
+        item = queue.get(result["added"][0])
+        assert item.line_number == 2
+
+
+class TestReanchor:
+    """--reanchor-review: repair drifted/moved anchors, fail closed on ambiguity."""
+
+    def _drift_file(self, path: Path, old: str, new: str) -> None:
+        path.write_text(path.read_text(encoding="utf-8").replace(old, new),
+                        encoding="utf-8")
+
+    def test_in_place_drift_prefers_recorded_context(self, queue, transcript, tmp_path):
+        """Multi-occurrence + drifted line: recorded context must pick the line."""
+        f = tmp_path / "work" / "multi.md"
+        f.write_text(
+            "甲说：重复词。\n乙说：重复词，继续。\n丙说：重复词。\n", encoding="utf-8")
+        ids = queue.enqueue([_item(f, original="重复词", line=2,
+                                   context="乙说：重复词，继续。")])["added"]
+        self._drift_file(f, "乙说：重复词，继续。", "乙说：重复词，改口。")
+        r = queue.reanchor(ids[0])
+        assert r["line_number"] == 2
+        assert "改口" in r["context_snippet"]
+        queue.resolve(ids[0], "accepted")
+        body = f.read_text(encoding="utf-8")
+        assert "乙说：汪晓明，改口。" in body  # resolved via default file_edit
+        assert "甲说：重复词。" in body  # sibling occurrences untouched
+
+    def test_file_gone_unique_search_repoints(self, queue, transcript, tmp_path):
+        ids = queue.enqueue([_item(transcript, original="王晓明")])["added"]
+        moved = tmp_path / "elsewhere" / "renamed.md"
+        moved.parent.mkdir()
+        transcript.rename(moved)
+        r = queue.reanchor(ids[0], search_roots=[str(tmp_path)])
+        assert r["file_repointed"] is True
+        assert r["file_path"] == str(moved.resolve())
+
+    def test_file_gone_ambiguous_then_explicit_to(self, queue, transcript, tmp_path):
+        ids = queue.enqueue([_item(transcript, original="王晓明")])["added"]
+        copy2 = tmp_path / "copy2.md"
+        copy2.write_text(transcript.read_text(encoding="utf-8"), encoding="utf-8")
+        copy3 = tmp_path / "copy3.md"
+        copy3.write_text(transcript.read_text(encoding="utf-8"), encoding="utf-8")
+        transcript.unlink()
+        with pytest.raises(ReviewQueueError, match="ambiguous"):
+            queue.reanchor(ids[0], search_roots=[str(tmp_path)])
+        r = queue.reanchor(ids[0], reanchor_to=str(copy2))
+        assert r["file_repointed"] is True
+        nope = tmp_path / "nope.md"
+        nope.write_text("完全没有那个词。\n", encoding="utf-8")
+        with pytest.raises(ReviewQueueError, match="not in explicit target"):
+            queue.reanchor(ids[0], reanchor_to=str(nope))
+
+    def test_overlapping_roots_not_double_counted(self, queue, transcript, tmp_path):
+        """recorded parent ⊆ search root: same file must not count twice (F3)."""
+        sub = tmp_path / "root" / "sub"
+        sub.mkdir(parents=True)
+        f = sub / "old.md"
+        f.write_text(transcript.read_text(encoding="utf-8"), encoding="utf-8")
+        ids = queue.enqueue([_item(f, original="王晓明")])["added"]
+        new = sub / "new.md"
+        f.rename(new)
+        r = queue.reanchor(ids[0], search_roots=[str(tmp_path / "root")])
+        assert r["file_repointed"] is True
+        assert r["file_path"] == str(new.resolve())
+
+    def test_reanchor_refuses_dedup_collision(self, queue, transcript, tmp_path):
+        copy2 = tmp_path / "copy2.md"
+        copy2.write_text(transcript.read_text(encoding="utf-8"), encoding="utf-8")
+        ids_a = queue.enqueue([_item(transcript, original="王晓明")])["added"]
+        queue.enqueue([_item(copy2, original="王晓明")])["added"]
+        transcript.unlink()
+        with pytest.raises(ReviewQueueError, match="collide"):
+            queue.reanchor(ids_a[0], reanchor_to=str(copy2))
+
+    def test_reanchor_rewrites_action_pack_paths(self, queue, transcript, tmp_path):
+        ids = queue.enqueue([_item(
+            transcript, original="王晓明",
+            actions=[{"type": "file_edit", "path": str(transcript),
+                      "old": "王晓明", "new": "汪晓明"}])])["added"]
+        moved = tmp_path / "moved.md"
+        transcript.rename(moved)
+        queue.reanchor(ids[0], reanchor_to=str(moved))
+        queue.resolve(ids[0], "accepted")
+        assert "汪晓明" in moved.read_text(encoding="utf-8")
+
+    def test_reanchor_rejects_non_pending(self, queue, transcript):
+        ids = queue.enqueue([_item(transcript)])["added"]
+        queue.resolve(ids[0], "kept_original")
+        with pytest.raises(ReviewQueueError, match="pending"):
+            queue.reanchor(ids[0])

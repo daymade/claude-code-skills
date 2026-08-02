@@ -48,8 +48,9 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 - `--enqueue-review JSON_PATH`: Enqueue items from a JSON file (`-` = stdin). Item fields: `{original, suggested?, file?, line?, context?, kind?, domain?, evidence?, actions?, priority?, source?}` — full field/alias table + gotchas in [Review Queue Item Schema](#review-queue-item-schema) below
 - `--list-review`: List queue items, priority-sorted (filters: `--review-status pending|accepted|overridden|kept_original|skipped|all` default pending; `--domain`; `--review-source native_pass|stage1_deferred|learned_suggestion|manual`)
 - `--show-review ID`: One item in full (evidence + proposed action pack)
+- `--reanchor-review ID [ID...]`: Re-anchor pending item(s) whose transcript drifted or moved since enqueue (refresh line/context verbatim from the current file; when the file is gone, search `--reanchor-root DIR` + the recorded parent dir for `*.md` containing the original text — unique candidate re-points the anchor, ambiguous asks for `--reanchor-to FILE` which names the target explicitly and is refused if the original is not in it)
 - `--resolve-review ID --decision accepted|overridden|kept_original|skipped|reopen`: Record a verdict and execute the action pack (`overridden` requires `--override-to TEXT`; `--note` free-text evidence; `--by` reviewer name; `reopen` reverts applied edits and re-pends the item)
-- `--json` works with all four: one machine-readable result line on stdout
+- `--json` works with all five: one machine-readable result line on stdout
 
 ### Review Queue Item Schema
 
@@ -112,7 +113,8 @@ uv run scripts/fix_transcription.py --input meeting.md --stage 1 --output ./meet
 
 - `0` - Success
 - `1` - Missing required parameters, file not found, or API key not configured (Stage 2/3)
-- `2` - `--resolve-review` refused because the anchor text no longer matches the target file (re-anchor needed; nothing was applied — fail closed)
+- `2` - `--resolve-review` refused because the anchor text no longer matches the target file (re-anchor needed; nothing was applied — fail closed); also `--reanchor-review` when every requested id failed
+- `3` - `--enqueue-review` rejected one or more items whose `original`/`context` is not verbatim in the declared file (see `rejected_unanchored` in the JSON; items in `added` WERE enqueued — fix the rejects and re-enqueue them)
 - API request failures do **not** get a dedicated exit code — the pipeline keeps the original text and prints a warning (see "API Fallback" in SKILL.md)
 
 ## fix_transcript_timestamps.py
