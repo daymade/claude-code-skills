@@ -18,7 +18,7 @@ Two-phase correction pipeline: deterministic dictionary rules (instant, free) fo
 
 All scripts use PEP 723 inline metadata — `uv run` auto-installs dependencies. Requires `uv` ([install guide](https://docs.astral.sh/uv/getting-started/installation/)).
 
-The commands below use relative `scripts/...` paths — run them from the skill directory. In agent harnesses whose shell resets the working directory between calls, substitute the absolute script path (e.g. `$CLAUDE_SKILL_DIR/scripts/fix_transcription.py`) — otherwise `uv` fails with `Failed to spawn: scripts/fix_transcription.py`.
+The commands below use relative script paths (`scripts/<name>.py`), so they only work from the skill's own directory — and in agent harnesses the shell's working directory resets between calls, which surfaces as `Failed to spawn: scripts/fix_transcription.py` on the very first command. **Take the skill directory from the "Base directory for this skill" line printed when this skill was invoked**, and either `cd` there in the same command or prefix every script path with it. Do not rely on `$CLAUDE_SKILL_DIR` — it is unset in at least some harnesses (verified 2026-08), so a command built on it fails with the same error it was meant to prevent. If you no longer have the invocation line, locate the bundle with `find -L ~/.claude ~/.codex -name SKILL.md -path '*transcript-fixer*'`.
 
 ## Quick Start
 
@@ -130,7 +130,39 @@ After native AI correction, review all applied fixes and decide which to save. U
 | Person/company name ASR error | 卡帕西→Karpathy, Anthropics→Anthropic | For **important recurring people**, add to your **people roster** instead (see "People Roster" below) — it carries relationship context and survives DB resets. For one-off names: ✅ `--add --domain` (stable, unique) |
 | Common word → context word | 争→蒸, 减→剪, affect→effect | ❌ Never add as a rule — record the trap + its disambiguating cue in the domain's context file instead (see "Domain Correction Contexts") |
 | Real brand → different brand | Xcode→Claude Code, Clover→Claude | ❌ Skip (real words in other contexts) |
-| Real name → different real name | 张亮→肖亮 (two real people in different projects) | ❌ Never a rule — same hazard as real brand → brand, but it corrupts a real person's name. Domain context trap with a disambiguating cue instead (see the user-verdict refinements in Native AI Correction step 4) |
+| Real name → different real name | `李明`→`黎明` (two real people in different projects) | ❌ Never a rule — same hazard as real brand → brand, but it corrupts a real person's name. Domain context trap with a disambiguating cue instead (see the user-verdict refinements in Native AI Correction step 4) |
+
+**The middle path, and it applies to exactly one of the ❌ rows.** The
+*common word → context word* row (`争`→`蒸`) forbids a **bare** common word as a
+rule, because it fires everywhere the word is legitimately used. It does not
+forbid the same fix carried by enough surrounding text that the phrase only
+occurs in the mishearing — `村里商量` → `<name>商量` is defensible where bare
+`村里` would be reckless. **The *real name → different real name* row is not
+relaxed by this and never anchored into the dictionary**: keep it in the domain
+context file as the row itself says.
+
+That exclusion is not squeamishness — the validator that would catch a mistake
+is *structurally blind* to exactly that case. `--add` runs a jieba check that
+warns when the FROM side decomposes into all-known words, and personal names are
+out-of-vocabulary (frequency 0), so the phrase is judged *not* a known phrase and
+**no warning is emitted at all**. Measured: `村里商量` and `天空智能` both warn;
+`<surname><given>商量` warns about nothing. The class with the worst blast radius
+is the one class you get no feedback on, which is why it stays out.
+
+Two things to know about that validator before you rely on it. A jieba
+`valid_phrase` warning means *review this by hand*, **not** *it was rejected* —
+the rule is added anyway. But other checks (`common_word`, `both_common`,
+`substring_collision`) are **errors**: `--add` exits 1 and writes nothing, and the
+only way past them is `--force`. So check the exit status rather than assuming a
+noisy-but-successful add — a rule you believe you saved may not be in the
+database at all.
+
+One caveat decides whether an anchored rule is worth adding: anchor to a
+**recurring collocation**, not to a one-off sentence fragment. A snippet of one
+particular sentence never matches again — it costs a dictionary row, compounds
+nothing, and dead rows are what make a domain slow to load and hard to audit.
+When even a collocation would be too narrow, the trap belongs in the domain
+context file with its disambiguating cue.
 
 Batch add multiple corrections in one session:
 ```bash
@@ -185,6 +217,66 @@ the bare return code (argparse usage errors also exit 2). On `overridden`, only
 retargeted `file_edit`s run — suggestion-specific `dict_add`/`append_note`
 actions are dropped (they were planned for a suggestion the human rejected).
 
+**One verdict fixes one occurrence — sweep the siblings yourself.** A resolved
+item edits exactly one span. When the original text occurs several times the
+guard does not edit them all and does not simply refuse either: it picks the
+occurrence nearest the recorded line hint whose context matches, and refuses only
+when nothing near the hint matches (that is the `re_anchor_needed` case above —
+multiplicity alone does not trigger it). Either way the other occurrences are
+left standing, **including on the very line the verdict just edited**, which is
+where a repeated name is most likely. Measured on one real batch: ten items
+resolved, four of them left six more occurrences behind, two of those on a line a
+verdict had already touched. So a verdict batch has a second half:
+
+```bash
+# 1. See what was actually decided. The default listing shows PENDING only —
+#    the items you just resolved are precisely the ones it hides.
+uv run scripts/fix_transcription.py --list-review --review-status accepted
+uv run scripts/fix_transcription.py --list-review --review-status overridden
+# 2. Read the verdict that was recorded, per item.
+uv run scripts/fix_transcription.py --show-review <id> --json
+```
+
+**Take the replacement from `resolved_text`, never from the listing line.** On
+an override the human's typed text lands in `resolved_text` while
+`suggested_text` still holds the suggestion they *rejected* — and the
+human-readable listing prints the suggestion. Propagating from that line pushes
+the rejected answer into every remaining occurrence, which is worse than leaving
+them alone. An override is free text, so read it before propagating: a typo
+typed once otherwise becomes a typo in five places.
+
+Fix the remaining occurrences with Edit, or a `sed` scoped to that **one file**
+— this is within-file propagation of a decision a human already made, not the
+cross-file find-and-replace the batch rules forbid — then re-grep to confirm.
+
+**Sweep `entity`-kind items only.** A `homophone` or `wording` verdict is a
+judgement about *that sentence* — those are the context-dependent class step 5
+says to anchor to surrounding text, and the class the `争`→`蒸` row keeps out of
+blanket rules. Propagating one across a file is the mistake the dictionary matrix
+exists to prevent.
+
+**And within `entity`, a verdict settles the entity, not every token that sounds
+like it** — this is step 4's carve-out, unchanged. An occurrence that is a
+*referred-to* third party rather than the person being addressed ("I'll ask
+`<token>` from the bank") can legitimately need the opposite answer: leave it and
+enqueue it on its own. A verdict the human reached **by listening to one clip**
+deserves the same caution — those seconds of audio settle that utterance, and a
+second occurrence is a second utterance. Sweep the occurrences that are plainly
+the same entity in the same sense; that is the ordinary case, and the one the
+measurement above counted.
+
+**Sweep after the whole batch is resolved, not between verdicts.** A swept
+occurrence that a still-pending item is anchored to will fail that item's guard
+(`re_anchor_needed`, exit 2) and have to be re-enqueued.
+
+**An override does not compound on its own — finish it with `--add`.** On
+`overridden` the queue drops the `dict_add` / `append_note` actions (they were
+planned for the suggestion the human rejected), so the strongest signal in the
+whole loop — a human personally correcting the AI — is the one case that never
+reaches the dictionary unless you put it there:
+`--add "<original>" "<resolved_text>" --domain <project>`, subject to the
+real-word rules above.
+
 **Dashboard** (single reviewer, local):
 
 ```bash
@@ -208,12 +300,23 @@ by declaring its recording EXPLICITLY in frontmatter (no implicit directory
 scanning — if the field is absent, the card simply has no play button):
 
 ```yaml
-audio: /absolute/path/to/recording.m4a   # MUST be the SAME timeline the
-                                         # transcript timestamps refer to (e.g.
-                                         # the exact file fed to the ASR — a
-                                         # 1.3x-speed ASR input pairs with a
-                                         # transcript on the 1.3x timeline)
+---
+audio: /absolute/path/to/recording.m4a
+---
 ```
+
+**Write the value bare — no trailing comment.** The parser takes everything
+after the first colon (`line.split(":", 1)[1].strip()`) and does not strip `#`,
+so `audio: /path/x.m4a  # same timeline as the transcript` becomes a path ending
+in `# same timeline as the transcript`, which does not exist — and the card then
+shows **no play button and no error**, which reads exactly like "this transcript
+has no audio." Same for the block's shape: it must open at line 1, be closed by
+its `---`, and the key must sit unindented.
+
+The file must be on the **same timeline the transcript's timestamps refer to** —
+the exact file fed to the ASR. A transcript produced from a 1.3x-speed input
+pairs only with the 1.3x file; pairing it with the original makes every clip play
+the wrong seconds.
 
 The dashboard derives the clip window from the speaker-timestamp lines
 (`<speaker> HH:MM:SS.mmm`) around the anchor, streams the file with HTTP Range
@@ -223,18 +326,71 @@ per recording source (`ffprobe` duration ≈ the transcript's last timestamp) �
 a mismatched speed rate plays the wrong seconds everywhere.
 
 **Wiring audio for a Feishu-minute transcript** (the common case when the
-transcript came from a minutes-sync pipeline): `cd` to a cache/state directory
-first (a media blob should not ride into a docs repo's git), then download the
-media with `lark-cli minutes +download --minute-tokens <token> --output
-./audio.m4a` — note `--output` only accepts a **relative** path inside the
-current directory (`../` is refused too), which is why the `cd` has to come
-first. If lark-cli's SSRF guard refuses the download host (`blocked download
-URL: local/internal host is not allowed` — Feishu's signed-download domain is
-literally named `internal-api-drive-stream.feishu.cn`, and its `internal-`
-prefix is what trips the guard), fetch the signed URL yourself: `--url-only`
-prints a JSON envelope — pull its `download_url` field, then `curl -sSL -o
-audio.m4a "<download_url>"`. Run the ffprobe duration check above, then
-declare `audio:` in the transcript's frontmatter.
+transcript came from a minutes-sync pipeline) — use the bundled script, which
+does the download, the timeline check, and prints the frontmatter line:
+
+```bash
+uv run scripts/fetch_minute_audio.py \
+  --token <minute-token> --profile <lark-cli-profile> \
+  --output ~/.transcript-fixer/cache/audio/<name>.m4a \
+  --transcript <path/to/transcript.md>
+```
+
+**Both arguments come from outside the transcript's body.** `--token` is the
+`minute_token:` field in the transcript's own frontmatter (a minutes-sync
+pipeline writes it there; if it is absent, the minute URL's last path segment is
+the same value). `--profile` is a lark-cli profile name — list them with
+`lark-cli profile list` and pick the one belonging to the account that owns the
+recording; the transcript does not record it, so if the owner is not obvious,
+ask rather than guess (a wrong profile fails in the silent way described below).
+
+Keep the audio outside the docs repo — a media blob should not ride into its git.
+
+**Exit codes**: `0` verified, `1` timeline mismatch (do **not** wire the file),
+`2` downloaded but unverified — which happens when `ffprobe` is absent or the
+transcript has no `<speaker> HH:MM:SS.mmm` lines. Check the status rather than
+the output: the diagnostics go to stderr while the `audio:` line goes to stdout,
+so a run that verified nothing still prints a usable-looking line. A transcript
+with no speaker-timestamp lines is worth stopping for — the dashboard derives its
+clip windows from those same lines, so wiring audio to it buys nothing.
+
+**The by-hand route**, for when lark-cli is unavailable or the script fails:
+
+```bash
+cd ~/.transcript-fixer/cache/audio    # --output below only accepts a relative
+                                      # path inside the CURRENT directory ("../"
+                                      # is refused too), hence the cd
+LARK_CLI_NO_PROXY=1 lark-cli minutes +download \
+  --minute-tokens <token> --profile <profile> --output ./audio.m4a
+# If that trips the SSRF guard, get the signed URL and fetch it yourself:
+LARK_CLI_NO_PROXY=1 lark-cli minutes +download \
+  --minute-tokens <token> --profile <profile> --url-only          # JSON envelope
+curl -sSL --noproxy '*' -o audio.m4a "<data.download_url>"
+ffprobe -v quiet -show_entries format=duration -of csv=p=0 audio.m4a
+```
+
+Three things the script encodes, each of which is a real failure by hand:
+
+- **lark-cli's own SSRF guard refuses its own download host.** The error is
+  `blocked download URL: local/internal host is not allowed` — Feishu's
+  signed-download domain is literally named `internal-api-drive-stream.…` and
+  the `internal-` prefix trips the guard. The fallback is `--url-only` plus your
+  own `curl -L`, which is what the script runs.
+- **The `--url-only` envelope is real JSON — parse it, don't pattern-match it.**
+  The URL lives at `data.download_url` (nested, not top level), and a regex
+  scrape leaves JSON escapes such as `&` literal, producing a URL that
+  truncates at its first parameter and downloads a redirect stub instead of
+  audio. `json.loads` handles this natively and a hand-rolled extraction is
+  where the escaping bug comes from.
+- **A minute is a per-tenant, per-user resource, so the `--profile` is the part
+  that usually fails, not the token.** A profile from another tenant — or one
+  the minute was never shared with — authenticates fine and still returns no
+  `download_url`. Pass the profile belonging to the account that owns the
+  recording.
+
+Wire the audio **before** enqueueing items you intend to have judged by ear
+(step 4 routes cross-language proper nouns there) — otherwise the reviewer opens
+a card with no play button and no way to answer the question you asked.
 
 **Stage 1 integration**: safe-mode deferrals are auto-enqueued
 (`source: stage1_deferred`) at run time, so a caller discarding the sidecar no
@@ -286,12 +442,18 @@ at Stage 1 time when `people_roster_path` is set in
 
 **Roster format** (canonical: `### Name` + `- **ASR 变体**: variant1, variant2`):
 ```markdown
-### Holly Yang
-- **ASR 变体**: Hollie, 浩磊
+### Nina Zhao
+- **ASR 变体**: Nena, 妮娜
 
-### Jo
-- **ASR 变体**: Joe, Joe 老师
+### 小雨
+- **ASR 变体**: 晓雨, 小宇老师
 ```
+
+Both example shapes are worth copying. An English given name spoken inside
+Chinese speech produces *two* kinds of variant — a misspelling (`Nena`) and a
+Chinese transliteration (`妮娜`) — and a Chinese nickname produces homophone
+variants plus honorific forms (`小宇老师`). List every form you have actually
+seen; each one is a rule that fires for free.
 
 **Setup** (once):
 ```bash
@@ -397,6 +559,9 @@ A recording can be long but still fast-tier (two known speakers, plain language)
      (do not expand a given name into a full name nobody said), and `--add` the
      confirmed variant to a `--domain` so the next transcript fixes it free.
    - **Judge ASR errors by SOUND, not by glyphs.** Chinese ASR errors are homophone / near-homophone substitutions, so decide "same entity?" by pronunciation, not by whether the characters match exactly. A name that comes through as `X小Y` when the roster or dictionary already holds `X晓Y` (小/晓 are the same sound) is the **same person → Confident fix** — do NOT downgrade it to Uncertain just because 小≠晓 on the page. Same logic for a foreign name whose syllables all map by sound to a near-homophone transliteration. The dictionary having a sound-alike canonical is *evidence for* the fix, not a mismatch to be dismissed.
+   - **But sound similarity is *sufficient* evidence of identity, not *necessary* — and the exception is a whole class, not a rarity.** A name spoken in one language while the engine transcribes another (an English given name inside Chinese speech, a transliterated surname) can come out phonetically **unrelated** to its canonical form, and — worse — as something that reads like a perfectly ordinary *different* real name. In one measured case a single person surfaced as three separate tokens, none a near-homophone of her name and each plausible as somebody else entirely; the tokens were recognizable only because all three sat where the same absent principal belonged, and what *confirmed* them was the human listening to those seconds of audio.
+     **This does not reopen the (a) bullet above.** That rule forbids resolving a *referred-to* token into one of the **speakers'** names, using speaker labels as the source — the failure mode where a third party gets overwritten with whoever is in the room. This class is the opposite direction: the token resolves to a known **non-speaker** whose canonical form comes from the roster or the project's ledger, and it is settled by the human's ear rather than by a label. Where the two are hard to tell apart, the (a) bullet wins and the token keeps walking the ladder.
+     So a candidate that fails the sound test but sits in a known person's slot is **neither dismissed nor rewritten**: enqueue it as `kind: entity` for audio verification (the dashboard's `Q` is the instrument for exactly this). Put your best candidate in `suggested` even when you doubt it — an item with no suggestion cannot be accepted at all (`--decision accepted` errors on it), so the reviewer would be forced to retype the answer for every card. And wire the transcript's audio *before* enqueueing (see the dashboard's audio section), or the card arrives with no play button and the question is unanswerable.
    - **A name you can't place defaults to the search ladder below, NOT to asking the user.** "Only the user knows this name" is the single most common wrong reflex. The canonical spelling is almost always already on this machine under a **different project's domain** — so you must query **all** domains at once (the cross-domain SQL in the ladder below), not the one domain you happened to pass to `--stage 1`, which may be brand-new and empty. Querying only that one and giving up looks exactly like "I checked" while finding nothing that was right there.
    - **Confident fix** — non-words, obvious garbling, product-name variants you already recognize, or a homophone that's unambiguous in context (`their`→`there` where context forces it; `彭波`→`彭博` when every other mention already reads `彭博`). Apply directly (step 5).
    - **Needs verification** — a proper noun you can't confirm from context: a person / company / ticker / product / place name (a misheard drug name in a medical interview, a researcher's surname in a podcast, a ticker on an earnings call), or any term you can't point to a specific source for — even one you think you recognize ("I'm pretty sure" is exactly how wrong names slip in). **Resolve it through a local-first search ladder before asking the user.** For project / personal entities the authoritative spelling almost always already lives on this machine, and WebSearch is near-useless on internal names — it returns wrong same-name people, or nothing — and worse, a fluent wrong guess becomes a confident fix that's hard to catch later. Search in this order:
@@ -406,7 +571,7 @@ A recording can be long but still fast-tier (two known speakers, plain language)
          `~/.transcript-fixer/config.json` points). This is your curated SSOT
          of long-term recurring people with their ASR variants annotated under
          `- **ASR 变体**:`. A garbled name that already maps to a canonical
-         person here — e.g. `Hollie`→`Holly Yang`, `丛老师`→`聪聪` — is a
+         person here — e.g. `Nena`→`Nina Zhao`, `小宇老师`→`小雨` — is a
          Confident fix: apply immediately. **This one step replaces asking the
          user for every name they've already documented.** Skip only for
          transcripts whose speakers are confirmed NOT in the roster.
@@ -419,7 +584,7 @@ A recording can be long but still fast-tier (two known speakers, plain language)
       Only after all of these strike out do you ask the user — and by then you've shown the entity isn't already recorded on this machine, which makes the ask legitimate. A confirmed result becomes a Confident fix; if the search *can't* confirm it, it drops to Uncertain. **Batch these**: collect the unique unknowns and run the ladder once per unique entity, not once per occurrence.
 
       **And when the user answers, their verdict is ✅ authoritative — the strongest source in this whole loop — and it compounds three ways in the same session.** A user who says "X is actually Y (my colleague on team Z)" has handed you a source stronger than any local document. Cash it in immediately: ① apply the fix; ② persist the variant where it compounds — an important recurring person goes to the **people roster** (per the roster-vs-DB table above), a project term or one-off name goes to `--add ... --domain <project>` (the same ASR will mishear the same name again next week); ③ record it in the ledger / roster / domain context with the user's words, the date, and a ✅ "user-confirmed" marker — no later session should re-ask. Two refinements learned the hard way:
-      - **Collision-check the FROM side before dict-adding.** If the garbled string is itself a real person's name elsewhere in your world (another project's roster holds a *different* real `张亮`), a `张亮→肖亮` dictionary rule will corrupt that person's future transcripts. That fix belongs in the domain context file as a trap with its disambiguating cue ("in editing-team context, `张亮` = `肖亮`"), never in the dictionary.
+      - **Collision-check the FROM side before dict-adding.** If the garbled string is itself a real person's name elsewhere in your world (another project's roster holds a *different* real `李明`), a `李明`→`黎明` dictionary rule will corrupt that person's future transcripts. That fix belongs in the domain context file as a trap with its disambiguating cue ("in editing-team context, `李明` = `黎明`"), never in the dictionary.
       - **Confirmed-correct entities deserve a note too.** When the user confirms a name is right as-is ("he's a real blogger, spelled exactly like that"), record the verdict (one line in the domain context or roster). An unrecorded "correct as-is" is a question the next run will burn five minutes re-asking.
    - **Uncertain** — you suspect an error but can't confirm it even after searching (a syllable that maps to several real entities; a structurally broken sentence). **Leave the original text exactly as-is** and record it in the needs-checking list (step 7). A fluent-but-wrong "fix" is harder to catch downstream than an obvious garble — silence beats a confident guess.
 5. Apply the confident fixes efficiently:
@@ -432,7 +597,7 @@ A recording can be long but still fast-tier (two known speakers, plain language)
    - Demand a compact table only — `line | original ≤20 chars | suspected | one-line reason | confidence` — and tell it to stop after the list, no prose preamble, no per-line stream-of-consciousness, no re-deriving corrections it has already made.
    Then adjudicate each residual — the subagent's list is **candidates, not conclusions** (one real run: 10 rows → 4 accepted). Run each through step-4 triage, plus these heuristics, all production-validated:
    - **Accept — near-homophone + in-document self-proof.** `利智回购`→`离职回购` when the same table of contents a few lines earlier already reads `离职回购`: near-sound plus the correct form inside the same file settles it. Referent-locked homophones likewise (`他`→`它` when the antecedent is a document, not a person).
-   - **Reject — sound distance falsifies too.** The sound test cuts both ways: near-sound is evidence *for* a fix (step 4); implausible-sound is evidence *against*. `代号`→`代码` (hào/mǎ) and `一撮`→`一坨` (cuō/tuó) are not swaps ASR makes — that candidate is the reviewer over-reading, not the engine mishearing.
+   - **Reject — sound distance falsifies too.** The sound test cuts both ways: near-sound is evidence *for* a fix (step 4); implausible-sound is evidence *against*. `代号`→`代码` (hào/mǎ) and `一撮`→`一坨` (cuō/tuó) are not swaps ASR makes — that candidate is the reviewer over-reading, not the engine mishearing. **The exception is step 4's cross-language proper-noun class**: a foreign name spoken inside another language can legitimately land far from its canonical sound. Don't reject those here — route them to the queue for audio verification instead. The rule as stated governs everything else, which is nearly all residuals.
    - **Reject — the ASR-capability counter-check (a strong prior, not a proof).** If the same engine rendered the word correctly elsewhere in the same transcript, the word is demonstrably inside this engine's recognition range for this audio — so a different rendering nearby is *more likely* what the speaker actually said, and the bar for "fixing" it jumps. (Candidate `一条`→`一坨`: `一坨` was recognized correctly a few lines earlier, and `一条` is itself a colloquially valid measure phrase — the two together reject the fix.) Keep it probabilistic: the same engine genuinely can shatter one name into a dozen variants (see Project-Specific corrections) — the counter-check weighs most when both the correct form and the candidate are common words the engine handles routinely, least when they're rare proper nouns.
    - **Reject — intelligible real words.** `一撮` is a perfectly good measure word; don't rewrite readable speech just to make a running metaphor consistent. Only fix what the speaker plausibly didn't say.
    - **Reject — evidence-free reconstruction.** A proposed fix with no phonetic basis (`半`→`分`) is a guess about meaning, not a correction.
@@ -457,6 +622,12 @@ A recording can be long but still fast-tier (two known speakers, plain language)
      ```
    - Keep or move the original `.txt` to the archive if you want it; otherwise delete it.
    - Re-grep the final file for a correction you know you applied to confirm the corrected version landed.
+   - **Sweep what was already DERIVED from this transcript — the correction does not travel on its own.** A transcript is not a terminal artifact: within hours of landing it gets mined into notes, decision logs, analyses, summaries, and outbound messages. Every one of those was written from the *uncorrected* text, so a name you fix today is still wrong in each of them — and unlike the transcript, they carry no timestamp telling a reader the spelling is suspect. Measured case: a misheard person-name reached two analysis documents and was one draft away from a message going to the very people being discussed.
+     Scope it deliberately. **Only entity corrections** (names, companies, products — never phrasing, which is sentence-local by definition). **Search the project the transcript belongs to, not the whole knowledge base** — a repo-wide sweep will hit unrelated projects where the "old form" may be a *different real person*, which is the one outcome worse than not sweeping. Use **`grep -rn`, not `git grep`**: `git grep` searches tracked files only, and a document written hours ago — this bullet's entire scenario — is exactly the untracked case (`git grep --untracked` if you want the repo-aware version).
+     **Exclude the evidence trail** rather than "fixing" it: the raw ASR baseline (`transcript_raw.txt` and friends) that step 2's upstream-diff depends on, the `_needs_review.md` / `_changes.md` sidecars, any archived copy of the pre-correction transcript, and the review queue's own `original_text` all contain the old form *on purpose*. Rewriting them destroys the next run's ability to diff against raw, and breaks the anchors of anything still pending.
+     Review each hit rather than blind-replacing — this is a supervised pass over a handful of documents, not the unconstrained cross-file `sed` the batch-workflow rules forbid.
+   - **The cheap moment is upstream of all that: cross-check a name against the roster the first time it leaves the transcript.** The sweep above is the recovery path; the reason it was needed is that when the name first got copied into a derived document, nobody asked whether it matched a known person. Any time you carry a proper noun out of a transcript into something else, run it past the people roster / the project's alias ledger first — the same lookup step 4 already describes, applied at export time rather than at correction time. It costs one grep and removes the entire propagation problem.
+9b. **Rename and archive BEFORE enqueueing, not after.** Queue items store the transcript's absolute path, and resolving one reads that recorded path — so a rename (step 10) or an archive copy made after step 7 leaves every pending item pointing at a path that no longer holds the file, and each verdict then fails its anchor with nothing explaining why. The promote path in step 9 has the same effect for a different reason: it rewrites the file the items anchor to. If you have already enqueued, resolve the queue empty first, or re-enqueue the affected items against the final path. Archiving cuts the other way too — a verdict applied after the archive copy is made fixes the working copy while the archived one keeps the error, which is the same "the correction doesn't travel" failure step 9's derived-document sweep exists to prevent.
 10. **Filename hygiene — rename machine-generated gibberish before archiving.** A transcript whose filename is a raw ASR artifact, device tag, or opaque timestamp hash (`TX02_MIC021_20260720_095909_1.3x.md`, `soundcore Work_01-01 10-36.md`, `07-12-2026 20.07.md`) is not a useful artifact. Rename it to a human-readable form before the file enters a shared repo: `YYYY-MM-DD-HH-MM-<topic-or-speaker-summary>.md`, using Chinese or short English as appropriate to the project. The bar: a human should be able to identify the meeting from the filename alone. If the content clearly belongs to one business line, also encode that in the slug when the repo convention allows it.
 11. Save stable patterns to the dictionary (see "Dictionary Addition" above)
 12. Strip any remaining Stage 1 false positives from the final file before archiving
@@ -591,6 +762,7 @@ sqlite3 ~/.transcript-fixer/corrections.db "SELECT value FROM system_config WHER
 - `generate_word_diff.py` — Word-level diff HTML generation
 - `generate_diff_report.py` — Multi-format comparison report (Markdown, unified diff, HTML, inline markers)
 - `split_transcript_sections.py` — Split transcript by marker phrases
+- `fetch_minute_audio.py` — Fetch a Feishu/Lark minute's audio, verify it shares the transcript's timeline, print the `audio:` frontmatter line (wires up dashboard `Q` playback)
 
 **References** (load as needed):
 - **Safety**: `false_positive_guide.md` (read before adding rules), `database_schema.md` (read before DB ops)
