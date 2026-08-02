@@ -223,6 +223,50 @@ missed one. Machine callers should parse the stdout `error` field rather than
 the bare return code (argparse usage errors also exit 2). On `overridden`, only
 retargeted `file_edit`s run — suggestion-specific `dict_add`/`append_note`
 actions are dropped (they were planned for a suggestion the human rejected).
+(One scope note: the context check only runs when the original occurs MORE
+THAN ONCE — a unique occurrence has no look-alike to refuse, so a
+single-occurrence edit applies without consulting the snippet.)
+
+**When the guard refuses: `--reanchor-review` repairs the item.** A refusal is
+not a dead end and NOT a cue to hand-edit the file around the queue — that
+leaves the item pending forever and the edit unaudited. Run the re-anchor and
+then verdict again:
+
+```bash
+uv run scripts/fix_transcription.py --reanchor-review <id> [<id>...]
+# file itself is gone (moved/renamed/cleaned)? add search root(s):
+uv run scripts/fix_transcription.py --reanchor-review <id> --reanchor-root <dir-with-transcripts>
+```
+
+Two drift shapes are repaired against current disk state, both fail-closed:
+**context/line drift** (file edited since enqueue — re-locates `original` in
+the file, preferring lines that still match the RECORDED context snippet over
+mere distance, refreshes line + verbatim context) and **file gone** (searches
+the recorded parent dir plus every `--reanchor-root` for `*.md` containing
+`original`; exactly one candidate re-points the anchor, zero changes nothing,
+and multiple asks for `--reanchor-to FILE` — the explicit-target form, which
+is itself refused if `original` is not in it). After a successful re-anchor,
+the guard's context check passes and `A`/`W`/CLI resolve proceed normally
+(explicit action packs get their `file_edit` path rewritten to the new file).
+The refusal messages themselves name this command. (Root-caused 2026-08-03: an item
+enqueued with a PARAPHRASED context could never be verdicted — the human's
+override died at the guard and the file got hand-edited around the queue
+before this command existed.)
+
+**Enqueue validates anchors verbatim — authoring errors die at enqueue, not
+at verdict.** When an item declares a readable `file`, `--enqueue-review`
+checks that `original` (and `context`, if given) literally appears in it, and
+repairs a line hint that points beyond the resolve window (±3 lines) of a
+UNIQUE match (a hint inside the window works as-is and is left alone; repairs
+are printed to stderr). Anything else is REJECTED on the spot with the
+reason, and the run exits 3 — the JSON carries the rejects under
+`rejected_unanchored` (items under `added` WERE enqueued; fix the rejects and
+re-enqueue them). `context` must be copied verbatim from the file; a
+paraphrase drifts the anchor at the first surrounding edit. (Files that don't
+exist yet are not validated — e.g. items enqueued for a file on another
+machine; the resolve-time guard owns that case. `stage1_deferred` items are
+also exempt — their `from_text` is the engine's evolving text after earlier
+rules applied in-memory, legitimately not in the input file yet.)
 
 **One verdict fixes one occurrence — sweep the siblings yourself.** A resolved
 item edits exactly one span. When the original text occurs several times the
