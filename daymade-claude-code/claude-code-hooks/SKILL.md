@@ -95,11 +95,14 @@ match tokens/patterns; it can't judge whether a design is good).
   hard gates ("this must not stand"). `hookSpecificOutput.additionalContext`
   shows as neutral "Stop hook feedback" with no error notification — for
   coaching and reminders the model should weigh, not gates. Both count toward
-  the same 8-consecutive-block ceiling from the table above, so the choice is
-  tone, not safety. What the ceiling means for message design: a blocked retry
+  the same consecutive-block ceiling from the table above, so the choice is
+  tone, not safety. What that means for message design: a blocked retry
   round (`stop_hook_active: true`) is let through **with whatever violations
-  remain**, and after 8 blocks the harness ends the turn the same way — so a
-  Stop guard gets exactly **one** informed bite. Report *all* findings in that
+  remain** — so a Stop guard gets exactly **one** informed bite. (The ceiling
+  reinforces this only when your remediation is "rewrite the reply"; if it
+  involves tool calls the counter resets and the ceiling never lands — #27.
+  Either way the one-bite conclusion holds, because it rests on the latch, not
+  on the ceiling.) Report *all* findings in that
   one block (a guard that prints only the first loses the rest permanently —
   pitfall #17), and write the message as an escape manual naming the exact
   acceptable fix, not a verdict — the model converges in one round or it burns

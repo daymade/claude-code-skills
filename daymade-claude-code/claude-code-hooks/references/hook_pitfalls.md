@@ -532,8 +532,9 @@ unresolvable path means **block**.
   honors by letting the turn end — so everything it did not say in round one
   sails through permanently. The anti-loop field that saves you from infinite
   re-entry is precisely what makes the first block your only informed bite.
-  (The harness separately ends the turn after 8 consecutive blocks — banking
-  on "I'll catch it next round" burns that cap and loses anyway.)
+  (The harness's consecutive-block ceiling does not rescue you either: banking
+  on "I'll catch it next round" burns it when the remediation is reply-only,
+  and never reaches it at all when the remediation involves tool calls — #27.)
 - **Fix:** collect *all* findings before printing (cap the list — five is
   plenty — so a pathological reply can't flood the model's context), and write
   the message as an escape manual: each finding plus the exact acceptable fix.
