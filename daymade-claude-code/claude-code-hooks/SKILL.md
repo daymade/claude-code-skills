@@ -745,3 +745,31 @@ fire, suspect the row before the hook.
 - [references/hook_pitfalls.md](references/hook_pitfalls.md) — every real failure mode with symptom → cause → fix.
 - [scripts/test_hook.sh](scripts/test_hook.sh) — end-to-end test harness; copy it next to any new hook.
 - [scripts/test_hook.group-name-guard.sh](scripts/test_hook.group-name-guard.sh) — a worked harness instance for a real Stop guard (event shapes, `says` rows, both polarities).
+
+## Maintenance — where new content goes
+
+New incident backports land outside this file, in the place that already holds
+their kind: a fresh pitfall or failure anatomy →
+[references/hook_pitfalls.md](references/hook_pitfalls.md); a reusable
+skeleton or pattern → [references/hook_patterns.md](references/hook_patterns.md);
+a worked harness instance (a test script) → `scripts/`. This file only takes
+**contract-level rules**: content every blocking hook consumes (a new hook
+type, a changed exit-code contract, a new rule in the `## Rules that separate
+a working guard from a session-poisoning one` series). The loaded-at-trigger
+surface stays stable while the knowledge base keeps growing; depth lives one
+pointer away. (The "Known pitfalls" headliners above are a highlights list,
+not an index — they have not been extended since pitfall #16; the numbered
+catalog in `hook_pitfalls.md` is the SSOT, and a new pitfall does not owe a
+headliner.)
+
+Why this is written down (2026-08-02): backports have in fact always gone to
+references — what grew this file 10k→50k chars in one week was *rules* prose
+(rules 5–8 landing inline), which this policy deliberately keeps here. The
+policy's job is to make the default explicit for the next session holding a
+fresh incident, so future growth stays limited to contract-level rules. A
+four-frame design review (cost / SSOT / architecture / evidence,
+cross-examined) chose this over a structural split of the existing eight
+rules. Restart-the-split criteria, for the next time someone proposes one: a
+measurement (not a vibe) showing the main file's size degrades rule
+compliance, or the whole skill's churn settling (30 consecutive days with no
+new rule or backport landing anywhere).
