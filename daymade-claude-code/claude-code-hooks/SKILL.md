@@ -50,7 +50,7 @@ match tokens/patterns; it can't judge whether a design is good).
 | **PreToolUse** | before a tool runs | allow | **block** the call (stderr → shown to model as guidance) | any other exit = "non-blocking error" → **the call proceeds** |
 | **PostToolUse** | after a tool ran | quiet **unless it prints a `hookSpecificOutput` JSON on stdout — that is how context injection works, and it happens at exit 0** | feedback to the model (can't un-run the tool) | — |
 | **SessionStart** | session begins | proceed | — | **always exit 0** — never block a session |
-| **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | loop safety is **two layers**: the hook checks `stop_hook_active` (necessary, **not** sufficient — rule 7), and the harness itself **ends the turn after 8 consecutive blocks** regardless. All Stop hooks for an event run **in parallel** — one block round can carry several hooks' feedback |
+| **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | loop safety: the hook checks `stop_hook_active` (necessary, **not** sufficient — rule 7). The harness's consecutive-block ceiling (default 8) is **not** a general backstop — its counter resets on any continuation that executed tools, so it never arrives for a hook whose remediation involves tool calls, which is most of them (#27). Carry your own bound. All Stop hooks for an event run **in parallel** — one block round can carry several hooks' feedback |
 
 - **PreToolUse** is the workhorse — the only one that can *stop* an action.
   `matcher` selects the tool (`Bash`, `Agent`, `WebFetch`, …). Exit 2 blocks and
@@ -367,13 +367,17 @@ condition T is true → hook demands remediation R → model performs R → T ch
 ```
 
 **If completing R can make T true again, the loop does not converge.** Nothing
-errors, nothing crashes; it burns round after round until the harness's
-8-consecutive-block ceiling ends the turn — or a human interrupts first, which
-is what usually happens because each round is a *complete* remediation cycle
-(dispatch, wait, adopt, edit), not a cheap retry. That ceiling is a backstop
-against a runaway session, not a design: reaching it means the turn ends with
-the violation still standing and the model's last 8 rounds spent on work nobody
-asked for. "It eventually stops" is not termination in any sense you want. `stop_hook_active` does *not* save you here — that field covers
+errors, nothing crashes; it burns round after round until a human interrupts —
+which is what usually happens, because each round is a *complete* remediation
+cycle (dispatch, wait, adopt, edit), not a cheap retry. **And that same
+property is why the harness's 8-consecutive-block ceiling will not save you:
+its counter resets on every continuation that executed tools, so a remediation
+cycle made of tool calls keeps it pinned at 1 forever** (measured — #27). Even
+where it does arrive, it is a backstop against a runaway session, not a design:
+the turn ends with the violation still standing, and the harness reports that
+turn as `reason:"completed"` — indistinguishable from genuinely finishing.
+"It eventually stops" is not termination in any sense you want, and here it
+does not even eventually stop. `stop_hook_active` does *not* save you here — that field covers
 exactly **one layer of re-entry** ("the stop I just blocked is being retried").
 It says nothing about the *cross-turn* case, where the model genuinely goes off
 and does R (real work, many tool calls), then stops naturally: that is a brand
