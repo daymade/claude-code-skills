@@ -77,8 +77,15 @@ def find_internal_path_references(content: str) -> list[str]:
         ]):
             continue
 
-        matches = re.findall(pattern, line)
-        for path in matches:
+        matches = re.finditer(pattern, line)
+        for m in matches:
+            path = m.group(0)
+            # A match immediately followed by a glob/brace/placeholder char is
+            # a PATTERN, not a file reference: `references/install_*.md`,
+            # `install_<system>.md`, `install_{a,b}.md` all truncate to
+            # `install_` and would false-positive as a missing file.
+            if line[m.end():m.end() + 1] in ('*', '{', '[', '<'):
+                continue
             # Skip placeholders
             if any(x in path.lower() for x in ['example', 'xxx', '<', '>', 'my-', 'my_']):
                 continue
