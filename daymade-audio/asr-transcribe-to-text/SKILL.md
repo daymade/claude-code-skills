@@ -208,6 +208,70 @@ Wrote upload.m4a
   | Only when the target rejects the above | `.mp3` | Compatibility fallback |
 - Keep the originals until the transcript passes Step 4 verification.
 
+## Option: Upload to Feishu Minutes for transcription
+
+After preprocessing, if the user wants **Feishu Minutes** to do the transcription
+instead of the local/remote pipeline above, use this path. This is the right
+choice when the user explicitly asks for a 妙记 minute or wants the cloud
+transcription UI rather than a local transcript file.
+
+**Trigger phrases**: 传到妙记 / 上传到飞书妙记 / 让妙记转写 / create a minute from this audio / upload to Feishu minutes.
+
+**Constraints**:
+- **No proxy**: all `lark-cli` calls must use `LARK_CLI_NO_PROXY=1`.
+- **Single profile**: use the active Feishu profile only. Do not iterate tenant
+  profiles or invoke tenant routing.
+- **No local transcription follows**: once the minute is created, this skill's
+  job ends here. The user opens the `minute_url` in Feishu and waits for the
+  cloud ASR. Local transcript correction (`transcript-fixer`) or speaker
+  backfill (`review-feishu-minutes`) only apply after the cloud transcript exists
+  and has been pulled back, not at create time.
+
+**Step-by-step**:
+
+1. **Use the already-preprocessed audio** from the section above when possible.
+   Feishu accepts `.m4a`, `.mp3`, `.wav`, `.aac` in an MP4/MOV wrapper; the
+   preprocessor's "Metered upload" row is already shaped for this. Keep the file
+   under 6 GB and under 6 hours — those are Feishu upload hard limits.
+
+2. **Upload to Drive as the user**:
+   ```bash
+   LARK_CLI_NO_PROXY=1 lark-cli drive +upload \
+     --file '<preprocessed-media-path>' \
+     --name '<basename>' \
+     --as user \
+     --format json
+   ```
+   From the result, record `file_token`. If the command errors with a path
+   validation or multipart failure, do not retry blindly — switch format or size
+   strategy and try once more, then report the exact failure.
+
+3. **Create the minute from that Drive file**:
+   ```bash
+   LARK_CLI_NO_PROXY=1 lark-cli minutes +upload \
+     --file-token '<file_token>' \
+     --as user \
+     --format json
+   ```
+   From the result, record `minute_token` and `minute_url`.
+
+4. **Return the `minute_url` to the user** and stop. Do not run this skill's
+   local transcription steps, and do not run `sync-feishu-minutes` ingest/delegate
+   for this newly created minute — those are for minutes that already existed on
+   Feishu. When the user later asks to pull this minute back, hand off to
+   **`sync-feishu-minutes`**; for speaker cleanup after that, hand off to
+   **`review-feishu-minutes`**.
+
+**Expected output**:
+- Success: a single `minute_url` the user can open to view/transcribe.
+- Failure: exact API error from `drive +upload` or `minutes +upload`, plus one
+  suggested next action.
+
+**Wrong-skill recovery**: if this request lands while you are inside
+`sync-feishu-minutes`, the request shape is "local audio -> Feishu minute", not
+"sync existing minutes" — stop, switch to `asr-transcribe-to-text`, and follow
+this section.
+
 ## Step 3: Transcribe (speaker labels by default)
 
 ### Path A: Local MLX (macOS Apple Silicon) — default
