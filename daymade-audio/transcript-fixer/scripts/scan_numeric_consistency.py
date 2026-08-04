@@ -286,15 +286,16 @@ def main() -> int:
     domains = [d for spec in (args.domain or []) for d in spec.split(",") if d.strip()] or None
     try:
         terms = load_canonical_terms(args.db, domains)
-    except RuntimeError as exc:
-        print(f"{exc}\nnumeric-slot 未能执行；这里退出而不是给你一份看似干净的报告。",
-              file=sys.stderr)
-        return 2
-    except FileNotFoundError as exc:
-        print(f"字典不存在：{exc}\n"
-              f"numeric-slot 需要它提供 needle 列表；现在退出，而不是打印一份\n"
+    except (RuntimeError, FileNotFoundError) as exc:
+        msg = (f"字典不存在：{exc}" if isinstance(exc, FileNotFoundError) else str(exc))
+        print(f"{msg}\nnumeric-slot 需要字典提供 needle 列表；这里退出，而不是打印一份\n"
               f"看起来干净、实际没扫的报告。orphan-plus 可单独跑：去掉 --domain。",
               file=sys.stderr)
+        if args.json:
+            # A caller parsing stdout unconditionally would otherwise get an
+            # empty string here and have to guess whether that meant "clean".
+            print(json.dumps({"_scan": {"error": msg, "needles_loaded": 0},
+                              "findings": {}}, ensure_ascii=False, indent=2))
         return 2
     if domains and not terms:
         print(f"⚠️ domain {domains} 在字典里没有可用作 needle 的规范词"

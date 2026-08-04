@@ -816,8 +816,11 @@ knowing by name, because the published work explains why voting across systems
 beats improving any one of them. Do not discard a "redundant" second recording
 of a meeting you already have; it is a reference transcript for exactly the
 values that matter most. If only one recording exists and a number is
-load-bearing, `fetch_minute_audio.py` gets you the audio to check that timestamp
-directly.
+load-bearing, settle it by ear through the path this skill already has: wire the
+transcript's `audio:` frontmatter (see "Wiring audio for a Feishu-minute
+transcript"), enqueue the number as a review item, and press `Q` in the review
+dashboard — it plays exactly the anchored utterance, so you hear the digits
+spoken instead of re-reading them.
 
 **Numeric-slot damage — when a replacement overshoots into a number.** A
 distinct failure with the same symptom: a global replace aimed at something else
@@ -835,11 +838,19 @@ that overshoots produces the same signature.
 uv run scripts/scan_numeric_consistency.py transcript.md --domain <project>
 ```
 
-Calibration, so you know what a hit is worth: across 222 real transcripts this
-reports 0.004 findings per file, while catching all four damage shapes above.
 Everything it prints is a **candidate to read**, never an edit to apply — and
 the polarity class is deliberately not automated, because a check that fires on
 healthy input is one people stop running.
+
+What you can verify yourself: `scripts/tests/test_numeric_consistency.py` pins
+both halves of that promise on synthetic fixtures — every damage shape above is
+detected, and the healthy-input shapes that killed two earlier versions of this
+scanner (a term merely co-occurring with digits, a term *before* a digit, a
+title's leading date, a timezone offset) stay silent. Run it with
+`uv run --with pytest python -m pytest scripts/tests/test_numeric_consistency.py`.
+The false-positive *rate* behind those choices was measured on a private
+transcript corpus that cannot ship, so the rate is not reproducible here — the
+behaviour it bought is.
 
 ### Efficient Batch Fix Strategy
 
