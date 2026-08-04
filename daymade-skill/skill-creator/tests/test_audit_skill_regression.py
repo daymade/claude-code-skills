@@ -556,6 +556,8 @@ def test_git_ref_baseline_is_resolved_and_verified_against_git_tree(tmp_path):
     skill = _make_skill(repo / "skill", "- Keep offline recovery available.")
     before = tmp_path / "before"
     subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "user@example.com"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test User"], check=True)
     subprocess.run(["git", "-C", str(repo), "add", "skill"], check=True)
     tree = subprocess.run(
         ["git", "-C", str(repo), "write-tree"], check=True, capture_output=True, text=True
@@ -585,6 +587,8 @@ def test_git_ref_baseline_rejects_a_copy_made_after_editing(tmp_path):
     repo = tmp_path / "repo"
     skill = _make_skill(repo / "skill", "- Keep offline recovery available.")
     subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "user@example.com"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test User"], check=True)
     subprocess.run(["git", "-C", str(repo), "add", "skill"], check=True)
     tree = subprocess.run(
         ["git", "-C", str(repo), "write-tree"], check=True, capture_output=True, text=True
@@ -649,6 +653,8 @@ def test_valid_marker_is_informational_and_cannot_bypass_packaging_review(tmp_pa
     repo = tmp_path / "repo"
     skill = _make_skill(repo / "skill", "- Keep offline recovery available.")
     subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "user@example.com"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test User"], check=True)
     subprocess.run(["git", "-C", str(repo), "add", "skill"], check=True)
     tree = subprocess.run(
         ["git", "-C", str(repo), "write-tree"], check=True, capture_output=True, text=True
