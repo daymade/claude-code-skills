@@ -290,6 +290,13 @@ the wrong cwd. If your hook takes a path out of command text and hands it to a r
 command, expand what the shell would have expanded — or decide, per rule 5, that an
 unresolvable path means **block**.
 
+  **The same parser has a second, sharper failure once you give it a fallback:**
+  it then answers confidently about the wrong repository instead of failing open.
+  Fixing #10 does not fix that — see #28. Note also that the shared-library
+  reassurance above has a boundary: it protects the hooks that *source* the
+  helper. A hook carrying its own inline parser inherits none of the fix and
+  has to be patched separately (that is exactly how #28 survived #10).
+
 ## 11. Newline-blind segmentation misses the multiline command (fixtures pass, real corpus barely fires)
 
 - **Symptom:** the hook passes every synthetic fixture (`git push origin main`,
@@ -1066,3 +1073,117 @@ When a guard is misbehaving, check in this order — cheapest and most common fi
     runaway process anywhere? → fork multiplier (#22): the fleet's per-call
     irrelevant path is the load. Slim every guard's fast path to zero forks;
     do not "fix" it by deleting guards.
+
+---
+
+## 28. The fallback target is right for one reason and wrong for another — and both print the same line
+
+> Worked example in this repo's sibling tooling: `git-push-verify.sh` and
+> `git-commit-headcheck.sh` (a private hooks repo, not shipped here) both had
+> exactly this defect and were fixed on 2026-08-04 by the prescription below.
+> Naming them matters — the entry is useless if you cannot go read a before/after.
+
+- **Symptom:** a verification hook reports a clean, confident, *correct* fact —
+  about the wrong object. `git push` to repo B triggers a push-verifier that
+  answers with repo A's HEAD, compares it against repo A's remote, and prints
+  `✅ push 已落地`. Nothing errored. The hash it printed is real. The comparison
+  it performed is sound. It just wasn't about the push you ran. And the message
+  opens with `权威源` / "authoritative — do not trust the in-command output",
+  which is an instruction to discard the very observation that would have caught
+  it.
+
+- **Cause — two different reasons for falling back share one fallback value.**
+  Such a hook derives its target from the command text (`git -C <path> …`) and
+  falls back to the event's `cwd` when it can't. That fallback is correct for
+  *one* of the two reasons it triggers and wrong for the other, and the code
+  path is identical:
+
+  | command | target parsed | falls back? | event cwd | verdict |
+  |---|---|---|---|---|
+  | `git push` | none — **there is no explicit target** | yes | the real target | ✅ correct |
+  | `git -C /literal/p push` | `/literal/p` | no | — | ✅ correct |
+  | `R=/p; git -C $R push` | `$R` — **explicit target, unreadable value** | yes | *not* the target | ❌ **bound to the wrong object** |
+
+  Rows 1 and 3 emit byte-identical shapes. The hook cannot tell them apart, and
+  neither can the reader: one is the strongest verdict the hook can give, the
+  other is that same verdict about an unrelated repository. Note the variable is
+  not exotic — assigning a path once and reusing it is ordinary shell, and it is
+  *more* likely in exactly the multi-repo sessions where the failure bites.
+
+  This is the checking-tool form of the **confused deputy** problem (Hardy,
+  1988): a component with the authority to answer becomes confused about *which
+  object it is answering for*. The security literature's diagnostic questions
+  port over directly — "who is the real requester? what resource is actually
+  being touched?" — and for a hook they become **"which target did the command
+  name, and is that the one I measured?"**
+
+- **The assumption that hides it.** Both hooks carried a comment asserting this
+  fallback was safe *because* "the wrong path will just fail to read, so the
+  failure direction is fail-loud — there is no false-green path here." That is
+  the reasoning to distrust. It holds only if the fallback lands somewhere
+  invalid; in a multi-repo session it lands in **another valid repository**, so
+  the read succeeds and returns a real, checkable, entirely irrelevant fact. The
+  false green grew directly out of the belief that a false green was impossible.
+  When you write "this can only fail loudly," name the input that would make it
+  fail quietly and go check that input exists.
+
+- **Why this is worse than a hook that fails open.** A fail-open hook (pitfall
+  #10) produces silence, and silence is at least honest about carrying no
+  information. This produces a *positive verdict with the wrong referent*, wearing
+  the vocabulary of authority. It also survives the reader's instinct to
+  double-check, because there is nothing to double-check: the command succeeded,
+  the output is well-formed, the hash is real.
+
+- **Fix — make the fallback carry its own reason, and downgrade the one that
+  can't be trusted.**
+  1. **Distinguish "no explicit target" from "explicit target, unresolvable."**
+     Only the first may silently adopt the event `cwd`. The second must refuse
+     to render a verdict: `目标是 $VAR，无法解析——本 hook 未核对，请手动比对`.
+     A hook that says "I didn't check" costs one manual check; one that says
+     "✅" about another object costs the thing it was built to protect.
+  2. **Put the referent where it is read, not where it is skipped.** If the
+     message must carry a caveat, it belongs *before* the verdict, not after it.
+     A trailing "⚠️ if the repo above isn't the one you pushed, this line is
+     unrelated" is a correct sentence that arrives after the reader has already
+     banked the ✅.
+  3. **Never claim more authority than the binding supports.** `权威源` is
+     earned by the *measurement* (asking the remote) and spent by the *binding*
+     (which repo). A hook whose binding is heuristic should not use the
+     vocabulary of a hook whose binding is exact.
+
+- **How this hides during development.** The author writes fixtures with literal
+  paths, because that is how you write a readable test. Literal paths are row 2 —
+  the one that works. The failure needs a variable, which appears in real
+  sessions and almost never in fixtures. Add a fixture whose target is a shell
+  variable and assert on the *rendered target string*, not on the exit code
+  (pitfall #14's rule applied here: for a hook whose product is text, the exit
+  code proves nothing).
+
+- **Calibration note for anyone tempted to "just always warn."** Research on static-analysis
+  alerts reports that a large majority of warnings go unacted-on — the
+  frequently-cited range is roughly **35%–91%** (Heckman & Williams' work on
+  actionable-vs-unactionable warnings is the usual entry point), with
+  false-positive rates reaching ~90% in some tools, and names the resulting
+  desensitisation *alert fatigue*. (Figures quoted from secondary summaries;
+  search "actionable static analysis warnings" for the primary sources and their
+  datasets.) That is the budget a hook spends
+  every time it emits an unreliable line. Choosing "I didn't check" over a
+  confident wrong answer is not timidity; it is spending that budget on the
+  cases that earn it.
+
+**The later entries route by shape, not by symptom order** (they were added after
+this list and describe defects you reach by asking a different question):
+
+- Does the guard **read a flag as data**, or drop a token it should have judged?
+  → arity table vs. the real tool (#23); boundary-regex negated class (#24).
+- Does the guard **block its own maintenance** — its health check, its fix commit,
+  its own read path? → read forms not modelled (#25); and #7 for the fix-commit form.
+- Is the guard **correct from now on but blind to what already happened**?
+  → mid-session activation guards only the future (#26).
+- Is a **Stop hook firing more times than the documented cap allows**?
+  → both loop-protections have blind spots (#27).
+- Does the guard emit a **confident verdict about the wrong object** — right facts,
+  wrong referent, no error anywhere? → fallback target sharing one value for two
+  different reasons (#28). This one does not announce itself as a malfunction;
+  you find it by asking "which target did the command name, and is that the one
+  the guard measured?"
