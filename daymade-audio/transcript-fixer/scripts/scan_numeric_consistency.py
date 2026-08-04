@@ -15,7 +15,7 @@ Two detectors, both narrow by design:
 
 Why a script rather than dictionary rules: a dictionary maps one wrong string to
 one right string, which requires the error to be *stable*. Damaged digits are
-not stable — the same replacement corrupts "21" and "5+1" and a date into three
+not stable — the same replacement corrupts "21" and "3+1" and a date into three
 different shapes — so only a scan over the text can find them. Numbers are worth
 the trouble: the entity-level ASR literature consistently ranks numbers and
 named entities as the worst-performing categories, with a numeral's continuation
@@ -164,7 +164,7 @@ def load_canonical_terms(db_path: Path, domains: list[str] | None = None) -> set
 def _body_only(text: str) -> str:
     """Blank out frontmatter and metadata lines, keeping offsets stable.
 
-    Titles and filenames carry a leading date ("0620华东区团队摸底"), which is
+    Titles and filenames carry a leading date ("0620北岸分馆库存盘点"), which is
     a digit immediately followed by a term — structurally identical to the
     damage this looks for, and never actually damage.
     """
@@ -187,7 +187,7 @@ def scan_numeric_slot(text: str, terms: set[str]) -> Iterator[Finding]:
 
     Shape of the real failure: someone relabels a speaker whose diarization label
     was the bare digit "1" by replacing that string globally. Speaker lines get
-    fixed — and so does every 1 inside "5+1", "1.1 倍速", "21 度电" and the date
+    fixed — and so does every 1 inside "3+1", "8.8 折", "21 册" and the date
     in the title. The transcript still reads fluently, which is why nobody
     notices: only the digits are wrong, and only where a number happened to
     contain that digit.
@@ -202,20 +202,20 @@ def scan_numeric_slot(text: str, terms: set[str]) -> Iterator[Finding]:
             # Widen to the surrounding CJK run before looking at the neighbours.
             # Without this the detector silently depends on the dictionary having
             # registered the *exact* injected form: a project that records the
-            # short name ("子涵") while the writeback injects the full one
-            # ("王子涵") would see every "2王子涵 度电" as clean, because the
-            # characters touching 子涵 are 王 and a space. Widening to the CJK
+            # short name ("辰社") while the writeback injects the full one
+            # ("星辰社") would see every "2星辰社 册" as clean, because the
+            # characters touching 辰社 are 王 and a space. Widening to the CJK
             # boundary makes the check depend on the text, not on which alias
             # someone happened to file.
             # Widening is BOUNDED to two characters per side, and that bound is
             # the whole ballgame. An unbounded walk to the CJK-run edge looked
-            # more thorough and was catastrophically worse: "华东区试点前1v1"
+            # more thorough and was catastrophically worse: "北岸分馆季度盘点前1v1"
             # swallows the entire phrase, lands next to the 1, and reports a
             # clean line. Chinese puts digits after a run of characters
             # constantly, so an unbounded rule fires on ordinary text — 97 hits
             # across a healthy 222-file corpus, versus 46 real ones. Two
             # characters is enough for the surname prefix this needs to cross
-            # ("子涵" registered, "王子涵" injected) and short enough that an
+            # ("辰社" registered, "星辰社" injected) and short enough that an
             # ordinary phrase cannot reach a neighbouring number.
             lo, hi = m.start(), m.end()
             for _ in range(2):
@@ -233,7 +233,7 @@ def scan_numeric_slot(text: str, terms: set[str]) -> Iterator[Finding]:
                 if i > 0 and text[i:m.start()] == text[i:m.start()].strip()
             )
             # Direction matters, and only one direction is evidence. Damage
-            # looks like "2王子涵 度电" — a digit followed by a term that split
+            # looks like "2星辰社 册" — a digit followed by a term that split
             # the number from its measure word. The mirror image, a term
             # followed by a digit ("本季项目6周", "关键词出现38次"), is simply how
             # Chinese is written; matching it drowned the detector in ordinary
@@ -247,7 +247,7 @@ def scan_numeric_slot(text: str, terms: set[str]) -> Iterator[Finding]:
             yield Finding(
                 kind="numeric-slot",
                 line=_line_of(text, lo),
-                detail=f"「{run}」紧邻数字 — 数字位很可能被替换越界（如 21→2{run}、5+1→5+{run}）",
+                detail=f"「{run}」紧邻数字 — 数字位很可能被替换越界（如 21→2{run}、3+1→5+{run}）",
                 excerpt=_excerpt(text, lo, hi),
             )
 

@@ -35,7 +35,7 @@ def _load_module():
 
 
 scan_mod = _load_module()
-TERMS = {"王子涵", "子涵", "华东区", "会销"}
+TERMS = {"星辰社", "辰社", "北岸分馆", "盘点"}
 
 
 def _kinds(text: str, terms=TERMS) -> list[str]:
@@ -45,22 +45,22 @@ def _kinds(text: str, terms=TERMS) -> list[str]:
 # --- damage shapes: each must be detected -----------------------------------
 
 @pytest.mark.parametrize("text,label", [
-    ("电站配 2王子涵 度储能电池", "digit split from its measure word"),
-    ("那 5+王子涵 用的比较好的是", "product code 5+1 with the 1 replaced"),
-    ("你这个是 1.王子涵 倍速还是 1.2", "decimal with the fractional digit replaced"),
-    ("2026-07-3王子涵 14:00 开始", "date with its last digit replaced"),
+    ("库存有 2星辰社 册精装本", "digit split from its measure word"),
+    ("那 3+星辰社 号书架空着", "shelf code 3+1 with the 1 replaced"),
+     ("这批打 8.星辰社 折还是 8.5", "decimal with the fractional digit replaced"),
+    ("2026-07-3星辰社 14:00 开始", "date with its last digit replaced"),
 ])
 def test_numeric_slot_damage_is_detected(text, label):
     assert "numeric-slot" in _kinds(text), f"missed: {label}"
 
 
 def test_short_alias_still_catches_full_name():
-    """Registering "子涵" must catch "2王子涵" — the injected form is longer.
+    """Registering "辰社" must catch "2星辰社" — the injected form is longer.
 
     Depending on the dictionary having filed the exact injected alias is how
     this detector silently fails on someone else's project.
     """
-    assert "numeric-slot" in _kinds("电站配 2王子涵 度储能电池", terms={"子涵"})
+    assert "numeric-slot" in _kinds("库存有 2星辰社 册精装本", terms={"辰社"})
 
 
 @pytest.mark.parametrize("text", ["总共30+家都签了", "total 30+ customers", "报名 50+ 人"])
@@ -73,11 +73,11 @@ def test_orphan_plus_is_detected_in_both_scripts(text):
 # --- healthy shapes: each must stay silent ----------------------------------
 
 @pytest.mark.parametrize("text,why", [
-    ("王子涵说这条 5 家都能用，21 度电很够", "term and digits merely co-occur"),
+    ("星辰社说这批 5 种都能用，21 册很够", "term and digits merely co-occur"),
     ("本季项目6周规划", "term BEFORE digit is ordinary Chinese"),
     ("关键词出现38次", "same, with a different measure word"),
-    ("华东区试点前1v1沟通", "a phrase reaching a digit only if widening is unbounded"),
-    ("会销转化了 35 家", "term adjacent to a number across a space"),
+    ("北岸分馆季度盘点前1v1沟通", "a phrase reaching a digit only if widening is unbounded"),
+    ("盘点核对了 35 册", "term adjacent to a number across a space"),
 ])
 def test_healthy_text_is_not_flagged_as_numeric_slot(text, why):
     assert "numeric-slot" not in _kinds(text), f"false positive: {why}"
@@ -94,7 +94,7 @@ def test_healthy_text_is_not_flagged_as_orphan_plus(text, why):
 
 def test_metadata_lines_are_skipped():
     """A title's leading date is structurally identical to the damage."""
-    doc = "---\ntitle: 0620华东区团队摸底\ndate: 2026-06-20\n---\n\n正文没有问题。\n"
+    doc = "---\ntitle: 0620北岸分馆库存盘点\ndate: 2026-06-20\n---\n\n正文没有问题。\n"
     assert "numeric-slot" not in _kinds(doc)
 
 
@@ -127,12 +127,12 @@ def test_corrupt_dictionary_raises_rather_than_crashing_with_exit_1(tmp_path, pa
 def test_no_domain_loads_no_needles(tmp_path):
     """Loading every domain would let one project's vocabulary judge another's."""
     db = tmp_path / "c.db"
-    _make_db(db, [("风舟", "子涵", "projA"), ("x", "华东区", "projB")])
+    _make_db(db, [("辰社变体", "星辰社", "projA"), ("x", "北岸分馆", "projB")])
     assert scan_mod.load_canonical_terms(db, None) == set()
 
 
 def test_single_char_and_latin_terms_are_rejected_as_needles(tmp_path):
     """A 1-char needle collides with ordinary text; a Latin one with units/IDs."""
     db = tmp_path / "c.db"
-    _make_db(db, [("a", "王", "p"), ("b", "OK", "p"), ("c", "子涵", "p")])
-    assert scan_mod.load_canonical_terms(db, ["p"]) == {"子涵"}
+    _make_db(db, [("a", "社", "p"), ("b", "OK", "p"), ("c", "辰社", "p")])
+    assert scan_mod.load_canonical_terms(db, ["p"]) == {"辰社"}
