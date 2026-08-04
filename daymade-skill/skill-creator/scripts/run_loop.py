@@ -174,6 +174,65 @@ def run_loop(
             if test_summary:
                 print_eval_stats("Test ", test_results["results"], 0)
 
+        # Degenerate-harness / infra-error guard: iteration 1 is the cheapest
+        # point to catch "this run measured nothing" before paying for 2-5.
+        if iteration == 1:
+            all_iter1_results = train_result_list + test_result_list
+            positive_results = [r for r in all_iter1_results if r["should_trigger"]]
+            negative_results = [r for r in all_iter1_results if not r["should_trigger"]]
+            total_pos_triggers = sum(r["triggers"] for r in positive_results)
+            total_pos_runs = sum(r["runs"] for r in positive_results)
+            total_neg_triggers = sum(r["triggers"] for r in negative_results)
+            positive_errors = sum(r.get("errors", 0) for r in positive_results)
+            negative_errors = sum(r.get("errors", 0) for r in negative_results)
+            total_errors = positive_errors + negative_errors
+
+            if positive_results and total_pos_triggers == 0 and total_errors > 0:
+                # Execution itself failed for some queries (claude CLI missing,
+                # timeout too short, network down) — this produces the exact same
+                # 0-triggers signature as a dead probe, but the fix is
+                # environmental, not a description rewrite. Scoped to ANY error
+                # (positive-side OR negative-side): a negative-side error means
+                # that query never actually ran, so its "0 triggers" can't be used
+                # as proof the probe is dead either — see edge case below.
+                # Diagnose this first; see stderr for "Warning: query failed".
+                # NOTE: even 1 error out of many runs takes this branch over
+                # degenerate_harness, since a crash — however rare — is still a
+                # more specific, actionable lead than "nothing fired." Check the
+                # ratio in the message: 1 error alongside many clean 0-trigger
+                # runs may mean BOTH causes are worth checking, not just infra.
+                exit_reason = (
+                    f"infra_error: {total_errors}/{total_pos_runs + sum(r['runs'] for r in negative_results)} "
+                    "query runs raised an exception on iteration 1 (see stderr for 'Warning: "
+                    "query failed') and zero should-trigger queries triggered. This is not "
+                    "necessarily a description problem — fix the execution environment "
+                    "(claude CLI on PATH? timeout too short? network reachable?) and re-run "
+                    "before concluding anything about the description itself."
+                )
+                if verbose:
+                    print(f"\n{exit_reason}", file=sys.stderr)
+                break
+
+            if positive_results and total_pos_triggers == 0 and total_neg_triggers == 0:
+                # Nothing fired for ANY query, positive or negative, AND every one
+                # of those runs actually executed (the branch above already ruled
+                # out errors) — the probe genuinely measures nothing (this is what
+                # "precision=100%" via a zero-denominator default actually means
+                # below). If negatives WERE firing, the probe clearly works and
+                # the description is just polarity-inverted, which has real
+                # gradient for improve_description — so this deliberately does
+                # not fire then.
+                exit_reason = (
+                    f"degenerate_harness: 0/{total_pos_runs} triggers across "
+                    f"{len(positive_results)} should-trigger queries, and 0 triggers on "
+                    "any not-should-trigger query either, on iteration 1. See SKILL.md "
+                    "'How skill triggering works' — competitor collision or a "
+                    "low-threshold task domain are the two known causes."
+                )
+                if verbose:
+                    print(f"\n{exit_reason}", file=sys.stderr)
+                break
+
         if train_summary["failed"] == 0:
             exit_reason = f"all_passed (iteration {iteration})"
             if verbose:

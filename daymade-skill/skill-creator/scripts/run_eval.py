@@ -211,18 +211,23 @@ def run_eval(
                 future_to_info[future] = (item, run_idx)
 
         query_triggers: dict[str, list[bool]] = {}
+        query_errors: dict[str, int] = {}
         query_items: dict[str, dict] = {}
+        error_count = 0
         for future in as_completed(future_to_info):
             item, _ = future_to_info[future]
             query = item["query"]
             query_items[query] = item
             if query not in query_triggers:
                 query_triggers[query] = []
+                query_errors[query] = 0
             try:
                 query_triggers[query].append(future.result())
             except Exception as e:
                 print(f"Warning: query failed: {e}", file=sys.stderr)
                 query_triggers[query].append(False)
+                query_errors[query] += 1
+                error_count += 1
 
     for query, triggers in query_triggers.items():
         item = query_items[query]
@@ -238,6 +243,7 @@ def run_eval(
             "trigger_rate": trigger_rate,
             "triggers": sum(triggers),
             "runs": len(triggers),
+            "errors": query_errors[query],
             "pass": did_pass,
         })
 
@@ -248,6 +254,7 @@ def run_eval(
         "skill_name": skill_name,
         "description": description,
         "results": results,
+        "error_count": error_count,
         "summary": {
             "total": total,
             "passed": passed,

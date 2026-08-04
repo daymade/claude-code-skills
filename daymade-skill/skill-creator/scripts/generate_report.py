@@ -68,6 +68,15 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
         }
         .summary p { margin: 5px 0; }
         .best { color: #788c5d; font-weight: bold; }
+        .abort-banner {
+            background: #fceaea;
+            border: 1px solid #c44;
+            color: #941616;
+            padding: 12px 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
         .table-container {
             overflow-x: auto;
             width: 100%;
@@ -147,7 +156,8 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
 </head>
 <body>
     <h1>""" + title_prefix + """Skill Description Optimization</h1>
-    <div class="explainer">
+""" + (f"""    <div class="abort-banner">⚠ Loop aborted early — {html.escape(str(data.get('exit_reason', '')))}</div>
+""" if str(data.get('exit_reason', '')).startswith(('degenerate_harness', 'infra_error')) else "") + """    <div class="explainer">
         <strong>Optimizing your skill's description.</strong> This page updates automatically as Claude tests different versions of your skill's description. Each row is an iteration — a new description attempt. The columns show test queries: green checkmarks mean the skill triggered correctly (or correctly didn't trigger), red crosses mean it got it wrong. The "Train" score shows performance on queries used to improve the description; the "Test" score shows performance on held-out queries the optimizer hasn't seen. When it's done, Claude will apply the best-performing description to your skill.
     </div>
 """]
@@ -217,7 +227,12 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
         test_total = h.get("test_total")
         description = h.get("description", "")
         train_results = h.get("train_results", h.get("results", []))
-        test_results = h.get("test_results", [])
+        # `or []`, not `.get(key, [])`: run_loop stores an explicit `None` (not a
+        # missing key) for test_results when holdout=0 disables the test split,
+        # so the dict-default form never applies and this used to crash inside
+        # aggregate_runs() below (pre-existing, found via testing the guard above
+        # against a --holdout 0 run).
+        test_results = h.get("test_results") or []
 
         # Create lookups for results by query
         train_by_query = {r["query"]: r for r in train_results}
