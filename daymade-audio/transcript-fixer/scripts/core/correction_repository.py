@@ -14,7 +14,7 @@ import sqlite3
 import logging
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Union
 from contextlib import contextmanager
 from dataclasses import dataclass, asdict
 import threading
@@ -34,6 +34,27 @@ from utils.domain_validator import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_domains(domain: Optional[Union[str, List[str]]]) -> Optional[List[str]]:
+    """Normalize a --domain value to an ordered, de-duplicated list.
+
+    The CLI accepts comma-separated domains ("huawei,huawei_lvdian"); library
+    callers may already pass a list. None / empty-after-cleaning -> None, so
+    every downstream branch keeps its historical "no filter" shape. Order is
+    preserved because callers use the first entry as the primary domain for
+    write-side attributions.
+    """
+    if domain is None:
+        return None
+    raw = [domain] if isinstance(domain, str) else list(domain)
+    out: List[str] = []
+    for piece in raw:
+        for name in str(piece).split(","):
+            name = name.strip()
+            if name and name not in out:
+                out.append(name)
+    return out or None
 
 
 @dataclass
@@ -338,22 +359,28 @@ class CorrectionRepository:
             row = cursor.fetchone()
             return self._row_to_correction(row) if row else None
 
-    def get_all_corrections(self, domain: Optional[str] = None, active_only: bool = True) -> List[Correction]:
-        """Get all corrections, optionally filtered by domain."""
+    def get_all_corrections(self, domain: Optional[Union[str, List[str]]] = None, active_only: bool = True) -> List[Correction]:
+        """Get all corrections, optionally filtered by domain.
+
+        `domain` accepts a single domain name or a list of names (the CLI's
+        comma-separated --domain arrives as a list). A list loads the union —
+        the stage-1 use case is sibling project domains whose vocabularies
+        belong to the same transcripts (e.g. a project domain plus its
+        hyphenated spin-offs) and should fire in one pass, not one rerun each.
+        """
+        domains = normalize_domains(domain)
         with self._pool.get_connection() as conn:
-            if domain:
-                if active_only:
-                    cursor = conn.execute("""
+            if domains:
+                placeholders = ", ".join("?" for _ in domains)
+                active_clause = " AND is_active = 1" if active_only else ""
+                cursor = conn.execute(
+                    f"""
                         SELECT * FROM corrections
-                        WHERE domain = ? AND is_active = 1
+                        WHERE domain IN ({placeholders}){active_clause}
                         ORDER BY LENGTH(from_text) DESC, from_text
-                    """, (domain,))
-                else:
-                    cursor = conn.execute("""
-                        SELECT * FROM corrections
-                        WHERE domain = ?
-                        ORDER BY LENGTH(from_text) DESC, from_text
-                    """, (domain,))
+                    """,
+                    tuple(domains),
+                )
             else:
                 if active_only:
                     cursor = conn.execute("""

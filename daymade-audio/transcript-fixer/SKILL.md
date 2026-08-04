@@ -39,6 +39,16 @@ uv run scripts/fix_transcription.py --input meeting.md --stage 1
 # (safe run -> review sidecar -> --apply-all rerun).
 uv run scripts/fix_transcription.py --input meeting.md --stage 1 --domain myproject --apply-domain
 
+# Sibling domains load together (comma-separated) — one project's vocabulary
+# often lives in several domains that grew at different times (myproject,
+# myproject-alt, ...), and a transcript that straddles them should be fixed in
+# ONE pass, not one rerun each. --apply-domain trusts the whole union.
+uv run scripts/fix_transcription.py --input meeting.md --stage 1 --domain myproject,myproject-alt --apply-domain
+
+# Which domains does this project even have? A 0-correction run prints the
+# hint listing every OTHER domain with its rule count — read it, then rerun
+# with the siblings added. (Write commands like --add stay single-domain.)
+
 # Apply EVERY risk level regardless of origin (the pre-safe-mode behavior).
 # Higher false-positive risk — only when you've reviewed ALL loaded rules.
 uv run scripts/fix_transcription.py --input meeting.md --stage 1 --apply-all
@@ -170,6 +180,31 @@ particular sentence never matches again — it costs a dictionary row, compounds
 nothing, and dead rows are what make a domain slow to load and hard to audit.
 When even a collocation would be too narrow, the trap belongs in the domain
 context file with its disambiguating cue.
+
+**Measure the corpus before you add — the validators can't see your project.**
+The built-in safety checks answer "is this a real word in Chinese"; they cannot
+answer the question that actually decides a project-domain rule: *"when this
+word appears in THIS project's transcripts, is it ever the real meaning?"* That
+is empirical, and the evidence is one command away:
+
+```bash
+# How does this term actually appear across the project's transcripts?
+uv run scripts/fix_transcription.py --probe "候选误识词" --corpus /path/to/transcripts/
+
+# Or probe as part of the add itself (prints the evidence before writing):
+uv run scripts/fix_transcription.py --add "候选误识词" "正确词" --domain myproject \
+  --check-corpus --corpus /path/to/transcripts/
+```
+
+The probe prints per-file counts plus sampled context windows, with the
+decision rule attached: every sampled occurrence an ASR error → a bare rule is
+safe; any real meaning present → anchored form, or don't add (record the trap
+in the domain context file instead); zero occurrences → a bare rule is
+zero-risk but compounds nothing. The surprise this kills: intuition says "this
+is obviously an error form", and a 30-second sweep finds the word carrying
+perfectly real meanings all over the corpus — or the reverse, a "real word"
+whose every single in-corpus occurrence is the mishearing, making the bare
+rule safe where a word-checker would have scared you off it.
 
 Batch add multiple corrections in one session:
 ```bash
@@ -675,7 +710,14 @@ A recording can be long but still fast-tier (two known speakers, plain language)
    - **Global replacements** (unique non-words like "克劳锐"→"Claude"): if it recurs across transcripts — most product/name garbles do — `--add` it to a `--domain` so it compounds to every future run; for a genuinely one-off term, one `sed -i ''` with multiple `-e` flags
    - **Context-dependent** (a word that's only wrong in one context, like "争"→"蒸" in a distillation discussion): sed with a longer surrounding phrase for uniqueness, or the Edit tool
    - Re-grep each changed term afterward to confirm it landed and didn't hit look-alikes you meant to keep
-6. **Second pass — catch what one read missed.** A single linear read reliably leaves residue: an idiom degraded into a near-homophone, a term wrong in just one spot among many correct ones, an acronym misheard as another. Always re-scan once for leftovers. A cheap targeted variant comes first: **trap-scan** — grep the file for every trap pattern the domain's context file documents (the recurring homophones this domain is known to produce). Thirty seconds checks exactly the errors this domain makes; a clean trap-scan plus your first pass is enough for fast tier. For a long or high-stakes transcript, *also* spawn an independent subagent (Task) to re-read the corrected file cold — fresh eyes with no memory of your first pass catch what you've read past. **The subagent's job is to *return a residual list*, not to re-narrate the transcript.** Give it an output format and a hard cap, because a subagent that thinks aloud line-by-line will blow its own context window before finishing (one real second-pass run on a 1131-line transcript hit the 32k token ceiling mid-scan and returned nothing usable). The correct prompt shape:
+6. **Second pass — catch what one read missed.** A single linear read reliably leaves residue: an idiom degraded into a near-homophone, a term wrong in just one spot among many correct ones, an acronym misheard as another. Always re-scan once for leftovers. A cheap targeted variant comes first: **trap-scan** — scan the file for every trap pattern the domain's context file documents (the recurring homophones this domain is known to produce). Run it mechanically, not as a hand-rolled grep loop (a 30-trap context file is 30+ greps by hand, and the list is exactly what a tired operator truncates):
+
+   ```bash
+   uv run scripts/fix_transcription.py --scan-traps \
+     --context-file ~/.transcript-fixer/contexts/<domain>.md -i meeting.md
+   ```
+
+   Every documented trap comes back with line number + context window, confirmed-correct records (`**X = 真实实体，勿修**`) are reported as keep-as-is so you stop re-investigating settled questions, and the no-hit list makes "scanned and absent" distinguishable from "never scanned". Thirty seconds checks exactly the errors this domain makes; a clean trap-scan plus your first pass is enough for fast tier. For a long or high-stakes transcript, *also* spawn an independent subagent (Task) to re-read the corrected file cold — fresh eyes with no memory of your first pass catch what you've read past. **The subagent's job is to *return a residual list*, not to re-narrate the transcript.** Give it an output format and a hard cap, because a subagent that thinks aloud line-by-line will blow its own context window before finishing (one real second-pass run on a 1131-line transcript hit the 32k token ceiling mid-scan and returned nothing usable). The correct prompt shape:
    - Scope it to exactly one file, forbid editing and cross-file grep.
    - Hand it the already-corrected terms as a do-not-re-report list (you fixed those; only *new* residuals are useful).
    - Demand a compact table only — `line | original ≤20 chars | suspected | one-line reason | confidence` — and tell it to stop after the list, no prose preamble, no per-line stream-of-consciousness, no re-deriving corrections it has already made.

@@ -15,6 +15,22 @@ uv run scripts/fix_transcription.py --add "巨升智能" "具身智能" --domain
 # Add corrections for specific domain
 uv run scripts/fix_transcription.py --add "奇迹创坛" "奇绩创坛" --domain general
 uv run scripts/fix_transcription.py --add "矩阵公司" "初创公司" --domain general
+
+# Measure the corpus BEFORE adding (real-meaning frequency + sampled context):
+uv run scripts/fix_transcription.py --probe "候选误识词" --corpus /path/to/transcripts/
+# Same evidence inline during the add (advisory, never blocks):
+uv run scripts/fix_transcription.py --add "候选误识词" "正确词" --domain myproject --check-corpus --corpus /path/to/transcripts/
+```
+
+### Stage 1 with Sibling Domains
+
+```bash
+# One pass over several sibling project domains; --apply-domain trusts the union
+uv run scripts/fix_transcription.py -i meeting.md --stage 1 --domain myproject,myproject-alt --apply-domain
+
+# Native-pass trap-scan: every trap the domain context file documents, located
+# with line + context (replaces the per-trap manual grep loop)
+uv run scripts/fix_transcription.py --scan-traps --context-file ~/.transcript-fixer/contexts/myproject.md -i meeting.md
 ```
 
 ### Adding Corrections via SQL

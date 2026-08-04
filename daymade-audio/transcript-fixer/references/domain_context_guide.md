@@ -95,6 +95,28 @@ word, so it's a deterministic fix and went to the dictionary via
 
 ## Rules
 
+0. **The format is machine-read, so write it in the shapes the scanner knows.**
+   `--scan-traps` parses every **bullet-line-start** `- **<wrong> → <right>**` entry
+   out of this file and locates each variant in the transcript mechanically (see
+   SKILL.md step 6). The grammar the parser accepts:
+   - **Bullet line start is required.** A `**...→...**` pair sitting mid-line in
+     prose is NOT parsed (that shape also matches text caught between two
+     unrelated bold spans — banning it is deliberate).
+   - **FROM side, `/`-separated variants**: `**卖吸引/卖新鲜 → 麦锡颖**`.
+   - **FROM side, parenthesized**: a `/`-separated list inside parens is a variant
+     family — `**升单系（圣诞/上单/生单 → 升单）**` scans only 圣诞/上单/生单, never
+     the family-name prefix (it may be a real word). Parens WITHOUT a `/` inside
+     are treated as a comment and the scan target is the word outside them —
+     write `**减（减少的减） → 剪**` and only 减 is scanned.
+   - **TO side**: cut at the first parenthesized annotation (`→ 爆（anchored）`
+     displays as 爆).
+   - **Confirmed-correct record**: `=` plus a keep-word, e.g.
+     `- **Brooklyn = 真实实体，勿修** — 教育博主 IP 名。` — reported as keep-as-is,
+     so a later pass stops re-investigating a settled name. The recognized
+     keep-words are exactly: `勿修` / `非误识` / `确认正确` / `保留原样` — a synonym
+     like 不要改 parses as nothing at all (silent no-entry), so use the listed forms.
+   A trap the parser can't read is a trap that never gets scanned — when in
+   doubt, run `--scan-traps` once and check the entry count in the header.
 1. **Cues, not rules.** Every entry must state the contextual condition under
    which the correction applies. An entry without a cue is a dictionary rule in
    disguise — and common-word rules are exactly what corrupts transcripts.
