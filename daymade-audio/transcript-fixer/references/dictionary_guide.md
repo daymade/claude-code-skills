@@ -39,7 +39,7 @@ uv run scripts/fix_transcription.py --add "错误词" "正确词" [--domain <dom
 |---|---|
 | `--list [--domain <d>]` | 列出规则 |
 | `--audit [--domain <d>]` | 体检词典，报告可疑规则（短词 / 冲突等） |
-| `--report-false-positive "错" "对" -d <d>` | 停用一条误报规则、降低其置信度 |
+| `--report-false-positive "<from>" "<to>" -d <d>` | 停用一条误报规则、降低其置信度。**两个参数是规则在词典里存的 from→to 对**（照 `*_changes.md` 的 From/To 抄），不是「错词→对词」语义——详见 SKILL.md 的 Native AI Correction step 2 |
 | `--load-presets <domain>` | 导入某 domain 的预置规则集（如 `tech`） |
 
 ## 学习闭环（AI → 词典自动晋升）
