@@ -524,7 +524,7 @@ Adding wrong dictionary rules silently corrupts future transcripts. **Read `refe
 
 ## Project-Specific & Person-Name Corrections (`--domain` isolation)
 
-The most important pattern for **recurring, project-specific errors** — person names, project jargon, product codenames — is the `--domain` flag. It is also the *answer* to the false-positive worry above: a person-name fix that's right **in your project** (a teammate's name the ASR keeps garbling) might collide with a real, differently-spelled person in someone else's transcript — so it must NOT go into the global (`general`) dictionary.
+The most important pattern for **recurring, project-specific errors** — person names, project jargon, shelf codenames — is the `--domain` flag. It is also the *answer* to the false-positive worry above: a person-name fix that's right **in your project** (a teammate's name the ASR keeps garbling) might collide with a real, differently-spelled person in someone else's transcript — so it must NOT go into the global (`general`) dictionary.
 
 `--domain` makes such rules safe by isolating them:
 
@@ -775,6 +775,82 @@ AI product names are frequently garbled. These patterns recur across transcripts
 | prototype | Pre top |
 
 Person names and company names also produce consistent ASR errors across sessions — always add confirmed name corrections to the dictionary, and for project-specific names use `--domain <project>` to keep them isolated (see "Project-Specific & Person-Name Corrections").
+
+### Numbers: the category the dictionary structurally cannot fix
+
+A dictionary rule needs the error to be *stable* — one wrong string, one right
+string. Numeric errors have no stable mapping (`80` becomes `800` in one
+recording and `18` in the next), so no amount of dictionary work reaches them.
+They are also the errors that cost the most. The ASR literature on
+entity-level error consistently ranks numbers and named entities as the worst
+categories — far worse than headline WER suggests — and reports numeral
+*continuation* tokens (the digits after the first) as worse still than the
+leading digit. That ordering is the load-bearing claim here, and it matches what
+you will see in practice: the first digit group is usually right and the tail is
+where it breaks, which is exactly why a wrong number still reads fluently.
+(Specific percentages circulate in secondary summaries of this literature; they
+are not reproduced here because they were not verified against the primary
+sources. Search "ASR named entity error rate" / "entity-preserved ASR" if you
+want the numbers with their datasets attached.)
+
+Three sub-classes, each needing a different check. None can be auto-applied —
+a number can only be resolved by evidence, never by pattern:
+
+| Sub-class | What it looks like | How to settle it |
+|---|---|---|
+| **Magnitude** | the same amount restated with an extra or missing zero | arithmetic against a figure stated elsewhere in the same passage; or the second recording (below) |
+| **Measure word dropped** | `30+` where the speaker said "30 家/个" (nobody says "plus" aloud) | the scanner below finds these (`orphan-plus`); the measure word is then usually recoverable from the object in the same clause |
+| **Polarity inverted** | a stated *ceiling* transcribed as a *floor* — "只能给 N" arriving as "超过 N…保底" | scan the same session for the other statements of that number; the one carrying a limiting modal (只能/最多/至多/封顶/不超过/至少/起码/超过/保底/最少 — the script prints this same list) is almost always the true one, because a speaker states a bound once and paraphrases it loosely afterwards |
+
+Polarity is the dangerous one and the one no tool catches: the sentence is
+grammatical, the number is right, and the meaning is reversed. It is worth a
+deliberate read whenever a number in the transcript will end up in a decision
+document — a price, a cap, a share, a deadline.
+
+**Two recordings of one meeting are the strongest evidence you will get.** When
+a session was captured by two independent systems (two platforms, or a platform
+plus a local recorder), their numeric errors are uncorrelated, so disagreement
+localises the error and agreement settles it. This is the manual, two-system
+case of ROVER (Recognizer Output Voting Error Reduction, NIST 1997) — worth
+knowing by name, because the published work explains why voting across systems
+beats improving any one of them. Do not discard a "redundant" second recording
+of a meeting you already have; it is a reference transcript for exactly the
+values that matter most. If only one recording exists and a number is
+load-bearing, settle it by ear through the path this skill already has: wire the
+transcript's `audio:` frontmatter (see "Wiring audio for a Feishu-minute
+transcript"), enqueue the number as a review item, and press `Q` in the review
+dashboard — it plays exactly the anchored utterance, so you hear the digits
+spoken instead of re-reading them.
+
+**Numeric-slot damage — when a replacement overshoots into a number.** A
+distinct failure with the same symptom: a global replace aimed at something else
+lands inside a numeral. The classic trigger is relabelling a speaker whose
+diarization label is a bare digit — replacing that digit globally fixes the
+speaker lines and quietly corrupts every number containing it (`21 册`,
+`3+1`, `8.8 折`, and the date in the title all lose a digit to a name). The
+transcript still reads fluently; only the numbers are wrong. A dictionary rule
+that overshoots produces the same signature.
+
+```bash
+# Scan for canonical terms sitting where a digit belongs. The needle list is the
+# dictionary's own to_text values — the strings this toolchain writes INTO
+# transcripts are exactly the ones that shouldn't be inside a number.
+uv run scripts/scan_numeric_consistency.py transcript.md --domain <project>
+```
+
+Everything it prints is a **candidate to read**, never an edit to apply — and
+the polarity class is deliberately not automated, because a check that fires on
+healthy input is one people stop running.
+
+What you can verify yourself: `scripts/tests/test_numeric_consistency.py` pins
+both halves of that promise on synthetic fixtures — every damage shape above is
+detected, and the healthy-input shapes that killed two earlier versions of this
+scanner (a term merely co-occurring with digits, a term *before* a digit, a
+title's leading date, a timezone offset) stay silent. Run it with
+`uv run --with pytest python -m pytest scripts/tests/test_numeric_consistency.py`.
+The false-positive *rate* behind those choices was measured on a private
+transcript corpus that cannot ship, so the rate is not reproducible here — the
+behaviour it bought is.
 
 ### Efficient Batch Fix Strategy
 
