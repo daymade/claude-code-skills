@@ -23,6 +23,27 @@ The guard fires at two points, and both read `utils/common_words.py`:
 
 The catch: both layers are only as good as the word list. **A real word missing from `common_words.py` is invisible to *both* checks** — that is exactly how `多深`, `小龙虾`, and `早生` slipped in and then got applied (fixed 2026-06; they are in the list now). So when you find a false positive whose `from_text` is a genuine word, add it to `common_words.py` — not just to the per-rule disable list. That fixes the whole class, not the one instance.
 
+## The corpus answers what the word list cannot (project-domain rules)
+
+The word-list checks answer "is this a real word **in Chinese**". A project-domain rule needs a different question answered: "when this word appears in **this project's** transcripts, is it ever the real meaning?" That is empirical — measure it before deciding the rule's shape:
+
+```bash
+uv run scripts/fix_transcription.py --probe "候选词" --corpus /path/to/transcripts/
+# or inline during the add:
+uv run scripts/fix_transcription.py --add "候选词" "正确词" --domain myproject --check-corpus --corpus /path/to/transcripts/
+```
+
+Read the sampled context windows, then decide by **in-corpus real-meaning frequency**:
+
+| In-corpus reality | Rule shape |
+|---|---|
+| 0 occurrences (the term never appears at all) | bare rule is zero-risk, but compounds nothing until the term actually recurs — and if you expected hits, re-check the corpus path (a probe cannot tell "absent" from "never searched") |
+| Every sampled occurrence is the ASR error | bare rule is likely safe — **even if the FROM side is a "real word"** (a colleague's name ASR keeps garbling: every in-corpus occurrence of the garbled form IS them). Mind the coverage line: samples are capped, so occurrences in unsampled files were never inspected |
+| Mixed (real meanings present) | anchored rule (`--add "搭配短语" "修正短语"`) or no rule — record the trap in the domain context file |
+| Real usage dominates | do not add; context-file trap only |
+
+Both directions of intuition fail without the measurement: "obviously an error form" turns out to carry real meanings all over one corpus, and "obviously a real word" turns out to be the mishearing in 100% of another corpus's occurrences. The probe makes the shape decision a 30-second lookup instead of a guess.
+
 ## When in doubt, use a context rule instead
 
 Context rules use regex patterns that match only in specific surroundings, avoiding false positives:

@@ -37,11 +37,18 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
   - `2` = AI corrections only (requires Stage 1 output file)
   - `3` = Both stages sequentially
 - `--output, -o` (optional): Where results are written — accepts either a **directory** (the sidecars `<stem>_stage1.md` / `_changes.md` / `_needs_review.md` are written into it) **or a file path** ending in `.md`/`.markdown`/`.txt` that is not an existing directory (the corrected Stage 1 output is written directly to that exact file). Defaults to the input file's directory. Every "Saved" / report line prints the full resolved path, so a misdirected output is visible immediately. (Passing a file path used to silently `mkdir` a directory of that name and hide the output inside it — fixed.)
-- `--domain, -d` (optional): Restrict to one correction domain (default: all domains)
+- `--domain, -d` (optional): Restrict to one correction domain (default: all domains). Accepts a comma-separated list (`--domain myproject,myproject-alt`): every listed domain's rules load as one union for Stage 1, and `--apply-domain` trusts the whole union. Write commands (`--add`, `--approve`) still require exactly one domain and fail fast on a list.
 - `--apply-all` (optional): Opt out of the default safe mode and apply every risk level (low/medium/high). Higher false-positive risk — see false_positive_guide.md.
 - `--review` (deprecated): No-op kept for backward compatibility; safe mode is now the default.
 - `--dry-run` (optional): Preview Stage 1 changes to `*_dryrun.md` without writing `*_stage1.md`.
 - `--changes-file` (optional): Always write `*_changes.md` (already on by default in safe mode).
+
+**Evidence commands** (read-only; turn the native pass's manual grep loops into single invocations — semantics in SKILL.md "Native AI Correction" steps 4-6):
+
+- `--scan-traps --context-file <domain-context.md> -i <transcript>`: parse every `**误识 → 正确**` entry out of a domain context file and locate each variant in the transcript (line number + context window), grouped by entry; `**X = …勿修…**` confirmed-correct records are reported as keep-as-is; entries with zero hits are listed so "scanned and absent" is distinguishable from "never scanned"
+- `--probe <term> --corpus <dir>`: the term's real-meaning frequency across every `*.md` under the corpus dir (recursive) — per-file counts + sampled context windows + the verdict criterion (all-error → bare rule safe / any real meaning → anchored or do-not-add / zero → safe but compounds nothing)
+- `--check-corpus` (with `--add`): run the same probe on the FROM term before the rule is written; advisory, never blocks. Requires `--corpus`
+- `--json` works with both: one machine-readable result line on stdout
 
 **Review queue** (persistent store for uncertain corrections; semantics in SKILL.md "Review Queue"):
 
