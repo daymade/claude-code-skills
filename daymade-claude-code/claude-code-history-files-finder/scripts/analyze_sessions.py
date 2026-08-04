@@ -343,25 +343,54 @@ class SessionAnalyzer:
     def _merge_sessions_from_dirs(
         self, pairs: List[tuple]
     ) -> List[Dict[str, Any]]:
-        """Collect + de-duplicate sessions from ``(source, project_dir)`` pairs."""
-        by_id: Dict[str, Dict[str, Any]] = {}
+        """Collect + de-duplicate sessions from ``(source, project_dir)`` pairs.
+
+        Per-model profile homes (``~/.claude-profiles/<name>``) commonly
+        symlink their ``projects/`` straight to the main home's — same real
+        directory, different nominal ``source.home``. ``pairs`` is built by
+        the caller per source label, so the same physical file can arrive
+        here once per profile that happens to alias it. Group by the
+        *resolved* real path first so each physical file is opened and
+        parsed exactly once no matter how many source labels point at it;
+        every label in the group is still attributed as valid provenance,
+        so output (which sources/homes a session is reachable from) is
+        unchanged — only the redundant I/O and JSON-parsing is eliminated.
+        """
+        groups: Dict[str, tuple] = {}
         for source, project_dir in pairs:
+            try:
+                key = str(project_dir.resolve())
+            except OSError:
+                key = str(project_dir)
+            group = groups.get(key)
+            if group is None:
+                groups[key] = (project_dir, [source])
+            else:
+                group[1].append(source)
+
+        by_id: Dict[str, Dict[str, Any]] = {}
+        for project_dir, group_sources in groups.values():
             for file in project_dir.glob("*.jsonl"):
                 if file.name.startswith("agent-"):
                     continue
                 summary = scan_claude_session(file)
                 sid = summary.session_id
-                copy = {
-                    "path": file,
-                    "source": source,
-                    "created_at": summary.created_at,
-                    "updated_at": summary.updated_at,
-                }
+                copies = [
+                    {
+                        "path": file,
+                        "source": source,
+                        "created_at": summary.created_at,
+                        "updated_at": summary.updated_at,
+                    }
+                    for source in group_sources
+                ]
                 candidate = {
                     "path": file,
-                    "copies": [copy],
-                    "sources": [source],
-                    "homes": [source.home],
+                    "copies": copies,
+                    "sources": list(group_sources),
+                    "homes": list(
+                        dict.fromkeys(source.home for source in group_sources)
+                    ),
                     "created_at": summary.created_at,
                     "updated_at": summary.updated_at,
                     "timestamp_source": (
@@ -369,7 +398,7 @@ class SessionAnalyzer:
                         if summary.timestamp_count
                         else "unknown"
                     ),
-                    "selected_kind": source.kind,
+                    "selected_kind": group_sources[0].kind,
                     "selected_updated_at": summary.updated_at,
                     "session_id": sid,
                 }
@@ -377,15 +406,17 @@ class SessionAnalyzer:
                 if entry is None:
                     by_id[sid] = candidate
                     continue
-                entry["copies"].append(copy)
+                entry["copies"].extend(copies)
                 sources = list(entry["sources"])
-                if source.display_label not in {
-                    item.display_label for item in sources
-                }:
-                    sources.append(source)
+                existing_labels = {item.display_label for item in sources}
+                for source in group_sources:
+                    if source.display_label not in existing_labels:
+                        sources.append(source)
+                        existing_labels.add(source.display_label)
                 homes = list(entry["homes"])
-                if source.home not in homes:
-                    homes.append(source.home)
+                for source in group_sources:
+                    if source.home not in homes:
+                        homes.append(source.home)
                 existing_selected_time = (
                     entry["selected_updated_at"]
                     if entry["selected_updated_at"] is not None
@@ -398,12 +429,12 @@ class SessionAnalyzer:
                 )
                 candidate_wins = candidate_time > existing_selected_time or (
                     candidate_time == existing_selected_time
-                    and source.kind == "active"
+                    and group_sources[0].kind == "active"
                     and entry["selected_kind"] != "active"
                 )
                 if candidate_wins:
                     entry["path"] = file
-                    entry["selected_kind"] = source.kind
+                    entry["selected_kind"] = group_sources[0].kind
                     entry["selected_updated_at"] = summary.updated_at
                 entry["sources"] = sources
                 entry["homes"] = homes
