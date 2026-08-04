@@ -317,6 +317,28 @@ class CorrectionService:
             metadata[c.from_text] = {"confidence": c.confidence, "notes": c.notes or "", "domain": c.domain}
         return corrections_dict, metadata
 
+    def get_disabled_pairs(self, domain: Optional[Union[str, List[str]]] = None) -> set:
+        """(from_text, to_text) pairs a human has explicitly disabled.
+
+        Needed because disabling is not the end of a rule's life. Three sources
+        feed Stage 1 — this DB, the people roster, and (as priors only) the
+        domain context file — and the roster merge fills gaps by asking "is this
+        from_text absent from the loaded corrections?". A disabled rule IS
+        absent, because loading filters on is_active. So `--report-false-positive`
+        removes a rule from the DB and the roster silently puts it straight back
+        on the next run, with no way to disable it again: the report command sees
+        no *active* row, prints "No active rule" and exits 1, while the rule is
+        demonstrably still firing.
+
+        Pairs, not bare from_texts: a domain may disable X→Y precisely to retarget
+        X→Z, and vetoing on from_text alone would also suppress a roster entry
+        that is correct — trading a visible wrong replacement for an invisible
+        missing one, which is harder to notice.
+        """
+        corrections = self.repository.get_all_corrections(
+            domain=normalize_domains(domain) or None, active_only=False)
+        return {(c.from_text, c.to_text) for c in corrections if not getattr(c, "is_active", True)}
+
     def get_corrections(self, domain: Optional[Union[str, List[str]]] = None) -> Dict[str, str]:
         """
         Get corrections as a dictionary for processing.
