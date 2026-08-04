@@ -698,8 +698,20 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         if roster_path.exists():
             from core.people_roster import load_people_roster
             roster_corr, _ = load_people_roster(roster_path)
+            # A rule disabled via --report-false-positive is *absent* from the
+            # loaded corrections (loading filters on is_active), which is exactly
+            # the gap the roster fills — so without this veto the roster silently
+            # resurrects every rule a human just retired, and the report command
+            # can never retire it again ("No active rule", exit 1, while the rule
+            # keeps firing). Suppression is printed, not silent: an invisible
+            # veto is the same class of bug in the other direction.
+            disabled = service.get_disabled_pairs(domains)
             new_count = 0
+            suppressed = []
             for wrong, correct in roster_corr.items():
+                if (wrong, correct) in disabled:
+                    suppressed.append(f"{wrong}→{correct}")
+                    continue
                 if wrong not in corrections:
                     corrections[wrong] = correct
                     correction_meta[wrong] = {
@@ -709,6 +721,11 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                     new_count += 1
             if new_count:
                 print(f"👥 People roster: +{new_count} person-name corrections ({roster_path.name})")
+            if suppressed:
+                print(f"🚫 People roster: {len(suppressed)} variant(s) suppressed "
+                      f"(disabled in DB): {', '.join(suppressed[:5])}"
+                      + (f" +{len(suppressed) - 5} more" if len(suppressed) > 5 else ""))
+                print(f"   To stop loading them at all, remove those ASR variants from {roster_path}")
         else:
             print(f"⚠️  People roster not found: {roster_path}")
 
@@ -1425,6 +1442,18 @@ def cmd_report_false_positive(args: argparse.Namespace) -> None:
         print(f"🚫 Reported false positive: '{args.from_text}' -> '{args.to_text}' (domain: {domain})")
         print("   The rule has been disabled and confidence lowered.")
     else:
+        # "No active rule" is misleading when the rule is disabled here but still
+        # supplied by the people roster: the user sees it firing, runs this
+        # command to stop it, and is told it does not exist. Name the real source.
+        if (args.from_text, args.to_text) in service.get_disabled_pairs(domain):
+            print(f"ℹ️  '{args.from_text}' -> '{args.to_text}' is ALREADY disabled in the "
+                  f"database (domain: {domain}) — nothing more to disable here.")
+            roster_path = (os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER")
+                           or get_config().paths.people_roster_path)
+            if roster_path:
+                print(f"   If it is still firing, it is being re-supplied by the people roster.")
+                print(f"   Remove that ASR variant from: {roster_path}")
+            return
         print(f"❌ No active rule matching '{args.from_text}' -> '{args.to_text}' (domain: {domain})")
         sys.exit(1)
 
