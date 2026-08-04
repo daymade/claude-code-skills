@@ -329,6 +329,18 @@ handed it a literal `~/repo`, `git -C` failed, staged came back empty, and the g
 concluded "no cross-domain files, allow." Every cross-repo commit went unguarded and
 nothing ever looked wrong. Anatomy + the shared-library twist: pitfall #10.
 
+That parser has a second failure direction, and it is the nastier one. Once you
+add a fallback so it stops failing open, the fallback becomes correct for one
+reason and wrong for another — and both print the same line. `git push` (no
+explicit target) legitimately falls back to the event's `cwd`; `git -C "$R" push`
+*names* a target the hook cannot resolve, falls back to the same `cwd`, and then
+renders a confident ✅ about a different repository. Those two cases render
+byte-identically (measured, MD5-equal), so neither the hook nor the reader can
+tell the honest verdict from the misbound one. **A fallback value must carry the reason it was
+chosen**, and only "no explicit target" earns a verdict. Full anatomy, the
+confused-deputy framing, and why fixtures with literal paths never catch it:
+pitfall #28.
+
 ### 6. Judge on a fact the world can answer — never on your own rendering, never on a naming habit
 
 Rules 1 and 5 are about *how* you match and *which way* you fail. This one is
