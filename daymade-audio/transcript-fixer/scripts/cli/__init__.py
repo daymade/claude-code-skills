@@ -30,6 +30,8 @@ from .commands import (
     cmd_show_review,
     cmd_reanchor_review,
     cmd_resolve_review,
+    cmd_scan_traps,
+    cmd_probe,
 )
 from .argument_parser import create_argument_parser
 
@@ -57,5 +59,7 @@ __all__ = [
     'cmd_show_review',
     'cmd_reanchor_review',
     'cmd_resolve_review',
+    'cmd_scan_traps',
+    'cmd_probe',
     'create_argument_parser',
 ]

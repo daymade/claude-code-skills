@@ -22,6 +22,7 @@ from core import (
     CorrectionService,
     DictionaryProcessor,
 )
+from core.correction_repository import normalize_domains
 from utils.config import get_config
 
 # Heavy command-specific imports are deferred to the functions that use them
@@ -46,6 +47,15 @@ def _get_service() -> CorrectionService:
     config = get_config()
     repository = CorrectionRepository(config.database.path)
     return CorrectionService(repository)
+
+
+def _parse_domains(raw: str | None) -> list[str] | None:
+    """Parse the CLI's --domain value into a domain list (comma-separated).
+
+    Thin wrapper over normalize_domains so command handlers stay readable;
+    returns None when no filter was given.
+    """
+    return normalize_domains(raw)
 
 
 def _get_learning_engine(service: CorrectionService | None = None):
@@ -108,7 +118,7 @@ def _enqueue_deferrals(changes, input_path: Path, original_text: str, domain: st
         return 0
 
 
-def _format_domain_hint(total_changes: int, domain: str | None, domain_stats: dict) -> str | None:
+def _format_domain_hint(total_changes: int, domains: str | list[str] | None, domain_stats: dict) -> str | None:
     """Explain a 0-correction run honestly when --domain was passed.
 
     Two different realities must read differently, because they call for
@@ -120,22 +130,29 @@ def _format_domain_hint(total_changes: int, domain: str | None, domain_stats: di
 
     The old message said "no rules in domain" for both, which sent operators
     investigating why their loaded domain was "empty". The Available list
-    deliberately excludes the requested domain (it lists *other* domains).
+    deliberately excludes the requested domain(s) (it lists *other* domains) —
+    with a comma-separated --domain the exclusion covers every requested one,
+    so the sibling list is exactly the domains NOT yet loaded.
+
+    `domains` accepts the raw CLI string or a parsed list — normalize here so
+    both callers and tests can pass either shape.
     """
-    if total_changes != 0 or not domain or not domain_stats:
+    domains = normalize_domains(domains)
+    if total_changes != 0 or not domains or not domain_stats:
         return None
-    other = {d: n for d, n in domain_stats.items() if d != domain}
+    other = {d: n for d, n in domain_stats.items() if d not in domains}
     if not other:
         return None
     parts = ", ".join(f"{d} ({n})" for d, n in sorted(other.items()))
     total = sum(domain_stats.values())
-    loaded = domain_stats.get(domain, 0)
+    loaded = sum(domain_stats.get(d, 0) for d in domains)
+    shown = ",".join(domains)
     if loaded:
-        first = (f"hint: 0 of {loaded} rules in domain '{domain}' matched this transcript. "
+        first = (f"hint: 0 of {loaded} rules in domain '{shown}' matched this transcript. "
                  f"Other domains: {parts}")
     else:
-        first = f"hint: no rules in domain '{domain}'. Available: {parts}"
-    return f"{first}\nhint: run without --domain to use all {total} rules"
+        first = f"hint: no rules in domain '{shown}'. Available: {parts}"
+    return f"{first}\nhint: run without --domain to use all {total} rules, or add a sibling as --domain a,b"
 
 
 def _format_changes_report(
@@ -266,14 +283,121 @@ def cmd_add_correction(args: argparse.Namespace) -> None:
     """Add a single correction with safety checks"""
     service = _get_service()
     force = getattr(args, 'force', False)
+
+    # A rule lives in exactly one domain; a comma-separated --domain is a
+    # read-side (stage 1 / --list) filter. Fail fast rather than guessing
+    # which domain the user meant to write to.
+    domains = _parse_domains(args.domain)
+    if domains and len(domains) > 1:
+        print(
+            f"Error: --add writes to exactly one domain, got {len(domains)}: "
+            f"{', '.join(domains)}. Run one --add per domain.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    # --check-corpus: put the FROM term's in-corpus real-meaning frequency on
+    # the record BEFORE the rule is written. Advisory — the validator's word
+    # checks answer "is this a real word"; only the corpus answers "is it ever
+    # real *in this project's transcripts*". A missing directory must fail
+    # fast (same as --probe): an unsearched corpus reports "0 occurrences",
+    # which reads exactly like the zero-risk verdict — a typo'd path would
+    # otherwise manufacture false safety evidence right at the decision gate.
+    if getattr(args, "check_corpus", False):
+        corpus_dir = getattr(args, "corpus_dir", None)
+        if not corpus_dir:
+            print("Error: --check-corpus requires --corpus <dir>", file=sys.stderr)
+            sys.exit(2)
+        corpus_path = Path(corpus_dir).expanduser()
+        if not corpus_path.is_dir():
+            print(f"Error: corpus dir not found: {corpus_path}", file=sys.stderr)
+            sys.exit(2)
+        from core.corpus_probe import probe_corpus, format_probe
+        probe = probe_corpus(args.from_text, corpus_path)
+        print(format_probe(probe, corpus_path))
+        print()
+
+    # Write exactly the domain the fail-fast validated — the normalized single
+    # domain, not the raw CLI string (a trailing comma/space would otherwise
+    # pass the count check and then die in the domain-pattern validator with a
+    # misleading "invalid characters" attribution). No --domain falls back to
+    # the service layer's own default ("general") — passing None explicitly
+    # would defeat that default and crash the domain validator.
+    domain_to_write = domains[0] if domains else "general"
     try:
         service.add_correction(
-            args.from_text, args.to_text, args.domain, force=force,
+            args.from_text, args.to_text, domain_to_write, force=force,
         )
-        print(f"Added: '{args.from_text}' -> '{args.to_text}' (domain: {args.domain})")
+        print(f"Added: '{args.from_text}' -> '{args.to_text}' (domain: {domain_to_write})")
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def cmd_scan_traps(args: argparse.Namespace) -> None:
+    """Scan --input for every trap documented in a domain context file.
+
+    Read-only evidence command: reports every documented trap variant found in
+    the transcript with line + context window, plus the no-hit list. The
+    adjudication (which hits are actually errors, per each trap's documented
+    cue) stays with the native pass — this command's job is that no documented
+    trap is ever silently un-scanned.
+    """
+    from core.trap_scanner import (
+        extract_trap_entries,
+        scan_text,
+        format_report,
+        hits_to_json,
+    )
+
+    context_file = getattr(args, "context_file", None)
+    if not context_file:
+        print("Error: --scan-traps requires --context-file <domain-context.md>", file=sys.stderr)
+        sys.exit(2)
+    if not getattr(args, "input", None):
+        print("Error: --scan-traps requires --input <transcript>", file=sys.stderr)
+        sys.exit(2)
+
+    context_path = Path(context_file).expanduser()
+    input_path = Path(args.input).expanduser()
+    for p, what in ((context_path, "context file"), (input_path, "input file")):
+        if not p.is_file():
+            print(f"Error: {what} not found: {p}", file=sys.stderr)
+            sys.exit(2)
+
+    entries = extract_trap_entries(context_path.read_text(encoding="utf-8"))
+    hits = scan_text(input_path.read_text(encoding="utf-8"), entries)
+
+    if getattr(args, "json_output", False):
+        print(json.dumps(hits_to_json(entries, hits), ensure_ascii=False))
+    else:
+        print(format_report(entries, hits, context_path=context_path))
+
+
+def cmd_probe(args: argparse.Namespace) -> None:
+    """Probe a term's real-meaning frequency across a transcript corpus.
+
+    The pre-add evidence step: validators judge "is this a real word in
+    Chinese"; only the project's own corpus can judge "is it ever real in
+    THIS project's transcripts". Prints counts + samples and the verdict
+    criterion; never blocks, never writes.
+    """
+    from core.corpus_probe import probe_corpus, format_probe, probe_to_json
+
+    corpus_dir = getattr(args, "corpus_dir", None)
+    if not corpus_dir:
+        print("Error: --probe requires --corpus <dir>", file=sys.stderr)
+        sys.exit(2)
+    corpus_path = Path(corpus_dir).expanduser()
+    if not corpus_path.is_dir():
+        print(f"Error: corpus dir not found: {corpus_path}", file=sys.stderr)
+        sys.exit(2)
+
+    result = probe_corpus(args.probe_term, corpus_path)
+    if getattr(args, "json_output", False):
+        print(json.dumps(probe_to_json(result), ensure_ascii=False))
+    else:
+        print(format_probe(result, corpus_path))
 
 
 def cmd_audit(args: argparse.Namespace) -> None:
@@ -534,18 +658,28 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     # Initialize service
     service = _get_service()
 
-    # Load corrections and rules
-    corrections, correction_meta = service.get_corrections_with_metadata(args.domain)
+    # Load corrections and rules. --domain may name several sibling domains
+    # (comma-separated): their rules load as one union so a transcript that
+    # straddles sibling project domains gets fixed in one pass, and
+    # --apply-domain below trusts exactly that union — every loaded rule came
+    # from one of the explicitly named domains, so the "domain match = trust"
+    # rationale holds per-rule.
+    domains = _parse_domains(args.domain)
+    corrections, correction_meta = service.get_corrections_with_metadata(domains)
     context_rules = service.load_context_rules()
     domain_stats = service.get_domain_stats()
 
     # --apply-domain: the user explicitly asserted this transcript belongs to
-    # args.domain, and every rule loaded above came from exactly that domain —
-    # each was hand-added for this project's vocabulary, so domain match =
-    # trust. Mark them so _assess_risk grades them low (auto-applied even in
-    # safe mode). MUST run before the roster merge below: roster entries are
-    # global (cross-project) and keep normal risk grading.
-    if getattr(args, "apply_domain", False) and args.domain:
+    # the domain(s) named via --domain, and every rule loaded above came from
+    # exactly those domains — each was hand-added for this project's
+    # vocabulary, so domain match = trust. Mark them so _assess_risk grades
+    # them low (auto-applied even in safe mode). The gate reads the NORMALIZED
+    # list, not the raw string: a malformed --domain like ",," normalizes to
+    # None (no filter → ALL domains load), and trusting that union would
+    # silently turn --apply-domain into --apply-all. MUST run before the
+    # roster merge below: roster entries are global (cross-project) and keep
+    # normal risk grading.
+    if getattr(args, "apply_domain", False) and domains:
         for _m in correction_meta.values():
             _m["trusted_domain"] = True
 
@@ -585,8 +719,8 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     print(f"   File size: {len(original_text):,} characters")
 
     # Show domain loading info
-    if args.domain:
-        print(f"📚 Loaded {len(corrections)} corrections (domain: {args.domain})")
+    if domains:
+        print(f"📚 Loaded {len(corrections)} corrections (domain: {', '.join(domains)})")
     elif domain_stats:
         parts = ", ".join(f"{d}: {n}" for d, n in sorted(domain_stats.items()))
         print(f"📚 Loaded {len(corrections)} corrections ({parts})")
@@ -629,8 +763,8 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         print("🔧 Stage 1: Dictionary Corrections")
         if dry_run:
             print("   (DRY RUN — no files will be written)")
-        elif review_mode and getattr(args, "apply_domain", False) and args.domain:
-            print(f"   (SAFE MODE + trusted domain '{args.domain}' — its rules apply at every risk level; roster/other rules still defer to *_needs_review.md.)")
+        elif review_mode and getattr(args, "apply_domain", False) and domains:
+            print(f"   (SAFE MODE + trusted domain '{', '.join(domains)}' — its rules apply at every risk level; roster/other rules still defer to *_needs_review.md.)")
         elif review_mode:
             print("   (SAFE MODE [default] — only low-risk auto-applied; medium/high → *_needs_review.md. Pass --apply-all to apply every level.)")
         else:
@@ -729,7 +863,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
             print(f"🔍 Dry-run preview: {preview_path}")
 
         # Hint when 0 corrections and other domains have rules
-        hint = _format_domain_hint(summary['total_changes'], args.domain, domain_stats)
+        hint = _format_domain_hint(summary['total_changes'], domains, domain_stats)
         if hint:
             print(hint)
         print()
@@ -890,6 +1024,20 @@ def cmd_review_learned(args: argparse.Namespace) -> None:
 
 def cmd_approve(args: argparse.Namespace) -> None:
     """Approve a learned suggestion and add it to the correction dictionary."""
+    # Same single-domain rule as --add: a rule lands in exactly one domain, so
+    # a comma-separated --domain must fail fast here too rather than fall
+    # through to the domain-pattern validator with a misleading attribution.
+    domains = _parse_domains(getattr(args, "domain", None))
+    if domains and len(domains) > 1:
+        print(
+            f"Error: --approve writes to exactly one domain, got {len(domains)}: "
+            f"{', '.join(domains)}. Approve one domain at a time.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if domains:
+        args.domain = domains[0]
+
     service = _get_service()
     engine = _get_learning_engine(service)
 

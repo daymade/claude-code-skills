@@ -66,6 +66,8 @@ from cli import (
     cmd_show_review,
     cmd_reanchor_review,
     cmd_resolve_review,
+    cmd_scan_traps,
+    cmd_probe,
     create_argument_parser,
 )
 
@@ -154,6 +156,10 @@ def main() -> None:
         cmd_reanchor_review(args)
     elif args.resolve_review is not None:
         cmd_resolve_review(args)
+    elif getattr(args, "scan_traps", False):
+        cmd_scan_traps(args)
+    elif getattr(args, "probe_term", None):
+        cmd_probe(args)
     elif args.input:
         if getattr(args, "json_output", False):
             # --json contract: stdout carries ONLY the machine-readable Stage 1
