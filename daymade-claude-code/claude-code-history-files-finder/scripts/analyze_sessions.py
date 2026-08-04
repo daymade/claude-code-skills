@@ -351,38 +351,56 @@ class SessionAnalyzer:
         the caller per source label, so the same physical file can arrive
         here once per profile that happens to alias it. Group by the
         *resolved* real path first so each physical file is opened and
-        parsed exactly once no matter how many source labels point at it;
-        every label in the group is still attributed as valid provenance,
-        so output (which sources/homes a session is reachable from) is
-        unchanged — only the redundant I/O and JSON-parsing is eliminated.
+        parsed exactly once no matter how many source labels point at it.
+
+        Every group member keeps its own *nominal* (unresolved) directory
+        so per-copy paths stay distinct strings — e.g. a session aliased
+        under both ``~/.claude/projects`` and ``~/.claude-profiles/css/
+        projects`` still reports two different copy paths, matching what
+        the un-grouped code produced. Collapsing them to one shared string
+        was tried first and broke ``search``'s "Other matching copies:"
+        listing (independent review, 2026-08-04): it distinguishes the
+        primary copy from the others by path-string inequality, so giving
+        every aliased copy the identical string made all-but-one silently
+        vanish from that field even though the ``sources``/``homes``
+        label lists stayed correct.
         """
         groups: Dict[str, tuple] = {}
         for source, project_dir in pairs:
             try:
                 key = str(project_dir.resolve())
-            except OSError:
+            except (OSError, RuntimeError):
                 key = str(project_dir)
             group = groups.get(key)
             if group is None:
-                groups[key] = (project_dir, [source])
+                groups[key] = (project_dir, [(source, project_dir)])
             else:
-                group[1].append(source)
+                group[1].append((source, project_dir))
 
         by_id: Dict[str, Dict[str, Any]] = {}
-        for project_dir, group_sources in groups.values():
-            for file in project_dir.glob("*.jsonl"):
+        for scan_dir, group_members in groups.values():
+            group_sources = [source for source, _nominal_dir in group_members]
+            # any(...) — not group_sources[0].kind — because "at least one
+            # active alias in the group" must win regardless of which
+            # member happened to be discovered first; index-0 only agrees
+            # with that whenever active sources are enumerated before
+            # archives (true for both shipped call sites today, but not a
+            # contract this function should silently depend on).
+            group_has_active = any(source.kind == "active" for source in group_sources)
+            group_kind = "active" if group_has_active else group_sources[0].kind
+            for file in scan_dir.glob("*.jsonl"):
                 if file.name.startswith("agent-"):
                     continue
                 summary = scan_claude_session(file)
                 sid = summary.session_id
                 copies = [
                     {
-                        "path": file,
+                        "path": nominal_dir / file.name,
                         "source": source,
                         "created_at": summary.created_at,
                         "updated_at": summary.updated_at,
                     }
-                    for source in group_sources
+                    for source, nominal_dir in group_members
                 ]
                 candidate = {
                     "path": file,
@@ -398,7 +416,7 @@ class SessionAnalyzer:
                         if summary.timestamp_count
                         else "unknown"
                     ),
-                    "selected_kind": group_sources[0].kind,
+                    "selected_kind": group_kind,
                     "selected_updated_at": summary.updated_at,
                     "session_id": sid,
                 }
@@ -429,12 +447,12 @@ class SessionAnalyzer:
                 )
                 candidate_wins = candidate_time > existing_selected_time or (
                     candidate_time == existing_selected_time
-                    and group_sources[0].kind == "active"
+                    and group_kind == "active"
                     and entry["selected_kind"] != "active"
                 )
                 if candidate_wins:
                     entry["path"] = file
-                    entry["selected_kind"] = group_sources[0].kind
+                    entry["selected_kind"] = group_kind
                     entry["selected_updated_at"] = summary.updated_at
                 entry["sources"] = sources
                 entry["homes"] = homes
