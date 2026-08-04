@@ -524,7 +524,7 @@ Adding wrong dictionary rules silently corrupts future transcripts. **Read `refe
 
 ## Project-Specific & Person-Name Corrections (`--domain` isolation)
 
-The most important pattern for **recurring, project-specific errors** — person names, project jargon, product codenames — is the `--domain` flag. It is also the *answer* to the false-positive worry above: a person-name fix that's right **in your project** (a teammate's name the ASR keeps garbling) might collide with a real, differently-spelled person in someone else's transcript — so it must NOT go into the global (`general`) dictionary.
+The most important pattern for **recurring, project-specific errors** — person names, project jargon, shelf codenames — is the `--domain` flag. It is also the *answer* to the false-positive worry above: a person-name fix that's right **in your project** (a teammate's name the ASR keeps garbling) might collide with a real, differently-spelled person in someone else's transcript — so it must NOT go into the global (`general`) dictionary.
 
 `--domain` makes such rules safe by isolating them:
 
@@ -826,8 +826,8 @@ spoken instead of re-reading them.
 distinct failure with the same symptom: a global replace aimed at something else
 lands inside a numeral. The classic trigger is relabelling a speaker whose
 diarization label is a bare digit — replacing that digit globally fixes the
-speaker lines and quietly corrupts every number containing it (`21 度电`,
-`5+1`, `1.1 倍速`, and the date in the title all lose a digit to a name). The
+speaker lines and quietly corrupts every number containing it (`21 册`,
+`3+1`, `8.8 折`, and the date in the title all lose a digit to a name). The
 transcript still reads fluently; only the numbers are wrong. A dictionary rule
 that overshoots produces the same signature.
 
