@@ -839,7 +839,7 @@ unresolvable path means **block**.
 
 ---
 
-## 26. A hook that activates mid-session only guards what happens AFTER it — in-flight work from before stays uninspected
+## 26. A hook that activates mid-session only guards what happens AFTER it — work from before stays unexamined unless something else checks
 
 - **Symptom:** a hook ships mid-session specifically because a systemic
   anti-pattern was just caught, and it works exactly as designed — every
@@ -867,39 +867,49 @@ unresolvable path means **block**.
   "The guard is now live" and "every prior instance this session is
   accounted for" are two independent facts; shipping the hook only ever
   establishes the first.
-- **Real case (2026-07-21 to 2026-07-27, six days, one session):**
+- **Real case (2026-07-21, one day; recurred once, six days later):**
   `bg-exitcode-guard` blocks backgrounded Bash commands whose last
   statement is `echo`/`printf` after the script already captured `$?` — the
   always-zero echo/printf exit code overwrites the real command's exit code
   in the task-notification summary. The same session used that exact shape
-  13 times before the hook went live. Once, on day one, it produced a
-  genuinely misleading "completed (exit code 0)" notification for a deploy
-  that had actually failed — and the operator caught it ten seconds later,
-  same turn, by habitually re-grepping the real log instead of trusting the
-  notification text. That was a near miss, not a believed-and-acted-on
-  failure — but the near miss alone didn't stop anything: the same shape
-  recurred another 12 times over the following six days. Only the hook's
-  activation actually closed it (zero recurrences after). And the hook,
-  once live, could do nothing about the 13 uses that already happened — it
-  does not reach backward, per Cause above.
+  13 times within a single ~4.5-hour window on one day, before the hook
+  existed. Once, it produced a genuinely misleading "completed (exit code
+  0)" notification for a deploy that had actually failed three times in a
+  row — and the operator caught the discrepancy within the same turn,
+  inside a minute, by habitually re-grepping the real log instead of
+  trusting the notification text: a near miss, not a believed-and-acted-on
+  failure. After that day the pattern went completely dormant — zero
+  backgrounded Bash calls of any kind — for six days, then recurred exactly
+  once; the hook, freshly live, blocked it on its very first opportunity.
+  None of the 13 pre-hook uses were still running by the time anyone
+  looked — they had all already finished, and simply sat unexamined until
+  an unrelated end-of-session review (not a sweep prompted by the hook
+  itself) happened to check the transcript and surfaced the full count,
+  the same day as the hook's only catch.
 - **Fix:** don't treat "I have a habit of double-checking" as equivalent to
   "this is closed" — a habit is a per-instance save, not a guarantee, and
-  this exact case shows a real habit still needing 13 repetitions and 6
-  days before something durable (the hook) actually ended it. Once the hook
-  is live, two concrete checks, not just a resolution to be careful:
-  (1) look for backgrounded tasks that are already running or already
-  dispatched from before the hook existed — the harness's own task
-  list/tracker is the right place to check, not a manual re-read of the
-  transcript, since those tasks can still complete and report *after* the
-  hook exists and the hook will never see them; (2) if the session or
+  the near miss above didn't stop anything on its own; the pattern simply
+  went dormant for six days before recurring once more, and only the hook
+  actually ended it. Two things follow, matched to what's actually
+  checkable: (1) a genuinely in-flight task dispatched before the fix will
+  still deliver its notification normally once it completes — Cause
+  implies this risk, but none of the 13 real instances exercised it, since
+  all of them had already finished by the time anyone looked — and there
+  is no tool that lists "background tasks still outstanding from before
+  this hook existed" to check for that in advance, so stay exactly as
+  skeptical of a notification from something you dispatched under the old
+  broken form as you are of a new one, since the hook cannot have
+  retroactively fixed a command that's already running; (2) for the case
+  that's actually common — already finished by the time the hook goes
+  live — a deliberate sweep isn't the only path: if the session or
   environment already runs some later, broader check (an end-of-session
   review, a periodic audit), confirm it actually covers this exact gap
-  rather than assuming it does — in the case above, that later check is
-  literally what surfaced the true count of 13 uses, days after the hook
-  activated, not any deliberate sweep done at the moment the hook shipped.
-  If either check turns up an instance that was actually acted on, not just
-  printed, treat it as its own live incident — verify what state it left
-  behind before moving on, not just log it as another near miss.
+  rather than assuming it does. In the case above, that's literally what
+  surfaced the true count of 13 uses — the same day as the hook's only
+  catch, not a later sweep triggered by the fix itself. If the habit in
+  (1) or the later check in (2) turns up an instance that was actually
+  acted on, not just printed, treat it as its own live incident — verify
+  what state it left behind before moving on.
 
 ---
 
