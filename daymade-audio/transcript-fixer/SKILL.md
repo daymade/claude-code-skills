@@ -288,6 +288,55 @@ enqueued with a PARAPHRASED context could never be verdicted — the human's
 override died at the guard and the file got hand-edited around the queue
 before this command existed.)
 
+**The human's `decision_note` is an instruction to you, not an archive entry —
+and nothing promotes it for you.** The dashboard's verdict row carries a free-text
+备注 field; the CLI's `--note` writes the same column. That is where a reviewer
+puts the *reason* — and the reason is routinely a domain rule worth more than the
+single edit it was attached to. A real one: a reviewer overrode a "typo" back to
+the original with the note "这是同音字，用来规避平台的审查" — i.e. *this whole class
+of substitution is deliberate, stop flagging it*. One edit was recorded; the rule
+behind it reached nothing.
+
+Two mechanics make this easy to miss, so handle both explicitly:
+
+- **The human-readable `--show-review` hides the note until the item leaves
+  `pending`; `--json` always carries the key** (null while unwritten). Since the
+  agent path here is `--show-review <id> --json`, the field is there — you just
+  have to look at it. Sweep decided items when a batch comes back, and include
+  `kept_original`: a "this class of substitution is deliberate" note lands on
+  exactly that verdict, and a status filter copied from the text-propagation
+  sweep below (`accepted|overridden`) will miss all of them.
+  `--list-review --review-status kept_original` (or `all`) is the one to run.
+  (`reopen` also writes a note while sending the item BACK to `pending`, so
+  "pending" is not a guarantee of no note — that path is CLI-only today, and it
+  is the shape most likely to be an instruction: a human handing your suggestion
+  back with the reason attached.)
+- **Do not filter the tool's output through a field list you decided in advance.**
+  Print what came back and look at it. A caller that renders only the keys it
+  expected will silently drop the one field the human actually wrote in — the
+  failure looks identical to "the human left no note".
+
+Then close the loop, because the queue does not — but **route by what the note
+says, not by whichever command is nearest**. The exits are not interchangeable,
+and for the example above the obvious-looking one is backwards:
+
+| The note says | Send it to | Not |
+|---|---|---|
+| this class of substitution is deliberate — stop flagging it | the domain context file, as a trap line with its disambiguating cue (the Maintenance loop under "Domain Correction Contexts") | `--add` — that creates a rule that rewrites the text from now on, the exact opposite of "leave it alone" |
+| a dictionary rule fired where it shouldn't | `--report-false-positive "<from>" "<to>" -d <domain>` | a context note — the rule keeps firing |
+| a stable FROM→TO this domain will see again | `--add "<from>" "<to>" --domain <project>`, subject to the real-word rules below | |
+| a person's name is spelled the surprising way | the people roster (hand-edited; no CLI writes it) | |
+
+Do not reach for the `append_note` **action** here: it runs only when a queue
+item carrying it is *accepted*, and on `overridden` it is dropped by design —
+which is precisely the verdict the motivating example used. After the fact,
+edit the context file directly.
+
+This is the same failure as **"An override does not compound on its own"**
+below, one storage over: there the human's corrected *text* stops at
+`resolved_text`, here the human's *reason* stops at `decision_note`. The queue
+records both faithfully and promotes neither.
+
 **Enqueue validates anchors verbatim — authoring errors die at enqueue, not
 at verdict.** When an item declares a readable `file`, `--enqueue-review`
 checks that `original` (and `context`, if given) literally appears in it, and
