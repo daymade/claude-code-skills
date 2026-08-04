@@ -30,8 +30,10 @@
 #   `python-pytest` runner here would open the door to *any* future contributor's test
 #   suite pulling in *any* pip package, an open-ended and growing surface, which is a
 #   different kind of commitment than one job installing one pinned tool for itself.
-#   Audited empirically before writing this: every one of the 9 currently-registered files
-#   is unittest.TestCase style with matching idioms (Path(__file__).resolve().parents[N],
+#   Audited empirically as of the 2026-08 registry snapshot (6 directories, 9 files —
+#   re-count from the list below if you need the current number, don't trust this one):
+#   every file registered at that time was unittest.TestCase style with matching idioms
+#   (Path(__file__).resolve().parents[N],
 #   importlib.util.spec_from_file_location, subprocess.run(text=True, encoding="utf-8")) —
 #   a consistent, cross-file house style, not coincidence. Converting the pytest-style
 #   files to match would not even clear criterion 1 in every case: skill-creator's own
