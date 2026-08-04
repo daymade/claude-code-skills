@@ -73,7 +73,7 @@ def _clean_token(token: str) -> str:
     return token.strip().strip(_STRIP_CHARS).strip()
 
 
-def _parse_from_side(raw_from: str) -> List[str]:
+def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None) -> List[str]:
     """Split the FROM side into scan variants.
 
     Three production shapes:
@@ -96,10 +96,24 @@ def _parse_from_side(raw_from: str) -> List[str]:
     else:
         body = raw_from
     variants = [_clean_token(v) for v in re.split(r"[/／]", body)]
-    return [
-        v for v in variants
-        if v and len(v) <= _MAX_TERM_LEN and not _BAD_VARIANT.search(v)
-    ]
+    kept = []
+    for v in variants:
+        if not v:
+            continue
+        if len(v) > _MAX_TERM_LEN:
+            reason = f"longer than {_MAX_TERM_LEN} chars — prose, not a term?"
+        elif _BAD_VARIANT.search(v):
+            # A variant with a space inside is a real authoring shape (a Latin
+            # token next to a CJK one), not necessarily prose — and dropping it
+            # silently is how a documented trap ends up never scanned while the
+            # report still says "scanned, absent".
+            reason = "contains whitespace/punctuation — write it without spaces, or on its own line"
+        else:
+            kept.append(v)
+            continue
+        if dropped is not None:
+            dropped.append((raw_from.strip(), v, reason))
+    return kept
 
 
 def _parse_to_side(raw_to: str) -> str:
@@ -132,13 +146,18 @@ class TrapHit:
     context: str  # line snippet around the occurrence
 
 
-def extract_trap_entries(context_text: str) -> List[TrapEntry]:
+def extract_trap_entries(context_text: str,
+                         dropped: Optional[List[tuple]] = None) -> List[TrapEntry]:
     """Parse trap entries out of a domain context markdown.
 
     Returns entries in file order, de-duplicated by (variant, to_text).
-    Malformed fragments (empty side after cleaning) are skipped silently —
-    the context file is prose first, and a partially-parseable bullet must
-    not kill the scan.
+    A partially-parseable bullet must not kill the scan — but it must not
+    vanish either. Pass `dropped` to collect what was NOT turned into a
+    scannable variant; format_report prints it. Without that, the report's
+    own promise breaks: it says "scanned, absent" for terms the parser never
+    saw, and two real authoring shapes hit this in production — a variant
+    containing a space, and two traps written into one bullet
+    (`**A → B / C → D**`, whose C never becomes a from-variant).
     """
     entries: List[TrapEntry] = []
     seen: set[tuple[str, str]] = set()
@@ -146,8 +165,16 @@ def extract_trap_entries(context_text: str) -> List[TrapEntry]:
     for m in _BOLD_TRAP.finditer(context_text):
         raw_from, raw_to = m.group(1), m.group(2)
         to_text = _parse_to_side(raw_to)
-        variants = _parse_from_side(raw_from)
+        variants = _parse_from_side(raw_from, dropped)
+        # A second arrow surviving on the TO side means this bullet holds a
+        # second trap that the FROM-side regex never reached.
+        if dropped is not None and re.search(r"→|->", raw_to):
+            dropped.append((raw_from.strip(), raw_to.strip(),
+                            "two traps in one bullet — split them onto separate lines"))
         if not variants or not to_text:
+            if dropped is not None and (variants or to_text):
+                dropped.append((raw_from.strip(), raw_to.strip(),
+                                "one side unparseable — entry not scanned at all"))
             continue
         key = ("/".join(variants), to_text)
         if key in seen:
@@ -212,6 +239,7 @@ def format_report(
     hits: List[TrapHit],
     *,
     context_path: Optional[Path] = None,
+    dropped: Optional[List[tuple]] = None,
 ) -> str:
     """Human-readable report: hits grouped by entry, then the no-hit list.
 
@@ -231,6 +259,16 @@ def format_report(
         f"{header}: {len(traps)} trap entries, {len(confirmed)} confirmed-correct; "
         f"{len(hits)} hit(s)"
     )
+    # Printed FIRST, before any "no hit (scanned, absent)" line can be read as a
+    # clean bill of health: these are documented traps the parser could not turn
+    # into a scannable variant, so they were never looked for at all. Silently
+    # skipping them is what let the report promise coverage it did not have.
+    if dropped:
+        out.append(f"\n⚠️ {len(dropped)} documented trap(s) NOT scanned "
+                   f"(unparseable — fix the context file, then re-scan):")
+        for raw, frag, reason in dropped:
+            out.append(f"  「{frag}」 in **{raw}**")
+            out.append(f"      {reason}")
 
     def _emit(group: List[TrapEntry], title: str) -> None:
         out.append(title)

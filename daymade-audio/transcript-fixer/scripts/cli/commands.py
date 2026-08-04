@@ -365,13 +365,20 @@ def cmd_scan_traps(args: argparse.Namespace) -> None:
             print(f"Error: {what} not found: {p}", file=sys.stderr)
             sys.exit(2)
 
-    entries = extract_trap_entries(context_path.read_text(encoding="utf-8"))
+    dropped: list = []
+    entries = extract_trap_entries(context_path.read_text(encoding="utf-8"), dropped)
     hits = scan_text(input_path.read_text(encoding="utf-8"), entries)
 
     if getattr(args, "json_output", False):
-        print(json.dumps(hits_to_json(entries, hits), ensure_ascii=False))
+        payload = hits_to_json(entries, hits)
+        # Machine callers need the coverage gap too — a JSON report that only
+        # carries hits lets an automated consumer conclude "no traps here" from
+        # a scan that never looked at some of them.
+        payload["unparsed"] = [
+            {"raw": r, "fragment": f, "reason": why} for r, f, why in dropped]
+        print(json.dumps(payload, ensure_ascii=False))
     else:
-        print(format_report(entries, hits, context_path=context_path))
+        print(format_report(entries, hits, context_path=context_path, dropped=dropped))
 
 
 def cmd_probe(args: argparse.Namespace) -> None:
