@@ -1455,11 +1455,30 @@ def cmd_report_false_positive(args: argparse.Namespace) -> None:
         if (args.from_text, args.to_text) in service.get_disabled_pairs(domain):
             print(f"ℹ️  '{args.from_text}' -> '{args.to_text}' is ALREADY disabled in the "
                   f"database (domain: {domain}) — nothing more to disable here.")
+            # Blame the roster only after CHECKING it. The roster is the
+            # cross-project person-name SSOT, so "remove that variant" deletes
+            # the correction in every other domain too — an instruction that
+            # expensive must not rest on an assumption. Configured-but-absent
+            # and configured-but-doesn't-contain-it are both common.
             roster_path = (os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER")
                            or get_config().paths.people_roster_path)
+            supplies_it = False
             if roster_path:
-                print(f"   If it is still firing, it is being re-supplied by the people roster.")
-                print(f"   Remove that ASR variant from: {roster_path}")
+                rp = Path(roster_path).expanduser()
+                if rp.is_file():
+                    try:
+                        from core.people_roster import load_people_roster
+                        roster_corr, _ = load_people_roster(rp)
+                        supplies_it = roster_corr.get(args.from_text) == args.to_text
+                    except Exception:
+                        supplies_it = False
+            if supplies_it:
+                print(f"   It is still being re-supplied by the people roster.")
+                print(f"   To stop that too, remove this ASR variant from: {roster_path}")
+            else:
+                print(f"   The people roster does not supply this pair, so nothing else "
+                      f"should be re-adding it. If it still fires, check the other "
+                      f"--domain values you run with — this veto is per-domain.")
             return
         print(f"❌ No active rule matching '{args.from_text}' -> '{args.to_text}' (domain: {domain})")
         sys.exit(1)
