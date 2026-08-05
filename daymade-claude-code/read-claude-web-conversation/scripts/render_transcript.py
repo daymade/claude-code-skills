@@ -950,8 +950,10 @@ def render_transcript(conv, source_url='', report=None, toc=False):
     return '\n'.join(head) + body + '\n' + citation_sources(conv)
 
 
-def list_files(conv):
-    """Inventory downloadable files + which endpoint family each needs."""
+def _file_inventory(conv):
+    """Every downloadable file on the active path as (msg_index, sender,
+    name, size_bytes, endpoint). Shared by --list-files and the post-render
+    file-count notice, so the two can never drift apart."""
     rows = []
     for i, m in enumerate(active_path(conv)):
         for f in (m.get('files') or []) + (m.get('attachments') or []):
@@ -967,6 +969,12 @@ def list_files(conv):
                 for p in (b.get('input') or {}).get('filepaths') or []:
                     rows.append((i, 'assistant', p.split('/')[-1], None,
                                  'wiggle/download-file?path=' + p))
+    return rows
+
+
+def list_files(conv):
+    """Inventory downloadable files + which endpoint family each needs."""
+    rows = _file_inventory(conv)
     for i, sender, name, size, endpoint in rows:
         size_s = f'{size}B' if size else '-'
         print(f'msg[{i}] {sender:9s} {size_s:>10s}  {name}  →  {endpoint}')
@@ -1130,6 +1138,23 @@ def main(argv=None):
             print(f"known gap: {len(report['stripped_blocks'])} tool blocks were emptied by the "
                   f"platform ({', '.join(names) or 'unnamed'}) — disclosed in the transcript header, "
                   f"NOT recoverable from a shared link", file=sys.stderr)
+
+        # File-count notice — the completion signal. A render that prints
+        # `fidelity: 100%` while the conversation carries downloadable files is
+        # an INCOMPLETE archive: the transcript references those files by name
+        # but never carries their bytes. Surfacing the count here — on the same
+        # stderr stream as the fidelity line — makes that impossible to miss.
+        # Completion-drive otherwise sees "100%" and stops before the files are
+        # pulled, which is exactly how a text-only export gets mistaken for a
+        # full archive. (Not a gate: it never blocks, and never fires under
+        # --list-files / --extract-file, which return earlier.)
+        file_rows = _file_inventory(conv)
+        if file_rows:
+            print(f"files: {len(file_rows)} downloadable file(s) in this conversation — "
+                  f"the transcript names them but does NOT carry the bytes, so a text-only "
+                  f"export is an INCOMPLETE archive. Run `render_transcript.py <json> "
+                  f"--list-files` for the inventory; use scripts/download_files.js to pull "
+                  f"them through the correct endpoint.", file=sys.stderr)
 
         # Obsidian conversion happens ONLY here — after the fidelity gate has run on the
         # verbatim <details> markdown and passed. Converting to > [!info]- callouts is a
