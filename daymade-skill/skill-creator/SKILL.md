@@ -1515,6 +1515,23 @@ After packaging, update the marketplace registry to include the new or updated s
 
 **For updated skills**, bump the version in `plugins[].version` following semver. Any change to a skill's files — even a one-line typo fix — needs a bump: without it, `marketplace update` sees no new version, so **already-installed copies never refresh** and users keep running the old skill while your fix sits unshipped.
 
+**Then record it in the changelog — this is the step that gets skipped.** The bump makes the
+update *installable*; the entry is what makes it *findable* six months later, when someone
+hits the same problem and greps for it. And a changelog that documents every other skill's
+versions while silently dropping yours is worse than none at all: the gaps read as "nothing
+changed there".
+
+Match the existing entries' shape instead of inventing one — in a Keep-a-Changelog file that
+is usually `- **skill-name** (\`suite\` vX.Y.Z): what broke, why, and what proves it fixed`.
+Write it in the **same commit** as the bump; a changelog updated "later" is one that never
+gets updated.
+
+Real case (2026-08): two consecutive releases of one skill shipped with correct bumps, green
+gates and merged PRs — and **no changelog entries at all**, because nothing in this procedure
+asked for one. Both were caught only by a later audit. That is discipline #6 turned on this
+file itself: a rule that lives in a convention rather than in a step loses to completion-drive
+every time.
+
 **Keep the registry diff minimal — it is the single file every skill shares.** A marketplace manifest is the one place where every concurrent editor collides, so an unrelated formatting change there is far more expensive than the same change anywhere else: it turns a clean three-line bump into a conflict for whoever else is mid-edit. When you script the update (parsing to JSON, mutating, writing back), the rewrite silently normalizes things the file may not have used — trailing newline, indent width, key order, unicode escaping. Round-trip discipline: re-read the file afterwards and run `git diff --stat` on it; **the only lines that may appear are the fields you meant to change.** If extra lines show up, restore the file's original convention rather than shipping the normalization (a scripted bump once added a trailing newline to a manifest that had never had one — one wasted diff line, in the file most likely to be edited by someone else at the same moment). The same instinct applies to any shared registry a skill touches: lockfiles, catalogs, index documents.
 
 **When a PR outlives a few merges, rebase — then prove you didn't eat anyone's work.** The same property that makes the manifest a collision hotspot makes it the thing that goes stale: an open PR touching the registry and the changelog will conflict as soon as anything else lands, so expect `mergeable: CONFLICTING` rather than treating it as a surprise (one PR hit it after main moved 7 commits in an afternoon). Rebase rather than merge if the repo squash-merges — a merge commit in a squashed history buys nothing. The conflicts themselves are almost always **additive**: two authors each appended their own entry in the same section, so the resolution is to **keep both**, never `--ours`/`--theirs`, which silently discards a colleague's line.
