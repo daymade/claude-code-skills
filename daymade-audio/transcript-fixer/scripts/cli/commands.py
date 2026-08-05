@@ -1440,46 +1440,151 @@ def cmd_extract_uncertain(args: argparse.Namespace) -> None:
     print(f"💾 Saved: {output_path}")
 
 
+def _roster_supplies(from_text: str, to_text: str) -> tuple[bool, str | None]:
+    """Does the people roster actually carry this pair? Returns (yes, path).
+
+    The roster is the cross-project person-name SSOT, so any instruction to
+    edit it deletes the correction in every other domain and every other
+    project too. An instruction that expensive must not rest on an assumption:
+    configured-but-absent and configured-but-doesn't-carry-it are both common.
+    """
+    roster_path = (os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER")
+                   or get_config().paths.people_roster_path)
+    if not roster_path:
+        return False, None
+    rp = Path(roster_path).expanduser()
+    if not rp.is_file():
+        return False, str(roster_path)
+    try:
+        from core.people_roster import load_people_roster
+        roster_corr, _ = load_people_roster(rp)
+        return roster_corr.get(from_text) == to_text, str(roster_path)
+    except Exception:
+        # Unreadable is not the same as absent — say so rather than asserting
+        # the roster does not carry it.
+        return False, str(roster_path)
+
+
+def _active_domains_for(service, from_text: str, to_text: str,
+                        exclude: str) -> list[str]:
+    """Which OTHER domains still hold this pair as an active rule.
+
+    Disabling is per-domain, so "I retired it but it keeps firing" usually
+    means a live copy in a domain the user did not name. Without this the
+    command can only guess, and guessing sent readers to edit the roster.
+    """
+    found = []
+    try:
+        for d in service.get_domain_stats():
+            if d == exclude:
+                continue
+            if service.get_corrections(d).get(from_text) == to_text:
+                found.append(d)
+    except Exception:
+        return []
+    return sorted(found)
+
+
 def cmd_report_false_positive(args: argparse.Namespace) -> None:
-    """Report a false-positive correction and disable it."""
+    """Report a false-positive correction and disable it.
+
+    Exit codes are part of the contract, because automation could not tell
+    "I just disabled it" from "it was already off" when both returned 0:
+      0  disabled by this run
+      1  no such pair anywhere (DB or roster)
+      2  bad input (malformed --domain, invalid text)
+      3  already disabled here — nothing to do
+      4  supplied only by the roster; no DB row exists to disable
+    """
     service = _get_service()
-    domain = getattr(args, 'domain', None) or "general"
-    success = service.report_false_positive(args.from_text, args.to_text, domain)
+
+    # Fail fast on a malformed --domain. Letting the repository's
+    # ValidationError escape produced a bare traceback with empty stdout and
+    # exit 1 — the same code as "no such rule", so a caller could not tell a
+    # typo from a real answer.
+    domains = _parse_domains(getattr(args, 'domain', None))
+    if domains and len(domains) > 1:
+        print(f"Error: --report-false-positive targets exactly one domain, got "
+              f"{len(domains)}: {', '.join(domains)}. Disabling is per-domain — "
+              f"run it once per domain.", file=sys.stderr)
+        sys.exit(2)
+    domain = domains[0] if domains else "general"
+    try:
+        service.validate_domain_name(domain)
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    supplies_it, roster_path = _roster_supplies(args.from_text, args.to_text)
+
+    # Check "already disabled" BEFORE attempting the disable. report_false_positive
+    # logs a "No active rule" warning to stderr when it finds nothing, which for
+    # an already-disabled pair contradicts the ℹ️ line this command prints to
+    # stdout — a caller capturing 2>&1 saw both, and one grepping for "No active
+    # rule" misclassified a normal, idempotent outcome as a fatal one.
+    if (args.from_text, args.to_text) in service.get_disabled_pairs(domain):
+        print(f"ℹ️  '{args.from_text}' -> '{args.to_text}' is ALREADY disabled in the "
+              f"database (domain: {domain}) — nothing more to disable here.")
+        elsewhere = _active_domains_for(service, args.from_text, args.to_text, domain)
+        if elsewhere:
+            print(f"   It is still ACTIVE in: {', '.join(elsewhere)}. That is the "
+                  f"most likely reason it keeps firing — re-run this command with "
+                  f"--domain {elsewhere[0]} to retire it there too.")
+        if supplies_it:
+            # State the scope, not the mechanism. A run using this domain
+            # suppresses the roster copy as well (the merge skips any pair
+            # already disabled for the run's domains and prints "🚫 …
+            # suppressed"), so "the roster is still re-supplying it" is false
+            # for exactly the domain just asked about — and acting on it edits
+            # a cross-project SSOT to fix a problem this domain does not have.
+            print(f"   The people roster also carries this pair, but a run using "
+                  f"--domain {domain} suppresses it — the disable already covers "
+                  f"that path.")
+            print(f"   To confirm where it is still live: re-run that domain and "
+                  f"look for a 🚫 suppressed line naming this pair; if the line is "
+                  f"absent, the pair applies there.")
+            print(f"   Removing it from {roster_path} stops it everywhere at once, "
+                  f"including other projects that share this roster.")
+        elif not elsewhere:
+            print(f"   The people roster does not carry this pair, so nothing else "
+                  f"should be re-adding it here.")
+        sys.exit(3)
+
+    # Resolve every non-success outcome BEFORE calling the service. Its
+    # report_false_positive logs "No active rule" to stderr whenever it finds
+    # nothing, and that line contradicts each of the stdout messages below —
+    # a caller capturing 2>&1 saw both, and one grepping for it misread a
+    # roster-only or wrong-domain answer as a fatal not-found.
+    if service.get_corrections(domain).get(args.from_text) != args.to_text:
+        success = False
+    else:
+        success = service.report_false_positive(args.from_text, args.to_text, domain)
     if success:
         print(f"🚫 Reported false positive: '{args.from_text}' -> '{args.to_text}' (domain: {domain})")
         print("   The rule has been disabled and confidence lowered.")
     else:
-        # "No active rule" is misleading when the rule is disabled here but still
-        # supplied by the people roster: the user sees it firing, runs this
-        # command to stop it, and is told it does not exist. Name the real source.
-        if (args.from_text, args.to_text) in service.get_disabled_pairs(domain):
-            print(f"ℹ️  '{args.from_text}' -> '{args.to_text}' is ALREADY disabled in the "
-                  f"database (domain: {domain}) — nothing more to disable here.")
-            # Blame the roster only after CHECKING it. The roster is the
-            # cross-project person-name SSOT, so "remove that variant" deletes
-            # the correction in every other domain too — an instruction that
-            # expensive must not rest on an assumption. Configured-but-absent
-            # and configured-but-doesn't-contain-it are both common.
-            roster_path = (os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER")
-                           or get_config().paths.people_roster_path)
-            supplies_it = False
-            if roster_path:
-                rp = Path(roster_path).expanduser()
-                if rp.is_file():
-                    try:
-                        from core.people_roster import load_people_roster
-                        roster_corr, _ = load_people_roster(rp)
-                        supplies_it = roster_corr.get(args.from_text) == args.to_text
-                    except Exception:
-                        supplies_it = False
-            if supplies_it:
-                print(f"   It is still being re-supplied by the people roster.")
-                print(f"   To stop that too, remove this ASR variant from: {roster_path}")
-            else:
-                print(f"   The people roster does not supply this pair, so nothing else "
-                      f"should be re-adding it. If it still fires, check the other "
-                      f"--domain values you run with — this veto is per-domain.")
-            return
+        # A roster-only pair never had a DB row, so there is nothing to mark
+        # inactive and the plain "No active rule" was, word for word, the
+        # failure this command exists to prevent: the pair fires on every run,
+        # the user runs this to stop it, and is told it does not exist.
+        if supplies_it:
+            print(f"⚠️  '{args.from_text}' -> '{args.to_text}' has no rule in the "
+                  f"database (domain: {domain}), but the people roster supplies it — "
+                  f"which is why it keeps firing.")
+            print(f"   Disabling works by retiring a database row, and there is none "
+                  f"to retire. Two ways forward:")
+            print(f"   1. Scope it to this domain: --add it first, then re-run this "
+                  f"command. That leaves a disabled row here and the roster copy "
+                  f"suppressed for runs using --domain {domain}, untouched elsewhere.")
+            print(f"   2. Stop it everywhere: remove this ASR variant from "
+                  f"{roster_path} — including other projects that share this roster.")
+            sys.exit(4)
+        elsewhere = _active_domains_for(service, args.from_text, args.to_text, domain)
+        if elsewhere:
+            print(f"❌ No active rule matching '{args.from_text}' -> '{args.to_text}' "
+                  f"(domain: {domain}) — but it IS active in: {', '.join(elsewhere)}.")
+            print(f"   Disabling is per-domain: re-run with --domain {elsewhere[0]}.")
+            sys.exit(1)
         print(f"❌ No active rule matching '{args.from_text}' -> '{args.to_text}' (domain: {domain})")
         sys.exit(1)
 
