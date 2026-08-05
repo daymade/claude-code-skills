@@ -18,6 +18,20 @@ so transcription quality stays at full-audio fidelity.
 | **Local MLX** | macOS Apple Silicon | 15-27x realtime | Free |
 | **Remote API** | Any platform, or when local unavailable | Depends on GPU | API/self-hosted |
 
+**Choosing between them is usually not about speed — it's about where the audio already
+is.** A remote GPU can be several times faster (a 4090 running vLLM measured ~61x realtime
+against ~15x for local MLX), but that gap is small change next to moving the files:
+transcription output is text, and text is ~10,000× smaller than the audio it came from
+(18.5 h of speech ≈ 330 K characters ≈ 1 MB, from ~2.6 GB of WAV). So:
+
+> **Transcribe where the audio already lives, and move only the transcript.**
+
+Pulling a few hundred MB across a slow link to reach a faster GPU routinely costs more
+wall-clock than the entire transcription — measured once at 63 KB/s, which is over two
+hours for 500 MB, to save minutes of compute. If the recording is already on the remote
+box (it was recorded there, downloaded there, or lives in a share mounted there), run the
+ASR there and bring back the `.txt`.
+
 Configuration persists in `${CLAUDE_PLUGIN_DATA}/config.json`.
 
 > **Speaker labels are the default.** Every run produces `[start-end] SPEAKER_xx: text`
@@ -551,9 +565,41 @@ Note this loses the overlap-merge stitching, so sentences may break at the seams
 which is exactly what the server-side energy-based splitter in #5 exists to avoid.
 
 **If remote health check fails**, diagnose in order:
+
 1. Network: `ping -c 1 HOST` or `tailscale status | grep HOST`
 2. Service: `tailscale ssh USER@HOST "curl -s localhost:PORT/v1/models"`
 3. Proxy: retry with `--noproxy '*'` toggled
+
+**4. "Is anything actually listening?" — `ss` alone will lie to you.** It shows only
+your own user's processes, so a server running as another user or **inside a container**
+is invisible to it while happily serving traffic. Ask Docker in the same breath:
+
+```bash
+tailscale ssh USER@HOST "ss -ltn | grep -E ':(8000|8001|8002)'; \
+  docker ps --format '{{.Names}}\t{{.Ports}}\t{{.Status}}'"
+```
+
+**5. "Is the GPU free?"** — before starting another server, check whether one is really
+holding VRAM. An **empty** compute-apps list means nothing is using it, regardless of what
+an older note may claim about which service "has" the GPU:
+
+```bash
+tailscale ssh USER@HOST "nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv"
+# under WSL nvidia-smi is often off PATH: /usr/lib/wsl/lib/nvidia-smi
+```
+
+**6. Restarting it? `pkill -f 'vllm serve'` kills the command that issued it.** `-f`
+matches against the whole command line — and the command line you just typed contains that
+exact string, so pkill matches your own shell. Symptom: the old process dies, the new one
+never starts, and **nothing reports an error**. Wrap the first letter in a character class
+so the pattern cannot match itself:
+
+```bash
+tailscale ssh USER@HOST "pgrep -f '[v]llm serve'"   # check
+tailscale ssh USER@HOST "pkill -f '[v]llm serve'"   # kill
+```
+
+The same trap applies to any `pkill -f` whose pattern you also typed on that line.
 
 ## Step 4: Verify Output
 
