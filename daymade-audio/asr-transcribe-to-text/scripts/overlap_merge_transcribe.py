@@ -28,6 +28,14 @@ def get_duration(audio_path: str) -> float:
          "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
         capture_output=True, text=True
     )
+    # Without this check a failed ffprobe reaches float('') and raises
+    # "could not convert string to float", which sends you looking at parsing
+    # instead of at the file that could not be opened.
+    if result.returncode != 0 or not result.stdout.strip():
+        raise RuntimeError(
+            f"ffprobe could not read {audio_path!r} (exit {result.returncode}): "
+            f"{result.stderr.strip()[:300]}"
+        )
     return float(result.stdout.strip())
 
 
@@ -36,16 +44,26 @@ def split_audio(audio_path: str, chunk_dir: str, chunk_duration: int, overlap: i
     total = int(get_duration(audio_path))
     chunks = []
     start = 0
+    # Keep the input's container so `-acodec copy` stays valid. Hardcoding .mp3
+    # only worked when the input happened to be MP3; a WAV or OGG input made
+    # every ffmpeg call fail, and nothing checked, so the failure surfaced much
+    # later as a JSON parse error on an empty transcription response.
+    ext = os.path.splitext(audio_path)[1] or ".mp3"
 
     while start < total:
         duration = min(chunk_duration, total - start)
-        chunk_path = os.path.join(chunk_dir, f"chunk_{len(chunks):02d}.mp3")
+        chunk_path = os.path.join(chunk_dir, f"chunk_{len(chunks):02d}{ext}")
 
-        subprocess.run(
-            ["ffmpeg", "-i", audio_path, "-ss", str(start), "-t", str(duration),
+        result = subprocess.run(
+            ["ffmpeg", "-nostdin", "-i", audio_path, "-ss", str(start), "-t", str(duration),
              "-acodec", "copy", chunk_path, "-y"],
             capture_output=True
         )
+        if result.returncode != 0 or not os.path.exists(chunk_path) or os.path.getsize(chunk_path) == 0:
+            raise RuntimeError(
+                f"ffmpeg failed to cut chunk at {start}s (exit {result.returncode}): "
+                f"{result.stderr.decode('utf-8', 'replace').strip()[-300:]}"
+            )
         chunks.append((start, duration, chunk_path))
         print(f"  Chunk {len(chunks)-1}: {start//60}:{start%60:02d} - {(start+duration)//60}:{(start+duration)%60:02d}", file=sys.stderr)
 
