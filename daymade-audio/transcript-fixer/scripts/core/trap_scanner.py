@@ -87,8 +87,13 @@ def _clean_token(token: str) -> str:
     return token.strip().strip(_STRIP_CHARS).strip()
 
 
-def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None) -> List[str]:
+def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None,
+                     raw_to: str = "") -> List[str]:
     """Split the FROM side into scan variants.
+
+    `raw_to` is used for one thing only: when this bullet yields nothing
+    scannable, ask the parser whether swapping the two sides WOULD work, so the
+    warning can prescribe a fix that is known to apply rather than a guess.
 
     Three production shapes:
       卖吸引/卖新鲜/卖新的          -> the variants themselves
@@ -133,14 +138,33 @@ def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None) -> Li
             # does not separate them: that example is 11 chars, under the cap.
             if not re.search(r"[A-Za-z]", v):
                 continue
-            # Deliberately does NOT tell the author to "write it without
-            # spaces": _BAD_VARIANT rejects whitespace outright, so no FROM
-            # variant can express this shape at all. Prescribing a fix that
-            # does not exist is worse than admitting the gap — following it
-            # produces a report that says "scanned, absent" about a term that
-            # really is in the transcript.
-            reason = ("contains whitespace/punctuation, which no FROM variant "
-                      "can currently express — put it on its own bullet")
+            # "Put it on its own bullet" was the previous remedy and it is
+            # never the fix. This branch reports only when the bullet produced
+            # NOTHING scannable (see the `not kept` guard below), and moving a
+            # term to a line of its own does not remove the whitespace inside
+            # it — measured: both real-corpus instances are already alone on
+            # their bullet and still warn. A remedy that is a no-op is the same
+            # defect as prescribing a fix that does not exist, which the note
+            # this replaces was written to avoid.
+            #
+            # Both real instances are instead a bullet written 正确 → 误识, the
+            # reverse of the documented **误识 → 正确** — the FROM side must be
+            # what appears in the transcript. So ask the parser directly whether
+            # swapping the sides would parse, and prescribe only what it
+            # confirms. (No recursion risk: the nested call leaves raw_to empty.)
+            flipped = _parse_from_side(raw_to) if raw_to else []
+            if flipped:
+                reason = (
+                    "FROM side holds whitespace, which no variant can express — "
+                    "and this bullet reads 正确 → 误识, the reverse of the "
+                    "documented **误识 → 正确**. Swap the two sides and "
+                    f"{len(flipped)} variant(s) become scannable: "
+                    + " / ".join(flipped[:6]))
+            else:
+                reason = (
+                    "contains whitespace, which no FROM variant can currently "
+                    "express — this trap cannot be scanned as written, and no "
+                    "rearranging of the bullet changes that")
         else:
             kept.append(v)
             continue
@@ -220,7 +244,8 @@ def extract_trap_entries(context_text: str,
         # same line twice. One line per bullet keeps the count meaningful.
         bullet_drops: List[tuple] = []
         to_text = _parse_to_side(raw_to)
-        variants = _parse_from_side(raw_from, bullet_drops if dropped is not None else None)
+        variants = _parse_from_side(
+            raw_from, bullet_drops if dropped is not None else None, raw_to)
         # A second arrow surviving on the TO side means this bullet holds a
         # second trap that the FROM-side regex never reached — but read only
         # the part _parse_to_side keeps. An annotation parenthesis may quote
@@ -259,8 +284,15 @@ def extract_trap_entries(context_text: str,
             # a candidate, so there is no coverage gap to announce and saying
             # otherwise is the false positive measured on real context files.
             if dropped is not None and variants and not to_text:
+                # Name what to change. _parse_to_side accepts only the corrected
+                # term: it strips quotes/backticks WRAPPING the side, but any
+                # left inside it (a descriptor before the term, `人名 ` + a
+                # backticked name) survive and reject the whole entry. Without
+                # this the reader is told the entry was lost and not what to do.
                 bullet_drops.append((raw_from.strip(), raw_to.strip(),
-                                     "TO side unparseable — entry not scanned at all"))
+                                     "TO side unparseable — entry not scanned at all; "
+                                     "leave only the corrected term there (a descriptor "
+                                     "or backticks/punctuation inside the side reject it)"))
             if dropped is not None and bullet_drops:
                 dropped.append(bullet_drops[0])
             continue
