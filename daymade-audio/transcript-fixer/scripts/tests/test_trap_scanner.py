@@ -295,16 +295,57 @@ class TestDroppedCoverage:
         reason = dropped[0][2]
         assert "own bullet" not in reason
 
-    def test_backwards_bullet_is_named_and_its_variants_listed(self):
-        """A 正确 → 误识 bullet is the reverse of the documented **误识 → 正确**.
-        The warning must say so and list what swapping actually recovers, so
-        the prescription is verifiable rather than a guess."""
+    def test_swap_is_offered_conditionally_and_lists_its_variants(self):
+        """The message may report what swapping WOULD recover — the parser
+        established that — but must not assert the bullet is written backwards,
+        which it cannot know. See the next test for why."""
         dropped = []
         extract_trap_entries("- **PEST 框架 → test / pest / pass / past**\n", dropped)
         reason = dropped[0][2]
-        assert "正确 → 误识" in reason
+        assert "If this bullet is written" in reason
+        assert "If the FROM side really is the ASR output" in reason
         for v in ("test", "pest", "pass", "past"):
             assert v in reason
+
+    def test_a_correct_bullet_is_never_told_it_is_backwards(self):
+        """ASR splitting a Latin compound (**Chat GPT → ChatGPT**) is a real
+        error shape, and its FROM side legitimately holds a space. At this
+        layer it is indistinguishable from a reversed bullet, so an
+        unconditional "swap the sides" would invert a correct file: it would
+        then scan for the CORRECT spelling and offer the ASR error as the
+        correction — warning gone, coverage "met", meaning reversed. That is
+        worse than the no-op remedy this class of message replaced.
+        """
+        dropped = []
+        extract_trap_entries("- **Chat GPT → ChatGPT**\n", dropped)
+        reason = dropped[0][2]
+        assert "reads 正确 → 误识" not in reason      # the assertion form
+        assert "If this bullet is written" in reason  # the conditional form
+        assert "If the FROM side really is the ASR output" in reason
+
+    def test_swap_is_not_offered_when_the_other_side_would_fail(self):
+        """Verifying one half of a move and prescribing the whole of it makes
+        a "known to apply" fix a guess: obeying lands the reader on a second
+        warning rather than a scanned trap."""
+        dropped = []
+        extract_trap_entries("- **`PEST` 框架 x → test/pest**\n", dropped)
+        assert len(dropped) == 1
+        reason = dropped[0][2]
+        # Assert the honest fallback is what came out, not merely that one
+        # phrasing of the offer is absent: a bare "not in" passes against any
+        # engine that worded the offer differently, including the one this
+        # test exists to fail against.
+        assert "cannot be scanned as written" in reason
+        assert "swap" not in reason.lower()
+
+    def test_variant_count_never_disagrees_with_its_own_list(self):
+        """A count that contradicts the list beside it is the reader's first
+        reason to stop believing the number."""
+        dropped = []
+        extract_trap_entries("- **人均 XX → a1/b2/c3/d4/e5/f6/g7/h8**\n", dropped)
+        reason = dropped[0][2]
+        assert "8 variant(s)" in reason
+        assert "(+2 more)" in reason
 
     def test_applying_the_swap_clears_the_warning(self):
         """The end-to-end property: do what the message says, warning goes
@@ -325,7 +366,7 @@ class TestDroppedCoverage:
         assert len(dropped) == 1
         reason = dropped[0][2]
         assert "cannot be scanned as written" in reason
-        assert "Swap" not in reason
+        assert "swap" not in reason.lower()
 
     def test_lost_to_side_says_what_to_change(self):
         """"entry not scanned at all" told the reader it was lost, not what to
@@ -339,6 +380,18 @@ class TestDroppedCoverage:
         assert any("leave only the corrected term" in r for _, _, r in dropped)
         # And doing that clears it.
         assert extract_trap_entries("- **`张三` / `张叁` → `李四`**\n", [])
+
+    def test_a_bare_descriptor_is_not_blamed_for_the_rejection(self):
+        """Measured: `姓名 李四` parses fine. The descriptor only matters
+        because it pushes the term's own backticks into the interior, so
+        naming it as a cause sends the reader after a rule that is not there.
+        """
+        clean = []
+        entries = extract_trap_entries("- **张三 / 张叁 → 姓名 李四**\n", clean)
+        assert clean == [] and entries[0].to_text == "姓名 李四"
+        dropped = []
+        extract_trap_entries("- **`张三` / `张叁` → 姓名 `李四`**\n", dropped)
+        assert "descriptor" not in dropped[0][2]
 
     def test_warning_precedes_any_absent_line_in_the_report(self):
         """An unscanned bullet listed after "scanned, absent" reads as a clean

@@ -91,9 +91,13 @@ def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None,
                      raw_to: str = "") -> List[str]:
     """Split the FROM side into scan variants.
 
-    `raw_to` is used for one thing only: when this bullet yields nothing
-    scannable, ask the parser whether swapping the two sides WOULD work, so the
-    warning can prescribe a fix that is known to apply rather than a guess.
+    `raw_to` is used for one thing only: wording the warning. For each variant
+    rejected for whitespace it asks the parser whether swapping the two sides
+    would parse, so the message can offer a move that is known to work rather
+    than a guess. (It is computed per rejected variant, not once per bullet —
+    when the bullet has a good variant beside the bad one the `not kept` guard
+    below discards the result unused.) It never changes which variants are
+    returned, so it cannot change which bullets warn.
 
     Three production shapes:
       卖吸引/卖新鲜/卖新的          -> the variants themselves
@@ -152,14 +156,37 @@ def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None,
             # what appears in the transcript. So ask the parser directly whether
             # swapping the sides would parse, and prescribe only what it
             # confirms. (No recursion risk: the nested call leaves raw_to empty.)
+            # Offer the swap only when BOTH sides survive it: the old TO must
+            # parse as FROM variants AND the old FROM must parse as a TO.
+            # Checking one half and prescribing the whole move is how a fix
+            # that is "known to apply" quietly becomes a guess — it lands the
+            # reader on a second warning instead of a scanned trap.
             flipped = _parse_from_side(raw_to) if raw_to else []
-            if flipped:
+            if flipped and _parse_to_side(raw_from):
+                shown = " / ".join(flipped[:6])
+                if len(flipped) > 6:
+                    # Say N and list N, or say how many were withheld. A count
+                    # that disagrees with its own list is the reader's first
+                    # reason to stop believing the number.
+                    shown += f" …(+{len(flipped) - 6} more)"
+                # State only what the parser established — that swapping would
+                # parse — and leave the DIRECTION to the author, who alone knows
+                # which side the transcript actually contains. Asserting "this
+                # is written backwards" would repeat, in a new form, the exact
+                # overreach this branch was rewritten to remove: a correctly
+                # written bullet whose FROM genuinely holds a space (ASR
+                # splitting a Latin compound — **Chat GPT → ChatGPT**) is
+                # indistinguishable from a reversed one at this layer, and
+                # obeying an unconditional "swap" inverts it silently — the file
+                # then scans for the CORRECT spelling and offers the ASR error
+                # as the correction, with the warning gone and coverage "met".
                 reason = (
-                    "FROM side holds whitespace, which no variant can express — "
-                    "and this bullet reads 正确 → 误识, the reverse of the "
-                    "documented **误识 → 正确**. Swap the two sides and "
-                    f"{len(flipped)} variant(s) become scannable: "
-                    + " / ".join(flipped[:6]))
+                    "FROM side holds whitespace, so no variant can express it. "
+                    "If this bullet is written 正确 → 误识 (the reverse of the "
+                    "documented **误识 → 正确**), swap the sides and "
+                    f"{len(flipped)} variant(s) become scannable: {shown}. "
+                    "If the FROM side really is the ASR output, this shape "
+                    "cannot be expressed as written.")
             else:
                 reason = (
                     "contains whitespace, which no FROM variant can currently "
@@ -286,13 +313,17 @@ def extract_trap_entries(context_text: str,
             if dropped is not None and variants and not to_text:
                 # Name what to change. _parse_to_side accepts only the corrected
                 # term: it strips quotes/backticks WRAPPING the side, but any
-                # left inside it (a descriptor before the term, `人名 ` + a
-                # backticked name) survive and reject the whole entry. Without
-                # this the reader is told the entry was lost and not what to do.
+                # left INSIDE it reject the whole entry. A leading descriptor is
+                # not itself a cause — measured, `姓名 李四` parses fine — it
+                # only matters because it pushes the term's own backticks into
+                # the interior (`人名 ` + a backticked name). The message names
+                # the punctuation, not the descriptor, so the reader does not go
+                # hunting for a rule that is not there.
                 bullet_drops.append((raw_from.strip(), raw_to.strip(),
                                      "TO side unparseable — entry not scanned at all; "
-                                     "leave only the corrected term there (a descriptor "
-                                     "or backticks/punctuation inside the side reject it)"))
+                                     "leave only the corrected term there (quotes/backticks "
+                                     "wrapping the side are stripped, any left inside it "
+                                     "reject the entry)"))
             if dropped is not None and bullet_drops:
                 dropped.append(bullet_drops[0])
             continue
