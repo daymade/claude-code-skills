@@ -279,6 +279,67 @@ class TestDroppedCoverage:
         entries = extract_trap_entries("- **Brooklyn = 真实实体，不要改**\n")
         assert [e.kind for e in entries] == ["confirmed_correct"]
 
+    def test_whitespace_warning_never_prescribes_a_no_op(self):
+        """The remedy must not be "put it on its own bullet".
+
+        This branch fires only when the bullet yielded NOTHING scannable, so
+        moving the term to a line of its own cannot remove the whitespace
+        inside it. Both instances measured on real context files were already
+        alone on their bullet and still warned — a remedy the reader can
+        "apply" without anything changing is what teaches them to ignore the
+        whole report.
+        """
+        dropped = []
+        extract_trap_entries("- **PEST 框架 → test / pest / pass / past**\n", dropped)
+        assert len(dropped) == 1
+        reason = dropped[0][2]
+        assert "own bullet" not in reason
+
+    def test_backwards_bullet_is_named_and_its_variants_listed(self):
+        """A 正确 → 误识 bullet is the reverse of the documented **误识 → 正确**.
+        The warning must say so and list what swapping actually recovers, so
+        the prescription is verifiable rather than a guess."""
+        dropped = []
+        extract_trap_entries("- **PEST 框架 → test / pest / pass / past**\n", dropped)
+        reason = dropped[0][2]
+        assert "正确 → 误识" in reason
+        for v in ("test", "pest", "pass", "past"):
+            assert v in reason
+
+    def test_applying_the_swap_clears_the_warning(self):
+        """The end-to-end property: do what the message says, warning goes
+        away AND the trap becomes scannable. Without this the two assertions
+        above could both pass while the advice still did nothing."""
+        dropped = []
+        entries = extract_trap_entries(
+            "- **test / pest / pass / past → PEST 框架**\n", dropped)
+        assert dropped == []
+        assert [v for e in entries for v in e.from_variants] == [
+            "test", "pest", "pass", "past"]
+
+    def test_unflippable_whitespace_admits_the_gap_without_prescribing(self):
+        """When swapping would not help either, the honest output is the gap
+        itself — inventing a remedy is the defect this class keeps hitting."""
+        dropped = []
+        extract_trap_entries("- **人均 GDB → 人均 GDP**\n", dropped)
+        assert len(dropped) == 1
+        reason = dropped[0][2]
+        assert "cannot be scanned as written" in reason
+        assert "Swap" not in reason
+
+    def test_lost_to_side_says_what_to_change(self):
+        """"entry not scanned at all" told the reader it was lost, not what to
+        do about it; the fix is to leave only the corrected term.
+
+        Placeholder names on purpose: the real instance is a private person's
+        name, and a test fixture is a shipped artifact like any other.
+        """
+        dropped = []
+        extract_trap_entries("- **`张三` / `张叁` → 姓名 `李四`**\n", dropped)
+        assert any("leave only the corrected term" in r for _, _, r in dropped)
+        # And doing that clears it.
+        assert extract_trap_entries("- **`张三` / `张叁` → `李四`**\n", [])
+
     def test_warning_precedes_any_absent_line_in_the_report(self):
         """An unscanned bullet listed after "scanned, absent" reads as a clean
         bill of health for coverage it never had."""
