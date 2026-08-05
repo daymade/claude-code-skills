@@ -165,3 +165,126 @@ class TestReport:
         assert "「减」 → 剪 ×1" in report
         assert "no hit" in report
         assert "错甲" in report  # appears in the no-hit list
+
+
+class TestDroppedCoverage:
+    """The `dropped` channel names bullets the parser could not scan at all.
+
+    Its dangerous direction is the false positive: a warning that fires on
+    healthy context prose teaches the reader to skip the whole section, and a
+    warning nobody reads protects nothing. So most cases here pin shapes that
+    must stay SILENT; the two true positives exist to prove silence is not
+    achieved by disconnecting the channel. Every case passes `dropped`
+    explicitly — without it these branches are unreachable from the tests.
+    """
+
+    def test_healthy_production_context_raises_nothing(self):
+        """Negative control on this file's own production-shaped fixture."""
+        dropped = []
+        extract_trap_entries(CONTEXT, dropped)
+        assert dropped == []
+
+    def test_bad_variant_beside_a_good_one_stays_silent(self):
+        """Rejecting prose is _BAD_VARIANT's job; only a bullet that yields
+        nothing scannable is evidence of lost coverage."""
+        dropped = []
+        entries = extract_trap_entries("- **卖吸引/卖 新鲜 → 卖点**\n", dropped)
+        assert [v for e in entries for v in e.from_variants] == ["卖吸引"]
+        assert dropped == []
+
+    def test_annotation_quoting_another_rule_is_not_two_traps(self):
+        """**A → B（已入 `C→D`）** is a shape the guide blesses. Reading the raw
+        TO side flags it as unscanned while it also appears as a hit — one
+        report contradicting itself."""
+        dropped = []
+        entries = extract_trap_entries("- **报 → 爆（已入 `视频报的→视频爆的`）**\n", dropped)
+        assert len(entries) == 1 and entries[0].to_text == "爆"
+        assert dropped == []
+
+    def test_ascii_arrow_in_annotation_stays_silent(self):
+        """_BOLD_TRAP admits only 「→」, so the warning must not admit "->" —
+        it would announce bullets the parser never took in."""
+        dropped = []
+        extract_trap_entries("- **甲 → 乙（另见 A->B）**\n", dropped)
+        assert dropped == []
+
+    def test_two_real_traps_in_one_bullet_are_reported(self):
+        """True positive: the second pair never becomes a from-variant."""
+        dropped = []
+        extract_trap_entries("- **人神 → 人审 / 真品 → 精品**\n", dropped)
+        assert any("two traps" in reason for _, _, reason in dropped)
+
+    def test_latin_cjk_term_split_by_a_space_is_reported(self):
+        """True positive: a Latin+CJK compound is a real term that whitespace
+        makes inexpressible. Plus: the remedy text must not prescribe a fix
+        that does not exist — no FROM variant can carry whitespace at all."""
+        dropped = []
+        entries = extract_trap_entries("- **PEST 框架 → 测试框架**\n", dropped)
+        assert entries == []
+        assert dropped != []
+        assert all("without spaces" not in reason for _, _, reason in dropped)
+
+    def test_han_only_prose_with_a_space_stays_silent(self):
+        """A run of Han characters split by a space is prose punctuation, not a
+        term — nothing was ever a candidate, so there is no coverage gap. This
+        is the false positive measured on real context files; length does not
+        separate it (this example is under the 12-char cap)."""
+        dropped = []
+        entries = extract_trap_entries("- **单母题固定成本 800 → 80 元**\n", dropped)
+        assert entries == []
+        assert dropped == []
+
+    def test_one_bullet_reports_at_most_one_line(self):
+        """Three producers can fire on one bullet. Counting tuples instead of
+        bullets inflated the header ("5 traps NOT scanned" for 3 bullets) and
+        sent the reader to fix the same line twice."""
+        dropped = []
+        extract_trap_entries("- **概率 承担 → 概率程度 / 侧无 → 测无**\n", dropped)
+        assert len(dropped) <= 1
+
+    def test_ascii_arrow_bullet_is_reported_not_swallowed(self):
+        """A bullet written with "->" is invisible to _BOLD_TRAP, so it produces
+        no entry, no hit and no absent line — the most complete silent loss, and
+        the one an author is least likely to spot because it renders fine."""
+        dropped = []
+        entries = extract_trap_entries("- **甲 -> 乙**\n", dropped)
+        assert entries == []
+        assert len(dropped) == 1 and "ASCII" in dropped[0][2]
+
+    def test_ascii_arrow_inside_a_parsed_bullet_stays_silent(self):
+        """The line parsed fine via 「→」; the "->" is just annotation text."""
+        dropped = []
+        entries = extract_trap_entries("- **甲 → 乙（另见 A->B）**\n", dropped)
+        assert len(entries) == 1
+        assert dropped == []
+
+    def test_annotation_example_of_the_same_rule_stays_silent(self):
+        """**码 → 嘛（页码→页嘛）** spells the same rule out in a longer word.
+        Both annotation sides contain the main pair, so it is an example — not
+        a second trap. Measured as a false positive on a real context file."""
+        dropped = []
+        extract_trap_entries("- **码 → 嘛（页码→页嘛）**\n", dropped)
+        assert dropped == []
+
+    def test_annotation_defining_a_new_trap_is_reported(self):
+        """No reference marker and no containment: the second pair is a trap
+        the FROM-side regex never reaches."""
+        dropped = []
+        extract_trap_entries("- **报 → 爆（另有 真品 → 精品）**\n", dropped)
+        assert any("annotation holds another" in r for _, _, r in dropped)
+
+    def test_keep_word_synonym_is_recognised_as_confirmed(self):
+        """不要改 means the same as 勿修; a synonym outside the whitelist made the
+        whole record vanish silently."""
+        entries = extract_trap_entries("- **Brooklyn = 真实实体，不要改**\n")
+        assert [e.kind for e in entries] == ["confirmed_correct"]
+
+    def test_warning_precedes_any_absent_line_in_the_report(self):
+        """An unscanned bullet listed after "scanned, absent" reads as a clean
+        bill of health for coverage it never had."""
+        dropped = []
+        ctx = "- **PEST 框架 → 测试框架**\n- **减 → 剪**\n"
+        entries = extract_trap_entries(ctx, dropped)
+        report = format_report(entries, scan_text("无关的一行。", entries),
+                               dropped=dropped)
+        assert report.index("NOT scanned") < report.index("absent")

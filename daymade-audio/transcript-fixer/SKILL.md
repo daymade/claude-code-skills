@@ -585,6 +585,25 @@ After this, every `--stage 1` run automatically merges roster corrections
 roster fills gaps without overriding hand-tuned entries. See
 `scripts/core/people_roster.py` for the parser.
 
+**Precedence has three layers, and the third one is domain-scoped while the
+roster is global** — the asymmetry is what surprises people:
+
+1. A DB rule active in the run's domain wins.
+2. Otherwise the roster supplies the pair.
+3. **Unless** the pair is disabled in the run's domain — then the roster copy is
+   suppressed too, and the run prints `🚫 People roster: N variant(s) suppressed`.
+
+Layer 3 is per-domain, so retiring a pair with `--report-false-positive
+--domain A` does **not** retire it under `--domain B`: the roster is global and
+nothing vetoes it there, so the rule keeps firing in B. That is intended (a
+false positive in one domain is often correct in another), but it means "I
+disabled it and it still fires" almost always means *a different domain* —
+check that before editing the roster, which stops the pair everywhere at once,
+including in other projects sharing the same file. `--report-false-positive`
+now names the domains where the pair is still active, and exits `3` (already
+disabled here) or `4` (roster-only, no DB row to disable) so automation can
+tell those apart from a real failure.
+
 **When to use the roster vs `--add` to DB:**
 
 | Person | Go to | Why |
