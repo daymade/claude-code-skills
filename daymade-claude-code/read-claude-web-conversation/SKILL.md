@@ -309,6 +309,75 @@ sandbox-created file by replaying its `create_file` plus every later
 `str_replace`, and refuses to emit anything if a replacement is missing or
 ambiguous rather than handing back stale content.
 
+### Completion check — render is not done while files remain
+
+`render_transcript.py` prints two lines to stderr when it writes a transcript.
+Read **both** before declaring the render finished:
+
+```
+fidelity: 143,088/143,088 chars rendered (100.0%) across 7 message(s)
+files: 2 downloadable file(s) in this conversation — the transcript names them but does NOT carry the bytes, so a text-only export is an INCOMPLETE archive. ...
+```
+
+The `fidelity:` line is the retention proof. The `files:` line is the
+**completion signal**: if it reports any files, the transcript references them
+by name but does not contain their bytes — a text-only export is an incomplete
+archive. The whole reason this line lives on the same stderr stream as
+`fidelity:` is that completion-drive otherwise sees `100%` and stops before the
+files are pulled, which is exactly how a text export gets mistaken for a full
+archive. (No `files:` line at all means the conversation carries no downloadable
+files; the render is genuinely complete on its own.)
+
+**So when `files:` reports N > 0, downloading them is part of this step, not an
+optional follow-up.** A user who said "archive / export / 拉到本地" asked for a
+complete archive; handing them the transcript while the files it references sit
+un-downloaded is handing them an incomplete one. (`--list-files` / `--extract-file`
+never print this notice — they return before the render branch.)
+
+Use [scripts/download_files.js](scripts/download_files.js) to inventory and pull
+every upload, assistant image, and sandbox deliverable through the correct
+endpoint family. The script is channel-agnostic JS; run it through the same
+channel you fetched with. CDP (one call, result on stdout):
+
+```bash
+# 1. Fire the inventory/download
+uv run --with websockets python scripts/cdp_channel.py eval \
+    --match <conversation-or-snapshot-id> --js scripts/download_files.js
+# 2. Poll until the status line is no longer 'pending' (a few seconds)
+echo "window.__dlStatus" > /tmp/check_dl.js
+uv run --with websockets python scripts/cdp_channel.py eval \
+    --match <conversation-or-snapshot-id> --js /tmp/check_dl.js
+# 3. Extract one file at a time (repeat for each name the status line listed)
+echo "window.__dl['filename.png']" > /tmp/read_one.js
+uv run --with websockets python scripts/cdp_channel.py eval \
+    --match <conversation-or-snapshot-id> --js /tmp/read_one.js 2>/dev/null \
+  | tr -d '\n' | base64 -d > filename.png
+```
+
+AppleScript channel — the realistic fallback when CDP is unavailable (Step 0 says
+CDP is usually ignored on the default profile), so it gets a worked example too,
+not just a swap pointer:
+```bash
+# 1. Fire the inventory/download
+osascript scripts/runjs.applescript scripts/download_files.js <conversation-id>
+# 2. Poll until the status line is no longer 'pending' (a few seconds)
+echo "window.__dlStatus" > /tmp/check_dl.js
+osascript scripts/runjs.applescript /tmp/check_dl.js <conversation-id>
+# 3. Extract one file at a time (repeat for each name the status line listed)
+echo "window.__dl['filename.png']" > /tmp/read_one.js
+osascript scripts/runjs.applescript /tmp/read_one.js <conversation-id> \
+  2>/dev/null | tr -d '\n' | base64 -d > filename.png
+```
+Extension channel: run the script body via `javascript_tool` and page `window.__dl`
+out in ~16k slices, like any other large return.
+
+Verify each file with `file <name>` (magic bytes — expect `PNG image data`,
+`Microsoft Excel 2007+`, not `ASCII text`) and compare its byte size against the
+metadata in the conversation JSON (`files[].size_bytes` for uploads; the status
+line from `download_files.js` for deliverables). Save downloads next to the
+transcript — conventionally a sibling `<transcript-basename>_附件/` directory —
+and repoint the transcript's image references at the local copies.
+
 ## Step 5 — Paging (extension channel only)
 
 `javascript_tool` truncates large return values. Fetch the `chars` count first,
@@ -372,43 +441,18 @@ and a troubleshooting table: [references/claude-web-api-extraction.md](reference
 
 ## Next Step
 
-Once you have the transcript, suggest the natural follow-up — opt-in, never
-automatic:
+Once the transcript is written **and its files are downloaded** — the `files:`
+stderr line from Step 4's Completion check is what tells you whether there were
+any, and a text-only export stays incomplete while that count is non-zero —
+suggest the natural follow-up. Opt-in, never automatic:
 
 ```
-Got the full conversation (<N> messages, "<title>", <retention>% fidelity).
+Got the full conversation (<N> messages, "<title>", <retention>% fidelity);
+<N> files downloaded to <dir>.
 
 Options:
 A) Clean it up — run transcript-fixer if it's ASR/garbled (only if relevant)
 B) Summarize / extract the decisions and action items
 C) Save it to a file — tell me where
-D) Download the conversation's files (uploads / deliverables / charts) — **done by default if files exist**
-E) Nothing else — you just needed it read
+D) Nothing else — you just needed it read
 ```
-
-If the transcript showed file activity, start with D; the text export alone is not
-a complete archive.
-
-### Download the conversation's files
-
-Use [scripts/download_files.js](scripts/download_files.js) to inventory and pull
-every upload, assistant image, and sandbox deliverable through the correct
-endpoint family. It is fire-and-poll; for CDP or AppleScript, run it, poll
-`window.__dlStatus`, then read each entry from `window.__dl` as base64:
-
-```bash
-# 1. Fire the inventory/download step
-osascript scripts/runjs.applescript scripts/download_files.js <conversation-id>
-
-# 2. Poll until status is no longer 'pending'
-#    (after a few seconds, run a one-liner that returns window.__dlStatus)
-
-# 3. Extract one file (repeat for each)
-echo "window.__dl['filename.pptx']" > /tmp/read_one.js
-osascript scripts/runjs.applescript /tmp/read_one.js <conversation-id> \
-  2>/dev/null | tr -d '\n' | base64 -d > filename.pptx
-```
-
-Verify each file with `file <name>` and compare its byte size against the
-metadata in the conversation JSON (`files[].size_bytes` for uploads; the
-status line from `download_files.js` for deliverables).

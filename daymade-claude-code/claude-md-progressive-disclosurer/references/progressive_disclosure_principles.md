@@ -473,7 +473,10 @@ LLM 注意力呈 U 型分布：开头和末尾强，中间弱。只放中间会�
 ### 正确做法（v1.3.1 修复，优先级：案例 8 胜）
 1. 整段先 verbatim 移 L2，规则句原句一字不改
 2. L1 的 ✅/🚫 + Why 是**派生重述**，与 L2 verbatim 原句**共存、不取代**
-3. 判据：优化后 grep 原规则句逐字节文本应仍命中（在 L2 verbatim 块）
+3. 判据：优化后原规则句的**逐字节文本**应仍完整存在于 L2 verbatim 块。
+   ⚠️ **别用 grep 验这条**（SKILL.md 反模式 6 与 Step 5.0 表已订正）：原句多行时
+   `grep -F` 把它拆成多个 pattern 按行 OR，**丢掉后两行照样 exit 0** —— 会给一次有损搬运
+   出具无罪证明（BSD 与 GNU 实测同）。用 python3 整串子串判断，要求连续完整匹配。
 
 ### 教训
 **"重述"是优化，"原句消失"是删除——混合段落里二者只差一念。** 原则 4/5 管的是 L1 *怎么呈现*规则，从不授权*销毁*信号原句的 verbatim 副本。当一段话同时是规则又是 case study，先 verbatim 落 L2，再在 L1 派生重述。
@@ -711,9 +714,12 @@ proxy、缩略图渲染…），**没有任何一个在拦 bypass 参数**。
 > ⚠️ **本附录同受 5.0 约束**。下面是硬化后的版本；**旧版（`grep -q "$heading" CLAUDE.md docs/references/*.md`）
 > 有两个会误报的缺陷，实测在一棵「什么都没丢」的树上把三个真实存在的章节全判成 NOT FOUND**：
 > ① 标题当正则 —— `## [2026-07-26] 变更记录` 这种再普通不过的 changelog 写法直接
-> `grep: invalid character range` exit 2，被 `2>/dev/null` 吞掉后长得就像「没找到」；
-> ② `docs/references/*.md` 既不递归子目录、也不跟随 symlink，还在用户级布局
-> （`~/.claude/references/`）下**一个文件都匹配不到**。
+> exit 2 报错（BSD `invalid character range` / GNU `Invalid range end`），被 `2>/dev/null`
+> 吞掉后长得就像「没找到」；
+> ② `docs/references/*.md` **不递归子目录**，且在用户级布局（`~/.claude/references/`）下
+> **一个文件都匹配不到**（模式写死了）。
+> （⚠️ 订正一处早期误述：旧版**并非**不跟随 symlink —— glob 按名字命中 symlink 的 `.md` 后，
+> grep 对命令行显式参数是直接跟随的，实测 exit 0。旧版真正的缺陷就是上面这两条。）
 
 ```bash
 ORIG="${ORIG:?先设成 Step 1 那份 CLAUDE.md.bak.<时间戳>（或改动前的 ref 导出的文件）}"
@@ -729,13 +735,22 @@ REFDIRS=(CLAUDE.md docs/references ~/.claude/references)   # 按你的实际布�
   found=""
   for d in "${REFDIRS[@]}"; do
     [ -e "$d" ] || continue
-    if command find -L "$d" -type f -name '*.md' -exec /usr/bin/grep -qF -- "$heading" {} + 2>/dev/null; then
-      found=1; break
-    fi
+    # ⚠️ 必须判「输出非空」，**不能**用 `if find … -exec grep -qF {} +`：
+    #    find 匹配到 0 个候选文件时 -exec 根本不执行，find 自己 exit 0 → if 判真
+    #    → 只要 REFDIRS 里有一个「存在但没有 .md」的目录，**每个标题都会误报 ✓**，
+    #    包括真的缺失的那些（BSD 与 GNU 同）。实测触发：先 mkdir 了 references 还没写文件。
+    hit=$(command find -L "$d" -type f -name '*.md' -exec /usr/bin/grep -lF -- "$heading" {} + 2>/dev/null)
+    [ -n "$hit" ] && { found=1; break; }
   done
   [ -n "$found" ] && echo "✓ $heading" || echo "✗ NOT FOUND: $heading"
 done
 ```
+
+> ⚠️ **三个已知的假警报方向（都安全，但会白查一轮）**：① 标题带**尾随空格**时
+> `-F` 逐字节比对会判不命中；② `2>/dev/null` 会把「目录不可读」这类 exit 2 折进 NOT FOUND；
+> ③ 本脚本有 `-name '*.md'`，所以 canonical 家在**无扩展名文件或代码**里的章节会报 ✗
+> （这是标题筛查的有意取舍——与 D.1 相反，那里故意不过滤扩展名，因为它查的是内容点不是标题）。
+> 报 ✗ 时先肉眼核一下那个标题，别直接当丢失。
 
 > **跑之前标定**：先拿一个你确定还在的章节标题过一遍，它必须报 ✓。若它也报 ✗，
 > 是 `REFDIRS` 没写对（命令坏了），不是内容丢了。
