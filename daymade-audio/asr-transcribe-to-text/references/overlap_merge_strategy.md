@@ -1,5 +1,19 @@
 # Overlap-Merge Strategy: Why and How
 
+> **First check whether your server already solves this — several do, and better.**
+> vLLM's speech-to-text endpoint splits long audio itself, at the **quietest point inside
+> a ~100 ms window** with 1 s of overlap (`SpeechToTextConfig.min_energy_split_window_size`
+> / `overlap_chunk_second`). That sidesteps the problem described below rather than
+> repairing it: it doesn't cut mid-sentence in the first place, so there is no truncated
+> tail to stitch back together. Against such an endpoint, splitting client-side makes the
+> result *worse*, and the right fix for a rejected long file is raising the server's limits
+> — see SKILL.md, Path B.
+>
+> **This document applies when the endpoint won't take the whole file and can't be made
+> to**: it has a fixed context window or hard duration limit, it OOMs at the same input
+> length every time, or you have no permission to reconfigure it. That is a real and common
+> situation — the technique below is sound, it just isn't the first thing to reach for.
+
 ## The Problem with Naive Chunking
 
 When ASR transcribes audio in chunks, each chunk's last sentence gets **forcibly truncated**. The model closes the sentence at the chunk boundary even if the speaker is mid-sentence.
