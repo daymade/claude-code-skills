@@ -85,6 +85,35 @@ queue-operation content, attachment payloads, last prompts, system/summary
 content, and custom titles. Structural keys, UUIDs, tool-use IDs, and thinking
 signatures are excluded to avoid false positives.
 
+### `attachment` records: queued mid-work user input
+
+Text the user types while the assistant is still working does NOT land as a
+`type == "user"` record. It is stored as `type == "attachment"` with
+`attachment.type == "queued_command"`:
+
+```json
+{
+  "type": "attachment",
+  "timestamp": "2026-08-06T03:17:29.811Z",
+  "sessionId": "session-uuid",
+  "attachment": {
+    "type": "queued_command",
+    "prompt": "the text the user typed",
+    "commandMode": "prompt",
+    "origin": { "kind": "human" }
+  }
+}
+```
+
+- The payload field is `attachment.prompt` — a string, or (observed variant) a
+  list of content blocks. There is no `command` field.
+- `attachment.origin.kind` carries authorship: `"human"` = typed by the user;
+  `"peer"` = delivered from another agent/session; absent = harness
+  notifications (e.g. `<task-notification>`).
+- Interruptions carry the sharpest corrections by definition. An extractor that
+  only reads `type == "user"` silently drops them — observed 2026-08: one such
+  extractor lost 153 of a user's messages over a 7-day window.
+
 ### File-history snapshot
 
 Current Claude Code sessions can record a path-to-backup map separate from tool
@@ -241,6 +270,46 @@ for item in message_content:
     if item.get("type") == "text":
         text = item.get("text", "")
 ```
+
+## A user-role record is not necessarily user-authored text
+
+Record-level fields (`type == "user"`, `promptSource: "typed"`,
+`origin.kind == "human"`) only prove the text entered through the input box.
+They say nothing about who *authored* the content. Tasks that extract "what the
+user actually said" (verbatim prompt archives, quote collections) must filter
+five contamination classes on top of the structural fields (all observed
+2026-08 on a real 7-day corpus):
+
+1. **Command envelopes.** `<command-message>/<command-name>/<command-args>`
+   wrappers, and bare `/command` strings. The invocation is the user's action
+   but not their prose, and the expanded template body that may follow is
+   harness content. Route to an appendix rather than deleting: `command-args`
+   often carries real user words.
+2. **Hook/loop-injected boilerplate.** Fixed instruction blocks injected by
+   hooks or scheduled loops. Two shapes: standalone records, AND the same block
+   appended to the tail of the user's own sentence — a prefix-only filter
+   leaves the second shape in place.
+3. **System placeholders inside text.** `[Image #N]` tokens are inserted by the
+   harness into `text` blocks; strip them and track the image count separately.
+4. **Whole-document pastes.** Logs, code, or documentation pasted as a message.
+   A splitter that held up on a real corpus: normalized length ≥ 2000 chars AND
+   ≥ 60% ASCII — long voice-dictation messages stay below the ASCII bar and are
+   not misfired.
+5. **Agent-voiced re-injection.** Text authored by an assistant (a parallel
+   session, a review agent, a scheduled loop) arriving as a user record with
+   `promptSource: "typed"` and `origin.kind: "human"` — record fields cannot
+   detect it; only content matching can. Compare against a corpus of assistant
+   texts, restricted to agent texts *earlier* than the user record (an agent
+   echoing the user's words later must not subtract the user's original).
+   Beware partial rewrites: the title may match an agent text verbatim while
+   the body diverges, so exact full-text equality and prefix matching both miss
+   it; verbatim containment catches the verbatim form only.
+
+Records that ARE reliably not user prose and safe to drop on structure alone:
+`promptSource: "system"` or `"sdk"`, `isMeta: true`, `tool_result` blocks,
+`[Request interrupted by user …]` markers, task notifications, and
+compact-summary continuations ("This session is being continued from a
+previous conversation …").
 
 ## Field Locations
 
