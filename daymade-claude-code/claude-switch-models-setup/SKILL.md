@@ -47,11 +47,19 @@ When the user says something like "set up Claude Code profiles" or "I want to us
 
 2. **Install the profile manager scripts — symlink them, do not copy**
 
-   On a machine that has this repo checked out (the maintainer case), link each
-   script instead of copying it:
+   On a machine that has this repo checked out (the maintainer case), run the
+   bundled installer — it does exactly what the manual form below does:
 
    ```bash
-   REPO=<path-to-this-repo>/daymade-claude-code/claude-switch-models-setup
+   <absolute-path-to-this-repo>/daymade-claude-code/claude-switch-models-setup/scripts/setup.sh
+   ```
+
+   Or link them by hand. `REPO` **must be an absolute path**: with a relative
+   one every command below still succeeds and exits 0, leaving five dangling
+   links that break `csk` and the LaunchAgent with no error to trace.
+
+   ```bash
+   REPO=<absolute-path-to-this-repo>/daymade-claude-code/claude-switch-models-setup
    DST=~/.config/claude-switch-models-setup
    mkdir -p "$DST"
    for f in scripts/claude-profiles.sh \
@@ -61,29 +69,45 @@ When the user says something like "set up Claude Code profiles" or "I want to us
             scripts/sync-profile-settings.py; do
      ln -sf "$REPO/$f" "$DST/$(basename "$f")"
    done
-   chmod +x "$REPO"/scripts/*.sh "$REPO"/scripts/*.py
    ```
 
    The five paths are spelled out rather than globbed so that reading this file
-   tells you which scripts exist and where — `scripts/*.sh` would not.
+   tells you which scripts exist and where — `scripts/*.sh` would not. No
+   `chmod` step: all five are committed executable, so setting the bit again
+   would only dirty the checkout with mode changes that then ride into somebody
+   else's commit.
 
    **Why symlinks and not `cp`:** `~/.config/…` is what actually runs — the
    LaunchAgent and `claude-profile` invoke scripts by that path — while this
    repo holds their source. Copies drift, and nothing about a deployed copy
    looks different from its source, so "am I editing the SSOT?" is not a
-   judgement anyone reliably makes. Measured on this machine before the switch:
+   judgement anyone reliably makes. Measured on one machine before the switch:
    a lock-placement fix sat in the repo for 26 days while the deployed copy kept
    running the bug it fixed, and two cleanup routines written straight into the
    deployed copy never reached version control at all — **drift in both
-   directions, silently.** A symlink makes both impossible: there is only one
-   file. It also lets `sync-local-skill-sources.py` locate its own source repo
-   by resolving its own path, instead of falling back to guessing.
+   directions, silently.** A link removes both, *for as long as it stays a
+   link* — an atomic-save editor, an `rsync` or a stray `cp` turns one back into
+   a real file without saying so, which is why this is worth re-checking rather
+   than declaring solved. It also lets `sync-local-skill-sources.py` locate its
+   own source repo by resolving its own path, instead of falling back to
+   guessing.
 
-   `hook-health-check.sh` (SessionStart) flags any of these that becomes a real
-   file again, or whose link goes dangling.
+   Worth re-checking how? Any periodic check works; there is none bundled with
+   this skill. One line, run wherever you keep such things:
 
-   On a machine **without** the repo, copy them — and accept that repo fixes
-   will not reach it until you copy again.
+   ```bash
+   for f in ~/.config/claude-switch-models-setup/*.py ~/.config/claude-switch-models-setup/*.sh; do
+     [ -L "$f" ] && [ -e "$f" ] || echo "not a live link: $f"
+   done
+   ```
+
+   If one has become a real file, **move it aside before re-linking** — it may
+   hold edits that exist nowhere else, which is the whole problem being
+   described: `mv "$f" "$f.local-edits" && ln -sf <source> "$f"`, then diff.
+
+   On a machine **without** the repo, copy the five scripts out of this skill
+   bundle instead — and accept that repo fixes will not reach it until you copy
+   again.
 
 3. **Add shell integration**
    - Source the profile manager in `~/.zshrc` or `~/.bashrc`
