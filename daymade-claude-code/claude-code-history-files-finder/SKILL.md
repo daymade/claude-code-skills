@@ -302,12 +302,14 @@ Produce a reading page of what the user actually typed — every user message
 across all homes and archives, with harness noise routed to appendices:
 
 ```bash
-python3 scripts/extract_user_messages.py /tmp/my-words --days 7
+python3 scripts/extract_user_messages.py --days 7
 ```
 
-Writes `/tmp/my-words.html` (primary) and `/tmp/my-words.md`. Useful flags:
-`--group-by project|day` (default `project`), `--min-dup N` (boilerplate
-frequency threshold), `--home <path>` (exact scope, repeatable).
+Writes `~/.claude-flow-viewer/user-words.html` (primary) and `.md` by default —
+a persistent path; avoid `/tmp` (the OS purges it). Pass an `OUT_BASE`
+positional to write elsewhere. Useful flags: `--group-by project|day`
+(default `project`), `--min-dup N` (boilerplate frequency threshold),
+`--home <path>` (exact scope, repeatable).
 
 The hard part of this task is not parsing, it is *authorship*: a `user` record
 is not necessarily user-authored. The extractor implements the five
