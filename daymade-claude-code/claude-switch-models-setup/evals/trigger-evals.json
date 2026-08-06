@@ -9,6 +9,7 @@
   {"query": "帮我把 StepFun 也加到我的多模型 Claude 配置里，模板怎么填", "should_trigger": true},
   {"query": "deepseek profile 看不到我在默认 profile 装的那个 skill，是怎么回事", "should_trigger": true},
   {"query": "想让 Kimi K3 用上 1M 上下文，那个 [1m] 标记加在哪几个字段", "should_trigger": true},
+  {"query": "Set up separate MiniMax-M3 and MiniMax-M2.7 Claude Code profiles for the global and China endpoints.", "should_trigger": true},
   {"query": "帮我写个 Python 脚本，根据用户输入切换调 OpenAI 还是 Anthropic 的 API", "should_trigger": false},
   {"query": "OpenRouter 怎么在一个请求里同时让多个模型回答做对比", "should_trigger": false},
   {"query": "Claude Code 在公司代理后面报 ECONNREFUSED 连不上 api.anthropic.com", "should_trigger": false},
