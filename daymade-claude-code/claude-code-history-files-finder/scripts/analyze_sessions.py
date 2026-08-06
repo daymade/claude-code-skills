@@ -20,6 +20,7 @@ import hashlib
 import json
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
@@ -49,7 +50,9 @@ from _core.sources import (  # noqa: E402
 )
 from _core.text import (  # noqa: E402
     SearchSegment,
+    extract_text,
     files_possibly_matching,
+    is_automated_title,
     iter_jsonl,
     keywords_are_raw_byte_safe,
     searchable_segments,
@@ -65,6 +68,194 @@ def _record_identity(record: Dict[str, Any]) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return "sha256:" + hashlib.sha256(canonical).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# Session tail classification (`triage` command) — see references/
+# session_file_format.md "Detect Session Interruption" and "Tool Use / Tool
+# Result Ordering" for the reasoning this implements.
+# ---------------------------------------------------------------------------
+
+# Structural terminal states. This is deliberately NOT a judgment about
+# whether a human reply is expected — "done" only means the last assistant
+# turn produced a normal text block, which is equally true of a session that
+# fully wrapped up and one that surfaced a finding and is waiting for a
+# response. Reading last_assistant_text is the caller's job.
+TAIL_INTERRUPTED_EXPLICIT = "interrupted_explicit"
+TAIL_NET_ERROR = "net_error"
+TAIL_STUCK_NO_RESULT = "stuck_no_result"
+TAIL_DONE = "done"
+TAIL_EMPTY = "empty"
+
+_INTERRUPTED_MARKER = "[Request interrupted by user"
+_NET_ERROR_PREFIX = "API Error"
+
+
+@dataclass
+class SessionTail:
+    """Structural classification of how a session's final turn ended."""
+
+    kind: str
+    last_user_text: str
+    last_assistant_kind: str  # "text" | "tool_use" | "thinking_only" | "none"
+    last_assistant_text: str
+    last_assistant_timestamp: Optional[float]
+
+
+def classify_session_tail(path: Path) -> SessionTail:
+    """Classify a session's ending state by streaming its records once.
+
+    Resolves tool_use/tool_result across the *whole* file as a true
+    set-difference, not an incremental add/discard in file order: a
+    tool_result can be written before the tool_use record it answers (see
+    "Tool Use / Tool Result Ordering" in references/session_file_format.md).
+    A single-pass ``discard-then-add`` was tried first and is NOT actually
+    order-independent — ``discard()`` on an id not yet seen is a silent
+    no-op, so a tool_result appearing before its tool_use left the id
+    "pending" even though it was genuinely resolved (verified against real
+    session data, 2026-08: 11/14 files hitting this ordering had their
+    final `kind` flipped). Accumulating two never-mutated sets and diffing
+    them once at the end is immune to this, because neither operation can
+    ever silently miss the other regardless of which came first in the file.
+
+    Classification is also computed from the RAW content of the LAST
+    assistant record only, not from state that could carry over from an
+    earlier turn: a final turn that produces no text and no tool_use (e.g.
+    thinking-only) previously left `last_assistant_kind`/`last_assistant_text`
+    holding an earlier turn's already-answered reply, misreporting a session
+    that crashed before responding to its latest question as `done`.
+
+    The interruption marker is checked the same way: `tail_is_interrupt` is
+    reset by any later user or assistant record, so it only survives to the
+    end of the loop when the marker is the LAST relevant record in the file.
+    A mid-session Ctrl+C that the conversation continued past is not a tail
+    interruption — treating "marker appears anywhere" as equivalent to "the
+    session ended on interruption" was tried first and false-positived on
+    exactly that shape (verified against real session data, 2026-08).
+    """
+    all_tool_use_ids: set = set()
+    all_resolved_tool_use_ids: set = set()
+    last_user_text = ""
+    last_assistant_content: Any = None
+    last_assistant_timestamp: Optional[float] = None
+    tail_is_interrupt = False
+
+    for record in iter_jsonl(path):
+        record_type = record.get("type")
+        message = record.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+
+        if record_type == "user" and not record.get("isMeta"):
+            if isinstance(content, str) and _INTERRUPTED_MARKER in content:
+                tail_is_interrupt = True
+                continue
+            tail_is_interrupt = False
+            if isinstance(content, str):
+                last_user_text = content
+            elif isinstance(content, list):
+                is_tool_result_only = bool(content) and all(
+                    isinstance(block, dict) and block.get("type") == "tool_result"
+                    for block in content
+                )
+                for block in content:
+                    if not isinstance(block, dict):
+                        continue
+                    if block.get("type") == "tool_result":
+                        tool_use_id = block.get("tool_use_id")
+                        if tool_use_id is not None:
+                            all_resolved_tool_use_ids.add(tool_use_id)
+                if not is_tool_result_only:
+                    text = extract_text(content)
+                    if text:
+                        last_user_text = text
+
+        elif record_type == "assistant":
+            tail_is_interrupt = False
+            parsed_ts = parse_timestamp(record.get("timestamp"))
+            if parsed_ts is not None:
+                last_assistant_timestamp = parsed_ts
+            last_assistant_content = content
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        tool_use_id = block.get("id")
+                        if tool_use_id is not None:
+                            all_tool_use_ids.add(tool_use_id)
+
+    pending_tool_use_ids = all_tool_use_ids - all_resolved_tool_use_ids
+
+    last_assistant_kind = "none"
+    last_assistant_text = ""
+    final_turn_has_pending_tool = False
+    if isinstance(last_assistant_content, list):
+        text_blocks = [
+            block.get("text", "")
+            for block in last_assistant_content
+            if isinstance(block, dict) and block.get("type") == "text"
+        ]
+        tool_blocks = [
+            block
+            for block in last_assistant_content
+            if isinstance(block, dict) and block.get("type") == "tool_use"
+        ]
+        joined_text = "\n".join(part for part in text_blocks if part)
+        final_turn_has_pending_tool = any(
+            block.get("id") in pending_tool_use_ids for block in tool_blocks
+        )
+        if final_turn_has_pending_tool:
+            last_assistant_kind = "tool_use"
+            pending_names = [
+                block.get("name", "?")
+                for block in tool_blocks
+                if block.get("id") in pending_tool_use_ids
+            ]
+            last_assistant_text = f"[tool_use:{pending_names[-1]}]"
+        elif joined_text:
+            last_assistant_kind = "text"
+            last_assistant_text = joined_text
+        elif tool_blocks:
+            # Every tool_use in this turn already has a matching result
+            # elsewhere in the file, but no further assistant reply followed
+            # it — the harness likely stopped between the tool result
+            # landing and the model's next turn being captured. Distinct
+            # from `final_turn_has_pending_tool`: nothing is unresolved, but
+            # nothing was said either, so this is not a normal `done` reply.
+            last_assistant_kind = "tool_use"
+            last_assistant_text = f"[tool_use:{tool_blocks[-1].get('name', '?')}] (resolved, no further reply)"
+        else:
+            last_assistant_kind = "thinking_only"
+            last_assistant_text = (
+                "(final assistant turn has no text or tool_use block — "
+                "thinking-only or empty content)"
+            )
+    elif isinstance(last_assistant_content, str) and last_assistant_content:
+        last_assistant_kind = "text"
+        last_assistant_text = last_assistant_content
+
+    if tail_is_interrupt:
+        kind = TAIL_INTERRUPTED_EXPLICIT
+    elif last_assistant_kind == "none":
+        kind = TAIL_EMPTY
+    elif last_assistant_kind == "text" and last_assistant_text.startswith(
+        _NET_ERROR_PREFIX
+    ):
+        kind = TAIL_NET_ERROR
+    elif last_assistant_kind == "text":
+        kind = TAIL_DONE
+    else:
+        # tool_use (pending or just-resolved-with-no-followup) and
+        # thinking_only all mean the same thing for triage purposes: the
+        # final turn produced no textual reply, so the model was still
+        # working when the file stopped.
+        kind = TAIL_STUCK_NO_RESULT
+
+    return SessionTail(
+        kind=kind,
+        last_user_text=last_user_text,
+        last_assistant_kind=last_assistant_kind,
+        last_assistant_text=last_assistant_text,
+        last_assistant_timestamp=last_assistant_timestamp,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1255,6 +1446,92 @@ def main():
     )
     _add_home_flags(list_parser)
 
+    # Triage command — classify how sessions in scope ended (crash recovery,
+    # backlog audit). Distinct from `list`: prints the full last-assistant
+    # text so a human/agent can judge whether a reply is still expected,
+    # rather than a truncated title.
+    triage_parser = subparsers.add_parser(
+        "triage",
+        help="Classify how sessions in a time window/project ended "
+        "(interrupted / net-error / stuck-on-tool / done) with full tail text",
+    )
+    triage_parser.add_argument(
+        "project_path",
+        nargs="?",
+        help="Project path (omit when using --all-projects)",
+    )
+    triage_parser.add_argument(
+        "--all-projects",
+        action="store_true",
+        help="Sweep every project across all sources instead of one project.",
+    )
+    triage_parser.add_argument(
+        "--exclude-session",
+        action="append",
+        metavar="ID",
+        default=[],
+        help="Exclude a session id (repeatable) — e.g. the current session.",
+    )
+    triage_parser.add_argument(
+        "--include-automated",
+        action="store_true",
+        help="Include sessions whose opening prompt matches the generic "
+        "smoke-test pattern ('reply/respond exactly ...'). Excluded by "
+        "default. This does NOT catch project-specific automation (e.g. a "
+        "git hook that always opens with the same review prompt) — use "
+        "--exclude-title-prefix for that; it is deliberately not hardcoded "
+        "here since the wording is per-project, not a Claude Code convention.",
+    )
+    triage_parser.add_argument(
+        "--exclude-title-prefix",
+        action="append",
+        metavar="TEXT",
+        default=[],
+        help="Exclude sessions whose opening prompt starts with TEXT "
+        "(repeatable, case-sensitive). Use this for a project's own "
+        "automation convention, e.g. a code-review hook that always opens "
+        "with the same fixed prompt — these otherwise dominate a triage "
+        "pass because they end in a routine structured tool call, not an "
+        "interruption.",
+    )
+    triage_parser.add_argument(
+        "--kind",
+        action="append",
+        choices=[
+            TAIL_INTERRUPTED_EXPLICIT,
+            TAIL_NET_ERROR,
+            TAIL_STUCK_NO_RESULT,
+            TAIL_DONE,
+            TAIL_EMPTY,
+        ],
+        metavar="KIND",
+        help="Restrict to one or more tail kinds (repeatable). Default: all "
+        "kinds. Note 'done' includes sessions that gave a real reply and may "
+        "still be awaiting a response — read last_assistant_text to judge "
+        "that; 'done' is not a claim that nothing is outstanding.",
+    )
+    triage_parser.add_argument(
+        "--tail-chars",
+        type=int,
+        default=4000,
+        help="Max characters of the last assistant message to print "
+        "(default: 4000; 0 = full text, no truncation).",
+    )
+    triage_parser.add_argument(
+        "--limit",
+        type=int,
+        default=200,
+        help="Max sessions to print, 0 = no limit (default: 200). This is a "
+        "print-time cap, not a scan-time one: every session in scope is "
+        "still classified before --limit or --kind trims the output, so "
+        "--kind does not reduce cost the way narrowing --from-date/--to-date "
+        "does. The 200 default exists specifically to stop an accidentally "
+        "unscoped `--all-projects` with no date bound from dumping tens of "
+        "thousands of lines; pass --limit 0 to explicitly opt into an "
+        "unbounded dump once you know the scope is narrow.",
+    )
+    _add_home_flags(triage_parser)
+
     # Search command
     search_parser = subparsers.add_parser("search", help="Search sessions for keywords")
     search_parser.add_argument(
@@ -1406,6 +1683,119 @@ def main():
                 print(f"   Physical copies searched by keyword queries: {len(ref['copies'])}")
             print(f"   Path: {session}")
             print()
+
+    elif args.command == "triage":
+        _validate_project_scope(args, parser)
+        from_timestamp, to_timestamp = _parse_date_window(args, parser)
+        analyzer = _analyzer_or_exit(args)
+        source_summary = _source_summary(analyzer.sources)
+        sessions = _collect_sessions(analyzer, args)
+        for warning in analyzer.warnings:
+            print(f"Warning: {warning}", file=sys.stderr)
+
+        unknown = 0
+        if from_timestamp is not None or to_timestamp is not None:
+            # Deliberately `timestamp_in_window` on updated_at, NOT
+            # `range_overlaps_window` on the full [created_at, updated_at]
+            # span: triage asks "did this session's momentum stop around
+            # this boundary," so a session that merely happened to be
+            # running through the window but kept going for hours/days
+            # afterward is not a candidate, even though its range overlaps
+            # the window. (list's browsing use case wants the overlap
+            # semantics; triage does not — verified against a real reboot
+            # window, where overlap swept in every still-running session.)
+            filtered = []
+            for ref in sessions:
+                if ref["updated_at"] is None:
+                    unknown += 1
+                    continue
+                if timestamp_in_window(ref["updated_at"], from_timestamp, to_timestamp):
+                    filtered.append(ref)
+            sessions = filtered
+
+        # One lightweight scan per session gets both the title (for automated
+        # exclusion) and cwd (for display) — cheaper than two passes, and
+        # find_*_sessions()'s ref dict does not carry cwd itself.
+        exclude_prefixes = tuple(args.exclude_title_prefix)
+        excluded_generic = 0
+        excluded_prefix = 0
+        scanned = []
+        for ref in sessions:
+            summary = scan_claude_session(ref["path"])
+            if not args.include_automated and is_automated_title(summary.title):
+                excluded_generic += 1
+                continue
+            if exclude_prefixes and summary.title.startswith(exclude_prefixes):
+                excluded_prefix += 1
+                continue
+            scanned.append((ref, summary))
+        excluded_automated = excluded_generic + excluded_prefix
+
+        allowed_kinds = set(args.kind) if args.kind else None
+        results = []
+        for ref, summary in scanned:
+            tail = classify_session_tail(ref["path"])
+            if allowed_kinds is not None and tail.kind not in allowed_kinds:
+                continue
+            results.append((ref, summary, tail))
+        results.sort(
+            key=lambda triple: triple[0]["updated_at"]
+            if triple[0]["updated_at"] is not None
+            else float("-inf"),
+            reverse=True,
+        )
+
+        # Deliberately one empty-result check, run AFTER --kind filtering,
+        # not two separate ones (scanned-empty vs. results-empty) that used
+        # to give different exit codes/messages for the same "nothing to
+        # show" outcome depending on which filter zeroed it (independent
+        # review, 2026-08).
+        if not results:
+            print("No sessions matched this triage scope.")
+            print(
+                f"(searched {len(analyzer.sources)} source(s): {source_summary}; "
+                f"scanned {len(scanned)}, excluded {excluded_generic} generic-automated "
+                f"+ {excluded_prefix} --exclude-title-prefix)",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        total_matched = len(results)
+        if args.limit:
+            results = results[: args.limit]
+
+        print(
+            f"Triaged {len(results)} session(s)"
+            + (f" of {total_matched} matched" if len(results) < total_matched else "")
+            + f" (excluded {excluded_generic} generic-automated + "
+            f"{excluded_prefix} --exclude-title-prefix); "
+            f"searched {len(analyzer.sources)} source(s): {source_summary}"
+        )
+        if unknown:
+            print(
+                f"Warning: excluded {unknown} session(s) without an internal "
+                "timestamp; file mtime was not used as a fallback.",
+                file=sys.stderr,
+            )
+        print()
+
+        for ref, summary, tail in results:
+            updated_at = ref["updated_at"]
+            when = format_timestamp(updated_at) if updated_at is not None else "(unknown)"
+            print("=" * 88)
+            print(ref["session_id"])
+            print(f"  last update: {when}")
+            print(f"  cwd:         {summary.cwd or '(unknown)'}")
+            print(f"  kind:        {tail.kind}")
+            last_user_preview = " ".join(tail.last_user_text.split())[:200]
+            print(f"  last user:   {last_user_preview}")
+            print(f"  last assistant ({tail.last_assistant_kind}):")
+            text = tail.last_assistant_text
+            if args.tail_chars and len(text) > args.tail_chars:
+                text = text[: args.tail_chars] + f"... [+{len(text) - args.tail_chars} chars]"
+            for line in text.splitlines() or [""]:
+                print(f"    {line}")
+        print("=" * 88)
 
     elif args.command == "search":
         _validate_project_scope(args, parser)

@@ -335,9 +335,15 @@ Reports each in-scope session's session ID (always full, never truncated —
 copy it directly into any follow-up report), cwd, and one of five structural
 `kind`s: `interrupted_explicit` (the session's last relevant record is an
 explicit interruption marker), `net_error` (the last assistant turn died on
-an API/transport error), `stuck_no_result` (the last assistant turn is a tool
-call with no matching result anywhere in the file), `done` (the last
-assistant turn is a normal text reply), or `empty`.
+an API/transport error), `done` (the last assistant turn produced real text,
+and it didn't start with an API error), `empty` (no assistant turns at all),
+or `stuck_no_result` — the catch-all for every other shape, because they all
+mean the same thing for triage purposes: **the final turn produced no
+textual reply, so the model was still working when the file stopped.** That
+covers a tool call still waiting on its result, a tool call whose result
+already landed but no further assistant turn followed it (the harness likely
+stopped between the result landing and the model's next turn being
+captured), and a final turn that is thinking-only or otherwise empty.
 
 **`done` is a structural label, not a claim that nothing is outstanding.** A
 session can end in a clean `text` block precisely because the assistant
