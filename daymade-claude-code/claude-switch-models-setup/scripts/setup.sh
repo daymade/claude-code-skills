@@ -13,14 +13,29 @@ mkdir -p "$CONFIG_DIR"
 mkdir -p "$CLAUDE_SETTINGS_DIR"
 
 echo "Installing Claude Code profile manager..."
-cp "$SCRIPT_DIR/claude-profiles.sh" "$CONFIG_DIR/claude-profiles.sh"
-cp "$SCRIPT_DIR/claude-plugins-sync.py" "$CONFIG_DIR/claude-plugins-sync.py"
-cp "$SCRIPT_DIR/sync-local-skill-sources.py" "$CONFIG_DIR/sync-local-skill-sources.py"
-cp "$SCRIPT_DIR/sync-local-skill-sources-daemon.sh" "$CONFIG_DIR/sync-local-skill-sources-daemon.sh"
-chmod +x "$CONFIG_DIR/claude-profiles.sh"
-chmod +x "$CONFIG_DIR/claude-plugins-sync.py"
-chmod +x "$CONFIG_DIR/sync-local-skill-sources.py"
-chmod +x "$CONFIG_DIR/sync-local-skill-sources-daemon.sh"
+
+# Symlink rather than copy. $CONFIG_DIR is what actually runs — the LaunchAgent
+# and claude-profile invoke these by that path — while this checkout holds the
+# source, and a copy is indistinguishable from its source by looking at it. Both
+# directions of drift have happened here for real: a lock-placement fix sat in
+# the repo for 26 days while the deployed copy kept running the bug, and two
+# cleanup routines written straight into a deployed copy never reached version
+# control at all. This installer runs FROM the checkout, so the source is
+# guaranteed present and there is no reason to duplicate it.
+#
+# sync-profile-settings.py was missing from this list while step 6 of the skill
+# depends on it, so a machine set up by this script had no settings converger.
+for f in claude-profiles.sh \
+         claude-plugins-sync.py \
+         sync-local-skill-sources.py \
+         sync-local-skill-sources-daemon.sh \
+         sync-profile-settings.py; do
+    ln -sf "$SCRIPT_DIR/$f" "$CONFIG_DIR/$f"
+done
+chmod +x "$SCRIPT_DIR"/claude-profiles.sh "$SCRIPT_DIR"/claude-plugins-sync.py \
+         "$SCRIPT_DIR"/sync-local-skill-sources.py \
+         "$SCRIPT_DIR"/sync-local-skill-sources-daemon.sh \
+         "$SCRIPT_DIR"/sync-profile-settings.py
 
 echo ""
 echo "✅ Installed to: $CONFIG_DIR"
