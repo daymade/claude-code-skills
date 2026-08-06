@@ -21,10 +21,12 @@ Mid-work input typed while the assistant was busy is recovered from
 against later-delivered user records (same normalized text within 120s).
 
 Usage:
-  extract_user_messages.py OUT_BASE [--days 7] [--group-by project|day]
+  extract_user_messages.py [OUT_BASE] [--days 7] [--group-by project|day]
       [--min-dup 5] [--home PATH ...]
 
-Writes OUT_BASE.html and OUT_BASE.md. Dates come from internal record
+OUT_BASE defaults to ~/.claude-flow-viewer/user-words — persistent; avoid /tmp
+(the OS purges it; 2026-08-07 战例: 产物写 /tmp 次日被清). Writes OUT_BASE.html
+and OUT_BASE.md. Dates come from internal record
 timestamps (UTC+8 rendering); file mtime is only a coarse prefilter.
 """
 
@@ -434,7 +436,9 @@ def render_markdown(ext: Extraction, days: int, group_by: str) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description='Extract verbatim user messages from Claude history.')
-    ap.add_argument('out_base', help='output path without extension (.html/.md are appended)')
+    ap.add_argument('out_base', nargs='?', default='~/.claude-flow-viewer/user-words',
+                    help='output path without extension (.html/.md appended); '
+                         'default ~/.claude-flow-viewer/user-words — persistent, NOT /tmp which the OS purges')
     ap.add_argument('--days', type=int, default=7)
     ap.add_argument('--group-by', choices=('project', 'day'), default='project')
     ap.add_argument('--min-dup', type=int, default=5,
@@ -450,7 +454,8 @@ def main() -> int:
 
     ext = extract(sources, cutoff, min_dup=args.min_dup)
 
-    out = Path(args.out_base)
+    out = Path(args.out_base).expanduser()
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.with_suffix('.html').write_text(render_html(ext, args.days, args.group_by), encoding='utf-8')
     out.with_suffix('.md').write_text(render_markdown(ext, args.days, args.group_by), encoding='utf-8')
 
