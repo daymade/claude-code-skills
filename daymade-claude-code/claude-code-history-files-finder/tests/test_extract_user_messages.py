@@ -145,6 +145,26 @@ class ExtractUserMessagesTest(unittest.TestCase):
         self.assertTrue(by_text['继续'].filler)
         self.assertFalse(by_text['把这个方案展开讲讲'].filler)
 
+    def test_multi_line_transcript_paste_goes_to_appendix(self):
+        # Long CJK text spanning many non-blank lines = meeting transcript / dialog,
+        # even though ASCII ratio is far below 60%. Multi-line structure (NOT speaker
+        # labels — those misfire on user prose that quotes people) is what separates
+        # a transcript from coherent dictation.
+        transcript = '\n'.join(
+            f'张三：这是第{i}段会议发言内容，包含足够长的论述用于检测。' for i in range(70))
+        ext = run_extract(self.home, [user('u1', transcript), user('u2', '我的真实发言')])
+        self.assertEqual([e.text for e in ext.entries], ['我的真实发言'])
+        self.assertEqual(len(ext.pastes), 1)
+
+    def test_long_coherent_dictation_not_misfired_as_paste(self):
+        # Long CJK voice dictation in ONE paragraph (coherent, few lines) must stay
+        # in entries — the reason the multi-line branch requires >=10 lines, not just
+        # length. This is the case the original ASCII safe-harbor protected.
+        dictation = '我今天想跟你聊一下关于这个产品的一些想法和感受。' * 100  # ~2200 chars, 1 line
+        ext = run_extract(self.home, [user('u1', dictation)])
+        self.assertEqual(len(ext.entries), 1)
+        self.assertEqual(len(ext.pastes), 0)
+
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self._tmp2 = tempfile.TemporaryDirectory()

@@ -12,7 +12,12 @@ user-authored text"):
      (identical text, >= --min-dup occurrences, >= 400 normalized chars), both
      standalone records and the tail-appended shape -> stripped / appendix
   3. `[Image #N]` placeholders -> stripped (count kept)
-  4. whole-document pastes (>= 2000 normalized chars AND >= 60% ASCII) -> appendix
+  4. whole-document pastes (>= 2000 normalized chars AND (>= 60% ASCII OR
+     >= 10 non-blank lines)) -> appendix. The multi-line branch catches CJK
+     meeting transcripts / multi-turn dialog / agent re-injections that stay
+     below the ASCII bar, while coherent voice dictation (few long paragraphs)
+     is preserved. Speaker-label counting was tried and rejected: user prose
+     that quotes people racks up more "name:" labels than a real transcript.
   5. agent-voiced re-injection -> dropped when the text matches (exact or
      contained-in) an assistant text that exists EARLIER than the record
 
@@ -72,6 +77,7 @@ FILLER = {x.lower() for x in (
 BOILER_MIN_CHARS = 400      # injected boilerplate is long; short repeats are just filler
 PASTE_MIN_CHARS = 2000      # whole-document paste splitter …
 PASTE_ASCII_RATIO = 0.60    # … length AND mostly-ASCII; long voice dictation stays below the ASCII bar
+PASTE_MULTI_LINE_MIN = 10   # … OR long text spanning >= N non-blank lines = transcript/dialog/paste
 AGENT_EXACT_MIN = 30        # below this a coincidental same-text match is plausible
 AGENT_CONTAINS_MIN = 60
 DELIVERED_WINDOW_SEC = 120
@@ -276,9 +282,12 @@ def extract(sources, cutoff: datetime, min_dup: int = 5) -> Extraction:
         if not text:
             return
         norm = normalize_text(text)
-        if len(norm) >= PASTE_MIN_CHARS and sum(1 for ch in norm if ord(ch) < 128) / len(norm) >= PASTE_ASCII_RATIO:
-            result.pastes.append(Entry(ts, project, text))
-            return
+        if len(norm) >= PASTE_MIN_CHARS:
+            ascii_ratio = sum(1 for ch in norm if ord(ch) < 128) / len(norm)
+            non_empty_lines = sum(1 for line in text.split('\n') if line.strip())
+            if ascii_ratio >= PASTE_ASCII_RATIO or non_empty_lines >= PASTE_MULTI_LINE_MIN:
+                result.pastes.append(Entry(ts, project, text))
+                return
         if len(norm) >= AGENT_EXACT_MIN:
             h = hashlib.md5(norm.encode()).digest()
             earlier = agent_exact.get(h)
