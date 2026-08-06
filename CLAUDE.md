@@ -75,6 +75,18 @@ cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.package
 uv run python daymade-skill/skill-creator/scripts/init_skill.py <skill-name> --path <output-directory>
 ```
 
+### Automated Test Suites (CI)
+
+A `tests/` directory under a skill does **not** automatically run in CI. The
+"Registered test suites (Linux)" GitHub Actions job only runs directories
+explicitly listed in `scripts/ci/test-suites.txt` — that file's header is the
+SSOT for the admission criteria (stdlib-only, no network/credentials,
+deterministic, Linux-verified) and the runner types (`python-unittest` via
+`unittest discover`, `node-test`). Adding a test file to an unregistered
+`tests/` directory gives you a suite you can run locally, not CI coverage —
+check the registry before assuming otherwise, and note `unittest discover`
+only collects `unittest.TestCase` subclasses, not bare pytest-style functions.
+
 ### Testing Skills Locally
 
 ```bash
@@ -148,6 +160,18 @@ local `main` guarantees divergence the moment its PR merges. Two rules keep
    A successful ff-only pull proves nobody broke rule 1. If it fails, someone
    committed to local `main` — inspect `git log origin/main..main` and rebase
    the stray commits onto a feature branch; do not merge or force-push `main`.
+3. **If step 2's `git checkout main` itself refuses** ("local changes would be
+   overwritten") while you're still on your feature branch: this is not
+   automatically the divergence case above. Check whether local `main` is
+   merely **stale** (nobody committed to it, it just never got its ref
+   updated after a previous merge) before assuming divergence — `git diff
+   HEAD origin/main -- <the-file>` from your feature branch; empty output
+   means your branch's committed content already matches `origin/main`
+   exactly, and the checkout conflict is purely local `main`'s ref being
+   behind. Fix without touching the working tree or any other session's
+   uncommitted changes: `git fetch origin main:main` (updates the ref
+   directly, no checkout needed), then retry `git checkout main`. Only fall
+   through to the divergence procedure below if the diff is non-empty.
 
 If local `main` has already diverged: do not `reset --hard` until every stray
 commit is proven superseded — mechanical test: cherry-pick them onto
@@ -318,7 +342,7 @@ This applies when you change ANY file under a skill directory:
 62. **bilibili-source** - Fetch login-free, citable data for a Bilibili (B站) video — stats, UP fans, tags, per-part cids, and full danmaku text — via one view/detail call (accepts BVID/av/b23.tv/URL); login-gated subtitles; ships a self-test for API-drift detection
 63. **claude-usage-analyst** - Explain local Claude Code / Claude Desktop token usage, cost, quota burn, model mix, and cache pressure from `ccusage` data — separating observed numbers from interpretation in plain language (daymade-claude-code suite member)
 64. **marketplace-health-check** - Run a full 6-dimension health check of this skills marketplace repo (code/script safety, doc/SSOT consistency, security/PII, open-PR triage, open-issue triage, marketplace integrity) via a parallel fan-out Dynamic Workflow, then Counter-Review the serious findings and report by priority
-65. **claude-switch-models-setup** - Set up multiple isolated Claude Code CLI profiles so students and power users can run different LLM providers (Kimi, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time (daymade-claude-code suite member)
+65. **claude-switch-models-setup** - Set up multiple isolated Claude Code CLI profiles so students and power users can run different LLM providers (Kimi, MiniMax, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time (daymade-claude-code suite member)
 66. **llm-eval-harness** - Evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four dimensions (speed with thinking-aware tok/s, concurrency/stability, Anthropic protocol compliance, and quality regression against your own use cases via blind judges); keys passed by env-var name only, use-case library kept outside the bundle
 67. **read-claude-web-conversation** - Extract the active path of a Claude.ai web conversation with full tool-call rendering, local Markdown export, upload/generated-file inventory and download, sandbox-file reconstruction, and a macOS AppleScript fallback when the Chrome extension cannot pair (daymade-claude-code suite member)
 68. **setup-notifications-via-wecom** - Set up reusable WeCom / Enterprise WeChat webhook notifications for status reports, alerts, and completion messages

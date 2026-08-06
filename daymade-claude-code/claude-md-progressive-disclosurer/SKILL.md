@@ -103,11 +103,38 @@ for ev, groups in (s.get('hooks') or {}).items():
             print(ev, g.get('matcher', '*'), h.get('command', ''))
 PY
 
-# ② payload 必须完整——缺字段会让判决翻转（见下方第一个坑）
-printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"Bash",
-  "tool_input":{"command":"<一条真实的违规命令>"},
-  "cwd":"'"$PWD"'","session_id":"probe","transcript_path":"/dev/null"}' \
-  | <用该 hook 自己的解释器执行它> >/dev/null 2>&1; echo "exit=$?"   # exit 2 = 拦截，0 = 放行
+# ② 从上面的名单里挑一条填进来。用变量而不是 <占位符> —— 在 shell 里 `<` 是重定向符，
+#    整块粘贴会得到一个莫名的重定向错误，而不是「这里要你填」
+# ⚠️ HOOK_CMD 必须是**数组**：写成字符串 + 不加引号展开 `$HOOK_CMD`，
+#    bash 会词分割成「解释器 + 路径」，**zsh 不会**（整串当一个命令名 → exit 127）。
+#    实测本块第一版就栽在这，与附录 C 的 REFDIRS 是同一个坑。
+HOOK_CMD=(bash /绝对路径/那个hook.sh)      # ← 换成 registered-hooks.txt 里那条（注意它自己的解释器）
+BAD_CMD='一条真实的违规命令'                # ← 换成你要试探的那条
+
+# payload 必须完整——缺字段会让判决翻转（见下方第一个坑）
+# ⚠️ 必须用 json.dumps 构造，**不能手搓字符串**：BAD_CMD 里只要有 `"` / `\` / 换行，
+#    手搓出来就不是合法 JSON，fail-open 的 hook 会答 0 → 你得出「无人强制」并去删规则，
+#    而它其实一直拦着。实测同一条含引号的违规命令：手搓 → exit 0，json.dumps → exit 2。
+#    **而最典型的探针形状 `git commit -m "msg" --no-verify` 恰好就带引号。**
+# ⚠️ 下面三道前置检查不能省。**这个探针所有的失败模式都指向「假放行」** ——
+#    而假放行正是会让你去删掉一条其实有效的规则的那个方向（实测过的三种）：
+#    ① 没有 python3 → 管道首段崩、hook 收到空 stdin → fail-open 答 0 → 打印「exit=0」
+#    ② 只粘贴了探针行、漏掉上面两行赋值 → 同样打印「exit=0」（`set -u` 也救不回，
+#       unbound 发生在管道首段的子 shell 里，脚本不死）
+#    ③ 贴进 `set -euo pipefail` 脚本时，**hook 拦截（exit 2 = 阳性结果）会先杀死脚本**，
+#       `echo` 根本执行不到 → strict 宿主里这个探针只可能打印出「放行」一种判决
+command -v python3 >/dev/null || { echo "探针不可用：没有 python3（换机器或先装）" >&2; exit 9; }
+: "${BAD_CMD:?探针不可用：BAD_CMD 未赋值——你大概只粘贴了下半段}"
+[ "${#HOOK_CMD[@]}" -gt 0 ] || { echo "探针不可用：HOOK_CMD 未赋值" >&2; exit 9; }
+
+# 用 if 包住：`if` 的条件位豁免 set -e，所以「拦截」这个阳性结果也打得出来
+if BAD_CMD="$BAD_CMD" python3 -c 'import json,os,sys; sys.stdout.write(json.dumps({
+  "hook_event_name":"PreToolUse","tool_name":"Bash",
+  "tool_input":{"command":os.environ["BAD_CMD"]},
+  "cwd":os.getcwd(),"session_id":"probe","transcript_path":"/dev/null"}))' \
+  | "${HOOK_CMD[@]}" >/dev/null 2>&1
+then ec=0; else ec=$?; fi
+echo "exit=$ec   # 2 = 拦截（这条规则有人强制），0 = 放行"
 ```
 
 **这个探针有两个会让你得出相反结论的坑，都实测踩过：**
@@ -215,7 +242,10 @@ cp CLAUDE.md CLAUDE.md.bak.$(date +%Y%m%d_%H%M%S)
 5. **添加「修改代码前必读」表格**（按"要改什么"索引）
 6. **在末尾再放一份触发索引表**
 
-**⚠️ 写指针前的硬 gate（事中验证，最易跳过、本次最大踩坑）**：每写一条「→ 某 reference / 详见 X」指针前，**当场 `grep` 确认目标文件真有这段内容**。三种结果：① 目标已有完整内容 → 写指针；② 目标没有 / 不确定是否完整 → 先把原文 verbatim cut 到目标（回 Step 3），再写指针；③ **绝不写「指向一个其实没有该内容的文件」的假指针**。假指针比丢内容更隐蔽——它让 5a「文件存在」通过、却在读者点进去时才发现是空的。Why：5a/5b 是**事后**验证，假指针那一刻已写进文件；事中 gate 才能在源头拦住。（实战：写「详见 anti-patterns」但那里 0 命中 Stripe 端点 → 案例 15。）
+**⚠️ 写指针前的硬 gate（事中验证，最易跳过、本次最大踩坑）**：每写一条「→ 某 reference / 详见 X」指针前，**当场确认目标文件真有这段内容**。
+⚠️ **验的方式看你要验什么**（Step 5.0 表已实测）：只验「这段在不在」→ 抽 3–5 个**特异串**用 `grep -F` 查即可；
+要验「**整段完整搬过去了**」→ **不能用 grep** —— 原句多行时 `grep -F` 按行 OR，**丢半段照样报命中**，
+必须用 python3 整串子串判断。三种结果：① 目标已有完整内容 → 写指针；② 目标没有 / 不确定是否完整 → 先把原文 verbatim cut 到目标（回 Step 3），再写指针；③ **绝不写「指向一个其实没有该内容的文件」的假指针**。假指针比丢内容更隐蔽——它让 5a「文件存在」通过、却在读者点进去时才发现是空的。Why：5a/5b 是**事后**验证，假指针那一刻已写进文件；事中 gate 才能在源头拦住。（实战：写「详见 anti-patterns」但那里 0 命中 Stripe 端点 → 案例 15。）
 
 ### Step 5: 验证（三项全部通过才算完成）
 
@@ -235,11 +265,11 @@ cp CLAUDE.md CLAUDE.md.bak.$(date +%Y%m%d_%H%M%S)
 | **递归搜索悄悄跳过 symlink** | reference 目录里只要有一个 symlink（**skill 安装、SSOT 外置极常见**），整片内容对验证器不可见 → 把「已下沉」误报成「未下沉」 | **别去挑递归 flag —— 先把路径解析成真身再读**：`readlink -f <path>` 拿到真实文件，或 `find -L <dir> -type f -name '*.md'` 枚举后逐个读（两种都不依赖任何实现，实测三种 grep + BSD/GNU find 行为一致）。⚠️ **递归 flag 的 symlink 语义因实现而异，且没有可移植组合**——挑哪个都会坑掉一部分读者；三实现实测矩阵见案例 17 ①，此处不复述数值（会漂） |
 | **代理判据**（拿 A 的存在证明 B 已完成） | 用「日期锚点是否出现在 reference」判是否已下沉 —— 而 reference 的**节标题里带个日期**就让整段显示为「已下沉」，实际那节里一条子发现都没有 | 判据必须落在**被判对象本身**上：抽该段的 3–5 个**特异串**（具体值/命令/专名）逐个查 |
 | **行级度量高估工作量** | 「含该锚点的整行」包含大量**不需搬**的规则正文，量到的是「含有它的行的总长」而非内容本身 | 按**段落**量，不按含关键词的行的字节数 |
-| **`grep -F` 对多行原句退化成「按行 OR」**（唯一会给**假阳性**的一条，最危险） | 验 verbatim 搬运时，原句是多行的：`grep -F` 把它当成**多个独立 pattern**，命中任意一行就报成功。**搬运时丢了半个段落，判据照样报「还在」** —— 它为一次有损搬运出具了无罪证明，而这正是 5b 存在的理由 | 存原句到临时文件用 `python - <<'PY'` 做**整串子串判断**（`需要的原文 in 目标文件内容`）—— 它要求连续完整匹配，丢一行就 False |
-| **探针串含正则元字符**（两种坏法，别只防一种） | 实测 BSD grep：`*` → **静默**假阴性（exit 1，0 命中，长得就像「内容丢了」）；`[2026-07-26]` 这类方括号 → **响亮报错**（exit 2 `invalid character range`），而报错在 `2>/dev/null` 的脚本里同样被读成「没找到」。（顺带纠正一个直觉错误：`\|\|` 在 BRE 下**正常命中**，不是假阴性） | 一律 `grep -F`（固定串），或走上面的 python 子串判断。**脚本里别把 stderr 丢掉** —— exit 2 和 exit 1 必须分开处理 |
+| **`grep -F` 对多行原句退化成「按行 OR」**（唯一会给**假阳性**的一条，最危险） | 验 verbatim 搬运时，原句是多行的：`grep -F` 把它当成**多个独立 pattern**，命中任意一行就报成功。**搬运时丢了半个段落，判据照样报「还在」** —— 它为一次有损搬运出具了无罪证明，而这正是 5b 存在的理由 | 存原句到临时文件用 `python3 - <<'PY'` 做**整串子串判断**（`需要的原文 in 目标文件内容`）—— 它要求连续完整匹配，丢一行就 False。**必须 `python3`**：裸 `python` 在 stock macOS（12.3 起）已被移除。⚠️ 精简 Linux 镜像（如 `debian:*-slim`）**两个都没有**，实测 `python3` 也 ABSENT —— 那种环境下先装再用，别以为换成 `python3` 就一定跑得起来 |
+| **探针串含正则元字符**（**三种**坏法，且同一字符换个位置就换一种） | 实测（BSD 2.6.0 / GNU 3.11）：① 中段 `*`（`use * wildcard`）→ 两边都 **静默** exit 1，长得就像「内容丢了」；② **开头的 `**`（markdown 粗体 —— CLAUDE.md 里最常见的探针形状）→ BSD **响亮报错** exit 2 `repetition-operator operand invalid`，而 GNU **exit 0 命中** —— 同一个串，一边硬错一边成功；③ 方括号日期 `[2026-07-26]` → 两边都 exit 2（BSD `invalid character range` / GNU `Invalid range end`）。**报错在 `2>/dev/null` 的脚本里和「没找到」长得一模一样。** | 一律 `grep -F`（固定串），或走上面的 python3 子串判断。**脚本里别把 stderr 丢掉** —— exit 2（判据坏了）和 exit 1（真没命中）必须分开处理 |
 
 **⚠️ 别把「重新折行」算进上面第 4 行**：搬运时重新折行**本身就违反反模式 6「原样复制，不改一字」**，
-判据判它失败是**对的**，不是误伤。python 子串判断在这种情况下同样返回 False（实测）——
+判据判它失败是**对的**，不是误伤。python3 子串判断在这种情况下同样返回 False（实测）——
 它不是用来给折行开脱的，**没有任何判据该给折行开脱**。
 
 **完整战例（判据陷阱如何连环误导同一个执行者）→ `references/progressive_disclosure_principles.md` 案例 17**
@@ -267,12 +297,27 @@ cp CLAUDE.md CLAUDE.md.bak.$(date +%Y%m%d_%H%M%S)
 ```bash
 # 抓出正文里所有反引号包起来的 .md 路径（不写死 docs/references/——用户级布局是
 # ~/.claude/references/，写死会一条都抓不到）
-grep -oh '`[^`]*\.md`' CLAUDE.md | tr -d '`' | sort -u > /tmp/pointers.txt
+# 尾巴不能省，但**也不能写成 `|| true`**：
+#   · 为什么需要：一条指针都没有时 grep exit 1。在 **`set -e` 与 `pipefail` 同时开**时
+#     （单开任一个都不会）整条管道致命，整块在打印任何东西之前就死 —— 而「0 条」
+#     正是下面要报的那种情况。实测：`set -o pipefail` 单开跑完、`set -e` 单开跑完、
+#     `set -eo pipefail` 输出为空 exit 1。
+#   · 为什么不能用 `|| true`：它把 grep 的 **exit 2（判据坏了，如 cwd 里根本没有 CLAUDE.md）**
+#     和 **exit 1（真的 0 命中）** 一起吞掉，于是误报「抓到 0 条 + 🚨 模式没命中」还 exit 0 ——
+#     正好违反本文件 5.0 表第 5 行「exit 2 和 exit 1 必须分开处理」。
+#   · `|| [ $? -eq 1 ]` 只放行 exit 1；exit 2 仍然响亮致死（两 shell 实测）。
+grep -oh '`[^`]*\.md`' CLAUDE.md | tr -d '`' | sort -u > /tmp/pointers.txt || [ $? -eq 1 ]
 
 # ⚠️ 先标定：抓到 0 条 ≠ 全部通过，而是「这个模式没匹配上你的写法」
 n=$(wc -l < /tmp/pointers.txt | tr -d ' ')     # BSD wc 会补空格，去掉
 echo "抓到 $n 条指针"
-[ "$n" -eq 0 ] && echo "🚨 0 条 = 模式没命中，不是没问题——先手工确认正文到底怎么写引用的"
+# 用 if 而不是 `[ … ] && echo`：后者在 n>0 时整行 rc=1。
+# ⚠️ 别把这说成「会中断 set -e 脚本」——实测 bash/zsh 都**不会**（POSIX 豁免 AND 列表
+# 非末位的失败）。真正会出事的是它**作为最后一行**时把 rc=1 泄漏成整个脚本的退出码。
+# 用 if 是 rc 中性的卫生做法，不是在修一个「中断」bug。
+if [ "$n" -eq 0 ]; then
+  echo "🚨 0 条 = 模式没命中，不是没问题——先手工确认正文到底怎么写引用的"
+fi
 
 while read -r f; do
   # ⚠️ 分「可判定 / 不可判定」，别把散文里的东西一律报成断链（见下方真实语料实测）
@@ -285,13 +330,18 @@ while read -r f; do
   esac
   case "$f" in
     /*|\~/*|./*) p="${f/#\~/$HOME}" ;;   # 绝对 / 家目录 / 显式相对 → 可判定
-    *)           echo "– 跳过(相对未知根): $f"; continue ;;
+    *)  # 相对路径：首段在 cwd 里存在才可判定。**这条不能省** ——
+        # Step 3 规定的命名就是 `docs/references/{主题}-sop.md`（无 ./ 前缀），
+        # 一律当「未知根」跳过 = 5a 对本 skill 自己规定的布局一条都不检
+        first="${f%%/*}"
+        if [ -d "$first" ]; then p="$f"
+        else echo "– 跳过(相对未知根): $f"; continue; fi ;;
   esac
   [ -e "$p" ] && echo "✓ $f" || echo "✗ MISSING: $f"
 done < /tmp/pointers.txt
 ```
 
-> **为什么加那三行标定**：原版把 `docs/references/` 写死在模式里。在本 skill 自己定义的
+> **为什么要那段标定**：原版把 `docs/references/` 写死在模式里。在本 skill 自己定义的
 > 用户级布局（`~/.claude/references/`）上跑，它匹配 0 条 → while 循环一次都不进 →
 > **零输出、exit 0**，和「所有引用都存在」的输出**完全一样**。实测：一份含真断链的
 > CLAUDE.md 被它判为干净。这正是 5.0 那条「`0 命中` 必须双向读」，而 5a 自己没做。
@@ -618,7 +668,7 @@ function getDatabase() {
 
 **问题**：比直接丢内容更隐蔽。`5a`「文件存在」会通过（`X.md` 确实存在），但内容不在那里；读者点进去才发现，且此时已无从知道原文是什么。本质是反模式 6（移动时压缩）+ 反模式 7（掩盖丢失）的组合：内容被砍 + 用一个看似合规的指针掩盖。
 
-**正确**：写指针前当场 `grep` 验证目标真有该内容（Step 4 硬 gate）。指针指错文件（内容在 A、却写「详见 B」）是同类问题，按内容实际所在地修正、不是删指针。
+**正确**：写指针前当场验证目标真有该内容（Step 4 硬 gate；**验「在不在」用 `grep -F` 抽特异串，验「整段完整」必须用 python3 子串判断——grep 会给假阳性，见 Step 5.0 表**）。指针指错文件（内容在 A、却写「详见 B」）是同类问题，按内容实际所在地修正、不是删指针。
 
 > 完整案例分析见 `references/progressive_disclosure_principles.md` 案例 15
 
@@ -689,7 +739,7 @@ function getDatabase() {
 - [ ] **Level 2 文件内容与原始内容完全一致**——没有在移动过程中被"精简"
 - [ ] **没有信号被静默删除**——每项删除是反信号且有用户确认/canonical source（反信号删除正当，见 Step 2.1）
 - [ ] **没有把行数当成果/KPI/移动理由/汇报指标**（诊断性观察不在此限，见「铁律」）
-- [ ] **每条「→ reference」指针都 grep 验证过目标真有该内容**（无假指针 / 指针失准，Step 4 硬 gate；反模式 9）
+- [ ] **每条「→ reference」指针都验证过目标真有该内容**，且**用对了工具**：验「在不在」= `grep -F` 抽特异串；验「整段完整搬到」= python3 整串子串判断（grep 对多行原句会给假阳性）（无假指针 / 指针失准，Step 4 硬 gate；反模式 9；Step 5.0 表）
 - [ ] **跑了独立 agent 5b 审计**（默认动作，非「大量压缩时才用」；禁 fork；Step 5b）
 - [ ] **审阅之后若又改过**：要么理由写进审阅记录，要么再派一轮（Step 5b 推论①）
 

@@ -180,10 +180,17 @@ class ReviewQueue:
     def enqueue(self, items: list[dict[str, Any]]) -> dict[str, Any]:
         """Insert items; duplicates (same file/original/suggested/domain in ANY
         status) are skipped so re-runs never re-ask an answered question.
-        Returns {added: [ids], skipped_duplicates: int, skipped_temp: int}."""
+        Returns {added: [ids], skipped_duplicates: int, skipped_temp: int,
+        rejected_unanchored: [{original, file, reason}], repaired_hints:
+        [{original, from, to}]}. Anchor-verbatim validation applies to all
+        sources EXCEPT stage1_deferred (whose from_text is the engine's
+        evolving text and legitimately need not appear in the input file)."""
         added: list[int] = []
         skipped_dup = 0
         skipped_temp = 0
+        rejected_unanchored: list[dict[str, Any]] = []
+        repaired_hints: list[dict[str, Any]] = []
+        anchor_cache: dict[str, Optional[str]] = {}  # path -> file content (read once per file)
         with self._connect() as conn:
             for raw in items:
                 item = self._normalize(raw)
@@ -191,6 +198,29 @@ class ReviewQueue:
                     # A temp-dir anchor is dead by the time anyone reviews it.
                     skipped_temp += 1
                     continue
+                # Verbatim-anchor validation: an item whose original/context is
+                # not literally in its file NOW can never survive the fail-closed
+                # anchor guard at resolve time — so it would die later, in the
+                # reviewer's hands (dashboard W/A) instead of the author's.
+                # Reject it HERE, loudly. (Real incident 2026-08-03: an agent
+                # enqueued a paraphrased context; the human's override was
+                # refused at re-anchor and the item had to be repaired by hand.)
+                # Engine-generated deferrals (source=stage1_deferred) are exempt:
+                # their from_text is the engine's EVOLVING text (earlier rules
+                # already applied in-memory), which legitimately need not appear
+                # verbatim in the input file — the guard owns their fate.
+                if item["file_path"] and item["source"] != "stage1_deferred":
+                    fp = item["file_path"]
+                    if fp not in anchor_cache:
+                        anchor_cache[fp] = self._read_anchor_source(fp)
+                    reason = self._check_anchor_verbatim(item, anchor_cache[fp])
+                    if reason:
+                        rejected_unanchored.append({
+                            "original": item["original_text"][:80],
+                            "file": item["file_path"],
+                            "reason": reason,
+                        })
+                        continue
                 # Dedup key includes the line: two occurrences of the same
                 # correction on different lines are DISTINCT review questions —
                 # collapsing them would silently drop coverage of the second
@@ -209,6 +239,14 @@ class ReviewQueue:
                 if dup:
                     skipped_dup += 1
                     continue
+                if item.get("_hint_repaired_to") is not None:
+                    # Report only for items actually enqueued — a dedup-skipped
+                    # item must not claim its hint was "repaired" (it wasn't).
+                    repaired_hints.append({
+                        "original": item["original_text"][:80],
+                        "from": raw.get("line") or raw.get("line_number"),
+                        "to": item["_hint_repaired_to"],
+                    })
                 cur = conn.execute(
                     """INSERT INTO review_items
                        (source, domain, file_path, line_number, context_snippet,
@@ -228,7 +266,235 @@ class ReviewQueue:
                             {"source": item["source"], "domain": item["domain"],
                              "original": item["original_text"][:80]})
             conn.commit()
-        return {"added": added, "skipped_duplicates": skipped_dup, "skipped_temp": skipped_temp}
+        return {"added": added, "skipped_duplicates": skipped_dup, "skipped_temp": skipped_temp,
+                "rejected_unanchored": rejected_unanchored, "repaired_hints": repaired_hints}
+
+    @staticmethod
+    def _read_anchor_source(path_str: str) -> Optional[str]:
+        """Read a candidate anchor file once; None = unreadable/missing (the
+        resolve-time guard owns that case, e.g. items for a file elsewhere)."""
+        path = Path(path_str)
+        if not path.is_file():
+            return None
+        try:
+            with open(path, encoding="utf-8", errors="replace", newline="") as f:
+                return f.read()
+        except OSError:
+            return None
+
+    @staticmethod
+    def _check_anchor_verbatim(item: dict[str, Any], content: Optional[str]) -> Optional[str]:
+        """Return a rejection reason when the item's anchor is not verbatim in
+        its file; None when valid — or when the file is unreadable/missing
+        (that case stays the resolve-time guard's job, e.g. items enqueued for
+        a file on another machine). Side effect: a stale line hint pointing at
+        the wrong line is repaired to the UNIQUE matching line."""
+        if content is None:
+            return None
+        original = item["original_text"]
+        if original not in content:
+            return ("original 不在文件里 —— original 必须从文件逐字复制；"
+                    "转述/改写会让 resolve 时被 fail-closed 拦下（修正 item 后重新 enqueue）")
+        if item["line_number"] is not None:
+            hits = [i + 1 for i, ln in enumerate(content.splitlines()) if original in ln]
+            if hits and item["line_number"] not in hits and len(hits) == 1:
+                # Only repair a hint that would actually break resolve: the
+                # resolve-time window is ±3 lines, so a hint within window of
+                # the unique match works fine as-is and must NOT be rewritten
+                # (rewriting a functional hint silently broke dashboard
+                # context fallback, tests/test_dashboard_context.py:150).
+                if abs(hits[0] - item["line_number"]) > 3:
+                    item["_hint_repaired_to"] = hits[0]
+                    item["line_number"] = hits[0]
+        snippet = item["context_snippet"]
+        if snippet and snippet.strip() and snippet not in content:
+            return ("context 不在文件里（非逐字）—— context 必须整段从文件复制；"
+                    "写转述 = anchor 必漂（修正 item 后重新 enqueue）")
+        return None
+
+    # ==================== Re-anchor ====================
+
+    def reanchor(self, item_id: int, search_roots: Optional[list[str]] = None,
+                 reanchor_to: Optional[str] = None) -> dict[str, Any]:
+        """Repair a pending item's anchor after its transcript drifted or moved.
+
+        Two drift shapes, both repaired against CURRENT disk state:
+        1. file exists but line/context went stale (edits since enqueue):
+           re-locate `original_text` in the file (nearest to the old hint) and
+           refresh line_number + context_snippet to the verbatim current line.
+        2. file is gone (moved/renamed/cleaned): search the recorded parent dir
+           plus any `search_roots` for *.md files containing `original_text`;
+           exactly one candidate re-points file_path to it. When search is
+           ambiguous, `reanchor_to` names the target file explicitly (the
+           caller's judgment), and is itself refused if `original_text` is not
+           in it.
+        Fail-closed throughout: no match or an ambiguous match changes nothing.
+        """
+        item = self.get(item_id)
+        if item is None:
+            raise ReviewQueueError(f"review item {item_id} not found")
+        if item.status != "pending":
+            raise ReviewQueueError(
+                f"item {item_id} is {item.status} — only pending items can be re-anchored")
+        if not item.file_path:
+            raise ReviewQueueError(f"item {item_id} has no file anchor")
+
+        path = Path(item.file_path)
+        repointed = False
+        if reanchor_to:
+            explicit = Path(reanchor_to).expanduser().resolve()
+            if not explicit.is_file():
+                raise ReviewQueueError(f"--reanchor-to target not a file: {explicit}")
+            probe = self._read_file(explicit)
+            if item.original_text not in probe:
+                raise ReviewQueueError(
+                    f"original {item.original_text[:60]!r} not in explicit target "
+                    f"{explicit.name} — refusing an unverified re-point")
+            path, content, repointed = explicit, probe, True
+        elif path.is_file():
+            content = self._read_file(path)
+        else:
+            hits = self._find_original_elsewhere(item.original_text, path, search_roots or [])
+            if len(hits) == 1:
+                path, _ = hits[0]
+                content = self._read_file(path)
+                repointed = True
+            elif not hits:
+                roots = [str(path.parent)] + [str(r) for r in (search_roots or [])]
+                raise ReviewQueueError(
+                    f"file gone and original not found under {roots} — "
+                    f"resolve kept_original/skipped, or re-enqueue against the new file")
+            else:
+                raise ReviewQueueError(
+                    f"file gone and original found in {len(hits)} files — ambiguous, "
+                    f"pass --reanchor-to <one of: "
+                    + ", ".join(str(h[0]) for h in hits[:5]) + ">")
+
+        lines = content.splitlines()
+        matches = [i + 1 for i, ln in enumerate(lines) if item.original_text in ln]
+        if not matches:
+            raise ReviewQueueError(
+                f"original {item.original_text[:60]!r} no longer in {path.name} — "
+                f"kept_original/skipped 才是正确退场")
+        # Disambiguate with the RECORDED context first (it is the best evidence
+        # for WHICH occurrence the item meant) — picking purely by distance and
+        # then overwriting context_snippet with the chosen line would feed the
+        # resolve-time guard a fabricated right answer for the wrong occurrence.
+        old_snippet = (item.context_snippet or "").strip()
+        if old_snippet and len(matches) > 1:
+            probe = old_snippet[:80]
+            ctx_matches = [
+                m for m in matches
+                if lines[m - 1].strip()[:80] in probe or probe in lines[m - 1]
+            ]
+            if len(ctx_matches) == 1:
+                matches = ctx_matches
+            # 0 or >1 context matches: fall through to distance — the context
+            # itself may be the drifted part; distance is the remaining signal.
+        old_hint = item.line_number if item.line_number is not None else matches[0]
+        ordered = sorted(matches, key=lambda h: (abs(h - old_hint), h))
+        if len(ordered) > 1 and abs(ordered[0] - old_hint) == abs(ordered[1] - old_hint):
+            # Same standard as the resolve-time guard: an equidistant tie has
+            # no honest winner. Overwriting context_snippet here would
+            # fabricate one — refuse instead.
+            raise ReviewQueueError(
+                f"two occurrences are equally near the old hint "
+                f"(lines {ordered[0]} and {ordered[1]}) — ambiguous; "
+                f"re-enqueue with a discriminating context")
+        line_no = ordered[0]
+        new_context = lines[line_no - 1].strip()
+        # A re-point must not collide with another pending item's dedup key —
+        # that would strand a permanently unresolvable duplicate in the queue.
+        with self._connect() as conn:
+            collision = conn.execute(
+                """SELECT id FROM review_items
+                   WHERE id != ?
+                     AND COALESCE(file_path,'') = ?
+                     AND original_text = ?
+                     AND COALESCE(suggested_text,'') = COALESCE(?, '')
+                     AND domain = ?
+                     AND COALESCE(line_number,-1) = ?
+                   LIMIT 1""",
+                (item_id, str(path), item.original_text, item.suggested_text,
+                 item.domain, line_no),
+            ).fetchone()
+            if collision:
+                raise ReviewQueueError(
+                    f"re-anchor would collide with item #{collision['id']} "
+                    f"(same file/original/suggested/domain/line) — resolve or skip "
+                    f"that one first")
+            # Mirror resolve's concurrency guard: never overwrite an anchor of
+            # an item whose verdict landed between our get() and now.
+            cur = conn.execute(
+                """UPDATE review_items SET file_path=?, line_number=?, context_snippet=?
+                   WHERE id=? AND status='pending'""",
+                (str(path), line_no, new_context, item_id))
+            if cur.rowcount != 1:
+                raise ReviewQueueError(
+                    f"item {item_id} changed status while re-anchoring — re-read and retry")
+            # Explicit action packs carry their own file paths/line hints.
+            # file_edit.expect_line must follow ANY line move — not just
+            # re-points: a stale expect_line OUTRANKS item.line_number at
+            # resolve, so leaving it creates a reanchor✅/resolve🛑 ping-pong.
+            if item.actions and (repointed or line_no != item.line_number):
+                new_actions = []
+                for action in item.actions:
+                    a = dict(action)
+                    if a.get("type") == "file_edit" and "path" in a:
+                        if repointed:
+                            a["path"] = str(path)
+                        if repointed or a.get("expect_line") is not None:
+                            a["expect_line"] = line_no
+                    elif a.get("type") == "append_note" and "path" in a and repointed:
+                        a["path"] = str(path)
+                    new_actions.append(a)
+                conn.execute(
+                    "UPDATE review_items SET actions_json=? WHERE id=?",
+                    (json.dumps(new_actions, ensure_ascii=False), item_id))
+            self._audit(conn, "review_reanchor", item_id, None,
+                        {"file": str(path), "line": line_no, "repointed": repointed})
+            conn.commit()
+        return {"id": item_id, "file_path": str(path), "line_number": line_no,
+                "context_snippet": new_context, "file_repointed": repointed}
+
+    @staticmethod
+    def _find_original_elsewhere(original: str, gone_path: Path,
+                                 search_roots: list[str]) -> list[tuple[Path, int]]:
+        """First hit per *.md file, under the recorded parent dir + search_roots.
+
+        Ambiguity is judged on FILES (one hit per file is enough to re-point);
+        the exact line is re-derived from the winning file afterwards."""
+        roots = [gone_path.parent] + [Path(r).expanduser() for r in search_roots]
+        hits: list[tuple[Path, int]] = []
+        seen_roots: set[Path] = set()
+        seen_files: set[Path] = set()  # overlapping roots must not double-count
+        for root in roots:
+            try:
+                root = root.resolve()
+            except OSError:
+                continue
+            if root in seen_roots or not root.is_dir():
+                continue
+            seen_roots.add(root)
+            for p in root.rglob("*.md"):
+                if any(part in {".git", "node_modules", "__pycache__"} for part in p.parts):
+                    continue
+                try:
+                    rp = p.resolve()
+                except OSError:
+                    continue
+                if rp in seen_files:
+                    continue
+                try:
+                    with open(rp, encoding="utf-8", errors="replace") as f:
+                        for i, ln in enumerate(f, 1):
+                            if original in ln:
+                                hits.append((rp, i))
+                                seen_files.add(rp)
+                                break
+                except OSError:
+                    continue
+        return hits
 
     def _normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         original = (raw.get("original") or raw.get("original_text") or "").strip("\n")
@@ -531,17 +797,29 @@ class ReviewQueue:
                 "type": "file_edit", "path": item.file_path,
                 "old": item.original_text, "new": item.suggested_text,
             }]
-        if override and item.file_path:
-            # Retarget file edits; drop suggestion-specific actions.
-            retargeted = []
-            for a in actions:
-                if a["type"] == "file_edit":
-                    retargeted.append({**a, "new": resolved_text})
-            if not retargeted:
+        if override:
+            # Retarget file edits to what the human actually typed; drop
+            # suggestion-specific actions unconditionally.
+            #
+            # The drop must NOT be gated on item.file_path. dict_add and
+            # append_note were planned around the suggestion the human just
+            # rejected, so executing them writes the rejected answer — and a
+            # dictionary rule then auto-applies it to every future transcript
+            # in that domain. An item with such an action and no file anchor
+            # used to skip this whole block and do exactly that, reporting
+            # "dictionary rule added" as if it had succeeded.
+            retargeted = [
+                {**a, "new": resolved_text}
+                for a in actions
+                if a["type"] == "file_edit"
+            ]
+            if not retargeted and item.file_path:
                 retargeted = [{
                     "type": "file_edit", "path": item.file_path,
                     "old": item.original_text, "new": resolved_text,
                 }]
+            # No file edit to perform: the verdict is still recorded, and the
+            # human's text is in resolved_text for a deliberate --add.
             actions = retargeted
 
         # Phase 1: plan everything against in-memory content.
@@ -614,7 +892,8 @@ class ReviewQueue:
         if not path.exists():
             raise ReAnchorNeeded(
                 f"file gone: {path} — the transcript moved since enqueue; "
-                f"re-anchor the item (or resolve with kept_original/skipped)"
+                f"run `fix_transcription.py --reanchor-review <id> [--reanchor-root DIR]` "
+                f"to repair the anchor (or resolve kept_original/skipped)"
             )
         with open(path, "r", encoding="utf-8", newline="") as f:
             return f.read()
@@ -640,7 +919,7 @@ class ReviewQueue:
             raise ReAnchorNeeded(
                 f"anchor text not found: {old[:60]!r} — the file changed since "
                 f"enqueue (or an earlier action in this pack consumed it); "
-                f"nothing was modified"
+                f"nothing was modified (repair with --reanchor-review <id> first)"
             )
         if count == 1:
             idx = content.find(old)
@@ -699,7 +978,8 @@ class ReviewQueue:
             if not candidates:
                 raise ReAnchorNeeded(
                     f"no line near line {line_no} matches the context recorded at "
-                    f"enqueue time — the file drifted; refusing to edit a look-alike"
+                    f"enqueue time — the file drifted; refusing to edit a look-alike "
+                    f"(repair with --reanchor-review <id> first)"
                 )
         on_hint = [c for c in candidates if c[0] == line_no]
         if len(on_hint) == 1:

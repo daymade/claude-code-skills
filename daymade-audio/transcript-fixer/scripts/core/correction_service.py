@@ -15,13 +15,14 @@ import os
 import sys
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
 
 from .correction_repository import (
     CorrectionRepository,
     ValidationError,
-    DatabaseError
+    DatabaseError,
+    normalize_domains,
 )
 
 # Import safety check for common words
@@ -275,41 +276,97 @@ class CorrectionService:
             raise
 
     def get_corrections_with_metadata(
-        self, domain: Optional[str] = None
+        self, domain: Optional[Union[str, List[str]]] = None
     ) -> Tuple[Dict[str, str], Dict[str, Dict]]:
         """
         Get corrections as a dictionary plus per-rule metadata.
 
+        `domain` accepts one name or a list (CLI comma-separated --domain); a
+        list loads the union of those domains. Each rule's metadata carries
+        its own `domain` so multi-domain runs never lose track of which
+        project a rule came from.
+
         Returns:
             Tuple of (corrections_dict, metadata_dict) where metadata_dict
-            maps from_text -> {"confidence": float, "notes": str}
+            maps from_text -> {"confidence": float, "notes": str, "domain": str}
         """
-        if domain:
-            self.validate_domain_name(domain)
-            corrections = self.repository.get_all_corrections(domain=domain, active_only=True)
+        domains = normalize_domains(domain)
+        if domains:
+            for d in domains:
+                self.validate_domain_name(d)
+            corrections = self.repository.get_all_corrections(domain=domains, active_only=True)
         else:
             corrections = self.repository.get_all_corrections(active_only=True)
 
-        corrections_dict = {c.from_text: c.to_text for c in corrections}
-        metadata = {
-            c.from_text: {"confidence": c.confidence, "notes": c.notes or ""}
-            for c in corrections
-        }
+        # Cross-domain from_text collisions resolve deterministically: when
+        # several named domains carry the same from_text, the EARLIEST domain
+        # in the caller's list wins (the CLI documents the first --domain
+        # entry as primary). Without this, the winner fell out of SQLite's
+        # scan order — a rule's target could flip with no visible cause, and
+        # --apply-domain would then trust and auto-apply an arbitrary winner.
+        # Single-domain and no-filter paths keep their historical behavior.
+        corrections_dict: Dict[str, str] = {}
+        metadata: Dict[str, Dict] = {}
+        priority = {d: i for i, d in enumerate(domains)} if domains else {}
+        for c in corrections:
+            existing = metadata.get(c.from_text)
+            if existing is not None and priority:
+                if priority.get(c.domain, len(priority)) >= priority.get(existing["domain"], len(priority)):
+                    continue  # earlier-named domain already claimed this key
+            corrections_dict[c.from_text] = c.to_text
+            metadata[c.from_text] = {"confidence": c.confidence, "notes": c.notes or "", "domain": c.domain}
         return corrections_dict, metadata
 
-    def get_corrections(self, domain: Optional[str] = None) -> Dict[str, str]:
+    def get_disabled_pairs(self, domain: Optional[Union[str, List[str]]] = None) -> set:
+        """(from_text, to_text) pairs a human has explicitly disabled.
+
+        Needed because disabling is not the end of a rule's life. Three sources
+        feed Stage 1 — this DB, the people roster, and (as priors only) the
+        domain context file — and the roster merge fills gaps by asking "is this
+        from_text absent from the loaded corrections?". A disabled rule IS
+        absent, because loading filters on is_active. So `--report-false-positive`
+        removes a rule from the DB and the roster silently puts it straight back
+        on the next run, with no way to disable it again: the report command sees
+        no *active* row, prints "No active rule" and exits 1, while the rule is
+        demonstrably still firing.
+
+        Pairs, not bare from_texts: a domain may disable X→Y precisely to retarget
+        X→Z, and vetoing on from_text alone would also suppress a roster entry
+        that is correct — trading a visible wrong replacement for an invisible
+        missing one, which is harder to notice.
+        """
+        corrections = self.repository.get_all_corrections(
+            domain=normalize_domains(domain) or None, active_only=False)
+        return {(c.from_text, c.to_text) for c in corrections if not getattr(c, "is_active", True)}
+
+    def get_corrections(self, domain: Optional[Union[str, List[str]]] = None) -> Dict[str, str]:
         """
         Get corrections as a dictionary for processing.
 
         Args:
-            domain: Optional domain filter
+            domain: Optional domain filter — one name or a list (list loads
+                the union, matching the CLI's comma-separated --domain)
 
         Returns:
             Dictionary of corrections {from_text: to_text}
         """
-        if domain:
-            self.validate_domain_name(domain)
-            return self.repository.get_corrections_dict(domain)
+        domains = normalize_domains(domain)
+        if domains:
+            for d in domains:
+                self.validate_domain_name(d)
+            corrections = self.repository.get_all_corrections(domain=domains, active_only=True)
+            # Same deterministic collision rule as get_corrections_with_metadata:
+            # earliest-named domain wins a from_text tie; no-filter keeps the
+            # historical last-writer behavior.
+            priority = {d: i for i, d in enumerate(domains)}
+            out: Dict[str, str] = {}
+            owners: Dict[str, str] = {}
+            for c in corrections:
+                if c.from_text in owners and priority.get(c.domain, len(priority)) >= priority.get(owners[c.from_text], len(priority)):
+                    continue
+                owners[c.from_text] = c.domain
+                out[c.from_text] = c.to_text
+            return out
         else:
             # Get all domains
             all_corrections = self.repository.get_all_corrections(active_only=True)

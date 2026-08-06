@@ -2,12 +2,13 @@
 name: claude-switch-models-setup
 description: >-
   Set up and maintain multiple isolated Claude Code CLI profiles so students and
-  power users can run different LLM providers (Kimi K3, Kimi K2.7 highspeed, GLM,
-  DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time.
+  power users can run different LLM providers (Kimi K3, Kimi K2.7 highspeed,
+  MiniMax M3, MiniMax M2.7, GLM, DeepSeek, StepFun, Anthropic) in separate
+  terminal windows at the same time.
   Use this skill whenever the user asks about multi-provider Claude setup,
   multiple Claude Code windows, switching models or the csk/csd/csg aliases,
   CLAUDE_CONFIG_DIR, the ~/.claude-profiles directory, or running
-  Kimi/GLM/DeepSeek/StepFun alongside Anthropic. It also owns profile-drift
+  Kimi/MiniMax/GLM/DeepSeek/StepFun alongside Anthropic. It also owns profile-drift
   troubleshooting — a third-party profile missing skills/hooks/plugins the default
   profile has, claude-profiles-doctor reporting a real directory where a symlink
   belongs, or settings not converging — and per-provider context-window
@@ -30,7 +31,7 @@ The result: you can open one terminal with Kimi, another with DeepSeek, another 
 - **Config layer — `settings.json`:** each profile has its own `settings.json` (Claude Code treats it as config-dir-local), so everything stored there — hook registration, `extraKnownMarketplaces`, `enabledPlugins`, `env` feature flags, `permissions`, behavior preferences — silently drifts the moment it changes in the default profile (measured 2026-07-18: 9/9 real profiles had zero hook registrations). `sync-profile-settings.py` is the converger: registered as a SessionStart hook, it copies every key from the default profile's `settings.json` into the active profile's, except identity keys (top-level `model`; and env vars that carry provider routing or Anthropic-native isolation — `ANTHROPIC_*`, `CLAUDE_CODE_SUBAGENT_MODEL`, `ENABLE_TOOL_SEARCH`, `DISABLE_GROWTHBOOK/TELEMETRY/AUTOUPDATER` — which the provider settings file deliberately sets differently). Profile-only keys are preserved; the sync never deletes. This is what makes "everything except the model works in every profile" actually hold.
 - **Exception — `plugins/`:** marketplace content and install state are shared, but each profile keeps its **own** `known_marketplaces.json`. Claude validates a marketplace's `installLocation` with `path.resolve()` (which does NOT resolve symlinks), so a single shared file would make every non-writing profile report "corrupted installLocation". `claude-plugins-sync.py` builds and maintains this per-profile structure.
 - `claude-plugins-sync.py` also mirrors `enabledPlugins` from the default `~/.claude/settings.json` into each profile's `settings.json` (sharing cache files is not enough; Claude Code treats "enabled" state as config-dir-local). The SessionStart converger above covers the same key as part of its whole-settings sync; `claude-plugins-sync.py` remains the owner of the per-profile `known_marketplaces.json` structure.
-- Local source sync is automatic on maintainer machines. Installed Claude plugin cache directories and Codex/agents skill copies are symlinked to the source repos, so normal source edits are live immediately. `sync-local-skill-sources.py` is the idempotent repair primitive; `claude-profile` init/launch runs it automatically, and `sync-local-skill-sources-daemon.sh --install` installs a macOS LaunchAgent that watches default Claude install state plus local marketplace manifests for structural changes. When a skill is removed from a marketplace manifest, the same repair pass prunes only stale Codex/agents symlinks that point back into the managed source repos; it never deletes real skill directories.
+- Local source sync is automatic on maintainer machines. Installed Claude plugin cache directories and Codex/agents skill copies are symlinked to the source repos, so normal source edits are live immediately. `sync-local-skill-sources.py` is the idempotent repair primitive; `claude-profile` init/launch runs it automatically, and `sync-local-skill-sources-daemon.sh --install` installs a macOS LaunchAgent that watches default Claude install state plus local marketplace manifests for structural changes. When a skill is removed from a marketplace manifest, the same repair pass prunes only stale Codex/agents symlinks that point back into the managed source repos, plus superseded version-alias symlinks in the plugin cache and all but the newest `KEEP_JSON_BACKUPS` copies of `installed_plugins.json`; it never deletes real skill directories.
   - **Pitfalls with daemon-owned symlinks** (both observed 2026-07): ① never hand-create a symlink into a daemon-owned directory (`ln -s <repo>/<skill> ~/.codex/skills/<skill>`) — if the daemon already created it, BSD `ln` puts the new link *inside* the target directory, leaving a self-referential `<skill>/<skill>` stray that directory walks can recurse into; repair by hand only with `ln -sfn`, or after `readlink` confirms the link is missing. ② Verify symlinks with `readlink`, not `ls -la <link>` — ls follows the link and lists the target's *contents*, which reads as "link created" even when the actual outcome was a stray inside the target.
 - Sync scripts use a shared cross-process lock. This is required because users often open several provider windows from tmux or multiple terminals at once; concurrent launches must serialize marketplace/cache rewrites while still allowing all profiles to start.
 - For the full local-source architecture, read `references/local-source-sync-architecture.md` before changing these scripts.
@@ -45,13 +46,69 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    - Shell is zsh or bash: detect via `$SHELL`
    - `python3` is available
 
-2. **Install the profile manager scripts**
-   - Copy `scripts/claude-profiles.sh` to `~/.config/claude-switch-models-setup/claude-profiles.sh`
-   - Copy `scripts/claude-plugins-sync.py` to `~/.config/claude-switch-models-setup/claude-plugins-sync.py`
-   - Copy `scripts/sync-local-skill-sources.py` to `~/.config/claude-switch-models-setup/sync-local-skill-sources.py`
-   - Copy `scripts/sync-local-skill-sources-daemon.sh` to `~/.config/claude-switch-models-setup/sync-local-skill-sources-daemon.sh`
-   - Copy `scripts/sync-profile-settings.py` to `~/.config/claude-switch-models-setup/sync-profile-settings.py`
-   - Make all five executable
+2. **Install the profile manager scripts — symlink them, do not copy**
+
+   On a machine that has this repo checked out (the maintainer case), run the
+   bundled installer — it does exactly what the manual form below does:
+
+   ```bash
+   <absolute-path-to-this-repo>/daymade-claude-code/claude-switch-models-setup/scripts/setup.sh
+   ```
+
+   Or link them by hand. `REPO` **must be an absolute path**: with a relative
+   one every command below still succeeds and exits 0, leaving five dangling
+   links that break `csk` and the LaunchAgent with no error to trace.
+
+   ```bash
+   REPO=<absolute-path-to-this-repo>/daymade-claude-code/claude-switch-models-setup
+   DST=~/.config/claude-switch-models-setup
+   mkdir -p "$DST"
+   for f in scripts/claude-profiles.sh \
+            scripts/claude-plugins-sync.py \
+            scripts/sync-local-skill-sources.py \
+            scripts/sync-local-skill-sources-daemon.sh \
+            scripts/sync-profile-settings.py; do
+     ln -sf "$REPO/$f" "$DST/$(basename "$f")"
+   done
+   ```
+
+   The five paths are spelled out rather than globbed so that reading this file
+   tells you which scripts exist and where — `scripts/*.sh` would not. No
+   `chmod` step: all five are committed executable, so setting the bit again
+   would only dirty the checkout with mode changes that then ride into somebody
+   else's commit.
+
+   **Why symlinks and not `cp`:** `~/.config/…` is what actually runs — the
+   LaunchAgent and `claude-profile` invoke scripts by that path — while this
+   repo holds their source. Copies drift, and nothing about a deployed copy
+   looks different from its source, so "am I editing the SSOT?" is not a
+   judgement anyone reliably makes. Measured on one machine before the switch:
+   a lock-placement fix sat in the repo for 26 days while the deployed copy kept
+   running the bug it fixed, and two cleanup routines written straight into the
+   deployed copy never reached version control at all — **drift in both
+   directions, silently.** A link removes both, *for as long as it stays a
+   link* — an atomic-save editor, an `rsync` or a stray `cp` turns one back into
+   a real file without saying so, which is why this is worth re-checking rather
+   than declaring solved. It also lets `sync-local-skill-sources.py` locate its
+   own source repo by resolving its own path, instead of falling back to
+   guessing.
+
+   Worth re-checking how? Any periodic check works; there is none bundled with
+   this skill. One line, run wherever you keep such things:
+
+   ```bash
+   for f in ~/.config/claude-switch-models-setup/*.py ~/.config/claude-switch-models-setup/*.sh; do
+     [ -L "$f" ] && [ -e "$f" ] || echo "not a live link: $f"
+   done
+   ```
+
+   If one has become a real file, **move it aside before re-linking** — it may
+   hold edits that exist nowhere else, which is the whole problem being
+   described: `mv "$f" "$f.local-edits" && ln -sf <source> "$f"`, then diff.
+
+   On a machine **without** the repo, copy the five scripts out of this skill
+   bundle instead — and accept that repo fixes will not reach it until you copy
+   again.
 
 3. **Add shell integration**
    - Source the profile manager in `~/.zshrc` or `~/.bashrc`
@@ -317,6 +374,13 @@ python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --apply
 ```
 
 This moves existing real copies into timestamped `.source-sync-backups/` folders, replaces them with symlinks to the source repos, and prunes stale managed symlinks after a skill is removed from the manifest.
+
+It also cleans up after itself, which earlier versions did not:
+
+- **Version-alias symlinks.** Each cache link is named after the marketplace's current version, so every version bump left the previous link behind pointing at the very same source directory. One plugin had six version directories, four of them aliases for one source. The pass now removes sibling links that resolve to the same source; real directories are never touched, since Claude Code installs those and a live session may still hold them through `.in_use`.
+- **`installed_plugins.json` backups.** Every run that changes the JSON writes one, and nothing removed them — a month of runs left 453 files behind. The `KEEP_JSON_BACKUPS` constant in the script caps the retained set; the names end in a `YYYYMMDD-HHMMSS` stamp, so lexical order is chronological.
+
+Both are visible in a dry run before `--apply` touches anything.
 
 ### A profile is missing hooks, marketplaces, env flags, or other default-profile settings
 

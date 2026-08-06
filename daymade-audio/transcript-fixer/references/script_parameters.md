@@ -37,19 +37,27 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
   - `2` = AI corrections only (requires Stage 1 output file)
   - `3` = Both stages sequentially
 - `--output, -o` (optional): Where results are written — accepts either a **directory** (the sidecars `<stem>_stage1.md` / `_changes.md` / `_needs_review.md` are written into it) **or a file path** ending in `.md`/`.markdown`/`.txt` that is not an existing directory (the corrected Stage 1 output is written directly to that exact file). Defaults to the input file's directory. Every "Saved" / report line prints the full resolved path, so a misdirected output is visible immediately. (Passing a file path used to silently `mkdir` a directory of that name and hide the output inside it — fixed.)
-- `--domain, -d` (optional): Restrict to one correction domain (default: all domains)
+- `--domain, -d` (optional): Restrict to one correction domain (default: all domains). Accepts a comma-separated list (`--domain myproject,myproject-alt`): every listed domain's rules load as one union for Stage 1, and `--apply-domain` trusts the whole union. Write commands (`--add`, `--approve`) still require exactly one domain and fail fast on a list.
 - `--apply-all` (optional): Opt out of the default safe mode and apply every risk level (low/medium/high). Higher false-positive risk — see false_positive_guide.md.
 - `--review` (deprecated): No-op kept for backward compatibility; safe mode is now the default.
 - `--dry-run` (optional): Preview Stage 1 changes to `*_dryrun.md` without writing `*_stage1.md`.
 - `--changes-file` (optional): Always write `*_changes.md` (already on by default in safe mode).
+
+**Evidence commands** (read-only; turn the native pass's manual grep loops into single invocations — semantics in SKILL.md "Native AI Correction" steps 4-6):
+
+- `--scan-traps --context-file <domain-context.md> -i <transcript>`: parse every `**误识 → 正确**` entry out of a domain context file and locate each variant in the transcript (line number + context window), grouped by entry; `**X = …勿修…**` confirmed-correct records are reported as keep-as-is; entries with zero hits are listed so "scanned and absent" is distinguishable from "never scanned". Bullets the parser could not turn into a scannable entry at all are reported **first**, under `⚠️ N documented trap(s) NOT scanned` — one line per bullet, so the count is bullets rather than internal reasons. With `--json` the same information is the `unparsed` key: a list of `{raw, fragment, reason}`. A machine caller reading only `hits`/`no_hit` concludes "no traps here" from a scan that never looked at some of them, which is exactly the coverage gap this key exists to close. Shapes that stay deliberately silent (they are not coverage gaps): a rejected variant sitting beside a good one, Han-only prose split by a space, and an annotation parenthesis that cites or exemplifies the same rule
+- `--probe <term> --corpus <dir>`: the term's real-meaning frequency across every `*.md` under the corpus dir (recursive) — per-file counts + sampled context windows + the verdict criterion (all-error → bare rule safe / any real meaning → anchored or do-not-add / zero → safe but compounds nothing)
+- `--check-corpus` (with `--add`): run the same probe on the FROM term before the rule is written; advisory, never blocks. Requires `--corpus`
+- `--json` works with both: one machine-readable result line on stdout
 
 **Review queue** (persistent store for uncertain corrections; semantics in SKILL.md "Review Queue"):
 
 - `--enqueue-review JSON_PATH`: Enqueue items from a JSON file (`-` = stdin). Item fields: `{original, suggested?, file?, line?, context?, kind?, domain?, evidence?, actions?, priority?, source?}` — full field/alias table + gotchas in [Review Queue Item Schema](#review-queue-item-schema) below
 - `--list-review`: List queue items, priority-sorted (filters: `--review-status pending|accepted|overridden|kept_original|skipped|all` default pending; `--domain`; `--review-source native_pass|stage1_deferred|learned_suggestion|manual`)
 - `--show-review ID`: One item in full (evidence + proposed action pack)
+- `--reanchor-review ID [ID...]`: Re-anchor pending item(s) whose transcript drifted or moved since enqueue (refresh line/context verbatim from the current file; when the file is gone, search `--reanchor-root DIR` + the recorded parent dir for `*.md` containing the original text — unique candidate re-points the anchor, ambiguous asks for `--reanchor-to FILE` which names the target explicitly and is refused if the original is not in it)
 - `--resolve-review ID --decision accepted|overridden|kept_original|skipped|reopen`: Record a verdict and execute the action pack (`overridden` requires `--override-to TEXT`; `--note` free-text evidence; `--by` reviewer name; `reopen` reverts applied edits and re-pends the item)
-- `--json` works with all four: one machine-readable result line on stdout
+- `--json` works with all five: one machine-readable result line on stdout
 
 ### Review Queue Item Schema
 
@@ -112,8 +120,24 @@ uv run scripts/fix_transcription.py --input meeting.md --stage 1 --output ./meet
 
 - `0` - Success
 - `1` - Missing required parameters, file not found, or API key not configured (Stage 2/3)
-- `2` - `--resolve-review` refused because the anchor text no longer matches the target file (re-anchor needed; nothing was applied — fail closed)
+- `2` - `--resolve-review` refused because the anchor text no longer matches the target file (re-anchor needed; nothing was applied — fail closed); also `--reanchor-review` when every requested id failed
+- `3` - `--enqueue-review` rejected one or more items whose `original`/`context` is not verbatim in the declared file (see `rejected_unanchored` in the JSON; items in `added` WERE enqueued — fix the rejects and re-enqueue them)
 - API request failures do **not** get a dedicated exit code — the pipeline keeps the original text and prints a warning (see "API Fallback" in SKILL.md)
+
+`--report-false-positive` carries its own codes, because a caller could not
+otherwise tell "I disabled it just now" from "it was already off" — both used
+to return `0`:
+
+- `0` - disabled by this run
+- `1` - no such pair in this domain. Names the domains where it IS active, if any
+- `2` - bad input: more than one `--domain` (disabling is per-domain), or a malformed domain name. Previously a bare traceback with empty stdout and exit `1`
+- `3` - already disabled in this domain — nothing to do. Not an error
+- `4` - supplied only by the people roster; no database row exists to disable. The message gives both ways forward (scope it to this domain with `--add` first, or remove the variant from the roster to stop it everywhere)
+
+None of these paths writes `No active rule` to stderr any more: that warning
+fires inside the service layer when it finds nothing, and it contradicted every
+stdout message above, so a caller capturing `2>&1` saw both and one grepping for
+it misread a normal outcome as fatal.
 
 ## fix_transcript_timestamps.py
 

@@ -361,7 +361,7 @@ SKILL.md 中的若干行级规则来自下面这些真实事故。规则本身�
 - **是 harness 坏了、不是描述坏了**:根因是触发被已装竞品截胡(见 Case 13),harness 反映不出来 → 输出全是噪音。
 - **通用铁律「验新功能的 harness 先跑通已知良好 baseline」在此适用**:信优化器的"best"之前,先喂一条**铁定该触发**的 query 看 recall 是否 >0;recall=0 或各轮同分,停,别应用任何"best"。
 
-→ 对应规则:Description Optimization 段加 caveat——`run_loop` 输出前先过 known-good baseline;recall=0/各轮同分 = harness 是隐藏变量,其"best_description"不可信,改手工写 + 真实探针验证。
+→ 对应规则（2026-08 已从散文升级为代码强制,见 Case 20）:`run_loop.py` 现在自己在 iteration 1 检测这个信号并自动中止,不再要求执行者记得先手工过 known-good baseline。SKILL.md Description Optimization 段仍保留"输出后再查一遍"的 caveat,作为 guard 覆盖不到的持续弱信号场景（各轮都非零但一直接近零）的第二层。
 
 ### Case 13: 触发和"已装 skill 群"抢,散文未必赢;按竞品归属决策（2026-07）
 
@@ -431,6 +431,22 @@ SKILL.md 中的若干行级规则来自下面这些真实事故。规则本身�
 
 → 对应规则：SKILL.md standing discipline #6 新增 "A check that misfires on healthy input is worse than no check"；"Match the engine" 一段由 renderer 泛化到 parser / linter / 任何验证工具。
 
+### Case 20: Case 12 的教训从散文升级为代码强制——两轮独立审阅各挑出一处「新守卫自己的盲区」（2026-08）
+
+Case 12 记录的是"发现 `run_loop` 会产出空洞退化结果"；本案例是后续把这条教训从"执行者需要记得手工检查"升级成"`run_loop.py` 自己在 iteration 1 检测并中止"的过程——升级本身很直接，真正的教训在于：**给检查本身加自动化，检查逻辑的边界条件比原先的散文提醒更容易出错，因为它现在要处理散文从不需要面对的具体输入组合。**
+
+第一轮独立审阅（fresh agent，自己造 mock 测试，不信任作者的验证结论）构造出一个反例：正样本 0 次触发、但负样本被大量误触发（description 方向搞反，probe 明明在正常工作）——原始 guard 只检查正样本触发数，会把这种"有真实梯度可迭代改进"的情况误判成"探针完全测不到东西"并错误中止。同一轮还发现执行层故障（claude CLI 不在 PATH / 超时 / 网络断）会产生和"探针真沉默"完全相同的数据形态，但归因文案只提了内容层面的原因（竞品冲突 / 低门槛领域），把读者引向错误的排查方向。
+
+第二轮审阅专门复核第一轮的修复本身，而不是重新走一遍第一轮的范围——这个"审阅审阅者"的结构本身抓出了第一轮修复引入的新缺口：负样本侧如果也是因为异常才"沉默"（而非真沉默），第一轮的修复条件（"正负样本都 0 触发"）看不出这种数据是坏的，会把它当成"探针works"的证据。第二轮还顺手在测试这个 guard 的过程中，发现一个与本次改动无关但真实存在的预存 bug（`--holdout 0` 时报告生成会直接崩溃）。
+
+三个可推广的结论：
+
+1. **一条散文建议升级为代码检查时，不能只翻译"发生什么就报什么"，必须逐条枚举检查条件在各种输入组合下的行为**——原散文只说"recall=0 就别信"，翻译成代码时"只看正样本"是一个隐性简化，直到被对抗性构造的反例戳穿。
+2. **审阅"修复"本身要用和审阅原始代码同等严格的独立性**——不能因为"这是在修一个已发现的问题"就降低审阅强度；第一轮修复自己就带了新的边界漏洞，只有第二轮独立、不预设"这次应该没问题"的审阅才抓得出来。
+3. **测试一个 fix 的过程会顺手暴露与它无关的预存缺陷**——遇到时判断是否顺手修（成本低、范围明确、能证明是预存的）还是只记录不修（范围/成本不可控），不要为了"保持 PR 干净"而假装没看见。
+
+→ 对应规则：`run_loop.py` 新增的 guard 现在同时检查正负样本的触发数与执行错误数（`daymade-skill/skill-creator/scripts/run_loop.py`），配套回归测试见 `tests/test_run_loop_degenerate_guard.py`；完整审阅记录（含两轮 prompt 原文、每条发现的处置理由）在私有仓 `next/_meta/skill-reviews/skill-creator/independent-review-degenerate-harness-guard.md`（不进公开仓库，因其引用真实操作细节）。
+
 ## 来源
 
 | 来源 | 本文档引用的独有贡献 |
@@ -438,4 +454,4 @@ SKILL.md 中的若干行级规则来自下面这些真实事故。规则本身�
 | Anthropic Official | Evaluation-driven development、conciseness imperative（已由 SKILL.md 覆盖，本文不重复） |
 | skill-creator SKILL.md | 完整工作流和工具链（本文引用但不复制，请直接参考 SKILL.md） |
 | 社区经验 | 激活率数据（20%→90%）、Encoded Preference > Capability Uplift |
-| 实战教训 | 并行研究 agent、失败记录的价值、竞争 skill 删除、量化迭代对比、Counter Review 流程、benchmark 有水分需抽查内容、baseline 揭示 skill 事实错误、诚实增量分布、现有 skill old-vs-new 完整性门禁 + 不盲信自己的评分脚本（Case 8）、语料蒸馏型 skill 需独立完整性审计（Case 11）、run_loop 空洞退化输出需先验 harness baseline（Case 12）、和已装 skill 群的触发竞争 + 竞品归属决策（Case 13）、触发验证的代理陷阱 + hook 干扰探针（Case 14）、认可产物语料的登记≠提炼（Case 15）、多 session 并发编辑同仓的 baseline/写入/提交纪律（Case 16）、交互组件货架＋纠正原话双层回写（Case 17） |
+| 实战教训 | 并行研究 agent、失败记录的价值、竞争 skill 删除、量化迭代对比、Counter Review 流程、benchmark 有水分需抽查内容、baseline 揭示 skill 事实错误、诚实增量分布、现有 skill old-vs-new 完整性门禁 + 不盲信自己的评分脚本（Case 8）、语料蒸馏型 skill 需独立完整性审计（Case 11）、run_loop 空洞退化输出需先验 harness baseline（Case 12）、和已装 skill 群的触发竞争 + 竞品归属决策（Case 13）、触发验证的代理陷阱 + hook 干扰探针（Case 14）、认可产物语料的登记≠提炼（Case 15）、多 session 并发编辑同仓的 baseline/写入/提交纪律（Case 16）、交互组件货架＋纠正原话双层回写（Case 17）、独立审核需对照未被作者改过的证据（Case 18）、误杀健康输入比漏报更贵 + 验证工具须与生产同实现（Case 19）、Case 12 从散文升级为代码强制 + 审阅修复本身需同等独立性（Case 20） |

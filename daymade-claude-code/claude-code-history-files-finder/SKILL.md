@@ -296,6 +296,77 @@ Reports:
 
 Optional: `--show-files` to list all file operations.
 
+### 5. Extract Verbatim User Messages
+
+Produce a reading page of what the user actually typed — every user message
+across all homes and archives, with harness noise routed to appendices:
+
+```bash
+python3 scripts/extract_user_messages.py /tmp/my-words --days 7
+```
+
+Writes `/tmp/my-words.html` (primary) and `/tmp/my-words.md`. Useful flags:
+`--group-by project|day` (default `project`), `--min-dup N` (boilerplate
+frequency threshold), `--home <path>` (exact scope, repeatable).
+
+The hard part of this task is not parsing, it is *authorship*: a `user` record
+is not necessarily user-authored. The extractor implements the five
+contamination classes in `references/session_file_format.md` — command
+envelopes, hook/loop-injected boilerplate (frequency-detected, both standalone
+and tail-appended shapes), `[Image #N]` placeholders, whole-document pastes,
+and agent-voiced re-injection (content-matched against earlier assistant
+texts) — and recovers mid-work input from `attachment.queued_command` records,
+de-duplicated against later-delivered user records. Read that reference section
+before modifying the filters.
+
+### 6. Triage Session Endings (Crash Recovery / Backlog Audit)
+
+Classify how sessions in a time window or project ended, with the full last
+assistant message printed for each — the tool for "which sessions did a
+reboot/crash cut off" or "which older sessions are still waiting on a reply,
+not actually done":
+
+```bash
+python3 scripts/analyze_sessions.py triage --all-projects \
+  --from-date 2026-08-05T12:30:00+00:00 --to-date 2026-08-05T13:05:00+00:00
+```
+
+Reports each in-scope session's session ID (always full, never truncated —
+copy it directly into any follow-up report), cwd, and one of five structural
+`kind`s: `interrupted_explicit` (the session's last relevant record is an
+explicit interruption marker), `net_error` (the last assistant turn died on
+an API/transport error), `done` (the last assistant turn produced real text,
+and it didn't start with an API error), `empty` (no assistant turns at all),
+or `stuck_no_result` — the catch-all for every other shape, because they all
+mean the same thing for triage purposes: **the final turn produced no
+textual reply, so the model was still working when the file stopped.** That
+covers a tool call still waiting on its result, a tool call whose result
+already landed but no further assistant turn followed it (the harness likely
+stopped between the result landing and the model's next turn being
+captured), and a final turn that is thinking-only or otherwise empty.
+
+**`done` is a structural label, not a claim that nothing is outstanding.** A
+session can end in a clean `text` block precisely because the assistant
+surfaced a finding, a decision, or a question and never got a reply — telling
+"fully wrapped up" from "waiting on you" requires reading the printed
+`last_assistant_text`, which is why this command prints up to 4000 characters
+of it by default (`--tail-chars 0` for no cap) rather than a truncated title.
+See "Detect Session
+Interruption" in `references/session_file_format.md` for the full reasoning,
+including why this is a genuinely different axis from the `kind` field.
+
+Useful flags: `--kind KIND` (repeatable, restrict to specific kinds — e.g.
+`--kind stuck_no_result --kind interrupted_explicit` for "only the ones a
+crash could plausibly explain"); `--exclude-title-prefix TEXT` (repeatable —
+exclude sessions whose opening prompt starts with TEXT, for a project's own
+automation convention such as a code-review hook that always opens with the
+same fixed prompt; these otherwise dominate a triage pass because they end
+in a routine structured tool call, not an interruption); `--tail-chars N`
+(cap the printed last-assistant text; default 4000, 0 = unlimited). Shares
+`--from-date`/`--to-date`/`--home`/`--main-only`/`--history-sources` with
+`list`, and `--all-projects`/project-path/`--exclude-session` with both
+`list` and `search`.
+
 ## Workflow Examples
 
 For detailed workflow examples including file recovery, tracking file evolution, and batch operations, see `references/workflow_examples.md`.

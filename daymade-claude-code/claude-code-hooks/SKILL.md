@@ -50,7 +50,7 @@ match tokens/patterns; it can't judge whether a design is good).
 | **PreToolUse** | before a tool runs | allow | **block** the call (stderr → shown to model as guidance) | any other exit = "non-blocking error" → **the call proceeds** |
 | **PostToolUse** | after a tool ran | quiet **unless it prints a `hookSpecificOutput` JSON on stdout — that is how context injection works, and it happens at exit 0** | feedback to the model (can't un-run the tool) | — |
 | **SessionStart** | session begins | proceed | — | **always exit 0** — never block a session |
-| **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | loop safety is **two layers**: the hook checks `stop_hook_active` (necessary, **not** sufficient — rule 7), and the harness itself **ends the turn after 8 consecutive blocks** regardless. All Stop hooks for an event run **in parallel** — one block round can carry several hooks' feedback |
+| **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | loop safety: the hook checks `stop_hook_active` (necessary, **not** sufficient — rule 7). The harness's consecutive-block ceiling (default 8) is **not** a general backstop — its counter resets on any continuation that executed tools, so it never arrives for a hook whose remediation involves tool calls, which is most of them (#27). Carry your own bound. All Stop hooks for an event run **in parallel** — one block round can carry several hooks' feedback |
 
 - **PreToolUse** is the workhorse — the only one that can *stop* an action.
   `matcher` selects the tool (`Bash`, `Agent`, `WebFetch`, …). Exit 2 blocks and
@@ -95,11 +95,14 @@ match tokens/patterns; it can't judge whether a design is good).
   hard gates ("this must not stand"). `hookSpecificOutput.additionalContext`
   shows as neutral "Stop hook feedback" with no error notification — for
   coaching and reminders the model should weigh, not gates. Both count toward
-  the same 8-consecutive-block ceiling from the table above, so the choice is
-  tone, not safety. What the ceiling means for message design: a blocked retry
+  the same consecutive-block ceiling from the table above, so the choice is
+  tone, not safety. What that means for message design: a blocked retry
   round (`stop_hook_active: true`) is let through **with whatever violations
-  remain**, and after 8 blocks the harness ends the turn the same way — so a
-  Stop guard gets exactly **one** informed bite. Report *all* findings in that
+  remain** — so a Stop guard gets exactly **one** informed bite. (The ceiling
+  reinforces this only when your remediation is "rewrite the reply"; if it
+  involves tool calls the counter resets and the ceiling never lands — #27.
+  Either way the one-bite conclusion holds, because it rests on the latch, not
+  on the ceiling.) Report *all* findings in that
   one block (a guard that prints only the first loses the rest permanently —
   pitfall #17), and write the message as an escape manual naming the exact
   acceptable fix, not a verdict — the model converges in one round or it burns
@@ -304,7 +307,7 @@ different guard classes.** Take `cd ~/no-such-dir && TRIGGER`:
 |---|---|---|---|
 | **Token matcher** (is this a banned command form?) | the command text alone | **2, block** | `TRIGGER` is right there in the text; an unresolvable `cd` doesn't make it not-a-trigger, and if the guard goes quiet here it will also go quiet on `cd ~/real-dir && TRIGGER` |
 | **State deriver** (does the repo's staged set span domains?) | state read from disk | **0, allow** | `cd` fails, `&&` short-circuits, no commit ever happens — there is nothing to guard |
-| **Termination-state reader** (has the remediation already happened?) | a receipt / counter file (rule 7) | **0, allow** | an unreadable state file means the hook cannot know it already fired; failing closed here blocks forever with no remediation possible and no human-visible cause — that *is* the loop, and it is the one failure worse than a missed case |
+| **Termination-state reader** (has the remediation already happened?) | a receipt / counter file (rule 7) | **0, allow** — *when the state file IS the termination condition* | an unreadable receipt means the hook cannot know it already fired; failing closed here blocks forever with no remediation possible and no human-visible cause — that *is* the loop, and it is the one failure worse than a missed case. **Inverted sub-case — read this before copying the row:** when the state is only a **budget on top of an independent predicate** (the block still clears by doing the work), allow-on-unreadable **silently disables the entire hook** — one unwritable directory makes it mute for every input, forever, which is the worst failure shape there is. There, fail back to *the behavior before the budget existed* (keep evaluating the predicate), not to silence. **Tell the two apart with one question: if the state vanished, would remediation still be possible?** No → receipt case, allow. Yes → budget case, keep checking |
 
 So decide which class your hook is *before* writing the row, and the harness's
 `unresolvable path` template row expects **2** because that template targets the
@@ -325,6 +328,18 @@ with `REPO_DIR` parsed out of the **command text** — so `cd ~/repo && git comm
 handed it a literal `~/repo`, `git -C` failed, staged came back empty, and the guard
 concluded "no cross-domain files, allow." Every cross-repo commit went unguarded and
 nothing ever looked wrong. Anatomy + the shared-library twist: pitfall #10.
+
+That parser has a second failure direction, and it is the nastier one. Once you
+add a fallback so it stops failing open, the fallback becomes correct for one
+reason and wrong for another — and both print the same line. `git push` (no
+explicit target) legitimately falls back to the event's `cwd`; `git -C "$R" push`
+*names* a target the hook cannot resolve, falls back to the same `cwd`, and then
+renders a confident ✅ about a different repository. Those two cases render
+byte-identically (measured, MD5-equal), so neither the hook nor the reader can
+tell the honest verdict from the misbound one. **A fallback value must carry the reason it was
+chosen**, and only "no explicit target" earns a verdict. Full anatomy, the
+confused-deputy framing, and why fixtures with literal paths never catch it:
+pitfall #28.
 
 ### 6. Judge on a fact the world can answer — never on your own rendering, never on a naming habit
 
@@ -349,6 +364,12 @@ that both go silent:
   layout changes; conventions do not. (When the candidate **is** a `SKILL.md`,
   there is no sibling to ask about — classify by basename; #13 explains why that
   is a spec-defined fact and not the naming habit this rule warns against.)
+  **A checkable fact can still be the wrong fact — anchor the question and filter by
+  type.** `test -f SKILL.md` is true in a downloads folder too, and one guard that walked
+  ancestors looking for exactly that swallowed an entire home directory, then told a real
+  session to load a skill named after it — a name that cannot exist (rule 9's incident).
+  Anchor to a sibling of a *specific* directory or to a known install path; an unanchored
+  ancestor walk is a convention wearing a fact's clothes.
 
 The tell for both: a branch that has never once fired in production while its
 tests are green. Print the raw pre-formatting classification and you will see
@@ -367,13 +388,17 @@ condition T is true → hook demands remediation R → model performs R → T ch
 ```
 
 **If completing R can make T true again, the loop does not converge.** Nothing
-errors, nothing crashes; it burns round after round until the harness's
-8-consecutive-block ceiling ends the turn — or a human interrupts first, which
-is what usually happens because each round is a *complete* remediation cycle
-(dispatch, wait, adopt, edit), not a cheap retry. That ceiling is a backstop
-against a runaway session, not a design: reaching it means the turn ends with
-the violation still standing and the model's last 8 rounds spent on work nobody
-asked for. "It eventually stops" is not termination in any sense you want. `stop_hook_active` does *not* save you here — that field covers
+errors, nothing crashes; it burns round after round until a human interrupts —
+which is what usually happens, because each round is a *complete* remediation
+cycle (dispatch, wait, adopt, edit), not a cheap retry. **And that same
+property is why the harness's 8-consecutive-block ceiling will not save you:
+its counter resets on every continuation that executed tools, so a remediation
+cycle made of tool calls keeps it pinned at 1 forever** (measured — #27). Even
+where it does arrive, it is a backstop against a runaway session, not a design:
+the turn ends with the violation still standing, and the harness reports that
+turn as `reason:"completed"` — indistinguishable from genuinely finishing.
+"It eventually stops" is not termination in any sense you want, and here it
+does not even eventually stop. `stop_hook_active` does *not* save you here — that field covers
 exactly **one layer of re-entry** ("the stop I just blocked is being retried").
 It says nothing about the *cross-turn* case, where the model genuinely goes off
 and does R (real work, many tool calls), then stops naturally: that is a brand
@@ -656,6 +681,74 @@ channel works (in that session, System Events window-counting returned a
 confident 0 for a dialog that was on screen — a permission failure masquerading
 as evidence).
 
+### 9. Fixtures cannot tell you the false-positive rate — replay a real command corpus before you register
+
+Rule 1 ranks *which* error is worse (a false block beats a missed one, because a guard
+people must bypass gets bypassed reflexively). Rule 2 makes you test before registering.
+Neither of them tells you **how big your false-block surface actually is** — and the test
+table cannot, because *you wrote its inputs from the same mental model that produced the
+detector*. Its cases carry the shapes you thought of; the shapes you didn't think of are,
+by construction, absent. That is not a coverage gap you can close by adding rows.
+
+**Measured, 2026-08-06.** A PreToolUse/Bash guard passed a 26-case table with 5 mutations
+run against it, and was registered. Replayed afterwards against **11,903 deduplicated real
+commands** harvested from 60 recent session transcripts: 143 produced candidates, the live
+hook blocked 46, and hand-checking all 46 found **10 wrong — 21.7% of everything it
+blocked** (two borderline calls counted as correct; judged the other way, ~30%). Inside 39
+minutes it had blocked 3 real sessions, one of them told to load a skill that cannot exist
+— the third defect below, surfacing as remediation guidance that points at nothing. It was
+removed the same hour. All three root defects sat in the **parsing** layer: a
+line-continuation token read as a separator, a segment scan that counted heredoc bodies and
+data arguments as execution, and a path classifier with no type filter.
+
+Two conclusions that story does *not* license. It is **not** "mutation testing doesn't
+work": a later audit of that same suite found **5 pieces of the hook's logic that could be
+deleted with all 26 rows still green**, and one row its author had annotated as "fixed from
+decorative" was still decorative — *"I ran mutation testing" is not "the mutation testing
+was right"*, and the replay is what exposed both. And it is **not** "you could not have
+known": three of those defects were hand-rolled reimplementations of code this file already
+ships (`split_shell_lines`, the command-position walk, `is_git_write`'s handling of `-C`
+and its argument). Rule 1's *use the walker verbatim* was the cheaper fix that got skipped;
+replay is the backstop, not the first line.
+
+**The method — four steps, and step 2 is the one that gets skipped:**
+
+1. **Harvest.** Session transcripts live at
+   `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`, plus any archives registered in
+   `~/.claude/history-sources.json`. Commands are `.message.content[]` entries with
+   `type == "tool_use"` and `name == "Bash"`, in field `.input.command` — **not** the hook
+   event's `.tool_input.command`, which is a different shape. Dedupe, and take enough
+   transcripts that your own recent working shapes are in there (that run used 60).
+2. **Pre-filter with the shipped detector, sliced out verbatim** — never a hand-written
+   equivalent, or you measure the agreement between two of your own guesses. The pre-filter
+   exists only for cost (11,903 → 143); step 3 is what decides. If the detector is not a
+   liftable block — shell, or split across a sourced library — make it one; a detector you
+   cannot run standalone is also one you cannot unit-test.
+3. **Feed each candidate to the real hook, with its own real transcript and `session_id`.**
+   A guard that reads session state answers differently under a fabricated context. Event
+   contract: `references/hook_patterns.md`. Two things will bite — run under a scratch
+   `TMPDIR`, or rule 7's receipts and per-session counters write into real sessions *and*
+   silence the guard partway through your own measurement; and if the hook has a human
+   gate, drive it through Pattern B's forced-decline path rather than answering 143 dialogs.
+4. **Hand-check every block — the block list is the false-positive measurement.** The allow
+   list answers rule 5's question instead (did it go quiet because nothing was there, or
+   because it could not see?), and a replay returning *zero* blocks makes the harness a
+   suspect rather than a clean bill — pitfall #11 prescribes this same instrument in the
+   under-firing direction.
+
+**What to do with the number.** A false block whose remediation guidance is wrong or
+impossible → do not register at all: that shape is the manufacturing process for the
+reflexive bypass rule 1 exists to prevent. Otherwise treat the block list as a fix list and
+re-replay. Expect the false positives to cluster on **whatever you were doing while you
+wrote the guard** — half of that run's landed on hook-development files, because its author
+was building hooks that week. And scan the block list specifically for **ops actions**
+(edits under the hooks dir, `bash -n` on a hook, the guard's own SSOT): a guard that blocks
+its own removal cannot be switched off from inside a session (#25 — that one blocked the
+very command that unregistered it).
+
+Sizing, so this doesn't read as a research project: one harvest plus one loop, minutes of
+wall time.
+
 ## Build order (in sequence)
 
 1. **Confirm it's a real recurrence**, not hypothetical — else don't build it.
@@ -670,10 +763,14 @@ as evidence).
 3. **Detection** with shlex token-level matching (rule 1), keyed on a fact the
    world can answer rather than your own rendering or a naming convention (rule 6).
 4. **`bash -n` + `test_hook.sh`** with trigger AND healthy-lookalike cases (rule 2) — do not register until green. Include the shapes that carry an unexpanded path (`cd ~/elsewhere && …`, rule 5); if the hook has a human gate, a forced-decline row (Pattern B, "Make the gate testable"); and if it demands remediation, the **after-remediation row pair** — fires without the receipt, quiet with it (template in `scripts/test_hook.sh`; rule 7 — point-in-time fixtures structurally cannot see non-termination).
-5. **Symlink** into `~/.claude/hooks/` (rule 3).
-6. **Register** in main `settings.json` + converge profiles (rule 4).
-7. For a Tier-0/irreversible action, add the **human-confirmation release gate** (rule 4).
-8. **Persist**: commit the SSOT to its private repo. Optionally add a CLAUDE.md line (prose says *why* + the alternative; the hook enforces).
+5. **Replay a real command corpus and hand-check every block** (rule 9) — this measures the
+   false-block surface, which the fixture table in step 4 structurally cannot. Slice the
+   shipped detector out verbatim to pre-filter; feed each candidate **to** the real hook
+   with its own real transcript and `session_id`, under a scratch `TMPDIR`.
+6. **Symlink** into `~/.claude/hooks/` (rule 3).
+7. **Register** in main `settings.json` + converge profiles (rule 4).
+8. For a Tier-0/irreversible action, add the **human-confirmation release gate** (rule 4).
+9. **Persist**: commit the SSOT to its private repo. Optionally add a CLAUDE.md line (prose says *why* + the alternative; the hook enforces).
 
 ## Known pitfalls (read before debugging a misfiring hook)
 
@@ -745,3 +842,31 @@ fire, suspect the row before the hook.
 - [references/hook_pitfalls.md](references/hook_pitfalls.md) — every real failure mode with symptom → cause → fix.
 - [scripts/test_hook.sh](scripts/test_hook.sh) — end-to-end test harness; copy it next to any new hook.
 - [scripts/test_hook.group-name-guard.sh](scripts/test_hook.group-name-guard.sh) — a worked harness instance for a real Stop guard (event shapes, `says` rows, both polarities).
+
+## Maintenance — where new content goes
+
+New incident backports land outside this file, in the place that already holds
+their kind: a fresh pitfall or failure anatomy →
+[references/hook_pitfalls.md](references/hook_pitfalls.md); a reusable
+skeleton or pattern → [references/hook_patterns.md](references/hook_patterns.md);
+a worked harness instance (a test script) → `scripts/`. This file only takes
+**contract-level rules**: content every blocking hook consumes (a new hook
+type, a changed exit-code contract, a new rule in the `## Rules that separate
+a working guard from a session-poisoning one` series). The loaded-at-trigger
+surface stays stable while the knowledge base keeps growing; depth lives one
+pointer away. (The "Known pitfalls" headliners above are a highlights list,
+not an index — they have not been extended since pitfall #16; the numbered
+catalog in `hook_pitfalls.md` is the SSOT, and a new pitfall does not owe a
+headliner.)
+
+Why this is written down (2026-08-02): backports have in fact always gone to
+references — what grew this file 10k→50k chars in one week was *rules* prose
+(rules 5–8 landing inline), which this policy deliberately keeps here. The
+policy's job is to make the default explicit for the next session holding a
+fresh incident, so future growth stays limited to contract-level rules. A
+four-frame design review (cost / SSOT / architecture / evidence,
+cross-examined) chose this over a structural split of the eight rules that
+existed then. Restart-the-split criteria, for the next time someone proposes one: a
+measurement (not a vibe) showing the main file's size degrades rule
+compliance, or the whole skill's churn settling (30 consecutive days with no
+new rule or backport landing anywhere).

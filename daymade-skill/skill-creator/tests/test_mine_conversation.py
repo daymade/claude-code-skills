@@ -1,4 +1,10 @@
-"""Tests for the conversation-mining pipeline."""
+"""Tests for the conversation-mining pipeline.
+
+Run with (tiktoken is required — mine_conversation.py fails closed without it, see
+scripts/mine_conversation.py:get_token_counter, and 9 of these tests will otherwise fail
+with a RuntimeError/CalledProcessError that has nothing to do with what they're checking):
+    uv run --with pytest --with PyYAML --with tiktoken python -m pytest tests/test_mine_conversation.py -v
+"""
 
 from __future__ import annotations
 

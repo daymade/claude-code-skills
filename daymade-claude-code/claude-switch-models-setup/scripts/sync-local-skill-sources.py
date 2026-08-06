@@ -35,6 +35,7 @@ LOCAL_MARKETPLACE_NAMES = ("daymade-skills", "daymade-skills-pro")
 SYNC_LOCK_NAME = ".daymade-skill-sync.lock"
 SYNC_LOCK_TIMEOUT_SECONDS = 120
 SYNC_LOCK_STALE_SECONDS = 600
+KEEP_JSON_BACKUPS = 20
 QUIET = False
 
 
@@ -283,6 +284,24 @@ def backup_path(dest: Path, root: Path, stamp: str) -> Path:
     return root / ".source-sync-backups" / stamp / dest.name
 
 
+def prune_json_backups(installed_path: Path, keep: int, apply: bool) -> None:
+    """Drop all but the newest `keep` installed_plugins.json backups.
+
+    Every run that changes the JSON writes one backup and nothing ever removed
+    them: one month of runs left 453 files / 21 MB behind. Names end in a
+    YYYYMMDD-HHMMSS stamp, so lexical sort is chronological.
+    """
+    if keep < 0:
+        return
+    prefix = f"{installed_path.name}.source-sync-backup-"
+    backups = sorted(p for p in installed_path.parent.glob(f"{prefix}*") if p.is_file())
+    for stale in backups[: len(backups) - keep] if keep else backups:
+        if apply:
+            stale.unlink()
+        else:
+            log(f"DRY prune JSON backup: {stale}")
+
+
 def replace_with_symlink(dest: Path, src: Path, backup_root: Path, stamp: str, apply: bool) -> str:
     src = src.resolve()
     if dest.is_symlink():
@@ -330,6 +349,40 @@ def replace_with_symlink(dest: Path, src: Path, backup_root: Path, stamp: str, a
                 return "already-linked"
             raise
     return action
+
+
+def prune_stale_version_links(dest: Path, source_dir: Path, apply: bool) -> None:
+    """Drop sibling version links that resolve to the same local source as `dest`.
+
+    Each cache link is named after the marketplace's current version, so every
+    version bump leaves the previous link behind pointing at the very same
+    directory. Nothing ever removed them: one plugin had six version dirs, four
+    of which were aliases for a single source. They cost no disk but they do
+    pollute every grep across the cache, and reading an alias feels like reading
+    a distinct version.
+
+    Only symlinks resolving to `source_dir` are removed. Real directories are
+    installed by Claude Code itself and may still be referenced by live sessions
+    through .in_use, so they are never touched here.
+    """
+    parent = dest.parent
+    if not parent.is_dir():
+        return
+    try:
+        src = source_dir.resolve()
+    except OSError:
+        return
+    for sibling in sorted(parent.iterdir()):
+        if sibling == dest or not sibling.is_symlink():
+            continue
+        try:
+            if sibling.resolve() != src:
+                continue
+        except (OSError, RuntimeError):
+            continue
+        log(f"claude cache {parent.name}: prune stale version link {sibling.name}")
+        if apply:
+            sibling.unlink()
 
 
 def path_is_under(path: Path, roots: list[Path]) -> bool:
@@ -406,6 +459,7 @@ def sync_claude_cache(
         )
         if action != "already-linked":
             log(f"claude cache {plugin_id}: {action}")
+        prune_stale_version_links(dest, plugin.source_dir, apply)
         desired_install = str(dest)
         if latest.get("version") != plugin.version or latest.get("installPath") != desired_install:
             log(
@@ -421,6 +475,7 @@ def sync_claude_cache(
             shutil.copy2(installed_path, backup)
         else:
             log(f"DRY backup JSON: {installed_path} -> {backup}")
+        prune_json_backups(installed_path, KEEP_JSON_BACKUPS, apply)
         write_json(installed_path, installed, apply)
 
 

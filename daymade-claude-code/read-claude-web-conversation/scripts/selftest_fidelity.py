@@ -279,6 +279,39 @@ def run_case(name, payload, expect_exit, must_contain, must_not_contain):
         return None
 
 
+def run_file_notice_case():
+    """The `files:` stderr line is the completion signal that stops a text-only
+    export being mistaken for a full archive (see Step 4's Completion check in
+    SKILL.md). If it silently disappears, completion-drive stops at `fidelity:
+    100%` before the files are pulled — so pin it here, two-sided: a conversation
+    WITH files must print it, and one WITHOUT files must stay silent (else the
+    line is noise that cries wolf on every file-free chat)."""
+    with tempfile.TemporaryDirectory() as td:
+        with_files = conv([msg('a', sender='human',
+                               content=[{'type': 'text', 'text': 'see attached'}],
+                               files=[{'file_name': 'upload.png', 'file_kind': 'image',
+                                       'file_uuid': 'u1'}])])
+        src = Path(td) / 'with.json'
+        src.write_text(json.dumps(with_files), encoding='utf-8')
+        p = subprocess.run([sys.executable, str(RENDER), str(src), '-o', str(Path(td) / 'w.md'),
+                            '--format', 'markdown'], capture_output=True, text=True)
+        if p.returncode != 0:
+            return f'exit {p.returncode}, expected 0'
+        if 'files: 1 downloadable file' not in p.stderr:
+            return ("stderr missing the `files: 1 ...` completion line — a text-only "
+                    "export will be mistaken for a full archive again")
+
+        no_files = conv([msg('b', content=[{'type': 'text', 'text': BIG}])])
+        src2 = Path(td) / 'without.json'
+        src2.write_text(json.dumps(no_files), encoding='utf-8')
+        p2 = subprocess.run([sys.executable, str(RENDER), str(src2), '-o', str(Path(td) / 'wo.md'),
+                             '--format', 'markdown'], capture_output=True, text=True)
+        if 'files:' in p2.stderr:
+            return ("a file-free conversation printed a `files:` line — the notice "
+                    "should be silent when there is nothing to download")
+        return None
+
+
 def main():
     failed = 0
     for name, payload, code, yes, no in CASES:
@@ -288,11 +321,19 @@ def main():
             print(f'  FAIL  {name}\n        {err}')
         else:
             print(f'  ok    {name}')
+    err = run_file_notice_case()
+    if err:
+        failed += 1
+        print(f'  FAIL  file-completion-notice\n        {err}')
+    else:
+        print('  ok    file-completion-notice')
     print()
+    total = len(CASES) + 1  # + the file-completion-notice case
     if failed:
-        print(f'{failed}/{len(CASES)} failed — the fidelity gate is not trustworthy right now.')
+        print(f'{failed}/{total} failed — see above.')
         return 1
-    print(f'all {len(CASES)} passed — the gate still catches every shape that has fooled it before.')
+    print(f'all {total} passed — the fidelity gate still catches every shape that has '
+          f'fooled it before, and the file-completion notice still fires when it should.')
     return 0
 
 

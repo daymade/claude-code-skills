@@ -62,8 +62,11 @@ def find_internal_path_references(content: str) -> list[str]:
     - External tool references
     """
     # Pattern: relative paths starting with scripts/, references/, or assets/
-    # that do NOT start with / or ~ (absolute paths)
-    pattern = r'(?<![A-Za-z0-9_/])(?:scripts|references|assets)/[\w./-]+'
+    # that do NOT start with / or ~ (absolute paths). The lookbehind also
+    # excludes `-` and `.` so a hyphenated/dotted parent dir doesn't donate a
+    # false bundle prefix: `05-voiceprint-references/centroids.json` must not
+    # match `references/centroids.json`.
+    pattern = r'(?<![A-Za-z0-9_/.\-])(?:scripts|references|assets)/[\w./-]+'
 
     unique_paths = set()
     for line in content.split('\n'):
@@ -77,8 +80,21 @@ def find_internal_path_references(content: str) -> list[str]:
         ]):
             continue
 
-        matches = re.findall(pattern, line)
-        for path in matches:
+        matches = re.finditer(pattern, line)
+        for m in matches:
+            path = m.group(0)
+            # A match immediately followed by a glob/brace/placeholder char is
+            # a PATTERN, not a file reference: `references/install_*.md`,
+            # `install_<system>.md`, `install_{a,b}.md` all truncate to
+            # `install_` and would false-positive as a missing file.
+            if line[m.end():m.end() + 1] in ('*', '{', '[', '<'):
+                continue
+            # The char class includes `.`, so a sentence-ending period gets
+            # swallowed: "use `scripts/foo.py`." -> "scripts/foo.py." — no
+            # real file ends in a bare dot; strip trailing dots.
+            path = path.rstrip('.')
+            if not path or '/' not in path:
+                continue
             # Skip placeholders
             if any(x in path.lower() for x in ['example', 'xxx', '<', '>', 'my-', 'my_']):
                 continue

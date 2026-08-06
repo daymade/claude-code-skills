@@ -16,6 +16,37 @@
 # RUNNERS:
 #   python-unittest   python3 -m unittest discover -s <path>
 #   node-test         node --test <path>
+#
+# WHY NO python-pytest RUNNER (audited 2026-08, not an oversight):
+#   Several skills (daymade-skill/skill-creator/tests, daymade-audio/transcript-fixer's
+#   own scripts/tests) have real, passing pytest-style test suites that are deliberately
+#   NOT registered here. Adding a `python-pytest` runner to run_registered_tests.sh's
+#   dispatch is a one-line change — the friction is upstream, not in that script:
+#   admission criterion 1 above ("standard library only") already excludes any file that
+#   `import pytest`, and the "tests" job that runs this registry never pip-installs
+#   anything today — the separate "skills" job does `pip install pyyaml` for its own
+#   validator script, but that's a fixed, single, one-time dependency scoped to one
+#   script's own job environment, not a precedent for this registry: admitting a
+#   `python-pytest` runner here would open the door to *any* future contributor's test
+#   suite pulling in *any* pip package, an open-ended and growing surface, which is a
+#   different kind of commitment than one job installing one pinned tool for itself.
+#   Audited empirically as of the 2026-08 registry snapshot (6 directories, 9 files —
+#   re-count from the list below if you need the current number, don't trust this one):
+#   every file registered at that time was unittest.TestCase style with matching idioms
+#   (Path(__file__).resolve().parents[N],
+#   importlib.util.spec_from_file_location, subprocess.run(text=True, encoding="utf-8")) —
+#   a consistent, cross-file house style, not coincidence. Converting the pytest-style
+#   files to match would not even clear criterion 1 in every case: skill-creator's own
+#   test_mine_conversation.py and test_package_skill.py exercise code that transitively
+#   hard-imports tiktoken / PyYAML regardless of test-framework syntax, so no amount of
+#   pytest-to-unittest conversion admits them — the third-party dependency lives in the
+#   code under test, not in the test file's style. The established, already-in-use
+#   alternative: pytest suites stay local, run via `uv run --with pytest ...` from their
+#   own skill directory, never touching this shared registry or its Python environment.
+#   Full audit trail (per-file admission scoring, conversion-risk analysis, empirical
+#   reproduction of every claim above): PKM next/_meta/skill-reviews/skill-creator/
+#   independent-review-ci-test-registry-scope.md (private repo — not shipped here since
+#   it quotes real machine/path specifics; this comment is the public-facing summary).
 
 python-unittest  git-safety-net/tests
 python-unittest  tests

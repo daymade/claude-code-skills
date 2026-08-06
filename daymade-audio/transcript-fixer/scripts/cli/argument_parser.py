@@ -93,7 +93,11 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--domain", "-d",
         default=None,
-        help="Correction domain (default: all domains)"
+        help="Correction domain (default: all domains). Accepts a comma-separated "
+             "list (--domain huawei,huawei_lvdian): the rules of every listed domain "
+             "load together, --apply-domain trusts all of them, and the FIRST entry "
+             "is primary — it wins any cross-domain from_text collision. Write "
+             "commands (--add, --approve) still require exactly one domain."
     )
     parser.add_argument(
         "--review",
@@ -136,6 +140,51 @@ def create_argument_parser() -> argparse.ArgumentParser:
              "consumers stop inferring no-op vs failure from whether a *_stage1.md "
              "sidecar exists. Also applies to the review-queue commands "
              "(--enqueue-review/--list-review/--show-review/--resolve-review)."
+    )
+
+    # Evidence commands (advisory, read-only): turn the native pass's manual
+    # grep loops into single invocations. Neither edits anything.
+    parser.add_argument(
+        "--scan-traps",
+        action="store_true",
+        dest="scan_traps",
+        help="Scan --input for every trap documented in --context-file (a domain "
+             "context markdown): parses each **误识 → 正确** entry, locates every "
+             "variant with line number + context window, and lists no-hit entries "
+             "so 'scanned and absent' is distinguishable from 'never scanned'. "
+             "Replaces the manual per-trap grep loop in the native pass's "
+             "trap-scan step."
+    )
+    parser.add_argument(
+        "--context-file",
+        metavar="PATH",
+        dest="context_file",
+        help="Domain context markdown for --scan-traps (e.g. "
+             "~/.transcript-fixer/contexts/<domain>.md)"
+    )
+    parser.add_argument(
+        "--probe",
+        metavar="TERM",
+        dest="probe_term",
+        help="Measure TERM's real-meaning frequency across --corpus before "
+             "deciding a dictionary rule: per-file counts + sampled context "
+             "windows, with the verdict criterion attached. Advisory — the "
+             "operator reads the samples and decides; the probe never blocks."
+    )
+    parser.add_argument(
+        "--corpus",
+        metavar="DIR",
+        dest="corpus_dir",
+        help="Transcript corpus directory for --probe / --check-corpus "
+             "(searched recursively for *.md)"
+    )
+    parser.add_argument(
+        "--check-corpus",
+        action="store_true",
+        dest="check_corpus",
+        help="With --add: probe the FROM term against --corpus BEFORE writing "
+             "the rule, so the in-corpus real-meaning frequency is on the "
+             "record at decision time. Advisory (never blocks the add)."
     )
 
     # Learning commands
@@ -349,6 +398,33 @@ def create_argument_parser() -> argparse.ArgumentParser:
         type=int,
         dest="show_review",
         help="Show one review item in full (evidence + proposed action pack)"
+    )
+    parser.add_argument(
+        "--reanchor-review",
+        metavar="ID",
+        type=int,
+        nargs="+",
+        dest="reanchor_review",
+        help="Re-anchor pending item(s) whose transcript drifted or moved since "
+             "enqueue: refresh line/context verbatim from the current file; when "
+             "the file is gone, search --reanchor-root (and the recorded parent "
+             "dir) for *.md containing the original text and re-point it"
+    )
+    parser.add_argument(
+        "--reanchor-root",
+        metavar="DIR",
+        action="append",
+        dest="reanchor_root",
+        help="Extra search root(s) for --reanchor-review when the file is gone "
+             "(repeatable; the recorded parent dir is always searched first)"
+    )
+    parser.add_argument(
+        "--reanchor-to",
+        metavar="FILE",
+        dest="reanchor_to",
+        help="Explicit re-point target for --reanchor-review when content search "
+             "is ambiguous (the caller picks the file; refused if the original "
+             "text is not in it)"
     )
     parser.add_argument(
         "--resolve-review",

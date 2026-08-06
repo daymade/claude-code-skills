@@ -22,6 +22,7 @@ from core import (
     CorrectionService,
     DictionaryProcessor,
 )
+from core.correction_repository import normalize_domains
 from utils.config import get_config
 
 # Heavy command-specific imports are deferred to the functions that use them
@@ -46,6 +47,15 @@ def _get_service() -> CorrectionService:
     config = get_config()
     repository = CorrectionRepository(config.database.path)
     return CorrectionService(repository)
+
+
+def _parse_domains(raw: str | None) -> list[str] | None:
+    """Parse the CLI's --domain value into a domain list (comma-separated).
+
+    Thin wrapper over normalize_domains so command handlers stay readable;
+    returns None when no filter was given.
+    """
+    return normalize_domains(raw)
 
 
 def _get_learning_engine(service: CorrectionService | None = None):
@@ -108,7 +118,7 @@ def _enqueue_deferrals(changes, input_path: Path, original_text: str, domain: st
         return 0
 
 
-def _format_domain_hint(total_changes: int, domain: str | None, domain_stats: dict) -> str | None:
+def _format_domain_hint(total_changes: int, domains: str | list[str] | None, domain_stats: dict) -> str | None:
     """Explain a 0-correction run honestly when --domain was passed.
 
     Two different realities must read differently, because they call for
@@ -120,22 +130,29 @@ def _format_domain_hint(total_changes: int, domain: str | None, domain_stats: di
 
     The old message said "no rules in domain" for both, which sent operators
     investigating why their loaded domain was "empty". The Available list
-    deliberately excludes the requested domain (it lists *other* domains).
+    deliberately excludes the requested domain(s) (it lists *other* domains) —
+    with a comma-separated --domain the exclusion covers every requested one,
+    so the sibling list is exactly the domains NOT yet loaded.
+
+    `domains` accepts the raw CLI string or a parsed list — normalize here so
+    both callers and tests can pass either shape.
     """
-    if total_changes != 0 or not domain or not domain_stats:
+    domains = normalize_domains(domains)
+    if total_changes != 0 or not domains or not domain_stats:
         return None
-    other = {d: n for d, n in domain_stats.items() if d != domain}
+    other = {d: n for d, n in domain_stats.items() if d not in domains}
     if not other:
         return None
     parts = ", ".join(f"{d} ({n})" for d, n in sorted(other.items()))
     total = sum(domain_stats.values())
-    loaded = domain_stats.get(domain, 0)
+    loaded = sum(domain_stats.get(d, 0) for d in domains)
+    shown = ",".join(domains)
     if loaded:
-        first = (f"hint: 0 of {loaded} rules in domain '{domain}' matched this transcript. "
+        first = (f"hint: 0 of {loaded} rules in domain '{shown}' matched this transcript. "
                  f"Other domains: {parts}")
     else:
-        first = f"hint: no rules in domain '{domain}'. Available: {parts}"
-    return f"{first}\nhint: run without --domain to use all {total} rules"
+        first = f"hint: no rules in domain '{shown}'. Available: {parts}"
+    return f"{first}\nhint: run without --domain to use all {total} rules, or add a sibling as --domain a,b"
 
 
 def _format_changes_report(
@@ -266,14 +283,128 @@ def cmd_add_correction(args: argparse.Namespace) -> None:
     """Add a single correction with safety checks"""
     service = _get_service()
     force = getattr(args, 'force', False)
+
+    # A rule lives in exactly one domain; a comma-separated --domain is a
+    # read-side (stage 1 / --list) filter. Fail fast rather than guessing
+    # which domain the user meant to write to.
+    domains = _parse_domains(args.domain)
+    if domains and len(domains) > 1:
+        print(
+            f"Error: --add writes to exactly one domain, got {len(domains)}: "
+            f"{', '.join(domains)}. Run one --add per domain.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    # --check-corpus: put the FROM term's in-corpus real-meaning frequency on
+    # the record BEFORE the rule is written. Advisory — the validator's word
+    # checks answer "is this a real word"; only the corpus answers "is it ever
+    # real *in this project's transcripts*". A missing directory must fail
+    # fast (same as --probe): an unsearched corpus reports "0 occurrences",
+    # which reads exactly like the zero-risk verdict — a typo'd path would
+    # otherwise manufacture false safety evidence right at the decision gate.
+    if getattr(args, "check_corpus", False):
+        corpus_dir = getattr(args, "corpus_dir", None)
+        if not corpus_dir:
+            print("Error: --check-corpus requires --corpus <dir>", file=sys.stderr)
+            sys.exit(2)
+        corpus_path = Path(corpus_dir).expanduser()
+        if not corpus_path.is_dir():
+            print(f"Error: corpus dir not found: {corpus_path}", file=sys.stderr)
+            sys.exit(2)
+        from core.corpus_probe import probe_corpus, format_probe
+        probe = probe_corpus(args.from_text, corpus_path)
+        print(format_probe(probe, corpus_path))
+        print()
+
+    # Write exactly the domain the fail-fast validated — the normalized single
+    # domain, not the raw CLI string (a trailing comma/space would otherwise
+    # pass the count check and then die in the domain-pattern validator with a
+    # misleading "invalid characters" attribution). No --domain falls back to
+    # the service layer's own default ("general") — passing None explicitly
+    # would defeat that default and crash the domain validator.
+    domain_to_write = domains[0] if domains else "general"
     try:
         service.add_correction(
-            args.from_text, args.to_text, args.domain, force=force,
+            args.from_text, args.to_text, domain_to_write, force=force,
         )
-        print(f"Added: '{args.from_text}' -> '{args.to_text}' (domain: {args.domain})")
+        print(f"Added: '{args.from_text}' -> '{args.to_text}' (domain: {domain_to_write})")
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def cmd_scan_traps(args: argparse.Namespace) -> None:
+    """Scan --input for every trap documented in a domain context file.
+
+    Read-only evidence command: reports every documented trap variant found in
+    the transcript with line + context window, plus the no-hit list. The
+    adjudication (which hits are actually errors, per each trap's documented
+    cue) stays with the native pass — this command's job is that no documented
+    trap is ever silently un-scanned.
+    """
+    from core.trap_scanner import (
+        extract_trap_entries,
+        scan_text,
+        format_report,
+        hits_to_json,
+    )
+
+    context_file = getattr(args, "context_file", None)
+    if not context_file:
+        print("Error: --scan-traps requires --context-file <domain-context.md>", file=sys.stderr)
+        sys.exit(2)
+    if not getattr(args, "input", None):
+        print("Error: --scan-traps requires --input <transcript>", file=sys.stderr)
+        sys.exit(2)
+
+    context_path = Path(context_file).expanduser()
+    input_path = Path(args.input).expanduser()
+    for p, what in ((context_path, "context file"), (input_path, "input file")):
+        if not p.is_file():
+            print(f"Error: {what} not found: {p}", file=sys.stderr)
+            sys.exit(2)
+
+    dropped: list = []
+    entries = extract_trap_entries(context_path.read_text(encoding="utf-8"), dropped)
+    hits = scan_text(input_path.read_text(encoding="utf-8"), entries)
+
+    if getattr(args, "json_output", False):
+        payload = hits_to_json(entries, hits)
+        # Machine callers need the coverage gap too — a JSON report that only
+        # carries hits lets an automated consumer conclude "no traps here" from
+        # a scan that never looked at some of them.
+        payload["unparsed"] = [
+            {"raw": r, "fragment": f, "reason": why} for r, f, why in dropped]
+        print(json.dumps(payload, ensure_ascii=False))
+    else:
+        print(format_report(entries, hits, context_path=context_path, dropped=dropped))
+
+
+def cmd_probe(args: argparse.Namespace) -> None:
+    """Probe a term's real-meaning frequency across a transcript corpus.
+
+    The pre-add evidence step: validators judge "is this a real word in
+    Chinese"; only the project's own corpus can judge "is it ever real in
+    THIS project's transcripts". Prints counts + samples and the verdict
+    criterion; never blocks, never writes.
+    """
+    from core.corpus_probe import probe_corpus, format_probe, probe_to_json
+
+    corpus_dir = getattr(args, "corpus_dir", None)
+    if not corpus_dir:
+        print("Error: --probe requires --corpus <dir>", file=sys.stderr)
+        sys.exit(2)
+    corpus_path = Path(corpus_dir).expanduser()
+    if not corpus_path.is_dir():
+        print(f"Error: corpus dir not found: {corpus_path}", file=sys.stderr)
+        sys.exit(2)
+
+    result = probe_corpus(args.probe_term, corpus_path)
+    if getattr(args, "json_output", False):
+        print(json.dumps(probe_to_json(result), ensure_ascii=False))
+    else:
+        print(format_probe(result, corpus_path))
 
 
 def cmd_audit(args: argparse.Namespace) -> None:
@@ -534,18 +665,28 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     # Initialize service
     service = _get_service()
 
-    # Load corrections and rules
-    corrections, correction_meta = service.get_corrections_with_metadata(args.domain)
+    # Load corrections and rules. --domain may name several sibling domains
+    # (comma-separated): their rules load as one union so a transcript that
+    # straddles sibling project domains gets fixed in one pass, and
+    # --apply-domain below trusts exactly that union — every loaded rule came
+    # from one of the explicitly named domains, so the "domain match = trust"
+    # rationale holds per-rule.
+    domains = _parse_domains(args.domain)
+    corrections, correction_meta = service.get_corrections_with_metadata(domains)
     context_rules = service.load_context_rules()
     domain_stats = service.get_domain_stats()
 
     # --apply-domain: the user explicitly asserted this transcript belongs to
-    # args.domain, and every rule loaded above came from exactly that domain —
-    # each was hand-added for this project's vocabulary, so domain match =
-    # trust. Mark them so _assess_risk grades them low (auto-applied even in
-    # safe mode). MUST run before the roster merge below: roster entries are
-    # global (cross-project) and keep normal risk grading.
-    if getattr(args, "apply_domain", False) and args.domain:
+    # the domain(s) named via --domain, and every rule loaded above came from
+    # exactly those domains — each was hand-added for this project's
+    # vocabulary, so domain match = trust. Mark them so _assess_risk grades
+    # them low (auto-applied even in safe mode). The gate reads the NORMALIZED
+    # list, not the raw string: a malformed --domain like ",," normalizes to
+    # None (no filter → ALL domains load), and trusting that union would
+    # silently turn --apply-domain into --apply-all. MUST run before the
+    # roster merge below: roster entries are global (cross-project) and keep
+    # normal risk grading.
+    if getattr(args, "apply_domain", False) and domains:
         for _m in correction_meta.values():
             _m["trusted_domain"] = True
 
@@ -564,8 +705,20 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         if roster_path.exists():
             from core.people_roster import load_people_roster
             roster_corr, _ = load_people_roster(roster_path)
+            # A rule disabled via --report-false-positive is *absent* from the
+            # loaded corrections (loading filters on is_active), which is exactly
+            # the gap the roster fills — so without this veto the roster silently
+            # resurrects every rule a human just retired, and the report command
+            # can never retire it again ("No active rule", exit 1, while the rule
+            # keeps firing). Suppression is printed, not silent: an invisible
+            # veto is the same class of bug in the other direction.
+            disabled = service.get_disabled_pairs(domains)
             new_count = 0
+            suppressed = []
             for wrong, correct in roster_corr.items():
+                if (wrong, correct) in disabled:
+                    suppressed.append(f"{wrong}→{correct}")
+                    continue
                 if wrong not in corrections:
                     corrections[wrong] = correct
                     correction_meta[wrong] = {
@@ -575,6 +728,11 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                     new_count += 1
             if new_count:
                 print(f"👥 People roster: +{new_count} person-name corrections ({roster_path.name})")
+            if suppressed:
+                print(f"🚫 People roster: {len(suppressed)} variant(s) suppressed "
+                      f"(disabled in DB): {', '.join(suppressed[:5])}"
+                      + (f" +{len(suppressed) - 5} more" if len(suppressed) > 5 else ""))
+                print(f"   To stop loading them at all, remove those ASR variants from {roster_path}")
         else:
             print(f"⚠️  People roster not found: {roster_path}")
 
@@ -585,8 +743,8 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     print(f"   File size: {len(original_text):,} characters")
 
     # Show domain loading info
-    if args.domain:
-        print(f"📚 Loaded {len(corrections)} corrections (domain: {args.domain})")
+    if domains:
+        print(f"📚 Loaded {len(corrections)} corrections (domain: {', '.join(domains)})")
     elif domain_stats:
         parts = ", ".join(f"{d}: {n}" for d, n in sorted(domain_stats.items()))
         print(f"📚 Loaded {len(corrections)} corrections ({parts})")
@@ -629,8 +787,8 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         print("🔧 Stage 1: Dictionary Corrections")
         if dry_run:
             print("   (DRY RUN — no files will be written)")
-        elif review_mode and getattr(args, "apply_domain", False) and args.domain:
-            print(f"   (SAFE MODE + trusted domain '{args.domain}' — its rules apply at every risk level; roster/other rules still defer to *_needs_review.md.)")
+        elif review_mode and getattr(args, "apply_domain", False) and domains:
+            print(f"   (SAFE MODE + trusted domain '{', '.join(domains)}' — its rules apply at every risk level; roster/other rules still defer to *_needs_review.md.)")
         elif review_mode:
             print("   (SAFE MODE [default] — only low-risk auto-applied; medium/high → *_needs_review.md. Pass --apply-all to apply every level.)")
         else:
@@ -729,7 +887,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
             print(f"🔍 Dry-run preview: {preview_path}")
 
         # Hint when 0 corrections and other domains have rules
-        hint = _format_domain_hint(summary['total_changes'], args.domain, domain_stats)
+        hint = _format_domain_hint(summary['total_changes'], domains, domain_stats)
         if hint:
             print(hint)
         print()
@@ -890,6 +1048,20 @@ def cmd_review_learned(args: argparse.Namespace) -> None:
 
 def cmd_approve(args: argparse.Namespace) -> None:
     """Approve a learned suggestion and add it to the correction dictionary."""
+    # Same single-domain rule as --add: a rule lands in exactly one domain, so
+    # a comma-separated --domain must fail fast here too rather than fall
+    # through to the domain-pattern validator with a misleading attribution.
+    domains = _parse_domains(getattr(args, "domain", None))
+    if domains and len(domains) > 1:
+        print(
+            f"Error: --approve writes to exactly one domain, got {len(domains)}: "
+            f"{', '.join(domains)}. Approve one domain at a time.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if domains:
+        args.domain = domains[0]
+
     service = _get_service()
     engine = _get_learning_engine(service)
 
@@ -1268,15 +1440,151 @@ def cmd_extract_uncertain(args: argparse.Namespace) -> None:
     print(f"💾 Saved: {output_path}")
 
 
+def _roster_supplies(from_text: str, to_text: str) -> tuple[bool, str | None]:
+    """Does the people roster actually carry this pair? Returns (yes, path).
+
+    The roster is the cross-project person-name SSOT, so any instruction to
+    edit it deletes the correction in every other domain and every other
+    project too. An instruction that expensive must not rest on an assumption:
+    configured-but-absent and configured-but-doesn't-carry-it are both common.
+    """
+    roster_path = (os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER")
+                   or get_config().paths.people_roster_path)
+    if not roster_path:
+        return False, None
+    rp = Path(roster_path).expanduser()
+    if not rp.is_file():
+        return False, str(roster_path)
+    try:
+        from core.people_roster import load_people_roster
+        roster_corr, _ = load_people_roster(rp)
+        return roster_corr.get(from_text) == to_text, str(roster_path)
+    except Exception:
+        # Unreadable is not the same as absent — say so rather than asserting
+        # the roster does not carry it.
+        return False, str(roster_path)
+
+
+def _active_domains_for(service, from_text: str, to_text: str,
+                        exclude: str) -> list[str]:
+    """Which OTHER domains still hold this pair as an active rule.
+
+    Disabling is per-domain, so "I retired it but it keeps firing" usually
+    means a live copy in a domain the user did not name. Without this the
+    command can only guess, and guessing sent readers to edit the roster.
+    """
+    found = []
+    try:
+        for d in service.get_domain_stats():
+            if d == exclude:
+                continue
+            if service.get_corrections(d).get(from_text) == to_text:
+                found.append(d)
+    except Exception:
+        return []
+    return sorted(found)
+
+
 def cmd_report_false_positive(args: argparse.Namespace) -> None:
-    """Report a false-positive correction and disable it."""
+    """Report a false-positive correction and disable it.
+
+    Exit codes are part of the contract, because automation could not tell
+    "I just disabled it" from "it was already off" when both returned 0:
+      0  disabled by this run
+      1  no such pair anywhere (DB or roster)
+      2  bad input (malformed --domain, invalid text)
+      3  already disabled here — nothing to do
+      4  supplied only by the roster; no DB row exists to disable
+    """
     service = _get_service()
-    domain = getattr(args, 'domain', None) or "general"
-    success = service.report_false_positive(args.from_text, args.to_text, domain)
+
+    # Fail fast on a malformed --domain. Letting the repository's
+    # ValidationError escape produced a bare traceback with empty stdout and
+    # exit 1 — the same code as "no such rule", so a caller could not tell a
+    # typo from a real answer.
+    domains = _parse_domains(getattr(args, 'domain', None))
+    if domains and len(domains) > 1:
+        print(f"Error: --report-false-positive targets exactly one domain, got "
+              f"{len(domains)}: {', '.join(domains)}. Disabling is per-domain — "
+              f"run it once per domain.", file=sys.stderr)
+        sys.exit(2)
+    domain = domains[0] if domains else "general"
+    try:
+        service.validate_domain_name(domain)
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    supplies_it, roster_path = _roster_supplies(args.from_text, args.to_text)
+
+    # Check "already disabled" BEFORE attempting the disable. report_false_positive
+    # logs a "No active rule" warning to stderr when it finds nothing, which for
+    # an already-disabled pair contradicts the ℹ️ line this command prints to
+    # stdout — a caller capturing 2>&1 saw both, and one grepping for "No active
+    # rule" misclassified a normal, idempotent outcome as a fatal one.
+    if (args.from_text, args.to_text) in service.get_disabled_pairs(domain):
+        print(f"ℹ️  '{args.from_text}' -> '{args.to_text}' is ALREADY disabled in the "
+              f"database (domain: {domain}) — nothing more to disable here.")
+        elsewhere = _active_domains_for(service, args.from_text, args.to_text, domain)
+        if elsewhere:
+            print(f"   It is still ACTIVE in: {', '.join(elsewhere)}. That is the "
+                  f"most likely reason it keeps firing — re-run this command with "
+                  f"--domain {elsewhere[0]} to retire it there too.")
+        if supplies_it:
+            # State the scope, not the mechanism. A run using this domain
+            # suppresses the roster copy as well (the merge skips any pair
+            # already disabled for the run's domains and prints "🚫 …
+            # suppressed"), so "the roster is still re-supplying it" is false
+            # for exactly the domain just asked about — and acting on it edits
+            # a cross-project SSOT to fix a problem this domain does not have.
+            print(f"   The people roster also carries this pair, but a run using "
+                  f"--domain {domain} suppresses it — the disable already covers "
+                  f"that path.")
+            print(f"   To confirm where it is still live: re-run that domain and "
+                  f"look for a 🚫 suppressed line naming this pair; if the line is "
+                  f"absent, the pair applies there.")
+            print(f"   Removing it from {roster_path} stops it everywhere at once, "
+                  f"including other projects that share this roster.")
+        elif not elsewhere:
+            print(f"   The people roster does not carry this pair, so nothing else "
+                  f"should be re-adding it here.")
+        sys.exit(3)
+
+    # Resolve every non-success outcome BEFORE calling the service. Its
+    # report_false_positive logs "No active rule" to stderr whenever it finds
+    # nothing, and that line contradicts each of the stdout messages below —
+    # a caller capturing 2>&1 saw both, and one grepping for it misread a
+    # roster-only or wrong-domain answer as a fatal not-found.
+    if service.get_corrections(domain).get(args.from_text) != args.to_text:
+        success = False
+    else:
+        success = service.report_false_positive(args.from_text, args.to_text, domain)
     if success:
         print(f"🚫 Reported false positive: '{args.from_text}' -> '{args.to_text}' (domain: {domain})")
         print("   The rule has been disabled and confidence lowered.")
     else:
+        # A roster-only pair never had a DB row, so there is nothing to mark
+        # inactive and the plain "No active rule" was, word for word, the
+        # failure this command exists to prevent: the pair fires on every run,
+        # the user runs this to stop it, and is told it does not exist.
+        if supplies_it:
+            print(f"⚠️  '{args.from_text}' -> '{args.to_text}' has no rule in the "
+                  f"database (domain: {domain}), but the people roster supplies it — "
+                  f"which is why it keeps firing.")
+            print(f"   Disabling works by retiring a database row, and there is none "
+                  f"to retire. Two ways forward:")
+            print(f"   1. Scope it to this domain: --add it first, then re-run this "
+                  f"command. That leaves a disabled row here and the roster copy "
+                  f"suppressed for runs using --domain {domain}, untouched elsewhere.")
+            print(f"   2. Stop it everywhere: remove this ASR variant from "
+                  f"{roster_path} — including other projects that share this roster.")
+            sys.exit(4)
+        elsewhere = _active_domains_for(service, args.from_text, args.to_text, domain)
+        if elsewhere:
+            print(f"❌ No active rule matching '{args.from_text}' -> '{args.to_text}' "
+                  f"(domain: {domain}) — but it IS active in: {', '.join(elsewhere)}.")
+            print(f"   Disabling is per-domain: re-run with --domain {elsewhere[0]}.")
+            sys.exit(1)
         print(f"❌ No active rule matching '{args.from_text}' -> '{args.to_text}' (domain: {domain})")
         sys.exit(1)
 
@@ -1376,6 +1684,48 @@ def cmd_enqueue_review(args: argparse.Namespace) -> None:
         if result["skipped_temp"]:
             print(f"   ↷ {result['skipped_temp']} item(s) skipped: file anchor in a temp dir "
                   f"(would be a dead pointer — enqueue against the final filed path instead)")
+    rejected = result.get("rejected_unanchored") or []
+    if rejected:
+        for r in rejected:
+            print(f"🛑 rejected (anchor not verbatim): {r['original']!r}\n"
+                  f"   file: {r['file']}\n   reason: {r['reason']}", file=sys.stderr)
+        # Anchor validation exists to surface authoring errors at enqueue time;
+        # swallowing them under a 0 exit would recreate the drift bug downstream.
+        # (Items in result['added'] WERE enqueued — the run fails only to force
+        # the rejected half to be fixed and re-enqueued.)
+        sys.exit(3)
+    for r in result.get("repaired_hints") or []:
+        print(f"   ↷ line hint repaired: {r['original']!r} line {r['from']} → {r['to']}",
+              file=sys.stderr)
+
+
+def cmd_reanchor_review(args: argparse.Namespace) -> None:
+    """Re-anchor pending items whose transcript drifted or moved since enqueue."""
+    from core.review_queue import ReviewQueueError
+
+    queue = _get_review_queue()
+    roots = getattr(args, "reanchor_root", None) or []
+    reanchor_to = getattr(args, "reanchor_to", None)
+    results: list[dict] = []
+    failures: list[dict] = []
+    for item_id in args.reanchor_review:
+        try:
+            results.append(queue.reanchor(item_id, search_roots=roots,
+                                          reanchor_to=reanchor_to))
+        except ReviewQueueError as e:
+            failures.append({"id": item_id, "error": str(e)})
+
+    if getattr(args, "json_output", False):
+        _emit_json({"reanchored": results, "failed": failures,
+                    **({"error": "reanchor_failed"} if failures and not results else {})})
+    else:
+        for r in results:
+            tag = " (file re-pointed)" if r["file_repointed"] else ""
+            print(f"✅ #{r['id']} re-anchored → {Path(r['file_path']).name}:{r['line_number']}{tag}")
+        for f in failures:
+            print(f"🛑 #{f['id']}: {f['error']}", file=sys.stderr)
+    if failures and not results:
+        sys.exit(2)
 
 
 def cmd_list_review(args: argparse.Namespace) -> None:

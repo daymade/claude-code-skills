@@ -85,6 +85,35 @@ queue-operation content, attachment payloads, last prompts, system/summary
 content, and custom titles. Structural keys, UUIDs, tool-use IDs, and thinking
 signatures are excluded to avoid false positives.
 
+### `attachment` records: queued mid-work user input
+
+Text the user types while the assistant is still working does NOT land as a
+`type == "user"` record. It is stored as `type == "attachment"` with
+`attachment.type == "queued_command"`:
+
+```json
+{
+  "type": "attachment",
+  "timestamp": "2026-08-06T03:17:29.811Z",
+  "sessionId": "session-uuid",
+  "attachment": {
+    "type": "queued_command",
+    "prompt": "the text the user typed",
+    "commandMode": "prompt",
+    "origin": { "kind": "human" }
+  }
+}
+```
+
+- The payload field is `attachment.prompt` — a string, or (observed variant) a
+  list of content blocks. There is no `command` field.
+- `attachment.origin.kind` carries authorship: `"human"` = typed by the user;
+  `"peer"` = delivered from another agent/session; absent = harness
+  notifications (e.g. `<task-notification>`).
+- Interruptions carry the sharpest corrections by definition. An extractor that
+  only reads `type == "user"` silently drops them — observed 2026-08: one such
+  extractor lost 153 of a user's messages over a 7-day window.
+
 ### File-history snapshot
 
 Current Claude Code sessions can record a path-to-backup map separate from tool
@@ -242,6 +271,46 @@ for item in message_content:
         text = item.get("text", "")
 ```
 
+## A user-role record is not necessarily user-authored text
+
+Record-level fields (`type == "user"`, `promptSource: "typed"`,
+`origin.kind == "human"`) only prove the text entered through the input box.
+They say nothing about who *authored* the content. Tasks that extract "what the
+user actually said" (verbatim prompt archives, quote collections) must filter
+five contamination classes on top of the structural fields (all observed
+2026-08 on a real 7-day corpus):
+
+1. **Command envelopes.** `<command-message>/<command-name>/<command-args>`
+   wrappers, and bare `/command` strings. The invocation is the user's action
+   but not their prose, and the expanded template body that may follow is
+   harness content. Route to an appendix rather than deleting: `command-args`
+   often carries real user words.
+2. **Hook/loop-injected boilerplate.** Fixed instruction blocks injected by
+   hooks or scheduled loops. Two shapes: standalone records, AND the same block
+   appended to the tail of the user's own sentence — a prefix-only filter
+   leaves the second shape in place.
+3. **System placeholders inside text.** `[Image #N]` tokens are inserted by the
+   harness into `text` blocks; strip them and track the image count separately.
+4. **Whole-document pastes.** Logs, code, or documentation pasted as a message.
+   A splitter that held up on a real corpus: normalized length ≥ 2000 chars AND
+   ≥ 60% ASCII — long voice-dictation messages stay below the ASCII bar and are
+   not misfired.
+5. **Agent-voiced re-injection.** Text authored by an assistant (a parallel
+   session, a review agent, a scheduled loop) arriving as a user record with
+   `promptSource: "typed"` and `origin.kind: "human"` — record fields cannot
+   detect it; only content matching can. Compare against a corpus of assistant
+   texts, restricted to agent texts *earlier* than the user record (an agent
+   echoing the user's words later must not subtract the user's original).
+   Beware partial rewrites: the title may match an agent text verbatim while
+   the body diverges, so exact full-text equality and prefix matching both miss
+   it; verbatim containment catches the verbatim form only.
+
+Records that ARE reliably not user prose and safe to drop on structure alone:
+`promptSource: "system"` or `"sdk"`, `isMeta: true`, `tool_result` blocks,
+`[Request interrupted by user …]` markers, task notifications, and
+compact-summary continuations ("This session is being continued from a
+previous conversation …").
+
 ## Field Locations
 
 Due to schema variations, some fields may appear in different locations:
@@ -316,6 +385,63 @@ file or the session's overall range.
 2. Track which files were accessed
 3. Generate usage statistics
 
+### Detect Session Interruption (crash / reboot triage)
+
+After an abnormal shutdown, or when auditing a backlog of older sessions, the
+question is not "what did this session say" but "does it still need a human
+response." Two axes answer different questions and must not be collapsed into
+one (observed 2026-08 auditing sessions around two real reboots):
+
+- **Structural terminal state** — what kind of record ends the session
+  (`text`, `tool_use`, an API error string).
+- **Pragmatic terminal state** — whether a human reply is actually expected.
+  A session that ends in a clean `text` block is not automatically "done": the
+  assistant may have surfaced a finding, a question, or a decision and simply
+  never received a reply. Equating "last block is text" with "nothing
+  outstanding" undercounts real backlog.
+
+Steps:
+
+1. Scope the candidate sessions — by internal timestamp window (e.g. the hour
+   before a reboot) or by project/profile — using the same union-of-sources
+   and internal-timestamp discipline as "Search Conversations" above.
+2. For each session, scan forward from its last non-`isMeta` `assistant`
+   record. If a later `user`-typed record's string content contains
+   `[Request interrupted by user`, that is the single most reliable
+   structural signal that the turn was explicitly cut off — it outranks any
+   inference drawn from the last assistant block's type. (This is the same
+   marker `## A user-role record is not necessarily user-authored text`
+   documents as safe to *drop* when extracting verbatim prose; here it is
+   read for the opposite purpose — as a positive interruption signal, not
+   noise to filter.)
+3. Absent that marker, classify the *last assistant record's raw content only*
+   — do not let an earlier turn's classification carry forward when the final
+   turn produces neither text nor a tool call (thinking-only, or empty
+   content); that silently resurfaces a stale, already-answered reply as the
+   current state. A turn whose text starts with `API Error` or a similar
+   transport-failure string means it died on a network/provider fault, not on
+   session logic reaching a stopping point.
+4. Everything else — a tool call still awaiting its result, a tool call whose
+   result already landed with no further assistant turn following it, or a
+   thinking-only/empty final turn — means the same thing for triage purposes:
+   **the final turn produced no textual reply, so the model was still working
+   when the file stopped.** Resolve "awaiting its result" as a true
+   whole-file set difference (all tool_use ids minus all resolved
+   tool_use_ids, both accumulated across the entire file and diffed once at
+   the end), not as an incremental add/discard in file order — see "Tool Use
+   / Tool Result Ordering" below for why a single-pass discard-then-add is
+   NOT actually order-independent despite looking like it resolves "across
+   the whole file."
+5. None of steps 2-4 answer the pragmatic question. For sessions that end in
+   `text`, read the full content of that final message (not a truncated
+   title) and look for an explicit ask directed at the user — a question mark,
+   "your call", "let me know", a list of options, a blocked/pending item. This
+   step is inherently a judgment call, not a pure structural classification.
+   Nothing in this skill implements an automated keyword pre-filter for it —
+   if you build one, treat it as a recall aid to narrow what a human reads,
+   not a verdict, since a phrase-matching heuristic will predictably both
+   miss real asks and flag rhetorical ones.
+
 ## Edge Cases
 
 ### Empty Content
@@ -345,6 +471,50 @@ try:
     data = json.loads(line)
 except json.JSONDecodeError:
     continue  # Skip malformed lines
+```
+
+### Tool Use / Tool Result Ordering
+
+File position is not always chronological order for a `tool_use` /
+`tool_result` pair. On a fast round-trip the two records can be written with
+the `tool_result` line appearing *before* the `tool_use` line it answers,
+sometimes at an identical millisecond timestamp (observed 2026-08 on real
+session data). A classifier that scans strictly forward from the last
+`assistant` record's file position, looking for a following `user`-typed
+record before declaring "no result yet," will false-positive on this
+ordering — the resolving `tool_result` is present but sits earlier in the
+file.
+
+**A single-pass add/discard on one mutating set looks order-independent and
+is not.** This was shipped once and caught by an independent review against
+real session data: `pending.discard(id)` on an id not yet added is a silent
+no-op, so when a `tool_result` line is written *before* its `tool_use` line —
+exactly the race this section describes — the later `.add(id)` leaves the id
+"pending" even though a resolving result already exists earlier in the file.
+Measured impact: sampling 500 real session files, 14 hit this reversed
+ordering, and 11 of those 14 (79%) had their classification flip as a direct
+result — not a rare corner case.
+
+Accumulate two sets that are only ever added to, and diff them once after
+the full scan instead:
+
+```python
+tool_use_ids = set()
+resolved_ids = set()
+for record in records:
+    content = record.get("message", {}).get("content")
+    if not isinstance(content, list):
+        continue
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        if block.get("type") == "tool_use":
+            tool_use_ids.add(block.get("id"))
+        elif block.get("type") == "tool_result":
+            resolved_ids.add(block.get("tool_use_id"))
+pending = tool_use_ids - resolved_ids
+# `pending` is now a true set difference over the whole file — neither
+# operation can miss the other regardless of which line came first.
 ```
 
 ### Large Files
