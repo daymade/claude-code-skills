@@ -11,7 +11,10 @@ re-deriving title/noise heuristics that would drift apart.
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Optional
@@ -84,7 +87,41 @@ def strip_structural_metadata_lines(value: str) -> tuple[str, bool]:
     return "\n".join(lines).strip(), removed_attachment
 
 
-def iter_jsonl(path: Path, *, bounded: bool = False) -> Iterator[dict[str, Any]]:
+def iter_jsonl(
+    path: Path,
+    *,
+    bounded: bool = False,
+    line_keywords: Optional[list[str]] = None,
+) -> Iterator[dict[str, Any]]:
+    """Yield each JSONL record as a dict.
+
+    ``line_keywords`` is an optional cheap pre-check: when given, a line is
+    only handed to ``json.loads`` if it contains at least one of these
+    strings as a raw substring (case-insensitive — callers pass already
+    case-folded keywords and this function case-folds the line to match).
+    This exists because ``json.loads`` plus walking the resulting structure
+    is the expensive part of a keyword search, and file-level filtering
+    (skip whole files with no occurrence anywhere) turned out not to be
+    enough on its own: a keyword common across a user's session history
+    (e.g. "embedding") can appear in most FILES while still appearing in
+    only a small fraction of the LINES within each one, so ruling out
+    individual non-matching lines before parsing them is where the real
+    remaining cost lives.
+
+    Like the file-level pre-filter in ``files_possibly_matching``, this is
+    an over-approximation: a line can pass this check and still turn out to
+    have no *matchable* record once parsed (the keyword landed in a raw
+    JSON key/structural byte rather than an actual field value, or in a
+    field the structured extractor deliberately excludes). It must never be
+    an under-approximation — never skip a line that a full parse would have
+    matched — which is what makes it safe to use as a pure speedup.
+
+    Only pass this from a call site that has independently confirmed
+    skipping unselected lines cannot corrupt some other accounting the
+    caller performs across every record (see ``search_sessions``'s
+    ``use_prefilter`` docstring for the specific case this codebase hit —
+    date-window "excluded because untimed" counts must see every record).
+    """
     consumed = 0
     lines = 0
     try:
@@ -94,6 +131,15 @@ def iter_jsonl(path: Path, *, bounded: bool = False) -> Iterator[dict[str, Any]]
                 lines += 1
                 if bounded and (consumed > MAX_PREFIX_BYTES or lines > MAX_PREFIX_LINES):
                     return
+                if line_keywords is not None:
+                    haystack = line.casefold()
+                    if not any(kw in haystack for kw in line_keywords) and not any(
+                        marker in line for marker in _UNSCANNABLE_MARKERS
+                    ):
+                        # Same over-approximation as the file-level filter: a
+                        # line holding a fold-equivalent character or a \u
+                        # escape may still match once parsed, so never skip it.
+                        continue
                 try:
                     value = json.loads(line)
                 except (json.JSONDecodeError, TypeError):
@@ -102,6 +148,219 @@ def iter_jsonl(path: Path, *, bounded: bool = False) -> Iterator[dict[str, Any]]
                     yield value
     except (OSError, UnicodeError):
         return
+
+
+# Every character a JSON writer may store as something other than itself:
+# the two mandatory escapes (" and \), the optional one (/), and all control
+# characters. Enumerated from the JSON grammar rather than from observed
+# escapes — an earlier version listed only control chars and "/", which
+# covered a case Python never even produces while missing the two that every
+# writer produces.
+_JSON_ESCAPED_CHAR_RE = re.compile(r'["\\/\x00-\x1f]')
+
+# The guard above can only inspect the KEYWORD. The other half of the problem
+# is invisible to it: an all-ASCII keyword can legitimately match non-ASCII
+# CONTENT, because Python's casefold() does *full* folding. Searching
+# "financial" must match a transcript containing "ﬁnancial" (U+FB01, which
+# arrives whenever someone pastes from a PDF) — the real matcher does, a byte
+# scanner does not.
+#
+# Enumerated from Python's own casefold table rather than written by hand:
+# every non-ASCII code point whose casefold is pure ASCII. There are exactly
+# 11 (ß ſ ẞ K and the ff/fi/fl/ffi/ffl/st ligatures). A hand-written list
+# drafted for this fix had 17 entries, several of which do not actually fold
+# to ASCII — which is the argument for deriving it.
+_FOLDS_TO_ASCII = tuple(
+    chr(cp)
+    for cp in range(0x80, 0x11000)
+    if chr(cp).casefold() != chr(cp)
+    and chr(cp).casefold().isascii()
+    and chr(cp).casefold().strip()
+)
+
+# Any of these in a file/line means a byte scan cannot rule it out:
+#   - the fold-equivalent characters above
+#   - a "\u" escape: content written with ensure_ascii=True stores non-ASCII
+#     that way, and some writers (Go's encoding/json) escape even ASCII
+#     "<" ">" "&" as </>/&
+_UNSCANNABLE_MARKERS = _FOLDS_TO_ASCII + ("\\u",)
+
+
+def keywords_are_raw_byte_safe(keywords: Iterable[str]) -> bool:
+    """Can a literal byte scan of the physical file stand in for matching
+    against the parsed strings?
+
+    Pass the **original** keywords, never case-folded ones. ``"ß".casefold()``
+    is ``"ss"`` — pure ASCII — so folding first makes this function answer
+    "safe" for exactly the input that motivated rule 2 below, silently
+    re-opening the hole it exists to close.
+
+    Only when every keyword's bytes are *guaranteed* to appear verbatim in the
+    file, and a byte scanner's notion of "equal" matches Python's. Three shapes
+    break that guarantee, and each one silently loses matches rather than
+    reporting an error — so all three fall back to full parsing:
+
+    1. **Characters JSON is required to escape**: control characters, ``"``,
+       and ``\\``. An embedded newline is stored as the two bytes ``\\n``, a
+       quote as ``\\"``, a backslash as ``\\\\`` — so a literal search for the
+       raw character cannot find the escaped form actually sitting in the
+       file. This is not a quirk of some serializers; every conforming JSON
+       writer does it, including the one that produced these transcripts.
+       Quoted error fragments (``Error: "ENOENT"``), config snippets
+       (``"model": "opus"``), and Windows paths are exactly the sort of thing
+       people search history for.
+
+    2. **Non-ASCII.** Two independent failures. (a) ``json.dumps`` defaults to
+       ``ensure_ascii=True``, which stores ``café`` as ``caf\\u00e9`` — the
+       UTF-8 bytes are simply not in the file. Claude Code's own writer does
+       not do this, but archives rewritten by other tooling do. (b) Even in
+       raw UTF-8, case-insensitive folding disagrees across implementations:
+       measured on this corpus's tooling, Python ``casefold()`` does *full*
+       folding (``straße`` == ``STRASSE``), ``rg -i`` does only *simple*
+       folding (matches ``STRAẞE`` but not ``STRASSE``), and ``/usr/bin/grep
+       -i`` matches neither. A pre-filter that disagrees with the real matcher
+       drops sessions, and it would drop *different* ones depending on whether
+       ``rg`` happens to be installed.
+
+    3. **A literal ``/``.** Optional in JSON — Python does not escape it — but
+       some writers emit ``\\/``, so it is excluded for the same reason.
+
+    Falling back is always the safe direction: it costs speed, never a missed
+    match. The cost is real and worth naming — a non-ASCII query (any CJK one)
+    gets no pre-filter at all and pays the full parse. Correctness first: this
+    tool's callers are told they may conclude a topic is absent from a
+    no-match result.
+    """
+    return all(
+        kw.isascii()
+        and not _JSON_ESCAPED_CHAR_RE.search(kw)
+        for kw in keywords
+    )
+
+
+def files_possibly_matching(
+    paths: Iterable[Path], keywords: Iterable[str], *, case_sensitive: bool = False
+) -> Optional[set[Path]]:
+    """Raw-byte pre-filter: which of ``paths`` could possibly contain any of
+    ``keywords``, without paying per-line ``json.loads`` + structured
+    extraction on files that plainly cannot match?
+
+    This exists because the natural way to search this corpus — open every
+    session file, ``json.loads`` every line, extract the searchable text, and
+    substring-match keywords against it — parses every byte of every file
+    even when the overwhelming majority contain none of the keywords at all.
+    On a single project of 294 files / 1.6GB that pure-Python loop measured
+    3.5+ minutes of CPU time without completing; ``rg``/``grep`` scan the same
+    bytes at native speed and can usually rule out most files in well under a
+    second, letting the expensive path run only on the handful of files that
+    are actually candidates.
+
+    Deliberately an OVER-approximation, never an under-approximation: keys
+    excluded from search on purpose (``id``, ``tool_use_id``, ``signature`` —
+    see ``_flatten_search_strings``) can still contain a keyword's raw bytes,
+    so a small number of files this returns as "possible" will turn out to
+    have no real match once fully parsed. That costs a little wasted parsing,
+    which is fine. What must never happen is the reverse — silently ruling
+    out a file that genuinely contains a matchable occurrence — because
+    completeness is this tool's whole reason to exist (see the "Completeness
+    invariant" in the finder skill's own SKILL.md). So every failure mode
+    below degrades to "don't filter" rather than to "filter more":
+
+    - No keywords, or a keyword containing a raw control character (the
+      JSON-escaping mismatch above): returns ``None``.
+    - Neither ``rg`` nor ``grep`` is on PATH: returns ``None``.
+    - The scanner subprocess itself errors or times out: returns ``None``.
+
+    ``None`` means "no filtering information — treat every path as a
+    candidate", which is exactly the pre-existing behavior before this
+    function existed. Callers must check for ``None`` and fall through to
+    scanning everything, not treat it as an empty result.
+    """
+    path_list = list(paths)
+    keyword_list = list(keywords)
+    if not path_list or not keyword_list or not keywords_are_raw_byte_safe(keyword_list):
+        return None
+    exe = shutil.which("rg") or shutil.which("grep")
+    if not exe:
+        return None
+    # -a/--text: never let the binary-content heuristic skip a JSONL file that
+    #   happens to contain a byte sequence that looks binary.
+    # -F: keywords are literal substrings everywhere else in this codebase
+    #   (Python's str.count(), not a regex) — a raw scan must match the same
+    #   semantics, not treat a keyword like "a.b" as a wildcard pattern.
+    # -l: list matching filenames only; we don't need line numbers here.
+    # Two scans, unioned — they need opposite case settings.
+    #
+    # Pass 1 matches the keywords the way the real matcher does (folded, unless
+    # the caller asked for case-sensitive).
+    #
+    # Pass 2 looks for content the byte scanner cannot reason about at all
+    # (fold-equivalent characters, "\u" escapes) and MUST be case-sensitive.
+    # Handing those characters to a "-i" scan is self-defeating: "-i" folds the
+    # *pattern* too, so `ſ` matches a plain `s` and `K` (U+212A) matches `k` —
+    # every file with an "s" or a "k" in it becomes a candidate and the filter
+    # stops filtering. (Caught by the pre-existing unit tests, which is exactly
+    # what they are for.)
+    kw_scan = [exe, "-a", "-F", "-l"]
+    if not case_sensitive:
+        kw_scan.append("-i")
+    for kw in keyword_list:
+        kw_scan += ["-e", kw]
+    kw_scan.append("--")
+
+    marker_scan = [exe, "-a", "-F", "-l"]
+    for marker in _UNSCANNABLE_MARKERS:
+        marker_scan += ["-e", marker]
+    marker_scan.append("--")
+
+    # Batch the paths: one exec per ~half of ARG_MAX. Passing every path in a
+    # single argv fails with E2BIG once the corpus is large enough — measured
+    # here at 7819 files needing 1,181,495 bytes against an ARG_MAX of
+    # 1,048,576. That failure degrades safely (OSError -> return None -> no
+    # filtering), but it means the speedup silently switched itself off in
+    # exactly the "tens of thousands of files" case that motivated it.
+    try:
+        arg_max = os.sysconf("SC_ARG_MAX")
+    except (ValueError, OSError):
+        arg_max = 256 * 1024
+    matched: set[Path] = set()
+
+    def run_batch(scan_prefix: list[str], paths_chunk: list[str]) -> bool:
+        """Returns False if the scanner failed — caller degrades to no filter."""
+        try:
+            result = subprocess.run(
+                scan_prefix + paths_chunk, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=120,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        # Both rg and grep: 0 = matches found, 1 = no matches (not an error).
+        # Any other code (bad invocation, I/O error) is a scanner failure ->
+        # degrade to "don't filter" rather than trust a broken result.
+        if result.returncode not in (0, 1):
+            return False
+        matched.update(Path(line) for line in result.stdout.splitlines() if line)
+        return True
+
+    def scan_all(scan_prefix: list[str]) -> bool:
+        fixed = sum(len(a.encode("utf-8", "replace")) + 1 for a in scan_prefix)
+        chunk_budget = max(arg_max // 2 - fixed, 64 * 1024)
+        batch: list[str] = []
+        used = 0
+        for path in path_list:
+            text = str(path)
+            size = len(text.encode("utf-8", "replace")) + 1
+            if batch and used + size > chunk_budget:
+                if not run_batch(scan_prefix, batch):
+                    return False
+                batch, used = [], 0
+            batch.append(text)
+            used += size
+        return not batch or run_batch(scan_prefix, batch)
+
+    if not scan_all(kw_scan) or not scan_all(marker_scan):
+        return None
+    return matched
 
 
 def extract_text(content: Any) -> str:
