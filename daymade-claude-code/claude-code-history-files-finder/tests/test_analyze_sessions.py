@@ -15,6 +15,9 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SKILL_DIR / "scripts" / "analyze_sessions.py"
 
+sys.path.insert(0, str(SKILL_DIR / "scripts"))
+from _core.text import keywords_are_raw_byte_safe  # noqa: E402
+
 
 def write_jsonl(path: Path, records: list[object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -224,6 +227,137 @@ class SessionAnalyzerTests(unittest.TestCase):
             str(self.manifest),
         )
         self.assertIn("No matches found.", signature_only.stdout)
+
+    def test_prefilter_and_no_prefilter_agree_byte_for_byte(self) -> None:
+        """The 2026-08 pre-filter (rg/grep file-level + in-process line-level)
+        must be a pure speedup: identical stdout with and without it, on a
+        mix of matching, non-matching, and mixed-case sessions."""
+        matching_id = "44444444-4444-4444-8444-444444444444"
+        write_jsonl(
+            project_dir(self.active_home, self.workspace) / f"{matching_id}.jsonl",
+            [
+                user_record(matching_id, self.workspace, "irrelevant filler line", "2026-04-01T00:00:00Z"),
+                user_record(matching_id, self.workspace, "contains the RareToken here", "2026-04-01T00:00:01Z"),
+                user_record(matching_id, self.workspace, "more filler after the hit", "2026-04-01T00:00:02Z"),
+            ],
+        )
+        no_match_id = "55555555-5555-4555-8555-555555555555"
+        write_jsonl(
+            project_dir(self.active_home, self.workspace) / f"{no_match_id}.jsonl",
+            [user_record(no_match_id, self.workspace, "nothing of interest", "2026-04-02T00:00:00Z")],
+        )
+
+        default_run = self.run_cli(
+            "search", str(self.workspace), "raretoken",
+            "--history-sources", str(self.manifest),
+        )
+        no_prefilter_run = self.run_cli(
+            "search", str(self.workspace), "raretoken", "--no-prefilter",
+            "--history-sources", str(self.manifest),
+        )
+        self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
+        self.assertIn(matching_id, default_run.stdout)
+        self.assertNotIn(no_match_id, default_run.stdout)
+
+    def test_prefilter_disabled_under_date_window_keeps_untimed_count_exact(self) -> None:
+        """The pre-filter is gated off automatically whenever a date window is
+        active (see search_sessions's use_prefilter docstring) because
+        excluded_untimed_records counts every untimed record in a session
+        regardless of keyword match, and skipping non-matching records would
+        silently under-report it. Prove the count is identical either way,
+        not just that both runs happen to exit 0."""
+        session_id = "66666666-6666-4666-8666-666666666666"
+        write_jsonl(
+            project_dir(self.active_home, self.workspace) / f"{session_id}.jsonl",
+            [
+                user_record(session_id, self.workspace, "has the target keyword", "2026-04-15T00:00:00Z"),
+                {  # untimed record, no keyword — must still be counted while a date window is active
+                    "type": "user",
+                    "sessionId": session_id,
+                    "cwd": str(self.workspace),
+                    "message": {"role": "user", "content": "untimed filler, no timestamp field at all"},
+                },
+                {  # a SECOND untimed record with no keyword — count must reach 2, not 1
+                    "type": "user",
+                    "sessionId": session_id,
+                    "cwd": str(self.workspace),
+                    "message": {"role": "user", "content": "another untimed filler"},
+                },
+            ],
+        )
+        default_run = self.run_cli(
+            "search", str(self.workspace), "target keyword",
+            "--from-date", "2026-04-01", "--to-date", "2026-04-30",
+            "--history-sources", str(self.manifest),
+        )
+        no_prefilter_run = self.run_cli(
+            "search", str(self.workspace), "target keyword", "--no-prefilter",
+            "--from-date", "2026-04-01", "--to-date", "2026-04-30",
+            "--history-sources", str(self.manifest),
+        )
+        self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
+        self.assertIn("excluded 2 record(s) without an internal timestamp", default_run.stdout)
+
+    def test_signature_only_keyword_finds_no_match_with_prefilter_on(self) -> None:
+        """The pre-filter's raw byte scan is a deliberate OVER-approximation —
+        it will say a file/line "could" match even when the keyword only
+        appears in a field the structured search excludes (signature/id/
+        tool_use_id — see _flatten_search_strings). Confirm that over-approval
+        never leaks into an actual false-positive match."""
+        session_id = "77777777-7777-4777-8777-777777777777"
+        write_jsonl(
+            project_dir(self.active_home, self.workspace) / f"{session_id}.jsonl",
+            [
+                {
+                    "type": "assistant",
+                    "sessionId": session_id,
+                    "cwd": str(self.workspace),
+                    "timestamp": "2026-04-10T00:00:00Z",
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "thinking",
+                                "thinking": "ordinary reasoning text",
+                                "signature": "excluded-only-secret-marker",
+                            }
+                        ],
+                    },
+                }
+            ],
+        )
+        result = self.run_cli(
+            "search", str(self.workspace), "excluded-only-secret-marker",
+            "--history-sources", str(self.manifest),
+        )
+        self.assertIn("No matches found.", result.stdout)
+
+    def test_all_projects_hint_appears_for_bare_keyword_project_path(self) -> None:
+        """Regression for a real trap: `search KEYWORD1 KEYWORD2` without
+        --all-projects treats KEYWORD1 as a project path (documented
+        argparse grammar), finds no project by that name, and used to print
+        only "No sessions found for project: KEYWORD1" — which reads as "your
+        keyword doesn't exist" rather than "you searched for a project by
+        that name". An agent hit exactly this during a real investigation."""
+        result = self.run_cli(
+            "search", "embedding", "classifier",
+            "--history-sources", str(self.manifest),
+            check=False,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("No sessions found for project: embedding", result.stdout)
+        self.assertIn("--all-projects", result.stderr)
+
+    def test_all_projects_hint_absent_for_a_real_existing_path(self) -> None:
+        """The hint must not fire when project_path genuinely looks like (or
+        is) a path — false "did you mean --all-projects" noise on an honest
+        typo'd real path would be its own annoyance."""
+        result = self.run_cli(
+            "search", str(self.workspace), "no-such-keyword-at-all",
+            "--history-sources", str(self.manifest),
+            check=False,
+        )
+        self.assertNotIn("--all-projects", result.stderr)
 
     def test_duplicate_session_unions_distinct_records_and_keeps_provenance(self) -> None:
         session_id = "33333333-3333-4333-8333-333333333333"
@@ -623,6 +757,164 @@ class SessionAnalyzerTests(unittest.TestCase):
         )
         self.assertIn(matching_id, swept.stdout)
         self.assertIn(other_id, swept.stdout)
+
+
+class RawBytePrefilterSafetyTests(unittest.TestCase):
+    """The raw-byte pre-filter must never rule out a session a full parse
+    would have matched.
+
+    Every case here was a real divergence found by an A/B run of the CLI
+    against its own pre-pre-filter version — and every one of them slipped
+    past the 59 tests above, because those fixtures are written with
+    ``ensure_ascii=False`` and searched with ASCII-only keywords. The shapes
+    below are exactly the ones that combination cannot reach.
+    """
+
+    def test_non_ascii_keyword_is_not_raw_byte_safe(self) -> None:
+        # Two independent reasons, either one sufficient: json.dumps defaults
+        # to ensure_ascii=True (so "café" is stored as "caf\\u00e9" and the
+        # UTF-8 bytes are absent), and case folding disagrees between Python
+        # and the byte scanners.
+        for keyword in ("café", "你好", "straße", "ẞ"):
+            with self.subTest(keyword=keyword):
+                self.assertFalse(keywords_are_raw_byte_safe([keyword]))
+
+    def test_ascii_keyword_is_raw_byte_safe(self) -> None:
+        # The guard must not misfire on ordinary input — killing the speedup
+        # for everyone would be a worse outcome than the bug it prevents.
+        for keyword in ("hello", "TODO", "session_id", "a-b_c.d"):
+            with self.subTest(keyword=keyword):
+                self.assertTrue(keywords_are_raw_byte_safe([keyword]))
+
+    def test_guard_must_see_original_keyword_not_the_folded_one(self) -> None:
+        # "ß".casefold() == "ss", which is pure ASCII. A call site that folds
+        # before asking would get "safe" back for the exact input the guard
+        # exists to reject, silently restoring the bug.
+        self.assertFalse(keywords_are_raw_byte_safe(["ß"]))
+        self.assertTrue(keywords_are_raw_byte_safe(["ß".casefold()]))
+
+    def test_json_escaped_keywords_are_not_raw_byte_safe(self) -> None:
+        # JSON *must* escape control characters, '"' and '\\'; '/' is optional
+        # but some writers escape it. All of them mean the keyword's bytes are
+        # not in the file verbatim. The quote and backslash cases are the ones
+        # that matter most in practice — quoted error fragments, JSON config
+        # snippets and Windows paths are common history queries.
+        for keyword in ("foo\nbar", "a\tb", "src/main.py",
+                        'say "hello world"', r"C:\Users", r"a\b"):
+            with self.subTest(keyword=keyword):
+                self.assertFalse(keywords_are_raw_byte_safe([keyword]))
+
+    def test_ascii_keyword_matches_fold_equivalent_content(self) -> None:
+        # The keyword-side guard cannot see the CONTENT. Python's casefold does
+        # full folding, so an all-ASCII keyword legitimately matches non-ASCII
+        # content — "financial" must find "ﬁnancial" (U+FB01, what you get
+        # pasting from a PDF). A byte scanner does not fold that way, so the
+        # pre-filter has to treat such content as unscannable.
+        for content, keyword in (
+            ("the ﬁnancial model is attached", "financial"),
+            ("DIE STRAẞE IST LANG", "strasse"),
+            ("a ﬅudy of ﬆate machines", "study"),
+        ):
+            with self.subTest(content=content):
+                self._assert_search_finds(content, keyword)
+
+    def test_fold_equivalent_table_is_derived_not_hand_written(self) -> None:
+        # Guards against someone "tidying" the table into a hand-typed literal.
+        # A hand-written draft of this list had 17 entries, several of which do
+        # not fold to ASCII at all.
+        from _core.text import _FOLDS_TO_ASCII
+
+        self.assertIn("ﬁ", _FOLDS_TO_ASCII)
+        self.assertIn("ß", _FOLDS_TO_ASCII)
+        for ch in _FOLDS_TO_ASCII:
+            self.assertFalse(ch.isascii(), f"{ch!r} is already ASCII")
+            self.assertTrue(ch.casefold().isascii(), f"{ch!r} does not fold to ASCII")
+
+    def _assert_search_finds(self, content: str, keyword: str,
+                             ensure_ascii: bool = False) -> None:
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            home, workspace = root / "home", root / "ws"
+            workspace.mkdir()
+            target = project_dir(home, workspace) / "018f0000-0000-4000-8000-0000000000ab.jsonl"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            record = {
+                "type": "user",
+                "timestamp": "2026-04-01T00:00:00Z",
+                "message": {"role": "user", "content": content},
+            }
+            target.write_text(
+                json.dumps(record, ensure_ascii=ensure_ascii) + "\n", encoding="utf-8"
+            )
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPT), "search", str(workspace), keyword],
+                capture_output=True, text=True, check=False,
+                env=dict(os.environ, CLAUDE_CONFIG_DIR=str(home)),
+            )
+            self.assertNotIn("No matches found", completed.stdout,
+                             f"lost a match: content={content!r} keyword={keyword!r}")
+
+    def test_one_unsafe_keyword_disables_the_filter_for_the_whole_query(self) -> None:
+        self.assertFalse(keywords_are_raw_byte_safe(["safe", "你好"]))
+
+    def test_escaped_unicode_session_is_still_found(self) -> None:
+        # End-to-end: a session file written with ensure_ascii=True (as any
+        # archive rewritten by default-parameter json.dumps would be) must
+        # still be found by a non-ASCII keyword.
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            home = root / "home"
+            workspace = root / "ws"
+            workspace.mkdir()
+            target = project_dir(home, workspace) / "018f0000-0000-4000-8000-0000000000ff.jsonl"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            record = {
+                "type": "user",
+                "timestamp": "2026-04-01T00:00:00Z",
+                "message": {"role": "user", "content": "café 你好世界 discussion"},
+            }
+            # ensure_ascii=True is the point of this fixture — do not "fix" it.
+            target.write_text(json.dumps(record, ensure_ascii=True) + "\n", encoding="utf-8")
+
+            env = dict(os.environ, CLAUDE_CONFIG_DIR=str(home))
+            for keyword in ("café", "你好"):
+                with self.subTest(keyword=keyword):
+                    completed = subprocess.run(
+                        [sys.executable, str(SCRIPT), "search", str(workspace), keyword],
+                        capture_output=True, text=True, env=env, check=False,
+                    )
+                    self.assertNotIn("No matches found", completed.stdout)
+                    self.assertIn("018f0000", completed.stdout)
+
+    def test_codex_path_does_not_build_line_keywords(self) -> None:
+        # Line-level filtering is incompatible with Codex's session_range:
+        # observe() needs every record (including the session_meta first line)
+        # to report the conversation's span. With line filtering on, a measured
+        # 4-line rollout reported "01-10 .. 01-10" instead of "01-01 .. 01-20"
+        # — a wrong value in a field callers quote, on the default
+        # no-date-window search. This asserts nobody adds it back.
+        lines = SCRIPT.read_text(encoding="utf-8").splitlines()
+        starts = [i for i, l in enumerate(lines) if l.startswith("def search_codex_rollouts")]
+        self.assertEqual(len(starts), 1, "anchor is no longer unique")
+        start = starts[0]
+        # The next top-level construct is a `class`, not a `def` — searching
+        # only for "\ndef " runs past it and swallows SessionAnalyzer's own
+        # (legitimate) line_keywords, failing this test on correct code.
+        end = next(
+            (i for i, l in enumerate(lines)
+             if i > start and (l.startswith("def ") or l.startswith("class "))),
+            len(lines),
+        )
+        codex_body = "\n".join(lines[start:end])
+        self.assertIn(
+            "line_keywords = None", codex_body,
+            "sliced the wrong region — Codex body should contain the disabling line",
+        )
+        self.assertNotIn(
+            "[kw.casefold() for kw in keywords]",
+            codex_body,
+            "Codex must not build line_keywords — it collapses Internal range",
+        )
 
 
 if __name__ == "__main__":
