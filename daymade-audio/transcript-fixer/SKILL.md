@@ -288,54 +288,36 @@ enqueued with a PARAPHRASED context could never be verdicted — the human's
 override died at the guard and the file got hand-edited around the queue
 before this command existed.)
 
-**The human's `decision_note` is an instruction to you, not an archive entry —
-and nothing promotes it for you.** The dashboard's verdict row carries a free-text
-备注 field; the CLI's `--note` writes the same column. That is where a reviewer
-puts the *reason* — and the reason is routinely a domain rule worth more than the
-single edit it was attached to. A real one: a reviewer overrode a "typo" back to
-the original with the note "这是同音字，用来规避平台的审查" — i.e. *this whole class
-of substitution is deliberate, stop flagging it*. One edit was recorded; the rule
-behind it reached nothing.
+**Promote each `decision_note`; the queue only stores it.** The dashboard's
+备注 field and the CLI's `--note` record the reviewer's reason, but neither
+turns that reason into a reusable rule. After a review batch, inspect the full
+queue JSON:
 
-Two mechanics make this easy to miss, so handle both explicitly:
+```bash
+uv run scripts/fix_transcription.py --list-review --review-status all --json
+```
 
-- **The human-readable `--show-review` hides the note until the item leaves
-  `pending`; `--json` always carries the key** (null while unwritten). Since the
-  agent path here is `--show-review <id> --json`, the field is there — you just
-  have to look at it. Sweep decided items when a batch comes back, and include
-  `kept_original`: a "this class of substitution is deliberate" note lands on
-  exactly that verdict, and a status filter copied from the text-propagation
-  sweep below (`accepted|overridden`) will miss all of them.
-  `--list-review --review-status kept_original` (or `all`) is the one to run.
-  (`reopen` also writes a note while sending the item BACK to `pending`, so
-  "pending" is not a guarantee of no note — that path is CLI-only today, and it
-  is the shape most likely to be an instruction: a human handing your suggestion
-  back with the reason attached.)
-- **Do not filter the tool's output through a field list you decided in advance.**
-  Print what came back and look at it. A caller that renders only the keys it
-  expected will silently drop the one field the human actually wrote in — the
-  failure looks identical to "the human left no note".
+The human-readable list never prints `decision_note`. Human-readable
+`--show-review` prints it only after an item leaves `pending`; JSON always
+carries the field, including on an item that `reopen` returned to `pending`.
+Inspect every item with a non-empty note, regardless of status, and do not
+pre-project a field list that could discard a field the reviewer supplied.
 
-Then close the loop, because the queue does not — but **route by what the note
-says, not by whichever command is nearest**. The exits are not interchangeable,
-and for the example above the obvious-looking one is backwards:
+Route the note by meaning rather than by verdict:
 
-| The note says | Send it to | Not |
+| The note says | Promote it to | Do not |
 |---|---|---|
-| this class of substitution is deliberate — stop flagging it | the domain context file, as a trap line with its disambiguating cue (the Maintenance loop under "Domain Correction Contexts") | `--add` — that creates a rule that rewrites the text from now on, the exact opposite of "leave it alone" |
-| a dictionary rule fired where it shouldn't | `--report-false-positive "<from>" "<to>" -d <domain>` | a context note — the rule keeps firing |
-| a stable FROM→TO this domain will see again | `--add "<from>" "<to>" --domain <project>`, subject to the real-word rules below | |
-| a person's name is spelled the surprising way | the people roster (hand-edited; no CLI writes it) | |
+| an apparent error is an intentional, context-dependent substitution | the domain context file, with the cue that distinguishes when to preserve it | use `--add`, which would rewrite the text |
+| a dictionary rule fired where it should not | `--report-false-positive "<from>" "<to>" -d <domain>` | leave the rule active behind a context note |
+| a stable FROM→TO correction will recur in this domain | `--add "<from>" "<to>" --domain <project>`, subject to the real-word rules below | |
+| a recurring person's name has a non-obvious spelling | the people roster, which is hand-edited | |
 
-Do not reach for the `append_note` **action** here: it runs only when a queue
-item carrying it is *accepted*, and on `overridden` it is dropped by design —
-which is precisely the verdict the motivating example used. After the fact,
-edit the context file directly.
-
-This is the same failure as **"An override does not compound on its own"**
-below, one storage over: there the human's corrected *text* stops at
-`resolved_text`, here the human's *reason* stops at `decision_note`. The queue
-records both faithfully and promotes neither.
+A `decision_note` is never an action. A preplanned `append_note` action runs
+only when its item is `accepted`; `overridden` drops suggestion-specific
+`dict_add` and `append_note` actions, while `kept_original` and `skipped` run
+no actions. Explicitly promote the note after the verdict. This is the same
+gap as **"An override does not compound on its own"** below: corrected text
+stops at `resolved_text`, and the reason stops at `decision_note`.
 
 **Enqueue validates anchors verbatim — authoring errors die at enqueue, not
 at verdict.** When an item declares a readable `file`, `--enqueue-review`
