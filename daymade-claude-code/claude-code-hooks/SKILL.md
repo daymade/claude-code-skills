@@ -364,6 +364,12 @@ that both go silent:
   layout changes; conventions do not. (When the candidate **is** a `SKILL.md`,
   there is no sibling to ask about — classify by basename; #13 explains why that
   is a spec-defined fact and not the naming habit this rule warns against.)
+  **A checkable fact can still be the wrong fact — anchor the question and filter by
+  type.** `test -f SKILL.md` is true in a downloads folder too, and one guard that walked
+  ancestors looking for exactly that swallowed an entire home directory, then told a real
+  session to load a skill named after it — a name that cannot exist (rule 9's incident).
+  Anchor to a sibling of a *specific* directory or to a known install path; an unanchored
+  ancestor walk is a convention wearing a fact's clothes.
 
 The tell for both: a branch that has never once fired in production while its
 tests are green. Print the raw pre-formatting classification and you will see
@@ -675,6 +681,74 @@ channel works (in that session, System Events window-counting returned a
 confident 0 for a dialog that was on screen — a permission failure masquerading
 as evidence).
 
+### 9. Fixtures cannot tell you the false-positive rate — replay a real command corpus before you register
+
+Rule 1 ranks *which* error is worse (a false block beats a missed one, because a guard
+people must bypass gets bypassed reflexively). Rule 2 makes you test before registering.
+Neither of them tells you **how big your false-block surface actually is** — and the test
+table cannot, because *you wrote its inputs from the same mental model that produced the
+detector*. Its cases carry the shapes you thought of; the shapes you didn't think of are,
+by construction, absent. That is not a coverage gap you can close by adding rows.
+
+**Measured, 2026-08-06.** A PreToolUse/Bash guard passed a 26-case table with 5 mutations
+run against it, and was registered. Replayed afterwards against **11,903 deduplicated real
+commands** harvested from 60 recent session transcripts: 143 produced candidates, the live
+hook blocked 46, and hand-checking all 46 found **10 wrong — 21.7% of everything it
+blocked** (two borderline calls counted as correct; judged the other way, ~30%). Inside 39
+minutes it had blocked 3 real sessions, one of them told to load a skill that cannot exist
+— the third defect below, surfacing as remediation guidance that points at nothing. It was
+removed the same hour. All three root defects sat in the **parsing** layer: a
+line-continuation token read as a separator, a segment scan that counted heredoc bodies and
+data arguments as execution, and a path classifier with no type filter.
+
+Two conclusions that story does *not* license. It is **not** "mutation testing doesn't
+work": a later audit of that same suite found **5 pieces of the hook's logic that could be
+deleted with all 26 rows still green**, and one row its author had annotated as "fixed from
+decorative" was still decorative — *"I ran mutation testing" is not "the mutation testing
+was right"*, and the replay is what exposed both. And it is **not** "you could not have
+known": three of those defects were hand-rolled reimplementations of code this file already
+ships (`split_shell_lines`, the command-position walk, `is_git_write`'s handling of `-C`
+and its argument). Rule 1's *use the walker verbatim* was the cheaper fix that got skipped;
+replay is the backstop, not the first line.
+
+**The method — four steps, and step 2 is the one that gets skipped:**
+
+1. **Harvest.** Session transcripts live at
+   `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`, plus any archives registered in
+   `~/.claude/history-sources.json`. Commands are `.message.content[]` entries with
+   `type == "tool_use"` and `name == "Bash"`, in field `.input.command` — **not** the hook
+   event's `.tool_input.command`, which is a different shape. Dedupe, and take enough
+   transcripts that your own recent working shapes are in there (that run used 60).
+2. **Pre-filter with the shipped detector, sliced out verbatim** — never a hand-written
+   equivalent, or you measure the agreement between two of your own guesses. The pre-filter
+   exists only for cost (11,903 → 143); step 3 is what decides. If the detector is not a
+   liftable block — shell, or split across a sourced library — make it one; a detector you
+   cannot run standalone is also one you cannot unit-test.
+3. **Feed each candidate to the real hook, with its own real transcript and `session_id`.**
+   A guard that reads session state answers differently under a fabricated context. Event
+   contract: `references/hook_patterns.md`. Two things will bite — run under a scratch
+   `TMPDIR`, or rule 7's receipts and per-session counters write into real sessions *and*
+   silence the guard partway through your own measurement; and if the hook has a human
+   gate, drive it through Pattern B's forced-decline path rather than answering 143 dialogs.
+4. **Hand-check every block — the block list is the false-positive measurement.** The allow
+   list answers rule 5's question instead (did it go quiet because nothing was there, or
+   because it could not see?), and a replay returning *zero* blocks makes the harness a
+   suspect rather than a clean bill — pitfall #11 prescribes this same instrument in the
+   under-firing direction.
+
+**What to do with the number.** A false block whose remediation guidance is wrong or
+impossible → do not register at all: that shape is the manufacturing process for the
+reflexive bypass rule 1 exists to prevent. Otherwise treat the block list as a fix list and
+re-replay. Expect the false positives to cluster on **whatever you were doing while you
+wrote the guard** — half of that run's landed on hook-development files, because its author
+was building hooks that week. And scan the block list specifically for **ops actions**
+(edits under the hooks dir, `bash -n` on a hook, the guard's own SSOT): a guard that blocks
+its own removal cannot be switched off from inside a session (#25 — that one blocked the
+very command that unregistered it).
+
+Sizing, so this doesn't read as a research project: one harvest plus one loop, minutes of
+wall time.
+
 ## Build order (in sequence)
 
 1. **Confirm it's a real recurrence**, not hypothetical — else don't build it.
@@ -689,10 +763,14 @@ as evidence).
 3. **Detection** with shlex token-level matching (rule 1), keyed on a fact the
    world can answer rather than your own rendering or a naming convention (rule 6).
 4. **`bash -n` + `test_hook.sh`** with trigger AND healthy-lookalike cases (rule 2) — do not register until green. Include the shapes that carry an unexpanded path (`cd ~/elsewhere && …`, rule 5); if the hook has a human gate, a forced-decline row (Pattern B, "Make the gate testable"); and if it demands remediation, the **after-remediation row pair** — fires without the receipt, quiet with it (template in `scripts/test_hook.sh`; rule 7 — point-in-time fixtures structurally cannot see non-termination).
-5. **Symlink** into `~/.claude/hooks/` (rule 3).
-6. **Register** in main `settings.json` + converge profiles (rule 4).
-7. For a Tier-0/irreversible action, add the **human-confirmation release gate** (rule 4).
-8. **Persist**: commit the SSOT to its private repo. Optionally add a CLAUDE.md line (prose says *why* + the alternative; the hook enforces).
+5. **Replay a real command corpus and hand-check every block** (rule 9) — this measures the
+   false-block surface, which the fixture table in step 4 structurally cannot. Slice the
+   shipped detector out verbatim to pre-filter; feed each candidate **to** the real hook
+   with its own real transcript and `session_id`, under a scratch `TMPDIR`.
+6. **Symlink** into `~/.claude/hooks/` (rule 3).
+7. **Register** in main `settings.json` + converge profiles (rule 4).
+8. For a Tier-0/irreversible action, add the **human-confirmation release gate** (rule 4).
+9. **Persist**: commit the SSOT to its private repo. Optionally add a CLAUDE.md line (prose says *why* + the alternative; the hook enforces).
 
 ## Known pitfalls (read before debugging a misfiring hook)
 
@@ -787,8 +865,8 @@ references — what grew this file 10k→50k chars in one week was *rules* prose
 policy's job is to make the default explicit for the next session holding a
 fresh incident, so future growth stays limited to contract-level rules. A
 four-frame design review (cost / SSOT / architecture / evidence,
-cross-examined) chose this over a structural split of the existing eight
-rules. Restart-the-split criteria, for the next time someone proposes one: a
+cross-examined) chose this over a structural split of the eight rules that
+existed then. Restart-the-split criteria, for the next time someone proposes one: a
 measurement (not a vibe) showing the main file's size degrades rule
 compliance, or the whole skill's churn settling (30 consecutive days with no
 new rule or backport landing anywhere).
