@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Review reasons now have an explicit promotion loop instead of ending at `decision_note`.** After a batch review, the skill now uses `--list-review --review-status all --json` because the human-readable list never prints the note and a reopened item can carry one while back in `pending`. It routes each non-empty note by meaning to the domain context, false-positive retirement, domain dictionary, or people roster, and makes the state-machine boundary explicit: storing a note never executes it, `append_note` only runs on acceptance, overrides drop suggestion-specific actions, and kept/skipped verdicts run none.
+
 ### Fixed
 - **The replacement remedy asserted a diagnosis the parser cannot make (independent review of the fix below).** The new message stated flatly that the bullet "reads 正确 → 误识, the reverse of the documented **误识 → 正确**" — but all the parser established is that the TO side *would* parse as FROM variants, which is not the same fact. A correctly-written bullet whose FROM genuinely holds a space is a real, ordinary shape: ASR splitting a Latin compound, `**Chat GPT → ChatGPT**`. Measured, that bullet was told to swap; obeying produced `ChatGPT → Chat GPT`, which scans for the **correct** spelling and offers the ASR error as the correction — warning gone, coverage satisfied, file inverted. By the standard the previous entry set ("a remedy the reader can apply with nothing changing is the defect"), a confidently wrong diagnosis is worse than a no-op, and this change's own thesis was that a message must not claim what the parser does not know. The diagnosis is now conditional and names both branches, leaving the direction to the author — the only party who knows which side the transcript contains.
 
