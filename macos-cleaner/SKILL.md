@@ -326,9 +326,11 @@ docker volume rm ragflow_mysql_data ragflow_redis_data
 
 **Safety level**: 🟢 Homebrew/npm cleanup, 🔴 Docker volumes require per-project confirmation
 
-### Step 2A-2C: Docker Deep Analysis
+### Step 2A-2D: Docker Deep Analysis
 
 For Docker-heavy systems, follow the detailed per-object analysis and verification protocol (image/container/volume inspection, OrbStack sparse-file handling, and the database-volume red-flag rule) in `references/docker_analysis.md`. Core rule: verify every Docker object with independent cross-checks before deleting, and never use prune-family commands.
+
+**Before reporting a backlog as "cleaned," check whether it will refill.** If a single repository or category keeps growing across sessions rather than being a one-time accumulation (hundreds of tagged images from an automated build, only a handful in use), a cleanup pass is a symptom fix — see `references/docker_analysis.md` Step 2D for diagnosing the source (usually a CI/CD or dev-loop script that never cleans up its own build tags) and fixing it there, before or alongside clearing the existing backlog.
 
 ## Step 3: Integration with Mole
 
@@ -718,7 +720,7 @@ docker volume inspect <volume_name>
 
 - `cleanup_targets.md` - Detailed explanations of each cleanup target
 - `mole_integration.md` - How to use Mole, plus the multi-layer TUI exploration walkthrough
-- `docker_analysis.md` - Docker deep-analysis workflow (Step 2A-2C) and Dockerfile optimization
+- `docker_analysis.md` - Docker deep-analysis workflow (Step 2A-2D, including root-cause fixes for backlogs that keep refilling) and Dockerfile optimization
 - `report_templates.md` - Detailed report templates (object-level Docker tables, full report layout)
 - `safety_rules.md` - Comprehensive list of what to never delete
 
