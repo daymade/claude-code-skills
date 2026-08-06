@@ -47,7 +47,13 @@ from _core.sources import (  # noqa: E402
     HistorySourceConfigError,
     discover_claude_sources,
 )
-from _core.text import SearchSegment, iter_jsonl, searchable_segments  # noqa: E402
+from _core.text import (  # noqa: E402
+    SearchSegment,
+    files_possibly_matching,
+    iter_jsonl,
+    keywords_are_raw_byte_safe,
+    searchable_segments,
+)
 
 
 def _record_identity(record: Dict[str, Any]) -> str:
@@ -153,12 +159,27 @@ def search_codex_rollouts(
     to_timestamp: Optional[float] = None,
     project_path: Optional[str] = None,
     exclude_ids: Optional[set] = None,
+    use_prefilter: bool = True,
 ) -> List[Dict[str, Any]]:
     """Search Codex rollouts for keywords, one match dict per session.
 
     ``project_path`` filters by the rollout's session_meta cwd (recursive
     workspace match). Rollouts are de-duplicated by session id — a copy left
     in both sessions/ and archived_sessions/ is reported once.
+
+    ``use_prefilter`` skips per-file and per-line json.loads() work a raw byte
+    scan already proves cannot match (see ``files_possibly_matching`` and
+    ``iter_jsonl``'s ``line_keywords``). The FILE-level skip is safe
+    unconditionally — every counter this function reports (``excluded_untimed``,
+    ``session_range``, ``match_range``) is scoped to a single rollout file and
+    only surfaces when that same file has ``total_mentions > 0``, so a file
+    ruled out entirely never had anything to report.
+
+    Codex does NOT do line-level skipping at all — not even outside a date
+    window. Two separate accountings need to see every record: ``session_range``
+    (which would otherwise collapse onto ``match_range``) and, under a date
+    window, ``excluded_untimed``. See the comment at the ``line_keywords``
+    assignment below; the disabling is unconditional and a test enforces it.
     """
     search_keywords = [
         (keyword, keyword if case_sensitive else keyword.casefold())
@@ -167,6 +188,25 @@ def search_codex_rollouts(
     exclude = exclude_ids or set()
     matches: List[Dict[str, Any]] = []
     seen_ids: set[str] = set()
+
+    matched_files: Optional[set[Path]] = None
+    if use_prefilter:
+        matched_files = files_possibly_matching(
+            rollouts, keywords, case_sensitive=case_sensitive
+        )
+    # Codex gets FILE-level pre-filtering only, never line-level.
+    #
+    # ``session_range.observe()`` has to see every record — including the
+    # ``session_meta`` first line — to report the conversation's time span.
+    # Skipping lines that lack the keyword bytes collapses ``Internal range``
+    # onto ``Match range``: measured on a 4-line rollout, ``01-01 .. 01-20``
+    # became ``01-10 .. 01-10``. That is not "one less field", it is a *wrong
+    # value* in a field callers quote, and it fires on the plain no-date-window
+    # search — the most common invocation there is.
+    #
+    # A file the file-level filter rules out entirely reports no range at all,
+    # so that layer stays safe and stays on.
+    line_keywords = None
 
     for path in rollouts:
         try:
@@ -177,10 +217,19 @@ def search_codex_rollouts(
         sid = codex_session_id(meta, path) if meta else None
         if not sid:
             sid = path.stem
+        # Dedup and exclusion happen BEFORE the pre-filter check below, on
+        # purpose: they must claim/reject this path exactly as before, in the
+        # same traversal order, regardless of whether it turns out to have a
+        # keyword match. Moving the pre-filter check earlier would change
+        # which physical copy "wins" the session id when two copies of one
+        # session exist (sessions/ vs archived_sessions/) — a real behavior
+        # change this performance fix has no business making silently.
         if sid in seen_ids:
             continue
         seen_ids.add(sid)
         if sid in exclude or path.stem in exclude:
+            continue
+        if matched_files is not None and path not in matched_files:
             continue
         cwd = meta.get("cwd") if isinstance(meta, dict) else None
         if project_path is not None:
@@ -196,7 +245,7 @@ def search_codex_rollouts(
         match_range = TimestampRange()
         excluded_untimed = 0
         try:
-            for record in iter_jsonl(path):
+            for record in iter_jsonl(path, line_keywords=line_keywords):
                 record_timestamp = parse_timestamp(record.get("timestamp"))
                 if record_timestamp is not None:
                     session_range.observe(record_timestamp)
@@ -608,6 +657,7 @@ class SessionAnalyzer:
         case_sensitive: bool = False,
         from_timestamp: Optional[float] = None,
         to_timestamp: Optional[float] = None,
+        use_prefilter: bool = True,
     ) -> List[Dict[str, Any]]:
         """
         Search sessions for keywords.
@@ -619,11 +669,56 @@ class SessionAnalyzer:
             case_sensitive: Whether to perform case-sensitive search.
             from_timestamp: Inclusive lower internal record timestamp.
             to_timestamp: Inclusive upper internal record timestamp.
+            use_prefilter: Skip the expensive per-line json.loads() + text
+                extraction pass on copies a raw byte scan already proves
+                cannot contain any keyword (see ``files_possibly_matching``).
+                Forced off automatically when a date window is active — see
+                below for why.
 
         Returns:
             List of match dicts (session ref + match counts), most mentions
             first.
         """
+        # The pre-filter is only safe to apply when no date window is active.
+        # `excluded_untimed_count` below counts records that lack a timestamp
+        # ACROSS EVERY COPY of a session, independent of whether those records
+        # contain a keyword — it exists purely to report "N records could not
+        # be checked against your --from-date/--to-date window". Skipping a
+        # copy's full parse because it has no keyword match would silently
+        # drop its contribution to that count. Outside a date window this
+        # counter is never computed, so skipping is unconditionally safe —
+        # the file-level pre-filter is provably an over-approximation (see
+        # files_possibly_matching's docstring), so a copy it rules out cannot
+        # contain a matchable record.
+        use_prefilter = use_prefilter and from_timestamp is None and to_timestamp is None
+        matched_files: Optional[set[Path]] = None
+        # Always case-folded regardless of `case_sensitive`: casefold-matching
+        # is a strict superset of exact-case matching (anything an exact-case
+        # check would find, casefold-matching finds too), so it is always a
+        # safe over-approximation to hand to the line-level pre-check in
+        # iter_jsonl — it costs a little filtering precision in
+        # case-sensitive mode, never a missed match.
+        # Gate on the ORIGINAL keywords, not the folded ones: "ß".casefold()
+        # is "ss" (ASCII), so checking after folding would answer "safe" for
+        # precisely the input the check exists to reject.
+        line_keywords = (
+            [kw.casefold() for kw in keywords]
+            if use_prefilter and keywords_are_raw_byte_safe(keywords)
+            else None
+        )
+        if use_prefilter:
+            all_copy_paths = [
+                copy["path"]
+                for ref in session_refs
+                for copy in (
+                    ref.get("copies")
+                    or [{"path": ref["path"], "source": ref["sources"][0]}]
+                )
+            ]
+            matched_files = files_possibly_matching(
+                all_copy_paths, keywords, case_sensitive=case_sensitive
+            )
+
         matches: List[Dict[str, Any]] = []
         search_keywords = [
             (keyword, keyword if case_sensitive else keyword.casefold())
@@ -653,12 +748,18 @@ class SessionAnalyzer:
             for copy in copies:
                 session_file = copy["path"]
                 source = copy["source"]
+                if matched_files is not None and session_file not in matched_files:
+                    # A raw byte scan already proved this exact copy cannot
+                    # contain any keyword — see the use_prefilter comment
+                    # above for why skipping it here (no date window active)
+                    # cannot under-count anything.
+                    continue
                 copy_had_match = False
                 copy_new_mentions = 0
                 copy_untimed_records: set[str] = set()
                 copy_matched_records: set[str] = set()
                 try:
-                    records = iter_jsonl(session_file)
+                    records = iter_jsonl(session_file, line_keywords=line_keywords)
                     for data in records:
                         record_identity = _record_identity(data)
                         record_timestamp = parse_timestamp(data.get("timestamp"))
@@ -1042,6 +1143,29 @@ def _normalize_search_scope(args, parser) -> None:
     args.keywords = terms[1:]
 
 
+def _maybe_hint_all_projects(project_path: str) -> None:
+    """Warn when an unresolved ``project_path`` looks like it was meant as a
+    keyword, not a path — the exact trap of running ``search`` with keywords
+    only and forgetting ``--all-projects``: argparse's positional grammar
+    (``project_path?`` then ``keywords+``) silently consumes the first
+    keyword as the project, the lookup finds nothing, and the message alone
+    ("No sessions found for project: embedding") reads as "your keyword
+    doesn't exist" rather than "you searched for a project by that name".
+    A real project path always contains a path separator or resolves to an
+    existing directory; a bare word that does neither almost certainly was
+    not one.
+    """
+    if "/" in project_path or "\\" in project_path or Path(project_path).exists():
+        return
+    print(
+        "Hint: this looks like it might be a keyword, not a project path — "
+        "if you don't know which project the conversation happened in, "
+        "re-run with --all-projects (e.g. `search --all-projects "
+        f"{project_path} ...`).",
+        file=sys.stderr,
+    )
+
+
 def _collect_sessions(analyzer: "SessionAnalyzer", args) -> List[Dict[str, Any]]:
     """Collect session refs for the requested scope, applying exclusions."""
     if args.all_projects:
@@ -1171,6 +1295,18 @@ def main():
     search_parser.add_argument(
         "--case-sensitive", action="store_true", help="Case-sensitive search"
     )
+    search_parser.add_argument(
+        "--no-prefilter",
+        action="store_true",
+        help="Disable the rg/grep raw-byte pre-filter and fully parse every "
+        "session file. The pre-filter is designed to be a pure speedup: it "
+        "only runs for keywords whose bytes must appear verbatim in the file "
+        "(ASCII, no '/', no control characters), and disables itself for the "
+        "rest — so a non-ASCII query (any CJK one) already parses everything "
+        "and this flag changes nothing for it. Use this to verify the "
+        "pre-filter's neutrality on an ASCII query, or to rule it out when "
+        "diagnosing a suspected missed match.",
+    )
     _add_home_flags(search_parser)
 
     # Stats command
@@ -1217,6 +1353,7 @@ def main():
                 print("No sessions found across all projects")
             else:
                 print(f"No sessions found for project: {args.project_path}")
+                _maybe_hint_all_projects(args.project_path)
             print(
                 f"(searched {len(analyzer.sources)} source(s): {source_summary})",
                 file=sys.stderr,
@@ -1283,6 +1420,7 @@ def main():
                 print("No sessions found across all projects")
             else:
                 print(f"No sessions found for project: {args.project_path}")
+                _maybe_hint_all_projects(args.project_path)
             print(
                 f"(searched {len(analyzer.sources)} source(s): {source_summary})",
                 file=sys.stderr,
@@ -1305,6 +1443,7 @@ def main():
                 args.case_sensitive,
                 from_timestamp,
                 to_timestamp,
+                not args.no_prefilter,
             )
             if sessions
             else []
@@ -1327,6 +1466,7 @@ def main():
                 to_timestamp,
                 None if args.all_projects else args.project_path,
                 set(args.exclude_session),
+                not args.no_prefilter,
             )
 
         if matches:
