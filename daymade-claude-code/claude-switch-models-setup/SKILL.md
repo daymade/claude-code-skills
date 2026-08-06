@@ -45,13 +45,45 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    - Shell is zsh or bash: detect via `$SHELL`
    - `python3` is available
 
-2. **Install the profile manager scripts**
-   - Copy `scripts/claude-profiles.sh` to `~/.config/claude-switch-models-setup/claude-profiles.sh`
-   - Copy `scripts/claude-plugins-sync.py` to `~/.config/claude-switch-models-setup/claude-plugins-sync.py`
-   - Copy `scripts/sync-local-skill-sources.py` to `~/.config/claude-switch-models-setup/sync-local-skill-sources.py`
-   - Copy `scripts/sync-local-skill-sources-daemon.sh` to `~/.config/claude-switch-models-setup/sync-local-skill-sources-daemon.sh`
-   - Copy `scripts/sync-profile-settings.py` to `~/.config/claude-switch-models-setup/sync-profile-settings.py`
-   - Make all five executable
+2. **Install the profile manager scripts — symlink them, do not copy**
+
+   On a machine that has this repo checked out (the maintainer case), link each
+   script instead of copying it:
+
+   ```bash
+   REPO=<path-to-this-repo>/daymade-claude-code/claude-switch-models-setup
+   DST=~/.config/claude-switch-models-setup
+   mkdir -p "$DST"
+   for f in scripts/claude-profiles.sh \
+            scripts/claude-plugins-sync.py \
+            scripts/sync-local-skill-sources.py \
+            scripts/sync-local-skill-sources-daemon.sh \
+            scripts/sync-profile-settings.py; do
+     ln -sf "$REPO/$f" "$DST/$(basename "$f")"
+   done
+   chmod +x "$REPO"/scripts/*.sh "$REPO"/scripts/*.py
+   ```
+
+   The five paths are spelled out rather than globbed so that reading this file
+   tells you which scripts exist and where — `scripts/*.sh` would not.
+
+   **Why symlinks and not `cp`:** `~/.config/…` is what actually runs — the
+   LaunchAgent and `claude-profile` invoke scripts by that path — while this
+   repo holds their source. Copies drift, and nothing about a deployed copy
+   looks different from its source, so "am I editing the SSOT?" is not a
+   judgement anyone reliably makes. Measured on this machine before the switch:
+   a lock-placement fix sat in the repo for 26 days while the deployed copy kept
+   running the bug it fixed, and two cleanup routines written straight into the
+   deployed copy never reached version control at all — **drift in both
+   directions, silently.** A symlink makes both impossible: there is only one
+   file. It also lets `sync-local-skill-sources.py` locate its own source repo
+   by resolving its own path, instead of falling back to guessing.
+
+   `hook-health-check.sh` (SessionStart) flags any of these that becomes a real
+   file again, or whose link goes dangling.
+
+   On a machine **without** the repo, copy them — and accept that repo fixes
+   will not reach it until you copy again.
 
 3. **Add shell integration**
    - Source the profile manager in `~/.zshrc` or `~/.bashrc`
