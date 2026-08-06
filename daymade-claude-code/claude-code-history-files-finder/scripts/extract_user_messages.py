@@ -283,6 +283,8 @@ def extract(sources, cutoff: datetime, min_dup: int = 5) -> Extraction:
             return
         norm = normalize_text(text)
         if len(norm) >= PASTE_MIN_CHARS:
+            # ascii ratio uses normalized text (whitespace-stripped) so padding can't
+            # defeat it; line count uses raw text to see real paragraph structure.
             ascii_ratio = sum(1 for ch in norm if ord(ch) < 128) / len(norm)
             non_empty_lines = sum(1 for line in text.split('\n') if line.strip())
             if ascii_ratio >= PASTE_ASCII_RATIO or non_empty_lines >= PASTE_MULTI_LINE_MIN:
