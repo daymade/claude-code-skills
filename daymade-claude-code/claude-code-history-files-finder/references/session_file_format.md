@@ -293,8 +293,13 @@ five contamination classes on top of the structural fields (all observed
    harness into `text` blocks; strip them and track the image count separately.
 4. **Whole-document pastes.** Logs, code, or documentation pasted as a message.
    A splitter that held up on a real corpus: normalized length ≥ 2000 chars AND
-   ≥ 60% ASCII — long voice-dictation messages stay below the ASCII bar and are
-   not misfired.
+   (≥ 60% ASCII OR ≥ 10 non-blank lines). The ASCII branch catches code/logs;
+   the multi-line branch catches CJK meeting transcripts and multi-turn dialog
+   (and agent re-injections) that stay below the ASCII bar. Coherent voice
+   dictation (few long paragraphs — ≤4 non-blank lines on a 7-day corpus) sits
+   below the line bar and is not misfired. Speaker-label counting was tried and
+   rejected: user prose that quotes people racks up more "name:" labels than a
+   real transcript.
 5. **Agent-voiced re-injection.** Text authored by an assistant (a parallel
    session, a review agent, a scheduled loop) arriving as a user record with
    `promptSource: "typed"` and `origin.kind: "human"` — record fields cannot
