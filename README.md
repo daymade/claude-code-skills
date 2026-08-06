@@ -2666,7 +2666,7 @@ claude plugin install marketplace-health-check@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-Set up multiple isolated Claude Code CLI profiles so you can run different LLM providers (Kimi, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time — each profile gets its own `claude.json` state while sharing skills, projects, hooks, and agents.
+Set up multiple isolated Claude Code CLI profiles so you can run different LLM providers (Kimi, MiniMax, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time — each profile gets its own `claude.json` state while sharing skills, projects, hooks, and agents.
 
 **When to use:**
 - You want one terminal with Kimi and another with DeepSeek running side-by-side

@@ -2,12 +2,13 @@
 name: claude-switch-models-setup
 description: >-
   Set up and maintain multiple isolated Claude Code CLI profiles so students and
-  power users can run different LLM providers (Kimi K3, Kimi K2.7 highspeed, GLM,
-  DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time.
+  power users can run different LLM providers (Kimi K3, Kimi K2.7 highspeed,
+  MiniMax M3, MiniMax M2.7, GLM, DeepSeek, StepFun, Anthropic) in separate
+  terminal windows at the same time.
   Use this skill whenever the user asks about multi-provider Claude setup,
   multiple Claude Code windows, switching models or the csk/csd/csg aliases,
   CLAUDE_CONFIG_DIR, the ~/.claude-profiles directory, or running
-  Kimi/GLM/DeepSeek/StepFun alongside Anthropic. It also owns profile-drift
+  Kimi/MiniMax/GLM/DeepSeek/StepFun alongside Anthropic. It also owns profile-drift
   troubleshooting — a third-party profile missing skills/hooks/plugins the default
   profile has, claude-profiles-doctor reporting a real directory where a symlink
   belongs, or settings not converging — and per-provider context-window
@@ -191,6 +192,10 @@ These are not day-to-day commands. Normal source edits are live through symlinks
 
 Templates live in `assets/templates/`:
 
+- `minimax.json` — MiniMax-M3, global endpoint, 1M context, adaptive or disabled thinking
+- `minimax-cn.json` — MiniMax-M3, China endpoint, 1M context, adaptive or disabled thinking
+- `minimax-m2-7.json` — MiniMax-M2.7, global endpoint, 204800-token context, always-on thinking
+- `minimax-m2-7-cn.json` — MiniMax-M2.7, China endpoint, 204800-token context, always-on thinking
 - `kimi.json` — Kimi K3 (1M context via the `[1m]` marker — see "Configuring Context Window Size" below)
 - `kimi-highspeed.json` — Kimi K2.7 highspeed (legacy 200K context)
 - `glm.json`
@@ -198,7 +203,14 @@ Templates live in `assets/templates/`:
 - `stepfun.json`
 - `anthropic.json`
 
-Each template has placeholders for `<API_KEY>` and `<BASE_URL>`. Ask the user for real values; do not guess or reuse values from the current machine unless the user explicitly provides them.
+Every template uses the `<API_KEY>` placeholder. Templates for configurable gateways also use `<BASE_URL>`; the MiniMax templates pin the documented regional endpoint. Ask the user for every real placeholder value; do not guess or reuse values from the current machine unless the user explicitly provides them.
+
+### MiniMax model behavior
+
+| Templates | Model | Context configuration | Thinking behavior |
+|---|---|---|---|
+| `minimax.json`, `minimax-cn.json` | `MiniMax-M3` | Append `[1m]` to every routed model value and set `CLAUDE_CODE_AUTO_COMPACT_WINDOW` to `1000000`. | Supports adaptive or disabled thinking. Keep `ANTHROPIC_REASONING_MODEL` on the same model. |
+| `minimax-m2-7.json`, `minimax-m2-7-cn.json` | `MiniMax-M2.7` | Set `CLAUDE_CODE_MAX_CONTEXT_TOKENS` and `CLAUDE_CODE_AUTO_COMPACT_WINDOW` to `204800`; do not append `[1m]`. | Thinking is always on; do not claim a template-level disable path. |
 
 ## Configuring Context Window Size
 
@@ -222,6 +234,8 @@ When writing a new provider's `settings/<name>.json`, pick based on the provider
 
 `deepseek.json` and `glm.json` set **both** `[1m]` and an explicit `CLAUDE_CODE_AUTO_COMPACT_WINDOW: "1000000"`. That's belt-and-suspenders, not redundant filler to strip out — the exact precedence between the marker and the explicit override hasn't been independently reverse-engineered, so if you're copying one of those two templates, keep both rather than dropping one.
 
+The MiniMax-M3 templates use the same 1M marker plus an explicit `1000000` auto-compact value. The MiniMax-M2.7 templates use explicit `204800` limits with no marker.
+
 The full step-2-16k template-correctness war-story (why an internally-consistent-looking context value is not the same as a currently-correct one — cross-check the model name against the provider's live docs, not just the numbers around it), plus a reusable recipe to verify whether any env var actually changes the bytes sent over the wire (a local `http.server` capture, since `--debug api` only shows internal state), live in `references/context-window-config.md`.
 
 ### Common base URLs (verify with your provider)
@@ -232,6 +246,7 @@ The full step-2-16k template-correctness war-story (why an internally-consistent
 | GLM      | `https://open.bigmodel.cn/api/paas/v4` or OpenRouter-compatible endpoint |
 | DeepSeek | `https://api.deepseek.com` or OpenRouter-compatible endpoint |
 | StepFun  | `https://api.stepfun.com` or OpenRouter-compatible endpoint |
+| MiniMax  | Global: `https://api.minimax.io/anthropic`; China: `https://api.minimaxi.com/anthropic` |
 | Anthropic| `https://api.anthropic.com` |
 
 **Important:** The exact endpoint depends on whether the user is calling the provider directly or through a compatibility gateway (e.g., OpenRouter). Always ask.

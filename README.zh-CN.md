@@ -2705,7 +2705,7 @@ claude plugin install marketplace-health-check@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-设置多个互相隔离的 Claude Code CLI profile，让你可以在不同终端窗口同时运行不同的 LLM provider（Kimi、GLM、DeepSeek、StepFun、Anthropic）——每个 profile 拥有独立的 `claude.json` 状态，同时共享 skills、projects、hooks 和 agents。
+设置多个互相隔离的 Claude Code CLI profile，让你可以在不同终端窗口同时运行不同的 LLM provider（Kimi、MiniMax、GLM、DeepSeek、StepFun、Anthropic）——每个 profile 拥有独立的 `claude.json` 状态，同时共享 skills、projects、hooks 和 agents。
 
 **使用场景：**
 - 想在一个终端跑 Kimi、另一个终端跑 DeepSeek
