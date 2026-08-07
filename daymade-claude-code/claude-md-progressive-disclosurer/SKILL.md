@@ -1,7 +1,7 @@
 ---
 name: claude-md-progressive-disclosurer
 description: |
-  Optimize / slim down / restructure a CLAUDE.md (or AGENTS.md) using progressive disclosure — move low-frequency detail to Level 2 references while keeping Level 1 lean, WITHOUT losing information. Use this whenever the user asks to optimize / 精简 / 瘦身 / 重构 CLAUDE.md, asks "CLAUDE.md 是不是太大了 / 太长了" (is my CLAUDE.md too big / too long / bloated), wants to 把内容拆到 reference / 外部 / Level 2, do 整段外移 / 渐进式披露 / progressive disclosure, or whenever a CLAUDE.md duplicates info across files or the LLM keeps failing to follow its rules. ALSO trigger the moment an optimization turns into moving / cutting / compressing sections of a CLAUDE.md — even mid-task while another claude-md skill is already running. Distinct from claude-md quality auditors / scorers: this is the restructuring-and-offloading methodology that guarantees zero information loss (grep-verified pointers, verbatim moves, 5b content-integrity audit).
+  Optimize / slim down / restructure a CLAUDE.md (or AGENTS.md) using progressive disclosure — move low-frequency detail to Level 2 references while keeping Level 1 lean, WITHOUT losing information. Use this whenever the user asks to optimize / 精简 / 瘦身 / 重构 CLAUDE.md, asks "CLAUDE.md 是不是太大了 / 太长了" (is my CLAUDE.md too big / too long / bloated), wants to 把内容拆到 reference / 外部 / Level 2, do 整段外移 / 渐进式披露 / progressive disclosure, or whenever a CLAUDE.md duplicates info across files or the LLM keeps failing to follow its rules. ALSO trigger the moment an optimization turns into moving / cutting / compressing sections of a CLAUDE.md — even mid-task while another claude-md skill is already running. Distinct from claude-md quality auditors / scorers: this is the restructuring-and-offloading methodology that guarantees zero information loss (grep-verified pointers, verbatim moves, 5b content-integrity audit). Covers hotspot-first profiling (先打热点) and cross-tool truncation (Codex project_doc_max_bytes).
 ---
 
 # CLAUDE.md 渐进式披露优化器
@@ -88,6 +88,8 @@ Skills 描述常驻正文按需、以及 **Claude Code 的动态工具选择（�
 **不可逆 + 只能语义判断 → 注入器 + 常驻规则句两者并存**（注入器保证在场，常驻句保证
 它出现在最该出现的位置）。同一条规则挂两个载体不算违反 SSOT，前提是
 **只有一处写规则正文，另一处指向它**。
+
+**官方载体新增（2026-08 对照 code.claude.com 官方文档核过）**：`~/.claude/rules/`（用户级）与项目级 `.claude/rules/` 可把规则拆成多主题文件；带 `paths:` frontmatter 的 rule **只在 Claude 操作匹配文件时加载**——官方版的按需载体。⚠️ 边界：paths 按**文件读写**触发、不按 Bash 命令触发——代理 / git 类"Bash 时刻"规则用不了它，文件类规则（`*.py` / `*.docx` / 测试文件）适用。另外三条官方事实随手可用：单文件目标 **<200 行**（官方原文 "Longer files consume more context and reduce adherence"）；`/doctor` 自带 CLAUDE.md trim 检查（v2.1.206+，可当独立第二意见）；**块级 HTML 注释在注入前被剥掉**——维护者备注零 token 成本。auto memory 的 MEMORY.md 只加载前 200 行 / 25KB，塞过期条目挤占的是活配额。
 
 **🚫 缩正文前必须实证「真有别的机制在强制吗」，禁止推断。**
 把 L1 正文缩成「由 X 强制 + 指针」之前，构造一条真实的违规命令喂给 X，看它到底拦不拦：
@@ -181,7 +183,20 @@ cp CLAUDE.md CLAUDE.md.bak.$(date +%Y%m%d_%H%M%S)
 
 ### Step 2: 内容分类
 
-分两阶段。**先分诊，再分层**——跳过分诊会把噪音忠实搬进 Level 2，把 reference 变垃圾场。
+分三阶段。**先测量，再分诊，再分层**——跳过测量会把力气花在小头上，跳过分诊会把噪音忠实搬进 Level 2，把 reference 变垃圾场。
+
+#### 2.0 热点测量（先于一切提案——性能优化的第一课）
+
+**先量化，后动手；按贡献度排序，先打最大的。** 优化提案落在 3% 的小头上、而 70% 的热点在旁边没人动，是本 skill 实战里被用户当场打断的真实失败（案例 19：一份 168KB 的全局 CLAUDE.md 占每 session 启动上下文 69%，执行者却先端出一盘扩展清理——用户原话「你没有先去管热点，而是先找了一堆很小很小的东西」）。测量四步（`scripts/profile_claude_md.py` 产出第 2/3 步；第 1 步是会话内命令、第 4 步手查各消费方配置）：
+
+1. **全局占比**：`/context` 看这份文件在整个启动上下文里占多大——确认它是不是热点，还是别的类别才是
+2. **分节字节表**：按 heading 统计每节 bytes/lines 并降序——**工作顺序 = 这张表的降序**（⚠️ 父节字节含全部子节：降序在**同层之间**比较，容器节跳过看它最大的子节）；提案端出去前自问：这是当前最大贡献者吗？不是的话，最大的那个为什么不在最前面？
+3. **行长分布**：>1KB 的巨型行是「规则+战例焊死在一个 bullet」的签名（实战：4.4% 的行承载 35.6% 的字节）
+4. **消费方上限**：这份文件若被其他工具消费（如 Codex 经 `~/.codex/AGENTS.md` symlink 读同一文件），逐个查它们的截断上限——Codex `project_doc_max_bytes` 默认 32 KiB，超出的**尾部静默不可见、无任何报错**（实战：上限配过 96 KiB 当时够用，文件长到 164KB 后 41% 的正文对 Codex 隐形数周，整个协作规则 cluster 都在盲区）。修法 = 提上限 + 瘦文件双管齐下；再把「文件 size vs 上限」装进 SessionStart 体检哨兵——没有机械力量看着这个数字，它必然再次静默失效
+
+⚠️ 测量仪器自身的两个坑（都实测踩过，脚本已内建规避；先在已知答案的样本上校准，见案例 17/19）：
+- **heading 正则必须感知 code fence**——fence 里的 `# 注释` 会被当成标题，凭空造出不存在的大节（实测造出过一个假的 45.9KB 节，热点排序整个失真）
+- **CJK 文件禁用 chars/4 估 token**——中文密集文本实测 ~0.42 token/byte（≈2.4 bytes/token），chars/4 低估一倍以上；有 `/context` 实测值就按实测比率折算，并一律标「est.」
 
 #### 2.1 信号分诊（必要性闸门，先决）
 
@@ -232,6 +247,13 @@ cp CLAUDE.md CLAUDE.md.bak.$(date +%Y%m%d_%H%M%S)
 2. 原样粘贴到 Level 2 文件中
 3. 可以在 Level 2 中添加结构（标题、分隔线），但**不要删减、改写、合并**原始内容
 4. 如果确实有冗余（同一段话在原文中出现了多次），在 Level 2 中保留一份完整的，注释说明去重
+
+#### 整节批量下沉的机械流程（≥3 节时脚本化，禁手搬）
+
+手工复制粘贴 10 个节必出错。用 `scripts/sink_sections.py`（spec 驱动；实战一次通过 10 节 / 119KB，整串验证 10/10 零丢失）：**按精确标题行定界提取原文（fence 感知）→ verbatim 追加到目标 reference（带日期 provenance header，新文件配 intro）→ 自底向上替换 L1 压缩版（行号不失效）→ 每节整串子串验证（grep 对多行原文按行 OR、会放过丢半段的搬运，必须 python `in` 整串判断）→ 任一验证失败自动回滚源文件**。两条硬规则：
+
+- **拒写 symlink 目标（含父目录）**：目标路径任一环节是 symlink（文件本身、或**父目录**——文件级 `islink` 检查会被目录级 symlink 静默穿透，独立审阅实测打穿过），"本地追加"实际在改 link 指向的那个仓（触发它的版本 bump / commit 义务，且那个仓可能 public）。脚本按 `realpath ≠ abspath` 判定并 abort，特意跨 link（如 macOS `/tmp`）用 `--allow-symlinked-target` 显式放行；正确动作是落一个本地兄弟文件 + provenance 注明「与 symlink 源后续合并」
+- **先全部提取、后统一替换**：提取按原始行号一次做完，替换自底向上——两步交错会让未处理节的行号漂移。压缩版 snippet **必须保留原 start_heading 行**（验证器逐个检查标题存活，改名即 FAIL 回滚）；用作定界的标题在源文件里必须唯一（重名 abort）
 
 ### Step 4: 更新 Level 1
 
@@ -394,6 +416,8 @@ done < /tmp/pointers.txt
    - 唯一允许删除的情况：**该信息已有独立的 canonical source**（如 `docs/README.md` 已是文档索引的 canonical source），且在 Level 1 中有明确的指向
 
 **禁止将"故意删除"作为分类来掩盖信息丢失。** 每一项"故意删除"都必须说明 canonical source 在哪里。如果说不出来，就不是"故意删除"，而是"遗漏"。
+
+**压缩重述的保真审计（L1 留了压缩版时必查）**：压缩最容易丢的不是整段——是**限定词**。实战（案例 19）：原句「public + 0 stars/forks 且用户明确授权」被压成「0 stars 且明确授权」，6 个字符消失，一道闸门的条件字面上放宽了一半；同场审计还抓到「自称只省略战例、实际连 4 条可执行判据也省了」的申报口径不符。两个审计动作：① 对每条压缩重述，把**操作性子句**（条件 / 数值 / 枚举 / hook 名 / 否定词）与原句逐词 diff——整段丢失 5b 能抓，一个 "/forks" 只有子句级 diff 能抓；② 全文跑 expected-hunks-only 检查——difflib 比对基线，每个非 equal hunk 必须指认到一条已声明的改动，指认不了的就是计划外差异。
 
 **独立 agent 做 5b 是默认动作，不是「大量压缩时才用」**：执行者自审有「乐观偏差」——倾向相信自己砍掉的内容都有归属。启动一个**独立 sub-agent**（**普通 subagent，禁 fork**——fork 继承你的盲区，只会盖个「已审」的章）做完整逐节 5b（读原始文件 + 当前文件 + 所有 reference，逐个信息点验证归属，只返回「真丢失 / 指针失准」清单）。它没有你的 sunk-cost，能抓到你抽查会放过的。prompt 模板 + 批量内容点 grep 脚本见 `references/progressive_disclosure_principles.md` 附录 D。
 
