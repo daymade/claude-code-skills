@@ -114,6 +114,7 @@ It's OK to briefly explain terms if you're in doubt, and feel free to clarify te
 - Provide an escape hatch ("Other" is always implicit in AskUserQuestion)
 - Accept the user's choice — nudge on tradeoffs but never refuse to proceed
 - Skip the question if there's an obvious answer with no tradeoffs (just state what you'll do)
+- **If a question times out with no answer (user away from keyboard), neither stall nor barrel through the taste/scope decisions.** Do the side-effect-free groundwork first — pre-edit snapshot, inventory, eval-case collection, read-only audits/health checks — and hold the judgment calls (restructure direction, what to delete, go/no-go) for when they're back. Then say plainly which you did and what is waiting on them.
 
 ---
 
@@ -750,7 +751,7 @@ Also read [references/skill-development-methodology.md](references/skill-develop
 
 ### Test Cases
 
-After writing the skill draft, come up with 2-3 realistic test prompts — the kind of thing a real user would actually say. Present them via **AskUserQuestion**:
+After writing the skill draft, come up with 2-3 realistic test prompts — the kind of thing a real user would actually say. **For skills that act on live systems (a running service, a logged-in client, production data), give each test prompt an explicit side-effect budget** — e.g. "probe read-only and conclude; do NOT execute the download / drive the UI." An eval that mutates a live environment while "just testing" is a real action, not a test. Present them via **AskUserQuestion**:
 
 ```
 Skill draft is ready. Here are [N] test cases I'd like to run:
@@ -812,7 +813,7 @@ Execute this task:
 
 **Baseline run** (same prompt, but the baseline depends on context):
 - **Creating a new skill**: no skill at all. Same prompt, no skill path, save to `without_skill/outputs/`.
-- **Improving an existing skill**: the old version captured by the mandatory existing-skill regression gate before the first edit. Point the baseline subagent at that immutable snapshot and save to `old_skill/outputs/`. If no pre-edit snapshot exists, stop and reconstruct an authoritative baseline from Git before continuing; never use the already-edited tree as the old baseline.
+- **Improving an existing skill**: the old version captured by the mandatory existing-skill regression gate before the first edit. Point the baseline subagent at that immutable snapshot and save to `old_skill/outputs/`. If no pre-edit snapshot exists, stop and reconstruct an authoritative baseline from Git before continuing; never use the already-edited tree as the old baseline. **Know what this comparison can resolve: it measures only this round's delta.** If the capability you most want to verify already exists in the pre-edit snapshot — a sibling session can commit exactly that fix just before you start — the with/old A/B has zero resolving power for it; pick an older ref as the baseline when that's the capability under test.
 
 Write an `eval_metadata.json` for each test case (assertions can be empty for now). Give each eval a descriptive name based on what it's testing — not just "eval-0". Use this name for the directory too. If this iteration uses new or modified eval prompts, create these files for each new eval directory — don't assume they carry over from previous iterations.
 
@@ -829,7 +830,7 @@ Write an `eval_metadata.json` for each test case (assertions can be empty for no
 
 Don't just wait for the runs to finish — you can use this time productively. Draft quantitative assertions for each test case and explain them to the user. If assertions already exist in `evals/evals.json`, review them and explain what they check.
 
-Good assertions are objectively verifiable and have descriptive names — they should read clearly in the benchmark viewer so someone glancing at the results immediately understands what each one checks. Subjective skills (writing style, design quality) are better evaluated qualitatively — don't force assertions onto things that need human judgment; their real verification paths (historical-task replay, production-as-eval with a write-back habit, render + human review) are listed under question 4 of "Capture Intent".
+Good assertions are objectively verifiable and have descriptive names — they should read clearly in the benchmark viewer so someone glancing at the results immediately understands what each one checks. **Write assertions against the intent, not a literal tool path** — "voice content survives into the answer", not "calls the sanctioned reader script". A run that reaches the intent through a different sanctioned route (e.g. reading an archive that already has the transcripts inlined) passes, and grading it as a literal-path failure manufactures a false negative you'll then "fix" in the wrong place. Subjective skills (writing style, design quality) are better evaluated qualitatively — don't force assertions onto things that need human judgment; their real verification paths (historical-task replay, production-as-eval with a write-back habit, render + human review) are listed under question 4 of "Capture Intent".
 
 Update the `eval_metadata.json` files and `evals/evals.json` with the assertions once drafted. Also explain to the user what they'll see in the viewer — both the qualitative outputs and the quantitative benchmark.
 
@@ -872,6 +873,8 @@ Put each with_skill version before its baseline counterpart.
    VIEWER_PID=$!
    ```
    For iteration 2+, also pass `--previous-workspace <workspace>/iteration-<N-1>`.
+
+   **If the backgrounded viewer strands itself**: the process stays alive but nothing is listening — check with `lsof -a -p $VIEWER_PID -iTCP -sTCP:LISTEN` (empty) or curl the URL (fails); "no log output" is NOT a usable signal here because the launch line above redirects it to `/dev/null`. Kill it and fall back to `--static` rather than re-launching the same way.
 
    **Cowork / headless environments:** If `webbrowser.open()` is not available or the environment has no display, use `--static <output_path>` to write a standalone HTML file instead of starting a server. Feedback will be downloaded as a `feedback.json` file when the user clicks "Submit All Reviews". After download, copy `feedback.json` into the workspace directory for the next iteration to pick up.
 
@@ -1160,7 +1163,7 @@ grep -c "<a phrase unique to the new content>" <resolved-runtime-path>/SKILL.md 
 
 Power users run several Claude sessions at once, and skill repos are exactly where they collide: while you edit skill A, a sibling session may commit skill B (or even an earlier round of skill A) under you. One real session hit all three symptoms inside an hour — a `Write` rejected because the file changed after reading, and HEAD moving twice mid-task (methodology Case 16). The failure isn't the collision; it's a stale baseline or a clobbering write that silently mixes two sessions' work. Standing rules:
 
-1. **Baseline from a git ref, not from the working tree**, whenever the repo is clean at task start: `git archive <HEAD-sha> <skill-dir> | tar -x -C <workspace>/skill-before` and pass `--baseline-origin git-ref:<sha>` to the audit. A tree snapshot taken minutes before someone else's commit is a baseline for a tree that no longer exists.
+1. **Baseline from a git ref, not from the working tree**, whenever the repo is clean at task start: `git archive <HEAD-sha> <skill-dir> | tar -x -C <workspace>/skill-before` and pass `--baseline-origin git-ref:<sha>` to the audit. A tree snapshot taken minutes before someone else's commit is a baseline for a tree that no longer exists. **Extract into a fresh, non-existent directory.** Into an existing one, `tar -x` silently overwrites same-named files and leaves files the archive doesn't contain untouched — a mixed snapshot with zero signal at extract time, which `compare` later rejects as not matching the ref. Same trap, other command: `mv <dir> <existing-dir>` nests instead of replacing — and where `mv` is aliased to `mv -i`, a target-already-exists rename prints one prompt line and defaults to *not* happening, with exit 0 either way (verified by experiment).
 2. **Re-read before write** when a write is rejected or any time has passed: diff what changed (`git log --oneline -3`, `git show <new-commit> --stat`), fold the other session's intent into your version — their edit usually has a reason — and only then write.
 3. **Check HEAD *and which branch you are on* before committing.** `git log --oneline -1` catches a moved SHA: if it moved since your baseline, re-run the regression `compare` against the new ref before `verify` — the audit tool will reject a stale review anyway ("after skill changed"), so catching it yourself saves a round. But a sibling session can do something worse than advance HEAD: **it can switch the branch out from under you**, because a checkout is worktree-wide. Real sequence — `checkout -b feat/x`, edit for a while, and meanwhile another session ran `checkout main` + `pull`; the commit then landed on **main**, violating the repo's "never commit directly to local main" rule while the feature branch still pointed at the old base. So add `git branch --show-current` to the pre-commit check, not just the SHA. When it has already happened, `git reflog` is the authoritative reconstruction (it records each `checkout: moving from X to Y` with order), and the repair — **given a clean worktree** — is `git checkout -B <feature> <your-sha>` followed by `git branch -f main origin/main`: both are ref moves that never touch the working tree, so neither can destroy a parallel session's uncommitted work the way `reset --hard` would.
 4. **Stage only your own paths** (`git add <skill-dir> <registry-file>`), never `git add .` — the sibling session's uncommitted work must not ride along. (Already the rule for packaging; doubly load-bearing under concurrency.)
@@ -1290,7 +1293,13 @@ When editing, remember that the skill is being created for another instance of C
    "reason": "<why this counts as preserved/sanitized/…>",
    "disposition": "preserved_or_moved"}` (disposition defaults to
    `preserved_or_moved`; file-level candidates need only destination + a 40+
-   char reason — the fingerprint is computed for you).
+   char reason — the fingerprint is computed for you). **Copy the needle out of
+   the destination file (Read/grep/sed), never type it from memory** — the lookup
+   is exact-match and fail-fasts on a missing quote, and the two ways a hand-typed
+   needle actually fails are full-width vs half-width punctuation (`：` vs `:`) and
+   memory-paraphrased near-synonym characters (`也` vs `都`) — both escape
+   self-review, and both get caught only by the tool rejecting your whole map (one
+   map rejected twice in a row for exactly those two reasons).
 5. Verify the completed review. Hashes make the review stale after any further
    edit, so regenerate and reclassify when the candidate changes. A passing
    verification writes `.skill-regression-reviewed`, a content-bound local status
