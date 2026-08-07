@@ -87,6 +87,7 @@ def main():
               'measurement (chars/4 underestimates CJK by >2x)')
 
     print(f'\n== 分节字节表（降序 = 热点工作顺序） ==')
+    print('   （父节字节含全部子节——降序在**同层之间**比较；容器节跳过、看它最大的子节）')
     print(f"{'lvl':<5}{'bytes':>9}{'lines':>7}{'%':>7}  title")
     for lvl, title, b, nl in sorted(section_table(lines, heads), key=lambda r: -r[2]):
         print(f"{'#'*lvl:<5}{b:>9}{nl:>7}{100*b/total:>6.1f}%  {title[:64]}")

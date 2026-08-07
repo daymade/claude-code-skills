@@ -9,12 +9,17 @@ original is a WHOLE-STRING substring of its target (grep ORs per line and would 
 a lossy move) -> roll the source back if any check fails.
 
 Hard rules encoded here (each learned in real use — Case 19):
-  - REFUSES symlinked targets: a reference symlinked into another repo means your
-    "local" append actually edits that repo (its version-bump/commit obligations,
-    possibly public). Sink to a local sibling file instead and note the merge-later.
+  - REFUSES targets whose path crosses a symlink at ANY component — the file
+    itself OR any parent directory (checked as realpath != abspath; a file-only
+    islink() check was bypassed in review by a symlinked parent dir). A symlinked
+    target means your "local" append actually edits whatever repo it points into
+    (its version-bump/commit obligations, possibly public). Sink to a local
+    sibling file instead and note the merge-later — or pass
+    --allow-symlinked-target when the hop is deliberate (e.g. macOS /tmp).
   - Extract everything first (original line numbers), then splice bottom-up.
   - Fail-fast on missing/suspiciously-small snippets BEFORE writing anything.
   - Timestamped backups of the source and every touched existing target.
+  - Headings used as boundaries must be UNIQUE in the source (ambiguity aborts).
 
 Spec (JSON):
 {
@@ -23,8 +28,8 @@ Spec (JSON):
     {
       "key": "short-id",
       "start_heading": "### Exact Heading Line",
-      "end_heading": "### Next Heading Line (exclusive)",
-      "snippet_file": "path/to/compressed-replacement.md",
+      "end_heading": "### Next Heading Line (exclusive; OMIT for a last-section-to-EOF sink)",
+      "snippet_file": "compressed replacement. MUST retain the section's original start_heading line verbatim — the post-splice verifier checks every heading survived; a renamed heading fails and rolls back",
       "target_ref": "path/to/reference.md",
       "provenance_title": "Section name for the archive header",
       "new_file_intro": "# Title\\n\\n> optional; written only when target_ref is new\\n"
@@ -50,8 +55,9 @@ import sys
 
 
 def find_heading(lines, heading):
-    """Exact full-line match, skipping fenced code blocks."""
+    """All exact full-line matches, skipping fenced code blocks."""
     in_fence = False
+    hits = []
     for i, line in enumerate(lines):
         if line.lstrip().startswith('```'):
             in_fence = not in_fence
@@ -59,8 +65,18 @@ def find_heading(lines, heading):
         if in_fence:
             continue
         if line.rstrip() == heading:
-            return i
-    return -1
+            hits.append(i)
+    return hits
+
+
+def find_unique_heading(lines, heading, key, role):
+    hits = find_heading(lines, heading)
+    if not hits:
+        sys.exit(f"ABORT: {role} heading not found [{key}]: {heading[:60]}")
+    if len(hits) > 1:
+        sys.exit(f"ABORT: {role} heading ambiguous [{key}] — appears {len(hits)}x "
+                 f"(lines {', '.join(str(h+1) for h in hits)}): {heading[:60]}")
+    return hits[0]
 
 
 def main():
@@ -68,6 +84,9 @@ def main():
     ap.add_argument('spec')
     ap.add_argument('--min-snippet-bytes', type=int, default=200,
                     help='abort if a compressed snippet is smaller than this (default 200)')
+    ap.add_argument('--allow-symlinked-target', action='store_true',
+                    help='permit a target whose path crosses a symlink (deliberate hops only, '
+                         'e.g. macOS /tmp -> /private/tmp); default aborts')
     args = ap.parse_args()
 
     spec = json.load(open(args.spec, encoding='utf-8'))
@@ -91,9 +110,12 @@ def main():
     # ---- locate all boundaries in ORIGINAL coordinates -------------------------
     bounds = []
     for s in sections:
-        a = find_heading(lines, s['start_heading'])
-        b = find_heading(lines, s['end_heading'])
-        if a < 0 or b < 0 or b <= a:
+        a = find_unique_heading(lines, s['start_heading'], s['key'], 'start')
+        if s.get('end_heading'):
+            b = find_unique_heading(lines, s['end_heading'], s['key'], 'end')
+        else:
+            b = len(lines)  # omitted end_heading = sink through EOF
+        if b <= a:
             sys.exit(f"ABORT: boundary fail [{s['key']}]: start={a} end={b}")
         bounds.append((s, a, b))
     for (s1, a1, b1), (s2, a2, b2) in zip(sorted(bounds, key=lambda x: x[1]),
@@ -101,12 +123,18 @@ def main():
         if b1 > a2:
             sys.exit(f"ABORT: overlap [{s1['key']}] and [{s2['key']}]")
 
-    # ---- symlink guard + backups ----------------------------------------------
+    # ---- symlink guard (file OR any parent dir) + backups -----------------------
     ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     for s, _, _ in bounds:
-        if os.path.islink(s['target_ref']):
-            sys.exit(f"ABORT: target is a symlink (would edit another repo): {s['target_ref']}\n"
-                     f"  -> sink to a local sibling file and note the merge-later task instead")
+        tgt = s['target_ref']
+        literal, resolved = os.path.abspath(tgt), os.path.realpath(tgt)
+        if resolved != literal and not args.allow_symlinked_target:
+            sys.exit(f"ABORT: target path crosses a symlink: {tgt}\n"
+                     f"  literal : {literal}\n"
+                     f"  resolves: {resolved}\n"
+                     f"  A symlinked component (file OR parent dir) silently edits whatever repo it\n"
+                     f"  points into. Sink to a local sibling file and note the merge-later task —\n"
+                     f"  or re-run with --allow-symlinked-target if this hop is deliberate.")
     shutil.copy2(src_path, f'{src_path}.bak.presink.{ts}')
     for tgt in {s['target_ref'] for s, _, _ in bounds}:
         if os.path.isfile(tgt):
