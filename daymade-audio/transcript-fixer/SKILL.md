@@ -1,7 +1,7 @@
 ---
 name: transcript-fixer
 description: >-
-  Corrects speech-to-text transcription errors using dictionary rules and Claude's built-in AI (no external API key required — Native AI Correction is the DEFAULT). Stage 3 API is a backup for automation without Claude Code. Builds personalized correction databases that learn from each fix, auto-loads person-name ASR variants from your people roster, and reads per-domain context files that prime the AI pass for context-dependent homophones. Triggers when working with ASR/STT output containing recognition errors, homophones, garbled technical terms, person-name errors, or Chinese/English mixed content. Also triggers on requests to clean up meeting notes, lecture transcripts, interview recordings, or any text produced by speech recognition. Use this skill even when the user just says "fix this transcript", "clean up these meeting notes", or mentions garbled names without invoking ASR specifically.
+  Corrects speech-to-text transcription errors using dictionary rules and Claude's built-in AI (no external API key required — Native AI Correction is the DEFAULT). Stage 1 alone is not the job. Stage 3 API is a backup for automation without Claude Code. Builds personalized correction databases that learn from each fix, auto-loads person-name ASR variants from your people roster, and reads per-domain context files that prime the AI pass for context-dependent homophones. Triggers when working with ASR/STT output containing recognition errors, homophones, garbled technical terms, person-name errors, or Chinese/English mixed content. Also triggers on requests to clean up meeting notes, lecture transcripts, interview recordings, or any text produced by speech recognition. Use this skill even when the user just says "fix this transcript", "clean up these meeting notes", or mentions garbled names without invoking ASR specifically.
 ---
 
 # Transcript Fixer
@@ -63,9 +63,19 @@ uv run scripts/fix_transcription.py --extract-uncertain -i meeting.md -o ./revie
 for f in /path/to/*.txt; do
   uv run scripts/fix_transcription.py --input "$f" --stage 1
 done
+
+# ⚠️ STOP — Stage 1 alone is NOT the job. It is the pre-filter, not the
+# corrector: on clean ASR (Feishu / Tencent / Whisper) the dictionary often
+# matches almost nothing, and the Native AI pass below does essentially all
+# the real work. Reporting "transcript clean" after Stage 1 alone is the
+# recurring failure this skill exists to prevent (real case, 2026-08: an
+# ingest pipeline ran Stage 1 on a 73-min transcript, got 0 hits, declared
+# it clean — 54 errors were later found by the native pass it skipped).
+# "The dictionary applied N fixes" does not change this either.
+# "Done" = Stage 1 → Native AI Correction → --add the confirmed fixes.
 ```
 
-After Stage 1, Claude reads the output and fixes remaining ASR errors natively (no API key needed). The full method — triage by confidence, verify-don't-guess, second pass, needs-checking list — is in **Native AI Correction** below; read that section as the source of truth. For a quick, clean transcript it collapses to: read the domain's context file if one exists (`~/.transcript-fixer/contexts/<domain>.md`) → read the whole thing → fix the obvious one-off errors inline → `--add` any recurring or project-specific ones (especially names) to a `--domain` dictionary so they auto-fix next time (see "Project-Specific & Person-Name Corrections").
+After Stage 1, Claude reads the output and fixes remaining ASR errors natively (no API key needed) — **this is the primary path, and skipping it is not a valid shortcut, even for a quick transcript** (a "quick, clean" transcript is exactly where the dictionary is weakest and the native read matters most). The full method — triage by confidence, verify-don't-guess, second pass, needs-checking list — is in **Native AI Correction** below; read that section as the source of truth. For a quick, clean transcript it collapses to: read the domain's context file if one exists (`~/.transcript-fixer/contexts/<domain>.md`) → read the whole thing → fix the obvious one-off errors inline → `--add` any recurring or project-specific ones (especially names) to a `--domain` dictionary so they auto-fix next time (see "Project-Specific & Person-Name Corrections"). **If you are finishing after Stage 1, name explicitly why the native pass does not apply — "the pipeline ran the script" is not a reason.** The only valid exemptions: the human user explicitly scoped this one run to the dictionary pass (a caller pipeline's standing "run Stage 1" wiring is NOT this exemption — see "When called by another skill" below), or you have evidence the native pass already ran on this transcript (a dated note in the file or the ingest log). "The transcript looked short/clean", "the dictionary already applied N fixes", and "I'm in a hurry" are not exemptions — they are the failure.
 
 See `references/example_session.md` for a concrete input/output walkthrough.
 
@@ -109,7 +119,7 @@ Two-phase pipeline with persistent learning:
 
 ### When called by another skill (cross-skill invocation contract)
 
-This skill is often wired into another skill's ingest pipeline — e.g. a meeting-sync skill runs Stage 1 as a pre-classify hook before filing the transcript. That caller pipeline changes one assumption that bites silently, so a caller MUST follow this contract or it will run Stage 1, apply almost nothing, and report success.
+This skill is often wired into another skill's ingest pipeline — e.g. a meeting-sync skill runs Stage 1 as a pre-classify hook before filing the transcript. That caller pipeline changes one assumption that bites silently, so a caller MUST follow this contract or it will hit one of two verified failures: it will run Stage 1, apply almost nothing, and report success (deferred corrections silently discarded — the next section) — or it will run Stage 1, skip the native pass entirely, and report the transcript clean (the "**Stage 1 is the whole script call**" paragraph below). **This contract has TWO MUSTs; complying with only the first one ships the second failure with a false sense of having done it right.**
 
 **The failure mode (verified, reproducible).** Safe mode defers medium/high-risk corrections to `*_needs_review.md` rather than applying them. On a single file you edit by hand, that's fine — you read the sidecar next. But a caller pipeline typically runs transcript-fixer inside a `TemporaryDirectory` and reads only the corrected `transcript.txt` back out. **The `*_needs_review.md` sidecar lives in that temp dir and is deleted with it** — so 95%+ of the dictionary's corrections silently vanish while the run reports "complete." Real measurement on a 95-minute transcript with a 108-rule domain: safe mode applied **2/108**, deferred **106 to a sidecar that was immediately discarded**. The run looked clean; only ~2% of known corrections landed. The user then had to run transcript-fixer a second time by hand to get the other 98%.
 
@@ -126,6 +136,8 @@ With `--apply-domain`, the same 108-rule run applies **97/97 at low risk** inste
 **The `--json` status line is the contract surface.** It prints `{applied, deferred, output_path, needs_review_path, input_unchanged}` on one stdout line. `deferred` is the number that must not be silently lost. `input_unchanged: true` / `output_path: null` is the authoritative "0 corrections this domain" signal — do NOT infer no-op from whether `*_stage1.md` exists on disk (the file-presence check is what once aborted the whole chain and dropped corrections). Keep these field names and semantics stable; a caller's pre-classify chain depends on them.
 
 **The complementary side: keep the dictionary warm.** A caller pipeline that trusts `--apply-domain` only delivers value to the degree its project domain is populated. Every confirmed correction the downstream native pass makes should be `--add`ed back to that domain (`--add "ASR-variant" "correct" --domain <project>`), so the next ingest auto-fixes it and the native pass keeps getting lighter. A cold domain + `--apply-domain` still applies almost nothing — the fix is `--apply-domain` *and* ongoing `--add` discipline together.
+
+**Stage 1 is the whole script call — it must not be the whole job.** The contract above keeps Stage 1 from silently dropping its own corrections; it says nothing about the pass that does most of the work on a clean transcript. A caller that stops after Stage 1 ships a transcript the native AI pass never read and reports it as clean. So the caller's ingest step MUST either run the Native AI Correction pass itself (hand the filed transcript to an agent (possibly this one) with **this skill loaded** — the skill, not just the script path; agent-less CI automation completes through the Stage 3 API pass above instead) or surface "Stage 1 only" to the user as an incomplete state, never as success. And note the trap in how this skill gets wired: a caller that references it by script path alone (e.g. a `transcript_fixer.script_path` config entry) never loads this file, so every contract in it — this one included — is invisible to that run. Wiring the script path without wiring the skill is exactly the configuration that produced the 2026-08 "0 hits, declared clean, 54 errors missed" incident.
 
 **After fixing, always save reusable corrections to dictionary.** The skill's core value — see `references/iteration_workflow.md` for the complete checklist.
 
