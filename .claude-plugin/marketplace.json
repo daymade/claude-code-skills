@@ -676,10 +676,10 @@
     },
     {
       "name": "slides-creator",
-      "description": "Narrative-first slide deck creation. Guides users through structured narrative design (ABCDEFG model), then delegates visual generation to baoyu-slide-deck. Triggers on create slides, make a presentation, generate deck, slide deck, PPT, or when user needs to turn content into visual slides.",
+      "description": "【DEPRECATED · 已废弃】叙事优先的幻灯片创建方法论已于 2026-08-07 并入 deck-creator（作者私有仓 Route A）。本条目仅为退役通告保留，请勿调用。",
       "source": "./slides-creator",
       "strict": false,
-      "version": "1.0.0",
+      "version": "2.0.0",
       "category": "content-creation",
       "keywords": [
         "slides",
