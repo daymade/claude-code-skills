@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **daymade-skill** v1.25.0: make skill-creator verification risk-scaled instead of treating the full paired eval pipeline as the default for every edit. Tier 1 uses authoritative facts plus targeted deterministic checks for bounded fixes; Tier 2 adds one or two representative with-skill replays for narrow behavior uncertainty; Tier 3 retains the complete with-skill/baseline fan-out, grading, benchmark, analyst pass, and viewer for new, broad, high-risk, trigger-optimization, multi-class comparison, or explicitly benchmarked work. Subjective judgment alone no longer escalates a narrow change. The router selects the lowest tier that can falsify the changed behavior, prevents available subagents from becoming an escalation trigger, and requires already-launched paired eval, grader, aggregation, and viewer work to stop when the user says the benchmark is not worth it. Existing-skill migration, one required fresh-context review, public sanitization, and domain safety gates remain independent.
+
 ### Added
 - **slides-creator** (v2.0.0): **DEPRECATED — skill retired to a stub, no longer maintained.** Same consolidation as ppt-creator (daymade-docs v1.6.0, same release): the PPT toolchain merge of 2026-08-07 folded its methodology — First Law (user's voice is primary), the ABCDEFG narrative-discussion framework, the baoyu-slide-deck delegation protocol, and the four-layer directory governance — into deck-creator's Route A · narrative in the author's private marketplace. For external users: this is the final version, kept for install compatibility, receiving no further updates; physical removal in a future major release. references/ and scripts/ removed here (git history preserves them); SKILL.md is now a deprecation notice.
 
