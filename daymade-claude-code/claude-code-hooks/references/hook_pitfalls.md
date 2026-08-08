@@ -1187,3 +1187,52 @@ this list and describe defects you reach by asking a different question):
   different reasons (#28). This one does not announce itself as a malfunction;
   you find it by asking "which target did the command name, and is that the one
   the guard measured?"
+- Does the guard **look like it fires but never actually blocks** — the guidance
+  prints, the state is written, yet the exit code is 0 every time? → a trailing
+  `exit 0` swallowing the decision (#29).
+
+## 29. A trailing `exit 0` swallows the exit-code decision — the message prints, the state writes, the guard never blocks
+
+> Worked example: `same-cmd-resend-guard.sh` (a private hooks repo, not shipped
+> here), 2026-08-08. A PreToolUse guard whose fire-path ended in python
+> `sys.exit(2)` also ended the bash script with an unconditional `exit 0`
+> (added as a "safety" line so the script never returned non-zero outside its
+> python block). The `exit 0` ran **after** the heredoc, unconditionally
+> overriding the python exit code. The guard's entire decision — "block this" —
+> was thrown away on every fire.
+
+- **Symptom:** the hook *looks alive*. Run it by hand and it prints the guidance
+  to stderr. The state file it writes appears. `bash -n` passes. An end-to-end
+  test that only checks "did the message print" passes. But the harness sees
+  `exit 0` every time — the block never happens, the model never sees the
+  guidance in-session, and the guard is a silent no-op for its entire life. This
+  is the "绿成常态 = 没拦" shape: green everywhere, nothing enforced.
+
+- **Why this is worse than a miss.** A guard that never fires is a miss on every
+  input, forever — and it *looks* like a working guard (message prints, state
+  writes, tests pass). It survives until an independent reader checks the exit
+  code itself, because the author's own end-to-end test asserted the wrong
+  observable (stderr) and never asserted the decision channel (exit code).
+
+- **Fix — the script's exit code must BE the decision, and the test must assert
+  it.**
+  1. **Do not add a trailing `exit 0` to a PreToolUse hook that decides.** The
+     bash script's exit code is its contract; the last command (the python
+     heredoc, or an explicit `exit "$?"`) must be what the harness sees. If the
+     python block has fail-open branches, express them *inside* python
+     (`sys.exit(0)` on the allow paths), not as a shell-level override after it.
+     If python3 is missing, the heredoc's exit 127 is a "non-blocking error"
+     which the harness treats as proceed — that is already the fail-open you
+     wanted; you do not need the `exit 0`.
+  2. **Assert the exit code, not just the stderr.** For a guard whose product is
+     a decision, `says` (stderr) rows are necessary but not sufficient — a
+     `sys.exit(2)` swallowed by a later `exit 0` keeps every `says` row green.
+     Add `assert_exit 2` on the fire path and `assert_exit 0` on every allow
+     path, and **mutation-test the exit-code row**: reintroduce the bug (add the
+     `exit 0` back), confirm the suite goes red on the exit-code assertion.
+     (This pitfall was itself caught that way — the exit-code row is what turned
+     red when the bug was re-injected.)
+  3. **Watch the "message prints" trap in your own calibration.** Seeing the
+     guidance on stderr when you run the hook by hand is not proof the harness
+     will block — stderr shows on allow too. The decision channel is the exit
+     code; test the channel, not the ink.
