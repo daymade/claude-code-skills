@@ -654,6 +654,38 @@ tell those apart from a real failure.
 | Long-term recurring (coworker, client, family, workshop attendee) | **people.md** | SSOT with relationship context; survives DB resets |
 | One-off / minor name | **DB** (`--add --domain`) | Quick, no context needed |
 
+**Name-variant explosion — one person, every initial consonant.** A person
+whose name a diarizer labels once can still shatter in the body into a whole
+family of variants, sometimes across *different initial consonants* (h/f/w/g/zh
+all heard for one surname in a single 56-minute call — real case 2026-08-08:
+one speaker surfaced under seven different surname-initials). This is not a bug
+to chase per-variant; it is the canonical-name problem in disguise. Handle it
+as a unit:
+
+1. **Fix the canonical FIRST** — ask the user or take the diarization label,
+   settle one spelling, and only then sweep. A variant family resolved without
+   a canonical produces seven half-fixes and a confused roster.
+2. **Sweep every variant in the file in ONE pass** (single-file `sed` with all
+   variants in one command, then re-grep to zero), not variant-by-variant.
+3. **Record the whole family in the roster's `ASR 变体` line** — every form
+   you actually saw, including the weird ones. The next transcript will
+   produce new members of the family, and the roster is what keeps the
+   canonical stable while the family grows.
+4. **Honorific forms (`X老师` / `X总`) are variants too** — an honorific is
+   what a speaker actually said, so never *replace* it with the bare name, but
+   the surname inside it gets the same sweep and the same roster entry.
+
+**Mid-turn verdicts compound immediately — never defer them.** When the user
+answers a name/number question while you are still working (a mid-message
+correction, a one-word answer to your shortlist), the verdict is the strongest
+source in the whole loop and costs nothing to bank: fix the file, `--add` the
+confirmed variant, and update the roster/context in the SAME turn — not "after
+the batch", which is where deferrals die. Four mid-turn verdicts in one real
+batch session all compounded the turn they were given (2026-08-08), including
+one that corrected the reviewer's own stale training data about a version
+number. A user verdict that contradicts your search results is the verdict
+winning, not an anomaly to double-check.
+
 ## Domain Correction Contexts (per-domain AI priors)
 
 The dictionary handles deterministic replacements; the people roster handles names. A third class of error can't safely live in either: **context-dependent homophones** — words that are only wrong in a particular discussion context. Think `减`→`剪` in a meeting about producing N video clips per day, or a finance call where a common word collides with a ticker nickname. A dictionary rule on a common word silently corrupts every other transcript, and a generic AI pass lacks the domain prior to fix it confidently — it either guesses wrong or leaves it for the human. (Real case: a transcript had four `减到 N 条` occurrences that all meant `剪到`; the AI pass suspected but wouldn't touch them without a domain prior, and the user had to fix them by hand.)
@@ -858,6 +890,10 @@ AI product names are frequently garbled. These patterns recur across transcripts
 | Vibe Coding | web coding, Web coding |
 | GitHub | get Hub, Git Hub |
 | prototype | Pre top |
+| AI | a 夜, a 爱, ai, 阿伊 — two-letter English terms get heard as phonetic syllables when spoken mid-sentence in Chinese speech ("All in a 夜吧" = "All in AI 吧", user-confirmed 2026-08-08) |
+| skill | SQL, SKU, 死抠 — same two-letter splitting, `skill` is a high-frequency word in AI-tool conversations (SQL/SKU are real words elsewhere — context-judge, never a bare dictionary rule) |
+
+**The two-letter-English-in-Chinese-speech pattern generalizes**: `AI` / `skill` / `SDK` / `API` spoken inside a Chinese sentence are short enough that ASR maps them to any near-sounding syllables (including whole-word confusions like `a 夜`). When a transcript is about AI tooling and a syllable string reads as meaningless Chinese but sits where an English abbreviation belongs, run the abbreviation hypothesis first — then confirm by sound distance before fixing.
 
 Person names and company names also produce consistent ASR errors across sessions — always add confirmed name corrections to the dictionary, and for project-specific names use `--domain <project>` to keep them isolated (see "Project-Specific & Person-Name Corrections").
 
@@ -941,11 +977,14 @@ behaviour it bought is.
 
 When fixing multiple files (e.g., 5 transcripts from one day):
 
+0. **Diff raw for every file BEFORE touching anything** — if the batch came from a pipeline whose pre-classify stage ran an automated corrector, the filed copies are NOT raw ASR: upstream edits are baked in with no evidence trail, and every one of them is itself a suspect (an upstream AI "correction" can be a fluent wrong guess — grammar-perfect, wrong). Compare each filed transcript against its raw source (sync engines usually keep `transcript_raw.txt` alongside, or re-pull from the source API) and triage every upstream change FIRST: sound-distance test per change, revert the rewrites, treat the confirmed ones as settled (never re-propose them). This is the batch-scale version of the single-file upstream-diff in Native AI Correction step 2 — for a batch it is step 0, because everything you read afterwards is colored by whether you are reading raw or corrected text.
 1. **Stage 1 in parallel**: run all files through dictionary at once
 2. **Read all files first**: build a mental model of speakers, topics, and recurring terms before fixing anything
 3. **Compile a global correction list**: many errors repeat across files from the same session (same speakers, same topics). **If an error recurs — especially a person name or project term — `--add` it to a project `--domain` (see "Project-Specific & Person-Name Corrections" above) instead of replacing it inline; it then auto-fixes every future file, not just this batch.**
 4. **Apply the remaining one-off corrections** (sed with multiple `-e` flags, for genuinely non-recurring fixes only), then per-file context-dependent fixes
 5. **Verify all diffs**, archive all final files and clean up sidecars, then do one dictionary addition pass
+6. **Run the trap-scan** (Native AI Correction step 6) across the whole batch once — the domain's documented homophone traps, mechanically, after your read-through, to catch what the read missed
+7. **Reconcile your uncertains against the user in ONE pass, then compound immediately** — a batch produces a shortlist of unverifiable candidates (a garbled name, a version number your training data contradicts, a name variant you cannot canonicalize). Present the whole shortlist at once (not item-by-item as you go): the user can hear the audio / know the person, and each verdict lands the same way — fix the file, `--add` the confirmed variant to the `--domain` dictionary, and record it in the people roster or domain context in the same session. Four such mid-turn verdicts in one real session (2026-08-08) all compounded the same turn they were given. A version-number claim your training data contradicts is NOT an error until the user says so — "the current date is 2026, v4 exists" outranks a stale recollection of when v3 shipped; present, don't pre-judge.
 
 ### Parallel via Dynamic Workflow (large batches)
 
