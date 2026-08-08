@@ -2359,7 +2359,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 > **安装**：`claude plugin install daymade-skill@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-skill:skill-creator`）
 
-构建你自己技能的核心元技能。引导完整的「创建 → 测试 → 审阅 → 改进」循环：起草 SKILL.md、生成真实的测试 prompt、把技能跑出来与 baseline 对比、协助做定性与定量评估并迭代。还能优化技能的 `description` 以提升触发准确率。
+构建你自己技能的核心元技能。它会按改动风险匹配验证深度：局部修正走定向校验，窄范围行为变化走抽样回放，全新/大改/高风险任务才进入完整的「创建 → 配对测试 → 审阅 → 改进」循环。也支持用户明确要求的基准测试，并能优化技能的 `description` 以提升触发准确率。
 
 **使用场景：**
 - 从零创建技能，或编辑/优化已有技能
@@ -2372,7 +2372,8 @@ claude plugin install daymade-claude-code@daymade-skills
 - inline vs `context: fork` 决策指引（subagent 不能 spawn subagent 或调 skill）与可组合/正交的技能设计
 - `init_skill.py` 脚手架、`package_skill.py`（自动校验）、`security_scan.py`（基于 gitleaks 的密钥/PII 检测）
 - 现有 skill 迁移闸门：工具签发的快照或已核验 Git commit 基线、区分运行时可达性的能力审计、逐项 disposition，以及无法被 clean commit 或手写 marker 绕过的打包时重验
-- Eval 工具链：并行 spawn 带技能 + baseline 运行、起草断言、评分、聚合基准、在生成的 HTML viewer 里审阅
+- 风险分级验证路由：Tier 1 定向校验、Tier 2 抽样行为回放、Tier 3 仅在失败面确实需要时运行完整评测
+- Tier 3 完整 Eval 工具链：并行 spawn 带技能 + baseline 运行、起草断言、评分、聚合基准、在生成的 HTML viewer 里审阅
 - 面向公开技能的强制语义通读——抓住扫描器漏掉的「无关键词」泄漏
 - description 优化循环（60/40 训练/测试切分，按 held-out 分数选最优 description）
 
@@ -2387,7 +2388,7 @@ claude plugin install daymade-skill@daymade-skills
 "把这个 skill 和无技能 baseline 做基准对比"
 ```
 
-**要求**：Python 3、`uv`、PyYAML（校验/打包）、gitleaks（安全扫描）。eval 与 description 优化需要 `claude` CLI。
+**要求**：Python 3、`uv`、PyYAML（校验/打包）、gitleaks（安全扫描）。只有 agent eval 与 description 优化需要 `claude` CLI。
 
 ---
 

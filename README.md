@@ -50,6 +50,7 @@ This is a **production-hardened fork** of [Anthropic's official skill-creator](h
 | Avoid common mistakes | No guidance | Cache edit warnings, prerequisite checks, security scan gate |
 | Know the architecture options | Not mentioned | Inline vs Fork decision guide with examples (choosing wrong silently breaks your skill) |
 | Validate before shipping | Basic YAML check | Expanded structural validator plus provenance-checked old-vs-new capability audit; packaging re-verifies the completed review instead of trusting a marker |
+| Match validation cost to risk | One full create-test-review loop | Three tiers: targeted checks for bounded fixes, sampled behavior replay for narrow uncertainty, full paired benchmarks only for new/broad/high-risk work or an explicit benchmark request |
 | Catch security issues | No tooling | `security_scan.py` with gitleaks integration — hard gate before packaging |
 | Learn from real failures | No failure cases | Battle-tested methodology with documented failure patterns and gotchas |
 | Distill past conversations safely | Not covered | Explicit local manifest, message-level time window, redaction, opaque source IDs, ignored `.enrich/` staging, and manual promotion into references/scripts |
@@ -2359,7 +2360,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 > **Install**: `claude plugin install daymade-skill@daymade-skills` (suite-only — invoked as `daymade-skill:skill-creator`)
 
-The essential meta-skill for building your own skills. Guides the full create → test → review → improve loop: drafts a SKILL.md, generates realistic test prompts, runs the skill against a baseline, helps evaluate results qualitatively and quantitatively, and iterates. Also optimizes a skill's `description` for better triggering accuracy.
+The essential meta-skill for building your own skills. It scales verification to the change: bounded fixes get targeted checks, narrow behavior changes get sampled replays, and new/broad/high-risk work gets the full create → paired test → review → improve loop. It also supports explicit benchmarking and optimizes a skill's `description` for better triggering accuracy.
 
 **When to use:**
 - Creating a skill from scratch, or editing/optimizing an existing one
@@ -2372,7 +2373,8 @@ The essential meta-skill for building your own skills. Guides the full create �
 - The inline-vs-`context: fork` decision guide (subagents can't spawn subagents or call skills) and composable/orthogonal skill design
 - `init_skill.py` scaffolding, `package_skill.py` (auto-validates), and `security_scan.py` (gitleaks-based secret/PII detection)
 - Existing-skill migration gate: tool-attested snapshot or verified Git-commit baseline, runtime-reachability-aware capability audit, explicit dispositions, and package-time re-verification that a clean commit or hand-written marker cannot bypass
-- Eval harness: spawn with-skill + baseline runs, draft assertions, grade, aggregate a benchmark, and review in a generated HTML viewer
+- Risk-scaled verification router: Tier 1 targeted checks, Tier 2 sampled behavior replay, and Tier 3 full eval only when the failure surface warrants it
+- Full eval harness when Tier 3 is selected: spawn with-skill + baseline runs, draft assertions, grade, aggregate a benchmark, and review in a generated HTML viewer
 - Mandatory sanitization read-through for public skills — catches no-keyword leaks scanners miss
 - Description-optimization loop (60/40 train/test split, selects best description by held-out score)
 
@@ -2387,7 +2389,7 @@ claude plugin install daymade-skill@daymade-skills
 "benchmark this skill against a no-skill baseline"
 ```
 
-**Requirements**: Python 3, `uv`, PyYAML (validation/packaging), gitleaks (security scan). `claude` CLI for eval/description-optimization runs.
+**Requirements**: Python 3, `uv`, PyYAML (validation/packaging), gitleaks (security scan). `claude` CLI only for agent evals and description-optimization runs.
 
 ---
 
