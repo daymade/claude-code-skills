@@ -59,6 +59,8 @@ claude plugin install daymade-skill@daymade-skills
 
 ### Skill Validation and Packaging
 
+Behavior evaluation is risk-scaled by `daymade-skill:skill-creator`: bounded fixes use targeted deterministic checks, narrow instruction changes use sampled replays, and the full paired eval/benchmark/viewer pipeline is reserved for new, broad, high-risk, trigger-optimization, multi-class comparison, or explicitly benchmarked work. Subjective judgment alone does not escalate a narrow change. Do not fan out paired agents merely because a skill file changed; existing-skill regression and packaging gates remain separate.
+
 ```bash
 # Quick validation of a skill
 cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.quick_validate ../skill-name

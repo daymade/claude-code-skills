@@ -6,8 +6,8 @@
 
 - Phase 1 先手动解决问题 · Phase 2 并行调研 · Phase 3 真实数据验证（3.1 完整性 / 3.2 记录失败 / 3.3 隔离复现+反证+权威源）
 - Phase 4 写作补充（4.1 不能做什么 / 4.2 失败过什么 / 4.3 安全 / 4.4 console 示例 / 4.5 脚本健壮性 / 4.6 三资产分流）
-- Phase 5 测试迭代（5.1 删竞争旧 skill / 5.2 量化对比 / 5.3 grep 断言误判 / 5.4 baseline 揭示事实错误 / 5.5 增量为 0 / 5.6 完整性两道闸）
-- Phase 6 Counter Review（6.1 视角 / 6.2 final gate / 6.3 常见发现 / 6.4 findings 过滤 / 6.5 多层验证）
+- Phase 5 测试迭代（5.0 风险分级 / 5.1 删竞争旧 skill / 5.2 量化对比 / 5.3 grep 断言误判 / 5.4 baseline 揭示事实错误 / 5.5 增量为 0 / 5.6 完整性两道闸）
+- Phase 6 Counter Review（6.1 按失败轴增配 reviewer / 6.2 final gate / 6.3 常见发现 / 6.4 findings 过滤 / 6.5 多层验证）
 - Phase 7 & 8 Description + Packaging · Phase 9 实战案例库（Case 1-16）· 来源
 
 本文档只包含 SKILL.md 中**没有覆盖**的内容。SKILL.md 已经详细描述的流程（Prior Art 8 渠道表、决策矩阵、Inline vs Fork、测试用例格式、描述优化循环等）不在此重复——请直接参考 SKILL.md 对应章节。
@@ -38,7 +38,7 @@ SKILL.md 的 "Prior Art Research" 章节覆盖了 8 个搜索渠道、clone-and-
 
 ## Phase 3: 用真实数据验证原型
 
-SKILL.md 的 Evaluation-Driven Development 流程覆盖了"先跑 baseline → 建 eval → 迭代"的过程。本节补充两个 SKILL.md 未强调的验证原则：
+SKILL.md 的 Tier 3 完整评测流程覆盖了"先跑 baseline → 建 eval → 迭代"的过程。本节补充两个不依赖评测层级的验证原则：
 
 ### 3.1 数据完整性验证
 
@@ -129,7 +129,19 @@ SKILL.md 的 "Skill Writing Guide" 已覆盖 frontmatter、progressive disclosur
 
 ## Phase 5: 测试迭代补充
 
-SKILL.md 的测试流程非常详细（A/B 测试、断言、评分、viewer）。本节补充两个 SKILL.md 未覆盖的实操教训：
+SKILL.md 的验证深度路由是层级选择的 SSOT；完整 A/B 测试、断言、评分和 viewer 只在 Tier 3 运行。本节解释为什么要分级，并补充完整评测路径中的实操教训。
+
+### 5.0 评测深度由失败面决定，不由「改了 skill」决定
+
+全量 paired eval 的成本不是只有 token：它还引入 N 组 prompt 设计、2N 个执行样本、grader、聚合和 viewer，且每一层都有自己的误判面。只有当这些额外观察能改变下一步动作时才运行；否则它们是在用流程规模替代判别力。
+
+分级前问三件事：
+
+1. **改动能怎样失败？** 纯错字/格式且不改变行为，或文档/配置中有直接权威源能裁决的事实修正，走 Tier 1；任何实现文件的局部修复只有在「恢复明确既有契约」与「确定性回归覆盖修复行为」同时成立时才走 Tier 1，不能借前一个事实修正入口绕过。单条规则澄清只要会改变 agent 行为且无法确定性裁决，就走 Tier 2。任何新 skill、任何新增或实质变化的 capability、广泛改变 agent 行为或触发路由，以及需要跨多个 prompt 类别比较主观产物质量，才进入 Tier 3。主观判断本身不把一个可由 1–2 个具名样例覆盖的窄改动升级到 Tier 3。
+2. **有没有独立裁判直接判定？** CLI help、真实 API 响应、schema validator、窄测试能裁决时，重复让多个 agent 复述同一证据不会增加信息。
+3. **失败的外部后果是什么？** 会写外部系统、破坏状态、扩散到大批用户的改动要升级；工具恰好可用、workspace 已存在、或「以往都是这么跑」不构成升级理由。
+
+真实失效：一次现有 skill 的单段事实纠错已经有 GUI、配置和运行时三层直接证据，执行者仍按旧主循环为 3 个 case 启动 with-skill + baseline 共 6 个 agent。用户当场叫停，指出这不值得。问题不在 case 设计，而在流程把 Tier 3 当成所有编辑的默认值。此后以 SKILL.md 的路由为准：先选最低可证伪层级；用户叫停重评测时立即中止 paired eval、baseline、grader、聚合和 viewer，不用「流程要求」反驳，但停止执行不改变原分类——Tier 3 仍记作 Tier 3，其重证据标注为用户豁免或未完成，不能拿低层证据冒充通过。若规则、契约或数字已实质变化，discipline #5 要求的单个 fresh-context reviewer 仍保留；安全闸门同样不被「停评测」取消。
 
 ### 5.1 删除竞争的旧 skill
 
@@ -194,13 +206,13 @@ baseline（without-skill）跑同一 prompt 时，如果它**用了 with-skill �
 
 新 skill 没有旧 bundle，不触发 migration gate；Git 无法证明它是新 skill 时必须显式传 `--new-skill`，不能用“目录不在 Git”静默猜。即使是新 skill，从源对话蒸馏时仍要在收尾回看源材料。grep 只能 surface 候选：关键词不对会误报 gap，同词不同义也会误判保留，必须复查语义。
 
-## Phase 6: Counter Review — 用 Agent Team 做对抗性审查
+## Phase 6: Counter Review — 按失败轴增配独立视角
 
-这是 SKILL.md 未覆盖的独立环节。SKILL.md 的 "Improving the skill" 章节关注用户反馈驱动的迭代，但没有系统化的多视角审查流程。
+这是 SKILL.md 独立审阅纪律的扩展。一个 fresh-context reviewer 是规则、契约或数字发生实质变化时的默认；多个 reviewer 只用于额外且正交的失败轴，不因「这是 skill」自动扇出。
 
-### 6.1 第一轮：3 个常规视角；现有 skill 再加 1 个保真视角
+### 6.1 Tier 3 才展开多视角；每多一个必须对应新失败轴
 
-用 Task 工具同时启动 3 个 review agent：
+Tier 1 依靠确定性裁判；Tier 2 通常只需 discipline #5 的一个 fresh-context reviewer；Tier 3 才从下表选择必要视角。不要把下表读成固定的 3+1 agent 套餐：如果两个 reviewer 都只问「是否自洽」，它们是同一轴重复计费。
 
 | Reviewer | 视角 | 关注点 |
 |----------|------|--------|
@@ -211,7 +223,7 @@ baseline（without-skill）跑同一 prompt 时，如果它**用了 with-skill �
 
 ### 6.2 修复后 Final Gate
 
-**Findings 是假设，不是结论——逐条 triage，不要无脑「修复所有 Critical/HIGH」。** 先用 6.4 的过滤器把每条 Critical/HIGH 过一遍：确认为真的修，判为虚构 / 过度防御的记录下来并说明为何不修。修改现有 skill 时还必须让旧能力保真 reviewer 对照 immutable baseline；它不能被“新版本看起来更简洁”这一单版本评价替代。修完真问题后，再启动 final gate reviewers 验证修复正确性，评分 >= 8 才放行。
+**Findings 是假设，不是结论——逐条 triage，不要无脑「修复所有 Critical/HIGH」。** 先用 6.4 的过滤器把每条 Critical/HIGH 过一遍：确认为真的修，判为虚构 / 过度防御的记录下来并说明为何不修。修改现有 skill 时仍必须用 immutable baseline 完成机械保真审计；它不能被“新版本看起来更简洁”这一单版本评价替代。独立审阅发现导致规则、契约或数字实质变化时，换一个 fresh-context reviewer 复审；只有 Tier 3 使用多 reviewer 评分门时，才要求修复后的对应轴重新达到门槛。
 
 ### 6.3 常见发现模式
 
@@ -240,9 +252,9 @@ Counter-review 的价值不是「列出所有风险」，而是 surface 你没�
 
 **过滤纪律也针对你自己的评分脚本/grep，不只 sub-agent findings**：你写的 grep 断言、评分脚本、benchmark 也是**工具**，也会误判（同词不同义误命中、用词差异漏命中）。别盲信自己的脚本输出——benchmark 数字出来后抽查实际命中内容校准（详见 Phase 5.3）。"agent findings 是假设"这条纪律，对"我自己的工具输出"同样成立（一次 eval 里 grep 断言两头误判、把决定性差异判成平手，就是靠抽查内容才纠正）。
 
-### 6.5 counter-review 只是验证的一层——多层验证互补
+### 6.5 多层验证互补，但不是每次全买
 
-对抗性 counter-review 抓工程健壮性 + skill 质量，但它不是唯一一层。完整的 skill 验证是**三层互补，各抓不同类问题、各有独立盲区**：
+对抗性 counter-review 抓工程健壮性 + skill 质量，但它不是唯一一层。下面三层各抓不同问题、各有独立盲区：
 
 | 层 | 抓什么 | 独立盲区 |
 |----|--------|---------|
@@ -250,7 +262,7 @@ Counter-review 的价值不是「列出所有风险」，而是 surface 你没�
 | **外部 review**（如 Codex 等**别的模型**） | 你和你的审查 agent 的**共同盲区**——尤其撞用户自己的铁律（如 NO FALLBACK 兜底） | 依赖该工具可用 |
 | **eval**（with/without-skill baseline） | skill 的**事实错误**（baseline 揭示，见 5.4）+ 真价值分布（见 5.5） | 客观断言有水分（见 5.3） |
 
-**别只做一层。** 战例：一个 skill 对抗审查过了、Codex 又抓出一个 NO FALLBACK 违规、eval 再抓出一个"数据其实在 API"的事实错误——三层各逮到前两者发现不了的问题。
+Tier 3 可组合三层，因为它的失败面足以支付这笔成本；Tier 1/2 只选能裁决本次变化的层。战例：一个高风险 skill 的对抗审查抓工程健壮性、外部 review 抓 NO FALLBACK 违规、eval 又抓出“数据其实在 API”的事实错误——证明三层**能力互补**，不证明每个 typo 都必须跑三层。
 
 ## Phase 7 & 8: Description Optimization + Packaging
 
@@ -313,7 +325,7 @@ SKILL.md 中的若干行级规则来自下面这些真实事故。规则本身�
 - benchmark 90% vs 72% **有水分**：grep 断言误命中（baseline 的老通道标识被当成新的）+ 漏命中（"可用余额"≠"可用额度"）；真质量差异（给对 vs 给会退汇的老信息）grep 抓不出 → **Phase 5.3**
 - **baseline 揭示了 skill 的事实错误**：baseline agent 摸出 `/credit` endpoint，推翻 skill "信用卡不在 API" 的铁律，一手验证后修复，让 skill 少干一半手动活 → **Phase 5.4**
 - **诚实的增量分布**：对账/机制类 case 强 baseline 自己也做得好（增量小），只有"独有知识"case（搜不到的银行标识）决定性 → **Phase 5.5**
-- **三层验证互补**：对抗审查抓工程健壮性、Codex 抓"撞用户自己的铁律"（NO FALLBACK 兜底）、eval 抓事实错误——别只做一层
+- **三层验证在这个 Tier 3 新 skill 上互补**：对抗审查抓工程健壮性、Codex 抓"撞用户自己的铁律"（NO FALLBACK 兜底）、eval 抓事实错误；这是高失败面的组合证据，不外推成所有 skill 编辑的固定套餐
 - 从头审视时**不盲信自己的 grep**（初判的 gap 半数是关键词没对上）→ **Phase 5.6 + 6.4 延伸**
 
 → 对应规则：Phase 5.3 / 5.4 / 5.5 / 5.6 + 6.4「过滤纪律也针对自己的评分脚本」+ 6.5「多层验证互补」
@@ -339,7 +351,7 @@ SKILL.md 中的若干行级规则来自下面这些真实事故。规则本身�
 - **控制流 / 不可达分支**：给 end-reason 分类新加了 `in_progress` 分支、排在 `error_cascade` 之前；而 cascade 也以 tool_output/patch 结尾，于是 `error_cascade` 成了永不触发的死代码。happy-path 输入根本不会走到「那条被改得再也点不着的分支」，所以测不出。
 - **跨上下文**：`get_git_state` 跑在调用目录、而非被 resume 会话的 cwd。真实数据测试全在同一个 cwd 下，从没喂过「从 A 项目 resume B 项目的会话」这个跨上下文组合，那条路径就没被走过。
 
-**教训**：**真实数据 happy-path 覆盖 ≠ 代码路径覆盖。** happy-path 测试再「充分」（真数据 + 全模式 + 边界），能活下来的恰恰是你的输入没走过的路径——一条被改动变得不可达的分支、一个你没喂的跨上下文组合；它们本质上是 happy-path 的**补集**，靠「再多跑几组真实数据」逮不到，只有一道**专门构造失败输入 / 想清楚分支可达性**的对抗 pass 能补上。这就是 §6.5「别只做一层」的具体代价：**你自己的 happy-path 测试再勤，替代不了对抗那一层。** 同次对抗的 finding 仍按 6.4 过滤——2 条被驳回（一个假「回归」、一个把故意的设计差异当重复），肯定与否定都要亲验。
+**教训**：**真实数据 happy-path 覆盖 ≠ 代码路径覆盖。** happy-path 测试再「充分」（真数据 + 全模式 + 边界），能活下来的恰恰是你的输入没走过的路径——一条被改动变得不可达的分支、一个你没喂的跨上下文组合；它们本质上是 happy-path 的**补集**，靠「再多跑几组真实数据」逮不到，只有一道**专门构造失败输入 / 想清楚分支可达性**的对抗 pass 能补上。这个新解析器属于 Tier 3：**自己的 happy-path 测试替代不了它所需的对抗失败轴。** 同次对抗的 finding 仍按 6.4 过滤——2 条被驳回（一个假「回归」、一个把故意的设计差异当重复），肯定与否定都要亲验。
 
 → 对应规则：Phase 6.5「多层验证互补」+ 6.4「findings 是假设」；Phase 3「跑通不报错 ≠ 验证过了」在控制流覆盖上的延伸
 

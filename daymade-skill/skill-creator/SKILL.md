@@ -23,16 +23,15 @@ A skill for creating new skills and iteratively improving them.
 At a high level, the process of creating a skill goes like this:
 
 - Decide what you want the skill to do and roughly how it should do it
+- Classify the change into the lowest verification tier that can falsify its likely failure modes
 - Write a draft of the skill
-- Create a few test prompts and run claude-with-access-to-the-skill on them
-- Help the user evaluate the results both qualitatively and quantitatively
-  - While the runs happen in the background, draft some quantitative evals if there aren't any (if there are some, you can either use as is or modify if you feel something needs to change about them). Then explain them to the user (or if they already existed, explain the ones that already exist)
-  - Use the `eval-viewer/generate_review.py` script to show the user the results for them to look at, and also let them look at the quantitative metrics
+- Validate at that tier: targeted checks for bounded fixes, sampled behavior replay for uncertain instruction changes, or the full paired eval pipeline for new/high-risk/broad work
+- Help the user evaluate qualitative or quantitative results when the selected tier produces them
 - Rewrite the skill based on feedback from the user's evaluation of the results (and also if there are any glaring flaws that become apparent from the quantitative benchmarks)
 - Repeat until you're satisfied
-- Expand the test set and try again at larger scale
+- Escalate the verification tier only when the current evidence cannot resolve the changed behavior
 
-Your job when using this skill is to figure out where the user is in this process and then jump in and help them progress through these stages. So for instance, maybe they're like "I want to make a skill for X". You can help narrow down what they mean, write a draft, write the test cases, figure out how they want to evaluate, run all the prompts, and repeat.
+Your job when using this skill is to figure out where the user is in this process and then jump in and help them progress through the applicable stages. Full A/B benchmarking is a capability, not a tax on every edit. Do not create eval files, fan out paired agents, grade outputs, or launch a viewer for a bounded fix whose correctness is directly testable.
 
 Six standing disciplines apply throughout, because these failure modes ship convincing-looking skills that are wrong:
 
@@ -233,6 +232,18 @@ Only when nothing overlaps do you build standalone.
 
 **Why this check earns its place at the top:** a real 2026-07 session spent a day getting a third-party docx engine to produce correct Chinese business documents, then reached for the wrapper-skill branch — which skips straight past Prior Art Research. The shape it was about to ship was a fresh skill re-carrying that engine's capability. The correct shape was a **three-layer reference chain**: third-party engine untouched → a thin increment skill holding the correct usage plus the verified generator script → the domain-workflow skill calling that increment. The user had to catch it twice before it landed, with the second correction being the sharper one: *"don't copy an extra one — write the correct usage on top of theirs, and reference their skill; that's what skill-as-code means."*
 
+### Verification depth router (run before choosing any workflow)
+
+Choose the **lowest tier that can falsify the changed behavior** before taking a generic or specialized workflow branch. Classify by failure surface, not line count: one changed destructive command can outrank a long prose cleanup. State the selected tier and one-sentence reason before testing. A specialized workflow may replace incompatible mechanics, but it never bypasses tier selection or silently downgrades the required rigor.
+
+| Tier | Use when | Required evidence | Do not add by default |
+|---|---|---|---|
+| **1 — Targeted** | This is an existing skill; no capability, trigger family, workflow branch, output contract, dependency, permission, or external-write behavior is added or materially changed; and the edit is exactly one of: (a) spelling/format-only with no behavior change, (b) a factual doc/config correction whose truth a direct authority decides, or (c) a bounded implementation repair that restores an explicit existing contract **and** whose repaired behavior a deterministic regression check covers. A clarification that can change agent behavior is not Tier 1 | For all three: run `quick_validate`, inspect the diff, and complete the existing-skill migration gate. Then use the matching evidence only: (a) exact readback/format check; (b) authoritative fact plus its narrow check; (c) explicit existing contract plus deterministic regression. Add discipline #5's one fresh reviewer only when its rule/contract/number threshold is crossed | Agent behavior replays, paired runs, baselines, graders, benchmark, viewer, eval files |
+| **2 — Sampled behavior** | All of these are true: this is an existing skill; the change affects agent behavior; deterministic checks cannot fully decide it; no new or materially changed capability, trigger family, workflow branch, output contract, script behavior, dependency, permission, or external write is introduced; and 1–2 named examples with explicit acceptance criteria can exercise the whole changed behavior | Run only those 1–2 representative with-skill replays plus the narrow deterministic checks and the one fresh-context review required by discipline #5 | Baselines, paired fan-out, variance analysis, benchmark, viewer, or eval files. A request for any of these reclassifies the work to Tier 3 |
+| **3 — Full eval** | Any of these is true: any new skill; any new or materially changed capability; broad rewrite or methodology expansion; trigger/description optimization; a new or materially changed workflow branch, output contract, script capability, dependency, or permission; high-risk automation or external writes; the evaluation needs evidence across 3+ distinct prompt classes, repeated trials/variance, or a choice between materially different approaches; or the user explicitly requests A/B, baseline, benchmark, or viewer evidence. Subjective judgment alone does not escalate an otherwise narrow Tier 2 change | For the generic workflow, run the complete paired pipeline below: realistic cases, with-skill + baseline, assertions, grading, aggregate benchmark, analyst pass, and viewer. A specialized workflow may substitute only mechanics it explicitly marks incompatible; run its full verification protocol plus every compatible Tier 3 step, and record what it replaced | Nothing — this is the deliberate heavy path |
+
+Escalate when a lower tier exposes unresolved behavior or contradictory evidence. A user's request to cancel or de-escalate evaluation overrides **execution authorization, not the classification**: immediately stop already-launched paired eval agents, baselines, graders, aggregation, and viewer work. A Tier 3 change remains Tier 3; record its required heavy evidence as user-waived or incomplete rather than relabeling lower-tier evidence as a pass. Continue only with evidence the user still authorizes, and do not claim full Tier 3 verification. Do not cancel discipline #5's single fresh-context reviewer when its rule/contract/number threshold is crossed, or any safety gate needed to prevent destructive or external effects. The mechanical existing-skill migration audit, public-skill sanitization, and any domain-specific safety gate also remain independent of this router.
+
 ### Specialized Workflow: Wrapper Skills for Third-Party CLI Tools
 
 Before committing to the generic skill-creation flow, check whether the session that led up to this point actually calls for the **wrapper skill** workflow instead. A wrapper skill is a companion that installs, configures, diagnoses, and repairs a pre-existing third-party CLI tool or skill package — code that someone else wrote and that the user has just spent a session getting to work on their machine.
@@ -251,9 +262,9 @@ Signals it does **not** apply (use the generic workflow above instead):
 - The skill would wrap a service the user owns or controls (it's their code; edit the source instead of wrapping it).
 - The "tool" is actually a methodology or workflow that doesn't involve installing any binary or package.
 
-When the wrapper skill workflow applies, **do not** continue reading the sections below. Jump to [`workflows/wrapper-skill/workflow.md`](workflows/wrapper-skill/workflow.md) and follow that workflow end-to-end. It is a **retrospective distillation** workflow — its job is to mine the current conversation for the install flow, the bugs that were fixed, and the design decisions that were made, and to turn that mining output into a complete, self-contained wrapper skill that another user can install and benefit from without reliving the debugging session.
+When the wrapper skill workflow applies, preserve the verification tier selected above. Creating a wrapper is creating a new skill, so it is Tier 3. **Do not** continue reading the generic authoring sections below; jump to [`workflows/wrapper-skill/workflow.md`](workflows/wrapper-skill/workflow.md) and follow that workflow end-to-end, including its verification protocol. It is a **retrospective distillation** workflow — its job is to mine the current conversation for the install flow, the bugs that were fixed, and the design decisions that were made, and to turn that mining output into a complete, self-contained wrapper skill that another user can install and benefit from without reliving the debugging session.
 
-The wrapper skill workflow has its own architecture contract, code templates, and verification protocol — it does not share test-case infrastructure with the generic workflow, because its output is a user's install state rather than a file that can be easily asserted on. The canonical reference implementation is the `ima-copilot` skill (at the root of the daymade/claude-code-skills repository — a bare relative link here already broke once when this skill moved into a suite, exactly as the cross-skill-reference rule below warns), a wrapper around the Tencent IMA skill distilled from a real session using this exact workflow.
+The wrapper skill workflow has its own architecture contract, code templates, and Tier 3 verification protocol — it replaces incompatible generic test-case mechanics because its output is a user's install state rather than a file that can be easily asserted on; it does not downgrade the work. Run every compatible generic Tier 3 step and record which mechanics the specialized protocol replaced. The canonical reference implementation is the `ima-copilot` skill (at the root of the daymade/claude-code-skills repository — a bare relative link here already broke once when this skill moved into a suite, exactly as the cross-skill-reference rule below warns), a wrapper around the Tencent IMA skill distilled from a real session using this exact workflow.
 
 ### Specialized Workflow: Enrich a Skill from Conversation History
 
@@ -274,9 +285,9 @@ Signals it does **not** apply (use the generic workflow above instead):
 - The mined content is one-time personal notes that should live in `memory/` rather than a reusable reference file.
 - The source material is a batch of finished artifacts the user has endorsed, rather than dialogue — use the artifact-corpus-distillation workflow below.
 
-When the conversation-mining workflow applies, **do not** continue reading the generic sections below. Jump to [`workflows/conversation-mining/workflow.md`](workflows/conversation-mining/workflow.md) and follow that workflow end-to-end. It is a **retrospective distillation** workflow: it discovers local Claude Code project sessions, Codex transcripts, and command histories, redacts them, partitions them into agent-sized chunks, runs mining agents, and promotes the resulting candidate references into the target skill's `references/` after validation.
+When the conversation-mining workflow applies, preserve the verification tier selected above. A new mined skill is Tier 3; enriching an existing skill stays at the selected tier only if it satisfies that tier's capability boundary. **Do not** continue reading the generic authoring sections below; jump to [`workflows/conversation-mining/workflow.md`](workflows/conversation-mining/workflow.md) and follow that workflow end-to-end, including its verification protocol. It is a **retrospective distillation** workflow: it discovers local Claude Code project sessions, Codex transcripts, and command histories, redacts them, partitions them into agent-sized chunks, runs mining agents, and promotes the resulting candidate references into the target skill's `references/` after validation.
 
-The conversation-mining workflow has its own architecture contract, agent prompts, templates, and verification protocol. It is the canonical way to turn real conversation history into a skill's reusable knowledge base.
+The conversation-mining workflow has its own architecture contract, agent prompts, templates, and verification protocol. That protocol implements the selected tier's specialized mechanics; run every compatible generic step and record any substitution. It is the canonical way to turn real conversation history into a skill's reusable knowledge base.
 
 ### Specialized Workflow: Distill User Preferences from an Approved-Artifact Corpus
 
@@ -290,7 +301,7 @@ Signals this applies (any one is enough):
 
 Signals it does **not** apply: the source material is dialogue/corrections rather than endorsed products (use conversation-mining); the samples are not personally approved by the user (approval is the admission gate — ask first).
 
-When it applies, jump to [`workflows/artifact-corpus-distillation/workflow.md`](workflows/artifact-corpus-distillation/workflow.md). Its core discipline, which also applies any time you add material to an existing skill: **cataloging ≠ distillation** — registering a sample in a corpus table changes nothing about the skill's next run; ask of every addition "*does this change a decision rule?*", and do not declare a distillation session done while the answer is no for everything written (methodology Case 15). The workflow's spine: script-extracted quantitative comparison across ALL artifacts (≥3-artifact threshold per pattern, checked exception lists per claimed constant) → layered induction with evidence anchors → write to the decision-rule layer (separating invariants from register-dependent variables) → independent completeness audit (standing discipline #5) → regression audit.
+When it applies, preserve the verification tier selected above, then jump to [`workflows/artifact-corpus-distillation/workflow.md`](workflows/artifact-corpus-distillation/workflow.md) and follow its verification protocol. A new corpus-derived skill is Tier 3; adding a materially new decision capability to an existing skill is also Tier 3. The specialized protocol implements the selected tier's corpus mechanics and does not downgrade them; run every compatible generic step and record any substitution. Its core discipline, which also applies any time you add material to an existing skill: **cataloging ≠ distillation** — registering a sample in a corpus table changes nothing about the skill's next run; ask of every addition "*does this change a decision rule?*", and do not declare a distillation session done while the answer is no for everything written (methodology Case 15). The workflow's spine: script-extracted quantitative comparison across ALL artifacts (≥3-artifact threshold per pattern, checked exception lists per claimed constant) → layered induction with evidence anchors → write to the decision-rule layer (separating invariants from register-dependent variables) → independent completeness audit (standing discipline #5) → regression audit.
 
 ### Prior Art Research (Do Not Skip)
 
@@ -749,7 +760,9 @@ Anthropic has written skill authoring best practices — retrieve it before you 
 
 Also read [references/skill-development-methodology.md](references/skill-development-methodology.md) before starting — it covers the full 8-phase development process with prior art research, counter review, and real failure case studies. The two references are complementary: the Anthropic doc covers principles, the methodology covers process.
 
-### Test Cases
+### Full-eval test cases (Tier 3 only)
+
+Enter this section only when the router selects the generic Tier 3 path or the user explicitly requests the full eval pipeline. Do not use it merely because a SKILL.md changed. A specialized workflow follows the Tier 3 substitution contract declared above.
 
 After writing the skill draft, come up with 2-3 realistic test prompts — the kind of thing a real user would actually say. **For skills that act on live systems (a running service, a logged-in client, production data), give each test prompt an explicit side-effect budget** — e.g. "probe read-only and conclude; do NOT execute the download / drive the UI." An eval that mutates a live environment while "just testing" is a real action, not a test. Present them via **AskUserQuestion**:
 
@@ -790,9 +803,9 @@ Save test cases to `evals/evals.json`. Don't write assertions yet — just the p
 
 See `references/eval_pipeline_schemas.md` for the full schema (including the `assertions` field, which you'll add later).
 
-## Running and evaluating test cases
+## Full paired evaluation pipeline (generic Tier 3 only)
 
-This section is one continuous sequence — don't stop partway through. Do NOT use `/skill-test` or any other testing skill.
+Run this section only after the generic Tier 3 path is selected. While Tier 3 remains authorized, it is one continuous sequence — don't stop partway through. A user cancellation or de-escalation overrides this paragraph; stop the heavy pipeline as specified in the router. Do NOT mechanically reuse it for Tier 1, Tier 2, or specialized mechanics explicitly replaced by their workflow, and do not use `/skill-test` or any other testing skill.
 
 Put results in `<skill-name>-workspace/` as a sibling to the skill directory. Within the workspace, organize results by iteration (`iteration-1/`, `iteration-2/`, etc.) and within that, each test case gets a directory (`eval-0/`, `eval-1/`, etc.). Don't create all of this upfront — just create directories as you go.
 
@@ -940,7 +953,7 @@ kill $VIEWER_PID 2>/dev/null
 
 ## Improving the skill
 
-This is the heart of the loop. You've run the test cases, the user has reviewed the results, and now you need to make the skill better based on their feedback.
+This is the heart of the loop. Improve from the evidence selected by the router: authoritative facts and deterministic checks for Tier 1, 1–2 named behavior replays for Tier 2, or user-reviewed paired results for Tier 3. Do not import Tier 3 artifacts or steps into a lower-tier iteration.
 
 ### How to think about improvements
 
@@ -956,7 +969,7 @@ This is the heart of the loop. You've run the test cases, the user has reviewed 
 
 This task is pretty important (we are trying to create billions a year in economic value here!) and your thinking time is not the blocker; take your time and really mull things over. I'd suggest writing a draft revision and then looking at it anew and making improvements. Really do your best to get into the head of the user and understand what they want and need.
 
-After analyzing feedback, present your improvement plan via **AskUserQuestion**:
+For Tier 1, apply an unambiguous evidence-backed correction directly; ask only when the evidence leaves a real choice. For Tier 2 or Tier 3, when user feedback exposes a meaningful design fork, present the improvement plan via **AskUserQuestion**:
 
 ```
 I've read the feedback from [N] test cases. [X] had specific complaints, [Y] looked good.
@@ -969,9 +982,9 @@ RECOMMENDATION: [strategy] because [reason]
 
 Options:
 A) Iterative refinement — targeted fixes for the specific issues above (Recommended)
-B) Structural redesign — the core approach needs rethinking
-C) Bundle a script — I noticed all test runs independently wrote similar code for [X]
-D) Expand test set first — add [N] more test cases to avoid overfitting to these examples
+B) Structural redesign — the core approach needs rethinking (reclassifies Tier 1/2 work to Tier 3 before changing it)
+C) Bundle a script — I noticed all test runs independently wrote similar code for [X] (reclassifies Tier 1/2 work to Tier 3 before adding the capability)
+D) Expand test set first — add [N] more test cases to avoid overfitting (if the total exceeds 2, reclassify to Tier 3 before running them)
 ```
 
 ### The iteration loop
@@ -979,12 +992,17 @@ D) Expand test set first — add [N] more test cases to avoid overfitting to the
 After improving the skill:
 
 1. Apply your improvements to the skill
-2. Rerun all test cases into a new `iteration-<N+1>/` directory, including baseline runs. If you're creating a new skill, the baseline is always `without_skill` (no skill). If you're improving an existing skill, the immutable original pre-edit version remains the preservation baseline for every iteration. You may additionally compare against the immediately previous iteration to measure incremental quality, but never replace the original baseline with it.
-3. Launch the reviewer with `--previous-workspace` pointing at the previous iteration
-4. Wait for the user to review and tell you they're done
-5. Read the new feedback, improve again, repeat
+2. Re-run only the selected tier's evidence:
+   - **Tier 1:** always re-run `quick_validate`, diff inspection, and the migration gate; then re-run only the matching subtype evidence — (a) exact readback/format check, (b) authoritative fact plus its narrow check, or (c) explicit existing contract plus deterministic regression. Do not create an iteration workspace.
+   - **Tier 2:** re-run only the same 1–2 named with-skill examples and narrow checks. Do not add a baseline, benchmark, viewer, or eval workspace; a request for any of them reclassifies the work to Tier 3.
+   - **Tier 3, while still authorized:** rerun all test cases into a new `iteration-<N+1>/` directory, including baseline runs. For a new skill, the baseline is always `without_skill`; for an existing skill, the immutable original pre-edit version remains the preservation baseline for every iteration. An immediately previous iteration may supplement but never replace the original baseline.
+3. Apply discipline #5 after a substantive rule, contract, or number change. For the generic Tier 3 path, also launch the eval reviewer with `--previous-workspace` pointing at the previous iteration; specialized workflows use their declared reviewer mechanics.
+4. For generic Tier 3, wait for the user to review the new viewer results; otherwise decide from the selected tier's evidence unless a real user choice remains.
+5. Read the new evidence or feedback, improve again if it falsifies the current version, and repeat at the same tier.
 
-At the end of each iteration, use **AskUserQuestion** as a checkpoint:
+A user-requested cancellation or de-escalation remains in force for the rest of the task without changing its classification. Do not restart paired evals, baselines, graders, aggregation, or viewer work unless the user explicitly re-authorizes Tier 3 execution.
+
+At the end of each **generic Tier 3** iteration, use **AskUserQuestion** as a checkpoint:
 
 ```
 Iteration [N] complete. Results: [pass_rate]% assertions passing, [delta vs previous].
@@ -1181,7 +1199,7 @@ Before starting any skill work, auto-detect all dependencies and proactively ins
 
 Run the quick check from [references/prerequisites.md](references/prerequisites.md), auto-install what you can, and present the user a summary checklist. Only proceed when all blocking dependencies are satisfied.
 
-Key blockers: Python 3, uv, PyYAML (validation/packaging), gitleaks (security scan), claude CLI (evals). Run Python tools with explicit uv dependency declarations, for example `uv run --with PyYAML python -m scripts.quick_validate <skill-path>` from the skill-creator root directory. Bare `python3` depends on ambient site packages and can miss PyYAML.
+Key blockers: Python 3, uv, PyYAML (validation/packaging), and gitleaks (security scan). The claude CLI is blocking only when the selected verification tier actually runs agent evals. Run Python tools with explicit uv dependency declarations, for example `uv run --with PyYAML python -m scripts.quick_validate <skill-path>` from the skill-creator root directory. Bare `python3` depends on ambient site packages and can miss PyYAML.
 
 ### Step 1: Understanding the Skill with Concrete Examples
 
@@ -1347,15 +1365,17 @@ resource for corresponding updates, then pass the migration gate above. Moving a
 contract requires a direct runtime pointer from SKILL.md; an eval or changelog is
 not a replacement.
 
-**Scripts check**: Before calling the edit done, ask: *what code did the source conversation (or the eval transcripts) write — that every future invocation would otherwise rewrite?* Bundle it into `scripts/` (parameterized, sanitized) and change the docs to point at it. The division of labor: **scripts carry the execution, docs carry the understanding** — a skill whose method lives only in prose re-pays the full authoring cost on every run. This check exists here, in the edit step, precisely because paths that skip the eval loop (conversation distillation, direct edits) never reach the eval-transcript version of this check in "Improving the skill".
+The next three checks are **escalation probes, not unconditional scope expansion**. If acting on one would add or materially change a capability, workflow branch, output contract, script behavior, dependency, permission, or external write, stop and reclassify to Tier 3 before changing the skill. Tier 1 and Tier 2 may inspect these questions, but they do not acquire new deliverables from them.
 
-**Component-shelf check (the same question, asked of artifact-EMBEDDED fragments)**: the Scripts check covers code the *skill* executes; artifact-generating skills (report pages, decks, documents) also accumulate fragments their *outputs* embed — an image-overlay widget, a sticky nav, a chart config, a CSS block. If successive outputs each hand-write a similar fragment, that is the same repetition signal pointing at a different shelf: a dedicated `components` subfolder under the skill's `assets/` directory, plus a registry reference. What turns a snippet into a shelf component is the contract around it: (a) **verbatim-embed block** — BEGIN/END markers copied whole into the artifact, zero dependencies, so single-file artifacts stay self-contained; (b) **registry entry** stating the interaction contract (triggers, key bindings, close behavior, edge cases) and provenance — which delivered artifact it came from, when the user approved it; (c) **admission gate** — only fragments the user has actually used and approved enter (the approved-corpus discipline applied to interactions; unapproved-but-pretty stays out); (d) **behavior frozen, skin adjustable** — calibrated behavior and key bindings are the contract and must not drift between runs, while colors and sizing may follow the artifact's register; (e) **write-back loop** — a fragment invented for one artifact is promoted to the shelf in the same session its approval lands. The reason this matters beyond token savings: hand-rewritten fragments *drift* — each rewrite subtly changes key bindings, close behavior, counters — and for a user who reads these artifacts daily, interaction consistency IS the product experience. In the user's founding words for the first such shelf: 交互形式要沉淀下来、可复用、有复利，代表一致的交互喜好 (2026-07). Real instance (project fingerprints removed): a report-page skill's lightbox-gallery component (image overlay: ←/→ cycles the group, ESC closes, in-place zoom, n/N counter) with its interaction-components registry reference — extracted the same session the user corrected jump-style references, and verified with an automated click-through test before shipping. See methodology Case 17.
+**Scripts check**: Before calling the edit done, ask: *what code did the source conversation (or the eval transcripts) write — that every future invocation would otherwise rewrite?* When the selected tier already authorizes that capability work, bundle it into `scripts/` (parameterized, sanitized) and change the docs to point at it. Otherwise record the signal as a Tier 3 proposal and do not bundle it as a Tier 1/2 side effect. The division of labor: **scripts carry the execution, docs carry the understanding** — a skill whose method lives only in prose re-pays the full authoring cost on every run. This check exists here, in the edit step, precisely because paths that skip the eval loop (conversation distillation, direct edits) never reach the eval-transcript version of this check in "Improving the skill".
 
-**Pipeline check**: Consider whether this skill's output naturally feeds into another skill. If so, add a "Next Step" handoff section (see "Pipeline Handoff" in the Skill Writing Guide). Also check if any existing skill should chain *into* this one.
+**Component-shelf check (the same question, asked of artifact-EMBEDDED fragments)**: the Scripts check covers code the *skill* executes; artifact-generating skills (report pages, decks, documents) also accumulate fragments their *outputs* embed — an image-overlay widget, a sticky nav, a chart config, a CSS block. If successive outputs each hand-write a similar fragment, that is the same repetition signal pointing at a different shelf. Before adding a `components` subfolder or registry reference, apply the escalation rule above; Tier 1/2 surface the proposal but do not create the component capability. When Tier 3 is authorized, what turns a snippet into a shelf component is the contract around it: (a) **verbatim-embed block** — BEGIN/END markers copied whole into the artifact, zero dependencies, so single-file artifacts stay self-contained; (b) **registry entry** stating the interaction contract (triggers, key bindings, close behavior, edge cases) and provenance — which delivered artifact it came from, when the user approved it; (c) **admission gate** — only fragments the user has actually used and approved enter (the approved-corpus discipline applied to interactions; unapproved-but-pretty stays out); (d) **behavior frozen, skin adjustable** — calibrated behavior and key bindings are the contract and must not drift between runs, while colors and sizing may follow the artifact's register; (e) **write-back loop** — a fragment invented for one artifact is promoted to the shelf in the same session its approval lands. The reason this matters beyond token savings: hand-rewritten fragments *drift* — each rewrite subtly changes key bindings, close behavior, counters — and for a user who reads these artifacts daily, interaction consistency IS the product experience. In the user's founding words for the first such shelf: 交互形式要沉淀下来、可复用、有复利，代表一致的交互喜好 (2026-07). Real instance (project fingerprints removed): a report-page skill's lightbox-gallery component (image overlay: ←/→ cycles the group, ESC closes, in-place zoom, n/N counter) with its interaction-components registry reference — extracted the same session the user corrected jump-style references, and verified with an automated click-through test before shipping. See methodology Case 17.
+
+**Pipeline check**: Consider whether this skill's output naturally feeds into another skill, and whether an existing skill should chain *into* this one. Adding or materially changing a "Next Step" handoff or pipeline contract requires Tier 3 reclassification before the edit; Tier 1/2 may surface the proposal but must not add it in passing.
 
 ### Step 5: Sanitization Review (mandatory for any public skill)
 
-**Before this gate: discipline #5's independent pass must have run**, and `independent-review.md` (in your private git-tracked knowledge repo — not the wiped workspace, not any repo that is or may become public or distributed) must exist **and be committed** — a file sitting uncommitted in a git working directory is not meaningfully different from a file that was never written; `ls`/`test -f` confirms it's on disk, not that it survives. For a **new** skill this is the first step where anything leaves your hands, so it is where that discipline is actually enforced rather than merely stated — a rule that lives 1000 lines above the point of use, with nothing checking it, loses to completion-drive every time.
+**Before this gate, when discipline #5 is due, its independent pass must have run**, and the current change's `independent-review.md` (in your private git-tracked knowledge repo — not the wiped workspace, not any repo that is or may become public or distributed) must exist **and be committed**. It is always due for a new skill; for an existing skill use the threshold in the next paragraph. A file sitting uncommitted in a git working directory is not meaningfully different from a file that was never written; `ls`/`test -f` confirms it is on disk, not that it survives. For a **new** skill this is the first step where anything leaves your hands, so it is where that discipline is actually enforced rather than merely stated — a rule that lives 1000 lines above the point of use, with nothing checking it, loses to completion-drive every time.
 
 **For an edit to an already-published skill, the moment it leaves your hands is the push, not this step.** This gate can be answered "internal-only, skip" in one sentence, and packaging may never run at all for a docs-only change — so anchoring the review here means a skill edit can reach a public branch having passed no independent eye. Real case (2026-07): a change to this very file shipped a discovery command that could not reach three of the roots the prose beside it claimed it covered; it was merged, and only a review commissioned *afterwards* caught it. **So for an existing skill: the independent pass and its recorded artifact are due before `git push` / opening the PR — the gates that run at push (regression audit, validation, scans) all check structure, and none of them can tell you the instructions are wrong.** This inherits discipline #5's threshold unchanged: it is due when *a rule, contract, or number changed*, not for a typo or a pure reformat. Making a spelling fix wait on a review round would teach exactly the reflex #6 warns about — "this one's small" becomes the universal exemption, and then it covers the changes that mattered too.
 
@@ -1575,7 +1595,7 @@ when an entry disappears, leaving dangling installs that error on every `marketp
 update`. Treat such changes like an API deprecation: ship a migration note in the
 changelog, and follow marketplace-dev's guidance for the mechanics.
 
-**If you commit/push the skill repo yourself — for an *existing* skill, confirm `independent-review.md` exists AND is committed (check `git status` in that repo, not just that the file is on disk) before you push** (Step 5's "before this gate" note explains why the push, not Step 5, is the real moment for an edit to something already published; a docs-only change may never reach Step 5 or packaging at all). Then: stage only the skill's explicit paths (`git add <skill-dir> .claude-plugin/marketplace.json`) — never `git add .`; the working tree is usually full of unrelated churn that will otherwise ride into the commit (one commit swept in a pile of unrelated transcript files and had to be `git reset` and re-staged). Before pushing, confirm the repo's real visibility with `gh repo view --json visibility,isPrivate` instead of assuming from the path — a public skill repo deserves a PR + review, not a direct push to main.
+**If you commit/push the skill repo yourself:** for an existing skill whose current change crosses discipline #5's rule/contract/number threshold, confirm the review artifact records this change and is committed (check its exact path with `git status` and `git log -1 -- <artifact>`, not merely whether some historical `independent-review.md` exists). A typo or pure reformat does not require that artifact; an older review never satisfies a current substantive change. Step 5's note explains why push, not packaging, is the real enforcement point for an already-published skill. Then stage only the skill's explicit paths (`git add <skill-dir> .claude-plugin/marketplace.json`) — never `git add .`; the working tree is usually full of unrelated churn that will otherwise ride into the commit (one commit swept in a pile of unrelated transcript files and had to be `git reset` and re-staged). Before pushing, confirm the repo's real visibility with `gh repo view --json visibility,isPrivate` instead of assuming from the path — a public skill repo deserves a PR + review, not a direct push to main.
 
 ### Step 9: Ship or Iterate
 
@@ -1613,7 +1633,7 @@ After packaging, direct the user to the resulting `.skill` file path so they can
 
 ## Claude.ai-specific instructions
 
-In Claude.ai, the core workflow is the same (draft -> test -> review -> improve -> repeat), but because Claude.ai doesn't have subagents, some mechanics change. Here's what to adapt:
+In Claude.ai, use the same verification-depth router. When the generic Tier 3 path is selected, the full workflow is still draft -> test -> review -> improve -> repeat, but because Claude.ai doesn't have subagents, some mechanics change. Here's what to adapt:
 
 **Running test cases**: No subagents means no parallel execution. For each test case, read the skill's SKILL.md, then follow its instructions to accomplish the test prompt yourself. Do them one at a time. This is less rigorous than independent subagents (you wrote the skill and you're also running it, so you have full context), but it's a useful sanity check — and the human review step compensates. Skip the baseline runs — just use the skill to complete the task as requested.
 
@@ -1640,9 +1660,9 @@ In Claude.ai, the core workflow is the same (draft -> test -> review -> improve 
 
 If you're in Cowork, the main things to know are:
 
-- You have subagents, so the main workflow (spawn test cases in parallel, run baselines, grade, etc.) all works. (However, if you run into severe problems with timeouts, it's OK to run the test prompts in series rather than parallel.)
+- You have subagents, so the generic Tier 3 workflow (spawn test cases in parallel, run baselines, grade, etc.) works. Do not treat their availability as a reason to escalate a Tier 1 or Tier 2 change. (If a Tier 3 run hits severe timeouts, it is OK to run the test prompts in series rather than parallel.)
 - You don't have a browser or display, so when generating the eval viewer, use `--static <output_path>` to write a standalone HTML file instead of starting a server. Then proffer a link that the user can click to open the HTML in their browser.
-- For whatever reason, the Cowork setup seems to disincline Claude from generating the eval viewer after running the tests, so just to reiterate: whether you're in Cowork or in Claude Code, after running tests, you should always generate the eval viewer for the human to look at examples before revising the skill yourself and trying to make corrections, using `generate_review.py` (not writing your own boutique html code). Sorry in advance but I'm gonna go all caps here: GENERATE THE EVAL VIEWER *BEFORE* evaluating inputs yourself. You want to get them in front of the human ASAP!
+- After a **generic Tier 3** run, always generate the eval viewer for the human before revising the skill yourself, using `generate_review.py` rather than custom HTML. Tier 1, Tier 2, and specialized workflows that explicitly replace viewer mechanics do not acquire a viewer obligation merely because the work happens in Cowork.
 - Feedback works differently: since there's no running server, the viewer's "Submit All Reviews" button will download `feedback.json` as a file. You can then read it from there (you may have to request access first).
 - Packaging works — `package_skill.py` just needs Python and a filesystem.
 - Description optimization (`run_loop.py` / `run_eval.py`) should work in Cowork just fine since it uses `claude -p` via subprocess, not a browser, but please save it until you've fully finished making the skill and the user agrees it's in good shape.
@@ -1673,15 +1693,14 @@ Repeating one more time the core loop here for emphasis:
 
 - Figure out what the skill is about
 - For an existing skill, snapshot and inventory the old bundle before editing
+- Select the lowest verification tier that can falsify this change before taking any specialized workflow exit, and record why
 - Draft or edit the skill
-- Run claude-with-access-to-the-skill on test prompts
-- With the user, evaluate the outputs:
-  - Create benchmark.json and run `eval-viewer/generate_review.py` to help the user review them
-  - Run quantitative evals
+- Run the evidence required by that tier or the selected specialized workflow's declared equivalent mechanics
+- For generic Tier 3, evaluate the paired outputs with the user, create `benchmark.json`, and run `eval-viewer/generate_review.py`
 - Repeat until you and the user are satisfied
 - Run and clear the existing-skill regression review; eval-only survival does not count
 - Package the final skill and return it to the user.
 
-Please add steps to your TodoList, if you have such a thing, to make sure you don't forget. If you're in Cowork, please specifically put "Create evals JSON and run `eval-viewer/generate_review.py` so human can review test cases" in your TodoList to make sure it happens.
+Please add the selected verification tier and its required evidence to your TodoList, if you have one. Add "Create evals JSON and run `eval-viewer/generate_review.py` so human can review test cases" only for generic Tier 3.
 
 Good luck!
