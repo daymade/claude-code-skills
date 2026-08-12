@@ -80,7 +80,11 @@ match tokens/patterns; it can't judge whether a design is good).
   generated** (its own reply text). Every other hook type — including
   `UserPromptSubmit`, which sounds like a plausible place to police "what gets
   said" — only ever sees the **user's** input; it structurally cannot see the
-  model's own output. A rule like "the model must not invent a shorthand name
+  model's own *current-turn* output (that claim holds — this is still the
+  right reason to route such a rule to Stop). That guarantee, however, does
+  not extend to proving the `.prompt` field always originated from a
+  keystroke: a background task-notification's own report text can populate
+  it too, with nothing in the stdin JSON marking the difference — #30. A rule like "the model must not invent a shorthand name
   for something it hasn't verified" belongs on Stop; put it on
   `UserPromptSubmit` instead and it will (a) never once catch what it was
   built for, since that text never flows through that event, and (b)
