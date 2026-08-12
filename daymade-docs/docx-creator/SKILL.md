@@ -79,6 +79,9 @@ DOTNET_ROLL_FORWARD=Major dotnet run \
 soffice --headless --convert-to pdf --outdir /tmp/docxcheck your-doc.docx
 pdftoppm -png -r 100 /tmp/docxcheck/your-doc.pdf /tmp/docxcheck/page
 # then Read every /tmp/docxcheck/page-NN.png
+
+# 5. MANDATORY if Microsoft Word.app is installed — LibreOffice cannot see ISSUE-012
+open -a "Microsoft Word" your-doc.docx   # check the title bar for "兼容性模式", check every page
 ```
 
 Full command details and troubleshooting: `scripts/README.md`.
@@ -98,15 +101,17 @@ Never justify the whole document. Three layers, three alignments:
 | Ordinary body prose | Justified (`Both`) | Clean right edge |
 
 The rule is machine-checkable, so do not eyeball it: if the markdown paragraph's inline tree
-contains a `LineBreakInline`, left-align that paragraph; otherwise justify it. Implemented at
-`scripts/Program.cs` lines 144-147, with the break detection at lines 59-64.
-Full write-up: ISSUE-004.
+contains a `LineBreakInline`, left-align that paragraph; otherwise justify it. Implemented in
+the `case ParagraphBlock p:` arm of `Main`'s block-dispatch switch, with the break detection in
+`InlineRuns`. (Line numbers are deliberately not given here — they drift every time the file
+grows; see `scripts/README.md`'s function-name lookup table instead.) Full write-up: ISSUE-004.
 
 ### 2. Every list restarts at 1
 
 Each markdown list must get its **own** `NumId` plus a `LevelOverride` carrying
 `StartOverrideNumberingValue = 1`. Reuse one `NumId` across clauses and clause 3's list
-silently continues from 4. Implemented at `scripts/Program.cs` lines 148-162 and 183-197.
+silently continues from 4. Implemented across the `case ListBlock lb:` arm and the
+`NumberingDefinitionsPart` setup — see `scripts/README.md`'s lookup table for both.
 Two SDK traps come with it (wrong class name, wrong element order) — ISSUE-005, ISSUE-006.
 
 ### 3. CJK fonts need both slots
@@ -120,9 +125,11 @@ headings. Sizes are OpenXML half-points — body 24 (12pt), H1 36 (18pt), clause
 ### 4. Page and table basics
 
 A4 is 11906 × 16838 twips with 1440 twip margins; page number goes in a centered footer
-`PAGE` field. Tables need all six borders (`top`/`bottom`/`left`/`right`/`insideH`/`insideV`)
-— set fewer and cells look unruled in print. Implemented at `scripts/Program.cs`
-lines 93-125 and 175-177.
+`PAGE` field. Tables need all six borders (`top`/`bottom`/`left`/`right`/`insideH`/`insideV`,
+in that ECMA-376 order — ISSUE-013) and a `tblGrid` (ISSUE-012) — set fewer borders and cells
+look unruled in print; omit `tblGrid` and the file fails strict validation even though
+LibreOffice hides it. Implemented in `BuildTable` and the `SectionProperties`/`FooterPart`
+setup in `Main` — see `scripts/README.md`'s lookup table.
 
 ## Verification is not optional
 
@@ -134,8 +141,18 @@ opened broken in Word — that is the origin of this rule. ISSUE-008.
 **Required chain:** generate → XSD validate → `soffice --headless --convert-to pdf` →
 `pdftoppm -png` → `Read` every page image → check the five failure modes
 (info blocks not stretched / each list restarting at 1 / table borders present / signature
-block intact / no orphaned pagination). Details, prerequisites and the "what counts as
-failure" list: `references/verification_protocol.md`.
+block intact / no orphaned pagination) → **if Microsoft Word.app is installed, open the actual
+file in it and check the title bar for "兼容性模式" plus every page**. Details, prerequisites
+and the "what counts as failure" list: `references/verification_protocol.md`.
+
+**LibreOffice rendering clean is not the same claim as "Word renders this correctly."**
+ISSUE-012 is a real, reproduced case where a file passed every LibreOffice-based check in this
+chain — clean info blocks, correct numbering, intact tables — and still opened in real Word
+with "兼容性模式" in the title bar and phantom bullet markers on paragraphs that were never
+given any numbering. LibreOffice has no equivalent fallback path and is structurally unable to
+surface that class of defect. This is ISSUE-008's own lesson (a lenient renderer hides what
+Word does) recurring one layer up; treat LibreOffice-only verification as incomplete whenever
+Word is available to check against directly.
 
 **Before overwriting a delivered .docx**, check for a sibling `~$<name>.docx` — that is Word's
 owner lock, meaning the recipient has the old version open. Overwriting works, but they will
@@ -143,15 +160,28 @@ keep seeing the stale document until they close and reopen it. Tell them. ISSUE-
 
 ## Customizing
 
-`scripts/Program.cs` is ~215 lines of straightforward OpenXML. Edit it directly for fonts,
+`scripts/Program.cs` is ~260 lines of straightforward OpenXML. Edit it directly for fonts,
 sizes, spacing, borders, or new block types — that is the intended workflow. Before adding a
 structural feature (images, TOC, headers, track changes), read the corresponding
 `Samples/*.cs` in minimax-docx first; those patterns are SDK-version-verified and will save
 you a compile-error loop.
 
+**If you append a new property to `RunProperties`, `ParagraphProperties`, `TableProperties`,
+`TableCellProperties`, or `TableBorders`: it must go in ECMA-376's child-element order for
+that parent, not wherever `.Append()` reads naturally in the C#.** This is not a style
+preference — get it wrong and you reproduce ISSUE-012/ISSUE-013: `minimax-docx validate` still
+reports `PASSED`, LibreOffice still renders the file cleanly, and real Word still opens it in
+Compatibility Mode with unrequested formatting scattered across the document. The current code
+already carries a schema-order comment at each construction site (`RunProps`, `Para`,
+`BuildTable`) — extend the existing property list in place rather than appending after it, and
+if you add a genuinely new element, look up its position in `openxml_element_order.md`
+(minimax-docx) before deciding where the `.Append()` call goes. Re-run Step 3a of the
+verification protocol (real Word, not just LibreOffice) after any such change — that is the
+only check in the whole chain that would have caught this class of bug.
+
 ## References
 
-- `references/known_issues.md` — ISSUE-001…011: symptom / root cause / fix / verification for
+- `references/known_issues.md` — ISSUE-001…013: symptom / root cause / fix / verification for
   every trap hit while building this pipeline. Read before debugging anything.
 - `references/verification_protocol.md` — the full end-to-end verification chain, its
   prerequisites, its pass criteria, and the substitutions that are forbidden.
