@@ -1190,6 +1190,13 @@ this list and describe defects you reach by asking a different question):
 - Does the guard **look like it fires but never actually blocks** — the guidance
   prints, the state is written, yet the exit code is 0 every time? → a trailing
   `exit 0` swallowing the decision (#29).
+- Did a **UserPromptSubmit hook** fire with **no human message anywhere nearby**
+  in the transcript? → it fired on a task-notification's own text, not a
+  keystroke (#30) — the stdin JSON has nothing that says which.
+- Did a **staleness/compounding tracker** re-fire on a file you did **not**
+  touch this round, even after you wrote down exactly why the touched one
+  didn't need another pass? → it tracks file *kind*, not the specific diff,
+  and nothing in it reads prose (#31).
 
 ## 29. A trailing `exit 0` swallows the exit-code decision — the message prints, the state writes, the guard never blocks
 
@@ -1236,3 +1243,169 @@ this list and describe defects you reach by asking a different question):
      guidance on stderr when you run the hook by hand is not proof the harness
      will block — stderr shows on allow too. The decision channel is the exit
      code; test the channel, not the ink.
+
+---
+
+## 30. UserPromptSubmit fires on task-notification arrival too — the stdin JSON has no field that says so
+
+> Worked example: `workshop-skill-loader.sh` (a private hooks repo, not shipped
+> here), 2026-08-11. A `UserPromptSubmit` hook that keyword-scans `.prompt` for
+> content-writing triggers fired the moment a background subagent's
+> task-notification landed — no human had typed anything in between.
+
+- **Symptom:** a `UserPromptSubmit` hook injects its reminder at a moment when
+  the transcript shows no new human message anywhere nearby — only a
+  `<task-notification>` that just arrived (a background agent reporting
+  completion). The hook's own logic is correct: it read `.prompt`, found
+  matching keywords, fired exactly as designed. The keywords it matched came
+  from the **notification's own report text**, not from anything the user
+  wrote.
+
+- **Cause — this repo's own "UserPromptSubmit only ever sees user input" claim
+  (SKILL.md, the Stop-vs-UserPromptSubmit bullet) is stated as a clean binary
+  and misses a third source.** Verified directly against this session's
+  transcript JSONL, not inferred: a task-notification lands as a `type:"user"`
+  record tagged `origin: {"kind": "task-notification"}`,
+  `promptSource: "system"` — Claude Code's own data model already distinguishes
+  it from a genuine keystroke, which arrives as `origin: {"kind": "human"}`,
+  `promptSource: "typed"`. Immediately following it, an `attachment` record of
+  `type: "task_reminder"` (empty, `content: []`) appears, and chained to
+  *that* via `parentUuid`, an `attachment` of `type: "hook_success"` with
+  `hookName: "UserPromptSubmit"` — proof the harness invoked the hook on this
+  turn, not on a human's. **But `origin` and `promptSource` are transcript
+  metadata, not part of what the hook receives.** The official hooks reference
+  documents `UserPromptSubmit`'s stdin JSON as `session_id`, `transcript_path`,
+  `cwd`, `permission_mode`, `hook_event_name`, `prompt_id`, and `prompt` —
+  no `origin`, no `source`, nothing that tells the hook *why* this invocation
+  happened. A hook trusting `.prompt` at face value cannot structurally tell
+  "the user asked for this" from "a notification's own text satisfied my
+  regex" — from inside the hook, they are the same shape.
+
+- **Why the existing framing undersells the risk.** "UserPromptSubmit only
+  sees user input" reads as reassurance — *whatever* fires it, at least it's
+  something the user meant. This incident shows the event fires on **content
+  Claude itself produced two hops earlier** (a subagent's own summary,
+  re-surfacing as this turn's effective prompt) — the exact category of text
+  the Stop-vs-UserPromptSubmit bullet says this event "structurally cannot
+  see." It can, just not labeled as such, and not through the path anyone
+  would guess.
+
+- **Fix:**
+  1. **Gate on `origin.kind == "human"` alone — don't also require
+     `promptSource == "typed"`.** `promptSource` answers a different question
+     (*how* the text entered: at the moment of submission, `"typed"`, or while
+     a prior turn was still running, `"queued"`) and is not itself a
+     human/non-human signal — a genuine, substantive human message can carry
+     `promptSource: "queued"` with `origin.kind` still `"human"` (verified
+     directly in this session's own transcript: a real, several-sentence human
+     request has exactly this shape). Requiring `promptSource == "typed"` in
+     the same condition looks like the natural tightening — it's the value a
+     keystroke at idle carries — but it silently rejects real user input the
+     instant it arrives mid-turn instead of at idle: `promptSource` is not
+     part of the human/non-human distinction at all.
+     `origin` absent, or `kind` anything else (`"task-notification"`, or the
+     `None`/`None` shape a Stop-hook-injected turn carries), means this
+     invocation did not originate from a keystroke.
+  2. **Open `transcript_path` and look up `promptId` — camelCase, not the
+     `prompt_id` your own stdin JSON gave you.** The hook receives
+     `prompt_id` (snake_case, per the official schema) on stdin; the matching
+     transcript JSONL record carries it under `promptId` (camelCase) —
+     searching the transcript for the literal string `prompt_id` returns
+     nothing. Same twin-blind-spot shape #20 warns about, different field.
+     `transcript_path` is JSONL (one record per line) and is written
+     **asynchronously** — the official docs note it can lag behind the
+     current turn, so the record you want may not have landed yet. The safe
+     fallback is the last `type:"user"` record; this skill's
+     `hook_patterns.md` Pattern E already ships working, tested code for
+     tailing and parsing it — use that rather than re-deriving the parse.
+  3. **This costs one JSON read, not a rewrite.** The hook still reads
+     `.prompt` for its keyword match — the added step is one extra field check
+     against the transcript's *last* record before acting on a match, not a
+     new event type or a different hook.
+  4. **Don't assume this is limited to task-notifications.** Anything that can
+     inject a `type:"user"` record with a non-`"human"` `origin` — a
+     Stop-hook's own `additionalContext` re-surfacing, or (unverified from a
+     non-team-mode session; confirm before relying on it) a team-mode
+     teammate delivery — is the same shape from a `UserPromptSubmit` hook's
+     point of view. #20 already catches teammate deliveries, but by a
+     different mechanism (text-prefix matching on the wrapper string, not
+     `origin.kind`) — if a hook is exposed to both task-notifications and team
+     mode, check which signal a teammate delivery actually carries rather than
+     assuming either fix alone covers both. Match the symptom (fired with no
+     nearby human message in the transcript), not the specific trigger
+     (task-notification here, something else next time).
+
+---
+
+## 31. A compounding-tracker keyed on file *kind* re-flags files nobody touched — and a written justification can't clear it, because nothing reads prose
+
+> Worked example: `compounding-edit-review.sh` (a private hooks repo, not
+> shipped here), 2026-08-11/12. A Stop hook that nags for independent review
+> of "复利产物" (compounding artifacts — skill files, marketplace registry)
+> fired three times across one continuous editing session on the same
+> four-file group, the third time **after** the author had written and
+> committed an explicit "why this edit doesn't need another review" note.
+
+- **Symptom:** the hook's own instructions offer two valid closes: dispatch a
+  fresh independent-review pass, **or** — when the latest edit is a
+  narrow, verified, review-prescribed fix — write the reasoning into the
+  review record and pass. The author does the second, correctly (the fix's
+  exact wording came from the prior review's own suggestion, its underlying
+  fact independently `git grep`-verified). The hook fires again anyway, next
+  turn, listing the **same file list**, only one of which was actually
+  touched by the edit in question.
+
+- **Cause — the tracked unit is broader than the thing being justified.**
+  The hook persists a per-session ledger (JSON, one record per tracked
+  "turn"): a `kinds` array (e.g. `["marketplace","skill asset","skill"]`,
+  accumulated across every edit in that turn) and a `fires` counter, `causes`
+  logging `"none"` (nothing reviewed yet) then `"stale"` (something was
+  reviewed, but a later edit to a file of one of the tracked *kinds*
+  postdates it). Once a `kind` enters that array, re-editing **any file of
+  that kind** — not the specific file the last review covered — re-triggers
+  the whole group. A one-line SKILL.md wording fix and a from-scratch new
+  script both count as "touched the `skill` kind" identically. The written
+  justification lives in a markdown file the hook never opens; the ledger
+  only ever compares **timestamps against a kind**, so prose reasoning has
+  no channel to reach it. This is not a bug in the justification path — it
+  is the absence of one: the escape hatch the hook's own message describes
+  is real (a human reading it can apply it), but nothing in the hook's own
+  mechanism *checks* whether it was used correctly, because the mechanism
+  doesn't parse markdown.
+
+- **Why this is a design smell worth generalizing, not just a false alarm.**
+  A staleness tracker whose granularity is coarser than the thing it asks the
+  author to justify will always eventually re-fire on work already justified
+  — not because the author did anything wrong, but because "kind" and
+  "specific diff" are different units and the hook only measures the first.
+  Left alone, this either burns real review cycles on content a human has
+  already reasoned through carefully (expensive but survivable), or — the
+  worse failure mode — teaches the author that the written-justification
+  option "doesn't actually work," so they stop trying it and every future
+  edit gets the heavier treatment regardless of whether it needs it (the
+  same over-broad-check tax described in the calibration note under #28).
+
+- **Fix:**
+  1. **Key the staleness check on the file, not the kind — or make the
+     coarser key explicit and budgeted, not silent.** If per-kind tracking is
+     intentional (grouping small related edits so a session doesn't get
+     nagged once per file), give it a stated ceiling — this repo's own
+     `max_fires` config is exactly that pattern — and surface *why* it's
+     firing again ("this kind was touched N times since last review, not
+     this exact file") so the author can tell "genuinely unreviewed content"
+     from "the bucket reset because a sibling file changed."
+  2. **A written-justification escape hatch needs a channel the hook actually
+     reads**, not just a convention documented in the hook's own stderr
+     message. Either the hook parses a small structured marker (a
+     `reviewed-through: <commit-sha>` line the author writes and the hook
+     greps for) or the hatch is honest about being a **human-facing
+     convention**, not a **hook-enforced** one — and the hook's message
+     should say so, rather than presenting "write the reasoning and pass" as
+     if it clears the ledger.
+  3. **Don't spend a fourth review round arguing with the mechanism.** Once
+     you've confirmed (as here) that the re-fire is the kind-vs-file
+     granularity gap and not a genuine new gap in review coverage, the
+     correct move is exactly what the hook's own exhaustion message says:
+     treat the budget as spent, not as "clean," and — if the pattern
+     recurs — fix the tracker's granularity rather than writing a fourth
+     justification the mechanism will not read either.
