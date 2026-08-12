@@ -2,6 +2,7 @@
 // 用法: dotnet run -- <input.md> <output.docx>
 // CJK:宋体正文/黑体标题/RunFonts 双槽; 列表每条独立 NumId restart; 表格全边框;
 // 信息块(含软换行)左对齐、正文两端对齐; A4 + 页脚页码。
+using System.Linq;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
@@ -20,14 +21,17 @@ class Program
     static readonly List<(int numId, bool ordered)> Lists = new();
     static int _numId = 0;
 
+    // CT_RPr 子元素顺序（ECMA-376）：rFonts, b, bCs, ..., color, spacing, w, kern, position, sz, szCs, ...
+    // 顺序写错时 LibreOffice 照常渲染，真正的 Word 会判定 document.xml 不合规并触发自身修复/回退
+    // 渲染（ISSUE-012）——所以这里的顺序不是风格问题，是正确性问题。
     static RunProperties RunProps(string font, string size, bool bold)
     {
         var rp = new RunProperties();
         rp.Append(new RunFonts { Ascii = WEST, HighAnsi = WEST, EastAsia = font });
-        rp.Append(new FontSize { Val = size });
-        rp.Append(new FontSizeComplexScript { Val = size });
         if (bold) { rp.Append(new Bold()); rp.Append(new BoldComplexScript()); }
         rp.Append(new Color { Val = "000000" });
+        rp.Append(new FontSize { Val = size });
+        rp.Append(new FontSizeComplexScript { Val = size });
         return rp;
     }
 
@@ -76,36 +80,51 @@ class Program
         return (runs, hasBreak);
     }
 
+    // CT_PPrBase 子元素顺序：pStyle, keepNext, keepLines, pageBreakBefore, ..., numPr, ..., spacing, ind, ..., jc, ...
     static Paragraph Para(IEnumerable<Run> runs, JustificationValues just, string? spaceAfter = "120", string line = "360", int? numId = null)
     {
         var pp = new ParagraphProperties();
-        pp.Append(new Justification { Val = just });
+        if (numId.HasValue)
+            pp.Append(new NumberingProperties(new NumberingLevelReference { Val = 0 }, new NumberingId { Val = numId.Value }));
         var spacing = new SpacingBetweenLines { Line = line, LineRule = LineSpacingRuleValues.Auto };
         if (spaceAfter != null) spacing.After = spaceAfter;
         pp.Append(spacing);
-        if (numId.HasValue)
-            pp.Append(new NumberingProperties(new NumberingLevelReference { Val = 0 }, new NumberingId { Val = numId.Value }));
+        pp.Append(new Justification { Val = just });
         var p = new Paragraph(pp);
         foreach (var r in runs) p.Append(r);
         return p;
     }
 
+    // CT_TblPrBase 顺序：tblW, ..., tblBorders, shd, tblLayout, ...；CT_TblBorders 顺序：top, left,
+    // bottom, right, insideH, insideV。CT_Tbl 还要求 tblGrid 紧随 tblPr 之后且必须存在——此前完全没写
+    // 这个元素，不是顺序问题而是结构性缺失（ISSUE-012）。
     static Table BuildTable(MdTable mt)
     {
         var single = new EnumValue<BorderValues>(BorderValues.Single);
         var borders = new TableBorders(
             new TopBorder { Val = single, Size = 4, Color = "000000" },
-            new BottomBorder { Val = single, Size = 4, Color = "000000" },
             new LeftBorder { Val = single, Size = 4, Color = "000000" },
+            new BottomBorder { Val = single, Size = 4, Color = "000000" },
             new RightBorder { Val = single, Size = 4, Color = "000000" },
             new InsideHorizontalBorder { Val = single, Size = 4, Color = "000000" },
             new InsideVerticalBorder { Val = single, Size = 4, Color = "000000" });
         var table = new Table(new TableProperties(
             new TableWidth { Width = "5000", Type = TableWidthUnitValues.Pct },
             borders));
+        var rows = mt.Cast<MdTableRow>().ToList();
+        int colCount = rows.Count > 0 ? rows.Max(r => r.Cast<MdTableCell>().Count()) : 1;
+        const int contentWidthDxa = 9026; // A4 减左右各 1440 twips 页边距
+        var colWidth = (contentWidthDxa / Math.Max(1, colCount)).ToString();
+        var grid = new TableGrid();
+        for (int c = 0; c < colCount; c++) grid.Append(new GridColumn { Width = colWidth });
+        table.Append(grid);
         foreach (var row in mt)
         {
             var mr = (MdTableRow)row;
+            // 无表头信息表（md 语法被迫写 `| | |`）的全空 header 行不渲染——否则表顶多一条窄空行
+            if (mr.IsHeader && mr.Cast<MdTableCell>().All(c =>
+                    !c.Descendants<LiteralInline>().Any(l => !string.IsNullOrWhiteSpace(l.Content.ToString()))))
+                continue;
             var tr = new TableRow();
             foreach (var cell in mr)
             {
@@ -179,6 +198,31 @@ class Program
         using var doc = WordprocessingDocument.Create(args[1], WordprocessingDocumentType.Document);
         var main = doc.AddMainDocumentPart();
         main.Document = new Document(body);
+
+        // 标准实践：补齐 styles.xml。它不是本条缺陷的根因（详见下面 settings.xml 的注释），
+        // 但没有它包结构不完整，属于该补的卫生工作。
+        var stylesPart = main.AddNewPart<StyleDefinitionsPart>();
+        var styles = new Styles();
+        var normalStyle = new Style { Type = StyleValues.Paragraph, StyleId = "Normal", Default = true };
+        normalStyle.Append(new StyleName { Val = "Normal" }, new PrimaryStyle());
+        styles.Append(normalStyle);
+        var defaultCharStyle = new Style { Type = StyleValues.Character, StyleId = "DefaultParagraphFont", Default = true, CustomStyle = false };
+        defaultCharStyle.Append(new StyleName { Val = "Default Paragraph Font" }, new UIPriority { Val = 1 }, new SemiHidden(), new UnhideWhenUsed());
+        styles.Append(defaultCharStyle);
+        var tableNormalStyle = new Style { Type = StyleValues.Table, StyleId = "TableNormal", Default = true, CustomStyle = false };
+        tableNormalStyle.Append(new StyleName { Val = "Normal Table" }, new UIPriority { Val = 99 }, new SemiHidden(), new UnhideWhenUsed());
+        styles.Append(tableNormalStyle);
+        stylesPart.Styles = styles;
+
+        // 真正的根因（ISSUE-012，2026-08-12 用 Microsoft Word.app 实测锁定）：缺 settings.xml 里的
+        // compatibilityMode 声明时，Word 标题栏会显示"兼容模式"打开本文档——兼容模式套用旧版 Word 的
+        // 默认渲染规则，会产生看似无关的格式错乱（如项目符号泛滥）。LibreOffice 不受此影响、照常渲染
+        // 干净，所以只靠 LibreOffice 视觉验证发现不了这条（ISSUE-008 已经指出 qlmanage vs LibreOffice
+        // 会漏同类问题，这里是同一个教训在 LibreOffice vs 真实 Word 这一层再次出现）。
+        var settingsPart = main.AddNewPart<DocumentSettingsPart>();
+        settingsPart.Settings = new Settings(
+            new Compatibility(
+                new CompatibilitySetting { Name = new EnumValue<CompatSettingNameValues>(CompatSettingNameValues.CompatibilityMode), Uri = "http://schemas.microsoft.com/office/word", Val = "15" }));
 
         var numPart = main.AddNewPart<NumberingDefinitionsPart>();
         var numbering = new Numbering();

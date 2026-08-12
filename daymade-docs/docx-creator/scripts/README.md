@@ -1,6 +1,6 @@
 # `mmdocx-gen` — markdown to Chinese formal .docx
 
-A ~215-line C# console app built on the OpenXML SDK that `minimax-skills:minimax-docx`
+A ~260-line C# console app built on the OpenXML SDK that `minimax-skills:minimax-docx`
 provides. It exists because that skill's CLI can only emit headings, paragraphs and page
 breaks, which is not enough for a contract (see `references/known_issues.md`, ISSUE-001).
 
@@ -72,17 +72,24 @@ Page setup is fixed at A4 with 1440-twip margins and a centered `PAGE` field foo
 
 ## Where things are in `Program.cs`
 
-| Concern | Lines |
+By function/case name, not line number — line numbers drift every time the file grows (they
+already had, silently, before this table was rewritten this way; see ISSUE-012/013's fix for
+the concrete incident). Grep the name to jump straight there.
+
+| Concern | Find it at |
 |---|---|
-| Font constants, sizes, run properties (CJK dual slot) | 17-39 |
-| Inline walker + line-break detection (drives the alignment rule) | 41-77 |
-| Paragraph builder (justification, spacing, numbering ref) | 79-91 |
-| Table builder (six borders) | 93-125 |
-| Block dispatch — heading / paragraph / list / table / rule | 135-173 |
-| Alignment decision for body paragraphs | 144-147 |
-| Section properties (A4, margins) | 175-177 |
-| Numbering part (abstract nums, per-list restart) | 183-197 |
-| Footer with `PAGE` field | 199-210 |
+| Font constants, sizes | `const string SONG`, `const string BODY` (top of `class Program`) |
+| Run properties (CJK dual slot, ECMA-376 rPr child order) | `static RunProperties RunProps(...)` |
+| Inline walker + line-break detection (drives the alignment rule) | `static (List<Run> runs, bool hasBreak) InlineRuns(...)` |
+| Paragraph builder (numPr, spacing, justification — ECMA-376 pPr child order) | `static Paragraph Para(...)` |
+| Table builder (tblGrid, six borders — ECMA-376 tblPr/tblBorders child order) | `static Table BuildTable(...)` |
+| Block dispatch — heading / paragraph / list / table / rule | `switch (block)` inside `static void Main(...)` |
+| Alignment decision for body paragraphs | the `case ParagraphBlock p:` arm of that switch |
+| Section properties (A4, margins) | `new SectionProperties(...)` right after the `switch` block |
+| `styles.xml` (Normal / DefaultParagraphFont / TableNormal) | `main.AddNewPart<StyleDefinitionsPart>()` |
+| `settings.xml` (compatibilityMode — ISSUE-012 fix) | `main.AddNewPart<DocumentSettingsPart>()` |
+| Numbering part (abstract nums, per-list restart) | `main.AddNewPart<NumberingDefinitionsPart>()` |
+| Footer with `PAGE` field | `main.AddNewPart<FooterPart>()` |
 
 ## After generating
 

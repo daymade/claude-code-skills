@@ -125,15 +125,17 @@ lines, each of which is short, each of which gets blown out to the full text wid
 | Ordinary paragraph | Justified (`Both`) |
 | Table cells | Left |
 
-In `scripts/Program.cs` the inline walker returns a `hasBreak` flag (lines 59-64) and the
-block dispatcher picks `hasBreak ? Left : Both` (lines 144-147).
+In `scripts/Program.cs` the inline walker (`InlineRuns`) returns a `hasBreak` flag and the
+block dispatcher — the `case ParagraphBlock p:` arm of `Main`'s switch — picks
+`hasBreak ? Left : Both`. (Function names, not line numbers: see `scripts/README.md`'s lookup
+table — line numbers here drifted once already when this generator grew, ISSUE-012/013.)
 
 **Verify.** Only through the real chain — LibreOffice-rendered PDF, page PNGs, eyes on the
 signature page. `references/verification_protocol.md`. A stretched info block is unmistakable
 at 100 DPI.
 
-Reproduced on demand while writing this skill: replacing the decision at
-`scripts/Program.cs` line 146 with an unconditional `JustificationValues.Both` and
+Reproduced on demand while writing this skill: replacing the decision in the
+`case ParagraphBlock p:` arm with an unconditional `JustificationValues.Both` and
 regenerating turns `甲方：示例科技有限公司` into `甲 方 ： 示 例 科 技 有 限 公 司` spread
 edge to edge, while the **last** line of each block (住所, 联系地址) stays normal — the exact
 signature of "justify stretches every line but the last". Restoring the conditional restores
@@ -160,8 +162,9 @@ new NumberingInstance(
 ```
 
 Two abstract definitions are enough (one decimal, one bullet); every list gets its own
-instance pointing at one of them. `scripts/Program.cs` lines 148-162 (allocation) and 194-196
-(emission).
+instance pointing at one of them. Allocation happens in the `case ListBlock lb:` arm of `Main`
+(each markdown list bumps `_numId` and records it); emission happens in the
+`NumberingDefinitionsPart` setup later in `Main` — see `scripts/README.md`'s lookup table.
 
 **Verify.** The generator prints the number of lists it created; it must equal the number of
 lists in the markdown. Then confirm visually — the first item of every list reads `1.`.
@@ -185,9 +188,10 @@ list rendered `1.` `2.` rather than continuing from 4.
    precede **all** `NumberingInstance` elements. Interleaving them (natural if you append one
    pair per list in a loop) produces schema-invalid XML that some readers reject outright.
 
-**Fix.** Append both `AbstractNum` definitions first, then loop the instances — see
-`scripts/Program.cs` lines 192-196. Element-order rules for other parts are catalogued in
-minimax-docx's `openxml_element_order.md` reference; consult it whenever you add a new part.
+**Fix.** Append both `AbstractNum` definitions first, then loop the instances — see the
+`NumberingDefinitionsPart` setup in `Main` (`scripts/README.md`'s lookup table). Element-order
+rules for other parts are catalogued in minimax-docx's `openxml_element_order.md` reference;
+consult it whenever you add a new part — ISSUE-012/013 is what happens when you don't.
 
 **Verify.** `DOTNET_ROLL_FORWARD=Major dotnet run --project <path-to>/MiniMaxAIDocx.Cli --
 validate --input out.docx` — the XSD validator catches ordering violations that Word merely
@@ -214,7 +218,7 @@ rp.Append(new FontSizeComplexScript { Val = "24" });
 ```
 
 Shipped scheme: 宋体 body / 黑体 headings; 24 half-points body, 36 H1, 28 clause heading.
-`scripts/Program.cs` lines 23-32.
+See `RunProps` in `scripts/Program.cs` (`scripts/README.md`'s lookup table).
 
 **Verify.** Convert to PDF and inspect embedded fonts (`pdffonts out.pdf`), or read the page
 PNGs — a fallback font is visible as a weight and width change against the surrounding text.
@@ -296,6 +300,106 @@ soffice --headless -env:UserInstallation=file:///tmp/lo-docxcheck \
 **Verify.** The PDF appears in the output directory. If it does not, that is a hard failure —
 do not proceed to the visual step with a stale PDF from a previous run. Delete the output
 directory before each conversion so a missing PDF cannot masquerade as a fresh one.
+
+---
+
+## ISSUE-012 — Word opens the file in "Compatibility Mode" and scatters phantom bullets everywhere (P0 — LibreOffice cannot see this one either)
+
+**Symptom.** Word's title bar shows "兼容性模式" (Compatibility Mode) for a .docx this generator
+just produced. On some documents that alone is the only visible symptom; on others, nearly
+every paragraph — headings included, paragraphs that were never given `NumberingProperties` —
+picks up an extra small square marker in the left margin, as if a phantom bullet list had been
+applied document-wide. The Bullets-and-Numbering dialog reports "无" (none) for the affected
+paragraph, and the character count of a selected line matches the visible text exactly — the
+marker is not part of the paragraph's own run content. It is invisible in a LibreOffice-rendered
+PDF: `soffice --headless --convert-to pdf` on the exact same file, `pdftoppm`, and reading every
+page shows nothing wrong. It is invisible in `dotnet run ... -- validate` too — that XSD
+validator reports `Validation: PASSED` on a file that (see ISSUE-013) contains real schema
+violations.
+
+**Root cause.** `Program.cs` never writes a `DocumentSettingsPart` (`word/settings.xml`).
+Real Microsoft Word treats a missing compatibility declaration as a signal the document was
+authored by an older/incomplete writer and opens it in Compatibility Mode, which substitutes
+its own legacy default rendering for whatever the file's own paragraph/run properties say —
+this is what surfaces as the unrequested bullet markers. LibreOffice has no equivalent
+fallback path and just renders the paragraph properties as given, which is exactly why this
+one is invisible to the verification chain this skill already prescribes: **ISSUE-008
+identified that a lenient renderer (qlmanage) hides real Word layout bugs and banned it in
+favor of LibreOffice — this is the same failure shape one level up. LibreOffice is *also* a
+lenient renderer relative to Word for this specific class of defect (missing/malformed
+structural parts), and the chain had no step that would ever catch it.**
+
+**Fix.** Add a `DocumentSettingsPart` declaring `compatibilityMode = 15` (Word 2013+):
+
+```csharp
+var settingsPart = main.AddNewPart<DocumentSettingsPart>();
+settingsPart.Settings = new Settings(
+    new Compatibility(
+        new CompatibilitySetting {
+            Name = new EnumValue<CompatSettingNameValues>(CompatSettingNameValues.CompatibilityMode),
+            Uri = "http://schemas.microsoft.com/office/word", Val = "15" }));
+```
+
+A `StyleDefinitionsPart` (`styles.xml`) was also missing and has been added alongside it as
+standard hygiene — every real-Word-produced .docx carries one — but it was tested in isolation
+first and confirmed **not** to be the cause of this symptom; do not skip re-testing in real
+Word if you ever touch this again on the assumption "adding styles.xml is the fix." Only the
+settings.xml declaration was.
+
+**Verify.** No LibreOffice/XSD-only check can confirm this — that is the entire point of the
+issue. Open the actual generated file in **Microsoft Word.app** (`open -a "Microsoft Word"
+out.docx`) and read the title bar: no "兼容性模式" suffix, no unrequested markers on any
+page. Reproduced and fixed live while writing this skill (2026-08-12): the unpatched generator
+produced a file whose title bar read "test-contract — 兼容性模式"; after adding the
+`DocumentSettingsPart`, the identical markdown produced a file that opened as plain
+"test-contract" with a clean first page and an intact 3-column table on page 2. This is now a
+mandatory step — see `references/verification_protocol.md` Step 3a.
+
+---
+
+## ISSUE-013 — The XSD validator says PASSED on a file with real element-order violations (P1 — undermines Step 2's own evidence)
+
+**Symptom.** `dotnet run --project MiniMaxAIDocx.Cli -- validate --input out.docx` prints
+`Validation: PASSED`. Running the stricter `DocumentFormat.OpenXml.Validation.OpenXmlValidator`
+(the OpenXML SDK's own schema validator, same SDK this generator already depends on) against
+the identical file reports dozens of real `w:rPr`/`w:pPr`/`w:tblPr`/`w:tblBorders` child-element
+ordering violations plus a missing required `w:tblGrid` — see ISSUE-006 for what wrong element
+order does structurally; this is the same class of bug, just inside `rPr`/`pPr`/table parts
+rather than the `w:numbering` part ISSUE-006 already covers.
+
+**Root cause.** `RunProps` appended `Color` after `FontSize`/`FontSizeComplexScript` and
+`Bold`/`BoldComplexScript` after them too (CT_RPr requires `b`, `bCs` before `color`, and
+`color` before `sz`/`szCs`); `Para` appended `NumberingProperties` after `Justification`/
+`SpacingBetweenLines` (CT_PPrBase requires `numPr` well before `spacing`/`jc`); `BuildTable`
+never emitted `w:tblGrid` at all (CT_Tbl requires it immediately after `tblPr`) and ordered
+`TableBorders` as top/bottom/left/right instead of the schema's top/left/bottom/right. None of
+this is exotic — it is the direct, mechanical consequence of appending OpenXML elements to a
+parent in whatever order felt natural in the C# instead of the ECMA-376-mandated sequence for
+that specific parent element. minimax-docx's bundled validator evidently does not check this
+class of ordering inside `rPr`/`pPr`/`tblPr` — verified by running both validators against the
+identical file and getting `PASSED` from one and 59 concrete violations from the other.
+
+**Fix.** Same fix as ISSUE-012's code change (they were repaired together) — reorder the
+elements to the ECMA-376 sequence and add the missing `tblGrid`. See the current
+`scripts/Program.cs` for the corrected order; the comments at each construction site name the
+schema-required sequence so a future edit does not reintroduce this by appending a new
+property at the end out of habit.
+
+**Verify.** Run the OpenXML SDK's own validator, not just minimax-docx's CLI:
+
+```csharp
+// throwaway console project, DocumentFormat.OpenXml already a dependency
+using var doc = WordprocessingDocument.Open(path, false);
+var errors = new OpenXmlValidator(FileFormatVersions.Office2013).Validate(doc).ToList();
+Console.WriteLine(errors.Count);   // must be 0
+```
+
+0 errors confirmed on the same fixed file that also cleared ISSUE-012's real-Word check. This
+does not replace Step 2 of the verification protocol (the minimax-docx `validate` command is
+still cheap and worth running — it does catch other things, per ISSUE-006), it adds a second,
+stricter pass that Step 2 alone does not cover. **Neither validator being green is proof the
+document is correct — see ISSUE-012: a schema-valid file can still open in Compatibility Mode.
+Only the real-Word check in Step 3a settles that.**
 
 ---
 
