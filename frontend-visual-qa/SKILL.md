@@ -121,6 +121,31 @@ Use the actor's task as the success target. “The chart exists” or “the tab
 switches” is not enough when the user needs to decide severity, finish a review,
 or recover from an error.
 
+When the pass condition names a visual reference — a screenshot, another
+product's page, a "make ours look like theirs" — load
+[references/reference-parity-decomposition.md](references/reference-parity-decomposition.md)
+**before judging the implementation, and in fix-and-verify mode before writing
+the next fix round**. This does not widen the skill's after-implementation
+scope: the decomposition is the first act of the *audit*, applied to the
+reference artifact (which always already exists), and each parity fix round is
+implementation happening inside this skill's fix-and-verify authority. If the
+same request also needs a visual direction created from scratch, that part
+still belongs to a design skill — hand the finished inventory over rather than
+re-deriving it there. The contract's first deliverable is the measured
+structural inventory of the reference, and the parity verdict is a
+per-relationship diff against that inventory. Fixing only the delta the user's
+latest screenshot complains about, round after round, converges only by
+exhausting the user — a real five-round case is decomposed in that file. It also
+governs two traps that outlive the inventory: your own geometry assertions are
+Level D for parity (they encode your reading of the reference, and stay green
+through a misreading), and a user's veto on an effect ("never crop the image")
+indicts the structural premise that forces the effect, not the parameter that
+picks its flavor. For a reporting-grade data page compared against a tier
+reference, that file and
+[references/data_viz_tier_and_token_audit.md](references/data_viz_tier_and_token_audit.md)
+divide the work: decomposition governs page structure, the tier benchmark
+governs data-presentation parameters — load both.
+
 ### 2. Select The Evidence Level
 
 Use the strongest level required by the claim:
@@ -421,6 +446,9 @@ Report with this compact schema:
       Evidence: clicking the visible control opens about:blank; print preview has no page.
       Fix: use a user-gesture-safe print path and re-test the recipient preview.
 
+    Reference-parity inventory (parity audits only):
+    - <relationship -> matched | deliberately diverged (derivation) | not yet, one line each>
+
     Verified:
     - <journey/state/viewport + concrete evidence>
 
@@ -488,6 +516,11 @@ check the available agent tools can perform.
   (proxy, CSP entry point, server-log triangulation).
 - references/data_viz_tier_and_token_audit.md — conditional data-viz,
   reference-tier, token, and palette audit.
+- references/reference-parity-decomposition.md — the reference-parity profile's
+  method: measured structural inventory of the named reference before judging or
+  fixing, per-relationship parity verdicts with match criteria, why self-authored
+  assertions are Level D for parity, veto-premise analysis, asset fidelity,
+  relationship (not value) translation, and the pre-report confirmation list.
 - references/browser-driving-and-observation-traps.md — the auditor's own failure
   modes: misread clicks, stale caches, `file://` limits, viewport-vs-page
   screenshots, width-resize vs device emulation, states a default screenshot
