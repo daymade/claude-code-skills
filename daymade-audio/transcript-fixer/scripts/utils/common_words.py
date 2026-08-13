@@ -103,6 +103,9 @@ COMMON_WORDS_2CHAR: Set[str] = {
     # here makes --add block the bad rule, _assess_risk flag it high, and
     # --audit surface it — the three guards that all read ALL_COMMON_WORDS.
     "龙虾", "多深", "早生",
+    # 2026-08 production corpus: all three appeared with their ordinary
+    # meanings and were proposed/replaced as person or domain terms.
+    "买买", "争论", "冲锋",
 }
 
 # Common 3+ character words that should also be protected.
