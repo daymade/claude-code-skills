@@ -196,6 +196,7 @@
         "./financial-data-collector",
         "./gangtise-copilot",
         "./ashare-news-fetcher",
+        "./daymade-sector-research",
         "./pharma-daily-report"
       ]
     },
