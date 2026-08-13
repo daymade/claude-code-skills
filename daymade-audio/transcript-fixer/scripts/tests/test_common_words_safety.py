@@ -762,6 +762,21 @@ class TestProductionFalsePositives2026_06(unittest.TestCase):
         self.assertEqual(changes[0].risk, "medium")
 
 
+class TestProductionFalsePositives2026_08(unittest.TestCase):
+    """Regression tests for ordinary words seen in a 2026-08 corpus."""
+
+    def test_production_common_words_are_protected(self):
+        for source, target in (("买买", "卖卖"), ("争论", "蒸馏"), ("冲锋", "聪聪")):
+            with self.subTest(source=source):
+                self.assertIn(source, ALL_COMMON_WORDS)
+                errors = [
+                    warning
+                    for warning in check_correction_safety(source, target, strict=True)
+                    if warning.level == "error"
+                ]
+                self.assertTrue(errors, f"'{source}' must be blocked at --add time")
+
+
 class TestValidPhraseAuditHeuristic(unittest.TestCase):
     """
     jieba-based heuristic (is_likely_valid_phrase) for the 4+ char real-word
