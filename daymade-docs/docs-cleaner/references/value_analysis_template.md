@@ -26,8 +26,11 @@ Use this template for section-by-section documentation analysis.
 
 ### Delete (Red)
 - Duplicates existing documentation
-- One-time material with no continuing reader — a pasted run's output nobody refers back to
-  **⚠️ but never a passage that records what was true at a moment** (changelog, decision log,
+- One-time material with no continuing reader and no moment attached to it — a pasted copy of
+  a tool's `--help` text, a duplicated third-party quickstart. Note what this bullet's example
+  is *not*: "a pasted test run's output" would be a **dated measurement**, which the carve-out
+  below excludes — an example that its own exception swallows is worse than no example.
+  **⚠️ Never a passage that records what was true at a moment** (changelog, decision log,
   incident timeline, dated measurement, postmortem). That class is the Drift Test's question
   3; it may still be deleted, but only as a **named proposal to the owner with your reason**,
   never as a quiet Delete row. When you cannot tell, ask; do not resolve it by deleting.

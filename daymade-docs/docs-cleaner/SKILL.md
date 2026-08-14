@@ -115,17 +115,22 @@ So the test is just the classification:
 > a price history row, an incident timeline, a dated measurement, a postmortem? Then it is
 > question 3. Leave the value alone.
 
-**Apply this to the passage, not the file.** A how-to guide can contain one genuinely
+**Apply this to the passage, not the file** — where *passage* means the unit that would be
+read as one thing: **the entry, the table row, the dated note**, the section under one
+heading. A how-to guide can contain one genuinely
 historical block, and a changelog can carry a current-state summary at the top; a file-level
 verdict gets both wrong. But do not run it *below* the passage either — a postmortem's
 timeline and its root-cause section are one record, and splitting them so the timeline can
 be deleted as "reproducible from logs" destroys the thing whose parts they are.
 
-**Question 3 takes precedence over question 2 for these passages, even though it is asked
+**Question 3 takes precedence over questions 1 and 2 for these passages, even though it is asked
 later.** A changelog line "2026-01-04: raised the upload limit to 50 MB" *does* hit question
 2 — the upload limit is authoritatively defined in config — and stopping there would replace
-it with a link and destroy the record. The stop-at-first-hit rule is about efficiency, not
-about routing history into a link.
+it with a link and destroy the record. Question 1 does the same damage by a different route:
+"2026-01-04: added eu-west-3, bringing us to 12 regions" contains a count, and a count is
+question 1's own example — but recomputing it yields *today's* region count and rewrites what
+that day recorded. The stop-at-first-hit rule is about efficiency, not about routing history
+into a link or into a recomputation.
 
 When you cannot tell whether a passage is history or current-state, **ask — do not resolve
 it by deleting.** The asymmetry is the reason: deleting a record you mistook for a
@@ -344,6 +349,12 @@ Delete you can justify by pointing at something.
   duplicate content to be dropped. Without this category, "superseded" and "it is a record"
   pull the same document in opposite directions and whichever you read last wins.
 
+  A premise-dead **section** inside a live document is the same problem one level down, and
+  Archive does not accept it — it is defined over whole documents. Treat it as a Delete whose
+  reason is the dead premise, and name it in the Phase 3 plan rather than deciding it
+  yourself: "the Kafka migration section, for a migration that was cancelled" is exactly the
+  kind of call the owner may answer with "actually we still reference that".
+
   **An Archive verdict removes that document from this consolidation.** It does not go on to
   Phase 3 or Phase 4 — there is nothing to merge and nothing to condense. Handle it with
   Mode 1's archive procedure — the paragraph under **Mode 1 — Post-change governance** that
@@ -386,6 +397,13 @@ which is the self-certifying shape this skill exists to remove.
 It is filled in after Phase 4 step 7, and it is **not a percentage** — a percentage of what
 would have to be invented. It is a count against a stated denominator: *"all 34 items on
 the step-1 inventory survived"*, or *"31 of 34"* naming the three and where each went.
+
+**The denominator is the Keep and Condense items only.** The step-1 inventory deliberately
+also covers Delete sections, and those items are *supposed* to be absent from the
+consolidated file — counting them here would make "all survived" unreachable by
+construction, and a target nobody can hit is one people stop aiming at. They are accounted
+for on their own line: *"and 6 items from Delete sections, each named with where its copy
+survives or why it is going"*. Two numbers, two questions, neither one hiding in the other.
 Write the denominator, not just the verdict — *"every item I checked survived"* is true of
 one item as easily as thirty-four, so it reports your diligence rather than the document's
 fate. Anything short of all is a finding to report, never a number to round up, and never a
@@ -424,6 +442,14 @@ what you would delete.
      days". It is the troubleshooting content, and it is one line long, so it disappears
      first.
 
+   **Those two are a floor, not the boundary of what matters.** They are named because they
+   are the clauses coarse lists drop most reliably — not because a clause outside them is
+   safe. Three that fall through and are worth checking for by hand: **ordering constraints**
+   ("apply the migration before restarting the workers" — no consequence stated, so the first
+   rule does not reach it), **scope qualifiers** ("this applies to the `staging` cluster
+   only"), and **thresholds buried in prose** ("backs off up to 5 attempts"). Each is one
+   clause long, each changes what the reader does, and none announces itself.
+
    Go through **every** section — including the ones marked Delete — and write down, from
    the source:
    - Keep → one distinctive verbatim line per item in it (each gotcha, each constraint,
@@ -442,10 +468,13 @@ what you would delete.
    **What this list can and cannot do.** It catches *recall* failures — you meant to carry
    something over and did not. It cannot catch *judgment* failures: if you decided at Phase 2
    that something did not matter, it never enters the list, and step 7 will happily pass
-   without it. That gap is real and this procedure does not close it; the Phase 3 plan going
-   to a human is what covers it. Do not report step 7 passing as evidence that nothing
-   valuable was lost — report it as what it is, a check that everything you *identified* was
-   carried over.
+   without it. **That gap is real and nothing in this procedure closes it.** The Phase 3 plan
+   goes to a human, but it carries target structure and line counts — not this list — so it
+   cannot catch a misjudged item either; it is a check on the shape of the result, not on
+   what went into it. Do not report step 7 passing as evidence that nothing valuable was
+   lost — report it as what it is, a check that everything you *identified* was carried over.
+   If you want the judgment reviewed too, the only thing that does it is showing the item
+   list to someone who did not write it.
 
    One sanity check before continuing: does the item count look like the source material? A
    three-page runbook that yields four items means you skimmed it — and a thin list is
@@ -664,7 +693,16 @@ correctly returns nothing — that is the condensation working, not content loss
 | Disposition | How to show it survived |
 |---|---|
 | **Keep**, carried over as-is | Per saved item: `rg -U -F "<saved distinctive line>" <consolidated file>` → a hit |
-| **Keep**, merged with another section | A verbatim search will miss — merging two sections that state the same constraint in different words produces a third phrasing, and that is the point of Mode 2. Use the Condense method below. **Do not paste the original sentences back in to make the search go green**: that reinstates the duplication you were removing. |
+| **Keep**, merged with another section — **only if the merge was recorded before the rewrite** (in the Phase 3 plan or the step-1 inventory) | A verbatim search will miss — merging two sections that state the same constraint in different words produces a third phrasing, and that is the point of Mode 2. Use the Condense method below. **Do not paste the original sentences back in to make the search go green**: that reinstates the duplication you were removing. |
+
+**Which of those two rows applies is decided before the rewrite, never at check time.** If you
+cannot point at a plan or inventory line saying this section was being merged, the row above
+applies and a miss is a miss. This is not bookkeeping: letting the agent whose search just
+failed pick which row it is graded by converts a hard verbatim gate into a soft one, and it
+converts it *only in the cases where it just caught something*. The failure it lets through
+is not merging — it is a plain Keep section quietly reworded during the rewrite, its
+consequence clause dropped, relabelled "merged" so the softer method returns a hit on the
+weakened sentence.
 | **Condense** | Per saved claim (each constraint, number, condition, warning): quote the line in the consolidated file that carries it. A claim you cannot point to was dropped, whatever the prose length says. |
 | **Delete** | Per saved item: where the surviving copy is, or — if there is none — the reason it is going. "It looked redundant" is not a reason; naming what was in it is. |
 
