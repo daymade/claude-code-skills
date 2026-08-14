@@ -658,7 +658,15 @@ set -uo pipefail
 PROBLEMS=()
 
 # 1. Every installed hook parses and its symlink resolves.
-for h in "$HOME"/.claude/hooks/*.sh; do
+shopt -s nullglob          # else an EMPTY hooks dir yields the literal glob and the
+                           # loop below reports it as a dangling symlink — a false
+                           # alarm at exactly the moment (fresh profile, reinstalled
+                           # ~/.claude) this check matters most. Measured.
+for h in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/hooks/*.sh; do    # active profile, not
+                           # hardcoded $HOME — the settings check below already uses
+                           # CLAUDE_CONFIG_DIR, and rule 4's whole point is that each
+                           # profile is its own config home. Checking one profile's
+                           # scripts against another's settings answers nothing.
   [ -e "$h" ] || { PROBLEMS+=("dangling symlink: $h"); continue; }   # -e follows the link
   bash -n "$h" 2>/dev/null || PROBLEMS+=("syntax error: $h")
 done
@@ -919,8 +927,13 @@ Three things worth calling out beyond what the comments above already say:
 }
 ```
 
-Note `Stop` (like `SessionStart`) has no `matcher` key — it isn't scoped to a
-tool, so its `hooks` array sits directly under the event.
+Note `Stop` has no `matcher` key — it isn't scoped to a tool, so its `hooks` array
+sits directly under the event. **`SessionStart` is different and this file used to
+get it wrong**: it takes a matcher, just not on a tool name — it matches on *how the
+session started* (`startup`, `resume`, `clear`, `compact`, `fork`). Omitting it is
+still legal and means "all", so Pattern C below fires either way; but if you only
+want a health check at real startup and not on every `--resume`, `"matcher":
+"startup"` is how you say so.
 
 Add to an existing `matcher: "Bash"` entry's `hooks` array (don't create a second
 Bash entry). Then **converge every profile** — a guard registered only in the
