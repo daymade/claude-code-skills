@@ -85,8 +85,10 @@ run "comment-merge"  '{"tool_name":"Bash","tool_input":{"command":"echo hi # it'
 #   phantom quote (`# it's` used to glue TRIGGER into echo's args → miss).
 #   ↑ the multiline row is not optional: shlex treats newlines as whitespace, so
 #   a one-stage walker collapses the block into one segment headed by `cd` and
-#   never sees TRIGGER (pitfall #11). It only passes if your hook splits on
-#   newlines as text FIRST (Pattern A / the walker section both do).
+#   never sees TRIGGER (pitfall #11). It only passes if your hook splits into
+#   lines FIRST, shell-aware — `split_shell_lines`, which is what Pattern A and
+#   the walker section both ship. A plain text split (`cmd.split("\n")`) passes
+#   THIS row but false-blocks the `quoted-multiline` row below; run both.
 # Healthy-lookalike cases (want 0) — THESE are what prove you don't false-block:
 run "quoted-multiline" '{"tool_name":"Bash","tool_input":{"command":"echo \"line1\nTRIGGER was the culprit\nline3\""}}' 0
 #   ↑ quoted-multiline is the trap sibling of "multiline": a text-level line
