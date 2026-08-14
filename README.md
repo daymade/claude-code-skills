@@ -215,7 +215,7 @@ Installed names render as `daymade-claude-code:<skill>` under a single shared na
 claude plugin install daymade-financial@daymade-skills
 ```
 
-This suite bundles the skills that fetch and analyze financial data — Bigdata.com (RavenPack) structured financials and sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite orchestration, A-share news and policy aggregation, and A-share pharmaceutical sector daily reporting:
+This suite bundles the skills that fetch and analyze financial data — Bigdata.com (RavenPack) structured financials and sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite orchestration, A-share news and policy aggregation, A-share pharmaceutical sector daily reporting, and structured devil's-advocate pressure-testing of investment theses:
 
 ```text
 /daymade-financial:bigdata-skill
@@ -223,6 +223,7 @@ This suite bundles the skills that fetch and analyze financial data — Bigdata.
 /daymade-financial:gangtise-copilot
 /daymade-financial:ashare-news-fetcher
 /daymade-financial:pharma-daily-report
+/daymade-financial:devils-advocate
 ```
 
 Installed names render as `daymade-financial:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all members.
