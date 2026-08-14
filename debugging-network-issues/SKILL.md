@@ -1,7 +1,7 @@
 ---
 name: debugging-network-issues
 description: >-
-  Evidence-driven investigation for network, streaming, and protocol-layer bugs where symptoms don't match the obvious cause. Use when debugging connection resets (ECONNRESET, HTTP/2 RST_STREAM, INTERNAL_ERROR), SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, client-side proxy/VPN/TUN misrouting, CNAME-based proxy rule overrides, or symptoms like "socket closed unexpectedly", "stream interrupted", "fails after N seconds", "works sometimes but not always", "upstream silent for X seconds", ERR_CONNECTION_CLOSED, SSL_ERROR_SYSCALL, or certificate-verification errors (UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, wrong-site certificate) that hit some domains while others work. Also use for LAN-layer mysteries: identifying an unknown device (mystery IP/MAC/banner), devices silenced by a subnet change, or a host declared "dead" that is alive on another segment. Applies falsification-first layered isolation to pin down the responsible network layer instead of stacking assumptions.
+  Evidence-driven investigation for network, streaming, and protocol-layer bugs where symptoms don't match the obvious cause. Use when debugging connection resets (ECONNRESET, HTTP/2 RST_STREAM, INTERNAL_ERROR), SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, client-side proxy/VPN/TUN misrouting, CNAME-based proxy rule overrides, or symptoms like "socket closed unexpectedly", "stream interrupted", "fails after N seconds", "works sometimes but not always", "upstream silent for X seconds", ERR_CONNECTION_CLOSED, SSL_ERROR_SYSCALL, or certificate-verification errors (UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, wrong-site certificate) that hit some domains while others work. Also use for throughput collapse where nothing errors at all — "it works, it's just slow", transfers crawling, downloads truncating. Also for LAN-layer mysteries: unknown device (mystery IP/MAC/banner), devices silenced by a subnet change, or a host declared "dead" that is alive on another segment.
 ---
 
 # Debugging Network Issues
@@ -21,6 +21,7 @@ Before applying the general methodology below, check whether the symptom points 
 | Windows App / AVD / W365 RDP connection quality: WebSocket instead of UDP Shortpath, high RTT, STUN/TURN interference                                                                                    | **windows-remote-desktop-connection-doctor** |
 | Client-side proxy / VPN / TUN misrouting: one specific site fails with `ERR_CONNECTION_CLOSED` or `SSL_ERROR_SYSCALL`, other sites work, DNS returns fake/TUN IPs, and adding a PROXY rule did not help | **this skill** — read [references/case-proxy-tun-cname-override.md](references/case-proxy-tun-cname-override.md) first |
 | TLS certificate-verification errors (`UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`, a cert for the wrong site) or mid-handshake EOFs on **every** DIRECT-routed/domestic domain at once, while proxied domains work — and any proxy health watchdog still reports green                                        | **tunnel-doctor** (TUN DIRECT split-brain step) |
+| **Nothing errors — it is just slow.** Every request returns 200, latency and health checks look fine, but transfers crawl, bulk jobs overrun their estimates, or files arrive truncated | **this skill** — go straight to [Step 0.7](#step-07-throughput-collapse--when-nothing-errors-and-everything-is-slow); the error-driven steps have nothing to bite on |
 
 If none match — or you tried a domain skill and the evidence points elsewhere — continue below. The methodology generalizes to any multi-layer system.
 
@@ -44,6 +45,8 @@ If the answer is "nothing" or "I cannot think of one", the hypothesis is unfalsi
 
 Multi-hop systems (client → CDN → LB → reverse proxy → app → upstream) concentrate bugs at the seams between layers. When a symptom could plausibly come from several layers, **do not reason about which layer; test**. The canonical technique: run the same logical request through three or more paths that differ by exactly one hop, then compare where the symptom appears. This resolves in minutes what stacking hypotheses cannot resolve in hours. See [references/layered-isolation-experiment.md](references/layered-isolation-experiment.md).
 
+**The same technique isolates capacity, not just correctness.** When the symptom is a rate rather than an error, vary the *stack* instead of the *hop*: measure the same direction over two channels that share the network path but share no application code. It is the cheapest way to stop tuning an application that was never the bottleneck. Resist compressing the reading into "agreement means the path" — that holds only when both channels are *slow*; two fast channels mean the probe failed to reproduce the symptom and prove nothing at all. See Step 0.7 for how to read each of the four outcomes.
+
 ### 4. Counter-review before committing
 
 Before committing to a root cause or shipping a fix, have independent reviewers challenge the conclusion — not confirm it. Agents are good at surfacing risks a single investigator did not think of; they are bad at weighing them. Apply the four-question filter (see [references/counter-review-pattern.md](references/counter-review-pattern.md)) to every finding before it shapes action.
@@ -54,6 +57,10 @@ Monitors watch the paths their authors thought to probe. Multi-plane systems —
 
 Before accepting "the monitor says it's healthy" as evidence, ask: **which exact path does that check exercise?** Its green counts as evidence for that path alone. Enumerate the planes the system actually forwards or serves, and probe the failing one directly — the check that would have caught the outage is usually one curl away.
 
+**A check also certifies only the *quantity* it is large enough to measure.** Path coverage is one axis; scale is the other, and it is the one that hides throughput collapse. A liveness probe returns a few hundred bytes, so its timing is dominated by handshake and round-trip — in the case study it answered in 40 ms all day, unchanged, across a 100× swing in the link's actual capacity, and it was not lying: it genuinely did what it measures. Same for `ping`/RTT, which times a small packet's round trip and says nothing about capacity.
+
+The practical rule: **a probe measures the link only once transfer time dominates its total time.** So size it by the answer you need, not by convenience — if a probe returns in well under a second, essentially all of that was setup and you have measured setup. Sidestep the sizing question entirely by budgeting *time* instead of bytes (stream for N seconds, divide what arrived by N), which is what Step 0.7's commands do and why they stay cheap on a link that is already crawling. Extend the question to: **which path, and at what scale?**
+
 ## Workflow
 
 Copy this checklist into the investigation notes and check items off:
@@ -63,6 +70,7 @@ Investigation Progress:
 - [ ] Step 0:   Scope the symptom (exact error, exact times, who, who-not, what changed)
 - [ ] Step 0.5: Verify the premise — does direct evidence show the symptom is actually happening?
 - [ ] Step 0.6: **For large POST bodies: distinguish upload-timeout from processing-timeout** (see recipe below)
+- [ ] Step 0.7: **If nothing errors and it is just slow: measure a rate, then two-channel it** (see recipe below)
 - [ ] Step 1:   Gather direct evidence at every hop before hypothesizing
 - [ ] Step 2:   Frame ≥3 hypotheses; for each, name (a) what falsifies it, (b) which layer boundary the intervention would target
 - [ ] Step 3:   Design a decisive experiment (for network: layered isolation)
@@ -84,6 +92,8 @@ A tight scope is the difference between a 20-minute investigation and a 5-hour o
 - **What changed recently** (deploys, config, upstream dependencies, client versions)
 
 Distinguish symptom from diagnosis. "Slow" is not a symptom. "Request took 130.898s then returned HTTP/2 INTERNAL_ERROR" is.
+
+**But do not let that sentence route a real incident into the bin.** It demands quantification, not an error code — and a whole failure family quantifies as a *rate* with no error code anywhere: every request returns 200, nothing resets, and the system is still unusable. "Slow" becomes a symptom the moment you write it as **bytes per second over a stated payload size** ("8.4 MB in 95 s = 0.09 MB/s, HTTP 200 throughout"). Once you have that number, Step 0.7 has a decisive experiment for it. What stays out of scope is the *unmeasured* complaint — "users say it feels slow" — which is Step 0.5's problem, not this one.
 
 ### Step 0.5: Verify the premise
 
@@ -157,6 +167,71 @@ Interpretation: the proxy kept the connection for 125 s, read 4.1 MB of a 6 MB b
 ```
 
 Interpretation: full body uploaded, but backend did not respond before proxy timeout → backend/processing problem.
+
+### Step 0.7: Throughput collapse — when nothing errors and everything is slow
+
+The recipe above (0.6) handles a *timeout* — an error code you can grep for. This one handles the family with **no error at all**: every request succeeds, every health check is green, and the system is unusable because bytes arrive at a fraction of the expected rate. It is the failure mode most likely to be misdiagnosed for hours, because the entire error-driven toolkit has nothing to bite on.
+
+**Why the usual signals go green** — each of these was observed simultaneously with a 100×-degraded link:
+
+| Signal | What it read | Why it is green anyway |
+| --- | --- | --- |
+| HTTP status | `200` on everything | Slow is not an error; the response completes, just late |
+| Round-trip latency | 12 ms | RTT measures a small packet's round trip; it is **not** a capacity measurement |
+| Liveness/health endpoint | `0.04 s` | Its response is handshake-sized, so its timing is all RTT and none of it transfer. **A probe that finishes before the link becomes the limiting factor cannot measure the link** — see Principle 5 |
+| Transport status field | `active; direct <endpoint>` | Reports the **path type**, not the path's capacity — see trap 16 |
+
+So the first move is to stop reading status and **measure a rate**.
+
+**The decisive experiment: two independent channels, same direction, same time budget.**
+
+This is Principle 3's layered isolation applied to capacity instead of correctness. Pick two channels that reach the same host over the same network path but share **no application code** — the point is that a result they agree on cannot be caused by either one's internals.
+
+Both commands below are **time-budgeted, not size-budgeted**: they stream for a fixed number of seconds and report whatever arrived. That keeps the probe's cost constant no matter how bad the link is — a fixed 8 MB payload took under a second on the healthy path in the case study and about 90 seconds on the degraded one, and a degradation deeper than that scales the wait without bound, exactly when you can least afford it. It is also why the two numbers are comparable: same seconds, same direction, both measured **at the receiving end**.
+
+```bash
+BUDGET=20
+
+# Channel A — the service under suspicion. Point it at the largest object you can name.
+# --max-time aborts mid-transfer; -w still prints, and curl exits 28. That is a
+# successful measurement, not a failure — read the rate, ignore the exit code here.
+curl -s -o /dev/null --max-time "$BUDGET" \
+  -w 'A: %{size_download} B in %{time_total}s = %{speed_download} B/s\n' \
+  "http://<host>:<port>/<a-large-object>"
+
+# Channel B — a completely different stack to the same host. `cat /dev/zero` streams
+# until cut off, so the byte count is decided by the link, not by the payload size.
+B=$(timeout "$BUDGET" ssh <host> 'cat /dev/zero' 2>/dev/null | wc -c)
+echo "B: $B B in ${BUDGET}s = $((B / BUDGET)) B/s"
+```
+
+> **Do not substitute `dd`'s own summary line for channel B's number.** `dd if=/dev/zero … ` reports how fast it wrote into *its stdout*, which for a piped SSH transfer is absorbed by the pipe and SSH's channel window — it measures the local write, not the wire, and it never sees connection setup. Measured on the case study's healthy path, raw SSH moved 33.6 MB end-to-end at 44 MB/s while `dd` self-reported 54.9 MB/s on the same transfer. A sender-side rate is an upper bound on the wire rate, never a measurement of it. Time the whole invocation from the receiving end, as above.
+
+**Expect the two channels to disagree in absolute terms — that is not a problem.** On the same healthy path, raw SSH measured ~44 MB/s while fetches through the media service measured 11–16 MB/s, because channel A pays for the service's own read and encode work on top of the wire. This is why the decision rule below is about **order of magnitude**, not equality: what you are testing is whether both channels sit in the same band, not whether they print the same number. Two channels that differ by 3× on a healthy link and both collapse to 0.1 MB/s on a degraded one have told you exactly what you needed.
+
+**Before reading the table, confirm both probes actually ran.** This is trap 17 applied to your own recipe, and it is the easiest way to get a confidently wrong answer here: a probe that never transferred anything produces a *low or zero rate*, which the table below reads as "slow" and routes straight to "the path" — a conclusion drawn from a measurement that never happened. Two checks, both cheap:
+
+- **Channel A**: is `size_download` close to the object's real size? A DNS failure (curl exit 6), a refused connection (exit 7), or a 404 error page all return quickly and tiny — which can even read as *fast* and land you in the wrong row from the other direction. Only exit 28 (`--max-time` fired mid-transfer) means "the measurement is good, the object was just bigger than the budget".
+- **Channel B**: is `$B` plausibly non-zero? `2>/dev/null` in that command hides SSH's own errors, so a host you cannot authenticate to yields `B=0` silently. Re-run it once without `2>/dev/null` if the number looks wrong.
+
+Read the result as a four-way test — all four outcomes are reachable, and three of them tell you to stop what you were about to do:
+
+| Channel A | Channel B | Conclusion |
+| --- | --- | --- |
+| slow | slow | **The path.** Two unrelated stacks cannot be slow for unrelated reasons at the same rate. Stop tuning the application — nothing inside it will help. Go to "what changed about the path" below. |
+| slow | fast | **The application/service.** The path can clearly move bytes; A cannot. You now have a working control to bisect against. |
+| fast | slow | **Neither conclusion yet — your control is the anomaly.** SSH-specific cost (cipher on a weak CPU, a hop that shapes SSH), or B crossed a different path. Do not conclude "the service is fine"; replace B with a third stack and re-run. |
+| fast | fast | **The probe did not reproduce the symptom.** Do not declare the incident closed. The real workload differs in some dimension you have not replicated — direction (upload vs download), concurrency, object size, or time of day. Change one of those and re-measure before believing the green result. |
+
+**How close is "the same rate"?** Treat agreement within **~20%** as the same rate for this purpose — the two channels differ in framing, encryption and per-object overhead, so exact equality is not expected and not required. The judgement is order-of-magnitude: two stacks reading 0.09 and 0.11 MB/s agree; 0.1 and 12 MB/s do not. If the gap is between ~20% and ~2×, treat it as unresolved and widen the budget or the object size rather than picking a side.
+
+**Pairing channel B when there is no SSH.** The requirement is only *same host, same direction, no shared application code* — SSH is convenient, not special. Any of these works: a second unrelated service on the host (a metrics endpoint, an object store, a static file server), a container-runtime transfer (`docker cp` from that host), a raw throughput tool if you can run one on both ends (`iperf3 -c`), or the host's own package/artifact mirror. What does **not** count is a second endpoint of the same service — that shares the code you are trying to exonerate, so agreement proves nothing.
+
+**Then find what changed about the path.** Once the path is implicated, the variable is usually topology, not hardware: which route the traffic actually takes today versus yesterday. For mesh VPNs (Tailscale, Nebula, ZeroTier) and split-tunnel proxies, the same logical address can be served by a LAN-direct path, a WAN-direct path, or a relay — with order-of-magnitude different capacity and **no change in the status field or the address you connect to**. Ask the transport to report the path it is actually using (`tailscale ping <host>` prints the endpoint and whether the reply came via a relay).
+
+If no prior known-good measurement exists to compare against — the common case in a first incident — you can still make progress without one, because the question "did this change?" has a cheaper substitute: **measure the same path from somewhere else.** A second client on a different network, or the host measuring *itself* over loopback, brackets the problem without any history. Then record today's number as the baseline you did not have; the second occurrence of this incident is much cheaper than the first, and only if someone writes the number down.
+
+**Finally, audit what the wrong assumption already broke.** A degraded link does not just make things slow — it silently invalidates every timeout you calibrated on the fast path, and those timeouts produce *corrupt artifacts that look like successes*. Before declaring the incident over, re-verify anything transferred during the degraded window; see trap 18 and Step 7.
 
 ### Step 1: Gather direct evidence at every hop
 
@@ -321,7 +396,13 @@ Future investigators — including future self — will read this to avoid the s
 14. **Unreachable on one segment ≠ dead.** A probe certifies only the L2 domain it ran on. After a router swap, the old router answered no ARP on Ethernet — "dead" — while its Wi-Fi AP kept broadcasting and serving DHCP, so devices with stored credentials silently joined a network with no WAN. Verify absence from the target's own vantage point (its other interfaces, e.g. `ipconfig getifaddr en1` on the device itself) before declaring it gone; and after any topology change, physically power off retired gear — a "dead" router that still serves DHCP is a trap that keeps collecting devices.
 15. **Topology changes orphan manual-IP devices.** DHCP clients follow the new network automatically; manual/static-IP devices keep their old gateway and DNS and become silent islands — reachable from nothing, able to reach nothing. macOS makes this sneakier with "Manually Using DHCP Router Configuration" (manual IP + router learned from old DHCP): the address looks deliberate while the gateway is stale. After any router/subnet change, sweep before declaring the migration done: ARP entries on the old subnet, mDNS names resolving to old-subnet addresses, and every known static-IP box (servers, NAS, printers) re-verified for gateway and DNS.
 
-See [references/cognitive-traps.md](references/cognitive-traps.md) for extended examples including this case study.
+16. **Reading a path-*type* field as a path-*capacity* field.** Mesh-VPN and proxy status lines report how a peer is reached — `direct` vs `relay`, and the endpoint address. That answers "is it hole-punched?", never "how fast is it?" The two come apart hard: in the incident behind this trap the status line read `active; direct <endpoint>` in **both** a 0.09–0.11 MB/s state and an 11–16 MB/s state — same field, same word, two orders of magnitude apart — because the slow one was a direct path across the WAN and the fast one was a direct path across the LAN. RTT was no better a predictor: the *slower* state had the *lower*-looking 12 ms, the faster one 4 ms. Both are real measurements of something; neither measures capacity. Measure the rate (Step 0.7) and treat the status field as topology trivia.
+
+17. **Blaming the far host for what your own probe did.** Before concluding "the server is slow", confirm the request you sent is the request you meant to send. A malformed identifier often takes a *slower* path than a valid one — a lookup miss triggers a full scan, then returns an error — so a broken probe manufactures exactly the "the other end is struggling" signature you are looking for. Real instance: a Windows-style object key (`…\archive\…`) was interpolated through a shell that ate `\a` as a BEL byte; the corrupted key missed every index, the service scanned for ~21 seconds, and returned a 17-byte `404`. Read as "21 seconds to return nothing — the host is overloaded", it nearly redirected the whole investigation. The tell is the payload size: **21 seconds to deliver 17 bytes is not a bandwidth symptom**, it is a server-side scan, and a scan for something that does not exist is usually your key, not their disk. Rebuild the probe without the shell in the path (a script with an argument vector) and re-measure before attributing anything.
+
+18. **A wrong capacity assumption silently corrupts artifacts and passes the success check.** Degraded throughput does not stay contained as "slow" — it invalidates every timeout calibrated on the healthy path, and a transfer killed by *your own* timeout leaves a truncated file behind, not an error. Whether you notice depends entirely on what your success check measures — and a *plausible-looking* size floor does not save you. In the incident behind this trap the fetch loop checked `HTTP 200 && bytes > 1000`, which sounds like a real integrity check, and it passed **all 35** downloads while 14 of them were truncated. A 180-second cap that was generous at the healthy rate was impossible at the degraded one; the killed transfers still carried a `200`, because the status line arrives long before the body stops, and they still cleared 1000 bytes, because a truncated multi-megabyte file is enormous compared to any threshold you would think to write. **No byte floor can distinguish "complete" from "most of it"** — that is a property of the file's format, not of its size. Two durable fixes: **check the exit status of the transfer, not just the response status** (an HTTP 200 describes the response's beginning; only the exit code describes its end), and **verify the artifact by its own format** — a container with a terminator (`%%EOF`, `IEND`, a closing frame) can prove its own completeness. That check is also how you audit the blast radius afterwards: files carrying the terminator and files the parser accepted matched exactly, 21 and 21, which turned "some downloads may be bad" into a precise list.
+
+[references/cognitive-traps.md](references/cognitive-traps.md) carries extended write-ups for traps 1–12 (rescue-cycle warnings, field-semantic examples). Traps 13–18 are documented in the case studies they came from rather than there: 13–15 in the LAN/topology material, 16–18 in [references/case-throughput-collapse-no-errors.md](references/case-throughput-collapse-no-errors.md).
 
 ## Client-side proxy / VPN / TUN misrouting
 
@@ -351,13 +432,15 @@ If all of the above point to a proxy client that resolves a bad CNAME or relies 
 
 ## Case studies
 
-Three canonical cases illustrate the methodology in different failure modes:
+Four canonical cases illustrate the methodology in different failure modes:
 
 1. [references/case-sse-rst-130s.md](references/case-sse-rst-130s.md) — a 5-hour investigation where the assistant repeatedly jumped to the wrong conclusion. The right answer — Cloudflare edge HTTP/2 stream idle timeout at 126 seconds, amplified by <upstream-provider> not emitting SSE ping during <model-name> tool_use generation — surfaced in 10 minutes once a subagent designed a 3-path layered isolation experiment with a mock idle upstream.
 
 2. [references/case-cloudflare-524-upload.md](references/case-cloudflare-524-upload.md) — a Cloudflare 524 on `<api-domain>/<openrouter-path>` where a ~6 MB POST body took longer to upload from the US client to the <origin-region> origin than Cloudflare's default origin read timeout allowed. The key insight came from comparing `bytes_read` (4.1 MB) to `Content-Length` (6.0 MB) and confirming the request never reached `<upstream-capture-service>` or `<new-api-container>`. This case is the source of the upload-vs-processing recipe and the "edge timeouts masquerading as client aborts" trap above.
 
 3. [references/case-proxy-tun-cname-override.md](references/case-proxy-tun-cname-override.md) — a client-side `<proxy-client>` TUN case where `<auth-domain>` failed with `ERR_CONNECTION_CLOSED` even though explicit PROXY rules were at the top of the config. The root cause was a `DOMAIN-SUFFIX,<cname-suffix>,DIRECT` rule matching the target's CNAME chain, plus the proxy node's own DNS returning a different IP than the client's DoH query. The fix pattern uses `[Host]` mapping and `use-local-host-item-for-proxy`.
+
+4. [references/case-throughput-collapse-no-errors.md](references/case-throughput-collapse-no-errors.md) — the only case here with **no error string at all**: HTTP 200 throughout, 12 ms RTT, health endpoint at 0.04 s, and a link moving 0.09–0.11 MB/s. Three hours went into "the verification pass is slow" → "the host's uplink must be ~1 Mbps" → "it's the relay", all plausible, none verified. Two channels sharing the path but no application code (an HTTP service and plain SSH) agreed within ~20% and settled it in one command: the path, not the service. Source of Step 0.7 and traps 16–18, including how a 180 s timeout derived from the wrong rate truncated 14 of 35 downloads that all passed a `200 && bytes > 1000` check.
 
 Read these before applying this skill to an unfamiliar problem domain; the wrong-turn anatomy is the teaching.
 
@@ -371,6 +454,7 @@ Read these before applying this skill to an unfamiliar problem domain; the wrong
 - [references/case-sse-rst-130s.md](references/case-sse-rst-130s.md) — canonical case study with wrong-turn timeline
 - [references/case-cloudflare-524-upload.md](references/case-cloudflare-524-upload.md) — upload-timeout vs processing-timeout recipe
 - [references/case-proxy-tun-cname-override.md](references/case-proxy-tun-cname-override.md) — client-side proxy/TUN CNAME rule override and fix pattern
+- [references/case-throughput-collapse-no-errors.md](references/case-throughput-collapse-no-errors.md) — degraded throughput with every signal green; two-channel capacity isolation; the truncated-artifact aftermath
 
 ## Scripts
 
