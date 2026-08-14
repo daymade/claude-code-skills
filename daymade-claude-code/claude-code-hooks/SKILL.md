@@ -54,9 +54,11 @@ match tokens/patterns; it can't judge whether a design is good).
 
 - **PreToolUse** is the workhorse for stopping a *tool call* — the four types in this
   table are the ones this file teaches, not the complete set of blockable events, and
-  the reference now lists many more (`UserPromptSubmit`, `PreCompact`, `TeammateIdle`,
-  task and config events). If what you need to gate is not a tool call, check there
-  before forcing it onto PreToolUse.
+  the **official** hooks reference (docs.claude.com / code.claude.com, not the
+  `references/` files in this bundle — those cover only the four types above) now
+  lists many more blockable events, including `UserPromptSubmit`, `PreCompact`,
+  `TeammateIdle`, and task and config events. If what you need to gate is not a tool
+  call, look there before forcing it onto PreToolUse.
   `matcher` selects the tool (`Bash`, `Agent`, `WebFetch`, …) — **and how it is
   matched depends on the characters you use**: a matcher containing only letters,
   digits, `_`, `-`, spaces, `,` and `|` is compared as an **exact string** (or a
@@ -163,7 +165,28 @@ pure guard overhead and put Gatekeeper at the top of an all-day CPU ranking with
 runaway process anywhere — the fleet was fine; the *irrelevant path's* per-call cost
 was the bug (#22, with the per-guard conversion recipe and its measured floor).
 
-Two caveats before you copy the `case` line anywhere else:
+Three caveats before you copy the `case` line anywhere else — the first one is the
+difference between a fast path and a bypass:
+
+- **A coarse filter must be a SUPERSET of what you block, and a raw substring test
+  is not one.** `TRIG''GER -x` runs `TRIGGER` — bash splices the quotes away before
+  execution — but the raw event text contains no `TRIGGER` substring, so a bare
+  `case "$INPUT" in *TRIGGER*)` exits 0 and the guard never sees it. **Measured**:
+  drop this exact line into the shipped Pattern A and `TRIG''GER -x` flips from
+  exit 2 to exit 0, a full bypass — while `scripts/test_hook.sh` still reports
+  21 pass / 0 fail, because no row carries a spliced trigger. Pattern A already
+  carries the fix and the reason ("de-splice — strip quotes and backslashes — and
+  check again; a false negative is a full bypass"); a coarse filter placed *before*
+  that de-splice makes it unreachable. Two safe shapes, in order of preference:
+  **filter on something the splice cannot touch** — a JSON key or a tool name
+  (`case "$INPUT" in *'"tool_name":"Bash"'*)`), since quote-splicing lives in the
+  *command* text and cannot rewrite the event's own structure; or **de-splice
+  inside the filter** before testing (strip `"`, `'` and `\` from a copy of the
+  input, then match). Prefer the first: it needs no escaping gymnastics, and a
+  filter whose own quoting you have to get right is a filter you can get wrong
+  silently. The skeleton above is safe
+  as written only because its own detection is likewise a plain word match; the
+  moment the guard below the filter is smarter than the filter, the filter decides.
 
 - **This skeleton is fail-open on irrelevance** (`grep -qw … || exit 0`), so a
   coarse filter in front of it changes cost, not semantics. **A fail-closed guard is
@@ -206,11 +229,14 @@ false-blocks is matching on the raw command string.
   passes `scripts/test_hook.sh`**, which is **Pattern A's**. The
   [walker section](references/hook_patterns.md#the-shlex-command-position-walker) is
   a *compact* form and says so: it omits the per-wrapper valued-flag tables, so it
-  misses a target riding `timeout 5 …`, `sudo -u root …` or `nice -n 10 …` — three
-  rows the shipped harness asserts as blocks (measured: `want=True got=False` on all
-  three; Pattern A's version passes all). If that surprises you mid-run, note the
-  harness's failure HINT points at event shape and JSON quoting first, so it will
-  send you looking in the wrong place for this one. A quoted
+  misses a target riding a **valued-flag wrapper** — measured, it returns "not in
+  command position" for `timeout 5 TRIGGER`, `sudo -u root TRIGGER` and
+  `nice -n 10 TRIGGER`, while Pattern A's version catches all three. (Bare
+  `sudo TRIGGER` is fine in both — it is the wrapper's *own* flag taking an argument
+  that the compact table doesn't know to skip.) Only one of those shapes is in the
+  shipped harness, so the run you actually see is **20 pass / 1 fail on
+  `wrapper-timeout`** against 21/0 for Pattern A's; the other two fail silently
+  because no row covers them. A quoted
   `"a|TRIGGER|b"` stays **one token**, so a regex argument is never mistaken for
   a command. Then check whether your target is in a **command position**
   (token[0], or right after a `;`/`&&`/`||`/`|` separator, skipping `VAR=val`
@@ -334,10 +360,15 @@ skeleton: Pattern C in [references/hook_patterns.md](references/hook_patterns.md
     open `/dev/tty`**" (`terminalSequence` is the documented replacement for writing
     to it). So a "two-channel" gate built that way is one channel plus dead code,
     and on a box with no GUI session the gate can never be approved by anyone.
-    Corroborating local measurement: across 1,801 entries in a production guard's
-    channel-tagged audit log, the tty channel confirmed **zero** releases while the
-    dialog channel accounted for 361. (The log shows tty never *served*; the docs
-    are what establish it cannot.) Keep the dialog; if you need a non-macOS gate,
+    Consistent with local observation, though read the boundary carefully: in one
+    setup's shared audit log — 1,801 entries, several guards writing to it, three of
+    which implement a tty channel — **360 lines carry a channel tag (236 dialog
+    confirmations, 124 declines or timeouts) and not one line of any kind names the
+    tty channel.** That means the tty branch was never *entered*, which on macOS is
+    what you would predict anyway, because the dialog answers first and short-
+    circuits it. So the log shows nothing here ever depended on tty; it is the
+    documentation, not this measurement, that establishes tty cannot work at all.
+    Keep the dialog; if you need a non-macOS gate,
     you need a channel this file does not yet have a verified answer for.
   - ⚠️ **A human gate that outlives the hook timeout fails OPEN.** Hook `command`
     timeout defaults to 600s (30s on `UserPromptSubmit`), and a timed-out hook
@@ -691,8 +722,19 @@ skeleton (which ships `set -uo pipefail`, per the `-e`-vs-trap bullet), point
 — `N` never persists past 1, the ceiling is never reached, and #27 already rules out
 the harness cap as a backstop once remediation involves tool calls. The failure
 direction here is decided entirely by a `set` line the snippet does not carry, so
-**write the `|| exit 0` guard into the state read itself** rather than relying on
-the shell options of whatever skeleton it lands in.
+**put the guard on the step that actually fails — the write — and never on the
+read**:
+
+```bash
+printf '%s' "$N" > "$CNT" 2>/dev/null || exit 0   # can't persist ⇒ can't terminate
+```
+
+The read is already guarded (`cat … 2>/dev/null || echo 0`) and **must stay that
+way**: a missing counter file is the normal first run, so `|| exit 0` on the read
+silences the hook forever in a perfectly healthy environment. Measured, five
+consecutive runs per variant: guarding the write gives `2,2,2,0,0` on a writable
+`TMPDIR` and `0,0,0,0,0` on an unwritable one — correct in both; guarding the read
+gives `0,0,0,0,0` **in both**, i.e. a guard that never fires at all.
 
 **Prose in the demand text does not substitute for a converging predicate.** A
 hook whose message says "if you judge this unnecessary, just finish again" still
@@ -840,8 +882,8 @@ was building hooks that week. And scan the block list specifically for **ops act
 its own removal cannot be switched off from inside a session. The nearest recorded case is
 #25, where the guard blocked a **read-only** `git config core.hooksPath` query — the same
 blind spot one step short of self-lockout. Once a guard HAS locked you out, the escape
-routes are in #1's list (edit `settings.json` with the Edit/Write tool, which never fires a
-`Bash` matcher; or start a session with a different `CLAUDE_CONFIG_DIR`).
+routes are in **#3**'s list (edit `settings.json` with the Edit/Write tool, which never
+fires a `Bash` matcher; or start a session with a different `CLAUDE_CONFIG_DIR`).
 
 Sizing, so this doesn't read as a research project: one harvest plus one loop, minutes of
 wall time.
