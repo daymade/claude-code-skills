@@ -23,7 +23,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 
 # Multi-home discovery lives in the bundled `_core` package — the single source
@@ -340,6 +340,38 @@ def discover_codex_rollouts(codex_home: Path) -> List[Path]:
     if archived_dir.is_dir():
         rollouts.extend(sorted(archived_dir.glob("*.jsonl")))
     return rollouts
+
+
+def file_content_digest(path: Path) -> Optional[str]:
+    """SHA-256 over a file's bytes, or ``None`` when it cannot be read.
+
+    ``None`` means "no information" and must make the caller fall through to
+    the normal full parse — never to treating two files as identical.
+    """
+    digest = hashlib.sha256()
+    try:
+        with open(path, "rb") as handle:
+            for block in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(block)
+    except (OSError, ValueError):
+        return None
+    return digest.hexdigest()
+
+
+def repeated_copy_sizes(copies: List[Dict[str, Any]]) -> set:
+    """Byte sizes that occur more than once among a session's copies.
+
+    Only these are worth hashing: a size that appears once cannot have a
+    byte-identical twin, so single-copy sessions pay nothing for the
+    duplicate-copy optimisation.
+    """
+    sizes = Counter()
+    for item in copies:
+        try:
+            sizes[item["path"].stat().st_size] += 1
+        except OSError:
+            continue
+    return {size for size, count in sizes.items() if count > 1}
 
 
 def search_codex_rollouts(
@@ -936,6 +968,26 @@ class SessionAnalyzer:
                     "updated_at": ref["updated_at"],
                 }
             ]
+            # Archive copies of one session are routinely byte-identical: a
+            # registered long-term backup snapshots the same .jsonl every run,
+            # so one session commonly carries a dozen copies with a single
+            # distinct content (measured on a real project: 46 of 60 sampled
+            # multi-copy sessions held 13 copies and exactly 1 content; that
+            # redundancy was 85% of the corpus's bytes). Parsing all of them
+            # costs Nx for one session's worth of records — _record_identity
+            # dedupes them straight back down afterwards.
+            #
+            # A byte-identical copy therefore has a fully predictable outcome:
+            # every record identity is already registered by the twin that ran
+            # first, so it can add no new mentions, no new untimed records and
+            # no new timestamps. Only its own source label is new. Reuse that
+            # conclusion instead of re-parsing.
+            #
+            # Hash only sizes that actually repeat — a unique size cannot have
+            # an identical twin, so single-copy sessions pay nothing.
+            sizes_worth_hashing = repeated_copy_sizes(copies)
+            digest_had_match: Dict[str, bool] = {}
+
             for copy in copies:
                 session_file = copy["path"]
                 source = copy["source"]
@@ -945,6 +997,29 @@ class SessionAnalyzer:
                     # above for why skipping it here (no date window active)
                     # cannot under-count anything.
                     continue
+
+                copy_digest: Optional[str] = None
+                try:
+                    copy_size = session_file.stat().st_size
+                except OSError:
+                    copy_size = None
+                if copy_size in sizes_worth_hashing:
+                    copy_digest = file_content_digest(session_file)
+                if copy_digest is not None and copy_digest in digest_had_match:
+                    if digest_had_match[copy_digest]:
+                        # Same bytes as a copy already processed for this
+                        # session: it matched, so this one does too, and every
+                        # one of its records was already counted.
+                        matching_source_labels.add(source.display_label)
+                        matching_copies.append(
+                            {
+                                "path": session_file,
+                                "source": source,
+                                "new_mentions": 0,
+                            }
+                        )
+                    continue
+
                 copy_had_match = False
                 copy_new_mentions = 0
                 copy_untimed_records: set[str] = set()
@@ -1049,6 +1124,8 @@ class SessionAnalyzer:
 
                 excluded_untimed_from_prior_copies.update(copy_untimed_records)
                 matched_records_from_prior_copies.update(copy_matched_records)
+                if copy_digest is not None:
+                    digest_had_match[copy_digest] = copy_had_match
                 if copy_had_match:
                     matching_copies.append(
                         {
