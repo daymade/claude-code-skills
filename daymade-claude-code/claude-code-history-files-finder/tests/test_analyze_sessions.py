@@ -19,6 +19,20 @@ sys.path.insert(0, str(SKILL_DIR / "scripts"))
 from _core.text import keywords_are_raw_byte_safe  # noqa: E402
 
 
+def _load_analyze_module():
+    """Import analyze_sessions.py in-process to unit-test its helpers.
+
+    The rest of this suite drives the CLI as a subprocess, which cannot reach
+    module-level functions.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("analyze_sessions_under_test", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def write_jsonl(path: Path, records: list[object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
@@ -297,6 +311,103 @@ class SessionAnalyzerTests(unittest.TestCase):
         )
         self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
         self.assertIn("excluded 2 record(s) without an internal timestamp", default_run.stdout)
+
+    def test_repeated_copy_sizes_flags_only_actual_duplicates(self) -> None:
+        """Only sizes that repeat are worth hashing — a unique size cannot
+        have a byte-identical twin, so single-copy sessions must pay nothing
+        for the duplicate-copy skip."""
+        module = _load_analyze_module()
+        base = project_dir(self.active_home, self.workspace)
+        same_a, same_b, unique = base / "a.jsonl", base / "b.jsonl", base / "c.jsonl"
+        same_a.write_bytes(b"x" * 100)
+        same_b.write_bytes(b"y" * 100)      # same size, different bytes
+        unique.write_bytes(b"z" * 55)
+        flagged = module.repeated_copy_sizes(
+            [{"path": same_a}, {"path": same_b}, {"path": unique}]
+        )
+        self.assertEqual(flagged, {100})
+        # Same size is not same content: the digest must tell them apart, or
+        # the skip would drop a genuinely different copy's records.
+        self.assertNotEqual(
+            module.file_content_digest(same_a), module.file_content_digest(same_b)
+        )
+        self.assertEqual(
+            module.file_content_digest(same_a), module.file_content_digest(same_a)
+        )
+        # Unreadable input degrades to "no information", never to "identical".
+        self.assertIsNone(module.file_content_digest(base / "missing.jsonl"))
+
+    def test_byte_identical_copies_keep_output_identical(self) -> None:
+        """A registered archive re-snapshots the same .jsonl every run, so one
+        session routinely carries many byte-identical copies (measured on a
+        real project: 46 of 60 sampled multi-copy sessions had 13 copies and
+        exactly 1 distinct content, and that redundancy was 85% of the
+        corpus's bytes). Parsing each copy costs Nx for one session's worth of
+        records, which _record_identity then dedupes straight back down.
+
+        Reusing a byte-identical copy's conclusion must be invisible in the
+        output: the mention count must not double, and the skipped copy must
+        still be reported with its own source label — that label is the one
+        piece of state a reused conclusion does not already carry."""
+        session_id = "77777777-7777-4777-8777-777777777777"
+        records = [
+            user_record(
+                session_id, self.workspace, "has the target keyword", "2026-04-15T00:00:00Z"
+            ),
+        ]
+        active_copy = project_dir(self.active_home, self.workspace) / f"{session_id}.jsonl"
+        archive_copy = project_dir(self.archive_home, self.workspace) / f"{session_id}.jsonl"
+        write_jsonl(active_copy, records)
+        write_jsonl(archive_copy, records)
+        self.assertEqual(
+            active_copy.read_bytes(),
+            archive_copy.read_bytes(),
+            "fixture must produce byte-identical copies for this test to exercise the skip",
+        )
+
+        result = self.run_cli(
+            "search", str(self.workspace), "target keyword",
+            "--history-sources", str(self.manifest),
+        )
+        # Counted once, not once per copy.
+        self.assertIn("Total mentions: 1", result.stdout)
+        # The skipped copy must still contribute its own source label. Anchor
+        # on the whole line: a bare "full-backup" also appears in the
+        # "Searching N session(s) across ..." banner, so it would pass even
+        # with the label handling removed entirely.
+        self.assertIn(
+            "Match sources: active:main, archive:full-backup", result.stdout
+        )
+        # ...and still be listed as a copy.
+        self.assertIn("Other matching copies:", result.stdout)
+        self.assertIn("[archive:full-backup]", result.stdout)
+
+    def test_differing_copies_are_both_parsed(self) -> None:
+        """The skip is keyed on a content hash, so copies that differ — an
+        archive snapshot taken before the session grew — must both be parsed
+        and their distinct records merged, not collapsed by size or name."""
+        session_id = "88888888-8888-4888-8888-888888888888"
+        shared = user_record(
+            session_id, self.workspace, "has the target keyword", "2026-04-15T00:00:00Z"
+        )
+        newer = user_record(
+            session_id, self.workspace, "another target keyword line", "2026-04-16T00:00:00Z"
+        )
+        write_jsonl(
+            project_dir(self.archive_home, self.workspace) / f"{session_id}.jsonl",
+            [shared],
+        )
+        write_jsonl(
+            project_dir(self.active_home, self.workspace) / f"{session_id}.jsonl",
+            [shared, newer],
+        )
+        result = self.run_cli(
+            "search", str(self.workspace), "target keyword",
+            "--history-sources", str(self.manifest),
+        )
+        # Both records counted once each: the shared one is deduped across
+        # copies, the newer one only exists in the active copy.
+        self.assertIn("Total mentions: 2", result.stdout)
 
     def test_signature_only_keyword_finds_no_match_with_prefilter_on(self) -> None:
         """The pre-filter's raw byte scan is a deliberate OVER-approximation —
