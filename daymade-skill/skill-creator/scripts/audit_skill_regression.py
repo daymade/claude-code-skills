@@ -20,6 +20,11 @@ For a Git-tracked skill, reconstruct the old directory from Git and use
 ``--baseline-origin git-ref:<ref>``. The command resolves the ref to an immutable
 commit and rejects a ``before`` tree that does not match that exact Git tree.
 
+If the skill was renamed or moved (so ``--after`` is not at the same path the
+baseline was captured from), pass ``--renamed-from <old-path>`` to ``compare``
+to declare it explicitly; without it, a path change is rejected as an identity
+mismatch, on the assumption that ``--before``/``--after`` were paired by mistake.
+
     # Review every candidate in the JSON, then:
     python -m scripts.audit_skill_regression verify \
       --before /tmp/skill-before --after ./my-skill \
@@ -219,7 +224,19 @@ def _resolve_baseline_provenance(
     before: Path,
     after: Path,
     baseline_origin: str,
+    *,
+    renamed_from: Path | None = None,
 ) -> dict[str, Any]:
+    # Both provenance modes below identify the baseline by the SOURCE PATH the
+    # skill lived at when the baseline was captured, not by directory content.
+    # A skill rename changes that path on purpose while leaving the skill's
+    # identity and content otherwise intact, so a bare path match is too strict
+    # for that (legitimate, documented) operation. `renamed_from` is an explicit,
+    # narrow escape hatch — same shape as `--allow-identical-baseline` — that
+    # substitutes the declared old path for identity purposes ONLY; it does not
+    # touch either branch's content/tree-hash check, so a genuinely mismatched
+    # pairing (wrong skill entirely) still fails exactly as before.
+    identity_source = renamed_from.resolve() if renamed_from is not None else after.resolve()
     if baseline_origin == "test-fixture":
         return {"origin": "test-fixture"}
     if baseline_origin == "pre-edit-snapshot":
@@ -236,9 +253,14 @@ def _resolve_baseline_provenance(
             raise ValueError("pre-edit snapshot provenance uses an obsolete schema")
         if manifest.get("kind") != "skill-regression-pre-edit-snapshot":
             raise ValueError("pre-edit snapshot provenance has an invalid kind")
-        expected_source_hash = hashlib.sha256(str(after.resolve()).encode("utf-8")).hexdigest()
+        expected_source_hash = hashlib.sha256(str(identity_source).encode("utf-8")).hexdigest()
         if manifest.get("source_path_hash") != expected_source_hash:
-            raise ValueError("pre-edit snapshot source identity does not match the edited skill")
+            hint = (
+                " (pass --renamed-from <the path --source pointed at during snapshot> if the skill was renamed/moved)"
+                if renamed_from is None
+                else ""
+            )
+            raise ValueError(f"pre-edit snapshot source identity does not match the edited skill{hint}")
         if manifest.get("tree_hash") != tree_hash(before):
             raise ValueError("pre-edit snapshot content does not match its provenance manifest")
         created_at = manifest.get("created_at")
@@ -248,11 +270,14 @@ def _resolve_baseline_provenance(
             raise ValueError("pre-edit snapshot provenance timestamp is invalid") from error
         if parsed.tzinfo is None:
             raise ValueError("pre-edit snapshot provenance timestamp must include a timezone")
-        return {
+        provenance = {
             "origin": "pre-edit-snapshot",
             "created_at": created_at,
             "source_path_hash": manifest["source_path_hash"],
         }
+        if renamed_from is not None:
+            provenance["renamed_from"] = str(identity_source)
+        return provenance
     if baseline_origin.startswith("git-ref:"):
         requested_ref = baseline_origin.partition(":")[2].strip()
         if not requested_ref:
@@ -261,7 +286,7 @@ def _resolve_baseline_provenance(
             repo_value = _git_output(after, "rev-parse", "--show-toplevel")
             assert isinstance(repo_value, str)
             repo = Path(repo_value.strip()).resolve()
-            skill_rel = after.resolve().relative_to(repo)
+            skill_rel = identity_source.relative_to(repo)
             commit_value = _git_output(repo, "rev-parse", "--verify", f"{requested_ref}^{{commit}}")
             assert isinstance(commit_value, str)
             commit = commit_value.strip()
@@ -275,12 +300,15 @@ def _resolve_baseline_provenance(
             raise ValueError(
                 f"before tree does not match {requested_ref} for {skill_rel.as_posix()}"
             )
-        return {
+        provenance = {
             "origin": f"git-ref:{commit}",
             "requested_ref": requested_ref,
             "resolved_commit": commit,
             "skill_path": skill_rel.as_posix(),
         }
+        if renamed_from is not None:
+            provenance["renamed_from"] = str(identity_source)
+        return provenance
     raise ValueError("baseline origin must be pre-edit-snapshot or git-ref:<ref>")
 
 
@@ -661,13 +689,14 @@ def build_report(
     after: Path,
     *,
     baseline_origin: str = "test-fixture",
+    renamed_from: Path | None = None,
 ) -> dict[str, Any]:
     before = before.resolve()
     after = after.resolve()
     for label, root in (("before", before), ("after", after)):
         if not root.is_dir() or not (root / "SKILL.md").is_file():
             raise ValueError(f"{label} skill directory must contain SKILL.md: {root}")
-    provenance = _resolve_baseline_provenance(before, after, baseline_origin)
+    provenance = _resolve_baseline_provenance(before, after, baseline_origin, renamed_from=renamed_from)
 
     before_files = {str(rel).replace("\\", "/"): path for rel, path in _iter_files(before)}
     after_files = {str(rel).replace("\\", "/"): path for rel, path in _iter_files(after)}
@@ -1214,6 +1243,18 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="explicit bootstrap only: allow before and after to have the same tree hash",
     )
+    compare.add_argument(
+        "--renamed-from",
+        type=Path,
+        default=None,
+        help=(
+            "explicit rename declaration: the path --source pointed at when the baseline "
+            "was captured (snapshot) or the skill's old path in the baseline ref (git-ref). "
+            "Use when --after is at a different path than the baseline because the skill "
+            "was renamed or moved; the identity check verifies this path instead of --after, "
+            "so an undeclared path mismatch still fails exactly as before."
+        ),
+    )
     compare.add_argument("--json", action="store_true", help="also print the report JSON")
     verify = subparsers.add_parser("verify", help="verify a completed regression review")
     verify.add_argument("--before", required=True, type=Path)
@@ -1259,6 +1300,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.before,
                 args.after,
                 baseline_origin=args.baseline_origin,
+                renamed_from=args.renamed_from,
             )
             if (
                 report["before"]["tree_hash"] == report["after"]["tree_hash"]
