@@ -202,7 +202,7 @@ The Step 2I pattern is specific. Several adjacent symptoms have different fixes:
 | Symptom | Looks like Step 2I, but is actually | Fix |
 |---------|-------------------------------------|-----|
 | `nslookup` is also slow | Default DNS is bad, not a supplemental resolver | Replace `nameserver` in `/etc/resolv.conf` (won't persist across DHCP) or fix proxy DNS |
-| `ssh` hangs at `debug1: connect to address X.X.X.X` (after resolution succeeds) | Network/route layer, not DNS | Step 2B (route conflict) or Step 2H (TUN DNS hijack) |
+| `ssh` hangs at `debug1: connect to address X.X.X.X` (after resolution succeeds) | Network/route layer, not DNS | Step 2B (route conflict) or Step 2H (SSH/git drops through a TUN) |
 | Lookup works initially, slows down over hours | Cache poisoning or memory pressure on `mDNSResponder` | `sudo killall -HUP mDNSResponder` |
 | Only one specific domain is slow | Per-domain resolver with a `domain :` filter is dead | Same Step 2I procedure, but the blast radius is bounded |
 | `curl -x http://127.0.0.1:<port>` works but `curl` (no `-x`) doesn't | Proxy works; DNS works; the issue is `NO_PROXY` config or env vars | Step 2A |
