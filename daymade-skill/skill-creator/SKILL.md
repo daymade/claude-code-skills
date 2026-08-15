@@ -1258,9 +1258,26 @@ When editing, remember that the skill is being created for another instance of C
      --output <workspace>/skill-before
    ```
 
-   For a clean Git-tracked source, materialize the directory from the chosen ref.
+   For a clean Git-tracked source, materialize the directory from the chosen ref:
+
+   ```bash
+   mkdir -p <workspace>/skill-before   # tar -C requires the target to already exist
+   git -C <repo-containing-the-skill> archive <ref> <skill-dir-relative-to-repo-root> \
+     | tar -x -C <workspace>/skill-before
+   # lands at <workspace>/skill-before/<skill-dir>/SKILL.md — one level deeper than
+   # the snapshot subcommand's output, because `git archive` preserves the path
+   # prefix; --before in step 3 is <workspace>/skill-before/<skill-dir>, not
+   # <workspace>/skill-before itself.
+   ```
+
    Include SKILL.md, references, scripts, assets, workflows, and existing evals—not
    just the main prompt. Never copy the already-edited tree and label it "before".
+   **Use a directory nothing has extracted into before** — reusing one that already
+   has content from an earlier run lets `tar -x` silently overwrite same-named files
+   while leaving stale files the new archive doesn't contain untouched, producing a
+   mixed snapshot with zero signal at extract time (`compare` only catches it later,
+   indirectly, as a tree-hash mismatch). See "Concurrent sessions on the same skill
+   repo" below for the fuller version of this trap, including the `mv`-based variant.
 2. Inventory the old skill's actor/jobs, trigger contexts, runtime contracts,
    commands/flags, failure and recovery cases, page/domain variants, bundled
    resources, and eval coverage. Add preservation cases for important old edge
@@ -1279,6 +1296,26 @@ When editing, remember that the skill is being created for another instance of C
    If the old directory was reconstructed from Git, replace the final flag with
    `--baseline-origin git-ref:<ref>`. The tool resolves the ref to an immutable
    commit and verifies every included file and executable bit against that tree.
+
+   **Renaming or moving the skill directory itself** (not just editing its
+   contents) changes `--after`'s path, which both baseline modes use for
+   identity — `compare` rejects that by default (on the assumption `--before`/
+   `--after` were mismatched by accident) with `pre-edit snapshot source
+   identity does not match the edited skill`. Add `--renamed-from <old-path>`
+   (the path `--source` pointed at for `snapshot`, or the skill's old path
+   relative to its repo root for `git-ref:`) to declare the rename explicitly;
+   the identity check then verifies that path instead of `--after`, while the
+   content/tree-hash check is untouched, so an actually-mismatched pairing
+   still fails. **Pass `--renamed-from` as an absolute path.** Every path this
+   command takes resolves relative to the current working directory when given
+   as relative — not relative to `--after`, and not relative to each other —
+   and `--renamed-from` typically names a directory that no longer exists (it
+   was renamed away), so there's no existence check to catch a wrong
+   resolution the way there is for `--before`/`--after`; it just fails deeper,
+   confusingly. This bites skill-creator's own edits in particular: `cd
+   <skill-creator-path>` above is skill-creator's own repo, which is usually a
+   *different* repo from the skill being audited, so a relative
+   `--renamed-from` silently resolves against the wrong one.
 
 4. Review every candidate. Use exactly one disposition and record concrete
    evidence/reason: `preserved_or_moved`, `intentional_sanitization`,
