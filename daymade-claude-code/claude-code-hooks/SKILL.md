@@ -147,6 +147,19 @@ a guard people must bypass gets bypassed reflexively, and then it protects
 nothing (the core discipline: *误杀健康输入比漏报更糟*). The recurring cause of
 false-blocks is matching on the raw command string.
 
+**Corollary — the escape hatch should be the correct usage, not a bypass flag.**
+Every guard needs a way out for the legitimate case it cannot distinguish; the
+question is what you make that way out *be*. A `SKIP=1` / `--force` / env-var
+escape trains the exact reflex the paragraph above warns about, and it is
+indistinguishable from a bypass when someone reaches for it under deadline. Prefer
+an escape that is **the thing you wanted them to do anyway**, so taking it improves
+the command instead of disarming the guard: `pipe-fallback-guard` exits 0 the moment
+the command mentions `pipefail` / `PIPESTATUS` / `pipestatus`, because an author who
+wrote any of those has already demonstrated they understand pipeline exit codes —
+the guard has nothing left to teach them. The test to apply: *if someone takes my
+escape hatch, is the resulting command better or merely unblocked?* If the honest
+answer is "merely unblocked", the guard has a bypass flag with a nicer name.
+
 - **Wrong**: `awk '{gsub(/&&|\|\||;|\|/,"\n")}'` to split into segments — awk
   doesn't understand shell quoting, so `grep -E "a|TRIGGER|b"` gets split at the
   `|` *inside the quoted regex*, `TRIGGER` becomes a phantom command, and the
@@ -766,7 +779,42 @@ wall time.
 2. Write the script in the SSOT dir; `chmod +x`.
 3. **Detection** with shlex token-level matching (rule 1), keyed on a fact the
    world can answer rather than your own rendering or a naming convention (rule 6).
+   - **First check whether ShellCheck already decides it — then record the answer,
+     because the next author will ask the same question.** It is the de-facto standard
+     for shell anti-patterns, so "why didn't you just use shellcheck" is the first
+     thing a reviewer asks. Measured 2026-08-15 on **0.11.0** against
+     `find . -name x | head -5 || echo "no"` — a fallback that provably can never fire,
+     because `||` binds to the pipeline's **last** stage and `head` exits 0 on empty
+     input: **default config reports nothing, exit 0**. `--enable=all` surfaces
+     **SC2312** (`check-extra-masked-returns`), but it fires on `cmd | jq . || echo bad`
+     too, where the last stage genuinely can fail and the fallback is meaningful.
+     Three reasons that disqualifies it as *the gate* — each one generalizes:
+     it is **off by default** (so it is not protecting anyone today), it cannot
+     distinguish a dead fallback from a live one (blanket firing = the rule-1
+     false-block spiral), and its own suggested remedy is "use `|| true` to ignore",
+     the opposite of the intent. It also lints **files**, not tool-call events.
+     The general shape of the answer: the standard linter is the right thing to
+     **check** and usually the wrong thing to **delegate a blocking gate to**, because
+     linters are tuned for advisory breadth and a gate needs precision. Your hook's
+     contribution is that precision. Shipped example: `pipe-fallback-guard`, whose
+     precision lives in a small list of last-stage commands that actually swallow the
+     upstream code (`head`/`tail`/`wc`/`cat`/`sort`/…) and which deliberately excludes
+     `grep`/`jq`/`awk`/`sed` because those fail for real.
 4. **`bash -n` + `test_hook.sh`** with trigger AND healthy-lookalike cases (rule 2) — do not register until green. Include the shapes that carry an unexpanded path (`cd ~/elsewhere && …`, rule 5); if the hook has a human gate, a forced-decline row (Pattern B, "Make the gate testable"); and if it demands remediation, the **after-remediation row pair** — fires without the receipt, quiet with it (template in `scripts/test_hook.sh`; rule 7 — point-in-time fixtures structurally cannot see non-termination).
+   - **Give the hook a `--selftest` mode, and make it bidirectional.** Then have the
+     SessionStart guard-rail health check (see "Hook types" above — the one whose whole
+     job is checking the guards themselves) invoke `<hook> --selftest` for every
+     installed hook that offers one. This is the only automatic check that catches the
+     failure `bash -n` and the registration check both structurally miss: a hook that has
+     **degraded into a permanent no-op**. That failure is invisible by construction —
+     a guard that never fires produces output identical to a session with nothing to
+     report, which is why it can persist for weeks. Feed it **two** fixtures, never
+     one: a must-block sample *and* a must-pass sample, so it catches "stopped firing"
+     and "started false-blocking" alike. Then calibrate it the way you calibrate the
+     suite — break the detector on purpose and confirm `--selftest` exits non-zero;
+     a selftest that has never been seen to fail is indistinguishable from `exit 0`.
+     Keep it to two probes: it runs at every session start, so its cost is paid
+     constantly while its job is only to prove the hook is still alive.
 5. **Replay a real command corpus and hand-check every block** (rule 9) — this measures the
    false-block surface, which the fixture table in step 4 structurally cannot. Slice the
    shipped detector out verbatim to pre-filter; feed each candidate **to** the real hook
