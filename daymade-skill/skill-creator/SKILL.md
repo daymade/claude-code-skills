@@ -1280,6 +1280,16 @@ When editing, remember that the skill is being created for another instance of C
    `--baseline-origin git-ref:<ref>`. The tool resolves the ref to an immutable
    commit and verifies every included file and executable bit against that tree.
 
+   **Renaming or moving the skill directory itself** (not just editing its
+   contents) changes `--after`'s path, which both baseline modes use for
+   identity — `compare` rejects that by default (on the assumption `--before`/
+   `--after` were mismatched by accident) with `pre-edit snapshot source
+   identity does not match the edited skill`. Add `--renamed-from <old-path>`
+   (the path `--source` pointed at for `snapshot`, or the skill's old relative
+   path for `git-ref:`) to declare the rename explicitly; the identity check
+   then verifies that path instead of `--after`, while the content/tree-hash
+   check is untouched, so an actually-mismatched pairing still fails.
+
 4. Review every candidate. Use exactly one disposition and record concrete
    evidence/reason: `preserved_or_moved`, `intentional_sanitization`,
    `intentional_boundary`, `removed_by_explicit_user_request`, `not_reusable`,
