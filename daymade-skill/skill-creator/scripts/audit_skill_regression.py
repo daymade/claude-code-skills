@@ -255,11 +255,14 @@ def _resolve_baseline_provenance(
             raise ValueError("pre-edit snapshot provenance has an invalid kind")
         expected_source_hash = hashlib.sha256(str(identity_source).encode("utf-8")).hexdigest()
         if manifest.get("source_path_hash") != expected_source_hash:
-            hint = (
-                " (pass --renamed-from <the path --source pointed at during snapshot> if the skill was renamed/moved)"
-                if renamed_from is None
-                else ""
-            )
+            if renamed_from is None:
+                hint = " (pass --renamed-from <the path --source pointed at during snapshot> if the skill was renamed/moved)"
+            else:
+                hint = (
+                    f" (--renamed-from resolved to {identity_source} — verify this is exactly "
+                    "the absolute path --source pointed at during snapshot; a relative value "
+                    "resolves against the current working directory, not against --after)"
+                )
             raise ValueError(f"pre-edit snapshot source identity does not match the edited skill{hint}")
         if manifest.get("tree_hash") != tree_hash(before):
             raise ValueError("pre-edit snapshot content does not match its provenance manifest")
@@ -286,14 +289,35 @@ def _resolve_baseline_provenance(
             repo_value = _git_output(after, "rev-parse", "--show-toplevel")
             assert isinstance(repo_value, str)
             repo = Path(repo_value.strip()).resolve()
+        except subprocess.CalledProcessError as error:
+            raise ValueError(
+                "git-ref baseline requires --after to be inside a Git worktree"
+            ) from error
+        try:
             skill_rel = identity_source.relative_to(repo)
+        except ValueError as error:
+            # Distinct from the two except blocks around it: this is neither
+            # "not a Git worktree" nor "the ref doesn't resolve" — the path
+            # that failed here is whichever one identity now points at, and
+            # it isn't inside the same repo as --after. The likeliest cause,
+            # given both --before/--after/--renamed-from resolve relative to
+            # the CURRENT WORKING DIRECTORY when given as relative paths (not
+            # relative to each other), is that this ran from a different
+            # repo's directory than the skill being audited — a common shape
+            # for skill-creator itself, which normally lives in its own repo.
+            where = "--renamed-from" if renamed_from is not None else "--after"
+            raise ValueError(
+                f"{where} ({identity_source}) is not inside the Git repository containing "
+                f"--after ({repo}). If this path was given as relative, it resolved against "
+                "the current working directory, not against --after's location — pass an "
+                "absolute path to avoid the ambiguity."
+            ) from error
+        try:
             commit_value = _git_output(repo, "rev-parse", "--verify", f"{requested_ref}^{{commit}}")
             assert isinstance(commit_value, str)
             commit = commit_value.strip()
         except (subprocess.CalledProcessError, ValueError) as error:
-            raise ValueError(
-                "git-ref baseline requires the edited skill to be inside a Git worktree and the ref to resolve"
-            ) from error
+            raise ValueError(f"could not resolve ref {requested_ref!r} in {repo}") from error
         expected_hash = _git_tree_hash(repo, commit, skill_rel)
         actual_hash = tree_hash(before)
         if actual_hash != expected_hash:

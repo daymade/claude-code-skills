@@ -672,6 +672,26 @@ def test_pre_edit_snapshot_accepts_declared_rename(tmp_path):
         )
 
 
+def test_pre_edit_snapshot_wrong_renamed_from_names_the_resolved_path(tmp_path):
+    # A wrong --renamed-from value used to produce the exact same bare error
+    # as no --renamed-from at all, with no way to tell "you forgot the flag"
+    # apart from "you passed the flag but got the value wrong" (independent
+    # review, 2026-08-15). The hint must now show what path renamed_from
+    # actually resolved to, so a wrong value is diagnosable from the error
+    # alone.
+    skill = _make_skill(tmp_path / "old-name", "- Keep offline recovery available.")
+    before = tmp_path / "before"
+    create_baseline_snapshot(skill, before)
+    renamed = tmp_path / "new-name"
+    skill.rename(renamed)
+    wrong_old_path = tmp_path / "wrong-old-name"
+
+    with pytest.raises(ValueError, match=r"--renamed-from resolved to .*wrong-old-name"):
+        build_report(
+            before, renamed, baseline_origin="pre-edit-snapshot", renamed_from=wrong_old_path
+        )
+
+
 def test_git_ref_baseline_accepts_declared_rename(tmp_path):
     repo = tmp_path / "repo"
     skill = _make_skill(repo / "old-name", "- Keep offline recovery available.")
@@ -712,6 +732,19 @@ def test_git_ref_baseline_accepts_declared_rename(tmp_path):
     assert report["before"]["provenance"]["skill_path"] == "old-name"
     assert report["before"]["provenance"]["renamed_from"] == str(skill.resolve())
     assert any("offline recovery" in item["text"] for item in report["candidates"])
+
+    # renamed_from resolving outside --after's repo (e.g. a relative path that
+    # resolved against the wrong cwd — the exact shape independent review hit
+    # running this from skill-creator's own, separate repo) must get a specific
+    # "not inside the Git repository containing --after" error, not the bare
+    # "requires the edited skill to be inside a Git worktree" message that used
+    # to also fire here and made this failure indistinguishable from --after
+    # genuinely not being in a worktree at all.
+    outside_repo_path = tmp_path / "not-in-repo-at-all"
+    with pytest.raises(ValueError, match="not inside the Git repository containing"):
+        build_report(
+            before, renamed, baseline_origin="git-ref:HEAD", renamed_from=outside_repo_path
+        )
 
 
 def test_compare_cli_rejects_identical_current_to_current_baseline(tmp_path, capsys):
