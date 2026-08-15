@@ -147,18 +147,6 @@ a guard people must bypass gets bypassed reflexively, and then it protects
 nothing (the core discipline: *误杀健康输入比漏报更糟*). The recurring cause of
 false-blocks is matching on the raw command string.
 
-**Corollary — the escape hatch should be the correct usage, not a bypass flag.**
-Every guard needs a way out for the legitimate case it cannot distinguish; the
-question is what you make that way out *be*. A `SKIP=1` / `--force` / env-var
-escape trains the exact reflex the paragraph above warns about, and it is
-indistinguishable from a bypass when someone reaches for it under deadline. Prefer
-an escape that is **the thing you wanted them to do anyway**, so taking it improves
-the command instead of disarming the guard: `pipe-fallback-guard` exits 0 the moment
-the command mentions `pipefail` / `PIPESTATUS` / `pipestatus`, because an author who
-wrote any of those has already demonstrated they understand pipeline exit codes —
-the guard has nothing left to teach them. The test to apply: *if someone takes my
-escape hatch, is the resulting command better or merely unblocked?* If the honest
-answer is "merely unblocked", the guard has a bypass flag with a nicer name.
 
 - **Wrong**: `awk '{gsub(/&&|\|\||;|\|/,"\n")}'` to split into segments — awk
   doesn't understand shell quoting, so `grep -E "a|TRIGGER|b"` gets split at the
@@ -289,6 +277,23 @@ skeleton: Pattern C in [references/hook_patterns.md](references/hook_patterns.md
   and/or a typed `YES` on `/dev/tty` (model can't type into the user's terminal);
   refuse/cancel/timeout = hard NO; log every prompt/bypass to an audit file.
   Pattern in [references/hook_patterns.md](references/hook_patterns.md).
+  - **Below Tier-0, where a model-serviceable escape *is* allowed, make it the
+    correct usage rather than a bypass flag.** The rule above is absolute for Tier-0
+    and does not bend here — this is about the correctness guards that fall short of
+    it, which still need a way out for the legitimate case the detector cannot
+    distinguish. The question is what you make that way out *be*. A `SKIP=1` /
+    `--force` env escape trains exactly the reflex rule 1 warns about, and under
+    deadline it is indistinguishable from a bypass. Prefer an escape that is **the
+    thing you wanted them to do anyway**, so taking it improves the command instead of
+    disarming the guard: `pipe-fallback-guard` exits 0 the moment the command mentions
+    `pipefail` / `PIPESTATUS` / `pipestatus`, because an author who wrote any of those
+    has already demonstrated they understand pipeline exit codes — the guard has
+    nothing left to teach them. The test to apply: *if someone takes my escape hatch,
+    is the resulting command better, or merely unblocked?* If the honest answer is
+    "merely unblocked", you have a bypass flag with a nicer name. Sibling principle
+    for the Tier-0 case, where the override exists only so the gate can be tested:
+    **the escape hatch may only make the gate stricter** — see the `GIT_GUARD_TEST`
+    discussion in [references/hook_patterns.md](references/hook_patterns.md).
 
 ### 5. Decide the failure **direction**, and test *that* — not just the happy path
 
@@ -788,7 +793,7 @@ wall time.
      input: **default config reports nothing, exit 0**. `--enable=all` surfaces
      **SC2312** (`check-extra-masked-returns`), but it fires on `cmd | jq . || echo bad`
      too, where the last stage genuinely can fail and the fallback is meaningful.
-     Three reasons that disqualifies it as *the gate* — each one generalizes:
+     Three reasons that disqualify it as *the gate* — each one generalizes:
      it is **off by default** (so it is not protecting anyone today), it cannot
      distinguish a dead fallback from a live one (blanket firing = the rule-1
      false-block spiral), and its own suggested remedy is "use `|| true` to ignore",
@@ -805,16 +810,26 @@ wall time.
      SessionStart guard-rail health check (see "Hook types" above — the one whose whole
      job is checking the guards themselves) invoke `<hook> --selftest` for every
      installed hook that offers one. This is the only automatic check that catches the
-     failure `bash -n` and the registration check both structurally miss: a hook that has
+     failure `bash -n` and steps 4-7 below both structurally miss: a hook that has
      **degraded into a permanent no-op**. That failure is invisible by construction —
      a guard that never fires produces output identical to a session with nothing to
-     report, which is why it can persist for weeks. Feed it **two** fixtures, never
-     one: a must-block sample *and* a must-pass sample, so it catches "stopped firing"
-     and "started false-blocking" alike. Then calibrate it the way you calibrate the
-     suite — break the detector on purpose and confirm `--selftest` exits non-zero;
-     a selftest that has never been seen to fail is indistinguishable from `exit 0`.
-     Keep it to two probes: it runs at every session start, so its cost is paid
-     constantly while its job is only to prove the hook is still alive.
+     report, which is why it can persist for weeks. Two fixtures is the *floor*, not
+     the target: a must-block sample **and** a must-pass sample, so it catches "stopped
+     firing" and "started false-blocking" alike — one of either kind alone cannot.
+     **Size it by mutants killed, not by a fixture count**, and calibrate the way you
+     calibrate the suite: break the detector on purpose and confirm `--selftest` exits
+     non-zero. A selftest never seen to fail is indistinguishable from `exit 0`.
+     Measured on the shipped `compounding-edit-review`: its **first version's two
+     fixtures killed only 4 of 14 mutants** — every behavior its own comments declared
+     load-bearing had zero coverage, including a mutation that short-circuits the
+     anti-loop check while the selftest still printed OK. It now runs 58 cases.
+     The real constraint is not fixture count but **wall-clock at session start**,
+     where this is paid on every session: those 58 cases measure **~5.3 s**, against
+     **~140 ms** for a two-probe liveness check. When killing the mutants pushes you
+     past that budget, **split** rather than shrink — a cheap fixed-size liveness probe
+     on `--selftest`, the full regression battery in `test_hook.sh` at build time.
+     Shrinking below the mutant-kill line just buys back a selftest that passes
+     while the guard is dead.
 5. **Replay a real command corpus and hand-check every block** (rule 9) — this measures the
    false-block surface, which the fixture table in step 4 structurally cannot. Slice the
    shipped detector out verbatim to pre-filter; feed each candidate **to** the real hook
