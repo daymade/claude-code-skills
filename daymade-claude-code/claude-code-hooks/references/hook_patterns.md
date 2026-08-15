@@ -4,6 +4,17 @@ Battle-tested shapes plus the shlex command-position walker. Every snippet
 here is distilled from a hook that has run in production. Copy, rename the
 TRIGGER, keep the structure.
 
+> ⚠️ **Known divergence from SKILL.md's skeleton — read before copying an
+> opening.** Every pattern below still starts with `INPUT=$(cat)`, while SKILL.md
+> now opens with the builtin `IFS= read -rd '' INPUT || true` plus a `case`
+> pre-filter, because on a Bash matcher those two lines cost forks on **every**
+> call including the irrelevant ones (pitfall #22, which carries the conversion
+> recipe and its measured floor). These patterns have not been converted yet: the
+> swap is not purely cosmetic — `$(cat)` drops NUL bytes and keeps what follows,
+> `read -d ''` stops at the first NUL — and converting a blocking guard also
+> requires #22's payload gate, so each one needs its own re-test rather than a
+> find-and-replace. **Take the structure from here and the opening from SKILL.md.**
+
 ## Table of contents
 1. [JSON event contract](#json-event-contract)
 2. [Pattern A — PreToolUse block](#pattern-a--pretooluse-block)
@@ -47,7 +58,13 @@ CMD=$(printf '%s' "$INPUT"  | python3 -c "import sys,json;print(json.load(sys.st
 ```
 
 **Exit codes:** `0` = allow / proceed; `2` = block (PreToolUse) — stderr is shown
-to the model; anything else = non-blocking error. SessionStart must always exit 0.
+to the model; anything else = non-blocking error — **but that last clause holds
+only while stdout carries no valid JSON**: Claude Code reads JSON output on every
+exit code, and valid JSON decides the outcome instead of the code. Every skeleton
+in this file prints nothing on stdout, so the rule as stated applies to all of
+them. SessionStart should always exit 0 — **not because a non-zero could block it
+(no exit code can block a session start)** but because a non-zero prints a hook
+error notice to the user on every single session start.
 
 **stdin is single-use.** If you delegate logic to python, do NOT feed the script
 via `python3 - <<'PY'` — that heredoc IS the script and consumes stdin, so
@@ -517,7 +534,24 @@ there is no cheap middle ground.
 
 For an irreversible action you want to *allow with explicit human consent*, never
 a static env var (the model can set env vars). This is `git-worktree-guard` /
-`git-commit-scope-guard`. Two channels the model physically cannot drive:
+`git-commit-scope-guard`.
+
+> ⚠️ **This pattern ships two channels; only the first one is a channel.** The
+> official hooks reference states that hooks run in their own session **without a
+> controlling terminal** and "can't open `/dev/tty`" (its replacement for terminal
+> output is the `terminalSequence` output field). So Channel 2 below is, per the
+> documented contract, unreachable — and the comment inside it, written before that
+> was known, treats "exists but won't open" as a *sandbox* quirk rather than the
+> general case. Read it that way. **Consequence if you copy this verbatim onto a
+> machine with no GUI session: the gate can never be approved by anyone**, because
+> Channel 1 can't run and Channel 2 can't open — it falls through to a hard block.
+> The code is left in place because a hard block is the safe direction and because
+> a live audit log shows the branch has simply never been entered; do not read its
+> presence as endorsement. If you need a gate off macOS, this file does not yet
+> have a verified answer for you.
+
+Two channels the model physically cannot drive (see the warning above about the
+second):
 
 ```bash
 # ... detection decided this action needs confirmation ...
@@ -569,6 +603,10 @@ fi
 
 # Channel 2 (reached ONLY if there's no GUI session at all): typed YES on the
 # user's terminal — the model cannot type there.
+# ⚠️ DOCUMENTED AS UNREACHABLE — see the warning above this code block. Hooks run
+# without a controlling terminal, so the probe below is expected to fail and this
+# whole branch to be skipped. Kept because failing to a hard block is the safe
+# direction; NOT a working second channel you can rely on.
 if [ -r /dev/tty ] && [ -w /dev/tty ] && (exec 3<>/dev/tty) 2>/dev/null; then
   # The probe is INSIDE the `if` condition (exempt from set -e) — critical,
   # because in sandboxed/subagent contexts /dev/tty can exist and pass -r/-w yet
@@ -658,7 +696,15 @@ set -uo pipefail
 PROBLEMS=()
 
 # 1. Every installed hook parses and its symlink resolves.
-for h in "$HOME"/.claude/hooks/*.sh; do
+shopt -s nullglob          # else an EMPTY hooks dir yields the literal glob and the
+                           # loop below reports it as a dangling symlink — a false
+                           # alarm at exactly the moment (fresh profile, reinstalled
+                           # ~/.claude) this check matters most. Measured.
+for h in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/hooks/*.sh; do    # active profile, not
+                           # hardcoded $HOME — the settings check below already uses
+                           # CLAUDE_CONFIG_DIR, and rule 4's whole point is that each
+                           # profile is its own config home. Checking one profile's
+                           # scripts against another's settings answers nothing.
   [ -e "$h" ] || { PROBLEMS+=("dangling symlink: $h"); continue; }   # -e follows the link
   bash -n "$h" 2>/dev/null || PROBLEMS+=("syntax error: $h")
 done
@@ -919,8 +965,13 @@ Three things worth calling out beyond what the comments above already say:
 }
 ```
 
-Note `Stop` (like `SessionStart`) has no `matcher` key — it isn't scoped to a
-tool, so its `hooks` array sits directly under the event.
+Note `Stop` has no `matcher` key — it isn't scoped to a tool, so its `hooks` array
+sits directly under the event. **`SessionStart` is different and this file used to
+get it wrong**: it takes a matcher, just not on a tool name — it matches on *how the
+session started* (`startup`, `resume`, `clear`, `compact`, `fork`). Omitting it is
+still legal and means "all", so Pattern C above fires either way; but if you only
+want a health check at real startup and not on every `--resume`, `"matcher":
+"startup"` is how you say so.
 
 Add to an existing `matcher: "Bash"` entry's `hooks` array (don't create a second
 Bash entry). Then **converge every profile** — a guard registered only in the
