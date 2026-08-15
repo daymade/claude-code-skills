@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (fast local conversation discovery across Claude Code and Codex, session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-financial, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.86.0"
+    "version": "1.87.0"
   },
   "plugins": [
     {
@@ -174,10 +174,10 @@
     },
     {
       "name": "daymade-financial",
-      "description": "Financial data and investment-research suite covering the full China A-share and global equity data pipeline: Bigdata.com (RavenPack) structured financials and news sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite installation and orchestration, A-share news and policy aggregation, and A-share pharmaceutical sector daily reporting. Install once for the complete financial data workflow.",
+      "description": "Financial data and investment-research suite covering the full China A-share and global equity data pipeline: Bigdata.com (RavenPack) structured financials and news sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite installation and orchestration, A-share news and policy aggregation, A-share pharmaceutical sector daily reporting, and structured devil's-advocate pressure-testing of investment theses (assumption decomposition, evidence-linked counterarguments, monitoring signposts). Install once for the complete financial data workflow.",
       "source": "./daymade-financial",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -189,14 +189,18 @@
         "gangtise",
         "pharma",
         "news",
-        "yfinance"
+        "yfinance",
+        "devils-advocate",
+        "thesis-pressure-test"
       ],
       "skills": [
         "./bigdata-skill",
         "./financial-data-collector",
         "./gangtise-copilot",
         "./ashare-news-fetcher",
-        "./pharma-daily-report"
+        "./daymade-sector-research",
+        "./pharma-daily-report",
+        "./devils-advocate"
       ]
     },
     {

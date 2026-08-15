@@ -212,7 +212,7 @@ claude plugin install daymade-claude-code@daymade-skills
 claude plugin install daymade-financial@daymade-skills
 ```
 
-一次安装即可获得完整的金融数据与投研技能——Bigdata.com（RavenPack）结构化财务与情绪数据、美股基本面数据（yfinance）、Gangtise（岗底斯）OpenAPI 投研套件安装与编排、A 股消息面与政策聚合、A 股医药板块日报：
+一次安装即可获得完整的金融数据与投研技能——Bigdata.com（RavenPack）结构化财务与情绪数据、美股基本面数据（yfinance）、Gangtise（岗底斯）OpenAPI 投研套件安装与编排、A 股消息面与政策聚合、A 股医药板块日报，以及投资论点的结构化「魔鬼代言人」压力测试：
 
 ```text
 /daymade-financial:bigdata-skill
@@ -220,6 +220,7 @@ claude plugin install daymade-financial@daymade-skills
 /daymade-financial:gangtise-copilot
 /daymade-financial:ashare-news-fetcher
 /daymade-financial:pharma-daily-report
+/daymade-financial:devils-advocate
 ```
 
 安装后调用统一显示为 `daymade-financial:<skill>`，共享同一命名空间。这些技能仅作为套件发布——安装套件即可获得全部技能。

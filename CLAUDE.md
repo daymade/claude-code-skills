@@ -370,6 +370,7 @@ This applies when you change ANY file under a skill directory:
 88. **claude-migrate-memory-to-doc** - Migrate Claude Code personal memory into tool-agnostic reference docs so other AI CLIs (Codex/Cursor) auto-loading AGENTS.md read the same user profile (daymade-claude-code suite member)
 89. **docx-creator** - Produce production-grade Word (.docx) documents, especially Chinese ones, by driving the minimax-docx OpenXML engine correctly — alignment-layering rule, per-list numbering restart, and other corrections the underlying engine doesn't ship (daymade-docs suite member)
 90. **claude-code-hooks** - Write, test, register, and debug Claude Code hooks — PreToolUse/PostToolUse/SessionStart/Stop Bash guards that enforce a rule the model would otherwise talk itself past, with token-level shlex matching, bash -n + real-JSON end-to-end testing discipline, and multi-profile registration convergence (daymade-claude-code suite member)
+91. **devils-advocate** - Structured devil's-advocate pressure-testing of an investment thesis against user-supplied materials — decompose explicit/implicit assumptions, retrieve evidence-linked counterarguments with verbatim citations under a source-credibility ladder, risk-flag with an anti-inflation rubric, add a materials-bounded base-rate outside view, and emit dual-layer output (audit JSON + theme-grouped analyst narrative) plus a monitoring signpost list (daymade-financial suite member)
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
