@@ -47,20 +47,36 @@ match tokens/patterns; it can't judge whether a design is good).
 
 | Type | Fires | Exit 0 | Exit 2 | Other |
 |---|---|---|---|---|
-| **PreToolUse** | before a tool runs | allow | **block** the call (stderr → shown to model as guidance) | any other exit = "non-blocking error" → **the call proceeds** |
+| **PreToolUse** | before a tool runs | allow | **block** the call (stderr → shown to model as guidance) | any other exit = "non-blocking error" → **the call proceeds** — but only while stdout carries no valid JSON. Claude Code reads JSON output on **every** exit code, and valid JSON overrides the code entirely. The skeletons here print nothing on stdout, so their fail-open reasoning holds; add a `permissionDecision` payload and the exit code stops being the decision |
 | **PostToolUse** | after a tool ran | quiet **unless it prints a `hookSpecificOutput` JSON on stdout — that is how context injection works, and it happens at exit 0** | feedback to the model (can't un-run the tool) | — |
-| **SessionStart** | session begins | proceed | — | **always exit 0** — never block a session |
+| **SessionStart** | session begins | proceed | **cannot block** — stderr shows the user a hook-error notice, Claude never sees it, the session starts anyway | **exit 0 anyway**: not because a non-zero would block (it can't), but because anything non-zero puts a `<hook> hook error` in the user's transcript on every single session start. Takes a `matcher` on *how the session started* — `startup`, `resume`, `clear`, `compact`, `fork` |
 | **Stop** (+ `SubagentStop`) | the model is about to finish responding | let it stop | **block the stop** — forces the model to keep going (stderr → fed back as the reason) | loop safety: the hook checks `stop_hook_active` (necessary, **not** sufficient — rule 7). The harness's consecutive-block ceiling (default 8) is **not** a general backstop — its counter resets on any continuation that executed tools, so it never arrives for a hook whose remediation involves tool calls, which is most of them (#27). Carry your own bound. All Stop hooks for an event run **in parallel** — one block round can carry several hooks' feedback |
 
-- **PreToolUse** is the workhorse — the only one that can *stop* an action.
-  `matcher` selects the tool (`Bash`, `Agent`, `WebFetch`, …). Exit 2 blocks and
+- **PreToolUse** is the workhorse for stopping a *tool call* — the four types in this
+  table are the ones this file teaches, not the complete set of blockable events, and
+  the **official** hooks reference (docs.claude.com / code.claude.com, not the
+  `references/` files in this bundle — those cover only the four types above) now
+  lists many more blockable events, including `UserPromptSubmit`, `PreCompact`,
+  `TeammateIdle`, and task and config events. If what you need to gate is not a tool
+  call, look there before forcing it onto PreToolUse.
+  `matcher` selects the tool (`Bash`, `Agent`, `WebFetch`, …) — **and how it is
+  matched depends on the characters you use**: a matcher containing only letters,
+  digits, `_`, `-`, spaces, `,` and `|` is compared as an **exact string** (or a
+  `|`/`,`-separated list of exact strings); anything else is treated as an
+  **unanchored JavaScript regex**. Both directions bite silently — `Edit.*` also
+  matches `NotebookEdit` (anchor it `^Edit$`), while `mcp__memory` matches **nothing**
+  because it is all exact-match characters and no tool is named exactly that (you
+  want `mcp__memory__.*`). Matching is case-sensitive. Exit 2 blocks and
   the hook's **stderr** becomes the message the model sees — so put the *why* and
   the *correct alternative* there, not just "blocked".
 - **PostToolUse** can't undo, but it can **inject authoritative context** so a
   later hallucination can't stand (e.g. re-read the real git HEAD after a commit
   and surface it — the model can't "believe it committed" against injected truth).
 - **SessionStart** is for **health checks of the guard rails themselves** —
-  silent when healthy, warn on breakage, always exit 0.
+  silent when healthy, warn on breakage, always exit 0. Note *why*: it is not that
+  a non-zero exit would block the session (it cannot), but that it would print a
+  hook-error notice at every session start until someone fixes it — a check that
+  cries wolf on startup is a check people learn to scroll past.
 - **`set -euo pipefail` vs `set -uo pipefail` — pick by contract, and know there
   are two ways to keep an always-exit-0 contract.** A hook that may block
   (PreToolUse) wants `-e`: an unexpected failure aborting the script is
@@ -122,12 +138,17 @@ Full runnable skeletons: [references/hook_patterns.md](references/hook_patterns.
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-INPUT=$(cat)                                   # the JSON event on stdin
+IFS= read -rd '' INPUT || true                 # builtin; NOT $(cat) — see below
+# 0-fork fast path: a builtin `case` on the raw JSON, BEFORE paying for python3.
+# Your guard runs on EVERY matching tool call, so the irrelevant path is the one
+# that has to be cheap. Keep this filter BROADER than what you actually block and
+# never flag-level — it answers "is this even about X", nothing finer (#22).
+case "$INPUT" in *TRIGGER*) ;; *) exit 0 ;; esac
 TOOL=$(printf '%s' "$INPUT" | python3 -c "import sys,json;print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null||echo "")
 [ "$TOOL" != "Bash" ] && exit 0                # only guard the tool you mean to
 CMD=$(printf '%s' "$INPUT" | python3 -c "import sys,json;print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null||echo "")
 [ -z "$CMD" ] && exit 0
-printf '%s' "$CMD" | grep -qw 'TRIGGER' || exit 0   # fast path: not relevant → allow
+printf '%s' "$CMD" | grep -qw 'TRIGGER' || exit 0   # precise relevance check
 # ... precise detection here ...
 if <command actually does the banned thing>; then
   echo "BLOCKED: ... WHY ... USE INSTEAD: ..." >&2   # stderr = the guidance shown
@@ -135,6 +156,53 @@ if <command actually does the banned thing>; then
 fi
 exit 0
 ```
+
+**Why the first two lines are not stylistic.** `INPUT=$(cat)` plus each
+`printf … | python3 -c …` costs forks **on every call this hook matches, including
+the ones it has nothing to say about**. A fleet of ~13 Bash-matcher hooks × parallel
+sessions × sub-second tool cadence turned that into a sustained 40–200 forks/sec of
+pure guard overhead and put Gatekeeper at the top of an all-day CPU ranking with no
+runaway process anywhere — the fleet was fine; the *irrelevant path's* per-call cost
+was the bug (#22, with the per-guard conversion recipe and its measured floor).
+
+Three caveats before you copy the `case` line anywhere else — the first one is the
+difference between a fast path and a bypass:
+
+- **A coarse filter must be a SUPERSET of what you block, and a raw substring test
+  is not one.** `TRIG''GER -x` runs `TRIGGER` — bash splices the quotes away before
+  execution — but the raw event text contains no `TRIGGER` substring, so a bare
+  `case "$INPUT" in *TRIGGER*)` exits 0 and the guard never sees it. **Measured**:
+  drop this exact line into the shipped Pattern A and `TRIG''GER -x` flips from
+  exit 2 to exit 0, a full bypass — while `scripts/test_hook.sh` still reports
+  21 pass / 0 fail, because no row carries a spliced trigger. Pattern A already
+  carries the fix and the reason ("de-splice — strip quotes and backslashes — and
+  check again; a false negative is a full bypass"); a coarse filter placed *before*
+  that de-splice makes it unreachable. Two safe shapes, in order of preference:
+  **filter on something the splice cannot touch** — a JSON key or a tool name
+  (`case "$INPUT" in *'"tool_name":"Bash"'*)`), since quote-splicing lives in the
+  *command* text and cannot rewrite the event's own structure; or **de-splice
+  inside the filter** before testing (strip `"`, `'` and `\` from a copy of the
+  input, then match). Prefer the first: it needs no escaping gymnastics, and a
+  filter whose own quoting you have to get right is a filter you can get wrong
+  silently. The skeleton above is safe
+  as written only because its own detection is likewise a plain word match; the
+  moment the guard below the filter is smarter than the filter, the filter decides.
+
+- **This skeleton is fail-open on irrelevance** (`grep -qw … || exit 0`), so a
+  coarse filter in front of it changes cost, not semantics. **A fail-closed guard is
+  different**: a bare substring filter silently converts its contract from
+  block-unknown to allow-unknown (measured — `'not json'` sailed straight through the
+  first cut of that fix), and a `*tool_name*` marker alone re-opens the same hole from
+  the other side. Read #22's gate requirements *before* fitting a fast path to a guard
+  that is supposed to block on malformed input.
+- **There is a cheaper layer above the script.** A hook handler can carry an
+  `if` field in its registration — permission-rule syntax such as `"Bash(git *)"` —
+  and the hook command **does not run at all** when it doesn't match: zero forks,
+  because zero processes. It is best-effort by design (the docs say it fails *open*,
+  running your hook anyway, when the Bash command can't be parsed), so treat it as a
+  cost optimization and **never as the gate** — the in-script check still decides.
+  Three sharp edges: it holds exactly one rule (no `&&`/`||`), it is only evaluated
+  on tool events, and a hook that sets `if` on a non-tool event **never runs at all**.
 
 ## Rules that separate a working guard from a session-poisoning one
 
@@ -157,9 +225,19 @@ false-blocks is matching on the raw command string.
   `shlex.split()` function — `split()` only treats `| ; & < >` as separators when
   they are space-separated, so `ls|TRIGGER x` tokenizes to `['ls|TRIGGER', 'x']` and
   your command-position check never sees `TRIGGER` at all (measured; the class with
-  `punctuation_chars=True` yields `['ls', '|', 'TRIGGER', 'x']`). Use the walker in
-  [references/hook_patterns.md](references/hook_patterns.md#the-shlex-command-position-walker)
-  verbatim rather than reaching for the one-liner. A quoted
+  `punctuation_chars=True` yields `['ls', '|', 'TRIGGER', 'x']`). Copy a shipped
+  walker verbatim rather than reaching for the one-liner — but **copy the one that
+  passes `scripts/test_hook.sh`**, which is **Pattern A's**. The
+  [walker section](references/hook_patterns.md#the-shlex-command-position-walker) is
+  a *compact* form and says so: it omits the per-wrapper valued-flag tables, so it
+  misses a target riding a **valued-flag wrapper** — measured, it returns "not in
+  command position" for `timeout 5 TRIGGER`, `sudo -u root TRIGGER` and
+  `nice -n 10 TRIGGER`, while Pattern A's version catches all three. (Bare
+  `sudo TRIGGER` is fine in both — it is the wrapper's *own* flag taking an argument
+  that the compact table doesn't know to skip.) Only one of those shapes is in the
+  shipped harness, so the run you actually see is **20 pass / 1 fail on
+  `wrapper-timeout`** against 21/0 for Pattern A's; the other two fail silently
+  because no row covers them. A quoted
   `"a|TRIGGER|b"` stays **one token**, so a regex argument is never mistaken for
   a command. Then check whether your target is in a **command position**
   (token[0], or right after a `;`/`&&`/`||`/`|` separator, skipping `VAR=val`
@@ -273,10 +351,36 @@ skeleton: Pattern C in [references/hook_patterns.md](references/hook_patterns.md
   the guard fire on a safe probe, or at next session's health-check line.
 - **If the guard needs a release valve, make it a *human* gate, not an env var.**
   A static `GUARD_OK=1` escape hatch is no gate — the model can set the env var
-  itself. Replace with: a native macOS dialog (`osascript` — model can't click)
-  and/or a typed `YES` on `/dev/tty` (model can't type into the user's terminal);
+  itself. Use a native macOS dialog (`osascript` — the model can't click);
   refuse/cancel/timeout = hard NO; log every prompt/bypass to an audit file.
   Pattern in [references/hook_patterns.md](references/hook_patterns.md).
+  - ⚠️ **`/dev/tty` is not a second channel — the docs say hooks cannot open it.**
+    This file used to prescribe a typed `YES` on `/dev/tty` alongside the dialog.
+    The official reference is explicit: hooks "run in their own session **without a
+    controlling terminal**", and "the hook process and any child processes **can't
+    open `/dev/tty`**" (`terminalSequence` is the documented replacement for writing
+    to it). So a "two-channel" gate built that way is one channel plus dead code,
+    and on a box with no GUI session the gate can never be approved by anyone.
+    Consistent with local observation, though read the boundary carefully: in one
+    setup's shared audit log — 1,801 entries, several guards writing to it, three of
+    which implement a tty channel — **360 lines carry a channel tag (236 dialog
+    confirmations, 124 declines or timeouts) and not one line of any kind names the
+    tty channel.** That means the tty branch was never *entered*, which on macOS is
+    what you would predict anyway, because the dialog answers first and short-
+    circuits it. So the log shows nothing here ever depended on tty; it is the
+    documentation, not this measurement, that establishes tty cannot work at all.
+    Keep the dialog; if you need a non-macOS gate,
+    you need a channel this file does not yet have a verified answer for.
+  - ⚠️ **A human gate that outlives the hook timeout fails OPEN.** Hook `command`
+    timeout defaults to 600s (30s on `UserPromptSubmit`), and a timed-out hook
+    **does not block the tool call** — so an unanswered dialog does not become a
+    "no", it becomes an allow. Bound your wait well under the timeout and make
+    no-answer resolve to block *yourself*, before the harness resolves it for you.
+  - The docs also carry an in-UI channel — PreToolUse `hookSpecificOutput`
+    `permissionDecision: "ask"`, which prompts through Claude Code's own interface.
+    It is worth knowing about, but **unverified here under `bypassPermissions` /
+    auto-accept**, which is precisely the mode a Tier-0 gate must survive; the
+    dialog is prescribed because it does not depend on permission mode.
   - **Below Tier-0, where a model-serviceable escape *is* allowed, make it the
     correct usage rather than a bypass flag.** The rule above is absolute for Tier-0
     and does not bend here — this is about the correctness guards that fall short of
@@ -329,7 +433,7 @@ different guard classes.** Take `cd ~/no-such-dir && TRIGGER`:
 |---|---|---|---|
 | **Token matcher** (is this a banned command form?) | the command text alone | **2, block** | `TRIGGER` is right there in the text; an unresolvable `cd` doesn't make it not-a-trigger, and if the guard goes quiet here it will also go quiet on `cd ~/real-dir && TRIGGER` |
 | **State deriver** (does the repo's staged set span domains?) | state read from disk | **0, allow** | `cd` fails, `&&` short-circuits, no commit ever happens — there is nothing to guard |
-| **Termination-state reader** (has the remediation already happened?) | a receipt / counter file (rule 7) | **0, allow** — *when the state file IS the termination condition* | an unreadable receipt means the hook cannot know it already fired; failing closed here blocks forever with no remediation possible and no human-visible cause — that *is* the loop, and it is the one failure worse than a missed case. **Inverted sub-case — read this before copying the row:** when the state is only a **budget on top of an independent predicate** (the block still clears by doing the work), allow-on-unreadable **silently disables the entire hook** — one unwritable directory makes it mute for every input, forever, which is the worst failure shape there is. There, fail back to *the behavior before the budget existed* (keep evaluating the predicate), not to silence. **Tell the two apart with one question: if the state vanished, would remediation still be possible?** No → receipt case, allow. Yes → budget case, keep checking |
+| **Termination-state reader** (has the remediation already happened?) | a receipt / counter file (rule 7) | **0, allow** — *when the state file IS the termination condition* | an unreadable receipt means the hook cannot know it already fired; failing closed here blocks forever with no remediation possible and no human-visible cause — that *is* the loop, and it is the one failure worse than a missed case. **Inverted sub-case — read this before copying the row:** when the state is only a **budget on top of an independent predicate** (the block still clears by doing the work), allow-on-unreadable **silently disables the entire hook** — one unwritable directory makes it mute for every input, forever, which is the worst failure shape there is. There, fail back to *the behavior before the budget existed* (keep evaluating the predicate), not to silence. **Tell the two apart with one question: if the state vanished, would remediation still be possible?** No → receipt case, allow. Yes → budget case, keep checking. Worked answers, so nobody has to re-derive them: rule 7's mechanism 2 (receipt) **and** mechanism 3 (per-session counter) are both **receipt case → allow** — mechanism 3 is deliberately blind to whether R happened, so its counter is the only exit and muting it strands the turn. The budget case is a counter layered on a predicate the user can still satisfy on its own |
 
 So decide which class your hook is *before* writing the row, and the harness's
 `unresolvable path` template row expects **2** because that template targets the
@@ -611,16 +715,44 @@ enforcement you actually need, not simply the first one.
    proof.** The loop ends only if the condition subsides on its own, and what
    ends it then is the world, not your hook. So its `# TERMINATION:` line has to
    name that external fact ("by the time the stamp expires, X has been resolved
-   by &lt;whom&gt;"). If you can't write that line honestly, what you needed was 2
+   by <whom>"). If you can't write that line honestly, what you needed was 2
    or 3. (Family resemblance worth seeing: mechanism 0 is the limit case of both
    — mechanism 3 with the ceiling set to 0, or mechanism 4 with the window set to
    ∞. They differ in enforcement, not in termination.)
 
-**Failure direction for the state itself (rule 5): fail *open*.** If the receipt
-or counter can't be read or written — unwritable `TMPDIR`, sandbox, full disk —
-**allow the stop**. This is the one place in this skill where fail-open is
-mandatory rather than a judgement call: a termination mechanism that cannot read
-its own state and blocks anyway *is* the loop, now with no human-visible cause.
+**Failure direction for the state itself: apply rule 5's question, don't match on
+the word.** If the state can't be read or written — unwritable `TMPDIR`, sandbox,
+full disk — rule 5's guard-class table decides, and it decides by asking **"if this
+state vanished, would remediation still be possible?"** For mechanisms 2 and 3 the
+answer is **no** — the receipt is the only record that R happened, and mechanism 3
+is deliberately blind to whether R happened at all, so its counter is the only exit
+— therefore **allow the stop**. A termination mechanism that cannot read its own
+state and blocks anyway *is* the loop, now with no human-visible cause.
+
+⚠️ **Do not route mechanism 3 to rule 5's "inverted sub-case" just because both say
+"counter".** That sub-case is for a counter that only *budgets the nagging* on top of
+a predicate the user can still satisfy independently — there, going quiet on an
+unreadable counter mutes a hook that had another way to clear, so you keep evaluating
+the predicate. Mechanism 3 has no such predicate to fall back to. **Measured, and it
+is the failure this pairing produces:** paste mechanism 3's snippet into Pattern E's
+skeleton (which ships `set -uo pipefail`, per the `-e`-vs-trap bullet), point
+`TMPDIR` at an unwritable directory, and it returns exit 2 on five consecutive runs
+— `N` never persists past 1, the ceiling is never reached, and #27 already rules out
+the harness cap as a backstop once remediation involves tool calls. The failure
+direction here is decided entirely by a `set` line the snippet does not carry, so
+**put the guard on the step that actually fails — the write — and never on the
+read**:
+
+```bash
+printf '%s' "$N" > "$CNT" 2>/dev/null || exit 0   # can't persist ⇒ can't terminate
+```
+
+The read is already guarded (`cat … 2>/dev/null || echo 0`) and **must stay that
+way**: a missing counter file is the normal first run, so `|| exit 0` on the read
+silences the hook forever in a perfectly healthy environment. Measured, five
+consecutive runs per variant: guarding the write gives `2,2,2,0,0` on a writable
+`TMPDIR` and `0,0,0,0,0` on an unwritable one — correct in both; guarding the read
+gives `0,0,0,0,0` **in both**, i.e. a guard that never fires at all.
 
 **Prose in the demand text does not substitute for a converging predicate.** A
 hook whose message says "if you judge this unnecessary, just finish again" still
@@ -765,8 +897,11 @@ re-replay. Expect the false positives to cluster on **whatever you were doing wh
 wrote the guard** — half of that run's landed on hook-development files, because its author
 was building hooks that week. And scan the block list specifically for **ops actions**
 (edits under the hooks dir, `bash -n` on a hook, the guard's own SSOT): a guard that blocks
-its own removal cannot be switched off from inside a session (#25 — that one blocked the
-very command that unregistered it).
+its own removal cannot be switched off from inside a session. The nearest recorded case is
+#25, where the guard blocked a **read-only** `git config core.hooksPath` query — the same
+blind spot one step short of self-lockout. Once a guard HAS locked you out, the escape
+routes are in **#3**'s list (edit `settings.json` with the Edit/Write tool, which never
+fires a `Bash` matcher; or start a session with a different `CLAUDE_CONFIG_DIR`).
 
 Sizing, so this doesn't read as a research project: one harvest plus one loop, minutes of
 wall time.
@@ -908,7 +1043,7 @@ fire, suspect the row before the hook.
 - [references/hook_patterns.md](references/hook_patterns.md) — runnable skeletons for every hook type covered here, the shlex command-position walker, and the JSON event contract.
 - [references/hook_pitfalls.md](references/hook_pitfalls.md) — every real failure mode with symptom → cause → fix.
 - [scripts/test_hook.sh](scripts/test_hook.sh) — end-to-end test harness; copy it next to any new hook.
-- [scripts/test_hook.group-name-guard.sh](scripts/test_hook.group-name-guard.sh) — a worked harness instance for a real Stop guard (event shapes, `says` rows, both polarities).
+- [scripts/test_hook.group-name-guard.sh](scripts/test_hook.group-name-guard.sh) — a worked harness instance for a real Stop guard: Stop event shapes and an exemption-vs-trigger row set. Takes the hook path as `$1` (`bash test_hook.group-name-guard.sh ~/scripts/claude-hooks/<hook>.sh`); run bare it prints `HOOK not found: …/CHANGE-ME.sh`. **It is not a model for the two things this file asks of a Stop guard** — it carries no `says` rows and no `stop_hook_active` anti-loop row. For those, `scripts/test_hook.sh` is the reference.
 
 ## Maintenance — where new content goes
 

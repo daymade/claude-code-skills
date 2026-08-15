@@ -311,8 +311,10 @@ unresolvable path means **block**.
   yielding a single segment whose head is `cd`. The `git push` further down is no
   longer at a segment head, and the command-position check (#2) never sees it.
   Single-line fixtures cannot expose this: they have no newline to swallow.
-- **Fix — two stages, and the order matters.** First split on **newlines only, as
-  text** (`cmd.split("\n")`). Then, *within each line*, use #2's `shlex` tokenizer
+- **Fix — two stages, and the order matters.** First split into lines with the
+  **shell-aware** splitter `split_shell_lines` (walker section / Pattern A), which
+  tracks quote state, backslash continuations and `$'…'` escapes. Then, *within each
+  line*, use #2's `shlex` tokenizer
   to segment on `;`/`&&`/`|` and walk for command position. This defeats the common
   #2 trap: a `|` inside `grep -E "a|git push|b"`, or an `&&` inside a *single-line*
   `git commit -m "… && git push"`, stays inside one `shlex` token, so no phantom
@@ -320,20 +322,21 @@ unresolvable path means **block**.
   quote-blind split like `re.split(r"[\n;]|&&|\|\||[|&]", cmd)`: that cuts those same
   separators *inside* quotes — pitfall #2, the worst bug in this file — and orphans
   the inner text from its `git commit` head, defeating #7's exemption.
-- **Name its residual, don't hide it.** The text `cmd.split("\n")` is itself
-  quote-blind about *newlines*: a newline **inside** a quoted string or a heredoc
-  body still fragments. The clean witness is a heredoc — `git commit -F - <<'MSG'`
-  whose body contains a bare `git push` line splits that line off and reads it as a
-  command it isn't. (A multiline `-m "…\ngit push"` message fragments too, but its
-  torn line has an unbalanced quote, so whether it over- or under-fires depends on how
-  you handle the `shlex` `ValueError` — a witness for the same residual, less clean.)
+- **Name its residual, don't hide it — and know which stage-1 you are naming.** The
+  first form of this fix split lines as plain text (`cmd.split("\n")`). That form is
+  **superseded**: being quote-blind about newlines, it fragments a newline **inside**
+  a quoted string and false-blocks a healthy command — measured on this file's own
+  harness row `quoted-multiline` (`echo "line1\nTRIGGER…\nline3"`, want 0, got 2),
+  which is the error direction #2 ranks as the worse one. Do not copy it.
   **2026-07-26 refinement (production qlmanage-guard, three review rounds with
-  100+ executed probes):** split shell-aware instead — `split_shell_lines`
+  100+ executed probes), now the prescription above:** `split_shell_lines`
   (walker section / Pattern A) tracks quote state, backslash continuations, and
   `$'…'` ANSI-C escapes, which removes the *quoted-string* half of the residual
   (the `gh pr create -b "…\nTRIGGER…"` shape — more common than heredocs in real
-  tool calls). What remains is heredoc bodies only: they are not quote syntax,
-  so no quote-state machine can see them.
+  tool calls). **What remains is heredoc bodies only**: they are not quote syntax,
+  so no quote-state machine can see them. The clean witness for that surviving
+  residual is `git commit -F - <<'MSG'` whose body contains a bare `git push` line —
+  it splits off and reads as a command it isn't.
   Whether that residual is acceptable follows the same **bias-to-under** call as #2:
   for a **fail-open reminder** an extra over-fire costs nothing — declare it and move
   on; for a **fail-closed blocker** it re-creates #2's false-block, so you must lift
@@ -928,8 +931,13 @@ unresolvable path means **block**.
 - **Cause — the ceiling counts something narrower than its name suggests.**
   Claude Code caps consecutive Stop-hook blocks (default **8**, overridable via
   `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`; **setting it to `0` disables the cap
-  rather than forbidding blocks** — the guard is `cap > 0 &&`). None of this is
-  in the docs; it is readable from the shipped binary. The counter driving it is
+  rather than forbidding blocks** — the guard is `cap > 0 &&`). Those three facts
+  were reverse-engineered here and have since been documented, `0`-disables
+  included, so they are now checkable against the reference. **The mechanism below
+  still is not**: the docs say only that the override lands after eight consecutive
+  blocks "without progress", never defining what resets the count — so the next
+  paragraph remains a binary-derived finding, not a documented contract, and should
+  be re-verified against the CLI you are actually running. The counter driving it is
   **reset to 0 on every continuation that executed tools** — verified across all
   six continuation branches in 2.1.220, each of which writes the counter back as
   `0`; only the block branch increments it. So the cap's real meaning is *"blocked
@@ -946,9 +954,11 @@ unresolvable path means **block**.
   hook cannot learn how many times it has fired, so "let the third one through"
   is not expressible from the input alone. (Cursor hands its stop hook a numeric
   `loop_count` plus a configurable `loop_limit`; Claude Code hands you the bit.)
-  The field is also undocumented — absent from the hooks reference, present in
-  the SDK's type declaration with no prose. Within one query loop it behaves as a
-  **latch**: once true it stays true.
+  The field is now documented — the reference states it is `true` "when Claude Code
+  is already continuing as a result of a stop hook" and tells you to check it — but
+  the documented prose stops there, and the property that actually bites is the one
+  measured here: within one query loop it behaves as a **latch**, once true it stays
+  true, so it cannot count and cannot tell your hook's block from another's.
 - **What is NOT the cause (tested, so you don't repeat the experiment):**
   asynchronous background completions arriving *inside* the blocked window do
   **not** clear the latch. Measured over 7 headless runs on 2.1.220 — three with

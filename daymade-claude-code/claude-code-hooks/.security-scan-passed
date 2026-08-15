@@ -1,4 +1,4 @@
 Security scan passed
-Scanned at: 2026-08-12T02:56:21.707428+00:00
+Scanned at: 2026-08-14T16:30:25.957136+00:00
 Tool: gitleaks + pattern-based validation
-Content hash: ac49aea9d6097d06c01a4e32d8ba706d3d3a5508f7ace906fd48222580a0a050
+Content hash: 41728e161c802ce00caf75d799244fd871efce551b825cfbeb5ea250adbf687c
