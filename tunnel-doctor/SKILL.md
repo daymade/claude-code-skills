@@ -24,7 +24,7 @@ Diagnose and fix conflicts when Tailscale coexists with proxy/VPN tools on macOS
 
 ## Conflict Layers
 
-Proxy/VPN tools on macOS create conflicts at several independent layers. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations; Layer 5 affects VM/container runtimes. TUN-state failure modes beyond this table — DNS hijack, resolver stall, DIRECT split-brain — are covered in Steps 2H–2J:
+Proxy/VPN tools on macOS create conflicts at several independent layers. Layers 1-3 affect Tailscale connectivity; Layer 4 affects SSH git operations; Layer 5 affects VM/container runtimes. TUN-state failure modes beyond this table — SSH/git connection drops, resolver stall, DIRECT split-brain — are covered in Steps 2H–2J:
 
 | Layer | What breaks | What still works | Root cause |
 |-------|-------------|------------------|------------|
@@ -51,7 +51,7 @@ Determine which scenario applies:
 - **`docker pull` fails with `TLS handshake timeout`** → VM proxy misconfiguration (Step 2G-2, fix: `docker.json` with `host.internal`)
 - **Container healthcheck `(unhealthy)` but app runs fine** → Lowercase proxy env var leak (Step 2G-4, fix: clear `http_proxy`+`HTTP_PROXY`)
 - **`docker build` can't fetch base images** → VM/container proxy propagation (Step 2G)
-- **`git clone` fails with `Connection closed by 198.18.x.x`** → TUN DNS hijack for SSH (Step 2H)
+- **`git clone` fails with `Connection closed by 198.18.x.x`** → two different mechanisms produce this; Step 2H separates them
 - **Every domestic/DIRECT-rule site fails at once (TLS `unexpected EOF` mid-handshake, proxy-port CONNECT returns 503, Node CLIs report `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`) while proxied overseas sites keep working** → TUN DIRECT split-brain (Step 2J)
 - **SSH connects but `operation not permitted`** → Tailscale SSH config issue (Step 4)
 - **SSH connects but `be-child ssh` exits code 1** → WSL snap sandbox issue (Step 5)
@@ -68,7 +68,7 @@ Determine which scenario applies:
 - If host `curl https://...` works but `docker pull` times out → Layer 5 (VM proxy propagation).
 - If `docker pull` works but `docker build` `RUN apk add` fails instantly with `Connection refused` → OrbStack transparent proxy broken by TUN (Step 2G-1).
 - If container healthcheck shows `(unhealthy)` but app works → lowercase `http_proxy` leaked into container (Step 2G-4).
-- If DNS resolves to `198.18.x.x` virtual IPs → TUN DNS hijack (Step 2H).
+- If DNS resolves to `198.18.x.x` virtual IPs → a TUN is active, which is **not** by itself a diagnosis: under TUN every hostname resolves this way, on success as well as failure. Go to Step 2H to find out which mechanism you have.
 - If connections to fake-IP-resolved domains die but the same host works via `curl --resolve <host>:443:<real-ip>` (real IP from `dig @<public-resolver>`) → the TUN tool's DIRECT forwarding state is broken, not your network and not the destination (Step 2J).
 - If `nc -z` succeeds on port 22 but SSH gets no banner (`kex_exchange_identification`) → Tailscale SSH proxy intercept (Step 5A). Confirm with `tcpdump -i any port 22` on the remote — 0 packets means Tailscale intercepts above the kernel.
 - If `tailscale ssh` fails with "not available on App Store builds" → install Standalone Tailscale (Step 5B).
@@ -574,56 +574,62 @@ docker exec <container> env | grep -i proxy
 # Expected: all empty or not set
 ```
 
-### Step 2H: Fix TUN DNS Hijack for SSH/Git (198.18.x.x virtual IPs)
+### Step 2H: SSH/Git Failing Through a TUN (`Connection closed by 198.18.x.x`)
 
 **Symptom**: `git clone/fetch/push` fails with `Connection closed by 198.18.0.x port 443`. `ssh -T git@github.com` may also fail. DNS resolution returns `198.18.x.x` addresses instead of real IPs.
 
-**Root cause**: Shadowrocket TUN intercepts all DNS queries and returns virtual IPs in the `198.18.0.0/15` range. It then routes traffic to these virtual IPs through the TUN for protocol-aware proxying. HTTP/HTTPS works because the landing proxy understands these protocols, but SSH-over-443 (used by GitHub) gets mishandled — the TUN sees port 443 traffic, expects HTTPS, and drops the SSH handshake.
+**First, a warning about this symptom**: the `198.18.x.x` in the error message is **not evidence that fake-IP caused the failure**. Under TUN, *every* hostname resolves to a fake IP, so that address appears in the error whether the connection failed for this reason or any other. It tells you a TUN is active — nothing more. Two very different mechanisms produce an identical error line, and they need opposite fixes:
 
-**Diagnosis**:
+| | (A) Protocol-aware mishandling | (B) Episodic forwarding-path instability |
+|---|---|---|
+| Claim | TUN sees port 443, expects HTTPS, drops the SSH handshake | The tunnel's forwarding path drops connections in bursts, regardless of protocol, port, or destination |
+| Predicts | SSH-over-443 fails **deterministically**; HTTPS through the same proxy is fine | SSH and HTTPS both fail at a **similar rate**, in time-clustered windows |
+| Correct fix | Route SSH around the TUN | Retry — the next connection usually succeeds |
 
-```bash
-# DNS returns virtual IP (TUN hijack)
-nslookup ssh.github.com
-# → 198.18.0.26  ← Shadowrocket virtual IP, NOT real GitHub IP
-
-# Direct IP works (bypasses DNS hijack)
-ssh -o HostName=140.82.112.35 -o Port=443 git@github.com
-# → "Hi user! You've successfully authenticated"
-```
-
-**Fix** — use direct IP in SSH config to bypass DNS hijack:
+**Tell them apart before doing anything** — run the *same* proxy path with plain HTTPS to an unrelated host, enough times to see a rate rather than an anecdote:
 
 ```bash
-# ~/.ssh/config
-Host github.com
-    HostName 140.82.112.35    # GitHub SSH server real IP (bypasses TUN DNS hijack)
-    Port 443
-    User git
-    ServerAliveInterval 60
-    ServerAliveCountMax 3
-    IdentityFile ~/.ssh/id_ed25519
+# Same proxy, plain HTTPS, unrelated destination — does it also fail?
+for i in $(seq 1 40); do
+  curl -s -o /dev/null -x http://127.0.0.1:<proxy-port> \
+       -w '%{http_code}\n' -m 10 https://www.google.com/generate_204
+done | sort | uniq -c
 ```
 
-**GitHub SSH server IPs** (as of 2026, verify with `dig +short ssh.github.com @8.8.8.8`):
-- `140.82.112.35` (primary)
-- `140.82.112.36` (alternate)
+- Some HTTPS requests fail too (`000`) at a rate comparable to your SSH failures → **(B)**. The failure is not protocol- or port-specific. Rerouting SSH will not help, because the thing dropping connections is upstream of the protocol.
+- HTTPS is 100% clean across many trials while SSH reliably fails → **(A)**, and the DIRECT-rule fix below is warranted.
 
-**Trade-off**: Hardcoded IPs break if GitHub changes them. Monitor `ssh -T git@github.com` — if it starts failing, update the IP. A cron job can automate this:
+One measured data point for (B), so the rate is concrete rather than hand-waved: on a macOS host running Shadowrocket in TUN mode, `ssh -T git@github.com` succeeded 20/20 in a good window and failed roughly 15–20% of attempts in a bad one — while plain HTTPS through the explicit proxy to an unrelated host failed at a comparable rate in the same window. Same-day `git push` failed twice in a row and then succeeded on the third try, unchanged. That machine was (B), so the port-443 story did not survive contact with the measurement. **This is one host, not a universal refutation** — run the test above and find out which one you have.
+
+**Fix for (B) — retry, and make it automatic.** The failure is episodic, so the cheapest correct response is to try again. Make it transparent at git's transport layer rather than remembering to re-run commands:
 
 ```bash
-# Weekly check (add to crontab)
-0 9 * * 1 dig +short ssh.github.com @8.8.8.8 | head -1 > /tmp/github-ssh-ip.txt
+git config --global core.sshCommand /path/to/ssh-retry-wrapper.sh
 ```
 
-**Alternative** (if you control Shadowrocket rules): Add GitHub SSH IPs to DIRECT rule so TUN passes them through without protocol inspection:
+Two things that wrapper must get right:
+
+- **Only retry failures that happen before key exchange completes.** Match on stderr signatures such as `kex_exchange_identification`, `Connection closed|reset by <host> port <n>`, and `Connection timed out during banner exchange`. If key exchange never completed, ssh never ran the remote command, so git received zero protocol bytes and reopening the connection is invisible to it. A mid-transfer drop carries none of those signatures and **must** pass through untouched — retrying there is what corrupts things.
+- **Don't reach for `ConnectionAttempts` instead; it does not work here.** It retries only the TCP connect phase, and under TUN the handshake completes *locally* no matter what the destination does — so connect always "succeeds" and the failure lands afterwards, in the banner exchange. Measured with a listener that accepts and immediately closes: `ConnectionAttempts=1`, `3`, and `5` all produced exactly **one** accept.
+
+⚠️ Beware stacking retries. If a wrapper script or cron job already retries pushes, adding a transport-layer retry underneath multiplies them (5 × 3 = 15 connections), and the outer layer's logs will undercount actual connection attempts.
+
+**Fix for (A) — a DIRECT rule** (requires proxy tool config access), so the TUN passes this traffic through without protocol inspection:
 
 ```
 IP-CIDR,140.82.112.0/24,DIRECT
 IP-CIDR,192.30.252.0/22,DIRECT
 ```
 
-This is more robust but requires proxy tool config access.
+This degrades softly: if it doesn't help, you are back where you started.
+
+**Not recommended: hardcoding GitHub's IP in `~/.ssh/config`.** Earlier versions of this skill prescribed `HostName 140.82.112.35`. Three reasons to avoid it:
+
+1. **It goes stale, and fails hard when it does.** GitHub rotates these addresses; a dead hardcoded IP surfaces as `connection refused`, which reads like an outage. Prescribing a weekly cron job to babysit an IP is a sign the fix is in the wrong place.
+2. **It may not bypass what it claims to.** Proxy tools route by *rule*, not by whether the destination happens to be a fake IP — so unless a matching DIRECT rule exists, a literal IP takes the same forwarding path as the hostname did, and inherits the same instability.
+3. **It introduces a new `known_hosts` lookup key.** `known_hosts` is keyed by connection string, not by host key, so `[140.82.112.35]:443` is unseen and triggers a TOFU prompt — which either blocks unattended automation or pressures you into loosening `StrictHostKeyChecking`. That is a real cost paid for an uncertain benefit.
+
+If you already applied the hardcoded-IP fix and things improved, run the HTTPS test above before concluding it was the IP: episodic failures also "improve" on their own when the bad window ends.
 
 ### Step 2I: Fix Stalled DNS Resolver in `getaddrinfo` Chain
 
