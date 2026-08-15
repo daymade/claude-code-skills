@@ -632,6 +632,121 @@ def test_pre_edit_snapshot_requires_tool_created_provenance(tmp_path):
     assert report["before"]["provenance"]["origin"] == "pre-edit-snapshot"
 
 
+def test_pre_edit_snapshot_rejects_undeclared_rename(tmp_path):
+    skill = _make_skill(tmp_path / "old-name", "- Keep offline recovery available.")
+    before = tmp_path / "before"
+    create_baseline_snapshot(skill, before)
+    renamed = tmp_path / "new-name"
+    skill.rename(renamed)
+
+    with pytest.raises(ValueError, match="does not match the edited skill"):
+        build_report(before, renamed, baseline_origin="pre-edit-snapshot")
+
+
+def test_pre_edit_snapshot_accepts_declared_rename(tmp_path):
+    skill = _make_skill(tmp_path / "old-name", "- Keep offline recovery available.")
+    before = tmp_path / "before"
+    create_baseline_snapshot(skill, before)
+    renamed = tmp_path / "new-name"
+    skill.rename(renamed)
+    (renamed / "SKILL.md").write_text(
+        (renamed / "SKILL.md").read_text(encoding="utf-8").replace(
+            "Keep offline recovery available", "Use the online workflow"
+        ),
+        encoding="utf-8",
+    )
+
+    report = build_report(
+        before, renamed, baseline_origin="pre-edit-snapshot", renamed_from=skill
+    )
+
+    assert report["before"]["provenance"]["origin"] == "pre-edit-snapshot"
+    assert report["before"]["provenance"]["renamed_from"] == str(skill.resolve())
+    assert any("offline recovery" in item["text"] for item in report["candidates"])
+
+    # A renamed_from pointing at the wrong old path must still fail — the
+    # override is a narrow substitution, not a way to skip identity checking.
+    with pytest.raises(ValueError, match="does not match the edited skill"):
+        build_report(
+            before, renamed, baseline_origin="pre-edit-snapshot", renamed_from=tmp_path / "wrong-old-name"
+        )
+
+
+def test_pre_edit_snapshot_wrong_renamed_from_names_the_resolved_path(tmp_path):
+    # A wrong --renamed-from value used to produce the exact same bare error
+    # as no --renamed-from at all, with no way to tell "you forgot the flag"
+    # apart from "you passed the flag but got the value wrong" (independent
+    # review, 2026-08-15). The hint must now show what path renamed_from
+    # actually resolved to, so a wrong value is diagnosable from the error
+    # alone.
+    skill = _make_skill(tmp_path / "old-name", "- Keep offline recovery available.")
+    before = tmp_path / "before"
+    create_baseline_snapshot(skill, before)
+    renamed = tmp_path / "new-name"
+    skill.rename(renamed)
+    wrong_old_path = tmp_path / "wrong-old-name"
+
+    with pytest.raises(ValueError, match=r"--renamed-from resolved to .*wrong-old-name"):
+        build_report(
+            before, renamed, baseline_origin="pre-edit-snapshot", renamed_from=wrong_old_path
+        )
+
+
+def test_git_ref_baseline_accepts_declared_rename(tmp_path):
+    repo = tmp_path / "repo"
+    skill = _make_skill(repo / "old-name", "- Keep offline recovery available.")
+    before = tmp_path / "before"
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "user@example.com"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test User"], check=True)
+    subprocess.run(["git", "-C", str(repo), "add", "old-name"], check=True)
+    tree = subprocess.run(
+        ["git", "-C", str(repo), "write-tree"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    commit = subprocess.run(
+        ["git", "-C", str(repo), "commit-tree", tree, "-m", "baseline"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "-C", str(repo), "symbolic-ref", "HEAD", "refs/heads/main"], check=True)
+    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/heads/main", commit], check=True)
+    create_baseline_snapshot(skill, before)
+    renamed = repo / "new-name"
+    skill.rename(renamed)
+    (renamed / "SKILL.md").write_text(
+        (renamed / "SKILL.md").read_text(encoding="utf-8").replace(
+            "Keep offline recovery available", "Use the online workflow"
+        ),
+        encoding="utf-8",
+    )
+
+    # Undeclared: after moved out from under the ref-relative lookup path, so
+    # the tree lookup for the (now nonexistent) new-name path fails.
+    with pytest.raises(ValueError):
+        build_report(before, renamed, baseline_origin="git-ref:HEAD")
+
+    report = build_report(
+        before, renamed, baseline_origin="git-ref:HEAD", renamed_from=skill
+    )
+
+    assert report["before"]["provenance"]["origin"] == f"git-ref:{commit}"
+    assert report["before"]["provenance"]["skill_path"] == "old-name"
+    assert report["before"]["provenance"]["renamed_from"] == str(skill.resolve())
+    assert any("offline recovery" in item["text"] for item in report["candidates"])
+
+    # renamed_from resolving outside --after's repo (e.g. a relative path that
+    # resolved against the wrong cwd — the exact shape independent review hit
+    # running this from skill-creator's own, separate repo) must get a specific
+    # "not inside the Git repository containing --after" error, not the bare
+    # "requires the edited skill to be inside a Git worktree" message that used
+    # to also fire here and made this failure indistinguishable from --after
+    # genuinely not being in a worktree at all.
+    outside_repo_path = tmp_path / "not-in-repo-at-all"
+    with pytest.raises(ValueError, match="not inside the Git repository containing"):
+        build_report(
+            before, renamed, baseline_origin="git-ref:HEAD", renamed_from=outside_repo_path
+        )
+
+
 def test_compare_cli_rejects_identical_current_to_current_baseline(tmp_path, capsys):
     skill = _make_skill(tmp_path / "skill", "- Keep offline recovery available.")
     before = tmp_path / "before"
