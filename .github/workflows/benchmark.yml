@@ -29,10 +29,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -57,7 +57,7 @@ jobs:
           npx vitest run tests/benchmark/scrape-benchmark.ts --reporter=verbose 2>&1 | tee scrape-benchmark.log
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: scrape-benchmark-results
@@ -92,10 +92,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -111,7 +111,7 @@ jobs:
           npx vitest run tests/benchmark/annotation-accuracy.ts --reporter=verbose 2>&1 | tee annotation-accuracy.log
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: annotation-accuracy-results
@@ -147,10 +147,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
 
       - name: Generate combined report
         run: |
@@ -171,14 +171,14 @@ jobs:
           fi
 
       - name: Upload combined report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: full-benchmark-report
           path: benchmark-report.md
 
       - name: Create GitHub Issue on failure
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             github.rest.issues.create({
