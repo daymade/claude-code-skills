@@ -1527,3 +1527,86 @@ this list and describe defects you reach by asking a different question):
    triggers it is trivially constructible and entirely ordinary (a comment
    above a commit). Frequency data tells you whether you were lucky, not
    whether the gate holds.
+
+## 33. A shlex-based guard sees the text you typed, not the argv bash builds — every shell expansion is a hole in it
+
+> Worked example: `git-commit-form-guard.sh` (a private hooks repo, not
+> shipped here), 2026-08-16, found by an independent fresh-context reviewer
+> after the author had already declared the guard sound. Three separate,
+> zero-setup, everyday-syntax ways to make the guard's own target form
+> (`git commit -a`) invisible to it, all present since the guard's earliest
+> commit, one of them pushed all the way through to a real `git commit` that
+> genuinely swept uncommitted work into the tree.
+
+- **Symptom:** the guard blocks `git commit -a -m x` (exit 2) and allows all
+  of these (exit 0), each of which bash executes as *exactly that command*:
+
+  | typed | bash's real argv |
+  |---|---|
+  | `git commit {-a,-m} x` | `commit` `-a` `-m` `x` (brace expansion) |
+  | `git commit $'-a' -m x` | `commit` `-a` `-m` `x` (ANSI-C quoting) |
+  | `git${IFS:0:1}commit${IFS:0:1}-a` | `git` `commit` `-a` (IFS as separator) |
+
+- **Cause — a category error about what the tokenizer is for.** `shlex` is a
+  *lexer*: it splits text into words and handles quoting. Bash, before it
+  ever has an argv, additionally performs brace expansion, tilde expansion,
+  parameter/variable expansion, command substitution, arithmetic expansion,
+  word splitting, and pathname expansion. `shlex` does **none** of these and
+  never claims to. So `{-a,-m}` arrives as one literal token beginning with
+  `{`, which never reaches a flag scanner that only fires on tokens
+  beginning with `-`. The guard is not buggy in its own terms; it is
+  answering a different question than the one that matters ("what did the
+  user type" vs "what will actually run").
+
+- **Why this outranks the disclaimer the guard already had.** This guard
+  already declared variable indirection (`G=git; $G commit -am`) an accepted
+  false negative. That disclaimer does not cover these: `$G` requires the
+  user to have written an assignment first, whereas all three above are
+  zero-setup and are ordinary syntax people type for non-evasive reasons
+  (`cp file.{txt,bak}` is completely normal). "We accept some
+  under-detection" is a budget, and it silently overran — the accepted case
+  was narrow and these are broad.
+
+- **Why the author didn't find it and the reviewer did.** The author's own
+  adversarial sweep (26 dangerous forms) was built from *the mechanism he
+  had just fixed* — comments, redirects, line continuations, quoting. Not
+  one case used a shell expansion, because expansions were not part of the
+  bug he had in mind. A fresh-context reviewer, given only "find any
+  remaining bypass," had no such anchor. **Generalize: your own bypass
+  hunt is shaped by the bug you just fixed, and is therefore blindest
+  exactly where the next bug lives.**
+
+**Fixes, in the order they buy the most:**
+
+1. **Decide explicitly whether you are guarding text or argv, and write it
+   down.** If argv, a lexer alone cannot get you there and every expansion
+   is an open hole. If text (a reasonable choice for a cheap PreToolUse
+   guard), then the accepted-under-detection list must name the expansion
+   classes, not just the one you happened to think of.
+2. **Normalize the expansions you can, on raw text, outside quotes, before
+   tokenizing.** You do not need to *implement* bash expansion — you need
+   only to stop the expansion from *hiding a flag*. Rewriting `{a,b}` to
+   ` a b `, `$'x'` to `x`, and `${IFS…}` to a space is a few dozen lines and
+   restores the flags as independent tokens the existing logic already
+   understands. Constrain the brace rule to groups that contain a comma and
+   no whitespace, or you will eat `find -exec {} \;` and `awk '{print $1}'`.
+3. **Prove the exploit against real bash before you fix, and against real
+   bash after.** A guard-parser disagreement is not automatically a
+   vulnerability — the reviewer here correctly discarded one candidate
+   (`{-a,} -m x`) after finding that real `git` rejects it with `fatal:
+   paths … with -a does not make sense`. Dump argv with a probe script that
+   just prints `"$@"`; that is the ground truth, not your reading of the
+   man page.
+4. **Measure the fix against a real corpus, in both directions.** Here:
+   27,641 real commands containing `commit` / brace-with-comma / `IFS` /
+   `$'`, run through pre-fix and post-fix binaries, **zero exit-code
+   differences** — three complete bypasses closed with provably no
+   real-world behavior change. Without that number, "I added a normalizer to
+   a Tier-0 gate" is an unbounded false-positive risk, and false positives
+   on a gate are worse than the gap you closed.
+5. **Keep the positive controls that pass in BOTH versions.** The
+   calibration run against the pre-fix binary should redden *only* the
+   bug-specific cases (here 11 of them: 8 bypasses + 3 false blocks), while
+   `cp file.{txt,bak}` and "braces appearing inside a commit message as
+   data" stay green on both. A positive control that only passes after the
+   fix is not a control — it is another regression test riding along.
