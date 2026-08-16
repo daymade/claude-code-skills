@@ -74,15 +74,20 @@ The body field moved between lark-cli versions, so probe both instead of hard-co
 ```bash
 lark-cli docs +fetch --doc <obj_token> --format json > /tmp/fetch.json 2> /tmp/fetch.err
 # ≤1.0.32: clean Markdown in .data.markdown.
-# 1.0.55: body moved to .data.document.content as HTML (.data.markdown is null).
+# 1.0.55+: body moved to .data.document.content as HTML (.data.markdown is
+# null — verified null in 11/11 real documents checked as of 2026-08-17,
+# including 3/3 fresh fetches on the currently-installed 1.0.80; whether the
+# .data.markdown branch is still reachable on any current build was not
+# confirmed).
 if jq -e -r '.data.markdown // empty' /tmp/fetch.json > "<sanitized-title>.md" && [ -s "<sanitized-title>.md" ]; then
   : # got clean Markdown directly
 else
-  jq -r '.data.document.content' /tmp/fetch.json | pandoc -f html -t gfm > "<sanitized-title>.md"
+  jq -r '.data.document.content' /tmp/fetch.json > "<sanitized-title>.html"
+  pandoc -f html -t gfm "<sanitized-title>.html" > "<sanitized-title>.md"
 fi
 ```
 
-- On 1.0.55 the HTML in `.data.document.content` carries Feishu structure as `<h1>/<table>/<cite doc-id=…>` tags; `pandoc -f html -t gfm` renders headings and tables faithfully, and the `<cite>` tags surface as the reference list Step 5 recurses on. `--format markdown` is **not** a valid value (lark-cli warns and falls back to json).
+- On 1.0.55+ the HTML in `.data.document.content` carries Feishu structure as `<h1>/<table>/<cite doc-id=…>` tags; `pandoc -f html -t gfm` renders headings and ordinary tables faithfully. ⚠️ **But `<cite>` (mention-doc) and `<whiteboard token=…>` do NOT survive — pandoc drops them with zero trace** (verified 2026-08-16/17 against real documents; for `<cite>` not even the bare title text survives, since the title lives in a `title="…"` attribute and the tag body is empty). Because of this, **Step 5's extractor and leaf-gate must run against the saved `<sanitized-title>.html`, never against the pandoc-converted `.md`**, whenever this branch was taken — see Step 5 below. `--format markdown` is **not** a valid value (lark-cli warns and falls back to json).
 - **Keep stdout/stderr separate.** `stderr` may carry `[deprecated] docs +fetch with v1 API is deprecated` — harmless. Doing `2>/dev/null | jq` in one pipe produced a spurious `Exit code 5`; redirect to files and inspect instead.
 - **Never** reconstruct the body by reading and retyping it — `jq`/`pandoc` it to disk. pandoc only re-renders HTML structure (it does not rewrite prose), so the fidelity guarantee that makes Path A safer than any browser/LLM path still holds.
 - `--format json` is required so you parse one field deterministically.
@@ -140,11 +145,13 @@ A hub is the root of a reference graph. Treat it as BFS/DFS over references unti
 **Enumerate references with the bundled extractor** (a missed reference is a missing document — the single biggest hub-scraping failure; do not hand-roll `grep` and forget the `my.feishu.cn` personal-space pattern, which is exactly what happened before this script existed):
 
 ```bash
-python3 scripts/feishu_extract_refs.py <fetched-body>.md
-# → JSON array of {type, token_or_url, title}
+python3 scripts/feishu_extract_refs.py <fetched-body>.html
+# prefer the raw HTML saved in Step 3; fall back to <fetched-body>.md only if
+# no .html was ever saved (the .data.markdown branch)
+# → JSON array of {type, ref, title, dispatch}
 ```
 
-The references it recognizes (the full rich-media inventory): `<mention-doc token type>`, `<sheet token>`, `<lark-table><lark-tr><lark-td>` (inline tables — render in place, not a reference), `<image token>`, `<view><file>`, cross-tenant `https://<tenant>.feishu.cn/(docx|wiki|sheets|base|file)/<token>`, personal-space `https://my.feishu.cn/docx/<token>`, Minutes `https://<tenant>.feishu.cn/minutes/<token>`, Tencent-Meeting `https://meeting.tencent.com/crm/<id>`.
+The references it recognizes (the full rich-media inventory): `<mention-doc token type>`, `<sheet token>`, `<lark-table><lark-tr><lark-td>` (inline tables — render in place, not a reference), `<image token>`, `<whiteboard token>` (inline diagram block — export+Read, NOT a followable reference, see below), `<view><file>`, cross-tenant `https://<tenant>.feishu.cn/(docx|wiki|sheets|base|file)/<token>`, personal-space `https://my.feishu.cn/docx/<token>`, Minutes `https://<tenant>.feishu.cn/minutes/<token>`, Tencent-Meeting `https://meeting.tencent.com/crm/<id>`. ⚠️ The `<mention-doc>`/`<image>`/`<lark-table>` shapes above are this doc's shorthand names for the reference *types*, not their literal raw-HTML syntax — the real, verified tag shapes (`<cite doc-id=…>`, `<img src=…>`, plain `<table>`) are documented with evidence in `scripts/feishu_extract_refs.py`'s regex comments; trust those over these shorthand names when hand-verifying a residual tag.
 
 **Dispatch table:**
 
@@ -157,6 +164,7 @@ The references it recognizes (the full rich-media inventory): `<mention-doc toke
 | `meeting.tencent.com/crm/` | Tencent Meeting tooling (outside this skill — its native transcript API; never download+re-ASR) |
 | `<lark-table>` | render inline to a Markdown table (pandas `read_html` handles colspan/rowspan); it is content, not a link |
 | `<image token>` | register the token; lark-cli cannot download it (see permission-and-failure-boundaries.md) |
+| `<whiteboard token>` | NOT recursed — export a preview image (`lark-cli whiteboard +export --whiteboard-token <token> --output-type preview --output <path>.jpg --overwrite`) and Read it; see SKILL.md Path A step 4 |
 | `<view><file>` | attachment — record token + filename; treat like an image gap unless separately retrievable |
 
 **Recursion loop:** fetch root → extract refs → for each new ref, dispatch and fetch → run the extractor on each newly fetched body → repeat until no new tokens appear. A child doc can itself embed another reference (e.g. a summary doc that embeds a third Minutes link); the loop must re-scan every newly fetched file, not only the root.
@@ -164,11 +172,11 @@ The references it recognizes (the full rich-media inventory): `<mention-doc toke
 **Leaf / completion gate** — before declaring the collection done, no rich-media reference may remain unresolved anywhere:
 
 ```bash
-grep -rlE '<(lark-table|lark-tr|sheet token=|mention-doc|view type=)' . \
+grep -rlE '<(lark-table|lark-tr|sheet token=|mention-doc|cite doc-id=|whiteboard token=|view type=)' . \
   && echo "UNRESOLVED — keep recursing" || echo "clean"
 ```
 
-This grep being empty is a hard acceptance gate for collections.
+⚠️ **On each document's saved `.html`, "empty" is not a literal stop condition.** Each `<sanitized-title>.html` (Step 3's per-document naming — never a literal shared `source.html` across a hub's multiple fetches, or the second fetch silently destroys the first) is an immutable raw capture of that one document — nothing in this skill rewrites a document's own file in place — so a hub doc that genuinely references N children or M diagrams keeps showing N+M matches forever in its own file, even after every one is correctly handled; chasing this grep to a literal zero across the whole directory will never terminate for a real hub. Treat each match as a worklist item: a `mention-doc`/`cite doc-id=`/`sheet` hit is resolved once the referenced child has actually been fetched and saved (as its own distinct file); a `whiteboard` hit is resolved once its preview `.jpg` was exported and Read (dispatch-table row above) — it is not a missing document to fetch, don't treat it as one. This grep still recurses over every file already on disk, so it naturally covers every document's raw `.html` saved in Step 3 alongside its pandoc-converted `.md` — no extra step needed there. (On the `.data.markdown` branch, where the fetched body is the deliverable Markdown itself, a literal empty result remains the simpler signal.)
 
 ## Step 6: cross-tenant and personal-space sources
 
