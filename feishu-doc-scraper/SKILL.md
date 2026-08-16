@@ -1,7 +1,7 @@
 ---
 name: feishu-doc-scraper
 description: Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets, and Minutes (妙记) transcripts into faithful local Markdown via the lark-cli API (no LLM rewriting of the body; browser-DOM fallback when lark-cli can't reach the content). Use whenever the source is a Feishu/Lark URL and fidelity matters — 导出飞书文档/合集/妙记转写, 把飞书 wiki/知识库转 markdown, archiving a Feishu collection, exporting a 妙记 transcript, or saving a Feishu page — even if the user only says clipping, archiving, converting, or "save this". Also covers the owner-exported .docx → faithful Markdown path.
-compatibility: Primary path needs the `lark-cli` binary (npm `@larksuite/cli`, verified 1.0.32, 2026-05) authenticated to the target tenant. Fallback path needs a browser automation surface with an authenticated session (Chrome DevTools MCP / Browser Use / Computer Use). docx path needs `python-docx` and a docx→md converter (the bundled doc-to-markdown skill or pandoc).
+compatibility: Primary path needs the `lark-cli` binary (npm `@larksuite/cli`; verified 1.0.32, 2026-05, and re-verified 1.0.80, 2026-08 — the `.data.markdown` field is null on 1.0.80 and the pandoc/`source.html` path in step 3 is load-bearing there) authenticated to the target tenant. Fallback path needs a browser automation surface with an authenticated session (Chrome DevTools MCP / Browser Use / Computer Use). docx path needs `python-docx` and a docx→md converter (the bundled doc-to-markdown skill or pandoc).
 argument-hint: "[feishu-url-or-output-path]"
 ---
 
@@ -61,27 +61,50 @@ lark-cli docs +fetch --doc <obj_token> --format json > /tmp/fetch.json 2> /tmp/f
 if jq -e -r '.data.markdown // empty' /tmp/fetch.json > source.md && [ -s source.md ]; then
   : # got clean Markdown directly
 else
-  jq -r '.data.document.content' /tmp/fetch.json | pandoc -f html -t gfm > source.md
+  jq -r '.data.document.content' /tmp/fetch.json > source.html
+  pandoc -f html -t gfm source.html > source.md
 fi
 ```
 
-`--format markdown` is **not** a valid value (lark-cli warns and falls back to json). Keep stdout and stderr separate — a harmless `[deprecated]` line goes to stderr, and piping `2>/dev/null` *and* `jq` together produced a false `Exit code 5` in practice. The body must reach disk via `jq`/`pandoc`, never retyped or summarized by the model — paraphrasing silently corrupts source text, the single most important fidelity rule. (pandoc only re-renders HTML structure to Markdown; it does not rewrite prose, so fidelity holds.)
+⚠️ **On this pandoc branch, `pandoc -f html -t gfm` silently strips several of Feishu's custom embedded tags — verified against real documents, 2026-08-16/17, and the damage is worse the deeper you look:**
+- **whiteboard** (`<whiteboard token="…">`, an inline diagram block) vanishes with zero trace. Confirmed on a real document: 3 raw tags in `.data.document.content` → 0 trace in the pandoc-converted `source.md` (`grep -c whiteboard` found 3 hits in the raw HTML, 0 in the converted Markdown).
+- **mention-doc** — whose real raw tag is `<cite doc-id="…" file-type="wiki|docx" title="…" type="doc"></cite>`, not the `<mention-doc token="…" type="…">Title</mention-doc>` shape this skill originally assumed — also vanishes with zero trace, and worse than just losing the token/type: the title lives in a `title="…"` attribute and the tag body is empty, so pandoc drops the whole element and not even the bare title text survives.
+- **sheet** is unconfirmed either way (no real sheet-reference document was found to test) — treat it as capable of silently vanishing too until proven otherwise.
+- **image** — whose real raw tag is a standard `<img src="<drive-token>" alt="…" …>`, not `<image token="…">` — does *not* vanish: pandoc passes the raw `<img>` element through mostly intact (`src`/`id`/`href`/`width`/`height`/`alt` survive; `name=` is dropped; `mime=`/`scale=` are renamed `data-mime=`/`data-scale=`).
+- **lark-table** turns out not to be a real tag for ordinary docx tables at all — they use plain `<table>` HTML, and pandoc generally converts them intact (clean GFM pipe-table syntax for single-paragraph cells, or a raw `<table>` HTML block for multi-paragraph cells) — not part of this silent-loss class.
 
-**4. If it's a collection/hub, follow the reference graph (BFS).** The hub body contains `<mention-doc>`, `<sheet>`, `<image>` tags and cross-tenant / Minutes / Tencent-Meeting URLs. Extract every reference, dispatch by type, fetch, and **repeat on each newly fetched doc until no new references remain** (leaf nodes). Use the bundled extractor so nothing is silently missed (a missed reference = a missing document, the #1 hub-scraping failure):
+Because the loss is real and type-dependent, **extraction (step 4) and the residual-tag check (step 5) must operate on `source.html`, never on `source.md`, whenever this pandoc branch was taken.** On the `.data.markdown` branch (≤1.0.32), if it is still reachable at all, the tags already survive as literal text directly in `source.md`, and checking `source.md` there remains correct — this caveat is specific to the pandoc fallback, which is the **current default**: `.data.markdown` was `null` in every real document checked (11/11 — 3/3 fresh fetches on the currently-installed lark-cli 1.0.80, plus 8/8 archived 2026-07-25 fetches), so whether the old branch is still reachable on any current lark-cli build was not confirmed.
+
+`--format markdown` is **not** a valid value (lark-cli warns and falls back to json). Keep stdout and stderr separate — a harmless `[deprecated]` line goes to stderr, and piping `2>/dev/null` *and* `jq` together produced a false `Exit code 5` in practice. The body must reach disk via `jq`/`pandoc`, never retyped or summarized by the model — paraphrasing silently corrupts source text, the single most important fidelity rule. (pandoc only re-renders HTML structure to Markdown; it does not rewrite prose — the tag-stripping above is a structural loss, not a prose-fidelity one, which is why source.html must stay on disk and stay authoritative for rich-media references.)
+
+**4. If it's a collection/hub, follow the reference graph (BFS).** The hub body contains `<mention-doc>` (real raw tag: `<cite doc-id="…">`), `<sheet>`, `<image>` (real raw tag: `<img src="…">`) tags, `<whiteboard token="…">` blocks, and cross-tenant / Minutes / Tencent-Meeting URLs. Extract every reference, dispatch by type, fetch, and **repeat on each newly fetched doc until no new references remain** (leaf nodes) — **except `whiteboard`, which is never fetched or recursed**: it's inline visual content, not a link to another document (see the dedicated instruction below). Use the bundled extractor so nothing is silently missed (a missed reference = a missing document, the #1 hub-scraping failure):
 
 ```bash
-python3 scripts/feishu_extract_refs.py source.md   # → JSON list of {type, token, title}
+python3 scripts/feishu_extract_refs.py source.html   # → JSON list of {type, ref, title, dispatch}
 ```
 
-Recursion loop, dispatch table, and the cross-tenant/`my.feishu.cn` personal-space rules are in the reference.
+The extractor is a plain regex scan — it works on either `source.html` or `source.md`, since it just checks whether the file's text contains the tags — but **`source.html` is the one to trust when both exist**; fall back to `source.md` only if no `source.html` was ever saved (the `.data.markdown` branch, see step 3). Recursion loop, dispatch table, and the cross-tenant/`my.feishu.cn` personal-space rules are in the reference.
 
-**5. Final residual-tag check (acceptance gate for collections).** Every rich-media reference must have been resolved and rendered:
+**Whiteboard blocks are not a followable reference — export and read them in place.** A `whiteboard token="…"` tag is Feishu's native diagram/flowchart block, inlined in the current document — it is not a pointer to another document, so don't try to recurse/fetch it like `mention-doc`/`sheet`. It must be understood visually: a flowchart's meaning is not reliably recoverable from raw node coordinates/text-fragment lists alone. Export a preview image and actually look at it:
 
 ```bash
-grep -rlE '<(lark-table|lark-tr|sheet token=|mention-doc|view type=)' . && echo "UNRESOLVED — keep recursing" || echo "clean"
+lark-cli whiteboard +export --whiteboard-token <token> --output-type preview --output <path>.jpg --overwrite
 ```
 
-Must be empty before you stop.
+Then use the Read tool on the resulting `.jpg` to see the diagram's actual content. `--output-type raw` is also available (structured node JSON — useful as a cross-check/searchable index, but not a substitute for looking at the rendered image); `svg` and `source` output types also exist. The output path must have a real image extension matching what the command actually produces (it errors if you ask for `.png` when the true format is `.jpg` — match the extension to what the command reports, or omit the extension per its own `--help`). This matters because diagrams frequently carry decision-relevant content absent from the document's plain-text sections — e.g. a swimlane/process diagram can carry role-by-role steps and concrete numeric thresholds nowhere else in the doc. Treating a document as "fully extracted" without opening these blocks silently discards exactly the content most likely to carry its actual operating logic.
+
+**5. Final residual-tag check (acceptance gate — run this on every fetched document, not just collections).** A single standalone document with no cross-doc references still needs this: an inline `whiteboard` or unresolved reference tag can appear with zero other documents involved (this is exactly what happened on a real single-doc extraction 2026-08-16 — no hub, no recursion, just 3 unread whiteboards). Every rich-media reference must have been resolved and rendered. Run this against `source.html` — the pandoc-converted `source.md` can report "clean" while real tags were silently dropped (see step 3's callout):
+
+```bash
+TARGET=source.html
+[ -f "$TARGET" ] || TARGET=source.md   # only if no source.html was ever saved (the .data.markdown branch)
+grep -lE '<(lark-table|lark-tr|sheet token=|mention-doc|cite doc-id=|whiteboard token=|view type=)' "$TARGET" \
+  && echo "UNRESOLVED — keep recursing" || echo "clean"
+```
+
+`lark-tr` and `view type=` in that pattern are pre-existing, unverified-against-real-HTML terms — unlike the other five, they have no backing regex in `feishu_extract_refs.py` and no dispatch entry, so a hit here has no structured tooling support; treat it as "stop and inspect the raw tag by hand," not as something the extractor already understands.
+
+⚠️ **On `source.html`, "empty" is not a literal stop condition — treat each hit as a worklist item, not a failure to loop on.** `source.html` is an immutable raw capture; nothing in this skill rewrites it in place, so a parent doc that genuinely references N other docs or M diagrams keeps showing N+M matches forever, even after every one of them has been correctly handled — chasing this grep to a literal zero on `source.html` will never terminate for a real hub doc. Instead, for every match, verify the corresponding artifact exists on disk: a `mention-doc`/`cite doc-id=`/`sheet` hit is resolved once the referenced child doc has actually been fetched and saved (step 3, applied to that child); a `whiteboard` hit is resolved once its preview `.jpg` was exported and Read (step 4) — **never** by fetching another document, it is not a followable reference. Stop only once every match maps to a verified on-disk artifact. (On the `.data.markdown` fallback branch, where the fetched body is the deliverable Markdown itself rather than an immutable raw capture, a literal empty result remains the simpler signal — but that branch was not confirmed reachable on any current lark-cli build, see step 3.)
 
 ## Path B — permission denied → owner-exported .docx
 
@@ -104,6 +127,7 @@ These are the rules whose violation silently ruins the output. Each has a reason
 - **Transcripts come from the platform's native transcription, never re-ASR.** Downloading media and transcribing again loses speaker labels, timestamps, and accuracy.
 - **A generated docx Markdown is not done until it has been *visually* verified** against the source (render to image, read it). Feishu-exported docx uses font-size+bold for headings rather than Word heading styles, so a "no errors, word count matches" check passes while the entire heading hierarchy is silently flat. Text-level checks cannot catch this.
 - **Do not 死磕 (grind) on docx embedded-image download.** lark-cli (through 1.0.32) cannot download `<image>` tokens from a docx — exhaustively verified. Register the image tokens and note "needs document owner to right-click → save"; the text is the value, images are a tracked gap.
+- **Rich-media tag verification must run on `source.html`, never `source.md`, on the pandoc fallback path.** `pandoc -f html -t gfm` silently strips Feishu's custom embedded tags — verified on a real document: 3 raw `whiteboard token="…"` tags in `.data.document.content` left zero trace in the converted `source.md` (2026-08-16). Checking `source.md` for residual tags on this path always reports "clean," even when content was silently discarded.
 - **HTTP 200 from anonymous curl ≠ accessible.** A Feishu login wall returns 200 with a body containing `accounts.feishu.cn` / `login` / `passport` / an empty `<title>`. Check the body, never infer "public" from the status code.
 - **A file "not found" by a search agent is not authoritative.** Verify against authoritative sources before concluding (this is general Inference Discipline; relevant when locating where ingested content already lives).
 - **U+FFFD final check on every produced file:** `LC_ALL=C grep -rl $'\xef\xbf\xbd' .` must be empty. A replacement character means an encoding step corrupted the text.
@@ -113,7 +137,7 @@ These are the rules whose violation silently ruins the output. Each has a reason
 Stop only when all that apply are true:
 
 - Every fetched body reached disk via `jq`/script, not retyped by the model.
-- Collections: the residual rich-media-tag grep (Path A step 5) is empty — every `mention-doc`/`sheet`/cross-tenant reference was followed to a leaf.
+- **Every fetched document — a lone doc as much as a collection**: every hit from the residual rich-media-tag check (Path A step 5, run against `source.html`) maps to a verified on-disk artifact — every `mention-doc`/`cite doc-id=`/`sheet`/cross-tenant reference was **followed** to a fetched leaf file, and every `whiteboard` reference was **exported and read** (not followed — a whiteboard is inline visual content, never a link to recurse into). This is not a collections-only check: a standalone document can contain an unresolved `whiteboard` with zero other documents involved. `source.html` legitimately keeps showing these tags forever (it's an immutable raw capture, never rewritten) — don't chase the grep itself to a literal zero on that file.
 - `LC_ALL=C grep -rl $'\xef\xbf\xbd' .` is empty.
 - docx path: rendered to an image and visually compared to the source; heading hierarchy and highlights match (see docx reference's checklist).
 - Browser fallback only: TOC coverage + scale check (see browser-failure-rules.md).
@@ -132,7 +156,7 @@ Verified dead-ends — retrying them only wastes the session. Full table with fa
 
 ## Bundled resources
 
-- `scripts/feishu_extract_refs.py` — deterministic reference-token extractor; the recursion engine's core. Run it on every fetched body to enumerate `<mention-doc>`/`<sheet>`/`<image>`/cross-tenant/Minutes/Tencent-Meeting references as JSON.
+- `scripts/feishu_extract_refs.py` — deterministic reference-token extractor; the recursion engine's core. Run it on `source.html` (prefer over `source.md` — step 3) to enumerate `<mention-doc>`/`<sheet>`/`<image>`/`<whiteboard>`/cross-tenant/Minutes/Tencent-Meeting references as JSON.
 - `scripts/restore_docx_headings.py` — for Path B: reads true font sizes via python-docx, maps them to heading levels, restores `w:shd` highlights to Obsidian `==…==`, without retyping body text.
 - `scripts/feishu_dom_capture.js` — Path D: injectable end-to-end browser DOM capture.
 - `scripts/download_feishu_images.py` — Path D: SSR image extraction when browser automation is unavailable.
