@@ -1610,3 +1610,62 @@ this list and describe defects you reach by asking a different question):
    `cp file.{txt,bak}` and "braces appearing inside a commit message as
    data" stay green on both. A positive control that only passes after the
    fix is not a control — it is another regression test riding along.
+
+## 34. A PostToolUse-only registration never fires on the Bash command's own failure — that lives entirely on a separate PostToolUseFailure event
+
+> Worked example: a PostToolUse hook meant to fire when a `git` query against
+> a given path failed with "fatal: not a git repository" (a private hooks
+> repo, not shipped here), 2026-08-16. Registered `PostToolUse` only, matcher
+> `Bash`. Manually running the exact triggering command produced zero hook
+> output — no error, no stderr, nothing.
+
+- **Symptom, and why it's easy to misdiagnose as something else.** The
+  natural first two guesses are both wrong and both cost real debugging time:
+  "the hook didn't hot-reload after the settings.json edit" (it did — every
+  *other* Bash call in the same session was triggering it fine), or "the
+  matcher/filter logic is wrong" (it wasn't — the same command text fed to
+  the script by hand produced the expected output). What actually
+  distinguished the silent case from the working ones was invisible to both
+  guesses: the triggering command's own exit code.
+
+- **The actual mechanism, confirmed by live trace comparison.** Claude Code
+  routes a Bash tool call's outcome to one of two *separate* hook events
+  based on the command's own exit code — not to `PostToolUse` unconditionally
+  with a status field inside it. Exit `0` routes to `PostToolUse`. Any
+  nonzero exit (128 for `git`'s "fatal: not a git repository", but this is
+  general, not specific to that exit code) routes instead to a distinct
+  `PostToolUseFailure` event, and `PostToolUse` does not fire for that same
+  invocation at all. A hook registered under `PostToolUse` only is
+  structurally blind to every failing command it was likely written to
+  catch — command failure is usually exactly the case worth reacting to.
+  This was confirmed by comparing a debug trace log across two command
+  runs in the same session: every exit-0 command in the window was logged
+  by the hook, including one from a concurrent session; the one exit-128
+  command was not logged at all, with `PostToolUse` as the sole
+  registration. This is not currently documented in this skill bundle as of
+  2026-08-16 — treat it as a platform behavior to verify against your own
+  CLI version rather than a permanent guarantee.
+
+- **Fix.**
+  1. **Register the SAME hook command under both events** in `settings.json`
+     — one `PostToolUse` entry and one `PostToolUseFailure` entry, both with
+     matcher `Bash`, both pointing at the identical script path. Without the
+     second registration, the failure path is simply never invoked, no
+     matter how correct the script's internal logic is.
+  2. **Read `hook_event_name` from the input JSON and echo it back verbatim**
+     in `hookSpecificOutput.hookEventName`, rather than hardcoding one value.
+     Whether the CLI validates that field against the event that actually
+     fired is not something to bet on either way — echoing the real value
+     back is strictly safer than guessing.
+  3. **Write end-to-end test fixtures for both event shapes.** A fixture
+     that only feeds the script a `PostToolUse`-shaped JSON payload can never
+     exercise the failure path, even if the script's logic branches on
+     `hook_event_name` — the branch exists in the code but never runs in the
+     suite. Include at least one fixture with `"hook_event_name":
+     "PostToolUseFailure"` in the input.
+  4. **When debugging "the hook isn't firing" for a case involving a failing
+     command, check the triggering command's own exit code before anything
+     else.** If it's nonzero and the hook is registered under `PostToolUse`
+     only, that fully explains the silence — it is not a hot-reload problem,
+     not a matcher problem, and no amount of re-editing the matching logic
+     will fix it.
