@@ -140,7 +140,7 @@ const CODESIGN_IDENTITY = process.env.CODESIGN_IDENTITY || 'Developer ID Applica
       if (/\.(so|dylib|node)$/.test(filePath)) return false;
       return true;
     },
-    // CI: apple-actions/import-codesign-certs@v3 imports to signing_temp.keychain,
+    // CI: apple-actions/import-codesign-certs@v7 imports to signing_temp.keychain,
     // but @electron/osx-sign searches system keychain by default.
     ...(process.env.MACOS_SIGNING_KEYCHAIN
       ? { keychain: process.env.MACOS_SIGNING_KEYCHAIN }
@@ -243,7 +243,7 @@ if (SHOULD_CODESIGN && process.platform === 'darwin') {
 ```yaml
 - name: Import Apple certificates
   if: ${{ env.HAS_CERT == 'true' }}
-  uses: apple-actions/import-codesign-certs@v3
+  uses: apple-actions/import-codesign-certs@v7
   with:
     p12-file-base64: ${{ secrets.MACOS_CERT_P12 }}
     p12-password: ${{ secrets.MACOS_CERT_PASSWORD }}
@@ -325,7 +325,7 @@ gh api repos/OWNER/REPO/dispatches -f event_type=release -f 'client_payload[ref]
 | App signed as adhoc despite certificate configured | `@electron/packager` defaults `continueOnError: true` in `createSignOpts()` (mac.js line 402-404). Signing error was silently swallowed. | Set `continueOnError: false` in osxSign config |
 | "Cannot use password credentials, API key credentials and keychain credentials at once" | `@electron/notarize` v2.5.0 `isNotaryToolPasswordCredentials()` checks `teamId !== undefined`. Passing `teamId` with API key = credential conflict. | Remove `teamId` from osxNotarize config. `notarytool` infers team from API key. |
 | EMFILE: too many open files | `@electron/osx-sign` `walkAsync()` traverses ALL files in .app. Large embedded runtimes (Python: 51k+ files) exhaust file descriptors. | Add `ignore` filter to skip non-binary files + `ulimit -n 65536` in CI |
-| CI signing: cert not found | `apple-actions/import-codesign-certs@v3` imports to `signing_temp.keychain`, but osx-sign searches system keychain. | Pass `keychain: process.env.MACOS_SIGNING_KEYCHAIN` in osxSign |
+| CI signing: cert not found | `apple-actions/import-codesign-certs@v7` imports to `signing_temp.keychain`, but osx-sign searches system keychain. | Pass `keychain: process.env.MACOS_SIGNING_KEYCHAIN` in osxSign |
 | Install .cer: Error -25294 | Certificate imported to wrong keychain (iCloud/System). Private key from CSR is in `login` keychain. | Re-import `.cer` choosing `login` keychain |
 | `security find-identity` shows nothing | Private key and certificate in different keychains | Ensure CSR private key and imported cert are both in `login` keychain |
 | CI step `if:` with secrets → HTTP 422 | `secrets.*` context not available in step `if:` conditions | Use `env:` intermediate variable pattern (see workflow section) |
