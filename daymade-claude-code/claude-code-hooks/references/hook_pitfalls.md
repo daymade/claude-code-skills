@@ -1419,3 +1419,96 @@ this list and describe defects you reach by asking a different question):
      treat the budget as spent, not as "clean," and — if the pattern
      recurs — fix the tracker's granularity rather than writing a fourth
      justification the mechanism will not read either.
+
+## 32. Two parallel arrays indexed by the same offsets are an unstated invariant — and orthogonal test axes never cross the point where it breaks
+
+> Worked example: `git-commit-form-guard.sh` (a private hooks repo, not
+> shipped here), 2026-08-16. A quote-aware redirect stripper built one
+> character-mask array alongside the text array it masks, then indexed the
+> mask with the text's match offsets. One branch appended to the text array
+> and not the mask. Measured result: `git commit -a` — the exact form this
+> Tier-0 guard exists to block — sailed through with exit 0.
+
+- **Symptom:** the guard blocks correctly in isolation and fails only in
+  combination. `git commit -a -m "wip >log"` blocks (exit 2). Prefix the
+  same command with four comment lines and it **allows** (exit 0). Nothing
+  about the diagnostic output distinguishes the two — the guard simply
+  returns 0 the way it does for every healthy command, so the failure is
+  indistinguishable from correct operation unless you already suspect it.
+
+- **Cause — the invariant was real but unwritten.** The scanner walks the
+  command character by character, appending to `out` (the rewritten text)
+  and to `qmask` (is this character inside quotes?). A later regex pass
+  strips redirects, skipping any match whose span is quoted:
+  `if any(qmask[m.start():m.end()]): continue`. That slice is only
+  meaningful while `len(qmask) == len(out)`. The comment-terminating branch
+  appended `";"` to `out` and nothing to `qmask`, so **each comment line
+  shifts the mask one position left** relative to the text it describes.
+  Note the shift is unbounded and cumulative — it grows with input, so
+  there is no "small enough" input that is safe.
+
+- **Why the consequence is worse than "strips slightly wrong."** The
+  displaced window eventually lands entirely outside the quotes it should
+  have been inside, so the stripper eats the message's **closing quote**.
+  The now-unbalanced text raises `ValueError` from the tokenizer, and this
+  guard's documented convention is `except ValueError: sys.exit(0)` —
+  fail-open. So a pure *offset* bug is laundered into a **complete bypass**
+  of the gate. Generalize: in any fail-open parser, a corruption bug and a
+  disable switch are the same bug. Audit what your `except` clauses exit
+  with before you add anything that can throw.
+
+- **Why the test suite was green — the axes never crossed.** The suite had
+  redirect cases (added the day before, deliberately, with negative
+  controls) and comment cases (long-standing). **Every redirect case had
+  zero comments; every comment case had zero redirects.** Each axis was
+  covered; their intersection was empty; the bug lives only in the
+  intersection. Coverage counted per-axis reads as thorough and is blind
+  by construction.
+
+- **Why a first probe said "no fail-open" and was wrong.** Testing comment
+  counts 0–3 against a few message shapes returns all-blocked, which reads
+  as a clean bill of health. The offset grows one position per comment, so
+  whether the window clears the quote depends on **both** the comment count
+  and the message length — for the shapes probed, the flip started at
+  k=4. A single sampled value of a linear parameter is not a test of that
+  parameter. Sweep it, or you will certify the safe cell and ship the
+  unsafe one.
+
+**Fixes, in the order they buy the most:**
+
+1. **Make the invariant executable, not documentary.** `assert len(qmask)
+   == len(out)` immediately after the loop costs nothing and converts a
+   silent misalignment into a loud failure. A comment saying "these must
+   stay equal" is not enforcement; the next person appending a branch will
+   not read it. Better still, remove the invariant's ability to break:
+   append `(char, in_quote)` **tuples** to one array so no branch *can*
+   update one without the other. Two arrays that must stay in lockstep are
+   a data-structure choice you can simply decline to make.
+2. **Test the product of your axes, not their union.** When you add axis B
+   to a suite that already covers axis A, add A×B cases in the same commit.
+   The cheap version: for each existing A case, re-run it with the smallest
+   nonzero amount of B. This is the same discipline as the negative
+   controls elsewhere in this file — the difference is that a missing
+   *intersection* looks like coverage on every count you can take.
+3. **Sweep parameters that shift an offset; don't sample them.** If a
+   quantity in the input moves an index (count of comments, lines,
+   escapes, nesting depth), enumerate a range of it in the suite (here:
+   1..8, each as its own case) rather than picking one value. State the
+   reason in the test file so a later reader doesn't "tidy" eight cases
+   into one.
+4. **Calibrate bidirectionally against a single-line revert.** Build a copy
+   of the guard with *only* the fix undone and run the suite against it.
+   The result must be red **and** red in exactly the new cases — here 58
+   pass / 16 fail, with the 16 being precisely the added intersection
+   cases. If reverting the fix leaves the suite green, the tests are
+   decoration; if it reddens unrelated cases, the fix did more than
+   claimed. (Watch for artifacts: copies must be `chmod +x` if the suite
+   execs the hook — an all-`126` run is "permission denied," not a signal.)
+5. **Weigh a Tier-0 bypass by reachability, not by corpus frequency.**
+   Replaying 142,687 real commands found only 8 where this misalignment
+   changed the parse, and none of those contained `git commit` — so the
+   bug had never actually fired in production. That is a fact worth
+   recording and worth *not* using as a severity discount: the input that
+   triggers it is trivially constructible and entirely ordinary (a comment
+   above a commit). Frequency data tells you whether you were lucky, not
+   whether the gate holds.
