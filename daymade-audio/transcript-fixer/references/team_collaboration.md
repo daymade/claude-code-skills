@@ -271,7 +271,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate JSON is well-formed
         run: |
           for f in *.json; do python -m json.tool "$f" > /dev/null; done
