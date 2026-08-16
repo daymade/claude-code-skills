@@ -1476,11 +1476,26 @@ this list and describe defects you reach by asking a different question):
 
 **Fixes, in the order they buy the most:**
 
-1. **Make the invariant executable, not documentary.** `assert len(qmask)
-   == len(out)` immediately after the loop costs nothing and converts a
-   silent misalignment into a loud failure. A comment saying "these must
-   stay equal" is not enforcement; the next person appending a branch will
-   not read it. Better still, remove the invariant's ability to break:
+1. **Make the invariant executable, not documentary — but check which way
+   your "loud failure" actually falls.** A comment saying "these must stay
+   equal" is not enforcement; the next person appending a branch will not
+   read it. The reflex is `assert len(qmask) == len(out)` — and in this
+   guard that reflex was **measured to be wrong, in the dangerous
+   direction**. This block returns its verdict on **stdout** (the shell does
+   `FORM=$(python3 …)`) and always `sys.exit(0)` itself, so an uncaught
+   `AssertionError` prints nothing to stdout, leaves `FORM` empty, reads as
+   "no violation found", and exits the hook **1** — and PreToolUse treats
+   any nonzero-but-not-2 as a non-blocking error, so the tool runs anyway.
+   Forcing the assertion to fire measured exactly that: `git commit -a -m x`
+   → exit 1 → allowed. Replacing it with an explicit `if len(qmask) !=
+   len(out): report_violation()` measured exit 2 for both the dangerous and
+   the healthy command — conservative, which is the correct direction for a
+   Tier-0 gate. **Generalize: whether a tripwire is fail-open or fail-closed
+   is a property of how *the call site consumes the result*, not of the
+   language construct.** The same `assert` is fail-closed in a hook whose
+   exit code is the verdict and fail-open in a block whose stdout is the
+   verdict. Determine this by forcing the failure and reading the exit code,
+   not by intuition. Better still, remove the invariant's ability to break:
    append `(char, in_quote)` **tuples** to one array so no branch *can*
    update one without the other. Two arrays that must stay in lockstep are
    a data-structure choice you can simply decline to make.
