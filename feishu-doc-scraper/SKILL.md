@@ -158,7 +158,7 @@ Verified dead-ends — retrying them only wastes the session. Full table with fa
 
 ## Bundled resources
 
-- `scripts/feishu_extract_refs.py` — deterministic reference-token extractor; the recursion engine's core. Run it on `source.html` (prefer over `source.md` — step 3) to enumerate `<mention-doc>`/`<sheet>`/`<image>`/`<whiteboard>`/cross-tenant/Minutes/Tencent-Meeting references as JSON.
+- `scripts/feishu_extract_refs.py` — deterministic reference-token extractor; the recursion engine's core. Run it once per fetched document, on that document's own `<sanitized-title>.html` (prefer over `.md` — step 3), to enumerate `<mention-doc>`/`<sheet>`/`<image>`/`<whiteboard>`/cross-tenant/Minutes/Tencent-Meeting references as JSON.
 - `scripts/restore_docx_headings.py` — for Path B: reads true font sizes via python-docx, maps them to heading levels, restores `w:shd` highlights to Obsidian `==…==`, without retyping body text.
 - `scripts/feishu_dom_capture.js` — Path D: injectable end-to-end browser DOM capture.
 - `scripts/download_feishu_images.py` — Path D: SSR image extraction when browser automation is unavailable.
