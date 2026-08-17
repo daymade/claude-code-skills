@@ -151,12 +151,18 @@ git push
 ```
 
 **Closing a PR unmerged (declined, or superseded by another PR) → delete its head
-branch in the same action.** `gh pr merge --delete-branch` only covers merged PRs;
-a closed-unmerged PR keeps `refs/pull/<N>/head` pointing at the branch tip, so its
-commits stay publicly addressable — including anything later found to need
-sanitizing (2026-08-17: a closed-superseded PR's branch carried an unsanitized
-fixture for 13 days after the fix was written). A weekly launchd job
-(`stale-branch-watch`) reports stragglers, but deleting at close time is the norm.
+branch in the same action.** `gh pr merge --delete-branch` only covers merged PRs.
+⚠️ Deleting the branch does NOT remove `refs/pull/<N>/head` — GitHub keeps serving
+that ref, so the commits remain publicly fetchable by anyone who fetches it, and the
+branch listing (plus the weekly `stale-branch-watch`, which only sees branch refs)
+loses sight of the residue. Branch deletion closes the *discoverable* surface, which
+is still worth doing at close time. But if the content needs **sanitizing**, branch
+deletion alone is cosmetic — first move the pull ref to a sanitized commit (reopen
+the PR → push the fix → close again; pushes do not move a *closed* PR's ref), then
+delete the branch, and accept that the old SHAs stay addressable from GitHub's object
+cache until GC — a guaranteed purge requires a GitHub support ticket. (2026-08-17: a
+closed-superseded PR's branch carried an unsanitized fixture for 13 days after the
+fix was written; the pull ref had to be moved via the reopen dance before deletion.)
 
 ### Local `main` Is a Read-Only Mirror
 
