@@ -54,6 +54,15 @@ def normalize_domains(domain: Optional[Union[str, List[str]]]) -> Optional[List[
             name = name.strip()
             if name and name not in out:
                 out.append(name)
+    # "all" is the documented alias for "no filter — every rule in the
+    # library" (the hint text itself says "run without --domain to use all N
+    # rules", and project configs declare `domain: all` for exactly this).
+    # Previously it fell through as a literal domain name, matched zero
+    # rules, and exited 0 with input_unchanged — a silent no-op that looked
+    # like a clean run (observed 2026-08-17: `--domain all` returned
+    # applied=0/input_unchanged=true alongside the hint).
+    if any(n.lower() == "all" for n in out):
+        return None
     return out or None
 
 

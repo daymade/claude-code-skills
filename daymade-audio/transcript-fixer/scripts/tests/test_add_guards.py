@@ -85,3 +85,59 @@ class TestDomainWriteGuards:
         cmd_add_correction(_args(domain=None))
         out = capsys.readouterr().out
         assert "(domain: general)" in out
+
+
+class TestAllAliasWriteGuards:
+    """The whole-library alias "all" folds to None on reads, but a write must
+    land in exactly one real domain — fail loud instead of silently
+    redirecting to general or minting a phantom "all" domain (2026-08-17
+    independent review F1/F3)."""
+
+    def test_add_domain_all_fails_loud(self, isolated_config, capsys):
+        with pytest.raises(SystemExit) as exc:
+            cmd_add_correction(_args(domain="all"))
+        assert exc.value.code == 2
+        assert "whole-library alias" in capsys.readouterr().err
+
+    def test_add_domain_all_any_case_fails_loud(self, isolated_config):
+        with pytest.raises(SystemExit) as exc:
+            cmd_add_correction(_args(domain="ALL"))
+        assert exc.value.code == 2
+
+    def test_add_domain_all_inside_list_fails_loud(self, isolated_config):
+        with pytest.raises(SystemExit) as exc:
+            cmd_add_correction(_args(domain="all,huawei"))
+        assert exc.value.code == 2
+
+    def test_report_false_positive_domain_all_fails_loud(self, isolated_config, capsys):
+        from cli.commands import cmd_report_false_positive
+        with pytest.raises(SystemExit) as exc:
+            cmd_report_false_positive(_args(domain="all"))
+        assert exc.value.code == 2
+        assert "whole-library alias" in capsys.readouterr().err
+
+    def test_approve_domain_all_clears_override(self, isolated_config, monkeypatch):
+        """--approve -d all must not write a literal 'all' domain: the alias
+        override is cleared so the suggestion's own domain wins."""
+        import cli.commands as commands
+        captured = {}
+
+        class _FakeEngine:
+            def list_pending(self):
+                return [{"from_text": "词", "to_text": "正确词",
+                         "domain": "huawei", "confidence": 0.9, "frequency": 3}]
+
+            def approve_suggestion(self, *a, **kw):
+                return True
+
+        class _FakeService:
+            def __init__(self):
+                self.repository = None
+
+            def add_correction(self, from_text, to_text, domain, **kw):
+                captured["domain"] = domain
+
+        monkeypatch.setattr(commands, "_get_service", lambda: _FakeService())
+        monkeypatch.setattr(commands, "_get_learning_engine", lambda service: _FakeEngine())
+        cmd_approve(_args(domain="all"))
+        assert captured["domain"] == "huawei"
