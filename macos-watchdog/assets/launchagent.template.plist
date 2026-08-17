@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent template for a periodic self-healing watchdog.
+  Install:  scripts/new-launchagent.sh <label> <program> <interval>  (preferred — idempotent)
+  Manual:   edit → plutil -lint → cp to ~/Library/LaunchAgents/ →
+            launchctl bootstrap gui/$(id -u) <plist>
+  Replace every com.example and /ABS/PATH. Validate with `plutil -lint` before loading.
+-->
+<plist version="1.0">
+<dict>
+  <!-- Unique job handle; every launchctl verb targets this string. Reverse-DNS. -->
+  <key>Label</key>
+  <string>com.example.my-watch</string>
+
+  <!-- Element 0 = absolute path to the executable. launchd has no PATH inheritance;
+       Homebrew binaries need their absolute path or an EnvironmentVariables/PATH entry. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/ABS/PATH/TO/watchdog.sh</string>
+    <string>heal</string>
+  </array>
+
+  <!-- Seconds between runs. Keep >= 60 for a watchdog; <30 is crash-loop territory. -->
+  <key>StartInterval</key>
+  <integer>300</integer>
+
+  <!-- Fire once at bootstrap/login too. Omit if the first run should wait for the interval. -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Without these two, a failing job leaves no trace anywhere. Files only grow —
+       rotate inside the script (cap ~1 MB). -->
+  <key>StandardOutPath</key>
+  <string>/Users/&lt;username&gt;/Library/Logs/com.example.my-watch.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/&lt;username&gt;/Library/Logs/com.example.my-watch.err.log</string>
+
+  <!-- Minimum seconds between respawns after an exit. Fixed delay, NO backoff —
+       escalating silence belongs in the script (see scripts/watchdog-cooldown.sh). -->
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <!-- Yield to interactive work. -->
+  <key>Nice</key>
+  <integer>10</integer>
+
+  <!-- launchd jobs do NOT inherit the user's shell env — set explicitly what the
+       script needs. Never put secrets here; the plist is world-readable. -->
+  <!--
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+  -->
+</dict>
+</plist>

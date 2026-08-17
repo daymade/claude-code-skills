@@ -1,0 +1,46 @@
+{
+  "skill_name": "macos-watchdog",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "我想在 Mac 上装一个常驻任务：每 10 分钟检查一下我的本地开发服务器（localhost:3000）是不是还活着，不活着就重启它。怎么搞？给我完整方案就行，先别真装到我机器上。",
+      "expected_output": "完整方案：plist 要点（StartInterval、StandardOut/ErrorPath、绝对路径）+ bootstrap/bootout 加载命令 + 闭嘴设计（失败计数、连续失败才动作、通知节流或冷却）",
+      "files": [],
+      "assertions": [
+        {"id": "mentions-startinterval", "text": "方案包含 launchd 周期调度（StartInterval 或等效）"},
+        {"id": "mentions-stdout-stderr-logging", "text": "要求 StandardOutPath/StandardErrorPath 或等效日志"},
+        {"id": "mentions-bootstrap-not-load", "text": "加载命令用 bootstrap（非 deprecated load）"},
+        {"id": "has-failure-persistence-or-cooldown", "text": "含「连续失败才动作」或「失败冷却/退避」设计"},
+        {"id": "has-notification-throttle", "text": "提到通知节流或只在持续失败时才通知"},
+        {"id": "absolute-path-warning", "text": "提到 ProgramArguments 需绝对路径"}
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "救命，我之前弄了个 launchd 定时任务每 5 分钟修复我的代理，它会在代理断的时候用 URL scheme 重连 VPN app。问题是我在咖啡店网络不通的时候，它每隔几分钟就把那个 VPN app 弹出来一次，我把 app 退了它又给拉起来。怎么让它别这么烦？给我改法就行，别真动我的系统。",
+      "expected_output": "诊断出三条机制（URL scheme 会拉起未运行的 app、无失败冷却导致每周期满血重试、无手动/自动停用），改法含：进程存活守门 + open -g、失败升档冷却、pause 兜底",
+      "files": [],
+      "assertions": [
+        {"id": "diagnoses-url-scheme-resurrection", "text": "诊断出 URL scheme 会拉起未运行的 app（复活机制）"},
+        {"id": "fix-process-gate-open-g", "text": "改法含进程存活守门（pgrep 类）与 open -g"},
+        {"id": "fix-cooldown-backoff", "text": "改法含失败冷却/升档退避"},
+        {"id": "fix-pause-or-disable-mechanism", "text": "改法含手动停用机制（pause/bootout/disable）"},
+        {"id": "distinguishes-network-unfixable", "text": "识别咖啡店网络不通属环境不可修、不该持续重试"}
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "帮我看看这个守护进程配置有没有坑（plist + 修复脚本都在附件里），只读分析，别改文件。",
+      "expected_output": "审计命中：unload 停用不可靠（应 bootout/disable）、缺 StandardErrorPath（失败无痕）、URL scheme 无进程守门会复活用户退出的 app、无冷却会周期性强拉、修复脚本无前提状态自检",
+      "files": ["iteration-1/eval-2-audit/fixture/broken-watchdog.plist", "iteration-1/eval-2-audit/fixture/broken-heal.sh"],
+      "assertions": [
+        {"id": "catches-unload-deprecated", "text": "指出 unload 停用不可靠、应用 bootout/disable"},
+        {"id": "catches-missing-stderr-path", "text": "指出缺 StandardOutPath/StandardErrorPath 日志"},
+        {"id": "catches-url-scheme-no-gate", "text": "指出 open URL scheme 无进程守门（复活用户退出的 app、无 -g）"},
+        {"id": "catches-no-cooldown", "text": "指出失败后无冷却、下周期满血重试且每周期通知"},
+        {"id": "catches-no-premise-check", "text": "指出无前提状态自检（用户退出也照修）"},
+        {"id": "catches-path-relative-binary", "text": "指出 ProgramArguments 用 bash/相对路径而非绝对路径"}
+      ]
+    }
+  ]
+}

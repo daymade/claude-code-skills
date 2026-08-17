@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.86.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.88.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -3287,6 +3287,72 @@ make a hook that blocks git push --force
 turn this rule I keep forgetting into a hard gate
 my hook is false-blocking a healthy command
 debug this hook that's poisoning my session
+```
+
+### 93. **macos-watchdog** - Design & Discipline macOS launchd Watchdogs
+
+> **Install**: `claude plugin install macos-watchdog@daymade-skills`
+
+Design, deploy, and discipline macOS launchd watchdogs — LaunchAgents /
+LaunchDaemons that detect a recurring problem and auto-remediate it, without
+the watchdog itself becoming the disturbance. Distilled from 15 production
+watchdogs and their incident history.
+
+**Key features:**
+- The quiet-watchdog contract — premise-state self-check (a monitor's lifecycle binds to its premise), patient mode (defer disruption, not detection), escalating auto-cooldown, and never-resurrect-what-the-user-quit
+- Deploy mechanics that bite — gui vs system domain, StandardOut/ErrorPath, TCC/FDA on the actual interpreter, and stop semantics (`unload` is deprecated and gets resurrected by `RunAtLoad` — bootout/bootstrap/disable only)
+- Batch-loop throttling by default and SRE alert layering (page vs ticket, fatigue numbers)
+- Bundles `watchdog-cooldown.sh` (source-able escalating cooldown + manual pause state machine), `new-launchagent.sh` (idempotent installer with validation), and an annotated plist template
+
+**Example usage:**
+```text
+make a launchd watchdog that reconnects my VPN when it drops
+my watchdog keeps re-launching an app I quit — make it stop
+audit my existing LaunchAgents for noise and crash loops
+```
+
+### 94. **devils-advocate** - Pressure-Test an Investment Thesis
+
+> **Install**: `claude plugin install daymade-financial@daymade-skills`
+> (suite-only — invoked as `daymade-financial:devils-advocate`)
+
+Structured devil's-advocate pressure-testing of an investment thesis against
+user-supplied evidence materials — evidence-anchored dissent, not role-played
+contrarianism (every counterpoint must cite, verbatim).
+
+**Key features:**
+- Decomposes the thesis into explicit assertions and implicit assumptions (fact/forecast/mechanism typing, load-bearing test)
+- Retrieves counter-evidence per assumption under a source-credibility ladder with verbatim citations, plus a Mauboussin base-rate outside view bounded to your materials
+- Emits an auditable findings JSON and a theme-grouped analyst narrative, and converts the critique into a RAND-style signpost monitoring list
+
+**Example usage:**
+```text
+/daymade-financial:devils-advocate
+stress-test my bull case on <stock> against these three research reports
+what would have to be true for this thesis to be wrong?
+```
+
+### 95. **daymade-sector-research** - A-Share Sector Research Workflow
+
+> **Install**: `claude plugin install daymade-financial@daymade-skills`
+> (suite-only — invoked as `daymade-financial:daymade-sector-research`)
+
+A-share (Chinese market) sector research workflow: Top-N gainers across all
+sector constituents, announcement-window retrieval, and market-sentiment
+judgment with graded evidence — executed by an Agent Team with fresh-context
+adversarial verification. All public, no-login data sources.
+
+**Key features:**
+- Top-N gainer pipeline across full sector constituent lists (East Money push2 + Sina realtime snapshots, cross-checked)
+- Announcement windows per stock (weekly/monthly) from cninfo + East Money, covering Shanghai/Shenzhen/Beijing exchanges
+- Sentiment verdicts graded by evidence level — L1 first-hand quotes / L2 timestamped media / L3 unverified headlines — with "rather uncertain than wrong" as the standing discipline
+
+**Example usage:**
+```text
+/daymade-financial:daymade-sector-research
+医药行业今天的 Top 10 标的
+这些标的最近一个月发过哪些公告
+判断医药板块现在的市场情绪
 ```
 
 ---
