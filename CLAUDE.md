@@ -150,6 +150,14 @@ git commit -m "message"
 git push
 ```
 
+**Closing a PR unmerged (declined, or superseded by another PR) → delete its head
+branch in the same action.** `gh pr merge --delete-branch` only covers merged PRs;
+a closed-unmerged PR keeps `refs/pull/<N>/head` pointing at the branch tip, so its
+commits stay publicly addressable — including anything later found to need
+sanitizing (2026-08-17: a closed-superseded PR's branch carried an unsanitized
+fixture for 13 days after the fix was written). A weekly launchd job
+(`stale-branch-watch`) reports stragglers, but deleting at close time is the norm.
+
 ### Local `main` Is a Read-Only Mirror
 
 Squash-merged PRs rewrite commits under new SHAs, so every direct commit to
