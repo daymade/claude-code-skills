@@ -76,7 +76,7 @@ def test_orphan_plus_is_detected_in_both_scripts(text):
     ("星辰社说这批 5 种都能用，21 册很够", "term and digits merely co-occur"),
     ("本季项目6周规划", "term BEFORE digit is ordinary Chinese"),
     ("关键词出现38次", "same, with a different measure word"),
-    ("北岸分馆季度盘点前1v1沟通", "a phrase reaching a digit only if widening is unbounded"),
+    ("北岸分馆季度盘点前1页纸汇报", "a phrase reaching a digit only if widening is unbounded"),
     ("盘点核对了 35 册", "term adjacent to a number across a space"),
 ])
 def test_healthy_text_is_not_flagged_as_numeric_slot(text, why):
