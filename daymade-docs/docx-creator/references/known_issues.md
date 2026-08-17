@@ -213,11 +213,13 @@ covers complex-script runs, and setting only one produces mixed sizes in bilingu
 
 ```csharp
 rp.Append(new RunFonts { Ascii = "Times New Roman", HighAnsi = "Times New Roman", EastAsia = "宋体" });
-rp.Append(new FontSize { Val = "24" });               // half-points → 12pt
-rp.Append(new FontSizeComplexScript { Val = "24" });
+rp.Append(new FontSize { Val = "21" });               // half-points → 10.5pt
+rp.Append(new FontSizeComplexScript { Val = "21" });
 ```
 
-Shipped scheme: 宋体 body / 黑体 headings; 24 half-points body, 36 H1, 28 clause heading.
+Shipped scheme: 宋体 body / 黑体 headings; 21 half-points body (10.5pt), 36 H1, 28 clause
+heading; Chinese bold runs switch family to 黑体 (ISSUE-014); body paragraphs carry a
+2-character first-line indent (`FirstLine = "420"` twips, sized for 10.5pt).
 See `RunProps` in `scripts/Program.cs` (`scripts/README.md`'s lookup table).
 
 **Verify.** Convert to PDF and inspect embedded fonts (`pdffonts out.pdf`), or read the page
@@ -418,3 +420,30 @@ recipient to close the document first, and to reopen it after you deliver.
 
 **Verify.** `ls -a <dir> | grep '^~\$'` returns nothing before you overwrite, and the
 recipient confirms a reopen after delivery.
+
+---
+
+## ISSUE-014 — 宋体「加粗」是渲染器合成的假粗体，多笔画汉字糊成一团 (P1)
+
+**Symptom.** A bolded Chinese name or term inside body text renders as a smeared black blob —
+most visible on characters with many strokes (three-plus-component names) — in both
+LibreOffice preview and Word.
+
+**Root cause.** 宋体 ships no true bold weight. `<w:b/>` on a 宋体 run makes the renderer
+*synthesize* bold by algorithmically thickening strokes, and strokes in dense characters merge
+into each other. Times New Roman has a real Bold face, so the same flag is fine for Latin —
+the failure is specific to the East Asian slot. Chinese typographic convention never bolds
+宋体 for emphasis in the first place; emphasis switches family to 黑体.
+
+**Fix.** In `RunProps`, when `bold` is requested and the East Asian font is 宋体, switch the
+family instead of relying on the flag:
+
+```csharp
+var eastAsia = (bold && font == SONG) ? HEI : font;
+rp.Append(new RunFonts { Ascii = WEST, HighAnsi = WEST, EastAsia = eastAsia });
+if (bold) { rp.Append(new Bold()); rp.Append(new BoldComplexScript()); }  // Latin still bolds
+```
+
+**Verify.** Convert to PDF and read the page PNG: a bolded multi-stroke name must show clean,
+separated strokes （黑体's even weight), not a thickened 宋体 with merged counters. Check a
+mixed line — Latin bold must remain Times New Roman Bold, visibly distinct from the 黑体 run.
