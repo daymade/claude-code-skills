@@ -32,6 +32,19 @@ class TestNormalizeDomains:
     def test_malformed_only_commas_is_no_filter(self):
         assert normalize_domains(",,") is None
 
+    def test_all_is_no_filter_alias(self):
+        """`all` is the documented whole-library alias, not a literal domain
+        name — before this, `--domain all` silently matched zero rules and
+        exited 0 looking like a clean run (observed 2026-08-17)."""
+        assert normalize_domains("all") is None
+        assert normalize_domains("ALL") is None
+        assert normalize_domains(" all ") is None
+
+    def test_all_in_comma_list_still_means_no_filter(self):
+        """`all,huawei` already covers every domain — collapse to no-filter
+        rather than intersecting with a literal 'all' that matches nothing."""
+        assert normalize_domains("all,huawei") is None
+
     def test_list_passthrough_with_comma_pieces(self):
         assert normalize_domains(["a,b", "c"]) == ["a", "b", "c"]
 

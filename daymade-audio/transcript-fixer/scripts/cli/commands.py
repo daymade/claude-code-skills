@@ -58,6 +58,42 @@ def _parse_domains(raw: str | None) -> list[str] | None:
     return normalize_domains(raw)
 
 
+def _is_all_alias(raw) -> bool:
+    """True when the raw --domain value is the whole-library alias ("all",
+    any case, alone or inside a comma-separated list).
+
+    normalize_domains folds it to None on the read side; write/attribution
+    paths need to tell it apart from "no --domain given", because a rule must
+    be owned by exactly one real domain and "all" cannot own one.
+    """
+    if not raw:
+        return False
+    items = [raw] if isinstance(raw, str) else list(raw)
+    return any(
+        piece.strip().lower() == "all"
+        for item in items
+        for piece in str(item).split(",")
+    )
+
+
+def _reject_all_on_write(raw, command: str) -> None:
+    """Fail loud when a write command gets the whole-library alias.
+
+    Reads may fold `all` to the no-filter form; writes may not — a rule,
+    approval, import, or disable must land in exactly one real domain, and
+    silently redirecting to "general" (or creating a phantom "all" domain)
+    both hide the user's intent. See review findings F1/F3 (2026-08-17).
+    """
+    if _is_all_alias(raw):
+        print(
+            f"Error: {command} writes to exactly one domain; 'all' is the "
+            f"read-side whole-library alias and cannot own a rule. "
+            f"Name the domain explicitly (e.g. --domain general).",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
 def _get_learning_engine(service: CorrectionService | None = None):
     """Create the file-backed learning engine for review/approval commands."""
     from core import LearningEngine
@@ -320,9 +356,12 @@ def cmd_add_correction(args: argparse.Namespace) -> None:
     # Write exactly the domain the fail-fast validated — the normalized single
     # domain, not the raw CLI string (a trailing comma/space would otherwise
     # pass the count check and then die in the domain-pattern validator with a
-    # misleading "invalid characters" attribution). No --domain falls back to
+    # misleading "invalid characters" attribution). The whole-library alias
+    # "all" normalizes to None and would silently redirect the rule to
+    # "general" — reject it explicitly instead. No --domain falls back to
     # the service layer's own default ("general") — passing None explicitly
     # would defeat that default and crash the domain validator.
+    _reject_all_on_write(getattr(args, "domain", None), "--add")
     domain_to_write = domains[0] if domains else "general"
     try:
         service.add_correction(
@@ -477,16 +516,21 @@ def cmd_list_corrections(args: argparse.Namespace) -> None:
     """List all corrections"""
     service = _get_service()
     corrections = service.get_corrections(args.domain)
+    # Display branching must follow the NORMALIZED form: the whole-library
+    # alias "all" already returns every rule from get_corrections, so keying
+    # the layout on the raw string would print the full library under a
+    # single-domain header without the [domain] prefixes.
+    list_domain = normalize_domains(args.domain)
 
-    if args.domain:
-        header = f"domain: {args.domain}, {len(corrections)} total"
+    if list_domain:
+        header = f"domain: {', '.join(list_domain)}, {len(corrections)} total"
     else:
         header = f"all domains, {len(corrections)} total"
 
     print(f"\n📋 Corrections ({header})")
     print("=" * 60)
 
-    if args.domain:
+    if list_domain:
         for wrong, correct in sorted(corrections.items()):
             print(f"  '{wrong}' → '{correct}'")
     else:
@@ -568,7 +612,13 @@ def cmd_import_corrections(args: argparse.Namespace) -> None:
 
     try:
         corrections, metadata_domain = _read_corrections_export(input_path)
-        domain = args.domain or metadata_domain or "general"
+        # The whole-library alias must not own an import: treat it as "no
+        # override given" so the export's own metadata domain (then the
+        # catch-all default) decides. Otherwise an `export --domain all`
+        # round-trip would re-import the entire library into a literal,
+        # unfilterable "all" domain.
+        domain = (None if _is_all_alias(getattr(args, "domain", None))
+                  else args.domain) or metadata_domain or "general"
     except Exception as e:
         print(f"❌ Error importing corrections: {e}", file=sys.stderr)
         sys.exit(1)
@@ -689,6 +739,18 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     if getattr(args, "apply_domain", False) and domains:
         for _m in correction_meta.values():
             _m["trusted_domain"] = True
+    elif getattr(args, "apply_domain", False):
+        # The caller explicitly asked to trust the domain — but with no filter
+        # (or the "all" alias) the loaded union IS the whole library, and
+        # trusting it sight-unseen would turn --apply-domain into
+        # --apply-all. Stay in safe mode, but say so: the canonical pipeline
+        # invocation (--stage 1 --domain all --apply-domain) otherwise looks
+        # like trust was applied when every medium/high rule still went to
+        # review.
+        print("hint: --apply-domain ignored without a specific domain "
+              "(whole-library run stays in safe mode; medium/high corrections "
+              "go to review). To trust a domain, name it: --domain <name>.",
+              file=sys.stderr)
 
     # Merge person-name ASR variants from the people roster (if configured).
     # Source: env TRANSCRIPT_FIXER_PEOPLE_ROSTER > config.json paths.people_roster_path (there is no --people-roster CLI flag).
@@ -870,7 +932,11 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                 # the correction run: warn loudly, continue.
                 review_enqueued = _enqueue_deferrals(
                     needs_review, input_path, original_text,
-                    getattr(args, "domain", None) or "general",
+                    # Normalize first: the raw "all" alias would be stamped
+                    # verbatim as the owning domain, and the review queue's
+                    # exact `domain = ?` match can then never find the item
+                    # under any real domain name.
+                    (domains[0] if domains else "general"),
                 )
 
         else:
@@ -933,10 +999,14 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         # --domain defaults to None (all domains). Normalize to "general" before it
         # reaches the history/learning layers: a null domain routes Stage-2
         # auto-approvable corrections into pending-review (validate_domain(None) raises)
-        # instead of learning them into the catch-all "general" domain.
+        # instead of learning them into the catch-all "general" domain. Use the
+        # normalized list, not the raw CLI string — the "all" alias would
+        # otherwise leak through as a literal attribution domain that no
+        # filter can ever select again.
+        attribution_domain = domains[0] if domains else "general"
         service.save_history(
             filename=str(input_path),
-            domain=args.domain or "general",
+            domain=attribution_domain,
             original_length=len(original_text),
             stage1_changes=len(applied_stage1),
             stage2_changes=len(stage2_changes),
@@ -952,7 +1022,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
 
             learning = _get_learning_engine(service)
 
-            stats = learning.analyze_and_auto_approve(stage2_changes, args.domain or "general")
+            stats = learning.analyze_and_auto_approve(stage2_changes, attribution_domain)
 
             print(f"📊 Analysis Results:")
             print(f"   Total changes: {stats['total_changes']}")
@@ -1061,6 +1131,13 @@ def cmd_approve(args: argparse.Namespace) -> None:
         sys.exit(2)
     if domains:
         args.domain = domains[0]
+    elif _is_all_alias(getattr(args, "domain", None)):
+        # The whole-library alias normalized to None above; without clearing
+        # the raw value it would win the `args.domain or ...` fallback below
+        # and write the approved rule into a literal, unfilterable "all"
+        # domain. Clearing it lets the suggestion's own domain take over,
+        # which is what "no specific domain" means for an approval.
+        args.domain = None
 
     service = _get_service()
     engine = _get_learning_engine(service)
@@ -1508,6 +1585,8 @@ def cmd_report_false_positive(args: argparse.Namespace) -> None:
               f"{len(domains)}: {', '.join(domains)}. Disabling is per-domain — "
               f"run it once per domain.", file=sys.stderr)
         sys.exit(2)
+    _reject_all_on_write(getattr(args, 'domain', None),
+                         "--report-false-positive")
     domain = domains[0] if domains else "general"
     try:
         service.validate_domain_name(domain)
