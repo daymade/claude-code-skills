@@ -209,7 +209,7 @@ def scan_numeric_slot(text: str, terms: set[str]) -> Iterator[Finding]:
             # someone happened to file.
             # Widening is BOUNDED to two characters per side, and that bound is
             # the whole ballgame. An unbounded walk to the CJK-run edge looked
-            # more thorough and was catastrophically worse: "北岸分馆季度盘点前1v1"
+            # more thorough and was catastrophically worse: "北岸分馆季度盘点前1页纸"
             # swallows the entire phrase, lands next to the 1, and reports a
             # clean line. Chinese puts digits after a run of characters
             # constantly, so an unbounded rule fires on ordinary text — 97 hits
