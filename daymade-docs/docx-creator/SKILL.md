@@ -119,8 +119,11 @@ Two SDK traps come with it (wrong class name, wrong element order) — ISSUE-005
 A run must set `RunFonts { Ascii, HighAnsi, EastAsia }`. Setting only the Latin slots leaves
 Chinese characters to Word's fallback, and the document renders in whatever the reader's
 machine picks. Shipped defaults: Latin `Times New Roman`; East Asian 宋体 for body, 黑体 for
-headings. Sizes are OpenXML half-points — body 24 (12pt), H1 36 (18pt), clause heading 28
-(14pt). ISSUE-007.
+headings. Chinese **bold runs switch family to 黑体** — 宋体 has no true bold weight and
+renderer-synthesized bold smears multi-stroke characters (ISSUE-014). Sizes are OpenXML
+half-points — body 21 (10.5pt, the common Chinese manuscript size), H1 36 (18pt), clause
+heading 28 (14pt). Body paragraphs also get a 2-character first-line indent (`420` twips at
+10.5pt — change it in lockstep with the body size). ISSUE-007.
 
 ### 4. Page and table basics
 

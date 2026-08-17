@@ -57,9 +57,9 @@ Full explanation: ISSUE-003.
 |---|---|
 | `# H1` | Centered, 黑体 18pt bold |
 | `## H2` and deeper | Left, 黑体 14pt bold |
-| Paragraph, no line breaks inside | Justified body, 宋体 12pt |
-| Paragraph **with** soft/hard line breaks | **Left-aligned** body — this is the info-block and signature-block rule, ISSUE-004 |
-| `**bold**` | Bold run (nested inline emphasis preserved) |
+| Paragraph, no line breaks inside | Justified body, 宋体 10.5pt, 2-character first-line indent |
+| Paragraph **with** soft/hard line breaks | **Left-aligned** body, no indent — this is the info-block and signature-block rule, ISSUE-004 |
+| `**bold**` | Bold run; Chinese bold set in 黑体 (宋体 has no true bold — ISSUE-014), nested inline emphasis preserved |
 | `1.` / `-` lists | Numbered or bulleted, each list restarting at 1, hanging indent |
 | Pipe tables | Full six-border table, header row bold, 100% width |
 | `---` | Horizontal rule as a bottom-bordered empty paragraph |
