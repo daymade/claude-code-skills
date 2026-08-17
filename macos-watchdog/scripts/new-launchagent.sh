@@ -52,14 +52,16 @@ if $SYSTEM; then
     PLIST_DIR="/Library/LaunchDaemons"
     DOMAIN="system"
     SUDO="sudo"
+    LOG_DIR="/Library/Logs"   # a root daemon must not log into one user's home
 else
     PLIST_DIR="$HOME/Library/LaunchAgents"
     DOMAIN="gui/$(id -u)"
     SUDO=""
+    LOG_DIR="$HOME/Library/Logs"
 fi
 PLIST="$PLIST_DIR/$LABEL.plist"
-LOG_OUT="$HOME/Library/Logs/$LABEL.out.log"
-LOG_ERR="$HOME/Library/Logs/$LABEL.err.log"
+LOG_OUT="$LOG_DIR/$LABEL.out.log"
+LOG_ERR="$LOG_DIR/$LABEL.err.log"
 
 # --- bootout if already loaded (converge, never double-install) ---------------
 if launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then
@@ -68,7 +70,7 @@ if launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; then
 fi
 
 # --- write plist ---------------------------------------------------------------
-mkdir -p "$PLIST_DIR" "$HOME/Library/Logs"
+$SUDO mkdir -p "$PLIST_DIR" "$LOG_DIR"
 
 args_xml="    <string>$PROGRAM</string>"
 for a in ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}; do
@@ -106,6 +108,12 @@ $runatload_xml  <key>StandardOutPath</key>
 EOF
 
 plutil -lint "$tmp_plist" >/dev/null || { echo "Generated plist failed plutil -lint" >&2; rm -f "$tmp_plist"; exit 1; }
+if $SYSTEM; then
+    # launchd rejects a LaunchDaemon plist not owned root:wheel ("dubious
+    # ownership", Bootstrap failed: 5) — mktemp files are mode 600, user-owned
+    sudo chown root:wheel "$tmp_plist"
+    sudo chmod 644 "$tmp_plist"
+fi
 $SUDO mv "$tmp_plist" "$PLIST"
 
 # --- bootstrap and verify -------------------------------------------------------

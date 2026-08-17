@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.86.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.88.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -3302,6 +3302,70 @@ completion drive 随时能盖过它；hook 才是一堵墙。
 把这条我老是忘记的规则做成硬性拦截
 我的 hook 把正常命令也误杀了
 调试这个把 session 搞坏的 hook
+```
+
+
+### 93. **macos-watchdog** - 设计与纪律化 macOS launchd 看门狗
+
+> **安装**：`claude plugin install macos-watchdog@daymade-skills`
+
+设计、部署、纪律化 macOS launchd 看门狗——检测复发问题并自动修复的
+LaunchAgent / LaunchDaemon，同时不让看门狗自己变成干扰源。提炼自
+15 个生产环境看门狗及其事故史。
+
+**核心能力：**
+- 安静看门狗契约——前提状态自检（监控的生命周期绑定其前提）、耐心模式（延迟打扰而非延迟检测）、升级式自动冷却、绝不复活用户主动退出的应用
+- 会咬人的部署细节——gui vs system domain、StandardOut/ErrorPath、作用于真实解释器的 TCC/FDA，以及停止语义（`unload` 已废弃且会被 `RunAtLoad` 复活——只用 bootout/bootstrap/disable）
+- 默认批量循环节流 + SRE 告警分层（page vs ticket、疲劳数字）
+- 附带 `watchdog-cooldown.sh`（可 source 的升级式冷却 + 手动暂停状态机）、`new-launchagent.sh`（带校验的幂等安装器）与带注释的 plist 模板
+
+**使用示例：**
+```text
+做一个 VPN 掉线自动重连的 launchd 看门狗
+我的看门狗总是把我退掉的 app 又拉起来——让它停
+审查我现有的 LaunchAgent 有没有噪音和崩溃循环
+```
+
+### 94. **devils-advocate** - 压力测试你的投资论点
+
+> **安装**：`claude plugin install daymade-financial@daymade-skills>`
+> （仅随套件提供 — 以 `daymade-financial:devils-advocate` 调用）
+
+针对你提供的证据材料，对投资论点做结构化的「魔鬼代言人」压力测试——
+基于证据的反对意见，而不是角色扮演的抬杠（每个反方观点都必须逐字引用出处）。
+
+**核心能力：**
+- 把论点拆成显式断言与隐式假设（事实/预测/机制分型，承重性测试）
+- 按来源可信度阶梯为每条假设检索反证（逐字引用），并叠加 Mauboussin 基准率外部视角（不超出你的材料范围）
+- 产出可审计的 findings JSON + 按主题分组的分析师叙事，并把批评转成 RAND 式路标监控清单
+
+**使用示例：**
+```text
+/daymade-financial:devils-advocate
+用这三份研报压力测试我看多 <股票> 的逻辑
+这个论点要错的话，需要发生什么？
+```
+
+### 95. **daymade-sector-research** - A股行业投研工作流
+
+> **安装**：`claude plugin install daymade-financial@daymade-skills`
+> （仅随套件提供 — 以 `daymade-financial:daymade-sector-research` 调用）
+
+A 股行业投研工作流：全板块成分股 Top N 涨幅计算、公告窗口检索、
+按证据分级判断市场情绪——由 Agent Team 并行执行 + fresh-context 对抗验证。
+全部公开免登录数据源。
+
+**核心能力：**
+- 全板块成分股 Top N 涨幅管线（东财 push2 + 新浪实时快照双源交叉）
+- 按个股检索公告窗口（周/月），覆盖沪深北三所（巨潮 + 东财）
+- 情绪结论按证据等级分级——L1 一手行情 / L2 带时间戳媒体 / L3 未核实标题——常驻纪律是「宁可标注不确定，不可给错误答案」
+
+**使用示例：**
+```text
+/daymade-financial:daymade-sector-research
+医药行业今天的 Top 10 标的
+这些标的最近一个月发过哪些公告
+判断医药板块现在的市场情绪
 ```
 
 ---

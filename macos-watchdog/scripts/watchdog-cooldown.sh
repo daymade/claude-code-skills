@@ -203,4 +203,5 @@ cooldown_status() {
     local n
     n=$(_wc_read_counter "$_WC_EXHAUSTED_FILE" nostale)
     [ "$n" != "0" ] && echo "Exhausted rounds: $n (each further failure extends the cool-down tier)"
+    return 0   # healthy path must exit 0 — callers source this under set -e
 }
