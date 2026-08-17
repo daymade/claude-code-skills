@@ -16,7 +16,8 @@ using MdTableCell = Markdig.Extensions.Tables.TableCell;
 class Program
 {
     const string SONG = "宋体", HEI = "黑体", WEST = "Times New Roman";
-    const string BODY = "24", H1 = "36", H2 = "28"; // half-points: 12/18/14pt
+    const string BODY = "21", H1 = "36", H2 = "28"; // half-points: 10.5/18/14pt（10.5pt = 中文书稿正文常用号）
+    const string BODY_INDENT = "420";               // twips: 2 字符 × 10.5pt × 20（改 BODY 字号时必须同步改这里）
 
     static readonly List<(int numId, bool ordered)> Lists = new();
     static int _numId = 0;
@@ -27,7 +28,11 @@ class Program
     static RunProperties RunProps(string font, string size, bool bold)
     {
         var rp = new RunProperties();
-        rp.Append(new RunFonts { Ascii = WEST, HighAnsi = WEST, EastAsia = font });
+        // 中文加粗切黑体：宋体没有真粗体字重，渲染器只能算法合成，笔画多的汉字会粘连成一团
+        // （实测多个三画以上的姓名在 LibreOffice 与 Word 下均糊）。中文排版惯例本就是「强调用黑体」
+        // 而非「宋体加粗」。西文仍靠 Bold——Times New Roman 有真 Bold 字重，合成不了才需要换字族。
+        var eastAsia = (bold && font == SONG) ? HEI : font;
+        rp.Append(new RunFonts { Ascii = WEST, HighAnsi = WEST, EastAsia = eastAsia });
         if (bold) { rp.Append(new Bold()); rp.Append(new BoldComplexScript()); }
         rp.Append(new Color { Val = "000000" });
         rp.Append(new FontSize { Val = size });
@@ -81,7 +86,7 @@ class Program
     }
 
     // CT_PPrBase 子元素顺序：pStyle, keepNext, keepLines, pageBreakBefore, ..., numPr, ..., spacing, ind, ..., jc, ...
-    static Paragraph Para(IEnumerable<Run> runs, JustificationValues just, string? spaceAfter = "120", string line = "360", int? numId = null)
+    static Paragraph Para(IEnumerable<Run> runs, JustificationValues just, string? spaceAfter = "120", string line = "360", int? numId = null, string? firstLineIndent = null)
     {
         var pp = new ParagraphProperties();
         if (numId.HasValue)
@@ -89,6 +94,10 @@ class Program
         var spacing = new SpacingBetweenLines { Line = line, LineRule = LineSpacingRuleValues.Auto };
         if (spaceAfter != null) spacing.After = spaceAfter;
         pp.Append(spacing);
+        // ind 必须落在 spacing 与 jc 之间（见上方 CT_PPrBase 顺序）。缩进只由调用方按块类型传入：
+        // 标题、列表项、表格单元格都不缩进，含软换行的 info block 也不缩进（ISSUE-004 同源——
+        // 它是一个多行段落，首行缩进只作用在第一行，反而把整块拉歪）。
+        if (firstLineIndent != null) pp.Append(new Indentation { FirstLine = firstLineIndent });
         pp.Append(new Justification { Val = just });
         var p = new Paragraph(pp);
         foreach (var r in runs) p.Append(r);
@@ -162,7 +171,8 @@ class Program
                     break;
                 case ParagraphBlock p:
                     var (pr, hasBreak) = InlineRuns(p.Inline, SONG, BODY, false);
-                    body.Append(Para(pr, hasBreak ? JustificationValues.Left : JustificationValues.Both));
+                    body.Append(Para(pr, hasBreak ? JustificationValues.Left : JustificationValues.Both,
+                        firstLineIndent: hasBreak ? null : BODY_INDENT));
                     break;
                 case ListBlock lb:
                     bool ordered = lb.IsOrdered;
