@@ -952,7 +952,9 @@ load-bearing, settle it by ear through the path this skill already has: wire the
 transcript's `audio:` frontmatter (see "Wiring audio for a Feishu-minute
 transcript"), enqueue the number as a review item, and press `Q` in the review
 dashboard — it plays exactly the anchored utterance, so you hear the digits
-spoken instead of re-reading them.
+spoken instead of re-reading them. For names and terms rather than numbers, a
+photographed in-room artifact can stand in as the second system — see "In-room
+artifacts are another independent engine" below.
 
 **Numeric-slot damage — when a replacement overshoots into a number.** A
 distinct failure with the same symptom: a global replace aimed at something else
@@ -983,6 +985,76 @@ title's leading date, a timezone offset) stay silent. Run it with
 The false-positive *rate* behind those choices was measured on a private
 transcript corpus that cannot ship, so the rate is not reproducible here — the
 behaviour it bought is.
+
+### In-room artifacts are another independent engine (whiteboard and slide photos)
+
+The two-recordings rule above has a cross-modal sibling. When the meeting
+produced a written artifact — a whiteboard, a flip chart, a projected slide — a
+photo of it is an independent recognizer alongside the recording(s): the second
+engine when you have one recording, the third when you have two. Handwriting
+fails on strokes (illegible scrawl) and ASR fails on sounds (homophones), so in
+principle their errors are largely uncorrelated — that is the mechanism claim;
+the yield reported at the end is one observed case (n=1), not a measured rate.
+
+Ask for the artifact before triaging: does a photo of the board or slides
+exist? A minutes-pipeline transcript often has the meeting's attachments
+nearby; if the owner is not obvious, ask rather than guess. Then locate the
+segment where the artifact was **created** — search the transcript for the
+artifact's own phrases, falling back to photo-talk cues, the photo file's
+timestamp against the transcript timeline, or speaker-turn structure. A
+zero-hit grep for a board word is an instrument report, not absence: the
+board's words are exactly what ASR may have garbled. And note the photo you
+hold may have been taken later than any photo-talk in the text — the talk
+locates the writing moment, not necessarily this shot.
+
+Prefer phrase-matching and treat the timestamp fallback as the weakest of the
+four, because for relayed media it is not merely absent but *systematically
+wrong*: a photo forwarded through a chat app carries the **re-export** time,
+not the capture time. Measured on one WeChat-relayed board photo, both the
+filesystem creation date and the ms-epoch embedded in its `mmexport…`
+filename decoded to the same value — the moment it was re-downloaded, hours
+after the meeting it documented. Leaning on that would have placed the
+artifact *after* the discussion and argued against a pairing that
+phrase-matching then confirmed. So when the file's time says "later," treat
+that as unresolved rather than as evidence, and go find the phrases.
+
+**Work board-first, and remember a garbled name reads as fluent text, not as
+noise.** For each board token, find the moment it was written and ask what in
+that utterance corresponds to it. The ASR side of a name garble is usually a
+fluent, semantically unrelated phrase sitting in the right slot (a latin
+company name arriving as an ordinary two-word Chinese phrase) — so test the
+slot; scanning for gibberish finds nothing. Four outcomes:
+
+- **Speech garbled, board legible** — the board spelling wins *only when the
+  writer plausibly knows the canonical form* (their own org, their client, a
+  name they use daily). A name the writer first heard in that same meeting is
+  a same-source error — the writer may have misheard it too — not a second
+  engine: route it to the queue. Where this anchor holds and the raw text
+  confirms it, it discharges step 6's route-to-queue exception for that item;
+  absent it, step 6 stands.
+- **Board illegible, speech clear** — the spoken words resolve the scrawl.
+- **Both channels carry a plausible but different reading** of the same slot —
+  that is a disagreement, never a garble-resolution, even when one side looks
+  stronger. Enqueue it as an uncertain item (Native AI Correction step 7,
+  `kind: entity`); in a batch it also joins the batch strategy's step-7
+  shortlist below.
+- **Only one channel has the item at all** (a board word nobody spoke, a
+  spoken name never written) — single-source: a lead, not a confirmation.
+
+A fix anchored by both channels clears the bar two independent recognizers
+set — **but evidence strength does not change destination routing**. The
+Dictionary Addition matrix's real-word rules apply in full: real-name /
+real-brand rows stay ❌ no matter how well anchored; deterministic non-word
+fixes go to `--add` / the roster, context-dependent ones to the domain context
+file; the FROM-side collision check and corpus probe still run. When recording
+the fix, note which two channels anchored it in the destination itself (the
+context file's trap line or the roster's variant line — e.g. `双证:白板+口述
+2026-08`).
+
+Observed once (2026-08, one 8-minute write-while-talking segment × one phone
+photo): four transcript fixes anchored by the board — two of them company
+names neither engine had settled alone — plus three board scrawls resolved
+from speech, and one both-sides-plausible disagreement correctly left open.
 
 ### Efficient Batch Fix Strategy
 
