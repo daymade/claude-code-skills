@@ -1669,3 +1669,103 @@ this list and describe defects you reach by asking a different question):
      only, that fully explains the silence — it is not a hot-reload problem,
      not a matcher problem, and no amount of re-editing the matching logic
      will fix it.
+
+## 35. A pipeline's exit status is its last segment's — a `cmd | head || echo "无"` fallback is dead code, and its empty output cannot tell "none" from "died"
+
+> Worked example: `pipe-fallback-guard.sh` (a private hooks repo, not
+> shipped here) — shipped 2026-08-15 after the prose rule (which already
+> named this exact shape) was violated four times in one session, and it
+> caught its first real `grep … | tail || echo` on 2026-08-18. One of the
+> pre-guard violations was the mirror-image hazard and nearly wrote "remote
+> branch already deleted" into a deliverable: the command had died with
+> `fatal` on all three retries, the downstream `grep` read empty output,
+> and the `||` fallback supplied the confident, wrong branch.
+
+- **Symptom:** an existence probe prints nothing and its `|| echo "无"`
+  fallback never fires — not once, ever. You are left reading an empty
+  result that is byte-identical across two opposite worlds: "the command
+  ran and found nothing" and "the command never ran (permission / path /
+  network / `fatal`)". Anything you conclude from that emptiness is a
+  guess.
+
+- **Cause — `||` binds to the pipeline's last segment, not to the
+  pipeline.** A pipeline's exit status is the exit status of its **last
+  command**, and this one root cause breaks the fallback in **both
+  directions**:
+  - **Dead fallback (what the guard blocks):** `head` / `tail` / `wc` /
+    `cat` / `sort` exit 0 on empty input, so `find … | head -5 || echo "无"`
+    asks "did `head` succeed" — always yes — and the fallback is
+    unreachable code. The upstream command's death is swallowed before
+    anyone looks at it.
+  - **Lying fallback (the 2026-08-15 near-miss):** `grep` on empty input
+    exits 1, so `cmd | grep x || echo "已删"` **does** fire — but it fires
+    identically for "upstream died" and "genuinely no match", because
+    grep's input is empty in both worlds. The fallback is live and still
+    wrong. For `find` / `grep -l` the trap is stacked two deep even without
+    a pipe: zero matches is itself a *legitimate* answer (exit 0, no
+    output), so the fallback was never going to fire on the healthy-empty
+    case — its only possible job was catching real failure, and that is
+    exactly the job emptiness cannot do.
+
+- **The `&&`-chain sibling is semantically fine — audit the last segment,
+  not the shape.** `A && B || C` parses as `(A && B) || C`; the `||` fires
+  when the chain's last executed command fails, which is what a fallback
+  wants, and no exit code is swallowed — *unless* `B` is itself a pipeline
+  ending in an always-0 segment, in which case the dead fallback is back.
+  (The classic caveat applies either way: `A && B || C` is not "if A then B
+  else C" — `C` also runs when `A` succeeds and `B` fails. For a fallback
+  that is usually the intent; if `C` assumes `A`'s side effects, it isn't.)
+  Scope note: the zsh `echo ===` EQUALS expansion — a bare `=`-leading word
+  aborting the *rest of the script* — is a different failure on a different
+  axis and is deliberately not this entry; it shipped as its own guard
+  (`zsh-equals-guard.sh`, 2026-08-18).
+
+- **Why this is a hook and not the prose rule that already existed.** The
+  rule was written down, with this exact shape named, and was still
+  violated four times in one session (2026-08-15) — one of them a
+  deliverable away from a false fact. Prose is advice; a wall is a wall.
+  This entry joins the #10/#15/#33 family — the shell fact that bites you
+  is never visible in the text you typed — on the exit-status axis rather
+  than the parsing axis.
+
+- **Why `pipefail` is not the default cure (measured, so don't re-argue
+  it):** it convicts two healthy commands — `seq 1 300000 | head -1`
+  returns **141** (SIGPIPE on a deliberately truncated pipe is normal
+  usage), and `grep -c zzz` returns **1** when zero hits is the legitimate
+  answer. A gate that fails healthy input trains reflexive bypass —
+  pitfall #2's rule, applied to a shell builtin. Hence the guard's escape
+  hatch is not a flag but the correct form itself: a command already
+  containing `pipefail` / `PIPESTATUS` / `pipestatus` is treated as "the
+  author knows" and passes. Shellcheck is measured-and-rejected as the
+  gate: its default config does not report `find . | head -5 || echo 无`
+  at all (0.11.0, exit 0), and `--enable=all`'s SC2312 fires on the
+  *legal* `cmd | jq . || echo bad` too — it knows pipes can mask returns,
+  not which last segments swallow codes. (It also lints script files, not
+  tool-call events, so it could never be this hook anyway.)
+
+**Fixes, in the order they buy the most:**
+
+1. **Judge success by the exit code, never by output emptiness — drop the
+   pipe first.** `cmd > /tmp/out 2>&1; ec=$?` makes the two worlds
+   distinguishable by construction: `ec` tells you "ran" vs "died", and
+   the log is read only after `ec=0`. It also fixes the lying-fallback
+   direction, which no last-segment blocklist can.
+2. **If the pipe must stay, read the first segment's real code:**
+   `${PIPESTATUS[0]}` (bash) / `$pipestatus[1]` (zsh) — captured
+   immediately, before any intervening command rewrites it. (Pitfall #8
+   carries the sibling trap for `$(…)`: the `||` goes *outside* the
+   substitution — `X=$(cmd | wc -l) || X='?'` — or `wc` prints `0` into
+   your fallback value.)
+3. **For existence probes, make "ran and found none" a different
+   observable from "didn't run".** Count the results, or branch on `ec` —
+   but never let a bare empty stdout be the evidence. A marker like
+   `|| echo "<name>: 无"` only rescues the no-pipe case; inside a pipeline
+   it is dead on arrival.
+4. **If you guard this with a hook, precision is the entire product.**
+   Block only the provably-dead shape — last pipeline segment in a named
+   swallow-list **and** a trailing `||` — and let `cmd | jq . || …` pass,
+   because `jq` really can fail and the `||` is live. The block message
+   should teach the fix forms from items 1–2 verbatim; the harness rows
+   must pin both directions (the `| head ||` case exits 2, the `| jq ||`
+   case exits 0), or you have shipped a false-block machine against
+   everyday, healthy shell.
