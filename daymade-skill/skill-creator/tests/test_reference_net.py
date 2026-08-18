@@ -403,6 +403,47 @@ class ReferenceNetTest(unittest.TestCase):
         self.assertEqual(r.stdout.strip(), "")
         self.assertIn("awk exited non-zero", r.stderr)
 
+    # ── the two states the reader could not tell apart from the verdict alone ─────────────────
+
+    def test_identical_names_the_stale_base_case_when_base_is_head(self):
+        """`IDENTICAL` and 'my base already contains my work' printed the same line; the second is
+        the likelier one right after committing, and is the only one detectable here."""
+        self.add_pointer_line()
+        git(self.repo, "add", "d.md")
+        git(self.repo, "commit", "-qm", "commit the pointer")
+        head = git(self.repo, "rev-parse", "HEAD").stdout.strip()
+        r = self.run_script(head, "d.md")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("IDENTICAL", r.stdout)
+        self.assertIn("also your current HEAD", r.stdout)
+
+    def test_identical_against_an_older_base_carries_no_stale_note(self):
+        """Negative control. Deliberately NOT 'unchanged file' — with no commits since setUp, base IS
+        HEAD, and that state is genuinely ambiguous (nothing changed vs. already committed), so the
+        note belongs there. The note must be absent only when the base is genuinely older than HEAD,
+        because then IDENTICAL cannot be hiding the reader's own commit."""
+        (self.repo / "other.md").write_text("x\n", encoding="utf-8")
+        git(self.repo, "add", "other.md")
+        git(self.repo, "commit", "-qm", "unrelated later commit")
+        self.assertNotEqual(
+            self.base, git(self.repo, "rev-parse", "HEAD").stdout.strip(), "base must be older"
+        )
+        r = self.run_script(self.base, "d.md")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("IDENTICAL", r.stdout)
+        self.assertNotIn("also your current HEAD", r.stdout)
+
+    def test_untracked_message_names_the_unstaged_new_file_case(self):
+        """Creating a references/ file mid-edit is routine; 'typo or wrong directory' misdirects."""
+        (self.repo / "brand_new.md").write_text("a\nsee rule 4\n", encoding="utf-8")
+        r = self.run_script(self.base, "brand_new.md")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("git add", r.stderr)
+        git(self.repo, "add", "brand_new.md")
+        r2 = self.run_script(self.base, "brand_new.md")
+        self.assertEqual(r2.returncode, 0, r2.stderr)
+        self.assertIn("see rule 4", r2.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

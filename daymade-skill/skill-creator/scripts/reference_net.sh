@@ -38,10 +38,11 @@
 # and this script uses bash arrays. That is a deliberate dependency, not an oversight — say
 # `bash reference_net.sh …` if your caller cannot rely on the shebang.
 #
-# Known boundary, documented rather than fixed: a staged-but-uncommitted submodule pointer bump is
-# not visible here. It cannot hide anything this tool looks for — a gitlink diff line is always
-# `Subproject commit <sha>`, which no prose pattern can match — so the gap is inert, but it is a
-# real exception to "staged edits are visible" and is written down instead of discovered later.
+# Known boundary, documented rather than fixed: a submodule bump is reported (measured: the gitlink
+# line is counted as one added line and correctly classified `NONE prose-reference-shaped`), but the
+# CONTENT behind the new commit is never traversed. So a pointer added inside a submodule is invisible
+# here. The gap is inert for this tool's purpose — run the script inside that submodule if you edited
+# it — but it is written down instead of discovered later.
 #
 # Exit codes:
 #   0  ran to completion — read the printed verdict, which always says which case you are in
@@ -94,7 +95,8 @@ for file in "$@"; do
   done < <(git ls-files -z --full-name -- "$file" 2>/dev/null)
 
   if [ "${#matches[@]}" -eq 0 ]; then
-    echo "FAIL: '${file}' is not tracked by git — typo, or wrong directory?" >&2
+    echo "FAIL: '${file}' is not tracked by git — new file you have not \`git add\`ed yet," >&2
+    echo "      or a typo, or the wrong directory." >&2
     echo "      Nothing was examined." >&2
     exit 2
   fi
@@ -145,7 +147,17 @@ for file in "${resolved_paths[@]}"; do
     # contributed no ADDED lines (deleted from the worktree, binary, mode/rename only). Naming
     # them apart is the same guarantee the suite already enforces for the two non-empty cases.
     if [ -z "$diff_out" ]; then
-      echo "${file}: IDENTICAL to ${base} — no diff at all, nothing to check."
+      # "Nothing changed" and "my base ref already contains my work" print the same thing, and the
+      # second is the likelier one right after committing. Only the second is detectable here, so
+      # say it rather than leaving the reader to tell two identical lines apart.
+      note=""
+      if head_commit=$(git rev-parse --verify --quiet HEAD 2>/dev/null); then
+        if [ "$head_commit" = "$resolved" ]; then
+          note=" NOTE: ${base} is also your current HEAD, so if you have already committed this"
+          note="${note} work, that is why this looks clean — re-run against the commit you started from."
+        fi
+      fi
+      echo "${file}: IDENTICAL to ${base} — no diff at all, nothing to check.${note}"
     else
       echo "${file}: CHANGED versus ${base} but contributed no ADDED lines" \
            "(deletion, binary, mode or rename only) — nothing to check, and worth a glance if you" \
