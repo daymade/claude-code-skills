@@ -1,61 +1,45 @@
 #!/usr/bin/env bash
-# reference_net.sh — list the PROSE cross-references in what you added, so each can be resolved.
+# reference_net.sh <base-ref> <file>… — list the PROSE cross-references among the lines you added,
+# so you can open each target and confirm it says what you claim it says.
 #
-# SCOPE — deliberately half of what you might expect, because the other half already has a tool.
+# SCOPE. Prose pointers only: "see rule 8", "discipline #6", "the step 3 above". These have no
+# machine-resolvable target, so no link checker can validate them. Markdown links and URLs are NOT
+# this script's job — use `lychee` (this repo's house standard; invocation and calibration caveats
+# in daymade-docs/docs-cleaner's SKILL.md). A hand-rolled link scanner was tried here and deleted
+# after it misreported 16 of 17 valid links, so do not rebuild one inside this script.
 #
-#   This script finds *prose* pointers: "see rule 8", "discipline #6", "the step 3 above". They have
-#   no machine-resolvable target — a numbered item in prose is not an anchor — so no link checker
-#   can validate them, and a human or agent has to open each target and read it.
+# CONTRACT. Every outcome is named out loud, and bad input fails loudly: there is no combination of
+# arguments under which this prints nothing and looks successful. That is the whole reason it is a
+# script rather than the one-liner it replaces, which found five separate ways to do exactly that.
+# (`git log -- <this file>` carries the individual defects; they are not repeated here.)
 #
-#   Machine-resolvable links — `[text](#anchor)`, `[text](path.md)`, URLs — are NOT this script's
-#   job. Use `lychee`, which parses Markdown properly and is this repository's house standard for
-#   them; daymade-docs/docs-cleaner's SKILL.md carries the invocation and, importantly, its
-#   calibration caveats. A hand-rolled link scanner was tried here before and deleted after it
-#   misreported 16 of 17 valid links; do not rebuild it inside this one.
+# WHAT TO EXPECT. This is a net, not a proof, and it is deliberately noisy in one direction: it will
+# re-surface stable anchors you cite constantly and pointer-shaped strings inside test fixtures or
+# worked examples. Most runs legitimately end in "yes, those are all fine". It also cannot see a
+# pointer with no number in it ("see the section below"), so read your added lines too.
 #
-# WHY THIS IS A SCRIPT AND NOT THE ONE-LINER IT REPLACES
+# USAGE. <base-ref> is the commit your work started from. NOT `HEAD` — once you commit, `HEAD`
+# contains your own change, the diff goes empty, and unresolved pointers sit in the file while this
+# reports nothing to do. Resolve it to a literal SHA before you start editing and reuse that value.
 #
-#   The prose version of this check accumulated five rounds of patches — anchor the diff to the
-#   right base, see staged edits, survive committing, ignore the diff's own `+++` header, drop a
-#   misleading `-n`. Four of those five added one more way for the command to print nothing and
-#   exit 0, which is indistinguishable from "I checked and it was clean"; the fifth (`-n`) was the
-#   other shape of the same disease — it printed hits with line numbers that pointed nowhere, which
-#   is worse, because a wrong answer outranks no answer. Prose cannot validate its own inputs,
-#   cannot say which of its outcomes happened, and cannot be tested.
+# Requires bash (uses arrays), so `sh reference_net.sh …` fails on Debian-family systems where
+# /bin/sh is dash. The shebang and executable bit make the bare invocation work.
 #
-#   So the contract here is: **every outcome is named out loud, and bad input fails loudly.** There
-#   is no combination of arguments under which this prints nothing and looks successful.
-#
-# Usage:
-#   reference_net.sh <base-ref> <file> [file...]
-#
-#   <base-ref>  The commit your current work started from. NOT `HEAD` — once you commit, `HEAD`
-#               includes your own change, the diff goes empty, and your unresolved pointers sit
-#               happily in the file while the check reports nothing to do. Use the SHA you branched
-#               from, or `@{u}` / `origin/main` when those genuinely predate your work.
-#
-# Requires bash. The shebang and the executable bit make the documented bare invocation work;
-# running it as `sh reference_net.sh …` will not, because /bin/sh is dash on Debian-family Linux
-# and this script uses bash arrays. That is a deliberate dependency, not an oversight — say
-# `bash reference_net.sh …` if your caller cannot rely on the shebang.
-#
-# Known boundary, documented rather than fixed: a submodule bump is reported (measured: the gitlink
-# line is counted as one added line and correctly classified `NONE prose-reference-shaped`), but the
-# CONTENT behind the new commit is never traversed. So a pointer added inside a submodule is invisible
-# here. The gap is inert for this tool's purpose — run the script inside that submodule if you edited
-# it — but it is written down instead of discovered later.
+# Known boundary: a submodule bump is reported and correctly classified non-prose, but the content
+# behind the new commit is never traversed — run this inside that submodule if you edited it.
 #
 # Exit codes:
 #   0  ran to completion — read the printed verdict, which always says which case you are in
 #   2  could not run (unresolvable base ref, untracked or mistyped path, git or parse failure)
 #
-# `set -e` is deliberately NOT used: `grep` exits 1 on no-match, a legitimate result here, and
-# `set -e` would turn "found nothing" into "script crashed".
+# `set -e` is deliberately NOT used: `grep` exits 1 on no-match, a legitimate result here.
 
 set -uo pipefail
 
 # Prose pointers only. Markdown links are lychee's job — see SCOPE above.
-readonly REFERENCE_PATTERN='(see|per|above|below|§|rule|discipline|step) *#?[0-9]'
+# The leading `(^|[^[:alnum:]])` is a word boundary written portably — `\b` and `\<` differ across
+# BSD and GNU. Without it "whisper9", "paper2" and "upper3" all matched, via the "per" inside them.
+readonly REFERENCE_PATTERN='(^|[^[:alnum:]])(see|per|above|below|§|rule|discipline|step) *#?[0-9]'
 
 usage() {
   echo "usage: $(basename "$0") <base-ref> <file> [file...]" >&2
@@ -67,6 +51,17 @@ if [ "$#" -lt 2 ]; then
   exit 2
 fi
 
+# Both are unset in ordinary use, so this line is silent then. When they ARE set, every git call
+# below silently targets another repository and a clean verdict may describe a file the caller never
+# edited — so say which repository was actually examined.
+if [ -n "${GIT_DIR:-}" ] || [ -n "${GIT_WORK_TREE:-}" ]; then
+  if ! env_toplevel=$(git rev-parse --show-toplevel 2>/dev/null); then
+    env_toplevel="(no working tree)"
+  fi
+  echo "NOTE: GIT_DIR/GIT_WORK_TREE is set, so this examined ${env_toplevel} — not necessarily the"
+  echo "      repository your current directory is in."
+fi
+
 base=$1
 shift
 
@@ -76,28 +71,26 @@ if ! resolved=$(git rev-parse --verify --quiet "${base}^{commit}"); then
   exit 2
 fi
 
-# Resolve each argument to a repo-root-relative path and keep it. Two reasons, both measured:
-# a bare relative name like SKILL.md resolves against the CALLER'S cwd, and in a repo with many
-# same-named files that silently examines a different file than the caller edited while printing a
-# clean verdict; and an argument that matches several paths (a directory, a glob) would be reported
-# under one heading as if it were one file.
+# Resolve each argument to a repo-root-relative path. A bare relative name resolves against the
+# CALLER'S cwd, so in a repo with many same-named files it silently examines a different file while
+# printing a clean verdict; and an argument matching several paths would be reported as one file.
 resolved_paths=()
 for file in "$@"; do
-  # -z, because it is the only form git guarantees is the RAW pathname. Plain `ls-files` C-quotes
-  # any name git considers unusual and hands back an escaped *string* — `"\346\226\207..."` for
-  # 文档.md, `"foo\"bar.md"` for a plain-ASCII foo"bar.md — which then matches nothing as a diff
-  # pathspec, so the file was reported IDENTICAL while real unresolved pointers sat in it
-  # (measured, both cases). `core.quotepath=false` is NOT sufficient: quotes, backslashes and
-  # control bytes are C-escaped unconditionally, regardless of that setting.
-  # The loop reads in THIS shell (process substitution, not a pipe) so the array survives.
+  # -z is the only form git guarantees is the RAW pathname. Plain `ls-files` C-quotes any name git
+  # considers unusual and returns an escaped *string*, which then matches nothing as a diff pathspec
+  # — the file reads as IDENTICAL with real pointers still in it. `core.quotepath=false` does not
+  # cover it: quotes, backslashes and control bytes are escaped regardless of that setting.
+  # Process substitution, not a pipe, so the array survives into this shell.
   matches=()
   while IFS= read -r -d '' match; do
     matches+=("$match")
   done < <(git ls-files -z --full-name -- "$file" 2>/dev/null)
 
   if [ "${#matches[@]}" -eq 0 ]; then
-    echo "FAIL: '${file}' is not tracked by git — new file you have not \`git add\`ed yet," >&2
-    echo "      or a typo, or the wrong directory." >&2
+    echo "FAIL: '${file}' is not tracked by git. Causes, likeliest first: a new file you have" >&2
+    echo "      not \`git add\`ed yet; a typo or the wrong directory; a name git reads as pathspec" >&2
+    echo "      magic (a leading ':') — pass it as './${file}'; or a bare repo, which has no" >&2
+    echo "      working tree for anything to be tracked in." >&2
     echo "      Nothing was examined." >&2
     exit 2
   fi
@@ -114,10 +107,9 @@ for file in "${resolved_paths[@]}"; do
   # --no-color: a user with color.diff=always gets ANSI codes that make every content line fail a
   #   `^\+` match, so the script reported NOTHING ADDED for every file (measured).
   # --no-ext-diff: an external differ (difftastic/delta) replaces the unified format entirely.
-  # --no-textconv: a .gitattributes `diff=<driver>` whose driver defines a textconv filter makes
-  #   git diff the FILTERED text rather than the real bytes, and --no-ext-diff does not cover that
-  #   (measured: a real `see discipline #6` became invisible). All three are repo-committable
-  #   config that changes what the diff SHOWS without changing what is on disk.
+  # --no-textconv: a .gitattributes textconv driver makes git diff the FILTERED text, and
+  #   --no-ext-diff does not cover that. All three are repo-committable config that changes what the
+  #   diff SHOWS without changing what is on disk.
   if ! diff_out=$(git -c core.quotepath=false diff -U0 --no-color --no-ext-diff --no-textconv \
                       "$resolved" -- ":(top)$file" 2>&1); then
     echo "FAIL: git diff failed for '${file}':" >&2
@@ -125,16 +117,12 @@ for file in "${resolved_paths[@]}"; do
     exit 2
   fi
 
-  # Hunk-aware, not prefix-filtered. `grep -v '^+++'` also deleted genuine added lines whose own
-  # text begins with `++` (measured: an added line `++ see rule 5` vanished and the file reported
-  # NOTHING ADDED). Content lines only ever appear after an `@@` hunk header — but ONE invocation
-  # can carry several file blocks (git emits two for a typechange, e.g. regular file -> symlink),
-  # and with no reset the second block's own `+++ b/<path>` header was swept in as content and
-  # reported as a prose reference no human ever wrote (measured). Hence the `diff --git` reset.
-  # LC_ALL=C makes awk byte-oriented. In a UTF-8 locale a single invalid byte anywhere in the
-  # added lines aborts awk mid-stream (`towc: multibyte conversion failure`, exit 2) — after which
-  # the script printed "contributed no ADDED lines" at exit 0, naming a wrong cause, while a real
-  # `see rule 8` sat unresolved in the file (measured on /usr/bin/awk).
+  # Hunk-aware, not prefix-filtered: filtering `^+++` also deletes genuine added lines beginning
+  # `++`. Content appears only after an `@@` header — but one invocation can carry several file
+  # blocks (git emits two for a typechange), so `h` resets at each, or the second block's own
+  # `+++ b/<path>` header is read as content and reported as a pointer nobody wrote.
+  # LC_ALL=C makes awk byte-oriented: in a UTF-8 locale one invalid byte aborts it mid-stream
+  # (`towc: multibyte conversion failure`, exit 2) and the truncated output reads as "no additions".
   if ! added=$(printf '%s\n' "$diff_out" \
       | LC_ALL=C awk '/^diff --git /{h=0} /^@@/{h=1;next} h && /^\+/{print}'); then
     echo "FAIL: could not parse the diff for '${file}' — awk exited non-zero." >&2
@@ -143,14 +131,12 @@ for file in "${resolved_paths[@]}"; do
   fi
 
   if [ -z "$added" ]; then
-    # Two different realities used to share one verdict here, and one of them involves a lot of
-    # content moving: a file identical to base, versus a file that changed substantially but
-    # contributed no ADDED lines (deleted from the worktree, binary, mode/rename only). Naming
-    # them apart is the same guarantee the suite already enforces for the two non-empty cases.
+    # Two realities used to share this verdict, and one involves a lot of content moving: identical
+    # to base, versus changed but contributing no ADDED lines (worktree deletion, binary, mode or
+    # rename). They are named apart for the same reason the two non-empty cases are.
     if [ -z "$diff_out" ]; then
-      # "Nothing changed" and "my base ref already contains my work" print the same thing, and the
-      # second is the likelier one right after committing. Only the second is detectable here, so
-      # say it rather than leaving the reader to tell two identical lines apart.
+      # "Nothing changed" and "my base already contains my work" are indistinguishable to the
+      # reader, and the second is likelier right after committing. Only it is detectable here.
       note=""
       if head_commit=$(git rev-parse --verify --quiet HEAD 2>/dev/null); then
         if [ "$head_commit" = "$resolved" ]; then
@@ -168,8 +154,8 @@ for file in "${resolved_paths[@]}"; do
   fi
 
   added_count=$(printf '%s\n' "$added" | wc -l | tr -d ' ')
-  # LC_ALL=C for the same reason as awk above; the pattern is ASCII plus a literal UTF-8 `§`,
-  # both of which match byte-wise, so nothing is lost by dropping locale-aware collation.
+  # LC_ALL=C for the same reason as awk above; the pattern is ASCII plus a literal UTF-8 `§`, both
+  # of which match byte-wise.
   hits=$(printf '%s\n' "$added" | LC_ALL=C grep -Ei "$REFERENCE_PATTERN")
 
   if [ -z "$hits" ]; then

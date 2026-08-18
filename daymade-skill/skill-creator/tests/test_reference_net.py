@@ -444,6 +444,54 @@ class ReferenceNetTest(unittest.TestCase):
         self.assertEqual(r2.returncode, 0, r2.stderr)
         self.assertIn("see rule 4", r2.stdout)
 
+    # ── the vector every other test in this file structurally cannot see ─────────────────────
+
+    def test_ambient_git_dir_is_named_not_silently_obeyed(self):
+        """Every other test pops GIT_DIR, so the whole suite was blind to it. Left set, git silently
+        targets another repo and a clean verdict can describe a file the caller never edited."""
+        other = self.repo / "other_repo"
+        other.mkdir()
+        git(other, "init", "-q", ".")
+        git(other, "config", "user.email", "t@example.invalid")
+        git(other, "config", "user.name", "T")
+        (other / "d.md").write_text("z\n", encoding="utf-8")
+        git(other, "add", "d.md")
+        git(other, "commit", "-qm", "init other")
+        other_base = git(other, "rev-parse", "HEAD").stdout.strip()
+
+        self.add_pointer_line()  # the REAL repo now has an unresolved pointer
+        env = dict(os.environ)
+        env["GIT_DIR"] = str(other / ".git")
+        env["GIT_WORK_TREE"] = str(other)
+        r = subprocess.run(
+            ["bash", str(SCRIPT), other_base, "d.md"],
+            cwd=str(self.repo), capture_output=True, text=True,
+            encoding="utf-8", env=env, check=False,
+        )
+        self.assertIn("GIT_DIR/GIT_WORK_TREE is set", r.stdout)
+        self.assertIn("other_repo", r.stdout)
+
+    def test_no_git_dir_note_when_the_environment_is_clean(self):
+        """Negative control: the note must be silent in ordinary use, or it is noise on every run."""
+        self.add_pointer_line()
+        r = self.run_script(self.base, "d.md")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("GIT_DIR", r.stdout)
+
+    def test_ordinary_prose_containing_per_is_not_flagged(self):
+        """No leading word boundary meant 'whisper9', 'paper2' and 'upper3' matched via their 'per'."""
+        (self.repo / "d.md").write_text(
+            "a\nwhisper9 was the codename\npaper2 describes the benchmark\n"
+            "the upper3 bound was chosen\nsee rule 8 for the rest\n",
+            encoding="utf-8",
+        )
+        r = self.run_script(self.base, "d.md")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("see rule 8", r.stdout)
+        self.assertNotIn("whisper9", r.stdout)
+        self.assertNotIn("paper2", r.stdout)
+        self.assertNotIn("upper3", r.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
