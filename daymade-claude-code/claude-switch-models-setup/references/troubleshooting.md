@@ -112,6 +112,12 @@ python3 ~/.config/claude-switch-models-setup/sync-profile-settings.py --all
 Restart the affected window — the harness reads `.claude.json` at startup, so
 a sync never changes the running session.
 
+Corrupt files on either layer: a corrupt profile `settings.json` or
+`.claude.json` is rebuilt from main with a WARNING line (the original bytes
+are retained in `<file>.sync-backup`); a corrupt MAIN file aborts the run —
+`--check`/`--all` exit 2, SessionStart prints the warning and exits 0
+(session start is never blocked).
+
 **Classifying a NEW key (the tripwire):** when a future Claude Code release
 adds a key that differs between main and a profile, the sync prints one line
 per profile:

@@ -143,7 +143,7 @@ When the user says something like "set up Claude Code profiles" or "I want to us
 6. **Register the settings converger**
    - Add `~/.config/claude-switch-models-setup/sync-profile-settings.py` as a SessionStart hook in the **default** profile's `~/.claude/settings.json` `hooks.SessionStart` list (it no-ops when the active profile IS the default; its job there is to propagate into every profile's own `hooks` key on the first sync)
    - Run the initial alignment: `python3 ~/.config/claude-switch-models-setup/sync-profile-settings.py --all`
-   - From then on every profile converges its `settings.json` from the default profile at each session start (changes apply next session). Audit without writing: `--check --all`
+   - From then on every profile converges its `settings.json` and the behavior slice of its `.claude.json` from the default profile at each session start (changes apply next session). Audit without writing: `--check --all`
 
 7. **Verify isolation**
    - Run `claude-profiles-doctor`
