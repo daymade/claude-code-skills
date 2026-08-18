@@ -26,6 +26,117 @@ from utils.common_words import ALL_COMMON_WORDS, is_likely_valid_phrase
 logger = logging.getLogger(__name__)
 
 
+# Frontmatter fields whose values are correction LEDGERS (e.g. `asr_note`
+# records the correction history as "旧形→正确形" lists). The old forms quoted
+# there are intentional citations, and Stage 1 must not match them — otherwise
+# every re-run re-fires on the ledger itself, and each safe-mode deferral
+# auto-enqueues a phantom review item whose accept would corrupt the ledger
+# (2026-08-17: one asr_note line → 18 phantom matches + 9 phantom enqueues
+# that had to be resolved kept_original by hand). Keywords/frontmatter fields
+# NOT in this list (e.g. `keywords:`) are still processed — metadata is a
+# search surface too.
+_LEDGER_FRONTMATTER_KEYS = ("asr_note",)
+_LEDGER_FILL = "□"  # U+25A1
+# Sentinel anchoring, not bare filler runs: a transcript body can legitimately
+# contain □ (checkbox glyph / illegible-speech convention), so locating the
+# mask by "all □ runs in the document" misfires on healthy input (2026-08-18
+# review repro: one body □ + one asr_note → the old run-count guard raised and
+# killed the whole Stage 1 run). The sentinel carries the span index and is
+# collision-proof by construction; the □ padding after it only preserves
+# length and is never searched for.
+_LEDGER_SENTINEL = "⟪TFLEDGER{}⟫"
+
+
+def _mask_ledger_spans(text: str) -> Tuple[str, List[Tuple[int, str]]]:
+    """Mask ledger-field values in a leading YAML frontmatter block.
+
+    Returns (masked_text, [(masked_length, original_value), ...]) in document
+    order. Each masked value becomes `⟪TFLEDGER{i}⟫` + □ padding to the
+    original length — or, for a value shorter than its sentinel, just the
+    sentinel (masked_length < original length there; line numbers are still
+    exact either way, because Change.line_number counts newlines, and the
+    splice-back below locates by sentinel, never by offset). Only the value
+    portion of a single-line `key: value` is masked. Multi-line YAML values
+    (`asr_note: |` / `>` / folded, optionally with a trailing `# comment`)
+    are deliberately SKIPPED — no span is recorded and nothing is masked,
+    because masking only the 1-char block indicator would be protection
+    theatre while the continuation lines stay live; the convention (SKILL.md)
+    is single-line ledgers. Text without a leading `---` block (a leading
+    UTF-8 BOM is tolerated) returns unchanged with an empty span list.
+    """
+    lines = text.split("\n")
+    if not lines or lines[0].lstrip("﻿").strip() != "---":
+        return text, []
+    close_idx = None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            close_idx = i
+            break
+    if close_idx is None:
+        return text, []
+    spans: List[Tuple[int, str]] = []
+    for i in range(1, close_idx):
+        line = lines[i]
+        m = re.match(r"^([A-Za-z_][\w-]*):\s+(.*)$", line)
+        if not m or m.group(1) not in _LEDGER_FRONTMATTER_KEYS:
+            continue
+        value = m.group(2)
+        if not value:
+            continue
+        # Block-scalar / folded values (any `|`/`>`-led form: bare, chomping
+        # or explicit-indent indicators, trailing comments/whitespace) have
+        # their ledger on the following indented lines — out of this masker's
+        # reach. Skip honestly, with a warning. The match is deliberately
+        # over-broad: a single-line value starting with | or > is invalid YAML
+        # anyway, and over-skipping degrades protection while under-matching
+        # would corrupt the citation — degrading is the safe direction.
+        if value[0] in ("|", ">"):
+            logger.warning(
+                "frontmatter %s uses a multi-line value; ledger masking "
+                "skipped for it (single-line convention — see SKILL.md)",
+                m.group(1),
+            )
+            continue
+        sentinel = _LEDGER_SENTINEL.format(len(spans))
+        masked_value = (
+            sentinel + _LEDGER_FILL * (len(value) - len(sentinel))
+            if len(value) >= len(sentinel)
+            else sentinel  # short ledger: sentinel alone (shorter, still safe)
+        )
+        spans.append((len(masked_value), value))
+        lines[i] = line[: m.start(2)] + masked_value
+    if not spans:
+        return text, []
+    return "\n".join(lines), spans
+
+
+def _restore_ledger_spans(text: str, spans: List[Tuple[int, str]]) -> str:
+    """Splice masked ledger values back, located by each span's sentinel — not
+    by filler runs or absolute position, so natural □ in the body and
+    length-changing corrections elsewhere cannot shift the anchor. Fail-
+    closed: a missing sentinel or damaged padding means the pipeline mangled
+    the mask, and returning silently would ship a corrupted file."""
+    out = text
+    # splice from the last span so earlier sentinels keep their positions
+    for idx in range(len(spans) - 1, -1, -1):
+        masked_len, value = spans[idx]
+        sentinel = _LEDGER_SENTINEL.format(idx)
+        pos = out.find(sentinel)
+        if pos == -1:
+            raise ValueError(
+                f"ledger mask restore: sentinel {sentinel} missing — "
+                f"refusing to ship a corrupted file"
+            )
+        pad = out[pos + len(sentinel) : pos + masked_len]
+        if pad != _LEDGER_FILL * (masked_len - len(sentinel)):
+            raise ValueError(
+                "ledger mask padding damaged (a dictionary rule matched the "
+                "□ filler?) — refusing to restore"
+            )
+        out = out[:pos] + value + out[pos + masked_len :]
+    return out
+
+
 @dataclass
 class Change:
     """Represents a single text change"""
@@ -79,7 +190,24 @@ class DictionaryProcessor:
         Returns:
             (corrected_text, list_of_changes)
         """
-        corrected_text = text
+        # Mask correction-ledger frontmatter fields (asr_note) so the verbatim
+        # old forms they cite never match; spliced back before returning.
+        masked_text, ledger_spans = _mask_ledger_spans(text)
+        if ledger_spans and any(
+            _LEDGER_FILL in wrong or "⟪TFLEDGER" in wrong for wrong in self.corrections
+        ) or ledger_spans and any(
+            _LEDGER_FILL in r.get("pattern", "") or "⟪TFLEDGER" in r.get("pattern", "")
+            for r in self.context_rules
+        ):
+            # A rule that matches the mask filler/sentinel would rewrite the
+            # mask itself and trip the restore guard. Degrade honestly: run
+            # unprotected rather than crash on a healthy file.
+            logger.warning(
+                "a dictionary/context rule matches the ledger mask "
+                "filler/sentinel — asr_note protection disabled for this run"
+            )
+            masked_text, ledger_spans = text, []
+        corrected_text = masked_text
         all_changes = []
 
         # Step 1: Apply context rules (more specific, higher priority)
@@ -90,6 +218,8 @@ class DictionaryProcessor:
         corrected_text, dict_changes = self._apply_dictionary(corrected_text, review_mode=review_mode)
         all_changes.extend(dict_changes)
 
+        if ledger_spans:
+            corrected_text = _restore_ledger_spans(corrected_text, ledger_spans)
         return corrected_text, all_changes
 
     def _apply_context_rules(self, text: str, review_mode: bool = False) -> Tuple[str, List[Change]]:

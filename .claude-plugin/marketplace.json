@@ -29,6 +29,25 @@
       ]
     },
     {
+      "name": "kimi-use",
+      "description": "Drive the Kimi desktop app (Kimi.app) through computer-use to query its built-in data plugins — 天眼查 company records, 同花顺 iFinD financials, 财新数据, 标普全球市场财智, 恒生聚源, SEC, IMF, 世界银行公开数据, 学术数据库, 法律数据库 and more — through the user's own logged-in Kimi session, with no separate API keys. Use whenever the user says \"用 Kimi 查\" / \"操作 Kimi 客户端\" / \"Kimi 插件\", asks to fetch company shareholders, financial statements, market data, or academic/legal records via Kimi, or needs a data source that has no standalone API but exists as a Kimi plugin. Covers both Claude Code (computer-use MCP) and Codex (computer plugin) driving, query-prompt patterns that force source-labeled honest answers, and the cross-checking discipline that screen-transcribed data requires. Not for kimi.com browser automation (that is kimi-webbridge) or for direct credentialed iFinD API access.",
+      "source": "./kimi-use",
+      "strict": false,
+      "version": "1.1.0",
+      "category": "developer-tools",
+      "keywords": [
+        "kimi",
+        "kimi-app",
+        "computer-use",
+        "天眼查",
+        "同花顺",
+        "ifind",
+        "data-source",
+        "financial-data",
+        "gui-automation"
+      ]
+    },
+    {
       "name": "capture-screen",
       "description": "Programmatic screenshot capture on macOS. Get window IDs via Swift CGWindowListCopyWindowInfo, capture specific windows with screencapture -l, and control application windows via AppleScript. Supports multi-shot workflows for capturing different sections of the same window. Use when taking automated screenshots, capturing application windows, or creating visual documentation",
       "source": "./capture-screen",
@@ -208,7 +227,7 @@
       "description": "Audio processing suite covering the full speech pipeline: ASR transcription (Qwen3, StepFun) with batch-mode guards against music-only repetition-loop hallucinations, speaker diarization and CAM++ voiceprint identification for multi-speaker recordings, transcript error correction, structured meeting minutes generation, and TTS voice synthesis (StepFun). Install once for the complete audio workflow.",
       "source": "./daymade-audio",
       "strict": false,
-      "version": "1.25.0",
+      "version": "1.26.0",
       "category": "suite",
       "keywords": [
         "suite",

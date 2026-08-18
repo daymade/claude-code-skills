@@ -19,7 +19,7 @@ description: >-
 
 ## Overview
 
-This skill creates an isolated-but-shared profile system for Claude Code CLI. Each profile gets its own `.claude.json` state file (credentials and session history) while sharing skills, projects, hook scripts, agents, and installed plugin state across all profiles — and converging each profile's `settings.json` (hook registration, marketplaces, env feature flags, permissions, preferences) from the default profile, so the only intended difference between profiles is the model/provider.
+This skill creates an isolated-but-shared profile system for Claude Code CLI. Each profile gets its own `.claude.json` state file (credentials and session history) while sharing skills, projects, hook scripts, agents, and installed plugin state across all profiles — and converging each profile's `settings.json` (hook registration, marketplaces, env feature flags, permissions, preferences) plus the **behavior slice of its `.claude.json`** (e.g. `workflowSizeGuideline`) from the default profile, so the only intended difference between profiles is the model/provider.
 
 The result: you can open one terminal with Kimi, another with DeepSeek, another with Anthropic — each running as a fully independent Claude Code process, without configuration bleed.
 
@@ -28,7 +28,8 @@ The result: you can open one terminal with Kimi, another with DeepSeek, another 
 - `CLAUDE_CONFIG_DIR` tells Claude Code CLI which directory to use as its config root.
 - Each profile lives in `~/.claude-profiles/<name>/` with an isolated `.claude.json`.
 - Content directories (`skills/`, `projects/`, `hooks/`, `agents/`, `settings/`) are symlinked back to the main `~/.claude/` directory so you only maintain one copy. Note this shares hook **scripts**, not hook **registration** — registration lives in each profile's own `settings.json` (next bullet).
-- **Config layer — `settings.json`:** each profile has its own `settings.json` (Claude Code treats it as config-dir-local), so everything stored there — hook registration, `extraKnownMarketplaces`, `enabledPlugins`, `env` feature flags, `permissions`, behavior preferences — silently drifts the moment it changes in the default profile (measured 2026-07-18: 9/9 real profiles had zero hook registrations). `sync-profile-settings.py` is the converger: registered as a SessionStart hook, it copies every key from the default profile's `settings.json` into the active profile's, except identity keys (top-level `model`; and env vars that carry provider routing or Anthropic-native isolation — `ANTHROPIC_*`, `CLAUDE_CODE_SUBAGENT_MODEL`, `ENABLE_TOOL_SEARCH`, `DISABLE_GROWTHBOOK/TELEMETRY/AUTOUPDATER` — which the provider settings file deliberately sets differently). Profile-only keys are preserved; the sync never deletes. This is what makes "everything except the model works in every profile" actually hold.
+- **Config layer — `settings.json`:** each profile has its own `settings.json` (Claude Code treats it as config-dir-local), so everything stored there — hook registration, `extraKnownMarketplaces`, `enabledPlugins`, `env` feature flags, `permissions`, behavior preferences — silently drifts the moment it changes in the default profile (measured 2026-07-18: 9/9 real profiles had zero hook registrations). `sync-profile-settings.py` is the converger: registered as a SessionStart hook, it copies every key from the default profile's `settings.json` into the active profile's, except identity keys (top-level `model` and `advisorModel` — the latter is Anthropic-model routing a third-party endpoint can't serve; and env vars that carry provider routing or Anthropic-native isolation — `ANTHROPIC_*`, `CLAUDE_CODE_SUBAGENT_MODEL`, `ENABLE_TOOL_SEARCH`, `DISABLE_GROWTHBOOK/TELEMETRY/AUTOUPDATER` — which the provider settings file deliberately sets differently). Profile-only **top-level** keys are preserved; nested collections inside a key main also has (e.g. `permissions.allow`, `enabledPlugins`) converge wholesale to main's value, and any profile-only nested entries dropped that way are listed (count on write, detail under `--check`) so the loss is visible rather than silent. This is what makes "everything except the model works in every profile" actually hold.
+- **State layer — `.claude.json` behavior keys:** `settings.json` is not the only per-profile config file. Claude Code also keeps a per-profile state file (the main profile's is `~/.claude.json`; each third-party profile's is `<profile>/.claude.json` — asymmetric paths, verified on disk), and a few **behavior** settings live only there (`workflowSizeGuideline`, notification/UI preferences). On 2026-08-17 `workflowSizeGuideline: small` existed only on the main profile and 10/11 third-party profiles had no copy — a Kimi session fanned one Dynamic Workflow out to 30+ agents with no size guidance in its system prompt. The same converger therefore also syncs an **allowlist of behavior keys** into each profile's `.claude.json`. The safety mechanism is a three-way classifier in the script, not a hand-maintained key list: allowlisted behavior keys sync; state/cache/counter/migration/credential keys (matched by name patterns) are never touched; anything unknown-and-different is **reported — one line per drifted key per run, until a human classifies it** (the tripwire that surfaces the next behavior key the day it appears). Writes are backup + atomic-replace; measured safe against a live harness rewriting the file (a marker key survived 30+ minutes of an active session). Applies next session — the harness reads this file at startup.
 - **Exception — `plugins/`:** marketplace content and install state are shared, but each profile keeps its **own** `known_marketplaces.json`. Claude validates a marketplace's `installLocation` with `path.resolve()` (which does NOT resolve symlinks), so a single shared file would make every non-writing profile report "corrupted installLocation". `claude-plugins-sync.py` builds and maintains this per-profile structure.
 - `claude-plugins-sync.py` also mirrors `enabledPlugins` from the default `~/.claude/settings.json` into each profile's `settings.json` (sharing cache files is not enough; Claude Code treats "enabled" state as config-dir-local). The SessionStart converger above covers the same key as part of its whole-settings sync; `claude-plugins-sync.py` remains the owner of the per-profile `known_marketplaces.json` structure.
 - Local source sync is automatic on maintainer machines. Installed Claude plugin cache directories and Codex/agents skill copies are symlinked to the source repos, so normal source edits are live immediately. `sync-local-skill-sources.py` is the idempotent repair primitive; `claude-profile` init/launch runs it automatically, and `sync-local-skill-sources-daemon.sh --install` installs a macOS LaunchAgent that watches default Claude install state plus local marketplace manifests for structural changes. When a skill is removed from a marketplace manifest, the same repair pass prunes only stale Codex/agents symlinks that point back into the managed source repos, plus superseded version-alias symlinks in the plugin cache and all but the newest `KEEP_JSON_BACKUPS` copies of `installed_plugins.json`; it never deletes real skill directories.
@@ -142,7 +143,7 @@ When the user says something like "set up Claude Code profiles" or "I want to us
 6. **Register the settings converger**
    - Add `~/.config/claude-switch-models-setup/sync-profile-settings.py` as a SessionStart hook in the **default** profile's `~/.claude/settings.json` `hooks.SessionStart` list (it no-ops when the active profile IS the default; its job there is to propagate into every profile's own `hooks` key on the first sync)
    - Run the initial alignment: `python3 ~/.config/claude-switch-models-setup/sync-profile-settings.py --all`
-   - From then on every profile converges its `settings.json` from the default profile at each session start (changes apply next session). Audit without writing: `--check --all`
+   - From then on every profile converges its `settings.json` and the behavior slice of its `.claude.json` from the default profile at each session start (changes apply next session). Audit without writing: `--check --all`
 
 7. **Verify isolation**
    - Run `claude-profiles-doctor`
@@ -177,9 +178,11 @@ claude-profile-rm <name>      # Remove a profile's isolation directory
 python3 ~/.config/claude-switch-models-setup/claude-plugins-sync.py
                                # Repair per-profile plugin structure and enabledPlugins
 python3 ~/.config/claude-switch-models-setup/sync-profile-settings.py --all
-                               # Converge every profile's settings.json from the default
-                               # profile (hooks, marketplaces, env flags, permissions,
-                               # preferences); --check --all audits without writing
+                               # Converge every profile from the default profile:
+                               # settings.json (hooks, marketplaces, env flags,
+                               # permissions, preferences) + .claude.json behavior
+                               # keys (workflowSizeGuideline etc.); --check --all
+                               # audits without writing
 python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --apply
                                # Maintainers: one-shot repair for Claude/Codex source symlinks
 ~/.config/claude-switch-models-setup/sync-local-skill-sources-daemon.sh --install
@@ -265,6 +268,7 @@ The full step-2-16k template-correctness war-story (why an internally-consistent
 | Projects/memory | `~/.claude/projects/`, `~/.claude/memory/` | Shared via symlink |
 | Hook scripts | `~/.claude/hooks/`, `~/.claude/commands/` | Shared via symlink (scripts only — NOT registration) |
 | `settings.json` config: hook registration, marketplaces, env flags, permissions, preferences | `<profile>/settings.json` | **Converged from default profile** by `sync-profile-settings.py` at session start (identity keys like `model` and provider-routing/isolation env vars are never synced) |
+| `.claude.json` behavior keys (`workflowSizeGuideline`, notification/UI preferences) | `~/.claude.json` → `<profile>/.claude.json` | **Behavior allowlist converged** by the same script; state/cache/counter/migration/credential keys (incl. `projects`, `oauthAccount`, `userID`) are never synced; unknown drifted keys are reported for human classification |
 | Provider settings | `~/.claude/settings/<name>.json` | Shared source, loaded per profile |
 
 ## Troubleshooting
@@ -385,6 +389,8 @@ Both are visible in a dry run before `--apply` touches anything.
 ### A profile is missing hooks, marketplaces, env flags, or other default-profile settings
 
 Symptom: the default profile has hook guards, marketplaces, or feature flags configured, but a third-party profile behaves as if they don't exist (no PreToolUse guards fire, `claude plugin marketplace list` is empty, a feature enabled in the default profile is off).
+
+**Sibling symptom, different layer (2026-08-17):** a behavior preference set on the default profile — e.g. the workflow size guideline — has no effect in third-party profiles (a Kimi session fanned a Dynamic Workflow out to 30+ agents despite `small` being set on main). That key lives in the per-profile `.claude.json`, which symlinks and the settings.json sync both miss. See "Default-profile behavior settings don't reach third-party profiles" in `references/troubleshooting.md`.
 
 Cause: those live in each profile's own `settings.json`, which is config-dir-local — symlinking directories does not cover the config layer, and it drifts silently the moment the default profile changes.
 
