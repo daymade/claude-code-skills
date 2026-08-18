@@ -1739,6 +1739,10 @@ The scripts/ directory includes deterministic gates used by this workflow:
 - `scripts/audit_skill_regression.py` — compares an immutable old skill bundle
   with the edited bundle, creates an explicit disposition review, and verifies
   its hashes/evidence before packaging an existing skill.
+- `scripts/reference_net.sh` — lists the prose cross-references among the lines you
+  added, for the Reference-and-self-application check in Step 4 (Edit the Skill). Its own header is
+  contract: what it covers, what it deliberately leaves to `lychee`, and why it takes a
+  base ref rather than `HEAD`.
 
 ---
 
