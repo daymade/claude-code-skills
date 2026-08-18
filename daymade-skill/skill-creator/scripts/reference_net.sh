@@ -17,10 +17,11 @@
 #
 #   The prose version of this check accumulated five rounds of patches — anchor the diff to the
 #   right base, see staged edits, survive committing, ignore the diff's own `+++` header, drop a
-#   misleading `-n` — and *every* patch added one more way for the command to print nothing and
-#   exit 0. That output is indistinguishable from "I checked and it was clean", which is precisely
-#   the failure the check exists to prevent. Prose cannot validate its own inputs, cannot say which
-#   of its outcomes happened, and cannot be tested.
+#   misleading `-n`. Four of those five added one more way for the command to print nothing and
+#   exit 0, which is indistinguishable from "I checked and it was clean"; the fifth (`-n`) was the
+#   other shape of the same disease — it printed hits with line numbers that pointed nowhere, which
+#   is worse, because a wrong answer outranks no answer. Prose cannot validate its own inputs,
+#   cannot say which of its outcomes happened, and cannot be tested.
 #
 #   So the contract here is: **every outcome is named out loud, and bad input fails loudly.** There
 #   is no combination of arguments under which this prints nothing and looks successful.
