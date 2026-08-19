@@ -102,9 +102,9 @@ Promoted references must:
 
 No exception. If a candidate fails, it goes back to the review queue, not to `references/`.
 
-## 8. Mining agents are single-purpose, not multi-hop
+## 8. Mining roles are a bounded menu, not a default fan-out
 
-Each mining agent is given one of these narrow tasks:
+The workflow exposes these narrow tasks:
 
 - **Mine patterns**: extract recurring patterns, rules, workflows, or code idioms
 - **Mine war stories**: extract failures, fixes, and lessons learned
@@ -113,7 +113,7 @@ Each mining agent is given one of these narrow tasks:
 - **Mine code assets**: extract code the session had to write (reusable helpers destined for `scripts/`, not `references/`)
 - **Synthesize**: merge the knowledge outputs into a canonical reference file outline (code-assets candidates bypass synthesis and promote to `scripts/` directly)
 
-Agents do not call tools. They receive a redacted chunk and produce structured markdown. The workflow orchestrates them via the skill-creator's normal subagent harness.
+Do not instantiate every role merely because it exists. A small, bounded corpus is handled inline from the redacted chunks by default; if an agent is justified, give it one narrow role. Additional roles require distinct outputs plus the main SKILL.md agent-budget gate. A selected role may still need several isolated chunk units for a large corpus; declare the total and concurrency cap, then process serially by default. Same-role shards share an output axis and do not justify more roles. Agents do not call tools; they receive a redacted chunk and produce structured markdown.
 
 ## 9. Reproducibility: every run is timestamped and hashable
 

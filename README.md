@@ -45,12 +45,12 @@ This is a **production-hardened fork** of [Anthropic's official skill-creator](h
 
 | You're trying to... | Official | This Fork |
 |---------------------|----------|-----------|
-| Research before building | "Check available MCPs" (5 lines) | 8-channel search protocol with decision matrix: Adopt / Extend / Build |
-| Create a skill interactively | Prose-based instructions | 9 structured AskUserQuestion checkpoints — user never loses context |
+| Research before building | "Check available MCPs" | Ordered search protocol with decision matrix: Adopt / Extend / Build |
+| Create a skill interactively | Prose-based instructions | Structured AskUserQuestion checkpoints — user never loses context |
 | Avoid common mistakes | No guidance | Cache edit warnings, prerequisite checks, security scan gate |
 | Know the architecture options | Not mentioned | Inline vs Fork decision guide with examples (choosing wrong silently breaks your skill) |
 | Validate before shipping | Basic YAML check | Expanded structural validator plus provenance-checked old-vs-new capability audit; packaging re-verifies the completed review instead of trusting a marker |
-| Match validation cost to risk | One full create-test-review loop | Three tiers: targeted checks for bounded fixes, sampled behavior replay for narrow uncertainty, full paired benchmarks only for new/broad/high-risk work or an explicit benchmark request |
+| Match validation cost to risk | One full create-test-review loop | Risk tier and evaluation spend are separate: targeted checks first; paired benchmarks require explicit authorization or a decision-bearing evidence plan plus opt-in |
 | Catch security issues | No tooling | `security_scan.py` with gitleaks integration — hard gate before packaging |
 | Learn from real failures | No failure cases | Battle-tested methodology with documented failure patterns and gotchas |
 | Distill past conversations safely | Not covered | Explicit local manifest, message-level time window, redaction, opaque source IDs, ignored `.enrich/` staging, and manual promotion into references/scripts |
@@ -59,18 +59,6 @@ This is a **production-hardened fork** of [Anthropic's official skill-creator](h
 | Ground knowledge skills in evidence | General advice | Authority ladder from real calls and machine-readable specs through production code, plus executable-example smoke checks and evidence-boundary rules |
 | Have both installed at once | Coin flip — the two descriptions are near-identical | Detects the clash on trigger and offers a one-command, reversible SessionStart routing hook (only ever installed when both coexist); the official plugin stays usable by explicit request |
 | Your own skill collides with an installed plugin | Not covered | `generate_supersede_kit.py` stamps the same conditional routing kit into your skill, plus a measured precedence decision guide (rename → description tiebreaker → hook → disable) |
-
-**Quality comparison** (independent audit, 8 dimensions):
-
-| Dimension | Official | This Fork |
-|-----------|----------|-----------|
-| Actionability | 7 | 9 |
-| Error Prevention | 5 | 9 |
-| Prior Art Research | 4 | 9 |
-| Counter Review Process | 4 | 8 |
-| Real-World Lessons | 3 | 8 |
-| User Experience | 4 | 9 |
-| **Total (out of 80)** | **42** | **65** |
 
 > Full methodology: [skill-creator/references/skill-development-methodology.md](./daymade-skill/skill-creator/references/skill-development-methodology.md)
 
@@ -2357,11 +2345,11 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### 58. **skill-creator** - Create, Improve & Benchmark Skills
+### **skill-creator** - Create, Improve & Benchmark Skills
 
 > **Install**: `claude plugin install daymade-skill@daymade-skills` (suite-only — invoked as `daymade-skill:skill-creator`)
 
-The essential meta-skill for building your own skills. It scales verification to the change: bounded fixes get targeted checks, narrow behavior changes get sampled replays, and new/broad/high-risk work gets the full create → paired test → review → improve loop. It also supports explicit benchmarking and optimizes a skill's `description` for better triggering accuracy.
+The essential meta-skill for building your own skills. It scales verification to the change: bounded fixes get targeted checks, narrow behavior changes get sampled replays, and broad/high-risk work becomes eligible for heavier evidence without automatically starting it. Paired baselines, graders, benchmarks, and viewers require explicit authorization or a decision-bearing evidence plan plus opt-in. It also supports explicit benchmarking and optimizes a skill's `description` for better triggering accuracy.
 
 **When to use:**
 - Creating a skill from scratch, or editing/optimizing an existing one
@@ -2370,12 +2358,12 @@ The essential meta-skill for building your own skills. It scales verification to
 - Wrapping a third-party CLI tool you just got working into a reusable companion skill
 
 **Key features:**
-- Prior-art research across conversation history, local SOPs, installed plugins/MCPs, skills.sh, official plugins, npm/PyPI — to reuse infrastructure and encode only the user's unique methodology
+- Prior-art research across the live conversation, explicitly approved prior history, local SOPs, installed plugins/MCPs, skills.sh, official plugins, npm/PyPI — to reuse infrastructure and encode only the user's unique methodology
 - The inline-vs-`context: fork` decision guide (subagents can't spawn subagents or call skills) and composable/orthogonal skill design
 - `init_skill.py` scaffolding, `package_skill.py` (auto-validates), and `security_scan.py` (gitleaks-based secret/PII detection)
 - Existing-skill migration gate: tool-attested snapshot or verified Git-commit baseline, runtime-reachability-aware capability audit, explicit dispositions, and package-time re-verification that a clean commit or hand-written marker cannot bypass
-- Risk-scaled verification router: Tier 1 targeted checks, Tier 2 sampled behavior replay, and Tier 3 full eval only when the failure surface warrants it
-- Full eval harness when Tier 3 is selected: spawn with-skill + baseline runs, draft assertions, grade, aggregate a benchmark, and review in a generated HTML viewer
+- Risk-scaled verification router: Tier 1 targeted checks, Tier 2 sampled behavior replay, and Tier 3 broad/high-risk classification without automatic fan-out
+- Separately authorized full-eval harness: with-skill + baseline runs, assertions, grading, benchmark aggregation, and an HTML viewer after an explicit request, or after a decision-bearing evidence plan receives opt-in
 - Mandatory sanitization read-through for public skills — catches no-keyword leaks scanners miss
 - Description-optimization loop (60/40 train/test split, selects best description by held-out score)
 

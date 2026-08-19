@@ -59,7 +59,7 @@ claude plugin install daymade-skill@daymade-skills
 
 ### Skill Validation and Packaging
 
-Behavior evaluation is risk-scaled by `daymade-skill:skill-creator`: bounded fixes use targeted deterministic checks, narrow instruction changes use sampled replays, and the full paired eval/benchmark/viewer pipeline is reserved for new, broad, high-risk, trigger-optimization, multi-class comparison, or explicitly benchmarked work. Subjective judgment alone does not escalate a narrow change. Do not fan out paired agents merely because a skill file changed; existing-skill regression and packaging gates remain separate.
+Behavior evaluation is risk-scaled by `daymade-skill:skill-creator`: bounded fixes use targeted deterministic checks and narrow instruction changes use at most one or two sampled replays. Tier 3 classifies broad/high-risk work but does not authorize paired baselines, agent fan-out, grading, benchmarking, or a viewer; an explicit user request or a decision-bearing plan plus opt-in passes the separate evidence-budget gate without changing the risk tier. A request to "optimize" an existing skill and a long preceding conversation do not by themselves trigger Tier 3 or conversation-mining. Existing-skill regression, one required fresh-context review, and packaging gates remain separate.
 
 ```bash
 # Quick validation of a skill

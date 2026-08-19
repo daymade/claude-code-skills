@@ -4,27 +4,27 @@
 
 ## Contents
 
-- Phase 1 先手动解决问题 · Phase 2 并行调研 · Phase 3 真实数据验证（3.1 完整性 / 3.2 记录失败 / 3.3 隔离复现+反证+权威源）
+- Phase 1 先手动解决问题 · Phase 2 最小充分调研 · Phase 3 真实数据验证（3.1 完整性 / 3.2 记录失败 / 3.3 隔离复现+反证+权威源）
 - Phase 4 写作补充（4.1 不能做什么 / 4.2 失败过什么 / 4.3 安全 / 4.4 console 示例 / 4.5 脚本健壮性 / 4.6 三资产分流）
 - Phase 5 测试迭代（5.0 风险分级 / 5.1 删竞争旧 skill / 5.2 量化对比 / 5.3 grep 断言误判 / 5.4 baseline 揭示事实错误 / 5.5 增量为 0 / 5.6 完整性两道闸）
 - Phase 6 Counter Review（6.1 按失败轴增配 reviewer / 6.2 final gate / 6.3 常见发现 / 6.4 findings 过滤 / 6.5 多层验证）
-- Phase 7 & 8 Description + Packaging · Phase 9 实战案例库（Case 1-16）· 来源
+- Phase 7 & 8 Description + Packaging · Phase 9 实战案例库 · 来源
 
-本文档只包含 SKILL.md 中**没有覆盖**的内容。SKILL.md 已经详细描述的流程（Prior Art 8 渠道表、决策矩阵、Inline vs Fork、测试用例格式、描述优化循环等）不在此重复——请直接参考 SKILL.md 对应章节。
+本文档只包含 SKILL.md 中**没有覆盖**的内容。SKILL.md 已经详细描述的流程（Prior Art 渠道表、决策矩阵、Inline vs Fork、测试用例格式、描述优化循环等）不在此重复——请直接参考 SKILL.md 对应章节。
 
 ## Phase 1: 先手动解决问题，不要上来就建 skill
 
-SKILL.md 的 "Capture Intent" 章节覆盖了意图收集的 4 个问题和 skill 类型分类。本节补充一个被忽略的前置步骤：
+SKILL.md 的 "Capture Intent" 章节覆盖了意图收集问题和 skill 类型分类。本节补充一个被忽略的前置步骤：
 
 **不要一开始就写 skill。** 先用 Claude Code 正常解决用户的问题，在过程中积累经验——哪些方案有效、哪些失败、最终的 working solution 是什么。如果你没有亲自失败过，你写不出能防止别人失败的 skill。
 
-很多 skill 都是从"把我们刚做的变成一个 skill"中诞生的。先从对话历史中提取已验证的模式（SKILL.md "Capture Intent" 第三段已提及），然后才开始规划 skill 结构。
+很多 skill 都是从"把我们刚做的变成一个 skill"中诞生的。先从当前对话提取已验证的模式；只有用户明确把此前会话列为来源时，才通过 conversation-mining 的授权与脱敏流程读取历史，然后再规划 skill 结构。
 
-## Phase 2: 用 Agent Team 做并行调研
+## Phase 2: 按未知轴选择最小充分调研
 
-SKILL.md 的 "Prior Art Research" 章节覆盖了 8 个搜索渠道、clone-and-verify 检查清单、和 Adopt/Extend/Build 决策矩阵。本节补充 SKILL.md 未提及的**并行调研模式**：
+SKILL.md 的 "Prior Art Research" 章节覆盖了搜索渠道、clone-and-verify 检查清单和 Adopt/Extend/Build 决策矩阵。本节补充如何控制调研预算：
 
-遇到不确定的技术方案时，不要串行尝试（太慢），也不要凭经验猜（太危险）。同时启动 3+ 个研究 agent，每个负责一个调研方向：
+遇到不确定的技术方案时，先在主上下文内查权威源与现有实现。下表是可选的未知轴，不是默认 Agent Team；一个问题能由一次检索或一个综合 pass 回答，就不拆 agent。只有多个轴彼此独立、答案会改变不同决策，而且用户已经同意 fan-out 数量时，才增配研究 agent：
 
 | Agent | 职责 | 搜索范围 |
 |-------|------|---------|
@@ -32,13 +32,13 @@ SKILL.md 的 "Prior Art Research" 章节覆盖了 8 个搜索渠道、clone-and-
 | API 调研 | 找可用 API 端点 | 官方文档、逆向工程、移动端 API |
 | 约束调研 | 理解技术限制 | 反爬机制、认证要求、平台限制 |
 
-每个 agent 必须独立验证（读源码、确认 API 可达、检查最近提交日期），不能只看 README。
+若确实获得并行授权，每个 agent 必须独立验证（读源码、确认 API 可达、检查最近提交日期），不能只看 README；否则由主上下文按优先级串行短路，某个答案已经闭合决策后不再继续铺通道。
 
-**案例**：开发一个数据导出 skill 时，3 个 agent 并行跑了 5-20 分钟，分别发现：一个关键工具当前版本 broken（605 stars 但 PR 待合并）、一个未公开的移动端 API（唯一可行方案）、目标平台升级了 PoW 反爬（所有 HTTP 抓取失效）。没有并行研究，这些信息需要串行试错 3+ 小时才能获得。
+**案例**：开发一个数据导出 skill 时，三个彼此独立且会改变选型的未知轴已经明确，用户同意后分别调研工具、API 与约束，最终发现：一个关键工具当前版本 broken（605 stars 但 PR 待合并）、一个未公开的移动端 API（唯一可行方案）、目标平台升级了 PoW 反爬（所有 HTTP 抓取失效）。这说明并行的价值来自正交未知轴，不来自“agent 可用”；若只有一个选型问题，复制这套阵容只是在重复计费。
 
 ## Phase 3: 用真实数据验证原型
 
-SKILL.md 的 Tier 3 完整评测流程覆盖了"先跑 baseline → 建 eval → 迭代"的过程。本节补充两个不依赖评测层级的验证原则：
+SKILL.md 的完整 paired-eval 流程在另获重评测授权时，覆盖"先跑 baseline → 建 eval → 迭代"的过程；风险 tier 本身既不授权也不禁止这套证据。本节补充不依赖评测层级的验证原则：
 
 ### 3.1 数据完整性验证
 
@@ -129,19 +129,19 @@ SKILL.md 的 "Skill Writing Guide" 已覆盖 frontmatter、progressive disclosur
 
 ## Phase 5: 测试迭代补充
 
-SKILL.md 的验证深度路由是层级选择的 SSOT；完整 A/B 测试、断言、评分和 viewer 只在 Tier 3 运行。本节解释为什么要分级，并补充完整评测路径中的实操教训。
+SKILL.md 的验证深度路由是层级选择的 SSOT；完整 A/B 测试、断言、评分和 viewer 还要单独通过 heavy-eval authorization gate，任何 tier 标签本身都不授权或禁止这些动作。本节解释为什么要分级，并补充完整评测路径中的实操教训。
 
 ### 5.0 评测深度由失败面决定，不由「改了 skill」决定
 
-全量 paired eval 的成本不是只有 token：它还引入 N 组 prompt 设计、2N 个执行样本、grader、聚合和 viewer，且每一层都有自己的误判面。只有当这些额外观察能改变下一步动作时才运行；否则它们是在用流程规模替代判别力。
+全量 paired eval 的成本不是只有 token：它还引入 N 组 prompt 设计、2N 个执行样本、grader、聚合和 viewer，且每一层都有自己的误判面。只有用户明确要求这个评测交付物，或这些额外观察能改变下一步动作且用户同意时才运行；否则它们是在用流程规模替代判别力。
 
-分级前问三件事：
+分级前依次检查：
 
-1. **改动能怎样失败？** 纯错字/格式且不改变行为，或文档/配置中有直接权威源能裁决的事实修正，走 Tier 1；任何实现文件的局部修复只有在「恢复明确既有契约」与「确定性回归覆盖修复行为」同时成立时才走 Tier 1，不能借前一个事实修正入口绕过。单条规则澄清只要会改变 agent 行为且无法确定性裁决，就走 Tier 2。任何新 skill、任何新增或实质变化的 capability、广泛改变 agent 行为或触发路由，以及需要跨多个 prompt 类别比较主观产物质量，才进入 Tier 3。主观判断本身不把一个可由 1–2 个具名样例覆盖的窄改动升级到 Tier 3。
+1. **改动能怎样失败？** 纯错字/格式且不改变行为，或文档/配置中有直接权威源能裁决的事实修正，走 Tier 1；任何实现文件的局部修复只有在「恢复明确既有契约」与「确定性回归覆盖修复行为」同时成立时才走 Tier 1，不能借前一个事实修正入口绕过。单条规则澄清只要会改变 agent 行为且无法确定性裁决，就走 Tier 2。任何新 skill、任何新增或实质变化的 capability、广泛改变 agent 行为或触发路由，以及改变本身需要跨多个 prompt 类别比较主观产物质量，才进入 Tier 3。主观判断、请求里的「优化」一词、上下文很长、或用户额外要求 benchmark，都不改变风险 tier；完整 paired eval 另走独立授权门。
 2. **有没有独立裁判直接判定？** CLI help、真实 API 响应、schema validator、窄测试能裁决时，重复让多个 agent 复述同一证据不会增加信息。
 3. **失败的外部后果是什么？** 会写外部系统、破坏状态、扩散到大批用户的改动要升级；工具恰好可用、workspace 已存在、或「以往都是这么跑」不构成升级理由。
 
-真实失效：一次现有 skill 的单段事实纠错已经有 GUI、配置和运行时三层直接证据，执行者仍按旧主循环为 3 个 case 启动 with-skill + baseline 共 6 个 agent。用户当场叫停，指出这不值得。问题不在 case 设计，而在流程把 Tier 3 当成所有编辑的默认值。此后以 SKILL.md 的路由为准：先选最低可证伪层级；用户叫停重评测时立即中止 paired eval、baseline、grader、聚合和 viewer，不用「流程要求」反驳，但停止执行不改变原分类——Tier 3 仍记作 Tier 3，其重证据标注为用户豁免或未完成，不能拿低层证据冒充通过。若规则、契约或数字已实质变化，discipline #5 要求的单个 fresh-context reviewer 仍保留；安全闸门同样不被「停评测」取消。
+真实失效：一次现有 skill 的单段事实纠错已经有 GUI、配置和运行时三层直接证据，执行者仍按旧主循环为 3 个 case 启动 with-skill + baseline 共 6 个 agent。用户当场叫停，指出这不值得。问题不在 case 设计，而在流程把 Tier 3 当成所有编辑的默认值。此后以 SKILL.md 的路由为准：先选最低可证伪层级；再独立判断 paired baseline / grader / benchmark / viewer 是用户明确要求的交付物，还是会改变某个具体决策并已获同意。二者都不是就停在轻证据层。用户叫停重评测时立即中止，不用「流程要求」反驳；如实写明实际跑过什么、哪些失败轴未覆盖即可，禁把未运行的重套件包装成标签自带的「必需证据」。若规则、契约或数字已实质变化，discipline #5 要求的单个 fresh-context reviewer 仍保留；安全闸门同样不被「停评测」取消。
 
 ### 5.1 删除竞争的旧 skill
 
@@ -210,9 +210,9 @@ baseline（without-skill）跑同一 prompt 时，如果它**用了 with-skill �
 
 这是 SKILL.md 独立审阅纪律的扩展。一个 fresh-context reviewer 是规则、契约或数字发生实质变化时的默认；多个 reviewer 只用于额外且正交的失败轴，不因「这是 skill」自动扇出。
 
-### 6.1 Tier 3 才展开多视角；每多一个必须对应新失败轴
+### 6.1 多视角另过授权门；每多一个必须对应新失败轴
 
-Tier 1 依靠确定性裁判；Tier 2 通常只需 discipline #5 的一个 fresh-context reviewer；Tier 3 才从下表选择必要视角。不要把下表读成固定的 3+1 agent 套餐：如果两个 reviewer 都只问「是否自洽」，它们是同一轴重复计费。
+Tier 1 依靠确定性裁判；Tier 2 通常只需 discipline #5 的一个 fresh-context reviewer；Tier 3 也仍以一个 reviewer 为默认。只有重评测 / fan-out 授权门已经通过，而且存在一个 reviewer 无法覆盖的正交失败轴时，才从下表增配视角。不要把下表读成固定套餐：如果两个 reviewer 都只问「是否自洽」，它们是同一轴重复计费。
 
 | Reviewer | 视角 | 关注点 |
 |----------|------|--------|
@@ -223,7 +223,7 @@ Tier 1 依靠确定性裁判；Tier 2 通常只需 discipline #5 的一个 fresh
 
 ### 6.2 修复后 Final Gate
 
-**Findings 是假设，不是结论——逐条 triage，不要无脑「修复所有 Critical/HIGH」。** 先用 6.4 的过滤器把每条 Critical/HIGH 过一遍：确认为真的修，判为虚构 / 过度防御的记录下来并说明为何不修。修改现有 skill 时仍必须用 immutable baseline 完成机械保真审计；它不能被“新版本看起来更简洁”这一单版本评价替代。独立审阅发现导致规则、契约或数字实质变化时，换一个 fresh-context reviewer 复审；只有 Tier 3 使用多 reviewer 评分门时，才要求修复后的对应轴重新达到门槛。
+**Findings 是假设，不是结论——逐条 triage，不要无脑「修复所有 Critical/HIGH」。** 先用 6.4 的过滤器把每条 Critical/HIGH 过一遍：确认为真的修，判为虚构 / 过度防御的记录下来并说明为何不修。修改现有 skill 时仍必须用 immutable baseline 完成机械保真审计；它不能被“新版本看起来更简洁”这一单版本评价替代。独立审阅发现导致规则、契约或数字实质变化时，换一个 fresh-context reviewer 复审；只有另获授权的多-reviewer 评分门，才要求修复后的对应轴重新达到门槛，Tier 3 标签本身不触发该要求。
 
 ### 6.3 常见发现模式
 
@@ -254,7 +254,7 @@ Counter-review 的价值不是「列出所有风险」，而是 surface 你没�
 
 ### 6.5 多层验证互补，但不是每次全买
 
-对抗性 counter-review 抓工程健壮性 + skill 质量，但它不是唯一一层。下面三层各抓不同问题、各有独立盲区：
+对抗性 counter-review 抓工程健壮性 + skill 质量，但它不是唯一一层。下列验证层各抓不同问题、各有独立盲区：
 
 | 层 | 抓什么 | 独立盲区 |
 |----|--------|---------|
@@ -262,11 +262,11 @@ Counter-review 的价值不是「列出所有风险」，而是 surface 你没�
 | **外部 review**（如 Codex 等**别的模型**） | 你和你的审查 agent 的**共同盲区**——尤其撞用户自己的铁律（如 NO FALLBACK 兜底） | 依赖该工具可用 |
 | **eval**（with/without-skill baseline） | skill 的**事实错误**（baseline 揭示，见 5.4）+ 真价值分布（见 5.5） | 客观断言有水分（见 5.3） |
 
-Tier 3 可组合三层，因为它的失败面足以支付这笔成本；Tier 1/2 只选能裁决本次变化的层。战例：一个高风险 skill 的对抗审查抓工程健壮性、外部 review 抓 NO FALLBACK 违规、eval 又抓出“数据其实在 API”的事实错误——证明三层**能力互补**，不证明每个 typo 都必须跑三层。
+任何 tier 都只选能裁决本次变化、且已通过独立证据预算门的层。广泛或高风险的失败面更可能让多层方案值得被提出，但 Tier 3 标签本身不支付这笔成本。战例：一个高风险 skill 的对抗审查抓工程健壮性、外部 review 抓 NO FALLBACK 违规、eval 又抓出“数据其实在 API”的事实错误——证明这些层**能力互补**，不证明每个 typo 都必须跑全套。
 
 ## Phase 7 & 8: Description Optimization + Packaging
 
-SKILL.md 已完整覆盖描述优化循环（20 个 eval query、60/40 train/test split、5 轮迭代）和打包流程（prerequisites、security scan、marketplace.json）。无补充。
+SKILL.md 已完整覆盖描述优化循环和打包流程；本 reference 不复制这些会随实现变化的参数。无补充。
 
 ## Phase 9: 实战案例库（每条规则背后的事故）
 
@@ -357,13 +357,13 @@ SKILL.md 中的若干行级规则来自下面这些真实事故。规则本身�
 
 ### Case 11: 语料蒸馏型 skill 的完整性靠独立审计，不靠作者自审（2026-07）
 
-从一份大型私有语料蒸馏一个 taste/方法论 SSOT skill。作者(同一个模型)**两次宣布"内容完整"、两次都在下一轮又冒出遗漏**——先自查补 12 处、再补 4 处，仍不放心。最后派一个**独立子代理**(全新 context,读全部源语料 + 当前 skill,对抗性列缺什么),一次抓出 **15 处真遗漏**(含一条承重操作机制:skill 反复要求"传参考截图"却从没写怎么传)。通用结论:
+从一份大型私有语料蒸馏一个 taste/方法论 SSOT skill。作者(同一个模型)**两次宣布"内容完整"、两次都在下一轮又冒出遗漏**——先自查补 12 处、再补 4 处，仍不放心。最后派一个**独立子代理**(全新 context,读取已获授权且完成对应边界处理的审阅语料 + 当前 skill,对抗性列缺什么),一次抓出 **15 处真遗漏**(含一条承重操作机制:skill 反复要求"传参考截图"却从没写怎么传)。通用结论:
 
 - **压缩即丢失,而自审用的是同一把压缩尺**:作者的"完整"判断,和造成遗漏的,是同一个模型、同一个盲区;自查(含自己 grep)会系统性放过同型缺口。
 - **改现有 skill 有 regression 门禁(`audit_skill_regression`),从大语料新建却没有对应的完整性门**——这是方法论的一个洞。
-- **修法 = 独立视角**:派一个不共享作者上下文的子代理,喂它全部一手源 + 成品 skill,要求"假设不完整,逐条对源挑缺失、带出处引用、按承重度分级"。它跳出作者盲区;且"漏"和"AI 味"不同——完整性有客观锚(源里有没有),适合子代理,不像 AI 味必须靠人耳(与「不用 sub-agent 测 AI 味」不冲突)。
+- **修法 = 独立视角**:派一个不共享作者上下文的子代理,喂它允许进入审阅上下文的一手源 + 成品 skill,要求"假设不完整,逐条对源挑缺失、带出处引用、按承重度分级"。artifact corpus 可按其授权边界提供原件;conversation-mining 只能提供 manifest 产出的 redacted chunks / source map,永不提供原始 JSONL 路径或内容。它跳出作者盲区;且"漏"和"AI 味"不同——完整性有客观锚(源里有没有),适合子代理,不像 AI 味必须靠人耳(与「不用 sub-agent 测 AI 味」不冲突)。
 
-→ 对应规则:语料蒸馏 / conversation-mining 型 skill 发布前必过一道**独立完整性审计**(子代理读全源 + 成品,对抗列 gap);与「不盲信自己的 grep」(Case 8)、discipline #4「preserve before compress」同源——那两条管改 skill,这条管从语料新建。
+→ 对应规则:语料蒸馏 / conversation-mining 型 skill 发布前必过一道**独立完整性审计**(子代理只读该来源类型允许进入审阅上下文的完整证据面 + 成品,对抗列 gap);对 conversation-mining,「完整证据面」明确等于 redacted chunks / source map,不等于 raw transcript。与「不盲信自己的 grep」(Case 8)、discipline #4「preserve before compress」同源——那两条管改 skill,这条管从语料新建。
 
 ### Case 12: description 优化循环会产出"空洞退化"结果,先用已知正例验 harness（2026-07）
 
@@ -459,6 +459,14 @@ Case 12 记录的是"发现 `run_loop` 会产出空洞退化结果"；本案例�
 
 → 对应规则：`run_loop.py` 新增的 guard 现在同时检查正负样本的触发数与执行错误数（`daymade-skill/skill-creator/scripts/run_loop.py`），配套回归测试见 `tests/test_run_loop_degenerate_guard.py`；完整审阅记录（含两轮 prompt 原文、每条发现的处置理由）在私有仓 `next/_meta/skill-reviews/skill-creator/independent-review-degenerate-harness-guard.md`（不进公开仓库，因其引用真实操作细节）。
 
+### Case 21: 「优化现有 skill」被误路由成五路挖掘 + Tier 3 重评测（2026-08）
+
+用户只要求用 skill-creator 优化一个现有 skill。执行者因为前面刚结束一段长调试会话，就把「上下文丰富」误读成「用户要求 conversation-mining」，又把计划中可能涉及流程和脚本误读成「已经确定是 Tier 3」；在没有列清实际改动、没有先跑确定性检查、也没有得到重评测授权时，启动了五个 mining agent，并准备继续 paired baseline / grader / benchmark / viewer。用户当场叫停，指出这不是第一次因过度判断 Tier 3 而浪费 sub-agent token。
+
+根因是两次不同的偷换：**任务方向不等于来源授权**（长会话在场 ≠ 允许打开/挖掘历史），**风险分类不等于执行预算**（Tier 3 ≠ 自动跑全套评测）。修法因此也分两层：conversation-mining 必须有显式历史来源意图；tier 先由已列明的 concrete delta 决定，而 full paired pipeline 再过独立的 heavy-eval authorization gate。普通现有-skill 优化默认确定性验证，行为仍不确定才做 1–2 个 with-skill replay；用户未明确要求重评测时，baseline、grader、benchmark、viewer 要说明会改变什么决策并获得同意，说明不了就不跑。用户已明确要求 A/B/benchmark 时，只授权完成该交付所必需的隔离 arms，不自动授权额外角色。
+
+→ 对应规则：SKILL.md「Verification depth router」的 heavy-eval authorization gate、conversation-mining explicit-source gate，以及 conversation-mining workflow 的 minimum mining pass。
+
 ## 来源
 
 | 来源 | 本文档引用的独有贡献 |
@@ -466,4 +474,4 @@ Case 12 记录的是"发现 `run_loop` 会产出空洞退化结果"；本案例�
 | Anthropic Official | Evaluation-driven development、conciseness imperative（已由 SKILL.md 覆盖，本文不重复） |
 | skill-creator SKILL.md | 完整工作流和工具链（本文引用但不复制，请直接参考 SKILL.md） |
 | 社区经验 | 激活率数据（20%→90%）、Encoded Preference > Capability Uplift |
-| 实战教训 | 并行研究 agent、失败记录的价值、竞争 skill 删除、量化迭代对比、Counter Review 流程、benchmark 有水分需抽查内容、baseline 揭示 skill 事实错误、诚实增量分布、现有 skill old-vs-new 完整性门禁 + 不盲信自己的评分脚本（Case 8）、语料蒸馏型 skill 需独立完整性审计（Case 11）、run_loop 空洞退化输出需先验 harness baseline（Case 12）、和已装 skill 群的触发竞争 + 竞品归属决策（Case 13）、触发验证的代理陷阱 + hook 干扰探针（Case 14）、认可产物语料的登记≠提炼（Case 15）、多 session 并发编辑同仓的 baseline/写入/提交纪律（Case 16）、交互组件货架＋纠正原话双层回写（Case 17）、独立审核需对照未被作者改过的证据（Case 18）、误杀健康输入比漏报更贵 + 验证工具须与生产同实现（Case 19）、Case 12 从散文升级为代码强制 + 审阅修复本身需同等独立性（Case 20） |
+| 实战教训 | Phase 9 案例库中的经验证实践 |
