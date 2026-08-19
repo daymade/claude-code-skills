@@ -43,7 +43,9 @@ from core.ai_utils import (
     parse_anthropic_response,
     reassemble_corrected_chunks,
 )
+from core.change_extractor import ChangeExtractor
 from core.correction_repository import CorrectionRepository, DatabaseError
+from core.correction_service import CorrectionService
 from utils.retry_logic import retry_sync, retry_async, RetryConfig, is_transient_error
 from utils.concurrency_manager import (
     ConcurrencyManager,
@@ -364,6 +366,38 @@ class TestAIChunkFailureFidelity:
         assert changes
         assert all("TFSPK" not in str(vars(change)) for change in changes)
 
+    def test_sync_fallback_success_records_the_real_change(self):
+        processor = AIProcessor(
+            api_key="test",
+            model="primary",
+            fallback_model="fallback",
+        )
+
+        def primary_then_fallback(chunk, _context, model):
+            if model == "primary":
+                raise RuntimeError("primary unavailable")
+            return chunk.replace("meetng", "meeting")
+
+        processor._process_chunk = primary_then_fallback
+        corrected, changes = processor.process("meetng")
+
+        assert corrected == "meeting"
+        assert [(change.from_text, change.to_text) for change in changes] == [
+            ("meetng", "meeting")
+        ]
+
+    def test_sync_ai_edits_short_timestamp_ended_prose(self):
+        source = "会议开时 00:01:00\n下一行开时"
+        processor = AIProcessor(api_key="test", fallback_model="")
+        processor._process_chunk = (
+            lambda chunk, _context, _model: chunk.replace("开时", "开始")
+        )
+
+        corrected, changes = processor.process(source)
+
+        assert corrected == "会议开始 00:01:00\n下一行开始"
+        assert changes
+
     @pytest.mark.asyncio
     async def test_async_ai_cannot_modify_speaker_label_prefix(self):
         source = "spekarA 00:01:00\n正文 spekarA"
@@ -377,6 +411,116 @@ class TestAIChunkFailureFidelity:
         assert corrected == "spekarA 00:01:00\n正文 Speaker A"
         assert changes
         assert all("TFSPK" not in str(vars(change)) for change in changes)
+
+    @pytest.mark.asyncio
+    async def test_async_insertion_is_recorded_as_a_replayable_word_pair(self):
+        processor = AIProcessorAsync(api_key="test", fallback_model="")
+
+        async def insert_missing_letter(
+            _index, _chunk, _context, _semaphore, _total
+        ):
+            return ChunkResult("meeting")
+
+        processor._process_chunk_with_semaphore = insert_missing_letter
+        corrected, changes = await processor._process_async("meetng", "")
+
+        assert corrected == "meeting"
+        assert [(change.from_text, change.to_text) for change in changes] == [
+            ("meetng", "meeting")
+        ]
+        assert changes[0].learnable is True
+
+    @pytest.mark.asyncio
+    async def test_async_ai_edits_short_timestamp_ended_prose(self):
+        source = "Project meetng starts 00:01:00\nnext meetng"
+        processor = AIProcessorAsync(api_key="test", fallback_model="")
+
+        async def fix_prose(_index, chunk, _context, _semaphore, _total):
+            return ChunkResult(chunk.replace("meetng", "meeting"))
+
+        processor._process_chunk_with_semaphore = fix_prose
+        corrected, changes = await processor._process_async(source, "")
+
+        assert corrected == "Project meeting starts 00:01:00\nnext meeting"
+        assert len(changes) == 2
+
+    def test_async_insert_change_persists_in_history(
+        self, correction_repository
+    ):
+        processor = AIProcessorAsync(api_key="test", fallback_model="")
+
+        async def insert_missing_letter(
+            _index, _chunk, _context, _semaphore, _total
+        ):
+            return ChunkResult("meeting")
+
+        processor._process_chunk_with_semaphore = insert_missing_letter
+        corrected, changes = asyncio.run(processor._process_async("meetng", ""))
+        assert corrected == "meeting"
+
+        service = CorrectionService(correction_repository)
+        service.save_history(
+            filename="fixture.md",
+            domain="test-domain",
+            original_length=6,
+            stage1_changes=0,
+            stage2_changes=len(changes),
+            model="fixture",
+            changes=changes,
+        )
+
+        with sqlite3.connect(correction_repository.db_path) as conn:
+            history_count = conn.execute(
+                "SELECT stage2_changes FROM correction_history"
+            ).fetchone()[0]
+            change_row = conn.execute(
+                "SELECT from_text, to_text FROM correction_changes"
+            ).fetchone()
+        assert history_count == 1
+        assert change_row == ("meetng", "meeting")
+
+    def test_unanchored_insert_delete_are_historical_but_not_learnable(self):
+        extractor = ChangeExtractor()
+
+        inserted = extractor.extract_changes("", "新增")
+        deleted = extractor.extract_changes("删除", "")
+
+        assert [(change.from_text, change.to_text) for change in inserted] == [
+            ("", "新增")
+        ]
+        assert [(change.from_text, change.to_text) for change in deleted] == [
+            ("删除", "")
+        ]
+        assert inserted[0].change_type == "insertion"
+        assert deleted[0].change_type == "deletion"
+        assert inserted[0].learnable is False
+        assert deleted[0].learnable is False
+
+    def test_multi_edit_ascii_name_is_one_truthful_pair(self):
+        changes = ChangeExtractor().extract_changes("spekarA", "Speaker A")
+        assert [(change.from_text, change.to_text) for change in changes] == [
+            ("spekarA", "Speaker A")
+        ]
+
+    def test_inserted_punctuation_is_recorded_but_never_learned(self):
+        changes = ChangeExtractor().extract_changes("你好", "你好，")
+        assert [(change.from_text, change.to_text) for change in changes] == [
+            ("好", "好，")
+        ]
+        assert changes[0].change_type == "insertion"
+        assert changes[0].learnable is False
+
+    @pytest.mark.parametrize(
+        ("original", "corrected"),
+        [("OpenAI", "openai"), ("甲乙", "甲 乙"), ("甲\n乙", "甲\n\n乙")],
+    )
+    def test_formatting_mutation_is_visible_but_not_learnable(
+        self, original, corrected
+    ):
+        changes = ChangeExtractor().extract_changes(original, corrected)
+        assert changes
+        assert all(change.change_type == "formatting" for change in changes)
+        assert all(change.learnable is False for change in changes)
 
     @pytest.mark.asyncio
     async def test_async_fallback_metrics_are_failures_not_successes(self, caplog):

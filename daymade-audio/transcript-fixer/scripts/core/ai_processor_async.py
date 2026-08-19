@@ -29,13 +29,12 @@ import httpx
 
 from .ai_utils import (
     AIChange,
-    AIAPIError,
     build_correction_prompt,
     parse_anthropic_response,
     reassemble_corrected_chunks,
     split_into_chunks,
 )
-from .change_extractor import ChangeExtractor, ExtractedChange
+from .change_extractor import ChangeExtractor
 from .defaults import (
     DEFAULT_MODEL,
     FALLBACK_MODEL,
@@ -276,7 +275,8 @@ class AIProcessorAsync:
                                 confidence=change.confidence,
                                 context_before=change.context_before,
                                 context_after=change.context_after,
-                                change_type=change.change_type
+                                change_type=change.change_type,
+                                learnable=change.learnable,
                             ))
                     else:
                         # Already at limit, skip tracking more changes
@@ -384,7 +384,7 @@ class AIProcessorAsync:
 
                 # API fallback: keep original text and warn clearly.
                 print(f"[WARNING] Chunk {chunk_index}: GLM API unavailable after retries; leaving original text unchanged.")
-                print(f"  To correct without an API, use native mode in Claude Code, or provide a valid API key.")
+                print("  To correct without an API, use native mode in Claude Code, or provide a valid API key.")
 
                 logger.warning(
                     f"Using original text for chunk {chunk_index} after all retries failed"

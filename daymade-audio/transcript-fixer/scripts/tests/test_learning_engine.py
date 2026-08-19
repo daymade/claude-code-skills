@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import only what we need to avoid circular dependencies
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 # Manually define Suggestion to avoid circular import
 @dataclass
@@ -116,6 +117,49 @@ class TestLearningEngineThreadSafety:
         # Verify uniqueness (no duplicates from overwrites)
         from_texts = [s["from_text"] for s in pending]
         assert len(from_texts) == len(set(from_texts)), "Duplicate suggestions found"
+
+    def test_non_replayable_insertions_never_become_empty_dictionary_rules(
+        self, engine
+    ):
+        changes = [
+            SimpleNamespace(
+                from_text="",
+                to_text="新增",
+                confidence=0.99,
+                learnable=False,
+                context_before="",
+                context_after="",
+                chunk_index=1,
+            )
+            for _ in range(5)
+        ]
+
+        stats = engine.analyze_and_auto_approve(changes, "test-domain")
+
+        assert stats["total_changes"] == 5
+        assert stats["unique_patterns"] == 0
+        assert stats["auto_approved"] == 0
+        assert stats["pending_review"] == 0
+
+    def test_replayable_insertions_enter_the_learning_queue(self, engine):
+        changes = [
+            SimpleNamespace(
+                from_text="meetng",
+                to_text="meeting",
+                confidence=0.9,
+                learnable=True,
+                context_before="the ",
+                context_after=" starts",
+                chunk_index=index,
+            )
+            for index in range(1, 4)
+        ]
+
+        stats = engine.analyze_and_auto_approve(changes, "test-domain")
+
+        assert stats["total_changes"] == 3
+        assert stats["unique_patterns"] == 1
+        assert stats["pending_review"] == 1
 
     def test_concurrent_approve_suggestions(self, engine):
         """Test that concurrent approvals don't cause race conditions"""

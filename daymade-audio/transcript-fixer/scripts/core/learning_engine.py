@@ -606,10 +606,22 @@ class LearningEngine:
         if not changes:
             return {"total_changes": 0, "unique_patterns": 0, "auto_approved": 0, "pending_review": 0}
 
-        # Group changes by pattern
+        # Group only replayable non-empty pairs. History still records
+        # unanchored insertions/deletions, but an empty FROM or TO value cannot
+        # become a safe dictionary rule.
         patterns = {}
         for change in changes:
-            key = (change.from_text, change.to_text)
+            from_text = getattr(change, "from_text", "")
+            to_text = getattr(change, "to_text", "")
+            if (
+                not getattr(change, "learnable", True)
+                or not isinstance(from_text, str)
+                or not isinstance(to_text, str)
+                or not from_text.strip()
+                or not to_text.strip()
+            ):
+                continue
+            key = (from_text, to_text)
             if key not in patterns:
                 patterns[key] = []
             patterns[key].append(change)

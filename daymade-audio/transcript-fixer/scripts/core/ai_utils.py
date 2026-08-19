@@ -33,6 +33,9 @@ class AIChange:
     context_before: str = ""
     context_after: str = ""
     change_type: str = "unknown"
+    # History must record every real edit, including an unanchored insertion or
+    # deletion. Learning may only consume replayable non-empty FROM→TO pairs.
+    learnable: bool = True
 
 
 def split_into_chunks(text: str, max_chunk_size: int = DEFAULT_MAX_CHUNK_SIZE) -> List[str]:

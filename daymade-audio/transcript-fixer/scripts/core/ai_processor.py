@@ -18,7 +18,6 @@ import httpx
 
 from .ai_utils import (
     AIChange,
-    AIAPIError,
     build_correction_prompt,
     parse_anthropic_response,
     reassemble_corrected_chunks,
@@ -32,6 +31,7 @@ from .defaults import (
     ANTHROPIC_VERSION,
     API_TIMEOUT,
 )
+from .change_extractor import ChangeExtractor
 from .protected_spans import (
     mask_speaker_labels,
     restore_speaker_labels,
@@ -67,6 +67,7 @@ class AIProcessor:
         self.fallback_model = fallback_model
         self.base_url = base_url
         self.max_chunk_size = 6000  # Characters per chunk
+        self.change_extractor = ChangeExtractor()
 
     def process(self, text: str, context: str = "") -> Tuple[str, List[AIChange]]:
         """
@@ -88,27 +89,12 @@ class AIProcessor:
 
         for i, chunk in enumerate(chunks, 1):
             print(f"   Chunk {i}/{len(chunks)}... ", end="", flush=True)
+            corrected_chunk = chunk
+            api_succeeded = False
 
             try:
                 corrected_chunk = self._process_chunk(chunk, context, self.model)
-                corrected_chunks.append(corrected_chunk)
-
-                # TODO: Extract actual changes for learning
-                # For now, we assume the whole chunk changed
-                if corrected_chunk != chunk:
-                    source_for_report = reveal_speaker_labels_for_reporting(
-                        chunk, speaker_spans
-                    )
-                    corrected_for_report = reveal_speaker_labels_for_reporting(
-                        corrected_chunk, speaker_spans
-                    )
-                    all_changes.append(AIChange(
-                        chunk_index=i,
-                        from_text=source_for_report[:50] + "...",
-                        to_text=corrected_for_report[:50] + "...",
-                        confidence=0.9  # Placeholder
-                    ))
-
+                api_succeeded = True
                 print("✓")
 
             except Exception as e:
@@ -119,14 +105,35 @@ class AIProcessor:
                     print(f"   Retrying with {self.fallback_model}... ", end="", flush=True)
                     try:
                         corrected_chunk = self._process_chunk(chunk, context, self.fallback_model)
-                        corrected_chunks.append(corrected_chunk)
+                        api_succeeded = True
                         print("✓")
-                        continue
                     except Exception as e2:
                         print(f"✗ {str(e2)[:50]}")
 
-                print("   Using original text...")
-                corrected_chunks.append(chunk)
+                if not api_succeeded:
+                    print("   Using original text...")
+
+            corrected_chunks.append(corrected_chunk)
+            if api_succeeded and corrected_chunk != chunk:
+                source_for_report = reveal_speaker_labels_for_reporting(
+                    chunk, speaker_spans
+                )
+                corrected_for_report = reveal_speaker_labels_for_reporting(
+                    corrected_chunk, speaker_spans
+                )
+                for change in self.change_extractor.extract_changes(
+                    source_for_report, corrected_for_report
+                ):
+                    all_changes.append(AIChange(
+                        chunk_index=i,
+                        from_text=change.from_text,
+                        to_text=change.to_text,
+                        confidence=change.confidence,
+                        context_before=change.context_before,
+                        context_after=change.context_after,
+                        change_type=change.change_type,
+                        learnable=change.learnable,
+                    ))
 
         corrected_text = reassemble_corrected_chunks(
             projected_text, chunks, corrected_chunks

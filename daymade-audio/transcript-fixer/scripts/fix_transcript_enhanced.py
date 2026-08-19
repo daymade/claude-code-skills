@@ -4,6 +4,7 @@
 # dependencies = [
 #     "httpx>=0.24.0",
 #     "filelock>=3.13.0",
+#     "jieba>=0.42.1",
 # ]
 # ///
 """
@@ -175,7 +176,7 @@ Examples:
             print("\n🌐 Opening HTML diff in browser...")
             open_html_in_browser(html_file)
         else:
-            print(f"\n⚠️  HTML diff not generated (may require Stage 2/3)")
+            print("\n⚠️  HTML diff not generated (may require Stage 2/3)")
 
     # List output files that were actually generated
     output_files = [

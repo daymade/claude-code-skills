@@ -202,6 +202,8 @@ class TestSpeakerLabelProtection:
             "spekarA 00:01:00",
             "**spekarA** 00:01:00.000",
             "spekarA [00:01]",
+            "Ada 00:01:00",
+            "李雷 00:01:00",
         ],
     )
     def test_dictionary_rule_changes_body_but_not_label(self, label_line):
@@ -228,19 +230,90 @@ class TestSpeakerLabelProtection:
         assert corrected == "spekarA 00:01:00\n正文 Speaker A"
         assert [change.line_number for change in changes] == [2]
 
-    def test_timestamp_ended_prose_is_not_misclassified_as_a_label(self):
-        text = "正文的 meetng 安排在 00:01:00\n下一行 meetng"
+    @pytest.mark.parametrize(
+        ("label", "replacement"),
+        [("Ada", "Eve"), ("李雷", "李蕾")],
+    )
+    def test_one_off_name_shaped_label_is_protected(self, label, replacement):
+        text = f"{label} 00:01:00\n正文 {label}"
+        processor = DictionaryProcessor(
+            corrections={label: replacement},
+            context_rules=[],
+        )
+        corrected, changes = processor.process(text, review_mode=False)
+        assert corrected == f"{label} 00:01:00\n正文 {replacement}"
+        assert [change.line_number for change in changes] == [2]
+
+    def test_context_rule_still_edits_short_timestamp_ended_prose(self):
+        text = "会议开时 00:01:00\n下一行开时"
+        processor = DictionaryProcessor(
+            corrections={},
+            context_rules=[{
+                "pattern": "开时",
+                "replacement": "开始",
+                "description": "ASR omission",
+            }],
+        )
+        corrected, changes = processor.process(text, review_mode=False)
+        assert corrected == "会议开始 00:01:00\n下一行开始"
+        assert [change.line_number for change in changes] == [1, 2]
+
+    @pytest.mark.parametrize(
+        ("text", "old", "new", "expected"),
+        [
+            (
+                "正文的 meetng 安排在 00:01:00\n下一行 meetng",
+                "meetng",
+                "meeting",
+                "正文的 meeting 安排在 00:01:00\n下一行 meeting",
+            ),
+            (
+                "会议开时 00:01:00\n下一行开时",
+                "开时",
+                "开始",
+                "会议开始 00:01:00\n下一行开始",
+            ),
+            (
+                "Project meetng starts 00:01:00\nnext meetng",
+                "meetng",
+                "meeting",
+                "Project meeting starts 00:01:00\nnext meeting",
+            ),
+        ],
+    )
+    def test_timestamp_ended_prose_is_not_misclassified_as_a_label(
+        self, text, old, new, expected
+    ):
         masked, spans = mask_speaker_labels(text)
         assert masked == text
         assert spans == []
 
         processor = DictionaryProcessor(
-            corrections={"meetng": "meeting"},
+            corrections={old: new},
             context_rules=[],
         )
         corrected, changes = processor.process(text, review_mode=False)
-        assert corrected == "正文的 meeting 安排在 00:01:00\n下一行 meeting"
+        assert corrected == expected
         assert [change.line_number for change in changes] == [1, 2]
+
+    def test_repeated_bare_alias_is_protected_without_guessing_its_language(self):
+        text = "小火 00:01:00\n第一段。\n小火 00:02:00\n第二段。"
+        masked, spans = mask_speaker_labels(text)
+        assert len(spans) == 2
+        assert "小火 00:01:00" not in masked
+        assert restore_speaker_labels(masked, spans) == text
+
+    @pytest.mark.parametrize(
+        "phrase",
+        ["方向", "方法", "时间", "计划", "项目", "马上", "何时", "王者"],
+    )
+    def test_common_cjk_phrase_is_not_a_name_just_because_it_starts_like_one(
+        self, phrase
+    ):
+        text = f"{phrase} 00:01:00\n正文。"
+        masked, spans = mask_speaker_labels(text)
+        assert masked == text
+        assert spans == []
 
     def test_damaged_speaker_marker_fails_closed(self):
         masked, spans = mask_speaker_labels("spekarA 00:01:00\n正文。")
