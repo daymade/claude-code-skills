@@ -45,8 +45,9 @@
 
 | 你想要... | 官方版 | 本 Fork |
 |----------|--------|---------|
-| 造之前先调研 | "Check available MCPs"（5 行） | 8 渠道搜索协议 + Adopt/Extend/Build 决策矩阵 |
-| 交互式创建 skill | 纯文字指令 | 9 个结构化 AskUserQuestion 检查点——用户永远不丢上下文 |
+| 造之前先调研 | "Check available MCPs" | 有序搜索协议 + Adopt/Extend/Build 决策矩阵 |
+| 交互式创建 skill | 纯文字指令 | 结构化 AskUserQuestion 检查点——用户永远不丢上下文 |
+| 按风险匹配验证成本 | 一套完整创建-测试-审阅循环 | 风险分级与评测开销分开：先跑定向证据；配对基准需用户明确授权，或先证明能改变决策再获得同意 |
 | 避免常见错误 | 无指引 | 缓存编辑警告、前置依赖检查、安全扫描门禁 |
 | 了解架构选项 | 未提及 | Inline vs Fork 决策指南（选错会静默破坏你的 skill） |
 | 发布前验证 | 基本 YAML 检查 | 扩展结构校验 + 带来源核验的现有 skill 新旧能力审计；打包时重验完整 review，不信任 marker 自证 |
@@ -56,18 +57,6 @@
 | 用证据锚定知识型 skill | 泛化建议 | 从真实调用和机器可读规范到生产代码的权威源阶梯，加上可执行示例冒烟与证据边界规则 |
 | 与官方版同时安装 | 抛硬币——两者描述几乎一字不差 | 触发时检测冲突，提供一条命令可装可卸的 SessionStart 路由 hook（仅在两者共存时才会安装）；显式点名时官方版仍可用 |
 | 你自己的 skill 与已装插件撞名 | 未覆盖 | `generate_supersede_kit.py` 把同款条件路由 kit 生成进你的 skill，附实测优先级决策指南（改名 → description 声明 → hook → disable） |
-
-**质量对比**（独立审计，8 个维度）：
-
-| 维度 | 官方版 | 本 Fork |
-|------|--------|---------|
-| 可操作性 | 7 | 9 |
-| 错误预防 | 5 | 9 |
-| 前置调研 | 4 | 9 |
-| 对抗性审查 | 4 | 8 |
-| 实战经验 | 3 | 8 |
-| 用户体验 | 4 | 9 |
-| **总分（/80）** | **42** | **65** |
 
 > 完整方法论：[skill-creator/references/skill-development-methodology.md](./daymade-skill/skill-creator/references/skill-development-methodology.md)
 
@@ -2356,11 +2345,11 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### 57. **skill-creator** - 创建、改进与基准测试技能
+### **skill-creator** - 创建、改进与基准测试技能
 
 > **安装**：`claude plugin install daymade-skill@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-skill:skill-creator`）
 
-构建你自己技能的核心元技能。它会按改动风险匹配验证深度：局部修正走定向校验，窄范围行为变化走抽样回放，全新/大改/高风险任务才进入完整的「创建 → 配对测试 → 审阅 → 改进」循环。也支持用户明确要求的基准测试，并能优化技能的 `description` 以提升触发准确率。
+构建你自己技能的核心元技能。它会按改动风险匹配验证深度：局部修正走定向校验，窄范围行为变化走抽样回放，大改/高风险任务只获得使用重证据的资格，不会自动启动。配对 baseline、grader、benchmark 和 viewer 需用户明确授权，或先证明它会改变决策再获得同意。也支持用户明确要求的基准测试，并能优化技能的 `description` 以提升触发准确率。
 
 **使用场景：**
 - 从零创建技能，或编辑/优化已有技能
@@ -2369,12 +2358,12 @@ claude plugin install daymade-claude-code@daymade-skills
 - 把刚调通的第三方 CLI 工具包装成可复用的伴侣技能
 
 **主要功能：**
-- 跨会话历史、本地 SOP、已装插件/MCP、skills.sh、官方插件、npm/PyPI 的先验调研——复用基础设施，只把用户独有的方法论编码进技能
+- 基于当前对话、用户明确授权的过往会话、本地 SOP、已装插件/MCP、skills.sh、官方插件、npm/PyPI 做先验调研——复用基础设施，只把用户独有的方法论编码进技能
 - inline vs `context: fork` 决策指引（subagent 不能 spawn subagent 或调 skill）与可组合/正交的技能设计
 - `init_skill.py` 脚手架、`package_skill.py`（自动校验）、`security_scan.py`（基于 gitleaks 的密钥/PII 检测）
 - 现有 skill 迁移闸门：工具签发的快照或已核验 Git commit 基线、区分运行时可达性的能力审计、逐项 disposition，以及无法被 clean commit 或手写 marker 绕过的打包时重验
-- 风险分级验证路由：Tier 1 定向校验、Tier 2 抽样行为回放、Tier 3 仅在失败面确实需要时运行完整评测
-- Tier 3 完整 Eval 工具链：并行 spawn 带技能 + baseline 运行、起草断言、评分、聚合基准、在生成的 HTML viewer 里审阅
+- 风险分级验证路由：Tier 1 定向校验、Tier 2 抽样行为回放、Tier 3 标记大改/高风险但不自动扇出
+- 单独授权的完整 Eval 工具链：用户明确要求，或能改变决策的证据计划获得同意后，才运行带技能 + baseline、断言、评分、聚合基准和 HTML viewer
 - 面向公开技能的强制语义通读——抓住扫描器漏掉的「无关键词」泄漏
 - description 优化循环（60/40 训练/测试切分，按 held-out 分数选最优 description）
 
