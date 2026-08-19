@@ -108,7 +108,9 @@ DEFAULT_REDACTION_PATTERNS = [
     {
         "id": "windows_user_paths",
         "pattern": r"C:\\Users\\[A-Za-z][A-Za-z0-9_-]+\\[^\s,;\"'\)]*",
-        "placeholder": "C:\\Users\\<REDACTED-USER>\\...",
+        # re.Match.expand() parses replacement backslashes. Keep each literal
+        # Windows separator doubled so ``\\U`` is never treated as an escape.
+        "placeholder": r"C:\\Users\\<REDACTED-USER>\\...",
     },
 ]
 
