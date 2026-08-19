@@ -229,7 +229,7 @@ For delegated batches, every agent owns one file, cannot cross-file replace, and
 ## Finalization
 
 - Native mode edits the original file directly. Rerun plain `--stage 1` to confirm; a clean no-op writes no Stage 1 sidecar.
-- When a newer `*_stage1.md` exists and the original was not edited after it, a plain Stage 1 rerun atomically promotes it and removes intermediate sidecars. `--apply-all` never takes this promotion path.
+- When a newer `*_stage1.md` exists and the original was not edited after it, a plain Stage 1 rerun atomically promotes it and removes disposable sidecars. It retains `*_changes.md` and `*_needs_review.md` because only the reviewer can know that every associated decision is closed. `--apply-all` never takes this promotion path.
 - Do not use the existence of an output file as the success signal; read JSON/exit status and independently read the final file.
 - Preserve raw transcripts, `*_changes.md`, and `*_needs_review.md` as evidence until every associated decision is closed.
 - Re-grep a known corrected form in the final file and verify no correction remains only in `asr_note` or a sidecar.
@@ -244,7 +244,7 @@ export GLM_API_KEY="<api-key>"
 uv run scripts/fix_transcript_enhanced.py input.md --output ./corrected
 ~~~
 
-Read [references/glm_api_setup.md](references/glm_api_setup.md), [references/installation_setup.md](references/installation_setup.md), and the explicitly API-oriented portions of [references/workflow_guide.md](references/workflow_guide.md). API failures keep the original text unchanged and print a warning; verify the output rather than assuming the warning means a corrected result exists.
+Read [references/glm_api_setup.md](references/glm_api_setup.md), [references/installation_setup.md](references/installation_setup.md), and the explicitly API-oriented portions of [references/workflow_guide.md](references/workflow_guide.md). When a chunk fails after retries, the API route keeps that chunk and its original surrounding separators byte-for-byte and prints a warning; if every chunk fails, the complete output equals the input. Verify the output rather than assuming the warning means a corrected result exists.
 
 The enhanced API wrapper can also add paragraph breaks, reduce repeated filler,
 and present corrections for interactive review. Those are API-wrapper features;

@@ -40,6 +40,14 @@ STAGE1_SIDECAR_SUFFIXES = [
     "_对比.html",
 ]
 
+# Auto-finalize cannot prove that the human decisions represented by these
+# reports are closed. Preserve them until an operator explicitly dispositions
+# every associated item; deleting them as generic intermediates loses evidence.
+PRESERVED_REVIEW_EVIDENCE_SUFFIXES = frozenset({
+    "_changes.md",
+    "_needs_review.md",
+})
+
 
 def _get_service() -> CorrectionService:
     """Get configured CorrectionService instance."""
@@ -242,9 +250,10 @@ def _auto_finalize_stage1(input_path: Path, output_dir: Path, dry_run: bool = Fa
     """Promote an existing *_stage1.md to the input file before re-running Stage 1.
 
     If <stem>_stage1.md exists and is newer than the input file, replace the input
-    file with it and remove the intermediate sidecars left by previous runs. This
-    removes the manual finalize step for the native AI-correction workflow without
-    adding a new CLI command.
+    file with it and remove disposable intermediate sidecars left by previous
+    runs. Review-evidence reports are retained because this helper cannot prove
+    that their associated decisions are closed. This removes the manual promote
+    step for the native AI-correction workflow without adding a new CLI command.
 
     Returns True if a finalize happened (or would happen in dry-run mode).
     """
@@ -265,7 +274,10 @@ def _auto_finalize_stage1(input_path: Path, output_dir: Path, dry_run: bool = Fa
         for suffix in STAGE1_SIDECAR_SUFFIXES:
             sidecar = output_dir / f"{input_path.stem}{suffix}"
             if sidecar.exists() and sidecar.name != stage1_file.name:
-                print(f"   Would remove: {sidecar.name}")
+                if suffix in PRESERVED_REVIEW_EVIDENCE_SUFFIXES:
+                    print(f"   Would preserve review evidence: {sidecar.name}")
+                else:
+                    print(f"   Would remove: {sidecar.name}")
         return True
 
     # Atomic promotion: os.replace overwrites input_path even on macOS where mv
@@ -292,12 +304,16 @@ def _auto_finalize_stage1(input_path: Path, output_dir: Path, dry_run: bool = Fa
     print(f"✅ Auto-finalized: {stage1_file.name} -> {input_path.name}")
 
     removed = []
+    preserved = []
     for suffix in STAGE1_SIDECAR_SUFFIXES:
         sidecar = output_dir / f"{input_path.stem}{suffix}"
         # After promotion, stage1_file no longer exists, so this loop silently
         # skips the promoted suffix. We iterate the full list anyway to keep
         # cleanup robust against partial failures.
         if sidecar.exists():
+            if suffix in PRESERVED_REVIEW_EVIDENCE_SUFFIXES:
+                preserved.append(sidecar.name)
+                continue
             try:
                 sidecar.unlink()
                 removed.append(sidecar.name)
@@ -305,6 +321,8 @@ def _auto_finalize_stage1(input_path: Path, output_dir: Path, dry_run: bool = Fa
                 print(f"⚠️  Could not remove {sidecar.name}: {e}", file=sys.stderr)
     if removed:
         print(f"🧹 Cleaned up: {', '.join(removed)}")
+    if preserved:
+        print(f"🗂️  Preserved review evidence: {', '.join(preserved)}")
 
     return True
 

@@ -26,7 +26,14 @@ import logging
 from typing import List, Tuple, Optional, Final
 import httpx
 
-from .ai_utils import AIChange, AIAPIError, split_into_chunks, build_correction_prompt, parse_anthropic_response
+from .ai_utils import (
+    AIChange,
+    AIAPIError,
+    build_correction_prompt,
+    parse_anthropic_response,
+    reassemble_corrected_chunks,
+    split_into_chunks,
+)
 from .change_extractor import ChangeExtractor, ExtractedChange
 from .defaults import (
     DEFAULT_MODEL,
@@ -267,7 +274,7 @@ class AIProcessorAsync:
             f"failure_rate={stats['window_failure_rate']:.2%}, changes_extracted={len(all_changes)}"
         )
 
-        return "\n\n".join(corrected_chunks), all_changes
+        return reassemble_corrected_chunks(text, chunks, corrected_chunks), all_changes
 
     async def _process_chunk_with_semaphore(
         self,

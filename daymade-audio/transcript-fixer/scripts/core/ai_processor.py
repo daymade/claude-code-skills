@@ -16,7 +16,14 @@ from __future__ import annotations
 from typing import List, Tuple
 import httpx
 
-from .ai_utils import AIChange, AIAPIError, split_into_chunks, build_correction_prompt, parse_anthropic_response
+from .ai_utils import (
+    AIChange,
+    AIAPIError,
+    build_correction_prompt,
+    parse_anthropic_response,
+    reassemble_corrected_chunks,
+    split_into_chunks,
+)
 from .defaults import (
     DEFAULT_MODEL,
     FALLBACK_MODEL,
@@ -109,7 +116,7 @@ class AIProcessor:
                 print("   Using original text...")
                 corrected_chunks.append(chunk)
 
-        return "\n\n".join(corrected_chunks), all_changes
+        return reassemble_corrected_chunks(text, chunks, corrected_chunks), all_changes
 
     def _process_chunk(self, chunk: str, context: str, model: str) -> str:
         """Process a single chunk with GLM API"""

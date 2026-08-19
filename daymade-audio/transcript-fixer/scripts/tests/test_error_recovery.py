@@ -35,6 +35,9 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.connection_pool import ConnectionPool, PoolExhaustedError
+from core.ai_processor import AIProcessor
+from core.ai_processor_async import AIProcessorAsync
+from core.ai_utils import reassemble_corrected_chunks
 from core.correction_repository import CorrectionRepository, DatabaseError
 from utils.retry_logic import retry_sync, retry_async, RetryConfig, is_transient_error
 from utils.concurrency_manager import (
@@ -288,6 +291,56 @@ class TestNetworkErrorRecovery:
         # Permanent errors
         assert is_transient_error(ValueError("invalid input")) == False
         assert is_transient_error(KeyError("not found")) == False
+
+
+class TestAIChunkFailureFidelity:
+    """API fallback must not alter text merely because chunking occurred."""
+
+    def test_sequential_total_failure_returns_byte_identical_source(self):
+        source = "甲。乙。丙。丁。"
+        processor = AIProcessor(api_key="test", fallback_model="")
+        processor.max_chunk_size = 4
+
+        def fail_chunk(_chunk, _context, _model):
+            raise RuntimeError("simulated API failure")
+
+        processor._process_chunk = fail_chunk
+        corrected, changes = processor.process(source)
+
+        assert corrected == source
+        assert changes == []
+
+    @pytest.mark.asyncio
+    async def test_async_chunk_fallback_preserves_original_separators(self):
+        source = "甲。乙。丙。丁。"
+        processor = AIProcessorAsync(api_key="test", fallback_model="")
+        processor.max_chunk_size = 4
+
+        async def keep_chunk(_index, chunk, _context, _semaphore, _total):
+            return chunk
+
+        processor._process_chunk_with_semaphore = keep_chunk
+        corrected, changes = await processor._process_async(source, "")
+
+        assert corrected == source
+        assert changes == []
+
+    def test_reassembly_preserves_nonstandard_inter_chunk_spacing(self):
+        original = "左段\n\n\n右段"
+        corrected = reassemble_corrected_chunks(
+            original,
+            ["左段", "右段"],
+            ["甲段", "乙段"],
+        )
+        assert corrected == "甲段\n\n\n乙段"
+
+    def test_reassembly_fails_fast_when_chunks_do_not_match_source(self):
+        with pytest.raises(ValueError, match="source chunk 2"):
+            reassemble_corrected_chunks(
+                "第一段\n\n第二段",
+                ["第一段", "missing"],
+                ["甲", "乙"],
+            )
 
 
 # ==================== Concurrency Error Recovery Tests ====================

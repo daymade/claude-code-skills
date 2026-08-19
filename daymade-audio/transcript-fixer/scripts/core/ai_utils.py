@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, List, Sequence
 
 from .defaults import MAX_CHUNK_SIZE as DEFAULT_MAX_CHUNK_SIZE
 
@@ -85,6 +85,49 @@ def split_into_chunks(text: str, max_chunk_size: int = DEFAULT_MAX_CHUNK_SIZE) -
         chunks.append('\n\n'.join(current_chunk))
 
     return chunks
+
+
+def reassemble_corrected_chunks(
+    original_text: str,
+    source_chunks: Sequence[str],
+    corrected_chunks: Sequence[str],
+) -> str:
+    """Reassemble corrected chunks using the original text's exact separators.
+
+    ``split_into_chunks`` omits the separators between chunks. Joining with a
+    hard-coded delimiter therefore changes the source whenever a long paragraph
+    is split by sentence, including the failure path where every chunk falls
+    back to its original text. Locate each source chunk in order and carry the
+    untouched text between chunks forward verbatim.
+
+    Raises:
+        ValueError: If the result list does not correspond to the source chunks,
+            or if a source chunk cannot be anchored in the original text.
+    """
+    if len(source_chunks) != len(corrected_chunks):
+        raise ValueError(
+            "Cannot reassemble AI output: source/corrected chunk counts differ "
+            f"({len(source_chunks)} != {len(corrected_chunks)})"
+        )
+
+    cursor = 0
+    reassembled: list[str] = []
+    for index, (source_chunk, corrected_chunk) in enumerate(
+        zip(source_chunks, corrected_chunks),
+        start=1,
+    ):
+        start = original_text.find(source_chunk, cursor)
+        if start == -1:
+            raise ValueError(
+                "Cannot reassemble AI output: "
+                f"source chunk {index} is not present after offset {cursor}"
+            )
+        reassembled.append(original_text[cursor:start])
+        reassembled.append(corrected_chunk)
+        cursor = start + len(source_chunk)
+
+    reassembled.append(original_text[cursor:])
+    return "".join(reassembled)
 
 
 def build_correction_prompt(chunk: str, context: str = "") -> str:

@@ -18,7 +18,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import cli.commands as commands_module
-from cli.commands import STAGE1_SIDECAR_SUFFIXES, _auto_finalize_stage1, cmd_run_correction
+from cli.commands import (
+    PRESERVED_REVIEW_EVIDENCE_SUFFIXES,
+    STAGE1_SIDECAR_SUFFIXES,
+    _auto_finalize_stage1,
+    cmd_run_correction,
+)
 
 
 class TestStage1AutoFinalize(unittest.TestCase):
@@ -80,8 +85,8 @@ class TestStage1AutoFinalize(unittest.TestCase):
         self.assertEqual(self.input_file.read_text(encoding="utf-8"), "original text\n")
         self.assertTrue(stage1.exists())
 
-    def test_stage1_newer_promotes_and_cleans_sidecars(self):
-        """If *_stage1.md is newer, promote it and remove sidecars."""
+    def test_stage1_newer_promotes_and_preserves_review_evidence(self):
+        """Promotion removes disposable sidecars but retains review evidence."""
         stage1 = self.test_dir / "meeting_stage1.md"
         stage1.write_text("corrected text\n", encoding="utf-8")
         self._write_sidecars()
@@ -94,10 +99,11 @@ class TestStage1AutoFinalize(unittest.TestCase):
         for suffix in STAGE1_SIDECAR_SUFFIXES:
             if suffix == "_stage1.md":
                 continue
-            self.assertFalse(
-                (self.test_dir / f"meeting{suffix}").exists(),
-                f"sidecar {suffix} should be removed",
-            )
+            sidecar_exists = (self.test_dir / f"meeting{suffix}").exists()
+            if suffix in PRESERVED_REVIEW_EVIDENCE_SUFFIXES:
+                self.assertTrue(sidecar_exists, f"review evidence {suffix} should remain")
+            else:
+                self.assertFalse(sidecar_exists, f"sidecar {suffix} should be removed")
 
     def test_dry_run_does_not_modify_files(self):
         """Dry-run mode reports but does not touch files."""
@@ -253,7 +259,7 @@ class TestStage1AutoFinalize(unittest.TestCase):
 
         self.assertEqual(self.input_file.read_text(encoding="utf-8"), "corrected text\n")
         self.assertFalse(stage1.exists())
-        self.assertFalse(changes.exists())
+        self.assertTrue(changes.exists())
 
     def test_cmd_apply_all_ignores_stale_stage1_and_runs_corrections(self):
         """--apply-all must run corrections, not promote a stale sidecar.
