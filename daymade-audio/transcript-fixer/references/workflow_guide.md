@@ -180,10 +180,10 @@ uv run scripts/fix_transcription.py --validate
    ```bash
    # Embodied AI domain
    uv run scripts/fix_transcription.py --add "巨升智能" "具身智能" --domain embodied_ai
-   uv run scripts/fix_transcription.py --add "机器学习" "机器学习" --domain embodied_ai
+   uv run scripts/fix_transcription.py --add "机器学西" "机器学习" --domain embodied_ai
 
    # Finance domain
-   uv run scripts/fix_transcription.py --add "股价" "股价" --domain finance  # Keep as-is
+   uv run scripts/fix_transcription.py --add "骨价" "股价" --domain finance
    uv run scripts/fix_transcription.py --add "PE比率" "市盈率" --domain finance
    ```
 

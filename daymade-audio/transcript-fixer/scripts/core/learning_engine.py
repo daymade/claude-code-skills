@@ -43,6 +43,21 @@ from .correction_repository import ValidationError
 logger = logging.getLogger(__name__)
 
 
+def _is_replayable_learning_pair(from_text: object, to_text: object) -> bool:
+    """Reject empty, formatting-only, and punctuation-only dictionary pairs."""
+    if not isinstance(from_text, str) or not isinstance(to_text, str):
+        return False
+    if not from_text.strip() or not to_text.strip():
+        return False
+    compact_from = "".join(from_text.split()).casefold()
+    compact_to = "".join(to_text.split()).casefold()
+    if compact_from == compact_to:
+        return False
+    return any(char.isalnum() for char in from_text) and any(
+        char.isalnum() for char in to_text
+    )
+
+
 @dataclass
 class Suggestion:
     """Represents a learned correction suggestion"""
@@ -311,7 +326,15 @@ class LearningEngine:
                 changes = data["stages"]["stage2"].get("changes", [])
 
                 for change in changes:
-                    key = (change["from"], change["to"])
+                    from_text = change.get("from", "")
+                    to_text = change.get("to", "")
+                    if (
+                        not change.get("learnable", True)
+                        or change.get("change_type") == "formatting"
+                        or not _is_replayable_learning_pair(from_text, to_text)
+                    ):
+                        continue
+                    key = (from_text, to_text)
                     patterns[key].append({
                         "file": data["filename"],
                         "line": change.get("line", 0),
@@ -339,6 +362,10 @@ class LearningEngine:
             FROM correction_changes c
             JOIN correction_history h ON h.id = c.history_id
             WHERE c.rule_type = 'ai'
+              AND c.learnable = 1
+              AND c.change_type <> 'formatting'
+              AND trim(c.from_text) <> ''
+              AND trim(c.to_text) <> ''
               AND h.success = 1
             ORDER BY h.run_timestamp ASC, c.id ASC
         """
@@ -352,6 +379,10 @@ class LearningEngine:
             return patterns
 
         for row in rows:
+            if not _is_replayable_learning_pair(
+                row["from_text"], row["to_text"]
+            ):
+                continue
             key = (row["from_text"], row["to_text"])
             context = " ".join(
                 part for part in [
@@ -580,7 +611,13 @@ class LearningEngine:
         with self._file_lock(self.rejected_lock, "save rejected"):
             self._save_rejected_unlocked(rejected)
 
-    def analyze_and_auto_approve(self, changes: List, domain: str = "general") -> Dict:
+    def analyze_and_auto_approve(
+        self,
+        changes: List,
+        domain: str = "general",
+        *,
+        auto_approve: bool = False,
+    ) -> Dict:
         """
         Analyze AI changes and auto-approve high-confidence patterns
 
@@ -593,6 +630,8 @@ class LearningEngine:
         Args:
             changes: List of AIChange objects from recent AI processing
             domain: Domain to add corrections to
+            auto_approve: Whether high-confidence patterns may be written to
+                the dictionary. False routes them to review.
 
         Returns:
             Dict with stats: {
@@ -615,10 +654,7 @@ class LearningEngine:
             to_text = getattr(change, "to_text", "")
             if (
                 not getattr(change, "learnable", True)
-                or not isinstance(from_text, str)
-                or not isinstance(to_text, str)
-                or not from_text.strip()
-                or not to_text.strip()
+                or not _is_replayable_learning_pair(from_text, to_text)
             ):
                 continue
             key = (from_text, to_text)
@@ -645,13 +681,42 @@ class LearningEngine:
             confidences = [c.confidence for c in occurrences]
             avg_confidence = sum(confidences) / len(confidences)
 
-            # Auto-approve if meets strict criteria
+            # Auto-approve only when the caller's explicit feature flag allows
+            # it. The default is review, not mutation.
             if (frequency >= self.AUTO_APPROVE_FREQUENCY and
-                avg_confidence >= self.AUTO_APPROVE_CONFIDENCE):
+                avg_confidence >= self.AUTO_APPROVE_CONFIDENCE and
+                auto_approve):
 
                 if self.correction_service:
+                    existing = self.correction_service.get_corrections(domain)
+                    if from_text in existing:
+                        if existing[from_text] != to_text:
+                            logger.warning(
+                                "Learned pattern conflicts with an existing "
+                                f"human rule: '{from_text}' -> "
+                                f"'{existing[from_text]}' (AI proposed "
+                                f"'{to_text}'). Routing to pending review."
+                            )
+                            pending_suggestions.append(
+                                self._build_pending_suggestion(
+                                    from_text, to_text, occurrences,
+                                    avg_confidence, domain, now,
+                                )
+                            )
+                            stats["pending_review"] += 1
+                        # An identical existing target is already covered; do
+                        # not rewrite its manual provenance as learned.
+                        continue
                     try:
-                        self.correction_service.add_correction(from_text, to_text, domain)
+                        self.correction_service.add_correction(
+                            from_text,
+                            to_text,
+                            domain,
+                            source="learned",
+                            confidence=avg_confidence,
+                            notes="auto-approved from Stage 2 history",
+                            update_existing=False,
+                        )
                         auto_approved_patterns.append({
                             "from": from_text,
                             "to": to_text,
@@ -672,10 +737,18 @@ class LearningEngine:
                         ))
                         stats["pending_review"] += 1
                     except Exception as e:
-                        # Other failures (database, already exists, etc.)
-                        logger.warning(
+                        # Persistence or programming failures are not a review
+                        # outcome. Propagate them so the CLI cannot announce a
+                        # completed learning pass that wrote nothing.
+                        logger.exception(
                             f"Auto-approve failed for '{from_text}' -> '{to_text}': {e}"
                         )
+                        raise
+                else:
+                    pending_suggestions.append(self._build_pending_suggestion(
+                        from_text, to_text, occurrences, avg_confidence, domain, now,
+                    ))
+                    stats["pending_review"] += 1
 
             # Add to pending review if meets minimum criteria
             elif (frequency >= self.MIN_FREQUENCY and

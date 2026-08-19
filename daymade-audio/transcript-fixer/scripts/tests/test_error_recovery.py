@@ -39,8 +39,10 @@ from core.ai_processor import AIProcessor
 from core.ai_processor_async import AIProcessorAsync, ChunkResult
 from core.ai_utils import (
     AIAPIError,
+    AIChange,
     parse_anthropic_response,
     reassemble_corrected_chunks,
+    split_into_chunks,
 )
 from core.change_extractor import ChangeExtractor
 from core.correction_repository import CorrectionRepository, DatabaseError
@@ -304,7 +306,9 @@ class TestAIChunkFailureFidelity:
 
     def test_sequential_total_failure_returns_byte_identical_source(self):
         source = "甲。乙。丙。丁。"
-        processor = AIProcessor(api_key="test", fallback_model="")
+        processor = AIProcessor(
+            api_key="test", fallback_model="", speaker_labels={"spekarA"}
+        )
         processor.max_chunk_size = 4
 
         def fail_chunk(_chunk, _context, _model):
@@ -315,6 +319,8 @@ class TestAIChunkFailureFidelity:
 
         assert corrected == source
         assert changes == []
+        assert processor.total_chunks == 2
+        assert processor.failed_chunks == 2
 
     @pytest.mark.parametrize("blank_text", ["", "   ", "\n\t"])
     def test_blank_api_text_is_a_failure_not_a_correction(self, blank_text):
@@ -322,6 +328,50 @@ class TestAIChunkFailureFidelity:
             parse_anthropic_response({
                 "content": [{"type": "text", "text": blank_text}],
             })
+
+    def test_multiple_text_blocks_are_joined_without_dropping_content(self):
+        assert parse_anthropic_response({
+            "content": [
+                {"type": "text", "text": "前半段"},
+                {"type": "text", "text": "后半段"},
+            ],
+            "stop_reason": "end_turn",
+        }) == "前半段后半段"
+
+    def test_non_text_response_block_fails_closed(self):
+        with pytest.raises(AIAPIError, match="non-text content block"):
+            parse_anthropic_response({
+                "content": [
+                    {"type": "text", "text": "正文"},
+                    {"type": "tool_use", "id": "tool-1"},
+                ],
+            })
+
+    @pytest.mark.parametrize(
+        "stop_reason",
+        ["max_tokens", "stop_sequence", "pause_turn", "refusal", "tool_use"],
+    )
+    def test_incomplete_api_stop_reason_is_failure(self, stop_reason):
+        with pytest.raises(AIAPIError, match="Incomplete API response"):
+            parse_anthropic_response({
+                "content": [{"type": "text", "text": "partial prefix"}],
+                "stop_reason": stop_reason,
+            })
+
+    def test_truncated_api_payload_retains_complete_source_chunk(self):
+        source = "这是必须完整保留的转写正文，后半部分包含关键决策和数字一二三四五。"
+        processor = AIProcessor(api_key="test", fallback_model="")
+
+        def truncated_payload(_chunk, _context, _model):
+            return parse_anthropic_response({
+                "content": [{"type": "text", "text": "这是必须完整保留的转写正文，"}],
+                "stop_reason": "max_tokens",
+            })
+
+        processor._process_chunk = truncated_payload
+        corrected, changes = processor.process(source)
+        assert corrected == source
+        assert changes == []
 
     def test_empty_success_payload_falls_back_to_original_chunk(self):
         source = "这段原文绝不能丢。"
@@ -355,7 +405,9 @@ class TestAIChunkFailureFidelity:
 
     def test_sync_ai_cannot_modify_speaker_label_prefix(self):
         source = "spekarA 00:01:00\n正文 spekarA"
-        processor = AIProcessor(api_key="test", fallback_model="")
+        processor = AIProcessor(
+            api_key="test", fallback_model="", speaker_labels={"spekarA"}
+        )
         processor._process_chunk = (
             lambda chunk, _context, _model: chunk.replace("spekarA", "Speaker A")
         )
@@ -384,6 +436,8 @@ class TestAIChunkFailureFidelity:
         assert [(change.from_text, change.to_text) for change in changes] == [
             ("meetng", "meeting")
         ]
+        assert changes[0].model == "fallback"
+        assert processor.models_used == {"fallback"}
 
     def test_sync_ai_edits_short_timestamp_ended_prose(self):
         source = "会议开时 00:01:00\n下一行开时"
@@ -400,7 +454,9 @@ class TestAIChunkFailureFidelity:
     @pytest.mark.asyncio
     async def test_async_ai_cannot_modify_speaker_label_prefix(self):
         source = "spekarA 00:01:00\n正文 spekarA"
-        processor = AIProcessorAsync(api_key="test", fallback_model="")
+        processor = AIProcessorAsync(
+            api_key="test", fallback_model="", speaker_labels={"spekarA"}
+        )
 
         async def replace_body(_index, chunk, _context, _semaphore, _total):
             return ChunkResult(chunk.replace("spekarA", "Speaker A"))
@@ -428,6 +484,61 @@ class TestAIChunkFailureFidelity:
             ("meetng", "meeting")
         ]
         assert changes[0].learnable is True
+
+    def test_long_rewrite_is_historical_but_not_learnable(self):
+        changes = ChangeExtractor().extract_changes("a" * 51, "b" * 51)
+        assert [(change.from_text, change.to_text) for change in changes] == [
+            ("a" * 51, "b" * 51)
+        ]
+        assert changes[0].learnable is False
+
+    @pytest.mark.asyncio
+    async def test_async_tracks_every_change_past_old_sampling_limit(
+        self, monkeypatch
+    ):
+        import core.ai_processor_async as async_module
+
+        chunks = ["meetng"] * 1001
+        source = "|".join(chunks)
+        processor = AIProcessorAsync(api_key="test", fallback_model="")
+
+        monkeypatch.setattr(async_module, "split_into_chunks", lambda *_args: chunks)
+
+        async def fix_chunk(_index, _chunk, _context, _semaphore, _total):
+            return ChunkResult("meeting", model_used="primary")
+
+        processor._process_chunk_with_semaphore = fix_chunk
+        corrected, changes = await processor._process_async(source, "")
+
+        assert corrected.count("meeting") == 1001
+        assert len(changes) == 1001
+        assert all(change.model == "primary" for change in changes)
+
+    @pytest.mark.asyncio
+    async def test_async_fallback_success_records_actual_model(
+        self, monkeypatch
+    ):
+        processor = AIProcessorAsync(
+            api_key="test",
+            model="primary",
+            fallback_model="fallback",
+        )
+
+        async def primary_then_fallback(_chunk, _context, model):
+            if model == "primary":
+                raise RuntimeError("primary unavailable")
+            return "meeting"
+
+        processor._process_chunk_async = primary_then_fallback
+        monkeypatch.setattr(asyncio, "sleep", AsyncMock())
+        corrected, changes = await processor._process_async("meetng", "")
+
+        assert corrected == "meeting"
+        assert [(change.from_text, change.to_text) for change in changes] == [
+            ("meetng", "meeting")
+        ]
+        assert changes[0].model == "fallback"
+        assert processor.models_used == {"fallback"}
 
     @pytest.mark.asyncio
     async def test_async_ai_edits_short_timestamp_ended_prose(self):
@@ -473,10 +584,13 @@ class TestAIChunkFailureFidelity:
                 "SELECT stage2_changes FROM correction_history"
             ).fetchone()[0]
             change_row = conn.execute(
-                "SELECT from_text, to_text FROM correction_changes"
+                """
+                SELECT from_text, to_text, learnable, change_type, model
+                FROM correction_changes
+                """
             ).fetchone()
         assert history_count == 1
-        assert change_row == ("meetng", "meeting")
+        assert change_row == ("meetng", "meeting", 1, "word", None)
 
     def test_unanchored_insert_delete_are_historical_but_not_learnable(self):
         extractor = ChangeExtractor()
@@ -558,6 +672,32 @@ class TestAIChunkFailureFidelity:
         assert changes == []
         assert "successes=0, failures=10" in caplog.text
         assert "returning degraded output" in caplog.text
+        assert processor.total_chunks == 10
+        assert processor.failed_chunks == 10
+
+    def test_degraded_stage2_status_is_persisted(self, correction_repository):
+        service = CorrectionService(correction_repository)
+        history_id = service.save_history(
+            filename="failed.md",
+            domain="test-domain",
+            original_length=10,
+            stage1_changes=0,
+            stage2_changes=0,
+            model="primary",
+            changes=[],
+            success=False,
+            error_message="1/1 API chunks failed; original text retained",
+        )
+
+        with sqlite3.connect(correction_repository.db_path) as conn:
+            row = conn.execute(
+                """
+                SELECT success, error_message
+                FROM correction_history WHERE id = ?
+                """,
+                (history_id,),
+            ).fetchone()
+        assert row == (0, "1/1 API chunks failed; original text retained")
 
     @pytest.mark.asyncio
     async def test_async_blank_http_payload_uses_failure_fallback(
@@ -604,6 +744,13 @@ class TestAIChunkFailureFidelity:
                 ["第一段", "missing"],
                 ["甲", "乙"],
             )
+
+    @pytest.mark.parametrize("size", [6001, 100_000])
+    def test_unpunctuated_paragraph_never_exceeds_chunk_limit(self, size):
+        source = "甲" * size
+        chunks = split_into_chunks(source, 6000)
+        assert "".join(chunks) == source
+        assert max(map(len, chunks)) <= 6000
 
 
 # ==================== Concurrency Error Recovery Tests ====================
@@ -836,6 +983,273 @@ class TestDataCorruptionRecovery:
         except InputValidationError as e:
             # Expected - validation caught the issue
             assert "UTF-8" in str(e) or "encoding" in str(e).lower()
+
+
+class TestConfigurationContractRecovery:
+    """Diagnostics must inspect the same paths and runtime floor as the CLI."""
+
+    def test_validate_honors_config_and_database_overrides(
+        self, tmp_path, monkeypatch
+    ):
+        from utils.config import reset_config
+        from utils.validation import validate_configuration
+
+        config_dir = tmp_path / "custom-config"
+        config_dir.mkdir()
+        db_path = tmp_path / "custom-data" / "corrections.db"
+        db_path.parent.mkdir()
+        repository = CorrectionRepository(db_path)
+        repository.close()
+
+        monkeypatch.setenv("TRANSCRIPT_FIXER_CONFIG_DIR", str(config_dir))
+        monkeypatch.setenv("TRANSCRIPT_FIXER_DB_PATH", str(db_path))
+        reset_config()
+        try:
+            errors, _warnings = validate_configuration()
+        finally:
+            reset_config()
+
+        assert errors == []
+
+    def test_environment_feature_flags_override_config_file(
+        self, tmp_path, monkeypatch
+    ):
+        from utils.config import get_config, reset_config
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "config.json").write_text(
+            '{"features":{"enable_learning":true,'
+            '"enable_metrics":true,"enable_auto_approval":true},'
+            '"resources":{"max_concurrent_tasks":9}}',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("TRANSCRIPT_FIXER_CONFIG_DIR", str(config_dir))
+        monkeypatch.setenv("TRANSCRIPT_FIXER_ENABLE_LEARNING", "0")
+        monkeypatch.setenv("TRANSCRIPT_FIXER_ENABLE_METRICS", "0")
+        monkeypatch.setenv("TRANSCRIPT_FIXER_AUTO_APPROVE", "0")
+        monkeypatch.setenv("TRANSCRIPT_FIXER_MAX_CONCURRENT", "3")
+        reset_config()
+        try:
+            config = get_config()
+        finally:
+            reset_config()
+
+        assert config.features.enable_learning is False
+        assert config.features.enable_metrics is False
+        assert config.features.enable_auto_approval is False
+        assert config.resources.max_concurrent_tasks == 3
+
+    def test_health_python_floor_matches_pep_metadata(
+        self, tmp_path, monkeypatch
+    ):
+        from collections import namedtuple
+        from utils.config import reset_config
+        from utils.health_check import HealthChecker, HealthStatus
+
+        VersionInfo = namedtuple("VersionInfo", "major minor micro")
+        monkeypatch.setenv("TRANSCRIPT_FIXER_CONFIG_DIR", str(tmp_path))
+        reset_config()
+        try:
+            checker = HealthChecker(config_dir=tmp_path)
+            monkeypatch.setattr(sys, "version_info", VersionInfo(3, 9, 19))
+            old = checker._check_python_version()
+            monkeypatch.setattr(sys, "version_info", VersionInfo(3, 14, 0))
+            current = checker._check_python_version()
+        finally:
+            reset_config()
+
+        assert old.status == HealthStatus.UNHEALTHY
+        assert old.details["minimum"] == "3.10"
+        assert current.status == HealthStatus.HEALTHY
+
+    @pytest.mark.parametrize(
+        ("max_file_size", "max_text_length", "expected"),
+        [(10, 1000, "max_file_size"), (1000, 10, "max_text_length")],
+    )
+    def test_cli_enforces_configured_resource_limits(
+        self,
+        tmp_path,
+        capsys,
+        max_file_size,
+        max_text_length,
+        expected,
+    ):
+        from argparse import Namespace
+        from cli.commands import cmd_run_correction
+        from utils.config import (
+            Config,
+            DatabaseConfig,
+            PathConfig,
+            ResourceLimits,
+            reset_config,
+            set_config,
+        )
+
+        input_path = tmp_path / "meeting.md"
+        input_path.write_text("一" * 20, encoding="utf-8")
+        config = Config(
+            database=DatabaseConfig(path=tmp_path / "corrections.db"),
+            paths=PathConfig(
+                config_dir=tmp_path,
+                data_dir=tmp_path / "data",
+                log_dir=tmp_path / "logs",
+                cache_dir=tmp_path / "cache",
+            ),
+            resources=ResourceLimits(
+                max_text_length=max_text_length,
+                max_file_size=max_file_size,
+                max_concurrent_tasks=2,
+            ),
+        )
+        set_config(config)
+        try:
+            with pytest.raises(SystemExit) as exc_info:
+                cmd_run_correction(Namespace(
+                    input=str(input_path), output=None, stage=1,
+                    domain="zzz_test_empty_domain", dry_run=False,
+                    apply_all=False, changes_file=False,
+                    people_roster=None, apply_domain=False,
+                ))
+        finally:
+            reset_config()
+
+        assert exc_info.value.code == 1
+        assert expected in capsys.readouterr().out
+
+    def test_cli_learning_flag_prevents_learning_call(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        from argparse import Namespace
+        import core
+        import cli.commands as commands
+        from utils.config import (
+            APIConfig,
+            Config,
+            DatabaseConfig,
+            FeatureFlags,
+            PathConfig,
+            reset_config,
+            set_config,
+        )
+
+        input_path = tmp_path / "meeting.md"
+        input_path.write_text("meetng", encoding="utf-8")
+
+        class FakeAIProcessor:
+            model = "primary"
+            models_used = {"primary"}
+            total_chunks = 1
+            failed_chunks = 0
+
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def process(self, _text):
+                return "meeting", [
+                    AIChange(
+                        1, "meetng", "meeting", 0.99,
+                        change_type="word", learnable=True, model="primary",
+                    )
+                    for _ in range(5)
+                ]
+
+        config = Config(
+            database=DatabaseConfig(path=tmp_path / "corrections.db"),
+            api=APIConfig(api_key="test"),
+            paths=PathConfig(
+                config_dir=tmp_path,
+                data_dir=tmp_path / "data",
+                log_dir=tmp_path / "logs",
+                cache_dir=tmp_path / "cache",
+            ),
+            features=FeatureFlags(
+                enable_learning=False,
+                enable_auto_approval=False,
+            ),
+        )
+        set_config(config)
+        monkeypatch.setattr(core, "AIProcessor", FakeAIProcessor)
+        monkeypatch.setattr(
+            commands,
+            "_get_learning_engine",
+            lambda *_args: pytest.fail("learning engine must stay disabled"),
+        )
+        try:
+            result = commands.cmd_run_correction(Namespace(
+                input=str(input_path), output=None, stage=2,
+                domain="zzz_test_empty_domain", dry_run=False,
+                apply_all=False, changes_file=False,
+                people_roster=None, apply_domain=False,
+            ))
+        finally:
+            reset_config()
+
+        assert result["stage2_degraded"] is False
+        assert "Learning System: disabled" in capsys.readouterr().out
+
+    def test_cli_persists_degraded_api_status(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        from argparse import Namespace
+        import core
+        import cli.commands as commands
+        from utils.config import (
+            APIConfig,
+            Config,
+            DatabaseConfig,
+            PathConfig,
+            reset_config,
+            set_config,
+        )
+
+        input_path = tmp_path / "meeting.md"
+        input_path.write_text("原文", encoding="utf-8")
+
+        class FailedAIProcessor:
+            model = "primary"
+            models_used: set[str] = set()
+            total_chunks = 1
+            failed_chunks = 1
+
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def process(self, text):
+                return text, []
+
+        config = Config(
+            database=DatabaseConfig(path=tmp_path / "corrections.db"),
+            api=APIConfig(api_key="test"),
+            paths=PathConfig(
+                config_dir=tmp_path,
+                data_dir=tmp_path / "data",
+                log_dir=tmp_path / "logs",
+                cache_dir=tmp_path / "cache",
+            ),
+        )
+        set_config(config)
+        monkeypatch.setattr(core, "AIProcessor", FailedAIProcessor)
+        try:
+            result = commands.cmd_run_correction(Namespace(
+                input=str(input_path), output=None, stage=2,
+                domain="zzz_test_empty_domain", dry_run=False,
+                apply_all=False, changes_file=False,
+                people_roster=None, apply_domain=False,
+            ))
+        finally:
+            reset_config()
+
+        with sqlite3.connect(config.database.path) as conn:
+            history = conn.execute(
+                "SELECT success, error_message FROM correction_history"
+            ).fetchone()
+
+        assert result["stage2_degraded"] is True
+        assert result["stage2_failed_chunks"] == 1
+        assert history[0] == 0
+        assert "1/1 API chunks failed" in history[1]
+        assert "degraded Stage 2" in capsys.readouterr().out
 
 
 # ==================== Integration Error Recovery Tests ====================

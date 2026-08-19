@@ -10,13 +10,14 @@ import tempfile
 import shutil
 import argparse
 import json
+import sqlite3
 from pathlib import Path
 import sys
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.correction_repository import CorrectionRepository
+from core.correction_repository import CorrectionRepository, DatabaseError
 from core.correction_service import CorrectionService, ValidationError
 
 
@@ -130,6 +131,24 @@ class TestCorrectionService(unittest.TestCase):
         # Verify updated
         corrections = self.service.get_corrections("general")
         self.assertEqual(corrections["错误"], "正确B")
+
+    def test_automated_insert_cannot_overwrite_concurrent_human_rule(self):
+        self.service.add_correction(
+            "meetng", "meeting", "general", source="manual"
+        )
+
+        with self.assertRaises(ValidationError):
+            self.service.add_correction(
+                "meetng",
+                "meetingX",
+                "general",
+                source="learned",
+                confidence=0.99,
+                update_existing=False,
+            )
+
+        corrections = self.service.get_corrections("general")
+        self.assertEqual(corrections["meetng"], "meeting")
 
     def test_get_corrections_multiple_domains(self):
         """Test getting corrections from different domains."""
@@ -270,7 +289,9 @@ class TestCorrectionService(unittest.TestCase):
                 confidence=0.95,
                 context_before="调用一下 ",
                 context_after=" 这种第三方",
-                # Default change_type is "unknown"; save_history must map it to "ai"
+                change_type="word",
+                learnable=True,
+                model="fallback-model",
             ),
         ]
 
@@ -303,6 +324,122 @@ class TestCorrectionService(unittest.TestCase):
             ).fetchall()
             self.assertEqual(rule_types[0][0], "dictionary")
             self.assertEqual(rule_types[1][0], "ai")
+
+            audit_fields = conn.execute(
+                """
+                SELECT change_type, learnable, model
+                FROM correction_changes
+                WHERE history_id = ? AND rule_type = 'ai'
+                """,
+                (history[0],),
+            ).fetchone()
+            self.assertEqual(tuple(audit_fields), ("word", 1, "fallback-model"))
+
+    def test_save_history_failure_propagates_and_rolls_back(self):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DROP TABLE correction_changes")
+
+        with self.assertRaises(DatabaseError):
+            self.service.save_history(
+                filename="test.md",
+                domain="test_domain",
+                original_length=6,
+                stage1_changes=0,
+                stage2_changes=1,
+                model="test-model",
+                changes=[{
+                    "line_number": 1,
+                    "from_text": "meetng",
+                    "to_text": "meeting",
+                    "rule_type": "ai",
+                }],
+            )
+
+        with sqlite3.connect(self.db_path) as conn:
+            history_count = conn.execute(
+                "SELECT COUNT(*) FROM correction_history"
+            ).fetchone()[0]
+        self.assertEqual(history_count, 0)
+
+    def test_existing_database_migrates_change_learning_metadata(self):
+        legacy_db = self.test_dir / "legacy.db"
+        with sqlite3.connect(legacy_db) as conn:
+            conn.execute(
+                """
+                CREATE TABLE correction_changes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    history_id INTEGER NOT NULL,
+                    line_number INTEGER,
+                    from_text TEXT NOT NULL,
+                    to_text TEXT NOT NULL,
+                    rule_type TEXT NOT NULL,
+                    rule_id INTEGER,
+                    context_before TEXT,
+                    context_after TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE system_config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    value_type TEXT NOT NULL,
+                    description TEXT,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO system_config
+                (key, value, value_type, description)
+                VALUES ('schema_version', '2.3', 'string', 'legacy')
+                """
+            )
+            conn.executemany(
+                """
+                INSERT INTO correction_changes
+                (history_id, from_text, to_text, rule_type)
+                VALUES (1, ?, ?, 'ai')
+                """,
+                [
+                    ("OpenAI", "openai"),
+                    ("。", "，"),
+                    ("meetng", "meeting"),
+                ],
+            )
+
+        legacy_repo = CorrectionRepository(legacy_db)
+        try:
+            with sqlite3.connect(legacy_db) as conn:
+                columns = {
+                    row[1] for row in conn.execute(
+                        "PRAGMA table_info(correction_changes)"
+                    )
+                }
+                migrated = conn.execute(
+                    """
+                    SELECT from_text, change_type, learnable, model
+                    FROM correction_changes
+                    ORDER BY id
+                    """
+                ).fetchall()
+                schema_version = conn.execute(
+                    "SELECT value FROM system_config WHERE key = 'schema_version'"
+                ).fetchone()[0]
+            self.assertTrue({"change_type", "learnable", "model"} <= columns)
+            self.assertEqual(migrated, [
+                ("OpenAI", "formatting", 0, None),
+                ("。", "unknown", 0, None),
+                ("meetng", "unknown", 1, None),
+            ])
+            # The separate migration registry owns schema-version history.
+            # This idempotent compatibility repair must not downgrade or claim
+            # an unrelated migration version.
+            self.assertEqual(schema_version, "2.3")
+        finally:
+            legacy_repo.close()
 
     # ==================== Statistics Tests ====================
 

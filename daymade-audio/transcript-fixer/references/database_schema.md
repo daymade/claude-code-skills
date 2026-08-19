@@ -93,6 +93,9 @@ Detailed changes made in each correction run.
 | rule_id | INTEGER | Reference to rule used |
 | context_before | TEXT | Text before change |
 | context_after | TEXT | Text after change |
+| change_type | TEXT | word / phrase / insertion / deletion / formatting / unknown |
+| learnable | BOOLEAN | Whether persisted-history learning may consume this row |
+| model | TEXT | Model that actually emitted this change (primary or fallback) |
 
 ### system_config
 
@@ -106,7 +109,7 @@ Key-value configuration store.
 | description | TEXT | What this config does |
 | updated_at | TIMESTAMP | Last update |
 
-**Default configs**: the authoritative default set (12 keys) lives in `scripts/core/defaults.py` (`SYSTEM_CONFIG_DEFAULTS`) — don't hand-copy it here, it drifts. Common keys include `schema_version` ('2.0'), `api_model`, `learning_frequency_threshold`, `learning_confidence_threshold`, `history_retention_days`. To see the live values: `SELECT key, value FROM system_config;`
+**Default configs**: the authoritative default set lives in `scripts/core/defaults.py` (`SYSTEM_CONFIG_DEFAULTS`) — don't hand-copy the full set here, it drifts. Current schema version is `2.0`; other common keys include `api_model`, `learning_frequency_threshold`, `learning_confidence_threshold`, and `history_retention_days`. To see live values: `SELECT key, value FROM system_config;`
 
 ### audit_log
 

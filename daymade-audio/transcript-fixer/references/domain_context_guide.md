@@ -57,7 +57,8 @@ For each trap:
 - **<wrong> → <right>** — the disambiguating cue: WHEN is the right reading
   intended? Add a dated real example if you have one.
 - Wrap an exact multi-word ASR form in backticks, for example
-  **`CC 思维链` → CC Switch**. The spaces are part of the literal scan target.
+  **`CC 思维链` → 目标术语**. The spaces are part of the literal scan target;
+  replace the synthetic target with the domain's intended term.
 - Order by frequency; prune entries that stop recurring.
 
 ## Authoritative name sources (pointers, not copies)
@@ -121,7 +122,7 @@ word, so it's a deterministic fix and went to the dictionary via
      use this shape:
 
      ~~~markdown
-     - **`CC 思维链`/`CC switch` → CC Switch** — client/API configuration cue
+     - **`CC 思维链`/`CC 思维连` → 目标术语** — domain-specific cue
      ~~~
 
      Bare whitespace remains unparseable because it is indistinguishable from

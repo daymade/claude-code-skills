@@ -48,6 +48,7 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 - `--review` (deprecated): No-op kept for backward compatibility; safe mode is now the default.
 - `--dry-run` (optional): Preview Stage 1 changes to `*_dryrun.md` without writing `*_stage1.md`.
 - `--changes-file` (optional): Always write `*_changes.md` (already on by default in safe mode).
+- `--json` (optional): Emit the Stage 1 contract fields (`applied`, `deferred`, `output_path`, `needs_review_path`, `input_unchanged`, `review_enqueued`). Stage 2/3 runs add `stage2_total_chunks`, `stage2_failed_chunks`, and `stage2_degraded`; any failed chunk is retained from source and makes `stage2_degraded` true, so automation must not equate exit 0 with a fully corrected API pass.
 
 **Evidence commands** (read-only; turn the native pass's manual grep loops into single invocations — semantics in [native_ai_full_workflow.md](native_ai_full_workflow.md) steps 4-6):
 

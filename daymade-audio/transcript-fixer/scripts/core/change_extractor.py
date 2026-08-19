@@ -77,11 +77,10 @@ class ChangeExtractor:
         Initialize extractor
 
         Args:
-            min_change_length: Ignore changes shorter than this (chars)
-                              - Helps filter noise like single punctuation
-                              - Must be >= 1
-            max_change_length: Ignore changes longer than this (chars)
-                              - Helps filter large rewrites (not corrections)
+            min_change_length: Minimum replayable learning-pair length
+            - Must be >= 1
+            max_change_length: Maximum replayable learning-pair length. Larger
+                              edits remain in audit history but never auto-learn.
                               - Must be > min_change_length
 
         Raises:
@@ -251,9 +250,11 @@ class ChangeExtractor:
                 from_text = original[original_start:original_end]
                 to_text = corrected[corrected_start:corrected_end]
 
-                # Filter by length
-                if not self._is_valid_change_length(from_text, to_text):
+                if not self._is_material_change(from_text, to_text):
                     continue
+                learnable_length = self._is_learnable_change_length(
+                    from_text, to_text
+                )
 
                 formatting_only = self._is_formatting_only(from_text, to_text)
 
@@ -293,6 +294,7 @@ class ChangeExtractor:
                     confidence=confidence,
                     learnable=(
                         learnable
+                        and learnable_length
                         and not formatting_only
                         and bool(clean_from)
                         and bool(clean_to)
@@ -302,11 +304,12 @@ class ChangeExtractor:
                 ))
 
                 # CRITICAL FIX: Prevent DoS from excessive changes
-                if len(changes) >= MAX_CHANGES:
-                    logger.warning(
-                        f"Reached maximum changes limit ({MAX_CHANGES}), stopping extraction"
+                if len(changes) > MAX_CHANGES:
+                    raise InputValidationError(
+                        "Correction produced more than "
+                        f"{MAX_CHANGES} auditable changes; refusing to truncate "
+                        "history for modified text"
                     )
-                    break
 
         logger.debug(f"Extracted {len(changes)} changes")
         return changes
@@ -615,8 +618,13 @@ class ChangeExtractor:
 
         return round(final_confidence, 2)
 
-    def _is_valid_change_length(self, from_text: str, to_text: str) -> bool:
-        """Check if change is within valid length range"""
+    @staticmethod
+    def _is_material_change(from_text: str, to_text: str) -> bool:
+        """Return whether the opcode represents any actual mutation."""
+        return from_text != to_text and bool(from_text or to_text)
+
+    def _is_learnable_change_length(self, from_text: str, to_text: str) -> bool:
+        """Bound dictionary learning without deleting the audit record."""
         from_len = len(from_text.strip())
         to_len = len(to_text.strip())
 

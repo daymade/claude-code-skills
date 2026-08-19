@@ -294,18 +294,18 @@ class TestDroppedCoverage:
         """Whitespace is ambiguous in bare prose but exact inside backticks."""
         dropped = []
         entries = extract_trap_entries(
-            "- **`CC 思维链`/`CC switch` → CC Switch** — 客户端配置语境。\n",
+            "- **`CC 思维链`/`CC 思维连` → 目标术语** — 领域配置语境。\n",
             dropped,
         )
         assert dropped == []
         assert len(entries) == 1
-        assert entries[0].from_variants == ("CC 思维链", "CC switch")
+        assert entries[0].from_variants == ("CC 思维链", "CC 思维连")
 
     def test_long_explicit_literal_bypasses_bare_term_length_cap(self):
         """A quoted exact phrase is author-declared data, not captured prose."""
         dropped = []
         entries = extract_trap_entries(
-            "- **`Claude Code 思维链配置` → Claude Code Switch**\n",
+            "- **`Claude Code 思维链配置` → 目标术语**\n",
             dropped,
         )
         hits = scan_text("正文含 Claude Code 思维链配置。", entries)

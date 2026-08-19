@@ -13,7 +13,7 @@ Features:
 
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import Collection, List, Tuple
 import httpx
 
 from .ai_utils import (
@@ -52,7 +52,8 @@ class AIProcessor:
 
     def __init__(self, api_key: str, model: str = DEFAULT_MODEL,
                  base_url: str = API_BASE_URL,
-                 fallback_model: str = FALLBACK_MODEL):
+                 fallback_model: str = FALLBACK_MODEL,
+                 speaker_labels: Collection[str] = ()):
         """
         Initialize AI processor
 
@@ -61,6 +62,7 @@ class AIProcessor:
             model: Model name (default: GLM-5.2)
             base_url: API base URL
             fallback_model: Fallback model on primary failure
+            speaker_labels: Explicit bare labels from a roster/manifest
         """
         self.api_key = api_key
         self.model = model
@@ -68,6 +70,10 @@ class AIProcessor:
         self.base_url = base_url
         self.max_chunk_size = 6000  # Characters per chunk
         self.change_extractor = ChangeExtractor()
+        self.models_used: set[str] = set()
+        self.speaker_labels = set(speaker_labels)
+        self.total_chunks = 0
+        self.failed_chunks = 0
 
     def process(self, text: str, context: str = "") -> Tuple[str, List[AIChange]]:
         """
@@ -80,8 +86,13 @@ class AIProcessor:
         Returns:
             (corrected_text, list_of_changes)
         """
-        projected_text, speaker_spans = mask_speaker_labels(text)
+        projected_text, speaker_spans = mask_speaker_labels(
+            text, self.speaker_labels
+        )
+        self.models_used.clear()
         chunks = split_into_chunks(projected_text, self.max_chunk_size)
+        self.total_chunks = len(chunks)
+        self.failed_chunks = 0
         corrected_chunks = []
         all_changes = []
 
@@ -91,10 +102,13 @@ class AIProcessor:
             print(f"   Chunk {i}/{len(chunks)}... ", end="", flush=True)
             corrected_chunk = chunk
             api_succeeded = False
+            model_used: str | None = None
 
             try:
                 corrected_chunk = self._process_chunk(chunk, context, self.model)
                 api_succeeded = True
+                model_used = self.model
+                self.models_used.add(self.model)
                 print("✓")
 
             except Exception as e:
@@ -106,12 +120,15 @@ class AIProcessor:
                     try:
                         corrected_chunk = self._process_chunk(chunk, context, self.fallback_model)
                         api_succeeded = True
+                        model_used = self.fallback_model
+                        self.models_used.add(self.fallback_model)
                         print("✓")
                     except Exception as e2:
                         print(f"✗ {str(e2)[:50]}")
 
                 if not api_succeeded:
                     print("   Using original text...")
+                    self.failed_chunks += 1
 
             corrected_chunks.append(corrected_chunk)
             if api_succeeded and corrected_chunk != chunk:
@@ -133,6 +150,7 @@ class AIProcessor:
                         context_after=change.context_after,
                         change_type=change.change_type,
                         learnable=change.learnable,
+                        model=model_used,
                     ))
 
         corrected_text = reassemble_corrected_chunks(

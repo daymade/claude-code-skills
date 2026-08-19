@@ -37,14 +37,9 @@ logger = logging.getLogger(__name__)
 # NOT in this list (e.g. `keywords:`) are still processed — metadata is a
 # search surface too.
 _LEDGER_FRONTMATTER_KEYS = ("asr_note",)
-_LEDGER_FILL = "□"  # U+25A1
-# Sentinel anchoring, not bare filler runs: a transcript body can legitimately
-# contain □ (checkbox glyph / illegible-speech convention), so locating the
-# mask by "all □ runs in the document" misfires on healthy input (2026-08-18
-# review repro: one body □ + one asr_note → the old run-count guard raised and
-# killed the whole Stage 1 run). The sentinel carries the span index and is
-# collision-proof by construction; the □ padding after it only preserves
-# length and is never searched for.
+# Sentinel anchoring contains no matcher-visible padding: a transcript body can
+# legitimately contain □ (checkbox glyph / illegible-speech convention), and a
+# rule for that symbol must never disable ledger protection.
 _LEDGER_SENTINEL = "⟪TFLEDGER{}⟫"
 
 
@@ -52,11 +47,9 @@ def _mask_ledger_spans(text: str) -> Tuple[str, List[Tuple[int, str]]]:
     """Mask ledger-field values in a leading YAML frontmatter block.
 
     Returns (masked_text, [(masked_length, original_value), ...]) in document
-    order. Each masked value becomes `⟪TFLEDGER{i}⟫` + □ padding to the
-    original length — or, for a value shorter than its sentinel, just the
-    sentinel (masked_length < original length there; line numbers are still
-    exact either way, because Change.line_number counts newlines, and the
-    splice-back below locates by sentinel, never by offset). Only the value
+    order. Each masked value becomes `⟪TFLEDGER{i}⟫`. The projection need not
+    preserve columns: Change.line_number counts newlines, and restore locates
+    the sentinel rather than an absolute offset. Only the value
     portion of a single-line `key: value` is masked. Multi-line YAML values
     (`asr_note: |` / `>` / folded, optionally with a trailing `# comment`)
     are deliberately SKIPPED — no span is recorded and nothing is masked,
@@ -99,11 +92,7 @@ def _mask_ledger_spans(text: str) -> Tuple[str, List[Tuple[int, str]]]:
             )
             continue
         sentinel = _LEDGER_SENTINEL.format(len(spans))
-        masked_value = (
-            sentinel + _LEDGER_FILL * (len(value) - len(sentinel))
-            if len(value) >= len(sentinel)
-            else sentinel  # short ledger: sentinel alone (shorter, still safe)
-        )
+        masked_value = sentinel
         spans.append((len(masked_value), value))
         lines[i] = line[: m.start(2)] + masked_value
     if not spans:
@@ -115,7 +104,7 @@ def _restore_ledger_spans(text: str, spans: List[Tuple[int, str]]) -> str:
     """Splice masked ledger values back, located by each span's sentinel — not
     by filler runs or absolute position, so natural □ in the body and
     length-changing corrections elsewhere cannot shift the anchor. Fail-
-    closed: a missing sentinel or damaged padding means the pipeline mangled
+    closed: a missing/damaged sentinel means the pipeline mangled
     the mask, and returning silently would ship a corrupted file."""
     out = text
     # splice from the last span so earlier sentinels keep their positions
@@ -128,12 +117,6 @@ def _restore_ledger_spans(text: str, spans: List[Tuple[int, str]]) -> str:
                 f"ledger mask restore: sentinel {sentinel} missing — "
                 f"refusing to ship a corrupted file"
             )
-        pad = out[pos + len(sentinel) : pos + masked_len]
-        if pad != _LEDGER_FILL * (masked_len - len(sentinel)):
-            raise ValueError(
-                "ledger mask padding damaged (a dictionary rule matched the "
-                "□ filler?) — refusing to restore"
-            )
         out = out[:pos] + value + out[pos + masked_len :]
     return out
 
@@ -142,7 +125,7 @@ def project_without_ledger_values(text: str) -> str:
     """Return a scan projection with single-line ledger values removed.
 
     Matchers that only need line numbers must not scan the ledger's old-form
-    citations *or* the internal filler used by Stage 1's reversible mask. This
+    citations or Stage 1's reversible sentinel. This
     projection reuses the same frontmatter parser, removes each generated mask
     span entirely, and preserves every newline. Other frontmatter and body
     text remain byte-for-byte visible to the matcher.
@@ -182,7 +165,8 @@ class DictionaryProcessor:
     """
 
     def __init__(self, corrections: Dict[str, str], context_rules: List[Dict],
-                 correction_meta: Optional[Dict[str, Dict]] = None):
+                 correction_meta: Optional[Dict[str, Dict]] = None,
+                 speaker_labels: Optional[set[str]] = None):
         """
         Initialize processor with corrections and rules
 
@@ -191,10 +175,13 @@ class DictionaryProcessor:
             context_rules: List of context-aware regex rules
             correction_meta: Optional metadata per correction key,
                 e.g. {"wrong": {"confidence": 0.95, "notes": "..."}}
+            speaker_labels: Explicit bare labels from a roster/manifest. Use
+                this for aliases whose text is indistinguishable from prose.
         """
         self.corrections = corrections
         self.context_rules = context_rules
         self.correction_meta = correction_meta or {}
+        self.speaker_labels = speaker_labels or set()
 
     def process(self, text: str, review_mode: bool = False) -> Tuple[str, List[Change]]:
         """
@@ -216,21 +203,9 @@ class DictionaryProcessor:
         # Mask correction-ledger frontmatter fields (asr_note) so the verbatim
         # old forms they cite never match; spliced back before returning.
         masked_text, ledger_spans = _mask_ledger_spans(text)
-        if ledger_spans and any(
-            _LEDGER_FILL in wrong or "⟪TFLEDGER" in wrong for wrong in self.corrections
-        ) or ledger_spans and any(
-            _LEDGER_FILL in r.get("pattern", "") or "⟪TFLEDGER" in r.get("pattern", "")
-            for r in self.context_rules
-        ):
-            # A rule that matches the mask filler/sentinel would rewrite the
-            # mask itself and trip the restore guard. Degrade honestly: run
-            # unprotected rather than crash on a healthy file.
-            logger.warning(
-                "a dictionary/context rule matches the ledger mask "
-                "filler/sentinel — asr_note protection disabled for this run"
-            )
-            masked_text, ledger_spans = text, []
-        masked_text, speaker_spans = mask_speaker_labels(masked_text)
+        masked_text, speaker_spans = mask_speaker_labels(
+            masked_text, self.speaker_labels
+        )
         corrected_text = masked_text
         all_changes = []
 
@@ -437,7 +412,6 @@ class DictionaryProcessor:
             return False
 
         to_len = len(to_text)
-        from_len = len(from_text)
 
         # Find all positions where from_text appears inside to_text.
         # For each, check if the surrounding text matches to_text.

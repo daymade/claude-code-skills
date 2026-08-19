@@ -28,6 +28,9 @@ SKILL_MD = SKILL_DIR / "SKILL.md"
 REVIEW_QUEUE_MD = SKILL_DIR / "references" / "review_queue_dashboard.md"
 AUDIO_DOCS = (SKILL_MD, REVIEW_QUEUE_MD)
 SERVER_PY = SKILL_DIR / "scripts" / "review-dashboard" / "server.py"
+WORKFLOW_GUIDE = SKILL_DIR / "references" / "workflow_guide.md"
+TROUBLESHOOTING = SKILL_DIR / "references" / "troubleshooting.md"
+FILE_FORMATS = SKILL_DIR / "references" / "file_formats.md"
 
 PRODUCTION_FUNC = "_frontmatter_audio"
 PRODUCTION_IDIOM = 'line.split(":", 1)[1].strip()'
@@ -161,3 +164,18 @@ def test_audio_examples_parse_to_a_usable_path():
                 "button and no error. Move the annotation into prose (or quote the "
                 "value if the path genuinely contains a space and a hash)."
             )
+
+
+def test_dictionary_add_examples_never_add_an_identity_mapping():
+    text = WORKFLOW_GUIDE.read_text(encoding="utf-8")
+    pairs = re.findall(r'--add\s+"([^"]+)"\s+"([^"]+)"', text)
+    assert pairs
+    assert all(source != target for source, target in pairs)
+
+
+def test_missing_table_recovery_uses_the_canonical_uv_entrypoint():
+    for path in (TROUBLESHOOTING, FILE_FORMATS):
+        text = path.read_text(encoding="utf-8")
+        section = text.split("### Missing Tables", 1)[1].split("\n### ", 1)[0]
+        assert "uv run scripts/fix_transcription.py --init" in section
+        assert 'from core import CorrectionRepository' not in section

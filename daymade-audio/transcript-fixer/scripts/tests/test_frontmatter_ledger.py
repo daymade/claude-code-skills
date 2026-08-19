@@ -88,9 +88,10 @@ class TestLedgerMasking:
 
 
 class TestMaskRestorePrimitives:
-    def test_mask_is_length_preserving(self):
+    def test_mask_is_line_preserving_without_business_filler(self):
         masked, spans = _mask_ledger_spans(LEDGER_TRANSCRIPT)
-        assert len(masked) == len(LEDGER_TRANSCRIPT)
+        assert masked.count("\n") == LEDGER_TRANSCRIPT.count("\n")
+        assert "□" not in masked
         assert len(spans) == 1
 
     def test_restore_round_trip(self):
@@ -161,15 +162,15 @@ class TestMaskRestorePrimitives:
             masked, spans = _mask_ledger_spans(text)
             assert spans == [] and masked == text, f"indicator {ind!r} not skipped"
 
-    def test_context_rule_with_fill_char_also_degrades(self):
-        # Round-2 residual: the collision check originally covered only the
-        # dictionary; a context rule with a □ pattern crashed the run.
+    def test_context_rule_with_fill_char_keeps_ledger_protected(self):
         p = DictionaryProcessor(
             corrections={"丹娜": "Dyna"},
             context_rules=[{"pattern": "□", "replacement": "[不清]", "description": "fill"}],
         )
         text = "---\nasr_note: 修正含：丹娜→Dyna、图度→苏度。\n---\n\n清单：□ 已登录。聊丹娜。\n"
         corrected, _ = p.process(text)  # must not raise
+        assert "asr_note: 修正含：丹娜→Dyna、图度→苏度。" in corrected
+        assert "清单：[不清] 已登录。" in corrected
         assert "聊Dyna。" in corrected
 
     def test_short_ledger_value_still_protected(self):
@@ -182,17 +183,13 @@ class TestMaskRestorePrimitives:
         assert "正文聊Dyna。" in corrected
         assert len(changes) == 1
 
-    def test_dictionary_fill_rule_degrades_without_crash(self):
-        # A (pathological) dictionary rule whose from_text contains □ must not
-        # crash a ledger-bearing file: protection disables itself with a
-        # warning instead of tripping the restore guard.
+    def test_dictionary_fill_rule_keeps_ledger_protected(self):
         p = DictionaryProcessor(corrections={"□": "某", "丹娜": "Dyna"}, context_rules=[])
         text = LEDGER_TRANSCRIPT + "课前清单：□ DeepSeek\n"
         corrected, _ = p.process(text)  # must not raise
-        # degraded honestly: with protection off, the ledger is plain text and
-        # its citation gets rewritten — pinned as the known degraded behavior
-        assert "asr_note: 主会已过纠错。修正含：Dyna→Dyna、图度→苏度。未修：小鱼说。" in corrected
+        assert "asr_note: 主会已过纠错。修正含：丹娜→Dyna、图度→苏度。未修：小鱼说。" in corrected
         assert "我们今天聊Dyna这个模型。" in corrected  # body still corrected
+        assert "课前清单：某 DeepSeek" in corrected
 
 
 class TestSpeakerLabelProtection:
@@ -211,6 +208,7 @@ class TestSpeakerLabelProtection:
         processor = DictionaryProcessor(
             corrections={"spekarA": "Speaker A"},
             context_rules=[],
+            speaker_labels={"spekarA", "Ada", "李雷"},
         )
         corrected, changes = processor.process(text, review_mode=False)
         assert corrected == f"{label_line}\n正文 Speaker A"
@@ -225,6 +223,7 @@ class TestSpeakerLabelProtection:
                 "replacement": "Speaker A",
                 "description": "speaker typo",
             }],
+            speaker_labels={"spekarA"},
         )
         corrected, changes = processor.process(text, review_mode=False)
         assert corrected == "spekarA 00:01:00\n正文 Speaker A"
@@ -239,6 +238,7 @@ class TestSpeakerLabelProtection:
         processor = DictionaryProcessor(
             corrections={label: replacement},
             context_rules=[],
+            speaker_labels={label},
         )
         corrected, changes = processor.process(text, review_mode=False)
         assert corrected == f"{label} 00:01:00\n正文 {replacement}"
@@ -279,6 +279,24 @@ class TestSpeakerLabelProtection:
                 "meeting",
                 "Project meeting starts 00:01:00\nnext meeting",
             ),
+            (
+                "会议开时 00:00:09\n下一行开时\n会议开时 00:00:11",
+                "开时",
+                "开始",
+                "会议开始 00:00:09\n下一行开始\n会议开始 00:00:11",
+            ),
+            (
+                "Project Starts 00:00:12\nProject Starts",
+                "Starts",
+                "Begins",
+                "Project Begins 00:00:12\nProject Begins",
+            ),
+            (
+                "meetng 00:00:13\nnext meetng",
+                "meetng",
+                "meeting",
+                "meeting 00:00:13\nnext meeting",
+            ),
         ],
     )
     def test_timestamp_ended_prose_is_not_misclassified_as_a_label(
@@ -294,14 +312,35 @@ class TestSpeakerLabelProtection:
         )
         corrected, changes = processor.process(text, review_mode=False)
         assert corrected == expected
-        assert [change.line_number for change in changes] == [1, 2]
+        expected_lines = [
+            line_number
+            for line_number, line in enumerate(text.splitlines(), start=1)
+            if old in line
+        ]
+        assert [change.line_number for change in changes] == expected_lines
 
-    def test_repeated_bare_alias_is_protected_without_guessing_its_language(self):
+    def test_explicit_roster_alias_is_protected_without_guessing_its_language(self):
         text = "小火 00:01:00\n第一段。\n小火 00:02:00\n第二段。"
-        masked, spans = mask_speaker_labels(text)
+        masked, spans = mask_speaker_labels(text, known_labels={"小火"})
         assert len(spans) == 2
         assert "小火 00:01:00" not in masked
         assert restore_speaker_labels(masked, spans) == text
+
+    def test_repetition_does_not_guess_an_ambiguous_alias(self):
+        text = (
+            "小火 00:01:00\n第一段。\n"
+            "小火 00:02:00\n第二段。\n"
+            "小火 00:03:00\n第三段。"
+        )
+        masked, spans = mask_speaker_labels(text)
+        assert masked == text
+        assert spans == []
+
+    def test_cjk_prose_containing_a_name_token_is_not_protected(self):
+        text = "李雷发言 00:01:00\n正文。"
+        masked, spans = mask_speaker_labels(text)
+        assert masked == text
+        assert spans == []
 
     @pytest.mark.parametrize(
         "phrase",
@@ -316,14 +355,18 @@ class TestSpeakerLabelProtection:
         assert spans == []
 
     def test_damaged_speaker_marker_fails_closed(self):
-        masked, spans = mask_speaker_labels("spekarA 00:01:00\n正文。")
+        masked, spans = mask_speaker_labels(
+            "spekarA 00:01:00\n正文。", known_labels={"spekarA"}
+        )
         assert spans
         damaged = masked.replace(spans[0][0], "marker-damaged")
         with pytest.raises(ValueError, match="uncertain attribution"):
             restore_speaker_labels(damaged, spans)
 
     def test_moved_speaker_marker_fails_closed(self):
-        masked, spans = mask_speaker_labels("spekarA 00:01:00\n正文。")
+        masked, spans = mask_speaker_labels(
+            "spekarA 00:01:00\n正文。", known_labels={"spekarA"}
+        )
         moved = "正文。\n" + spans[0][0]
         with pytest.raises(ValueError, match="uncertain attribution"):
             restore_speaker_labels(moved, spans)

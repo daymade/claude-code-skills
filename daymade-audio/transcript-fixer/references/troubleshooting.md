@@ -180,7 +180,7 @@ mv ~/.transcript-fixer/corrections_new.db ~/.transcript-fixer/corrections.db
 **Solution**: Reinitialize schema (safe, uses IF NOT EXISTS):
 
 ```bash
-python -c "from core import CorrectionRepository; from pathlib import Path; CorrectionRepository(Path.home() / '.transcript-fixer' / 'corrections.db')"
+uv run scripts/fix_transcription.py --init
 ```
 
 Or delete database and reinitialize:

@@ -146,10 +146,10 @@ Read [references/false_positive_guide.md](references/false_positive_guide.md) an
 A context trap is a cue, not permission to replace blindly. `--scan-traps` supports canonical `→` and legacy `≈` mappings with the same directional contract: left is observed ASR, right is intended text. Wrap an exact FROM phrase containing spaces in backticks:
 
 ~~~markdown
-- **`CC 思维链`/`CC switch` → CC Switch** — only in client/API configuration context
+- **`CC 思维链`/`CC 思维连` → 目标术语** — only under the domain's documented cue
 ~~~
 
-This exact phrase is an ASR error candidate for `CC Switch`, not a person-name candidate. The contextual cue must still hold before editing.
+This demonstrates an exact ASR phrase candidate, not a person-name candidate. The domain context remains the authority for the real target and cue; the scanner only locates the literal FROM forms.
 
 Before adding any real-word-shaped rule, measure the project corpus:
 
@@ -244,7 +244,7 @@ export GLM_API_KEY="<api-key>"
 uv run scripts/fix_transcript_enhanced.py input.md --output ./corrected
 ~~~
 
-Read [references/glm_api_setup.md](references/glm_api_setup.md), [references/installation_setup.md](references/installation_setup.md), and the explicitly API-oriented portions of [references/workflow_guide.md](references/workflow_guide.md). When a chunk fails after retries, the API route keeps that chunk and its original surrounding separators byte-for-byte and prints a warning; if every chunk fails, the complete output equals the input. Verify the output rather than assuming the warning means a corrected result exists.
+Read [references/glm_api_setup.md](references/glm_api_setup.md), [references/installation_setup.md](references/installation_setup.md), and the explicitly API-oriented portions of [references/workflow_guide.md](references/workflow_guide.md). When a chunk fails after retries, the API route keeps that chunk and its original surrounding separators byte-for-byte and prints a warning; if every chunk fails, the complete output equals the input. For `fix_transcription.py --stage 2|3 --json`, read the additive `stage2_total_chunks`, `stage2_failed_chunks`, and `stage2_degraded` fields: `stage2_degraded: true` is not a fully corrected run even though the safely retained artifact is emitted. Verify the output rather than assuming the warning means a corrected result exists.
 
 The enhanced API wrapper can also add paragraph breaks, reduce repeated filler,
 and present corrections for interactive review. Those are API-wrapper features;

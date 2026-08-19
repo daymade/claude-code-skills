@@ -19,7 +19,7 @@ Entry shapes parsed (all observed in production context files):
   - **减 ≈ 剪** — 判据说明…                     (legacy mapping alias; left is
                                                  still observed ASR text)
   - **卖吸引/卖新鲜/卖新的 → 麦锡颖** — …         (multi-variant, "/" separated)
-  - **`CC 思维链` → CC Switch** — …             (quoted exact phrase; internal
+  - **`CC 思维链` → 目标术语** — …                (quoted exact phrase; internal
                                                  whitespace is literal)
   - **报 → 爆（anchored）** — …                  (TO side carries a parenthesized
                                                  annotation — stripped)
@@ -127,7 +127,7 @@ def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None,
 
     Three production shapes:
       卖吸引/卖新鲜/卖新的          -> the variants themselves
-      `CC 思维链`/`CC switch`     -> quoted exact phrases; spaces are literal
+      `CC 思维链`/`CC 思维连`     -> quoted exact phrases; spaces are literal
       升单系（圣诞/上单/生单        -> a FAMILY NAME prefix + parenthesized
                                      variant list ("/"-separated); the prefix
                                      (升单系) is a real word and must not be

@@ -393,5 +393,5 @@ sqlite3 corrections.db ".recover" | sqlite3 corrections_new.db
 
 ```bash
 # Reinitialize schema (safe, uses IF NOT EXISTS)
-uv run python -c "from core import CorrectionRepository; from pathlib import Path; CorrectionRepository(Path.home() / '.transcript-fixer' / 'corrections.db')"
+uv run scripts/fix_transcription.py --init
 ```

@@ -520,12 +520,12 @@ class HealthChecker:
 
             # Check config directory permissions
             if not os.access(self.config_dir, os.R_OK | os.W_OK | os.X_OK):
-                issues.append(f"Config dir: insufficient permissions")
+                issues.append("Config dir: insufficient permissions")
 
             # Check database permissions (if exists)
             if self.db_path.exists():
                 if not os.access(self.db_path, os.R_OK | os.W_OK):
-                    issues.append(f"Database: read/write denied")
+                    issues.append("Database: read/write denied")
 
             if issues:
                 return HealthCheckResult(
@@ -563,25 +563,25 @@ class HealthChecker:
             version = sys.version_info
             version_str = f"{version.major}.{version.minor}.{version.micro}"
 
-            # Minimum required: Python 3.8
-            if version < (3, 8):
+            # PEP 723 entrypoints and the runtime bundle require Python 3.10.
+            if version < (3, 10):
                 return HealthCheckResult(
                     name=name,
                     status=HealthStatus.UNHEALTHY,
                     message=f"Python version too old: {version_str}",
                     duration_ms=(time.time() - start_time) * 1000,
-                    details={'version': version_str, 'minimum': '3.8'},
-                    error="Python 3.8+ required"
+                    details={'version': version_str, 'minimum': '3.10'},
+                    error="Python 3.10+ required"
                 )
 
-            # Warn if using Python 3.12+ (may have compatibility issues)
-            if version >= (3, 13):
+            # 3.10 and 3.14 are both exercised by the full test suite.
+            if version >= (3, 15):
                 return HealthCheckResult(
                     name=name,
                     status=HealthStatus.DEGRADED,
                     message=f"Python version very new: {version_str}",
                     duration_ms=(time.time() - start_time) * 1000,
-                    details={'version': version_str, 'recommended': '3.8-3.12'},
+                    details={'version': version_str, 'recommended': '3.10-3.14'},
                     error="May have untested compatibility issues"
                 )
 
