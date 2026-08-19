@@ -38,7 +38,7 @@ SKILL.md 的 "Prior Art Research" 章节覆盖了搜索渠道、clone-and-verify
 
 ## Phase 3: 用真实数据验证原型
 
-SKILL.md 的完整 paired-eval 流程在 Tier 3 且另获重评测授权时，覆盖"先跑 baseline → 建 eval → 迭代"的过程。本节补充不依赖评测层级的验证原则：
+SKILL.md 的完整 paired-eval 流程在另获重评测授权时，覆盖"先跑 baseline → 建 eval → 迭代"的过程；风险 tier 本身既不授权也不禁止这套证据。本节补充不依赖评测层级的验证原则：
 
 ### 3.1 数据完整性验证
 
@@ -129,19 +129,19 @@ SKILL.md 的 "Skill Writing Guide" 已覆盖 frontmatter、progressive disclosur
 
 ## Phase 5: 测试迭代补充
 
-SKILL.md 的验证深度路由是层级选择的 SSOT；完整 A/B 测试、断言、评分和 viewer 还要单独通过 heavy-eval authorization gate，Tier 3 标签本身不授权这些动作。本节解释为什么要分级，并补充完整评测路径中的实操教训。
+SKILL.md 的验证深度路由是层级选择的 SSOT；完整 A/B 测试、断言、评分和 viewer 还要单独通过 heavy-eval authorization gate，任何 tier 标签本身都不授权或禁止这些动作。本节解释为什么要分级，并补充完整评测路径中的实操教训。
 
 ### 5.0 评测深度由失败面决定，不由「改了 skill」决定
 
-全量 paired eval 的成本不是只有 token：它还引入 N 组 prompt 设计、2N 个执行样本、grader、聚合和 viewer，且每一层都有自己的误判面。只有当这些额外观察能改变下一步动作时才运行；否则它们是在用流程规模替代判别力。
+全量 paired eval 的成本不是只有 token：它还引入 N 组 prompt 设计、2N 个执行样本、grader、聚合和 viewer，且每一层都有自己的误判面。只有用户明确要求这个评测交付物，或这些额外观察能改变下一步动作且用户同意时才运行；否则它们是在用流程规模替代判别力。
 
 分级前依次检查：
 
-1. **改动能怎样失败？** 纯错字/格式且不改变行为，或文档/配置中有直接权威源能裁决的事实修正，走 Tier 1；任何实现文件的局部修复只有在「恢复明确既有契约」与「确定性回归覆盖修复行为」同时成立时才走 Tier 1，不能借前一个事实修正入口绕过。单条规则澄清只要会改变 agent 行为且无法确定性裁决，就走 Tier 2。任何新 skill、任何新增或实质变化的 capability、广泛改变 agent 行为或触发路由，以及需要跨多个 prompt 类别比较主观产物质量，才进入 Tier 3。主观判断、请求里的「优化」一词、或上下文很长，都不把一个可由 1–2 个具名样例覆盖的窄改动升级到 Tier 3；即使判为 Tier 3，也要另问完整 paired eval 是否真能改变决策。
+1. **改动能怎样失败？** 纯错字/格式且不改变行为，或文档/配置中有直接权威源能裁决的事实修正，走 Tier 1；任何实现文件的局部修复只有在「恢复明确既有契约」与「确定性回归覆盖修复行为」同时成立时才走 Tier 1，不能借前一个事实修正入口绕过。单条规则澄清只要会改变 agent 行为且无法确定性裁决，就走 Tier 2。任何新 skill、任何新增或实质变化的 capability、广泛改变 agent 行为或触发路由，以及改变本身需要跨多个 prompt 类别比较主观产物质量，才进入 Tier 3。主观判断、请求里的「优化」一词、上下文很长、或用户额外要求 benchmark，都不改变风险 tier；完整 paired eval 另走独立授权门。
 2. **有没有独立裁判直接判定？** CLI help、真实 API 响应、schema validator、窄测试能裁决时，重复让多个 agent 复述同一证据不会增加信息。
 3. **失败的外部后果是什么？** 会写外部系统、破坏状态、扩散到大批用户的改动要升级；工具恰好可用、workspace 已存在、或「以往都是这么跑」不构成升级理由。
 
-真实失效：一次现有 skill 的单段事实纠错已经有 GUI、配置和运行时三层直接证据，执行者仍按旧主循环为 3 个 case 启动 with-skill + baseline 共 6 个 agent。用户当场叫停，指出这不值得。问题不在 case 设计，而在流程把 Tier 3 当成所有编辑的默认值。此后以 SKILL.md 的路由为准：先选最低可证伪层级；即使风险分类仍是 Tier 3，也要再证明 paired baseline / grader / benchmark / viewer 各自会改变什么决策，证明不了就停在更轻的证据层。用户叫停重评测时立即中止，不用「流程要求」反驳；如实写明实际跑过什么、哪些失败轴未覆盖即可，禁把未运行的重套件包装成标签自带的「必需证据」。若规则、契约或数字已实质变化，discipline #5 要求的单个 fresh-context reviewer 仍保留；安全闸门同样不被「停评测」取消。
+真实失效：一次现有 skill 的单段事实纠错已经有 GUI、配置和运行时三层直接证据，执行者仍按旧主循环为 3 个 case 启动 with-skill + baseline 共 6 个 agent。用户当场叫停，指出这不值得。问题不在 case 设计，而在流程把 Tier 3 当成所有编辑的默认值。此后以 SKILL.md 的路由为准：先选最低可证伪层级；再独立判断 paired baseline / grader / benchmark / viewer 是用户明确要求的交付物，还是会改变某个具体决策并已获同意。二者都不是就停在轻证据层。用户叫停重评测时立即中止，不用「流程要求」反驳；如实写明实际跑过什么、哪些失败轴未覆盖即可，禁把未运行的重套件包装成标签自带的「必需证据」。若规则、契约或数字已实质变化，discipline #5 要求的单个 fresh-context reviewer 仍保留；安全闸门同样不被「停评测」取消。
 
 ### 5.1 删除竞争的旧 skill
 
@@ -463,7 +463,7 @@ Case 12 记录的是"发现 `run_loop` 会产出空洞退化结果"；本案例�
 
 用户只要求用 skill-creator 优化一个现有 skill。执行者因为前面刚结束一段长调试会话，就把「上下文丰富」误读成「用户要求 conversation-mining」，又把计划中可能涉及流程和脚本误读成「已经确定是 Tier 3」；在没有列清实际改动、没有先跑确定性检查、也没有得到重评测授权时，启动了五个 mining agent，并准备继续 paired baseline / grader / benchmark / viewer。用户当场叫停，指出这不是第一次因过度判断 Tier 3 而浪费 sub-agent token。
 
-根因是两次不同的偷换：**任务方向不等于来源授权**（长会话在场 ≠ 允许打开/挖掘历史），**风险分类不等于执行预算**（Tier 3 ≠ 自动跑全套评测）。修法因此也分两层：conversation-mining 必须有显式历史来源意图；tier 先由已列明的 concrete delta 决定，而 full paired pipeline 再过独立的 heavy-eval authorization gate。普通现有-skill 优化默认确定性验证，行为仍不确定才做 1–2 个 with-skill replay；多 agent、baseline、grader、benchmark、viewer 都要逐项说明它会改变什么决策，说明不了就不跑。
+根因是两次不同的偷换：**任务方向不等于来源授权**（长会话在场 ≠ 允许打开/挖掘历史），**风险分类不等于执行预算**（Tier 3 ≠ 自动跑全套评测）。修法因此也分两层：conversation-mining 必须有显式历史来源意图；tier 先由已列明的 concrete delta 决定，而 full paired pipeline 再过独立的 heavy-eval authorization gate。普通现有-skill 优化默认确定性验证，行为仍不确定才做 1–2 个 with-skill replay；用户未明确要求重评测时，baseline、grader、benchmark、viewer 要说明会改变什么决策并获得同意，说明不了就不跑。用户已明确要求 A/B/benchmark 时，只授权完成该交付所必需的隔离 arms，不自动授权额外角色。
 
 → 对应规则：SKILL.md「Verification depth router」的 heavy-eval authorization gate、conversation-mining explicit-source gate，以及 conversation-mining workflow 的 minimum mining pass。
 

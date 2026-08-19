@@ -241,19 +241,25 @@ Choose the **lowest tier that can falsify the changed behavior** before taking a
 | Tier | Use when | Required evidence | Do not add by default |
 |---|---|---|---|
 | **1 — Targeted** | This is an existing skill; no capability, trigger family, workflow branch, output contract, dependency, permission, or external-write behavior is added or materially changed; and the edit is exactly one of: (a) spelling/format-only with no behavior change, (b) a factual doc/config correction whose truth a direct authority decides, or (c) a bounded implementation repair that restores an explicit existing contract **and** whose repaired behavior a deterministic regression check covers. A clarification that can change agent behavior is not Tier 1 | For all three: run `quick_validate`, inspect the diff, and complete the existing-skill migration gate. Then use the matching evidence only: (a) exact readback/format check; (b) authoritative fact plus its narrow check; (c) explicit existing contract plus deterministic regression. Add discipline #5's one fresh reviewer only when its rule/contract/number threshold is crossed | Agent behavior replays, paired runs, baselines, graders, benchmark, viewer, eval files |
-| **2 — Sampled behavior** | This is an existing skill; the change affects agent behavior but adds no capability, trigger family, output contract, script behavior, dependency, permission, or external write; and 1–2 named examples with explicit acceptance criteria can exercise the whole changed behavior. A bounded correction to one existing routing or evidence-selection rule stays here even when it changes the chosen path | Run only those 1–2 representative with-skill replays plus the narrow deterministic checks and the one fresh-context review required by discipline #5 | Baselines, paired fan-out, variance analysis, benchmark, viewer, or eval files. A request for any of these reclassifies the work to Tier 3 |
-| **3 — Broad / high-risk** | Any of these is true: any new skill; any new or materially changed capability; broad cross-branch rewrite or methodology expansion; trigger/description optimization; a new workflow branch or materially changed output contract, script capability, dependency, or permission; high-risk automation or external writes; or the evidence genuinely must compare 3+ distinct prompt classes, repeated trials, or materially different approaches | Run deterministic gates first, then add only the evidence needed for the named failure axes. The full paired pipeline below is available only after the separate heavy-eval authorization gate passes; Tier 3 by itself does not start it | Automatic paired fan-out, graders, benchmark, or viewer based only on the Tier 3 label |
+| **2 — Sampled behavior** | This is an existing skill; the change affects agent behavior but adds no capability, trigger family, output contract, script behavior, dependency, permission, or external write; and 1–2 named examples with explicit acceptance criteria can exercise the whole changed behavior. A bounded correction to one existing routing or evidence-selection rule stays here even when it changes the chosen path | Run only those 1–2 representative with-skill replays plus the narrow deterministic checks and the one fresh-context review required by discipline #5 | Baselines, paired fan-out, variance analysis, benchmark, viewer, or eval files by default. An explicit request for them goes through the separate evidence-budget gate and does not reclassify the change |
+| **3 — Broad / high-risk** | Any of these is true: any new skill; any new or materially changed capability; broad cross-branch rewrite or methodology expansion; trigger/description optimization; a new workflow branch or materially changed output contract, script capability, dependency, or permission; high-risk automation or external writes; or the changed behavior itself spans 3+ distinct prompt classes, repeated trials, or materially different approaches | Run deterministic gates first, then add only the evidence needed for the named failure axes. The full paired pipeline below is available only after the separate heavy-eval authorization gate passes; Tier 3 by itself does not start it, and the same gate can authorize extra evidence at another tier | Automatic paired fan-out, graders, benchmark, or viewer based only on the Tier 3 label |
 
 #### Heavy-eval authorization gate — separate from tier classification
 
-A tier describes **risk and uncertainty**; it does not authorize token spend or agent fan-out. The generic paired baseline → grader → benchmark → viewer pipeline may run only when either:
+A tier describes **risk and uncertainty**; it does not authorize token spend or agent fan-out. Passing this gate changes the permitted evidence plan, not the tier. The generic paired baseline → grader → benchmark → viewer pipeline may run only when either:
 
 - the user explicitly asks for A/B, baselines, benchmarking, repeated trials, a viewer, or multi-agent evaluation; or
 - the executor can name at least three distinct prompt classes, competing plausible outcomes, and the decision that paired comparison would change, then obtains the user's explicit opt-in.
 
 For an existing-skill optimization, default to zero eval agents: run deterministic checks first, then at most one or two with-skill replays if behavior remains uncertain. Discipline #5's one fresh-context reviewer is a release gate, not permission to create a reviewer team. A token/cost-sensitivity instruction blocks the heavy pipeline until the user explicitly reverses it.
 
-Before spawning more than one research, mining, eval, or grading agent, state the total count, the distinct failure axis owned by each, and why deterministic evidence or one combined pass cannot answer it. If that case cannot be made, do not fan out. If the interactive question tool is unavailable or the user does not answer, take the lighter evidence path; silence is not consent.
+Before spawning more than one research, mining, eval, or grading agent, separate **roles** from **execution units**:
+
+- Each additional role or reviewer must own a distinct failure axis or output. Template availability never justifies another role.
+- Necessary experimental arms and corpus shards may share an axis: with-skill and baseline arms need isolated contexts, and one mining role may need several bounded chunks. Before launch, state the exact total units, capped concurrency, and why combining them would contaminate the comparison or exceed the chunk budget. Run them serially by default; an explicit A/B/mining request authorizes only these necessary units, not extra roles.
+- For fan-out proposed by the executor rather than explicitly requested, obtain opt-in to that count. If the interactive question tool is unavailable or the user does not answer, take the lighter evidence path; silence is not consent.
+
+If a unit is neither a distinct role/output nor a necessary isolated arm/shard, do not spawn it.
 
 Escalate when a lower tier exposes unresolved behavior or contradictory evidence. A user's request to cancel or de-escalate evaluation immediately stops already-launched paired eval agents, baselines, graders, aggregation, and viewer work. Keep the risk classification if it remains informative, but report only the evidence actually run and the axes left unchecked; do not describe an unrun heavy suite as automatically "required" by the label. Do not cancel discipline #5's single fresh-context reviewer when its rule/contract/number threshold is crossed, or any safety gate needed to prevent destructive or external effects. The mechanical existing-skill migration audit, public-skill sanitization, and any domain-specific safety gate also remain independent of this router.
 
@@ -776,9 +782,9 @@ Anthropic has written skill authoring best practices — retrieve it before you 
 
 Also read [references/skill-development-methodology.md](references/skill-development-methodology.md) before starting — it covers the full development process with prior art research, counter review, and real failure case studies. The two references are complementary: the Anthropic doc covers principles, the methodology covers process.
 
-### Full-eval test cases (separately authorized Tier 3 paired run only)
+### Full-eval test cases (separately authorized paired plan only)
 
-Enter this section only when the router selects Tier 3 **and** the heavy-eval authorization gate passes, or when the user explicitly requests the full eval pipeline. Tier 3 classification alone is insufficient. Do not use it merely because a SKILL.md changed. A specialized workflow follows the Tier 3 substitution contract declared above.
+Enter this section only when the heavy-eval authorization gate passes. Risk tier alone neither authorizes nor forbids this evidence; an explicit full-pipeline request does not reclassify the underlying change. Do not use it merely because a SKILL.md changed. A specialized workflow follows its substitution contract declared above.
 
 After writing the skill draft, come up with 2-3 realistic test prompts — the kind of thing a real user would actually say. **For skills that act on live systems (a running service, a logged-in client, production data), give each test prompt an explicit side-effect budget** — e.g. "probe read-only and conclude; do NOT execute the download / drive the UI." An eval that mutates a live environment while "just testing" is a real action, not a test. Present them via **AskUserQuestion**:
 
@@ -819,15 +825,15 @@ Save test cases to `evals/evals.json`. Don't write assertions yet — just the p
 
 See `references/eval_pipeline_schemas.md` for the full schema (including the `assertions` field, which you'll add later).
 
-## Full paired evaluation pipeline (separately authorized generic Tier 3 only)
+## Full paired evaluation pipeline (separately authorized only)
 
-Run this section only after Tier 3 is selected **and** the heavy-eval authorization gate passes. Execute it in decision-bearing stages and stop when the uncertainty that justified it is resolved; do not pre-spawn downstream graders, aggregation, or viewer work. A user cancellation or de-escalation stops the heavy pipeline immediately. Do NOT mechanically reuse it for Tier 1, Tier 2, or specialized mechanics explicitly replaced by their workflow, and do not use `/skill-test` or any other testing skill.
+Run this section only after the heavy-eval authorization gate passes. The risk tier remains whatever the changed behavior warrants. Execute the pipeline in decision-bearing stages and stop when the uncertainty or requested benchmark deliverable is resolved; do not pre-spawn downstream graders, aggregation, or viewer work. A user cancellation or de-escalation stops the heavy pipeline immediately. Do not use it without authorization or mechanically add generic mechanics that a specialized workflow explicitly replaces, and do not use `/skill-test` or any other testing skill.
 
 Put results in `<skill-name>-workspace/` as a sibling to the skill directory. Within the workspace, organize results by iteration (`iteration-1/`, `iteration-2/`, etc.) and within that, each test case gets a directory (`eval-0/`, `eval-1/`, etc.). Don't create all of this upfront — just create directories as you go.
 
 ### Step 1: Run the approved with-skill / baseline pairs
 
-For each approved test case, run one with-skill sample and its baseline under the same prompt and side-effect budget. Parallel execution is optional, not a correctness condition; never exceed the user-approved agent count. Serial pairs are valid when token sensitivity, rate limits, or a small case set make fan-out wasteful.
+For each approved test case, run one with-skill sample and its baseline under the same prompt and side-effect budget. These two arms intentionally share one failure axis but require isolated contexts; they are necessary experimental units, not extra reviewer roles. State the total arms and capped concurrency before launch. Run serially by default, and never exceed the authorized unit count.
 
 **With-skill run:**
 
@@ -969,7 +975,7 @@ kill $VIEWER_PID 2>/dev/null
 
 ## Improving the skill
 
-This is the heart of the loop. Improve from the evidence selected by the router: authoritative facts and deterministic checks for Tier 1, 1–2 named behavior replays for Tier 2, or user-reviewed paired results for Tier 3. Do not import Tier 3 artifacts or steps into a lower-tier iteration.
+This is the heart of the loop. Improve from the evidence plan: authoritative facts and deterministic checks for Tier 1, 1–2 named behavior replays for Tier 2, or user-reviewed paired results when the separate heavy-eval gate authorizes them at any tier. Do not import paired-eval artifacts into the default Tier 1/2 path without that authorization.
 
 ### How to think about improvements
 
@@ -1000,27 +1006,27 @@ Options:
 A) Iterative refinement — targeted fixes for the specific issues above (Recommended)
 B) Structural redesign — the core approach needs rethinking (reclassifies Tier 1/2 work to Tier 3 before changing it)
 C) Bundle a script — I noticed all test runs independently wrote similar code for [X] (reclassifies Tier 1/2 work to Tier 3 before adding the capability)
-D) Expand test set first — add [N] more test cases to avoid overfitting (if the total exceeds 2, reclassify to Tier 3 before running them)
+D) Expand test set first — add [N] more test cases to avoid overfitting (authorizes only the named extra evidence; risk tier still follows the changed behavior)
 ```
 
-Selecting B, C, or D authorizes only the named scope change. It does not authorize paired baselines, graders, benchmarks, a viewer, or additional agents; those still require the separate heavy-eval/fan-out gate.
+Selecting B or C may change the risk tier because it changes the implementation scope; selecting D does not. Each option authorizes only the named scope/evidence change. It does not authorize paired baselines, graders, benchmarks, a viewer, or additional roles unless those are named and the separate heavy-eval/fan-out gate passes.
 
 ### The iteration loop
 
 After improving the skill:
 
 1. Apply your improvements to the skill
-2. Re-run only the selected tier's evidence:
-   - **Tier 1:** always re-run `quick_validate`, diff inspection, and the migration gate; then re-run only the matching subtype evidence — (a) exact readback/format check, (b) authoritative fact plus its narrow check, or (c) explicit existing contract plus deterministic regression. Do not create an iteration workspace.
-   - **Tier 2:** re-run only the same 1–2 named with-skill examples and narrow checks. Do not add a baseline, benchmark, viewer, or eval workspace; a request for any of them reclassifies the work to Tier 3.
-   - **Separately authorized generic Tier 3 paired run:** rerun all approved test cases into a new `iteration-<N+1>/` directory, including baseline runs. For a new skill, the baseline is always `without_skill`; for an existing skill, the immutable original pre-edit version remains the preservation baseline for every iteration. An immediately previous iteration may supplement but never replace the original baseline.
-3. Apply discipline #5 after a substantive rule, contract, or number change. For a separately authorized generic Tier 3 paired run, also launch the eval reviewer with `--previous-workspace` pointing at the previous iteration; specialized workflows use their declared reviewer mechanics.
-4. For a separately authorized generic Tier 3 paired run, wait for the user to review the new viewer results; otherwise decide from the selected tier's evidence unless a real user choice remains.
+2. Re-run the default tier evidence, plus any separately authorized evidence plan:
+   - **Tier 1 default:** always re-run `quick_validate`, diff inspection, and the migration gate; then re-run only the matching subtype evidence — (a) exact readback/format check, (b) authoritative fact plus its narrow check, or (c) explicit existing contract plus deterministic regression. Do not create an iteration workspace unless a separate paired plan is authorized.
+   - **Tier 2 default:** re-run only the same 1–2 named with-skill examples and narrow checks. Do not add a baseline, benchmark, viewer, or eval workspace unless a separate paired plan is authorized.
+   - **Separately authorized generic paired run, at any tier:** rerun all approved test cases into a new `iteration-<N+1>/` directory, including baseline runs. For a new skill, the baseline is always `without_skill`; for an existing skill, the immutable original pre-edit version remains the preservation baseline for every iteration. An immediately previous iteration may supplement but never replace the original baseline.
+3. Apply discipline #5 after a substantive rule, contract, or number change. For a separately authorized generic paired run, also launch the eval reviewer with `--previous-workspace` pointing at the previous iteration; specialized workflows use their declared reviewer mechanics.
+4. For a separately authorized generic paired run, wait for the user to review the new viewer results; otherwise decide from the default tier evidence unless a real user choice remains.
 5. Read the new evidence or feedback, improve again if it falsifies the current version, and repeat at the same tier.
 
-A user-requested cancellation or de-escalation remains in force for the rest of the task without changing its classification. Do not restart paired evals, baselines, graders, aggregation, or viewer work unless the user explicitly re-authorizes Tier 3 execution.
+A user-requested cancellation or de-escalation remains in force for the rest of the task without changing its classification. Do not restart paired evals, baselines, graders, aggregation, or viewer work unless the user explicitly re-authorizes that evidence plan.
 
-At the end of each **separately authorized generic Tier 3 paired** iteration, use **AskUserQuestion** as a checkpoint:
+At the end of each **separately authorized generic paired** iteration, use **AskUserQuestion** as a checkpoint:
 
 ```
 Iteration [N] complete. Results: [pass_rate]% assertions passing, [delta vs previous].
@@ -1704,7 +1710,7 @@ After packaging, direct the user to the resulting `.skill` file path so they can
 
 ## Claude.ai-specific instructions
 
-In Claude.ai, use the same verification-depth router and heavy-eval authorization gate. When the full generic Tier 3 pipeline is explicitly authorized, the workflow is draft -> test -> review -> improve -> repeat, but because Claude.ai doesn't have subagents, some mechanics change. Here's what to adapt:
+In Claude.ai, use the same verification-depth router and heavy-eval authorization gate. When the full generic paired pipeline is explicitly authorized, the workflow is draft -> test -> review -> improve -> repeat, but because Claude.ai doesn't have subagents, some mechanics change. Here's what to adapt:
 
 **Running test cases**: No subagents means no parallel execution. For each test case, read the skill's SKILL.md, then follow its instructions to accomplish the test prompt yourself. Do them one at a time. This is less rigorous than independent subagents (you wrote the skill and you're also running it, so you have full context), but it's a useful sanity check — and the human review step compensates. Skip the baseline runs — just use the skill to complete the task as requested.
 
@@ -1731,9 +1737,9 @@ In Claude.ai, use the same verification-depth router and heavy-eval authorizatio
 
 If you're in Cowork, the main things to know are:
 
-- You have subagents, so an explicitly authorized generic Tier 3 pipeline can run baselines and graders. Their availability is not authorization and does not justify fan-out; stay within the approved count, and run cases serially whenever parallelism adds no evidence.
+- You have subagents, so an explicitly authorized generic paired pipeline can run baselines and graders. Their availability is not authorization and does not justify extra roles; state the necessary arms, cap concurrency, and run cases serially whenever parallelism adds no evidence.
 - You don't have a browser or display, so when generating the eval viewer, use `--static <output_path>` to write a standalone HTML file instead of starting a server. Then proffer a link that the user can click to open the HTML in their browser.
-- After an explicitly authorized **generic Tier 3 paired run**, generate the eval viewer for the human before revising the skill yourself, using `generate_review.py` rather than custom HTML. Tier 1, Tier 2, unauthorized Tier 3 work, and specialized workflows that replace viewer mechanics do not acquire a viewer obligation merely because the work happens in Cowork.
+- After an explicitly authorized **generic paired run**, generate the eval viewer for the human before revising the skill yourself, using `generate_review.py` rather than custom HTML. Default tier evidence, unauthorized work, and specialized workflows that replace viewer mechanics do not acquire a viewer obligation merely because the work happens in Cowork.
 - Feedback works differently: since there's no running server, the viewer's "Submit All Reviews" button will download `feedback.json` as a file. You can then read it from there (you may have to request access first).
 - Packaging works — `package_skill.py` just needs Python and a filesystem.
 - Description optimization (`run_loop.py` / `run_eval.py`) should work in Cowork just fine since it uses `claude -p` via subprocess, not a browser, but please save it until you've fully finished making the skill and the user agrees it's in good shape.
@@ -1771,11 +1777,11 @@ Repeating one more time the core loop here for emphasis:
 - Select the lowest verification tier that can falsify this change before taking any specialized workflow exit, and record why
 - Draft or edit the skill
 - Run the evidence required by that tier or the selected specialized workflow's declared equivalent mechanics
-- For an explicitly authorized generic Tier 3 paired run, evaluate the outputs with the user, create `benchmark.json`, and run `eval-viewer/generate_review.py`
+- For an explicitly authorized generic paired run, evaluate the outputs with the user, create `benchmark.json`, and run `eval-viewer/generate_review.py`
 - Repeat until you and the user are satisfied
 - Run and clear the existing-skill regression review; eval-only survival does not count
 - Package the final skill and return it to the user.
 
-Please add the selected verification tier and its required evidence to your TodoList, if you have one. Add "Create evals JSON and run `eval-viewer/generate_review.py` so human can review test cases" only after the generic Tier 3 paired pipeline is explicitly authorized.
+Please add the selected verification tier and its default evidence to your TodoList, if you have one. Add "Create evals JSON and run `eval-viewer/generate_review.py` so human can review test cases" only after the generic paired pipeline is explicitly authorized.
 
 Good luck!

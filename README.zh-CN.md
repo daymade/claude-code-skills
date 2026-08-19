@@ -2358,12 +2358,12 @@ claude plugin install daymade-claude-code@daymade-skills
 - 把刚调通的第三方 CLI 工具包装成可复用的伴侣技能
 
 **主要功能：**
-- 跨会话历史、本地 SOP、已装插件/MCP、skills.sh、官方插件、npm/PyPI 的先验调研——复用基础设施，只把用户独有的方法论编码进技能
+- 基于当前对话、用户明确授权的过往会话、本地 SOP、已装插件/MCP、skills.sh、官方插件、npm/PyPI 做先验调研——复用基础设施，只把用户独有的方法论编码进技能
 - inline vs `context: fork` 决策指引（subagent 不能 spawn subagent 或调 skill）与可组合/正交的技能设计
 - `init_skill.py` 脚手架、`package_skill.py`（自动校验）、`security_scan.py`（基于 gitleaks 的密钥/PII 检测）
 - 现有 skill 迁移闸门：工具签发的快照或已核验 Git commit 基线、区分运行时可达性的能力审计、逐项 disposition，以及无法被 clean commit 或手写 marker 绕过的打包时重验
 - 风险分级验证路由：Tier 1 定向校验、Tier 2 抽样行为回放、Tier 3 标记大改/高风险但不自动扇出
-- 单独授权的完整 Eval 工具链：仅在证据会改变决策时运行带技能 + baseline、断言、评分、聚合基准和 HTML viewer
+- 单独授权的完整 Eval 工具链：用户明确要求，或能改变决策的证据计划获得同意后，才运行带技能 + baseline、断言、评分、聚合基准和 HTML viewer
 - 面向公开技能的强制语义通读——抓住扫描器漏掉的「无关键词」泄漏
 - description 优化循环（60/40 训练/测试切分，按 held-out 分数选最优 description）
 

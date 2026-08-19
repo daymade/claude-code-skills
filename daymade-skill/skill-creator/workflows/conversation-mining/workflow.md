@@ -92,6 +92,8 @@ The available prompt types are a menu, not a mandatory agent package. Inspect th
 - Add another role only when it owns a distinct output that the first pass cannot produce. Do not split one coherent question across roles merely because templates exist.
 - Multi-role fan-out requires the main SKILL.md heavy-eval/agent-budget gate. A request to "optimize a skill" is not authorization.
 
+Role count and execution-unit count are different. One selected role may emit one prompt per chunk; those same-role prompts are necessary corpus shards, not new specialist roles. Process shards serially by default. If bounded concurrency is useful, first state the exact shard count, maximum concurrent units, and why recombining them would exceed the declared chunk budget. Same-role sharding never justifies adding another role.
+
 Use the prompts in `workflows/conversation-mining/patterns.md`:
 
 - `patterns` → `candidates/patterns/chunk-000.md`

@@ -2358,12 +2358,12 @@ The essential meta-skill for building your own skills. It scales verification to
 - Wrapping a third-party CLI tool you just got working into a reusable companion skill
 
 **Key features:**
-- Prior-art research across conversation history, local SOPs, installed plugins/MCPs, skills.sh, official plugins, npm/PyPI — to reuse infrastructure and encode only the user's unique methodology
+- Prior-art research across the live conversation, explicitly approved prior history, local SOPs, installed plugins/MCPs, skills.sh, official plugins, npm/PyPI — to reuse infrastructure and encode only the user's unique methodology
 - The inline-vs-`context: fork` decision guide (subagents can't spawn subagents or call skills) and composable/orthogonal skill design
 - `init_skill.py` scaffolding, `package_skill.py` (auto-validates), and `security_scan.py` (gitleaks-based secret/PII detection)
 - Existing-skill migration gate: tool-attested snapshot or verified Git-commit baseline, runtime-reachability-aware capability audit, explicit dispositions, and package-time re-verification that a clean commit or hand-written marker cannot bypass
 - Risk-scaled verification router: Tier 1 targeted checks, Tier 2 sampled behavior replay, and Tier 3 broad/high-risk classification without automatic fan-out
-- Separately authorized full-eval harness: with-skill + baseline runs, assertions, grading, benchmark aggregation, and an HTML viewer only when the evidence will change a decision
+- Separately authorized full-eval harness: with-skill + baseline runs, assertions, grading, benchmark aggregation, and an HTML viewer after an explicit request, or after a decision-bearing evidence plan receives opt-in
 - Mandatory sanitization read-through for public skills — catches no-keyword leaks scanners miss
 - Description-optimization loop (60/40 train/test split, selects best description by held-out score)
 
