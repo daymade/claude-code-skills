@@ -12,7 +12,7 @@ import json
 import shutil
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -328,6 +328,17 @@ def test_redactor_allowlist() -> None:
     assert "sk-test-example" in redacted
     assert "sk-kimi-fakekey123" not in redacted
     assert redactor.counts["llm_provider_keys"] == 1
+
+
+def test_redactor_windows_path_placeholder_is_literal() -> None:
+    redactor = mine_conversation.Redactor()
+    fixture_path = PureWindowsPath(
+        "C:/", "Users", "fixture-user", "Documents", "report.txt"
+    )
+    redacted = redactor.redact(f"Open {fixture_path} now")
+
+    assert redacted == r"Open C:\Users\<REDACTED-USER>\... now"
+    assert redactor.counts["windows_user_paths"] == 1
 
 
 def test_redactor_does_not_allow_substring_matches() -> None:
