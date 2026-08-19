@@ -787,7 +787,8 @@ class SpellCheckProcessor:
 - `httpx` (for API calls)
 - `filelock` (for thread-safe operations)
 
-Scripts use PEP 723 inline metadata; run with `uv run` to auto-install dependencies.
+Primary entrypoints that need third-party packages use PEP 723 inline metadata;
+stdlib/internal-only utilities may omit it. Run every entrypoint with `uv run`.
 
 ### Optional
 
@@ -809,7 +810,7 @@ Scripts use PEP 723 inline metadata; run with `uv run` to auto-install dependenc
 git clone <repo> transcript-fixer
 cd transcript-fixer
 
-# 2. Initialize (uv auto-installs PEP 723 dependencies)
+# 2. Initialize (the primary CLI declares its PEP 723 dependencies)
 uv run scripts/fix_transcription.py --init
 
 # 3. Configure API key in the canonical config file

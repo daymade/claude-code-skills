@@ -196,5 +196,10 @@ def parse_anthropic_response(response: Any) -> str:
         raise AIAPIError(
             f"Unexpected text type: {type(text).__name__}"
         )
+    if not text.strip():
+        raise AIAPIError(
+            "Empty 'text' in API response; refusing to treat a blank payload "
+            "as a correction"
+        )
 
     return text

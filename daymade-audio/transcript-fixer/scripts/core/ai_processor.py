@@ -32,6 +32,7 @@ from .defaults import (
     ANTHROPIC_VERSION,
     API_TIMEOUT,
 )
+from .protected_spans import mask_speaker_labels, restore_speaker_labels
 
 
 class AIProcessor:
@@ -74,7 +75,8 @@ class AIProcessor:
         Returns:
             (corrected_text, list_of_changes)
         """
-        chunks = split_into_chunks(text, self.max_chunk_size)
+        projected_text, speaker_spans = mask_speaker_labels(text)
+        chunks = split_into_chunks(projected_text, self.max_chunk_size)
         corrected_chunks = []
         all_changes = []
 
@@ -116,7 +118,12 @@ class AIProcessor:
                 print("   Using original text...")
                 corrected_chunks.append(chunk)
 
-        return reassemble_corrected_chunks(text, chunks, corrected_chunks), all_changes
+        corrected_text = reassemble_corrected_chunks(
+            projected_text, chunks, corrected_chunks
+        )
+        if speaker_spans:
+            corrected_text = restore_speaker_labels(corrected_text, speaker_spans)
+        return corrected_text, all_changes
 
     def _process_chunk(self, chunk: str, context: str, model: str) -> str:
         """Process a single chunk with GLM API"""

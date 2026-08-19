@@ -37,7 +37,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.connection_pool import ConnectionPool, PoolExhaustedError
 from core.ai_processor import AIProcessor
 from core.ai_processor_async import AIProcessorAsync
-from core.ai_utils import reassemble_corrected_chunks
+from core.ai_utils import (
+    AIAPIError,
+    parse_anthropic_response,
+    reassemble_corrected_chunks,
+)
 from core.correction_repository import CorrectionRepository, DatabaseError
 from utils.retry_logic import retry_sync, retry_async, RetryConfig, is_transient_error
 from utils.concurrency_manager import (
@@ -310,6 +314,28 @@ class TestAIChunkFailureFidelity:
         assert corrected == source
         assert changes == []
 
+    @pytest.mark.parametrize("blank_text", ["", "   ", "\n\t"])
+    def test_blank_api_text_is_a_failure_not_a_correction(self, blank_text):
+        with pytest.raises(AIAPIError, match="Empty 'text'"):
+            parse_anthropic_response({
+                "content": [{"type": "text", "text": blank_text}],
+            })
+
+    def test_empty_success_payload_falls_back_to_original_chunk(self):
+        source = "这段原文绝不能丢。"
+        processor = AIProcessor(api_key="test", fallback_model="")
+
+        def parse_empty_payload(_chunk, _context, _model):
+            return parse_anthropic_response({
+                "content": [{"type": "text", "text": ""}],
+            })
+
+        processor._process_chunk = parse_empty_payload
+        corrected, changes = processor.process(source)
+
+        assert corrected == source
+        assert changes == []
+
     @pytest.mark.asyncio
     async def test_async_chunk_fallback_preserves_original_separators(self):
         source = "甲。乙。丙。丁。"
@@ -324,6 +350,28 @@ class TestAIChunkFailureFidelity:
 
         assert corrected == source
         assert changes == []
+
+    def test_sync_ai_cannot_modify_speaker_label_prefix(self):
+        source = "spekarA 00:01:00\n正文 spekarA"
+        processor = AIProcessor(api_key="test", fallback_model="")
+        processor._process_chunk = (
+            lambda chunk, _context, _model: chunk.replace("spekarA", "Speaker A")
+        )
+
+        corrected, _ = processor.process(source)
+        assert corrected == "spekarA 00:01:00\n正文 Speaker A"
+
+    @pytest.mark.asyncio
+    async def test_async_ai_cannot_modify_speaker_label_prefix(self):
+        source = "spekarA 00:01:00\n正文 spekarA"
+        processor = AIProcessorAsync(api_key="test", fallback_model="")
+
+        async def replace_body(_index, chunk, _context, _semaphore, _total):
+            return chunk.replace("spekarA", "Speaker A")
+
+        processor._process_chunk_with_semaphore = replace_body
+        corrected, _ = await processor._process_async(source, "")
+        assert corrected == "spekarA 00:01:00\n正文 Speaker A"
 
     def test_reassembly_preserves_nonstandard_inter_chunk_spacing(self):
         original = "左段\n\n\n右段"

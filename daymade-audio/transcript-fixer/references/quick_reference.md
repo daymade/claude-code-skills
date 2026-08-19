@@ -142,7 +142,8 @@ sqlite3 ~/.transcript-fixer/corrections.db "SELECT pattern, replacement, priorit
 ## Review Queue
 
 Uncertain corrections wait in a persistent queue for a human verdict (full
-semantics: SKILL.md "Review Queue"; storage shape: `database_schema.md`).
+semantics: [review_queue_dashboard.md](review_queue_dashboard.md); storage
+shape: `database_schema.md`).
 
 ```bash
 # What's waiting? (priority-sorted: entity names first)

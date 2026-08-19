@@ -43,6 +43,7 @@ from .defaults import (
     ANTHROPIC_VERSION,
     API_TIMEOUT,
 )
+from .protected_spans import mask_speaker_labels, restore_speaker_labels
 
 # CRITICAL FIX: Import structured logging and retry logic
 import sys
@@ -167,7 +168,8 @@ class AIProcessorAsync:
         - Releases intermediate results
         - Monitors memory usage
         """
-        chunks = split_into_chunks(text, self.max_chunk_size)
+        projected_text, speaker_spans = mask_speaker_labels(text)
+        chunks = split_into_chunks(projected_text, self.max_chunk_size)
         all_changes = []
 
         # CRITICAL FIX: Memory warning for large files
@@ -274,7 +276,12 @@ class AIProcessorAsync:
             f"failure_rate={stats['window_failure_rate']:.2%}, changes_extracted={len(all_changes)}"
         )
 
-        return reassemble_corrected_chunks(text, chunks, corrected_chunks), all_changes
+        corrected_text = reassemble_corrected_chunks(
+            projected_text, chunks, corrected_chunks
+        )
+        if speaker_spans:
+            corrected_text = restore_speaker_labels(corrected_text, speaker_spans)
+        return corrected_text, all_changes
 
     async def _process_chunk_with_semaphore(
         self,

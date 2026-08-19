@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
-from core.dictionary_processor import _mask_ledger_spans
+from core.dictionary_processor import project_without_ledger_values
 
 # A trap pair is a bold mapping AT A BULLET LINE START. 「→」 is canonical;
 # legacy context files used 「≈」 with the same directional convention (left =
@@ -84,12 +84,12 @@ _STRIP_CHARS = "「」\"'“”‘’`"
 
 # A bare trap variant is a WORD, not a sentence: no whitespace, punctuation,
 # or embedded quotes/backticks. A whole variant explicitly wrapped in quotes
-# may contain literal whitespace (e.g. `CC 思维链`). Prose fragments caught by the bold-pair regex (a context
+# is an intentional exact substring and may be longer or contain whitespace
+# (e.g. `CC 思维链`). Prose fragments caught by the bold-pair regex (a context
 # file's own commentary discussing an anchored rule, e.g. **已入 `视频报的→
 # 视频爆的`**) always violate this — the constraint is what keeps "every bold
 # arrow pair" from degrading into "every arrow mentioned in prose".
 _BAD_VARIANT = re.compile(r"[\s，。；：、（）()\[\]【】\"'“”‘’`]")
-_BAD_LITERAL_PUNCT = re.compile(r"[，。；：、（）()\[\]【】\"'“”‘’`]")
 _MAX_TERM_LEN = 12
 
 
@@ -153,6 +153,13 @@ def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None,
         v = _clean_token(raw_variant)
         if not v:
             continue
+        if explicit_literal:
+            # Quoting the whole variant removes the prose-vs-term ambiguity.
+            # Literal substring matching has no regex/metacharacter risk, so a
+            # deliberately quoted phrase must not disappear behind the bare
+            # term length/punctuation heuristics.
+            kept.append(v)
+            continue
         if len(v) > _MAX_TERM_LEN:
             # Too long to be a term at all — this is the bold-arrow regex
             # catching a SENTENCE, not a trap whose variant the parser failed
@@ -162,10 +169,6 @@ def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None,
             # Rejected silently, exactly as before this channel existed.
             continue
         if _BAD_VARIANT.search(v):
-            if (explicit_literal and re.search(r"\s", v)
-                    and not _BAD_LITERAL_PUNCT.search(v)):
-                kept.append(v)
-                continue
             # Whitespace only makes a term inexpressible when the term genuinely
             # contains it — a Latin token next to a CJK one (PEST 框架, 人均 GDP),
             # which is the shape this channel was built for. A run of Han
@@ -414,7 +417,7 @@ def scan_text(
     # consume the same projection or every completed correction reappears as a
     # residual. Other frontmatter (keywords/title) remains live because it is an
     # ASR-derived search surface. The shared helper preserves line numbers.
-    projected_text, _ = _mask_ledger_spans(text)
+    projected_text = project_without_ledger_values(text)
     lines = projected_text.splitlines()
     for entry in entries:
         for variant in entry.from_variants:

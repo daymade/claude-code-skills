@@ -206,6 +206,22 @@ class TestScanText:
         hits = scan_text("讨论 asr_note 时仍说了旧写法。", entries)
         assert [h.line for h in hits] == [1]
 
+    def test_ledger_projection_does_not_scan_internal_fill_character(self):
+        entries = extract_trap_entries("- **□ → 不清楚**\n")
+        text = (
+            "---\n"
+            "asr_note: 已完成：旧写法→新写法；另一旧写法→另一新写法\n"
+            "---\n\n"
+            "正文干净。\n"
+        )
+        assert scan_text(text, entries) == []
+
+    def test_real_body_fill_character_remains_scannable(self):
+        entries = extract_trap_entries("- **□ → 不清楚**\n")
+        text = "---\nasr_note: 已完成旧写法\n---\n\n正文仍有 □。\n"
+        hits = scan_text(text, entries)
+        assert [hit.line for hit in hits] == [5]
+
 
 class TestReport:
     def test_report_separates_hits_from_no_hits(self):
@@ -284,6 +300,19 @@ class TestDroppedCoverage:
         assert dropped == []
         assert len(entries) == 1
         assert entries[0].from_variants == ("CC 思维链", "CC switch")
+
+    def test_long_explicit_literal_bypasses_bare_term_length_cap(self):
+        """A quoted exact phrase is author-declared data, not captured prose."""
+        dropped = []
+        entries = extract_trap_entries(
+            "- **`Claude Code 思维链配置` → Claude Code Switch**\n",
+            dropped,
+        )
+        hits = scan_text("正文含 Claude Code 思维链配置。", entries)
+        assert dropped == []
+        assert len(entries) == 1
+        assert entries[0].from_variants == ("Claude Code 思维链配置",)
+        assert [hit.variant for hit in hits] == ["Claude Code 思维链配置"]
 
     def test_han_only_prose_with_a_space_stays_silent(self):
         """A run of Han characters split by a space is prose punctuation, not a

@@ -22,6 +22,7 @@ from dataclasses import dataclass
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.common_words import ALL_COMMON_WORDS, is_likely_valid_phrase
+from core.protected_spans import mask_speaker_labels, restore_speaker_labels
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,28 @@ def _restore_ledger_spans(text: str, spans: List[Tuple[int, str]]) -> str:
     return out
 
 
+def project_without_ledger_values(text: str) -> str:
+    """Return a scan projection with single-line ledger values removed.
+
+    Matchers that only need line numbers must not scan the ledger's old-form
+    citations *or* the internal filler used by Stage 1's reversible mask. This
+    projection reuses the same frontmatter parser, removes each generated mask
+    span entirely, and preserves every newline. Other frontmatter and body
+    text remain byte-for-byte visible to the matcher.
+    """
+    projected, spans = _mask_ledger_spans(text)
+    for index in range(len(spans) - 1, -1, -1):
+        masked_len, _ = spans[index]
+        sentinel = _LEDGER_SENTINEL.format(index)
+        position = projected.find(sentinel)
+        if position == -1:
+            raise ValueError(
+                f"ledger scan projection: sentinel {sentinel} missing"
+            )
+        projected = projected[:position] + projected[position + masked_len :]
+    return projected
+
+
 @dataclass
 class Change:
     """Represents a single text change"""
@@ -207,6 +230,7 @@ class DictionaryProcessor:
                 "filler/sentinel — asr_note protection disabled for this run"
             )
             masked_text, ledger_spans = text, []
+        masked_text, speaker_spans = mask_speaker_labels(masked_text)
         corrected_text = masked_text
         all_changes = []
 
@@ -218,6 +242,8 @@ class DictionaryProcessor:
         corrected_text, dict_changes = self._apply_dictionary(corrected_text, review_mode=review_mode)
         all_changes.extend(dict_changes)
 
+        if speaker_spans:
+            corrected_text = restore_speaker_labels(corrected_text, speaker_spans)
         if ledger_spans:
             corrected_text = _restore_ledger_spans(corrected_text, ledger_spans)
         return corrected_text, all_changes

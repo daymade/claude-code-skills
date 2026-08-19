@@ -49,14 +49,14 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 - `--dry-run` (optional): Preview Stage 1 changes to `*_dryrun.md` without writing `*_stage1.md`.
 - `--changes-file` (optional): Always write `*_changes.md` (already on by default in safe mode).
 
-**Evidence commands** (read-only; turn the native pass's manual grep loops into single invocations — semantics in SKILL.md "Native AI Correction" steps 4-6):
+**Evidence commands** (read-only; turn the native pass's manual grep loops into single invocations — semantics in [native_ai_full_workflow.md](native_ai_full_workflow.md) steps 4-6):
 
 - `--scan-traps --context-file <domain-context.md> -i <transcript>`: parse every `**误识 → 正确**` entry out of a domain context file and locate each variant in the transcript (line number + context window), grouped by entry. Legacy `≈` entries use the same left-observed/right-intended convention. Wrap an exact multi-word FROM variant in backticks (for example `` `CC 思维链` ``); bare whitespace remains unparseable. `**X = …勿修…**` confirmed-correct records are reported as keep-as-is. A single-line leading-frontmatter value under `asr_note` is excluded because it intentionally quotes old forms as correction provenance; multi-line YAML ledger values are not masked. Keywords, titles, and body text remain in scope. Entries with zero hits are listed so "scanned and absent" is distinguishable from "never scanned". Bullets the parser could not turn into a scannable entry at all are reported **first**, under `⚠️ N documented trap(s) NOT scanned` — one line per bullet, so the count is bullets rather than internal reasons. With `--json` the same information is the `unparsed` key: a list of `{raw, fragment, reason}`. A machine caller reading only `hits`/`no_hit` concludes "no traps here" from a scan that never looked at some of them, which is exactly the coverage gap this key exists to close. Shapes that stay deliberately silent (they are not coverage gaps): a rejected variant sitting beside a good one, Han-only prose split by a space, and an annotation parenthesis that cites or exemplifies the same rule
 - `--probe <term> --corpus <dir>`: the term's real-meaning frequency across every `*.md` under the corpus dir (recursive) — per-file counts + sampled context windows + the verdict criterion (all-error → bare rule safe / any real meaning → anchored or do-not-add / zero → safe but compounds nothing)
 - `--check-corpus` (with `--add`): run the same probe on the FROM term before the rule is written; advisory, never blocks. Requires `--corpus`
 - `--json` works with both: one machine-readable result line on stdout
 
-**Review queue** (persistent store for uncertain corrections; semantics in SKILL.md "Review Queue"):
+**Review queue** (persistent store for uncertain corrections; semantics in [review_queue_dashboard.md](review_queue_dashboard.md)):
 
 - `--enqueue-review JSON_PATH`: Enqueue items from a JSON file (`-` = stdin). Item fields: `{original, suggested?, file?, line?, context?, kind?, domain?, evidence?, actions?, priority?, source?}` — full field/alias table + gotchas in [Review Queue Item Schema](#review-queue-item-schema) below
 - `--list-review`: List queue items, priority-sorted (filters: `--review-status pending|accepted|overridden|kept_original|skipped|all` default pending; `--domain`; `--review-source native_pass|stage1_deferred|learned_suggestion|manual`)
@@ -126,7 +126,7 @@ uv run scripts/fix_transcription.py --input meeting.md --stage 1 --output ./meet
 - `1` - Missing required parameters, file not found, or API key not configured (Stage 2/3)
 - `2` - `--resolve-review` refused because the anchor text no longer matches the target file (re-anchor needed; nothing was applied — fail closed); also `--reanchor-review` when every requested id failed
 - `3` - `--enqueue-review` rejected one or more items whose `original`/`context` is not verbatim in the declared file (see `rejected_unanchored` in the JSON; items in `added` WERE enqueued — fix the rejects and re-enqueue them)
-- API request failures do **not** get a dedicated exit code — the pipeline keeps the original text and prints a warning (see "API Fallback" in SKILL.md)
+- API request failures do **not** get a dedicated exit code — the pipeline keeps the original text and prints a warning (see [SKILL.md](../SKILL.md)「Agent-less API route」)
 
 `--report-false-positive` carries its own codes, because a caller could not
 otherwise tell "I disabled it just now" from "it was already off" — both used

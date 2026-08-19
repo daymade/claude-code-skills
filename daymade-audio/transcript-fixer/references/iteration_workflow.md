@@ -91,7 +91,7 @@ Safe dictionary candidates are **non-words and garbled fragments** — a rule fi
 | **Person / project names** | `<garbled-name>`→`<canonical-name>` | Project `--domain` (isolated), not `general` |
 | **Common-word homophones** | 减→剪, 赢→营, 营业→营的 | ❌ NOT the dictionary — the "from" side is a real word (减少/输赢/营业), so a blanket rule corrupts other sentences. Route to the domain **context file** with its disambiguating cue (`domain_context_guide.md`). |
 
-Rule of thumb: if the "from" side is real text in some other reading, it does not belong in the dictionary. (Mirrors SKILL.md's decision matrix + `false_positive_guide.md`.)
+Rule of thumb: if the "from" side is real text in some other reading, it does not belong in the dictionary. (Mirrors the decision matrix in [dictionary_identity_and_context.md](dictionary_identity_and_context.md) plus `false_positive_guide.md`.)
 
 ## When the optional GLM API route fails
 

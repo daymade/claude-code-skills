@@ -26,7 +26,7 @@ Use a two-phase loop:
 
 ## Run context
 
-All scripts use PEP 723 metadata and run through `uv run`. Execute commands from the skill directory printed when this skill was invoked, or prefix every script path with that directory. Do not rely on `$CLAUDE_SKILL_DIR`; it is not available in every harness.
+Run every entrypoint through `uv run`; entrypoints that need third-party Python packages declare them with PEP 723, while stdlib/internal-only utilities may omit the metadata block. Execute commands from the skill directory printed when this skill was invoked, or prefix every script path with that directory. Do not rely on `$CLAUDE_SKILL_DIR`; it is not available in every harness.
 
 If the bundle location is genuinely unknown, use the installation-resolution procedure in [references/installation_setup.md](references/installation_setup.md). Do not select the first result from a broad `find`: caches, backups, and old versions can coexist.
 

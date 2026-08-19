@@ -141,7 +141,8 @@ Per-occurrence context for a learned suggestion (one suggestion → many example
 
 Persistent queue of uncertain corrections awaiting a human verdict (native-pass
 uncertain items, Stage 1 safe-mode deferrals, manual entries). Behavior and
-workflow live in SKILL.md's "Review Queue" section; this is the storage shape.
+workflow live in [review_queue_dashboard.md](review_queue_dashboard.md); this
+is the storage shape.
 
 | Column | Type | Description |
 |--------|------|-------------|

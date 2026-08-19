@@ -16,7 +16,9 @@ Complete installation and configuration guide for transcript-fixer.
 
 ### Dependencies
 
-所有脚本使用 PEP 723 内联元数据，`uv run` 会自动安装依赖。只需要安装 [uv](https://docs.astral.sh/uv/getting-started/installation/) 即可。
+所有入口都通过 `uv run` 执行；需要第三方 Python 包的主入口用 PEP 723
+声明依赖，只使用标准库或仓内模块的工具可以没有 metadata block。安装
+[uv](https://docs.astral.sh/uv/getting-started/installation/) 后，下面的主 CLI 会自动准备依赖。
 
 ```bash
 # 直接运行（推荐）

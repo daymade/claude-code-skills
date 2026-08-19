@@ -53,7 +53,7 @@ Transcript:
 
 20 条 uncertain 入队 → dashboard 裁决。**事故**：#24 enqueue 的 `original` 拖了整句「我们的民宿就完了」，用户 override 品牌名「栖云」→ CLI 的 file_edit 把**整句**替换成「栖云」，上下文被吞。修法三层：
 
-1. **enqueue 粒度**（根因，零成本）：`original` 只放 ASR 误写的那个词，整句放 `context`——SKILL.md step 7 已写明
+1. **enqueue 粒度**（根因，零成本）：`original` 只放 ASR 误写的那个词，整句放 `context`——[native_ai_full_workflow.md](native_ai_full_workflow.md) step 7 已写明
 2. **dashboard UI**（防线）：override 输入框上方恒显「替换范围（整段）：「<original>」」，输入远短于原文时琥珀色警告——已修（app.js `updateOverrideScope`）
 3. **裁决后抽查**：dashboard 批量裁决完，逐行 grep 核验落地 + 抽读关键行语义（本次靠这步发现丢字）
 

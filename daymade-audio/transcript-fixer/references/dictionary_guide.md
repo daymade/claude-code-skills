@@ -14,7 +14,7 @@
 uv run scripts/fix_transcription.py --add "错误词" "正确词" [--domain <domain>]
 ```
 
-- `--domain` 决定规则归属（默认 `general`）。**项目特定的词（人名 / 项目黑话 / 产品代号）务必用项目专属 domain**，不要进 `general`——否则会污染别项目的转写。详见 SKILL.md「Project-Specific & Person-Name Corrections」。
+- `--domain` 决定规则归属（默认 `general`）。**项目特定的词（人名 / 项目黑话 / 产品代号）务必用项目专属 domain**，不要进 `general`——否则会污染别项目的转写。详见 [dictionary_identity_and_context.md](dictionary_identity_and_context.md) 的「Project-Specific & Person-Name Corrections」。
 - 应用时 `--stage 1 --domain <domain>` **只用该 domain 的规则**；`--domain all`（默认）用所有 domain。这就是隔离机制：`--domain <项目>` 的人名规则不会作用于别项目转写。
 
 ## 两类规则
@@ -39,7 +39,7 @@ uv run scripts/fix_transcription.py --add "错误词" "正确词" [--domain <dom
 |---|---|
 | `--list [--domain <d>]` | 列出规则 |
 | `--audit [--domain <d>]` | 体检词典，报告可疑规则（短词 / 冲突等） |
-| `--report-false-positive "<from>" "<to>" -d <d>` | 停用一条误报规则、降低其置信度。**两个参数是规则在词典里存的 from→to 对**（照 `*_changes.md` 的 From/To 抄），不是「错词→对词」语义——详见 SKILL.md 的 Native AI Correction step 2 |
+| `--report-false-positive "<from>" "<to>" -d <d>` | 停用一条误报规则、降低其置信度。**两个参数是规则在词典里存的 from→to 对**（照 `*_changes.md` 的 From/To 抄），不是「错词→对词」语义——详见 [native_ai_full_workflow.md](native_ai_full_workflow.md) step 2 |
 | `--load-presets <domain>` | 导入某 domain 的预置规则集（如 `tech`） |
 
 ## 学习闭环（AI → 词典自动晋升）

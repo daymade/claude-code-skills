@@ -19,6 +19,11 @@ from core.dictionary_processor import (  # noqa: E402
     DictionaryProcessor,
     _mask_ledger_spans,
     _restore_ledger_spans,
+    project_without_ledger_values,
+)
+from core.protected_spans import (  # noqa: E402
+    mask_speaker_labels,
+    restore_speaker_labels,
 )
 
 # A transcript fronted by a correction-ledger note that cites the old form
@@ -91,6 +96,14 @@ class TestMaskRestorePrimitives:
     def test_restore_round_trip(self):
         masked, spans = _mask_ledger_spans(LEDGER_TRANSCRIPT)
         assert _restore_ledger_spans(masked, spans) == LEDGER_TRANSCRIPT
+
+    def test_scan_projection_removes_ledger_value_not_body_fill_chars(self):
+        text = LEDGER_TRANSCRIPT + "正文保留 □ 不清晰标记。\n"
+        projected = project_without_ledger_values(text)
+        assert "asr_note: " in projected
+        assert "丹娜→Dyna" not in projected
+        assert "TFLEDGER" not in projected
+        assert "正文保留 □ 不清晰标记。" in projected
 
     def test_restore_survives_length_change_elsewhere(self):
         # A body correction changes total length; the filler run must still
@@ -180,3 +193,50 @@ class TestMaskRestorePrimitives:
         # its citation gets rewritten — pinned as the known degraded behavior
         assert "asr_note: 主会已过纠错。修正含：Dyna→Dyna、图度→苏度。未修：小鱼说。" in corrected
         assert "我们今天聊Dyna这个模型。" in corrected  # body still corrected
+
+
+class TestSpeakerLabelProtection:
+    @pytest.mark.parametrize(
+        "label_line",
+        [
+            "spekarA 00:01:00",
+            "**spekarA** 00:01:00.000",
+            "spekarA [00:01]",
+        ],
+    )
+    def test_dictionary_rule_changes_body_but_not_label(self, label_line):
+        text = f"{label_line}\n正文 spekarA"
+        processor = DictionaryProcessor(
+            corrections={"spekarA": "Speaker A"},
+            context_rules=[],
+        )
+        corrected, changes = processor.process(text, review_mode=False)
+        assert corrected == f"{label_line}\n正文 Speaker A"
+        assert [change.line_number for change in changes] == [2]
+
+    def test_context_rule_changes_body_but_not_label(self):
+        text = "spekarA 00:01:00\n正文 spekarA"
+        processor = DictionaryProcessor(
+            corrections={},
+            context_rules=[{
+                "pattern": "spekarA",
+                "replacement": "Speaker A",
+                "description": "speaker typo",
+            }],
+        )
+        corrected, changes = processor.process(text, review_mode=False)
+        assert corrected == "spekarA 00:01:00\n正文 Speaker A"
+        assert [change.line_number for change in changes] == [2]
+
+    def test_damaged_speaker_marker_fails_closed(self):
+        masked, spans = mask_speaker_labels("spekarA 00:01:00\n正文。")
+        assert spans
+        damaged = masked.replace(spans[0][0], "marker-damaged")
+        with pytest.raises(ValueError, match="uncertain attribution"):
+            restore_speaker_labels(damaged, spans)
+
+    def test_moved_speaker_marker_fails_closed(self):
+        masked, spans = mask_speaker_labels("spekarA 00:01:00\n正文。")
+        moved = "正文。\n" + spans[0][0]
+        with pytest.raises(ValueError, match="uncertain attribution"):
+            restore_speaker_labels(moved, spans)
