@@ -1,4 +1,8 @@
-# Example Session
+# Agent-less API-stage example
+
+This is a compact Stage 1/Stage 2 mechanics example for automation without an
+agent. It is not the recommended Claude/Codex workflow; for Native AI Correction
+use `example_session_dji_minutes.md` and the main SKILL.md.
 
 ## Input transcript (`meeting.md`)
 ```

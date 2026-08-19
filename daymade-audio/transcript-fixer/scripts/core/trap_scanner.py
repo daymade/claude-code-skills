@@ -16,7 +16,11 @@ remembering what to grep.
 
 Entry shapes parsed (all observed in production context files):
   - **减 → 剪** — 判据说明…                     (single variant)
+  - **减 ≈ 剪** — 判据说明…                     (legacy mapping alias; left is
+                                                 still observed ASR text)
   - **卖吸引/卖新鲜/卖新的 → 麦锡颖** — …         (multi-variant, "/" separated)
+  - **`CC 思维链` → CC Switch** — …             (quoted exact phrase; internal
+                                                 whitespace is literal)
   - **报 → 爆（anchored）** — …                  (TO side carries a parenthesized
                                                  annotation — stripped)
   - **撕 → "丝"** — …                            (TO side quoted — stripped)
@@ -37,7 +41,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
-# A trap pair is a bold arrow pair AT A BULLET LINE START. Both sides are
+from core.dictionary_processor import _mask_ledger_spans
+
+# A trap pair is a bold mapping AT A BULLET LINE START. 「→」 is canonical;
+# legacy context files used 「≈」 with the same directional convention (left =
+# observed ASR, right = intended text), so both are executable. Both sides are
 # stripped of quotes / backticks; the FROM side may carry "/" -separated
 # variants; the TO side is cut at the first parenthesized annotation
 # (（anchored）/（两解…）/etc). The line-start anchor is load-bearing, not
@@ -46,7 +54,7 @@ from typing import List, Optional
 # 单→双 entry that would then report every 单 in the transcript as a hit) —
 # observed against a real production context file.
 _BOLD_TRAP = re.compile(
-    r"^[ \t]*(?:[-*+]|\d+\.)[ \t]*\*\*([^*\n]+?)\s*→\s*([^*\n]+?)\*\*",
+    r"^[ \t]*(?:[-*+]|\d+\.)[ \t]*\*\*([^*\n]+?)\s*[→≈]\s*([^*\n]+?)\*\*",
     re.MULTILINE,
 )
 # Confirmed-correct record: **X = <text containing a keep-word>**, same
@@ -74,17 +82,35 @@ _ANNOTATION_REF = re.compile(r"已入|见|参|同上|同前|cf\.")
 
 _STRIP_CHARS = "「」\"'“”‘’`"
 
-# A trap variant is a WORD, not a sentence: no whitespace, no punctuation, no
-# quotes/backticks. Prose fragments caught by the bold-pair regex (a context
+# A bare trap variant is a WORD, not a sentence: no whitespace, punctuation,
+# or embedded quotes/backticks. A whole variant explicitly wrapped in quotes
+# may contain literal whitespace (e.g. `CC 思维链`). Prose fragments caught by the bold-pair regex (a context
 # file's own commentary discussing an anchored rule, e.g. **已入 `视频报的→
 # 视频爆的`**) always violate this — the constraint is what keeps "every bold
 # arrow pair" from degrading into "every arrow mentioned in prose".
 _BAD_VARIANT = re.compile(r"[\s，。；：、（）()\[\]【】\"'“”‘’`]")
+_BAD_LITERAL_PUNCT = re.compile(r"[，。；：、（）()\[\]【】\"'“”‘’`]")
 _MAX_TERM_LEN = 12
 
 
 def _clean_token(token: str) -> str:
     return token.strip().strip(_STRIP_CHARS).strip()
+
+
+def _is_explicit_literal(token: str) -> bool:
+    """Return whether ``token`` explicitly quotes one literal scan phrase.
+
+    Bare whitespace remains ambiguous with prose and keeps the existing
+    fail-loud behavior. Wrapping the whole variant in a matching quote pair
+    makes the internal spaces part of the exact substring to scan.
+    """
+    token = token.strip()
+    pairs = (("`", "`"), ('"', '"'), ("'", "'"), ("“", "”"),
+             ("‘", "’"), ("「", "」"))
+    return len(token) >= 2 and any(
+        token.startswith(left) and token.endswith(right)
+        for left, right in pairs
+    )
 
 
 def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None,
@@ -101,6 +127,7 @@ def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None,
 
     Three production shapes:
       卖吸引/卖新鲜/卖新的          -> the variants themselves
+      `CC 思维链`/`CC switch`     -> quoted exact phrases; spaces are literal
       升单系（圣诞/上单/生单        -> a FAMILY NAME prefix + parenthesized
                                      variant list ("/"-separated); the prefix
                                      (升单系) is a real word and must not be
@@ -118,10 +145,12 @@ def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None,
         body = raw_from[: m.start()]  # comment parentheses: keep the word
     else:
         body = raw_from
-    variants = [_clean_token(v) for v in re.split(r"[/／]", body)]
+    raw_variants = re.split(r"[/／]", body)
     kept = []
     local_drops = []
-    for v in variants:
+    for raw_variant in raw_variants:
+        explicit_literal = _is_explicit_literal(raw_variant)
+        v = _clean_token(raw_variant)
         if not v:
             continue
         if len(v) > _MAX_TERM_LEN:
@@ -133,6 +162,10 @@ def _parse_from_side(raw_from: str, dropped: Optional[List[tuple]] = None,
             # Rejected silently, exactly as before this channel existed.
             continue
         if _BAD_VARIANT.search(v):
+            if (explicit_literal and re.search(r"\s", v)
+                    and not _BAD_LITERAL_PUNCT.search(v)):
+                kept.append(v)
+                continue
             # Whitespace only makes a term inexpressible when the term genuinely
             # contains it — a Latin token next to a CJK one (PEST 框架, 人均 GDP),
             # which is the shape this channel was built for. A run of Han
@@ -376,7 +409,13 @@ def scan_text(
     repeats would hide exactly the recurrence signal that matters.
     """
     hits: List[TrapHit] = []
-    lines = text.splitlines()
+    # Single-line correction provenance deliberately quotes old forms as evidence
+    # (`asr_note: old → new`). Stage 1 already masks that ledger; trap-scan must
+    # consume the same projection or every completed correction reappears as a
+    # residual. Other frontmatter (keywords/title) remains live because it is an
+    # ASR-derived search surface. The shared helper preserves line numbers.
+    projected_text, _ = _mask_ledger_spans(text)
+    lines = projected_text.splitlines()
     for entry in entries:
         for variant in entry.from_variants:
             for line_no, line in enumerate(lines, start=1):

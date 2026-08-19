@@ -2,6 +2,12 @@
 
 Detailed command-line parameters and usage examples for transcript-fixer Python scripts.
 
+> **Route warning:** this file documents the CLI surface, including legacy API
+> stages. Inside Claude Code, the recommended workflow is explicit Stage 1 plus
+> Native AI Correction; the parser's default `--stage 3` is backward-compatible
+> CLI behavior, not the recommended skill route. Stage 3 is for automation that
+> has no Claude/Codex agent available.
+
 ## Table of Contents
 
 - [fix_transcription.py](#fixtranscriptionpy) - Main correction pipeline
@@ -34,8 +40,8 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 - `--input, -i` (required): Input Markdown file path
 - `--stage, -s` (optional): Stage to execute (default: 3)
   - `1` = Dictionary corrections only
-  - `2` = AI corrections only (requires Stage 1 output file)
-  - `3` = Both stages sequentially
+  - `2` = Stage 1 dictionary pass followed by API AI correction
+  - `3` = Stage 1 + API AI correction + diff report
 - `--output, -o` (optional): Where results are written — accepts either a **directory** (the sidecars `<stem>_stage1.md` / `_changes.md` / `_needs_review.md` are written into it) **or a file path** ending in `.md`/`.markdown`/`.txt` that is not an existing directory (the corrected Stage 1 output is written directly to that exact file). Defaults to the input file's directory. Every "Saved" / report line prints the full resolved path, so a misdirected output is visible immediately. (Passing a file path used to silently `mkdir` a directory of that name and hide the output inside it — fixed.)
 - `--domain, -d` (optional): Restrict to one correction domain (default: all domains). Accepts a comma-separated list (`--domain myproject,myproject-alt`): every listed domain's rules load as one union for Stage 1, and `--apply-domain` trusts the whole union. Write commands (`--add`, `--approve`) still require exactly one domain and fail fast on a list.
 - `--apply-all` (optional): Opt out of the default safe mode and apply every risk level (low/medium/high). Higher false-positive risk — see false_positive_guide.md.
@@ -45,7 +51,7 @@ uv run scripts/fix_transcription.py --input <file> --stage <1|2|3> [--output <di
 
 **Evidence commands** (read-only; turn the native pass's manual grep loops into single invocations — semantics in SKILL.md "Native AI Correction" steps 4-6):
 
-- `--scan-traps --context-file <domain-context.md> -i <transcript>`: parse every `**误识 → 正确**` entry out of a domain context file and locate each variant in the transcript (line number + context window), grouped by entry; `**X = …勿修…**` confirmed-correct records are reported as keep-as-is; entries with zero hits are listed so "scanned and absent" is distinguishable from "never scanned". Bullets the parser could not turn into a scannable entry at all are reported **first**, under `⚠️ N documented trap(s) NOT scanned` — one line per bullet, so the count is bullets rather than internal reasons. With `--json` the same information is the `unparsed` key: a list of `{raw, fragment, reason}`. A machine caller reading only `hits`/`no_hit` concludes "no traps here" from a scan that never looked at some of them, which is exactly the coverage gap this key exists to close. Shapes that stay deliberately silent (they are not coverage gaps): a rejected variant sitting beside a good one, Han-only prose split by a space, and an annotation parenthesis that cites or exemplifies the same rule
+- `--scan-traps --context-file <domain-context.md> -i <transcript>`: parse every `**误识 → 正确**` entry out of a domain context file and locate each variant in the transcript (line number + context window), grouped by entry. Legacy `≈` entries use the same left-observed/right-intended convention. Wrap an exact multi-word FROM variant in backticks (for example `` `CC 思维链` ``); bare whitespace remains unparseable. `**X = …勿修…**` confirmed-correct records are reported as keep-as-is. A single-line leading-frontmatter value under `asr_note` is excluded because it intentionally quotes old forms as correction provenance; multi-line YAML ledger values are not masked. Keywords, titles, and body text remain in scope. Entries with zero hits are listed so "scanned and absent" is distinguishable from "never scanned". Bullets the parser could not turn into a scannable entry at all are reported **first**, under `⚠️ N documented trap(s) NOT scanned` — one line per bullet, so the count is bullets rather than internal reasons. With `--json` the same information is the `unparsed` key: a list of `{raw, fragment, reason}`. A machine caller reading only `hits`/`no_hit` concludes "no traps here" from a scan that never looked at some of them, which is exactly the coverage gap this key exists to close. Shapes that stay deliberately silent (they are not coverage gaps): a rejected variant sitting beside a good one, Han-only prose split by a space, and an annotation parenthesis that cites or exemplifies the same rule
 - `--probe <term> --corpus <dir>`: the term's real-meaning frequency across every `*.md` under the corpus dir (recursive) — per-file counts + sampled context windows + the verdict criterion (all-error → bare rule safe / any real meaning → anchored or do-not-add / zero → safe but compounds nothing)
 - `--check-corpus` (with `--add`): run the same probe on the FROM term before the rule is written; advisory, never blocks. Requires `--corpus`
 - `--json` works with both: one machine-readable result line on stdout
@@ -88,14 +94,12 @@ uv run scripts/fix_transcription.py --input meeting.md --stage 1
 
 Output: `meeting_stage1.md` (only when corrections were applied — a 0-correction run writes no `_stage1.md`; safe-mode deferrals go to `_needs_review.md`)
 
-**Run AI corrections only:**
+**Run the API correction route (Stage 1 runs first automatically):**
 ```bash
-uv run scripts/fix_transcription.py --input meeting_stage1.md --stage 2
+uv run scripts/fix_transcription.py --input meeting.md --stage 2
 ```
 
 Output: `meeting_stage2.md`
-
-Note: Requires Stage 1 output file as input.
 
 **Run complete pipeline:**
 ```bash
@@ -273,9 +277,9 @@ Generates four files in the output directory:
 
 ## Common Workflows
 
-### Testing Dictionary Changes
+### Testing dictionary changes inside an agent session
 
-Test dictionary updates before running expensive AI corrections:
+Test dictionary updates before the Native AI pass:
 
 ```bash
 # 1. Add the rule (dictionary lives in SQLite, not a source variable):
@@ -286,11 +290,10 @@ uv run scripts/fix_transcription.py --input meeting.md --stage 1
 # 3. Review output
 cat meeting_stage1.md
 
-# 4. If satisfied, run Stage 2
-uv run scripts/fix_transcription.py --input meeting_stage1.md --stage 2
+# 4. If satisfied, perform Native AI Correction with SKILL.md loaded.
 ```
 
-### Batch Processing
+### Agent-less API batch processing
 
 Process multiple transcripts in sequence:
 
@@ -300,7 +303,7 @@ for file in transcripts/*.md; do
 done
 ```
 
-### Quick Review Cycle
+### Agent-less API review cycle
 
 Generate and open word-level diff immediately after correction:
 

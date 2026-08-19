@@ -72,6 +72,20 @@ class TestExtractTrapEntries:
         entries = extract_trap_entries("- ** → **\n- ** only-from → **\n- **→ 没有from**\n")
         assert entries == []
 
+    def test_approx_mapping_is_a_supported_legacy_trap_shape(self):
+        """Existing context files used ≈ before the scanner standardized →.
+
+        A bullet-line bold mapping is already an explicit trap declaration, so
+        silently returning zero entries loses coverage.  Treat the left side as
+        the observed ASR form and the right side as the intended form.
+        """
+        dropped = []
+        entries = extract_trap_entries("- **误识词 ≈ 正确词** — 按上下文判断。\n", dropped)
+        assert dropped == []
+        assert len(entries) == 1
+        assert entries[0].from_variants == ("误识词",)
+        assert entries[0].to_text == "正确词"
+
 
 class TestProseFalsePairRejection:
     """The bold-pair shape also matches prose that merely CONTAINS an arrow —
@@ -156,6 +170,42 @@ class TestScanText:
         kinds = {h.kind for h in hits}
         assert kinds == {"confirmed_correct"}
 
+    def test_frontmatter_asr_note_is_not_scanned_as_a_residual(self):
+        """Correction provenance intentionally quotes old forms.
+
+        The same term in ASR-derived metadata or body text must still be found;
+        only the explicit ``asr_note`` evidence trail is outside scan scope.
+        """
+        entries = extract_trap_entries("- **旧写法 → 正确写法**\n")
+        text = (
+            "---\n"
+            "keywords: [旧写法]\n"
+            "asr_note: 'Native correction: 旧写法 → 正确写法'\n"
+            "---\n"
+            "正文仍有旧写法。\n"
+        )
+        hits = scan_text(text, entries)
+        assert [h.line for h in hits] == [2, 5]
+
+    def test_multiline_asr_note_is_honestly_not_masked(self):
+        """The shared Stage 1 projection supports single-line ledgers only."""
+        entries = extract_trap_entries("- **旧写法 → 正确写法**\n")
+        text = (
+            "---\n"
+            "asr_note: >-\n"
+            "  旧写法 was corrected\n"
+            "title: clean\n"
+            "---\n"
+            "正文旧写法。\n"
+        )
+        hits = scan_text(text, entries)
+        assert [h.line for h in hits] == [3, 6]
+
+    def test_asr_note_text_outside_frontmatter_remains_scannable(self):
+        entries = extract_trap_entries("- **旧写法 → 正确写法**\n")
+        hits = scan_text("讨论 asr_note 时仍说了旧写法。", entries)
+        assert [h.line for h in hits] == [1]
+
 
 class TestReport:
     def test_report_separates_hits_from_no_hits(self):
@@ -223,6 +273,17 @@ class TestDroppedCoverage:
         assert entries == []
         assert dropped != []
         assert all("without spaces" not in reason for _, _, reason in dropped)
+
+    def test_explicitly_quoted_multiword_variant_is_scannable(self):
+        """Whitespace is ambiguous in bare prose but exact inside backticks."""
+        dropped = []
+        entries = extract_trap_entries(
+            "- **`CC 思维链`/`CC switch` → CC Switch** — 客户端配置语境。\n",
+            dropped,
+        )
+        assert dropped == []
+        assert len(entries) == 1
+        assert entries[0].from_variants == ("CC 思维链", "CC switch")
 
     def test_han_only_prose_with_a_space_stays_silent(self):
         """A run of Han characters split by a space is prose punctuation, not a

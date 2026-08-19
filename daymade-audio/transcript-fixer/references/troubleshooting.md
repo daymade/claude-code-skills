@@ -199,22 +199,22 @@ uv run scripts/fix_transcription.py --init
 
 Safe mode is the default, so Stage 1 only auto-applies **low-risk** (non-word, high-confidence) corrections. On a clean transcript — or one from a strong ASR engine — there may be no low-risk dictionary hits, so `Applied: 0` is expected. Any medium/high-risk candidates are written to `*_needs_review.md` for you to confirm. To apply every risk level (the pre-safe-mode behavior), pass `--apply-all`.
 
-### 1. Stage Order Confusion
+### 1. Native route versus API stages
 
-**Problem**: Running Stage 2 without Stage 1 output.
+**Problem**: Treating the CLI stage number as the skill's recommended route.
 
-**Solution**: Use `--stage 3` for full pipeline, or run stages sequentially:
+**Solution**: Inside Claude/Codex, run explicit Stage 1 and then Native AI
+Correction. In agent-less API automation, Stage 2 and Stage 3 both run Stage 1
+internally; Stage 3 additionally creates the diff report.
 
 ```bash
-# Wrong: Stage 2 on raw file
-uv run scripts/fix_transcription.py --input file.md --stage 2  # ❌
-
-# Correct: Full pipeline
-uv run scripts/fix_transcription.py --input file.md --stage 3  # ✅
-
-# Or sequential stages
+# Agent session (recommended)
 uv run scripts/fix_transcription.py --input file.md --stage 1
-uv run scripts/fix_transcription.py --input file_stage1.md --stage 2
+# Then perform Native AI Correction with this skill loaded.
+
+# Agent-less API route
+uv run scripts/fix_transcription.py --input file.md --stage 2
+uv run scripts/fix_transcription.py --input file.md --stage 3  # adds diff report
 ```
 
 ### 2. Overwriting Imports

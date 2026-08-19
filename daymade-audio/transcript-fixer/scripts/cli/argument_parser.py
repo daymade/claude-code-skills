@@ -149,7 +149,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="scan_traps",
         help="Scan --input for every trap documented in --context-file (a domain "
-             "context markdown): parses each **误识 → 正确** entry, locates every "
+             "context markdown): parses each **误识 → 正确** entry (legacy ≈ "
+             "accepted; quote exact multi-word variants), locates every "
              "variant with line number + context window, and lists no-hit entries "
              "so 'scanned and absent' is distinguishable from 'never scanned'. "
              "Replaces the manual per-trap grep loop in the native pass's "

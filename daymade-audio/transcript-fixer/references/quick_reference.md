@@ -1,5 +1,9 @@
 # Quick Reference
 
+> Inside Claude/Codex, use Stage 1 plus Native AI Correction. Stage 2/3 examples
+> elsewhere in the bundle are for agent-less API automation. Prefer the CLI over
+> direct SQL writes; read `database_schema.md` before any custom query.
+
 **Storage**: transcript-fixer uses SQLite database for corrections storage.
 
 **Database location**: `~/.transcript-fixer/corrections.db`

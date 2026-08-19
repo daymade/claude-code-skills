@@ -2,6 +2,9 @@
 
 Complete installation and configuration guide for transcript-fixer.
 
+> Native AI Correction requires only `uv`; the GLM API configuration below is
+> optional and applies only to agent-less Stage 2/3 automation.
+
 ## Table of Contents
 
 - [Installation](#installation)
