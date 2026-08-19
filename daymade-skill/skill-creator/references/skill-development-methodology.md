@@ -254,7 +254,7 @@ Counter-review 的价值不是「列出所有风险」，而是 surface 你没�
 
 ### 6.5 多层验证互补，但不是每次全买
 
-对抗性 counter-review 抓工程健壮性 + skill 质量，但它不是唯一一层。下面三层各抓不同问题、各有独立盲区：
+对抗性 counter-review 抓工程健壮性 + skill 质量，但它不是唯一一层。下列验证层各抓不同问题、各有独立盲区：
 
 | 层 | 抓什么 | 独立盲区 |
 |----|--------|---------|
@@ -262,11 +262,11 @@ Counter-review 的价值不是「列出所有风险」，而是 surface 你没�
 | **外部 review**（如 Codex 等**别的模型**） | 你和你的审查 agent 的**共同盲区**——尤其撞用户自己的铁律（如 NO FALLBACK 兜底） | 依赖该工具可用 |
 | **eval**（with/without-skill baseline） | skill 的**事实错误**（baseline 揭示，见 5.4）+ 真价值分布（见 5.5） | 客观断言有水分（见 5.3） |
 
-Tier 3 可组合三层，因为它的失败面足以支付这笔成本；Tier 1/2 只选能裁决本次变化的层。战例：一个高风险 skill 的对抗审查抓工程健壮性、外部 review 抓 NO FALLBACK 违规、eval 又抓出“数据其实在 API”的事实错误——证明三层**能力互补**，不证明每个 typo 都必须跑三层。
+任何 tier 都只选能裁决本次变化、且已通过独立证据预算门的层。广泛或高风险的失败面更可能让多层方案值得被提出，但 Tier 3 标签本身不支付这笔成本。战例：一个高风险 skill 的对抗审查抓工程健壮性、外部 review 抓 NO FALLBACK 违规、eval 又抓出“数据其实在 API”的事实错误——证明这些层**能力互补**，不证明每个 typo 都必须跑全套。
 
 ## Phase 7 & 8: Description Optimization + Packaging
 
-SKILL.md 已完整覆盖描述优化循环（20 个 eval query、60/40 train/test split、5 轮迭代）和打包流程（prerequisites、security scan、marketplace.json）。无补充。
+SKILL.md 已完整覆盖描述优化循环和打包流程；本 reference 不复制这些会随实现变化的参数。无补充。
 
 ## Phase 9: 实战案例库（每条规则背后的事故）
 

@@ -6,7 +6,7 @@ Use this only when the user explicitly asks to read local/past conversation hist
 
 - "mine my chat history for the patterns we just figured out"
 - "turn my earlier sessions into a skill reference"
-- "distill what we learned into the skill"
+- "distill what we learned in my earlier sessions into the skill"
 - "enrich <skill> from my recent transcripts"
 
 It is **not** a generic skill-creation flow and is not implied by a long live conversation. When the relevant evidence is already in the current context, use the normal existing-skill update path without history discovery, chunking, or mining agents. After an explicitly requested mining run completes, return to the normal skill-creator steps (edit `SKILL.md`, validate, scan, package).

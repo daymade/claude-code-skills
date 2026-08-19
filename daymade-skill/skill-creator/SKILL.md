@@ -7,10 +7,10 @@ description: >-
   users want to create a skill from scratch, edit, or optimize an existing
   skill, run evals to test a skill, benchmark skill performance with variance
   analysis, or optimize a skill's description for better triggering accuracy.
-  Also use for its three specialized distillations, even when the user never
+  Also use for its specialized distillations, even when the user never
   says "skill" — "wrap this session up as a skill" / "把这次 session 做成一个
   skill" (wrapper skill for a third-party tool), "mine my chat history for
-  patterns" / "把这次对话沉淀到 skill 里" (conversation mining), and "these are
+  patterns" / "把以前的 Claude/Codex 对话沉淀到 skill 里" (conversation mining), and "these are
   my approved examples, learn what I really want" /
   "从我认可的样例里提炼我真正的喜好" (artifact-corpus preference distillation).
 license: Complete terms in LICENSE.txt
@@ -121,15 +121,15 @@ It's OK to briefly explain terms if you're in doubt, and feel free to clarify te
 
 ### Capture Intent
 
-Start by understanding the user's intent. The current conversation might already contain a workflow the user wants to capture (e.g., they say "turn this into a skill"). If so, extract answers from the conversation history first — the tools used, the sequence of steps, corrections the user made, input/output formats observed. The user may need to fill the gaps, and should confirm before proceeding to the next step.
+Start by understanding the user's intent. The current conversation might already contain a workflow the user wants to capture (e.g., they say "turn this into a skill"). If so, extract answers from the live conversation first — the tools used, the sequence of steps, corrections the user made, input/output formats observed. The user may need to fill the gaps, and should confirm before proceeding to the next step.
 
 **Source inventory — always before drafting, with consent boundaries.** Inventory the live conversation and existing docs/skills that overlap (see Prior Art Research below). Earlier local session JSONL files are a separate private source: do not open or parse them unless the user explicitly asks to mine history or affirmatively approves that source after you explain what will be read. If approved, fold only relevant prior sessions in through the conversation-mining workflow's redacted extraction; never load raw transcripts into your own context. If not approved, continue from the live conversation and existing project sources without treating the missing history as a blocker.
 
-When mining a conversation (or session transcripts), inventory **two kinds of assets — they land in different places**. *Knowledge* — endpoints, parameters, pitfalls, decision rules — becomes SKILL.md guidance or `references/`. *Code the session had to write* — helper scripts, injected snippets, renderers, one-off templates — is a `scripts/` candidate: if this session wrote it, the next invocation will have to rewrite it, so parameterize it, sanitize it, and bundle it. A prior distillation captured polished prose but omitted the reusable helpers; the general lesson is to keep both knowledge→references and code→scripts channels in frame.
+When mining a conversation (or session transcripts), inventory **both asset classes — they land in different places**. *Knowledge* — endpoints, parameters, pitfalls, decision rules — becomes SKILL.md guidance or `references/`. *Code the session had to write* — helper scripts, injected snippets, renderers, one-off templates — is a `scripts/` candidate: if this session wrote it, the next invocation will have to rewrite it, so parameterize it, sanitize it, and bundle it. A prior distillation captured polished prose but omitted the reusable helpers; the general lesson is to keep both knowledge→references and code→scripts channels in frame.
 
-When the source material is *past* session transcripts (the JSONL files under the Claude Code projects directory) rather than the live conversation, do not load them into your own context — a large transcript can exhaust the window and lose the session. Delegate extraction to subagents instead, with explicit instructions to parse line-by-line with a script, truncate every extracted field, and return only a distilled lessons list — the raw transcript never enters the main context.
+When the source material is *past* session transcripts (the JSONL files under the Claude Code projects directory) rather than the live conversation, enter the conversation-mining workflow. Do not open raw transcripts in the main context or hand raw paths/content to subagents. Its deterministic manifest → discover → redact → chunk sequence must finish before any agent sees content; only redacted chunks may enter the minimum role/shard plan, with the exact unit count and concurrency cap declared under the budget gate.
 
-**First, resolve which DIRECTION this is — before the four questions below.** The request may be one of several *opposite* things: build a NEW skill / edit an EXISTING skill / optimize skill-creator itself / or it's not-a-skill-at-all (a one-off task). Guessing wrong wastes the whole session — the research you'd do for "new skill" is the wrong research for "optimize the meta-tool." When the phrasing is ambiguous (e.g. "make me a skill" while pointing at skill-creator's own path), one AskUserQuestion here costs 30 seconds. The wrapper-skill fork below is one special case of this; the direction check is general.
+**First, resolve which DIRECTION this is — before the questions below.** The request may be one of several *opposite* things: build a NEW skill / edit an EXISTING skill / optimize skill-creator itself / or it's not-a-skill-at-all (a one-off task). Guessing wrong wastes the whole session — the research you'd do for "new skill" is the wrong research for "optimize the meta-tool." When the phrasing is ambiguous (e.g. "make me a skill" while pointing at skill-creator's own path), one AskUserQuestion here costs 30 seconds. The wrapper-skill fork below is one special case of this; the direction check is general.
 
 `Use skill-creator to optimize <existing-skill>` means the normal existing-skill update path. It does **not** authorize conversation-history mining, a broad rewrite, Tier 3 classification, or multi-agent evaluation. Inspect the actual proposed deltas first; escalate only for a failure surface those deltas really introduce.
 
