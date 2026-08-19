@@ -28,7 +28,6 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Any, List, Optional
 from unittest.mock import AsyncMock
 
 # Add parent directory to path
@@ -46,14 +45,14 @@ from core.ai_utils import (
 from core.change_extractor import ChangeExtractor
 from core.correction_repository import CorrectionRepository, DatabaseError
 from core.correction_service import CorrectionService
-from utils.retry_logic import retry_sync, retry_async, RetryConfig, is_transient_error
+from utils.retry_logic import retry_async, RetryConfig, is_transient_error
 from utils.concurrency_manager import (
     ConcurrencyManager,
     ConcurrencyConfig,
     BackpressureError,
     CircuitBreakerOpenError
 )
-from utils.rate_limiter import RateLimiter, RateLimitConfig, RateLimitExceeded
+from utils.rate_limiter import RateLimiter, RateLimitConfig
 
 logger = logging.getLogger(__name__)
 
@@ -522,6 +521,26 @@ class TestAIChunkFailureFidelity:
         assert all(change.change_type == "formatting" for change in changes)
         assert all(change.learnable is False for change in changes)
 
+    def test_repetitive_cjk_diff_avoids_quadratic_sequence_matching(self):
+        # Production-shaped adversary: a long repetitive ASR chunk with one
+        # missing character. The previous SequenceMatcher(autojunk=False) path
+        # took 6.9s at only 10k characters and exceeded 10s at 50k.
+        size = 100_000
+        original = "甲" * size
+        corrected = original[: size // 2] + "乙" + original[size // 2 :]
+
+        started = time.perf_counter()
+        changes = ChangeExtractor().extract_changes(original, corrected)
+        elapsed = time.perf_counter() - started
+
+        assert [(change.from_text, change.to_text) for change in changes] == [
+            ("甲", "甲乙")
+        ]
+        # RapidFuzz measured ~0.1s end-to-end on the reference machine. Keep a
+        # wide threshold so normal CI load stays green while the old 6.9s/10k
+        # algorithm fails decisively.
+        assert elapsed < 3.0
+
     @pytest.mark.asyncio
     async def test_async_fallback_metrics_are_failures_not_successes(self, caplog):
         source = "甲。乙。丙。丁。戊。己。庚。辛。壬。癸。"
@@ -690,7 +709,7 @@ class TestConcurrencyErrorRecovery:
                 task.cancel()
 
         # Gather results (ignore cancellation errors)
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
         # Check metrics
         metrics = manager.get_metrics()
@@ -813,7 +832,7 @@ class TestDataCorruptionRecovery:
 
         try:
             # Should handle gracefully or raise specific error
-            changes = extractor.extract_changes(invalid_text, "corrected")
+            extractor.extract_changes(invalid_text, "corrected")
         except InputValidationError as e:
             # Expected - validation caught the issue
             assert "UTF-8" in str(e) or "encoding" in str(e).lower()

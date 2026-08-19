@@ -34,6 +34,8 @@ uv pip install -r requirements.txt
 **Required packages**:
 - `httpx>=0.24.0` - 用于 GLM API 调用
 - `filelock>=3.13.0` - 用于线程安全操作
+- `jieba>=0.42.1` - 用于中文短语审计与裸 CJK 说话人名判别
+- `rapidfuzz>=3.14.0,<4` - 用于 Stage 2 变更提取，避免重复文本触发二次复杂度差分
 
 ### Database Initialization
 

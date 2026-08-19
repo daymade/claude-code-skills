@@ -786,6 +786,8 @@ class SpellCheckProcessor:
 - Python 3.10+ (`from __future__ import annotations`)
 - `httpx` (for API calls)
 - `filelock` (for thread-safe operations)
+- `jieba` (for advisory Chinese phrase checks and bare CJK speaker-name tagging)
+- `rapidfuzz` (for bounded Stage 2 edit opcodes and change-history extraction)
 
 Primary entrypoints that need third-party packages use PEP 723 inline metadata;
 stdlib/internal-only utilities may omit it. Run every entrypoint with `uv run`.

@@ -19,11 +19,12 @@ CRITICAL FIX (P1-2): Comprehensive input validation
 
 from __future__ import annotations
 
-import difflib
 import logging
 import re
 from dataclasses import dataclass
 from typing import List, Tuple, Final
+
+from rapidfuzz.distance import Levenshtein
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class ChangeExtractor:
     Extract precise from→to changes from before/after text pairs
 
     Strategy:
-    1. Use difflib.SequenceMatcher for accurate diff
+    1. Use RapidFuzz's optimized Levenshtein opcodes for accurate bounded diff
     2. Retain formatting-only changes in history but exclude them from learning
     3. Extract context for confidence scoring
     4. Classify change types
@@ -193,16 +194,14 @@ class ChangeExtractor:
 
         original_tokens = self._tokenize(original)
         corrected_tokens = self._tokenize(corrected)
-        matcher = difflib.SequenceMatcher(
-            None,
+        opcodes = self._coalesce_opcodes(Levenshtein.opcodes(
             [token for token, _start, _end in original_tokens],
             [token for token, _start, _end in corrected_tokens],
-            autojunk=False,
-        )
+        ).as_list())
         changes = []
         seen: set[tuple[int, str, str]] = set()
 
-        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        for tag, i1, i2, j1, j2 in opcodes:
             if tag != 'equal':
                 original_start, original_end = self._token_span(
                     original_tokens, i1, i2, len(original)
@@ -313,14 +312,59 @@ class ChangeExtractor:
         return changes
 
     @staticmethod
+    def _coalesce_opcodes(
+        opcodes: list[tuple[str, int, int, int, int]],
+    ) -> list[tuple[str, int, int, int, int]]:
+        """Merge adjacent edit opcodes into one human/replayable change.
+
+        Levenshtein may express one token replacement as an insertion followed
+        immediately by a replacement (for example one ASR token becoming two
+        words). With no equal material between them, they are one correction.
+        """
+        merged: list[tuple[str, int, int, int, int]] = []
+        pending: tuple[str, int, int, int, int] | None = None
+
+        def flush_pending() -> None:
+            nonlocal pending
+            if pending is not None:
+                merged.append(pending)
+                pending = None
+
+        for tag, i1, i2, j1, j2 in opcodes:
+            if tag == "equal":
+                flush_pending()
+                merged.append((tag, i1, i2, j1, j2))
+                continue
+
+            if pending is None:
+                pending = (tag, i1, i2, j1, j2)
+                continue
+
+            _old_tag, old_i1, old_i2, old_j1, old_j2 = pending
+            if old_i2 == i1 and old_j2 == j1:
+                combined_tag = (
+                    "insert" if old_i1 == i2
+                    else "delete" if old_j1 == j2
+                    else "replace"
+                )
+                pending = (combined_tag, old_i1, i2, old_j1, j2)
+            else:
+                flush_pending()
+                pending = (tag, i1, i2, j1, j2)
+
+        flush_pending()
+        return merged
+
+    @staticmethod
     def _tokenize(text: str) -> list[tuple[str, int, int]]:
         """Tokenize ASCII words as units and keep CJK characters addressable.
 
-        Character-level SequenceMatcher can represent ``meetng → meeting`` as
-        an empty-string insertion and split ``spekarA → Speaker A`` into several
+        Character-level diffing can represent ``meetng → meeting`` as an empty-
+        string insertion and split ``spekarA → Speaker A`` into several
         misleading one-character edits. ASCII word tokens retain the replayable
         ASR pair, while individual CJK characters preserve precise homophone
-        replacements.
+        replacements. RapidFuzz handles repetitive token sequences without the
+        quadratic ``SequenceMatcher(autojunk=False)`` failure mode.
         """
         token_re = re.compile(
             r"[A-Za-z0-9_]+(?:[.'’_-][A-Za-z0-9_]+)*|[\u3400-\u9fff]|.",
