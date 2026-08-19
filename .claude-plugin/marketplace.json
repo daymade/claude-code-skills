@@ -250,10 +250,10 @@
     },
     {
       "name": "daymade-skill",
-      "description": "Daymade skills core suite. Bundles skill creation, quality review, governance, and marketplace development tooling under one shared namespace. Skill verification is risk-scaled: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and full paired benchmarks are reserved for new, broad, high-risk, or explicitly benchmarked work. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
+      "description": "Daymade skills core suite. Bundles skill creation, quality review, governance, and marketplace development tooling under one shared namespace. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and Tier 3 work enters paired baselines, graders, benchmarks, or a viewer only after explicit user authorization or a decision-bearing evidence plan plus opt-in. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.26.3",
+      "version": "1.27.0",
       "category": "suite",
       "keywords": [
         "suite",
