@@ -228,6 +228,20 @@ class TestSpeakerLabelProtection:
         assert corrected == "spekarA 00:01:00\n正文 Speaker A"
         assert [change.line_number for change in changes] == [2]
 
+    def test_timestamp_ended_prose_is_not_misclassified_as_a_label(self):
+        text = "正文的 meetng 安排在 00:01:00\n下一行 meetng"
+        masked, spans = mask_speaker_labels(text)
+        assert masked == text
+        assert spans == []
+
+        processor = DictionaryProcessor(
+            corrections={"meetng": "meeting"},
+            context_rules=[],
+        )
+        corrected, changes = processor.process(text, review_mode=False)
+        assert corrected == "正文的 meeting 安排在 00:01:00\n下一行 meeting"
+        assert [change.line_number for change in changes] == [1, 2]
+
     def test_damaged_speaker_marker_fails_closed(self):
         masked, spans = mask_speaker_labels("spekarA 00:01:00\n正文。")
         assert spans

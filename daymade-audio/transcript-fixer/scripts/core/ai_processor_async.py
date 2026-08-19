@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import gc
 import logging
+from dataclasses import dataclass
 from typing import List, Tuple, Optional, Final
 import httpx
 
@@ -43,7 +44,11 @@ from .defaults import (
     ANTHROPIC_VERSION,
     API_TIMEOUT,
 )
-from .protected_spans import mask_speaker_labels, restore_speaker_labels
+from .protected_spans import (
+    mask_speaker_labels,
+    restore_speaker_labels,
+    reveal_speaker_labels_for_reporting,
+)
 
 # CRITICAL FIX: Import structured logging and retry logic
 import sys
@@ -59,6 +64,14 @@ timed_logger = TimedLogger(logger)
 # CRITICAL FIX: Memory management constants
 MAX_CHANGES_TO_TRACK: Final[int] = 1000  # Limit changes tracking to prevent memory bloat
 MEMORY_WARNING_THRESHOLD: Final[int] = 100  # Warn if >100 chunks
+
+
+@dataclass(frozen=True)
+class ChunkResult:
+    """One API chunk plus whether it used the original-text fallback."""
+
+    text: str
+    api_failed: bool = False
 
 
 class AIProcessorAsync:
@@ -220,23 +233,36 @@ class AIProcessorAsync:
                 corrected_chunks.append(chunk)
                 error_counter.failure()
 
-                # CRITICAL FIX: Check error rate threshold
-                if error_counter.should_abort():
-                    stats = error_counter.get_stats()
-                    logger.critical(
-                        f"Error rate exceeded threshold, aborting. Stats: {stats}"
-                    )
-                    raise RuntimeError(
-                        f"Error rate {stats['window_failure_rate']:.1%} exceeds "
-                        f"threshold {stats['threshold']:.1%}. Processed {i}/{len(chunks)} chunks."
-                    )
             else:
-                corrected_chunks.append(result)
+                if not isinstance(result, ChunkResult):
+                    logger.error(
+                        "Chunk %s returned unexpected result type %s; "
+                        "retaining original text",
+                        i,
+                        type(result).__name__,
+                    )
+                    corrected_chunks.append(chunk)
+                    error_counter.failure()
+                    continue
+
+                corrected_chunks.append(result.text)
+                if result.api_failed:
+                    error_counter.failure()
+                    continue
+
                 error_counter.success()
 
                 # Extract actual changes for learning
-                if result != chunk:
-                    extracted_changes = self.change_extractor.extract_changes(chunk, result)
+                if result.text != chunk:
+                    source_for_report = reveal_speaker_labels_for_reporting(
+                        chunk, speaker_spans
+                    )
+                    corrected_for_report = reveal_speaker_labels_for_reporting(
+                        result.text, speaker_spans
+                    )
+                    extracted_changes = self.change_extractor.extract_changes(
+                        source_for_report, corrected_for_report
+                    )
 
                     # CRITICAL FIX: Limit changes tracking to prevent memory bloat
                     # Sample changes if we're already tracking too many
@@ -270,6 +296,15 @@ class AIProcessorAsync:
 
         # Final statistics
         stats = error_counter.get_stats()
+        if stats["should_abort"]:
+            # All requests have already completed concurrently. Raising here
+            # would discard the safely retained fallback text without saving a
+            # single API call, contradicting the original-text guarantee.
+            logger.error(
+                "API failure rate exceeded threshold; returning degraded "
+                "output with every failed chunk restored. Stats: %s",
+                stats,
+            )
         logger.info(
             f"Batch processing completed: total_chunks={len(chunks)}, "
             f"successes={stats['total_successes']}, failures={stats['total_failures']}, "
@@ -290,7 +325,7 @@ class AIProcessorAsync:
         context: str,
         semaphore: asyncio.Semaphore,
         total_chunks: int
-    ) -> str:
+    ) -> ChunkResult:
         """
         Process chunk with concurrency control.
 
@@ -314,7 +349,7 @@ class AIProcessorAsync:
                 logger.info(
                     f"Chunk {chunk_index} completed successfully"
                 )
-                return result
+                return ChunkResult(result)
 
             except Exception as e:
                 print(f"[DEBUG] Chunk {chunk_index} primary error: {type(e).__name__}: {e}")
@@ -338,7 +373,7 @@ class AIProcessorAsync:
                         logger.info(
                             f"Chunk {chunk_index} succeeded with fallback model"
                         )
-                        return result
+                        return ChunkResult(result)
 
                     except Exception as e2:
                         print(f"[DEBUG] Chunk {chunk_index} fallback error: {type(e2).__name__}: {e2}")
@@ -354,7 +389,7 @@ class AIProcessorAsync:
                 logger.warning(
                     f"Using original text for chunk {chunk_index} after all retries failed"
                 )
-                return chunk
+                return ChunkResult(chunk, api_failed=True)
 
     async def _process_chunk_async(self, chunk: str, context: str, model: str) -> str:
         """

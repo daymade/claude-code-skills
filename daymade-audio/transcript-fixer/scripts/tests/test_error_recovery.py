@@ -29,6 +29,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Any, List, Optional
+from unittest.mock import AsyncMock
 
 # Add parent directory to path
 import sys
@@ -36,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.connection_pool import ConnectionPool, PoolExhaustedError
 from core.ai_processor import AIProcessor
-from core.ai_processor_async import AIProcessorAsync
+from core.ai_processor_async import AIProcessorAsync, ChunkResult
 from core.ai_utils import (
     AIAPIError,
     parse_anthropic_response,
@@ -343,7 +344,7 @@ class TestAIChunkFailureFidelity:
         processor.max_chunk_size = 4
 
         async def keep_chunk(_index, chunk, _context, _semaphore, _total):
-            return chunk
+            return ChunkResult(chunk)
 
         processor._process_chunk_with_semaphore = keep_chunk
         corrected, changes = await processor._process_async(source, "")
@@ -358,8 +359,10 @@ class TestAIChunkFailureFidelity:
             lambda chunk, _context, _model: chunk.replace("spekarA", "Speaker A")
         )
 
-        corrected, _ = processor.process(source)
+        corrected, changes = processor.process(source)
         assert corrected == "spekarA 00:01:00\n正文 Speaker A"
+        assert changes
+        assert all("TFSPK" not in str(vars(change)) for change in changes)
 
     @pytest.mark.asyncio
     async def test_async_ai_cannot_modify_speaker_label_prefix(self):
@@ -367,11 +370,60 @@ class TestAIChunkFailureFidelity:
         processor = AIProcessorAsync(api_key="test", fallback_model="")
 
         async def replace_body(_index, chunk, _context, _semaphore, _total):
-            return chunk.replace("spekarA", "Speaker A")
+            return ChunkResult(chunk.replace("spekarA", "Speaker A"))
 
         processor._process_chunk_with_semaphore = replace_body
-        corrected, _ = await processor._process_async(source, "")
+        corrected, changes = await processor._process_async(source, "")
         assert corrected == "spekarA 00:01:00\n正文 Speaker A"
+        assert changes
+        assert all("TFSPK" not in str(vars(change)) for change in changes)
+
+    @pytest.mark.asyncio
+    async def test_async_fallback_metrics_are_failures_not_successes(self, caplog):
+        source = "甲。乙。丙。丁。戊。己。庚。辛。壬。癸。"
+        processor = AIProcessorAsync(api_key="test", fallback_model="")
+        processor.max_chunk_size = 2
+
+        async def fail_chunk(_index, chunk, _context, _semaphore, _total):
+            return ChunkResult(chunk, api_failed=True)
+
+        processor._process_chunk_with_semaphore = fail_chunk
+        with caplog.at_level(logging.INFO, logger="core.ai_processor_async"):
+            corrected, changes = await processor._process_async(source, "")
+
+        assert corrected == source
+        assert changes == []
+        assert "successes=0, failures=10" in caplog.text
+        assert "returning degraded output" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_async_blank_http_payload_uses_failure_fallback(
+        self, caplog, monkeypatch
+    ):
+        class BlankResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"content": [{"type": "text", "text": ""}]}
+
+        class BlankClient:
+            async def post(self, *_args, **_kwargs):
+                return BlankResponse()
+
+        processor = AIProcessorAsync(api_key="test", fallback_model="")
+
+        async def get_client():
+            return BlankClient()
+
+        processor._get_http_client = get_client
+        monkeypatch.setattr(asyncio, "sleep", AsyncMock())
+        with caplog.at_level(logging.INFO, logger="core.ai_processor_async"):
+            corrected, changes = await processor._process_async("原文不能丢", "")
+
+        assert corrected == "原文不能丢"
+        assert changes == []
+        assert "successes=0, failures=1" in caplog.text
 
     def test_reassembly_preserves_nonstandard_inter_chunk_spacing(self):
         original = "左段\n\n\n右段"

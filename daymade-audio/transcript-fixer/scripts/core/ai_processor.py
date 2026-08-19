@@ -32,7 +32,11 @@ from .defaults import (
     ANTHROPIC_VERSION,
     API_TIMEOUT,
 )
-from .protected_spans import mask_speaker_labels, restore_speaker_labels
+from .protected_spans import (
+    mask_speaker_labels,
+    restore_speaker_labels,
+    reveal_speaker_labels_for_reporting,
+)
 
 
 class AIProcessor:
@@ -92,10 +96,16 @@ class AIProcessor:
                 # TODO: Extract actual changes for learning
                 # For now, we assume the whole chunk changed
                 if corrected_chunk != chunk:
+                    source_for_report = reveal_speaker_labels_for_reporting(
+                        chunk, speaker_spans
+                    )
+                    corrected_for_report = reveal_speaker_labels_for_reporting(
+                        corrected_chunk, speaker_spans
+                    )
                     all_changes.append(AIChange(
                         chunk_index=i,
-                        from_text=chunk[:50] + "...",
-                        to_text=corrected_chunk[:50] + "...",
+                        from_text=source_for_report[:50] + "...",
+                        to_text=corrected_for_report[:50] + "...",
                         confidence=0.9  # Placeholder
                     ))
 

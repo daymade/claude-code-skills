@@ -312,55 +312,83 @@ class ConcurrencyManager:
             self._metrics.queued_operations += 1
             self._metrics.total_requests += 1
 
+        # asyncio.timeout was added in Python 3.11, while this bundle's
+        # declared floor is 3.10. A loop timer cancels the owning task across
+        # both semaphore acquisition and the caller's `async with` body, then
+        # translates only that timer-driven cancellation into TimeoutError.
+        owner_task = asyncio.current_task()
+        if owner_task is None:
+            raise RuntimeError("ConcurrencyManager.acquire requires an asyncio task")
+        timeout_fired = False
+
+        def cancel_for_timeout() -> None:
+            nonlocal timeout_fired
+            timeout_fired = True
+            owner_task.cancel()
+
+        timeout_handle = asyncio.get_running_loop().call_later(
+            timeout, cancel_for_timeout
+        )
+        acquired = False
         try:
-            # Acquire semaphore with timeout
-            async with asyncio.timeout(timeout):
-                async with self._semaphore:
-                    # Update active metrics
+            await self._semaphore.acquire()
+            acquired = True
+
+            # Update active metrics after a successful acquisition.
+            with self._metrics_lock:
+                self._metrics.queued_operations -= 1
+                self._metrics.active_operations += 1
+
+            operation_start = time.time()
+            try:
+                yield
+
+                # Record success
+                response_time_ms = (time.time() - operation_start) * 1000
+                self._update_response_time(response_time_ms)
+                self._record_success()
+
+                with self._metrics_lock:
+                    self._metrics.successful_requests += 1
+
+            except Exception:
+                # Record failure
+                self._record_failure()
+
+                with self._metrics_lock:
+                    self._metrics.failed_requests += 1
+
+                raise
+
+            finally:
+                self._semaphore.release()
+
+                # Update active metrics
+                with self._metrics_lock:
+                    self._metrics.active_operations -= 1
+
+                # Adaptive tuning
+                self._adjust_concurrency()
+
+        except asyncio.CancelledError:
+            if not timeout_fired:
+                if not acquired:
                     with self._metrics_lock:
                         self._metrics.queued_operations -= 1
-                        self._metrics.active_operations += 1
+                raise
 
-                    operation_start = time.time()
-
-                    try:
-                        yield
-
-                        # Record success
-                        response_time_ms = (time.time() - operation_start) * 1000
-                        self._update_response_time(response_time_ms)
-                        self._record_success()
-
-                        with self._metrics_lock:
-                            self._metrics.successful_requests += 1
-
-                    except Exception as e:
-                        # Record failure
-                        self._record_failure()
-
-                        with self._metrics_lock:
-                            self._metrics.failed_requests += 1
-
-                        raise
-
-                    finally:
-                        # Update active metrics
-                        with self._metrics_lock:
-                            self._metrics.active_operations -= 1
-
-                        # Adaptive tuning
-                        self._adjust_concurrency()
-
-        except asyncio.TimeoutError:
             with self._metrics_lock:
                 self._metrics.timeout_requests += 1
-                self._metrics.queued_operations -= 1
+                if not acquired:
+                    self._metrics.queued_operations -= 1
 
             elapsed = time.time() - start_time
             raise asyncio.TimeoutError(
                 f"Operation timed out after {elapsed:.1f}s "
                 f"(timeout: {timeout}s)"
-            )
+            ) from None
+        finally:
+            timeout_handle.cancel()
 
     @contextmanager
     def acquire_sync(self, timeout: Optional[float] = None):
