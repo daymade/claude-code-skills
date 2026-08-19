@@ -17,7 +17,7 @@ import re
 import sys
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, TypeAlias
 from dataclasses import dataclass
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -40,14 +40,15 @@ _LEDGER_FRONTMATTER_KEYS = ("asr_note",)
 # Sentinel anchoring contains no matcher-visible padding: a transcript body can
 # legitimately contain □ (checkbox glyph / illegible-speech convention), and a
 # rule for that symbol must never disable ledger protection.
-_LEDGER_SENTINEL = "⟪TFLEDGER{}⟫"
+_LEDGER_PREFIX = "⟪TFLEDGER"
+LedgerSpan: TypeAlias = tuple[str, str]
 
 
-def _mask_ledger_spans(text: str) -> Tuple[str, List[Tuple[int, str]]]:
+def _mask_ledger_spans(text: str) -> Tuple[str, List[LedgerSpan]]:
     """Mask ledger-field values in a leading YAML frontmatter block.
 
-    Returns (masked_text, [(masked_length, original_value), ...]) in document
-    order. Each masked value becomes `⟪TFLEDGER{i}⟫`. The projection need not
+    Returns (masked_text, [(sentinel, original_value), ...]) in document
+    order. Each masked value becomes a unique sentinel. The projection need not
     preserve columns: Change.line_number counts newlines, and restore locates
     the sentinel rather than an absolute offset. Only the value
     portion of a single-line `key: value` is masked. Multi-line YAML values
@@ -68,7 +69,10 @@ def _mask_ledger_spans(text: str) -> Tuple[str, List[Tuple[int, str]]]:
             break
     if close_idx is None:
         return text, []
-    spans: List[Tuple[int, str]] = []
+    marker_prefix = _LEDGER_PREFIX
+    while marker_prefix in text:
+        marker_prefix += "X"
+    spans: List[LedgerSpan] = []
     for i in range(1, close_idx):
         line = lines[i]
         m = re.match(r"^([A-Za-z_][\w-]*):\s+(.*)$", line)
@@ -91,16 +95,16 @@ def _mask_ledger_spans(text: str) -> Tuple[str, List[Tuple[int, str]]]:
                 m.group(1),
             )
             continue
-        sentinel = _LEDGER_SENTINEL.format(len(spans))
+        sentinel = f"{marker_prefix}{len(spans)}⟫"
         masked_value = sentinel
-        spans.append((len(masked_value), value))
+        spans.append((sentinel, value))
         lines[i] = line[: m.start(2)] + masked_value
     if not spans:
         return text, []
     return "\n".join(lines), spans
 
 
-def _restore_ledger_spans(text: str, spans: List[Tuple[int, str]]) -> str:
+def _restore_ledger_spans(text: str, spans: List[LedgerSpan]) -> str:
     """Splice masked ledger values back, located by each span's sentinel — not
     by filler runs or absolute position, so natural □ in the body and
     length-changing corrections elsewhere cannot shift the anchor. Fail-
@@ -109,16 +113,33 @@ def _restore_ledger_spans(text: str, spans: List[Tuple[int, str]]) -> str:
     out = text
     # splice from the last span so earlier sentinels keep their positions
     for idx in range(len(spans) - 1, -1, -1):
-        masked_len, value = spans[idx]
-        sentinel = _LEDGER_SENTINEL.format(idx)
-        pos = out.find(sentinel)
-        if pos == -1:
+        sentinel, value = spans[idx]
+        occurrences = out.count(sentinel)
+        if occurrences != 1:
             raise ValueError(
-                f"ledger mask restore: sentinel {sentinel} missing — "
-                f"refusing to ship a corrupted file"
+                "ledger mask restore: sentinel altered or duplicated "
+                f"({sentinel!r}: expected once, found {occurrences}) — "
+                "refusing to ship a corrupted file"
             )
-        out = out[:pos] + value + out[pos + masked_len :]
+        pos = out.find(sentinel)
+        out = out[:pos] + value + out[pos + len(sentinel) :]
     return out
+
+
+def reveal_ledger_values_for_reporting(
+    text: str,
+    spans: List[LedgerSpan],
+) -> str:
+    """Reveal ledger markers in a chunk/report without validating position.
+
+    Final output restoration uses the strict checks above. Change extraction
+    works on fragments, so it needs a display projection that keeps internal
+    markers out of reports, history, and learning examples.
+    """
+    revealed = text
+    for sentinel, value in spans:
+        revealed = revealed.replace(sentinel, value)
+    return revealed
 
 
 def project_without_ledger_values(text: str) -> str:
@@ -132,14 +153,13 @@ def project_without_ledger_values(text: str) -> str:
     """
     projected, spans = _mask_ledger_spans(text)
     for index in range(len(spans) - 1, -1, -1):
-        masked_len, _ = spans[index]
-        sentinel = _LEDGER_SENTINEL.format(index)
+        sentinel, _ = spans[index]
         position = projected.find(sentinel)
         if position == -1:
             raise ValueError(
                 f"ledger scan projection: sentinel {sentinel} missing"
             )
-        projected = projected[:position] + projected[position + masked_len :]
+        projected = projected[:position] + projected[position + len(sentinel) :]
     return projected
 
 

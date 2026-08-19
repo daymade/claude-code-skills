@@ -32,6 +32,11 @@ from .defaults import (
     API_TIMEOUT,
 )
 from .change_extractor import ChangeExtractor
+from .dictionary_processor import (
+    _mask_ledger_spans,
+    _restore_ledger_spans,
+    reveal_ledger_values_for_reporting,
+)
 from .protected_spans import (
     mask_speaker_labels,
     restore_speaker_labels,
@@ -86,8 +91,9 @@ class AIProcessor:
         Returns:
             (corrected_text, list_of_changes)
         """
+        ledger_projected_text, ledger_spans = _mask_ledger_spans(text)
         projected_text, speaker_spans = mask_speaker_labels(
-            text, self.speaker_labels
+            ledger_projected_text, self.speaker_labels
         )
         self.models_used.clear()
         chunks = split_into_chunks(projected_text, self.max_chunk_size)
@@ -138,6 +144,12 @@ class AIProcessor:
                 corrected_for_report = reveal_speaker_labels_for_reporting(
                     corrected_chunk, speaker_spans
                 )
+                source_for_report = reveal_ledger_values_for_reporting(
+                    source_for_report, ledger_spans
+                )
+                corrected_for_report = reveal_ledger_values_for_reporting(
+                    corrected_for_report, ledger_spans
+                )
                 for change in self.change_extractor.extract_changes(
                     source_for_report, corrected_for_report
                 ):
@@ -158,6 +170,8 @@ class AIProcessor:
         )
         if speaker_spans:
             corrected_text = restore_speaker_labels(corrected_text, speaker_spans)
+        if ledger_spans:
+            corrected_text = _restore_ledger_spans(corrected_text, ledger_spans)
         return corrected_text, all_changes
 
     def _process_chunk(self, chunk: str, context: str, model: str) -> str:

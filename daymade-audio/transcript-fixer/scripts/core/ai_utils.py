@@ -183,7 +183,7 @@ def parse_anthropic_response(response: Any) -> str:
         )
 
     stop_reason = response.get("stop_reason")
-    if stop_reason not in (None, "end_turn"):
+    if "stop_reason" in response and stop_reason != "end_turn":
         raise AIAPIError(
             "Incomplete API response: "
             f"stop_reason={stop_reason!r}; refusing truncated/refused output"

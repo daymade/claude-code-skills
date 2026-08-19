@@ -565,6 +565,7 @@ _process_chunk()         # Single API call
 - Calculate confidence scores
 - Generate suggestions for review
 - Track rejected suggestions
+- Preserve the actual primary/fallback model set in pending and auto-approved evidence
 
 **Algorithm**:
 ```python
@@ -576,7 +577,7 @@ _process_chunk()         # Single API call
 6. Filter by thresholds:
    - frequency ≥ 3
    - confidence ≥ 0.8
-7. Save to learned/pending_review.json
+7. Save the pattern, examples, and model provenance to learned/pending_review.json
 ```
 
 **Confidence Calculation**:

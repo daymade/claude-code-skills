@@ -349,7 +349,7 @@ class TestAIChunkFailureFidelity:
 
     @pytest.mark.parametrize(
         "stop_reason",
-        ["max_tokens", "stop_sequence", "pause_turn", "refusal", "tool_use"],
+        [None, "max_tokens", "stop_sequence", "pause_turn", "refusal", "tool_use"],
     )
     def test_incomplete_api_stop_reason_is_failure(self, stop_reason):
         with pytest.raises(AIAPIError, match="Incomplete API response"):
@@ -988,6 +988,114 @@ class TestDataCorruptionRecovery:
 class TestConfigurationContractRecovery:
     """Diagnostics must inspect the same paths and runtime floor as the CLI."""
 
+    def test_enhanced_wrapper_exits_nonzero_on_degraded_stage2(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        from types import SimpleNamespace
+        import fix_transcript_enhanced as enhanced
+
+        input_path = tmp_path / "meeting.md"
+        input_path.write_text("原文", encoding="utf-8")
+        output_dir = tmp_path / "output"
+        monkeypatch.setattr(
+            enhanced,
+            "get_config",
+            lambda: SimpleNamespace(api=SimpleNamespace(api_key="test")),
+        )
+        monkeypatch.setattr(
+            enhanced,
+            "cmd_run_correction",
+            lambda _args: {
+                "stage2_degraded": True,
+                "stage2_failed_chunks": 1,
+                "stage2_total_chunks": 2,
+            },
+        )
+        monkeypatch.setattr(sys, "argv", [
+            "fix_transcript_enhanced.py",
+            str(input_path),
+            "--output", str(output_dir),
+            "--stage", "2",
+            "--no-auto-open",
+        ])
+
+        with pytest.raises(SystemExit) as exc_info:
+            enhanced.main()
+
+        output = capsys.readouterr().out
+        assert exc_info.value.code == 1
+        assert "Processing incomplete" in output
+        assert "✅ Processing complete!" not in output
+
+    def test_enhanced_wrapper_does_not_call_stage1_end_to_end_complete(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        import fix_transcript_enhanced as enhanced
+
+        input_path = tmp_path / "meeting.md"
+        input_path.write_text("原文", encoding="utf-8")
+        monkeypatch.setattr(
+            enhanced,
+            "cmd_run_correction",
+            lambda _args: {
+                "stage1_only_incomplete": True,
+                "stage2_degraded": False,
+            },
+        )
+        monkeypatch.setattr(sys, "argv", [
+            "fix_transcript_enhanced.py",
+            str(input_path),
+            "--stage", "1",
+            "--no-auto-open",
+        ])
+
+        enhanced.main()
+
+        output = capsys.readouterr().out
+        assert "end-to-end transcript correction is incomplete" in output
+        assert "✅ Processing complete!" not in output
+
+    def test_stage1_cli_reports_machine_readable_incomplete_state(
+        self, tmp_path, capsys
+    ):
+        from argparse import Namespace
+        import cli.commands as commands
+        from utils.config import (
+            Config,
+            DatabaseConfig,
+            PathConfig,
+            reset_config,
+            set_config,
+        )
+
+        input_path = tmp_path / "meeting.md"
+        input_path.write_text("原文", encoding="utf-8")
+        config = Config(
+            database=DatabaseConfig(path=tmp_path / "corrections.db"),
+            paths=PathConfig(
+                config_dir=tmp_path,
+                data_dir=tmp_path / "data",
+                log_dir=tmp_path / "logs",
+                cache_dir=tmp_path / "cache",
+            ),
+        )
+        set_config(config)
+        try:
+            result = commands.cmd_run_correction(Namespace(
+                input=str(input_path), output=None, stage=1,
+                domain="zzz_test_empty_domain", dry_run=False,
+                apply_all=False, changes_file=False,
+                people_roster=None, apply_domain=False,
+            ))
+        finally:
+            reset_config()
+
+        output = capsys.readouterr().out
+        assert result["stage1_only_incomplete"] is True
+        assert "Stage 1 complete" in output
+        assert "end-to-end transcript correction is incomplete" in output
+        assert "✅ Correction complete!" not in output
+
     def test_validate_honors_config_and_database_overrides(
         self, tmp_path, monkeypatch
     ):
@@ -1025,9 +1133,9 @@ class TestConfigurationContractRecovery:
             encoding="utf-8",
         )
         monkeypatch.setenv("TRANSCRIPT_FIXER_CONFIG_DIR", str(config_dir))
-        monkeypatch.setenv("TRANSCRIPT_FIXER_ENABLE_LEARNING", "0")
-        monkeypatch.setenv("TRANSCRIPT_FIXER_ENABLE_METRICS", "0")
-        monkeypatch.setenv("TRANSCRIPT_FIXER_AUTO_APPROVE", "0")
+        monkeypatch.setenv("TRANSCRIPT_FIXER_ENABLE_LEARNING", "false")
+        monkeypatch.setenv("TRANSCRIPT_FIXER_ENABLE_METRICS", "no")
+        monkeypatch.setenv("TRANSCRIPT_FIXER_AUTO_APPROVE", "off")
         monkeypatch.setenv("TRANSCRIPT_FIXER_MAX_CONCURRENT", "3")
         reset_config()
         try:
@@ -1039,6 +1147,20 @@ class TestConfigurationContractRecovery:
         assert config.features.enable_metrics is False
         assert config.features.enable_auto_approval is False
         assert config.resources.max_concurrent_tasks == 3
+
+    def test_invalid_environment_boolean_fails_fast(
+        self, tmp_path, monkeypatch
+    ):
+        from utils.config import get_config, reset_config
+
+        monkeypatch.setenv("TRANSCRIPT_FIXER_CONFIG_DIR", str(tmp_path))
+        monkeypatch.setenv("TRANSCRIPT_FIXER_ENABLE_LEARNING", "sometimes")
+        reset_config()
+        try:
+            with pytest.raises(ValueError, match="TRANSCRIPT_FIXER_ENABLE_LEARNING"):
+                get_config()
+        finally:
+            reset_config()
 
     def test_health_python_floor_matches_pep_metadata(
         self, tmp_path, monkeypatch
@@ -1062,6 +1184,82 @@ class TestConfigurationContractRecovery:
         assert old.status == HealthStatus.UNHEALTHY
         assert old.details["minimum"] == "3.10"
         assert current.status == HealthStatus.HEALTHY
+
+    def test_health_rejects_missing_review_table_and_audit_columns(
+        self, tmp_path
+    ):
+        from utils.config import (
+            Config,
+            DatabaseConfig,
+            PathConfig,
+            reset_config,
+            set_config,
+        )
+        from utils.health_check import HealthChecker, HealthStatus
+
+        db_path = tmp_path / "corrections.db"
+        config = Config(
+            database=DatabaseConfig(path=db_path),
+            paths=PathConfig(
+                config_dir=tmp_path,
+                data_dir=tmp_path / "data",
+                log_dir=tmp_path / "logs",
+                cache_dir=tmp_path / "cache",
+            ),
+        )
+        set_config(config)
+        try:
+            with sqlite3.connect(db_path) as conn:
+                conn.execute(
+                    """
+                    CREATE TABLE correction_changes (
+                        id INTEGER PRIMARY KEY,
+                        from_text TEXT,
+                        to_text TEXT,
+                        rule_type TEXT
+                    )
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE TABLE correction_history (
+                        id INTEGER PRIMARY KEY,
+                        success BOOLEAN,
+                        error_message TEXT
+                    )
+                    """
+                )
+                for table in (
+                    "corrections", "context_rules", "learned_suggestions",
+                    "suggestion_examples", "system_config", "audit_log",
+                ):
+                    conn.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY)")
+
+            checker = HealthChecker(config_dir=tmp_path)
+            missing_table = checker._check_database_schema()
+            assert missing_table.status == HealthStatus.DEGRADED
+            assert "review_items" in missing_table.message
+
+            with sqlite3.connect(db_path) as conn:
+                conn.execute(
+                    """
+                    CREATE TABLE review_items (
+                        id INTEGER PRIMARY KEY,
+                        status TEXT,
+                        file_path TEXT,
+                        original_text TEXT,
+                        suggested_text TEXT,
+                        decision_note TEXT,
+                        resolved_text TEXT
+                    )
+                    """
+                )
+            missing_columns = checker._check_database_schema()
+            assert missing_columns.status == HealthStatus.DEGRADED
+            assert "correction_changes" in missing_columns.message
+            assert "learnable" in missing_columns.message
+        finally:
+            reset_config()
 
     @pytest.mark.parametrize(
         ("max_file_size", "max_text_length", "expected"),
@@ -1186,6 +1384,7 @@ class TestConfigurationContractRecovery:
             reset_config()
 
         assert result["stage2_degraded"] is False
+        assert result["stage1_only_incomplete"] is False
         assert "Learning System: disabled" in capsys.readouterr().out
 
     def test_cli_persists_degraded_api_status(
@@ -1246,6 +1445,7 @@ class TestConfigurationContractRecovery:
             ).fetchone()
 
         assert result["stage2_degraded"] is True
+        assert result["stage1_only_incomplete"] is False
         assert result["stage2_failed_chunks"] == 1
         assert history[0] == 0
         assert "1/1 API chunks failed" in history[1]

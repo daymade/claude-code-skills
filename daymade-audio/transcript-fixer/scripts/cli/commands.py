@@ -107,6 +107,10 @@ def _get_learning_engine(service: CorrectionService | None = None):
     from core import LearningEngine
 
     config = get_config()
+    if service is None:
+        # Repository construction runs the idempotent compatibility migration
+        # for legacy correction_changes tables before learning queries them.
+        service = _get_service()
     return LearningEngine(
         history_dir=config.paths.config_dir / "history",
         learned_dir=config.paths.config_dir / "learned",
@@ -1135,7 +1139,14 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         else:
             print("   Skipped: Stage 2 output required for diff report\n")
 
-    if stage2_failed_chunks:
+    stage1_only_incomplete = args.stage == 1
+    if stage1_only_incomplete:
+        print(
+            "⚠️  Stage 1 complete — end-to-end transcript correction is "
+            "incomplete until Native AI Correction runs (or an agent-less "
+            "Stage 2 API pass is explicitly chosen)."
+        )
+    elif stage2_failed_chunks:
         print(
             "⚠️  Correction completed with degraded Stage 2: "
             f"{stage2_failed_chunks}/{stage2_total_chunks} API chunks failed; "
@@ -1159,6 +1170,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         # Additive field (existing consumers read by name and are unaffected):
         # how many deferrals landed in the persistent review queue this run.
         "review_enqueued": review_enqueued,
+        "stage1_only_incomplete": stage1_only_incomplete,
         "stage2_total_chunks": stage2_total_chunks,
         "stage2_failed_chunks": stage2_failed_chunks,
         "stage2_degraded": stage2_failed_chunks > 0,
@@ -1184,6 +1196,8 @@ def cmd_review_learned(args: argparse.Namespace) -> None:
         frequency = suggestion.get("frequency", 0)
         print(f"\n{idx}. [{domain}] '{suggestion['from_text']}' -> '{suggestion['to_text']}'")
         print(f"   Frequency: {frequency} | Confidence: {confidence:.2f}")
+        models = suggestion.get("models") or []
+        print(f"   Models: {', '.join(models) if models else 'unknown'}")
 
         examples = suggestion.get("examples") or []
         if examples:

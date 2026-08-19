@@ -43,6 +43,8 @@ SpeakerLabelSpan: TypeAlias = tuple[str, str, int]
 def _normalise_label(label: str) -> tuple[str, bool]:
     """Return the label text and whether its markup is explicit attribution."""
     candidate = label.strip()
+    if candidate.endswith((":", "：")):
+        candidate = candidate[:-1].rstrip()
     if candidate.startswith("**") and candidate.endswith("**"):
         return candidate[2:-2].strip(), True
     if candidate.startswith("[") and candidate.endswith("]"):
@@ -69,10 +71,23 @@ def _looks_like_cjk_name(candidate: str) -> bool:
         warnings.simplefilter("ignore", SyntaxWarning)
         import jieba.posseg as pseg
     tokens = list(pseg.cut(candidate))
-    return (
-        bool(tokens)
-        and "".join(token.word for token in tokens) == candidate
-        and all(token.flag.startswith("nr") for token in tokens)
+    if not tokens or "".join(token.word for token in tokens) != candidate:
+        return False
+    if all(token.flag.startswith("nr") for token in tokens):
+        return True
+    # Jieba sometimes recognizes the surname token but tags an unfamiliar
+    # one-character given name as an adjective (for example 周/nr + 深/a).
+    # Limit this fallback to ordinary 2–3-character name length so a phrase
+    # such as "李雷发言" remains editable rather than partially name-shaped.
+    if (
+        2 <= len(candidate) <= 3
+        and tokens[0].flag.startswith("nr")
+    ):
+        return True
+    # `nrt` is jieba's phonetic-person-name tag; it covers compound-surname
+    # names that may split into a place-looking prefix plus a name token.
+    return 3 <= len(candidate) <= 4 and any(
+        token.flag == "nrt" for token in tokens
     )
 
 

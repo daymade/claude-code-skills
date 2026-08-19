@@ -24,7 +24,7 @@ import logging
 import sqlite3
 from pathlib import Path
 from typing import Any, List, Dict, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from collections import defaultdict
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -58,6 +58,19 @@ def _is_replayable_learning_pair(from_text: object, to_text: object) -> bool:
     )
 
 
+def _models_for_occurrences(occurrences: List) -> List[str]:
+    """Return sorted, explicit model provenance from dicts or AIChange rows."""
+    models = set()
+    for occurrence in occurrences:
+        if isinstance(occurrence, dict):
+            model = occurrence.get("model")
+        else:
+            model = getattr(occurrence, "model", None)
+        if isinstance(model, str) and model.strip():
+            models.add(model)
+    return sorted(models)
+
+
 @dataclass
 class Suggestion:
     """Represents a learned correction suggestion"""
@@ -70,6 +83,7 @@ class Suggestion:
     last_seen: str
     status: str  # "pending", "approved", "rejected"
     domain: str = "general"
+    models: List[str] = field(default_factory=list)
 
 
 class LearningEngine:
@@ -216,7 +230,8 @@ class LearningEngine:
                 first_seen=occurrences[0]["timestamp"],
                 last_seen=occurrences[-1]["timestamp"],
                 status="pending",
-                domain=occurrences[0].get("domain", "general")
+                domain=occurrences[0].get("domain", "general"),
+                models=_models_for_occurrences(occurrences),
             )
 
             suggestions.append(suggestion)
@@ -339,7 +354,8 @@ class LearningEngine:
                         "file": data["filename"],
                         "line": change.get("line", 0),
                         "context": change.get("context", ""),
-                        "timestamp": data["timestamp"]
+                        "timestamp": data["timestamp"],
+                        "model": change.get("model"),
                     })
 
         return patterns
@@ -358,7 +374,8 @@ class LearningEngine:
                 c.from_text,
                 c.to_text,
                 c.context_before,
-                c.context_after
+                c.context_after,
+                c.model
             FROM correction_changes c
             JOIN correction_history h ON h.id = c.history_id
             WHERE c.rule_type = 'ai'
@@ -375,8 +392,9 @@ class LearningEngine:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(query).fetchall()
         except sqlite3.Error as e:
-            logger.warning(f"Could not read SQLite correction history: {e}")
-            return patterns
+            raise RuntimeError(
+                f"Could not read SQLite correction history: {e}"
+            ) from e
 
         for row in rows:
             if not _is_replayable_learning_pair(
@@ -399,6 +417,7 @@ class LearningEngine:
                 "line": row["line_number"] or 0,
                 "context": context,
                 "timestamp": row["run_timestamp"],
+                "model": row["model"],
                 "domain": row["domain"] or "general",
             })
 
@@ -490,6 +509,7 @@ class LearningEngine:
         for suggestion in suggestions:
             normalized = dict(suggestion)
             normalized["domain"] = normalized.get("domain") or "general"
+            normalized["models"] = sorted(set(normalized.get("models") or []))
             key = (
                 normalized.get("from_text"),
                 normalized.get("to_text"),
@@ -515,6 +535,10 @@ class LearningEngine:
                 if example not in existing_examples:
                     existing_examples.append(example)
             current["examples"] = existing_examples[:5]
+
+            current_models = set(current.get("models") or [])
+            current_models.update(normalized.get("models") or [])
+            current["models"] = sorted(current_models)
 
             first_seen = normalized.get("first_seen")
             if first_seen and (
@@ -680,6 +704,7 @@ class LearningEngine:
             # Calculate confidence
             confidences = [c.confidence for c in occurrences]
             avg_confidence = sum(confidences) / len(confidences)
+            models = _models_for_occurrences(occurrences)
 
             # Auto-approve only when the caller's explicit feature flag allows
             # it. The default is review, not mutation.
@@ -714,7 +739,10 @@ class LearningEngine:
                             domain,
                             source="learned",
                             confidence=avg_confidence,
-                            notes="auto-approved from Stage 2 history",
+                            notes=(
+                                "auto-approved from Stage 2 history; models="
+                                + (",".join(models) if models else "unknown")
+                            ),
                             update_existing=False,
                         )
                         auto_approved_patterns.append({
@@ -722,7 +750,8 @@ class LearningEngine:
                             "to": to_text,
                             "frequency": frequency,
                             "confidence": avg_confidence,
-                            "domain": domain
+                            "domain": domain,
+                            "models": models,
                         })
                         stats["auto_approved"] += 1
                     except ValidationError as e:
@@ -800,6 +829,7 @@ class LearningEngine:
                 "line": getattr(change, "chunk_index", 0),
                 "context": context,
                 "timestamp": timestamp,
+                "model": getattr(change, "model", None),
             })
 
         return Suggestion(
@@ -812,6 +842,7 @@ class LearningEngine:
             last_seen=timestamp,
             status="pending",
             domain=domain or "general",
+            models=_models_for_occurrences(occurrences),
         )
 
     def _save_auto_approved(self, patterns: List[Dict]) -> None:

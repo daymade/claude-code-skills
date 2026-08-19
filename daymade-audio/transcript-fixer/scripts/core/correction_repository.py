@@ -277,6 +277,27 @@ class CorrectionRepository:
                         """,
                         (normalized_type, row_id),
                     )
+
+            # Older schemas recorded one model per run in correction_history.
+            # Carry that best available provenance into each migrated detail;
+            # new runs store the actual per-change primary/fallback model.
+            conn.execute(
+                """
+                UPDATE correction_changes
+                SET model = (
+                    SELECT h.model
+                    FROM correction_history h
+                    WHERE h.id = correction_changes.history_id
+                )
+                WHERE model IS NULL
+                  AND EXISTS (
+                    SELECT 1
+                    FROM correction_history h
+                    WHERE h.id = correction_changes.history_id
+                      AND h.model IS NOT NULL
+                  )
+                """
+            )
     def _initialize_system_config(self) -> None:
         """Insert or ignore canonical system_config defaults."""
         values = [

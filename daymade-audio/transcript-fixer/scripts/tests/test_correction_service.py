@@ -335,6 +335,43 @@ class TestCorrectionService(unittest.TestCase):
             ).fetchone()
             self.assertEqual(tuple(audit_fields), ("word", 1, "fallback-model"))
 
+    def test_save_history_normalizes_context_rule_for_schema(self):
+        from core.dictionary_processor import Change
+
+        history_id = self.service.save_history(
+            filename="meeting.md",
+            domain="general",
+            original_length=20,
+            stage1_changes=2,
+            stage2_changes=0,
+            model=None,
+            changes=[
+                Change(
+                    line_number=3,
+                    from_text="机器学西",
+                    to_text="机器学习",
+                    rule_type="context_rule",
+                    rule_name="domain cue",
+                ),
+                {
+                    "line_number": 4,
+                    "from_text": "骨价",
+                    "to_text": "股价",
+                    "rule_type": "context_rule",
+                },
+            ],
+        )
+
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                """
+                SELECT rule_type FROM correction_changes
+                WHERE history_id = ? ORDER BY id
+                """,
+                (history_id,),
+            ).fetchall()
+        self.assertEqual(rows, [("context",), ("context",)])
+
     def test_save_history_failure_propagates_and_rolls_back(self):
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("DROP TABLE correction_changes")

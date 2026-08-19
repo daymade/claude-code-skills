@@ -855,6 +855,84 @@ class TestLearningCli:
         output = capsys.readouterr().out
         assert "Learned suggestions pending review (1)" in output
 
+    def test_review_learned_migrates_legacy_change_table_before_query(
+        self, isolated_config, capsys
+    ):
+        from cli.commands import cmd_review_learned
+
+        db_path = isolated_config.database.path
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE correction_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    filename TEXT NOT NULL,
+                    domain TEXT NOT NULL,
+                    run_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    original_length INTEGER NOT NULL,
+                    stage1_changes INTEGER NOT NULL DEFAULT 0,
+                    stage2_changes INTEGER NOT NULL DEFAULT 0,
+                    model TEXT,
+                    execution_time_ms INTEGER,
+                    success BOOLEAN NOT NULL DEFAULT 1,
+                    error_message TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE correction_changes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    history_id INTEGER NOT NULL,
+                    line_number INTEGER,
+                    from_text TEXT NOT NULL,
+                    to_text TEXT NOT NULL,
+                    rule_type TEXT NOT NULL,
+                    rule_id INTEGER,
+                    context_before TEXT,
+                    context_after TEXT
+                )
+                """
+            )
+            for index in range(7):
+                history = conn.execute(
+                    """
+                    INSERT INTO correction_history
+                    (filename, domain, original_length, stage2_changes, model)
+                    VALUES (?, 'tech', 100, 1, 'legacy-model')
+                    """,
+                    (f"legacy-{index}.md",),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO correction_changes
+                    (history_id, line_number, from_text, to_text, rule_type,
+                     context_before, context_after)
+                    VALUES (?, ?, 'meetng', 'meeting', 'ai', '', '')
+                    """,
+                    (history.lastrowid, index + 1),
+                )
+
+        cmd_review_learned(argparse.Namespace())
+        output = capsys.readouterr().out
+
+        with sqlite3.connect(db_path) as conn:
+            columns = {
+                row[1]
+                for row in conn.execute(
+                    "PRAGMA table_info(correction_changes)"
+                ).fetchall()
+            }
+        assert {"change_type", "learnable", "model"} <= columns
+        assert "Learned suggestions pending review (1)" in output
+        assert "No learned suggestions pending review" not in output
+        assert "Models: legacy-model" in output
+        pending = json.loads(
+            (isolated_config.paths.config_dir / "learned" / "pending_review.json")
+            .read_text(encoding="utf-8")
+        )["suggestions"]
+        assert pending[0]["models"] == ["legacy-model"]
+
     def test_persisted_nonlearnable_changes_never_reenter_learning(
         self, isolated_config
     ):
@@ -876,7 +954,7 @@ class TestLearningCli:
                 ),
                 AIChange(
                     1, "meetng", "meeting", 0.99,
-                    change_type="word", learnable=True,
+                    change_type="word", learnable=True, model="fallback-real",
                 ),
             ]
             service.save_history(
@@ -900,6 +978,7 @@ class TestLearningCli:
         assert [(item.from_text, item.to_text) for item in suggestions] == [
             ("meetng", "meeting")
         ]
+        assert suggestions[0].models == ["fallback-real"]
 
     def test_auto_approval_never_overwrites_manual_rule_and_keeps_provenance(
         self, isolated_config
@@ -921,7 +1000,7 @@ class TestLearningCli:
             SimpleNamespace(
                 from_text="meetng", to_text="meetingX", confidence=0.99,
                 learnable=True, context_before="", context_after="",
-                chunk_index=index,
+                chunk_index=index, model="fallback-conflict",
             )
             for index in range(5)
         ]
@@ -929,7 +1008,7 @@ class TestLearningCli:
             SimpleNamespace(
                 from_text="speach", to_text="speech", confidence=0.91,
                 learnable=True, context_before="", context_after="",
-                chunk_index=index,
+                chunk_index=index, model="fallback-real",
             )
             for index in range(5)
         ]
@@ -944,7 +1023,7 @@ class TestLearningCli:
         with sqlite3.connect(isolated_config.database.path) as conn:
             rows = conn.execute(
                 """
-                SELECT from_text, to_text, source, confidence
+                SELECT from_text, to_text, source, confidence, notes
                 FROM corrections
                 WHERE from_text IN ('meetng', 'speach')
                 ORDER BY from_text
@@ -952,13 +1031,26 @@ class TestLearningCli:
             ).fetchall()
         service.close()
 
+        pending = json.loads(engine.pending_file.read_text(encoding="utf-8"))[
+            "suggestions"
+        ]
+        auto_approved = json.loads(
+            engine.auto_approved_file.read_text(encoding="utf-8")
+        )["auto_approved"]
+
         assert conflict_stats["auto_approved"] == 0
         assert conflict_stats["pending_review"] == 1
         assert fresh_stats["auto_approved"] == 1
         assert rows == [
-            ("meetng", "meeting", "manual", 1.0),
-            ("speach", "speech", "learned", pytest.approx(0.91)),
+            ("meetng", "meeting", "manual", 1.0, None),
+            (
+                "speach", "speech", "learned", pytest.approx(0.91),
+                "auto-approved from Stage 2 history; models=fallback-real",
+            ),
         ]
+        assert pending[0]["models"] == ["fallback-conflict"]
+        assert pending[0]["examples"][0]["model"] == "fallback-conflict"
+        assert auto_approved[0]["models"] == ["fallback-real"]
 
 
 if __name__ == "__main__":

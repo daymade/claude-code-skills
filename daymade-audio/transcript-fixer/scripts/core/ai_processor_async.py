@@ -35,6 +35,11 @@ from .ai_utils import (
     split_into_chunks,
 )
 from .change_extractor import ChangeExtractor
+from .dictionary_processor import (
+    _mask_ledger_spans,
+    _restore_ledger_spans,
+    reveal_ledger_values_for_reporting,
+)
 from .defaults import (
     DEFAULT_MODEL,
     FALLBACK_MODEL,
@@ -187,8 +192,9 @@ class AIProcessorAsync:
         - Releases intermediate results
         - Monitors memory usage
         """
+        ledger_projected_text, ledger_spans = _mask_ledger_spans(text)
         projected_text, speaker_spans = mask_speaker_labels(
-            text, self.speaker_labels
+            ledger_projected_text, self.speaker_labels
         )
         self.models_used.clear()
         chunks = split_into_chunks(projected_text, self.max_chunk_size)
@@ -266,6 +272,12 @@ class AIProcessorAsync:
                     corrected_for_report = reveal_speaker_labels_for_reporting(
                         result.text, speaker_spans
                     )
+                    source_for_report = reveal_ledger_values_for_reporting(
+                        source_for_report, ledger_spans
+                    )
+                    corrected_for_report = reveal_ledger_values_for_reporting(
+                        corrected_for_report, ledger_spans
+                    )
                     extracted_changes = self.change_extractor.extract_changes(
                         source_for_report, corrected_for_report
                     )
@@ -320,6 +332,8 @@ class AIProcessorAsync:
         )
         if speaker_spans:
             corrected_text = restore_speaker_labels(corrected_text, speaker_spans)
+        if ledger_spans:
+            corrected_text = _restore_ledger_spans(corrected_text, ledger_spans)
         return corrected_text, all_changes
 
     async def _process_chunk_with_semaphore(

@@ -21,6 +21,8 @@ from core.dictionary_processor import (  # noqa: E402
     _restore_ledger_spans,
     project_without_ledger_values,
 )
+from core.ai_processor import AIProcessor  # noqa: E402
+from core.ai_processor_async import AIProcessorAsync, ChunkResult  # noqa: E402
 from core.protected_spans import (  # noqa: E402
     mask_speaker_labels,
     restore_speaker_labels,
@@ -107,7 +109,7 @@ class TestMaskRestorePrimitives:
         assert "正文保留 □ 不清晰标记。" in projected
 
     def test_restore_survives_length_change_elsewhere(self):
-        # A body correction changes total length; the filler run must still
+        # A body correction changes total length; the sentinel must still
         # anchor the splice.
         masked, spans = _mask_ledger_spans(LEDGER_TRANSCRIPT)
         mutated = masked.replace("我们今天聊丹娜这个模型。", "我们今天聊Dyna这个模型。")
@@ -117,7 +119,66 @@ class TestMaskRestorePrimitives:
 
     def test_restore_fail_closed_on_run_mismatch(self):
         with pytest.raises(ValueError):
-            _restore_ledger_spans("no filler here", [(3, "abc")])
+            _restore_ledger_spans(
+                "no marker here", [("⟪TFLEDGER0⟫", "abc")]
+            )
+
+    def test_natural_marker_text_cannot_steal_the_ledger_anchor(self):
+        text = (
+            "---\nasr_note: 丹娜→Dyna\n---\n"
+            "正文保留字面 ⟪TFLEDGER0⟫，另聊丹娜。\n"
+        )
+        corrected, _changes = _processor().process(text, review_mode=False)
+
+        assert "asr_note: 丹娜→Dyna" in corrected
+        assert "正文保留字面 ⟪TFLEDGER0⟫，另聊Dyna。" in corrected
+
+    def test_duplicated_ledger_marker_fails_closed(self):
+        masked, spans = _mask_ledger_spans(LEDGER_TRANSCRIPT)
+        duplicated = masked + spans[0][0]
+        with pytest.raises(ValueError, match="duplicated"):
+            _restore_ledger_spans(duplicated, spans)
+
+    def test_api_routes_preserve_ledger_while_editing_other_surfaces(self):
+        text = (
+            "---\nasr_note: 丹娜→Dyna；□ 保留\n"
+            "title: 丹娜会议\nkeywords: [丹娜]\n---\n"
+            "正文：丹娜 □\n"
+        )
+        expected = (
+            "---\nasr_note: 丹娜→Dyna；□ 保留\n"
+            "title: Dyna会议\nkeywords: [Dyna]\n---\n"
+            "正文：Dyna 某\n"
+        )
+
+        class SyncProcessor(AIProcessor):
+            def _process_chunk(self, chunk, _context, _model):
+                return chunk.replace("丹娜", "Dyna").replace("□", "某")
+
+        class AsyncProcessor(AIProcessorAsync):
+            async def _process_chunk_with_semaphore(
+                self, _index, chunk, _context, _semaphore, _total
+            ):
+                return ChunkResult(
+                    chunk.replace("丹娜", "Dyna").replace("□", "某"),
+                    model_used="test-model",
+                )
+
+        for processor in (
+            SyncProcessor("test", fallback_model=""),
+            AsyncProcessor("test", fallback_model="", max_concurrent=1),
+        ):
+            corrected, changes = processor.process(text)
+            assert corrected == expected
+            assert all(
+                "TFLEDGER" not in " ".join([
+                    change.from_text,
+                    change.to_text,
+                    change.context_before,
+                    change.context_after,
+                ])
+                for change in changes
+            )
 
     def test_unclosed_frontmatter_is_noop(self):
         text = "---\nasr_note: 丹娜→Dyna\n（没有闭合）\n"
@@ -231,7 +292,7 @@ class TestSpeakerLabelProtection:
 
     @pytest.mark.parametrize(
         ("label", "replacement"),
-        [("Ada", "Eve"), ("李雷", "李蕾")],
+        [("Ada", "Eve"), ("李雷", "李蕾"), ("周快", "周块")],
     )
     def test_one_off_name_shaped_label_is_protected(self, label, replacement):
         text = f"{label} 00:01:00\n正文 {label}"
@@ -243,6 +304,43 @@ class TestSpeakerLabelProtection:
         corrected, changes = processor.process(text, review_mode=False)
         assert corrected == f"{label} 00:01:00\n正文 {replacement}"
         assert [change.line_number for change in changes] == [2]
+
+    def test_inferred_cjk_name_is_protected_on_all_four_paths(self):
+        # Synthetic name whose surname/given-name split exercises the fallback
+        # without publishing a private person's name.
+        text = "周快 00:01:00\n正文提到周快。"
+        expected = "周快 00:01:00\n正文提到周块。"
+
+        dictionary_output, _ = DictionaryProcessor(
+            {"周快": "周块"}, []
+        ).process(text, review_mode=False)
+        context_output, _ = DictionaryProcessor({}, [{
+            "pattern": "周快",
+            "replacement": "周块",
+            "description": "probe",
+        }]).process(text, review_mode=False)
+
+        class SyncProcessor(AIProcessor):
+            def _process_chunk(self, chunk, _context, _model):
+                return chunk.replace("周快", "周块")
+
+        class AsyncProcessor(AIProcessorAsync):
+            async def _process_chunk_with_semaphore(
+                self, _index, chunk, _context, _semaphore, _total
+            ):
+                return ChunkResult(
+                    chunk.replace("周快", "周块"), model_used="test-model"
+                )
+
+        sync_output, _ = SyncProcessor("test", fallback_model="").process(text)
+        async_output, _ = AsyncProcessor(
+            "test", fallback_model="", max_concurrent=1
+        ).process(text)
+
+        assert dictionary_output == expected
+        assert context_output == expected
+        assert sync_output == expected
+        assert async_output == expected
 
     def test_context_rule_still_edits_short_timestamp_ended_prose(self):
         text = "会议开时 00:01:00\n下一行开时"
@@ -341,6 +439,16 @@ class TestSpeakerLabelProtection:
         masked, spans = mask_speaker_labels(text)
         assert masked == text
         assert spans == []
+
+    @pytest.mark.parametrize(
+        "label",
+        ["Speaker 1:", "Speaker 1：", "说话人A:", "说话人A：", "主持人:"],
+    )
+    def test_generic_label_allows_terminal_colon(self, label):
+        text = f"{label} 00:01:00\n正文。"
+        masked, spans = mask_speaker_labels(text)
+        assert len(spans) == 1
+        assert restore_speaker_labels(masked, spans) == text
 
     @pytest.mark.parametrize(
         "phrase",

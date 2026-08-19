@@ -42,6 +42,21 @@ from core.defaults import (
 logger = logging.getLogger(__name__)
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    """Parse an optional boolean environment override without guessing."""
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(
+        f"{name} must be one of 1/0, true/false, yes/no, or on/off"
+    )
+
+
 class Environment(Enum):
     """Application environment"""
     DEVELOPMENT = "development"
@@ -260,9 +275,9 @@ class Config:
 
         # Feature flags
         features = FeatureFlags(
-            enable_learning=os.getenv("TRANSCRIPT_FIXER_ENABLE_LEARNING", "1") != "0",
-            enable_metrics=os.getenv("TRANSCRIPT_FIXER_ENABLE_METRICS", "1") != "0",
-            enable_auto_approval=os.getenv("TRANSCRIPT_FIXER_AUTO_APPROVE", "0") == "1",
+            enable_learning=_env_bool("TRANSCRIPT_FIXER_ENABLE_LEARNING", True),
+            enable_metrics=_env_bool("TRANSCRIPT_FIXER_ENABLE_METRICS", True),
+            enable_auto_approval=_env_bool("TRANSCRIPT_FIXER_AUTO_APPROVE", False),
         )
 
         return cls(
@@ -539,15 +554,21 @@ def get_config() -> Config:
 
         env_learning = os.getenv("TRANSCRIPT_FIXER_ENABLE_LEARNING")
         if env_learning is not None:
-            _config.features.enable_learning = env_learning != "0"
+            _config.features.enable_learning = _env_bool(
+                "TRANSCRIPT_FIXER_ENABLE_LEARNING", True
+            )
 
         env_metrics = os.getenv("TRANSCRIPT_FIXER_ENABLE_METRICS")
         if env_metrics is not None:
-            _config.features.enable_metrics = env_metrics != "0"
+            _config.features.enable_metrics = _env_bool(
+                "TRANSCRIPT_FIXER_ENABLE_METRICS", True
+            )
 
         env_auto_approve = os.getenv("TRANSCRIPT_FIXER_AUTO_APPROVE")
         if env_auto_approve is not None:
-            _config.features.enable_auto_approval = env_auto_approve == "1"
+            _config.features.enable_auto_approval = _env_bool(
+                "TRANSCRIPT_FIXER_AUTO_APPROVE", False
+            )
 
         # Validate. The API-key warning is suppressed here: get_config() runs on
         # every command including native/stage-1 runs that never touch the API,

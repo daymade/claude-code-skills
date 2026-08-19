@@ -450,8 +450,16 @@ class HealthChecker:
         expected_tables = [
             'corrections', 'context_rules', 'correction_history',
             'correction_changes', 'learned_suggestions', 'suggestion_examples',
-            'system_config', 'audit_log'
+            'review_items', 'system_config', 'audit_log'
         ]
+        required_columns = {
+            'correction_changes': {'change_type', 'learnable', 'model'},
+            'correction_history': {'success', 'error_message'},
+            'review_items': {
+                'status', 'file_path', 'original_text', 'suggested_text',
+                'decision_note', 'resolved_text',
+            },
+        }
 
         try:
             if not self.db_path.exists():
@@ -464,12 +472,25 @@ class HealthChecker:
                 )
 
             import sqlite3
-            conn = sqlite3.connect(str(self.db_path), timeout=5.0)
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-            )
-            actual_tables = [row[0] for row in cursor.fetchall()]
-            conn.close()
+            with sqlite3.connect(str(self.db_path), timeout=5.0) as conn:
+                cursor = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                )
+                actual_tables = [row[0] for row in cursor.fetchall()]
+
+                missing_columns = {}
+                for table, columns in required_columns.items():
+                    if table not in actual_tables:
+                        continue
+                    actual_columns = {
+                        row[1]
+                        for row in conn.execute(
+                            f"PRAGMA table_info({table})"
+                        ).fetchall()
+                    }
+                    absent = sorted(columns - actual_columns)
+                    if absent:
+                        missing_columns[table] = absent
 
             missing = [t for t in expected_tables if t not in actual_tables]
             extra = [t for t in actual_tables if t not in expected_tables and not t.startswith('sqlite_')]
@@ -487,6 +508,25 @@ class HealthChecker:
                         'extra': extra
                     },
                     error="Schema incomplete"
+                )
+
+            if missing_columns:
+                summary = "; ".join(
+                    f"{table}: {', '.join(columns)}"
+                    for table, columns in sorted(missing_columns.items())
+                )
+                return HealthCheckResult(
+                    name=name,
+                    status=HealthStatus.DEGRADED,
+                    message=f"Missing schema columns: {summary}",
+                    duration_ms=(time.time() - start_time) * 1000,
+                    details={
+                        'expected_tables': expected_tables,
+                        'actual_tables': actual_tables,
+                        'missing_columns': missing_columns,
+                        'extra': extra,
+                    },
+                    error="Schema incomplete",
                 )
 
             return HealthCheckResult(

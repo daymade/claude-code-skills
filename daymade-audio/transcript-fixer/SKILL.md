@@ -68,11 +68,12 @@ The Stage 1 JSON contract is:
   "output_path": null,
   "needs_review_path": null,
   "input_unchanged": true,
-  "review_enqueued": 0
+  "review_enqueued": 0,
+  "stage1_only_incomplete": true
 }
 ~~~
 
-Read these fields. Do not infer no-op or success from whether a sidecar exists.
+Read these fields. `stage1_only_incomplete` is additive to the original six-field caller contract and must remain true for a Stage 1 script run; only the caller can close it by running Native AI, or by explicitly choosing the agent-less Stage 2/3 route. Do not infer no-op or success from whether a sidecar exists.
 
 For a native end-to-end example, read [references/example_session_dji_minutes.md](references/example_session_dji_minutes.md).
 
@@ -244,7 +245,7 @@ export GLM_API_KEY="<api-key>"
 uv run scripts/fix_transcript_enhanced.py input.md --output ./corrected
 ~~~
 
-Read [references/glm_api_setup.md](references/glm_api_setup.md), [references/installation_setup.md](references/installation_setup.md), and the explicitly API-oriented portions of [references/workflow_guide.md](references/workflow_guide.md). When a chunk fails after retries, the API route keeps that chunk and its original surrounding separators byte-for-byte and prints a warning; if every chunk fails, the complete output equals the input. For `fix_transcription.py --stage 2|3 --json`, read the additive `stage2_total_chunks`, `stage2_failed_chunks`, and `stage2_degraded` fields: `stage2_degraded: true` is not a fully corrected run even though the safely retained artifact is emitted. Verify the output rather than assuming the warning means a corrected result exists.
+Read [references/glm_api_setup.md](references/glm_api_setup.md), [references/installation_setup.md](references/installation_setup.md), and the explicitly API-oriented portions of [references/workflow_guide.md](references/workflow_guide.md). When a chunk fails after retries, the API route keeps that chunk and its original surrounding separators byte-for-byte and prints a warning; if every chunk fails, the complete output equals the input. For `fix_transcription.py --stage 2|3 --json`, read the additive `stage2_total_chunks`, `stage2_failed_chunks`, and `stage2_degraded` fields: `stage2_degraded: true` is not a fully corrected run even though the safely retained artifact is emitted. The enhanced wrapper exits nonzero after writing that retained artifact when any Stage 2 chunk is degraded. Verify the output rather than assuming the warning means a corrected result exists.
 
 The enhanced API wrapper can also add paragraph breaks, reduce repeated filler,
 and present corrections for interactive review. Those are API-wrapper features;

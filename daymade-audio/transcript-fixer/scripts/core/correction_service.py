@@ -658,11 +658,14 @@ class CorrectionService:
         def _normalize_change(change):
             """Extract standard fields from dict or dataclass (Change / AIChange)."""
             if isinstance(change, dict):
+                rule_type = change.get("rule_type", "dictionary")
+                if rule_type == "context_rule":
+                    rule_type = "context"
                 return {
                     "line_number": change.get("line_number"),
                     "from_text": change.get("from_text", ""),
                     "to_text": change.get("to_text", ""),
-                    "rule_type": change.get("rule_type", "dictionary"),
+                    "rule_type": rule_type,
                     "context_before": change.get("context_before"),
                     "context_after": change.get("context_after"),
                     "change_type": change.get("change_type", "unknown"),
@@ -680,6 +683,8 @@ class CorrectionService:
                 change_type = getattr(change, "change_type", "ai")
                 # DB CHECK constraint only allows context/dictionary/ai
                 rule_type = change_type if change_type in ("context", "dictionary", "ai") else "ai"
+            elif rule_type == "context_rule":
+                rule_type = "context"
 
             return {
                 "line_number": line_number,
