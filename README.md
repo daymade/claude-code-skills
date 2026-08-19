@@ -3343,6 +3343,26 @@ adversarial verification. All public, no-login data sources.
 判断医药板块现在的市场情绪
 ```
 
+### 96. **kimi-use** - Query Kimi Desktop Data Plugins
+
+Drive the logged-in Kimi desktop app through computer-use to query its built-in
+company, financial, market, academic, and legal data plugins without separate
+API keys. Results stay source-labeled and must be independently checked before
+they become load-bearing data.
+
+**Key features:**
+- Routes requests to installed Kimi plugins such as 天眼查, 同花顺 iFinD, SEC, IMF, and academic/legal databases
+- Covers both Claude Code computer-use and Codex computer control
+- Provides query patterns that require explicit sources and honest unknowns
+- Guards against truncated lists, OCR/name errors, and financial-data scope mismatches
+
+**Example usage:**
+```text
+/kimi-use
+用 Kimi 查这家公司的股东和最新财务数据，并逐项标明来源
+操作 Kimi 客户端，用已安装插件核对这组市场数据
+```
+
 ---
 
 ## 🎬 Interactive Demo Gallery
