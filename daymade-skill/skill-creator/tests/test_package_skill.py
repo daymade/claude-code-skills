@@ -166,3 +166,26 @@ def test_package_skill_accepts_current_completed_regression_review(tmp_path, mon
 
     assert artifact is not None
     assert artifact.exists()
+
+
+def test_package_uses_attested_snapshot_when_live_source_changes(tmp_path, monkeypatch):
+    skill_dir = _make_minimal_skill(tmp_path, "test-skill")
+    _add_security_marker(skill_dir)
+    original_validate = package_module.validate_security_marker
+
+    def mutate_live_during_staged_validation(candidate_skill):
+        if Path(candidate_skill).resolve() != skill_dir.resolve():
+            with (skill_dir / "SKILL.md").open("a", encoding="utf-8") as handle:
+                handle.write("late live mutation\n")
+        return original_validate(candidate_skill)
+
+    monkeypatch.setattr(
+        package_module, "validate_security_marker", mutate_live_during_staged_validation
+    )
+
+    artifact = package_skill(skill_dir, new_skill=True)
+
+    assert artifact is not None
+    with zipfile.ZipFile(artifact, "r") as zf:
+        packaged = zf.read("test-skill/SKILL.md").decode("utf-8")
+    assert "late live mutation" not in packaged

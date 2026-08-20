@@ -28,7 +28,7 @@ from pathlib import Path
 from scripts.package_skill import should_exclude, validate_security_marker
 from scripts.audit_skill_regression import build_report
 from scripts.quick_validate import validate_skill
-from scripts.security_scan import calculate_skill_hash, create_security_marker, scan_skill_patterns
+from scripts.security_scan import calculate_skill_hash, scan_skill_patterns
 
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 PASS, FAIL = [], []
@@ -48,6 +48,14 @@ def make_skill(root: Path, name: str = "fixture-skill") -> Path:
         encoding="utf-8")
     (skill / "references" / "guide.md").write_text("# Guide\n\nAll good here.\n", encoding="utf-8")
     return skill
+
+
+def write_security_marker_fixture(skill: Path) -> None:
+    """Write a validator fixture; this does not represent a completed scan."""
+    (skill / ".security-scan-passed").write_text(
+        f"Security scan passed\nContent hash: {calculate_skill_hash(skill)}\n",
+        encoding="utf-8",
+    )
 
 
 def main() -> int:
@@ -101,7 +109,7 @@ def main() -> int:
         check("changed HTML content changes hash", html_hash_1 != html_hash_2)
 
         print("[3] tampering after a scan must be caught by marker validation")
-        create_security_marker(hidden_skill, calculate_skill_hash(hidden_skill))
+        write_security_marker_fixture(hidden_skill)
         ok_before, _ = validate_security_marker(hidden_skill)
         f.write_bytes(orig + b"\nevil edit\n")
         ok_after, msg = validate_security_marker(hidden_skill)
