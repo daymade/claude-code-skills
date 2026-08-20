@@ -28,7 +28,7 @@ from pathlib import Path
 from scripts.package_skill import should_exclude, validate_security_marker
 from scripts.audit_skill_regression import build_report
 from scripts.quick_validate import validate_skill
-from scripts.security_scan import calculate_skill_hash, create_security_marker, scan_skill_patterns
+from scripts.security_scan import calculate_skill_hash, scan_skill_patterns
 
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 PASS, FAIL = [], []
@@ -48,6 +48,14 @@ def make_skill(root: Path, name: str = "fixture-skill") -> Path:
         encoding="utf-8")
     (skill / "references" / "guide.md").write_text("# Guide\n\nAll good here.\n", encoding="utf-8")
     return skill
+
+
+def write_security_marker_fixture(skill: Path) -> None:
+    """Write a validator fixture; this does not represent a completed scan."""
+    (skill / ".security-scan-passed").write_text(
+        f"Security scan passed\nContent hash: {calculate_skill_hash(skill)}\n",
+        encoding="utf-8",
+    )
 
 
 def main() -> int:
@@ -101,13 +109,22 @@ def main() -> int:
         check("changed HTML content changes hash", html_hash_1 != html_hash_2)
 
         print("[3] tampering after a scan must be caught by marker validation")
-        create_security_marker(hidden_skill)
+        write_security_marker_fixture(hidden_skill)
         ok_before, _ = validate_security_marker(hidden_skill)
         f.write_bytes(orig + b"\nevil edit\n")
         ok_after, msg = validate_security_marker(hidden_skill)
         f.write_bytes(orig)
         check("marker validates right after scan", ok_before)
         check("marker validation fails after tamper", not ok_after, msg)
+
+        write_security_marker_fixture(hidden_skill)
+        marker = hidden_skill / ".security-scan-passed"
+        marker.write_text(
+            marker.read_text(encoding="utf-8") + f"Content hash: {'0' * 64}\n",
+            encoding="utf-8",
+        )
+        duplicate_ok, duplicate_msg = validate_security_marker(hidden_skill)
+        check("marker validation rejects duplicate content hashes", not duplicate_ok, duplicate_msg)
 
         print("[4] quick_validate flags absolute user paths inside references/ (not just SKILL.md)")
         leaky = make_skill(tmp, "leaky-skill")
@@ -139,7 +156,7 @@ def main() -> int:
             f"# Local artifact\n\n{bad_path}\n",
             encoding="utf-8")
         hidden_output_issues, _ = scan_skill_patterns(hidden_output_skill)
-        check("verbose scan still skips hidden directories inside a skill",
+        check("verbose scan skips non-shipping .enrich/ inside a skill",
               not any(issue.pattern_name == "Absolute User Paths" for issue in hidden_output_issues))
 
         print("[5] quick_validate flags broken internal refs inside references/")
