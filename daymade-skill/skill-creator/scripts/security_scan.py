@@ -58,6 +58,14 @@ class SecurityIssue:
     recommendation: str
 
 
+@dataclass(frozen=True)
+class GitleaksScanResult:
+    """A gitleaks verdict bound to the exact staged bytes it examined."""
+
+    findings: List[Dict]
+    content_hash: str
+
+
 # ============================================================================
 # DETECTION LAYER - What to scan for
 # ============================================================================
@@ -184,10 +192,18 @@ def _remap_gitleaks_paths(
     return remapped
 
 
-def run_gitleaks(skill_path: Path) -> Optional[List[Dict]]:
+def _print_gitleaks_runtime_error(result: subprocess.CompletedProcess, message: str) -> None:
+    """Surface a scanner execution failure without misclassifying it as clean."""
+    print(f"{RED}❌ Error: {message}{RESET}", file=sys.stderr)
+    detail = (result.stderr or result.stdout or '').strip()
+    if detail:
+        print(detail[-1000:], file=sys.stderr)
+
+
+def run_gitleaks(skill_path: Path) -> Optional[GitleaksScanResult]:
     """
     Run gitleaks scan on skill directory
-    Returns: List of findings, empty list if clean, None on error
+    Returns: findings plus the staged content hash, or None on scanner error
     """
     skill_path = Path(skill_path).resolve()
     try:
@@ -202,6 +218,7 @@ def run_gitleaks(skill_path: Path) -> Optional[List[Dict]]:
                 staged_file = staged_root / relative
                 staged_file.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(file_path, staged_file)
+            staged_hash = calculate_skill_hash(staged_root)
 
             # Use a temporary file for cross-platform compatibility (Windows
             # does not have /dev/stdout).
@@ -217,15 +234,31 @@ def run_gitleaks(skill_path: Path) -> Optional[List[Dict]]:
                     timeout=60
                 )
 
-                # gitleaks exits with 1 if secrets found, 0 if clean.
+                # Default gitleaks semantics use 0 for clean and 1 for either
+                # leaks or execution errors. A nonempty report distinguishes
+                # the former; empty/missing output must fail closed.
                 if result.returncode == 0:
-                    return []
+                    return GitleaksScanResult([], staged_hash)
+
+                if result.returncode != 1:
+                    _print_gitleaks_runtime_error(
+                        result, f"gitleaks exited with status {result.returncode}"
+                    )
+                    return None
 
                 # Parse findings from temp file and restore source paths in the
                 # report; temporary staging locations are not actionable.
                 with open(tmp_path, 'r', encoding='utf-8') as f:
                     findings = json.load(f)
-                return _remap_gitleaks_paths(findings, staged_root, skill_path)
+                if not isinstance(findings, list) or not findings:
+                    _print_gitleaks_runtime_error(
+                        result, "gitleaks exited 1 without a findings report"
+                    )
+                    return None
+                return GitleaksScanResult(
+                    _remap_gitleaks_paths(findings, staged_root, skill_path),
+                    staged_hash,
+                )
 
             finally:
                 Path(tmp_path).unlink(missing_ok=True)
@@ -249,7 +282,10 @@ def scan_file_patterns(file_path: Path, patterns: List[Dict]) -> List[SecurityIs
     issues = []
 
     try:
-        content = file_path.read_text(encoding='utf-8')
+        raw_content = file_path.read_bytes()
+        if b'\0' in raw_content:
+            return []
+        content = raw_content.decode('utf-8')
         lines = content.split('\n')
 
         for line_num, line in enumerate(lines, 1):
@@ -290,13 +326,7 @@ def scan_skill_patterns(skill_path: Path) -> tuple[List[SecurityIssue], Dict[str
     all_issues = []
     stats = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0}
 
-    code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.sh', '.bash',
-                       '.md', '.yml', '.yaml', '.json', '.jsonl', '.toml'}
-
     for file_path in iter_security_relevant_files(skill_path):
-        if file_path.suffix not in code_extensions:
-            continue
-
         issues = scan_file_patterns(file_path, patterns)
         for issue in issues:
             all_issues.append(issue)
@@ -481,14 +511,12 @@ def calculate_skill_hash(skill_path: Path) -> str:
     return hasher.hexdigest()
 
 
-def create_security_marker(skill_path: Path) -> None:
+def create_security_marker(skill_path: Path, content_hash: str) -> None:
     """
     Create marker file indicating security scan passed
     Includes content-based hash for validation
     """
     marker_file = skill_path / ".security-scan-passed"
-    content_hash = calculate_skill_hash(skill_path)
-
     # Atomic write (methodology §4.5): package_skill reads this marker concurrently.
     marker_tmp = marker_file.with_name(marker_file.name + ".tmp")
     marker_tmp.write_text(
@@ -546,10 +574,11 @@ Exit codes:
     print(f"🔍 Scanning: {skill_path.name}")
     print(f"   Tool: gitleaks (industry standard)")
     print(f"   Mode: {'verbose (educational)' if args.verbose else 'simple (packaging gate)'}")
-    gitleaks_findings = run_gitleaks(skill_path)
+    gitleaks_result = run_gitleaks(skill_path)
 
-    if gitleaks_findings is None:
+    if gitleaks_result is None:
         sys.exit(4)
+    gitleaks_findings = gitleaks_result.findings
 
     # Run pattern-based scan (only in verbose mode)
     pattern_issues = []
@@ -567,7 +596,13 @@ Exit codes:
 
     # Create marker file on clean scan
     if exit_code == 0:
-        create_security_marker(skill_path)
+        if calculate_skill_hash(skill_path) != gitleaks_result.content_hash:
+            print(
+                f"{RED}❌ Error: skill content changed during the security scan; rerun it{RESET}",
+                file=sys.stderr,
+            )
+            sys.exit(4)
+        create_security_marker(skill_path, gitleaks_result.content_hash)
 
     sys.exit(exit_code)
 

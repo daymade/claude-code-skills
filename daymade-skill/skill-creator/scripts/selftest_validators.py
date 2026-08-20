@@ -101,7 +101,7 @@ def main() -> int:
         check("changed HTML content changes hash", html_hash_1 != html_hash_2)
 
         print("[3] tampering after a scan must be caught by marker validation")
-        create_security_marker(hidden_skill)
+        create_security_marker(hidden_skill, calculate_skill_hash(hidden_skill))
         ok_before, _ = validate_security_marker(hidden_skill)
         f.write_bytes(orig + b"\nevil edit\n")
         ok_after, msg = validate_security_marker(hidden_skill)
@@ -139,7 +139,7 @@ def main() -> int:
             f"# Local artifact\n\n{bad_path}\n",
             encoding="utf-8")
         hidden_output_issues, _ = scan_skill_patterns(hidden_output_skill)
-        check("verbose scan still skips hidden directories inside a skill",
+        check("verbose scan skips non-shipping .enrich/ inside a skill",
               not any(issue.pattern_name == "Absolute User Paths" for issue in hidden_output_issues))
 
         print("[5] quick_validate flags broken internal refs inside references/")
