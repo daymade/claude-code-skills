@@ -70,7 +70,7 @@ def test_run_gitleaks_remaps_staged_finding_to_source(tmp_path, monkeypatch):
     result = security_scan.run_gitleaks(skill_dir)
 
     assert result is not None
-    assert result.findings[0]["File"] == str(skill_dir / "scripts" / "client.py")
+    assert result.findings[0]["File"] == "scripts/client.py"
 
 
 def test_run_gitleaks_exit_one_without_findings_fails_closed(tmp_path, monkeypatch):

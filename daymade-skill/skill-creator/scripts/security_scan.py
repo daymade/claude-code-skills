@@ -187,7 +187,7 @@ def _remap_gitleaks_paths(
                 if (staged_root / candidate).exists():
                     relative = candidate
             if relative is not None:
-                updated['File'] = str(original_root / relative)
+                updated['File'] = relative.as_posix()
         remapped.append(updated)
     return remapped
 

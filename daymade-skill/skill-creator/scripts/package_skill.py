@@ -194,6 +194,11 @@ def package_skill(
     skill_name = skill_path.name
     if output_dir:
         output_path = Path(output_dir).resolve()
+        if output_path.is_relative_to(skill_path) and not output_path.is_relative_to(
+            skill_path / "dist"
+        ):
+            print("Error: an in-skill output directory must be under the excluded dist/ root")
+            return None
     else:
         # Default: place artifact next to source in a dedicated dist/ folder
         output_path = skill_path / "dist"

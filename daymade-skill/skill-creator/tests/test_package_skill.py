@@ -76,6 +76,21 @@ def test_package_skill_custom_output_dir(tmp_path):
     assert not (skill_dir / "dist").exists()
 
 
+def test_package_skill_rejects_custom_output_inside_shipping_tree(tmp_path, capsys):
+    skill_dir = _make_minimal_skill(tmp_path, "test-skill")
+    _add_security_marker(skill_dir)
+
+    artifact = package_skill(
+        skill_dir,
+        output_dir=skill_dir / "out",
+        new_skill=True,
+    )
+
+    assert artifact is None
+    assert not (skill_dir / "out").exists()
+    assert "must be under the excluded dist/ root" in capsys.readouterr().out
+
+
 def test_package_skill_artifact_contains_skill_files(tmp_path):
     skill_dir = _make_minimal_skill(tmp_path, "test-skill")
     (skill_dir / "references").mkdir()
