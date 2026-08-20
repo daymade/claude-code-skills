@@ -117,6 +117,15 @@ def main() -> int:
         check("marker validates right after scan", ok_before)
         check("marker validation fails after tamper", not ok_after, msg)
 
+        write_security_marker_fixture(hidden_skill)
+        marker = hidden_skill / ".security-scan-passed"
+        marker.write_text(
+            marker.read_text(encoding="utf-8") + f"Content hash: {'0' * 64}\n",
+            encoding="utf-8",
+        )
+        duplicate_ok, duplicate_msg = validate_security_marker(hidden_skill)
+        check("marker validation rejects duplicate content hashes", not duplicate_ok, duplicate_msg)
+
         print("[4] quick_validate flags absolute user paths inside references/ (not just SKILL.md)")
         leaky = make_skill(tmp, "leaky-skill")
         # Assemble the bad path at runtime so static scanners never match this

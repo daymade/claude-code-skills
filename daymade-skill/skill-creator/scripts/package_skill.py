@@ -62,11 +62,14 @@ def validate_security_marker(skill_path: Path) -> Tuple[bool, str]:
     # Read stored hash
     try:
         marker_content = security_marker.read_text()
-        hash_match = re.search(r'Content hash:\s*([a-f0-9]{64})', marker_content)
-
+        hash_lines = [
+            line for line in marker_content.splitlines() if line.startswith("Content hash:")
+        ]
+        if len(hash_lines) != 1:
+            return False, "Security marker must contain exactly one content hash"
+        hash_match = re.fullmatch(r'Content hash: ([a-f0-9]{64})', hash_lines[0])
         if not hash_match:
-            return False, "Security marker missing content hash (old format)"
-
+            return False, "Security marker content hash is malformed"
         stored_hash = hash_match.group(1)
     except Exception as e:
         return False, f"Cannot read security marker: {e}"
