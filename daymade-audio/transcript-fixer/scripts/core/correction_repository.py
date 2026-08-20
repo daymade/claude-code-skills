@@ -13,21 +13,17 @@ from __future__ import annotations
 import sqlite3
 import logging
 from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any, Union
+from typing import Dict, List, Optional, Tuple, Union
 from contextlib import contextmanager
-from dataclasses import dataclass, asdict
-import threading
+from dataclasses import dataclass
 
-from .connection_pool import ConnectionPool, PoolExhaustedError
+from .connection_pool import ConnectionPool
 from .defaults import SYSTEM_CONFIG_DEFAULTS
 
 # CRITICAL FIX: Import domain validation (SQL injection prevention)
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.domain_validator import (
-    validate_domain,
-    validate_source,
     validate_correction_inputs,
     validate_confidence,
     ValidationError as DomainValidationError
@@ -189,6 +185,9 @@ class CorrectionRepository:
                 conn.execute("BEGIN IMMEDIATE")  # Acquire write lock immediately
                 yield conn
                 conn.commit()
+            except DatabaseError:
+                conn.rollback()
+                raise
             except Exception as e:
                 conn.rollback()
                 logger.error(f"Transaction rolled back: {e}", exc_info=True)
@@ -207,6 +206,8 @@ class CorrectionRepository:
         with self._transaction() as conn:
             conn.executescript(schema_sql)
 
+        self._migrate_correction_change_metadata()
+
         # Write canonical defaults from Python SSOT (idempotent).
         # This replaces the historical schema.sql INSERT OR IGNORE block so
         # default values are defined in exactly one place: core.defaults.
@@ -214,6 +215,93 @@ class CorrectionRepository:
 
         logger.info(f"Database initialized: {self.db_path}")
 
+    def _migrate_correction_change_metadata(self) -> None:
+        """Add audit/learning metadata to databases created by older releases."""
+        additions = {
+            "change_type": "TEXT NOT NULL DEFAULT 'unknown'",
+            "learnable": "BOOLEAN NOT NULL DEFAULT 1 CHECK(learnable IN (0, 1))",
+            "confidence": (
+                "REAL CHECK(confidence IS NULL OR "
+                "(confidence >= 0.0 AND confidence <= 1.0))"
+            ),
+            "model": "TEXT",
+        }
+        with self._transaction() as conn:
+            existing = {
+                row[1]
+                for row in conn.execute(
+                    "PRAGMA table_info(correction_changes)"
+                ).fetchall()
+            }
+            needs_legacy_backfill = (
+                "change_type" not in existing or "learnable" not in existing
+            )
+            for column, declaration in additions.items():
+                if column not in existing:
+                    conn.execute(
+                        f"ALTER TABLE correction_changes ADD COLUMN "
+                        f"{column} {declaration}"
+                    )
+
+            # Older rows had no learnability field. Backfill unsafe shapes in
+            # Python so Unicode letters/digits are handled correctly too;
+            # SQLite's built-in character classes are ASCII-only.
+            rows = (
+                conn.execute(
+                    """
+                    SELECT id, from_text, to_text, change_type
+                    FROM correction_changes
+                    WHERE rule_type = 'ai' AND learnable = 1
+                    """
+                ).fetchall()
+                if needs_legacy_backfill
+                else []
+            )
+            for row_id, from_text, to_text, change_type in rows:
+                compact_from = "".join(from_text.split()).casefold()
+                compact_to = "".join(to_text.split()).casefold()
+                unsafe = (
+                    not from_text.strip()
+                    or not to_text.strip()
+                    or compact_from == compact_to
+                    or not any(char.isalnum() for char in from_text)
+                    or not any(char.isalnum() for char in to_text)
+                )
+                if unsafe:
+                    normalized_type = (
+                        "formatting"
+                        if change_type == "unknown" and compact_from == compact_to
+                        else change_type
+                    )
+                    conn.execute(
+                        """
+                        UPDATE correction_changes
+                        SET learnable = 0, change_type = ?
+                        WHERE id = ?
+                        """,
+                        (normalized_type, row_id),
+                    )
+
+            # Older schemas recorded one model per run in correction_history.
+            # Carry that best available provenance into each migrated detail;
+            # new runs store the actual per-change primary/fallback model.
+            conn.execute(
+                """
+                UPDATE correction_changes
+                SET model = (
+                    SELECT h.model
+                    FROM correction_history h
+                    WHERE h.id = correction_changes.history_id
+                )
+                WHERE model IS NULL
+                  AND EXISTS (
+                    SELECT 1
+                    FROM correction_history h
+                    WHERE h.id = correction_changes.history_id
+                      AND h.model IS NOT NULL
+                  )
+                """
+            )
     def _initialize_system_config(self) -> None:
         """Insert or ignore canonical system_config defaults."""
         values = [
@@ -241,7 +329,8 @@ class CorrectionRepository:
         confidence: float = 1.0,
         added_by: Optional[str] = None,
         notes: Optional[str] = None,
-        force: bool = False
+        force: bool = False,
+        update_existing: bool = True,
     ) -> int:
         """
         Add a new correction with full validation.
@@ -257,6 +346,9 @@ class CorrectionRepository:
             confidence: Confidence score (0.0-1.0)
             added_by: User who added it
             notes: Optional notes
+            update_existing: Whether a duplicate active row may be updated.
+                Automated learning passes False so a concurrent human write
+                cannot be overwritten between its read and insert.
 
         Returns:
             ID of inserted correction
@@ -315,6 +407,12 @@ class CorrectionRepository:
                         raise ValidationError(f"Integrity constraint violated: {e}") from e
 
                     existing_id, old_to_text, is_active, old_notes, old_added_at = row
+
+                    if not update_existing:
+                        raise ValidationError(
+                            f"Correction '{from_text}' already exists in domain "
+                            f"'{domain}'; refusing automated overwrite"
+                        )
 
                     # A disabled row is a deliberate signal (typically a reported
                     # false positive). Do not silently resurrect it — require force.

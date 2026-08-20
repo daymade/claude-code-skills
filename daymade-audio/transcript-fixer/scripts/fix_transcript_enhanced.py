@@ -4,6 +4,8 @@
 # dependencies = [
 #     "httpx>=0.24.0",
 #     "filelock>=3.13.0",
+#     "jieba>=0.42.1",
+#     "rapidfuzz>=3.14.0,<4",
 # ]
 # ///
 """
@@ -161,8 +163,9 @@ Examples:
         changes_file=False,
     )
 
+    status = None
     try:
-        cmd_run_correction(run_args)
+        status = cmd_run_correction(run_args)
     except SystemExit as e:
         if e.code != 0:
             print(f"❌ Processing failed with exit code {e.code}")
@@ -175,7 +178,7 @@ Examples:
             print("\n🌐 Opening HTML diff in browser...")
             open_html_in_browser(html_file)
         else:
-            print(f"\n⚠️  HTML diff not generated (may require Stage 2/3)")
+            print("\n⚠️  HTML diff not generated (may require Stage 2/3)")
 
     # List output files that were actually generated
     output_files = [
@@ -184,11 +187,27 @@ Examples:
         (f"{input_path.stem}_对比.html", "visual diff"),
     ]
 
-    print("\n✅ Processing complete!")
     print(f"\n📄 Output files in: {output_dir}")
     for name, description in output_files:
         if (output_dir / name).exists():
             print(f"   - {name} ({description})")
+
+    if status and status.get("stage2_degraded"):
+        print(
+            "\n⚠️  Processing incomplete: Stage 2 retained source text for "
+            f"{status['stage2_failed_chunks']}/"
+            f"{status['stage2_total_chunks']} failed API chunks."
+        )
+        sys.exit(1)
+
+    if status and status.get("stage1_only_incomplete"):
+        print(
+            "\n⚠️  Stage 1 finished, but end-to-end transcript correction "
+            "is incomplete until the Native AI or Stage 2 route runs."
+        )
+        return
+
+    print("\n✅ Processing complete!")
 
 
 if __name__ == '__main__':

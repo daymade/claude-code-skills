@@ -40,6 +40,14 @@ STAGE1_SIDECAR_SUFFIXES = [
     "_对比.html",
 ]
 
+# Auto-finalize cannot prove that the human decisions represented by these
+# reports are closed. Preserve them until an operator explicitly dispositions
+# every associated item; deleting them as generic intermediates loses evidence.
+PRESERVED_REVIEW_EVIDENCE_SUFFIXES = frozenset({
+    "_changes.md",
+    "_needs_review.md",
+})
+
 
 def _get_service() -> CorrectionService:
     """Get configured CorrectionService instance."""
@@ -99,6 +107,10 @@ def _get_learning_engine(service: CorrectionService | None = None):
     from core import LearningEngine
 
     config = get_config()
+    if service is None:
+        # Repository construction runs the idempotent compatibility migration
+        # for legacy correction_changes tables before learning queries them.
+        service = _get_service()
     return LearningEngine(
         history_dir=config.paths.config_dir / "history",
         learned_dir=config.paths.config_dir / "learned",
@@ -242,9 +254,10 @@ def _auto_finalize_stage1(input_path: Path, output_dir: Path, dry_run: bool = Fa
     """Promote an existing *_stage1.md to the input file before re-running Stage 1.
 
     If <stem>_stage1.md exists and is newer than the input file, replace the input
-    file with it and remove the intermediate sidecars left by previous runs. This
-    removes the manual finalize step for the native AI-correction workflow without
-    adding a new CLI command.
+    file with it and remove disposable intermediate sidecars left by previous
+    runs. Review-evidence reports are retained because this helper cannot prove
+    that their associated decisions are closed. This removes the manual promote
+    step for the native AI-correction workflow without adding a new CLI command.
 
     Returns True if a finalize happened (or would happen in dry-run mode).
     """
@@ -265,7 +278,10 @@ def _auto_finalize_stage1(input_path: Path, output_dir: Path, dry_run: bool = Fa
         for suffix in STAGE1_SIDECAR_SUFFIXES:
             sidecar = output_dir / f"{input_path.stem}{suffix}"
             if sidecar.exists() and sidecar.name != stage1_file.name:
-                print(f"   Would remove: {sidecar.name}")
+                if suffix in PRESERVED_REVIEW_EVIDENCE_SUFFIXES:
+                    print(f"   Would preserve review evidence: {sidecar.name}")
+                else:
+                    print(f"   Would remove: {sidecar.name}")
         return True
 
     # Atomic promotion: os.replace overwrites input_path even on macOS where mv
@@ -292,12 +308,16 @@ def _auto_finalize_stage1(input_path: Path, output_dir: Path, dry_run: bool = Fa
     print(f"✅ Auto-finalized: {stage1_file.name} -> {input_path.name}")
 
     removed = []
+    preserved = []
     for suffix in STAGE1_SIDECAR_SUFFIXES:
         sidecar = output_dir / f"{input_path.stem}{suffix}"
         # After promotion, stage1_file no longer exists, so this loop silently
         # skips the promoted suffix. We iterate the full list anyway to keep
         # cleanup robust against partial failures.
         if sidecar.exists():
+            if suffix in PRESERVED_REVIEW_EVIDENCE_SUFFIXES:
+                preserved.append(sidecar.name)
+                continue
             try:
                 sidecar.unlink()
                 removed.append(sidecar.name)
@@ -305,6 +325,8 @@ def _auto_finalize_stage1(input_path: Path, output_dir: Path, dry_run: bool = Fa
                 print(f"⚠️  Could not remove {sidecar.name}: {e}", file=sys.stderr)
     if removed:
         print(f"🧹 Cleaned up: {', '.join(removed)}")
+    if preserved:
+        print(f"🗂️  Preserved review evidence: {', '.join(preserved)}")
 
     return True
 
@@ -710,6 +732,10 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                 "needs_review_path": None,
                 "input_unchanged": bool(dry_run),
                 "review_enqueued": 0,
+                "stage1_only_incomplete": True,
+                "stage2_total_chunks": 0,
+                "stage2_failed_chunks": 0,
+                "stage2_degraded": False,
             }
 
     # Initialize service
@@ -760,6 +786,7 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     # never written to the DB, per the "one SSOT + DB stays" design.
     from pathlib import Path as _Path
     from utils.config import get_config
+    speaker_labels: set[str] = set()
     roster_path = (os.getenv("TRANSCRIPT_FIXER_PEOPLE_ROSTER")
                    or get_config().paths.people_roster_path)
     if roster_path:
@@ -767,6 +794,8 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         if roster_path.exists():
             from core.people_roster import load_people_roster
             roster_corr, _ = load_people_roster(roster_path)
+            speaker_labels.update(roster_corr)
+            speaker_labels.update(roster_corr.values())
             # A rule disabled via --report-false-positive is *absent* from the
             # loaded corrections (loading filters on is_active), which is exactly
             # the gap the roster fills — so without this veto the roster silently
@@ -800,8 +829,23 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
 
     # Read input file
     print(f"📖 Reading: {input_path.name}")
+    runtime_config = get_config()
+    file_size = input_path.stat().st_size
+    if file_size > runtime_config.resources.max_file_size:
+        print(
+            "❌ Error: input file exceeds configured max_file_size "
+            f"({file_size} > {runtime_config.resources.max_file_size} bytes)"
+        )
+        sys.exit(1)
     with open(input_path, 'r', encoding='utf-8') as f:
         original_text = f.read()
+    if len(original_text) > runtime_config.resources.max_text_length:
+        print(
+            "❌ Error: input text exceeds configured max_text_length "
+            f"({len(original_text)} > "
+            f"{runtime_config.resources.max_text_length} characters)"
+        )
+        sys.exit(1)
     print(f"   File size: {len(original_text):,} characters")
 
     # Show domain loading info
@@ -857,7 +901,12 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
             print("   (APPLY-ALL — every risk level applied; higher false-positive risk)")
         print("=" * 60)
 
-        processor = DictionaryProcessor(corrections, context_rules, correction_meta)
+        processor = DictionaryProcessor(
+            corrections,
+            context_rules,
+            correction_meta,
+            speaker_labels=speaker_labels,
+        )
         stage1_text, stage1_changes = processor.process(original_text, review_mode=review_mode)
 
         summary = processor.get_summary(stage1_changes)
@@ -962,6 +1011,9 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     stage2_changes = []
     stage2_text = stage1_text
     stage2_file = None
+    stage2_model = None
+    stage2_failed_chunks = 0
+    stage2_total_chunks = 0
     if args.stage >= 2 and not dry_run:
         print("=" * 60)
         print("🤖 Stage 2: AI Corrections")
@@ -979,11 +1031,23 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
 
         ai_processor = AIProcessor(
             api_key,
-            base_url=config.api.base_url or API_BASE_URL
+            base_url=config.api.base_url or API_BASE_URL,
+            max_concurrent=config.resources.max_concurrent_tasks,
+            speaker_labels=speaker_labels,
         )
         stage2_text, stage2_changes = ai_processor.process(stage1_text)
+        stage2_failed_chunks = ai_processor.failed_chunks
+        stage2_total_chunks = ai_processor.total_chunks
 
-        print(f"✓ Processed {len(stage2_changes)} chunks\n")
+        models_used = sorted(ai_processor.models_used)
+        if len(models_used) == 1:
+            stage2_model = models_used[0]
+        elif models_used:
+            stage2_model = "mixed:" + ",".join(models_used)
+        else:
+            stage2_model = ai_processor.model
+
+        print(f"✓ Recorded {len(stage2_changes)} Stage 2 changes\n")
 
         stage2_file = output_dir / f"{input_path.stem}_stage2.md"
         with open(stage2_file, 'w', encoding='utf-8') as f:
@@ -1004,25 +1068,37 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         # otherwise leak through as a literal attribution domain that no
         # filter can ever select again.
         attribution_domain = domains[0] if domains else "general"
+        stage2_error = (
+            f"{stage2_failed_chunks}/{stage2_total_chunks} API chunks failed; "
+            "their original text was retained"
+            if stage2_failed_chunks else None
+        )
         service.save_history(
             filename=str(input_path),
             domain=attribution_domain,
             original_length=len(original_text),
             stage1_changes=len(applied_stage1),
             stage2_changes=len(stage2_changes),
-            model=ai_processor.model,
-            changes=applied_stage1 + stage2_changes
+            model=stage2_model,
+            changes=applied_stage1 + stage2_changes,
+            success=stage2_failed_chunks == 0,
+            error_message=stage2_error,
         )
 
-        # Run learning engine - AUTO-LEARN from AI results!
-        if stage2_changes:
+        # Run learning only when enabled. Auto-approval is a separate, default-
+        # off mutation permission; otherwise qualifying patterns go to review.
+        if stage2_changes and config.features.enable_learning:
             print("=" * 60)
             print("🎓 Learning System: Analyzing AI Corrections")
             print("=" * 60)
 
             learning = _get_learning_engine(service)
 
-            stats = learning.analyze_and_auto_approve(stage2_changes, attribution_domain)
+            stats = learning.analyze_and_auto_approve(
+                stage2_changes,
+                attribution_domain,
+                auto_approve=config.features.enable_auto_approval,
+            )
 
             print(f"📊 Analysis Results:")
             print(f"   Total changes: {stats['total_changes']}")
@@ -1040,6 +1116,8 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                 print(f"\n   💰 {stats['savings_potential']}")
 
             print()
+        elif stage2_changes:
+            print("🎓 Learning System: disabled by configuration\n")
 
     # Stage 3: Generate diff report
     if args.stage >= 3 and not dry_run:
@@ -1058,14 +1136,28 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                     stage1_file=str(stage1_report_source),
                     stage2_file=str(stage2_file),
                     output_dir=str(output_dir),
-                    model=ai_processor.model,
+                    model=stage2_model,
                 )
             except Exception as e:
                 print(f"⚠️  Diff report generation failed: {e}", file=sys.stderr)
         else:
             print("   Skipped: Stage 2 output required for diff report\n")
 
-    print("✅ Correction complete!")
+    stage1_only_incomplete = args.stage == 1
+    if stage1_only_incomplete:
+        print(
+            "⚠️  Stage 1 complete — end-to-end transcript correction is "
+            "incomplete until Native AI Correction runs (or an agent-less "
+            "Stage 2 API pass is explicitly chosen)."
+        )
+    elif stage2_failed_chunks:
+        print(
+            "⚠️  Correction completed with degraded Stage 2: "
+            f"{stage2_failed_chunks}/{stage2_total_chunks} API chunks failed; "
+            "original text was retained for those chunks."
+        )
+    else:
+        print("✅ Correction complete!")
 
     # --json status object (see the --json flag help + the main() dispatch that
     # emits this on stdout). Built from what Stage 1 actually did: output_path is
@@ -1082,6 +1174,10 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
         # Additive field (existing consumers read by name and are unaffected):
         # how many deferrals landed in the persistent review queue this run.
         "review_enqueued": review_enqueued,
+        "stage1_only_incomplete": stage1_only_incomplete,
+        "stage2_total_chunks": stage2_total_chunks,
+        "stage2_failed_chunks": stage2_failed_chunks,
+        "stage2_degraded": stage2_failed_chunks > 0,
     }
 
 
@@ -1104,6 +1200,8 @@ def cmd_review_learned(args: argparse.Namespace) -> None:
         frequency = suggestion.get("frequency", 0)
         print(f"\n{idx}. [{domain}] '{suggestion['from_text']}' -> '{suggestion['to_text']}'")
         print(f"   Frequency: {frequency} | Confidence: {confidence:.2f}")
+        models = suggestion.get("models") or []
+        print(f"   Models: {', '.join(models) if models else 'unknown'}")
 
         examples = suggestion.get("examples") or []
         if examples:

@@ -32,7 +32,7 @@ This document describes the SQLite database format used by transcript-fixer v2.0
 
 ## Database Schema
 
-> **The full, authoritative table schema is `database_schema.md`** (8 tables + views) — read that before writing queries. This section summarizes the same tables for storage-format context; if the two ever disagree, `database_schema.md` and `scripts/core/schema.sql` win. Default config values live in `scripts/core/defaults.py`, not copied here.
+> **The full, authoritative table schema is `database_schema.md`** — read that before writing queries. This section summarizes the same tables for storage-format context; if the two ever disagree, `database_schema.md` and `scripts/core/schema.sql` win. Default config values live in `scripts/core/defaults.py`, not copied here.
 
 ### Core Tables
 
@@ -111,6 +111,10 @@ Detailed changes made in each run.
 | rule_id | INTEGER | | Reference to rule |
 | context_before | TEXT | | Text before |
 | context_after | TEXT | | Text after |
+| change_type | TEXT | DEFAULT 'unknown' | Auditable edit shape |
+| learnable | BOOLEAN | DEFAULT 1 | Whether history learning may consume the row |
+| confidence | REAL | 0.0–1.0 or NULL | Confidence emitted for this change |
+| model | TEXT | | Model that actually emitted the change |
 
 **Foreign Key**: history_id → correction_history.id (CASCADE DELETE)
 
@@ -393,5 +397,5 @@ sqlite3 corrections.db ".recover" | sqlite3 corrections_new.db
 
 ```bash
 # Reinitialize schema (safe, uses IF NOT EXISTS)
-uv run python -c "from core import CorrectionRepository; from pathlib import Path; CorrectionRepository(Path.home() / '.transcript-fixer' / 'corrections.db')"
+uv run scripts/fix_transcription.py --init
 ```

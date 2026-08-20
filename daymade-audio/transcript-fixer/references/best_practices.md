@@ -2,6 +2,10 @@
 
 Recommendations for effective use of transcript-fixer based on production experience.
 
+> **Route boundary:** SKILL.md owns the current Native AI workflow. References
+> to Stage 2/3 and API quota in this file apply only to agent-less automation;
+> they are not the recommended path inside Claude Code or Codex.
+
 ## Table of Contents
 
 - [Getting Started](#getting-started)
@@ -57,7 +61,7 @@ uv run scripts/fix_transcription.py --add "奇迹创坛" "奇绩创坛" --domain
 uv run scripts/fix_transcription.py --review-learned
 ```
 
-**Why**: Learned corrections move from Stage 2 (AI, expensive) to Stage 1 (dictionary, cheap/instant).
+**Why**: Learned corrections move repeated work from Native/API judgment to Stage 1 (dictionary, cheap/instant).
 
 **Impact**:
 - 10x faster processing (no API calls)
@@ -85,7 +89,7 @@ Never put a common real word into `general` — that silently corrupts every fut
 - `finance` - Financial terminology
 - `medical` - Medical terminology
 
-**Custom domains**: Any string matching `^[\w一-鿿぀-ゟ゠-ヿ가-힯-]+$` — Unicode letters (including CJK / kana / hangul), digits, underscore, hyphen. So a Chinese/Japanese/Korean project slug is a valid domain name (e.g. `--domain 火星加速器`).
+**Custom domains**: Any string matching `^[\w一-鿿぀-ゟ゠-ヿ가-힯-]+$` — Unicode letters (including CJK / kana / hangul), digits, underscore, hyphen. So a Chinese/Japanese/Korean project slug is a valid domain name (e.g. `--domain 示例项目`).
 
 ### Domain Selection Strategy
 
@@ -100,7 +104,7 @@ uv run scripts/fix_transcription.py --add "我司" "奇绩创坛" --domain yc_ch
 
 ## Cost Optimization
 
-### Test Dictionary Changes Before AI Calls
+### Test dictionary changes before an agent-less API run
 
 **Problem**: AI calls (Stage 2) consume API quota and time.
 
@@ -116,7 +120,7 @@ uv run scripts/fix_transcription.py --input sample.md --stage 1
 # 3. Review output
 less sample_stage1.md
 
-# 4. If satisfied, run full pipeline on large files
+# 4. Agent-less automation only: run the API route on large files
 uv run scripts/fix_transcription.py --input large_file.md --stage 3
 ```
 

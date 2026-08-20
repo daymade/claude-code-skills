@@ -19,11 +19,12 @@ CRITICAL FIX (P1-2): Comprehensive input validation
 
 from __future__ import annotations
 
-import difflib
 import logging
 import re
 from dataclasses import dataclass
 from typing import List, Tuple, Final
+
+from rapidfuzz.distance import Levenshtein
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,9 @@ class ExtractedChange:
     context_before: str  # 20 chars before
     context_after: str   # 20 chars after
     position: int        # Character position in original
-    change_type: str     # 'word', 'phrase', 'punctuation'
+    change_type: str     # 'word', 'phrase', 'punctuation', 'insertion', 'deletion'
     confidence: float    # 0.0-1.0 based on context consistency
+    learnable: bool = True  # False when no safe replayable FROM→TO pair exists
 
     def __hash__(self):
         """Allow use in sets for deduplication"""
@@ -63,8 +65,8 @@ class ChangeExtractor:
     Extract precise from→to changes from before/after text pairs
 
     Strategy:
-    1. Use difflib.SequenceMatcher for accurate diff
-    2. Filter out formatting-only changes
+    1. Use RapidFuzz's optimized Levenshtein opcodes for accurate bounded diff
+    2. Retain formatting-only changes in history but exclude them from learning
     3. Extract context for confidence scoring
     4. Classify change types
     5. Calculate confidence based on consistency
@@ -75,11 +77,10 @@ class ChangeExtractor:
         Initialize extractor
 
         Args:
-            min_change_length: Ignore changes shorter than this (chars)
-                              - Helps filter noise like single punctuation
-                              - Must be >= 1
-            max_change_length: Ignore changes longer than this (chars)
-                              - Helps filter large rewrites (not corrections)
+            min_change_length: Minimum replayable learning-pair length
+            - Must be >= 1
+            max_change_length: Maximum replayable learning-pair length. Larger
+                              edits remain in audit history but never auto-learn.
                               - Must be > min_change_length
 
         Raises:
@@ -190,53 +191,335 @@ class ChangeExtractor:
             f"corrected={len(corrected)} chars"
         )
 
-        matcher = difflib.SequenceMatcher(None, original, corrected)
+        original_tokens = self._tokenize(original)
+        corrected_tokens = self._tokenize(corrected)
+        opcodes = self._coalesce_opcodes(Levenshtein.opcodes(
+            [token for token, _start, _end in original_tokens],
+            [token for token, _start, _end in corrected_tokens],
+        ).as_list())
         changes = []
+        seen: set[tuple[int, str, str]] = set()
 
-        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-            if tag == 'replace':  # Actual replacement (from→to)
-                from_text = original[i1:i2]
-                to_text = corrected[j1:j2]
+        for tag, i1, i2, j1, j2 in opcodes:
+            if tag != 'equal':
+                original_start, original_end = self._token_span(
+                    original_tokens, i1, i2, len(original)
+                )
+                corrected_start, corrected_end = self._token_span(
+                    corrected_tokens, j1, j2, len(corrected)
+                )
 
-                # Filter by length
-                if not self._is_valid_change_length(from_text, to_text):
+                learnable = tag == 'replace'
+                if tag == 'insert':
+                    (
+                        original_start,
+                        original_end,
+                        corrected_start,
+                        corrected_end,
+                        learnable,
+                    ) = self._anchor_insert(
+                        original_tokens,
+                        corrected_tokens,
+                        i1,
+                        j1,
+                        j2,
+                        original_start,
+                        original_end,
+                        corrected_start,
+                        corrected_end,
+                    )
+                elif tag == 'delete':
+                    (
+                        original_start,
+                        original_end,
+                        corrected_start,
+                        corrected_end,
+                        learnable,
+                    ) = self._anchor_delete(
+                        original_tokens,
+                        corrected_tokens,
+                        i1,
+                        i2,
+                        j1,
+                        original_start,
+                        original_end,
+                        corrected_start,
+                        corrected_end,
+                    )
+
+                from_text = original[original_start:original_end]
+                to_text = corrected[corrected_start:corrected_end]
+
+                if not self._is_material_change(from_text, to_text):
                     continue
+                learnable_length = self._is_learnable_change_length(
+                    from_text, to_text
+                )
 
-                # Filter formatting-only changes
-                if self._is_formatting_only(from_text, to_text):
-                    continue
+                formatting_only = self._is_formatting_only(from_text, to_text)
 
                 # Extract context
-                context_before = original[max(0, i1-20):i1]
-                context_after = original[i2:min(len(original), i2+20)]
+                context_before = original[max(0, original_start-20):original_start]
+                context_after = original[
+                    original_end:min(len(original), original_end+20)
+                ]
 
                 # Classify change type
-                change_type = self._classify_change(from_text, to_text)
+                change_type = self._classify_change(
+                    tag, from_text, to_text, formatting_only=formatting_only
+                )
 
                 # Calculate confidence (based on text similarity and context)
                 confidence = self._calculate_confidence(
                     from_text, to_text, context_before, context_after
                 )
 
+                # Keep the exact bytes of an unexpected whitespace/case edit in
+                # history. Ordinary lexical changes still shed boundary space
+                # so their replayable dictionary pair is not indentation-bound.
+                clean_from = from_text if formatting_only else from_text.strip()
+                clean_to = to_text if formatting_only else to_text.strip()
+                key = (original_start, clean_from, clean_to)
+                if key in seen:
+                    continue
+                seen.add(key)
+
                 changes.append(ExtractedChange(
-                    from_text=from_text.strip(),
-                    to_text=to_text.strip(),
+                    from_text=clean_from,
+                    to_text=clean_to,
                     context_before=context_before,
                     context_after=context_after,
-                    position=i1,
+                    position=original_start,
                     change_type=change_type,
-                    confidence=confidence
+                    confidence=confidence,
+                    learnable=(
+                        learnable
+                        and learnable_length
+                        and not formatting_only
+                        and bool(clean_from)
+                        and bool(clean_to)
+                        and self._contains_lexical_text(clean_from)
+                        and self._contains_lexical_text(clean_to)
+                    ),
                 ))
 
                 # CRITICAL FIX: Prevent DoS from excessive changes
-                if len(changes) >= MAX_CHANGES:
-                    logger.warning(
-                        f"Reached maximum changes limit ({MAX_CHANGES}), stopping extraction"
+                if len(changes) > MAX_CHANGES:
+                    raise InputValidationError(
+                        "Correction produced more than "
+                        f"{MAX_CHANGES} auditable changes; refusing to truncate "
+                        "history for modified text"
                     )
-                    break
 
         logger.debug(f"Extracted {len(changes)} changes")
         return changes
+
+    @staticmethod
+    def _coalesce_opcodes(
+        opcodes: list[tuple[str, int, int, int, int]],
+    ) -> list[tuple[str, int, int, int, int]]:
+        """Merge adjacent edit opcodes into one human/replayable change.
+
+        Levenshtein may express one token replacement as an insertion followed
+        immediately by a replacement (for example one ASR token becoming two
+        words). With no equal material between them, they are one correction.
+        """
+        merged: list[tuple[str, int, int, int, int]] = []
+        pending: tuple[str, int, int, int, int] | None = None
+
+        def flush_pending() -> None:
+            nonlocal pending
+            if pending is not None:
+                merged.append(pending)
+                pending = None
+
+        for tag, i1, i2, j1, j2 in opcodes:
+            if tag == "equal":
+                flush_pending()
+                merged.append((tag, i1, i2, j1, j2))
+                continue
+
+            if pending is None:
+                pending = (tag, i1, i2, j1, j2)
+                continue
+
+            _old_tag, old_i1, old_i2, old_j1, old_j2 = pending
+            if old_i2 == i1 and old_j2 == j1:
+                combined_tag = (
+                    "insert" if old_i1 == i2
+                    else "delete" if old_j1 == j2
+                    else "replace"
+                )
+                pending = (combined_tag, old_i1, i2, old_j1, j2)
+            else:
+                flush_pending()
+                pending = (tag, i1, i2, j1, j2)
+
+        flush_pending()
+        return merged
+
+    @staticmethod
+    def _tokenize(text: str) -> list[tuple[str, int, int]]:
+        """Tokenize ASCII words as units and keep CJK characters addressable.
+
+        Character-level diffing can represent ``meetng → meeting`` as an empty-
+        string insertion and split ``spekarA → Speaker A`` into several
+        misleading one-character edits. ASCII word tokens retain the replayable
+        ASR pair, while individual CJK characters preserve precise homophone
+        replacements. RapidFuzz handles repetitive token sequences without the
+        quadratic ``SequenceMatcher(autojunk=False)`` failure mode.
+        """
+        token_re = re.compile(
+            r"[A-Za-z0-9_]+(?:[.'’_-][A-Za-z0-9_]+)*|[\u3400-\u9fff]|.",
+            re.DOTALL,
+        )
+        return [
+            (match.group(0), match.start(), match.end())
+            for match in token_re.finditer(text)
+        ]
+
+    @staticmethod
+    def _token_span(
+        tokens: list[tuple[str, int, int]],
+        start: int,
+        end: int,
+        text_length: int,
+    ) -> tuple[int, int]:
+        if start == end:
+            position = tokens[start][1] if start < len(tokens) else text_length
+            return position, position
+        return tokens[start][1], tokens[end - 1][2]
+
+    @staticmethod
+    def _is_lexical_token(token: str) -> bool:
+        return bool(re.fullmatch(
+            r"(?:[A-Za-z0-9_]+(?:[.'’_-][A-Za-z0-9_]+)*)|[\u3400-\u9fff]",
+            token,
+        ))
+
+    @staticmethod
+    def _contains_lexical_text(text: str) -> bool:
+        return bool(re.search(r"[A-Za-z0-9_\u3400-\u9fff]", text))
+
+    def _anchor_insert(
+        self,
+        original_tokens: list[tuple[str, int, int]],
+        corrected_tokens: list[tuple[str, int, int]],
+        original_index: int,
+        corrected_start_index: int,
+        corrected_end_index: int,
+        original_start: int,
+        original_end: int,
+        corrected_start: int,
+        corrected_end: int,
+    ) -> tuple[int, int, int, int, bool]:
+        """Attach an insertion to an unchanged lexical neighbour when safe."""
+        inserted_is_lexical = any(
+            self._contains_lexical_text(token)
+            for token, _start, _end in corrected_tokens[
+                corrected_start_index:corrected_end_index
+            ]
+        )
+        if original_index > 0 and corrected_start_index > 0:
+            original_left = original_tokens[original_index - 1]
+            corrected_left = corrected_tokens[corrected_start_index - 1]
+            if (
+                original_left[0] == corrected_left[0]
+                and self._is_lexical_token(original_left[0])
+            ):
+                return (
+                    original_left[1],
+                    original_end,
+                    corrected_left[1],
+                    corrected_end,
+                    inserted_is_lexical,
+                )
+
+        if (
+            original_index < len(original_tokens)
+            and corrected_end_index < len(corrected_tokens)
+        ):
+            original_right = original_tokens[original_index]
+            corrected_right = corrected_tokens[corrected_end_index]
+            if (
+                original_right[0] == corrected_right[0]
+                and self._is_lexical_token(original_right[0])
+            ):
+                return (
+                    original_start,
+                    original_right[2],
+                    corrected_start,
+                    corrected_right[2],
+                    inserted_is_lexical,
+                )
+
+        return (
+            original_start,
+            original_end,
+            corrected_start,
+            corrected_end,
+            False,
+        )
+
+    def _anchor_delete(
+        self,
+        original_tokens: list[tuple[str, int, int]],
+        corrected_tokens: list[tuple[str, int, int]],
+        original_start_index: int,
+        original_end_index: int,
+        corrected_index: int,
+        original_start: int,
+        original_end: int,
+        corrected_start: int,
+        corrected_end: int,
+    ) -> tuple[int, int, int, int, bool]:
+        """Attach a deletion to an unchanged lexical neighbour when safe."""
+        deleted_is_lexical = any(
+            self._contains_lexical_text(token)
+            for token, _start, _end in original_tokens[
+                original_start_index:original_end_index
+            ]
+        )
+        if original_start_index > 0 and corrected_index > 0:
+            original_left = original_tokens[original_start_index - 1]
+            corrected_left = corrected_tokens[corrected_index - 1]
+            if (
+                original_left[0] == corrected_left[0]
+                and self._is_lexical_token(original_left[0])
+            ):
+                return (
+                    original_left[1],
+                    original_end,
+                    corrected_left[1],
+                    corrected_end,
+                    deleted_is_lexical,
+                )
+
+        if (
+            original_end_index < len(original_tokens)
+            and corrected_index < len(corrected_tokens)
+        ):
+            original_right = original_tokens[original_end_index]
+            corrected_right = corrected_tokens[corrected_index]
+            if (
+                original_right[0] == corrected_right[0]
+                and self._is_lexical_token(original_right[0])
+            ):
+                return (
+                    original_start,
+                    original_right[2],
+                    corrected_start,
+                    corrected_right[2],
+                    deleted_is_lexical,
+                )
+
+        return (
+            original_start,
+            original_end,
+            corrected_start,
+            corrected_end,
+            False,
+        )
 
     def group_by_pattern(self, changes: List[ExtractedChange]) -> dict[Tuple[str, str], List[ExtractedChange]]:
         """
@@ -335,16 +618,31 @@ class ChangeExtractor:
 
         return round(final_confidence, 2)
 
-    def _is_valid_change_length(self, from_text: str, to_text: str) -> bool:
-        """Check if change is within valid length range"""
+    @staticmethod
+    def _is_material_change(from_text: str, to_text: str) -> bool:
+        """Return whether the opcode represents any actual mutation."""
+        return from_text != to_text and bool(from_text or to_text)
+
+    def _is_learnable_change_length(self, from_text: str, to_text: str) -> bool:
+        """Bound dictionary learning without deleting the audit record."""
         from_len = len(from_text.strip())
         to_len = len(to_text.strip())
 
-        # Both must be within range
-        if from_len < self.min_change_length or from_len > self.max_change_length:
+        # A whitespace-only edit has no stripped length but is still a material
+        # transcript mutation that history must expose.
+        if from_len == 0 and to_len == 0 and from_text != to_text:
+            from_len = len(from_text)
+            to_len = len(to_text)
+
+        # History may represent a whole-span insertion/deletion with one empty
+        # side. At least one side must contain a bounded material change.
+        if from_len == 0 and to_len == 0:
             return False
-        if to_len < self.min_change_length or to_len > self.max_change_length:
-            return False
+        for length in (from_len, to_len):
+            if length and (
+                length < self.min_change_length or length > self.max_change_length
+            ):
+                return False
 
         return True
 
@@ -368,12 +666,26 @@ class ChangeExtractor:
 
         return False
 
-    def _classify_change(self, from_text: str, to_text: str) -> str:
+    def _classify_change(
+        self,
+        tag: str,
+        from_text: str,
+        to_text: str,
+        *,
+        formatting_only: bool = False,
+    ) -> str:
         """
         Classify the type of change
 
-        Returns: 'word', 'phrase', 'punctuation', 'mixed'
+        Returns: 'word', 'phrase', 'punctuation', 'mixed', 'insertion',
+        'deletion', or 'formatting'
         """
+        if formatting_only:
+            return 'formatting'
+        if tag == 'insert':
+            return 'insertion'
+        if tag == 'delete':
+            return 'deletion'
         # Single character = punctuation or letter
         if len(from_text.strip()) == 1 and len(to_text.strip()) == 1:
             return 'punctuation'

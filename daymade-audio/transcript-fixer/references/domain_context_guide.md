@@ -4,6 +4,13 @@ Format and template for per-domain correction context files — the third layer 
 the correction system, alongside the dictionary (deterministic replacements) and
 the people roster (person names).
 
+## Contents
+
+- What problem this solves
+- Location and format
+- Worked example
+- Machine-readable grammar and maintenance rules
+
 ## What problem this solves
 
 Three kinds of ASR errors, three homes:
@@ -49,6 +56,9 @@ What recordings in this domain are about; the vocabulary universe.
 For each trap:
 - **<wrong> → <right>** — the disambiguating cue: WHEN is the right reading
   intended? Add a dated real example if you have one.
+- Wrap an exact multi-word ASR form in backticks, for example
+  **`CC 思维链` → 目标术语**. The spaces are part of the literal scan target;
+  replace the synthetic target with the domain's intended term.
 - Order by frequency; prune entries that stop recurring.
 
 ## Authoritative name sources (pointers, not copies)
@@ -98,11 +108,26 @@ word, so it's a deterministic fix and went to the dictionary via
 0. **The format is machine-read, so write it in the shapes the scanner knows.**
    `--scan-traps` parses every **bullet-line-start** `- **<wrong> → <right>**` entry
    out of this file and locates each variant in the transcript mechanically (see
-   SKILL.md step 6). The grammar the parser accepts:
+   the Native correction checklist in SKILL.md). The grammar the parser accepts:
    - **Bullet line start is required.** A `**...→...**` pair sitting mid-line in
      prose is NOT parsed (that shape also matches text caught between two
      unrelated bold spans — banning it is deliberate).
-   - **FROM side, `/`-separated variants**: `**卖吸引/卖新鲜 → 麦锡颖**`.
+   - **Direction is always left-to-right.** `→` is the canonical separator:
+     left is the observed ASR form, right is the intended text. Legacy `≈`
+     entries are accepted with the same directional convention so older context
+     files do not silently scan zero traps; use `→` for new entries because it
+     makes the direction explicit.
+   - **FROM side, `/`-separated variants**: `**卡帕西/卡帕希 → Karpathy**`.
+   - **Exact FROM phrases containing spaces must be quoted as a whole**:
+     use this shape:
+
+     ~~~markdown
+     - **`CC 思维链`/`CC 思维连` → 目标术语** — domain-specific cue
+     ~~~
+
+     Bare whitespace remains unparseable because it is indistinguishable from
+     prose; backticks declare that every internal space belongs to the literal
+     scan target.
    - **FROM side, parenthesized**: a `/`-separated list inside parens is a variant
      family — `**升单系（圣诞/上单/生单 → 升单）**` scans only 圣诞/上单/生单, never
      the family-name prefix (it may be a real word). Parens WITHOUT a `/` inside
@@ -113,10 +138,14 @@ word, so it's a deterministic fix and went to the dictionary via
    - **Confirmed-correct record**: `=` plus a keep-word, e.g.
      `- **Brooklyn = 真实实体，勿修** — 教育博主 IP 名。` — reported as keep-as-is,
      so a later pass stops re-investigating a settled name. The recognized
-     keep-words are exactly: `勿修` / `非误识` / `确认正确` / `保留原样` — a synonym
-     like 不要改 parses as nothing at all (silent no-entry), so use the listed forms.
+     keep-words are: `勿修` / `非误识` / `确认正确` / `保留原样` / `不要改` /
+     `不用改` / `别改` / `无需修改`.
    A trap the parser can't read is a trap that never gets scanned — when in
    doubt, run `--scan-traps` once and check the entry count in the header.
+   The scanner excludes only a single-line value of the leading frontmatter
+   field `asr_note`, because that field intentionally cites old forms as
+   correction provenance. Multi-line block/folded values are not masked.
+   Keywords, titles, and body text remain in scope.
 1. **Cues, not rules.** Every entry must state the contextual condition under
    which the correction applies. An entry without a cue is a dictionary rule in
    disguise — and common-word rules are exactly what corrupts transcripts.

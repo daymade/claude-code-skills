@@ -180,7 +180,7 @@ mv ~/.transcript-fixer/corrections_new.db ~/.transcript-fixer/corrections.db
 **Solution**: Reinitialize schema (safe, uses IF NOT EXISTS):
 
 ```bash
-python -c "from core import CorrectionRepository; from pathlib import Path; CorrectionRepository(Path.home() / '.transcript-fixer' / 'corrections.db')"
+uv run scripts/fix_transcription.py --init
 ```
 
 Or delete database and reinitialize:
@@ -199,22 +199,22 @@ uv run scripts/fix_transcription.py --init
 
 Safe mode is the default, so Stage 1 only auto-applies **low-risk** (non-word, high-confidence) corrections. On a clean transcript — or one from a strong ASR engine — there may be no low-risk dictionary hits, so `Applied: 0` is expected. Any medium/high-risk candidates are written to `*_needs_review.md` for you to confirm. To apply every risk level (the pre-safe-mode behavior), pass `--apply-all`.
 
-### 1. Stage Order Confusion
+### 1. Native route versus API stages
 
-**Problem**: Running Stage 2 without Stage 1 output.
+**Problem**: Treating the CLI stage number as the skill's recommended route.
 
-**Solution**: Use `--stage 3` for full pipeline, or run stages sequentially:
+**Solution**: Inside Claude/Codex, run explicit Stage 1 and then Native AI
+Correction. In agent-less API automation, Stage 2 and Stage 3 both run Stage 1
+internally; Stage 3 additionally creates the diff report.
 
 ```bash
-# Wrong: Stage 2 on raw file
-uv run scripts/fix_transcription.py --input file.md --stage 2  # ❌
-
-# Correct: Full pipeline
-uv run scripts/fix_transcription.py --input file.md --stage 3  # ✅
-
-# Or sequential stages
+# Agent session (recommended)
 uv run scripts/fix_transcription.py --input file.md --stage 1
-uv run scripts/fix_transcription.py --input file_stage1.md --stage 2
+# Then perform Native AI Correction with this skill loaded.
+
+# Agent-less API route
+uv run scripts/fix_transcription.py --input file.md --stage 2
+uv run scripts/fix_transcription.py --input file.md --stage 3  # adds diff report
 ```
 
 ### 2. Overwriting Imports
@@ -295,23 +295,25 @@ git add corrections_*.json
 
 **Problem**: After correction you end up with multiple intermediate files (`file_stage1.md`, `file_dryrun.md`, `file_changes.md`, `file_needs_review.md`) in the working directory.
 
-**Preferred solution**: Re-run `--stage 1` on the original `file.md` — plain, **without `--apply-all`** (an explicit `--apply-all` always runs corrections and never takes the promote path, so it won't finalize). If `file_stage1.md` is newer than `file.md`, transcript-fixer automatically promotes it to `file.md` and removes the sidecars. It skips promotion if `file.md` has been edited more recently, so it never overwrites your manual changes. This is the recommended finalize path.
+**Preferred solution**: Re-run `--stage 1` on the original `file.md` — plain, **without `--apply-all`** (an explicit `--apply-all` always runs corrections and never takes the promote path, so it won't finalize). If `file_stage1.md` is newer than `file.md`, transcript-fixer automatically promotes it to `file.md` and removes disposable sidecars. It preserves `file_changes.md` and `file_needs_review.md` until you explicitly close their review decisions. It skips promotion if `file.md` has been edited more recently, so it never overwrites your manual changes. This is the recommended finalize path.
 
 ```bash
 uv run scripts/fix_transcription.py --input file.md --stage 1
 ```
 
-**Manual fallback**: In the native AI-correction workflow, edit the original `file.md` directly, archive it, then delete the sidecars with a Python one-liner (avoids macOS `mv` alias hazards):
+**Manual fallback**: In the native AI-correction workflow, edit the original `file.md` directly, archive it, then delete only the disposable sidecars with a Python one-liner (avoids macOS `mv` alias hazards):
 
 ```bash
 uv run python -c "
 from pathlib import Path
 stem = 'file'
-for suffix in ['_stage1.md','_dryrun.md','_changes.md','_needs_review.md','_uncertain.md','_stage2.md','_对比.html']:
+for suffix in ['_stage1.md','_dryrun.md','_uncertain.md','_stage2.md','_对比.html']:
     p = Path(f'{stem}{suffix}')
     p.exists() and p.unlink()
 "
 ```
+
+The manual cleanup also leaves `_changes.md` and `_needs_review.md` untouched. Remove them separately only after every represented item has an explicit disposition.
 
 **Why not a bare `mv`**: On macOS, `mv` is commonly aliased to `mv -i`. A bare `mv file_stage1.md file.md && echo done` can skip the overwrite (still exit 0) when the target already exists, leaving the uncorrected file in place. Use the Python one-liner above, or `/bin/mv -f`, if you must use the shell:
 

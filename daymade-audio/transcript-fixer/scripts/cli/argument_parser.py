@@ -136,7 +136,9 @@ def create_argument_parser() -> argparse.ArgumentParser:
         dest="json_output",
         help="Emit a machine-readable Stage 1 status object as the ONLY thing on stdout "
              "(the human-readable log is routed to stderr). Fields: applied, deferred, "
-             "output_path, needs_review_path, input_unchanged, review_enqueued. Lets "
+             "output_path, needs_review_path, input_unchanged, review_enqueued, "
+             "stage1_only_incomplete, stage2_total_chunks, stage2_failed_chunks, "
+             "stage2_degraded. All ten status fields are always present. Lets "
              "consumers stop inferring no-op vs failure from whether a *_stage1.md "
              "sidecar exists. Also applies to the review-queue commands "
              "(--enqueue-review/--list-review/--show-review/--resolve-review)."
@@ -149,7 +151,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="scan_traps",
         help="Scan --input for every trap documented in --context-file (a domain "
-             "context markdown): parses each **误识 → 正确** entry, locates every "
+             "context markdown): parses each **误识 → 正确** entry (legacy ≈ "
+             "accepted; quote exact multi-word variants), locates every "
              "variant with line number + context window, and lists no-hit entries "
              "so 'scanned and absent' is distinguishable from 'never scanned'. "
              "Replaces the manual per-trap grep loop in the native pass's "

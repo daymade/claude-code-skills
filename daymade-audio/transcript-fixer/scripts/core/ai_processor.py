@@ -13,10 +13,16 @@ Features:
 
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import Collection, List, Tuple
 import httpx
 
-from .ai_utils import AIChange, AIAPIError, split_into_chunks, build_correction_prompt, parse_anthropic_response
+from .ai_utils import (
+    AIChange,
+    build_correction_prompt,
+    parse_anthropic_response,
+    reassemble_corrected_chunks,
+    split_into_chunks,
+)
 from .defaults import (
     DEFAULT_MODEL,
     FALLBACK_MODEL,
@@ -24,6 +30,17 @@ from .defaults import (
     AUTH_HEADER_NAME,
     ANTHROPIC_VERSION,
     API_TIMEOUT,
+)
+from .change_extractor import ChangeExtractor
+from .dictionary_processor import (
+    _mask_ledger_spans,
+    _restore_ledger_spans,
+    reveal_ledger_values_for_reporting,
+)
+from .protected_spans import (
+    mask_speaker_labels,
+    restore_speaker_labels,
+    reveal_speaker_labels_for_reporting,
 )
 
 
@@ -40,7 +57,8 @@ class AIProcessor:
 
     def __init__(self, api_key: str, model: str = DEFAULT_MODEL,
                  base_url: str = API_BASE_URL,
-                 fallback_model: str = FALLBACK_MODEL):
+                 fallback_model: str = FALLBACK_MODEL,
+                 speaker_labels: Collection[str] = ()):
         """
         Initialize AI processor
 
@@ -49,12 +67,18 @@ class AIProcessor:
             model: Model name (default: GLM-5.2)
             base_url: API base URL
             fallback_model: Fallback model on primary failure
+            speaker_labels: Explicit bare labels from a roster/manifest
         """
         self.api_key = api_key
         self.model = model
         self.fallback_model = fallback_model
         self.base_url = base_url
         self.max_chunk_size = 6000  # Characters per chunk
+        self.change_extractor = ChangeExtractor()
+        self.models_used: set[str] = set()
+        self.speaker_labels = set(speaker_labels)
+        self.total_chunks = 0
+        self.failed_chunks = 0
 
     def process(self, text: str, context: str = "") -> Tuple[str, List[AIChange]]:
         """
@@ -67,7 +91,14 @@ class AIProcessor:
         Returns:
             (corrected_text, list_of_changes)
         """
-        chunks = split_into_chunks(text, self.max_chunk_size)
+        ledger_projected_text, ledger_spans = _mask_ledger_spans(text)
+        projected_text, speaker_spans = mask_speaker_labels(
+            ledger_projected_text, self.speaker_labels
+        )
+        self.models_used.clear()
+        chunks = split_into_chunks(projected_text, self.max_chunk_size)
+        self.total_chunks = len(chunks)
+        self.failed_chunks = 0
         corrected_chunks = []
         all_changes = []
 
@@ -75,21 +106,15 @@ class AIProcessor:
 
         for i, chunk in enumerate(chunks, 1):
             print(f"   Chunk {i}/{len(chunks)}... ", end="", flush=True)
+            corrected_chunk = chunk
+            api_succeeded = False
+            model_used: str | None = None
 
             try:
                 corrected_chunk = self._process_chunk(chunk, context, self.model)
-                corrected_chunks.append(corrected_chunk)
-
-                # TODO: Extract actual changes for learning
-                # For now, we assume the whole chunk changed
-                if corrected_chunk != chunk:
-                    all_changes.append(AIChange(
-                        chunk_index=i,
-                        from_text=chunk[:50] + "...",
-                        to_text=corrected_chunk[:50] + "...",
-                        confidence=0.9  # Placeholder
-                    ))
-
+                api_succeeded = True
+                model_used = self.model
+                self.models_used.add(self.model)
                 print("✓")
 
             except Exception as e:
@@ -100,16 +125,54 @@ class AIProcessor:
                     print(f"   Retrying with {self.fallback_model}... ", end="", flush=True)
                     try:
                         corrected_chunk = self._process_chunk(chunk, context, self.fallback_model)
-                        corrected_chunks.append(corrected_chunk)
+                        api_succeeded = True
+                        model_used = self.fallback_model
+                        self.models_used.add(self.fallback_model)
                         print("✓")
-                        continue
                     except Exception as e2:
                         print(f"✗ {str(e2)[:50]}")
 
-                print("   Using original text...")
-                corrected_chunks.append(chunk)
+                if not api_succeeded:
+                    print("   Using original text...")
+                    self.failed_chunks += 1
 
-        return "\n\n".join(corrected_chunks), all_changes
+            corrected_chunks.append(corrected_chunk)
+            if api_succeeded and corrected_chunk != chunk:
+                source_for_report = reveal_speaker_labels_for_reporting(
+                    chunk, speaker_spans
+                )
+                corrected_for_report = reveal_speaker_labels_for_reporting(
+                    corrected_chunk, speaker_spans
+                )
+                source_for_report = reveal_ledger_values_for_reporting(
+                    source_for_report, ledger_spans
+                )
+                corrected_for_report = reveal_ledger_values_for_reporting(
+                    corrected_for_report, ledger_spans
+                )
+                for change in self.change_extractor.extract_changes(
+                    source_for_report, corrected_for_report
+                ):
+                    all_changes.append(AIChange(
+                        chunk_index=i,
+                        from_text=change.from_text,
+                        to_text=change.to_text,
+                        confidence=change.confidence,
+                        context_before=change.context_before,
+                        context_after=change.context_after,
+                        change_type=change.change_type,
+                        learnable=change.learnable,
+                        model=model_used,
+                    ))
+
+        corrected_text = reassemble_corrected_chunks(
+            projected_text, chunks, corrected_chunks
+        )
+        if speaker_spans:
+            corrected_text = restore_speaker_labels(corrected_text, speaker_spans)
+        if ledger_spans:
+            corrected_text = _restore_ledger_spans(corrected_text, ledger_spans)
+        return corrected_text, all_changes
 
     def _process_chunk(self, chunk: str, context: str, model: str) -> str:
         """Process a single chunk with GLM API"""

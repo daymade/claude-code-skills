@@ -28,7 +28,7 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, Any, Final
+from typing import Optional, Final
 
 from core.defaults import (
     APP_NAME,
@@ -40,6 +40,21 @@ from core.defaults import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    """Parse an optional boolean environment override without guessing."""
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(
+        f"{name} must be one of 1/0, true/false, yes/no, or on/off"
+    )
 
 
 class Environment(Enum):
@@ -260,9 +275,9 @@ class Config:
 
         # Feature flags
         features = FeatureFlags(
-            enable_learning=os.getenv("TRANSCRIPT_FIXER_ENABLE_LEARNING", "1") != "0",
-            enable_metrics=os.getenv("TRANSCRIPT_FIXER_ENABLE_METRICS", "1") != "0",
-            enable_auto_approval=os.getenv("TRANSCRIPT_FIXER_AUTO_APPROVE", "0") == "1",
+            enable_learning=_env_bool("TRANSCRIPT_FIXER_ENABLE_LEARNING", True),
+            enable_metrics=_env_bool("TRANSCRIPT_FIXER_ENABLE_METRICS", True),
+            enable_auto_approval=_env_bool("TRANSCRIPT_FIXER_AUTO_APPROVE", False),
         )
 
         return cls(
@@ -309,10 +324,12 @@ class Config:
             logger.warning(f"Invalid environment '{env_str}', defaulting to development")
             environment = Environment.DEVELOPMENT
 
+        default_config_dir = config_path.parent
+
         # Parse database config
         db_data = data.get("database", {})
         database = DatabaseConfig(
-            path=Path(db_data.get("path", str(Path.home() / ".transcript-fixer" / "corrections.db"))),
+            path=Path(db_data.get("path", str(default_config_dir / "corrections.db"))),
             max_connections=db_data.get("max_connections", 5),
             connection_timeout=db_data.get("connection_timeout", 30.0),
         )
@@ -328,7 +345,7 @@ class Config:
 
         # Parse path config
         paths_data = data.get("paths", {})
-        config_dir = Path(paths_data.get("config_dir", str(Path.home() / ".transcript-fixer")))
+        config_dir = Path(paths_data.get("config_dir", str(default_config_dir)))
         paths = PathConfig(
             config_dir=config_dir,
             data_dir=Path(paths_data.get("data_dir", str(config_dir / "data"))),
@@ -515,6 +532,43 @@ def get_config() -> Config:
         env_base_url = os.getenv("ANTHROPIC_BASE_URL")
         if env_base_url:
             _config.api.base_url = env_base_url
+
+        env_config_dir = os.getenv("TRANSCRIPT_FIXER_CONFIG_DIR")
+        if env_config_dir:
+            _config.paths.config_dir = Path(env_config_dir)
+
+        env_db_path = os.getenv("TRANSCRIPT_FIXER_DB_PATH")
+        if env_db_path:
+            _config.database.path = Path(env_db_path)
+
+        env_max_concurrent = os.getenv("TRANSCRIPT_FIXER_MAX_CONCURRENT")
+        if env_max_concurrent is not None:
+            max_concurrent = int(env_max_concurrent)
+            if max_concurrent <= 0:
+                raise ValueError("TRANSCRIPT_FIXER_MAX_CONCURRENT must be positive")
+            _config.resources.max_concurrent_tasks = max_concurrent
+
+        env_rate_limit = os.getenv("TRANSCRIPT_FIXER_RATE_LIMIT")
+        if env_rate_limit is not None:
+            _config.resources.rate_limit_requests = int(env_rate_limit)
+
+        env_learning = os.getenv("TRANSCRIPT_FIXER_ENABLE_LEARNING")
+        if env_learning is not None:
+            _config.features.enable_learning = _env_bool(
+                "TRANSCRIPT_FIXER_ENABLE_LEARNING", True
+            )
+
+        env_metrics = os.getenv("TRANSCRIPT_FIXER_ENABLE_METRICS")
+        if env_metrics is not None:
+            _config.features.enable_metrics = _env_bool(
+                "TRANSCRIPT_FIXER_ENABLE_METRICS", True
+            )
+
+        env_auto_approve = os.getenv("TRANSCRIPT_FIXER_AUTO_APPROVE")
+        if env_auto_approve is not None:
+            _config.features.enable_auto_approval = _env_bool(
+                "TRANSCRIPT_FIXER_AUTO_APPROVE", False
+            )
 
         # Validate. The API-key warning is suppressed here: get_config() runs on
         # every command including native/stage-1 runs that never touch the API,

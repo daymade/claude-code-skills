@@ -2345,7 +2345,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### **skill-creator** - 创建、改进与基准测试技能
+### 58. **skill-creator** - 创建、改进与基准测试技能
 
 > **安装**：`claude plugin install daymade-skill@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-skill:skill-creator`）
 
@@ -3355,6 +3355,25 @@ A 股行业投研工作流：全板块成分股 Top N 涨幅计算、公告窗�
 医药行业今天的 Top 10 标的
 这些标的最近一个月发过哪些公告
 判断医药板块现在的市场情绪
+```
+
+### 96. **kimi-use** - 查询 Kimi 桌面客户端内置数据插件
+
+通过 computer-use 驱动已登录的 Kimi 桌面客户端，调用其内置的企业、
+金融、市场、学术与法律数据插件，无需另外配置 API key。查询结果必须标明
+来源；承重数据在落盘前仍需独立通道复核。
+
+**核心能力：**
+- 路由到天眼查、同花顺 iFinD、SEC、IMF、学术/法律数据库等已安装插件
+- 同时覆盖 Claude Code computer-use 与 Codex computer control
+- 提供强制逐项标来源、查不到就明确说未知的查询模式
+- 防止列表截断、屏幕识别错人名和财务口径混淆
+
+**使用示例：**
+```text
+/kimi-use
+用 Kimi 查这家公司的股东和最新财务数据，并逐项标明来源
+操作 Kimi 客户端，用已安装插件核对这组市场数据
 ```
 
 ---
