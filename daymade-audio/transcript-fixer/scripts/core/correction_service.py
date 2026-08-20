@@ -186,6 +186,7 @@ class CorrectionService:
         confidence: float = 1.0,
         notes: Optional[str] = None,
         force: bool = False,
+        update_existing: bool = True,
     ) -> int:
         """
         Add a correction with full validation and safety checks.
@@ -202,6 +203,7 @@ class CorrectionService:
             confidence: Confidence score
             notes: Optional notes
             force: If True, downgrade safety errors to warnings
+            update_existing: Whether an existing active mapping may be updated
 
         Returns:
             ID of inserted correction
@@ -262,7 +264,8 @@ class CorrectionService:
                 confidence=confidence,
                 added_by=added_by,
                 notes=notes,
-                force=force
+                force=force,
+                update_existing=update_existing,
             )
 
             logger.info(
@@ -630,7 +633,8 @@ class CorrectionService:
 
     def save_history(self, filename: str, domain: str, original_length: int,
                     stage1_changes: int, stage2_changes: int, model: str,
-                    changes: List[Any]) -> None:
+                    changes: List[Any], *, success: bool = True,
+                    error_message: Optional[str] = None) -> int:
         """
         Save correction run history for learning.
 
@@ -642,17 +646,32 @@ class CorrectionService:
             stage2_changes: Number of Stage 2 changes
             model: AI model used
             changes: List of individual changes (dict or dataclass: Change / AIChange)
+            success: False when any API chunk degraded to retained source text
+            error_message: Durable explanation for a degraded run
+
+        Returns:
+            The committed correction_history row ID.
+
+        Raises:
+            DatabaseError: If history or any detail row cannot be persisted.
         """
         def _normalize_change(change):
             """Extract standard fields from dict or dataclass (Change / AIChange)."""
             if isinstance(change, dict):
+                rule_type = change.get("rule_type", "dictionary")
+                if rule_type == "context_rule":
+                    rule_type = "context"
                 return {
                     "line_number": change.get("line_number"),
                     "from_text": change.get("from_text", ""),
                     "to_text": change.get("to_text", ""),
-                    "rule_type": change.get("rule_type", "dictionary"),
+                    "rule_type": rule_type,
                     "context_before": change.get("context_before"),
                     "context_after": change.get("context_after"),
+                    "change_type": change.get("change_type", "unknown"),
+                    "learnable": bool(change.get("learnable", True)),
+                    "confidence": change.get("confidence"),
+                    "model": change.get("model"),
                 }
             # Dataclass fallback: Change has line_number/rule_type;
             # AIChange has chunk_index/change_type instead.
@@ -665,6 +684,8 @@ class CorrectionService:
                 change_type = getattr(change, "change_type", "ai")
                 # DB CHECK constraint only allows context/dictionary/ai
                 rule_type = change_type if change_type in ("context", "dictionary", "ai") else "ai"
+            elif rule_type == "context_rule":
+                rule_type = "context"
 
             return {
                 "line_number": line_number,
@@ -673,40 +694,53 @@ class CorrectionService:
                 "rule_type": rule_type,
                 "context_before": getattr(change, "context_before", None),
                 "context_after": getattr(change, "context_after", None),
+                "change_type": getattr(change, "change_type", "unknown"),
+                "learnable": bool(getattr(change, "learnable", True)),
+                "confidence": getattr(change, "confidence", None),
+                "model": getattr(change, "model", None),
             }
 
-        try:
-            with self.repository._transaction() as conn:
-                # Insert history record
-                cursor = conn.execute("""
-                    INSERT INTO correction_history
-                    (filename, domain, original_length, stage1_changes, stage2_changes, model)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (filename, domain, original_length, stage1_changes, stage2_changes, model))
+        with self.repository._transaction() as conn:
+            # Insert history record
+            cursor = conn.execute("""
+                INSERT INTO correction_history
+                (filename, domain, original_length, stage1_changes, stage2_changes,
+                 model, success, error_message)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                filename, domain, original_length, stage1_changes,
+                stage2_changes, model, int(success), error_message,
+            ))
 
-                history_id = cursor.lastrowid
+            history_id = cursor.lastrowid
 
-                # Insert individual changes
-                for change in changes:
-                    normalized = _normalize_change(change)
-                    conn.execute("""
-                        INSERT INTO correction_changes
-                        (history_id, line_number, from_text, to_text, rule_type, context_before, context_after)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        history_id,
-                        normalized["line_number"],
-                        normalized["from_text"],
-                        normalized["to_text"],
-                        normalized["rule_type"],
-                        normalized["context_before"],
-                        normalized["context_after"],
-                    ))
+            # Insert individual changes
+            for change in changes:
+                normalized = _normalize_change(change)
+                conn.execute("""
+                    INSERT INTO correction_changes
+                    (history_id, line_number, from_text, to_text, rule_type,
+                     context_before, context_after, change_type, learnable,
+                     confidence, model)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    history_id,
+                    normalized["line_number"],
+                    normalized["from_text"],
+                    normalized["to_text"],
+                    normalized["rule_type"],
+                    normalized["context_before"],
+                    normalized["context_after"],
+                    normalized["change_type"],
+                    int(normalized["learnable"]),
+                    normalized["confidence"],
+                    normalized["model"],
+                ))
 
-                logger.info(f"Saved correction history for {filename}: {stage1_changes + stage2_changes} total changes")
+            logger.info(f"Saved correction history for {filename}: {stage1_changes + stage2_changes} total changes")
 
-        except Exception as e:
-            logger.error(f"Failed to save history: {e}")
+        assert history_id is not None
+        return int(history_id)
 
     def report_false_positive(
         self,

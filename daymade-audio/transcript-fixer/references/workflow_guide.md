@@ -1,8 +1,11 @@
-# Workflow Guide
+# Agent-less API Automation Workflow Guide
 
 Detailed step-by-step workflows for transcript correction and management.
 
-> **Read this first — the primary path is native, not the API stages below.** Inside Claude Code the workflow is: `--stage 1` (dictionary, instant, free) → then Claude reads the output and corrects the rest **natively** (no API key). Stage 1 runs in **safe mode** by default (only low-risk non-word rules auto-apply; risky ones defer to `*_needs_review.md`) and auto-loads your people roster + the domain context file. The API "Stage 2/3" flow documented later is the **backup channel for automation without Claude Code**, not the default. The current authoritative workflow is SKILL.md's "Native AI Correction"; this guide's stage mechanics are still accurate, just no longer the recommended entry point.
+> **Scope:** use this guide only for automation where no Claude/Codex agent can
+> perform Native AI Correction. Inside an agent session, return to SKILL.md and
+> use explicit Stage 1 plus Native AI. The Stage 2/3 commands below require an
+> API key and do not consume the private domain-context markdown priors.
 
 ## Table of Contents
 
@@ -177,10 +180,10 @@ uv run scripts/fix_transcription.py --validate
    ```bash
    # Embodied AI domain
    uv run scripts/fix_transcription.py --add "巨升智能" "具身智能" --domain embodied_ai
-   uv run scripts/fix_transcription.py --add "机器学习" "机器学习" --domain embodied_ai
+   uv run scripts/fix_transcription.py --add "机器学西" "机器学习" --domain embodied_ai
 
    # Finance domain
-   uv run scripts/fix_transcription.py --add "股价" "股价" --domain finance  # Keep as-is
+   uv run scripts/fix_transcription.py --add "骨价" "股价" --domain finance
    uv run scripts/fix_transcription.py --add "PE比率" "市盈率" --domain finance
    ```
 
@@ -283,21 +286,18 @@ uv run scripts/fix_transcription.py --input file.md --stage 1 --domain general
 
 **Review**: Check if dictionary corrections are sufficient.
 
-#### Stage 2 Only (AI)
+#### Stage 2 (Stage 1 + API AI, no diff report)
 
-**Use when**: Running AI corrections on pre-processed file.
+**Use when**: Agent-less API correction without the Stage 3 diff report.
 
-**Prerequisites**: Stage 1 output exists.
+**Prerequisites**: API configuration is valid. Stage 1 runs internally.
 
 ```bash
-# Stage 1 first
-uv run scripts/fix_transcription.py --input file.md --stage 1
-
-# Then Stage 2
-uv run scripts/fix_transcription.py --input file_stage1.md --stage 2
+uv run scripts/fix_transcription.py --input file.md --stage 2
 ```
 
-**Output**: `file_stage1_stage2.md` (confusing naming - use Stage 3 instead).
+Do not feed a Stage 1 sidecar merely to satisfy an old ordering rule; that rule
+does not match the current CLI implementation.
 
 #### Stage 3 (Full Pipeline)
 

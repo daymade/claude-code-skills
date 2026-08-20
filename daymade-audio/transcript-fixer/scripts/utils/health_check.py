@@ -450,8 +450,52 @@ class HealthChecker:
         expected_tables = [
             'corrections', 'context_rules', 'correction_history',
             'correction_changes', 'learned_suggestions', 'suggestion_examples',
-            'system_config', 'audit_log'
+            'review_items', 'system_config', 'audit_log'
         ]
+        required_columns = {
+            'corrections': {
+                'id', 'from_text', 'to_text', 'domain', 'source',
+                'confidence', 'added_by', 'added_at', 'usage_count',
+                'last_used', 'notes', 'is_active',
+            },
+            'context_rules': {
+                'id', 'pattern', 'replacement', 'description', 'priority',
+                'is_active', 'added_at', 'added_by',
+            },
+            'correction_history': {
+                'id', 'filename', 'domain', 'run_timestamp',
+                'original_length', 'stage1_changes', 'stage2_changes',
+                'model', 'execution_time_ms', 'success', 'error_message',
+            },
+            'correction_changes': {
+                'id', 'history_id', 'line_number', 'from_text', 'to_text',
+                'rule_type', 'rule_id', 'context_before', 'context_after',
+                'change_type', 'learnable', 'confidence', 'model',
+            },
+            'learned_suggestions': {
+                'id', 'from_text', 'to_text', 'domain', 'frequency',
+                'confidence', 'first_seen', 'last_seen', 'status',
+                'reviewed_at', 'reviewed_by',
+            },
+            'suggestion_examples': {
+                'id', 'suggestion_id', 'filename', 'line_number', 'context',
+                'occurred_at',
+            },
+            'review_items': {
+                'id', 'created_at', 'source', 'domain', 'file_path',
+                'line_number', 'context_snippet', 'original_text',
+                'suggested_text', 'kind', 'evidence', 'actions_json',
+                'priority', 'status', 'decided_at', 'decided_by',
+                'decision_note', 'resolved_text', 'applied_at', 'apply_log',
+            },
+            'system_config': {
+                'key', 'value', 'value_type', 'description', 'updated_at',
+            },
+            'audit_log': {
+                'id', 'timestamp', 'action', 'entity_type', 'entity_id',
+                'user', 'details', 'success', 'error_message',
+            },
+        }
 
         try:
             if not self.db_path.exists():
@@ -464,12 +508,25 @@ class HealthChecker:
                 )
 
             import sqlite3
-            conn = sqlite3.connect(str(self.db_path), timeout=5.0)
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-            )
-            actual_tables = [row[0] for row in cursor.fetchall()]
-            conn.close()
+            with sqlite3.connect(str(self.db_path), timeout=5.0) as conn:
+                cursor = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+                )
+                actual_tables = [row[0] for row in cursor.fetchall()]
+
+                missing_columns = {}
+                for table, columns in required_columns.items():
+                    if table not in actual_tables:
+                        continue
+                    actual_columns = {
+                        row[1]
+                        for row in conn.execute(
+                            f"PRAGMA table_info({table})"
+                        ).fetchall()
+                    }
+                    absent = sorted(columns - actual_columns)
+                    if absent:
+                        missing_columns[table] = absent
 
             missing = [t for t in expected_tables if t not in actual_tables]
             extra = [t for t in actual_tables if t not in expected_tables and not t.startswith('sqlite_')]
@@ -487,6 +544,25 @@ class HealthChecker:
                         'extra': extra
                     },
                     error="Schema incomplete"
+                )
+
+            if missing_columns:
+                summary = "; ".join(
+                    f"{table}: {', '.join(columns)}"
+                    for table, columns in sorted(missing_columns.items())
+                )
+                return HealthCheckResult(
+                    name=name,
+                    status=HealthStatus.DEGRADED,
+                    message=f"Missing schema columns: {summary}",
+                    duration_ms=(time.time() - start_time) * 1000,
+                    details={
+                        'expected_tables': expected_tables,
+                        'actual_tables': actual_tables,
+                        'missing_columns': missing_columns,
+                        'extra': extra,
+                    },
+                    error="Schema incomplete",
                 )
 
             return HealthCheckResult(
@@ -520,12 +596,12 @@ class HealthChecker:
 
             # Check config directory permissions
             if not os.access(self.config_dir, os.R_OK | os.W_OK | os.X_OK):
-                issues.append(f"Config dir: insufficient permissions")
+                issues.append("Config dir: insufficient permissions")
 
             # Check database permissions (if exists)
             if self.db_path.exists():
                 if not os.access(self.db_path, os.R_OK | os.W_OK):
-                    issues.append(f"Database: read/write denied")
+                    issues.append("Database: read/write denied")
 
             if issues:
                 return HealthCheckResult(
@@ -563,25 +639,25 @@ class HealthChecker:
             version = sys.version_info
             version_str = f"{version.major}.{version.minor}.{version.micro}"
 
-            # Minimum required: Python 3.8
-            if version < (3, 8):
+            # PEP 723 entrypoints and the runtime bundle require Python 3.10.
+            if version < (3, 10):
                 return HealthCheckResult(
                     name=name,
                     status=HealthStatus.UNHEALTHY,
                     message=f"Python version too old: {version_str}",
                     duration_ms=(time.time() - start_time) * 1000,
-                    details={'version': version_str, 'minimum': '3.8'},
-                    error="Python 3.8+ required"
+                    details={'version': version_str, 'minimum': '3.10'},
+                    error="Python 3.10+ required"
                 )
 
-            # Warn if using Python 3.12+ (may have compatibility issues)
-            if version >= (3, 13):
+            # 3.10 and 3.14 are both exercised by the full test suite.
+            if version >= (3, 15):
                 return HealthCheckResult(
                     name=name,
                     status=HealthStatus.DEGRADED,
                     message=f"Python version very new: {version_str}",
                     duration_ms=(time.time() - start_time) * 1000,
-                    details={'version': version_str, 'recommended': '3.8-3.12'},
+                    details={'version': version_str, 'recommended': '3.10-3.14'},
                     error="May have untested compatibility issues"
                 )
 

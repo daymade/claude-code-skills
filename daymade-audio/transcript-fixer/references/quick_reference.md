@@ -1,5 +1,9 @@
 # Quick Reference
 
+> Inside Claude/Codex, use Stage 1 plus Native AI Correction. Stage 2/3 examples
+> elsewhere in the bundle are for agent-less API automation. Prefer the CLI over
+> direct SQL writes; read `database_schema.md` before any custom query.
+
 **Storage**: transcript-fixer uses SQLite database for corrections storage.
 
 **Database location**: `~/.transcript-fixer/corrections.db`
@@ -138,7 +142,8 @@ sqlite3 ~/.transcript-fixer/corrections.db "SELECT pattern, replacement, priorit
 ## Review Queue
 
 Uncertain corrections wait in a persistent queue for a human verdict (full
-semantics: SKILL.md "Review Queue"; storage shape: `database_schema.md`).
+semantics: [review_queue_dashboard.md](review_queue_dashboard.md); storage
+shape: `database_schema.md`).
 
 ```bash
 # What's waiting? (priority-sorted: entity names first)

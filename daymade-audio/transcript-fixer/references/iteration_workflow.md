@@ -6,7 +6,7 @@ The core value of transcript-fixer is building a personalized correction diction
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  1. Fix transcript (manual or Stage 3)          │
+│  1. Fix transcript (Stage 1 + Native AI)        │
 │                    ↓                            │
 │  2. Identify new ASR errors during fixing       │
 │                    ↓                            │
@@ -24,9 +24,10 @@ Copy this checklist when correcting transcripts:
 
 ```
 Correction Progress:
-- [ ] Run correction: --input file.md --stage 3
-- [ ] Review output file for remaining ASR errors
-- [ ] Fix errors manually with Edit tool
+- [ ] Run Stage 1 with the explicit project domain + --apply-domain --json
+- [ ] Read the domain context and the entire transcript
+- [ ] Run Native AI Correction; leave uncertain text unchanged and enqueue it
+- [ ] Run trap-scan and verify the final diff
 - [ ] Save EACH correction to dictionary with --add
 - [ ] Verify with --list that corrections were saved
 - [ ] Next time: Stage 1 handles these automatically
@@ -41,7 +42,7 @@ After fixing any transcript, save stable corrections:
 uv run scripts/fix_transcription.py --add "错误词" "正确词" --domain general
 
 # Multiple corrections - run command for each
-uv run scripts/fix_transcription.py --add "片片总" "翩翩总" --domain general
+uv run scripts/fix_transcription.py --add "<garbled-name>" "<canonical-name>" --domain <project>
 uv run scripts/fix_transcription.py --add "姐弟" "结业" --domain general
 uv run scripts/fix_transcription.py --add "自杀性" "自嗨性" --domain general
 uv run scripts/fix_transcription.py --add "被看" "被砍" --domain general
@@ -71,12 +72,12 @@ Choose the right domain for corrections:
 | `embodied_ai` | 具身智能、机器人、AI 相关术语 |
 | `finance` | 财务、投资、金融术语 |
 | `medical` | 医疗、健康相关术语 |
-| `火星加速器` | Custom Chinese domain name (any valid name works) |
+| `示例项目` | Custom Chinese domain name (any valid name works) |
 
 ```bash
 # Domain-specific correction
 uv run scripts/fix_transcription.py --add "巨升智能" "具身智能" --domain embodied_ai
-uv run scripts/fix_transcription.py --add "片片总" "翩翩总" --domain 火星加速器
+uv run scripts/fix_transcription.py --add "<garbled-name>" "<canonical-name>" --domain 示例项目
 ```
 
 ## Common ASR Error Patterns
@@ -87,24 +88,24 @@ Safe dictionary candidates are **non-words and garbled fragments** — a rule fi
 |------|----------|------|
 | **Broken / non-words** | 姐弟→结业, 单反→单访, 巨升智能→具身智能 | Dictionary (`--add`) — safe |
 | **English garbles** | log→vlog, cloucode→Claude Code | Dictionary — safe |
-| **Person / project names** | 片片→翩翩, 亮亮→亮哥 | Project `--domain` (isolated), not `general` |
+| **Person / project names** | `<garbled-name>`→`<canonical-name>` | Project `--domain` (isolated), not `general` |
 | **Common-word homophones** | 减→剪, 赢→营, 营业→营的 | ❌ NOT the dictionary — the "from" side is a real word (减少/输赢/营业), so a blanket rule corrupts other sentences. Route to the domain **context file** with its disambiguating cue (`domain_context_guide.md`). |
 
-Rule of thumb: if the "from" side is real text in some other reading, it does not belong in the dictionary. (Mirrors SKILL.md's decision matrix + `false_positive_guide.md`.)
+Rule of thumb: if the "from" side is real text in some other reading, it does not belong in the dictionary. (Mirrors the decision matrix in [dictionary_identity_and_context.md](dictionary_identity_and_context.md) plus `false_positive_guide.md`.)
 
-## When GLM API Fails
+## When the optional GLM API route fails
 
-If you see `[CLAUDE_FALLBACK]` output, the GLM API is unavailable.
+The GLM API is an agent-less automation route, not the default workflow.
 
 Steps:
-1. Claude Code should analyze the text directly for ASR errors
-2. Fix using Edit tool
-3. **MUST save corrections to dictionary** - this is critical
-4. Dictionary corrections work even without AI
+1. Keep the original text unchanged; do not treat fallback output as corrected
+2. When an agent is available, run Native AI Correction instead
+3. Fix only evidence-backed ASR errors
+4. **MUST save stable corrections to their dictionary/roster/context destination**
 
 ## Auto-Learning Feature
 
-After running Stage 3 multiple times:
+After repeated correction sessions (Native AI or the optional API route):
 
 ```bash
 # Check learned patterns

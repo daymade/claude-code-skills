@@ -2,6 +2,9 @@
 
 Complete installation and configuration guide for transcript-fixer.
 
+> Native AI Correction requires only `uv`; the GLM API configuration below is
+> optional and applies only to agent-less Stage 2/3 automation.
+
 ## Table of Contents
 
 - [Installation](#installation)
@@ -13,7 +16,9 @@ Complete installation and configuration guide for transcript-fixer.
 
 ### Dependencies
 
-所有脚本使用 PEP 723 内联元数据，`uv run` 会自动安装依赖。只需要安装 [uv](https://docs.astral.sh/uv/getting-started/installation/) 即可。
+所有入口都通过 `uv run` 执行；需要第三方 Python 包的主入口用 PEP 723
+声明依赖，只使用标准库或仓内模块的工具可以没有 metadata block。安装
+[uv](https://docs.astral.sh/uv/getting-started/installation/) 后，下面的主 CLI 会自动准备依赖。
 
 ```bash
 # 直接运行（推荐）
@@ -29,6 +34,8 @@ uv pip install -r requirements.txt
 **Required packages**:
 - `httpx>=0.24.0` - 用于 GLM API 调用
 - `filelock>=3.13.0` - 用于线程安全操作
+- `jieba>=0.42.1` - 用于中文短语审计与裸 CJK 说话人名判别
+- `rapidfuzz>=3.14.0,<4` - 用于 Stage 2 变更提取，避免重复文本触发二次复杂度差分
 
 ### Database Initialization
 

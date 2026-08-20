@@ -13,12 +13,10 @@ Features:
 
 from __future__ import annotations
 
-import json
-import os
 import sys
-from pathlib import Path
 
 from core.defaults import API_PROVIDER, DEFAULT_MODEL, API_BASE_URL
+from utils.config import get_config
 
 
 def _check_system_config_consistency(repository) -> list[str]:
@@ -51,8 +49,9 @@ def validate_configuration() -> tuple[list[str], list[str]]:
     Returns:
         Tuple of (errors, warnings) as string lists
     """
-    config_dir = Path.home() / ".transcript-fixer"
-    db_path = config_dir / "corrections.db"
+    config = get_config()
+    config_dir = config.paths.config_dir
+    db_path = config.database.path
 
     errors = []
     warnings = []
@@ -117,17 +116,9 @@ def validate_configuration() -> tuple[list[str], list[str]]:
         warnings.append("Database not found (will be created on first use)")
         print(f"⚠️  Database not found: {db_path}")
 
-    # Check API key (canonical source: config directory)
-    config_dir = Path.home() / ".transcript-fixer"
-    try:
-        from utils.config import get_config
-        config = get_config()
-        api_key = config.api.api_key
-        config_dir = config.paths.config_dir
-    except Exception as e:
-        errors.append(f"Could not load configuration: {e}")
-        print(f"❌ Could not load configuration: {e}")
-        api_key = None
+    # Check API key from the same resolved configuration used above.
+    api_key = config.api.api_key
+    config_dir = config.paths.config_dir
 
     if not api_key:
         warnings.append("API key not configured (required for Stage 2 AI corrections)")

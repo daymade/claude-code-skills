@@ -565,6 +565,7 @@ _process_chunk()         # Single API call
 - Calculate confidence scores
 - Generate suggestions for review
 - Track rejected suggestions
+- Preserve the actual primary/fallback model set in pending and auto-approved evidence
 
 **Algorithm**:
 ```python
@@ -576,7 +577,7 @@ _process_chunk()         # Single API call
 6. Filter by thresholds:
    - frequency ≥ 3
    - confidence ≥ 0.8
-7. Save to learned/pending_review.json
+7. Save the pattern, examples, and model provenance to learned/pending_review.json
 ```
 
 **Confidence Calculation**:
@@ -786,8 +787,17 @@ class SpellCheckProcessor:
 - Python 3.10+ (`from __future__ import annotations`)
 - `httpx` (for API calls)
 - `filelock` (for thread-safe operations)
+- `jieba` (for advisory Chinese phrase checks and bare CJK speaker-name tagging)
+- `rapidfuzz` (for bounded Stage 2 edit opcodes and change-history extraction)
 
-Scripts use PEP 723 inline metadata; run with `uv run` to auto-install dependencies.
+Speaker attribution protection accepts explicit Markdown/generic labels and
+whole-string CJK person-name signals directly. Ambiguous bare aliases and Latin
+labels must come from the configured people roster (or a programmatic caller's
+`speaker_labels` manifest); repetition is not identity evidence. The CLI passes
+roster canonical names and ASR variants to Stage 1 and the API processor.
+
+Primary entrypoints that need third-party packages use PEP 723 inline metadata;
+stdlib/internal-only utilities may omit it. Run every entrypoint with `uv run`.
 
 ### Optional
 
@@ -809,7 +819,7 @@ Scripts use PEP 723 inline metadata; run with `uv run` to auto-install dependenc
 git clone <repo> transcript-fixer
 cd transcript-fixer
 
-# 2. Initialize (uv auto-installs PEP 723 dependencies)
+# 2. Initialize (the primary CLI declares its PEP 723 dependencies)
 uv run scripts/fix_transcription.py --init
 
 # 3. Configure API key in the canonical config file

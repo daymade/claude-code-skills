@@ -1,4 +1,4 @@
-"""SKILL.md's copy-me examples must survive being copied.
+"""The skill's copy-me audio examples must survive being copied.
 
 Why this file exists: the `audio:` frontmatter example has shipped broken twice.
 Both times it grew a trailing `# …` annotation explaining what to do with the
@@ -21,11 +21,19 @@ rule encoded here and turn this test into one that fails healthy examples.
 from __future__ import annotations
 
 import re
+import runpy
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[2]
 SKILL_MD = SKILL_DIR / "SKILL.md"
+REVIEW_QUEUE_MD = SKILL_DIR / "references" / "review_queue_dashboard.md"
+AUDIO_DOCS = (SKILL_MD, REVIEW_QUEUE_MD)
 SERVER_PY = SKILL_DIR / "scripts" / "review-dashboard" / "server.py"
+WORKFLOW_GUIDE = SKILL_DIR / "references" / "workflow_guide.md"
+TROUBLESHOOTING = SKILL_DIR / "references" / "troubleshooting.md"
+FILE_FORMATS = SKILL_DIR / "references" / "file_formats.md"
+DJI_EXAMPLE = SKILL_DIR / "references" / "example_session_dji_minutes.md"
+ARGUMENT_PARSER_PY = SKILL_DIR / "scripts" / "cli" / "argument_parser.py"
 
 PRODUCTION_FUNC = "_frontmatter_audio"
 PRODUCTION_IDIOM = 'line.split(":", 1)[1].strip()'
@@ -97,10 +105,11 @@ def test_production_parser_still_matches_this_mirror():
     )
 
 
-def test_skill_md_shows_an_audio_example_this_test_can_see():
-    text = SKILL_MD.read_text(encoding="utf-8")
+def test_skill_docs_show_an_audio_example_this_test_can_see():
+    texts = {path: path.read_text(encoding="utf-8") for path in AUDIO_DOCS}
     in_block = any(
         any(line.startswith("audio:") for line in block)
+        for text in texts.values()
         for block in _frontmatter_blocks(text)
     )
     if in_block:
@@ -108,13 +117,15 @@ def test_skill_md_shows_an_audio_example_this_test_can_see():
     # Distinguish "the docs dropped the example" from "the example moved somewhere
     # this extractor cannot see" — they need opposite fixes, and neither is
     # "delete this test".
-    assert not re.search(r"^audio:", text, re.M), (
-        "SKILL.md has an `audio:` line, but not inside a fenced yaml block whose "
+    malformed = [str(path) for path, text in texts.items()
+                 if re.search(r"^audio:", text, re.M)]
+    assert not malformed, (
+        f"{malformed} has an `audio:` line, but not inside a fenced yaml block whose "
         "first line is `---`, so this check cannot see it. Either restore that "
         "shape or widen _YAML_FENCE / _frontmatter_blocks to match the new one."
     )
     raise AssertionError(
-        "SKILL.md no longer shows an `audio:` frontmatter example. If that is "
+        "The skill docs no longer show an `audio:` frontmatter example. If that is "
         "deliberate, remove the audio wiring docs too; the example is what this "
         "file exists to protect."
     )
@@ -129,14 +140,16 @@ def test_audio_examples_parse_to_a_usable_path():
     the defect it was built for.
     """
     blocks = [
-        b for b in _frontmatter_blocks(SKILL_MD.read_text(encoding="utf-8"))
-        if any(line.startswith("audio:") for line in b)
+        (path, block)
+        for path in AUDIO_DOCS
+        for block in _frontmatter_blocks(path.read_text(encoding="utf-8"))
+        if any(line.startswith("audio:") for line in block)
     ]
-    assert blocks, "no visible `audio:` example — see test_skill_md_shows_an_audio_example_this_test_can_see"
+    assert blocks, "no visible `audio:` example — see test_skill_docs_show_an_audio_example_this_test_can_see"
 
-    for i, block in enumerate(blocks):
+    for i, (path, block) in enumerate(blocks):
         raw, closed, quoted = _parse_audio(block)
-        where = f"`audio:` example #{i + 1}"
+        where = f"`audio:` example #{i + 1} in {path.name}"
 
         assert closed, f"{where}: frontmatter block is not closed — production returns None"
         assert raw, f"{where}: the line yields an empty value"
@@ -154,3 +167,67 @@ def test_audio_examples_parse_to_a_usable_path():
                 "button and no error. Move the annotation into prose (or quote the "
                 "value if the path genuinely contains a space and a hash)."
             )
+
+
+def test_dictionary_add_examples_never_add_an_identity_mapping():
+    text = WORKFLOW_GUIDE.read_text(encoding="utf-8")
+    pairs = re.findall(r'--add\s+"([^"]+)"\s+"([^"]+)"', text)
+    assert pairs
+    assert all(source != target for source, target in pairs)
+
+
+def test_missing_table_recovery_uses_the_canonical_uv_entrypoint():
+    for path in (TROUBLESHOOTING, FILE_FORMATS):
+        text = path.read_text(encoding="utf-8")
+        section = text.split("### Missing Tables", 1)[1].split("\n### ", 1)[0]
+        assert "uv run scripts/fix_transcription.py --init" in section
+        assert 'from core import CorrectionRepository' not in section
+
+
+def test_public_dji_example_is_explicitly_synthetic():
+    text = DJI_EXAMPLE.read_text(encoding="utf-8")
+    native_workflow = (
+        SKILL_DIR / "references" / "native_ai_full_workflow.md"
+    ).read_text(encoding="utf-8")
+    assert "完全合成的演练 fixture" in text
+    assert "不对应任何真实人物、项目或逐字稿" in text
+    assert "synthetic failure fixture" in native_workflow
+    for private_source_marker in (
+        "实战全程",
+        "私人实体已化名",
+        "我们的民宿就完了",
+    ):
+        assert private_source_marker not in text
+        assert private_source_marker not in native_workflow
+
+
+def test_public_json_contract_lists_the_complete_always_present_shape():
+    skill_text = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+    parameters = (SKILL_DIR / "references" / "script_parameters.md").read_text(
+        encoding="utf-8"
+    )
+    stage1_contract = skill_text.split("The Stage 1 JSON contract is:", 1)[1].split(
+        "For a native end-to-end example", 1
+    )[0]
+    fields = (
+        '"applied"',
+        '"deferred"',
+        '"output_path"',
+        '"needs_review_path"',
+        '"input_unchanged"',
+        '"review_enqueued"',
+        '"stage1_only_incomplete"',
+        '"stage2_total_chunks"',
+        '"stage2_failed_chunks"',
+        '"stage2_degraded"',
+    )
+    for field in fields:
+        assert field in stage1_contract
+    assert "All ten fields are always present" in parameters
+    assert "Stage 2/3 runs add" not in parameters
+
+    parser = runpy.run_path(str(ARGUMENT_PARSER_PY))["create_argument_parser"]()
+    help_text = parser.format_help()
+    for field in fields:
+        assert field.strip('"') in help_text
+    assert "All ten status fields are always present" in " ".join(help_text.split())

@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import only what we need to avoid circular dependencies
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 # Manually define Suggestion to avoid circular import
 @dataclass
@@ -116,6 +117,97 @@ class TestLearningEngineThreadSafety:
         # Verify uniqueness (no duplicates from overwrites)
         from_texts = [s["from_text"] for s in pending]
         assert len(from_texts) == len(set(from_texts)), "Duplicate suggestions found"
+
+    def test_non_replayable_insertions_never_become_empty_dictionary_rules(
+        self, engine
+    ):
+        changes = [
+            SimpleNamespace(
+                from_text="",
+                to_text="新增",
+                confidence=0.99,
+                learnable=False,
+                context_before="",
+                context_after="",
+                chunk_index=1,
+            )
+            for _ in range(5)
+        ]
+
+        stats = engine.analyze_and_auto_approve(changes, "test-domain")
+
+        assert stats["total_changes"] == 5
+        assert stats["unique_patterns"] == 0
+        assert stats["auto_approved"] == 0
+        assert stats["pending_review"] == 0
+
+    def test_legacy_json_history_filters_implicit_formatting_and_punctuation(
+        self, temp_dirs
+    ):
+        history_dir, learned_dir = temp_dirs
+        (history_dir / "run.json").write_text(json.dumps({
+            "filename": "meeting.md",
+            "timestamp": "2026-01-01T00:00:00Z",
+            "stages": {"stage2": {"changes": [
+                {"from": "OpenAI", "to": "openai"},
+                {"from": "。", "to": "，"},
+                {"from": "meetng", "to": "meeting"},
+            ]}},
+        }), encoding="utf-8")
+        engine = LearningEngine(history_dir, learned_dir)
+
+        patterns = engine._extract_patterns_from_json()
+
+        assert list(patterns) == [("meetng", "meeting")]
+
+    def test_auto_approval_persistence_failure_is_not_swallowed(self, engine):
+        class BrokenService:
+            @staticmethod
+            def get_corrections(_domain):
+                return {}
+
+            @staticmethod
+            def add_correction(*_args, **_kwargs):
+                raise RuntimeError("database unavailable")
+
+        engine.correction_service = BrokenService()
+        changes = [
+            SimpleNamespace(
+                from_text="meetng",
+                to_text="meeting",
+                confidence=0.99,
+                learnable=True,
+                context_before="",
+                context_after="",
+                chunk_index=index,
+            )
+            for index in range(5)
+        ]
+
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            engine.analyze_and_auto_approve(
+                changes, "test-domain", auto_approve=True
+            )
+
+    def test_replayable_insertions_enter_the_learning_queue(self, engine):
+        changes = [
+            SimpleNamespace(
+                from_text="meetng",
+                to_text="meeting",
+                confidence=0.9,
+                learnable=True,
+                context_before="the ",
+                context_after=" starts",
+                chunk_index=index,
+            )
+            for index in range(1, 4)
+        ]
+
+        stats = engine.analyze_and_auto_approve(changes, "test-domain")
+
+        assert stats["total_changes"] == 3
+        assert stats["unique_patterns"] == 1
+        assert stats["pending_review"] == 1
 
     def test_concurrent_approve_suggestions(self, engine):
         """Test that concurrent approvals don't cause race conditions"""
@@ -519,11 +611,14 @@ class MockCorrectionService:
         self.blocked = blocked
         self.added = []
 
-    def add_correction(self, from_text, to_text, domain):
+    def get_corrections(self, _domain):
+        return {}
+
+    def add_correction(self, from_text, to_text, domain, **metadata):
         if (from_text, to_text) in self.blocked:
             from core.correction_repository import ValidationError
             raise ValidationError(f"Safety check blocked: {from_text} -> {to_text}")
-        self.added.append((from_text, to_text, domain))
+        self.added.append((from_text, to_text, domain, metadata))
 
 
 class TestLearningEngineAutoApprove:
@@ -567,7 +662,9 @@ class TestLearningEngineAutoApprove:
         )
 
         with caplog.at_level(logging.WARNING):
-            stats = engine_with_service.analyze_and_auto_approve(changes, "general")
+            stats = engine_with_service.analyze_and_auto_approve(
+                changes, "general", auto_approve=True
+            )
 
         # Unsafe pattern goes to pending, safe one auto-approved
         assert stats["auto_approved"] == 1
@@ -579,6 +676,30 @@ class TestLearningEngineAutoApprove:
         assert pending[0]["from_text"] == "仿佛"
         assert pending[0]["to_text"] == "反复"
         assert pending[0]["domain"] == "general"
+
+    def test_auto_approval_disabled_routes_high_confidence_to_review(
+        self, engine_with_service
+    ):
+        changes = [
+            SimpleNamespace(
+                from_text="meetng",
+                to_text="meeting",
+                confidence=0.99,
+                learnable=True,
+                context_before="",
+                context_after="",
+                chunk_index=index,
+            )
+            for index in range(5)
+        ]
+
+        stats = engine_with_service.analyze_and_auto_approve(
+            changes, "general", auto_approve=False
+        )
+
+        assert stats["auto_approved"] == 0
+        assert stats["pending_review"] == 1
+        assert engine_with_service.correction_service.added == []
 
 
 class TestLearningCli:
@@ -733,6 +854,204 @@ class TestLearningCli:
         cmd_review_learned(argparse.Namespace())
         output = capsys.readouterr().out
         assert "Learned suggestions pending review (1)" in output
+
+    def test_review_learned_migrates_legacy_change_table_before_query(
+        self, isolated_config, capsys
+    ):
+        from cli.commands import cmd_review_learned
+
+        db_path = isolated_config.database.path
+        with sqlite3.connect(db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE correction_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    filename TEXT NOT NULL,
+                    domain TEXT NOT NULL,
+                    run_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    original_length INTEGER NOT NULL,
+                    stage1_changes INTEGER NOT NULL DEFAULT 0,
+                    stage2_changes INTEGER NOT NULL DEFAULT 0,
+                    model TEXT,
+                    execution_time_ms INTEGER,
+                    success BOOLEAN NOT NULL DEFAULT 1,
+                    error_message TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE correction_changes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    history_id INTEGER NOT NULL,
+                    line_number INTEGER,
+                    from_text TEXT NOT NULL,
+                    to_text TEXT NOT NULL,
+                    rule_type TEXT NOT NULL,
+                    rule_id INTEGER,
+                    context_before TEXT,
+                    context_after TEXT
+                )
+                """
+            )
+            for index in range(7):
+                history = conn.execute(
+                    """
+                    INSERT INTO correction_history
+                    (filename, domain, original_length, stage2_changes, model)
+                    VALUES (?, 'tech', 100, 1, 'legacy-model')
+                    """,
+                    (f"legacy-{index}.md",),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO correction_changes
+                    (history_id, line_number, from_text, to_text, rule_type,
+                     context_before, context_after)
+                    VALUES (?, ?, 'meetng', 'meeting', 'ai', '', '')
+                    """,
+                    (history.lastrowid, index + 1),
+                )
+
+        cmd_review_learned(argparse.Namespace())
+        output = capsys.readouterr().out
+
+        with sqlite3.connect(db_path) as conn:
+            columns = {
+                row[1]
+                for row in conn.execute(
+                    "PRAGMA table_info(correction_changes)"
+                ).fetchall()
+            }
+        assert {"change_type", "learnable", "model"} <= columns
+        assert "Learned suggestions pending review (1)" in output
+        assert "No learned suggestions pending review" not in output
+        assert "Models: legacy-model" in output
+        pending = json.loads(
+            (isolated_config.paths.config_dir / "learned" / "pending_review.json")
+            .read_text(encoding="utf-8")
+        )["suggestions"]
+        assert pending[0]["models"] == ["legacy-model"]
+
+    def test_persisted_nonlearnable_changes_never_reenter_learning(
+        self, isolated_config
+    ):
+        from core.ai_utils import AIChange
+        from core.correction_repository import CorrectionRepository
+        from core.correction_service import CorrectionService
+
+        repository = CorrectionRepository(isolated_config.database.path)
+        service = CorrectionService(repository)
+        for index in range(7):
+            changes = [
+                AIChange(
+                    1, "OpenAI", "openai", 0.99,
+                    change_type="formatting", learnable=False,
+                ),
+                AIChange(
+                    1, "", "新增", 0.99,
+                    change_type="insertion", learnable=False,
+                ),
+                AIChange(
+                    1, "meetng", "meeting", 0.99,
+                    change_type="word", learnable=True, model="fallback-real",
+                ),
+            ]
+            service.save_history(
+                filename=f"meeting-{index}.md",
+                domain="tech",
+                original_length=100,
+                stage1_changes=0,
+                stage2_changes=len(changes),
+                model="test-model",
+                changes=changes,
+            )
+
+        engine = LearningEngine(
+            isolated_config.paths.config_dir / "history",
+            isolated_config.paths.config_dir / "learned",
+            db_path=isolated_config.database.path,
+        )
+        suggestions = engine.analyze_and_suggest()
+        service.close()
+
+        assert [(item.from_text, item.to_text) for item in suggestions] == [
+            ("meetng", "meeting")
+        ]
+        assert suggestions[0].confidence == pytest.approx(0.99)
+        assert suggestions[0].models == ["fallback-real"]
+
+    def test_auto_approval_never_overwrites_manual_rule_and_keeps_provenance(
+        self, isolated_config
+    ):
+        from core.correction_repository import CorrectionRepository
+        from core.correction_service import CorrectionService
+
+        repository = CorrectionRepository(isolated_config.database.path)
+        service = CorrectionService(repository)
+        service.add_correction(
+            "meetng", "meeting", "tech", source="manual", confidence=1.0
+        )
+        engine = LearningEngine(
+            isolated_config.paths.config_dir / "history",
+            isolated_config.paths.config_dir / "learned",
+            correction_service=service,
+        )
+        conflict = [
+            SimpleNamespace(
+                from_text="meetng", to_text="meetingX", confidence=0.99,
+                learnable=True, context_before="", context_after="",
+                chunk_index=index, model="fallback-conflict",
+            )
+            for index in range(5)
+        ]
+        fresh = [
+            SimpleNamespace(
+                from_text="speach", to_text="speech", confidence=0.91,
+                learnable=True, context_before="", context_after="",
+                chunk_index=index, model="fallback-real",
+            )
+            for index in range(5)
+        ]
+
+        conflict_stats = engine.analyze_and_auto_approve(
+            conflict, "tech", auto_approve=True
+        )
+        fresh_stats = engine.analyze_and_auto_approve(
+            fresh, "tech", auto_approve=True
+        )
+
+        with sqlite3.connect(isolated_config.database.path) as conn:
+            rows = conn.execute(
+                """
+                SELECT from_text, to_text, source, confidence, notes
+                FROM corrections
+                WHERE from_text IN ('meetng', 'speach')
+                ORDER BY from_text
+                """
+            ).fetchall()
+        service.close()
+
+        pending = json.loads(engine.pending_file.read_text(encoding="utf-8"))[
+            "suggestions"
+        ]
+        auto_approved = json.loads(
+            engine.auto_approved_file.read_text(encoding="utf-8")
+        )["auto_approved"]
+
+        assert conflict_stats["auto_approved"] == 0
+        assert conflict_stats["pending_review"] == 1
+        assert fresh_stats["auto_approved"] == 1
+        assert rows == [
+            ("meetng", "meeting", "manual", 1.0, None),
+            (
+                "speach", "speech", "learned", pytest.approx(0.91),
+                "auto-approved from Stage 2 history; models=fallback-real",
+            ),
+        ]
+        assert pending[0]["models"] == ["fallback-conflict"]
+        assert pending[0]["examples"][0]["model"] == "fallback-conflict"
+        assert auto_approved[0]["models"] == ["fallback-real"]
 
 
 if __name__ == "__main__":
