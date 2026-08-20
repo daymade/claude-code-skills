@@ -69,11 +69,14 @@ The Stage 1 JSON contract is:
   "needs_review_path": null,
   "input_unchanged": true,
   "review_enqueued": 0,
-  "stage1_only_incomplete": true
+  "stage1_only_incomplete": true,
+  "stage2_total_chunks": 0,
+  "stage2_failed_chunks": 0,
+  "stage2_degraded": false
 }
 ~~~
 
-Read these fields. `stage1_only_incomplete` is additive to the original six-field caller contract and must remain true for a Stage 1 script run; only the caller can close it by running Native AI, or by explicitly choosing the agent-less Stage 2/3 route. Do not infer no-op or success from whether a sidecar exists.
+Read all ten fields. `stage1_only_incomplete` is additive to the original six-field caller contract and must remain true for a Stage 1 script run; only the caller can close it by running Native AI, or by explicitly choosing the agent-less Stage 2/3 route. The three `stage2_*` telemetry fields are always present: Stage 1 reports `0`, `0`, and `false`; Stage 2/3 replace them with the actual API outcome. Do not infer no-op or success from whether a sidecar exists.
 
 For a native end-to-end example, read [references/example_session_dji_minutes.md](references/example_session_dji_minutes.md).
 

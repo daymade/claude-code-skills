@@ -197,3 +197,28 @@ def test_public_dji_example_is_explicitly_synthetic():
     ):
         assert private_source_marker not in text
         assert private_source_marker not in native_workflow
+
+
+def test_public_json_contract_lists_the_complete_always_present_shape():
+    skill_text = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+    parameters = (SKILL_DIR / "references" / "script_parameters.md").read_text(
+        encoding="utf-8"
+    )
+    stage1_contract = skill_text.split("The Stage 1 JSON contract is:", 1)[1].split(
+        "For a native end-to-end example", 1
+    )[0]
+    for field in (
+        '"applied"',
+        '"deferred"',
+        '"output_path"',
+        '"needs_review_path"',
+        '"input_unchanged"',
+        '"review_enqueued"',
+        '"stage1_only_incomplete"',
+        '"stage2_total_chunks"',
+        '"stage2_failed_chunks"',
+        '"stage2_degraded"',
+    ):
+        assert field in stage1_contract
+    assert "All ten fields are always present" in parameters
+    assert "Stage 2/3 runs add" not in parameters
