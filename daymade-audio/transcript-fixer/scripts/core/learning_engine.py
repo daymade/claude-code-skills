@@ -355,6 +355,7 @@ class LearningEngine:
                         "line": change.get("line", 0),
                         "context": change.get("context", ""),
                         "timestamp": data["timestamp"],
+                        "confidence": change.get("confidence"),
                         "model": change.get("model"),
                     })
 
@@ -375,6 +376,7 @@ class LearningEngine:
                 c.to_text,
                 c.context_before,
                 c.context_after,
+                c.confidence,
                 c.model
             FROM correction_changes c
             JOIN correction_history h ON h.id = c.history_id
@@ -417,6 +419,7 @@ class LearningEngine:
                 "line": row["line_number"] or 0,
                 "context": context,
                 "timestamp": row["run_timestamp"],
+                "confidence": row["confidence"],
                 "model": row["model"],
                 "domain": row["domain"] or "general",
             })
@@ -432,7 +435,25 @@ class LearningEngine:
         - Consistency (always same correction = higher)
         - Recency (recent occurrences = higher)
         """
-        # Base confidence from frequency
+        # New history rows persist the confidence emitted with each actual
+        # change. Use that evidence directly so a 0.99 correction does not
+        # silently become a frequency-derived 0.83 after a restart. Legacy
+        # JSON/SQLite rows have no value; only that all-legacy case uses the
+        # historical heuristic below.
+        recorded = [
+            float(item["confidence"])
+            for item in occurrences
+            if item.get("confidence") is not None
+        ]
+        if recorded:
+            if any(not 0.0 <= value <= 1.0 for value in recorded):
+                raise ValueError("Persisted correction confidence must be between 0 and 1")
+            # Keep persisted confidence stable across repeated identical rows;
+            # raw floating-point averaging can turn 0.99 into
+            # 0.9900000000000001 in JSON and exact audit comparisons.
+            return round(sum(recorded) / len(recorded), 6)
+
+        # Legacy fallback: base confidence from frequency.
         frequency_score = min(len(occurrences) / 10.0, 1.0)
 
         # Consistency: always the same from→to mapping

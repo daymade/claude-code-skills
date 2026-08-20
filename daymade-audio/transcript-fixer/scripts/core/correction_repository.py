@@ -220,6 +220,10 @@ class CorrectionRepository:
         additions = {
             "change_type": "TEXT NOT NULL DEFAULT 'unknown'",
             "learnable": "BOOLEAN NOT NULL DEFAULT 1 CHECK(learnable IN (0, 1))",
+            "confidence": (
+                "REAL CHECK(confidence IS NULL OR "
+                "(confidence >= 0.0 AND confidence <= 1.0))"
+            ),
             "model": "TEXT",
         }
         with self._transaction() as conn:

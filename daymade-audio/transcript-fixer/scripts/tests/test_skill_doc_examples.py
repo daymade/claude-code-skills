@@ -31,6 +31,7 @@ SERVER_PY = SKILL_DIR / "scripts" / "review-dashboard" / "server.py"
 WORKFLOW_GUIDE = SKILL_DIR / "references" / "workflow_guide.md"
 TROUBLESHOOTING = SKILL_DIR / "references" / "troubleshooting.md"
 FILE_FORMATS = SKILL_DIR / "references" / "file_formats.md"
+DJI_EXAMPLE = SKILL_DIR / "references" / "example_session_dji_minutes.md"
 
 PRODUCTION_FUNC = "_frontmatter_audio"
 PRODUCTION_IDIOM = 'line.split(":", 1)[1].strip()'
@@ -179,3 +180,20 @@ def test_missing_table_recovery_uses_the_canonical_uv_entrypoint():
         section = text.split("### Missing Tables", 1)[1].split("\n### ", 1)[0]
         assert "uv run scripts/fix_transcription.py --init" in section
         assert 'from core import CorrectionRepository' not in section
+
+
+def test_public_dji_example_is_explicitly_synthetic():
+    text = DJI_EXAMPLE.read_text(encoding="utf-8")
+    native_workflow = (
+        SKILL_DIR / "references" / "native_ai_full_workflow.md"
+    ).read_text(encoding="utf-8")
+    assert "完全合成的演练 fixture" in text
+    assert "不对应任何真实人物、项目或逐字稿" in text
+    assert "synthetic failure fixture" in native_workflow
+    for private_source_marker in (
+        "实战全程",
+        "私人实体已化名",
+        "我们的民宿就完了",
+    ):
+        assert private_source_marker not in text
+        assert private_source_marker not in native_workflow

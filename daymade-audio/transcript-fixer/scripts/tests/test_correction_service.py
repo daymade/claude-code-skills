@@ -327,13 +327,16 @@ class TestCorrectionService(unittest.TestCase):
 
             audit_fields = conn.execute(
                 """
-                SELECT change_type, learnable, model
+                SELECT change_type, learnable, confidence, model
                 FROM correction_changes
                 WHERE history_id = ? AND rule_type = 'ai'
                 """,
                 (history[0],),
             ).fetchone()
-            self.assertEqual(tuple(audit_fields), ("word", 1, "fallback-model"))
+            self.assertEqual(
+                tuple(audit_fields),
+                ("word", 1, 0.95, "fallback-model"),
+            )
 
     def test_save_history_normalizes_context_rule_for_schema(self):
         from core.dictionary_processor import Change
@@ -457,7 +460,7 @@ class TestCorrectionService(unittest.TestCase):
                 }
                 migrated = conn.execute(
                     """
-                    SELECT from_text, change_type, learnable, model
+                    SELECT from_text, change_type, learnable, confidence, model
                     FROM correction_changes
                     ORDER BY id
                     """
@@ -465,11 +468,14 @@ class TestCorrectionService(unittest.TestCase):
                 schema_version = conn.execute(
                     "SELECT value FROM system_config WHERE key = 'schema_version'"
                 ).fetchone()[0]
-            self.assertTrue({"change_type", "learnable", "model"} <= columns)
+            self.assertTrue(
+                {"change_type", "learnable", "confidence", "model"}
+                <= columns
+            )
             self.assertEqual(migrated, [
-                ("OpenAI", "formatting", 0, None),
-                ("。", "unknown", 0, None),
-                ("meetng", "unknown", 1, None),
+                ("OpenAI", "formatting", 0, None, None),
+                ("。", "unknown", 0, None, None),
+                ("meetng", "unknown", 1, None, None),
             ])
             # The separate migration registry owns schema-version history.
             # This idempotent compatibility repair must not downgrade or claim

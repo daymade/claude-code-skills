@@ -95,6 +95,7 @@ Detailed changes made in each correction run.
 | context_after | TEXT | Text after change |
 | change_type | TEXT | word / phrase / insertion / deletion / formatting / unknown |
 | learnable | BOOLEAN | Whether persisted-history learning may consume this row |
+| confidence | REAL | Confidence emitted for this change; NULL for legacy/non-AI rows |
 | model | TEXT | Model that actually emitted this change (primary or fallback) |
 
 ### system_config

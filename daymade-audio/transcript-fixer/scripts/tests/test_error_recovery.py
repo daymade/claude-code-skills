@@ -1256,8 +1256,41 @@ class TestConfigurationContractRecovery:
                 )
             missing_columns = checker._check_database_schema()
             assert missing_columns.status == HealthStatus.DEGRADED
+            assert "corrections" in missing_columns.message
+            assert "from_text" in missing_columns.message
             assert "correction_changes" in missing_columns.message
             assert "learnable" in missing_columns.message
+        finally:
+            reset_config()
+
+    def test_deep_health_accepts_the_canonical_repository_schema(self, tmp_path):
+        from core.correction_repository import CorrectionRepository
+        from utils.config import (
+            Config,
+            DatabaseConfig,
+            PathConfig,
+            reset_config,
+            set_config,
+        )
+        from utils.health_check import HealthChecker, HealthStatus
+
+        db_path = tmp_path / "corrections.db"
+        config = Config(
+            database=DatabaseConfig(path=db_path),
+            paths=PathConfig(
+                config_dir=tmp_path,
+                data_dir=tmp_path / "data",
+                log_dir=tmp_path / "logs",
+                cache_dir=tmp_path / "cache",
+            ),
+        )
+        set_config(config)
+        repository = CorrectionRepository(db_path)
+        repository.close()
+        try:
+            result = HealthChecker(config_dir=tmp_path)._check_database_schema()
+            assert result.status == HealthStatus.HEALTHY
+            assert result.message == "Database schema valid"
         finally:
             reset_config()
 

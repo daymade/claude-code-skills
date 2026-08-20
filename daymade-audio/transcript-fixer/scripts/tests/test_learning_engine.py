@@ -978,6 +978,7 @@ class TestLearningCli:
         assert [(item.from_text, item.to_text) for item in suggestions] == [
             ("meetng", "meeting")
         ]
+        assert suggestions[0].confidence == pytest.approx(0.99)
         assert suggestions[0].models == ["fallback-real"]
 
     def test_auto_approval_never_overwrites_manual_rule_and_keeps_provenance(

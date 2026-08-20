@@ -246,7 +246,7 @@ class TestStage1AutoFinalize(unittest.TestCase):
         changes.write_text("old changes\n", encoding="utf-8")
         self._make_stage1_newer(stage1, self.input_file)
 
-        cmd_run_correction(argparse.Namespace(
+        result = cmd_run_correction(argparse.Namespace(
             input=str(self.input_file),
             output=None,
             stage=1,
@@ -260,6 +260,21 @@ class TestStage1AutoFinalize(unittest.TestCase):
         self.assertEqual(self.input_file.read_text(encoding="utf-8"), "corrected text\n")
         self.assertFalse(stage1.exists())
         self.assertTrue(changes.exists())
+        self.assertEqual(
+            result,
+            {
+                "applied": 0,
+                "deferred": 0,
+                "output_path": str(self.input_file),
+                "needs_review_path": None,
+                "input_unchanged": False,
+                "review_enqueued": 0,
+                "stage1_only_incomplete": True,
+                "stage2_total_chunks": 0,
+                "stage2_failed_chunks": 0,
+                "stage2_degraded": False,
+            },
+        )
 
     def test_cmd_apply_all_ignores_stale_stage1_and_runs_corrections(self):
         """--apply-all must run corrections, not promote a stale sidecar.

@@ -80,6 +80,9 @@ CREATE TABLE IF NOT EXISTS correction_changes (
     context_after TEXT,
     change_type TEXT NOT NULL DEFAULT 'unknown',
     learnable BOOLEAN NOT NULL DEFAULT 1 CHECK(learnable IN (0, 1)),
+    confidence REAL CHECK(
+        confidence IS NULL OR (confidence >= 0.0 AND confidence <= 1.0)
+    ),
     model TEXT,
     FOREIGN KEY (history_id) REFERENCES correction_history(id) ON DELETE CASCADE
 );

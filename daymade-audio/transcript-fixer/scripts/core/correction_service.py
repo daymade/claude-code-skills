@@ -670,6 +670,7 @@ class CorrectionService:
                     "context_after": change.get("context_after"),
                     "change_type": change.get("change_type", "unknown"),
                     "learnable": bool(change.get("learnable", True)),
+                    "confidence": change.get("confidence"),
                     "model": change.get("model"),
                 }
             # Dataclass fallback: Change has line_number/rule_type;
@@ -695,6 +696,7 @@ class CorrectionService:
                 "context_after": getattr(change, "context_after", None),
                 "change_type": getattr(change, "change_type", "unknown"),
                 "learnable": bool(getattr(change, "learnable", True)),
+                "confidence": getattr(change, "confidence", None),
                 "model": getattr(change, "model", None),
             }
 
@@ -718,8 +720,9 @@ class CorrectionService:
                 conn.execute("""
                     INSERT INTO correction_changes
                     (history_id, line_number, from_text, to_text, rule_type,
-                     context_before, context_after, change_type, learnable, model)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     context_before, context_after, change_type, learnable,
+                     confidence, model)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     history_id,
                     normalized["line_number"],
@@ -730,6 +733,7 @@ class CorrectionService:
                     normalized["context_after"],
                     normalized["change_type"],
                     int(normalized["learnable"]),
+                    normalized["confidence"],
                     normalized["model"],
                 ))
 

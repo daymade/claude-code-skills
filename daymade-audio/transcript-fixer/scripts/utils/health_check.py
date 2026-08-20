@@ -453,11 +453,47 @@ class HealthChecker:
             'review_items', 'system_config', 'audit_log'
         ]
         required_columns = {
-            'correction_changes': {'change_type', 'learnable', 'model'},
-            'correction_history': {'success', 'error_message'},
+            'corrections': {
+                'id', 'from_text', 'to_text', 'domain', 'source',
+                'confidence', 'added_by', 'added_at', 'usage_count',
+                'last_used', 'notes', 'is_active',
+            },
+            'context_rules': {
+                'id', 'pattern', 'replacement', 'description', 'priority',
+                'is_active', 'added_at', 'added_by',
+            },
+            'correction_history': {
+                'id', 'filename', 'domain', 'run_timestamp',
+                'original_length', 'stage1_changes', 'stage2_changes',
+                'model', 'execution_time_ms', 'success', 'error_message',
+            },
+            'correction_changes': {
+                'id', 'history_id', 'line_number', 'from_text', 'to_text',
+                'rule_type', 'rule_id', 'context_before', 'context_after',
+                'change_type', 'learnable', 'confidence', 'model',
+            },
+            'learned_suggestions': {
+                'id', 'from_text', 'to_text', 'domain', 'frequency',
+                'confidence', 'first_seen', 'last_seen', 'status',
+                'reviewed_at', 'reviewed_by',
+            },
+            'suggestion_examples': {
+                'id', 'suggestion_id', 'filename', 'line_number', 'context',
+                'occurred_at',
+            },
             'review_items': {
-                'status', 'file_path', 'original_text', 'suggested_text',
-                'decision_note', 'resolved_text',
+                'id', 'created_at', 'source', 'domain', 'file_path',
+                'line_number', 'context_snippet', 'original_text',
+                'suggested_text', 'kind', 'evidence', 'actions_json',
+                'priority', 'status', 'decided_at', 'decided_by',
+                'decision_note', 'resolved_text', 'applied_at', 'apply_log',
+            },
+            'system_config': {
+                'key', 'value', 'value_type', 'description', 'updated_at',
+            },
+            'audit_log': {
+                'id', 'timestamp', 'action', 'entity_type', 'entity_id',
+                'user', 'details', 'success', 'error_message',
             },
         }
 

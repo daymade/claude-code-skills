@@ -732,6 +732,10 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
                 "needs_review_path": None,
                 "input_unchanged": bool(dry_run),
                 "review_enqueued": 0,
+                "stage1_only_incomplete": True,
+                "stage2_total_chunks": 0,
+                "stage2_failed_chunks": 0,
+                "stage2_degraded": False,
             }
 
     # Initialize service
