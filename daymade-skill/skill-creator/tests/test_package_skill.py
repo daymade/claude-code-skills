@@ -76,6 +76,21 @@ def test_package_skill_custom_output_dir(tmp_path):
     assert not (skill_dir / "dist").exists()
 
 
+def test_package_skill_rejects_custom_output_inside_shipping_tree(tmp_path, capsys):
+    skill_dir = _make_minimal_skill(tmp_path, "test-skill")
+    _add_security_marker(skill_dir)
+
+    artifact = package_skill(
+        skill_dir,
+        output_dir=skill_dir / "out",
+        new_skill=True,
+    )
+
+    assert artifact is None
+    assert not (skill_dir / "out").exists()
+    assert "must be under the excluded dist/ root" in capsys.readouterr().out
+
+
 def test_package_skill_artifact_contains_skill_files(tmp_path):
     skill_dir = _make_minimal_skill(tmp_path, "test-skill")
     (skill_dir / "references").mkdir()
@@ -127,6 +142,29 @@ def test_package_skill_missing_security_marker(tmp_path, capsys):
     assert "Security scan not completed" in captured.out
 
 
+@pytest.mark.parametrize("corruption", ["duplicate", "trailing-garbage"])
+def test_security_marker_rejects_ambiguous_or_malformed_hash_line(tmp_path, corruption):
+    skill_dir = _make_minimal_skill(tmp_path, "test-skill")
+    _add_security_marker(skill_dir)
+    marker = skill_dir / ".security-scan-passed"
+    valid_hash = calculate_skill_hash(skill_dir)
+    if corruption == "duplicate":
+        marker.write_text(
+            marker.read_text(encoding="utf-8") + f"Content hash: {'0' * 64}\n",
+            encoding="utf-8",
+        )
+    else:
+        marker.write_text(
+            f"Security scan passed\nContent hash: {valid_hash} trailing\n",
+            encoding="utf-8",
+        )
+
+    valid, message = package_module.validate_security_marker(skill_dir)
+
+    assert valid is False
+    assert "hash" in message.lower()
+
+
 def test_package_skill_missing_skill_md(tmp_path, capsys):
     skill_dir = tmp_path / "bad-skill"
     skill_dir.mkdir()
@@ -166,3 +204,26 @@ def test_package_skill_accepts_current_completed_regression_review(tmp_path, mon
 
     assert artifact is not None
     assert artifact.exists()
+
+
+def test_package_uses_attested_snapshot_when_live_source_changes(tmp_path, monkeypatch):
+    skill_dir = _make_minimal_skill(tmp_path, "test-skill")
+    _add_security_marker(skill_dir)
+    original_validate = package_module.validate_security_marker
+
+    def mutate_live_during_staged_validation(candidate_skill):
+        if Path(candidate_skill).resolve() != skill_dir.resolve():
+            with (skill_dir / "SKILL.md").open("a", encoding="utf-8") as handle:
+                handle.write("late live mutation\n")
+        return original_validate(candidate_skill)
+
+    monkeypatch.setattr(
+        package_module, "validate_security_marker", mutate_live_during_staged_validation
+    )
+
+    artifact = package_skill(skill_dir, new_skill=True)
+
+    assert artifact is not None
+    with zipfile.ZipFile(artifact, "r") as zf:
+        packaged = zf.read("test-skill/SKILL.md").decode("utf-8")
+    assert "late live mutation" not in packaged

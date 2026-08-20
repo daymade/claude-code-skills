@@ -24,7 +24,9 @@ Notes:
 import argparse
 import os
 import re
+import shutil
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 from typing import Optional, Tuple
@@ -60,11 +62,14 @@ def validate_security_marker(skill_path: Path) -> Tuple[bool, str]:
     # Read stored hash
     try:
         marker_content = security_marker.read_text()
-        hash_match = re.search(r'Content hash:\s*([a-f0-9]{64})', marker_content)
-
+        hash_lines = [
+            line for line in marker_content.splitlines() if line.startswith("Content hash:")
+        ]
+        if len(hash_lines) != 1:
+            return False, "Security marker must contain exactly one content hash"
+        hash_match = re.fullmatch(r'Content hash: ([a-f0-9]{64})', hash_lines[0])
         if not hash_match:
-            return False, "Security marker missing content hash (old format)"
-
+            return False, "Security marker content hash is malformed"
         stored_hash = hash_match.group(1)
     except Exception as e:
         return False, f"Cannot read security marker: {e}"
@@ -80,6 +85,25 @@ def validate_security_marker(skill_path: Path) -> Tuple[bool, str]:
         return False, "Skill content changed since last security scan"
 
     return True, "Security scan valid"
+
+
+def _stage_attested_snapshot(skill_path: Path, staged_skill: Path) -> None:
+    """Copy the package superset plus its marker into an isolated snapshot."""
+    staged_skill.mkdir()
+    for file_path in skill_path.rglob('*'):
+        if not file_path.is_file():
+            continue
+        arcname = file_path.relative_to(skill_path.parent)
+        if should_exclude(arcname, include_evals=True):
+            continue
+        relative = file_path.relative_to(skill_path)
+        destination = staged_skill / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(file_path, destination)
+
+    marker = skill_path / ".security-scan-passed"
+    if marker.is_file():
+        shutil.copy2(marker, staged_skill / marker.name)
 
 
 def package_skill(
@@ -164,13 +188,20 @@ def package_skill(
         return None
     print(f"PASSED: {message}\n")
 
-    # Step 4: Package the skill
+    # Step 4: Package an attested immutable snapshot. Revalidating the marker
+    # against the staged superset closes the live-source race between Step 3
+    # and zip creation; later edits to the working tree cannot enter this zip.
     print("Step 4: Creating package...")
 
     # Determine output location
     skill_name = skill_path.name
     if output_dir:
         output_path = Path(output_dir).resolve()
+        if output_path.is_relative_to(skill_path) and not output_path.is_relative_to(
+            skill_path / "dist"
+        ):
+            print("Error: an in-skill output directory must be under the excluded dist/ root")
+            return None
     else:
         # Default: place artifact next to source in a dedicated dist/ folder
         output_path = skill_path / "dist"
@@ -183,23 +214,30 @@ def package_skill(
     # half-written .skill at the final path where it looks distributable.
     zip_tmp = skill_filename.with_name(skill_filename.name + ".tmp")
     try:
-        with zipfile.ZipFile(zip_tmp, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            # Walk through the skill directory, excluding build artifacts
-            for file_path in skill_path.rglob('*'):
-                if not file_path.is_file():
-                    continue
-                arcname = file_path.relative_to(skill_path.parent)
-                if should_exclude(arcname, include_evals=include_evals):
-                    print(f"  Skipped: {arcname}")
-                    continue
-                zipf.write(file_path, arcname)
-                print(f"  Added: {arcname}")
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_package_snapshot_") as stage_dir:
+            staged_skill = Path(stage_dir) / skill_name
+            _stage_attested_snapshot(skill_path, staged_skill)
+            staged_valid, staged_message = validate_security_marker(staged_skill)
+            if not staged_valid:
+                print(f"BLOCKED: staged snapshot is not attested: {staged_message}")
+                return None
 
-        os.replace(zip_tmp, skill_filename)
-        print(f"\nDistribution artifact created: {skill_filename}")
-        print(f"  Source of truth (kept in git): {skill_path}")
-        print(f"  The .skill file is a disposable zip bundle; delete it after distribution if desired.")
-        return skill_filename
+            with zipfile.ZipFile(zip_tmp, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for file_path in staged_skill.rglob('*'):
+                    if not file_path.is_file():
+                        continue
+                    arcname = file_path.relative_to(staged_skill.parent)
+                    if should_exclude(arcname, include_evals=include_evals):
+                        print(f"  Skipped: {arcname}")
+                        continue
+                    zipf.write(file_path, arcname)
+                    print(f"  Added: {arcname}")
+
+            os.replace(zip_tmp, skill_filename)
+            print(f"\nDistribution artifact created: {skill_filename}")
+            print(f"  Source of truth (kept in git): {skill_path}")
+            print(f"  The .skill file is a disposable zip bundle; delete it after distribution if desired.")
+            return skill_filename
 
     except Exception as e:
         zip_tmp.unlink(missing_ok=True)

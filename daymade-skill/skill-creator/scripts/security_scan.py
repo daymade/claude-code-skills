@@ -58,6 +58,14 @@ class SecurityIssue:
     recommendation: str
 
 
+@dataclass(frozen=True)
+class GitleaksScanResult:
+    """A gitleaks verdict bound to the exact staged bytes it examined."""
+
+    findings: List[Dict]
+    content_hash: str
+
+
 # ============================================================================
 # DETECTION LAYER - What to scan for
 # ============================================================================
@@ -138,35 +146,131 @@ def print_gitleaks_installation() -> None:
     print(f"\nAfter installation, run this script again.\n")
 
 
-def run_gitleaks(skill_path: Path) -> Optional[List[Dict]]:
+def iter_security_relevant_files(skill_path: Path):
+    """Yield every file that can ship in either packaging mode.
+
+    Security attestation covers the superset accepted by ``package_skill``:
+    normal package files plus the optional root ``evals/`` directory. Build,
+    test, and conversation-mining artifacts are excluded by the same shared
+    policy the packager uses.
+    """
+    skill_path = Path(skill_path).resolve()
+    for file_path in skill_path.rglob('*'):
+        if not file_path.is_file():
+            continue
+        rel_path = file_path.relative_to(skill_path.parent)
+        if should_exclude(rel_path, include_evals=True):
+            continue
+        yield file_path
+
+
+def _remap_gitleaks_paths(
+    findings: List[Dict], staged_root: Path, original_root: Path
+) -> List[Dict]:
+    """Replace temporary staging paths with actionable source paths."""
+    remapped = []
+    for finding in findings:
+        updated = dict(finding)
+        raw_file = finding.get('File')
+        if raw_file:
+            reported = Path(raw_file)
+            relative = None
+            if reported.is_absolute():
+                try:
+                    relative = reported.relative_to(staged_root)
+                except ValueError:
+                    pass
+            else:
+                candidate = reported
+                if candidate.parts and candidate.parts[0] == staged_root.name:
+                    candidate = Path(*candidate.parts[1:])
+                if (staged_root / candidate).exists():
+                    relative = candidate
+            if relative is not None:
+                updated['File'] = relative.as_posix()
+        remapped.append(updated)
+    return remapped
+
+
+def _print_gitleaks_runtime_error(result: subprocess.CompletedProcess, message: str) -> None:
+    """Surface a scanner execution failure without misclassifying it as clean."""
+    print(f"{RED}❌ Error: {message}{RESET}", file=sys.stderr)
+    detail = (result.stderr or result.stdout or '').strip()
+    if detail:
+        print(detail[-1000:], file=sys.stderr)
+
+
+def run_gitleaks(skill_path: Path) -> Optional[GitleaksScanResult]:
     """
     Run gitleaks scan on skill directory
-    Returns: List of findings, empty list if clean, None on error
+    Returns: findings plus the staged content hash, or None on scanner error
     """
+    skill_path = Path(skill_path).resolve()
     try:
-        # Use temporary file for cross-platform compatibility (Windows doesn't have /dev/stdout)
-        with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as tmp_file:
-            tmp_path = tmp_file.name
+        # Gitleaks has no per-file include manifest. Stage the exact package
+        # superset so ignored .enrich/, tests/, and dist/ evidence cannot block
+        # a release, while optional evals/ content is still attested.
+        with tempfile.TemporaryDirectory(prefix='tinkle_skill_security_scan_') as stage_dir:
+            staged_root = Path(stage_dir) / skill_path.name
+            staged_root.mkdir()
+            for file_path in iter_security_relevant_files(skill_path):
+                relative = file_path.relative_to(skill_path)
+                staged_file = staged_root / relative
+                staged_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(file_path, staged_file)
+            staged_hash = calculate_skill_hash(staged_root)
 
-        try:
-            result = subprocess.run(
-                ['gitleaks', 'detect', '--source', str(skill_path),
-                 '--report-format', 'json', '--report-path', tmp_path, '--no-git'],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
+            # Use a temporary file for cross-platform compatibility (Windows
+            # does not have /dev/stdout).
+            with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as tmp_file:
+                tmp_path = tmp_file.name
 
-            # gitleaks exits with 1 if secrets found, 0 if clean
-            if result.returncode == 0:
-                return []
+            try:
+                result = subprocess.run(
+                    ['gitleaks', 'detect', '--source', str(staged_root),
+                     '--report-format', 'json', '--report-path', tmp_path, '--no-git'],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
 
-            # Parse findings from temp file
-            with open(tmp_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                if result.returncode != 1:
+                    if result.returncode != 0:
+                        _print_gitleaks_runtime_error(
+                            result, f"gitleaks exited with status {result.returncode}"
+                        )
+                        return None
 
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)
+                # Default gitleaks semantics use 0 for clean and 1 for either
+                # leaks or execution errors. Always parse its freshly created
+                # report: rc=0 is clean only when the report is an empty list,
+                # while rc=1 is a leak verdict only when findings are present.
+                with open(tmp_path, 'r', encoding='utf-8') as f:
+                    findings = json.load(f)
+                if not isinstance(findings, list):
+                    _print_gitleaks_runtime_error(
+                        result, "gitleaks report is not a JSON list"
+                    )
+                    return None
+                if result.returncode == 0:
+                    if findings:
+                        _print_gitleaks_runtime_error(
+                            result, "gitleaks exited 0 with a nonempty findings report"
+                        )
+                        return None
+                    return GitleaksScanResult([], staged_hash)
+                if not findings:
+                    _print_gitleaks_runtime_error(
+                        result, "gitleaks exited 1 without a findings report"
+                    )
+                    return None
+                return GitleaksScanResult(
+                    _remap_gitleaks_paths(findings, staged_root, skill_path),
+                    staged_hash,
+                )
+
+            finally:
+                Path(tmp_path).unlink(missing_ok=True)
 
     except subprocess.TimeoutExpired:
         print(f"{RED}❌ Error: gitleaks scan timed out{RESET}", file=sys.stderr)
@@ -179,7 +283,9 @@ def run_gitleaks(skill_path: Path) -> Optional[List[Dict]]:
         return None
 
 
-def scan_file_patterns(file_path: Path, patterns: List[Dict]) -> List[SecurityIssue]:
+def scan_file_patterns(
+    file_path: Path, patterns: List[Dict], skill_path: Path
+) -> List[SecurityIssue]:
     """
     Scan a single file using regex patterns
     Used for verbose mode educational review
@@ -187,7 +293,10 @@ def scan_file_patterns(file_path: Path, patterns: List[Dict]) -> List[SecurityIs
     issues = []
 
     try:
-        content = file_path.read_text(encoding='utf-8')
+        raw_content = file_path.read_bytes()
+        if b'\0' in raw_content:
+            return []
+        content = raw_content.decode('utf-8')
         lines = content.split('\n')
 
         for line_num, line in enumerate(lines, 1):
@@ -205,7 +314,7 @@ def scan_file_patterns(file_path: Path, patterns: List[Dict]) -> List[SecurityIs
                         issues.append(SecurityIssue(
                             severity=pattern_def["severity"],
                             category=pattern_def["category"],
-                            file_path=str(file_path.relative_to(file_path.parent.parent)),
+                            file_path=str(file_path.relative_to(skill_path)),
                             line_number=line_num,
                             pattern_name=pattern_def["name"],
                             message=pattern_def["message"],
@@ -224,22 +333,13 @@ def scan_skill_patterns(skill_path: Path) -> tuple[List[SecurityIssue], Dict[str
     Scan all files in skill directory using regex patterns
     Returns: (issues list, severity stats dict)
     """
+    skill_path = Path(skill_path).resolve()
     patterns = get_pattern_rules()
     all_issues = []
     stats = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0}
 
-    code_extensions = {'.py', '.js', '.ts', '.jsx', '.tsx', '.sh', '.bash',
-                       '.md', '.yml', '.yaml', '.json', '.jsonl', '.toml'}
-
-    for file_path in skill_path.rglob('*'):
-        if not file_path.is_file() or file_path.suffix not in code_extensions:
-            continue
-        if any(part.startswith('.') for part in file_path.relative_to(skill_path).parts):
-            continue
-        if '__pycache__' in file_path.parts or 'node_modules' in file_path.parts:
-            continue
-
-        issues = scan_file_patterns(file_path, patterns)
+    for file_path in iter_security_relevant_files(skill_path):
+        issues = scan_file_patterns(file_path, patterns, skill_path)
         for issue in issues:
             all_issues.append(issue)
             stats[issue.severity] += 1
@@ -399,14 +499,7 @@ def calculate_skill_hash(skill_path: Path) -> str:
     # text, but the attestation must also bind templates, HTML, binary assets,
     # and extensionless files. include_evals=True binds the superset accepted
     # by the optional packaging flag.
-    files_to_hash = []
-    for file_path in skill_path.rglob('*'):
-        if not file_path.is_file():
-            continue
-        rel_path = file_path.relative_to(skill_path.parent)
-        if should_exclude(rel_path, include_evals=True):
-            continue
-        files_to_hash.append(file_path)
+    files_to_hash = list(iter_security_relevant_files(skill_path))
 
     # Sort for deterministic order
     files_to_hash.sort()
@@ -430,21 +523,26 @@ def calculate_skill_hash(skill_path: Path) -> str:
     return hasher.hexdigest()
 
 
-def create_security_marker(skill_path: Path) -> None:
+def _create_security_marker(
+    skill_path: Path, scan_result: GitleaksScanResult
+) -> None:
     """
     Create marker file indicating security scan passed
     Includes content-based hash for validation
     """
-    marker_file = skill_path / ".security-scan-passed"
-    content_hash = calculate_skill_hash(skill_path)
+    if scan_result.findings:
+        raise ValueError("cannot create a clean marker for a scan with findings")
+    if calculate_skill_hash(skill_path) != scan_result.content_hash:
+        raise ValueError("cannot create marker: source differs from scanned snapshot")
 
+    marker_file = skill_path / ".security-scan-passed"
     # Atomic write (methodology §4.5): package_skill reads this marker concurrently.
     marker_tmp = marker_file.with_name(marker_file.name + ".tmp")
     marker_tmp.write_text(
         f"Security scan passed\n"
         f"Scanned at: {datetime.now(timezone.utc).isoformat()}\n"
         f"Tool: gitleaks + pattern-based validation\n"
-        f"Content hash: {content_hash}\n"
+        f"Content hash: {scan_result.content_hash}\n"
     )
     os.replace(marker_tmp, marker_file)
     print(f"{GREEN}✓ Security marker created: {marker_file.name}{RESET}")
@@ -495,10 +593,11 @@ Exit codes:
     print(f"🔍 Scanning: {skill_path.name}")
     print(f"   Tool: gitleaks (industry standard)")
     print(f"   Mode: {'verbose (educational)' if args.verbose else 'simple (packaging gate)'}")
-    gitleaks_findings = run_gitleaks(skill_path)
+    gitleaks_result = run_gitleaks(skill_path)
 
-    if gitleaks_findings is None:
+    if gitleaks_result is None:
         sys.exit(4)
+    gitleaks_findings = gitleaks_result.findings
 
     # Run pattern-based scan (only in verbose mode)
     pattern_issues = []
@@ -516,7 +615,13 @@ Exit codes:
 
     # Create marker file on clean scan
     if exit_code == 0:
-        create_security_marker(skill_path)
+        if calculate_skill_hash(skill_path) != gitleaks_result.content_hash:
+            print(
+                f"{RED}❌ Error: skill content changed during the security scan; rerun it{RESET}",
+                file=sys.stderr,
+            )
+            sys.exit(4)
+        _create_security_marker(skill_path, gitleaks_result)
 
     sys.exit(exit_code)
 
