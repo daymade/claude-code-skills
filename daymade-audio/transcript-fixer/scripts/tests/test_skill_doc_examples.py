@@ -21,6 +21,7 @@ rule encoded here and turn this test into one that fails healthy examples.
 from __future__ import annotations
 
 import re
+import runpy
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[2]
@@ -32,6 +33,7 @@ WORKFLOW_GUIDE = SKILL_DIR / "references" / "workflow_guide.md"
 TROUBLESHOOTING = SKILL_DIR / "references" / "troubleshooting.md"
 FILE_FORMATS = SKILL_DIR / "references" / "file_formats.md"
 DJI_EXAMPLE = SKILL_DIR / "references" / "example_session_dji_minutes.md"
+ARGUMENT_PARSER_PY = SKILL_DIR / "scripts" / "cli" / "argument_parser.py"
 
 PRODUCTION_FUNC = "_frontmatter_audio"
 PRODUCTION_IDIOM = 'line.split(":", 1)[1].strip()'
@@ -207,7 +209,7 @@ def test_public_json_contract_lists_the_complete_always_present_shape():
     stage1_contract = skill_text.split("The Stage 1 JSON contract is:", 1)[1].split(
         "For a native end-to-end example", 1
     )[0]
-    for field in (
+    fields = (
         '"applied"',
         '"deferred"',
         '"output_path"',
@@ -218,7 +220,14 @@ def test_public_json_contract_lists_the_complete_always_present_shape():
         '"stage2_total_chunks"',
         '"stage2_failed_chunks"',
         '"stage2_degraded"',
-    ):
+    )
+    for field in fields:
         assert field in stage1_contract
     assert "All ten fields are always present" in parameters
     assert "Stage 2/3 runs add" not in parameters
+
+    parser = runpy.run_path(str(ARGUMENT_PARSER_PY))["create_argument_parser"]()
+    help_text = parser.format_help()
+    for field in fields:
+        assert field.strip('"') in help_text
+    assert "All ten status fields are always present" in " ".join(help_text.split())
