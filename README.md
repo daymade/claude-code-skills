@@ -2345,7 +2345,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### **skill-creator** - Create, Improve & Benchmark Skills
+### 58. **skill-creator** - Create, Improve & Benchmark Skills
 
 > **Install**: `claude plugin install daymade-skill@daymade-skills` (suite-only — invoked as `daymade-skill:skill-creator`)
 

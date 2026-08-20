@@ -2345,7 +2345,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### **skill-creator** - 创建、改进与基准测试技能
+### 58. **skill-creator** - 创建、改进与基准测试技能
 
 > **安装**：`claude plugin install daymade-skill@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-skill:skill-creator`）
 
