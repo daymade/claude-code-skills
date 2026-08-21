@@ -672,6 +672,57 @@ def test_pre_edit_snapshot_accepts_declared_rename(tmp_path):
         )
 
 
+def test_verify_review_accepts_declared_rename(tmp_path):
+    # Regression test for a gap independent review found 2026-08-21: `compare`
+    # and `classify` both accept a declared rename via renamed_from and record
+    # it into before.provenance.renamed_from, but `verify_review` used to
+    # recompute identity from --before/--after alone (build_report(..., ) with
+    # no renamed_from), so a review that `compare`/`classify` had legitimately
+    # accepted always failed re-verification with "source identity does not
+    # match the edited skill" — the CLI `verify` subcommand doesn't even expose
+    # a --renamed-from flag to work around it. This is the exact shape a
+    # cross-repo skill port hits: --before is a snapshot of a skill living in
+    # one repo, --after is the authored skill in a different repo, so identity
+    # can only be bridged through the renamed_from already sitting in the
+    # review JSON.
+    skill = _make_skill(tmp_path / "old-name", "- Keep offline recovery available.")
+    before = tmp_path / "before"
+    create_baseline_snapshot(skill, before)
+    renamed = tmp_path / "new-name"
+    skill.rename(renamed)
+    (renamed / "SKILL.md").write_text(
+        (renamed / "SKILL.md").read_text(encoding="utf-8").replace(
+            "Keep offline recovery available", "Use the online workflow"
+        ),
+        encoding="utf-8",
+    )
+
+    report = build_report(before, renamed, baseline_origin="pre-edit-snapshot", renamed_from=skill)
+    assert report["before"]["provenance"]["renamed_from"] == str(skill.resolve())
+    review_path = _write_review(tmp_path / "review.json", report)
+    map_path = tmp_path / "map.json"
+    map_path.write_text(
+        json.dumps(
+            {
+                "0": {
+                    "destination": "SKILL.md",
+                    "needle": "Use the online workflow",
+                    "reason": "offline-recovery guidance reworded to the online workflow; same operational intent survives in SKILL.md",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    from scripts.audit_skill_regression import classify_review
+
+    classified, unclassified = classify_review(review_path, renamed, map_path, "tester")
+    assert classified == 1
+    assert unclassified == []
+
+    ok, errors = verify_review(before, renamed, review_path)
+    assert ok, errors
+
+
 def test_pre_edit_snapshot_wrong_renamed_from_names_the_resolved_path(tmp_path):
     # A wrong --renamed-from value used to produce the exact same bare error
     # as no --renamed-from at all, with no way to tell "you forgot the flag"

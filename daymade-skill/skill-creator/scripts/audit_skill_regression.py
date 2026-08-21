@@ -917,8 +917,17 @@ def verify_review(before: Path, after: Path, review_path: Path) -> tuple[bool, l
     before = before.resolve()
     after = after.resolve()
     review = _load_review(review_path)
-    baseline_origin = review.get("before", {}).get("provenance", {}).get("origin")
-    current = build_report(before, after, baseline_origin=baseline_origin or "")
+    review_provenance = review.get("before", {}).get("provenance", {})
+    baseline_origin = review_provenance.get("origin")
+    renamed_from_value = review_provenance.get("renamed_from")
+    # `compare` records a declared rename into before.provenance.renamed_from (see
+    # _resolve_baseline_provenance). Re-derive identity the same way `compare` did instead of
+    # recomputing it from --after alone — otherwise a legitimately renamed/moved skill (this
+    # includes cross-repo ports authored from a git-ref or snapshot baseline elsewhere) always
+    # fails re-verification with "source identity does not match", even though `compare` and
+    # `classify` both already accepted the exact same rename declaration for this review.
+    renamed_from = Path(renamed_from_value) if isinstance(renamed_from_value, str) and renamed_from_value else None
+    current = build_report(before, after, baseline_origin=baseline_origin or "", renamed_from=renamed_from)
     errors: list[str] = []
     if review.get("schema_version") != SCHEMA_VERSION:
         errors.append(f"unsupported schema_version: {review.get('schema_version')!r}")
