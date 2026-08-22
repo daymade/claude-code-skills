@@ -110,7 +110,17 @@ Use vocabulary and stakes as the primary tier signals; use length only as a tieb
    - Full tier: use a fresh-context reviewer on exactly one corrected file. Require a compact residual table or explicit `no new residuals`; an empty/truncated response is a failed review.
 9. **Enqueue every unresolved item.** Follow `Review queue safety` below and [review_queue_dashboard.md](references/review_queue_dashboard.md).
 10. **Verify and finalize.** Diff the file actually edited, run numeric consistency when numbers matter, rerun plain Stage 1, re-grep known corrections, and confirm every change traces to a triage decision.
-11. **Compound the learning in the same turn.** Route each stable pattern to its correct home; do not leave confirmed fixes only in chat.
+11. **Compound the learning in the same turn.** Route each stable pattern to its correct home; do not leave confirmed fixes only in chat. Native-pass edits never reach Stage 1's correction history, so harvest them mechanically right after the final diff:
+
+    ~~~bash
+    # Diff raw vs corrected into parseable trap candidates (review artifact —
+    # you adjudicate the printed list; --write auto-appends only the recurring
+    # (≥2x) non-bare candidates; --write-all also appends the one-off set)
+    uv run scripts/harvest_corrections.py raw.md corrected.md \
+      --context-file ~/.transcript-fixer/contexts/<domain>.md
+    ~~~
+
+    Every emitted bullet is round-trip verified through the real trap parser before printing, and pairs already documented in the context file are skipped. High-frequency candidates are strong traps; single-occurrence ones need a human judgment — that is why `--write` leaves them out by default — and ⚠️ 裸形 candidates are never auto-written. This replaces hand-writing trap bullets from memory.
 12. **Propagate entity fixes deliberately.** Search only the owning project’s derived notes/summaries, review every hit, and exclude raw ASR and correction sidecars because they preserve the evidence trail.
 
 The detailed provenance bar, local-first entity ladder, second-pass prompt, queue payload, and finalization rules are in [references/native_ai_full_workflow.md](references/native_ai_full_workflow.md).
@@ -275,6 +285,10 @@ uv run scripts/split_transcript_sections.py meeting.txt \
 
 # Word-level review diff
 uv run scripts/generate_word_diff.py original.md corrected.md output.html
+
+# Harvest native-pass edits into context-trap candidates
+uv run scripts/harvest_corrections.py raw.md corrected.md \
+  --context-file ~/.transcript-fixer/contexts/myproject.md --write
 
 # Multi-format Stage 1/API comparison report
 uv run scripts/generate_diff_report.py \
