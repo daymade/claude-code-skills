@@ -148,7 +148,11 @@ def _git_output(repo: Path, *args: str, text: bool = True) -> str | bytes:
 
 def _git_tree_hash(repo: Path, commit: str, skill_rel: Path) -> str:
     """Hash the distributable/development skill tree exactly as stored in Git."""
-    prefix = skill_rel.as_posix().rstrip("/") + "/"
+    # skill_rel == Path(".")（skill 目录即仓根）时，git ls-tree 输出无前缀路径
+    # （"SKILL.md"），而 ".".rstrip("/")+"/" 拼出的 "./" 永不匹配任何条目，
+    # 会把整个树滤空并报 "does not contain ./SKILL.md"。仓根必须用空前缀。
+    rel = skill_rel.as_posix().rstrip("/")
+    prefix = "" if rel in ("", ".") else rel + "/"
     listing = _git_output(
         repo,
         "ls-tree",
@@ -256,7 +260,7 @@ def _resolve_baseline_provenance(
         expected_source_hash = hashlib.sha256(str(identity_source).encode("utf-8")).hexdigest()
         if manifest.get("source_path_hash") != expected_source_hash:
             if renamed_from is None:
-                hint = " (pass --renamed-from <the path --source pointed at during snapshot> if the skill was renamed/moved)"
+                hint = " (re-run compare with --renamed-from <the path --source pointed at during snapshot> if the skill was renamed/moved)"
             else:
                 hint = (
                     f" (--renamed-from resolved to {identity_source} — verify this is exactly "
@@ -918,7 +922,18 @@ def verify_review(before: Path, after: Path, review_path: Path) -> tuple[bool, l
     after = after.resolve()
     review = _load_review(review_path)
     baseline_origin = review.get("before", {}).get("provenance", {}).get("origin")
-    current = build_report(before, after, baseline_origin=baseline_origin or "")
+    # compare 已把 --renamed-from 记进 provenance；verify 必须沿用同一身份源，
+    # 否则凡 snapshot 源路径 ≠ --after 路径（如 baseline 取自替身目录）时
+    # identity 检查永远失败，形成无解死路。
+    renamed_from_value = review.get("before", {}).get("provenance", {}).get("renamed_from")
+    renamed_from = (
+        Path(renamed_from_value)
+        if isinstance(renamed_from_value, str) and renamed_from_value
+        else None
+    )
+    current = build_report(
+        before, after, baseline_origin=baseline_origin or "", renamed_from=renamed_from
+    )
     errors: list[str] = []
     if review.get("schema_version") != SCHEMA_VERSION:
         errors.append(f"unsupported schema_version: {review.get('schema_version')!r}")
@@ -1040,8 +1055,27 @@ def classify_review(
             try:
                 candidate = candidates[int(key)]
             except (ValueError, IndexError):
-                errors.append(f"map key {key!r} matches no candidate index or id")
-                continue
+                candidate = None
+        if candidate is None:
+            # 唯一 id 前缀（≥4 字符）：完整 16 位 id 在终端里难抄，
+            # 前缀唯一即可安全定位；歧义前缀显式报错而不是静默选错。
+            if isinstance(key, str) and len(key) >= 4 and not key.isdigit():
+                pref = [
+                    c
+                    for cid, c in by_id.items()
+                    if isinstance(cid, str) and cid.startswith(key)
+                ]
+                if len(pref) == 1:
+                    candidate = pref[0]
+                elif len(pref) > 1:
+                    errors.append(
+                        f"map key {key!r} is an ambiguous id prefix "
+                        f"({len(pref)} candidates match)"
+                    )
+                    continue
+        if candidate is None:
+            errors.append(f"map key {key!r} matches no candidate index or id")
+            continue
         if not isinstance(entry, dict):
             errors.append(f"map[{key}] must be an object")
             continue

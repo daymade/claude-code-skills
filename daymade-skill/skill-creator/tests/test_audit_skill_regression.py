@@ -909,3 +909,111 @@ def test_classify_rejects_short_reason(tmp_path):
 
     with pytest.raises(ValueError, match="reason needs >= 20"):
         classify_review(review_path, after, map_path, "tester")
+
+
+def _git_repo_with_commit(root: Path) -> str:
+    """git init + 提交全部内容，返回 commit sha（git-ref baseline 测试用）。"""
+    subprocess.run(["git", "init", str(root)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(root), "config", "user.email", "user@example.com"], check=True)
+    subprocess.run(["git", "-C", str(root), "config", "user.name", "Test User"], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+    tree = subprocess.run(
+        ["git", "-C", str(root), "write-tree"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    commit = subprocess.run(
+        ["git", "-C", str(root), "commit-tree", tree, "-m", "baseline"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "-C", str(root), "symbolic-ref", "HEAD", "refs/heads/master"], check=True)
+    subprocess.run(["git", "-C", str(root), "update-ref", "refs/heads/master", commit], check=True)
+    return commit
+
+
+def test_git_ref_baseline_when_skill_is_repo_root(tmp_path):
+    # skill 目录即仓根（SKILL.md 直接在 repo 根）：git-ref baseline 不得报
+    # "Git baseline does not contain ./SKILL.md"（prefix 曾恒拼成 "./" 永不匹配）
+    repo = tmp_path / "repo"
+    _make_skill(repo, "- Keep offline recovery available.")
+    commit = _git_repo_with_commit(repo)
+
+    report = build_report(repo, repo, baseline_origin=f"git-ref:{commit}")
+
+    assert report["before"]["tree_hash"]
+    assert report["before"]["provenance"]["origin"].startswith("git-ref:")
+
+
+def test_verify_uses_renamed_from_recorded_in_review(tmp_path):
+    # baseline snapshot 取自替身目录（如 git archive 物化的干净树）、--after 指向
+    # 真实 skill：identity 靠 compare 时记进 provenance 的 renamed_from 打通。
+    # 修复前 verify 不读该记录、也不接受 --renamed-from，此场景永不过。
+    pristine = _make_skill(tmp_path / "pristine", "- Keep offline recovery available.")
+    before = tmp_path / "snap"
+    create_baseline_snapshot(pristine, before)
+    after = _make_skill(tmp_path / "after", "- Keep offline recovery available.")
+
+    report = build_report(
+        before, after, baseline_origin="pre-edit-snapshot", renamed_from=pristine
+    )
+    review_path = _write_review(tmp_path / "review.json", report)
+
+    ok, errors = verify_review(before, after, review_path)
+
+    assert ok, errors
+
+
+def test_classify_accepts_unique_id_prefix(tmp_path):
+    before = _make_skill(tmp_path / "before", "- Keep offline recovery available.")
+    after = _make_skill(tmp_path / "after", "- Use the online workflow.")
+    report = build_report(before, after, baseline_origin="test-fixture")
+    assert report["candidates"]
+    review_path = _write_review(tmp_path / "review.json", report)
+    cid = report["candidates"][0]["id"]
+    map_path = tmp_path / "map.json"
+    map_path.write_text(
+        json.dumps(
+            {
+                cid[:8]: {
+                    "destination": "SKILL.md",
+                    "needle": "Use the online workflow.",
+                    "reason": "candidate guidance moved into the rewritten online workflow line",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    from scripts.audit_skill_regression import classify_review
+
+    staged, unclassified = classify_review(review_path, after, map_path, "tester")
+
+    assert staged == 1
+    assert unclassified == []
+
+
+def test_classify_rejects_ambiguous_id_prefix(tmp_path):
+    after = _make_skill(tmp_path / "after", "- Use the online workflow.")
+    review_path = _write_review(
+        tmp_path / "review.json",
+        {
+            "candidates": [
+                {"id": "aaaa111111111111", "kind": "guidance", "text": "x"},
+                {"id": "aaaa222222222222", "kind": "guidance", "text": "y"},
+            ]
+        },
+    )
+    map_path = tmp_path / "map.json"
+    map_path.write_text(
+        json.dumps(
+            {
+                "aaaa": {
+                    "destination": "SKILL.md",
+                    "needle": "x",
+                    "reason": "some reason long enough to pass",
+                }
+            }
+        ),
+        encoding='utf-8',
+    )
+    from scripts.audit_skill_regression import classify_review
+
+    with pytest.raises(ValueError, match="ambiguous id prefix"):
+        classify_review(review_path, after, map_path, "tester")
