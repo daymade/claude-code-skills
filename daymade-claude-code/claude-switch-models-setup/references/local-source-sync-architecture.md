@@ -21,7 +21,7 @@ The sync scripts exist for topology repair, not day-to-day editing.
 | Change | Mechanism |
 |---|---|
 | Edit an existing `SKILL.md`, script, reference, or asset | Live through symlink; restart running agent session if needed |
-| Install/uninstall a plugin in the default Claude profile | Default `settings.json` / `installed_plugins.json` changes; LaunchAgent watcher mirrors state to every profile |
+| Install/uninstall, or `claude plugin enable`/`disable --scope user`, a plugin in the default Claude profile | Default `settings.json` / `installed_plugins.json` changes; LaunchAgent watcher mirrors state to every profile within seconds (verified 2026-08-22: launchd run counter incremented within 5s of a `settings.json` touch) |
 | Add a new skill/plugin entry | Marketplace manifest changes; LaunchAgent watcher runs source sync |
 | Remove or rename a skill entry | Marketplace manifest changes; LaunchAgent watcher prunes stale Codex/agents symlinks that point into managed source repos |
 | Bump `plugins[].version` | Marketplace manifest changes; LaunchAgent watcher creates/updates the version symlink and installed metadata |
