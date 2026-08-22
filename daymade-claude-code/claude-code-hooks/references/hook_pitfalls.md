@@ -1790,17 +1790,33 @@ this list and describe defects you reach by asking a different question):
   round-2 correction had already been checked against the primary source, and
   the remaining consequence was a reader noticing a typo. “It terminates” and
   “the next cycle is worth running” are different claims.
+- **Scale removes the safety net self-termination looked like.** The same shape
+  recurred the same day at roughly seven times that scale, on a fact-check
+  report meant to inform a real decision rather than a proofread: 21 completed
+  independent-review rounds plus a 22nd already dispatched, stopped only when a
+  human asked why — nothing in the process paused it on its own. Each round
+  re-ran one fixed, multi-question reader-spec against the *whole* document
+  rather than against what the previous fix had actually touched, so even a
+  change confined to wording or disclosure could still trip a finding on an
+  unrelated axis; the loop key was never narrowed to the edit's own axis,
+  exactly the gap this pitfall's Fix prescribes closing. Real defects did
+  surface across those rounds — the review was not worthless — so the missing
+  check was never “is this finding real,” it was “does clearing it still
+  justify a fresh pass over everything else.”
 - **Fix:** write the Loop Contract from SKILL.md rule 7 before round 1. Key it on
-  one immutable target plus one failure axis; predeclare the budget and both
-  exits. For agent-driven review loops, the default is one initial review plus
-  one narrowly scoped re-review after substantive fixes. A new, unrelated
-  finding becomes a backlog item / new task; it does not reset the budget. If
-  the re-review still reproduces a same-axis blocker, stop with the artifact
-  unregistered or unshipped and report `blocked` — do not silently dispatch a
-  third reviewer.
-- **Cost gate:** before any extra cycle, name the concrete safety or business
-  failure caused by stopping now and the new falsifying experiment the cycle
-  will run. “A reviewer found something” and optional polish are not enough.
+  one immutable lineage plus one failure axis; predeclare the budget and both
+  exits. Repair commits and new reviewer names remain in that lineage. For
+  agent-driven review loops, the default is one initial review plus one narrowly
+  scoped re-review after substantive fixes. A new, unrelated finding becomes a
+  backlog item / new task; it does not reset the budget. If the re-review still
+  reproduces a same-axis BLOCKER or MAJOR, stop with the artifact unregistered
+  or unshipped and report `blocked` — do not silently dispatch a third reviewer.
+- **Restart authority:** only an explicitly user-authorized new task can open
+  another review budget after the cap. The agent must then declare that budget,
+  the concrete safety or business failure caused by stopping, and the new
+  falsifying experiment before cycle 1. Declaring those fields is necessary but
+  cannot authorize the agent's own restart. “A reviewer found something” and
+  optional polish are not enough.
 - **Honest enforcement boundary:** nothing in Claude Code mechanically enforces
   a hookless review budget. This remains an agent-executed contract. Its safety
   comes from the predeclared cap and visible capped exit, not from pretending a
