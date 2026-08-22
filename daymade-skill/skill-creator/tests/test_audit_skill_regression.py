@@ -1017,3 +1017,59 @@ def test_classify_rejects_ambiguous_id_prefix(tmp_path):
 
     with pytest.raises(ValueError, match="ambiguous id prefix"):
         classify_review(review_path, after, map_path, "tester")
+
+
+def test_classify_accepts_all_digit_unique_id_prefix(tmp_path):
+    # 候选 id 是 hex 截断，前几位全数字是常态（4 位全数字概率约 15%）；
+    # 索引解析失败（越界）后纯数字 key 仍应能按唯一前缀解析
+    after = _make_skill(tmp_path / "after", "- Use the online workflow.")
+    review_path = _write_review(
+        tmp_path / "review.json",
+        {"candidates": [{"id": "1234abcd5678ef00", "kind": "guidance", "text": "x"}]},
+    )
+    map_path = tmp_path / "map.json"
+    map_path.write_text(
+        json.dumps(
+            {
+                "1234": {
+                    "destination": "SKILL.md",
+                    "needle": "Use the online workflow.",
+                    "reason": "all-digit unique prefix resolves after index overflow",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    from scripts.audit_skill_regression import classify_review
+
+    staged, unclassified = classify_review(review_path, after, map_path, "tester")
+
+    assert staged == 1
+    assert unclassified == []
+
+
+def test_classify_rejects_negative_index(tmp_path):
+    # "-1" 在 Python 里是合法索引但在这里是语义错乱（静默指向最后一个候选），
+    # 必须显式报错而不是解析成功
+    after = _make_skill(tmp_path / "after", "- Use the online workflow.")
+    review_path = _write_review(
+        tmp_path / "review.json",
+        {"candidates": [{"id": "aaaa111111111111", "kind": "guidance", "text": "x"}]},
+    )
+    map_path = tmp_path / "map.json"
+    map_path.write_text(
+        json.dumps(
+            {
+                "-1": {
+                    "destination": "SKILL.md",
+                    "needle": "Use the online workflow.",
+                    "reason": "negative index must not silently pick the last candidate",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    from scripts.audit_skill_regression import classify_review
+
+    with pytest.raises(ValueError, match="matches no candidate"):
+        classify_review(review_path, after, map_path, "tester")

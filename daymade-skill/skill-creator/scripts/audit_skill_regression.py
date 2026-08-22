@@ -1058,13 +1058,20 @@ def classify_review(
         candidate = by_id.get(key)
         if candidate is None:
             try:
-                candidate = candidates[int(key)]
+                idx = int(key)
+                # 负数索引在 Python 里合法但在这里是语义错乱（"-1" 会静默指向
+                # 最后一个候选）——索引必须是候选集内的非负整数，否则落到
+                # 前缀/报错路径。
+                if idx >= 0:
+                    candidate = candidates[idx]
             except (ValueError, IndexError):
                 candidate = None
         if candidate is None:
             # 唯一 id 前缀（≥4 字符）：完整 16 位 id 在终端里难抄，
             # 前缀唯一即可安全定位；歧义前缀显式报错而不是静默选错。
-            if isinstance(key, str) and len(key) >= 4 and not key.isdigit():
+            # 纯数字 key 在索引失败（越界/负数）后同样允许走前缀——
+            # 候选 id 是 hex 截断，前几位全数字是常态（4 位全数字概率约 15%）。
+            if isinstance(key, str) and len(key) >= 4:
                 pref = [
                     c
                     for cid, c in by_id.items()
