@@ -205,12 +205,19 @@ The script backs up existing real copies under `.source-sync-backups/` before cr
 
 This should not happen on current scripts: `sync-local-skill-sources.py` and `claude-plugins-sync.py` share a cross-process lock before writing marketplace JSON, installed plugin metadata, or cache symlinks.
 
-If you still see `FileExistsError` while creating a symlink or `FileNotFoundError` while replacing `known_marketplaces.json`, update the installed helper scripts from the source skill and rerun:
+If you still see `FileExistsError` while creating a symlink or `FileNotFoundError` while replacing `known_marketplaces.json`, re-link (not copy — see "Why symlinks and not `cp`" in SKILL.md's install steps; a `cp` here statically forks these files and reintroduces the exact silent-drift failure that section exists to prevent) the installed helper scripts from the source skill and rerun. This is the same install form SKILL.md uses, covering all five deployed scripts:
 
 ```bash
-cp <source>/scripts/claude-profiles.sh ~/.config/claude-switch-models-setup/claude-profiles.sh
-cp <source>/scripts/claude-plugins-sync.py ~/.config/claude-switch-models-setup/claude-plugins-sync.py
-cp <source>/scripts/sync-local-skill-sources.py ~/.config/claude-switch-models-setup/sync-local-skill-sources.py
+REPO=<absolute-path-to-this-repo>/daymade-claude-code/claude-switch-models-setup
+DST=~/.config/claude-switch-models-setup
+mkdir -p "$DST"
+for f in scripts/claude-profiles.sh \
+         scripts/claude-plugins-sync.py \
+         scripts/sync-local-skill-sources.py \
+         scripts/sync-local-skill-sources-daemon.sh \
+         scripts/sync-profile-settings.py; do
+  ln -sf "$REPO/$f" "$DST/$(basename "$f")"
+done
 ```
 
 Then verify with concurrent version probes:
