@@ -77,7 +77,18 @@ Run the profile syncer so every profile mirrors the default profile's `enabledPl
 python3 ~/.config/claude-switch-models-setup/claude-plugins-sync.py
 ```
 
-Restart the affected Claude Code window after syncing.
+This file-level fix also happens automatically, usually within seconds, when
+the `ai.daymade.claude-skill-source-sync` LaunchAgent is installed (see "Local
+skill source changes do not appear in Claude Code or Codex" below) — `claude
+plugin enable/disable --scope user` writes to `~/.claude/settings.json`, which
+is itself a watched path, and the watcher's sync pass calls this same script.
+Run the command above manually when the watcher is not installed, or to force
+convergence without waiting (verified 2026-08-22: `launchctl`'s per-agent run
+counter incremented within 5s of a bare `touch` on the watched file).
+
+Restart the affected Claude Code window after syncing — a running session
+does not re-read `enabledPlugins` mid-session, whether the file was synced by
+hand or by the watcher.
 
 ## Default-profile behavior settings don't reach third-party profiles
 
