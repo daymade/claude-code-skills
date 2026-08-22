@@ -114,13 +114,13 @@ Use vocabulary and stakes as the primary tier signals; use length only as a tieb
 
     ~~~bash
     # Diff raw vs corrected into parseable trap candidates (review artifact —
-    # you adjudicate the printed list; --write then appends the filtered set
-    # to the context file's dated harvest section, skipping ⚠️ bare-form ones)
+    # you adjudicate the printed list; --write auto-appends only the recurring
+    # (≥2x) non-bare candidates; --write-all also appends the one-off set)
     uv run scripts/harvest_corrections.py raw.md corrected.md \
       --context-file ~/.transcript-fixer/contexts/<domain>.md
     ~~~
 
-    Every emitted bullet is round-trip verified through the real trap parser before printing, and pairs already documented in the context file are skipped. High-frequency candidates are strong traps; single-occurrence ones need a human judgment, and ⚠️ 裸形 candidates are never auto-written. `--write` appends the whole filtered set — prune that section afterward rather than treating it as curated. This replaces hand-writing trap bullets from memory.
+    Every emitted bullet is round-trip verified through the real trap parser before printing, and pairs already documented in the context file are skipped. High-frequency candidates are strong traps; single-occurrence ones need a human judgment — that is why `--write` leaves them out by default — and ⚠️ 裸形 candidates are never auto-written. This replaces hand-writing trap bullets from memory.
 12. **Propagate entity fixes deliberately.** Search only the owning project’s derived notes/summaries, review every hit, and exclude raw ASR and correction sidecars because they preserve the evidence trail.
 
 The detailed provenance bar, local-first entity ladder, second-pass prompt, queue payload, and finalization rules are in [references/native_ai_full_workflow.md](references/native_ai_full_workflow.md).

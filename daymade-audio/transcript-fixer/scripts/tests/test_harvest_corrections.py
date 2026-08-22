@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from harvest_corrections import (  # noqa: E402
+    _bullet,
     _candidates_from_pair,
     _common_affixes,
     _expand,
@@ -112,7 +113,8 @@ class TestExpand:
         assert (f, t) == ("小缺陷", "小确幸")
 
     def test_tie_goes_left_deterministic(self):
-        # 同分先长左侧：最终形是 商阳科（左优先路径），不是 阳科技（右优先）
+        # 同分回退左侧（确定性兜底）——count=1 时语料无法判断哪侧邻居属于
+        # 词，可能带出一个游离邻字，由裁决环节人工修齐（见 _expand docstring）
         f, t = _expand("阳", "央", "商", "科技", lambda s: 1)
         assert (f, t) == ("商阳科", "商央科")
 
@@ -250,3 +252,62 @@ class TestReviewFixes20260823:
         out, _ = harvest("他说：你好，世界。然后走了；真的。第二段，没什么。",
                          "他说：你好世界，然后走了；真的。第二段，没什么。")
         assert out == []
+
+
+class TestRound2Fixes20260823:
+    """二轮审阅（修复引入的新问题）回归网。"""
+
+    def test_partially_fixed_real_trap_survives(self):
+        # R2-HIGH-1：部分修复 + 正确形在 raw 预存在 = 真 trap，必须存活
+        # （旧幻影过滤把它和「残留>0 要 surfaced」的设计一起杀死）
+        out, _ = harvest("生活通开户。盛付通不错。生活通也行。",
+                         "盛付通开户。盛付通不错。生活通也行。")
+        assert any(c["from"] == "生活通" and c["remaining"] == 1 for c in out)
+
+    def test_long_latin_quoted_no_exit2(self):
+        # R2-HIGH-2：13-24 字 Latin 候选加反引号走 explicit-literal 路径，
+        # 产出的每条 bullet 都能过真 parser（不再触发 exit 2）
+        out, _ = harvest("走paypalstandard通道", "走stripecheckout通道")
+        assert out and all(_parses(_bullet(c["from"], c["to"], "cue")) for c in out)
+
+    def test_to_interior_punct_rejected(self):
+        # R2-HIGH-2 触发形 2：TO 含句读 → parser 硬拒 → 提前在 _keep 丢弃
+        out, _ = harvest("他说axc了", "他说a。b了")
+        assert not any("。" in c["to"] for c in out)
+
+    def test_verb_glue_blocked(self):
+        # R2-HIGH-3：用 已入黏着字集——用生活→用盛付 不再生成，右补全胜出
+        out, _ = harvest("我说用生活通付款很快", "我说用盛付通付款很快")
+        assert any(c["from"] == "生活通" for c in out)
+        assert not any(c["from"] == "用生活" for c in out)
+
+    def test_bare_never_absorbs_good(self):
+        # R2-MED-4：裸形不作吸收方——好候选与裸形并列呈现，不被吞
+        out, _ = harvest("它的缺陷很大。域名是小缺陷为主。",
+                         "它的确幸很大。域名是小确幸为主。")
+        froms = [c["from"] for c in out]
+        assert "小缺陷" in froms
+
+    def test_dedup_symmetric_containment(self):
+        # R2-LOW-6：已知宽 trap 也吞窄候选（商阳科技 覆盖 商阳）
+        import tempfile, subprocess
+        with tempfile.TemporaryDirectory() as d:
+            ctx = f"{d}/ctx.md"
+            with open(ctx, "w") as fh:
+                fh.write("- **商阳科技 → 商央科技** — 已有\n")
+            raw_f, new_f = f"{d}/r.md", f"{d}/n.md"
+            with open(raw_f, "w") as fh:
+                fh.write("他说商阳的事。")
+            with open(new_f, "w") as fh:
+                fh.write("他说商央的事。")
+            r = subprocess.run(
+                ["uv", "run", "scripts/harvest_corrections.py", raw_f, new_f,
+                 "--context-file", ctx],
+                capture_output=True, text=True,
+                cwd=str(Path(__file__).resolve().parent.parent.parent))
+            assert "商阳" not in r.stdout or "已跳过 context 已有 trap" in r.stdout
+
+    def test_split_fused_recovers_and_no_unparsable(self):
+        # R2-MED-5 补充：fused 区域的每条产出 bullet 都必须可解析
+        out, _ = harvest("小缺陷。\n\n新话题开始", "小确幸，旧话题结束")
+        assert out and all(_parses(_bullet(c["from"], c["to"], "cue")) for c in out)

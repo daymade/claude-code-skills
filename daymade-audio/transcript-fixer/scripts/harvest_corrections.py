@@ -20,7 +20,10 @@ again by hand. This script closes that leak mechanically:
            through the real parser before printing)
 
 Output is a REVIEW artifact: the operator adjudicates which pairs are real
-recurring traps vs one-off fixes, then appends with --write (or by hand).
+recurring traps vs one-off fixes. `--write` auto-appends only the recurring
+(≥2 occurrences) non-bare candidates to the context file's dated harvest
+section — recurrence is the trap signal, and one-off prose rewrites must not
+land in a context file unreviewed; `--write-all` appends the full set.
 Nothing here edits the dictionary — per the skill's Dictionary Addition
 matrix, real-word traps belong to the domain context file, and a trap is a
 cue for the next native pass, never permission to replace blindly.
@@ -86,7 +89,8 @@ def _extract_pairs(raw: str, corrected: str) -> list[tuple[str, str]]:
 _GLUE_CHARS = set(
     "的了在有我你他她它把被以让去和或就是个这那哪呢吧吗啊呀哦嗯嘛啦"
     "只又也都还要会能可以说来对从向往前中后上下里外间问到最更很太极"
-    "再越按曾正将及且而则即若虽因所为于之其此该各每某时当")
+    "再越按曾正将及且而则即若虽因所为于之其此该各每某时当"
+    "用做打搞弄拿给叫使令")
 
 # trap 最短有效长度：CJK 2 字（生活/缺陷）误伤面太大，3 字（生活通/小缺陷）
 # 通常已带消歧邻字。扩展后仍 <3 的纯 CJK 候选标 ⚠️ 裸形——人工收紧前
@@ -110,7 +114,12 @@ def _expand(core_f: str, core_t: str, left_eq: str, right_eq: str,
     term shape (生活通 recurs across contexts; 器生活/用生活 are locked to
     one neighbor char each). Fixed left-priority fragmented one trap into
     per-context variants and split its occurrence count (2026-08-23 review).
-    `count` is a callable raw_text.count; ties go left (deterministic).
+    `count` is a callable raw_text.count. Ties are undecidable at count=1
+    (the corpus cannot tell which neighbor belongs to the term) and fall
+    back left deterministically — a single-occurrence candidate may carry a
+    stray neighbor char; the operator trims it at adjudication. High-frequency
+    glue/verb chars (_GLUE_CHARS) never get absorbed, which resolves the
+    common 用生活→用盛付 shape before the tiebreak is even consulted.
     """
     while len(core_f) < min_len:
         options = []
@@ -173,9 +182,8 @@ def _split_fused(core_f: str, core_t: str) -> list[tuple[str, str]] | None:
     fw, tw = _WORD_RUN.findall(core_f), _WORD_RUN.findall(core_t)
     if not fw or len(fw) != len(tw):
         return None
-    fp, tp = _WORD_RUN.split(core_f), _WORD_RUN.split(core_t)
-    if len(fp) != len(tp):
-        return None
+    # 词 run 计数相等 → 标点 run 计数必相等（无捕获组时 split 件数恒为
+    # 匹配数+1），无需二次检查
     return list(zip(fw, tw))
 
 
@@ -241,6 +249,11 @@ def _candidates_from_pair(from_span: str, to_span: str,
     return out
 
 
+# parser 对 TO 的硬拒字符（含其一整个 entry 不解析 → 自检 exit 2）。
+# FROM 侧可带（反引号 quoted literal 是合法路径），TO 侧不行。
+_TO_HARD_REJECT = re.compile(r"[，。；：、（）()\[\]【】\"'“”‘’`]")
+
+
 def _keep(from_span: str, to_span: str) -> bool:
     """Noise filter: only term-level, content-changing replacements."""
     if not from_span or not to_span:
@@ -253,6 +266,8 @@ def _keep(from_span: str, to_span: str) -> bool:
     if len(from_span) > _MAX_SPAN_CHARS or len(to_span) > _MAX_SPAN_CHARS:
         return False
     if _PUNCT_ONLY.match(from_span) or _PUNCT_ONLY.match(to_span):
+        return False
+    if _TO_HARD_REJECT.search(to_span):
         return False
     # parser 的 FROM 按 / 拆多 variant——含 / 的对无法表达，硬写会变成
     # 扫描裸 API/SDK 的错误 trap（_parses 只验「可解析」不验语义保真）
@@ -271,12 +286,26 @@ def _keep(from_span: str, to_span: str) -> bool:
     # the native pass normalizes these constantly; they are not traps.
     if _PUNCT_CHARS.sub("", from_span) == _PUNCT_CHARS.sub("", to_span):
         return False
+    # 对齐幻影：长度悬殊且零相似 = difflib 把不相关文本配成对
+    # （世界→然后走了）。等长全换是 CJK 实体错误的正常形态（缺陷→确幸
+    # 音近但零共同字），不能按相似度杀；跨脚本口述→ASCII 转换
+    # （点三西派点→.sanxipay）无相似度地板，豁免。
+    if not re.search(r"[A-Za-z0-9]", from_span + to_span):
+        if abs(len(from_span) - len(to_span)) >= 2 and \
+                difflib.SequenceMatcher(None, from_span, to_span).ratio() < 0.3:
+            return False
     return True
 
 
 def _quote(side: str) -> str:
-    """Wrap in backticks iff the scanner's bare-variant contract needs it."""
-    return f"`{side}`" if _BAD_BARE.search(side) else side
+    """Wrap in backticks iff the scanner's bare-variant contract needs it.
+
+    Two triggers: special characters (_BAD_BARE), or length beyond the
+    parser's bare-term cap (_MAX_TERM_LEN=12) — a quoted variant is an
+    explicit literal and exempt from the cap, so quoting long forms keeps
+    the bullet parseable instead of tripping the exit-2 self-check.
+    """
+    return f"`{side}`" if _BAD_BARE.search(side) or len(side) > 12 else side
 
 
 def _bullet(from_span: str, to_span: str, cue: str) -> str:
@@ -317,23 +346,19 @@ def harvest(raw: str, corrected: str) -> tuple[list[dict], int]:
                 kept[(f, t)] = kept.get((f, t), 0) + 1
             else:
                 dropped += 1
-    # 幻影错位过滤：修正目标在 raw 里本来就存在、且 FROM 在 corrected 里
-    # 仍有残留 → 这不是替换修正，是 difflib 对标点移动的词对齐幻觉
-    # （世界→然后走了：然后走了 raw 已有、世界 corrected 仍在）。
-    # 真实 trap 的 TO 通常是 raw 中缺席的正确形，FROM 在 corrected 清零。
-    kept = {k: n for k, n in kept.items()
-            if not (corrected.count(k[0]) > 0 and raw.count(k[1]) > 0)}
     # 包含聚类：f1 严格短于 f2 且 t1⊂t2 时（同一实体错误的宽窄两形），计数并入
     # 更短的那条——更短 = 复用面更大。from 相同而 to 不同的对**不**并入：
-    # 那是两个不同修正，必须各自呈现给裁决。
+    # 那是两个不同修正，必须各自呈现给裁决。⚠️ 裸形（<_MIN_TRAP_LEN 纯 CJK）
+    # 不作吸收方：否则好候选被并进裸形，--write 跳过裸形后两形全丢。
     merged: dict[tuple[str, str], int] = {}
     for (f, t), n in sorted(kept.items(), key=lambda kv: len(kv[0][0])):
         absorbed = False
         for (kf, kt) in merged:
-            if len(kf) < len(f) and kf in f and kt in t:
-                merged[(kf, kt)] += n
-                absorbed = True
-                break
+            if len(kf) >= _MIN_TRAP_LEN or kf.isascii():
+                if len(kf) < len(f) and kf in f and kt in t:
+                    merged[(kf, kt)] += n
+                    absorbed = True
+                    break
         if not absorbed:
             merged[(f, t)] = merged.get((f, t), 0) + n
     out = []
@@ -360,7 +385,9 @@ def main() -> int:
     ap.add_argument("--context-file",
                     help="域 context 文件；提供时跳过已是文档化 trap 的对")
     ap.add_argument("--write", action="store_true",
-                    help="把候选追加进 --context-file（需要同时给该参数）")
+                    help="把**高频组**候选追加进 --context-file（需要同时给该参数）")
+    ap.add_argument("--write-all", action="store_true",
+                    help="高频+单发全部追加（散文形伪候选也会进，慎用于未裁决批次）")
     ap.add_argument("--min-count", type=int, default=2,
                     help="高频组阈值（默认 2 = 出现 ≥2 次）")
     ap.add_argument("--json", action="store_true", help="机器可读输出")
@@ -374,9 +401,9 @@ def main() -> int:
 
     candidates, dropped = harvest(raw, corrected)
 
-    # 已在 context 文件里的 trap 不再报。包含即覆盖：context 有 商阳→商央，
-    # 候选 商阳科→商央科 是同一 trap 的宽形，跳过（宽已知 trap 吞窄候选同
-    # 理——宽的那条本来就会先命中）。
+    # 已在 context 文件里的 trap 不再报。双向包含即覆盖：context 有
+    # 商阳→商央，候选 商阳科→商央科 是宽形，跳过；反向（已知宽 trap、
+    # 候选窄形）同理——宽窄同体，哪边先命中都一样。
     known: list[tuple[str, str]] = []
     ctx_path: Path | None = None
     skipped_known = 0
@@ -391,7 +418,8 @@ def main() -> int:
             before = len(candidates)
             candidates = [
                 c for c in candidates
-                if not any(kf in c["from"] and kt in c["to"]
+                if not any((kf in c["from"] or c["from"] in kf)
+                           and (kt in c["to"] or c["to"] in kt)
                            for kf, kt in known)
             ]
             skipped_known = before - len(candidates)
@@ -456,13 +484,19 @@ def main() -> int:
                   + (f"\n⚠️ {len(bare)} 条裸形候选（<3 字纯 CJK，两侧黏着字扩不动）"
                      "误伤面大，--write 不自动写入，人工收紧后再入。" if bare else ""))
 
-    if args.write:
+    if args.write or args.write_all:
         if ctx_path is None:
-            print("Error: --write 需要 --context-file", file=sys.stderr)
+            print("Error: --write/--write-all 需要 --context-file", file=sys.stderr)
             return 2
-        write_bullets = [to_bullet(c) for c in candidates if not c["bare"]]
+        # 默认只自动写高频组：复现 = trap 的信号本身；单发候选（散文改写、
+        # 一次性修正、真伪难辨）必须经人裁决——未裁决的单发被 --write 落进
+        # context 后，下轮 trap-scan 会在干净文本上误报（二轮审阅实测）。
+        pool = candidates if args.write_all else hot
+        write_bullets = [to_bullet(c) for c in pool if not c["bare"]]
+        skipped_cold = len([c for c in candidates if c not in pool]) if not args.write_all else 0
         if not write_bullets:
-            print("\n--write: 无候选（或全部裸形被跳过），未改动 context 文件")
+            print("\n--write: 无可写候选（高频组为空或全部裸形被跳过），"
+                  "未改动 context 文件")
             return 0
         section = f"\n## Harvest 候选（{today} · {raw_name}）\n\n" + \
                   "\n".join(write_bullets) + "\n"
@@ -476,7 +510,9 @@ def main() -> int:
         ctx_path.write_text(prior.rstrip("\n") + "\n" + section, encoding="utf-8")
         print(f"\n--write: {len(write_bullets)} 条候选已追加到 {ctx_path}"
               f"（Harvest 候选节；下一轮 --scan-traps 即可命中）"
-              + (f"；跳过裸形 ×{len(bare)}" if bare else ""))
+              + (f"；跳过裸形 ×{len(bare)}" if bare else "")
+              + (f"；单发 ×{skipped_cold} 未写（裁决后手工补或 --write-all）"
+                 if skipped_cold else ""))
     return 0
 
 
