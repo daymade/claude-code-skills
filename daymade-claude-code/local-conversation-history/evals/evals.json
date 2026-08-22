@@ -36,6 +36,24 @@
       "prompt": "Search every old Claude conversation for a keyword that may only appear inside a tool result, then recover the file that was written in that session.",
       "expected_output": "Routes the request to claude-code-history-files-finder instead of using the recent-inventory command, because the task requires full-event keyword search and recovery.",
       "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "列出我最近用 Kimi CLI 跑过的对话，只要标题、时间和会话 ID。",
+      "expected_output": "Runs the bundled inventory once with --source kimi and returns a Chinese Kimi CLI section with timezone-qualified timestamps from state.json/wire internal fields, without hand-parsing wire.jsonl or consulting file mtime.",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "Show recent chats across Claude Code, Codex, and Kimi CLI for this workspace, and give me machine-readable JSON.",
+      "expected_output": "Runs the default inventory once with JSON output so all three providers appear, including the Kimi CLI (kimi-code) section; does not claim `kimi export` can produce a cross-session listing.",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "看看我 Kimi CLI 里有没有关于支付重试 bug 的对话。",
+      "expected_output": "Routes the request to claude-code-history-files-finder with --kimi instead of the recent-inventory command, because the task is keyword search inside full Kimi CLI session content.",
+      "files": []
     }
   ]
 }

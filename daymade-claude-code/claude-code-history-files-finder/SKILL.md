@@ -3,16 +3,17 @@ name: claude-code-history-files-finder
 description: >-
   Searches and recovers Claude Code JSONL history across all active config homes
   and archives registered in ~/.claude/history-sources.json. Use --all-projects
-  when the project is unknown and --codex to include Codex rollout search. Uses
-  internal timestamps and searches messages, thinking, tool inputs/results,
-  queues, attachments, summaries, titles, and file-history paths. Recovers exact
+  when the project is unknown, --codex to include Codex rollout search, and
+  --kimi to include Kimi CLI (kimi-code) session search. Uses internal
+  timestamps and searches messages, thinking, tool inputs/results, queues,
+  attachments, summaries, titles, and file-history paths. Recovers exact
   captured bytes from Claude file-history snapshots, including post-Write edits
   and binary files; otherwise labels Write checkpoints as lower fidelity. Use
   for keyword/date-bounded history search, prior-conversation forensics,
   deleted-file recovery, vanished ~/.claude/jobs artifacts, tool/file-operation
   analysis, or requests mentioning session history, find in history, previous
-  conversation, or .claude/projects. For a recent Claude+Codex inventory, use
-  local-conversation-history instead.
+  conversation, or .claude/projects. For a recent Claude+Codex+Kimi CLI
+  inventory, use local-conversation-history instead.
 ---
 
 # Claude Code History Files Finder
@@ -49,8 +50,10 @@ a dedicated widening (the script prints these automatically on zero matches):
 
 1. **Wrong project guess.** You searched one project, the conversation lived
    in another. Widening: `--all-projects` sweeps every project in one pass.
-2. **Wrong tool.** The conversation happened in Codex, whose rollouts are a
-   separate store the Claude registry never covers. Widening: `--codex`.
+2. **Wrong tool.** The conversation happened in Codex or Kimi CLI, whose
+   rollouts/wire logs are separate stores the Claude registry never covers.
+   Widening: `--codex` and `--kimi` (both opt-in; pass both when the project
+   was developed with both tools).
 3. **Wording drift.** A remembered quote differs from the real wording in
    punctuation or a few words, so the exact phrase misses. Widening: retry
    shorter distinctive substrings.
@@ -227,9 +230,43 @@ file-history mapping, so `recover_content.py` rejects a Codex rollout with a
 clear boundary error instead of returning an empty, apparently successful
 recovery.
 
+### 2c. Include Kimi CLI history — `--kimi`
+
+Kimi CLI (kimi-code) keeps sessions at
+`<kimi-home>/sessions/wd_<workspace>_<hash>/session_<uuid>/agents/<agent>/wire.jsonl`
+with a per-session `state.json` holding id/cwd/title and millisecond
+created/updated bounds (kimi home = `--kimi-home`, `$KIMI_HOME`, or
+`~/.kimi-code`). The wire schema differs from both Claude's and Codex's, so
+the default search skips it entirely; `--kimi` adds a wire pass:
+
+```bash
+python3 scripts/analyze_sessions.py search /path/to/project 'some phrase' --kimi
+```
+
+Kimi hits print in their own section (🌙) with session id, title, cwd,
+internal ranges, mention counts, and match fields. A project positional
+filters sessions by their `state.json` cwd (recursive match); with
+`--all-projects` every session is searched. Subagent wires
+(`agents/agent-N/`) are runs of the same conversation, so matches aggregate
+at session level with the agent name prefixed into each match field (e.g.
+`main:message`, `agent-0:tool_input`). Searchable coverage is the
+conversation itself — prompts (`turn.prompt` / `turn.steer`, indexed for any
+`origin` — search deliberately errs wide), appended messages, assistant
+content parts, tool calls, and tool results. Static
+boilerplate (config/profile system prompts, tool snapshots, usage/token
+metrics) is deliberately not indexed: a keyword that only appears in a shared
+system prompt would match every session, and "not found" is the answer this
+tool is trusted to give about conversation content.
+
+`--kimi` widens **search only**, exactly like `--codex`. Kimi wire logs do
+not carry Claude's file-history mapping, so file recovery remains Claude Code
+JSONL only; do not pass a Kimi wire path to `recover_content.py`. `--codex`
+and `--kimi` compose — a project developed with both tools needs both flags
+in the same command.
+
 The zero-match hint printed by the script already suggests whichever of
-`--all-projects` / `--codex` / shorter substrings was not yet applied — read
-stderr before concluding anything is absent.
+`--all-projects` / `--codex` / `--kimi` / shorter substrings was not yet
+applied — read stderr before concluding anything is absent.
 
 ### 3. Recover Deleted Content
 
@@ -474,7 +511,8 @@ used, re-run without it. A missing required archive must be repaired or its
 registry entry deliberately changed; do not silently ignore the error and claim
 the session does not exist. If the source set is confirmed complete, work the
 widening ladder from the Completeness invariant section: `--all-projects` →
-`--codex` → shorter substrings, and `--exclude-session` the current session.
+`--codex` → `--kimi` → shorter substrings, and `--exclude-session` the current
+session.
 
 ### Empty Recovery
 
