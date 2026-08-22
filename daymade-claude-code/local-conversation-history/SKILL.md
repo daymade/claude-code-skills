@@ -1,17 +1,18 @@
 ---
 name: local-conversation-history
 description: >-
-  Lists recent local Claude Code and OpenAI Codex conversations for a workspace
-  in one read-only command. For Claude Code, the default inventory combines
-  every active config home with every long-term archive registered in
+  Lists recent local Claude Code, OpenAI Codex, and Kimi CLI conversations for
+  a workspace in one read-only command. For Claude Code, the default inventory
+  combines every active config home with every long-term archive registered in
   ~/.claude/history-sources.json, de-duplicates session IDs, and orders or
   filters by internal JSONL timestamps rather than file mtime. Produces readable
   Markdown or JSON with titles, timezone-qualified timestamps, provenance,
   session IDs, and archive/test markers while excluding internal sub-agent noise
-  by default; Codex raw-rollout fallback also computes internal record bounds
-  without mtime. Use when the user asks to list, show, or browse recent local
-  chats, task history, or session IDs across Claude Code and Codex. Do not use
-  for keyword/full-event search, deleted-file recovery, or resuming work.
+  by default; Codex raw-rollout fallback and Kimi CLI state.json/wire parsing
+  also compute internal record bounds without mtime. Use when the user asks to
+  list, show, or browse recent local chats, task history, or session IDs across
+  Claude Code, Codex, and Kimi CLI (kimi-code). Do not use for
+  keyword/full-event search, deleted-file recovery, or resuming work.
 argument-hint: "[workspace-path]"
 ---
 
@@ -39,10 +40,14 @@ bypasses the registry; never use it for a completeness claim.
 ## Route the request
 
 - List/recent/show/browse local conversations: run the bundled script once.
-- Restrict to one provider: pass `--source claude` or `--source codex`.
+- Restrict to one provider: pass `--source claude`, `--source codex`, or
+  `--source kimi` (Kimi CLI, a.k.a. kimi-code).
+- Point at a non-default Kimi CLI home: pass `--kimi-home <dir>`; resolution
+  order is `--kimi-home` > `KIMI_HOME` > `~/.kimi-code`.
 - Include child workspaces under a directory: pass `--recursive`.
 - List every workspace: pass `--all-projects`; omit `--cwd`.
-- Include archived Codex threads: pass `--include-archived`.
+- Include archived Codex threads or archived Kimi CLI sessions: pass
+  `--include-archived`.
 - Restrict by conversation date: pass `--from-date` and/or `--to-date`.
 - Include internal agents or obvious smoke prompts only when explicitly asked:
   pass `--include-subagents` or `--include-automated`.
@@ -102,6 +107,10 @@ Treat the command as an inventory, not a transcript export:
   database is unavailable, compute the rollout range from internal top-level
   event timestamps plus `session_meta.payload.timestamp`; never use rollout
   mtime or database-file mtime as chronology.
+- For Kimi CLI, prefer `state.json`'s `createdAt`/`updatedAt` (epoch
+  milliseconds). If `state.json` is missing or lacks them, compute the range
+  from internal wire `time` fields (plus the metadata record's `created_at`,
+  also ms); never use file mtime as chronology.
 - A date-only filter means the whole local calendar day. A datetime filter must
   include `Z` or an explicit UTC offset. Sessions without internal timestamps
   are excluded with a visible warning while a date filter is active.
@@ -109,15 +118,17 @@ Treat the command as an inventory, not a transcript export:
 - State warnings from the script instead of silently hiding a missing,
   unreadable, or unsupported store.
 - Do not claim Claude Desktop native chats are included. The Claude source here
-  is Claude Code history; Codex covers local Codex CLI/Desktop thread stores.
+  is Claude Code history; Codex covers local Codex CLI/Desktop thread stores;
+  Kimi CLI covers the local kimi-code session store, not the Kimi web product.
 
 ## Handle source configuration and failures
 
-The script honors `CLAUDE_CONFIG_DIR` and `CODEX_HOME`. Register durable Claude
-archives once in `~/.claude/history-sources.json`; the default command then
-searches them on every run. Use `--history-sources <file>` to test another
-registry. Use `--claude-home <dir>` or `--codex-home <dir>` only when the user
-explicitly requests an exact single-store diagnostic scope.
+The script honors `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `KIMI_HOME`. Register
+durable Claude archives once in `~/.claude/history-sources.json`; the default
+command then searches them on every run. Use `--history-sources <file>` to test
+another registry. Use `--claude-home <dir>`, `--codex-home <dir>`, or
+`--kimi-home <dir>` only when the user explicitly requests an exact
+single-store diagnostic scope.
 
 If no conversations appear, use the diagnostics already printed by the same
 command. Read

@@ -10,10 +10,11 @@ every long-term archive registered in ~/.claude/history-sources.json. Searching
 only ~/.claude or only the current active tree can silently miss a real session.
 Conversation dates come from internal JSONL records, never file mtime.
 
-Two opt-in widenings exist because "not found" is the expensive answer:
---all-projects sweeps every project when the project is a guess, and --codex
-also searches Codex rollout history (~/.codex) — a different store that the
-Claude registry never covers.
+Three opt-in widenings exist because "not found" is the expensive answer:
+--all-projects sweeps every project when the project is a guess, --codex
+also searches Codex rollout history (~/.codex), and --kimi also searches
+Kimi CLI sessions (~/.kimi-code) — different stores that the Claude registry
+never covers.
 """
 
 import hashlib
@@ -33,6 +34,14 @@ from collections import Counter, defaultdict
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _core.claude import scan_claude_session  # noqa: E402
 from _core.codex import codex_meta_from_rollout, codex_session_id  # noqa: E402
+from _core.kimi import (  # noqa: E402
+    iter_kimi_session_dirs,
+    kimi_wire_files,
+    kimi_wire_time_range,
+    load_kimi_state,
+    resolve_kimi_home,
+    scan_kimi_session,
+)  # noqa: E402
 from _core.homes import home_label  # noqa: E402
 from _core.parse import (  # noqa: E402
     TimestampRange,
@@ -518,6 +527,262 @@ def search_codex_rollouts(
                     "session_id": sid,
                     "path": path,
                     "cwd": cwd,
+                    "total_mentions": total_mentions,
+                    "keyword_counts": dict(keyword_counts),
+                    "match_sources": sorted(match_sources),
+                    "created_at": session_range.earliest,
+                    "updated_at": session_range.latest,
+                    "match_created_at": match_range.earliest,
+                    "match_updated_at": match_range.latest,
+                    "excluded_untimed_records": excluded_untimed,
+                }
+            )
+
+    matches.sort(
+        key=lambda match: (
+            match["total_mentions"],
+            match["match_updated_at"]
+            if match["match_updated_at"] is not None
+            else float("-inf"),
+        ),
+        reverse=True,
+    )
+    return matches
+
+
+# ---------------------------------------------------------------------------
+# Kimi CLI session search (--kimi)
+#
+# Kimi CLI (kimi-code) stores conversations under <KIMI_HOME>/sessions/
+# wd_<workspace>_<hash>/session_<uuid>/agents/<agent>/wire.jsonl, with a
+# per-session state.json (id/cwd/title/createdAt/updatedAt in ms). The wire
+# record schema is NOT the Claude or Codex one (turn.prompt,
+# context.append_message, context.append_loop_event, all timestamped by a
+# `time` epoch-ms field), so neither searchable_segments() nor
+# codex_searchable_segments() applies. Layout and record shapes were verified
+# against Kimi CLI 0.38.0 (wire protocol 1.5) on a real store; see
+# _core/kimi.py's module docstring for the full format contract.
+#
+# Searchable coverage is the conversation itself: user prompts (turn.prompt /
+# turn.steer), appended messages (user/assistant text and attachments), and
+# loop events (assistant content parts, tool calls, tool results). Static
+# boilerplate — config.update / profile.bind system prompts, tool snapshots,
+# usage/token metrics — is deliberately NOT indexed: a keyword that only
+# appears in a shared system prompt would match every session, and "not found"
+# is the answer this tool is trusted to give about conversation content.
+# ---------------------------------------------------------------------------
+
+
+def _kimi_flatten_payload(value: Any) -> List[str]:
+    """Flatten nested Kimi payload content, dropping structural identifier keys.
+
+    Same principle as text.py's searchable_segments excluding id/signature
+    keys: UUID-class fields (turnId, toolCallId, …) are unique per record, so
+    indexing them only manufactures false-positive hits and dilutes the match
+    source attribution (independent review, 2026-08).
+    """
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [part for item in value for part in _kimi_flatten_payload(item)]
+    if isinstance(value, dict):
+        return [
+            part
+            for key, item in value.items()
+            if key not in _KIMI_STRUCTURAL_KEYS
+            for part in _kimi_flatten_payload(item)
+        ]
+    return []
+
+
+_KIMI_STRUCTURAL_KEYS = frozenset(
+    {
+        "type",
+        "id",
+        "uuid",
+        "stepUuid",
+        "turnId",
+        "toolCallId",
+        "parentUuid",
+        "callId",
+    }
+)
+
+
+def kimi_searchable_segments(record: Dict[str, Any]) -> List[SearchSegment]:
+    """Extract searchable text fields from one Kimi wire.jsonl record."""
+    segments: List[SearchSegment] = []
+
+    def add(source: str, value: Any) -> None:
+        for text_value in _kimi_flatten_payload(value):
+            segments.append(SearchSegment(source=source, text=text_value))
+
+    record_type = record.get("type")
+    if record_type in {"turn.prompt", "turn.steer"}:
+        add("prompt", record.get("input"))
+    elif record_type == "context.append_message":
+        message = record.get("message")
+        if isinstance(message, dict):
+            add("message", message.get("content"))
+            add("tool_input", message.get("toolCalls"))
+    elif record_type == "context.append_loop_event":
+        event = record.get("event")
+        if isinstance(event, dict):
+            event_type = event.get("type")
+            if event_type == "content.part":
+                add("message", event)
+            elif event_type == "tool.call":
+                add("tool_input", event)
+            elif event_type == "tool.result":
+                add("tool_result", event)
+            # step.begin / step.end carry no conversation text.
+    elif record_type == "plugin.session_start":
+        add("plugin", record.get("content"))
+    return list(dict.fromkeys(segments))
+
+
+def discover_kimi_wires(kimi_home: Path) -> List[tuple]:
+    """Enumerate (session_dir, agent_name, wire_path) triples under a Kimi home."""
+    wires: List[tuple] = []
+    for session_dir in iter_kimi_session_dirs(kimi_home):
+        main_wire, subagent_wires = kimi_wire_files(session_dir)
+        for path in ([main_wire] if main_wire else []) + subagent_wires:
+            if path is not None:
+                wires.append((session_dir, path.parent.name, path))
+    return wires
+
+
+def search_kimi_wires(
+    wires: List[tuple],
+    keywords: List[str],
+    case_sensitive: bool = False,
+    from_timestamp: Optional[float] = None,
+    to_timestamp: Optional[float] = None,
+    project_path: Optional[str] = None,
+    exclude_ids: Optional[set] = None,
+    use_prefilter: bool = True,
+) -> List[Dict[str, Any]]:
+    """Search Kimi wire files for keywords, one match dict per SESSION.
+
+    A session's subagent wires (agents/agent-N/) are runs of the same
+    conversation, so matches aggregate at session level with the agent name
+    prefixed into each match source (e.g. "main:message", "agent-0:tool_input").
+
+    Like the Codex search, Kimi gets FILE-level pre-filtering only, never
+    line-level: the session's internal range must observe every record's
+    `time`, and collapsing it onto the match range would report a wrong value
+    in a field callers quote. One Kimi-specific subtlety: the pre-filter rules
+    out whole wires, but a session's range spans ALL its wires — so when any
+    wire of a session matched, the remaining wires are re-read for their time
+    ranges only (no keyword work), keeping the displayed range exact.
+    """
+    search_keywords = [
+        (keyword, keyword if case_sensitive else keyword.casefold())
+        for keyword in keywords
+    ]
+    exclude = exclude_ids or set()
+
+    matched_files: Optional[set] = None
+    if use_prefilter:
+        matched_files = files_possibly_matching(
+            [wire_path for _, _, wire_path in wires],
+            keywords,
+            case_sensitive=case_sensitive,
+        )
+    line_keywords = None  # see docstring — never line-level for Kimi either
+
+    # Group wires by session, preserving discovery order.
+    sessions: Dict[Path, List[tuple]] = {}
+    for session_dir, agent_name, wire_path in wires:
+        sessions.setdefault(session_dir, []).append((agent_name, wire_path))
+
+    matches: List[Dict[str, Any]] = []
+    for session_dir, agent_wires in sessions.items():
+        state = load_kimi_state(session_dir) or {}
+        session_id = state.get("id") if isinstance(state.get("id"), str) else None
+        if not session_id:
+            session_id = session_dir.name
+        if session_id in exclude or session_dir.name in exclude:
+            continue
+        if isinstance(state.get("cwd"), str) and state["cwd"].strip():
+            cwd: Optional[str] = state["cwd"].strip()
+        else:
+            cwd = None
+        if project_path is not None:
+            if not cwd or not workspace_matches(cwd, project_path, recursive=True):
+                continue
+
+        keyword_counts: Dict[str, int] = defaultdict(int)
+        total_mentions = 0
+        match_sources: set = set()
+        session_range = TimestampRange()
+        match_range = TimestampRange()
+        excluded_untimed = 0
+        skipped_wires: List[Path] = []
+
+        for agent_name, wire_path in agent_wires:
+            if matched_files is not None and wire_path not in matched_files:
+                skipped_wires.append(wire_path)
+                continue
+            try:
+                for record in iter_jsonl(wire_path, line_keywords=line_keywords):
+                    record_timestamp = parse_timestamp(record.get("time"))
+                    if record_timestamp is None and record.get("type") == "metadata":
+                        record_timestamp = parse_timestamp(record.get("created_at"))
+                    if record_timestamp is not None:
+                        session_range.observe(record_timestamp)
+                    if from_timestamp is not None or to_timestamp is not None:
+                        if record_timestamp is None:
+                            excluded_untimed += 1
+                            continue
+                        if not timestamp_in_window(
+                            record_timestamp, from_timestamp, to_timestamp
+                        ):
+                            continue
+                    record_counts: Dict[str, int] = defaultdict(int)
+                    record_sources: set = set()
+                    for segment in kimi_searchable_segments(record):
+                        search_text = (
+                            segment.text
+                            if case_sensitive
+                            else segment.text.casefold()
+                        )
+                        for keyword, search_keyword in search_keywords:
+                            count = search_text.count(search_keyword)
+                            if count > 0:
+                                record_counts[keyword] += count
+                                record_sources.add(f"{agent_name}:{segment.source}")
+                    record_mentions = sum(record_counts.values())
+                    if not record_mentions:
+                        continue
+                    for keyword, count in record_counts.items():
+                        keyword_counts[keyword] += count
+                    total_mentions += record_mentions
+                    match_sources.update(record_sources)
+                    if record_timestamp is not None:
+                        match_range.observe(record_timestamp)
+            except (OSError, UnicodeError) as e:
+                print(f"Warning: Error processing {wire_path}: {e}", file=sys.stderr)
+                continue
+
+        if total_mentions > 0:
+            # A prefiltered-out wire can still hold earlier/later records of
+            # this matched session; fold its time range in so the displayed
+            # internal range stays exact.
+            for wire_path in skipped_wires:
+                try:
+                    extra = kimi_wire_time_range(wire_path)
+                except OSError:
+                    continue
+                for value in (extra.earliest, extra.latest):
+                    if value is not None:
+                        session_range.observe(value)
+            matches.append(
+                {
+                    "session_id": session_id,
+                    "path": session_dir,
+                    "title": scan_kimi_session(session_dir).title,
+                    "cwd": cwd or "",
                     "total_mentions": total_mentions,
                     "keyword_counts": dict(keyword_counts),
                     "match_sources": sorted(match_sources),
@@ -1460,6 +1725,10 @@ def _codex_home_for(args) -> Path:
     return Path.home() / ".codex"
 
 
+def _kimi_home_for(args) -> Path:
+    return resolve_kimi_home(getattr(args, "kimi_home", None))
+
+
 def _print_search_widening_hint(args) -> None:
     """On zero matches, point at the widening the user has NOT applied yet.
 
@@ -1477,6 +1746,11 @@ def _print_search_widening_hint(args) -> None:
     if not getattr(args, "codex", False):
         tips.append(
             "--codex (it may have been a Codex conversation — Codex rollouts "
+            "are a separate store this search skips by default)"
+        )
+    if not getattr(args, "kimi", False):
+        tips.append(
+            "--kimi (it may have been a Kimi CLI conversation — Kimi sessions "
             "are a separate store this search skips by default)"
         )
     tips.append(
@@ -1645,6 +1919,18 @@ def main():
         "--codex-home",
         metavar="DIR",
         help="Codex home for --codex (default: $CODEX_HOME or ~/.codex).",
+    )
+    search_parser.add_argument(
+        "--kimi",
+        action="store_true",
+        help="Also search Kimi CLI session history (sessions/**/wire.jsonl "
+        "under the Kimi home). Kimi CLI uses a different store and schema "
+        "that the Claude registry never covers.",
+    )
+    search_parser.add_argument(
+        "--kimi-home",
+        metavar="DIR",
+        help="Kimi CLI home for --kimi (default: $KIMI_HOME or ~/.kimi-code).",
     )
     search_parser.add_argument(
         "--case-sensitive", action="store_true", help="Case-sensitive search"
@@ -1882,7 +2168,7 @@ def main():
         sessions = _collect_sessions(analyzer, args)
         for warning in analyzer.warnings:
             print(f"Warning: {warning}", file=sys.stderr)
-        if not sessions and not args.codex:
+        if not sessions and not args.codex and not args.kimi:
             if args.all_projects:
                 print("No sessions found across all projects")
             else:
@@ -1927,6 +2213,26 @@ def main():
             )
             codex_matches = search_codex_rollouts(
                 rollouts,
+                args.keywords,
+                args.case_sensitive,
+                from_timestamp,
+                to_timestamp,
+                None if args.all_projects else args.project_path,
+                set(args.exclude_session),
+                not args.no_prefilter,
+            )
+
+        kimi_matches: List[Dict[str, Any]] = []
+        kimi_home: Optional[Path] = None
+        if args.kimi:
+            kimi_home = _kimi_home_for(args)
+            kimi_wires = discover_kimi_wires(kimi_home)
+            print(
+                f"Also searching {len(kimi_wires)} Kimi CLI wire(s) under "
+                f"{kimi_home} (--kimi)\n"
+            )
+            kimi_matches = search_kimi_wires(
+                kimi_wires,
                 args.keywords,
                 args.case_sensitive,
                 from_timestamp,
@@ -2015,7 +2321,41 @@ def main():
             else:
                 print(f"No Codex rollout matches (home: {codex_home}).")
 
-        if not matches and not codex_matches:
+        if args.kimi:
+            if kimi_matches:
+                print(f"Kimi CLI session matches (home: {kimi_home}):\n")
+                for info in kimi_matches:
+                    print(f"🌙 {info['path'].name}")
+                    print(f"   Session: {info['session_id']}")
+                    if info.get("title"):
+                        print(f"   Title: {info['title']}")
+                    if info.get("cwd"):
+                        print(f"   cwd: {info['cwd']}")
+                    print(
+                        "   Internal range: "
+                        f"{_format_range(info['created_at'], info['updated_at'])}"
+                    )
+                    print(
+                        "   Match range: "
+                        f"{_format_range(info['match_created_at'], info['match_updated_at'])}"
+                    )
+                    print(f"   Total mentions: {info['total_mentions']}")
+                    print(
+                        f"   Keywords: {', '.join(f'{k}({v})' for k, v in info['keyword_counts'].items())}"
+                    )
+                    print(f"   Match fields: {', '.join(info['match_sources'])}")
+                    if info["excluded_untimed_records"]:
+                        print(
+                            "   Date-filter note: excluded "
+                            f"{info['excluded_untimed_records']} record(s) without an "
+                            "internal timestamp; file mtime was not used."
+                        )
+                    print(f"   Path: {info['path']}")
+                    print()
+            else:
+                print(f"No Kimi CLI session matches (home: {kimi_home}).")
+
+        if not matches and not codex_matches and not kimi_matches:
             print("No matches found.")
             _print_search_widening_hint(args)
             sys.exit(0)
