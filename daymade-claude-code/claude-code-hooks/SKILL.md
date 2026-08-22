@@ -43,6 +43,11 @@ pre-build guards for hypothetical mistakes — cost with no proven benefit), or
 the "rule" is a judgment call with no mechanical signature (a hook can only
 match tokens/patterns; it can't judge whether a design is good).
 
+If the symptom is “it keeps reviewing / waiting / retrying,” do not assume the
+answer is another hook. First complete the **Loop Contract** in rule 7 and read
+[pitfall #36](references/hook_pitfalls.md#36-a-self-applied-review-rule-can-loop-without-any-hook).
+The loop may be created entirely by an agent repeatedly applying a prose rule.
+
 ## Hook types and what the exit code means
 
 | Type | Fires | Exit 0 | Exit 2 | Other |
@@ -513,6 +518,55 @@ than people reach for it.)
 condition T is true → hook demands remediation R → model performs R → T checked again
 ```
 
+**Write the Loop Contract before the first cycle — for hook-enforced loops and
+agent-driven review / wait / retry loops alike:**
+
+```text
+LOOP KEY: immutable logical target / lineage + one failure axis
+FIRE T: the condition that starts another cycle
+REMEDIATION R: the exact action one cycle performs
+VARIANT V: the well-founded quantity that strictly decreases for this key
+BUDGET: maximum cycles, fixed before cycle 1
+SUCCESS EXIT: the observable that proves the axis is clear
+CAPPED EXIT: what is left blocked / unshipped / pending when the budget ends
+```
+
+No completed contract means no blocking Stop hook and no repeated reviewer or
+polling loop. Freeze the key before cycle 1. A remediation snapshot, commit, or
+reviewer name stays inside that same lineage and cannot mint a new budget. A
+new, unrelated finding is a **new key**: record it separately; it does not reset
+this loop's budget. A cycle that cannot name a new falsifying experiment or a
+smaller V adds no evidence and stops.
+
+For an **agent-driven independent-review loop**, the default budget is one
+initial review plus one narrowly scoped re-review after substantive fixes. A
+third reviewer is not automatic. If the re-review still reproduces a BLOCKER or
+MAJOR on the same axis, leave the hook unregistered / artifact unshipped, report
+the blocked state, and require a new user-authorized task whose Loop Contract
+declares its budget before cycle 1. An agent-declared budget cannot authorize
+itself. Inside that authorized task, name the concrete safety or business
+failure caused by stopping now; optional polish does not qualify.
+
+Filled review-loop example:
+
+```text
+LOOP KEY: <initial frozen commit>'s review lineage + termination-contract fidelity
+FIRE T: fresh review reports a same-axis BLOCKER / MAJOR
+REMEDIATION R: reproduce that finding, apply one bounded fix, run its narrow check
+VARIANT V: 2 - completed review cycles
+BUDGET: 2 cycles total (initial review + one re-review)
+SUCCESS EXIT: no same-axis BLOCKER / MAJOR
+CAPPED EXIT: artifact stays unregistered / unshipped; report remaining findings
+```
+
+Every repair descendant of the initial frozen commit remains in this key. The
+current snapshot changes so the reviewer can inspect the fix; the lineage and
+its remaining budget do not.
+
+Nothing mechanically enforces this hookless budget — it holds only while the
+agent follows the Skill. That limitation is why the capped exit must be visible
+and must never be reported as “completed.”
+
 **If completing R can make T true again, the loop does not converge.** Nothing
 errors, nothing crashes; it burns round after round until a human interrupts —
 which is what usually happens, because each round is a *complete* remediation
@@ -682,6 +736,9 @@ enforcement you actually need, not simply the first one.
    time-based key is the temporal predicate this rule exists to forbid. **A
    temporal predicate is almost always the wrong shape**, because the remediation
    you demanded is usually what moves the operand you compare against.
+   This content-SHA key is correct for a one-shot receipt gate. It does **not**
+   redefine an agent-review lineage: commits created by that lineage's
+   remediation remain under its original key and original budget.
    ⚠️ If the **model** can create the receipt, this is rule 4's retired
    `GUARD_OK=1` escape hatch wearing a new hat. Have it written by something the
    model doesn't drive (the reviewer subagent's own output file, a git note), or
@@ -695,14 +752,26 @@ enforcement you actually need, not simply the first one.
    SID=$(printf '%s' "$INPUT" | python3 -c "import sys,json;print(json.load(sys.stdin).get('session_id','nosid'))" 2>/dev/null || echo nosid)
    CNT="${TMPDIR:-/tmp}/my-guard.${SID}.count"
    N=$(cat "$CNT" 2>/dev/null || echo 0); N=$((N+1)); printf '%s' "$N" > "$CNT"
-   [ "$N" -gt 3 ] && exit 0                # V = 3 - N, reaches 0 and stays
+   if [ "$N" -gt 3 ]; then
+     CAPPED_REASON='Loop budget exhausted; the blocked condition remains unresolved. Do not report completed.'
+     python3 - "$CAPPED_REASON" <<'PY'
+   import json, sys
+   print(json.dumps({"continue": False, "stopReason": sys.argv[1]}))
+   PY
+     exit 0                              # explicit capped stop, not silent success
+   fi
    ```
 
    Crude, and deliberately blind to whether R actually happened — but *finite*,
    which is the property that was missing. Do **not** substitute `$$` or `$PPID`:
    each hook run is a fresh process, so those change every invocation and the
    counter never accumulates. Print the count ("reminder 2 of 3") — see the war
-   story below for why that wording earns its place.
+   story below for why that wording earns its place. The cap output uses the
+   documented universal [`continue:false` / `stopReason` JSON fields](https://code.claude.com/docs/en/hooks#json-output)
+   so the user sees a capped stop instead of an indistinguishable successful
+   Stop. That stops the session; it does **not** protect a publish action. If the
+   capped exit says an artifact remains unshipped, enforce that separately at
+   the action boundary with PreToolUse.
 
 4. **Hysteresis / a cool-down window** (the control-theory answer to
    [alert flapping](https://utcc.utoronto.ca/~cks/space/blog/sysadmin/HysteresisMeaningAndAlerts)):
@@ -794,29 +863,10 @@ like this density problem turned out to be 100% false positives — its review
 channel was schema-blind in team mode; see the observability form above. Before
 accepting density as "legitimate", verify the fires are evidence-based at all.)**
 
-**A loop can converge and still not have been worth running — and this shows up
-with no hook in the picture at all (2026-08-23).** Everything above proves V
-*exists* for a hook-enforced loop; the same T → R → recheck shape recurs when an
-agent self-applies a prose discipline instead of a shell mechanism enforcing it —
-"a substantive edit needs a fresh independent reviewer" is exactly the rule the
-counter-example above is built from, except here nothing but the agent's own
-judgment decides when to stop. Verifying one small correction in a low-stakes,
-single-reader document, an agent ran three full independent-review rounds (the
-measured one: ~253K tokens) instead of one: round 1 found unrelated real errors
-plus this one; round 2, dispatched specifically to re-check round 1's fixes,
-found the correction was still slightly wrong; round 3 found nothing. Round 3
-genuinely proves convergence in this rule's sense — V hit zero and the loop
-terminated correctly. **But "it terminates" and "it was worth running" are
-different questions, and a termination proof only answers the first one.** The
-round-3 finding had already been confirmed against a primary source directly
-(not taken on a prior round's word), and the stakes were "a reader notices a
-typo" — that does not clear the bar for another full round no matter how cleanly
-the mechanism converges. **The missing check sits beside V, not instead of it:
-before paying for the next iteration, name what breaks if you stop here, and
-only proceed if that answer outweighs the round's cost.** None of mechanisms
-0–4 above ask this — they all assume every triggered iteration is worth its
-cost, which is a safe assumption when R is "re-run a script" and stops being
-one the moment R is "spawn an agent."
+**Termination and worth are separate gates.** V proves a loop ends; the Loop
+Contract's budget and capped exit decide whether another cycle is worth paying
+for. The hookless review-loop failure that exposed this distinction, including
+why scope drift silently minted endless “new” work, is pitfall #36.
 
 ### 8. Waiting needs the same proof — notifications are advisory, polling must carry a budget
 
@@ -934,12 +984,12 @@ wall time.
 
 1. **Confirm it's a real recurrence**, not hypothetical — else don't build it.
    If the hook will **demand a remediation** rather than just block, write its
-   termination variant **V** into the script header as a `# TERMINATION:` line
-   (rule 7) before any logic — and first check whether the thing you're gating is
-   an *action*, in which case a PreToolUse guard on that action removes the loop
-   instead of taming it. Can't name a quantity that strictly decreases per
-   `trigger → remediate → re-check` cycle? The design is non-terminating — fix the
-   design, not the regex.
+   complete Loop Contract (key / axis / T / R / V / budget / two exits) before
+   any logic, and put V into the script header as a `# TERMINATION:` line (rule
+   7). First check whether the thing you're gating is an *action*, in which case
+   a PreToolUse guard on that action removes the loop instead of taming it.
+   Can't name a quantity that strictly decreases per `trigger → remediate →
+   re-check` cycle? The design is non-terminating — fix the design, not the regex.
 2. Write the script in the SSOT dir; `chmod +x`.
 3. **Detection** with shlex token-level matching (rule 1), keyed on a fact the
    world can answer rather than your own rendering or a naming convention (rule 6).
