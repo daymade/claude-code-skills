@@ -794,6 +794,30 @@ like this density problem turned out to be 100% false positives — its review
 channel was schema-blind in team mode; see the observability form above. Before
 accepting density as "legitimate", verify the fires are evidence-based at all.)**
 
+**A loop can converge and still not have been worth running — and this shows up
+with no hook in the picture at all (2026-08-23).** Everything above proves V
+*exists* for a hook-enforced loop; the same T → R → recheck shape recurs when an
+agent self-applies a prose discipline instead of a shell mechanism enforcing it —
+"a substantive edit needs a fresh independent reviewer" is exactly the rule the
+counter-example above is built from, except here nothing but the agent's own
+judgment decides when to stop. Verifying one small correction in a low-stakes,
+single-reader document, an agent ran three full independent-review rounds (the
+measured one: ~253K tokens) instead of one: round 1 found unrelated real errors
+plus this one; round 2, dispatched specifically to re-check round 1's fixes,
+found the correction was still slightly wrong; round 3 found nothing. Round 3
+genuinely proves convergence in this rule's sense — V hit zero and the loop
+terminated correctly. **But "it terminates" and "it was worth running" are
+different questions, and a termination proof only answers the first one.** The
+round-3 finding had already been confirmed against a primary source directly
+(not taken on a prior round's word), and the stakes were "a reader notices a
+typo" — that does not clear the bar for another full round no matter how cleanly
+the mechanism converges. **The missing check sits beside V, not instead of it:
+before paying for the next iteration, name what breaks if you stop here, and
+only proceed if that answer outweighs the round's cost.** None of mechanisms
+0–4 above ask this — they all assume every triggered iteration is worth its
+cost, which is a safe assumption when R is "re-run a script" and stops being
+one the moment R is "spawn an agent."
+
 ### 8. Waiting needs the same proof — notifications are advisory, polling must carry a budget
 
 Rule 7 covers loops a *hook* creates. The same shape recurs with no hook
