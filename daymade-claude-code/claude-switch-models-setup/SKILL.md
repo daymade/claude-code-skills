@@ -113,7 +113,9 @@ When the user says something like "set up Claude Code profiles" or "I want to us
 
 3. **Add shell integration**
    - Source the profile manager in `~/.zshrc` or `~/.bashrc`
-   - Add aliases: `csk`, `csks`, `csd`, `csg`, `css`, `cssp`
+   - Add aliases: `csk`, `csks`, `csd`, `csg`, `css`
+   - Add any further per-account/per-plan variant alias by hand if needed —
+     `claude-profiles.sh` only defines the five above
    - Tell the user to run `source ~/.zshrc` (or open a new terminal)
 
 4. **Generate provider settings files**
@@ -160,8 +162,10 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    - `csd` → DeepSeek window
    - `csg` → GLM window
    - `css` → StepFun window
-   - `cssp` → StepFun paid/account-specific window, when `step-pay.json` exists
    - `claude` (no alias) → default Anthropic profile
+   - Optional: hand-add a per-account/per-plan variant alias yourself, e.g.
+     `alias cssp='claude-profile step-pay --dangerously-skip-permissions'` —
+     `claude-profiles.sh` does not generate this; it is a manual pattern on top
 
 ## Commands
 
