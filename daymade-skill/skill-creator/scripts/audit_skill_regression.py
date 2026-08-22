@@ -1022,6 +1022,11 @@ def classify_review(
     compute file fingerprints for file-level candidates, and write entries in
     the exact shape ``verify`` validates. Fail-fast: any problem in the map
     aborts before anything is written, so a half-classified review never lands.
+
+    Map fields: ``destination``, ``reason``, ``disposition`` (default
+    ``preserved_or_moved``), ``needle`` (non-file candidates). Optional
+    ``user_approval`` is passed through verbatim — ``verify`` requires it for
+    runtime ``intentional_boundary`` and ``removed_by_explicit_user_request``.
     """
     after = after.resolve()
     review = _load_review(review_path)
@@ -1097,18 +1102,21 @@ def classify_review(
                 errors.append(f"map[{key}].needle not found in {destination}: {needle[:60]!r}")
                 continue
             evidence = [{"path": destination, "line": line_no, "contains": needle}]
-        staged.append(
-            (
-                candidate,
-                {
-                    "disposition": disposition,
-                    "reason": reason,
-                    "destination": destination,
-                    "evidence": evidence,
-                    "semantic_review": {"reviewer": reviewer, "rationale": reason},
-                },
-            )
-        )
+        fields: dict[str, Any] = {
+            "disposition": disposition,
+            "reason": reason,
+            "destination": destination,
+            "evidence": evidence,
+            "semantic_review": {"reviewer": reviewer, "rationale": reason},
+        }
+        # Pass through the approval trail verbatim — verify requires it for
+        # runtime intentional_boundary / removed_by_explicit_user_request, and
+        # silently dropping it here forces a hand-edit of the review JSON,
+        # which is exactly what this subcommand exists to prevent.
+        user_approval = str(entry.get("user_approval", "")).strip()
+        if user_approval:
+            fields["user_approval"] = user_approval
+        staged.append((candidate, fields))
 
     if errors:
         raise ValueError("disposition map has problems; nothing was written:\n- " + "\n- ".join(errors))
