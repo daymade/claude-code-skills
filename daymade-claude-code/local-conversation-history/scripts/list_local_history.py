@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""List local Claude Code and Codex conversations without modifying them."""
+"""List local Claude Code, Codex, and Kimi CLI conversations without modifying them."""
 
 from __future__ import annotations
 
@@ -37,6 +37,7 @@ from _core.text import (  # noqa: E402
     iter_jsonl,
 )
 from _core.codex import collect_codex  # noqa: E402
+from _core.kimi import collect_kimi, resolve_kimi_home  # noqa: E402
 
 
 def configure_utf8_streams() -> None:
@@ -230,7 +231,9 @@ def render_provider_markdown(
     result: ProviderResult, args: argparse.Namespace, language: str
 ) -> list[str]:
     shown = result.conversations[: args.limit]
-    provider_name = "Claude Code" if result.provider == "claude" else "Codex"
+    provider_name = {"claude": "Claude Code", "codex": "Codex", "kimi": "Kimi CLI"}.get(
+        result.provider, result.provider
+    )
     if language == "zh":
         lines = [f"## {provider_name} — {result.total} 条对话", ""]
         lines.append(
@@ -355,7 +358,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--cwd", help="Workspace path (default: current directory)")
     parser.add_argument(
-        "--source", choices=("all", "claude", "codex"), default="all"
+        "--source", choices=("all", "claude", "codex", "kimi"), default="all"
     )
     parser.add_argument("--limit", type=int, default=10, help="Rows per provider")
     parser.add_argument(
@@ -383,6 +386,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--codex-home", help="Override the Codex configuration root")
+    parser.add_argument("--kimi-home", help="Override the Kimi CLI configuration root")
     parser.add_argument(
         "--from-date",
         help="Inclusive start: YYYY-MM-DD (local day) or timezone-qualified ISO datetime",
@@ -533,6 +537,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     codex_home = Path(
         args.codex_home or os.environ.get("CODEX_HOME") or (Path.home() / ".codex")
     ).expanduser()
+    kimi_home = resolve_kimi_home(args.kimi_home)
 
     results: list[ProviderResult] = []
     if args.source in {"all", "claude"}:
@@ -575,6 +580,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         results.append(
             apply_date_filter(
                 collect_codex(args, codex_home), from_timestamp, to_timestamp
+            )
+        )
+    if args.source in {"all", "kimi"}:
+        results.append(
+            apply_date_filter(
+                collect_kimi(args, kimi_home), from_timestamp, to_timestamp
             )
         )
 

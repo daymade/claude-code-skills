@@ -87,10 +87,66 @@ The selected backend is printed in the report. A database problem is reported
 before raw-rollout recovery is attempted, so the alternate path is visible
 rather than a silent fallback.
 
+### Kimi CLI
+
+1. Resolve the configuration root from `--kimi-home`, then `KIMI_HOME`, then
+   the user's home-relative `.kimi-code` directory.
+2. Enumerate session directories under `<home>/sessions/`. A directory
+   qualifies as a session by containing `state.json` or an `agents/`
+   subdirectory — not by matching the observed `wd_<workspace>_<hash>` bucket
+   naming convention, which is a convention rather than a contract.
+3. Read `state.json` for the session id, cwd, title, archive flag, and the
+   `createdAt`/`updatedAt` bounds (epoch milliseconds). When it is missing or
+   a field is absent, the main agent's `wire.jsonl` supplies the fallback: the
+   first genuine user prompt for the title, the minimum/maximum wire `time`
+   values for the range. Subagent wires (`agents/agent-N/`) only extend the
+   time-range fallback; they are runs of the same session, not separate
+   conversations.
+4. Use `session_index.jsonl` at the home root only as a cwd aid (it maps
+   `session_<uuid>` to `workDir`). The session directories on disk are
+   authoritative; never treat the index as the sole existence check.
+
+The layout below was verified against Kimi CLI 0.38.0 (wire
+`protocol_version` 1.5) on a real 26-session store:
+
+```text
+<home>/session_index.jsonl     # one {sessionId, sessionDir, workDir} object per line
+<home>/sessions/wd_<workspace>_<hash>/session_<uuid>/
+    state.json                 # id/cwd/title/lastPrompt/createdAt/updatedAt (ms)/archived
+    agents/main/wire.jsonl     # the primary run's event log
+    agents/agent-N/wire.jsonl  # subagent runs of the SAME session
+    logs/kimi-code.log         # diagnostics, not conversation content
+```
+
+Wire records carry their timestamp in `time` (epoch ms); the first record is
+`{"type": "metadata", "protocol_version", "created_at"}` (also ms). The
+record types that carry user-visible text are `turn.prompt` / `turn.steer`
+(`origin.kind == "user"` marks genuine human input) and
+`context.append_message` / `context.append_loop_event`. File mtime is never
+consulted, matching the Claude and Codex providers.
+
+Titles come from `state.json`'s `title` first. A trivial auto-title (for
+example "hi") is worse than the real first prompt, so a weak title (under 4
+characters) falls back to `lastPrompt` and then to the first meaningful user
+prompt in the main wire. Injected context wrappers (observed:
+`<git-context>...</git-context>`) can precede prompt text, so a leading
+wrapper is stripped defensively before title extraction.
+
+Static boilerplate — `config.update` / `profile.bind` system prompts,
+`llm.tools_snapshot`, usage/token metrics — is deliberately excluded from
+title extraction here and from the finder's search segments: a keyword that
+only appears in a shared static system prompt would match every session and
+is not conversation content.
+
+Kimi CLI ships `kimi export [sessionId]`, which zips a single session, but
+offers no batch listing or cross-session search command. That gap is why this
+suite parses the raw store instead of shelling out to the vendor CLI.
+
 ## Verified format boundary
 
 The implementation was checked against Claude Code 2.1.207 and Codex CLI
-0.144.1 on 2026-07-13. These observations establish the tested boundary, not a
+0.144.1 on 2026-07-13, and against Kimi CLI 0.38.0 (wire `protocol_version`
+1.5) in 2026-08. These observations establish the tested boundary, not a
 promise that vendors will never change their private local formats.
 
 - Claude Code main records use top-level event types with user content under a
@@ -105,6 +161,10 @@ promise that vendors will never change their private local formats.
 - Current Codex state databases expose thread title, cwd, archive state, source,
   timestamps, and rollout path, with newer schemas adding fields rather than
   replacing the core columns.
+- Kimi CLI wire records are typed events (`turn.prompt`,
+  `context.append_message`, `context.append_loop_event`) timestamped by a
+  `time` epoch-ms field; `agents/agent-N/` wires are subagent runs of the same
+  session, not separate conversations.
 
 The parser skips malformed JSON lines, but it does not invent metadata. A
 session with neither a usable title nor a real first prompt is shown as untitled
