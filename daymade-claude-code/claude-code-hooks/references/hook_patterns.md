@@ -797,6 +797,12 @@ substitute, and the shipped incident) in SKILL.md's Stop bullet.
 #!/usr/bin/env bash
 # Stop hook: block the model from ending its turn if its own last reply
 # contains <BANNED PATTERN>.
+# LOOP CONTRACT — fill every field before registration:
+# KEY: <immutable target + one failure axis>
+# TERMINATION: V = <well-founded quantity>; decreased by <remediation>
+# BUDGET: <maximum cycles fixed before cycle 1>
+# SUCCESS EXIT: <observable proving this axis is clear>
+# CAPPED EXIT: <blocked / unshipped / pending state; never "completed">
 set -uo pipefail                                # no -e: every risky step below
 INPUT=$(cat)                                     # is explicitly ||-guarded instead
 
@@ -895,6 +901,12 @@ exit 0
 ```
 
 Three things worth calling out beyond what the comments above already say:
+
+- **The Loop Contract header is part of the pattern, not optional
+  documentation.** If you cannot fill its key, V, budget, and two exits, do not
+  register the hook. For an agent-driven review loop with no hook, use the same
+  card from SKILL.md rule 7; nothing mechanically enforces that case, so the
+  visible capped exit is the safety mechanism.
 
 - **This skeleton uses `python3 - <<'PY' ... PY` (a QUOTED heredoc) everywhere,
   never `python3 -c "…multi-line…"`.** The quoted delimiter makes the body inert

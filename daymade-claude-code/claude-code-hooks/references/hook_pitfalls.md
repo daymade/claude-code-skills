@@ -1769,3 +1769,39 @@ this list and describe defects you reach by asking a different question):
    must pin both directions (the `| head ||` case exits 2, the `| jq ||`
    case exits 0), or you have shipped a false-block machine against
    everyday, healthy shell.
+
+## 36. A self-applied review rule can loop without any hook
+
+- **Symptom:** an agent runs independent review, applies the findings, then
+  automatically launches another fresh reviewer because the fix was
+  substantive. The next reviewer finds a new issue, often outside the original
+  axis, so the agent fixes that too and launches another. Each round is locally
+  justified; the user experiences an expanding task that never returns to the
+  original objective.
+- **Cause:** the process has T and R but no immutable **loop key**, no fixed
+  failure axis, and no cycle budget. “Any substantive edit needs review” makes
+  every remediation mint a fresh trigger. Unrelated findings silently reset the
+  scope, so even a converging review of one artifact becomes an unbounded stream
+  of newly admitted work. There may be no shell hook at all — prose plus the
+  agent's completion drive is enough to create the feedback loop.
+- **Why a termination proof alone is insufficient.** One measured low-stakes,
+  single-reader correction used three full independent-review rounds (~253K
+  tokens). The third round found nothing, so V genuinely reached zero. But the
+  round-2 correction had already been checked against the primary source, and
+  the remaining consequence was a reader noticing a typo. “It terminates” and
+  “the next cycle is worth running” are different claims.
+- **Fix:** write the Loop Contract from SKILL.md rule 7 before round 1. Key it on
+  one immutable target plus one failure axis; predeclare the budget and both
+  exits. For agent-driven review loops, the default is one initial review plus
+  one narrowly scoped re-review after substantive fixes. A new, unrelated
+  finding becomes a backlog item / new task; it does not reset the budget. If
+  the re-review still reproduces a same-axis blocker, stop with the artifact
+  unregistered or unshipped and report `blocked` — do not silently dispatch a
+  third reviewer.
+- **Cost gate:** before any extra cycle, name the concrete safety or business
+  failure caused by stopping now and the new falsifying experiment the cycle
+  will run. “A reviewer found something” and optional polish are not enough.
+- **Honest enforcement boundary:** nothing in Claude Code mechanically enforces
+  a hookless review budget. This remains an agent-executed contract. Its safety
+  comes from the predeclared cap and visible capped exit, not from pretending a
+  reminder is a hard gate.
