@@ -96,6 +96,44 @@ seen. History cleanup does not invalidate the secret.
 - The skill instructions make this explicit: "Live secrets must be rotated
   before history cleanup."
 
+## Lesson 7: Commit Messages Leak Too — Blob-Only Rewrite and Verify Both Missed Them
+
+**What happened:** A cleanup replaced leaked entities in file content across
+history, but the commit messages kept naming the same entities — including
+the squash-merge message on `main` itself. `rewrite_history.py` only ran
+`--replace-text` (blob content), and `verify_cleanup.py` only ran
+`git grep` over commit trees, which also covers blobs only. Both layers
+agreed the repo was clean while the entity sat in `git log` output.
+
+**Why it matters:** Two checks that share a blind spot read as independent
+confirmation. A rewrite is only as complete as its narrowest channel, and
+commit messages are a first-class leak channel — search engines index them.
+
+**Prevention:**
+
+- `rewrite_history.py --message-replacements <file>` runs
+  `git filter-repo --replace-message` in the same pass; the same replacements
+  file usually covers both channels.
+- `verify_cleanup.py` now greps `git log --all --format=%B` in addition to
+  blob content, so a message-only leak fails verification.
+
+## Lesson 8: The Clean-Working-Tree Check Blocks Rewrites on Shared Checkouts
+
+**What happened:** A rewrite had to run while untracked directories owned by
+other active sessions sat in the working tree. `rewrite_history.py` aborts on
+any `git status --short` output, and the foreign files could neither be
+committed (not the rewriter's work) nor moved (active writers).
+
+**Why it matters:** The check protects against losing uncommitted tracked
+changes during the post-rewrite checkout, but untracked files are not touched
+by a ref rewrite or by the final `reset --hard` — blocking on them conflates
+two different risks and can stall an urgent cleanup.
+
+**Prevention:** If the tree is clean except foreign-owned untracked paths,
+run the script's exact steps manually (backup bundle, `git filter-repo`,
+verify) and document the deviation — never delete or stash another session's
+files to satisfy the check.
+
 ## When to Escalate to a Human
 
 Stop and ask the user before proceeding if:

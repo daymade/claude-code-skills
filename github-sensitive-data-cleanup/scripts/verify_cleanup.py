@@ -82,6 +82,29 @@ def check_pattern_in_history(
     return list(matched), None
 
 
+def check_pattern_in_messages(
+    repo_path: Path, pattern: str, is_regex: bool
+) -> tuple[int, str | None]:
+    """Return the count of commit MESSAGES still containing the pattern.
+
+    `git grep <commits>` only searches blob content; a rewrite that covered
+    file content but missed --replace-message would pass blob checks while
+    the entity still named itself in a commit message.
+    """
+    log = subprocess.run(
+        ["git", "-C", str(repo_path), "log", "--all", "--format=%B", "--no-color"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if log.returncode != 0:
+        return 0, f"git log failed: {log.stderr}"
+    if is_regex:
+        hits = re.findall(pattern, log.stdout)
+        return len(hits), None
+    return log.stdout.count(pattern), None
+
+
 def run_gitleaks(repo_path: Path) -> list[dict]:
     gitleaks_bin = shutil.which("gitleaks")
     if not gitleaks_bin:
@@ -166,10 +189,21 @@ def main():
                 {"pattern": item["pattern"], "is_regex": item["is_regex"], "error": error}
             )
             continue
-        if commits:
-            remaining.append(
-                {"pattern": item["pattern"], "is_regex": item["is_regex"], "commits": commits[:10]}
+        msg_hits, msg_error = check_pattern_in_messages(
+            repo_path, item["pattern"], item["is_regex"]
+        )
+        if msg_error:
+            check_errors.append(
+                {"pattern": item["pattern"], "is_regex": item["is_regex"], "error": msg_error}
             )
+            continue
+        if commits or msg_hits:
+            entry = {"pattern": item["pattern"], "is_regex": item["is_regex"]}
+            if commits:
+                entry["commits"] = commits[:10]
+            if msg_hits:
+                entry["commit_message_hits"] = msg_hits
+            remaining.append(entry)
 
     report = {
         "repo": str(repo_path),
