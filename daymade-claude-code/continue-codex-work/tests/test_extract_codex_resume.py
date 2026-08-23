@@ -82,6 +82,21 @@ class SchemaSelectionTests(unittest.TestCase):
         self.assertEqual(data["user_messages"], ["旧请求"])
         self.assertEqual(data["assistant_messages"], ["旧回复"])
 
+    def test_richer_event_stream_wins(self):
+        """0.142.3/0.143.0/0.144.0 shape: commentary exists only in the event
+        stream — picking response_item/message there would silently drop it."""
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "s2b", "cwd": "/tmp", "cli_version": "0.144.0"}},
+            _ev("user_message", message="请求"),
+            _msg("user", "请求", "input_text"),
+            _ev("agent_message", message="旁白一"),
+            _ev("agent_message", message="旁白二"),
+            _ev("agent_message", message="最终回复"),
+            _msg("assistant", "最终回复", "output_text"),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["assistant_messages"], ["旁白一", "旁白二", "最终回复"])
+
     def test_event_stream_fallback_when_no_message_records(self):
         rollout = _write_rollout([
             {"type": "session_meta", "payload": {"id": "s3", "cwd": "/tmp"}},
@@ -129,6 +144,93 @@ class SchemaSelectionTests(unittest.TestCase):
         self.assertEqual(
             data["user_messages"], ["[skill invoked: demo-skill — injected body omitted]"]
         )
+
+
+def _file_change_event(paths, status="completed", stderr=""):
+    return {
+        "type": "event_msg",
+        "payload": {
+            "type": "item_completed",
+            "item": {
+                "type": "FileChange",
+                "id": "exec-x",
+                "changes": {p: {"unified_diff": "…"} for p in paths},
+                "status": status,
+                "stdout": "",
+                "stderr": stderr,
+            },
+        },
+    }
+
+
+class FileChangeTests(unittest.TestCase):
+    """0.147+ records file edits as item_completed/FileChange items, not
+    patch_apply_end (measured 0 vs 1086 in one real 0.147.0 rollout)."""
+
+    def test_file_change_populates_files_edited(self):
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "f1", "cwd": "/tmp"}},
+            _msg("user", "改一下", "input_text"),
+            _file_change_event(["/tmp/a.py", "/tmp/b.py"]),
+            _msg("assistant", "改完了", "output_text"),
+            _ev("task_complete", last_agent_message="改完了"),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["files_touched"], {"/tmp/a.py", "/tmp/b.py"})
+        self.assertEqual(data["errors"], [])
+
+    def test_failed_file_change_feeds_errors(self):
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "f2", "cwd": "/tmp"}},
+            _file_change_event(["/tmp/a.py"], status="failed", stderr="patch failed: conflict"),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["errors"], ["patch failed: conflict"])
+
+
+class EndReasonTests(unittest.TestCase):
+    def test_turn_aborted_is_interrupted(self):
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "e1", "cwd": "/tmp"}},
+            _msg("user", "请求", "input_text"),
+            _ev("turn_aborted"),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["end_reason"], "interrupted")
+
+    def test_commentary_tail_is_in_progress_not_completed(self):
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "e2", "cwd": "/tmp"}},
+            _msg("user", "请求", "input_text"),
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "commentary",
+                    "content": [{"type": "output_text", "text": "我先看一下"}],
+                },
+            },
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["end_reason"], "in_progress")
+
+    def test_final_answer_tail_is_completed(self):
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "e3", "cwd": "/tmp"}},
+            _msg("user", "请求", "input_text"),
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "content": [{"type": "output_text", "text": "完成了"}],
+                },
+            },
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["end_reason"], "completed")
 
 
 class TruncationContractTests(unittest.TestCase):

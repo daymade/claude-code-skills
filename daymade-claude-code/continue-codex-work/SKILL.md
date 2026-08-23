@@ -104,14 +104,14 @@ Discovery goes through `_core.codex.collect_codex` (bundled into `scripts/_core/
 ### Rollout parsing
 
 Codex's rollout schema is not Claude's. The parser reads:
-- **User / assistant turns** from `response_item/message` records (user text is `input_text`, assistant text is `output_text`) — the only turn stream in Codex ≥0.147. The older `event_msg/user_message` / `agent_message` mirrors (≤0.144) are a fallback used only when no message records exist, so a version emitting both is never double-counted. `task_complete.last_agent_message` is a tail safeguard, appended only when the chosen stream lacks the final assistant text. `response_item/agent_message` records are inter-agent traffic (encrypted sub-agent payloads), never main-thread text.
-- **Files edited** from `event_msg/patch_apply_end` — the keys of its `changes` map are the files `apply_patch` touched.
+- **User / assistant turns** from two possible streams, because where turns live drifts by Codex version (measured on ~2,600 rollouts, 0.142.2–0.149.0): the `event_msg/user_message` / `agent_message` mirror stream (the norm through 0.146.x and in the 0.147/0.148 alphas, rare residuals after) and `response_item/message` records (user text is `input_text`, assistant text is `output_text`, decoded locally). The streams do not always mirror — some versions keep per-step commentary only in the event stream — so both are collected and the **richer stream wins** (ties go to the event stream), never double-counting, never silently dropping the bigger half. `task_complete.last_agent_message` is a tail safeguard, appended only when the chosen stream lacks the final assistant text. `response_item/agent_message` records are inter-agent traffic (sub-agent routing messages, plaintext or encrypted), never main-thread text.
+- **Files edited** from `event_msg/patch_apply_end` (≤0.146) and from `event_msg/item_completed` items of type `FileChange` (0.147+, where patch events vanished) — the keys of the `changes` map are the files touched; both sources feed one set.
 - **Tool calls** from `response_item/function_call` and `custom_tool_call`, paired with their `*_output` by `call_id` (an unpaired call means it never returned).
 - **Compaction** from `compacted` records — Codex replaces the compacted window with a `replacement_history` of messages (not a single summary), and re-injects the system preamble; the parser keeps only the user/assistant turns.
 
 ### Session end reason detection
 
-Classified from the tail of the rollout: a trailing `task_complete`/`agent_message` is **completed**; unpaired tool calls are **interrupted**; tools that ran with no closing message are **in progress**; a trailing user message is **abandoned**; three or more tool failures are an **error cascade**.
+Classified from the tail of the rollout: a trailing `task_complete` or `final_answer`-phase assistant message is **completed**; unpaired tool calls or a trailing `turn_aborted` are **interrupted**; tools that ran with no closing message, or a tail stuck at a `commentary`-phase message (cut off mid-turn), are **in progress**; a trailing user message is **abandoned**; three or more tool failures are an **error cascade**.
 
 ### Noise filtering
 

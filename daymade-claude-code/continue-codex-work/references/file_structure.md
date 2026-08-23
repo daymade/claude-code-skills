@@ -1,7 +1,7 @@
 # Codex CLI Session File Structure
 
 Reference for the on-disk format the `extract_codex_resume.py` script parses.
-Verified against real rollouts from Codex CLI `0.142.4`–`0.144.4` (July 2026) and `0.147.0` (August 2026).
+Verified against ~2,600 real rollouts spanning Codex CLI `0.142.2`–`0.149.0` (July–August 2026).
 
 ## Directory layout
 
@@ -20,31 +20,34 @@ The session id is a UUIDv7 embedded in the rollout filename and repeated inside 
 
 ## Rollout JSONL — record schema
 
-Every line is one JSON object with a top-level `timestamp`, `type`, and (usually) `payload`. The `payload.type` further discriminates `event_msg` and `response_item` records. Approximate frequency in a real 1100-line session is shown to indicate what dominates.
+Every line is one JSON object with a top-level `timestamp`, `type`, and (usually) `payload`. The `payload.type` further discriminates `event_msg` and `response_item` records. Reasoning and tool-execution records dominate by volume; the table below lists what the parser reads and what it deliberately ignores.
 
 | `type` | `payload.type` | Carries | Used for |
 |--------|----------------|---------|----------|
 | `session_meta` | — | `id`, `cwd`, `timestamp`, `cli_version`, `model_provider` | Session Info header |
 | `compacted` | — | `message` (often empty), `replacement_history` (list of messages), `window_number` | Compact Summary |
 | `event_msg` | `context_compacted` | just a marker | (the real content is in the `compacted` record) |
-| `event_msg` | `user_message` | `message` (plain string) | **≤0.144 only — removed in 0.147** (fallback turn stream) |
-| `event_msg` | `agent_message` | `message` (plain string) | **≤0.144 only — removed in 0.147** (fallback turn stream) |
-| `event_msg` | `patch_apply_end` | `changes` (map: path -> {content\|unified_diff}), `success`, `stderr` | Files Edited; errors |
+| `event_msg` | `user_message` | `message` (plain string) | turn stream (see version note below) |
+| `event_msg` | `agent_message` | `message` (plain string) | turn stream (see version note below) |
+| `event_msg` | `item_completed` | generic completed-item envelope; `item.type` ∈ `UserMessage` / `AgentMessage` / `Reasoning` / `CommandExecution` / `FileChange` / … | **only `FileChange` is read** (Files Edited, ≥0.147) — the turn mirrors inside are deliberately never read for turns |
+| `event_msg` | `patch_apply_end` | `changes` (map: path -> {content\|unified_diff}), `success`, `stderr` | Files Edited; errors (≤0.146) |
 | `event_msg` | `task_complete` | `last_agent_message`, `duration_ms` | Assistant-text tail safeguard; turn boundary → end reason |
-| `event_msg` | `token_count` | usage counters | ignored (noise) |
-| `response_item` | `message` | `role` (developer/user/assistant), `content` (list) | **the turn stream** — see note below |
-| `response_item` | `agent_message` | `author`, `recipient`, `content` (incl. `encrypted_content`) | inter-agent traffic — **never main-thread text, always skipped** |
+| `event_msg` | `turn_aborted` | abort marker | end reason → interrupted |
+| `event_msg` | `task_started` / `token_count` / `thread_settings_applied` / `thread_goal_updated` | lifecycle markers, usage counters | ignored (noise) |
+| `response_item` | `message` | `role` (developer/user/assistant), `content` (list), `phase` (`commentary`/`final_answer`, assistant only) | **the turn stream** — see note below |
+| `response_item` | `agent_message` | `author`, `recipient`, `content` (plaintext and/or `encrypted_content`) | inter-agent traffic — **never main-thread text, always skipped** |
 | `response_item` | `reasoning` | model thinking | ignored (noise) |
 | `response_item` | `function_call` | `name`, `arguments` (JSON string), `call_id` | Recent Tool Calls |
 | `response_item` | `function_call_output` | `call_id`, `output` (list) | pairs a call; error detection |
 | `response_item` | `custom_tool_call` | `name` (e.g. `exec`), `input`, `call_id`, `status` | Recent Tool Calls |
 | `response_item` | `custom_tool_call_output` | `call_id`, `output` (list) | pairs a call; error detection |
+| `turn_context` / `world_state` / `inter_agent_communication_metadata` | — | turn settings, world snapshots, sub-agent routing metadata | observed; ignored |
 
 ### Message content element types (important)
 
 `response_item/message` `content` is a list of `{type, text}` where `type` is **`input_text`** for user/developer content and **`output_text`** for assistant content. The shared `extract_text` decodes `text`/`input_text` but **not** `output_text`, so the parser joins `output_text` items locally (changing the shared helper would alter every sibling skill that bundles `_core`).
 
-**Version drift, measured on real rollouts:** in `0.142.x` the event stream (`event_msg/user_message` / `agent_message`, plain strings) and `response_item/message` are both written and mirror each other turn-for-turn; in `0.147.0` the event-stream mirrors are gone entirely and `response_item/message` is the only place turns exist. The parser therefore collects both streams and prefers `response_item/message` whenever it is present — a version emitting both is never double-counted, and a post-0.147 rollout is never left with an empty turn list. One more new-schema user-turn shape: an invoked skill arrives as a user message whose whole body is the skill bundle (`<skill>…</name>…`, ~90 KB); the parser renders it as a one-line `[skill invoked: <name> — injected body omitted]` marker.
+**Version drift, measured on ~2,600 real rollouts (0.142.2–0.149.0):** the `event_msg/user_message` / `agent_message` mirror stream is the norm through 0.146.x and in the 0.147/0.148 alphas; stable 0.147.0 drops it for most sessions (measured 30/1050 residual files), with rare residuals into 0.149.0 (8/239). The two streams do NOT always mirror each other: in 0.142.3 / 0.143.0 / 0.144.0 the event stream also carries per-step **commentary** narration that `response_item/message` never has (one measured file: 494 event messages vs 29 message records), while in other files of the same versions the message stream is the richer one. The parser therefore collects both streams and lets the **richer stream win** (ties go to the event stream, the historical display stream) — no version silently loses its bigger half, and dual-stream files are never double-counted. Assistant `message` records carry a `phase` field: a session whose tail is a `commentary` message was cut off mid-turn and is classified **in progress**, not completed. One more user-turn shape: an invoked skill arrives as a user message whose whole body is the skill bundle (`<skill>…</name>…`, measured 2.7–148 KB); the parser renders it as a one-line `[skill invoked: <name> — injected body omitted]` marker.
 
 ## Compaction format
 

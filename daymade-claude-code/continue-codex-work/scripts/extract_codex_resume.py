@@ -162,6 +162,12 @@ def _detect_end_reason(data: dict) -> str:
         return "interrupted"
     if data["last_sig"] == "user_message":
         return "abandoned"
+    if data["last_sig"] == "turn_aborted":
+        return "interrupted"
+    # A trailing commentary message means the turn never finished — the same
+    # shape as tools-ran-without-closing-message.
+    if data["last_sig"] == "agent_commentary":
+        return "in_progress"
     if data["last_sig"] in ("task_complete", "agent_message"):
         return "completed"
     # Check the error cascade before in_progress: a cascade also ends on a
@@ -198,13 +204,20 @@ def _message_text(content: Any, wanted_types: set[str]) -> str:
 def parse_codex_rollout(path: Path) -> dict:
     """Stream a rollout JSONL into a structured resume payload.
 
-    Where the user/assistant turns live depends on the Codex version (verified
-    against real rollouts): 0.142.x emits BOTH `event_msg/user_message` /
-    `agent_message` mirrors AND `response_item/message` records; 0.147.0 emits
-    ONLY the `response_item/message` records. To never double-count we collect
-    both streams separately and prefer `response_item/message` whenever it
-    exists. `response_item/agent_message` records are inter-agent traffic
-    (encrypted sub-agent payloads) and are never main-thread text.
+    Where the user/assistant turns live depends on the Codex version (measured
+    on ~2600 real rollouts, 0.142.2–0.149.0): the `event_msg/user_message` /
+    `agent_message` mirror stream is the norm through 0.146.x and in the
+    0.147/0.148 alphas; stable 0.147.0 drops it for most sessions, with rare
+    residuals into 0.149.0. The streams do NOT always mirror each other — in
+    0.142.3/0.143.0/0.144.0 the event stream also carries per-step commentary
+    that `response_item/message` never has. So both streams are collected and
+    the RICHER one wins (ties go to the event stream, the historical display
+    stream), which never silently drops the bigger half. `task_complete`'s
+    last message is a tail safeguard. `response_item/agent_message` records
+    are inter-agent traffic, never main-thread text. Files edited come from
+    `event_msg/patch_apply_end` (≤0.146) and `event_msg/item_completed`
+    FileChange items (0.147+); both feed the same set, so versions emitting
+    both union harmlessly.
     """
     data: dict[str, Any] = {
         "file_size": path.stat().st_size,
@@ -256,6 +269,23 @@ def parse_codex_rollout(path: Path) -> dict:
                     if stderr:
                         data["errors"].append(stderr[:300])
                 data["last_sig"] = "patch"
+            elif ptype == "item_completed":
+                # ≥0.147 generic item envelope; only FileChange is read here.
+                # (It also mirrors UserMessage/AgentMessage — a third turn
+                # stream we deliberately never read for turns.)
+                item = payload.get("item")
+                if isinstance(item, dict) and item.get("type") == "FileChange":
+                    changes = item.get("changes")
+                    if isinstance(changes, dict):
+                        for filepath in changes:
+                            data["files_touched"].add(filepath)
+                    status = str(item.get("status") or "completed")
+                    stderr = str(item.get("stderr") or "").strip()
+                    if status != "completed" or stderr:
+                        data["errors"].append((stderr or f"patch status={status}")[:300])
+                    data["last_sig"] = "patch"
+            elif ptype == "turn_aborted":
+                data["last_sig"] = "turn_aborted"
             elif ptype == "task_complete":
                 # last_agent_message repeats the turn's final assistant text;
                 # appended at end-of-parse only if the chosen stream lacks it.
@@ -275,7 +305,12 @@ def parse_codex_rollout(path: Path) -> dict:
                     text = _message_text(payload.get("content"), {"output_text", "text"}).strip()
                     if text:
                         data["ri_assistant"].append(text)
-                        data["last_sig"] = "agent_message"
+                        # phase=commentary is mid-turn narration; a session
+                        # whose tail is commentary was cut off mid-turn.
+                        phase = payload.get("phase")
+                        data["last_sig"] = (
+                            "agent_commentary" if phase == "commentary" else "agent_message"
+                        )
             elif ptype in ("function_call", "custom_tool_call"):
                 name = str(payload.get("name") or "?")
                 raw = payload.get("input") if ptype == "custom_tool_call" else payload.get("arguments")
@@ -294,11 +329,16 @@ def parse_codex_rollout(path: Path) -> dict:
                     data["errors"].append(output[:300])
                 data["last_sig"] = "tool_output"
 
-    # Stream selection: response_item/message wins whenever present (it is the
-    # only turn stream in Codex ≥0.147); the event_msg mirrors only exist in
-    # older versions. task_complete's tail message is a safeguard for sessions
-    # whose final assistant text never landed in either stream.
-    if data["ri_user"] or data["ri_assistant"]:
+    # Stream selection: the richer stream wins — in versions where both exist
+    # they usually mirror, but where they diverge (measured: 0.142.3/0.143.0/
+    # 0.144.0 keep per-step commentary only in the event stream) picking by
+    # count is the only rule that never silently drops the bigger half. Ties
+    # go to the event stream, the historical display stream. task_complete's
+    # tail message is a safeguard for sessions whose final assistant text
+    # never landed in either stream.
+    ev_turns = len(data["user_messages"]) + len(data["assistant_messages"])
+    ri_turns = len(data["ri_user"]) + len(data["ri_assistant"])
+    if ri_turns > ev_turns:
         data["user_messages"] = data["ri_user"]
         data["assistant_messages"] = data["ri_assistant"]
     if data["task_tail"] and (
