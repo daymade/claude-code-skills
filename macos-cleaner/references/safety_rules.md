@@ -80,7 +80,7 @@ Before deleting ANY Docker object, perform independent cross-verification. This 
 - For database volumes (name contains mysql, postgres, redis, mongo, mariadb): MANDATORY content inspection with a temporary container
 - Even if Docker reports a volume as "dangling", the data inside may be valuable
 
-See **SKILL.md Step 4** for the complete verification commands and database volume inspection workflow.
+See `references/docker_analysis.md` for the complete verification commands and database-volume inspection workflow.
 
 ### Rule 8: Use Trash When Possible
 

@@ -1,6 +1,6 @@
 # Docker Deep Analysis
 
-Detailed Docker analysis workflow referenced from `SKILL.md` Step 2. Use this when development-environment cleanup involves Docker images, containers, volumes, or build cache.
+Detailed Docker analysis workflow referenced from `SKILL.md`. Use this when development-environment cleanup involves Docker images, containers, volumes, or build cache.
 
 ## Step 2A: Docker Deep Analysis
 

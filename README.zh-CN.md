@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.88.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.89.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -1206,7 +1206,7 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 
 ### 26. **macos-cleaner** - 智能 macOS 磁盘空间恢复
 
-**在 macOS 上恢复磁盘空间最安全的方式。** 通过智能分类和交互式清理，分析系统缓存、应用残留、大文件和开发环境。
+**在 macOS 上恢复磁盘空间最安全的方式。** 已知具体嫌疑源时先做定向只读取证（包括 Apple 内容缓存），只有来源未知时才扩大到系统缓存、应用残留、大文件和开发环境。
 
 **为什么 macos-cleaner 与众不同：**
 - **安全优先理念**：在明确用户确认之前绝不删除。每项操作都包含风险评估（🟢 安全 / 🟡 谨慎 / 🔴 保留）。
@@ -1225,12 +1225,14 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 **使用场景：**
 - 你的 Mac 磁盘空间不足（使用率 >80%）
 - 你是开发者，Docker/npm/pip/Homebrew 缓存堆积如山
+- Apple 内容缓存提示 `Caching needs more space`、处于 unlimited，或 `ActualCacheUsed` 异常偏高
 - 你想了解占用空间的内容，而不仅仅是盲目删除
 - 你需要清理已卸载应用程序的残留
 - 你更喜欢理解而非自动化
 
 **主要功能：**
 - **智能缓存分析**：按安全级别对系统缓存、应用缓存、日志进行分类
+- **Apple 内容缓存**：区分逻辑 `CacheUsed` 与物理 `ActualCacheUsed`，核验 peer 和受保护服务，并使用 Apple 支持的限额、停用与清空入口
 - **应用残留检测**：查找已卸载应用程序的孤立数据，并提供可信度评分
 - **大文件发现**：智能分类（视频、归档、数据库、磁盘镜像、构建产物）
 - **开发环境清理**：Docker（镜像、容器、卷、构建缓存）、Homebrew、npm、pip、旧 Git 仓库
@@ -1245,7 +1247,7 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 - ✅ **以开发者为中心**：我们清理 Docker，而不仅仅是浏览器缓存。我们理解 `.git` 目录、`node_modules` 和构建产物。
 - ✅ **内置安全检查**：保护系统文件、用户数据、凭据、活动数据库或正在使用的文件不被删除。
 - ✅ **教育性**：了解什么可以安全删除及原因，以便你能自信地维护你的 Mac。
-- ❌ **不是一键解决方案**：我们不会自动删除。如果你想要"立即清理所有内容"，请使用其他工具。我们面向想要控制的用户。
+- ❌ **不是一键解决方案**：在你确认一份有明确范围的命令计划前不会改变任何状态；如果你要求 Claude 执行，也只会运行已确认的动作并做前后验证。
 
 **示例用法：**
 ```bash
@@ -1256,7 +1258,7 @@ claude plugin install macos-cleaner@daymade-skills
 "我的 Mac 快没空间了，帮我分析一下是什么在占用存储空间"
 
 # Claude 将会：
-# 1. 运行全面的磁盘分析
+# 1. 已知嫌疑源时先定向只读检查；只有来源未知时才做广泛分析
 # 2. 展示带有安全级别的分类结果
 # 3. 解释每个类别（缓存、残留、大文件、开发工具）
 # 4. 推荐清理方法
@@ -1293,6 +1295,7 @@ claude plugin install macos-cleaner@daymade-skills
 *即将推出*
 
 📚 **文档**：参见 [macos-cleaner/references/](./macos-cleaner/references/) 了解：
+- `apple_content_caching.md` - Apple 内容缓存的定向诊断与受支持修复
 - `cleanup_targets.md` - 每个清理目标的详细说明
 - `mole_integration.md` - 如何将脚本与 Mole 可视化工具结合使用
 - `safety_rules.md` - 全面的安全指南以及永远不应删除的内容
@@ -3376,6 +3379,26 @@ A 股行业投研工作流：全板块成分股 Top N 涨幅计算、公告窗�
 操作 Kimi 客户端，用已安装插件核对这组市场数据
 ```
 
+### 97. **tibo-reset-codex** - ChatGPT/Codex 额度重置速查
+
+> **安装**：`claude plugin install tibo-reset-codex@daymade-skills`
+
+查询 ChatGPT/Codex 额度重置时间，解读 OpenAI Codex 负责人 Tibo 的重置公告。
+不要凭记忆回答“什么时候恢复额度”，应通过权威追踪通道现查并换算北京时间。
+
+**核心能力：**
+- Tibo Radar JSON API 与 codexlimitwatch 双源核对
+- 识别公告中的混合时间写法和 PST/PDT 夏令时差异
+- 太平洋时间到北京时间的当场实测换算
+- 区分 tracker 标签、官方公告与用户账户实际到账状态
+
+**使用示例：**
+```text
+ChatGPT 什么时候重置额度
+banked reset 到了吗
+Tibo 最新的重置公告换算成北京时间是几点
+```
+
 ---
 
 ## 🎬 交互式演示画廊
@@ -3474,7 +3497,7 @@ rollout 重建简报，不会把完整旧会话重新灌入上下文。
 使用 **twitter-reader** 无需 JavaScript 渲染或身份验证即可获取推文内容。非常适合记录社交媒体讨论、归档话题、分析推文内容或从 Twitter/X 收集参考资料。与 **doc-to-markdown** 结合可将获取的内容转换为其他格式，或与 **repomix-safe-mixer** 结合安全地打包研究集合。
 
 ### macOS 系统维护与磁盘空间恢复
-使用 **macos-cleaner** 以安全优先的方式智能分析和恢复 macOS 上的磁盘空间。与盲目删除的一键清理工具不同，macos-cleaner 解释每个文件是什么、按风险级别分类（🟢/🟡/🔴），并在任何删除前需要明确确认。非常适合处理 Docker/Homebrew/npm/pip 缓存膨胀的开发者、希望了解存储空间消耗的用户，或任何重视透明度而非自动化的人。结合基于脚本的精度和可选的 Mole 可视化工具集成以实现混合工作流。
+使用 **macos-cleaner** 以安全优先的方式诊断和恢复 macOS 磁盘空间。它会把 Apple 内容缓存等已知嫌疑源先路由到定向只读取证，区分逻辑量与物理占盘，说明影响和恢复方式，并在任何状态变更前要求明确确认；同时覆盖 Docker/OrbStack、Homebrew/npm/pip、应用残留、大文件和可选的 Mole 探索。
 
 ### 技能发现与管理
 使用 **skills-search** 从 CCPM 注册表中查找、安装和管理 Claude Code 技能。非常适合为特定任务发现新技能、为常见工作流安装技能包，以及保持技能集合的有序管理。
@@ -3557,7 +3580,7 @@ rollout 重建简报，不会把完整旧会话重新灌入上下文。
 - **promptfoo-evaluation**：参见 `promptfoo-evaluation/references/promptfoo_api.md` 了解评测模式
 - **iOS-APP-developer**：参见 `iOS-APP-developer/references/xcodegen-full.md` 了解 XcodeGen 选项与 project.yml 细节
 - **twitter-reader**：参见 `twitter-reader/SKILL.md` 了解 API 密钥设置和 URL 格式支持
-- **macos-cleaner**：参见 `macos-cleaner/references/cleanup_targets.md` 了解详细清理目标说明、`macos-cleaner/references/mole_integration.md` 了解 Mole 可视化工具集成、`macos-cleaner/references/safety_rules.md` 了解全面安全指南
+- **macos-cleaner**：参见 `macos-cleaner/references/apple_content_caching.md` 了解 Apple 内容缓存、`macos-cleaner/references/cleanup_targets.md` 了解清理目标语义、`macos-cleaner/references/mole_integration.md` 了解 Mole、`macos-cleaner/references/safety_rules.md` 了解安全指南
 - **skill-reviewer**：参见 `daymade-skill/skill-reviewer/references/evaluation_checklist.md` 了解完整评估标准、`daymade-skill/skill-reviewer/references/pr_template.md` 了解 PR 模板
 - **github-contributor**：参见 `github-contributor/references/pr_checklist.md` 了解 PR 质量清单、`github-contributor/references/project_evaluation.md` 了解项目评估标准、`github-contributor/references/communication_templates.md` 了解 issue/PR 沟通模板
 - **i18n-expert**：参见 `i18n-expert/SKILL.md` 了解完整的 i18n 设置工作流程、键架构指导和审计程序

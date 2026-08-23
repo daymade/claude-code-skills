@@ -553,10 +553,10 @@
     },
     {
       "name": "macos-cleaner",
-      "description": "Intelligent macOS disk space analysis and cleanup with safety-first philosophy. Use when users report disk space issues, need to clean their Mac, or want to understand storage consumption. Analyzes system caches, application remnants, large files, and development environments (Docker, Homebrew, npm, pip) with risk categorization (Safe/Caution/Keep) and requires explicit user confirmation before any deletions. Includes Mole visual tool integration for hybrid workflow",
+      "description": "Diagnoses and safely reclaims macOS disk space. Use for low-storage Macs, Apple Content Caching or AssetCacheManagerUtil growth, caches, logs, application remnants, large files, Docker or OrbStack, Homebrew, npm, pip, and Xcode. Routes known suspects to targeted read-only diagnosis before broad scans, distinguishes logical from physical usage, requires an impact-and-recovery plan plus explicit confirmation before state changes, and verifies disk space and co-resident services afterward.",
       "source": "./macos-cleaner",
       "strict": false,
-      "version": "1.3.0",
+      "version": "1.4.0",
       "category": "utilities",
       "keywords": [
         "macos",

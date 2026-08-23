@@ -237,14 +237,14 @@ docker volume rm project-mysql-data project-redis-data
 
 **What it is**: Intermediate build layers
 
-**Safety**: 🟢 **Safe to delete** (rebuilds just take longer)
+**Safety**: 🟡 **Rebuildable, but category-wide deletion still needs an explicit decision**
 
-**Note**: `docker builder prune` is the ONE exception to the prune prohibition -- build cache contains only intermediate layers, never user data.
-
-**Cleanup**:
+Inspect the allocation without deleting it:
 ```bash
-docker builder prune -a
+docker builder du
 ```
+
+This skill does not use `docker builder prune` or `docker buildx prune`. They are category-wide prune commands and cannot express which cache records the user approved. Report the build-cache total and rebuild cost; if it is the chosen target, obtain a separately approved, tool-specific plan instead of treating it as an exception to the prune prohibition.
 
 ### node_modules
 
