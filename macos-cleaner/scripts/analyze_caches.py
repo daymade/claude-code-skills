@@ -205,7 +205,7 @@ def main():
     print("   1. Review the list above")
     print("   2. Review rebuild/redownload cost for each exact cache target")
     print("   3. For 🟡 items, verify the application is not running")
-    print("   4. Use safe_delete.py for interactive cleanup")
+    print("   4. Return exact candidates to the main skill's impact and confirmation gate")
 
     return 0
 

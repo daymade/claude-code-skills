@@ -10,7 +10,15 @@ Checks:
 - Old .git directories in archived projects
 
 Usage:
-    python3 analyze_dev_env.py
+    uv run scripts/analyze_dev_env.py
+
+Read scope:
+- Docker daemon metadata and package-manager cache roots
+- Existing ~/Projects, ~/workspace, ~/dev, ~/src, and ~/code trees, searched
+  up to depth 3 for .git directories
+
+Run only after that complete fixed scope is approved. For a narrower task,
+use the dedicated commands/reference instead of this aggregate helper.
 """
 
 import os

@@ -107,24 +107,26 @@ List every object rather than reporting category totals:
 ```markdown
 ### Images
 
-| Image ID | Repository:tag | Physical/reclaimable size | Referenced by running containers | Referenced by stopped containers | Decision |
-|---|---|---:|---|---|---|
-| <id> | <repo:tag> | <size> | <names/none> | <names/none> | <preserve/confirm exact removal> |
+| Image ID | Repository:tag | Engine size evidence | Host physical release estimate | Referenced by running containers | Referenced by stopped containers | Decision |
+|---|---|---|---|---|---|---|
+| <id> | <repo:tag> | <SIZE / SHARED / UNIQUE from `docker system df -v`> | <unknown or defensible upper bound> | <names/none> | <names/none> | <preserve/confirm exact removal> |
 
 ### Containers
 
-| Name | Image | Status | Writable size | Restartable state | Decision |
-|---|---|---|---:|---|---|
-| <name> | <image> | <status> | <size> | <what would be lost> | <preserve/confirm> |
+| Name | Image | Status | Engine writable-layer size | Host physical release estimate | Restartable state | Decision |
+|---|---|---|---|---|---|---|
+| <name> | <image> | <status> | <size> | <unknown or upper bound> | <what would be lost> | <preserve/confirm> |
 
 ### Volumes
 
-| Volume | Physical size | Mounted by | Inspected contents | Database/user-data risk | Decision |
-|---|---:|---|---|---|---|
-| <name> | <size> | <all running/stopped containers> | <bounded inspection> | <risk> | <preserve/confirm exact ID> |
+| Volume | Engine volume size | Host physical release estimate | Mounted by | Inspected contents | Database/user-data risk | Decision |
+|---|---|---|---|---|---|---|
+| <name> | <size> | <unknown or upper bound> | <all running/stopped containers> | <bounded inspection or incomplete> | <risk> | <preserve/confirm exact ID> |
 
 No prune-family command is part of the plan.
 ```
+
+For OrbStack, add **OrbStack Settings → Reclaim disk space** as a separate, explicitly approved manual plan item when host APFS recovery is required. Engine-object deletion and sparse-image compaction have different effects and postconditions; never promise host `df` recovery from Docker's object-size tables alone.
 
 ## Phase-4 result
 

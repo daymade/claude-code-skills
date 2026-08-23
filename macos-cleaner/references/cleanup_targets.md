@@ -24,10 +24,7 @@ Detailed explanations of cleanup targets, their safety levels, and impact.
 
 **Size**: Typically 10-100 GB depending on usage
 
-Inventory exact application-owned subdirectories first and prefer the application's supported cache-management command when one exists. If none exists, verify the owning application is stopped or the directory is otherwise inactive. After the user approves the named directory and rebuild/redownload impact, use the guarded helper from the skill directory:
-```bash
-uv run scripts/safe_delete.py "<exact-cache-directory>"
-```
+Inventory exact application-owned subdirectories first and prefer the application's supported cache-management command when one exists. If none exists, verify the owning application is stopped or the directory is otherwise inactive. After the user approves the named directory and rebuild/redownload impact, use the recoverable Finder Trash command from the main skill. Do not route application state through the legacy permanent-deletion helper.
 
 Do not pass `~/Library/Caches/*` or the whole cache root. Do not remove an exact cache directory while its owning application or service is using it. The application may store active state beside disposable cache files.
 
@@ -99,10 +96,7 @@ pip3 cache purge
 
 **Typical size**: 1-20 GB
 
-After confirming no active investigation needs the logs, delete exact named files/directories through the guarded helper:
-```bash
-uv run scripts/safe_delete.py "<exact-log-path>"
-```
+After confirming no active investigation needs the logs, move exact named files/directories through the recoverable Finder Trash path in the main skill. Do not remove the whole log root.
 
 ### /var/log (System Logs)
 
@@ -161,6 +155,36 @@ uv run scripts/safe_delete.py "<exact-log-path>"
 - Troubleshooting a misbehaving app (as last resort)
 
 ## Development Environment
+
+### High-value developer caches: preserve by default
+
+These were explicit decision points in the original skill and remain reachable for any named-cache request. A cache can be rebuildable and still be valuable. Measure the exact live path and ask whether its rebuild/redownload cost is acceptable before proposing removal.
+
+| Target | Value retained | Real deletion impact | Default |
+|---|---|---|---|
+| Xcode DerivedData | Compiled products and indexes for active projects | The next full build can take materially longer; prior field examples were 10–30 minutes | Keep unless the user names inactive projects or accepts the rebuild |
+| npm `_cacache` | Downloaded package content | `npm install` redownloads packages; constrained networks can turn this into a long reinstall | Keep; do not confuse it with `_npx` |
+| uv cache | Downloaded/built Python packages | Environments may need to fetch or rebuild dependencies again | Keep unless the user accepts dependency restoration cost |
+| Playwright browser cache | Browser binaries used by automation | Browsers must be downloaded again; this can be several GiB | Keep when tests or automation use Playwright |
+| iOS DeviceSupport | Symbols/support files for attached iOS versions | Xcode/device debugging may need to download support again | Keep for iOS versions still in use |
+| Hugging Face cache | Model weights and datasets | Large models may take hours to redownload and may be unavailable offline | Keep unless exact artifacts are obsolete |
+| ModelScope cache | Model weights and datasets, often chosen for China-accessible delivery | Same redownload/offline cost as other model stores | Keep unless exact artifacts are obsolete |
+| JetBrains caches | IDE indexes and caches | The IDE must re-index; prior field examples were 5–10 minutes | Keep for active projects |
+| Stopped Docker containers | Writable container state and restartable instances | Removing them can lose state and prevents `docker start` reuse | Inspect every container; never classify by stopped status alone |
+
+The historical time/size examples above are impact illustrations, not current measurements. Use live allocation and the user's actual network/project activity in the plan.
+
+### Narrow npm `_npx` candidate
+
+`_npx` stores temporary packages fetched for `npx` executions. It is narrower than npm's content-addressed `_cacache`; deleting it means future `npx` commands may download those packages again.
+
+Resolve the current npm cache root first:
+
+```bash
+npm config get cache
+```
+
+Then measure the exact returned `<npm-cache-root>/_npx` path. If no `npx` process is using it and the user approves the redownload cost, move that exact directory to Trash using the main skill's Finder command. Permanent deletion through the legacy helper requires separate irreversible approval. Never replace this narrow target with the whole npm cache.
 
 ### Docker
 
@@ -221,9 +245,9 @@ docker volume ls
 # Check which container uses each volume
 docker ps -a --filter "volume=<VOLUME_NAME>" --format "{{.Names}}\t{{.Status}}"
 
-# CRITICAL: For database volumes (mysql, postgres, redis in name), inspect contents
-docker run --rm -v <VOLUME_NAME>:/data alpine ls -la /data
-docker run --rm -v <VOLUME_NAME>:/data alpine du -sh /data/*
+# Database/anonymous-volume content inspection is mandatory before deletion,
+# but it creates a temporary container. Use the separately authorized,
+# no-pull/no-network/read-only procedure in references/docker_analysis.md.
 ```
 
 **Cleanup** (only after per-volume confirmation, database volumes require content inspection):
@@ -255,17 +279,14 @@ Build-cache deletion is outside this skill's execution scope. Do not advertise t
 
 **Impact**: Need to run `npm install` to restore
 
-**Finding large node_modules**:
+**Finding large node_modules inside an exact approved project root**:
 ```bash
-find ~ -name "node_modules" -type d -prune -print 2>/dev/null | while read dir; do
+find "<approved-project-root>" -name "node_modules" -type d -prune -print 2>/dev/null | while read dir; do
   du -sh "$dir"
 done | sort -hr
 ```
 
-**Cleanup**:
-```bash
-uv run scripts/safe_delete.py "/path/to/approved-project/node_modules"
-```
+**Cleanup**: after confirming the project is reproducible and the exact directory is approved, use the main skill's Finder Trash path. Permanent deletion needs separate irreversible approval.
 
 ### Python Virtual Environments
 
@@ -277,9 +298,9 @@ uv run scripts/safe_delete.py "/path/to/approved-project/node_modules"
 
 **Impact**: Need to recreate virtualenv and reinstall packages
 
-**Finding venvs**:
+**Finding venvs inside an exact approved project root**:
 ```bash
-find ~ -type d -name "venv" -o -name ".venv" 2>/dev/null
+find "<approved-project-root>" -type d \( -name "venv" -o -name ".venv" \) 2>/dev/null
 ```
 
 ### Optional duplicate files
@@ -424,11 +445,14 @@ When in doubt, **DON'T DELETE**.
 
 **Use Trash when possible**:
 ```bash
-# Move to trash (recoverable)
-osascript -e 'tell app "Finder" to move POSIX file "/path/to/file" to trash'
+# Move exact target to Trash (recoverable)
+/usr/bin/osascript \
+  -e 'on run argv' \
+  -e 'tell application "Finder" to delete (POSIX file (item 1 of argv))' \
+  -e 'end run' -- "/exact/approved/path"
 ```
 
-**Guarded permanent deletion after explicit confirmation**:
+**Legacy permanent deletion for an exact non-user-data target after separate irreversible confirmation**:
 ```bash
 uv run scripts/safe_delete.py "/exact/approved/path"
 ```

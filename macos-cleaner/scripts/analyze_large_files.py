@@ -3,11 +3,11 @@
 Find large files on macOS and categorize them.
 
 Usage:
-    python3 analyze_large_files.py [--threshold SIZE] [--path PATH] [--limit N]
+    uv run scripts/analyze_large_files.py --path PATH [--threshold SIZE] [--limit N]
 
 Options:
     --threshold    Minimum file size in MB (default: 100)
-    --path         Path to search (default: ~)
+    --path         Exact user-approved path to search (required)
     --limit        Maximum number of results (default: 50)
 """
 
@@ -158,8 +158,8 @@ def main():
     )
     parser.add_argument(
         '--path',
-        default=os.path.expanduser('~'),
-        help='Path to search (default: ~)'
+        required=True,
+        help='Exact user-approved path to search (required)'
     )
     parser.add_argument(
         '--limit',
@@ -235,7 +235,7 @@ def main():
     print("   1. Review the list and identify files you no longer need")
     print("   2. For videos/archives: consider moving to external storage")
     print("   3. For databases/VMs: verify they're not in use")
-    print("   4. Use safe_delete.py for interactive cleanup")
+    print("   4. Return exact candidates to the main skill's impact and confirmation gate")
 
     return 0
 

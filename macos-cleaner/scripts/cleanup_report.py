@@ -45,7 +45,8 @@ def get_disk_usage(volume=DEFAULT_VOLUME):
         result = subprocess.run(
             ['/bin/df', '-k', volume],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=10,
         )
 
         if result.returncode == 0:
@@ -64,7 +65,7 @@ def get_disk_usage(volume=DEFAULT_VOLUME):
                     'available': available_kb * 1024,
                     'percent': percent,
                     'volume': volume,
-                    'timestamp': datetime.now().isoformat()
+                    'timestamp': datetime.now().astimezone().isoformat()
                 }
     except (OSError, subprocess.SubprocessError, ValueError, IndexError):
         pass
@@ -73,21 +74,23 @@ def get_disk_usage(volume=DEFAULT_VOLUME):
 
 
 def save_snapshot(name, volume=DEFAULT_VOLUME):
-    """Save disk usage snapshot to file."""
+    """Save one measured disk snapshot and return that exact reading."""
     snapshot_dir = Path.home() / '.macos-cleaner'
-    snapshot_dir.mkdir(exist_ok=True)
-
-    snapshot_file = snapshot_dir / f'{name}.json'
-
     usage = get_disk_usage(volume)
-    if usage:
+    if not usage:
+        print("❌ Failed to get disk usage")
+        return None
+
+    try:
+        snapshot_dir.mkdir(exist_ok=True)
+        snapshot_file = snapshot_dir / f'{name}.json'
         with snapshot_file.open('w') as f:
             json.dump(usage, f, indent=2)
         print(f"✅ Snapshot saved: {snapshot_file}")
-        return True
-    else:
-        print("❌ Failed to get disk usage")
-        return False
+        return usage
+    except OSError as error:
+        print(f"❌ Failed to save snapshot: {error}")
+        return None
 
 
 def load_snapshot(name):
@@ -126,6 +129,10 @@ def generate_report(before, after):
     # Time
     before_time = datetime.fromisoformat(before['timestamp'])
     after_time = datetime.fromisoformat(after['timestamp'])
+    if before_time.utcoffset() is None or after_time.utcoffset() is None:
+        raise ValueError('Snapshot timestamps must include explicit UTC offsets')
+    if after_time < before_time:
+        raise ValueError('After snapshot predates before snapshot; recapture both')
     duration = after_time - before_time
 
     print(f"\nCleanup Duration: {duration}")
@@ -222,30 +229,30 @@ def main():
     args = parser.parse_args()
 
     if args.snapshot == 'before':
-        # Save before snapshot
         print("📸 Capturing disk usage before cleanup...")
-        if save_snapshot('before', args.volume):
-            usage = get_disk_usage(args.volume)
-            print(f"\nCurrent Usage: {format_size(usage['used'])} ({usage['percent']}%)")
-            print(f"Available:     {format_size(usage['available'])}")
-            print("\n💡 Run cleanup operations, then:")
-            print(
-                "   uv run scripts/cleanup_report.py "
-                f"--volume '{args.volume}' --snapshot after --compare"
-            )
+        usage = save_snapshot('before', args.volume)
+        if not usage:
+            return 1
+        print(f"\nCurrent Usage: {format_size(usage['used'])} ({usage['percent']}%)")
+        print(f"Available:     {format_size(usage['available'])}")
+        print(f"Timestamp:     {usage['timestamp']}")
+        print("\n💡 Run the approved cleanup operations, then:")
+        print(
+            "   uv run scripts/cleanup_report.py "
+            f"--volume '{args.volume}' --snapshot after --compare"
+        )
         return 0
 
     elif args.snapshot == 'after':
         # Save after snapshot
         print("📸 Capturing disk usage after cleanup...")
-        if not save_snapshot('after', args.volume):
+        after = save_snapshot('after', args.volume)
+        if not after:
             return 1
 
         if args.compare:
             # Load before snapshot and compare
             before = load_snapshot('before')
-            after = load_snapshot('after')
-
             if before and after:
                 try:
                     generate_report(before, after)
@@ -256,9 +263,8 @@ def main():
                 print("❌ Cannot compare: missing snapshots")
                 return 1
         else:
-            usage = get_disk_usage(args.volume)
-            print(f"\nCurrent Usage: {format_size(usage['used'])} ({usage['percent']}%)")
-            print(f"Available:     {format_size(usage['available'])}")
+            print(f"\nCurrent Usage: {format_size(after['used'])} ({after['percent']}%)")
+            print(f"Available:     {format_size(after['available'])}")
 
         return 0
 

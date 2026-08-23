@@ -25,7 +25,7 @@ Choose the narrowest path that can answer the request:
 | Apple Content Caching, `AssetCacheManagerUtil`, `CacheUsed`, `ActualCacheUsed`, iCloud cache, or “Caching needs more space” | Read `references/apple_content_caching.md` completely before probing or proposing commands |
 | Docker, OrbStack, images, containers, or volumes | Read `references/docker_analysis.md`; inspect every object and never use prune-family commands |
 | Docker build cache | Measure with `docker builder du`; this skill reports it but does not delete it because Docker exposes category-wide prune controls rather than per-record intent |
-| A named cache, directory, application, or service is already the suspect | Inspect that target first; do not start a home-directory or whole-disk scan |
+| A named cache, directory, application, or service is already the suspect | Inspect that target first and read the matching semantics in `references/cleanup_targets.md`; do not start a home-directory or whole-disk scan |
 | The source is genuinely unknown | Use the general analysis workflow below; Mole is optional, not the universal first step |
 
 User-provided scope exclusions override every generic scan suggestion. Do not inspect personal directories, credentials, databases, application state, or unrelated services when the user excludes them.
@@ -38,7 +38,7 @@ User-provided scope exclusions override every generic scan suggestion. Do not in
 4. **Require explicit approval.** If the user supplies an exact confirmation phrase, require that phrase. Otherwise ask for unmistakable approval of the listed commands and targets. Approval for one plan does not authorize a fallback or a wider cleanup.
 5. **Use precise supported controls.** Prefer an application's supported cache-management command or an exact object ID. If no supported control exists, an exact application-owned cache directory may be removed only after verifying its owner, confirming the application is stopped or the directory is otherwise inactive, explaining rebuild/redownload impact, and receiving approval. Never target a broad cache root or active application state.
 6. **Never use Docker prune-family commands.** This includes image, container, volume, system, builder, and buildx prune. Category-wide deletion cannot express per-object user intent.
-7. **Avoid broad destructive shell forms.** Do not recommend or execute broad `rm -rf` or glob deletion. For ordinary files that the user approves, prefer Trash or `scripts/safe_delete.py`, which applies path guards and interactive confirmation.
+7. **Avoid broad destructive shell forms.** Do not recommend or execute broad `rm -rf` or glob deletion. For exact approved ordinary files, prefer Finder Trash. The bundled legacy helper permanently deletes and has only the limited guards documented below; never treat it as equivalent to Trash.
 8. **Preserve valuable state.** Never target user documents, credentials, SSH material, active databases, application configuration, or running-service state merely to increase the reported savings. Read `references/safety_rules.md` before any file deletion.
 9. **Execution follows the user's authorization.** If the user asks only for analysis or wants to run commands personally, hand off the commands. If the user asks the agent to fix the machine and explicitly confirms the scoped plan, execute the exact approved commands and verify them. Unattended recurring deletion logic needs separate approval before it is written or enabled.
 10. **Fail fast.** A non-zero command, a mismatched postcondition, an unexpected target, or a changed dependency stops the cleanup. Report the partial state; do not improvise a fallback.
@@ -48,6 +48,7 @@ User-provided scope exclusions override every generic scan suggestion. Do not in
 Use this state machine for every cleanup:
 
 1. **Observe — read-only.** Capture identity, disk baseline, the suspected subsystem's status and configuration, physical allocation, and critical-service health.
+1b. **Authorize stateful inspection when unavoidable.** If deeper evidence requires creating a temporary container, pulling an image, mounting a volume, or writing a snapshot, first finish the metadata-only observation, list the exact inspection commands and their side effects, and obtain separate approval. Inspection approval is not cleanup approval.
 2. **Plan — no mutation.** Explain findings, commands, impact, recovery, expected release, and success criteria. Stop at the confirmation gate.
 3. **Execute — approved scope only.** Re-read live state immediately before acting, then run each approved command separately and check its exit status and postcondition.
 4. **Verify — independent readback.** Measure disk space and subsystem state again, recheck protected services, and observe long enough to detect immediate refill.
@@ -71,6 +72,8 @@ At minimum, capture:
 
 Use `df -k` for calculations and `df -h` for the human-readable report. Treat an extension, label, or old report as a hint until the live command confirms it.
 
+Establish the success target before an unknown-source scan. Copy a user-supplied free-space or capacity target exactly. If the user supplied none, report the current values and ask for a target in GiB, capacity percentage, or both; do not invent one. A named-suspect diagnosis may continue without a cleanup target, but the ordered unknown-source scan cannot claim a stop condition until the target is explicit.
+
 Keep this first phase read-only. Do not run `scripts/cleanup_report.py` yet: it creates a local state directory and snapshot file. Preserve the command output in the report instead. On a remote target, always run the direct `df` commands on that host; the local helper must not measure the controller Mac by mistake.
 
 ### Follow the named suspect before broad scans
@@ -90,9 +93,9 @@ Run the smallest ordered sequence that can identify enough physical space to mee
 | Order / signal | Read-only action | Stop or continue |
 |---|---|---|
 | 1. Always | Capture identity and `df -k/-h`; inventory user exclusions | Stop on target mismatch |
-| 2. Cache/log pressure | `uv run scripts/analyze_caches.py --user-only` | Stop when measured candidates can meet the target |
-| 3. Developer tools are present or named | `uv run scripts/analyze_dev_env.py` | Route Docker/OrbStack findings to their dedicated reference |
-| 4. Uninstalled-app residue is plausible | `uv run scripts/find_app_remnants.py` | Treat every result as a candidate, never proof of abandonment |
+| 2. Cache/log pressure, and `~/Library/Caches` plus `~/Library/Logs` are approved read scopes | `uv run scripts/analyze_caches.py --user-only` | Stop when measured candidates can meet the target |
+| 3. Developer tools are present and the script's fixed scope is approved | `uv run scripts/analyze_dev_env.py` reads Docker/package managers plus existing `~/Projects`, `~/workspace`, `~/dev`, `~/src`, and `~/code` roots | Route Docker/OrbStack findings to their dedicated reference; skip this helper when any fixed root is out of scope |
+| 4. Uninstalled-app residue is plausible and its fixed roots are approved | `uv run scripts/find_app_remnants.py` reads `/Applications`, `~/Applications`, and four documented `~/Library` application-state roots | Treat every result as a candidate, never proof of abandonment; skip when that scope is not approved |
 | 5. A content-bearing path is explicitly approved | `uv run scripts/analyze_large_files.py --threshold 100MB --path "<approved-path>"` | Do not substitute `~`, Downloads, Documents, or the data-volume root when no path was approved |
 | 6. Still unknown after bounded checks, and the user explicitly approves Mole's fixed broad scan roots | Read `references/mole_integration.md` and use `mo analyze` through a TTY | Mole cannot accept an arbitrary path scope; skip it when approval is narrower than its documented roots |
 
@@ -148,13 +151,22 @@ This writes under `~/.macos-cleaner`, so list it in the plan. It is optional and
 
 Run one state-changing command at a time. Read the result before sending the next command. After each command, run the postcondition that can distinguish success from partial success.
 
-For ordinary file targets, invoke the guarded helper from the skill directory after the user confirms the exact paths:
+For an exact ordinary file that is not user data, application state, a database, or a protected path, prefer a recoverable Finder Trash move after the user confirms the exact path:
+
+```bash
+/usr/bin/osascript \
+  -e 'on run argv' \
+  -e 'tell application "Finder" to delete (POSIX file (item 1 of argv))' \
+  -e 'end run' -- "<exact-path>"
+```
+
+Moving to Trash usually releases no physical space until Trash is emptied; state that in the plan. `scripts/safe_delete.py` is a legacy permanent-deletion helper with an interactive prompt and a limited system/credential denylist. It does not move to Trash, check every user-data root, detect open files, or independently prove reclaimed bytes. Use it only when the exact non-user-data target and irreversible deletion were explicitly approved:
 
 ```bash
 uv run scripts/safe_delete.py <exact-path> [<exact-path> ...]
 ```
 
-Do not use this helper for application-managed caches such as Apple Content Caching; use that subsystem's supported management command instead.
+Do not use this helper for user documents, application-managed caches such as Apple Content Caching, databases, credentials, or any target whose role is uncertain.
 
 ## Phase 4: verify and observe
 
@@ -185,10 +197,10 @@ Load only the branch relevant to the current task:
 - `references/report_templates.md` — long-form general and Docker report templates.
 - `references/safety_rules.md` — blocked paths, confirmation, recovery, and file-deletion safety checks.
 - `scripts/analyze_caches.py` — bounded cache inventory.
-- `scripts/find_app_remnants.py` — application-remnant candidates.
+- `scripts/find_app_remnants.py` — application-remnant candidates; reads its fixed Applications and `~/Library` roots, so require that scope first.
 - `scripts/analyze_large_files.py` — large-file discovery inside an approved path.
-- `scripts/analyze_dev_env.py` — Docker and package-manager inventory.
-- `scripts/safe_delete.py` — guarded interactive deletion for exact ordinary-file targets.
+- `scripts/analyze_dev_env.py` — Docker/package-manager inventory plus fixed common-project-root `.git` sizing; require that full read scope first.
+- `scripts/safe_delete.py` — legacy guarded permanent deletion for exact approved non-user-data targets; it is not a Trash or recovery tool.
 - `scripts/cleanup_report.py` — local-target before/after reporting for `/System/Volumes/Data` by default, with an explicit `--volume` override.
 
 ## Do not use this skill when
