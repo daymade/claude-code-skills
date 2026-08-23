@@ -82,14 +82,14 @@ docker run --rm -v /var/lib/docker:/x:ro alpine sh -c "df -h /x; du -d 1 -h /x"
 
 Before deleting ANY Docker object, perform independent verification.
 
-**On a machine with active development, the object list is live data.** `docker system df` and `docker images` can report different totals minutes apart if a build is running in the background (a CI job, another terminal's `docker compose build`, an IDE task). If time passed between the dry-run analysis and user confirmation, re-run the listing query fresh before executing — don't reuse the dry-run's cached list. A deletion plan built from a stale snapshot can delete an image that started being used since, or skip one that became safe to delete since. Re-pulling costs one command.
+**On a machine with active development, the object list is live data.** `docker system df` and `docker images` can report different totals minutes apart if a build is running in the background (a CI job, another terminal's `docker compose build`, an IDE task). If time passed between the dry-run analysis and user confirmation, re-run the listing query fresh before executing — don't reuse the dry-run's cached list. A deletion plan built from a stale snapshot can delete an image that started being used since, or skip one that became eligible for a new user decision. Re-pulling costs one command.
 
 **For Images**:
 ```bash
 # Verify no container (running or stopped) references the image
 docker ps -a --filter "ancestor=<IMAGE_ID>" --format "{{.Names}}\t{{.Status}}"
 
-# If empty → safe to delete with: docker rmi <IMAGE_ID>
+# If empty → eligible for an explicit user decision; exact command: docker rmi <IMAGE_ID>
 ```
 
 **For Volumes**:
@@ -98,7 +98,7 @@ docker ps -a --filter "ancestor=<IMAGE_ID>" --format "{{.Names}}\t{{.Status}}"
 docker ps -a --filter "volume=<VOLUME_NAME>" --format "{{.Names}}"
 
 # If empty → check if database volume (see below)
-# If not database → safe to delete with: docker volume rm <VOLUME_NAME>
+# If not database → still inspect ownership/value, then ask about: docker volume rm <VOLUME_NAME>
 ```
 
 **Database Volume Red Flag Rule**: If volume name contains mysql, postgres, redis, mongo, or mariadb, MANDATORY content inspection:
@@ -133,9 +133,9 @@ Everything above cleans up an existing backlog. When a Docker resource type keep
 1. Confirm the pattern: does the tag naming look programmatic (commit hash, build ID, timestamp)? That's the signature of an automated build, not manual `docker build` runs.
 2. Find what produces it: grep the project for the tag-naming pattern to locate the script, Makefile target, or CI config that builds that repository.
 3. Check whether cleanup logic already exists nearby but was never wired in — a `down`/`stop` command that deliberately preserves images (e.g. to keep the last-known-good build) is correct by design; it just means retention belongs at the *build* step instead.
-4. **Confirm this repository is only consumed locally** before proposing an automated fix. Step 2 tells you where images are *produced*, not where they're *consumed* — if the pipeline pushes to a registry that other machines or a CI/CD cluster pull from, a local `docker ps -a` check is blind to those remote consumers, and an image judged "safe to delete" locally may still be in active use elsewhere. This approach fits locally-built, locally-consumed repositories (a dev-loop `local-uat`-style target is the common case); a registry-backed multi-host pipeline needs registry-side retention, a different mechanism than what follows.
+4. **Confirm this repository is only consumed locally** before proposing an automated fix. The production-side analysis above tells you where images are *produced*, not where they're *consumed* — if the pipeline pushes to a registry that other machines or a CI/CD cluster pull from, a local `docker ps -a` check is blind to those remote consumers, and an image judged eligible locally may still be in active use elsewhere. This approach fits locally-built, locally-consumed repositories (a dev-loop `local-uat`-style target is the common case); a registry-backed multi-host pipeline needs registry-side retention, a different mechanism than what follows.
 
-**Writing the fix needs the same user confirmation as every other deletion in this document — the difference is *when* you ask.** Every other deletion here is confirmed per-item, at the moment it happens, with a human present. Retention logic wired into a build script runs unattended *every future time the build succeeds*, so the confirmation has to move earlier: **get the user's explicit sign-off on adding this automated deletion logic before writing or committing it**, the same way you'd never `rm -rf` a directory without asking first. This isn't satisfied by avoiding prune-family commands — Core Principle 1 ("no shortcuts, no workarounds") and Principle 9 ("do NOT auto-execute cleanup") are both about *unattended* deletion, not which Docker subcommand runs. Recommend a dry-run/log-only mode for a few runs before enabling real deletion.
+**Writing the fix needs separate user confirmation — the difference is *when* you ask.** One-time deletion is confirmed per exact object while the user is present; retention logic wired into a build script runs unattended every future time the build succeeds. Get the user's explicit sign-off on that recurring behavior before writing or committing it. This isn't satisfied by avoiding prune-family commands: unattended automation is a different scope from an approved in-session cleanup. Recommend a dry-run/log-only mode for a few runs before enabling real deletion.
 
 **Once approved, this is still precision deletion — just automated and scoped to one repository:**
 - Add retention logic that runs **after** the new build succeeds and any health check passes — never before. A failed new build shouldn't cost the last-known-good image.

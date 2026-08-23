@@ -90,8 +90,8 @@ Prefer moving to Trash over permanent deletion:
 # Recoverable
 osascript -e 'tell app "Finder" to move POSIX file "/path/to/file" to trash'
 
-# Permanent (use only when confirmed safe)
-rm -rf /path/to/file
+# Guarded permanent deletion (exact approved target only)
+uv run scripts/safe_delete.py "/exact/approved/path"
 ```
 
 ## Never Delete These
@@ -171,21 +171,11 @@ Proceed without backup? [y/N]:
 
 **Paths**: `/Library/Caches`, `/var/log`
 
-**Action**: Require manual sudo command (don't execute directly)
-
-**Example**:
-```
-⚠️ This operation requires administrator privileges.
-
-Please run this command manually:
-  sudo rm -rf /Library/Caches/*
-
-⚠️ You will be asked for your password.
-```
+**Action**: Identify the owning subsystem and use its supported cache-management command. Do not delete the whole category.
 
 **Reason**:
 - Requires elevated privileges
-- User should be aware of system-wide impact
+- The approved plan must state the system-wide impact and exact target
 - Audit trail (user types password)
 
 ### Docker Objects (Images, Containers, Volumes)

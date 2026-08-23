@@ -15,32 +15,31 @@ Detailed explanations of cleanup targets, their safety levels, and impact.
 - Thumbnail caches
 - Font caches
 
-**Safety**: 🟢 **Safe to delete**
+**Safety**: 🟡 **Rebuildable, not automatically disposable**
 
 **Impact**:
 - Apps may be slower on first launch after deletion
 - Websites may load slower on first visit (need to re-download assets)
-- No data loss (caches are regenerated)
+- Local cache copies are regenerated, but redownload time, bandwidth, authentication, and offline availability may matter
 
 **Size**: Typically 10-100 GB depending on usage
 
-**Cleanup command**:
+Inventory exact application-owned subdirectories first. After the user approves named targets, use the guarded helper from the skill directory:
 ```bash
-rm -rf ~/Library/Caches/*
+uv run scripts/safe_delete.py "<exact-cache-directory>"
 ```
+
+Do not pass `~/Library/Caches/*` or the whole cache root. The application may store active state beside disposable cache files.
 
 ### /Library/Caches
 
 **What it is**: System-level cache storage (shared across all users).
 
-**Safety**: 🟢 **Safe to delete** (requires sudo)
+**Safety**: 🟡 **System-managed; inspect and use the owning subsystem's supported control**
 
-**Impact**: Same as user caches, but system-wide
+**Impact**: System-wide redownload/rebuild cost; some entries are protected or active.
 
-**Cleanup command**:
-```bash
-sudo rm -rf /Library/Caches/*
-```
+Do not delete `/Library/Caches/*` as a category. Identify the owning subsystem, confirm the exact target, and prefer its supported reset or cache-management command.
 
 ### Package Manager Caches
 
@@ -50,11 +49,11 @@ sudo rm -rf /Library/Caches/*
 
 **What it is**: Downloaded package installers and build artifacts
 
-**Safety**: 🟢 **Safe to delete**
+**Safety**: 🟡 **Rebuildable**
 
 **Impact**: Will need to re-download packages on next install/upgrade
 
-**Cleanup**:
+**Cleanup after the exact Homebrew impact is approved**:
 ```bash
 brew cleanup -s          # Safe cleanup (removes old versions)
 brew cleanup --prune=all # Aggressive cleanup (removes all cached downloads)
@@ -64,11 +63,11 @@ brew cleanup --prune=all # Aggressive cleanup (removes all cached downloads)
 
 **Location**: `~/.npm` or configured cache directory
 
-**Safety**: 🟢 **Safe to delete**
+**Safety**: 🟡 **Rebuildable**
 
 **Impact**: Packages will be re-downloaded when needed
 
-**Cleanup**:
+**Cleanup after the redownload impact is approved**:
 ```bash
 npm cache clean --force
 ```
@@ -77,11 +76,11 @@ npm cache clean --force
 
 **Location**: `~/Library/Caches/pip` (macOS)
 
-**Safety**: 🟢 **Safe to delete**
+**Safety**: 🟡 **Rebuildable**
 
 **Impact**: Packages will be re-downloaded when needed
 
-**Cleanup**:
+**Cleanup after the redownload impact is approved**:
 ```bash
 pip cache purge
 # or for pip3
@@ -94,22 +93,22 @@ pip3 cache purge
 
 **What it is**: Application log files
 
-**Safety**: 🟢 **Safe to delete**
+**Safety**: 🟡 **Diagnostic history; inspect before deletion**
 
 **Impact**: Loss of diagnostic information (only matters if debugging)
 
 **Typical size**: 1-20 GB
 
-**Cleanup**:
+After confirming no active investigation needs the logs, delete exact named files/directories through the guarded helper:
 ```bash
-rm -rf ~/Library/Logs/*
+uv run scripts/safe_delete.py "<exact-log-path>"
 ```
 
 ### /var/log (System Logs)
 
 **What it is**: System and service log files
 
-**Safety**: 🟢 **Safe to delete old logs** (requires sudo)
+**Safety**: 🟡 **System-managed diagnostic history**
 
 **Impact**: Loss of system diagnostic history
 
@@ -130,7 +129,7 @@ rm -rf ~/Library/Logs/*
 - Plugins and extensions
 - Save games
 
-**When safe to delete**:
+**When it may become a removal candidate**:
 - Application is confirmed uninstalled
 - Folder belongs to trial software no longer used
 - Folder is for outdated version of app (check first!)
@@ -250,7 +249,7 @@ This skill does not use `docker builder prune` or `docker buildx prune`. They ar
 
 **What it is**: Installed npm packages for Node.js projects
 
-**Safety**: 🟢 **Safe to delete** (can be regenerated)
+**Safety**: 🟡 **Rebuildable**
 
 **Impact**: Need to run `npm install` to restore
 
@@ -263,8 +262,7 @@ done | sort -hr
 
 **Cleanup**:
 ```bash
-# For old projects
-rm -rf /path/to/old-project/node_modules
+uv run scripts/safe_delete.py "/path/to/approved-project/node_modules"
 ```
 
 ### Python Virtual Environments
@@ -273,7 +271,7 @@ rm -rf /path/to/old-project/node_modules
 
 **Location**: `venv/`, `.venv/`, `env/` in project directories
 
-**Safety**: 🟢 **Safe to delete** (can be recreated)
+**Safety**: 🟡 **Rebuildable; confirm the environment can be recreated**
 
 **Impact**: Need to recreate virtualenv and reinstall packages
 
@@ -288,19 +286,17 @@ find ~ -type d -name "venv" -o -name ".venv" 2>/dev/null
 
 **Safety**: 🟡 **Depends on use case**
 
-**When SAFE to delete**:
-- Project is archived and you have remote backup
-- You only need final code, not history
+**When it may be expendable**:
+- The project is archived
+- Every commit and branch is proven present in a reachable remote or verified bundle
+- The user explicitly wants a plain source folder without local history
 
 **When to KEEP**:
 - Active development
 - No remote backup exists
 - You might need the history
 
-**Cleanup** (convert to plain folder, lose history):
-```bash
-rm -rf /path/to/old-project/.git
-```
+Prefer archiving or removing the whole obsolete project through a separate, explicitly approved plan. Do not recommend deleting only `.git`: it silently converts a repository into an unversioned folder and destroys local-only history, reflogs, branches, and recovery data.
 
 ## Large Files
 
@@ -322,11 +318,11 @@ rm -rf /path/to/old-project/.git
 
 **What it is**: Mountable disk images, often installers
 
-**Safety**: 🟢 **Safe to delete after installation**
+**Safety**: 🟡 **User decision; the image may still be needed for offline reinstall or recovery**
 
 **Typical location**: ~/Downloads
 
-**Cleanup**: Delete .dmg files for already-installed apps
+**Cleanup**: After the user confirms the installer is no longer needed, move the exact file to Trash
 
 ### Archives (.zip, .tar.gz)
 
@@ -355,7 +351,7 @@ ls -lh ~/Library/Application\ Support/MobileSync/Backup/
 
 **What it is**: Local Time Machine backups
 
-**Safety**: 🟢 **Safe - macOS manages automatically**
+**Safety**: 🟡 **System-managed; normally leave it to macOS**
 
 **macOS automatically deletes** these when disk space is low
 
@@ -418,10 +414,9 @@ When in doubt, **DON'T DELETE**.
 osascript -e 'tell app "Finder" to move POSIX file "/path/to/file" to trash'
 ```
 
-**Permanent deletion**:
+**Guarded permanent deletion after explicit confirmation**:
 ```bash
-# Cannot be recovered without Time Machine
-rm -rf /path/to/file
+uv run scripts/safe_delete.py "/exact/approved/path"
 ```
 
 ### Time Machine

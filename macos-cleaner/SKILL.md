@@ -69,6 +69,14 @@ At minimum, capture:
 
 Use `df -k` for calculations and `df -h` for the human-readable report. Treat an extension, label, or old report as a hint until the live command confirms it.
 
+For a local target, persist the exact Data-volume baseline with:
+
+```bash
+uv run scripts/cleanup_report.py --snapshot before
+```
+
+For a remote target, keep using the direct `df` commands on that host; the local helper must not measure the controller Mac by mistake.
+
 ### Follow the named suspect before broad scans
 
 - Query the subsystem's own status and settings.
@@ -152,6 +160,12 @@ Verification must cover all clauses of the approved plan:
 
 Never report “fixed” when only the command exit code is known. A successful cleanup requires both the intended state and the protected invariants.
 
+For a local target whose before snapshot was captured by the helper, generate the comparison with:
+
+```bash
+uv run scripts/cleanup_report.py --snapshot after --compare
+```
+
 ## Resources
 
 Load only the branch relevant to the current task:
@@ -167,7 +181,7 @@ Load only the branch relevant to the current task:
 - `scripts/analyze_large_files.py` — large-file discovery inside an approved path.
 - `scripts/analyze_dev_env.py` — Docker and package-manager inventory.
 - `scripts/safe_delete.py` — guarded interactive deletion for exact ordinary-file targets.
-- `scripts/cleanup_report.py` — before/after cleanup reporting.
+- `scripts/cleanup_report.py` — local-target before/after reporting for `/System/Volumes/Data` by default, with an explicit `--volume` override.
 
 ## Do not use this skill when
 

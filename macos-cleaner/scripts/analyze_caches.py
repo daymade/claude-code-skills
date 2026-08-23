@@ -91,7 +91,7 @@ def categorize_safety(name):
     """
     name_lower = name.lower()
 
-    # Known safe to delete
+    # Rebuildable caches; still require an impact decision before deletion
     safe_patterns = [
         'chrome', 'firefox', 'safari', 'edge',  # Browsers
         'spotify', 'slack', 'discord',           # Communication
@@ -163,7 +163,10 @@ def main():
         log_size = get_dir_size(user_log_path)
         if log_size >= min_size_bytes:
             print(f"\n📝 User Logs: {user_log_path}")
-            print(f"   Size: {format_size(log_size)} 🟢 Safe to delete")
+            print(
+                f"   Size: {format_size(log_size)} "
+                "🟡 Diagnostic history — review exact targets"
+            )
             total_user += log_size
 
     # System caches (if not --user-only)
@@ -200,7 +203,7 @@ def main():
 
     print("\n💡 Next Steps:")
     print("   1. Review the list above")
-    print("   2. Identify caches marked 🟢 (safe to delete)")
+    print("   2. Review rebuild/redownload cost for each exact cache target")
     print("   3. For 🟡 items, verify the application is not running")
     print("   4. Use safe_delete.py for interactive cleanup")
 

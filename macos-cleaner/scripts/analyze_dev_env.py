@@ -251,9 +251,9 @@ def check_old_git_repos():
             print(f"   - {project_name:<30} {format_size(size)}")
 
         print(f"\n   Total: {format_size(total_size)}")
-        print(f"\n💡 If these are archived projects, consider:")
-        print(f"   1. Delete .git history: rm -rf <project>/.git")
-        print(f"   2. Or compress entire project: tar -czf archive.tar.gz <project>")
+        print(f"\n💡 If these are archived projects, preserve history:")
+        print(f"   1. Verify every local commit/branch exists in a remote or bundle")
+        print(f"   2. Archive the whole project instead of deleting only .git")
     else:
         print("   No large .git directories found in common project locations")
 
@@ -297,8 +297,8 @@ def main():
 
     print("\n💡 Next Steps:")
     print("   1. Review Docker volumes before cleanup (may contain data)")
-    print("   2. Package manager caches are safe to delete")
-    print("   3. For .git directories, ensure project is truly archived")
+    print("   2. Package manager caches are rebuildable; confirm redownload cost")
+    print("   3. Preserve .git history; archive the whole obsolete project")
 
     return 0
 

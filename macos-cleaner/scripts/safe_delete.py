@@ -3,8 +3,8 @@
 Interactive safe file/directory deletion with confirmation.
 
 Usage:
-    python3 safe_delete.py <path1> [path2] [path3] ...
-    python3 safe_delete.py --batch <file_with_paths>
+    uv run scripts/safe_delete.py <path1> [path2] [path3] ...
+    uv run scripts/safe_delete.py --batch <file_with_paths>
 
 Options:
     --batch FILE    Read paths from a file (one per line)

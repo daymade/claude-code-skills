@@ -298,9 +298,8 @@ def main():
         print("\n\n💡 Next Steps:")
         print("   1. Double-check each item in /Applications and ~/Applications")
         print("   2. Search Spotlight for the application name")
-        print("   3. If truly uninstalled, safe to delete with:")
-        print("      rm -rf '<path>'")
-        print("   4. Or use safe_delete.py for interactive cleanup")
+        print("   3. If truly uninstalled, use guarded interactive cleanup:")
+        print("      uv run scripts/safe_delete.py '<exact-path>'")
 
     return 0
 
