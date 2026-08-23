@@ -1195,8 +1195,8 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 - **Smart Cache Analysis**: Categorizes system caches, app caches, logs by safety level
 - **Apple Content Caching**: Separates logical `CacheUsed` from physical `ActualCacheUsed`, verifies peers and protected services, and uses Apple's supported limit/deactivate/flush controls
 - **Application Remnant Detection**: Finds orphaned data from uninstalled apps with confidence scoring
-- **Large File Discovery**: Intelligent categorization (videos, archives, databases, disk images, build artifacts)
-- **Development Environment Cleanup**: Docker (images, containers, volumes, build cache), Homebrew, npm, pip, old Git repos
+- **Large & Duplicate File Discovery**: Intelligent categorization plus optional read-only `fdupes` scans inside exact approved paths
+- **Development Environment Cleanup**: Docker images/containers/volumes, OrbStack, Homebrew, npm, and pip; Docker build cache is measured but prune-based deletion is out of scope
 - **Interactive Safe Deletion**: Batch confirmation, selective deletion, undo-friendly (uses Trash when possible)
 - **Before/After Reports**: Track space recovery with detailed breakdown
 - **Mole Integration**: Seamless workflow with visual cleanup tool for GUI preferences

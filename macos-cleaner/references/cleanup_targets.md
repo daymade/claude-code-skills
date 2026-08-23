@@ -245,6 +245,8 @@ docker builder du
 
 This skill does not use `docker builder prune` or `docker buildx prune`. They are category-wide prune commands and cannot express which cache records the user approved. Report the build-cache total and rebuild cost; if it is the chosen target, obtain a separately approved, tool-specific plan instead of treating it as an exception to the prune prohibition.
 
+Build-cache deletion is outside this skill's execution scope. Do not advertise the build-cache number as reclaimable space this skill can automatically deliver.
+
 ### node_modules
 
 **What it is**: Installed npm packages for Node.js projects
@@ -279,6 +281,18 @@ uv run scripts/safe_delete.py "/path/to/approved-project/node_modules"
 ```bash
 find ~ -type d -name "venv" -o -name ".venv" 2>/dev/null
 ```
+
+### Optional duplicate files
+
+Duplicate detection reads file metadata and contents and can be expensive. Run it only when the user explicitly approves each search root. Never default to the whole home directory, Downloads, Documents, or the data volume.
+
+If `fdupes` is already installed:
+
+```bash
+fdupes -r "<approved-path>" [<approved-path> ...]
+```
+
+This is discovery only. Do not use `fdupes -d`, `--delete`, or any automatic-selection option. Present each duplicate set with paths and sizes; the user decides whether the files are semantically interchangeable. If `fdupes` is missing, report that fact—do not install it inside a read-only phase.
 
 ### Git Repositories (.git directories)
 

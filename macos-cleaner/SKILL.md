@@ -4,7 +4,8 @@ description: >-
   Diagnoses and safely reclaims macOS disk space. Use when a Mac is low on
   storage, reports “Caching needs more space,” shows large Apple Content
   Caching or AssetCacheManagerUtil usage, or needs analysis of caches, logs,
-  application remnants, large files, Docker or OrbStack, Homebrew, npm, pip,
+  application remnants, large or duplicate files, Docker or OrbStack,
+  Homebrew, npm, pip,
   Xcode, and other developer storage. Routes known suspects to targeted
   read-only diagnosis before broad scans, distinguishes logical from physical
   usage, requires an impact-and-recovery plan plus explicit confirmation before
@@ -22,7 +23,8 @@ Choose the narrowest path that can answer the request:
 | User signal | Route |
 |---|---|
 | Apple Content Caching, `AssetCacheManagerUtil`, `CacheUsed`, `ActualCacheUsed`, iCloud cache, or “Caching needs more space” | Read `references/apple_content_caching.md` completely before probing or proposing commands |
-| Docker, OrbStack, images, containers, volumes, or build cache | Read `references/docker_analysis.md`; inspect every object and never use prune-family commands |
+| Docker, OrbStack, images, containers, or volumes | Read `references/docker_analysis.md`; inspect every object and never use prune-family commands |
+| Docker build cache | Measure with `docker builder du`; this skill reports it but does not delete it because Docker exposes category-wide prune controls rather than per-record intent |
 | A named cache, directory, application, or service is already the suspect | Inspect that target first; do not start a home-directory or whole-disk scan |
 | The source is genuinely unknown | Use the general analysis workflow below; Mole is optional, not the universal first step |
 
@@ -89,22 +91,24 @@ If the known suspect alone can meet the user's free-space target, do not scan un
 
 ### General analysis when the source is unknown
 
-Use built-in, bounded checks first. When a broad interactive view is genuinely useful, read `references/mole_integration.md` and use `mo analyze` through a TTY. Do not install or upgrade Mole during a read-only phase unless the user separately authorizes that change.
+Run the smallest ordered sequence that can identify enough physical space to meet the target. Stop as soon as one measured source can do that; do not keep scanning to make the report look comprehensive.
 
-Use the bundled analyzers only inside the user's allowed scope:
+| Order / signal | Read-only action | Stop or continue |
+|---|---|---|
+| 1. Always | Capture identity and `df -k/-h`; inventory user exclusions | Stop on target mismatch |
+| 2. Cache/log pressure | `uv run scripts/analyze_caches.py --user-only` | Stop when measured candidates can meet the target |
+| 3. Developer tools are present or named | `uv run scripts/analyze_dev_env.py` | Route Docker/OrbStack findings to their dedicated reference |
+| 4. Uninstalled-app residue is plausible | `uv run scripts/find_app_remnants.py` | Treat every result as a candidate, never proof of abandonment |
+| 5. A content-bearing path is explicitly approved | `uv run scripts/analyze_large_files.py --threshold 100MB --path "<approved-path>"` | Do not substitute `~`, Downloads, Documents, or the data-volume root when no path was approved |
+| 6. Still unknown after bounded checks | Read `references/mole_integration.md` and use `mo analyze` through a TTY | Keep the scan inside the approved directory scope |
 
-```bash
-uv run scripts/analyze_caches.py --user-only
-uv run scripts/find_app_remnants.py
-uv run scripts/analyze_large_files.py --threshold 100MB --path <approved-path>
-uv run scripts/analyze_dev_env.py
-```
+An `<approved-path>` is an exact path the user named or explicitly accepted after its scope was described. If none exists, skip large-file and duplicate-content scanning, state that this evidence branch was not authorized, and continue with non-content-bearing evidence. Do not install or upgrade Mole during a read-only phase unless the user separately authorizes that change.
 
-These are analysis tools, not deletion authorization. Read `references/cleanup_targets.md` for target semantics and network/redownload trade-offs.
+For an explicitly approved duplicate-file investigation, read the “Optional duplicate files” section in `references/cleanup_targets.md`. It is read-only and never uses an automatic-delete option.
 
 ### Docker and OrbStack
 
-Read `references/docker_analysis.md` before reporting Docker savings. List every image, container, and volume individually; inspect references and database-like contents; use actual sparse-file allocation rather than apparent size. A resource reported as dangling is not proof that its data is worthless.
+Read `references/docker_analysis.md` before reporting Docker savings. List every image, container, and volume individually; inspect references and database-like contents; use actual sparse-file allocation rather than apparent size. A resource reported as dangling is not proof that its data is worthless. Build-cache measurement is supported, but build-cache deletion is deliberately out of scope because the available Docker controls are prune-family operations.
 
 ## Phase 2: report and stop at the gate
 

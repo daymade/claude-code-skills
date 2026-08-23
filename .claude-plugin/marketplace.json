@@ -553,7 +553,7 @@
     },
     {
       "name": "macos-cleaner",
-      "description": "Diagnoses and safely reclaims macOS disk space. Use for low-storage Macs, Apple Content Caching or AssetCacheManagerUtil growth, caches, logs, application remnants, large files, Docker or OrbStack, Homebrew, npm, pip, and Xcode. Routes known suspects to targeted read-only diagnosis before broad scans, distinguishes logical from physical usage, requires an impact-and-recovery plan plus explicit confirmation before state changes, and verifies disk space and co-resident services afterward.",
+      "description": "Diagnoses and safely reclaims macOS disk space. Use for low-storage Macs, Apple Content Caching or AssetCacheManagerUtil growth, caches, logs, application remnants, large or duplicate files, Docker or OrbStack, Homebrew, npm, pip, and Xcode. Routes known suspects to targeted read-only diagnosis before broad scans, distinguishes logical from physical usage, requires an impact-and-recovery plan plus explicit confirmation before state changes, and verifies disk space and co-resident services afterward. Docker build cache is analysis-only because prune-family deletion is intentionally excluded.",
       "source": "./macos-cleaner",
       "strict": false,
       "version": "1.4.0",
