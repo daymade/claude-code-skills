@@ -106,7 +106,7 @@ Available commands from `mo --help`:
 | **Use When** | Understanding what consumes space | Ready to see cleanup options |
 | **Interface** | Interactive TUI with tree navigation | Static list output |
 | **Navigation** | Arrow keys to drill into directories | No navigation |
-| **Detail Level** | Full directory breakdown | Only cleanup-eligible items |
+| **Detail Level** | Breakdown within Mole's fixed broad scan roots | Only cleanup-eligible items |
 | **Recommended Order** | Use in the read-only evidence phase | Optional planning input after findings are presented |
 
 ### When to Use Each
@@ -114,8 +114,10 @@ Available commands from `mo --help`:
 **Use `mo analyze` when:**
 - User asks "What's taking up space?" or "Where is my disk space going?"
 - Need to understand storage consumption patterns
-- Want to explore specific directories interactively
+- The user has approved Mole's fixed broad roots: home, application data, applications, system library, and volumes
 - Investigating unexpected disk usage
+
+Do not use `mo analyze` when the user approved only one narrow path. Selecting a branch in the TUI changes what is displayed, not what Mole scanned. Use `analyze_large_files.py --path "<approved-path>"` for an exact approved path, or stop and report that the broader Mole evidence branch was not authorized.
 
 **Use `mo clean --dry-run` when:**
 - Already know what's consuming space (after `mo analyze`)
@@ -126,7 +128,7 @@ Available commands from `mo --help`:
 ### Workflow Recommendation
 
 ```
-Step 1: mo analyze (understand the problem)
+Step 1: After broad scan authorization, mo analyze (understand the problem)
     ↓
 Step 2: Present findings to user
     ↓
@@ -136,8 +138,10 @@ Step 4: Present exact categories, impact, recovery, and success criteria
     ↓
 Step 5: Stop and wait for explicit confirmation
     ↓
-Step 6: User drives mo clean interactively, or the agent executes only an exact approved plan
+Step 6: If the user chooses Mole, the user drives mo clean interactively and selects only the approved categories
 ```
+
+`mo clean` does not encode category choices in the command line. Therefore the agent must not automate it as execution of an exact approved plan. It is a separate user-driven interactive handoff. Agent-executed cleanup must use commands or exact object IDs that encode the approved targets.
 
 ### Common Mistake
 
@@ -224,7 +228,8 @@ tmux capture-pane -t mole -p
 1. Show the `--dry-run` preview results to user
 2. Explain each category's impact, recovery, and expected physical release
 3. Wait for user to confirm the exact categories
-4. Default to the user driving the interactive TUI; automate it only when the user explicitly asks and the approved plan fully specifies the choices
+4. If the user chooses Mole, hand off the interactive TUI and instruct them to select only those categories; do not automate the selections
+5. Verify disk and protected-service postconditions after the user reports that the interactive run finished
 
 ## Safety Principles
 
@@ -261,19 +266,21 @@ mo clean --dry-run
 - Report progress to user regularly
 - Wait for complete results before making decisions
 
-### 3. User Executes Cleanup
+### 3. User-Driven Mole Cleanup Is a Separate Handoff
 
-After analysis and confirmation:
+After analysis and category confirmation, the agent may provide this user-driven option. Do not represent it as agent execution of the exact-command plan, because the command itself does not encode the confirmed choices:
 ```
-Present findings to user, then provide command for them to run:
+Present the named approved categories and their impact, then provide:
 
-"Based on the analysis, you can reclaim approximately 30GB.
-To proceed, please run this command in your terminal:
+"If you want to use Mole's interactive cleaner, run:
 
     mo clean
 
-You will be prompted to confirm each category interactively."
+Select only these approved categories: <exact category names>.
+Do not select any additional category. Tell me when the run finishes so I can verify disk space and protected services."
 ```
+
+If the user asked the agent to perform the cleanup, choose exact target-addressable commands from the relevant reference instead of `mo clean`.
 
 ## Mole Command Details
 
@@ -326,13 +333,13 @@ mo purge --paths
 
 ### Recommended Workflow
 
-1. **Route first**: Use Mole only when the source is unknown and broad exploration is in scope
+1. **Route first**: Use Mole only when the source is unknown and the user approved Mole's documented fixed broad scan roots
 2. **Version inventory**: Check what is installed; do not install or upgrade inside read-only diagnosis
 3. **TTY setup**: Create tmux session for interactive commands
 4. **Observe**: Run `mo analyze`; report progress
 5. **Plan**: Present findings; optionally add `mo clean --dry-run` as scoped planning evidence
 6. **Confirm**: List exact choices and wait for explicit approval
-7. **Execute and verify**: Run only approved choices, then measure disk and protected services independently
+7. **Execute and verify**: The user drives `mo clean` and selects only approved categories, or the agent uses exact target-addressable commands outside Mole; then measure disk and protected services independently
 
 ### Example Session
 
@@ -420,7 +427,7 @@ brew upgrade tw93/tap/mole
 5. `mo --help` is the **ONLY safe help command**
 6. Run `mo analyze` before any optional cleanup preview
 7. **Be patient** - scans take time
-8. Stop at a scoped confirmation gate before `mo clean`
+8. Stop at a scoped confirmation gate before handing off user-driven `mo clean`; never automate its interactive category selections
 
 ## Multi-Layer Deep Exploration with Mole
 

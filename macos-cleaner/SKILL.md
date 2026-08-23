@@ -36,7 +36,7 @@ User-provided scope exclusions override every generic scan suggestion. Do not in
 2. **Confirm the exact target.** On a remote Mac, record the current host identity before any other work. Never infer the machine from an IP, old PID, directory name, or prior report.
 3. **Plan before asking.** Before any state change, list every command, what it changes, expected physical space reclaimed, impact, recoverability, and postconditions. Then stop if the user requested a plan-only phase.
 4. **Require explicit approval.** If the user supplies an exact confirmation phrase, require that phrase. Otherwise ask for unmistakable approval of the listed commands and targets. Approval for one plan does not authorize a fallback or a wider cleanup.
-5. **Use precise supported controls.** Prefer an application's supported management command or an exact object ID. Never delete an application's internal cache files behind its back.
+5. **Use precise supported controls.** Prefer an application's supported cache-management command or an exact object ID. If no supported control exists, an exact application-owned cache directory may be removed only after verifying its owner, confirming the application is stopped or the directory is otherwise inactive, explaining rebuild/redownload impact, and receiving approval. Never target a broad cache root or active application state.
 6. **Never use Docker prune-family commands.** This includes image, container, volume, system, builder, and buildx prune. Category-wide deletion cannot express per-object user intent.
 7. **Avoid broad destructive shell forms.** Do not recommend or execute broad `rm -rf` or glob deletion. For ordinary files that the user approves, prefer Trash or `scripts/safe_delete.py`, which applies path guards and interactive confirmation.
 8. **Preserve valuable state.** Never target user documents, credentials, SSH material, active databases, application configuration, or running-service state merely to increase the reported savings. Read `references/safety_rules.md` before any file deletion.
@@ -71,13 +71,7 @@ At minimum, capture:
 
 Use `df -k` for calculations and `df -h` for the human-readable report. Treat an extension, label, or old report as a hint until the live command confirms it.
 
-For a local target, persist the exact Data-volume baseline with:
-
-```bash
-uv run scripts/cleanup_report.py --snapshot before
-```
-
-For a remote target, keep using the direct `df` commands on that host; the local helper must not measure the controller Mac by mistake.
+Keep this first phase read-only. Do not run `scripts/cleanup_report.py` yet: it creates a local state directory and snapshot file. Preserve the command output in the report instead. On a remote target, always run the direct `df` commands on that host; the local helper must not measure the controller Mac by mistake.
 
 ### Follow the named suspect before broad scans
 
@@ -100,9 +94,11 @@ Run the smallest ordered sequence that can identify enough physical space to mee
 | 3. Developer tools are present or named | `uv run scripts/analyze_dev_env.py` | Route Docker/OrbStack findings to their dedicated reference |
 | 4. Uninstalled-app residue is plausible | `uv run scripts/find_app_remnants.py` | Treat every result as a candidate, never proof of abandonment |
 | 5. A content-bearing path is explicitly approved | `uv run scripts/analyze_large_files.py --threshold 100MB --path "<approved-path>"` | Do not substitute `~`, Downloads, Documents, or the data-volume root when no path was approved |
-| 6. Still unknown after bounded checks | Read `references/mole_integration.md` and use `mo analyze` through a TTY | Keep the scan inside the approved directory scope |
+| 6. Still unknown after bounded checks, and the user explicitly approves Mole's fixed broad scan roots | Read `references/mole_integration.md` and use `mo analyze` through a TTY | Mole cannot accept an arbitrary path scope; skip it when approval is narrower than its documented roots |
 
 An `<approved-path>` is an exact path the user named or explicitly accepted after its scope was described. If none exists, skip large-file and duplicate-content scanning, state that this evidence branch was not authorized, and continue with non-content-bearing evidence. Do not install or upgrade Mole during a read-only phase unless the user separately authorizes that change.
+
+Mole's analyzer scans a fixed set that includes the home directory, application data, system libraries, applications, and volumes. Navigation inside the results does not make the underlying scan path-scoped. If that broad read scope is not approved, do not run Mole; stop with the bounded evidence already collected or ask for the missing scan authorization in the plan.
 
 For an explicitly approved duplicate-file investigation, read the “Optional duplicate files” section in `references/cleanup_targets.md`. It is read-only and never uses an automatic-delete option.
 
@@ -141,6 +137,14 @@ Immediately before the first state-changing command:
 2. Re-query the objects or subsystem status; cleanup plans expire when live state changes.
 3. Recheck protected-service health.
 4. Compare the approved commands with the commands about to run. Any difference requires new approval.
+
+If the approved plan includes creation of a local before/after report artifact, capture the before snapshot now, after approval and before the first cleanup command:
+
+```bash
+uv run scripts/cleanup_report.py --snapshot before
+```
+
+This writes under `~/.macos-cleaner`, so list it in the plan. It is optional and local-target only; direct `df -k/-h` readings remain the source of truth. Never run it on the controller Mac as a substitute for measuring a remote target.
 
 Run one state-changing command at a time. Read the result before sending the next command. After each command, run the postcondition that can distinguish success from partial success.
 

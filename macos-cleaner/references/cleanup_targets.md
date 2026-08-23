@@ -24,12 +24,12 @@ Detailed explanations of cleanup targets, their safety levels, and impact.
 
 **Size**: Typically 10-100 GB depending on usage
 
-Inventory exact application-owned subdirectories first. After the user approves named targets, use the guarded helper from the skill directory:
+Inventory exact application-owned subdirectories first and prefer the application's supported cache-management command when one exists. If none exists, verify the owning application is stopped or the directory is otherwise inactive. After the user approves the named directory and rebuild/redownload impact, use the guarded helper from the skill directory:
 ```bash
 uv run scripts/safe_delete.py "<exact-cache-directory>"
 ```
 
-Do not pass `~/Library/Caches/*` or the whole cache root. The application may store active state beside disposable cache files.
+Do not pass `~/Library/Caches/*` or the whole cache root. Do not remove an exact cache directory while its owning application or service is using it. The application may store active state beside disposable cache files.
 
 ### /Library/Caches
 
