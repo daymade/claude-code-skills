@@ -114,8 +114,9 @@ commit messages are a first-class leak channel — search engines index them.
 - `rewrite_history.py --message-replacements <file>` runs
   `git filter-repo --replace-message` in the same pass; the same replacements
   file usually covers both channels.
-- `verify_cleanup.py` now greps `git log --all --format=%B` in addition to
-  blob content, so a message-only leak fails verification.
+- `verify_cleanup.py` now greps commit messages (`git log` over all refs,
+  hash-annotated) in addition to blob content, so a message-only leak fails
+  verification.
 
 ## Lesson 8: The Clean-Working-Tree Check Blocks Rewrites on Shared Checkouts
 
@@ -148,6 +149,13 @@ escaped the `except` clause. A FAILED message check reported only a hit
 count, leaving the operator to hand-grep `git log` for the offending
 commits.
 
+A documentation-round review then found the same crash class still open in
+the blob channel (`git grep` decode in `grep_all_commits`) — the
+prescription below had been written before the class was fully closed. It
+was fixed by hardening every subprocess decode in all four scripts, and the
+fix was verified against a GBK-encoded source file containing a leak:
+verification now reports the leak from both channels instead of dying.
+
 **Why it matters:** A repo being cleaned is by definition a repo with
 hygiene problems — legacy encodings included — so the verification tooling
 must be more robust than the code it inspects; a verifier that crashes
@@ -159,8 +167,12 @@ get silently skipped.
 **Prevention:**
 
 - Decode git output with `errors="replace"` when the goal is detection, not
-  fidelity; report `commit_message_commits` hashes so a FAILED check
-  locates commits instead of just counting hits.
+  fidelity — this now holds for every subprocess call in all four scripts,
+  both channels. Report `commit_message_commits` hashes (first 10) so a
+  FAILED check locates commits instead of just counting hits. Boundary:
+  `errors="replace"` prevents the crash but cannot make a UTF-8 pattern
+  match GBK-encoded CJK bytes — non-UTF-8 content belongs to the Layer 4
+  semantic review, not regex.
 - Test every documented command block verbatim — copy-paste from the doc
   into a shell — before shipping the doc.
 - Pass `-C <repo>` to every git invocation; scripts must behave identically

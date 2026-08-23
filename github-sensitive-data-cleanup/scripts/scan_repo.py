@@ -78,7 +78,7 @@ def run_gitleaks(repo_path: Path, output_path: Path) -> dict:
     ]
 
     try:
-        subprocess.run(cmd, capture_output=True, text=True, check=False)
+        subprocess.run(cmd, capture_output=True, text=True, errors="replace", check=False)
     except Exception as e:
         tmp_path.unlink(missing_ok=True)
         return {
@@ -191,7 +191,7 @@ def grep_all_commits(
         rev_list = subprocess.run(
             ["git", "-C", str(repo_path), "rev-list", "--all"],
             capture_output=True,
-            text=True,
+            text=True, errors="replace",
             check=False,
         )
         if rev_list.returncode != 0:
@@ -217,7 +217,7 @@ def grep_all_commits(
             ]
             + batch,
             capture_output=True,
-            text=True,
+            text=True, errors="replace",
             check=False,
         )
         if result.returncode == 1 and not result.stdout:
@@ -328,7 +328,7 @@ def get_all_commits(repo_path: Path) -> tuple[list[str], str | None]:
     result = subprocess.run(
         ["git", "-C", str(repo_path), "rev-list", "--all"],
         capture_output=True,
-        text=True,
+        text=True, errors="replace",
         check=False,
     )
     if result.returncode != 0:
@@ -376,7 +376,7 @@ def main():
         "scanned_at": subprocess.run(
             ["date", "-u", "+%Y-%m-%dT%H:%M:%SZ"],
             capture_output=True,
-            text=True,
+            text=True, errors="replace",
             check=True,
         ).stdout.strip(),
         "tools": [gitleaks_result, custom_result, layer3_result],

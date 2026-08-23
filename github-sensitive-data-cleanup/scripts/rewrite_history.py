@@ -32,7 +32,7 @@ def get_current_heads(repo_path: Path) -> dict:
     result = subprocess.run(
         ["git", "-C", str(repo_path), "show-ref", "--heads"],
         capture_output=True,
-        text=True,
+        text=True, errors="replace",
         check=False,
     )
     heads = {}
@@ -62,7 +62,7 @@ def create_backup(repo_path: Path, backup_path: Path) -> None:
     verify = subprocess.run(
         ["git", "-C", str(repo_path), "bundle", "verify", str(backup_path)],
         capture_output=True,
-        text=True,
+        text=True, errors="replace",
         check=False,
     )
     if verify.returncode != 0:
@@ -74,7 +74,7 @@ def check_clean_working_tree(repo_path: Path) -> None:
     result = subprocess.run(
         ["git", "-C", str(repo_path), "status", "--short"],
         capture_output=True,
-        text=True,
+        text=True, errors="replace",
         check=False,
     )
     if result.stdout.strip():
@@ -139,7 +139,7 @@ def main():
     version_check = subprocess.run(
         [filter_repo_bin, "--version"],
         capture_output=True,
-        text=True,
+        text=True, errors="replace",
         check=False,
     )
     if version_check.returncode != 0:

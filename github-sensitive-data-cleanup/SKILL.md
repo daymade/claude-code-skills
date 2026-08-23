@@ -265,8 +265,8 @@ uv run --with gitpython scripts/rewrite_history.py \
 
 Re-runs the scanner and greps all commits for the original sensitive strings,
 covering both blob content (`git grep` over every commit) and commit messages
-(`git log --format=%B`), so a rewrite that missed `--replace-message` still
-fails verification.
+(`git log` over all refs with a hash-annotated record format), so a rewrite
+that missed `--replace-message` still fails verification.
 
 ```bash
 uv run --with gitpython scripts/verify_cleanup.py \

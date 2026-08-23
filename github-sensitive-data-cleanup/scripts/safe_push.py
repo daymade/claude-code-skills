@@ -29,7 +29,7 @@ def get_remote_repo_info(repo_path: Path) -> dict | None:
         ["gh", "repo", "view", "--json", "visibility,isPrivate,stargazerCount,forkCount,owner,name"],
         cwd=str(repo_path),
         capture_output=True,
-        text=True,
+        text=True, errors="replace",
         check=False,
     )
     if result.returncode != 0:
@@ -57,7 +57,7 @@ def get_remote_repo_info(repo_path: Path) -> dict | None:
 def push(repo_path: Path, remote: str, branch: str) -> None:
     """Push with --force-with-lease; fall back to --force on stale-info error."""
     lease_cmd = ["git", "-C", str(repo_path), "push", remote, branch, "--force-with-lease"]
-    result = subprocess.run(lease_cmd, capture_output=True, text=True, check=False)
+    result = subprocess.run(lease_cmd, capture_output=True, text=True, errors="replace", check=False)
     if result.returncode == 0:
         print("Push succeeded with --force-with-lease.")
         return
@@ -69,7 +69,7 @@ def push(repo_path: Path, remote: str, branch: str) -> None:
         print("--force-with-lease reported stale info (expected after local rewrite).")
         print("Falling back to --force exactly once...")
         force_cmd = ["git", "-C", str(repo_path), "push", remote, branch, "--force"]
-        result2 = subprocess.run(force_cmd, capture_output=True, text=True, check=False)
+        result2 = subprocess.run(force_cmd, capture_output=True, text=True, errors="replace", check=False)
         if result2.returncode == 0:
             print("Push succeeded with --force.")
             return
