@@ -40,7 +40,7 @@ MAX_FILES = 40
 
 END_REASON_LABELS = {
     "completed": "Clean exit — the last turn completed",
-    "interrupted": "Interrupted — tool calls were dispatched but never resolved",
+    "interrupted": "Interrupted — tool calls were dispatched but never resolved, or the turn was aborted",
     "in_progress": "In progress — tools ran but the agent left no closing message (resume mid-task)",
     "abandoned": "Abandoned — a user message got no response",
     "error_cascade": "Error cascade — repeated tool failures",
@@ -210,9 +210,10 @@ def parse_codex_rollout(path: Path) -> dict:
     0.147/0.148 alphas; stable 0.147.0 drops it for most sessions, with rare
     residuals into 0.149.0. The streams do NOT always mirror each other — in
     0.142.3/0.143.0/0.144.0 the event stream also carries per-step commentary
-    that `response_item/message` never has. So both streams are collected and
-    the RICHER one wins (ties go to the event stream, the historical display
-    stream), which never silently drops the bigger half. `task_complete`'s
+    that `response_item/message` never has, while mid-turn queued user inputs
+    appear only in message records. So both streams are collected and the
+    RICHER one wins PER ROLE (ties go to the event stream, the historical
+    display stream), which never silently drops either role's bigger half. `task_complete`'s
     last message is a tail safeguard. `response_item/agent_message` records
     are inter-agent traffic, never main-thread text. Files edited come from
     `event_msg/patch_apply_end` (≤0.146) and `event_msg/item_completed`
@@ -295,9 +296,16 @@ def parse_codex_rollout(path: Path) -> dict:
             if ptype == "message":
                 role = payload.get("role")
                 if role == "user":
+                    content = payload.get("content")
                     text = _user_turn_text(
-                        _message_text(payload.get("content"), {"input_text", "text"}).strip()
+                        _message_text(content, {"input_text", "text"}).strip()
                     )
+                    if not text and isinstance(content, list) and any(
+                        isinstance(c, dict) and c.get("type") == "input_image" for c in content
+                    ):
+                        # An image-only request must still surface (and still
+                        # route end-reason as abandoned when it is the tail).
+                        text = "[image-only user message]"
                     if text and not is_noise_text(text):
                         data["ri_user"].append(text)
                         data["last_sig"] = "user_message"
@@ -329,17 +337,18 @@ def parse_codex_rollout(path: Path) -> dict:
                     data["errors"].append(output[:300])
                 data["last_sig"] = "tool_output"
 
-    # Stream selection: the richer stream wins — in versions where both exist
-    # they usually mirror, but where they diverge (measured: 0.142.3/0.143.0/
-    # 0.144.0 keep per-step commentary only in the event stream) picking by
-    # count is the only rule that never silently drops the bigger half. Ties
-    # go to the event stream, the historical display stream. task_complete's
-    # tail message is a safeguard for sessions whose final assistant text
-    # never landed in either stream.
-    ev_turns = len(data["user_messages"]) + len(data["assistant_messages"])
-    ri_turns = len(data["ri_user"]) + len(data["ri_assistant"])
-    if ri_turns > ev_turns:
+    # Stream selection is PER ROLE: in dual-stream versions either side of
+    # either role can be richer — commentary inflates the event stream, while
+    # mid-turn queued user inputs appear only in message records (whole-stream
+    # selection was measured to lose the final user request on real files).
+    # The briefing displays the roles in separate sections, so picking the
+    # richer stream per role never silently drops either role's bigger half.
+    # Ties go to the event stream, the historical display stream.
+    # task_complete's tail message is a safeguard for sessions whose final
+    # assistant text never landed in either stream.
+    if len(data["ri_user"]) > len(data["user_messages"]):
         data["user_messages"] = data["ri_user"]
+    if len(data["ri_assistant"]) > len(data["assistant_messages"]):
         data["assistant_messages"] = data["ri_assistant"]
     if data["task_tail"] and (
         not data["assistant_messages"] or data["assistant_messages"][-1] != data["task_tail"]

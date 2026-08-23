@@ -97,6 +97,40 @@ class SchemaSelectionTests(unittest.TestCase):
         data = mod.parse_codex_rollout(rollout)
         self.assertEqual(data["assistant_messages"], ["旁白一", "旁白二", "最终回复"])
 
+    def test_stream_selection_is_per_role(self):
+        """Event richer on assistant (commentary) while message records are
+        richer on user (queued inputs never mirror to the event stream —
+        measured to lose the final user request on real files)."""
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "s2c", "cwd": "/tmp", "cli_version": "0.142.2"}},
+            _ev("user_message", message="请求一"),
+            _msg("user", "请求一", "input_text"),
+            _msg("user", "请求二（只在消息流）", "input_text"),
+            _ev("agent_message", message="旁白一"),
+            _ev("agent_message", message="旁白二"),
+            _ev("agent_message", message="最终回复"),
+            _msg("assistant", "最终回复", "output_text"),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["user_messages"], ["请求一", "请求二（只在消息流）"])
+        self.assertEqual(data["assistant_messages"], ["旁白一", "旁白二", "最终回复"])
+
+    def test_image_only_user_message_gets_marker(self):
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "s8", "cwd": "/tmp"}},
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_image"}],
+                },
+            },
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["user_messages"], ["[image-only user message]"])
+        self.assertEqual(data["end_reason"], "abandoned")
+
     def test_event_stream_fallback_when_no_message_records(self):
         rollout = _write_rollout([
             {"type": "session_meta", "payload": {"id": "s3", "cwd": "/tmp"}},
