@@ -171,13 +171,15 @@ Save this file outside the repo, e.g. `/tmp/sensitive-replacements.txt`.
 ```bash
 uv run scripts/rewrite_history.py --repo /path/to/repo \
   --replacements /tmp/sensitive-replacements.txt \
-  --backup /tmp/repo-backup.bundle
+  --backup /tmp/repo-backup.bundle \
+  --yes
 
 # Entity leaks live in commit MESSAGES too, not just file content. Cover both:
 uv run scripts/rewrite_history.py --repo /path/to/repo \
   --replacements /tmp/sensitive-replacements.txt \
   --message-replacements /tmp/sensitive-replacements.txt \
-  --backup /tmp/repo-backup.bundle
+  --backup /tmp/repo-backup.bundle \
+  --yes
 ```
 
 This script:
@@ -255,7 +257,8 @@ uv run --with gitpython scripts/rewrite_history.py \
   --repo /path/to/repo \
   --replacements /tmp/sensitive-replacements.txt \
   --message-replacements /tmp/sensitive-replacements.txt \
-  --backup /tmp/repo-backup.bundle
+  --backup /tmp/repo-backup.bundle \
+  --yes
 ```
 
 ### `scripts/verify_cleanup.py`
