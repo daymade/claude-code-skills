@@ -57,8 +57,10 @@ def create_backup(repo_path: Path, backup_path: Path) -> None:
     ]
     subprocess.run(cmd, check=True)
 
+    # 与 create 一样带 -C：从非 git 目录调用时 bundle verify 会因找不到
+    # 仓库而失败（错误信息指错方向），且 RuntimeError 要能被调用点接住
     verify = subprocess.run(
-        ["git", "bundle", "verify", str(backup_path)],
+        ["git", "-C", str(repo_path), "bundle", "verify", str(backup_path)],
         capture_output=True,
         text=True,
         check=False,
@@ -166,7 +168,7 @@ def main():
     print("Creating backup bundle...")
     try:
         create_backup(repo_path, backup_path)
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, RuntimeError) as e:
         print(f"Backup failed: {e}", file=sys.stderr)
         sys.exit(1)
     print(f"Backup created: {backup_path}")
