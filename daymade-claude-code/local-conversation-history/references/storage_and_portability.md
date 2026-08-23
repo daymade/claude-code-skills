@@ -3,6 +3,15 @@
 Read this reference only when the default inventory reports an unsupported,
 missing, or ambiguous local store.
 
+## Contents
+
+- Source order: Claude Code, archive registry, Codex, and Kimi CLI
+- Codex writer-lock observation
+- Verified format boundary
+- Cross-platform behavior
+- Privacy and safety
+- Common diagnostics
+
 ## Source order
 
 ### Claude Code
@@ -78,6 +87,13 @@ missing archive (`required: false`) produces a warning and is skipped. Passing
 5. For raw rollouts, stream the complete JSONL and compute minimum/maximum from
    internal top-level event timestamps plus `session_meta.payload.timestamp`.
    A rollout without either is unknown-time; file mtime is never substituted.
+6. For every Codex row admitted by the workspace/date/archive filters, inspect the standard
+   `thread-writer-locks/` directory under the resolved Codex home. Coordinate
+   with `.coordination.lock`, then non-blockingly test each exact per-thread
+   lock. Mark only locks held by a process; do not claim the process is Codex,
+   and do not classify an absent or available lock as proof that the thread
+   stopped. The recent-row limit remains intact, but any positive hit outside
+   it is appended so the lock-state answer is not silently truncated.
 
 When compatible databases have the same greatest internal thread update, the
 numeric `state_<generation>.sqlite` suffix breaks the tie. Database-file mtime
@@ -86,6 +102,38 @@ is not chronological evidence and is not consulted.
 The selected backend is printed in the report. A database problem is reported
 before raw-rollout recovery is attempted, so the alternate path is visible
 rather than a silent fallback.
+Codex raw-rollout fallback and Kimi CLI state/wire parsing continue to compute
+internal record bounds without using file mtime.
+
+### Codex writer-lock observation
+
+Codex serializes each writable thread with
+`<codex-home>/thread-writer-locks/<session-id>.lock` and coordinates acquisition
+and stale-file cleanup through `.coordination.lock`. The inventory uses the same
+advisory-lock behavior through Python's POSIX `fcntl` module; it does not infer
+activity from file existence, mtime, process names, cwd, or CPU usage.
+
+The observation is deliberately positive-only:
+
+- `writer-lock file held` means a process owned that exact advisory lock
+  during the snapshot. It proves lock-file state only: the probe cannot identify
+  the process, prove that it is Codex, prove an open UI or executing agent, or
+  establish that the thread owns a repository lease.
+- No marker means only “no positive lock evidence was recorded.” It does not
+  mean idle, stopped, safe to overwrite, or safe to retire.
+- `busy` means another process held the coordination lock while the snapshot
+  ran. Its identity and purpose are unknown, so the command makes no per-thread
+  runtime claim for that pass.
+- `partial` or `unavailable` means at least part of the lock surface could not
+  be inspected. The report keeps history results and states the observation
+  boundary instead of guessing.
+
+The probe checks all admitted Codex rows, not only the recent display slice.
+Positive hits beyond `--limit` are appended to Markdown and JSON output. It
+opens existing lock files without changing their bytes and never creates or
+removes lock files. It currently runs on POSIX platforms. On Windows, history
+inventory remains available but writer-lock observation reports `unavailable`
+until an interoperable standard-library lock probe is verified.
 
 ### Kimi CLI
 
@@ -145,9 +193,10 @@ suite parses the raw store instead of shelling out to the vendor CLI.
 ## Verified format boundary
 
 The implementation was checked against Claude Code 2.1.207 and Codex CLI
-0.144.1 on 2026-07-13, and against Kimi CLI 0.38.0 (wire `protocol_version`
-1.5) in 2026-08. These observations establish the tested boundary, not a
-promise that vendors will never change their private local formats.
+0.144.1 on 2026-07-13, against Codex CLI 0.147.0 writer-lock semantics on
+2026-08-24, and against Kimi CLI 0.38.0 (wire `protocol_version` 1.5) in
+2026-08. These observations establish the tested boundary, not a promise that
+vendors will never change their private local formats.
 
 - Claude Code main records use top-level event types with user content under a
   nested message object; non-message events may appear anywhere in the file.
@@ -181,6 +230,9 @@ with its exact session ID.
   on legacy Windows code pages cannot fail after a successful read.
 - Use Python's standard library only. Python 3.10 or newer is required; no
   package installation or network access occurs.
+- Use POSIX advisory locks for Codex runtime observation. On platforms where
+  that primitive is unavailable, report `unavailable`; never substitute lock
+  filenames, mtime, PIDs, cwd, or a guessed inactivity timeout.
 
 Equivalent Windows and WSL paths are not guessed to be the same workspace. If
 history was created under a different path representation, pass the exact
@@ -193,6 +245,8 @@ persisted workspace through `--cwd` or use `--all-projects` to discover it.
   prefix-only inventory.
 - Titles are whitespace-normalized and truncated before printing.
 - No transcript, title, or path is uploaded or written to a cache.
+- Writer-lock observation neither writes lock bytes nor exposes process IDs. It
+  annotates only conversations already admitted by the inventory filters.
 - `--format json` still contains local titles and paths. Treat that output with
   the same privacy level as the underlying conversation history.
 
@@ -205,6 +259,9 @@ persisted workspace through `--cwd` or use `--all-projects` to discover it.
 | Invalid history source registry | The source set cannot be trusted | Fix the reported JSON/schema/path error and rerun |
 | Project directory not found | Claude's encoded project directory did not match | Use the exact workspace path or `--all-projects` |
 | No compatible Codex database | SQLite is absent, unreadable, or has an unknown schema | Review the warning; raw rollout scanning runs next |
+| Codex row says `writer-lock file held` | A process owned that exact advisory lock during the snapshot; its identity is unknown | Use the exact ID with `daymade-claude-code:continue-codex-work` to inspect stored thread context; do not infer process identity or progress from the lock alone |
+| Writer-lock observation is `busy` | Another process held the coordination lock; its identity and purpose are unknown | Report the unresolved runtime boundary and make no inactivity claim; take a fresh snapshot only on a new user request |
+| Writer-lock observation is `partial` or `unavailable` | The runtime lock surface was not fully observable on this platform/store | Keep the history result, but do not classify unmarked sessions as stopped |
 | Zero direct conversations, many excluded agents | The workspace contains worker/reviewer sessions but no matching main thread | Add `--include-subagents` only if those internals are desired |
 | History exists under another cwd spelling | The stored path and requested path are not equivalent | Run `--all-projects`, then retry with the printed path |
 | Date filter excludes unknown-time sessions | JSONL contained no valid internal timestamp | Inspect without a date filter if needed; never infer the date from mtime |

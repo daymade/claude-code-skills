@@ -439,6 +439,7 @@ class KimiCliTests(unittest.TestCase):
         self.assertEqual(set(payload["providers"]), {"kimi"})
         kimi = payload["providers"]["kimi"]
         self.assertEqual(kimi["total"], 1)
+        self.assertNotIn("recent_rows", kimi)
         self.assertEqual(kimi["conversations"][0]["session_id"], session_id)
         self.assertEqual(
             kimi["conversations"][0]["title"], "Summarize the quarterly report"

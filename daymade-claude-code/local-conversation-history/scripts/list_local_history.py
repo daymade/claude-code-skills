@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import os
 import re
@@ -38,6 +39,28 @@ from _core.text import (  # noqa: E402
 )
 from _core.codex import collect_codex  # noqa: E402
 from _core.kimi import collect_kimi, resolve_kimi_home  # noqa: E402
+
+
+CODEX_SESSION_ID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+
+
+class CodexWriterLockObservation:
+    """Positive-only observation of Codex per-thread advisory-lock state."""
+
+    __slots__ = ("status", "held_session_ids", "detail")
+
+    def __init__(
+        self,
+        status: str,
+        held_session_ids: frozenset[str] = frozenset(),
+        detail: str = "",
+    ) -> None:
+        self.status = status
+        self.held_session_ids = held_session_ids
+        self.detail = detail
 
 
 def configure_utf8_streams() -> None:
@@ -212,8 +235,139 @@ def display_project(value: str) -> str:
     return "…/" + "/".join(parts[-3:])
 
 
-def conversation_flags(item: Conversation, language: str) -> str:
+def probe_codex_writer_locks(
+    codex_home: Path,
+    conversations: list[Conversation],
+) -> CodexWriterLockObservation:
+    """Observe locks without using file existence, mtime, PID, or process names.
+
+    Codex serializes lock acquisition and stale-file cleanup through
+    ``.coordination.lock``. Take that lock non-blocking before testing the exact
+    admitted thread locks so this read-only snapshot cannot race a new writer.
+    A held lock proves only that some process owns the advisory lock; it does not
+    establish the holder's identity. An available or absent lock is deliberately
+    not reported as proof that the thread stopped.
+    """
+    if os.name != "posix":
+        return CodexWriterLockObservation(
+            status="unavailable",
+            detail="writer-lock probing is not implemented on this platform",
+        )
+    try:
+        import fcntl
+    except ImportError:
+        return CodexWriterLockObservation(
+            status="unavailable",
+            detail="Python fcntl support is unavailable",
+        )
+
+    lock_root = codex_home / "thread-writer-locks"
+    coordination_path = lock_root / ".coordination.lock"
+    if not coordination_path.is_file():
+        return CodexWriterLockObservation(
+            status="unavailable",
+            detail="Codex writer-lock coordination file is unavailable",
+        )
+
+    held: set[str] = set()
+    failures = 0
+    try:
+        coordination = coordination_path.open("rb")
+    except OSError as error:
+        return CodexWriterLockObservation(
+            status="unavailable",
+            detail=f"cannot open Codex writer-lock coordination file: {error}",
+        )
+    coordination_locked = False
+    try:
+        try:
+            fcntl.flock(
+                coordination.fileno(),
+                fcntl.LOCK_EX | fcntl.LOCK_NB,
+            )
+            coordination_locked = True
+        except BlockingIOError:
+            return CodexWriterLockObservation(
+                status="busy",
+                detail="writer-lock coordination is busy; no runtime claim was made",
+            )
+        except OSError as error:
+            return CodexWriterLockObservation(
+                status="unavailable",
+                detail=f"cannot inspect Codex writer-lock coordination: {error}",
+            )
+
+        for conversation in conversations:
+            session_id = conversation.session_id
+            if not CODEX_SESSION_ID_RE.fullmatch(session_id):
+                failures += 1
+                continue
+            lock_path = lock_root / f"{session_id}.lock"
+            try:
+                lock_file = lock_path.open("rb")
+            except FileNotFoundError:
+                continue
+            except OSError:
+                failures += 1
+                continue
+            try:
+                try:
+                    fcntl.flock(
+                        lock_file.fileno(),
+                        fcntl.LOCK_EX | fcntl.LOCK_NB,
+                    )
+                except BlockingIOError:
+                    held.add(session_id)
+                except OSError as error:
+                    if error.errno in {errno.EACCES, errno.EAGAIN}:
+                        held.add(session_id)
+                    else:
+                        failures += 1
+                else:
+                    try:
+                        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                    except OSError:
+                        failures += 1
+            finally:
+                try:
+                    lock_file.close()
+                except OSError:
+                    failures += 1
+    finally:
+        if coordination_locked:
+            try:
+                fcntl.flock(coordination.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                failures += 1
+        try:
+            coordination.close()
+        except OSError:
+            failures += 1
+
+    return CodexWriterLockObservation(
+        status="partial" if failures else "observed",
+        held_session_ids=frozenset(held),
+        detail=(
+            f"{failures} inventory session lock operation(s) failed"
+            if failures
+            else "positive-only writer-lock snapshot completed"
+        ),
+    )
+
+
+def conversation_flags(
+    item: Conversation,
+    language: str,
+    writer_locks: CodexWriterLockObservation,
+) -> str:
     values: list[str] = []
+    if (
+        item.provider == "codex"
+        and item.session_id in writer_locks.held_session_ids
+    ):
+        values.append(
+            "写入锁文件已持有" if language == "zh" else "writer-lock file held"
+        )
     if item.archived:
         values.append("已归档" if language == "zh" else "archived")
     if item.kind == "subagent":
@@ -227,17 +381,45 @@ def conversation_source(item: Conversation) -> str:
     return ", ".join(item.source_labels) if item.source_labels else "—"
 
 
+def conversations_for_output(
+    result: ProviderResult,
+    limit: int,
+    writer_locks: CodexWriterLockObservation,
+) -> list[Conversation]:
+    """Keep the recent-row limit while retaining every positive Codex lock hit."""
+    shown = list(result.conversations[:limit])
+    if result.provider != "codex" or not writer_locks.held_session_ids:
+        return shown
+    shown_ids = {item.session_id for item in shown}
+    shown.extend(
+        item
+        for item in result.conversations[limit:]
+        if item.session_id in writer_locks.held_session_ids
+        and item.session_id not in shown_ids
+    )
+    return shown
+
+
 def render_provider_markdown(
     result: ProviderResult, args: argparse.Namespace, language: str
 ) -> list[str]:
-    shown = result.conversations[: args.limit]
+    writer_locks = args.codex_writer_lock_observation
+    shown = conversations_for_output(result, args.limit, writer_locks)
+    recent_count = min(args.limit, result.total)
+    held_outside_recent_limit = len(shown) - recent_count
     provider_name = {"claude": "Claude Code", "codex": "Codex", "kimi": "Kimi CLI"}.get(
         result.provider, result.provider
     )
     if language == "zh":
         lines = [f"## {provider_name} — {result.total} 条对话", ""]
+        display_summary = f"显示最近 {recent_count} 条"
+        if held_outside_recent_limit:
+            display_summary += (
+                f"，并补入最近窗口外 {held_outside_recent_limit} 条"
+                "写入锁文件已持有的会话"
+            )
         lines.append(
-            f"显示最近 {len(shown)} 条；数据源：`{result.backend}`；"
+            f"{display_summary}；数据源：`{result.backend}`；"
             f"排除子代理 {result.excluded_subagents} 条、归档 {result.excluded_archived} 条、"
             f"自动测试 {result.excluded_automated} 条。"
         )
@@ -246,8 +428,14 @@ def render_provider_markdown(
         source_label = "来源"
     else:
         lines = [f"## {provider_name} — {result.total} conversations", ""]
+        display_summary = f"Showing {recent_count} most recent"
+        if held_outside_recent_limit:
+            display_summary += (
+                f" plus {held_outside_recent_limit} lock-held row(s) "
+                "outside the recent window"
+            )
         lines.append(
-            f"Showing {len(shown)} most recent; backend: `{result.backend}`; "
+            f"{display_summary}; backend: `{result.backend}`; "
             f"excluded {result.excluded_subagents} sub-agents, "
             f"{result.excluded_archived} archived, and "
             f"{result.excluded_automated} automated sessions."
@@ -255,6 +443,36 @@ def render_provider_markdown(
         updated_label, title_label = "Updated", "Title"
         id_label, flags_label, project_label = "Session ID", "Flags", "Project"
         source_label = "Source"
+    if result.provider == "codex":
+        if writer_locks.status == "observed":
+            runtime_note = (
+                "运行态：`写入锁文件已持有` 只证明快照时有进程占用 Codex 的"
+                "规范线程锁；它不证明持锁者身份或会话正在运行，无标记也不证明会话已停止。"
+                if language == "zh"
+                else "Runtime: `writer-lock file held` proves only that a process held "
+                "Codex's canonical thread lock during the snapshot; it does not identify "
+                "the holder or prove the session is running, and no flag does not prove "
+                "that a session stopped."
+            )
+        elif writer_locks.status == "partial":
+            runtime_note = (
+                f"运行态：writer-lock 观测为 `partial`（{writer_locks.detail}）；"
+                "已标记项只证明锁文件被占用，不证明持锁者身份；无标记不证明会话已停止。"
+                if language == "zh"
+                else f"Runtime: writer-lock observation is `partial` "
+                f"({writer_locks.detail}); marked rows prove only lock-file contention, "
+                "not holder identity, and an unmarked row is not evidence that a session stopped."
+            )
+        else:
+            runtime_note = (
+                f"运行态：writer-lock 观测为 `{writer_locks.status}`"
+                f"（{writer_locks.detail}）；"
+                "未对任何无标记会话作停止判断。"
+                if language == "zh"
+                else f"Runtime: writer-lock observation is `{writer_locks.status}`; "
+                f"{writer_locks.detail}; no unflagged session is classified as stopped."
+            )
+        lines.append(runtime_note)
     lines.append("")
     include_project = args.all_projects or args.recursive
     headers = [updated_label, title_label, id_label]
@@ -276,7 +494,7 @@ def render_provider_markdown(
             row.append(f"`{markdown_escape(display_project(item.cwd))}`")
         if result.provider == "claude":
             row.append(markdown_escape(conversation_source(item)))
-        row.append(conversation_flags(item, language))
+        row.append(conversation_flags(item, language, writer_locks))
         lines.append("| " + " | ".join(row) + " |")
     if not shown:
         empty = "未找到匹配的对话。" if language == "zh" else "No matching conversations found."
@@ -330,37 +548,69 @@ def render_json(results: list[ProviderResult], args: argparse.Namespace) -> str:
         },
         "providers": {},
     }
+    writer_locks = args.codex_writer_lock_observation
     for result in results:
-        payload["providers"][result.provider] = {
+        shown_items = conversations_for_output(result, args.limit, writer_locks)
+        recent_rows = min(args.limit, result.total)
+        held_rows_appended = len(shown_items) - recent_rows
+        provider_payload = {
             "backend": result.backend,
             "home": result.home,
             "total": result.total,
-            "shown": min(args.limit, result.total),
+            "shown": len(shown_items),
             "excluded": {
                 "subagents": result.excluded_subagents,
                 "archived": result.excluded_archived,
                 "automated": result.excluded_automated,
             },
             "warnings": result.warnings,
-            "conversations": [
-                item.to_dict() for item in result.conversations[: args.limit]
-            ],
+            "conversations": [],
         }
+        for item in shown_items:
+            item_payload = item.to_dict()
+            if (
+                result.provider == "codex"
+                and item.session_id in writer_locks.held_session_ids
+            ):
+                item_payload["runtime"] = {"writer_lock": "held"}
+            provider_payload["conversations"].append(item_payload)
+        if result.provider == "codex":
+            provider_payload["recent_rows"] = recent_rows
+            provider_payload["runtime_observation"] = {
+                "status": writer_locks.status,
+                "evidence": "codex-thread-writer-lock",
+                "semantics": (
+                    "positive-only lock-state evidence; holder identity is not "
+                    "established; absence is not proof of inactivity"
+                ),
+                "detail": writer_locks.detail,
+                "held_rows_appended": held_rows_appended,
+            }
+        payload["providers"][result.provider] = provider_payload
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "List local Claude Code and Codex conversations for a workspace. "
-            "The command is read-only and uses Python's standard library only."
+            "List local Claude Code, Codex, and Kimi CLI conversations for a "
+            "workspace. The command is read-only and uses Python's standard "
+            "library only."
         )
     )
     parser.add_argument("--cwd", help="Workspace path (default: current directory)")
     parser.add_argument(
         "--source", choices=("all", "claude", "codex", "kimi"), default="all"
     )
-    parser.add_argument("--limit", type=int, default=10, help="Rows per provider")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help=(
+            "Most recent rows per provider; Codex rows with held writer-lock "
+            "files are appended even when outside this limit"
+        ),
+    )
     parser.add_argument(
         "--recursive", action="store_true", help="Include child workspace cwd values"
     )
@@ -538,6 +788,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         args.codex_home or os.environ.get("CODEX_HOME") or (Path.home() / ".codex")
     ).expanduser()
     kimi_home = resolve_kimi_home(args.kimi_home)
+    args.codex_writer_lock_observation = CodexWriterLockObservation(
+        status="not-requested",
+        detail="Codex was not included in this inventory",
+    )
 
     results: list[ProviderResult] = []
     if args.source in {"all", "claude"}:
@@ -577,11 +831,14 @@ def main(argv: Optional[list[str]] = None) -> int:
             apply_date_filter(claude_result, from_timestamp, to_timestamp)
         )
     if args.source in {"all", "codex"}:
-        results.append(
-            apply_date_filter(
-                collect_codex(args, codex_home), from_timestamp, to_timestamp
-            )
+        codex_result = apply_date_filter(
+            collect_codex(args, codex_home), from_timestamp, to_timestamp
         )
+        args.codex_writer_lock_observation = probe_codex_writer_locks(
+            codex_home,
+            codex_result.conversations,
+        )
+        results.append(codex_result)
     if args.source in {"all", "kimi"}:
         results.append(
             apply_date_filter(

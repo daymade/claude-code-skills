@@ -2,17 +2,19 @@
 name: local-conversation-history
 description: >-
   Lists recent local Claude Code, OpenAI Codex, and Kimi CLI conversations for
-  a workspace in one read-only command. For Claude Code, the default inventory
-  combines every active config home with every long-term archive registered in
-  ~/.claude/history-sources.json, de-duplicates session IDs, and orders or
-  filters by internal JSONL timestamps rather than file mtime. Produces readable
+  a workspace in one read-only command. Claude inventory combines active config
+  homes with every archive registered in ~/.claude/history-sources.json,
+  de-duplicates IDs, and uses internal timestamps instead of file mtime. Marks
+  every in-scope Codex session whose canonical per-thread advisory lock is held,
+  appending hits outside the recent limit; this proves lock state, not holder
+  identity or liveness, and no marker does not prove “stopped.” Outputs
   Markdown or JSON with titles, timezone-qualified timestamps, provenance,
-  session IDs, and archive/test markers while excluding internal sub-agent noise
-  by default; Codex raw-rollout fallback and Kimi CLI state.json/wire parsing
-  also compute internal record bounds without mtime. Use when the user asks to
-  list, show, or browse recent local chats, task history, or session IDs across
-  Claude Code, Codex, and Kimi CLI (kimi-code). Do not use for
-  keyword/full-event search, deleted-file recovery, or resuming work.
+  session IDs, runtime/archive markers, and visible diagnostics while excluding
+  internal sub-agents by default. Use when the user asks to list or browse local
+  chats, task history, or session IDs across Claude Code, Codex, and Kimi CLI
+  (kimi-code), or asks which Codex session locks are held or may still be in
+  use. Do not use for keyword/full-event search, deleted-file recovery, or
+  resuming work.
 argument-hint: "[workspace-path]"
 ---
 
@@ -21,7 +23,8 @@ argument-hint: "[workspace-path]"
 List project-scoped local histories without reconstructing ad hoc `rg`, `stat`,
 `jq`, or SQLite pipelines. The bundled script performs provider and archive
 discovery, schema introspection, filtering, de-duplication, title extraction,
-internal-time sorting, and rendering in one process.
+internal-time sorting, positive-only Codex writer-lock observation, and rendering
+in one process.
 
 ## Completeness invariant
 
@@ -40,6 +43,16 @@ bypasses the registry; never use it for a completeness claim.
 ## Route the request
 
 - List/recent/show/browse local conversations: run the bundled script once.
+- Triage Codex sessions that may still be in use: use the automatic
+  `writer-lock file held` marker. The command probes every admitted Codex row
+  and appends any positive hit outside the recent-row limit. A hit proves only
+  that a process held Codex's canonical advisory lock during the snapshot; it
+  does not identify that process or prove the session is running. An unmarked
+  row does not prove that a session stopped.
+- Understand what a marked Codex session is doing: pass its exact session ID to
+  `daymade-claude-code:continue-codex-work`. A title, recent timestamp, or held
+  writer-lock marker identifies a thread lock, not its holder, current task, or
+  progress.
 - Restrict to one provider: pass `--source claude`, `--source codex`, or
   `--source kimi` (Kimi CLI, a.k.a. kimi-code).
 - Point at a non-default Kimi CLI home: pass `--kimi-home <dir>`; resolution
@@ -81,14 +94,18 @@ Expected output is already presentation-ready Markdown:
 # Local conversation history
 Scope: `<workspace>`
 
-## Claude Code — 3 conversations
-| Updated | Title | Session ID | Source | Flags |
-|---|---|---|---|---|
-| 2026-01-15 10:30 +00:00 | Review authentication flow | `019...` | active:main, archive:long-term | — |
+## Codex — 3 conversations
+Runtime: `writer-lock file held` proves lock contention, not holder identity; an unmarked row is not evidence that a session stopped.
+| Updated | Title | Session ID | Flags |
+|---|---|---|---|
+| 2026-01-15 10:30 +00:00 | Review authentication flow | `019...` | writer-lock file held |
 ```
 
 Return that output directly, with at most one short observation. Do not run
 follow-up `find`, `rg`, `stat`, or database calls merely to restate the result.
+When the user asks what a marked Codex thread is doing, the sanctioned follow-up
+is `daymade-claude-code:continue-codex-work` for that exact ID, not a
+process-name or cwd guess.
 
 ## Preserve the evidence boundary
 
@@ -107,6 +124,12 @@ Treat the command as an inventory, not a transcript export:
   database is unavailable, compute the rollout range from internal top-level
   event timestamps plus `session_meta.payload.timestamp`; never use rollout
   mtime or database-file mtime as chronology.
+- Treat `writer-lock file held` as evidence only that some process owned the
+  canonical per-thread advisory lock during the snapshot. It does not identify
+  that process or prove an open UI, an executing agent, ongoing tool use,
+  business progress, repository permission, or a project lease. Every in-scope
+  Codex row is probed; positive hits outside `--limit` are appended. Never
+  invert an absent marker into “inactive”.
 - For Kimi CLI, prefer `state.json`'s `createdAt`/`updatedAt` (epoch
   milliseconds). If `state.json` is missing or lacks them, compute the range
   from internal wire `time` fields (plus the metadata record's `created_at`,
@@ -133,9 +156,9 @@ single-store diagnostic scope.
 If no conversations appear, use the diagnostics already printed by the same
 command. Read
 [references/storage_and_portability.md](references/storage_and_portability.md)
-only when the format or path needs diagnosis; it documents the source registry,
-inspected stores, internal-time policy, Windows path normalization, and known
-boundaries.
+when the format, path, or writer-lock observation needs diagnosis; it documents
+the source registry, inspected stores, internal-time policy, lock semantics,
+Windows path normalization, and known boundaries.
 
 ## Maintainer verification
 

@@ -3100,14 +3100,14 @@ main 在上次 review 后变了，重新告诉我现在真正会合进去什么
 
 **依赖**：已认证的 `gh` CLI、支持 `merge-tree --write-tree` 的 `git`、`jq`。
 
-### 86. **local-conversation-history** - 快速查看本地 Claude Code 与 Codex 对话
+### 86. **local-conversation-history** - 快速查看本地 Agent 对话
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`
 >（仅作为套件成员发布，调用方式 `daymade-claude-code:local-conversation-history`）
 
-用一次只读命令列出当前工作区最近的 Claude Code 与 Codex 本地对话。
-输出已经是可直接阅读的 Markdown 或 JSON，包含短标题、带时区时间、精确会话
-ID 和明确诊断信息。
+用一次只读命令列出当前工作区最近的 Claude Code、Codex 与 Kimi CLI 本地
+对话。输出已经是可直接阅读的 Markdown 或 JSON，包含短标题、带时区时间、
+精确会话 ID、Codex writer lock 阳性标记和明确诊断信息。
 
 **主要能力：**
 - 默认合并所有活跃 Claude 配置目录与已登记的长期备份
@@ -3115,6 +3115,9 @@ ID 和明确诊断信息。
 - 按会话 ID 去重、合并各副本的内部时间范围，同时保留活跃目录/备份来源信息
 - 通过 schema 检查选择兼容的 Codex 状态数据库
 - 数据库不可用时明确告警，再读取原始 Codex rollout JSONL
+- 检查范围内每条 Codex 会话；精确的规范 writer-lock 文件被占用时才加标记，
+  即使位于最近条数限制之外也会补入。标记只证明锁状态，不证明持锁者身份或
+  agent 正在运行；无标记不会被解释为已停止或可以注销
 - 支持内部时间日期范围、精确单目录诊断、Codex 归档会话、递归/全部项目、Windows 路径归一化和 JSON
 - 仅使用 Python 标准库，不联网、不写入本地历史
 
@@ -3122,6 +3125,7 @@ ID 和明确诊断信息。
 ```text
 /daymade-claude-code:local-conversation-history
 列出当前文件夹最近的 Claude Code 和 Codex 对话
+显示当前工作区哪些 Codex 会话的规范 writer-lock 文件被持有
 把包含归档会话的 Codex 记录输出成 JSON
 ```
 
@@ -3450,10 +3454,14 @@ review 后修复/落地时，使用 **github-review-pr**。
 rollout 重建简报，不会把完整旧会话重新灌入上下文。
 
 ### 快速发现本地对话
-需要快速查看当前工作区最近的 Claude Code 与 Codex 对话时，使用
-**local-conversation-history**。它用一次只读调用输出两个来源的可读清单，
-并默认排除内部 agent。只有在需要全文搜索、分析工具调用或从 Claude Code
-逐字稿恢复文件时，再切换到 **claude-code-history-files-finder**。
+需要快速查看当前工作区最近的 Claude Code、Codex 与 Kimi CLI 对话，或确认
+哪些 Codex 会话的规范 writer-lock 文件当前被持有时，使用
+**local-conversation-history**。它检查范围内全部 Codex 会话，最近窗口外的
+阳性项也会补入；该标记只证明锁状态，不证明持锁者身份或 agent 进度。它用
+一次只读调用输出各来源的可读清单，并默认排除内部 agent。要查看某个已标记
+Codex 会话的存量上下文，把精确 ID 交给 **continue-codex-work**；需要全文
+搜索、分析工具调用或从 Claude Code 逐字稿恢复文件时，再切换到
+**claude-code-history-files-finder**。
 
 ### 网页提取与微信公众号文章
 使用 **scrapling-skill** 安装并验证 Scrapling CLI，判断应使用静态抓取还是浏览器抓取，并从 `mp.weixin.qq.com` 等页面提取干净的 Markdown。可与 **deep-research** 配合，将抓取内容整理为结构化报告，或与 **docs-cleaner** 配合清理抽取后的文章内容。

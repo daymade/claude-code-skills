@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import errno
+import importlib.util
 import json
 import os
 import sqlite3
@@ -12,6 +14,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -282,6 +285,45 @@ class LocalConversationHistoryTests(unittest.TestCase):
         ]
         create_codex_database(self.codex_home / "state_5.sqlite", rows)
 
+    def start_lock_holder(self, path: Path) -> subprocess.Popen[str]:
+        code = """
+import fcntl
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+with path.open("r+b") as handle:
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    print("READY", flush=True)
+    sys.stdin.read()
+"""
+        holder = subprocess.Popen(
+            [sys.executable, "-c", code, str(path)],
+            text=True,
+            encoding="utf-8",
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        assert holder.stdout is not None
+        ready = holder.stdout.readline().strip()
+        if ready != "READY":
+            stderr = holder.stderr.read() if holder.stderr is not None else ""
+            holder.kill()
+            holder.wait()
+            self.fail(f"lock holder did not start: {ready!r} {stderr}")
+        return holder
+
+    def stop_lock_holder(self, holder: subprocess.Popen[str]) -> None:
+        if holder.poll() is None:
+            assert holder.stdin is not None
+            holder.stdin.close()
+            holder.wait(timeout=5)
+        if holder.stdout is not None:
+            holder.stdout.close()
+        if holder.stderr is not None:
+            holder.stderr.close()
+
     def test_combined_json_inventory_filters_noise(self) -> None:
         self.seed_claude()
         self.seed_codex_database()
@@ -299,15 +341,18 @@ class LocalConversationHistoryTests(unittest.TestCase):
         claude = payload["providers"]["claude"]
         codex = payload["providers"]["codex"]
         self.assertEqual(claude["total"], 2)
+        self.assertNotIn("recent_rows", claude)
         self.assertEqual(claude["excluded"]["subagents"], 1)
         self.assertEqual(claude["excluded"]["automated"], 1)
         self.assertEqual(codex["total"], 1)
         self.assertEqual(codex["excluded"]["subagents"], 1)
         self.assertEqual(codex["excluded"]["archived"], 1)
         self.assertEqual(codex["excluded"]["automated"], 1)
+        self.assertEqual(codex["runtime_observation"]["status"], "unavailable")
         self.assertEqual(
             codex["conversations"][0]["title"], "Review API limits"
         )
+        self.assertNotIn("runtime", codex["conversations"][0])
         self.assertNotIn("AGENTS.md", completed.stdout)
         self.assertNotIn("Internal worker", completed.stdout)
 
@@ -327,7 +372,278 @@ class LocalConversationHistoryTests(unittest.TestCase):
         self.assertIn("# 本地对话历史", completed.stdout)
         self.assertIn("Audit the release workflow", completed.stdout)
         self.assertIn("Fix \\| table rendering", completed.stdout)
+        self.assertIn("writer-lock 观测为 `unavailable`", completed.stdout)
         self.assertRegex(completed.stdout, r"\d{4}-\d{2}-\d{2} \d{2}:\d{2} [+-]\d{2}:\d{2}")
+
+    @unittest.skipUnless(os.name == "posix", "writer-lock probe uses POSIX flock")
+    def test_codex_writer_lock_is_positive_only_and_structured(self) -> None:
+        self.seed_codex_database()
+        lock_root = self.codex_home / "thread-writer-locks"
+        lock_root.mkdir(parents=True)
+        (lock_root / ".coordination.lock").touch()
+        session_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        lock_path = lock_root / f"{session_id}.lock"
+        lock_path.touch()
+
+        stale = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "codex",
+            "--codex-home",
+            str(self.codex_home),
+            "--format",
+            "json",
+        )
+        stale_payload = json.loads(stale.stdout)["providers"]["codex"]
+        self.assertEqual(stale_payload["runtime_observation"]["status"], "observed")
+        self.assertNotIn("runtime", stale_payload["conversations"][0])
+        self.assertTrue(lock_path.is_file())
+        self.assertEqual(lock_path.read_bytes(), b"")
+
+        holder = self.start_lock_holder(lock_path)
+        try:
+            markdown = self.run_cli(
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "codex",
+                "--codex-home",
+                str(self.codex_home),
+                "--language",
+                "zh",
+            )
+            structured = self.run_cli(
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "codex",
+                "--codex-home",
+                str(self.codex_home),
+                "--format",
+                "json",
+            )
+        finally:
+            self.stop_lock_holder(holder)
+
+        self.assertIn("写入锁文件已持有", markdown.stdout)
+        self.assertIn("不证明持锁者身份", markdown.stdout)
+        self.assertIn("无标记也不证明会话已停止", markdown.stdout)
+        payload = json.loads(structured.stdout)["providers"]["codex"]
+        self.assertEqual(payload["runtime_observation"]["status"], "observed")
+        self.assertIn(
+            "holder identity is not established",
+            payload["runtime_observation"]["semantics"],
+        )
+        self.assertEqual(
+            payload["conversations"][0]["runtime"],
+            {"writer_lock": "held"},
+        )
+        self.assertTrue(lock_path.is_file())
+        self.assertEqual(lock_path.read_bytes(), b"")
+
+    @unittest.skipUnless(os.name == "posix", "writer-lock probe uses POSIX flock")
+    def test_lock_held_outside_recent_limit_is_appended(self) -> None:
+        rows = []
+        for index in range(11):
+            session_id = (
+                f"{index:08x}-0000-4000-8000-{index:012x}"
+            )
+            rows.append(
+                (
+                    session_id,
+                    str(self.workspace),
+                    f"Conversation {index}",
+                    "",
+                    "",
+                    1768000000 + index,
+                    (1768000000 + index) * 1000,
+                    1768000100 + index,
+                    (1768000100 + index) * 1000,
+                    "cli",
+                    "user",
+                    None,
+                    0,
+                    f"sessions/{index}.jsonl",
+                )
+            )
+        create_codex_database(self.codex_home / "state_5.sqlite", rows)
+        held_session_id = "00000000-0000-4000-8000-000000000000"
+        lock_root = self.codex_home / "thread-writer-locks"
+        lock_root.mkdir(parents=True)
+        (lock_root / ".coordination.lock").touch()
+        lock_path = lock_root / f"{held_session_id}.lock"
+        lock_path.touch()
+
+        holder = self.start_lock_holder(lock_path)
+        try:
+            structured = self.run_cli(
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "codex",
+                "--codex-home",
+                str(self.codex_home),
+                "--limit",
+                "10",
+                "--format",
+                "json",
+            )
+            markdown = self.run_cli(
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "codex",
+                "--codex-home",
+                str(self.codex_home),
+                "--limit",
+                "10",
+                "--language",
+                "en",
+            )
+        finally:
+            self.stop_lock_holder(holder)
+
+        payload = json.loads(structured.stdout)["providers"]["codex"]
+        self.assertEqual(payload["total"], 11)
+        self.assertEqual(payload["recent_rows"], 10)
+        self.assertEqual(payload["shown"], 11)
+        self.assertEqual(payload["runtime_observation"]["held_rows_appended"], 1)
+        held_rows = [
+            row
+            for row in payload["conversations"]
+            if row.get("runtime") == {"writer_lock": "held"}
+        ]
+        self.assertEqual([row["session_id"] for row in held_rows], [held_session_id])
+        self.assertIn("plus 1 lock-held row(s) outside the recent window", markdown.stdout)
+
+    @unittest.skipUnless(os.name == "posix", "writer-lock probe uses POSIX flock")
+    def test_thread_unlock_failure_returns_partial_observation(self) -> None:
+        import fcntl
+
+        lock_root = self.codex_home / "thread-writer-locks"
+        lock_root.mkdir(parents=True)
+        (lock_root / ".coordination.lock").touch()
+        session_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        (lock_root / f"{session_id}.lock").touch()
+
+        spec = importlib.util.spec_from_file_location(
+            f"local_history_under_test_{id(self)}",
+            SCRIPT,
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        conversation = module.Conversation(
+            provider="codex",
+            session_id=session_id,
+            title="Unlock failure",
+            cwd=str(self.workspace),
+            updated_at=1768000100.0,
+            created_at=1768000000.0,
+            archived=False,
+            kind="main",
+            path="sessions/example.jsonl",
+            metadata_source="sqlite",
+            timestamp_source="sqlite",
+        )
+
+        real_flock = fcntl.flock
+        failed_unlock = False
+
+        def flaky_flock(file_descriptor: int, operation: int) -> None:
+            nonlocal failed_unlock
+            if operation == fcntl.LOCK_UN and not failed_unlock:
+                failed_unlock = True
+                raise OSError(errno.EIO, "injected unlock failure")
+            real_flock(file_descriptor, operation)
+
+        with mock.patch.object(fcntl, "flock", side_effect=flaky_flock):
+            observation = module.probe_codex_writer_locks(
+                self.codex_home,
+                [conversation],
+            )
+
+        self.assertTrue(failed_unlock)
+        self.assertEqual(observation.status, "partial")
+        self.assertEqual(observation.held_session_ids, frozenset())
+        self.assertIn("1 inventory session lock operation(s) failed", observation.detail)
+
+    @unittest.skipUnless(os.name == "posix", "writer-lock probe uses POSIX flock")
+    def test_busy_coordination_lock_makes_no_runtime_claim(self) -> None:
+        self.seed_codex_database()
+        lock_root = self.codex_home / "thread-writer-locks"
+        lock_root.mkdir(parents=True)
+        coordination_path = lock_root / ".coordination.lock"
+        coordination_path.touch()
+        session_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        (lock_root / f"{session_id}.lock").touch()
+
+        holder = self.start_lock_holder(coordination_path)
+        try:
+            completed = self.run_cli(
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "codex",
+                "--codex-home",
+                str(self.codex_home),
+                "--format",
+                "json",
+            )
+            markdown = self.run_cli(
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "codex",
+                "--codex-home",
+                str(self.codex_home),
+                "--language",
+                "en",
+            )
+        finally:
+            self.stop_lock_holder(holder)
+
+        payload = json.loads(completed.stdout)["providers"]["codex"]
+        self.assertEqual(payload["runtime_observation"]["status"], "busy")
+        self.assertEqual(
+            payload["runtime_observation"]["detail"],
+            "writer-lock coordination is busy; no runtime claim was made",
+        )
+        self.assertNotIn("runtime", payload["conversations"][0])
+        self.assertIn("writer-lock observation is `busy`", markdown.stdout)
+        self.assertNotIn("Codex is changing writer-lock ownership", markdown.stdout)
+        self.assertIn("no unflagged session is classified as stopped", markdown.stdout)
+
+    @unittest.skipUnless(os.name == "posix", "writer-lock probe uses POSIX flock")
+    def test_invalid_session_id_makes_lock_observation_partial(self) -> None:
+        self.seed_codex_database()
+        connection = sqlite3.connect(self.codex_home / "state_5.sqlite")
+        try:
+            connection.execute(
+                "UPDATE threads SET id = 'not-a-session-id' "
+                "WHERE id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'"
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        lock_root = self.codex_home / "thread-writer-locks"
+        lock_root.mkdir(parents=True)
+        (lock_root / ".coordination.lock").touch()
+
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "codex",
+            "--codex-home",
+            str(self.codex_home),
+            "--format",
+            "json",
+        )
+        payload = json.loads(completed.stdout)["providers"]["codex"]
+        self.assertEqual(payload["runtime_observation"]["status"], "partial")
+        self.assertNotIn("runtime", payload["conversations"][0])
 
     def test_claude_title_uses_structure_instead_of_text_length(self) -> None:
         project_dir = claude_project_dir(self.claude_home, self.workspace)
