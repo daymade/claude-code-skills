@@ -16,6 +16,7 @@ tool calls, files edited, and how the session ended.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -44,8 +45,17 @@ END_REASON_LABELS = {
     "in_progress": "In progress — tools ran but the agent left no closing message (resume mid-task)",
     "abandoned": "Abandoned — a user message got no response",
     "error_cascade": "Error cascade — repeated tool failures",
+    "errored": "Errored — the last task_complete carried an error and produced no closing message",
     "unknown": "Unknown",
 }
+
+# codex_error_info values that are typically transient (capacity/rate limits,
+# not something the resuming agent needs to fix) — measured on a corpus scan
+# of 468 real task_complete errors (~/.codex/sessions, 6650 rollouts): the
+# other observed codes (unauthorized, cyber_policy, context_window_exceeded)
+# all require the user/agent to change something before retrying, so they are
+# deliberately excluded here.
+TRANSIENT_ERROR_CODES = {"usage_limit_exceeded", "internal_server_error"}
 
 
 # ── Session discovery (reuses the tested _core.codex provider) ────────────────
@@ -169,6 +179,15 @@ def _detect_end_reason(data: dict) -> str:
     if data["last_sig"] == "agent_commentary":
         return "in_progress"
     if data["last_sig"] in ("task_complete", "agent_message"):
+        # A task_complete can carry an error and still be the tail signal —
+        # measured on a real corpus, this is NOT rare (468/5554 sessions with
+        # a task_complete had one). Compose the two rather than letting error
+        # presence override completion: 466/468 had no closing message (a
+        # real interruption), but 2/468 had a full, coherent closing message
+        # despite the error (e.g. usage_limit_exceeded mid-turn, recovered
+        # before the turn ended) — that case must stay "completed".
+        if data["last_sig"] == "task_complete" and data["task_error"] and not data["task_tail"]:
+            return "errored"
         return "completed"
     # Check the error cascade before in_progress: a cascade also ends on a
     # tool_output/patch tail, so testing in_progress first would shadow it.
@@ -230,6 +249,8 @@ def parse_codex_rollout(path: Path) -> dict:
         "ri_user": [],  # response_item/message stream (preferred when present)
         "ri_assistant": [],
         "task_tail": "",  # last task_complete.last_agent_message (tail safeguard)
+        "task_error": None,  # last task_complete.error dict, last-task_complete-wins
+        "latest_plan": None,  # last update_plan call's parsed {explanation?, plan}
         "tool_calls": [],  # (name, preview)
         "files_touched": set(),
         "errors": [],
@@ -291,6 +312,13 @@ def parse_codex_rollout(path: Path) -> dict:
                 # last_agent_message repeats the turn's final assistant text;
                 # appended at end-of-parse only if the chosen stream lacks it.
                 data["task_tail"] = str(payload.get("last_agent_message") or "").strip()
+                # Captured on EVERY task_complete (last-wins, same as task_tail
+                # above) — not only when present — so a later clean
+                # task_complete correctly clears a stale error from an earlier
+                # turn in the same session, rather than leaving it to mislabel
+                # the session's true end state.
+                error = payload.get("error")
+                data["task_error"] = error if isinstance(error, dict) else None
                 data["last_sig"] = "task_complete"
         elif rtype == "response_item":
             if ptype == "message":
@@ -328,6 +356,24 @@ def parse_codex_rollout(path: Path) -> dict:
                 if call_id:
                     data["open_calls"][call_id] = name
                 data["last_sig"] = "tool_call"
+                # update_plan is Codex's own multi-step plan/TODO tool — the
+                # highest-signal "what stage is this task at" artifact, and
+                # exactly what a resume skill needs. Generic tool_calls above
+                # truncates to 120 chars and the briefing only shows the last
+                # MAX_TOOL_CALLS entries, so in a long session (thousands of
+                # calls) the latest plan is reliably evicted/truncated there.
+                # Tracked separately, last-call-wins, full text, no truncation.
+                # Measured stable on ~4000 real calls: arguments is always a
+                # JSON string parsing to {"plan": [...]} or
+                # {"explanation": ..., "plan": [...]}, each plan entry
+                # {"step": ..., "status": ...}.
+                if name == "update_plan" and isinstance(raw, str):
+                    try:
+                        parsed_plan = json.loads(raw)
+                    except (json.JSONDecodeError, TypeError):
+                        parsed_plan = None
+                    if isinstance(parsed_plan, dict) and isinstance(parsed_plan.get("plan"), list):
+                        data["latest_plan"] = parsed_plan
             elif ptype in ("function_call_output", "custom_tool_call_output"):
                 call_id = payload.get("call_id")
                 if call_id:
@@ -406,6 +452,18 @@ def _clip(text: str, limit: int, full: bool) -> str:
     )
 
 
+def _format_task_error(error: dict) -> str:
+    """Render a task_complete.error dict as `codex_error_info: message`.
+
+    Both keys were stable across every shape seen in a 468-record corpus
+    scan; `message` is kept because codex_error_info alone (e.g.
+    "other") is not always self-explanatory.
+    """
+    info = str(error.get("codex_error_info") or "unknown")
+    message = str(error.get("message") or "").strip()
+    return f"{info}: {message}" if message else info
+
+
 def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> str:
     sections = ["# Codex Resume Context Briefing\n"]
 
@@ -424,11 +482,38 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
 
     file_mb = data["file_size"] / 1_000_000
     end_label = END_REASON_LABELS.get(data["end_reason"], data["end_reason"])
+    task_error = data.get("task_error")
+    if data["end_reason"] == "errored" and task_error:
+        # Inline the actual error rather than a generic "an error occurred" —
+        # usage_limit_exceeded, context_window_exceeded, and unauthorized each
+        # call for a different next action, and the resumer needs to tell
+        # them apart without opening the raw rollout.
+        end_label = f"Errored — {_format_task_error(task_error)}"
     sections.append(
         f"\n**Rollout file**: {file_mb:.1f} MB, {data['total_lines']} records, "
         f"{len(data['compact_summaries'])} compaction(s)"
     )
     sections.append(f"**Session end reason**: {end_label}")
+    if data["end_reason"] == "errored" and task_error:
+        info = str(task_error.get("codex_error_info") or "")
+        if info in TRANSIENT_ERROR_CODES:
+            sections.append(
+                "> This kind of error often clears on a schedule (usage limits "
+                "reset, server load subsides). If the original Codex "
+                "process/terminal is still open, it may resume this session on "
+                "its own — check for that before assuming manual continuation "
+                "is the only path."
+            )
+    elif data["end_reason"] == "completed" and data["last_sig"] == "task_complete" and task_error:
+        # The turn genuinely closed (a real last_agent_message exists) but the
+        # same task_complete also carried an error — measured 2/468 times in
+        # the corpus scan. Composing rather than hiding: neither "completed"
+        # nor "errored" alone tells the whole story here.
+        sections.append(
+            f"> ⚠️ Note: the final `task_complete` also carried an error "
+            f"(`{_format_task_error(task_error)}`) despite producing a closing "
+            f"message — the underlying issue may still need attention."
+        )
     if data["open_calls"]:
         pending = ", ".join(sorted(set(data["open_calls"].values())))
         sections.append(f"**Unresolved tool calls**: {len(data['open_calls'])} ({pending})")
@@ -449,6 +534,25 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
         sections.append("\n## Last Assistant Responses\n")
         for i, text in enumerate(assistant_messages, 1):
             sections.append(f"### Response {i}\n{_clip(text, 1000, full)}\n")
+
+    if data["latest_plan"]:
+        # The single most recent update_plan call, full text, exempt from both
+        # the 120-char tool-call preview and the last-MAX_TOOL_CALLS window
+        # below — in a long session (thousands of tool calls) this is
+        # otherwise reliably evicted, yet it's the highest-signal "what stage
+        # is this task at" artifact Codex produces.
+        plan = data["latest_plan"]
+        sections.append("\n## Latest Plan State (from the last `update_plan` call)\n")
+        explanation = plan.get("explanation")
+        if explanation:
+            sections.append(f"_{explanation}_\n")
+        for step in plan.get("plan", []):
+            if not isinstance(step, dict):
+                continue
+            status = str(step.get("status") or "pending")
+            text = str(step.get("step") or "")
+            mark = "x" if status == "completed" else " "
+            sections.append(f"- [{mark}] {text} ({status})")
 
     if data["tool_calls"]:
         recent = data["tool_calls"][-MAX_TOOL_CALLS:]
