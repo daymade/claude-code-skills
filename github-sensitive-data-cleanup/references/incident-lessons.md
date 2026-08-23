@@ -141,8 +141,9 @@ files to satisfy the check.
 tooling itself broke on realistic inputs: `verify_cleanup.py` decoded
 `git log` output with strict UTF-8, so one GBK/legacy-encoded commit message
 crashed verification with an uncaught `UnicodeDecodeError` — no report at
-all. The SKILL.md Step 4 command blocks omitted `--yes`, so following the
-documentation verbatim exited before the backup was even created.
+all. The SKILL.md rewrite command blocks (Step 4 and the script-reference
+section) omitted `--yes`, so following the documentation verbatim exited
+before the backup was even created.
 `rewrite_history.py` ran `git bundle verify` without `-C <repo>`, crashing
 when invoked from a non-git directory, and the resulting `RuntimeError`
 escaped the `except` clause. A FAILED message check reported only a hit
@@ -167,7 +168,7 @@ get silently skipped.
 **Prevention:**
 
 - Decode git output with `errors="replace"` when the goal is detection, not
-  fidelity — this now holds for every subprocess call in all four scripts,
+  fidelity — this now holds for every subprocess decode in all four scripts,
   both channels. Report `commit_message_commits` hashes (first 10) so a
   FAILED check locates commits instead of just counting hits. Boundary:
   `errors="replace"` prevents the crash but cannot make a UTF-8 pattern
