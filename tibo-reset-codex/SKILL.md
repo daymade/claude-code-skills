@@ -13,8 +13,9 @@ description: >-
 ## 这是什么
 
 「Tibo reset」= OpenAI Codex/ChatGPT Work 负责人 **Thibault Sottiaux（X: @thsottiaux）**
-个人在 X 上宣布的**全员额度重置**传统。社区昵称「Lord Tibo」，有第三方追踪站（Tibo Radar）
-和「祈祷重置」亚文化。重置是**善意姿态，没有固定排期**——每次由他发推宣布。
+个人在 X 上宣布的**全员额度重置**传统。社区昵称「Lord Tibo」，有第三方追踪站
+**Tibo Radar**（域名 `codex-reset.com`）和「祈祷重置」亚文化。重置是**善意姿态，
+没有固定排期**——每次由他发推宣布。
 
 **三种「重置」别混淆**（回答用户前先分清问的是哪种）：
 
@@ -37,11 +38,11 @@ description: >-
        if ow: print('   窗口:', ow.get('label'), '=', ow.get('start_at'), '→', ow.get('end_at'), 'UTC')"
    ```
 
-   新条目在前。关键字段：`announced_at`（UTC ISO）、`summary`（推文原文）、
-   `official_window`（见第 3 步）、`reset_verification_status`（`pending` = 预告未落地；
-   该字段只有 pending/rejected/null，**永不翻转成「已到账」**，见证据纪律节）。
-   `type` 是内部小写值：`reset` = 全员重置、`credits` = banked/额度包、`boost`/`promo` =
-   消耗规则类——对应页面显示层的 RESET / BANKED / LIMITS / BOOST，别拿大写词去匹配 API。
+   新条目在前。关键字段：`announced_at`（UTC ISO）、`summary`（推文内容，长推文可能截断，
+   完整原文看 `url` 字段）、`official_window`（见第 3 步）、`reset_verification_status`
+   （`pending` = 预告未落地；该字段只有 pending/rejected/null，**永不翻转成「已到账」**，
+   见证据纪律节）。`type` 是内部小写值：`reset` = 全员重置、`credits` = banked/额度包、
+   `boost`/`promo` = 消耗规则类，别拿大写词去匹配 API。
 
    ⚠️ **别用 HTML 页面 `codex-reset.com/tibo` 当数据源**：它是 SPA，静态 HTML 只渲染旧条目
    （2026-08-23 实测最新一条滞后两天，且无任何过期提示）；WebFetch 还可能被域名安全拦截。
@@ -56,7 +57,7 @@ description: >-
 4. **fallback 链**：API curl 挂 → codexlimitwatch curl 单源（标注「单源未交叉」）→ WebSearch
    `thsottiaux reset`。都拿不到就明说「无法核实」，别凭记忆答。`feed.xml` 滞后更多
    （实测最新只到 8-13），不作 fallback。X 原文（x.com/thsottiaux）抓不到，不必试。
-5. 用户若说「群里看到的」：截图源头通常就是 Tibo Radar 页面；群聊转述可搜关键词
+5. 用户若说「群里看到的」：截图源头通常就是 Tibo Radar 页面；如有群聊归档可搜关键词
    「重置/reset/Tibo」交叉验证群友实测（如到账与否）。
 
 ## Tibo 的时间写法是糙的（解读规则）
@@ -71,7 +72,7 @@ description: >-
   或 8（PST）小时得到发推的太平洋日期，再读 tomorrow 指哪天
 - 历史模式（非承诺）：重置从不落在太平洋 1AM–8AM（他的睡眠时段），高峰在太平洋下午
 
-## 时区换算（命令已实测，2026-08-23）
+## 时区换算（命令已实测，2026-08-23；**macOS only**——BSD `date -j`/`-f`，GNU date 无此参数）
 
 ```bash
 # 免查时令写法（推荐）：让 OS 自己解 PDT/PST。注意 macOS BSD date 的 -f 不支持
@@ -91,7 +92,7 @@ TZ=America/Los_Angeles date "+%F %T %Z(%z)"
 ## 证据纪律（踩过的坑）
 
 - **tracker 的 confirmed 类标签对未来的预告也会打**（两站均有此形态：codexlimitwatch 给
-  8-23 那条预告就打了「Reset confirmed (future-dated)」；Radar 历史上也有）。判「已到账」
+  8-23 那条预告打了「Reset confirmed」——预告未落地也标 confirmed；Radar 历史上也有）。判「已到账」
   只看落地后的实际信号，不看标签：API 的 `reset_verification_status` 只有 pending/rejected/null
   （2026-08-23 全量 51 条实测：落地两天的「has landed」条目仍是 pending）——**结构上不提供
   「已到账」正向信号**，别去等一个永不触发的字段翻转。到账证据 = Tibo 后续「has landed」类
