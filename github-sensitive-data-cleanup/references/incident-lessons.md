@@ -134,6 +134,38 @@ run the script's exact steps manually (backup bundle, `git filter-repo`,
 verify) and document the deviation — never delete or stash another session's
 files to satisfy the check.
 
+## Lesson 9: The Tooling Crashed on Exactly the Repos It Cleans
+
+**What happened:** Independent review of the Lesson 7 fixes found that the
+tooling itself broke on realistic inputs: `verify_cleanup.py` decoded
+`git log` output with strict UTF-8, so one GBK/legacy-encoded commit message
+crashed verification with an uncaught `UnicodeDecodeError` — no report at
+all. The SKILL.md Step 4 command blocks omitted `--yes`, so following the
+documentation verbatim exited before the backup was even created.
+`rewrite_history.py` ran `git bundle verify` without `-C <repo>`, crashing
+when invoked from a non-git directory, and the resulting `RuntimeError`
+escaped the `except` clause. A FAILED message check reported only a hit
+count, leaving the operator to hand-grep `git log` for the offending
+commits.
+
+**Why it matters:** A repo being cleaned is by definition a repo with
+hygiene problems — legacy encodings included — so the verification tooling
+must be more robust than the code it inspects; a verifier that crashes
+instead of reporting converts "leak still present" into "tool broken" at
+the worst possible moment. And a documented command that cannot be run
+verbatim trains operators to improvise, which is how steps like backups
+get silently skipped.
+
+**Prevention:**
+
+- Decode git output with `errors="replace"` when the goal is detection, not
+  fidelity; report `commit_message_commits` hashes so a FAILED check
+  locates commits instead of just counting hits.
+- Test every documented command block verbatim — copy-paste from the doc
+  into a shell — before shipping the doc.
+- Pass `-C <repo>` to every git invocation; scripts must behave identically
+  from any working directory.
+
 ## When to Escalate to a Human
 
 Stop and ask the user before proceeding if:
