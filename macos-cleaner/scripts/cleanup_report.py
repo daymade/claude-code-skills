@@ -136,8 +136,8 @@ def generate_report(before, after):
     duration = after_time - before_time
 
     print(f"\nCleanup Duration: {duration}")
-    print(f"Before: {before_time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"After:  {after_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Before: {before_time.isoformat()}")
+    print(f"After:  {after_time.isoformat()}")
 
     # Disk usage comparison
     print("\n" + "-" * 60)

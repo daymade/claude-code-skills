@@ -88,7 +88,7 @@ If the known suspect alone can meet the user's free-space target, do not scan un
 
 ### General analysis when the source is unknown
 
-Run the smallest ordered sequence that can identify enough physical space to meet the target. Stop as soon as one measured source can do that; do not keep scanning to make the report look comprehensive.
+Run the smallest ordered sequence that can identify enough physical space to meet the target. Stop only when candidates with supported exact actions and defensible expected physical release can meet it. Raw allocation totals, logical cache sizes, shared Docker layers, Trash moves, and unverified “potential savings” do not satisfy the stop condition.
 
 | Order / signal | Read-only action | Stop or continue |
 |---|---|---|
@@ -167,6 +167,11 @@ uv run scripts/safe_delete.py <exact-path> [<exact-path> ...]
 ```
 
 Do not use this helper for user documents, application-managed caches such as Apple Content Caching, databases, credentials, or any target whose role is uncertain.
+
+Two narrow Finder-Trash branches remain available without weakening those exclusions:
+
+- For an exact inactive application cache with no verified supported management control, follow the named-cache discovery/in-use protocol in `references/cleanup_targets.md`, explain the rebuild cost, and obtain explicit approval for that exact cache path.
+- For duplicate files inside an exact approved user-data root, first show each duplicate set's size/hash and every path. The user must name the copy to keep and each copy to remove. Move only those confirmed files to Finder Trash; never use the permanent helper, an automatic duplicate-selection flag, `all`, a glob, or a directory-level target. Verify the source paths moved to Trash, and state that physical space is not released until Trash is separately reviewed and emptied.
 
 ## Phase 4: verify and observe
 

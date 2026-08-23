@@ -105,6 +105,8 @@ class ComparisonTests(unittest.TestCase):
 
         self.assertIn('Volume: /System/Volumes/Data', output.getvalue())
         self.assertIn('Recovered:', output.getvalue())
+        self.assertIn('Before: 2026-08-24T01:00:00+08:00', output.getvalue())
+        self.assertIn('After:  2026-08-24T01:05:00+08:00', output.getvalue())
 
     def test_after_snapshot_cannot_predate_before(self):
         before = self.snapshot('/System/Volumes/Data')

@@ -174,6 +174,40 @@ These were explicit decision points in the original skill and remain reachable f
 
 The historical time/size examples above are impact illustrations, not current measurements. Use live allocation and the user's actual network/project activity in the plan.
 
+#### Targeted discovery and measurement
+
+Do not reopen a broad Mole scan for a named developer cache. Resolve one exact path from the current tool/application configuration, then measure only that path.
+
+| Target | Authority for the exact live path | Default candidate only when no override is found | Supported/narrow next step |
+|---|---|---|---|
+| Xcode DerivedData | Xcode **Settings → Locations → Derived Data** | `~/Library/Developer/Xcode/DerivedData` | Quit Xcode; prefer removing an exact inactive project child. Whole-root Trash requires explicit rebuild-cost approval. |
+| npm `_cacache` / `_npx` | `npm config get cache`, then append the exact child name | None; do not guess around npm's returned root | `_npx` may go to Trash after confirming no `npx` process. Keep `_cacache` by default; whole-cache removal requires explicit redownload approval. |
+| uv cache | `uv cache dir` (honors `--cache-dir`, `UV_CACHE_DIR`, and uv config) | `$XDG_CACHE_HOME/uv` or `~/.cache/uv` only as a candidate | Prefer `uv cache clean <exact-package>` for a named obsolete package, or `uv cache clean` only when the whole cache is approved. Do not edit uv's internal cache by hand. |
+| Playwright browsers | The project's `PLAYWRIGHT_BROWSERS_PATH` / runner configuration | `~/Library/Caches/ms-playwright` only as a candidate | Stop Playwright/browser processes. Prefer project-supported browser removal; otherwise move the verified whole inactive cache to Trash, not internal browser files guessed by name. |
+| iOS DeviceSupport | Xcode's active platform/device support view plus the exact on-disk directory | `~/Library/Developer/Xcode/iOS DeviceSupport` | Quit Xcode; move only an exact OS-version child no longer needed for connected-device debugging. |
+| Hugging Face cache | Active service/project values for `HF_HOME`, `HF_HUB_CACHE`, or `XDG_CACHE_HOME` | `~/.cache/huggingface` only as a candidate | Prefer the installed Hugging Face cache-management command after verifying its current help. Without a verified supported control, keep internal cache subsets; whole inactive cache Trash is a separate user decision. |
+| ModelScope cache | Active service/project cache configuration | `~/.cache/modelscope` only as a candidate | Prefer the installed ModelScope cache-management command after verifying its current help. Without one, keep internal subsets; whole inactive cache Trash needs explicit redownload approval. |
+| JetBrains caches | **Help → Diagnostic Tools → Special Files and Folders** or `idea.system.path` | `~/Library/Caches/JetBrains/<product><version>` | Quit the IDE; prefer its cache invalidation UI. An exact cache for an uninstalled/retired product version may go to Trash. Never target config/plugins/local history by assuming every JetBrains directory is cache. |
+| Stopped Docker container | `docker inspect <exact-name-or-id>` plus `docker ps -a` | None | Use `references/docker_analysis.md`; stopped status alone never authorizes removal. |
+
+For the resolved `<exact-cache-path>`, use allocated blocks and an in-use check:
+
+```bash
+/usr/bin/du -sk "<exact-cache-path>"
+/usr/sbin/lsof +D "<exact-cache-path>"
+```
+
+`lsof` exit 0 means the target is in use. Exit 1 with empty stdout/stderr is the no-open-files result; timeout, permission errors, or any other output leave the check incomplete. Combine this with the live owning-process check—an empty `lsof` result alone does not prove an application is inactive.
+
+The plan must name the exact supported command or exact Finder Trash target, rebuild/redownload impact, and a postcondition. After action, re-resolve the configured path, re-run `du -sk`, and read target-volume `df -k/-h`. Trash is a recovery step, not physical reclamation; do not claim freed bytes until the separately approved removal from Trash is reflected in `df`.
+
+Source notes (accessed 2026-08-24):
+
+- uv cache resolution and supported `uv cache dir` / `uv cache clean [package]`: <https://docs.astral.sh/uv/concepts/cache/> and <https://docs.astral.sh/uv/reference/storage/>
+- Playwright browser binaries, macOS cache default, and `PLAYWRIGHT_BROWSERS_PATH`: <https://playwright.dev/docs/browsers#managing-browser-binaries>
+- Hugging Face cache environment variables: <https://huggingface.co/docs/huggingface_hub/en/package_reference/environment_variables>
+- JetBrains live-path authority, `idea.system.path`, and macOS cache layout: <https://www.jetbrains.com/help/idea/directories-used-by-the-ide-to-store-settings-caches-plugins-and-logs.html>
+
 ### Narrow npm `_npx` candidate
 
 `_npx` stores temporary packages fetched for `npx` executions. It is narrower than npm's content-addressed `_cacache`; deleting it means future `npx` commands may download those packages again.
@@ -267,7 +301,7 @@ Inspect the allocation without deleting it:
 docker builder du
 ```
 
-This skill does not use `docker builder prune` or `docker buildx prune`. They are category-wide prune commands and cannot express which cache records the user approved. Report the build-cache total and rebuild cost; if it is the chosen target, obtain a separately approved, tool-specific plan instead of treating it as an exception to the prune prohibition.
+This skill does not use `docker builder prune` or `docker buildx prune`. They are category-wide prune commands and conflict with this skill's explicit prune prohibition. Report the build-cache total and rebuild cost, then state that build-cache deletion is not executable through this skill; do not leave a dangling promise to obtain an unspecified plan.
 
 Build-cache deletion is outside this skill's execution scope. Do not advertise the build-cache number as reclaimable space this skill can automatically deliver.
 
