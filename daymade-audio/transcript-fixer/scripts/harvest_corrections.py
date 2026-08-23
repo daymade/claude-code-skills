@@ -92,7 +92,7 @@ _GLUE_CHARS = set(
     "再越按曾正将及且而则即若虽因所为于之其此该各每某时当"
     "用做打搞弄拿给叫使令")
 
-# trap 最短有效长度：CJK 2 字（生活/缺陷）误伤面太大，3 字（生活通/小缺陷）
+# trap 最短有效长度：CJK 2 字（生活/缺陷）误伤面太大，3 字（蓝活通/云国）
 # 通常已带消歧邻字。扩展后仍 <3 的纯 CJK 候选标 ⚠️ 裸形——人工收紧前
 # --write 不自动写入（裸词 trap 误伤面最大）。
 _MIN_TRAP_LEN = 3
@@ -111,7 +111,7 @@ def _expand(core_f: str, core_t: str, left_eq: str, right_eq: str,
 
     Direction is chosen by a frequency oracle, not fixed left-priority: the
     side whose expanded form appears MORE often in the raw text is the real
-    term shape (生活通 recurs across contexts; 器生活/用生活 are locked to
+    term shape (蓝活通 recurs across contexts; 器蓝活/用蓝活 are locked to
     one neighbor char each). Fixed left-priority fragmented one trap into
     per-context variants and split its occurrence count (2026-08-23 review).
     `count` is a callable raw_text.count. Ties are undecidable at count=1
@@ -119,7 +119,7 @@ def _expand(core_f: str, core_t: str, left_eq: str, right_eq: str,
     back left deterministically — a single-occurrence candidate may carry a
     stray neighbor char; the operator trims it at adjudication. High-frequency
     glue/verb chars (_GLUE_CHARS) never get absorbed, which resolves the
-    common 用生活→用盛付 shape before the tiebreak is even consulted.
+    common 用蓝活→用盛付 shape before the tiebreak is even consulted.
     """
     while len(core_f) < min_len:
         options = []
@@ -192,8 +192,8 @@ def _candidates_from_pair(from_span: str, to_span: str,
     """Clause-level diff span -> minimal term-level candidate(s).
 
     - Common affixes are trimmed first (with Latin-run protection), so a
-      mixed span like 点小云星派还没部署上去→点xqxpay还没部署上去 yields the
-      term pair 小云星派→xqxpay, not the whole clause.
+      mixed span like 点云小星派还没部署上去→点example还没部署上去 yields the
+      term pair 云小星派→example, not the whole clause.
     - Cores still containing Latin/digits are emitted whole: Latin tokens
       carry their own word boundaries and finer trimming mangles them.
     - Pure-CJK cores are char-diffed; each replace region becomes its own
@@ -289,7 +289,7 @@ def _keep(from_span: str, to_span: str) -> bool:
     # 对齐幻影：长度悬殊且零相似 = difflib 把不相关文本配成对
     # （世界→然后走了）。等长全换是 CJK 实体错误的正常形态（缺陷→确幸
     # 音近但零共同字），不能按相似度杀；跨脚本口述→ASCII 转换
-    # （点三西派点→.sanxipay）无相似度地板，豁免。
+    # （点三溪派点→.example）无相似度地板，豁免。
     if not re.search(r"[A-Za-z0-9]", from_span + to_span):
         if abs(len(from_span) - len(to_span)) >= 2 and \
                 difflib.SequenceMatcher(None, from_span, to_span).ratio() < 0.3:
@@ -338,7 +338,7 @@ def harvest(raw: str, corrected: str) -> tuple[list[dict], int]:
     dropped = 0
     for from_span, to_span in _extract_pairs(raw, corrected):
         for f, t in _candidates_from_pair(from_span, to_span, count):
-            # 归一化：尾部游离标点（口述句读吸入 span，mch.xqxpay.）；反引号
+            # 归一化：尾部游离标点（口述句读吸入 span，mch.example.）；反引号
             # 会破坏 bullet 语法，先剥掉
             f = f.rstrip(_TRAIL_PUNCT).replace("`", "").strip()
             t = t.rstrip(_TRAIL_PUNCT).replace("`", "").strip()
@@ -402,7 +402,7 @@ def main() -> int:
     candidates, dropped = harvest(raw, corrected)
 
     # 已在 context 文件里的 trap 不再报。双向包含即覆盖：context 有
-    # 商阳→商央，候选 商阳科→商央科 是宽形，跳过；反向（已知宽 trap、
+    # 恒阳→恒央，候选 恒阳科→恒央科 是宽形，跳过；反向（已知宽 trap、
     # 候选窄形）同理——宽窄同体，哪边先命中都一样。
     known: list[tuple[str, str]] = []
     ctx_path: Path | None = None
@@ -439,7 +439,7 @@ def main() -> int:
 
     bullets = [to_bullet(c) for c in candidates]
     # 自检：生成的每条 bullet 必须能被真 parser 解析——生成器 bug 当场炸，
-    # 不允许把不可解析的行写进 context 文件（2026-08-22 jeepay 表格不解析
+    # 不允许把不可解析的行写进 context 文件（2026-08-22 某支付域 表格不解析
     # 事故的机械防线）。
     bad = [b for b in bullets if not _parses(b)]
     if bad:

@@ -1,8 +1,8 @@
 """Tests for scripts.harvest_corrections — native-pass -> trap-candidate harvest.
 
-Fixtures model the 2026-08-22 jeepay transcript fixes (the session that
+Fixtures model the 2026-08-22 某支付域 transcript fixes (the session that
 motivated the tool): CJK entity traps need their disambiguating neighbor
-char (小缺陷 not 缺陷), glue chars mark word boundaries, Latin runs must
+char (云国 not 缺陷), glue chars mark word boundaries, Latin runs must
 never be cut mid-token, and every emitted bullet must round-trip through
 core.trap_scanner's real parser.
 """
@@ -33,32 +33,32 @@ def _cands(raw: str, new: str) -> list[tuple[str, str]]:
 
 
 class TestCandidateGranularity:
-    """The seven shapes from the real jeepay pair."""
+    """The seven shapes from the real 某支付域 pair."""
 
     def test_two_entity_fixes_in_one_clause_split(self):
-        got = _cands("我拿小信信去生活通开出来一个商户号", "我拿小确幸去盛付通开出来一个商户号")
-        assert ("小信信", "小确幸") in got
-        assert ("生活通", "盛付通") in got
+        got = _cands("我拿云信信去蓝活通开出来一个商户号", "我拿云果去蓝付通开出来一个商户号")
+        assert ("云信信", "云果") in got
+        assert ("蓝活通", "蓝付通") in got
 
     def test_neighbor_char_survives(self):
-        got = _cands("域名是以小缺陷为主", "域名是以小确幸为主")
-        assert ("小缺陷", "小确幸") in got
+        got = _cands("域名是以云国为主", "域名是以云果为主")
+        assert ("云国", "云果") in got
         assert ("缺陷", "确幸") not in got
-        assert ("以小缺陷", "以小确幸") not in got
+        assert ("以云国", "以云果") not in got
 
     def test_glue_char_vetoes_left_right_still_grows(self):
         # 去 is glue on the left; the completer 通 on the right must win.
-        got = _cands("去生活通官方", "去盛付通官方")
-        assert ("生活通", "盛付通") in got
+        got = _cands("去蓝活通官方", "去蓝付通官方")
+        assert ("蓝活通", "蓝付通") in got
         assert ("去生活", "去盛付") not in got
 
     def test_right_truncation_is_substring_consistent(self):
-        got = _cands("我是有一个三息支付的文档站", "我是有一个三希智付的文档站")
-        assert ("三息支", "三希智") in got  # 截短形：子串替换下自洽
+        got = _cands("我是有一个三溪支付的文档站", "我是有一个三江智付的文档站")
+        assert ("三溪支", "三江智") in got  # 截短形：子串替换下自洽
 
     def test_mixed_span_trims_cjk_affixes(self):
-        got = _cands("docs 点小云星派还没部署上去", "docs 点xqxpay还没部署上去")
-        assert ("小云星派", "xqxpay") in got
+        got = _cands("docs 点云小星派还没部署上去", "docs 点example还没部署上去")
+        assert ("云小星派", "example") in got
 
     def test_latin_run_never_cut(self):
         got = _cands("我没走那unifyorder", "我没走那unifyOrder")
@@ -66,7 +66,7 @@ class TestCandidateGranularity:
         assert ("nifyorder", "nifyOrder") not in got
 
     def test_spoken_domain_span_kept_whole(self):
-        got = _cands("merchant 点小缺陷派点cn", "mch.xqxpay.cn")
+        got = _cands("merchant 点云国派点cn", "mch.example.com")
         assert len(got) == 1
         f, t = got[0]
         assert "merchant" in f and "mch" in t
@@ -78,7 +78,7 @@ class TestKeepFilter:
         assert not _keep("点", ".")
 
     def test_to_punct_dropped(self):
-        assert not _keep("小确幸派", "，")
+        assert not _keep("云果派", "，")
 
     def test_identical_dropped(self):
         assert not _keep("abc", "abc")
@@ -88,13 +88,13 @@ class TestKeepFilter:
         assert not _keep("短", "超" * 25)
 
     def test_real_term_kept(self):
-        assert _keep("小缺陷", "小确幸")
+        assert _keep("云国", "云果")
 
 
 class TestExpand:
     def test_grows_to_min_len(self):
-        cnt = "商阳科技".count
-        assert _expand("阳", "央", "商", "科技", cnt) == ("商阳科", "商央科")
+        cnt = "恒阳科技".count
+        assert _expand("阳", "央", "恒", "科技", cnt) == ("恒阳科", "恒央科")
 
     def test_glue_stops_growth(self):
         # 两侧都是黏着字时保持短形，不硬凑长度
@@ -102,21 +102,21 @@ class TestExpand:
         assert f == "缺陷"
 
     def test_frequency_oracle_picks_recurring_side(self):
-        # 器生活出现 1 次、生活通出现 3 次 → 向右扩展
-        raw = "器生活通。又说生活通。还是生活通。"
-        f, t = _expand("生活", "盛付", "器", "通", raw.count)
-        assert (f, t) == ("生活通", "盛付通")
+        # 器蓝活出现 1 次、蓝活通出现 3 次 → 向右扩展
+        raw = "器蓝活通。又说蓝活通。还是蓝活通。"
+        f, t = _expand("蓝活", "蓝付", "器", "通", raw.count)
+        assert (f, t) == ("蓝活通", "蓝付通")
 
     def test_frequency_oracle_left_when_left_dominant(self):
-        raw = "小缺陷，小缺陷，缺陷为"
-        f, t = _expand("缺陷", "确幸", "小", "为", raw.count)
-        assert (f, t) == ("小缺陷", "小确幸")
+        raw = "云国，云国，国为"
+        f, t = _expand("国", "果", "云", "为", raw.count)
+        assert (f, t) == ("云国", "云果")
 
     def test_tie_goes_left_deterministic(self):
         # 同分回退左侧（确定性兜底）——count=1 时语料无法判断哪侧邻居属于
         # 词，可能带出一个游离邻字，由裁决环节人工修齐（见 _expand docstring）
-        f, t = _expand("阳", "央", "商", "科技", lambda s: 1)
-        assert (f, t) == ("商阳科", "商央科")
+        f, t = _expand("阳", "央", "恒", "科技", lambda s: 1)
+        assert (f, t) == ("恒阳科", "恒央科")
 
 
 class TestLatinCut:
@@ -133,55 +133,55 @@ class TestLatinCut:
 
 class TestQuoteAndParses:
     def test_bare_unquoted(self):
-        assert _quote("小缺陷") == "小缺陷"
+        assert _quote("云国") == "云国"
 
     def test_space_backticked(self):
         assert _quote("test scale") == "`test scale`"
 
     def test_emitted_bullets_roundtrip(self):
-        for f, t in [("小缺陷", "小确幸"), ("`test scale`", "tailscale"),
-                     ("三息支", "三希智")]:
+        for f, t in [("云国", "云果"), ("`test scale`", "tailscale"),
+                     ("三溪支", "三江智")]:
             bullet = f"- **{_quote(f)} → {_quote(t)}** — cue"
             assert _parses(bullet), bullet
 
 
 class TestHarvestEndToEnd:
-    RAW = "我去生物通开了一个小缺陷的号，test scale 连上了，小缺陷为主"
-    NEW = "我去盛付通开了一个小确幸的号，tailscale 连上了，小确幸为主"
+    RAW = "我去蓝物通开了一个云国的号，test scale 连上了，云国为主"
+    NEW = "我去蓝付通开了一个云果的号，tailscale 连上了，云果为主"
 
     def test_counts_and_fields(self):
         out, _ = harvest(self.RAW, self.NEW)
         by_from = {c["from"]: c for c in out}
-        assert by_from["小缺陷"]["fixed"] == 2
-        assert by_from["生物通"]["to"] == "盛付通"
+        assert by_from["云国"]["fixed"] == 2
+        assert by_from["蓝物通"]["to"] == "蓝付通"
         assert by_from["test scale"]["to"] == "tailscale"
-        assert by_from["小缺陷"]["raw_occurrences"] == 2
-        assert by_from["小缺陷"]["remaining"] == 0
+        assert by_from["云国"]["raw_occurrences"] == 2
+        assert by_from["云国"]["remaining"] == 0
 
     def test_clustering_absorbs_wider_form(self):
-        # merchant 点小缺陷派点 是 Latin 保护留下的宽形；并入窄形 小缺陷派点
-        raw = "merchant 点小缺陷派点cn，小缺陷派点"
-        new = "mch.xqxpay.cn，xqxpay."
+        # merchant 点云国派点 是 Latin 保护留下的宽形；并入窄形 云国派点
+        raw = "merchant 点云国派点cn，云国派点"
+        new = "mch.example.com，example."
         out, _ = harvest(raw, new)
         by_from = {c["from"]: c for c in out}
-        assert "小缺陷派点" in by_from
+        assert "云国派点" in by_from
         assert not any("merchant" in f for f in by_from)
-        assert by_from["小缺陷派点"]["fixed"] == 2
+        assert by_from["云国派点"]["fixed"] == 2
 
     def test_same_from_different_to_not_merged(self):
         # from 相同、to 不同 = 两个不同修正，各自呈现（分隔符不变才能切开）
-        raw = "小云星派，小云星派"
-        new = "xqxpay，xqxpay.cn"
+        raw = "云小星派，云小星派"
+        new = "example，example.com"
         out, _ = harvest(raw, new)
-        tos = {c["to"] for c in out if c["from"] == "小云星派"}
-        assert tos == {"xqxpay", "xqxpay.cn"}
+        tos = {c["to"] for c in out if c["from"] == "云小星派"}
+        assert tos == {"example", "example.com"}
 
     def test_multi_change_cjk_run_with_latin_target_stays_whole(self):
         # 已知边界：一个 CJK run 内两处改动且目标是 Latin 时无法切分
         # （old 侧是单个 token），整段作为一条候选呈现，交给人工裁决
-        out, _ = harvest("小云星派和小云星派", "xqxpay和xqxpay.cn")
+        out, _ = harvest("云小星派和云小星派", "example和example.com")
         assert len(out) == 1
-        assert out[0]["from"] == "小云星派和小云星派"
+        assert out[0]["from"] == "云小星派和云小星派"
 
     def test_remaining_flagged(self):
         out, _ = harvest("code 和 code", "Code 和 code")
@@ -195,9 +195,9 @@ class TestReviewFixes20260823:
     def test_cross_paragraph_fused_region_recovers_term(self):
         # HIGH-1：实体+标点+段落相邻修改熔合，term 对必须回收、不产生
         # 含换行的不可解析 bullet（原形态 exit 2 杀全批）
-        out, _ = harvest("小缺陷。\n\n新话题开始", "小确幸，旧话题结束")
+        out, _ = harvest("云国。\n\n新话题开始", "云果，旧话题结束")
         froms = [c["from"] for c in out]
-        assert "小缺陷" in froms
+        assert "云国" in froms
         assert all("\n" not in f for f in froms)
 
     def test_bare_numbers_dropped(self):
@@ -226,15 +226,15 @@ class TestReviewFixes20260823:
 
     def test_fragmentation_converges(self):
         # MED-7：同一 trap 的不同左邻字不再碎裂，计数合并到高频形
-        out, _ = harvest("器生活通在用。又说生活通。还是生活通。",
-                         "器盛付通在用。又说盛付通。还是盛付通。")
+        out, _ = harvest("器蓝活通在用。又说蓝活通。还是蓝活通。",
+                         "器蓝付通在用。又说蓝付通。还是蓝付通。")
         top = out[0]
-        assert (top["from"], top["to"]) == ("生活通", "盛付通")
+        assert (top["from"], top["to"]) == ("蓝活通", "蓝付通")
         assert top["fixed"] == 3
 
     def test_trailing_punct_stripped(self):
         # LOW-12：口述域名修正的 TO 不带游离句号
-        out, _ = harvest("merchant 点小云星派点cn。", "mch.xqxpay.cn。")
+        out, _ = harvest("merchant 点云小星派点cn。", "mch.example.com。")
         assert all(not c["to"].endswith(".") for c in out)
 
     def test_bare_cjk_marked(self):
@@ -260,9 +260,9 @@ class TestRound2Fixes20260823:
     def test_partially_fixed_real_trap_survives(self):
         # R2-HIGH-1：部分修复 + 正确形在 raw 预存在 = 真 trap，必须存活
         # （旧幻影过滤把它和「残留>0 要 surfaced」的设计一起杀死）
-        out, _ = harvest("生活通开户。盛付通不错。生活通也行。",
-                         "盛付通开户。盛付通不错。生活通也行。")
-        assert any(c["from"] == "生活通" and c["remaining"] == 1 for c in out)
+        out, _ = harvest("蓝活通开户。蓝付通不错。蓝活通也行。",
+                         "蓝付通开户。蓝付通不错。蓝活通也行。")
+        assert any(c["from"] == "蓝活通" and c["remaining"] == 1 for c in out)
 
     def test_long_latin_quoted_no_exit2(self):
         # R2-HIGH-2：13-24 字 Latin 候选加反引号走 explicit-literal 路径，
@@ -276,38 +276,38 @@ class TestRound2Fixes20260823:
         assert not any("。" in c["to"] for c in out)
 
     def test_verb_glue_blocked(self):
-        # R2-HIGH-3：用 已入黏着字集——用生活→用盛付 不再生成，右补全胜出
-        out, _ = harvest("我说用生活通付款很快", "我说用盛付通付款很快")
-        assert any(c["from"] == "生活通" for c in out)
-        assert not any(c["from"] == "用生活" for c in out)
+        # R2-HIGH-3：用 已入黏着字集——用蓝活→用盛付 不再生成，右补全胜出
+        out, _ = harvest("我说用蓝活通付款很快", "我说用蓝付通付款很快")
+        assert any(c["from"] == "蓝活通" for c in out)
+        assert not any(c["from"] == "用蓝活" for c in out)
 
     def test_bare_never_absorbs_good(self):
         # R2-MED-4：裸形不作吸收方——好候选与裸形并列呈现，不被吞
-        out, _ = harvest("它的缺陷很大。域名是小缺陷为主。",
-                         "它的确幸很大。域名是小确幸为主。")
+        out, _ = harvest("它的缺陷很大。域名是云国为主。",
+                         "它的确幸很大。域名是云果为主。")
         froms = [c["from"] for c in out]
-        assert "小缺陷" in froms
+        assert "云国" in froms
 
     def test_dedup_symmetric_containment(self):
-        # R2-LOW-6：已知宽 trap 也吞窄候选（商阳科技 覆盖 商阳）
+        # R2-LOW-6：已知宽 trap 也吞窄候选（恒阳科技 覆盖 恒阳）
         import tempfile, subprocess
         with tempfile.TemporaryDirectory() as d:
             ctx = f"{d}/ctx.md"
             with open(ctx, "w") as fh:
-                fh.write("- **商阳科技 → 商央科技** — 已有\n")
+                fh.write("- **恒阳科技 → 恒央科技** — 已有\n")
             raw_f, new_f = f"{d}/r.md", f"{d}/n.md"
             with open(raw_f, "w") as fh:
-                fh.write("他说商阳的事。")
+                fh.write("他说恒阳的事。")
             with open(new_f, "w") as fh:
-                fh.write("他说商央的事。")
+                fh.write("他说恒央的事。")
             r = subprocess.run(
                 ["uv", "run", "scripts/harvest_corrections.py", raw_f, new_f,
                  "--context-file", ctx],
                 capture_output=True, text=True,
                 cwd=str(Path(__file__).resolve().parent.parent.parent))
-            assert "商阳" not in r.stdout or "已跳过 context 已有 trap" in r.stdout
+            assert "恒阳" not in r.stdout or "已跳过 context 已有 trap" in r.stdout
 
     def test_split_fused_recovers_and_no_unparsable(self):
         # R2-MED-5 补充：fused 区域的每条产出 bullet 都必须可解析
-        out, _ = harvest("小缺陷。\n\n新话题开始", "小确幸，旧话题结束")
+        out, _ = harvest("云国。\n\n新话题开始", "云果，旧话题结束")
         assert out and all(_parses(_bullet(c["from"], c["to"], "cue")) for c in out)
