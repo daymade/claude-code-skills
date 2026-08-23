@@ -47,6 +47,9 @@ python3 scripts/extract_codex_resume.py --list
 
 # List across all projects (not just the current cwd)
 python3 scripts/extract_codex_resume.py --all-projects --list
+
+# Complete text of long sections (default output truncates and prints this hint itself)
+python3 scripts/extract_codex_resume.py --session <SESSION_ID> --full
 ```
 
 **Expected output**: a structured Markdown **briefing**. What you should see:
@@ -54,7 +57,7 @@ python3 scripts/extract_codex_resume.py --all-projects --list
 - A `# Codex Resume Context Briefing` header, then `## Session Info` (id, project cwd, last-active time, title, Codex version).
 - A one-line `**Session end reason**` — the single most important routing signal (see Step 2).
 - `## Compact Summary` — if the session was compacted, the surviving user/assistant thread (system preamble and re-injected `AGENTS.md` are stripped out).
-- `## Last User Requests` and `## Last Assistant Responses` — the most recent turns.
+- `## Last User Requests` and `## Last Assistant Responses` — the most recent turns. Long entries are truncated and end with a `rerun with --full` hint — that hint means there is more, and names exactly how to get it. A user turn shown as `[skill invoked: <name> — injected body omitted]` is a skill invocation (Codex delivers the whole bundle as the message; the fact matters, the bytes don't).
 - `## Recent Tool Calls`, `## Files Edited in Session` (from `apply_patch` results), `## Errors Encountered`.
 - `## Current Workspace State` — git branch, uncommitted changes, recent commits.
 
@@ -101,7 +104,7 @@ Discovery goes through `_core.codex.collect_codex` (bundled into `scripts/_core/
 ### Rollout parsing
 
 Codex's rollout schema is not Claude's. The parser reads:
-- **User / assistant turns** from the event stream (`event_msg/user_message`, `event_msg/agent_message`, `task_complete.last_agent_message`) — these store plain strings and mirror the `response_item/message` items, so we avoid double-counting and sidestep `output_text` content that isn't needed here.
+- **User / assistant turns** from `response_item/message` records (user text is `input_text`, assistant text is `output_text`) — the only turn stream in Codex ≥0.147. The older `event_msg/user_message` / `agent_message` mirrors (≤0.144) are a fallback used only when no message records exist, so a version emitting both is never double-counted. `task_complete.last_agent_message` is a tail safeguard, appended only when the chosen stream lacks the final assistant text. `response_item/agent_message` records are inter-agent traffic (encrypted sub-agent payloads), never main-thread text.
 - **Files edited** from `event_msg/patch_apply_end` — the keys of its `changes` map are the files `apply_patch` touched.
 - **Tool calls** from `response_item/function_call` and `custom_tool_call`, paired with their `*_output` by `call_id` (an unpaired call means it never returned).
 - **Compaction** from `compacted` records — Codex replaces the compacted window with a `replacement_history` of messages (not a single summary), and re-injects the system preamble; the parser keeps only the user/assistant turns.
@@ -125,7 +128,7 @@ Codex re-injects large system blocks after compaction and between turns — the 
 
 - Cannot recover sessions whose rollout files were deleted from `~/.codex/sessions/`.
 - Cannot access sessions from other machines (files are local only).
-- Tool-call previews are truncated — for the full command or patch, read the rollout line directly.
+- Long briefing sections (compact summary, user requests, assistant responses) are truncated by default; each truncation point prints a `rerun with --full` hint, and `--full` prints the complete text (per-section count caps still apply). Tool-call previews stay capped at 120 chars by design — for a full command or patch, grep the rollout for the call's `call_id`.
 - Compaction is lossy — early-conversation detail may be gone.
 - Codex has no per-session auto-memory equivalent to Claude Code's `MEMORY.md`; the project's `AGENTS.md` is deliberately filtered out as re-injected noise, so read it separately if you need the project's standing instructions.
 

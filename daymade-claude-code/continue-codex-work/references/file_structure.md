@@ -1,7 +1,7 @@
 # Codex CLI Session File Structure
 
 Reference for the on-disk format the `extract_codex_resume.py` script parses.
-Verified against real rollouts from Codex CLI `0.144.4` (July 2026).
+Verified against real rollouts from Codex CLI `0.142.4`–`0.144.4` (July 2026) and `0.147.0` (August 2026).
 
 ## Directory layout
 
@@ -27,12 +27,13 @@ Every line is one JSON object with a top-level `timestamp`, `type`, and (usually
 | `session_meta` | — | `id`, `cwd`, `timestamp`, `cli_version`, `model_provider` | Session Info header |
 | `compacted` | — | `message` (often empty), `replacement_history` (list of messages), `window_number` | Compact Summary |
 | `event_msg` | `context_compacted` | just a marker | (the real content is in the `compacted` record) |
-| `event_msg` | `user_message` | `message` (plain string) | Last User Requests |
-| `event_msg` | `agent_message` | `message` (plain string) | Last Assistant Responses |
+| `event_msg` | `user_message` | `message` (plain string) | **≤0.144 only — removed in 0.147** (fallback turn stream) |
+| `event_msg` | `agent_message` | `message` (plain string) | **≤0.144 only — removed in 0.147** (fallback turn stream) |
 | `event_msg` | `patch_apply_end` | `changes` (map: path -> {content\|unified_diff}), `success`, `stderr` | Files Edited; errors |
-| `event_msg` | `task_complete` | `last_agent_message`, `duration_ms` | Assistant text; turn boundary → end reason |
+| `event_msg` | `task_complete` | `last_agent_message`, `duration_ms` | Assistant-text tail safeguard; turn boundary → end reason |
 | `event_msg` | `token_count` | usage counters | ignored (noise) |
-| `response_item` | `message` | `role` (developer/user/assistant), `content` (list) | see note below |
+| `response_item` | `message` | `role` (developer/user/assistant), `content` (list) | **the turn stream** — see note below |
+| `response_item` | `agent_message` | `author`, `recipient`, `content` (incl. `encrypted_content`) | inter-agent traffic — **never main-thread text, always skipped** |
 | `response_item` | `reasoning` | model thinking | ignored (noise) |
 | `response_item` | `function_call` | `name`, `arguments` (JSON string), `call_id` | Recent Tool Calls |
 | `response_item` | `function_call_output` | `call_id`, `output` (list) | pairs a call; error detection |
@@ -41,7 +42,9 @@ Every line is one JSON object with a top-level `timestamp`, `type`, and (usually
 
 ### Message content element types (important)
 
-`response_item/message` `content` is a list of `{type, text}` where `type` is **`input_text`** for user/developer content and **`output_text`** for assistant content. The shared `extract_text` decodes `text`/`input_text` but **not** `output_text`. That is why the parser reads user/assistant turns from the `event_msg` stream (`user_message` / `agent_message` / `task_complete.last_agent_message`, all plain strings) instead of from `response_item/message` — the event stream mirrors the same turns without the `output_text` gap, and avoids double-counting. Tool `output` and compaction `content` use `input_text`, which `extract_text` handles.
+`response_item/message` `content` is a list of `{type, text}` where `type` is **`input_text`** for user/developer content and **`output_text`** for assistant content. The shared `extract_text` decodes `text`/`input_text` but **not** `output_text`, so the parser joins `output_text` items locally (changing the shared helper would alter every sibling skill that bundles `_core`).
+
+**Version drift, measured on real rollouts:** in `0.142.x` the event stream (`event_msg/user_message` / `agent_message`, plain strings) and `response_item/message` are both written and mirror each other turn-for-turn; in `0.147.0` the event-stream mirrors are gone entirely and `response_item/message` is the only place turns exist. The parser therefore collects both streams and prefers `response_item/message` whenever it is present — a version emitting both is never double-counted, and a post-0.147 rollout is never left with an empty turn list. One more new-schema user-turn shape: an invoked skill arrives as a user message whose whole body is the skill bundle (`<skill>…</name>…`, ~90 KB); the parser renders it as a one-line `[skill invoked: <name> — injected body omitted]` marker.
 
 ## Compaction format
 
