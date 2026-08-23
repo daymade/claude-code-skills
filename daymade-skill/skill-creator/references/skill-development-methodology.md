@@ -467,6 +467,19 @@ Case 12 记录的是"发现 `run_loop` 会产出空洞退化结果"；本案例�
 
 → 对应规则：SKILL.md「Verification depth router」的 heavy-eval authorization gate、conversation-mining explicit-source gate，以及 conversation-mining workflow 的 minimum mining pass。
 
+### Case 22: 把「压缩」当任务名，既偷删能力又让审阅无限扩张（2026-08，已去除项目指纹）
+
+一次现有运维 skill 优化，目标是把臃肿主入口改成 progressive-disclosure router，并新增一个实战暴露的系统缓存分支。作者先把“压缩”当成整包变更的名字，于是三种完全不同的动作混在一起：把详细流程原样下沉（真正的 lossless compression）、把一个清理分支改成 analysis-only（scope narrowing）、重写确认与验证顺序（workflow redesign）。前两轮机械账本都能完成分类，fresh reviewer 却持续发现“文件还在、执行出口没了”的真实缺口——因为字符串归属不能证明下一位 agent 还能完成同一用户场景。
+
+随后审阅又向另一个方向失控：reviewer 发现 legacy helper 的历史缺陷，执行者差点把任务扩成重写整个删除引擎。用户提醒“不要走太远忘记为什么出发”。复查 diff 后确认：只有当本次文档把旧 helper **提升为新的正式安全出口**时，历史缺陷才因本次变更进入 scope；原样存在、未被新路径依赖的历史问题应单独记 backlog，不自动阻断当前优化。
+
+两条对称的教训：
+
+1. **“压缩”必须是行为等价结论，不是编辑任务的总标签。** relocation/dedup 可以叫 compression；capability retirement、scope narrowing、workflow redesign、bug fix 必须分开命名。retirement / narrowing / redesign 需用户已明确要求或另获批准；bug/fact fix 由可指认的既有 contract 或 current authority 授权，不因“修 bug”三个字自动放行。判据是旧场景的 trigger → decision → action → confirmation → recovery → verification 链是否仍可执行，不是内容能否在新树里 grep 到。
+2. **审阅边界必须在 dispatch 前冻结。** immutable artifact、blast radius、failure axes、terminal condition 不预先写清，真实 finding 会不断生成新的调查轴；“审得更久”取代“回答原问题”。历史缺陷只有被本次改动造成、放大、重新承诺或变成可达矛盾时进入 release gate，否则记录但不扩项。
+
+→ 对应规则：SKILL.md discipline #4 的 change taxonomy；discipline #5 与 `references/independent-review-protocol.md` 的 frozen review boundary / stopping rule。
+
 ## 来源
 
 | 来源 | 本文档引用的独有贡献 |

@@ -63,9 +63,12 @@ the user for the missing anchor rather than reporting an independent pass you di
 
 ## Writing the reviewer prompt
 
-Give it **exactly two things**: the artifact, and the reader spec. Nothing else — no design
-rationale, no project background, no "just confirm X is fine." A leading prompt converts an
-independent reviewer into a rubber stamp.
+Give it **exactly two evidence-bearing inputs**: the immutable artifact and the reader spec.
+Also provide three non-evidentiary control fields: the current change's blast radius, named
+failure axes, and terminal condition. These fields constrain what the pass may inspect and
+when it stops; they do not assert that the implementation is correct. Give no design rationale,
+project background, or "just confirm X is fine." A leading prompt converts an independent
+reviewer into a rubber stamp.
 
 ### The reader spec
 
@@ -138,6 +141,41 @@ who moved the commitment. Coherence and fidelity are orthogonal: an artifact can
 self-consistent while being completely unfaithful to what was already decided. If you run a
 second reviewer at all, make it the fidelity one — and hand it the out-of-blast-radius anchor,
 or it will simply re-derive your conclusion from your own record.
+
+## Freeze scope and the stopping rule before review
+
+An adversarial reviewer is deliberately good at finding more work. Without a frozen boundary,
+each genuine finding becomes permission to inspect a wider subsystem, and “verify this edit”
+quietly turns into “redesign everything the artifact has ever done.” That is not rigor; it is
+an unapproved scope change whose completion condition moves after every pass.
+
+Freeze these five fields before dispatch and include all five in the reviewer prompt. The first
+two are evidence-bearing inputs; the last three are review-control metadata, not evidence for
+the author's conclusion:
+
+1. **Immutable artifact** — exact file set or commit/ref being judged.
+2. **Reader spec** — who must execute it and what they already know.
+3. **Change blast radius** — capabilities, rules, scripts, and runtime paths this edit touched or newly advertised.
+4. **Failure axes** — the bounded questions this pass must answer.
+5. **Terminal condition** — for example: no unresolved BLOCKER/MAJOR on those axes, deterministic gates pass, and every old scenario has a classified disposition.
+
+Triage each finding by causal relationship to the current change:
+
+| Finding relationship | Current-release disposition |
+|---|---|
+| The edit caused the defect, removed its old exit, widened exposure, contradicted the new contract, or newly promised that the affected helper/path was safe | **In scope.** Reproduce and fix or explicitly change the plan with user approval |
+| The defect predates the edit unchanged, the edited runtime path does not rely on it, and no new claim elevates it | **Pre-existing / out of scope.** Record as a backlog hypothesis; do not silently absorb it into this task |
+| The relationship is unclear | Run the cheapest ref/diff/scenario check that separates the rows; uncertainty is not permission to expand scope |
+
+After a substantive fix, use a new fresh-context reviewer, but ask it to recheck the failed
+axes and verify no regression against the same immutable anchor. Do not reset the audit to an
+unbounded whole-artifact hunt unless the fix actually broadened the blast radius or the user
+explicitly expands the assignment.
+
+Stop when the declared terminal condition is met. Minor improvements and unrelated historical
+defects can remain recorded without blocking release. If the user says to stop reviewing or
+ship now, open no new axes; finish the already-declared release gate and report any unresolved
+in-scope BLOCKER/MAJOR rather than hiding it. This boundary limits scope, not honesty.
 
 ## The corpus case
 
