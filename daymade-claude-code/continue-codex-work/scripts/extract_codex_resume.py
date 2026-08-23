@@ -464,6 +464,21 @@ def _format_task_error(error: dict) -> str:
     return f"{info}: {message}" if message else info
 
 
+def _transient_hint(codex_error_info: str) -> str:
+    """A note that this error code often self-resolves, or "" if not one of
+    TRANSIENT_ERROR_CODES. Factored out because it is shown from two call
+    sites (the errored branch and the open-calls branch below) and the text
+    must stay identical between them."""
+    if codex_error_info not in TRANSIENT_ERROR_CODES:
+        return ""
+    return (
+        "> This kind of error often clears on a schedule (usage limits "
+        "reset, server load subsides). If the original Codex process/terminal "
+        "is still open, it may resume this session on its own — check for "
+        "that before assuming manual continuation is the only path."
+    )
+
+
 def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> str:
     sections = ["# Codex Resume Context Briefing\n"]
 
@@ -495,15 +510,9 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
     )
     sections.append(f"**Session end reason**: {end_label}")
     if data["end_reason"] == "errored" and task_error:
-        info = str(task_error.get("codex_error_info") or "")
-        if info in TRANSIENT_ERROR_CODES:
-            sections.append(
-                "> This kind of error often clears on a schedule (usage limits "
-                "reset, server load subsides). If the original Codex "
-                "process/terminal is still open, it may resume this session on "
-                "its own — check for that before assuming manual continuation "
-                "is the only path."
-            )
+        hint = _transient_hint(str(task_error.get("codex_error_info") or ""))
+        if hint:
+            sections.append(hint)
     elif data["end_reason"] == "completed" and data["last_sig"] == "task_complete" and task_error:
         # The turn genuinely closed (a real last_agent_message exists) but the
         # same task_complete also carried an error — measured 2/468 times in
@@ -517,6 +526,23 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
     if data["open_calls"]:
         pending = ", ".join(sorted(set(data["open_calls"].values())))
         sections.append(f"**Unresolved tool calls**: {len(data['open_calls'])} ({pending})")
+        if task_error:
+            # _detect_end_reason checks open_calls before ever reaching the
+            # task_complete/error branches above, so without this the error
+            # detail would be invisible everywhere in the briefing whenever a
+            # dangling call and a task_complete error co-occur — which is
+            # common, not a corner case: usage_limit_exceeded and
+            # context_window_exceeded are exactly the errors likely to strand
+            # a tool call mid-flight (confirmed on the real session that
+            # motivated this fix, which hit precisely this combination).
+            sections.append(
+                f"> The last recorded `task_complete` also carried an error "
+                f"(`{_format_task_error(task_error)}`) — plausibly why the "
+                f"call above never returned."
+            )
+            hint = _transient_hint(str(task_error.get("codex_error_info") or ""))
+            if hint:
+                sections.append(hint)
 
     if data["compact_summaries"]:
         summary = data["compact_summaries"][-1]

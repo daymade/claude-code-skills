@@ -375,6 +375,34 @@ class EndReasonTests(unittest.TestCase):
         self.assertNotIn("Errored", briefing)
         self.assertNotIn("also carried an error", briefing)
 
+    def test_dangling_open_call_plus_task_complete_error_still_surfaces_error(self):
+        # Found by independent review, then confirmed as the exact shape of
+        # the real session that motivated this fix: open_calls is checked
+        # BEFORE the task_complete/error branches in _detect_end_reason, so
+        # end_reason stays "interrupted" here — but the error detail must
+        # still surface somewhere, since usage_limit_exceeded /
+        # context_window_exceeded are exactly the errors likely to strand a
+        # tool call mid-flight (not a rare combination).
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "e8", "cwd": "/tmp"}},
+            _msg("user", "继续", "input_text"),
+            _function_call("exec", {"cmd": "ls"}, call_id="dangling-1"),
+            _ev(
+                "task_complete",
+                last_agent_message=None,
+                error={
+                    "message": "Codex ran out of room in the model's context window.",
+                    "codex_error_info": "context_window_exceeded",
+                },
+            ),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["end_reason"], "interrupted")
+        briefing = mod.build_briefing(None, data, "/tmp")
+        self.assertIn("Unresolved tool calls", briefing)
+        self.assertIn("context_window_exceeded", briefing)
+        self.assertIn("also carried an error", briefing)
+
 
 class UpdatePlanTests(unittest.TestCase):
     """update_plan is Codex's own multi-step plan/TODO tool. Shapes below are
