@@ -172,6 +172,12 @@ Save this file outside the repo, e.g. `/tmp/sensitive-replacements.txt`.
 uv run scripts/rewrite_history.py --repo /path/to/repo \
   --replacements /tmp/sensitive-replacements.txt \
   --backup /tmp/repo-backup.bundle
+
+# Entity leaks live in commit MESSAGES too, not just file content. Cover both:
+uv run scripts/rewrite_history.py --repo /path/to/repo \
+  --replacements /tmp/sensitive-replacements.txt \
+  --message-replacements /tmp/sensitive-replacements.txt \
+  --backup /tmp/repo-backup.bundle
 ```
 
 This script:
@@ -181,7 +187,10 @@ This script:
    files). If not, aborts.
 3. Creates a `git bundle` backup of the current state.
 4. Verifies the backup bundle with `git bundle verify`.
-5. Runs `git filter-repo --replace-text`.
+5. Runs `git filter-repo --replace-text`. When `--message-replacements` is
+   given, it also runs `--replace-message` so commit messages are rewritten,
+   not just file blobs — a cleanup that only covers blobs can leave the
+   entity naming itself in a commit message.
 6. Reports the old and new commit hashes.
 
 **If the backup or verification step fails, the script stops.** Do not proceed
@@ -237,18 +246,24 @@ uv run --with gitpython scripts/scan_repo.py --repo /path/to/repo --output /tmp/
 
 ### `scripts/rewrite_history.py`
 
-Creates a backup bundle and runs `git filter-repo --replace-text`.
+Creates a backup bundle and runs `git filter-repo --replace-text`. Pass
+`--message-replacements <file>` to also rewrite commit messages via
+`--replace-message` (the same replacements file usually covers both).
 
 ```bash
 uv run --with gitpython scripts/rewrite_history.py \
   --repo /path/to/repo \
   --replacements /tmp/sensitive-replacements.txt \
+  --message-replacements /tmp/sensitive-replacements.txt \
   --backup /tmp/repo-backup.bundle
 ```
 
 ### `scripts/verify_cleanup.py`
 
-Re-runs the scanner and greps all commits for the original sensitive strings.
+Re-runs the scanner and greps all commits for the original sensitive strings,
+covering both blob content (`git grep` over every commit) and commit messages
+(`git log --format=%B`), so a rewrite that missed `--replace-message` still
+fails verification.
 
 ```bash
 uv run --with gitpython scripts/verify_cleanup.py \
