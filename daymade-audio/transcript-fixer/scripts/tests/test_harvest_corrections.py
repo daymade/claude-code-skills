@@ -94,7 +94,7 @@ class TestKeepFilter:
 class TestExpand:
     def test_grows_to_min_len(self):
         cnt = "恒阳科技".count
-        assert _expand("阳", "央", "商", "科技", cnt) == ("恒阳科", "恒央科")
+        assert _expand("阳", "央", "恒", "科技", cnt) == ("恒阳科", "恒央科")
 
     def test_glue_stops_growth(self):
         # 两侧都是黏着字时保持短形，不硬凑长度
@@ -104,18 +104,18 @@ class TestExpand:
     def test_frequency_oracle_picks_recurring_side(self):
         # 器蓝活出现 1 次、蓝活通出现 3 次 → 向右扩展
         raw = "器蓝活通。又说蓝活通。还是蓝活通。"
-        f, t = _expand("生活", "盛付", "器", "通", raw.count)
+        f, t = _expand("蓝活", "蓝付", "器", "通", raw.count)
         assert (f, t) == ("蓝活通", "蓝付通")
 
     def test_frequency_oracle_left_when_left_dominant(self):
-        raw = "云国，云国，缺陷为"
-        f, t = _expand("缺陷", "确幸", "小", "为", raw.count)
+        raw = "云国，云国，国为"
+        f, t = _expand("国", "果", "云", "为", raw.count)
         assert (f, t) == ("云国", "云果")
 
     def test_tie_goes_left_deterministic(self):
         # 同分回退左侧（确定性兜底）——count=1 时语料无法判断哪侧邻居属于
         # 词，可能带出一个游离邻字，由裁决环节人工修齐（见 _expand docstring）
-        f, t = _expand("阳", "央", "商", "科技", lambda s: 1)
+        f, t = _expand("阳", "央", "恒", "科技", lambda s: 1)
         assert (f, t) == ("恒阳科", "恒央科")
 
 
