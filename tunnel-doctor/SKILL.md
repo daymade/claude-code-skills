@@ -51,6 +51,7 @@ Determine which scenario applies:
 - **`docker pull` fails with `TLS handshake timeout`** → VM proxy misconfiguration (Step 2G-2, fix: `docker.json` with `host.internal`)
 - **Container healthcheck `(unhealthy)` but app runs fine** → Lowercase proxy env var leak (Step 2G-4, fix: clear `http_proxy`+`HTTP_PROXY`)
 - **`docker build` can't fetch base images** → VM/container proxy propagation (Step 2G)
+- **`docker pull` works but `docker build` still dies fetching base-image tokens (TLS/i-o timeout) on a WSL2 + Docker Desktop host, or every runbook proxy port on a Windows+v2rayN host silently died after a v2rayN upgrade** → buildkit direct-dials past the DD proxy override / v2rayN ≥7.17 LAN-port split (references/windows_host_tun_wsl_cascade.md §2026-08-23)
 - **`git clone` fails with `Connection closed by 198.18.x.x`** → two different mechanisms produce this; Step 2H separates them
 - **Every domestic/DIRECT-rule site fails at once (TLS `unexpected EOF` mid-handshake, proxy-port CONNECT returns 503, Node CLIs report `UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`) while proxied overseas sites keep working** → TUN DIRECT split-brain (Step 2J)
 - **SSH connects but `operation not permitted`** → Tailscale SSH config issue (Step 4)
