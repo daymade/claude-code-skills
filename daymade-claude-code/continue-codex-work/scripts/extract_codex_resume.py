@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -39,7 +40,7 @@ MAX_FILES = 40
 
 END_REASON_LABELS = {
     "completed": "Clean exit — the last turn completed",
-    "interrupted": "Interrupted — tool calls were dispatched but never resolved",
+    "interrupted": "Interrupted — tool calls were dispatched but never resolved, or the turn was aborted",
     "in_progress": "In progress — tools ran but the agent left no closing message (resume mid-task)",
     "abandoned": "Abandoned — a user message got no response",
     "error_cascade": "Error cascade — repeated tool failures",
@@ -125,7 +126,7 @@ def _compacted_summary(payload: dict) -> str:
                 continue
             if item.get("role") not in ("user", "assistant"):
                 continue
-            text = extract_text(item.get("content")).strip()
+            text = _user_turn_text(extract_text(item.get("content")).strip())
             if text and not is_noise_text(text):
                 parts.append(text[:800])
     return "\n\n".join(parts).strip()
@@ -139,11 +140,34 @@ def _looks_like_error(text: str) -> bool:
     )
 
 
+_SKILL_INJECTION_RE = re.compile(r"^<skill>\s*<name>\s*([^<]+?)\s*</name>")
+
+
+def _user_turn_text(text: str) -> str:
+    """Collapse a harness-injected skill body to a one-line marker.
+
+    Codex delivers an invoked skill as a user-role message whose entire body
+    is the skill bundle (measured ~90 KB). The invocation fact matters for
+    resume; the body does not — left as-is it occupies a briefing slot and
+    evicts a real user request from the window.
+    """
+    match = _SKILL_INJECTION_RE.match(text.lstrip())
+    if match:
+        return f"[skill invoked: {match.group(1)} — injected body omitted]"
+    return text
+
+
 def _detect_end_reason(data: dict) -> str:
     if data["open_calls"]:
         return "interrupted"
     if data["last_sig"] == "user_message":
         return "abandoned"
+    if data["last_sig"] == "turn_aborted":
+        return "interrupted"
+    # A trailing commentary message means the turn never finished — the same
+    # shape as tools-ran-without-closing-message.
+    if data["last_sig"] == "agent_commentary":
+        return "in_progress"
     if data["last_sig"] in ("task_complete", "agent_message"):
         return "completed"
     # Check the error cascade before in_progress: a cascade also ends on a
@@ -155,13 +179,46 @@ def _detect_end_reason(data: dict) -> str:
     return "unknown"
 
 
+def _message_text(content: Any, wanted_types: set[str]) -> str:
+    """Join the text of a `response_item/message` content list.
+
+    Codex stores user/developer turns as `input_text` items (which the shared
+    extract_text already decodes) but assistant turns as `output_text`, which
+    it deliberately does not — the shared helper is bundled from
+    `_conversation_core/` and changing it would alter every sibling skill's
+    search indexing, so the `output_text` decode lives here.
+    """
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for item in content:
+        if (
+            isinstance(item, dict)
+            and item.get("type") in wanted_types
+            and isinstance(item.get("text"), str)
+        ):
+            parts.append(item["text"])
+    return " ".join(parts)
+
+
 def parse_codex_rollout(path: Path) -> dict:
     """Stream a rollout JSONL into a structured resume payload.
 
-    User/assistant text is read from the event stream (`event_msg/user_message`,
-    `event_msg/agent_message`, `task_complete`), which stores plain strings and
-    mirrors the `response_item/message` items — so we avoid double-counting and
-    sidestep `output_text` content that the shared extract_text does not decode.
+    Where the user/assistant turns live depends on the Codex version (measured
+    on ~2600 real rollouts, 0.142.2–0.149.0): the `event_msg/user_message` /
+    `agent_message` mirror stream is the norm through 0.146.x and in the
+    0.147/0.148 alphas; stable 0.147.0 drops it for most sessions, with rare
+    residuals into 0.149.0. The streams do NOT always mirror each other — in
+    0.142.3/0.143.0/0.144.0 the event stream also carries per-step commentary
+    that `response_item/message` never has, while mid-turn queued user inputs
+    appear only in message records. So both streams are collected and the
+    RICHER one wins PER ROLE (ties go to the event stream, the historical
+    display stream), which never silently drops either role's bigger half. `task_complete`'s
+    last message is a tail safeguard. `response_item/agent_message` records
+    are inter-agent traffic, never main-thread text. Files edited come from
+    `event_msg/patch_apply_end` (≤0.146) and `event_msg/item_completed`
+    FileChange items (0.147+); both feed the same set, so versions emitting
+    both union harmlessly.
     """
     data: dict[str, Any] = {
         "file_size": path.stat().st_size,
@@ -170,6 +227,9 @@ def parse_codex_rollout(path: Path) -> dict:
         "compact_summaries": [],
         "user_messages": [],
         "assistant_messages": [],
+        "ri_user": [],  # response_item/message stream (preferred when present)
+        "ri_assistant": [],
+        "task_tail": "",  # last task_complete.last_agent_message (tail safeguard)
         "tool_calls": [],  # (name, preview)
         "files_touched": set(),
         "errors": [],
@@ -191,7 +251,7 @@ def parse_codex_rollout(path: Path) -> dict:
                 data["compact_summaries"].append(summary)
         elif rtype == "event_msg":
             if ptype == "user_message":
-                message = str(payload.get("message") or "").strip()
+                message = _user_turn_text(str(payload.get("message") or "").strip())
                 if message and not is_noise_text(message):
                     data["user_messages"].append(message)
                     data["last_sig"] = "user_message"
@@ -210,18 +270,56 @@ def parse_codex_rollout(path: Path) -> dict:
                     if stderr:
                         data["errors"].append(stderr[:300])
                 data["last_sig"] = "patch"
+            elif ptype == "item_completed":
+                # ≥0.147 generic item envelope; only FileChange is read here.
+                # (It also mirrors UserMessage/AgentMessage — a third turn
+                # stream we deliberately never read for turns.)
+                item = payload.get("item")
+                if isinstance(item, dict) and item.get("type") == "FileChange":
+                    changes = item.get("changes")
+                    if isinstance(changes, dict):
+                        for filepath in changes:
+                            data["files_touched"].add(filepath)
+                    status = str(item.get("status") or "completed")
+                    stderr = str(item.get("stderr") or "").strip()
+                    if status != "completed" or stderr:
+                        data["errors"].append((stderr or f"patch status={status}")[:300])
+                    data["last_sig"] = "patch"
+            elif ptype == "turn_aborted":
+                data["last_sig"] = "turn_aborted"
             elif ptype == "task_complete":
-                # last_agent_message repeats the turn's final agent_message
-                # verbatim, so only append it when it is not already the last one.
-                last_message = str(payload.get("last_agent_message") or "").strip()
-                if last_message and (
-                    not data["assistant_messages"]
-                    or data["assistant_messages"][-1] != last_message
-                ):
-                    data["assistant_messages"].append(last_message)
+                # last_agent_message repeats the turn's final assistant text;
+                # appended at end-of-parse only if the chosen stream lacks it.
+                data["task_tail"] = str(payload.get("last_agent_message") or "").strip()
                 data["last_sig"] = "task_complete"
         elif rtype == "response_item":
-            if ptype in ("function_call", "custom_tool_call"):
+            if ptype == "message":
+                role = payload.get("role")
+                if role == "user":
+                    content = payload.get("content")
+                    text = _user_turn_text(
+                        _message_text(content, {"input_text", "text"}).strip()
+                    )
+                    if not text and isinstance(content, list) and any(
+                        isinstance(c, dict) and c.get("type") == "input_image" for c in content
+                    ):
+                        # An image-only request must still surface (and still
+                        # route end-reason as abandoned when it is the tail).
+                        text = "[image-only user message]"
+                    if text and not is_noise_text(text):
+                        data["ri_user"].append(text)
+                        data["last_sig"] = "user_message"
+                elif role == "assistant":
+                    text = _message_text(payload.get("content"), {"output_text", "text"}).strip()
+                    if text:
+                        data["ri_assistant"].append(text)
+                        # phase=commentary is mid-turn narration; a session
+                        # whose tail is commentary was cut off mid-turn.
+                        phase = payload.get("phase")
+                        data["last_sig"] = (
+                            "agent_commentary" if phase == "commentary" else "agent_message"
+                        )
+            elif ptype in ("function_call", "custom_tool_call"):
                 name = str(payload.get("name") or "?")
                 raw = payload.get("input") if ptype == "custom_tool_call" else payload.get("arguments")
                 preview = " ".join(str(raw or "").split())[:120]
@@ -238,6 +336,24 @@ def parse_codex_rollout(path: Path) -> dict:
                 if output and _looks_like_error(output):
                     data["errors"].append(output[:300])
                 data["last_sig"] = "tool_output"
+
+    # Stream selection is PER ROLE: in dual-stream versions either side of
+    # either role can be richer — commentary inflates the event stream, while
+    # mid-turn queued user inputs appear only in message records (whole-stream
+    # selection was measured to lose the final user request on real files).
+    # The briefing displays the roles in separate sections, so picking the
+    # richer stream per role never silently drops either role's bigger half.
+    # Ties go to the event stream, the historical display stream.
+    # task_complete's tail message is a safeguard for sessions whose final
+    # assistant text never landed in either stream.
+    if len(data["ri_user"]) > len(data["user_messages"]):
+        data["user_messages"] = data["ri_user"]
+    if len(data["ri_assistant"]) > len(data["assistant_messages"]):
+        data["assistant_messages"] = data["ri_assistant"]
+    if data["task_tail"] and (
+        not data["assistant_messages"] or data["assistant_messages"][-1] != data["task_tail"]
+    ):
+        data["assistant_messages"].append(data["task_tail"])
 
     data["end_reason"] = _detect_end_reason(data)
     return data
@@ -275,7 +391,22 @@ def get_git_state(project_path: str) -> str:
 # ── Briefing ─────────────────────────────────────────────────────────────────
 
 
-def build_briefing(conv, data: dict, project_path: str) -> str:
+def _clip(text: str, limit: int, full: bool) -> str:
+    """Truncate for the default briefing, always naming the escape hatch.
+
+    A silent "..." reads as "this is all there is"; the rerun hint makes the
+    difference between "the rollout only had this much" and "there is more the
+    briefing did not show" visible at the exact point it matters.
+    """
+    if full or len(text) <= limit:
+        return text
+    return (
+        text[:limit]
+        + f"\n… (truncated at {limit}/{len(text)} chars — rerun with --full for the complete text)"
+    )
+
+
+def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> str:
     sections = ["# Codex Resume Context Briefing\n"]
 
     meta = data["meta"] or {}
@@ -304,25 +435,20 @@ def build_briefing(conv, data: dict, project_path: str) -> str:
 
     if data["compact_summaries"]:
         summary = data["compact_summaries"][-1]
-        display = summary[:MAX_SUMMARY_CHARS]
-        if len(summary) > MAX_SUMMARY_CHARS:
-            display += f"\n\n... (truncated, full summary: {len(summary)} chars)"
         sections.append("\n## Compact Summary (from the session's last compaction)\n")
-        sections.append(display)
+        sections.append(_clip(summary, MAX_SUMMARY_CHARS, full))
 
     user_messages = data["user_messages"][-MAX_USER_REQUESTS:]
     if user_messages:
         sections.append("\n## Last User Requests\n")
         for i, text in enumerate(user_messages, 1):
-            display = text[:500] + ("..." if len(text) > 500 else "")
-            sections.append(f"### Request {i}\n{display}\n")
+            sections.append(f"### Request {i}\n{_clip(text, 500, full)}\n")
 
     assistant_messages = data["assistant_messages"][-MAX_ASSISTANT_RESPONSES:]
     if assistant_messages:
         sections.append("\n## Last Assistant Responses\n")
         for i, text in enumerate(assistant_messages, 1):
-            display = text[:1000] + ("..." if len(text) > 1000 else "")
-            sections.append(f"### Response {i}\n{display}\n")
+            sections.append(f"### Response {i}\n{_clip(text, 1000, full)}\n")
 
     if data["tool_calls"]:
         recent = data["tool_calls"][-MAX_TOOL_CALLS:]
@@ -425,6 +551,9 @@ def main() -> int:
                         help="Number of sessions to list (default: 10)")
     parser.add_argument("--exclude-current", default=None,
                         help="Session ID to exclude (e.g. a currently active session)")
+    parser.add_argument("--full", action="store_true",
+                        help="Do not truncate long sections (summary / user requests / "
+                             "assistant responses); count caps still apply")
     args = parser.parse_args()
 
     project_path = os.path.abspath(args.project)
@@ -495,7 +624,7 @@ def main() -> int:
     print(f"Parsing Codex session {conv.session_id} "
           f"({rollout.stat().st_size / 1_000_000:.1f} MB)...", file=sys.stderr)
     data = parse_codex_rollout(rollout)
-    print(build_briefing(conv, data, project_path))
+    print(build_briefing(conv, data, project_path, full=args.full))
     return 0
 
 

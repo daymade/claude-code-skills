@@ -47,6 +47,9 @@ python3 scripts/extract_codex_resume.py --list
 
 # List across all projects (not just the current cwd)
 python3 scripts/extract_codex_resume.py --all-projects --list
+
+# Complete text of long sections (default output truncates and prints this hint itself)
+python3 scripts/extract_codex_resume.py --session <SESSION_ID> --full
 ```
 
 **Expected output**: a structured Markdown **briefing**. What you should see:
@@ -54,8 +57,8 @@ python3 scripts/extract_codex_resume.py --all-projects --list
 - A `# Codex Resume Context Briefing` header, then `## Session Info` (id, project cwd, last-active time, title, Codex version).
 - A one-line `**Session end reason**` — the single most important routing signal (see Step 2).
 - `## Compact Summary` — if the session was compacted, the surviving user/assistant thread (system preamble and re-injected `AGENTS.md` are stripped out).
-- `## Last User Requests` and `## Last Assistant Responses` — the most recent turns.
-- `## Recent Tool Calls`, `## Files Edited in Session` (from `apply_patch` results), `## Errors Encountered`.
+- `## Last User Requests` and `## Last Assistant Responses` — the most recent turns. Long entries are truncated and end with a `rerun with --full` hint — that hint means there is more, and names exactly how to get it. A user turn shown as `[skill invoked: <name> — injected body omitted]` is a skill invocation (Codex delivers the whole bundle as the message; the fact matters, the bytes don't).
+- `## Recent Tool Calls`, `## Files Edited in Session` (from patch / FileChange records), `## Errors Encountered`.
 - `## Current Workspace State` — git branch, uncommitted changes, recent commits.
 
 If instead you see `No Codex sessions found for <path>`, the current directory has no Codex history — try `--all-projects --list` to find the right project, or pass `--session <id>` directly.
@@ -68,7 +71,7 @@ The briefing's **Session end reason** tells you how the prior run stopped. Route
 |-----------|---------------|----------|
 | **Clean exit** | The agent had the last word (a completed turn). | Read the last user request that was addressed; continue from any pending work. |
 | **In progress** | Tools ran but the agent left no closing message — cut off mid-task. | This is the common resume case. Read the recent tool calls + files edited, verify what landed, and finish the turn the agent was in. |
-| **Interrupted** | Tool calls were dispatched but never returned (hard stop / ctrl-c). | Re-check whether those actions took effect, then retry or move on. |
+| **Interrupted** | Tool calls were dispatched but never returned, or the turn was aborted mid-way (hard stop / ctrl-c / esc). | Re-check whether those actions took effect, then retry or move on. |
 | **Abandoned** | A user message got no response. | Treat the last user message as the current request. |
 | **Error cascade** | Repeated tool failures. | Do not retry blindly — diagnose the root cause first. |
 
@@ -101,14 +104,14 @@ Discovery goes through `_core.codex.collect_codex` (bundled into `scripts/_core/
 ### Rollout parsing
 
 Codex's rollout schema is not Claude's. The parser reads:
-- **User / assistant turns** from the event stream (`event_msg/user_message`, `event_msg/agent_message`, `task_complete.last_agent_message`) — these store plain strings and mirror the `response_item/message` items, so we avoid double-counting and sidestep `output_text` content that isn't needed here.
-- **Files edited** from `event_msg/patch_apply_end` — the keys of its `changes` map are the files `apply_patch` touched.
+- **User / assistant turns** from two possible streams, because where turns live drifts by Codex version (measured on ~2,600 rollouts, 0.142.2–0.149.0): the `event_msg/user_message` / `agent_message` mirror stream (the norm through 0.146.x and in the 0.147/0.148 alphas, rare residuals after) and `response_item/message` records (user text is `input_text`, assistant text is `output_text`, decoded locally). The streams do not always mirror — some versions keep per-step commentary only in the event stream, and mid-turn queued user inputs appear only in message records — so both are collected and the **richer stream wins per role** (requests and responses display in separate sections; ties go to the event stream), never double-counting, never silently dropping either role's bigger half. An image-only user message renders as `[image-only user message]` instead of vanishing. `task_complete.last_agent_message` is a tail safeguard, appended only when the chosen stream lacks the final assistant text. `response_item/agent_message` records are inter-agent traffic (sub-agent routing messages, plaintext or encrypted), never main-thread text.
+- **Files edited** from `event_msg/patch_apply_end` (norm ≤0.146 + alphas; rare residuals later) and from `event_msg/item_completed` items of type `FileChange` (0.147+, where patch events vanished) — the keys of the `changes` map are the files touched; both sources feed one set.
 - **Tool calls** from `response_item/function_call` and `custom_tool_call`, paired with their `*_output` by `call_id` (an unpaired call means it never returned).
 - **Compaction** from `compacted` records — Codex replaces the compacted window with a `replacement_history` of messages (not a single summary), and re-injects the system preamble; the parser keeps only the user/assistant turns.
 
 ### Session end reason detection
 
-Classified from the tail of the rollout: a trailing `task_complete`/`agent_message` is **completed**; unpaired tool calls are **interrupted**; tools that ran with no closing message are **in progress**; a trailing user message is **abandoned**; three or more tool failures are an **error cascade**.
+Classified from the tail of the rollout: a trailing `task_complete` or `final_answer`-phase assistant message is **completed**; unpaired tool calls or a trailing `turn_aborted` are **interrupted**; tools that ran with no closing message, or a tail stuck at a `commentary`-phase message (cut off mid-turn), are **in progress**; a trailing user message is **abandoned**; three or more tool failures are an **error cascade**.
 
 ### Noise filtering
 
@@ -125,7 +128,7 @@ Codex re-injects large system blocks after compaction and between turns — the 
 
 - Cannot recover sessions whose rollout files were deleted from `~/.codex/sessions/`.
 - Cannot access sessions from other machines (files are local only).
-- Tool-call previews are truncated — for the full command or patch, read the rollout line directly.
+- Long briefing sections (compact summary, user requests, assistant responses) are truncated by default; each truncation point prints a `rerun with --full` hint, and `--full` prints the complete text (per-section count caps still apply). Tool-call previews stay capped at 120 chars by design — for a full command or patch, grep the rollout for the call's `call_id`.
 - Compaction is lossy — early-conversation detail may be gone.
 - Codex has no per-session auto-memory equivalent to Claude Code's `MEMORY.md`; the project's `AGENTS.md` is deliberately filtered out as re-injected noise, so read it separately if you need the project's standing instructions.
 
