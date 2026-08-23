@@ -142,7 +142,7 @@ def run_gitleaks(repo_path: Path) -> list[dict]:
         "--report-path",
         str(tmp_path),
     ]
-    subprocess.run(cmd, capture_output=True, text=True, check=False)
+    subprocess.run(cmd, capture_output=True, text=True, errors="replace", check=False)
 
     findings = []
     if tmp_path.exists():
