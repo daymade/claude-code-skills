@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.88.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-1.89.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -1167,7 +1167,7 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 
 ### 26. **macos-cleaner** - Intelligent macOS Disk Space Recovery
 
-**The safest way to reclaim disk space on macOS.** Analyze system caches, application remnants, large files, and development environments with intelligent categorization and interactive cleanup.
+**The safest way to reclaim disk space on macOS.** Start with targeted read-only diagnosis when a subsystem is already suspect—including Apple Content Caching—then analyze caches, application remnants, large files, and development environments only as needed.
 
 **Why macos-cleaner stands out:**
 - **Safety-First Philosophy**: Never deletes without explicit user confirmation. Every operation includes risk assessment (🟢 Safe / 🟡 Caution / 🔴 Keep).
@@ -1186,15 +1186,17 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 **When to use:**
 - Your Mac is running out of disk space (>80% full)
 - You're a developer with Docker/npm/pip/Homebrew caches piling up
+- Apple Content Caching reports `Caching needs more space`, an unlimited cache, or unexpectedly high `ActualCacheUsed`
 - You want to understand what's consuming space, not just delete blindly
 - You need to clean up after uninstalled applications
 - You prefer understanding over automation
 
 **Key features:**
 - **Smart Cache Analysis**: Categorizes system caches, app caches, logs by safety level
+- **Apple Content Caching**: Separates logical `CacheUsed` from physical `ActualCacheUsed`, verifies peers and protected services, and uses Apple's supported limit/deactivate/flush controls
 - **Application Remnant Detection**: Finds orphaned data from uninstalled apps with confidence scoring
-- **Large File Discovery**: Intelligent categorization (videos, archives, databases, disk images, build artifacts)
-- **Development Environment Cleanup**: Docker (images, containers, volumes, build cache), Homebrew, npm, pip, old Git repos
+- **Large & Duplicate File Discovery**: Intelligent categorization plus optional read-only `fdupes` scans inside exact approved paths
+- **Development Environment Cleanup**: Docker images/containers/volumes, OrbStack, Homebrew, npm, and pip; Docker build cache is measured but prune-based deletion is out of scope
 - **Interactive Safe Deletion**: Batch confirmation, selective deletion, undo-friendly (uses Trash when possible)
 - **Before/After Reports**: Track space recovery with detailed breakdown
 - **Mole Integration**: Seamless workflow with visual cleanup tool for GUI preferences
@@ -1206,7 +1208,7 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 - ✅ **Developer-Centric**: We clean Docker, not just browser caches. We understand `.git` directories, `node_modules`, and build artifacts.
 - ✅ **Safety Checks Built-In**: Protection against deleting system files, user data, credentials, active databases, or files in use.
 - ✅ **Educational**: Learn what's safe to delete and why, so you can maintain your Mac confidently.
-- ❌ **Not a One-Click Solution**: We don't delete automatically. If you want "clean everything now", use other tools. We're for users who want control.
+- ❌ **Not a One-Click Solution**: Nothing changes until you approve a scoped command plan. When you ask Claude to execute it, only those confirmed actions run, followed by before/after verification.
 
 **Example usage:**
 ```bash
@@ -1217,7 +1219,7 @@ claude plugin install macos-cleaner@daymade-skills
 "My Mac is running out of space, help me analyze what's using storage"
 
 # Claude will:
-# 1. Run comprehensive disk analysis
+# 1. Route a named suspect to targeted read-only diagnosis; scan broadly only if the source is unknown
 # 2. Present categorized findings with safety levels
 # 3. Explain each category (caches, remnants, large files, dev tools)
 # 4. Recommend cleanup approach
@@ -1254,6 +1256,7 @@ Recommendation: Start with 🟢 Safe items (95 GB), then review 🟡 items toget
 *Coming soon*
 
 📚 **Documentation**: See [macos-cleaner/references/](./macos-cleaner/references/) for:
+- `apple_content_caching.md` - Targeted Apple Content Caching diagnosis and supported repair
 - `cleanup_targets.md` - Detailed explanations of every cleanup target
 - `mole_integration.md` - How to combine scripts with Mole visual tool
 - `safety_rules.md` - Comprehensive safety guidelines and what to never delete
@@ -3493,7 +3496,7 @@ Use **promptfoo-evaluation** to set up prompt tests, compare model outputs, and 
 Use **iOS-APP-developer** to configure XcodeGen projects, resolve SPM dependency issues, and troubleshoot code signing or device deployment.
 
 ### For macOS System Maintenance & Disk Space Recovery
-Use **macos-cleaner** to intelligently analyze and reclaim disk space on macOS with safety-first approach. Unlike one-click cleaners that blindly delete, macos-cleaner explains what each file is, categorizes by risk level (🟢/🟡/🔴), and requires explicit confirmation before any deletion. Perfect for developers dealing with Docker/Homebrew/npm/pip cache bloat, users wanting to understand storage consumption, or anyone who values transparency over automation. Combines script-based precision with optional Mole visual tool integration for hybrid workflow.
+Use **macos-cleaner** to diagnose and reclaim disk space on macOS with a safety-first approach. It routes known suspects such as Apple Content Caching to targeted read-only checks before any broad scan, distinguishes logical from physical usage, explains impact and recovery, and requires explicit confirmation before state changes. It also covers Docker/OrbStack, Homebrew/npm/pip, application remnants, large files, and optional Mole exploration.
 
 ### For Twitter/X Content Research
 Use **twitter-reader** to fetch tweet content without JavaScript rendering or authentication. Perfect for documenting social media discussions, archiving threads, analyzing tweet content, or gathering reference material from Twitter/X. Combine with **doc-to-markdown** to convert fetched content into other formats, or with **repomix-safe-mixer** to package research collections securely.
@@ -3576,7 +3579,7 @@ Each skill includes:
 - **promptfoo-evaluation**: See `promptfoo-evaluation/references/promptfoo_api.md` for evaluation patterns
 - **iOS-APP-developer**: See `iOS-APP-developer/references/xcodegen-full.md` for XcodeGen options and project.yml details
 - **twitter-reader**: See `twitter-reader/SKILL.md` for API key setup and URL format support
-- **macos-cleaner**: See `macos-cleaner/references/cleanup_targets.md` for detailed cleanup target explanations, `macos-cleaner/references/mole_integration.md` for Mole visual tool integration, and `macos-cleaner/references/safety_rules.md` for comprehensive safety guidelines
+- **macos-cleaner**: See `macos-cleaner/references/apple_content_caching.md` for Apple Content Caching, `macos-cleaner/references/cleanup_targets.md` for cleanup target semantics, `macos-cleaner/references/mole_integration.md` for Mole, and `macos-cleaner/references/safety_rules.md` for safety guidelines
 - **skill-reviewer**: See `daymade-skill/skill-reviewer/references/evaluation_checklist.md` for complete evaluation criteria and `daymade-skill/skill-reviewer/references/pr_template.md` for PR templates
 - **github-contributor**: See `github-contributor/references/pr_checklist.md` for PR quality checklist, `github-contributor/references/project_evaluation.md` for project evaluation criteria, and `github-contributor/references/communication_templates.md` for issue/PR templates
 - **i18n-expert**: See `i18n-expert/SKILL.md` for complete i18n setup workflow, key architecture guidance, and audit procedures

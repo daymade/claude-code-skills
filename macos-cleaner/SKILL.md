@@ -1,783 +1,216 @@
 ---
 name: macos-cleaner
-description: Analyze and reclaim macOS disk space through intelligent cleanup recommendations. This skill should be used when users report disk space issues, need to clean up their Mac, or want to understand what's consuming storage. Focus on safe, interactive analysis with user confirmation before any deletions.
+description: >-
+  Diagnoses and safely reclaims macOS disk space. Use when a Mac is low on
+  storage, reports “Caching needs more space,” shows large Apple Content
+  Caching or AssetCacheManagerUtil usage, or needs analysis of caches, logs,
+  application remnants, large or duplicate files, Docker or OrbStack,
+  Homebrew, npm, pip,
+  Xcode, and other developer storage. Routes known suspects to targeted
+  read-only diagnosis before broad scans, distinguishes logical from physical
+  usage, requires an impact-and-recovery plan plus explicit confirmation before
+  state changes, and verifies disk space and co-resident services afterward.
 ---
 
 # macOS Cleaner
 
-## Overview
+Diagnose the actual source of disk pressure, reclaim only approved space, and prove that the cleanup did not damage user data or co-resident services.
 
-Intelligently analyze macOS disk usage and provide actionable cleanup recommendations to reclaim storage space. This skill follows a **safety-first philosophy**: analyze thoroughly, present clear findings, and require explicit user confirmation before executing any deletions.
+## Entry router
 
-**Target users**: Users with basic technical knowledge who understand file systems but need guidance on what's safe to delete on macOS.
+Choose the narrowest path that can answer the request:
 
-## Core Principles
+| User signal | Route |
+|---|---|
+| Apple Content Caching, `AssetCacheManagerUtil`, `CacheUsed`, `ActualCacheUsed`, iCloud cache, or “Caching needs more space” | Read `references/apple_content_caching.md` completely before probing or proposing commands |
+| Docker, OrbStack, images, containers, or volumes | Read `references/docker_analysis.md`; inspect every object and never use prune-family commands |
+| Docker build cache | Measure with `docker builder du`; this skill reports it but does not delete it because Docker exposes category-wide prune controls rather than per-record intent |
+| A named cache, directory, application, or service is already the suspect | Inspect that target first and read the matching semantics in `references/cleanup_targets.md`; do not start a home-directory or whole-disk scan |
+| The source is genuinely unknown | Use the general analysis workflow below; Mole is optional, not the universal first step |
 
-1. **Safety First, Never Bypass**: NEVER execute dangerous commands (`rm -rf`, `mo clean`, etc.) without explicit user confirmation. No shortcuts, no workarounds.
-2. **Precision Deletion Only**: Delete by specifying exact object IDs/names. Never use batch prune commands.
-3. **Every Object Listed**: Reports must show every specific image, volume, container — not just "12 GB of unused images".
-4. **Value Over Vanity**: Your goal is NOT to maximize cleaned space. Your goal is to identify what is **truly useless** vs **valuable cache**. Clearing 50GB of useful cache just to show a big number is harmful.
-5. **Network Environment Awareness**: Many users (especially in China) have slow/unreliable internet. Re-downloading caches can take hours. A cache that saves 30 minutes of download time is worth keeping.
-6. **Impact Analysis Required**: Every cleanup recommendation MUST include "what happens if deleted" column. Never just list items without explaining consequences.
-7. **Double-Check Before Delete**: Verify each Docker object with independent cross-checks before deletion (see references/docker_analysis.md).
-8. **Patience Over Speed**: Disk scans can take 5-10 minutes. NEVER interrupt or skip slow operations. Report progress to user regularly.
-9. **User Executes Cleanup**: After analysis, provide the cleanup command for the user to run themselves. Do NOT auto-execute cleanup.
-10. **Conservative Defaults**: When in doubt, don't delete. Err on the side of caution.
+User-provided scope exclusions override every generic scan suggestion. Do not inspect personal directories, credentials, databases, application state, or unrelated services when the user excludes them.
 
-**ABSOLUTE PROHIBITIONS:**
-- ❌ NEVER use `docker image prune`, `docker volume prune`, `docker system prune`, or ANY prune-family command (exception: `docker builder prune` is safe — build cache contains only intermediate layers, never user data)
-- ❌ NEVER use `docker container prune` — stopped containers may be restarted at any time
-- ❌ NEVER run `rm -rf` on user directories without explicit confirmation
-- ❌ NEVER run `mo clean` without `--dry-run` preview first
-- ❌ NEVER skip analysis steps to save time
-- ❌ NEVER append `--help` to Mole commands (only `mo --help` is safe)
-- ❌ NEVER present cleanup reports with only categories — every object must be individually listed
-- ❌ NEVER recommend deleting useful caches just to inflate cleanup numbers
+## Safety and authorization contract
 
-## Workflow Decision Tree
+1. **Separate observation from mutation.** Complete a read-only diagnosis first. Do not delete, stop a service, edit settings, install or upgrade tools, or run a cleanup preview that may mutate state during that phase.
+2. **Confirm the exact target.** On a remote Mac, record the current host identity before any other work. Never infer the machine from an IP, old PID, directory name, or prior report.
+3. **Plan before asking.** Before any state change, list every command, what it changes, expected physical space reclaimed, impact, recoverability, and postconditions. Then stop if the user requested a plan-only phase.
+4. **Require explicit approval.** If the user supplies an exact confirmation phrase, require that phrase. Otherwise ask for unmistakable approval of the listed commands and targets. Approval for one plan does not authorize a fallback or a wider cleanup.
+5. **Use precise supported controls.** Prefer an application's supported cache-management command or an exact object ID. If no supported control exists, an exact application-owned cache directory may be removed only after verifying its owner, confirming the application is stopped or the directory is otherwise inactive, explaining rebuild/redownload impact, and receiving approval. Never target a broad cache root or active application state.
+6. **Never use Docker prune-family commands.** This includes image, container, volume, system, builder, and buildx prune. Category-wide deletion cannot express per-object user intent.
+7. **Avoid broad destructive shell forms.** Do not recommend or execute broad `rm -rf` or glob deletion. For exact approved ordinary files, prefer Finder Trash. The bundled legacy helper permanently deletes and has only the limited guards documented below; never treat it as equivalent to Trash.
+8. **Preserve valuable state.** Never target user documents, credentials, SSH material, active databases, application configuration, or running-service state merely to increase the reported savings. Read `references/safety_rules.md` before any file deletion.
+9. **Execution follows the user's authorization.** If the user asks only for analysis or wants to run commands personally, hand off the commands. If the user asks the agent to fix the machine and explicitly confirms the scoped plan, execute the exact approved commands and verify them. Unattended recurring deletion logic needs separate approval before it is written or enabled.
+10. **Fail fast.** A non-zero command, a mismatched postcondition, an unexpected target, or a changed dependency stops the cleanup. Report the partial state; do not improvise a fallback.
 
-```
-User reports disk space issues
-           ↓
-    Quick Diagnosis
-           ↓
-    ┌──────┴──────┐
-    │             │
-Immediate    Deep Analysis
- Cleanup      (continue below)
-    │             │
-    └──────┬──────┘
-           ↓
-  Present Findings
-           ↓
-   User Confirms
-           ↓
-   Execute Cleanup
-           ↓
-  Verify Results
-```
+## Phase contract
 
-## Step 1: Quick Diagnosis with Mole
+Use this state machine for every cleanup:
 
-**Primary tool**: Use Mole for disk analysis. It provides comprehensive, categorized results.
+1. **Observe — read-only.** Capture identity, disk baseline, the suspected subsystem's status and configuration, physical allocation, and critical-service health.
+1b. **Authorize stateful inspection when unavoidable.** If deeper evidence requires creating a temporary container, pulling an image, mounting a volume, or writing a snapshot, first finish the metadata-only observation, list the exact inspection commands and their side effects, and obtain separate approval. Inspection approval is not cleanup approval.
+2. **Plan — no mutation.** Explain findings, commands, impact, recovery, expected release, and success criteria. Stop at the confirmation gate.
+3. **Execute — approved scope only.** Re-read live state immediately before acting, then run each approved command separately and check its exit status and postcondition.
+4. **Verify — independent readback.** Measure disk space and subsystem state again, recheck protected services, and observe long enough to detect immediate refill.
 
-### 1.1 Pre-flight Checks
+Do not compress phases 2 and 3 into one message. A plan printed beside a cleanup command is not a confirmation gate.
+
+## Phase 1: read-only diagnosis
+
+### Establish the baseline
+
+At minimum, capture:
 
 ```bash
-# Check Mole installation and version
-which mo && mo --version
-
-# If not installed
-brew install tw93/tap/mole
-
-# Check for updates (Mole updates frequently)
-brew info tw93/tap/mole | head -5
-
-# Upgrade if outdated
-brew upgrade tw93/tap/mole
+/bin/date "+%F %T %Z %z"
+/usr/sbin/scutil --get ComputerName
+/usr/sbin/scutil --get LocalHostName
+/usr/bin/sw_vers
+/bin/df -k /System/Volumes/Data
+/bin/df -h /System/Volumes/Data
 ```
 
-### 1.2 Choose Analysis Method
+Use `df -k` for calculations and `df -h` for the human-readable report. Treat an extension, label, or old report as a hint until the live command confirms it.
 
-**IMPORTANT**: Use `mo analyze` as the primary analysis tool, NOT `mo clean --dry-run`.
+Establish the success target before an unknown-source scan. Copy a user-supplied free-space or capacity target exactly. If the user supplied none, report the current values and ask for a target in GiB, capacity percentage, or both; do not invent one. A named-suspect diagnosis may continue without a cleanup target, but the ordered unknown-source scan cannot claim a stop condition until the target is explicit.
 
-| Command | Purpose | Use When |
-|---------|---------|----------|
-| `mo analyze` | Interactive disk usage explorer (TUI tree view) | **PRIMARY**: Understanding what's consuming space |
-| `mo clean --dry-run` | Preview cleanup categories | **SECONDARY**: Only after `mo analyze` to see cleanup preview |
+Keep this first phase read-only. Do not run `scripts/cleanup_report.py` yet: it creates a local state directory and snapshot file. Preserve the command output in the report instead. On a remote target, always run the direct `df` commands on that host; the local helper must not measure the controller Mac by mistake.
 
-**Why prefer `mo analyze`:**
-- Dedicated disk analysis tool with interactive tree navigation
-- Allows drilling down into specific directories
-- Shows actual disk usage breakdown, not just cleanup categories
-- More informative for understanding storage consumption
+### Follow the named suspect before broad scans
 
-### 1.3 Run Analysis via tmux
+- Query the subsystem's own status and settings.
+- Measure physical allocation with a bounded `du` on the exact data path only when permissions and user scope allow it.
+- Distinguish logical content size, sparse-file apparent size, purgeable space, and physically allocated bytes.
+- For a suspected growing log, record exact file sizes at two or more timestamps. One large file or one recent mtime does not prove sustained growth.
+- Capture the current process, listeners, launch mechanism, and supported health probe of any co-resident service the user marks as critical. Re-resolve PIDs at each checkpoint.
 
-**IMPORTANT**: Mole requires TTY. Always use tmux from Claude Code.
+If the known suspect alone can meet the user's free-space target, do not scan unrelated personal or development directories “just in case.”
 
-**CRITICAL TIMING NOTE**: Home directory scans are SLOW (5-10 minutes or longer for large directories). Inform user upfront and wait patiently.
+### General analysis when the source is unknown
+
+Run the smallest ordered sequence that can identify enough physical space to meet the target. Stop only when candidates with supported exact actions and defensible expected physical release can meet it. Raw allocation totals, logical cache sizes, shared Docker layers, Trash moves, and unverified “potential savings” do not satisfy the stop condition.
+
+| Order / signal | Read-only action | Stop or continue |
+|---|---|---|
+| 1. Always | Capture identity and `df -k/-h`; inventory user exclusions | Stop on target mismatch |
+| 2. Cache/log pressure, and `~/Library/Caches` plus `~/Library/Logs` are approved read scopes | `uv run scripts/analyze_caches.py --user-only` | Stop when measured candidates can meet the target |
+| 3. Developer tools are present and the script's fixed scope is approved | `uv run scripts/analyze_dev_env.py` reads Docker/package managers plus existing `~/Projects`, `~/workspace`, `~/dev`, `~/src`, and `~/code` roots | Route Docker/OrbStack findings to their dedicated reference; skip this helper when any fixed root is out of scope |
+| 4. Uninstalled-app residue is plausible and its fixed roots are approved | `uv run scripts/find_app_remnants.py` reads `/Applications`, `~/Applications`, and four documented `~/Library` application-state roots | Treat every result as a candidate, never proof of abandonment; skip when that scope is not approved |
+| 5. A content-bearing path is explicitly approved | `uv run scripts/analyze_large_files.py --threshold 100MB --path "<approved-path>"` | Do not substitute `~`, Downloads, Documents, or the data-volume root when no path was approved |
+| 6. Still unknown after bounded checks, and the user explicitly approves Mole's fixed broad scan roots | Read `references/mole_integration.md` and use `mo analyze` through a TTY | Mole cannot accept an arbitrary path scope; skip it when approval is narrower than its documented roots |
+
+An `<approved-path>` is an exact path the user named or explicitly accepted after its scope was described. If none exists, skip large-file and duplicate-content scanning, state that this evidence branch was not authorized, and continue with non-content-bearing evidence. Do not install or upgrade Mole during a read-only phase unless the user separately authorizes that change.
+
+Mole's analyzer scans a fixed set that includes the home directory, application data, system libraries, applications, and volumes. Navigation inside the results does not make the underlying scan path-scoped. If that broad read scope is not approved, do not run Mole; stop with the bounded evidence already collected or ask for the missing scan authorization in the plan.
+
+For an explicitly approved duplicate-file investigation, read the “Optional duplicate files” section in `references/cleanup_targets.md`. It is read-only and never uses an automatic-delete option.
+
+### Docker and OrbStack
+
+Read `references/docker_analysis.md` before reporting Docker savings. List every image, container, and volume individually; inspect references and database-like contents; use actual sparse-file allocation rather than apparent size. A resource reported as dangling is not proof that its data is worthless. Build-cache measurement is supported, but build-cache deletion is deliberately out of scope because the available Docker controls are prune-family operations.
+
+## Phase 2: report and stop at the gate
+
+Report observed values rather than inferred properties. Use `references/report_templates.md` for the long-form layout and include these fields for every proposed action:
+
+| Field | Required content |
+|---|---|
+| Current state | Timestamp, target identity, disk used/free/capacity, and subsystem status |
+| Evidence | The command and observed value; state whether the number is logical or physical |
+| Exact command | The command that would change state, with the exact target or object ID |
+| Change | What the command modifies or removes |
+| Recoverability | Reversible command, Trash recovery, backup restore, or redownload-only |
+| Expected release | Physical-space estimate with unit and assumptions |
+| Service impact | User-visible effects and protected-service invariants |
+| Postconditions | Values that must be true before the action is called successful |
+
+Classify findings by consequence, not by how tempting the number is:
+
+- **Rebuildable cache:** deletion loses only a local copy, but state the redownload or rebuild cost.
+- **User decision required:** value depends on the user's workflow or ownership knowledge.
+- **Preserve:** user data, credentials, database state, active configuration, or anything whose role is uncertain.
+
+Do not call a cache “absolutely safe” merely because software can regenerate it. Regeneration time, bandwidth, authentication, and offline availability are real costs.
+
+## Phase 3: execute the confirmed plan
+
+Immediately before the first state-changing command:
+
+1. Reconfirm the target identity and current disk state.
+2. Re-query the objects or subsystem status; cleanup plans expire when live state changes.
+3. Recheck protected-service health.
+4. Compare the approved commands with the commands about to run. Any difference requires new approval.
+
+If the approved plan includes creation of a local before/after report artifact, capture the before snapshot now, after approval and before the first cleanup command:
 
 ```bash
-# Create tmux session
-tmux new-session -d -s mole -x 120 -y 40
-
-# Run disk analysis (PRIMARY tool - interactive TUI)
-tmux send-keys -t mole 'mo analyze' Enter
-
-# Wait for scan - BE PATIENT!
-# Home directory scanning typically takes 5-10 minutes
-# Report progress to user regularly
-sleep 60 && tmux capture-pane -t mole -p
-
-# Navigate the TUI with arrow keys
-tmux send-keys -t mole Down    # Move to next item
-tmux send-keys -t mole Enter   # Expand/select item
-tmux send-keys -t mole 'q'     # Quit when done
+uv run scripts/cleanup_report.py --snapshot before
 ```
 
-**Alternative: Cleanup preview (use AFTER mo analyze)**
-```bash
-# Run dry-run preview (SAFE - no deletion)
-tmux send-keys -t mole 'mo clean --dry-run' Enter
+This writes under `~/.macos-cleaner`, so list it in the plan. It is optional and local-target only; direct `df -k/-h` readings remain the source of truth. Never run it on the controller Mac as a substitute for measuring a remote target.
 
-# Wait for scan (report progress to user every 30 seconds)
-# Be patient! Large directories take 5-10 minutes
-sleep 30 && tmux capture-pane -t mole -p
-```
+Run one state-changing command at a time. Read the result before sending the next command. After each command, run the postcondition that can distinguish success from partial success.
 
-### 1.4 Progress Reporting
-
-Report scan progress to user regularly:
-
-```
-📊 Disk Analysis in Progress...
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⏱️ Elapsed: 2 minutes
-
-Current status:
-✅ Applications: 49.5 GB (complete)
-✅ System Library: 10.3 GB (complete)
-⏳ Home: scanning... (this may take 5-10 minutes)
-⏳ App Library: pending
-
-I'm waiting patiently for the scan to complete.
-Will report again in 30 seconds...
-```
-
-### 1.5 Present Final Findings
-
-After scan completes, present structured results:
-
-```
-📊 Disk Space Analysis (via Mole)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Free space: 27 GB
-
-🧹 Recoverable Space (dry-run preview):
-
-➤ User Essentials
-  • User app cache:     16.67 GB
-  • User app logs:      102.3 MB
-  • Trash:              642.9 MB
-
-➤ Browser Caches
-  • Chrome cache:       1.90 GB
-  • Safari cache:       4 KB
-
-➤ Developer Tools
-  • uv cache:           9.96 GB
-  • npm cache:          (detected)
-  • Docker cache:       (detected)
-  • Homebrew cache:     (detected)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Total recoverable: ~30 GB
-
-⚠️ This was a dry-run preview. No files were deleted.
-```
-
-## Step 2: Deep Analysis Categories
-
-Scan the following categories systematically. Reference `references/cleanup_targets.md` for detailed explanations.
-
-### Category 1: System & Application Caches
-
-**Locations to analyze:**
-- `~/Library/Caches/*` - User application caches
-- `/Library/Caches/*` - System-wide caches (requires sudo)
-- `~/Library/Logs/*` - Application logs
-- `/var/log/*` - System logs (requires sudo)
-
-**Analysis script:**
-```bash
-scripts/analyze_caches.py --user-only
-```
-
-**Safety level**: 🟢 Generally safe to delete (apps regenerate caches)
-
-**Exceptions to preserve:**
-- Browser caches while browser is running
-- IDE caches (may slow down next startup)
-- Package manager caches (Homebrew, pip, npm)
-
-### Category 2: Application Remnants
-
-**Locations to analyze:**
-- `~/Library/Application Support/*` - App data
-- `~/Library/Preferences/*` - Preference files
-- `~/Library/Containers/*` - Sandboxed app data
-
-**Analysis approach:**
-1. List installed applications in `/Applications`
-2. Cross-reference with `~/Library/Application Support`
-3. Identify orphaned folders (app uninstalled but data remains)
-
-**Analysis script:**
-```bash
-scripts/find_app_remnants.py
-```
-
-**Safety level**: 🟡 Caution required
-- ✅ Safe: Folders for clearly uninstalled apps
-- ⚠️ Check first: Folders for apps you rarely use
-- ❌ Keep: Active application data
-
-### Category 3: Large Files & Duplicates
-
-**Analysis script:**
-```bash
-scripts/analyze_large_files.py --threshold 100MB --path ~
-```
-
-**Find duplicates (optional, resource-intensive):**
-```bash
-# Use fdupes if installed
-if command -v fdupes &> /dev/null; then
-  fdupes -r ~/Documents ~/Downloads
-fi
-```
-
-**Present findings:**
-```
-📦 Large Files (>100MB):
-━━━━━━━━━━━━━━━━━━━━━━━━
-1. movie.mp4                    4.2 GB  ~/Downloads
-2. dataset.csv                  1.8 GB  ~/Documents/data
-3. old_backup.zip               1.5 GB  ~/Desktop
-...
-
-🔁 Duplicate Files:
-- screenshot.png (3 copies)     15 MB each
-- document_v1.docx (2 copies)   8 MB each
-```
-
-**Safety level**: 🟡 User judgment required
-
-### Category 4: Development Environment Cleanup
-
-**Targets:**
-- Docker: images, containers, volumes, build cache
-- Homebrew: cache, old versions
-- Node.js: `node_modules`, npm cache
-- Python: pip cache, `__pycache__`, venv
-- Git: `.git` folders in archived projects
-
-**Analysis script:**
-```bash
-scripts/analyze_dev_env.py
-```
-
-**Example findings:**
-```
-🐳 Docker Resources:
-- Unused images:      12 GB
-- Stopped containers:  2 GB
-- Build cache:         8 GB
-- Orphaned volumes:    3 GB
-Total potential:      25 GB
-
-📦 Package Managers:
-- Homebrew cache:      5 GB
-- npm cache:           3 GB
-- pip cache:           1 GB
-Total potential:       9 GB
-
-🗂️  Old Projects:
-- archived-project-2022/.git  500 MB
-- old-prototype/.git          300 MB
-```
-
-**Cleanup commands (require confirmation):**
-```bash
-# Homebrew cleanup (safe)
-brew cleanup -s
-
-# npm _npx only (safe - temporary packages)
-rm -rf ~/.npm/_npx
-
-# pip cache (use with caution)
-pip cache purge
-```
-
-**Docker cleanup - SPECIAL HANDLING REQUIRED:**
-
-⚠️ **NEVER use these commands:**
-```bash
-# ❌ DANGEROUS - deletes ALL volumes without confirmation
-docker volume prune -f
-docker system prune -a --volumes
-```
-
-✅ **Correct approach - per-volume confirmation:**
-```bash
-# 1. List all volumes
-docker volume ls
-
-# 2. Identify which projects each volume belongs to
-docker volume inspect <volume_name>
-
-# 3. Ask user to confirm EACH project they want to delete
-# Example: "Do you want to delete all volumes for 'ragflow' project?"
-
-# 4. Delete specific volumes only after confirmation
-docker volume rm ragflow_mysql_data ragflow_redis_data
-```
-
-**Safety level**: 🟢 Homebrew/npm cleanup, 🔴 Docker volumes require per-project confirmation
-
-### Step 2A-2D: Docker Deep Analysis
-
-For Docker-heavy systems, follow the detailed per-object analysis and verification protocol (image/container/volume inspection, OrbStack sparse-file handling, and the database-volume red-flag rule) in `references/docker_analysis.md`. Core rule: verify every Docker object with independent cross-checks before deleting, and never use prune-family commands.
-
-**Before reporting a backlog as "cleaned," check whether it will refill.** If a single repository or category keeps growing across sessions rather than being a one-time accumulation (hundreds of tagged images from an automated build, only a handful in use), a cleanup pass is a symptom fix — see `references/docker_analysis.md` Step 2D for diagnosing the source (usually a CI/CD or dev-loop script that never cleans up its own build tags) and fixing it there, before or alongside clearing the existing backlog.
-
-## Step 3: Integration with Mole
-
-**Mole** (https://github.com/tw93/Mole) is a **command-line interface (CLI)** tool for comprehensive macOS cleanup. It provides interactive terminal-based analysis and cleanup for caches, logs, developer tools, and more.
-
-**CRITICAL REQUIREMENTS:**
-
-1. **TTY Environment**: Mole requires a TTY for interactive commands. Use `tmux` when running from Claude Code or scripts.
-2. **Version Check**: Always verify Mole is up-to-date before use.
-3. **Safe Help Command**: Only `mo --help` is safe. Do NOT append `--help` to other commands.
-
-**Installation check and upgrade:**
+For an exact ordinary file that is not user data, application state, a database, or a protected path, prefer a recoverable Finder Trash move after the user confirms the exact path:
 
 ```bash
-# Check if installed and get version
-which mo && mo --version
-
-# If not installed
-brew install tw93/tap/mole
-
-# Check for updates
-brew info tw93/tap/mole | head -5
-
-# Upgrade if needed
-brew upgrade tw93/tap/mole
+/usr/bin/osascript \
+  -e 'on run argv' \
+  -e 'tell application "Finder" to delete (POSIX file (item 1 of argv))' \
+  -e 'end run' -- "<exact-path>"
 ```
 
-**Using Mole with tmux (REQUIRED for Claude Code):**
+Moving to Trash usually releases no physical space until Trash is emptied; state that in the plan. `scripts/safe_delete.py` is a legacy permanent-deletion helper with an interactive prompt and a limited system/credential denylist. It does not move to Trash, check every user-data root, detect open files, or independently prove reclaimed bytes. Use it only when the exact non-user-data target and irreversible deletion were explicitly approved:
 
 ```bash
-# Create tmux session for TTY environment
-tmux new-session -d -s mole -x 120 -y 40
-
-# Run analysis (safe, read-only)
-tmux send-keys -t mole 'mo analyze' Enter
-
-# Wait for scan (be patient - can take 5-10 minutes for large directories)
-sleep 60
-
-# Capture results
-tmux capture-pane -t mole -p
-
-# Cleanup when done
-tmux kill-session -t mole
+uv run scripts/safe_delete.py <exact-path> [<exact-path> ...]
 ```
 
-**Available commands (from `mo --help`):**
+Do not use this helper for user documents, application-managed caches such as Apple Content Caching, databases, credentials, or any target whose role is uncertain.
 
-| Command | Safety | Description |
-|---------|--------|-------------|
-| `mo --help` | ✅ Safe | View all commands (ONLY safe help) |
-| `mo analyze` | ✅ Safe | Disk usage explorer (read-only) |
-| `mo status` | ✅ Safe | System health monitor |
-| `mo clean --dry-run` | ✅ Safe | Preview cleanup (no deletion) |
-| `mo clean` | ⚠️ DANGEROUS | Actually deletes files |
-| `mo purge` | ⚠️ DANGEROUS | Remove project artifacts |
-| `mo uninstall` | ⚠️ DANGEROUS | Remove applications |
+Two narrow Finder-Trash branches remain available without weakening those exclusions:
 
-**Reference guide:**
-See `references/mole_integration.md` for detailed tmux workflow and troubleshooting.
+- For an exact inactive application cache with no verified supported management control, follow the named-cache discovery/in-use protocol in `references/cleanup_targets.md`, explain the rebuild cost, and obtain explicit approval for that exact cache path.
+- For duplicate files inside an exact approved user-data root, first show each duplicate set's size/hash and every path. The user must name the copy to keep and each copy to remove. Move only those confirmed files to Finder Trash; never use the permanent helper, an automatic duplicate-selection flag, `all`, a glob, or a directory-level target. Verify the source paths moved to Trash, and state that physical space is not released until Trash is separately reviewed and emptied.
 
-## Multi-Layer Deep Exploration with Mole
+## Phase 4: verify and observe
 
-For comprehensive analysis, perform multi-layer exploration (drilling into Home, Library, .cache, .npm, Downloads, etc.) rather than only top-level scans. The full TUI navigation walkthrough, recommended exploration tree, time expectations, and a complete example session are documented in `references/mole_integration.md`.
+Verification must cover all clauses of the approved plan:
 
-## Anti-Patterns: What NOT to Delete
+- Re-read `df -k` and `df -h`; calculate reclaimed space from before/after readings rather than from the deletion tool's claim.
+- Re-query the cleaned subsystem's activation, configuration, and physical usage.
+- Re-resolve each protected service's PID, listeners, launch mechanism, and health probe. A healthy disk does not prove the service survived.
+- Observe at bounded intervals when APFS accounting can lag or the source may refill. Record each timestamp and value.
+- If the free-space target is missed, stop all deletion. Begin a second read-only analysis and rank remaining sources by measured physical allocation.
 
-**CRITICAL**: The following items are often suggested for cleanup but should NOT be deleted in most cases. They provide significant value that outweighs the space they consume.
+Never report “fixed” when only the command exit code is known. A successful cleanup requires both the intended state and the protected invariants.
 
-### Items to KEEP (Anti-Patterns)
-
-| Item | Size | Why NOT to Delete | Real Impact of Deletion |
-|------|------|-------------------|------------------------|
-| **Xcode DerivedData** | 10+ GB | Build cache saves 10-30 min per full rebuild | Next build takes 10-30 minutes longer |
-| **npm _cacache** | 5+ GB | Downloaded packages cached locally | `npm install` redownloads everything (30min-2hr in China) |
-| **~/.cache/uv** | 10+ GB | Python package cache | Every Python project reinstalls deps from PyPI |
-| **Playwright browsers** | 3-4 GB | Browser binaries for automation testing | Redownload 2GB+ each time (30min-1hr) |
-| **iOS DeviceSupport** | 2-3 GB | Required for device debugging | Redownload from Apple when connecting device |
-| **Docker stopped containers** | <500 MB | May restart anytime with `docker start` | Lose container state, need to recreate |
-| **~/.cache/huggingface** | varies | AI model cache | Redownload large models (hours) |
-| **~/.cache/modelscope** | varies | AI model cache (China) | Same as above |
-| **JetBrains caches** | 1+ GB | IDE indexing and caches | IDE takes 5-10 min to re-index |
-
-### Why This Matters
-
-**The vanity trap**: Showing "Cleaned 50GB!" feels good but:
-- User spends next 2 hours redownloading npm packages
-- Next Xcode build takes 30 minutes instead of 30 seconds
-- AI project fails because models need redownload
-
-**The right mindset**: "I found 50GB of caches. Here's why most of them are actually valuable and should be kept..."
-
-### What IS Actually Safe to Delete
-
-| Item | Why Safe | Impact |
-|------|----------|--------|
-| **Trash** | User already deleted these files | None - user's decision |
-| **Homebrew old versions** | Replaced by newer versions | Rare: can't rollback to old version |
-| **npm _npx** | Temporary npx executions | Minor: npx re-downloads on next use |
-| **Orphaned app remnants** | App already uninstalled | None - app doesn't exist |
-| **Specific unused Docker volumes** | Projects confirmed abandoned | None - if truly abandoned |
-
-## Report Format Requirements
-
-Every cleanup report MUST follow this format with impact analysis:
-
-```markdown
-## Disk Analysis Report
-
-### Classification Legend
-| Symbol | Meaning |
-|--------|---------|
-| 🟢 | **Absolutely Safe** - No negative impact, truly unused |
-| 🟡 | **Trade-off Required** - Useful cache, deletion has cost |
-| 🔴 | **Do Not Delete** - Contains valuable data or actively used |
-
-### Findings
-
-| Item | Size | Classification | What It Is | Impact If Deleted |
-|------|------|----------------|------------|-------------------|
-| Trash | 643 MB | 🟢 | Files you deleted | None |
-| npm _npx | 2.1 GB | 🟢 | Temp npx packages | Minor redownload |
-| npm _cacache | 5 GB | 🟡 | Package cache | 30min-2hr redownload |
-| DerivedData | 10 GB | 🟡 | Xcode build cache | 10-30min rebuild |
-| Docker volumes | 11 GB | 🔴 | Project databases | **DATA LOSS** |
-
-### Recommendation
-Only items marked 🟢 are recommended for cleanup.
-Items marked 🟡 require your judgment based on usage patterns.
-Items marked 🔴 require explicit confirmation per-item.
-```
-
-### Docker Report: Required Object-Level Detail
-
-Docker reports must list every individual object (each image, container, and volume), not just categories. See the object-level table templates in `references/report_templates.md`.
-
-## High-Quality Report Template
-
-After multi-layer exploration, present findings using the detailed fill-in-the-blank template in `references/report_templates.md`.
-
-### Report Quality Checklist
-
-Before presenting the report, verify:
-
-- [ ] Every item has "Impact If Deleted" explanation
-- [ ] 🟢 items are truly safe (Trash, _npx, old versions)
-- [ ] 🟡 items require user decision (age info, usage patterns)
-- [ ] 🔴 items explain WHY they should be kept
-- [ ] Docker volumes listed by project, not blanket prune
-- [ ] Network environment considered (China = slow redownload)
-- [ ] No recommendations to delete useful caches just to inflate numbers
-- [ ] Clear action items with exact commands
-
-## Step 4: Present Recommendations
-
-Format findings into actionable recommendations with risk levels:
-
-```markdown
-# macOS Cleanup Recommendations
-
-## Summary
-Total space recoverable: ~XX GB
-Current usage: XX%
-
-## Recommended Actions
-
-### 🟢 Safe to Execute (Low Risk)
-These are safe to delete and will be regenerated as needed:
-
-1. **Empty Trash** (~12 GB)
-   - Location: ~/.Trash
-   - Command: `rm -rf ~/.Trash/*`
-
-2. **Clear System Caches** (~45 GB)
-   - Location: ~/Library/Caches
-   - Command: `rm -rf ~/Library/Caches/*`
-   - Note: Apps may be slightly slower on next launch
-
-3. **Remove Homebrew Cache** (~5 GB)
-   - Command: `brew cleanup -s`
-
-### 🟡 Review Recommended (Medium Risk)
-Review these items before deletion:
-
-1. **Large Downloads** (~38 GB)
-   - Location: ~/Downloads
-   - Action: Manually review and delete unneeded files
-   - Files: [list top 10 largest files]
-
-2. **Application Remnants** (~8 GB)
-   - Apps: [list detected uninstalled apps]
-   - Locations: [list paths]
-   - Action: Confirm apps are truly uninstalled before deleting data
-
-### 🔴 Keep Unless Certain (High Risk)
-Only delete if you know what you're doing:
-
-1. **Docker Volumes** (~3 GB)
-   - May contain important data
-   - Review with: `docker volume ls`
-
-2. **Time Machine Local Snapshots** (~XX GB)
-   - Automatic backups, will be deleted when space needed
-   - Command to check: `tmutil listlocalsnapshots /`
-```
-
-## Step 5: Execute with Confirmation
-
-**CRITICAL**: Never execute deletions without explicit user confirmation.
-
-**Interactive confirmation flow:**
-
-```python
-# Example from scripts/safe_delete.py
-def confirm_delete(path: str, size: str, description: str) -> bool:
-    """
-    Ask user to confirm deletion.
-
-    Args:
-        path: File/directory path
-        size: Human-readable size
-        description: What this file/directory is
-
-    Returns:
-        True if user confirms, False otherwise
-    """
-    print(f"\n🗑️  Confirm Deletion")
-    print(f"━━━━━━━━━━━━━━━━━━")
-    print(f"Path:        {path}")
-    print(f"Size:        {size}")
-    print(f"Description: {description}")
-
-    response = input("\nDelete this item? [y/N]: ").strip().lower()
-    return response == 'y'
-```
-
-**For batch operations:**
-
-```python
-def batch_confirm(items: list) -> list:
-    """
-    Show all items, ask for batch confirmation.
-
-    Returns list of items user approved.
-    """
-    print("\n📋 Items to Delete:")
-    print("━━━━━━━━━━━━━━━━━━")
-    for i, item in enumerate(items, 1):
-        print(f"{i}. {item['path']} ({item['size']})")
-
-    print("\nOptions:")
-    print("  'all'    - Delete all items")
-    print("  '1,3,5'  - Delete specific items by number")
-    print("  'none'   - Cancel")
-
-    response = input("\nYour choice: ").strip().lower()
-
-    if response == 'none':
-        return []
-    elif response == 'all':
-        return items
-    else:
-        # Parse numbers
-        indices = [int(x.strip()) - 1 for x in response.split(',')]
-        return [items[i] for i in indices if 0 <= i < len(items)]
-```
-
-## Step 6: Verify Results
-
-After cleanup, verify the results and report back:
+For a local target whose before snapshot was captured by the helper, generate the comparison with:
 
 ```bash
-# Compare before/after
-df -h /
-
-# Calculate space recovered
-# (handled by scripts/cleanup_report.py)
-```
-
-**Report format:**
-
-```
-✅ Cleanup Complete!
-
-Before: 450 GB used (90%)
-After:  385 GB used (77%)
-━━━━━━━━━━━━━━━━━━━━━━━━
-Recovered: 65 GB
-
-Breakdown:
-- System caches:        45 GB
-- Downloads:            12 GB
-- Homebrew cache:        5 GB
-- Application remnants:  3 GB
-
-⚠️ Notes:
-- Some applications may take longer to launch on first run
-- Deleted items cannot be recovered unless you have Time Machine backup
-- Consider running this cleanup monthly
-
-💡 Maintenance Tips:
-- Set up automatic Homebrew cleanup: `brew cleanup` weekly
-- Review Downloads folder monthly
-- Enable "Empty Trash Automatically" in Finder preferences
-```
-
-## Bonus: Dockerfile Optimization Discoveries
-
-When image analysis reveals oversized images, suggest multi-stage build optimization. See the before/after example and key techniques in `references/docker_analysis.md`.
-
-## ⚠️ Safety Guidelines
-
-### Always Preserve
-
-Never delete these without explicit user instruction:
-- `~/Documents`, `~/Desktop`, `~/Pictures` content
-- Active project directories
-- Database files (*.db, *.sqlite)
-- Configuration files for active apps
-- SSH keys, credentials, certificates
-- Time Machine backups
-
-### ⚠️ Require Sudo Confirmation
-
-These operations require elevated privileges. Ask user to run commands manually:
-- Clearing `/Library/Caches` (system-wide)
-- Clearing `/var/log` (system logs)
-- Clearing `/private/var/folders` (system temp)
-
-Example prompt:
-```
-⚠️ This operation requires administrator privileges.
-
-Please run this command manually:
-  sudo rm -rf /Library/Caches/*
-
-⚠️ You'll be asked for your password.
-```
-
-### 💡 Backup Recommendation
-
-Before executing any cleanup >10GB, recommend:
-
-```
-💡 Safety Tip:
-Before cleaning XX GB, consider creating a Time Machine backup.
-
-Quick backup check:
-  tmutil latestbackup
-
-If no recent backup, run:
-  tmutil startbackup
-```
-
-## Troubleshooting
-
-### "Operation not permitted" errors
-
-macOS may block deletion of certain system files due to SIP (System Integrity Protection).
-
-**Solution**: Don't force it. These protections exist for security.
-
-### App crashes after cache deletion
-
-Rare but possible. **Solution**: Restart the app, it will regenerate necessary caches.
-
-### Docker cleanup removes important data
-
-**Prevention**: Always list Docker volumes before cleanup:
-```bash
-docker volume ls
-docker volume inspect <volume_name>
+uv run scripts/cleanup_report.py --snapshot after --compare
 ```
 
 ## Resources
 
-### scripts/
+Load only the branch relevant to the current task:
 
-- `analyze_caches.py` - Scan and categorize cache directories
-- `find_app_remnants.py` - Detect orphaned application data
-- `analyze_large_files.py` - Find large files with smart filtering
-- `analyze_dev_env.py` - Scan development environment resources
-- `safe_delete.py` - Interactive deletion with confirmation
-- `cleanup_report.py` - Generate before/after reports
+- `references/apple_content_caching.md` — Apple Content Caching diagnosis, unit interpretation, supported remote controls, confirmation plan, and post-cleanup verification.
+- `references/cleanup_targets.md` — cache, log, application, developer, large-file, and Time Machine target semantics.
+- `references/docker_analysis.md` — per-object Docker and OrbStack analysis, database-volume safeguards, and refill root-cause diagnosis.
+- `references/mole_integration.md` — TTY workflow for interactive Mole analysis and preview.
+- `references/report_templates.md` — long-form general and Docker report templates.
+- `references/safety_rules.md` — blocked paths, confirmation, recovery, and file-deletion safety checks.
+- `scripts/analyze_caches.py` — bounded cache inventory.
+- `scripts/find_app_remnants.py` — application-remnant candidates; reads its fixed Applications and `~/Library` roots, so require that scope first.
+- `scripts/analyze_large_files.py` — large-file discovery inside an approved path.
+- `scripts/analyze_dev_env.py` — Docker/package-manager inventory plus fixed common-project-root `.git` sizing; require that full read scope first.
+- `scripts/safe_delete.py` — legacy guarded permanent deletion for exact approved non-user-data targets; it is not a Trash or recovery tool.
+- `scripts/cleanup_report.py` — local-target before/after reporting for `/System/Volumes/Data` by default, with an explicit `--volume` override.
 
-### references/
+## Do not use this skill when
 
-- `cleanup_targets.md` - Detailed explanations of each cleanup target
-- `mole_integration.md` - How to use Mole, plus the multi-layer TUI exploration walkthrough
-- `docker_analysis.md` - Docker deep-analysis workflow (Step 2A-2D, including root-cause fixes for backlogs that keep refilling) and Dockerfile optimization
-- `report_templates.md` - Detailed report templates (object-level Docker tables, full report layout)
-- `safety_rules.md` - Comprehensive list of what to never delete
-
-## Usage Examples
-
-### Example 1: Quick Cache Cleanup
-
-User request: "My Mac is running out of space, can you help?"
-
-Workflow:
-1. Run quick diagnosis
-2. Identify system caches as quick win
-3. Present findings: "45 GB in ~/Library/Caches"
-4. Explain: "These are safe to delete, apps will regenerate them"
-5. Ask confirmation
-6. Provide the command for the user to run themselves: `rm -rf ~/Library/Caches/*` (per Core Principle 9, do not auto-execute)
-7. After the user runs it, verify with `df -h /` and report: "Recovered 45 GB"
-
-### Example 2: Development Environment Cleanup
-
-User request: "I'm a developer and my disk is full"
-
-Workflow:
-1. Run `scripts/analyze_dev_env.py`
-2. Present Docker + npm + Homebrew findings
-3. Explain each category
-4. Provide cleanup commands with explanations
-5. Let user execute (don't auto-execute Docker cleanup)
-6. Verify results
-
-### Example 3: Finding Large Files
-
-User request: "What's taking up so much space?"
-
-Workflow:
-1. Run `scripts/analyze_large_files.py --threshold 100MB`
-2. Present top 20 large files with context
-3. Categorize: videos, datasets, archives, disk images
-4. Let user decide what to delete
-5. Provide deletion commands for the user to run (or use scripts/safe_delete.py for interactive per-item confirmation)
-6. Suggest archiving to external drive
-
-## Best Practices
-
-1. **Start Conservative**: Begin with obviously safe targets (caches, trash)
-2. **Explain Everything**: Users should understand what they're deleting
-3. **Show Examples**: List 3-5 example files from each category
-4. **Respect User Pace**: Don't rush through confirmations
-5. **Document Results**: Always show before/after space usage
-6. **Educate**: Include maintenance tips in final report
-7. **Integrate Tools**: Suggest Mole for users who prefer GUI
-
-## When NOT to Use This Skill
-
-- User wants automatic/silent cleanup (against safety-first principle)
-- User needs Windows/Linux cleanup (macOS-specific skill)
-- User has <10% disk usage (no cleanup needed)
-- User wants to clean system files requiring SIP disable (security risk)
-
-In these cases, explain limitations and suggest alternatives.
+- The target is Windows or Linux.
+- The requested action requires disabling SIP or bypassing macOS protections.
+- The user asks for silent or automatic deletion without an auditable scope and confirmation gate.
+- The task is only to tune application behavior and has no disk-space diagnosis or recovery goal.

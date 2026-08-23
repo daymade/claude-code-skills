@@ -3,11 +3,11 @@
 Find large files on macOS and categorize them.
 
 Usage:
-    python3 analyze_large_files.py [--threshold SIZE] [--path PATH] [--limit N]
+    uv run scripts/analyze_large_files.py --path PATH [--threshold SIZE] [--limit N]
 
 Options:
     --threshold    Minimum file size in MB (default: 100)
-    --path         Path to search (default: ~)
+    --path         Exact user-approved path to search (required)
     --limit        Maximum number of results (default: 50)
 """
 
@@ -44,12 +44,12 @@ def categorize_file(path):
     # Archive files
     archive_exts = {'.zip', '.tar', '.gz', '.bz2', '.7z', '.rar', '.dmg'}
     if suffix in archive_exts:
-        return ('Archive', '📦', 'Extract if needed, then delete archive')
+        return ('Archive', '📦', 'Confirm contents and recovery value')
 
     # Disk images
     disk_exts = {'.iso', '.img', '.toast'}
     if suffix in disk_exts:
-        return ('Disk Image', '💿', 'Delete after installation/use')
+        return ('Disk Image', '💿', 'Confirm offline reinstall/recovery value')
 
     # Database files
     db_exts = {'.db', '.sqlite', '.sqlite3', '.sql'}
@@ -63,15 +63,15 @@ def categorize_file(path):
 
     # Log files: match by extension only. A substring check on the whole
     # name misclassifies catalog.pdf, dialog.wav, blog.zip, Prologue.mp4,
-    # analog.avi, etc. as "safe to delete" logs.
+    # analog.avi, etc. as log files.
     log_exts = {'.log', '.log1', '.log2'}
     if suffix in log_exts or path.name.lower().endswith('.log.gz'):
-        return ('Log File', '📝', 'Safe to delete old logs')
+        return ('Log File', '📝', 'Review diagnostic value and exact age')
 
     # Build artifacts
     build_patterns = ['.o', '.a', '.so', '.dylib', '.framework']
     if suffix in build_patterns:
-        return ('Build Artifact', '🔨', 'Safe to delete, rebuild will regenerate')
+        return ('Build Artifact', '🔨', 'Rebuildable; confirm project and rebuild cost')
 
     # Virtual machine images
     vm_exts = {'.vmdk', '.vdi', '.qcow2', '.vhd'}
@@ -158,8 +158,8 @@ def main():
     )
     parser.add_argument(
         '--path',
-        default=os.path.expanduser('~'),
-        help='Path to search (default: ~)'
+        required=True,
+        help='Exact user-approved path to search (required)'
     )
     parser.add_argument(
         '--limit',
@@ -235,7 +235,7 @@ def main():
     print("   1. Review the list and identify files you no longer need")
     print("   2. For videos/archives: consider moving to external storage")
     print("   3. For databases/VMs: verify they're not in use")
-    print("   4. Use safe_delete.py for interactive cleanup")
+    print("   4. Return exact candidates to the main skill's impact and confirmation gate")
 
     return 0
 

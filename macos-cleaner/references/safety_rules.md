@@ -2,6 +2,8 @@
 
 Critical safety guidelines to prevent data loss and system damage.
 
+This reference defines the agent's required preflight, not a claim that every check is implemented by `scripts/safe_delete.py`. The bundled helper performs an exact-path existence check, a limited hard denylist, an interactive prompt, and permanent deletion. It does **not** move items to Trash, hard-block all user-data roots, run `lsof`, enforce the >10 GiB backup discussion, or independently measure physical space after deletion. The main skill therefore keeps user data and application state outside that helper and uses Finder Trash for recoverable ordinary-file handling.
+
 ## Golden Rules
 
 ### Rule 1: Never Delete Without Confirmation
@@ -77,21 +79,24 @@ Before deleting ANY Docker object, perform independent cross-verification. This 
 **Key requirements**:
 - For images: verify no container (running or stopped) references the image
 - For volumes: verify no container mounts the volume
-- For database volumes (name contains mysql, postgres, redis, mongo, mariadb): MANDATORY content inspection with a temporary container
+- For database volumes (name contains mysql, postgres, redis, mongo, mariadb): MANDATORY content inspection through the separately authorized no-pull/no-network/read-only temporary-container procedure
 - Even if Docker reports a volume as "dangling", the data inside may be valuable
 
-See **SKILL.md Step 4** for the complete verification commands and database volume inspection workflow.
+See `references/docker_analysis.md` for the complete verification commands and database-volume inspection workflow.
 
 ### Rule 8: Use Trash When Possible
 
 Prefer moving to Trash over permanent deletion:
 
 ```bash
-# Recoverable
-osascript -e 'tell app "Finder" to move POSIX file "/path/to/file" to trash'
+# Recoverable exact-target move
+/usr/bin/osascript \
+  -e 'on run argv' \
+  -e 'tell application "Finder" to delete (POSIX file (item 1 of argv))' \
+  -e 'end run' -- "/exact/approved/path"
 
-# Permanent (use only when confirmed safe)
-rm -rf /path/to/file
+# Legacy permanent deletion (exact approved non-user-data target only)
+uv run scripts/safe_delete.py "/exact/approved/path"
 ```
 
 ## Never Delete These
@@ -171,21 +176,11 @@ Proceed without backup? [y/N]:
 
 **Paths**: `/Library/Caches`, `/var/log`
 
-**Action**: Require manual sudo command (don't execute directly)
-
-**Example**:
-```
-⚠️ This operation requires administrator privileges.
-
-Please run this command manually:
-  sudo rm -rf /Library/Caches/*
-
-⚠️ You will be asked for your password.
-```
+**Action**: Identify the owning subsystem and use its supported cache-management command. Do not delete the whole category.
 
 **Reason**:
 - Requires elevated privileges
-- User should be aware of system-wide impact
+- The approved plan must state the system-wide impact and exact target
 - Audit trail (user types password)
 
 ### Docker Objects (Images, Containers, Volumes)
@@ -236,7 +231,9 @@ Only delete if:
 Proceed? [y/N]:
 ```
 
-## Safety Checks Before Deletion
+## Agent-side safety checks before deletion
+
+The snippets below are decision requirements and pseudocode. Do not assume they are wired into the bundled helper.
 
 ### Check 1: Path Exists
 
@@ -327,7 +324,7 @@ if not can_delete(path):
     return False
 ```
 
-## Safe Deletion Workflow
+## Required deletion decision model (pseudocode)
 
 ```python
 def safe_delete(path, size, description):

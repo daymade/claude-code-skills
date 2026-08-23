@@ -1,147 +1,159 @@
-# Report Templates
+# Report templates
 
-Detailed report templates referenced from `SKILL.md`. The core report format and classification legend live in SKILL.md; this file holds the longer, fill-in-the-blank templates so they load only when needed.
+Use these templates after the read-only evidence phase. They implement the main skill's Observe → Plan → Confirm → Execute → Verify contract. A report is not cleanup authorization: finish the plan, stop at the gate, and wait for the user's explicit approval.
 
-## Docker Report: Required Object-Level Detail
-
-Docker reports must list every individual object, not just categories:
+## General phase-2 cleanup plan
 
 ```markdown
-#### Dangling Images (no tag, no container references)
-| Image ID | Size | Created | Safe? |
-|----------|------|---------|-------|
-| a02c40cc28df | 884 MB | 2 months ago | ✅ No container uses it |
-| 555434521374 | 231 MB | 3 months ago | ✅ No container uses it |
+# macOS disk-space diagnosis and proposed repair
 
-#### Stopped Containers
-| Name | Image | Status | Size |
-|------|-------|--------|------|
-| ragflow-mysql | mysql:8.0 | Exited 2 weeks ago | 1.2 GB |
+## Current state
 
-#### Volumes
-| Volume | Size | Mounted By | Contains |
-|--------|------|------------|----------|
-| ragflow_mysql_data | 1.8 GB | ragflow-mysql | MySQL databases |
-| redis_data | 500 MB | (none - dangling) | Redis dump |
+- Timestamp: <YYYY-MM-DD HH:MM:SS ZONE OFFSET>
+- Target identity: <ComputerName / LocalHostName / hostname>
+- Volume: <exact mount>
+- Disk: <total> total, <used> used, <available> available, <capacity>%
+- Scope exclusions honored: <directories/services not inspected>
 
-#### 🔴 Database Volumes Requiring Inspection
-| Volume | Inspected Contents | User Decision |
-|--------|--------------------|---------------|
-| ragflow_mysql_data | 8 databases, 45 tables | Still need? |
+## Evidence
+
+| Suspect | Observed value | Logical or physical? | Authority | Confidence |
+|---|---:|---|---|---|
+| <subsystem/path> | <value + unit> | <logical/physical> | `<command>` | <complete/partial> |
+
+State permission errors and incomplete scans. Never present a partial `du` total as the complete category size.
+
+## Protected-service baseline
+
+| Service | Process/parent | Listener | Launch mechanism | Health probe | Log-growth window |
+|---|---|---|---|---|---|
+| <service> | <live values> | <live values> | <live value> | <result> | <timestamps + byte delta> |
+
+## Proposed commands — not yet executed
+
+| # | Exact command | Exact target | What changes | Recoverability | Expected physical release | User/service impact | Required postcondition |
+|---|---|---|---|---|---:|---|---|
+| 1 | `<command>` | <object/path/service> | <effect> | <reversible / Trash / backup / redownload-only> | <estimate + unit> | <impact> | <observable value> |
+
+## Recommendation
+
+Recommend <option> because <evidence-based reason>. Alternatives:
+
+- <alternative>: <trade-off>
+- <alternative>: <trade-off>
+
+Expected result: <projected free space and capacity, with assumptions>.
+
+## Confirmation gate
+
+No state-changing command has run.
+
+Reply with:
+
+`<the exact confirmation phrase supplied for this plan>`
 ```
 
-## High-Quality Report Template (Chinese)
+## Apple Content Caching variant
 
-After multi-layer exploration, present findings using this proven template:
+Use this compact variant with `references/apple_content_caching.md`:
 
 ```markdown
-## 📊 磁盘空间深度分析报告
+## Content Caching evidence
 
-**分析日期**: YYYY-MM-DD
-**使用工具**: Mole CLI + 多层目录探索
-**分析原则**: 安全第一，价值优于虚荣
+| Field | Current value | Interpretation |
+|---|---:|---|
+| Activated / Active | <values> | <currently serving or not> |
+| CacheLimit | <bytes/display> | <finite or unlimited> |
+| CacheUsed | <bytes + GB> | Logical cached-content size; not release estimate |
+| ActualCacheUsed | <bytes + GB/GiB> | Physical release basis |
+| PersonalCacheUsed / iCloud | <bytes + GB> | Logical subset; do not add to ActualCacheUsed |
+| DataPath allocated `du` | <KiB + GiB> | Independent physical cross-check |
+| Peers | <address + current healthy/friendly/capabilities> | Read from target status; peer not modified |
 
----
+## Preferred repair
 
-### 总览
+<Deactivate target and flush / retain service with finite limit>.
 
-| 区域 | 总占用 | 关键发现 |
-|------|--------|----------|
-| **Home** | XXX GB | Library占一半(XXX GB) |
-| **App Library** | XXX GB | 与Home/Library重叠统计 |
-| **Applications** | XXX GB | 应用本体 |
+Why: <peer health, target pressure, service requirement, target free-space math>.
 
----
+## Exact command plan
 
-### 🟢 绝对安全可删除 (约 X.X GB)
+| # | Command | Change | Recoverability | Postcondition |
+|---|---|---|---|---|
+| 1 | `<approved finite-limit command, if applicable>` | Replace unlimited with approved finite bytes | Set another approved finite value | `settings` shows finite limit |
+| 2 | `sudo AssetCacheManagerUtil deactivate` | Stop target cache node | Separately authorized `activate` | `isActivated` says deactivated |
+| 3 | `sudo AssetCacheManagerUtil flushCache` | Remove local Apple/iCloud cache copies | Redownload/peer transfer only | `ActualCacheUsed` reaches approved residual |
 
-| 项目 | 大小 | 位置 | 删除后影响 | 清理命令 |
-|------|------|------|-----------|---------|
-| **废纸篓** | XXX MB | ~/.Trash | 无 - 你已决定删除的文件 | 清空废纸篓 |
-| **npm _npx** | X.X GB | ~/.npm/_npx | 下次 npx 命令重新下载 | `rm -rf ~/.npm/_npx` |
-| **Homebrew 旧版本** | XX MB | /opt/homebrew | 无 - 已被新版本替代 | `brew cleanup --prune=0` |
+Expected physical release: <ActualCacheUsed-based estimate>.
+Projected volume: <available GiB>, <capacity>%.
 
-**废纸篓内容预览**:
-- [列出主要文件]
+Impact:
+- Apple/iCloud originals remain intact.
+- Clients may rediscover another healthy cache over time.
+- <protected service> must retain its process, listeners, launch mechanism, and healthy probe.
+- No peer configuration changes.
 
----
-
-### 🟡 需要你确认的项目
-
-#### 1. [项目名] (X.X GB) - [状态描述]
-
-| 子目录 | 大小 | 最后使用 |
-|--------|------|----------|
-| [子目录1] | X.X GB | >X个月 |
-| [子目录2] | X.X GB | >X个月 |
-
-**问题**: [需要用户回答的问题]
-
----
-
-#### 2. Downloads 中的旧文件 (X.X GB)
-
-| 文件/目录 | 大小 | 年龄 | 建议 |
-|-----------|------|------|------|
-| [文件1] | X.X GB | - | [建议] |
-| [文件2] | XXX MB | >X个月 | [建议] |
-
-**建议**: 手动检查 Downloads，删除已不需要的文件。
-
----
-
-#### 3. 停用的 Docker 项目 Volumes
-
-| 项目前缀 | 可能包含的数据 | 需要你确认 |
-|---------|--------------|-----------|
-| `project1_*` | MySQL, Redis | 还在用吗？ |
-| `project2_*` | Postgres | 还在用吗？ |
-
-**注意**: 我不会使用 `docker volume prune -f`，只会在你确认后删除特定项目的 volumes。
-
----
-
-### 🔴 不建议删除的项目 (有价值的缓存)
-
-| 项目 | 大小 | 为什么要保留 |
-|------|------|-------------|
-| **Xcode DerivedData** | XX GB | [项目名]的编译缓存，删除后下次构建需要X分钟 |
-| **npm _cacache** | X.X GB | 所有下载过的 npm 包，删除后需要重新下载 |
-| **~/.cache/uv** | XX GB | Python 包缓存，重新下载在中国网络下很慢 |
-| [其他有价值的缓存] | X.X GB | [保留原因] |
-
----
-
-### 📋 其他发现
-
-| 项目 | 大小 | 说明 |
-|------|------|------|
-| **OrbStack/Docker** | XX GB | 正常的 VM/容器占用 |
-| [其他发现] | X.X GB | [说明] |
-
----
-
-### ✅ 推荐操作
-
-**立即可执行** (无需确认):
-```bash
-# 1. 清空废纸篓 (XXX MB)
-# 手动: Finder → 清空废纸篓
-
-# 2. npm _npx (X.X GB)
-rm -rf ~/.npm/_npx
-
-# 3. Homebrew 旧版本 (XX MB)
-brew cleanup --prune=0
+Failure exits:
+- Limit mismatch → stop before deactivation.
+- Deactivation mismatch → report partial state; do not flush.
+- Flush failure → report “deactivated but not purged.”
+- Target still missed → second read-only analysis only.
 ```
 
-**预计释放**: ~X.X GB
+## Docker object-level detail
 
----
+List every object rather than reporting category totals:
 
-**需要你确认后执行**:
+```markdown
+### Images
 
-1. **[项目1]** - [确认问题]
-2. **[项目2]** - [确认问题]
-3. **Docker 项目** - 告诉我哪些项目确定不用了
+| Image ID | Repository:tag | Engine size evidence | Host physical release estimate | Referenced by running containers | Referenced by stopped containers | Decision |
+|---|---|---|---|---|---|---|
+| <id> | <repo:tag> | <SIZE / SHARED / UNIQUE from `docker system df -v`> | <unknown or defensible upper bound> | <names/none> | <names/none> | <preserve/confirm exact removal> |
+
+### Containers
+
+| Name | Image | Status | Engine writable-layer size | Host physical release estimate | Restartable state | Decision |
+|---|---|---|---|---|---|---|
+| <name> | <image> | <status> | <size> | <unknown or upper bound> | <what would be lost> | <preserve/confirm> |
+
+### Volumes
+
+| Volume | Engine volume size | Host physical release estimate | Mounted by | Inspected contents | Database/user-data risk | Decision |
+|---|---|---|---|---|---|---|
+| <name> | <size> | <unknown or upper bound> | <all running/stopped containers> | <bounded inspection or incomplete> | <risk> | <preserve/confirm exact ID> |
+
+No prune-family command is part of the plan.
+```
+
+For OrbStack, add **OrbStack Settings → Reclaim disk space** as a separate, explicitly approved manual plan item when host APFS recovery is required. Engine-object deletion and sparse-image compaction have different effects and postconditions; never promise host `df` recovery from Docker's object-size tables alone.
+
+## Phase-4 result
+
+```markdown
+# Cleanup result
+
+## Before and after
+
+| Metric | Before | After | Delta |
+|---|---:|---:|---:|
+| Used | <value> | <value> | <value> |
+| Available | <value> | <value> | <value> |
+| Capacity | <value>% | <value>% | <value pp> |
+| Cleaned subsystem physical usage | <value> | <value> | <value> |
+
+## Postconditions
+
+- [ ] Approved target and only that target changed
+- [ ] Required activation/configuration state matches
+- [ ] Free-space and capacity targets are met
+- [ ] Protected service process/listeners/launch mechanism/health match the baseline
+- [ ] Observation window shows no immediate abnormal refill
+- [ ] No user data, credentials, databases, or unrelated caches changed
+
+## Exceptions
+
+<none, or exact failed/mismatched postcondition and the resulting partial state>
+
+If the target was missed, state: “No second cleanup was performed; the next step is read-only analysis.”
 ```

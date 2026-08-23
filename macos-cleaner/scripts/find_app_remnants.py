@@ -6,7 +6,14 @@ This script identifies directories in ~/Library that may belong to
 uninstalled applications.
 
 Usage:
-    python3 find_app_remnants.py [--min-size SIZE]
+    uv run scripts/find_app_remnants.py [--min-size SIZE]
+
+Read scope:
+- /Applications and ~/Applications
+- ~/Library/Application Support, Containers, Preferences, and
+  Saved Application State
+
+Run only after that complete fixed scope is approved.
 
 Options:
     --min-size    Minimum size in MB to report (default: 10)
@@ -298,9 +305,8 @@ def main():
         print("\n\n💡 Next Steps:")
         print("   1. Double-check each item in /Applications and ~/Applications")
         print("   2. Search Spotlight for the application name")
-        print("   3. If truly uninstalled, safe to delete with:")
-        print("      rm -rf '<path>'")
-        print("   4. Or use safe_delete.py for interactive cleanup")
+        print("   3. Return exact candidates to the main skill's impact and confirmation gate")
+        print("      (a heuristic orphan result is not deletion authorization)")
 
     return 0
 

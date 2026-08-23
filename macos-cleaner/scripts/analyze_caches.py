@@ -87,11 +87,11 @@ def categorize_safety(name):
     Categorize cache safety based on name patterns.
 
     Returns:
-        ('safe'|'check'|'keep', reason)
+        ('rebuildable'|'check'|'keep', reason)
     """
     name_lower = name.lower()
 
-    # Known safe to delete
+    # Rebuildable caches; still require an impact decision before deletion
     safe_patterns = [
         'chrome', 'firefox', 'safari', 'edge',  # Browsers
         'spotify', 'slack', 'discord',           # Communication
@@ -99,7 +99,7 @@ def categorize_safety(name):
         'temp', 'tmp', 'cache'                   # Generic temp
     ]
     if any(pattern in name_lower for pattern in safe_patterns):
-        return ('safe', 'Application regenerates cache automatically')
+        return ('rebuildable', 'Rebuildable; confirm redownload/rebuild cost')
 
     # Check before deleting
     check_patterns = [
@@ -145,12 +145,12 @@ def main():
     total_user = 0
 
     if user_caches:
-        print(f"{'Application':<40} {'Size':<12} {'Safety'}")
+        print(f"{'Application':<40} {'Size':<12} {'Decision'}")
         print("-" * 70)
         for name, path, size in user_caches:
             safety, reason = categorize_safety(name)
-            safety_icon = {'safe': '🟢', 'check': '🟡', 'keep': '🔴'}[safety]
-            print(f"{name:<40} {format_size(size):<12} {safety_icon}")
+            safety_icon = {'rebuildable': '🟡', 'check': '🟡', 'keep': '🔴'}[safety]
+            print(f"{name:<40} {format_size(size):<12} {safety_icon} {safety}")
             total_user += size
         print("-" * 70)
         print(f"{'Total':<40} {format_size(total_user):<12}")
@@ -163,7 +163,10 @@ def main():
         log_size = get_dir_size(user_log_path)
         if log_size >= min_size_bytes:
             print(f"\n📝 User Logs: {user_log_path}")
-            print(f"   Size: {format_size(log_size)} 🟢 Safe to delete")
+            print(
+                f"   Size: {format_size(log_size)} "
+                "🟡 Diagnostic history — review exact targets"
+            )
             total_user += log_size
 
     # System caches (if not --user-only)
@@ -193,16 +196,21 @@ def main():
     print("\n" + "=" * 50)
     print("📊 Summary")
     print("=" * 50)
-    print(f"Total User Caches:   {format_size(total_user)}")
+    print(f"Observed user cache/log allocation above threshold: {format_size(total_user)}")
     if not args.user_only:
-        print(f"Total System Caches: {format_size(total_system)}")
-        print(f"Combined Total:      {format_size(total_user + total_system)}")
+        print(f"Displayed system-cache allocation (up to 10): {format_size(total_system)}")
+        print(
+            "Displayed cross-scope allocation sum (partial): "
+            f"{format_size(total_user + total_system)}"
+        )
+
+    print("These are inventory allocations, not approved or guaranteed physical savings.")
 
     print("\n💡 Next Steps:")
     print("   1. Review the list above")
-    print("   2. Identify caches marked 🟢 (safe to delete)")
+    print("   2. Review rebuild/redownload cost for each exact cache target")
     print("   3. For 🟡 items, verify the application is not running")
-    print("   4. Use safe_delete.py for interactive cleanup")
+    print("   4. Return exact candidates to the main skill's impact and confirmation gate")
 
     return 0
 

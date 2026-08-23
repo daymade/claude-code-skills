@@ -321,7 +321,7 @@ This applies when you change ANY file under a skill directory:
 25. **iOS-APP-developer** - iOS app development with XcodeGen, SwiftUI, and SPM troubleshooting
 26. **fact-checker** - Verify factual claims in documents using web search with automated corrections
 27. **twitter-reader** - Fetch Twitter/X post content using Jina.ai API without JavaScript or authentication
-28. **macos-cleaner** - Intelligent macOS disk space analysis and cleanup with safety-first philosophy, risk categorization, and interactive confirmation
+28. **macos-cleaner** - Targeted-first macOS disk diagnosis and confirmed cleanup, including Apple Content Caching, physical-vs-logical usage, protected-service verification, Docker/OrbStack, caches, remnants, and large files
 29. **skill-reviewer** - Reviews and improves Claude Code skills with a canonical-validator-backed CLI, structured exit semantics, external review, and auto-PR modes
 30. **github-contributor** - Strategic guide for becoming an effective GitHub contributor with opportunity discovery, project selection, and reputation building
 31. **i18n-expert** - Complete internationalization/localization setup and auditing for UI codebases with framework support, key architecture, and parity validation
@@ -388,6 +388,7 @@ This applies when you change ANY file under a skill directory:
 92. **macos-watchdog** - Design, deploy, and discipline macOS launchd watchdogs (LaunchAgents/LaunchDaemons that auto-remediate recurring problems) — quiet-watchdog contract (premise-state self-check, patient mode, escalating auto-cooldown, never-resurrect-what-the-user-quit), deploy mechanics (gui vs system domain, TCC/FDA, bootout vs deprecated unload), batch-loop throttling, SRE alert layering, with a source-able cooldown library and idempotent installer script
 93. **daymade-sector-research** - A-share sector research workflow: compute Top-N gainers across all sector constituents, retrieve announcement windows (weekly/monthly), grade market-sentiment evidence (L1/L2/L3), and run Agent Team parallel orchestration with fresh-context adversarial verification (daymade-financial suite member)
 94. **kimi-use** - Drive the logged-in Kimi desktop app through computer-use to query its built-in company, financial, market, academic, and legal data plugins without separate API keys; includes source-labeled query patterns and independent verification for screen-transcribed results
+95. **tibo-reset-codex** - Query current ChatGPT/Codex usage-limit reset timing, interpret Tibo reset announcements, and convert Pacific times to Beijing time through live evidence rather than memory
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 

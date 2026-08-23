@@ -10,7 +10,15 @@ Checks:
 - Old .git directories in archived projects
 
 Usage:
-    python3 analyze_dev_env.py
+    uv run scripts/analyze_dev_env.py
+
+Read scope:
+- Docker daemon metadata and package-manager cache roots
+- Existing ~/Projects, ~/workspace, ~/dev, ~/src, and ~/code trees, searched
+  up to depth 3 for .git directories
+
+Run only after that complete fixed scope is approved. For a narrower task,
+use the dedicated commands/reference instead of this aggregate helper.
 """
 
 import os
@@ -97,7 +105,8 @@ def check_docker():
                             size = float(size_str.replace('MB', '')) * 1024 * 1024
                         else:
                             size = 0
-                        print(f"   Total size: {format_size(size)}")
+                        print(f"   Engine-reported image allocation: {format_size(size)}")
+                        print("   Host physical release is unknown until exact-object analysis")
                         total_size += size
                 except (json.JSONDecodeError, ValueError):
                     pass
@@ -251,9 +260,9 @@ def check_old_git_repos():
             print(f"   - {project_name:<30} {format_size(size)}")
 
         print(f"\n   Total: {format_size(total_size)}")
-        print(f"\n💡 If these are archived projects, consider:")
-        print(f"   1. Delete .git history: rm -rf <project>/.git")
-        print(f"   2. Or compress entire project: tar -czf archive.tar.gz <project>")
+        print(f"\n💡 If these are archived projects, preserve history:")
+        print(f"   1. Verify every local commit/branch exists in a remote or bundle")
+        print(f"   2. Archive the whole project instead of deleting only .git")
     else:
         print("   No large .git directories found in common project locations")
 
@@ -264,8 +273,6 @@ def main():
     print("🔍 Development Environment Analysis")
     print("=" * 50)
 
-    total_savings = 0
-
     # Check each component
     docker_size = check_docker()
     brew_size = check_homebrew()
@@ -274,31 +281,26 @@ def main():
     git_size = check_old_git_repos()
 
     # Summary
-    print("\n\n📊 Summary")
+    print("\n\n📊 Observed Allocations (Not a Savings Estimate)")
     print("=" * 50)
     if docker_size:
-        print(f"Docker:              {format_size(docker_size)}")
-        total_savings += docker_size
+        print(f"Docker engine images: {format_size(docker_size)} (host release unknown)")
     if brew_size:
         print(f"Homebrew cache:      {format_size(brew_size)}")
-        total_savings += brew_size
     if npm_size:
         print(f"npm cache:           {format_size(npm_size)}")
-        total_savings += npm_size
     if pip_size:
         print(f"pip cache:           {format_size(pip_size)}")
-        total_savings += pip_size
     if git_size:
-        print(f"Old .git repos:      {format_size(git_size)}")
-        total_savings += git_size
+        print(f"Git history:         {format_size(git_size)} (preserve until independently backed up)")
 
-    print("-" * 50)
-    print(f"Potential savings:   {format_size(total_savings)}")
+    print("No combined savings total is computed: these categories have different")
+    print("ownership, rebuild cost, sharing, and host-physical-release semantics.")
 
     print("\n💡 Next Steps:")
     print("   1. Review Docker volumes before cleanup (may contain data)")
-    print("   2. Package manager caches are safe to delete")
-    print("   3. For .git directories, ensure project is truly archived")
+    print("   2. Package manager caches are rebuildable; confirm redownload cost")
+    print("   3. Preserve .git history; archive the whole obsolete project")
 
     return 0
 
