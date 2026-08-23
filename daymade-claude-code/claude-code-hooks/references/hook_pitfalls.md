@@ -1803,6 +1803,25 @@ this list and describe defects you reach by asking a different question):
   surface across those rounds — the review was not worthless — so the missing
   check was never “is this finding real,” it was “does clearing it still
   justify a fresh pass over everything else.”
+- **A formal "ready to ship" gate is not immune either — the lineage can reopen
+  after passing it.** A different fact-check report, also meant to inform a
+  real personal decision: 19 independent-review rounds, **three** of which
+  also triggered a separate formal acceptance pass — a workflow's own
+  designated "0 open findings, ready to ship" checkpoint, not merely another
+  review — at round 10, round 15, and round 19, spanning three calendar days.
+  The first acceptance passed the
+  same day as round 10. The lineage still reopened roughly two days later and
+  ran five more rounds before a second acceptance (round 15) — which *also*
+  did not end the task; four more rounds followed before the third acceptance
+  actually shipped it. Termination held every time (each acceptance genuinely
+  found the artifact ready when it ran); every new finding across those rounds
+  was real and on a different axis, so no single round was the "same-axis
+  BLOCKER" this pitfall's Fix already says should stop a reopen. The signal
+  that would have caught it is a different one: **a lineage that has already
+  cleared its own ready-to-ship gate once and is still running is itself the
+  thing to surface** — independent of whether the new round's finding is
+  same-axis or genuinely fresh — which is the trip condition the Fix below
+  adds.
 - **Fix:** write the Loop Contract from SKILL.md rule 7 before round 1. Key it on
   one immutable lineage plus one failure axis; predeclare the budget and both
   exits. Repair commits and new reviewer names remain in that lineage. For
@@ -1811,6 +1830,12 @@ this list and describe defects you reach by asking a different question):
   backlog item / new task; it does not reset the budget. If the re-review still
   reproduces a same-axis BLOCKER or MAJOR, stop with the artifact unregistered
   or unshipped and report `blocked` — do not silently dispatch a third reviewer.
+  **A same-axis recurrence is not the only trip condition worth coding for**:
+  if the lineage has already passed one formal acceptance/ready-to-ship check
+  and a new round is about to run anyway, that crossing — by itself, before
+  judging whether the new finding is real — is the signal to stop and put the
+  question to the human, not to reason "this one's a genuinely new finding, so
+  it's fine." A second "ready to ship" should not be quieter than the first.
 - **Restart authority:** only an explicitly user-authorized new task can open
   another review budget after the cap. The agent must then declare that budget,
   the concrete safety or business failure caused by stopping, and the new
