@@ -3363,6 +3363,26 @@ they become load-bearing data.
 操作 Kimi 客户端，用已安装插件核对这组市场数据
 ```
 
+### 97. **tibo-reset-codex** - ChatGPT/Codex 额度重置速查
+
+> **Install**: `claude plugin install tibo-reset-codex@daymade-skills`
+
+查询 ChatGPT/Codex 额度重置时间，解读 Tibo（OpenAI Codex 负责人 @thsottiaux）
+的重置公告。别再凭记忆回答「什么时候重置」——用权威追踪站 API 现查。
+
+**Key features:**
+- 主通道 Tibo Radar JSON API + codexlimitwatch 双源核对，30 秒出结果
+- 解读 Tibo 糙时间写法（「14pm PST」混用 24 小时制、常年写 PST 实为 PDT）
+- 太平洋时间→北京时间当场实测换算命令，含夏令时跨时令处理
+- 证据纪律：tracker 标签 ≠ 已到账，官宣 ≠ 你的账户已到账
+
+**Example usage:**
+```text
+ChatGPT 什么时候重置额度
+banked reset 到了吗
+Tibo 说的 2pm PST 是北京时间几点
+```
+
 ---
 
 ## 🎬 Interactive Demo Gallery
