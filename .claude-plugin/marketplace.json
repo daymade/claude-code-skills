@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (fast local conversation discovery across Claude Code and Codex, session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-financial, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "1.88.0"
+    "version": "1.89.0"
   },
   "plugins": [
     {
@@ -1230,6 +1230,25 @@
         "守护进程",
         "常驻任务",
         "后台监控"
+      ]
+    },
+    {
+      "name": "tibo-reset-codex",
+      "description": "查询 ChatGPT/Codex 额度重置时间、解读 Tibo（OpenAI Codex 负责人 @thsottiaux）的重置公告。Use when 用户问「ChatGPT/Codex 什么时候重置」「额度什么时候恢复」「下次全员重置几点」「banked reset 到了吗」「Tibo 说了什么」「usage limit when reset」，或从社媒看到重置截图/转述要核实时间并换算北京时间。覆盖：权威追踪站 API 速查、Tibo 糙时间写法解读、太平洋时间→北京时间的当场实测换算。别凭记忆回答重置时间——用本 skill 的通道现查。",
+      "source": "./tibo-reset-codex",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "utilities",
+      "keywords": [
+        "chatgpt",
+        "codex",
+        "openai",
+        "usage-limit",
+        "reset",
+        "tibo",
+        "quota",
+        "额度重置",
+        "timezone"
       ]
     }
   ]
