@@ -87,7 +87,13 @@ thoroughly, because a bad regex can corrupt many commits.
 git log --all --pickaxe-regex -S 'your-pattern' --pretty=format:'%H %s'
 ```
 
-This is what `verify_cleanup.py` does for each pattern.
+Use this pickaxe form for a manual "when did this string enter/leave" check.
+`verify_cleanup.py` itself checks each pattern over both channels: blob
+content (`git grep` across every commit's tree) and commit messages
+(`git log --all --format=%B`, decoded with `errors="replace"` so
+legacy-encoded messages cannot crash verification). A FAILED message check
+lists the offending commit hashes (`commit_message_commits`), not just a
+count.
 
 ## Git Bundle Backups
 
