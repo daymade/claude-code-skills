@@ -197,6 +197,27 @@ def _file_change_event(paths, status="completed", stderr=""):
     }
 
 
+def _function_call(name: str, arguments, call_id: str = "call-1") -> dict:
+    """response_item/function_call — arguments is JSON-encoded (a raw str is
+    passed through as-is, so malformed-JSON cases can be modelled directly)."""
+    return {
+        "type": "response_item",
+        "payload": {
+            "type": "function_call",
+            "name": name,
+            "arguments": arguments if isinstance(arguments, str) else json.dumps(arguments, ensure_ascii=False),
+            "call_id": call_id,
+        },
+    }
+
+
+def _function_call_output(call_id: str = "call-1", output: str = "done") -> dict:
+    return {
+        "type": "response_item",
+        "payload": {"type": "function_call_output", "call_id": call_id, "output": output},
+    }
+
+
 class FileChangeTests(unittest.TestCase):
     """0.147+ records file edits as item_completed/FileChange items, not
     patch_apply_end (measured 0 vs 1086 in one real 0.147.0 rollout)."""
@@ -265,6 +286,204 @@ class EndReasonTests(unittest.TestCase):
         ])
         data = mod.parse_codex_rollout(rollout)
         self.assertEqual(data["end_reason"], "completed")
+
+    # -- task_complete carrying an error (real shapes, ~/.codex/sessions scan:
+    # 468 records, 6 distinct codex_error_info values, 466/468 with a null
+    # last_agent_message, 2/468 with a real closing message anyway) --
+
+    def test_task_complete_usage_limit_error_with_null_message_is_errored(self):
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "e4", "cwd": "/tmp"}},
+            _msg("user", "继续", "input_text"),
+            _ev(
+                "task_complete",
+                last_agent_message=None,
+                error={
+                    "message": "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Aug 2nd, 2026 7:51 AM.",
+                    "codex_error_info": "usage_limit_exceeded",
+                },
+            ),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["end_reason"], "errored")
+        briefing = mod.build_briefing(None, data, "/tmp")
+        self.assertIn("Errored — usage_limit_exceeded", briefing)
+        self.assertIn("may resume this session on its own", briefing)
+
+    def test_task_complete_unauthorized_error_gets_no_transient_hint(self):
+        # unauthorized requires the user to re-auth — it will NOT clear on its
+        # own, so the "often clears on a schedule" hint must not appear here.
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "e5", "cwd": "/tmp"}},
+            _msg("user", "继续", "input_text"),
+            _ev(
+                "task_complete",
+                last_agent_message=None,
+                error={
+                    "message": "Your access token could not be refreshed because you have since logged out or signed in to another account. Please sign in again.",
+                    "codex_error_info": "unauthorized",
+                },
+            ),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["end_reason"], "errored")
+        briefing = mod.build_briefing(None, data, "/tmp")
+        self.assertIn("Errored — unauthorized", briefing)
+        self.assertNotIn("may resume this session on its own", briefing)
+
+    def test_task_complete_error_with_real_closing_message_stays_completed(self):
+        # The 2/468 counter-example: error present AND a full, coherent
+        # closing message. Presence of error must not override completion.
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "e6", "cwd": "/tmp"}},
+            _msg("user", "发布一下", "input_text"),
+            _ev(
+                "task_complete",
+                last_agent_message="GoalOS 2.4.0 已发布并合并。",
+                error={
+                    "message": "You've hit your usage limit.",
+                    "codex_error_info": "usage_limit_exceeded",
+                },
+            ),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["end_reason"], "completed")
+        briefing = mod.build_briefing(None, data, "/tmp")
+        self.assertIn("Clean exit", briefing)
+        self.assertIn("also carried an error", briefing)
+        self.assertIn("usage_limit_exceeded", briefing)
+
+    def test_later_clean_task_complete_clears_earlier_error(self):
+        # A session that errors mid-task and later genuinely completes on a
+        # subsequent turn must not stay stuck on the earlier error — task_error
+        # is last-task_complete-wins, same as task_tail.
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "e7", "cwd": "/tmp"}},
+            _msg("user", "第一步", "input_text"),
+            _ev(
+                "task_complete",
+                last_agent_message=None,
+                error={"message": "temporary", "codex_error_info": "internal_server_error"},
+            ),
+            _msg("user", "重试", "input_text"),
+            _msg("assistant", "完成了", "output_text"),
+            _ev("task_complete", last_agent_message="完成了"),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["end_reason"], "completed")
+        briefing = mod.build_briefing(None, data, "/tmp")
+        self.assertNotIn("Errored", briefing)
+        self.assertNotIn("also carried an error", briefing)
+
+    def test_dangling_open_call_plus_task_complete_error_still_surfaces_error(self):
+        # Found by independent review, then confirmed as the exact shape of
+        # the real session that motivated this fix: open_calls is checked
+        # BEFORE the task_complete/error branches in _detect_end_reason, so
+        # end_reason stays "interrupted" here — but the error detail must
+        # still surface somewhere, since usage_limit_exceeded /
+        # context_window_exceeded are exactly the errors likely to strand a
+        # tool call mid-flight (not a rare combination).
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "e8", "cwd": "/tmp"}},
+            _msg("user", "继续", "input_text"),
+            _function_call("exec", {"cmd": "ls"}, call_id="dangling-1"),
+            _ev(
+                "task_complete",
+                last_agent_message=None,
+                error={
+                    "message": "Codex ran out of room in the model's context window.",
+                    "codex_error_info": "context_window_exceeded",
+                },
+            ),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["end_reason"], "interrupted")
+        briefing = mod.build_briefing(None, data, "/tmp")
+        self.assertIn("Unresolved tool calls", briefing)
+        self.assertIn("context_window_exceeded", briefing)
+        self.assertIn("also carried an error", briefing)
+
+
+class UpdatePlanTests(unittest.TestCase):
+    """update_plan is Codex's own multi-step plan/TODO tool. Shapes below are
+    modelled on a real corpus scan (~4000 calls, 0 JSON-parse failures):
+    arguments is always a JSON string parsing to {"plan": [...]} or
+    {"explanation": ..., "plan": [...]}, each plan entry {"step", "status"}."""
+
+    def test_latest_plan_renders_as_its_own_section(self):
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "p1", "cwd": "/tmp"}},
+            _msg("user", "分几步做", "input_text"),
+            _function_call(
+                "update_plan",
+                {
+                    "explanation": "分三步完成迁移。",
+                    "plan": [
+                        {"step": "读取旧配置", "status": "completed"},
+                        {"step": "写入新配置", "status": "in_progress"},
+                        {"step": "验证", "status": "pending"},
+                    ],
+                },
+            ),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        briefing = mod.build_briefing(None, data, "/tmp")
+        self.assertIn("## Latest Plan State", briefing)
+        self.assertIn("分三步完成迁移。", briefing)
+        self.assertIn("- [x] 读取旧配置 (completed)", briefing)
+        self.assertIn("- [ ] 写入新配置 (in_progress)", briefing)
+        self.assertIn("- [ ] 验证 (pending)", briefing)
+
+    def test_plan_without_explanation_still_renders(self):
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "p2", "cwd": "/tmp"}},
+            _function_call("update_plan", {"plan": [{"step": "唯一步骤", "status": "pending"}]}),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        briefing = mod.build_briefing(None, data, "/tmp")
+        self.assertIn("## Latest Plan State", briefing)
+        self.assertIn("- [ ] 唯一步骤 (pending)", briefing)
+
+    def test_only_the_latest_update_plan_call_is_shown(self):
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "p3", "cwd": "/tmp"}},
+            _function_call("update_plan", {"plan": [{"step": "旧计划", "status": "completed"}]}, call_id="c1"),
+            _function_call("update_plan", {"plan": [{"step": "新计划", "status": "in_progress"}]}, call_id="c2"),
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        briefing = mod.build_briefing(None, data, "/tmp")
+        self.assertIn("新计划", briefing)
+        # Only the dedicated section is asserted against "旧计划" — it still
+        # legitimately appears in the generic Recent Tool Calls dump below.
+        latest_plan_section = briefing.split("## Latest Plan State")[1].split("##", 1)[0]
+        self.assertNotIn("旧计划", latest_plan_section)
+
+    def test_latest_plan_survives_beyond_max_tool_calls_window(self):
+        # This is the exact bug this fix targets: in a long session, the most
+        # recent update_plan call is reliably evicted from "Recent Tool
+        # Calls" (last MAX_TOOL_CALLS only). The dedicated section must not
+        # be subject to that eviction.
+        records = [
+            {"type": "session_meta", "payload": {"id": "p4", "cwd": "/tmp"}},
+            _function_call("update_plan", {"plan": [{"step": "早期计划", "status": "in_progress"}]}, call_id="plan-1"),
+        ]
+        for i in range(mod.MAX_TOOL_CALLS + 5):
+            records.append(_function_call("noop_tool", {"i": i}, call_id=f"noop-{i}"))
+        rollout = _write_rollout(records)
+        data = mod.parse_codex_rollout(rollout)
+        briefing = mod.build_briefing(None, data, "/tmp")
+        self.assertIn("## Latest Plan State", briefing)
+        self.assertIn("早期计划", briefing)
+
+    def test_malformed_update_plan_arguments_do_not_crash(self):
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "p5", "cwd": "/tmp"}},
+            _function_call("update_plan", "{not valid json"),
+        ])
+        data = mod.parse_codex_rollout(rollout)  # must not raise
+        self.assertIsNone(data["latest_plan"])
+        briefing = mod.build_briefing(None, data, "/tmp")
+        self.assertNotIn("## Latest Plan State", briefing)
 
 
 class TruncationContractTests(unittest.TestCase):
