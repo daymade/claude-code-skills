@@ -3069,15 +3069,15 @@ can we merge this contribution and fix the remaining repo bookkeeping ourselves?
 
 **Requirements**: authenticated `gh` CLI, `git` with `merge-tree --write-tree`, and `jq`.
 
-### 86. **local-conversation-history** - Fast Local Claude Code and Codex History
+### 86. **local-conversation-history** - Fast Local Agent Conversation History
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills`
 > (suite-only — invoked as `daymade-claude-code:local-conversation-history`)
 
-List recent local Claude Code and Codex conversations for the current workspace
-in one read-only command. The output is presentation-ready Markdown or JSON with
-short titles, timezone-qualified timestamps, exact session IDs, and explicit
-diagnostics.
+List recent local Claude Code, Codex, and Kimi CLI conversations for the current
+workspace in one read-only command. The output is presentation-ready Markdown or
+JSON with short titles, timezone-qualified timestamps, exact session IDs,
+positive-only Codex writer-lock markers, and explicit diagnostics.
 
 **Key features:**
 - Combines active Claude homes with every registered long-term archive by default
@@ -3086,6 +3086,10 @@ diagnostics.
 - De-duplicates copied session IDs, unions their internal ranges, and retains active/archive provenance
 - Selects a compatible Codex state database through schema introspection
 - Visibly falls back to raw Codex rollout JSONL when the database is unavailable
+- Probes every in-scope Codex session and appends any row whose exact canonical
+  writer-lock file is held even beyond the recent-row limit; the marker proves
+  lock state, not holder identity or a running agent, and an unmarked row is
+  never reported as stopped or safe to retire
 - Supports internal-time date windows, custom exact-scope diagnostics, archived
   Codex threads, recursive/all-project scopes, Windows path normalization, and JSON
 - Uses Python's standard library only; performs no network requests or writes
@@ -3094,6 +3098,7 @@ diagnostics.
 ```text
 /daymade-claude-code:local-conversation-history
 list the recent Claude Code and Codex chats for this folder
+show which Codex sessions in this workspace have held canonical writer-lock files
 show Codex threads including archived conversations as JSON
 ```
 
@@ -3459,10 +3464,15 @@ briefing from local Codex rollout files without replaying the full session.
 
 ### For Fast Local Conversation Discovery
 Use **local-conversation-history** when you need a quick, readable list of recent
-Claude Code and Codex chats for the current workspace. It produces both provider
-inventories in one read-only call and excludes internal agents by default. Move
-to **claude-code-history-files-finder** only when you need full-text search,
-tool-call analysis, or deleted-file recovery from Claude Code transcripts.
+Claude Code, Codex, and Kimi CLI chats for the current workspace, including
+positive-only markers for every in-scope Codex session whose canonical
+writer-lock file is held. Held rows beyond the recent limit are appended; the
+marker proves lock state, not holder identity or agent progress. It produces all
+provider inventories in one read-only call and excludes internal agents by
+default. Move to **continue-codex-work** to inspect the stored context for an
+exact marked Codex thread, or to **claude-code-history-files-finder** for
+full-text search, tool-call analysis, or deleted-file recovery from Claude Code
+transcripts.
 
 ### For Web Extraction & WeChat Articles
 Use **scrapling-skill** to install and validate Scrapling CLI, choose between static and browser-backed fetching, and extract clean Markdown from sites like `mp.weixin.qq.com`. Combine with **deep-research** to turn extracted sources into structured reports or with **docs-cleaner** to normalize captured article content.
