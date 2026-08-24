@@ -26,6 +26,35 @@ discovery, schema introspection, filtering, de-duplication, title extraction,
 internal-time sorting, positive-only Codex writer-lock observation, and rendering
 in one process.
 
+## Decide the job before calling a tool
+
+Treat the user's intent as the routing key; the word “history” alone does not
+mean inventory.
+
+| User intent | Route |
+|---|---|
+| List recent conversations, titles, dates, session IDs, or held Codex writer locks | Run this skill's bundled inventory once |
+| Find the conversation where a topic, action, quote, file, or tool result appeared — including “I remember we did X,” “find that old chat,” or “did we ever discuss Y?” | Invoke `daymade-claude-code:claude-code-history-files-finder` directly; do not run the recent inventory first |
+| Continue work from an already identified session | Invoke the matching `daymade-claude-code:continue-claude-work` or `daymade-claude-code:continue-codex-work` skill |
+
+A topic clue wins over inventory wording. For example, “find our historical
+conversation records about DINO” is full-content search even though it says
+“conversation records.”
+
+When routing a content search, preserve the unknown parts of the user's scope:
+
+- If the provider is unknown or the user says “our history,” require the finder
+  to cover Claude plus Codex and Kimi CLI; a Claude-only result cannot support
+  an absence claim.
+- If the project is unknown, require the finder to search all projects instead
+  of guessing the current workspace.
+- Exclude the current session before treating a fresh hit as historical
+  evidence; the user's query and the agent's search command are recorded in the
+  current transcript and otherwise self-match.
+
+Let the finder own its exact commands, query widening, source diagnostics, and
+result interpretation. This skill owns only the inventory-vs-search decision.
+
 ## Completeness invariant
 
 For a normal Claude Code inventory, the source set is indivisible:
