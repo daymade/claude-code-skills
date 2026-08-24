@@ -1,7 +1,18 @@
 ---
 name: debugging-network-issues
 description: >-
-  Evidence-driven investigation for network, streaming, and protocol-layer bugs where symptoms don't match the obvious cause. Use when debugging connection resets (ECONNRESET, HTTP/2 RST_STREAM, INTERNAL_ERROR), SSE or long-polling stalls, fixed-time connection drops, CDN/proxy/CGNAT idle timeouts, client-side proxy/VPN/TUN misrouting, CNAME-based proxy rule overrides, or symptoms like "socket closed unexpectedly", "stream interrupted", "fails after N seconds", "works sometimes but not always", "upstream silent for X seconds", ERR_CONNECTION_CLOSED, SSL_ERROR_SYSCALL, or certificate-verification errors (UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, wrong-site certificate) that hit some domains while others work. Also use for throughput collapse where nothing errors at all — "it works, it's just slow", transfers crawling, downloads truncating. Also for LAN-layer mysteries: unknown device (mystery IP/MAC/banner), devices silenced by a subnet change, or a host declared "dead" that is alive on another segment.
+  Investigates network, streaming, and protocol failures with falsification-first
+  layered experiments. Use for ECONNRESET, HTTP/2 RST_STREAM, SSE or long-polling
+  stalls, fixed-time drops, CDN/proxy/CGNAT timeouts, client-side proxy/TUN
+  misrouting, CNAME-rule surprises, certificate errors, generic throughput collapse
+  where everything returns 200 but transfers crawl, or LAN identity/topology
+  mysteries. Trigger phrases include "socket closed unexpectedly", "stream
+  interrupted", "fails after N seconds", "works sometimes but not always",
+  "upstream silent for X seconds", ERR_CONNECTION_CLOSED, SSL_ERROR_SYSCALL,
+  UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, and wrong-site certificate. Treat this as
+  the general method and unknown-root-cause fallback. Use tunnel-doctor for known
+  Tailscale/TUN/DNS/route/WSL-Docker conflicts and for a confirmed proxy
+  exit/node/chain quality problem.
 ---
 
 # Debugging Network Issues
@@ -21,6 +32,7 @@ Before applying the general methodology below, check whether the symptom points 
 | Windows App / AVD / W365 RDP connection quality: WebSocket instead of UDP Shortpath, high RTT, STUN/TURN interference                                                                                    | **windows-remote-desktop-connection-doctor** |
 | Client-side proxy / VPN / TUN misrouting: one specific site fails with `ERR_CONNECTION_CLOSED` or `SSL_ERROR_SYSCALL`, other sites work, DNS returns fake/TUN IPs, and adding a PROXY rule did not help | **this skill** — read [references/case-proxy-tun-cname-override.md](references/case-proxy-tun-cname-override.md) first |
 | TLS certificate-verification errors (`UNKNOWN_CERTIFICATE_VERIFICATION_ERROR`, a cert for the wrong site) or mid-handshake EOFs on **every** DIRECT-routed/domestic domain at once, while proxied domains work — and any proxy health watchdog still reports green                                        | **tunnel-doctor** (TUN DIRECT split-brain step) |
+| The proxy is reachable and the OS/Tailscale route is healthy, but bulk transfers are slow and changing the active exit/node changes the measured rate | **tunnel-doctor** — proxy node / exit / chain capacity branch |
 | **Nothing errors — it is just slow.** Every request returns 200, latency and health checks look fine, but transfers crawl, bulk jobs overrun their estimates, or files arrive truncated | **this skill** — go straight to [Step 0.7](#step-07-throughput-collapse--when-nothing-errors-and-everything-is-slow); the error-driven steps have nothing to bite on |
 
 If none match — or you tried a domain skill and the evidence points elsewhere — continue below. The methodology generalizes to any multi-layer system.
@@ -232,6 +244,18 @@ Read the result as a four-way test — all four outcomes are reachable, and thre
 If no prior known-good measurement exists to compare against — the common case in a first incident — you can still make progress without one, because the question "did this change?" has a cheaper substitute: **measure the same path from somewhere else.** A second client on a different network, or the host measuring *itself* over loopback, brackets the problem without any history. Then record today's number as the baseline you did not have; the second occurrence of this incident is much cheaper than the first, and only if someone writes the number down.
 
 **Finally, audit what the wrong assumption already broke.** A degraded link does not just make things slow — it silently invalidates every timeout you calibrated on the fast path, and those timeouts produce *corrupt artifacts that look like successes*. Before declaring the incident over, re-verify anything transferred during the degraded window; see trap 18 and Step 7.
+
+**Replay the original workload before changing its semantics.** After a path or
+node change restores a representative transfer rate, rerun the exact operation
+that originally failed with its original completeness contract: a full Git clone
+for a clone incident, the full body for an upload incident, or the original
+streaming protocol for a stream incident. A small health request, `ls-remote`, or
+partial/shallow clone proves only that its own smaller path works. If the original
+workload now completes inside its existing deadline, the evidence refutes the need
+for an application-level workaround such as partial clone or a relaxed timeout.
+If it still fails, keep that result and only then investigate workload semantics.
+This follows RFC 6349's separation of sustained TCP throughput from RTT/liveness:
+the proof must exercise enough data for transfer capacity to dominate setup cost.
 
 ### Step 1: Gather direct evidence at every hop
 

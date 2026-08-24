@@ -1,18 +1,18 @@
 ---
 name: tunnel-doctor
-description: >
-  Diagnoses and fixes Tailscale x proxy/VPN tool conflicts (Shadowrocket,
-  Clash, Surge, OrbStack/Docker) on macOS — route hijacking, proxy env vars, system
-  proxy bypass, SSH ProxyCommand double-tunneling, VM/container proxy propagation,
-  stalled macOS DNS. Use when Tailscale ping works but SSH/HTTP times out, browser
-  returns 503 but curl works, git push fails with "failed to begin relaying via
-  HTTP", Docker pull/build times out behind TUN/VPN, setting up Tailscale SSH to WSL
-  or remote dev over Tailscale, ssh/curl/git hang ~60s resolving a hostname while
-  nslookup is instant, ping to a resolver works but dig times out, ssh -vvv freezes
-  at "debug2: resolving", raw probes impossibly fast under a TUN (nc -z 0.00s), all DIRECT-routed sites fail at once (TLS handshake EOF,
-  UNKNOWN_CERTIFICATE_VERIFICATION_ERROR, proxy CONNECT 503) while proxied sites
-  work — TUN DIRECT split-brain — or a Windows host TUN (v2rayN) black-holing the
-  whole machine incl. WSL and Tailscale (event-log forensics prove which action fixed it).
+description: >-
+  Diagnoses concrete tunnel and proxy-path failures across macOS and Windows/WSL:
+  Tailscale routing, proxy env/system bypass, SSH double tunneling, VM/container
+  propagation, stalled DNS, TUN DIRECT split-brain, Windows-host TUN cascades, and
+  single-hop or chained proxy node/exit throughput. Use when Tailscale ping works
+  but SSH/HTTP fails, browser returns 503 while curl works, Git SSH closes through
+  the proxy, Docker pull/build fails behind TUN, getaddrinfo stalls while nslookup
+  is fast, raw probes report physically impossible results, domestic DIRECT-routed
+  sites fail while proxied sites work, or the proxy is reachable but real downloads
+  and full Git clones crawl. Also use when Git reports "failed to begin relaying via
+  HTTP", ssh -vvv freezes at "debug2: resolving", ping works but dig times out, or
+  setting up Tailscale SSH to WSL. Use debugging-network-issues only when the root
+  cause remains unknown or belongs to an application/protocol layer.
 allowed-tools: Read, Grep, Edit, Bash
 ---
 
@@ -21,6 +21,13 @@ allowed-tools: Read, Grep, Edit, Bash
 Diagnose and fix conflicts when Tailscale coexists with proxy/VPN tools on macOS, with specific guidance for SSH access to WSL instances.
 
 > **Methodology base:** the general diagnostic discipline this skill builds on — evidence over assumption, falsification over confirmation, layered isolation, counter-review — lives in the **debugging-network-issues** skill. This skill is the macOS Tailscale⨯proxy *domain* layer on top of it; reach for the base skill when the symptom is *not* a known Tailscale/proxy conflict.
+
+**Ownership boundary:** this skill owns concrete local network-path operations:
+Tailscale, route/DNS/proxy interception, VM/WSL propagation, TUN forwarding
+planes, and proxy node/exit/chain capacity. Use `debugging-network-issues` as the
+general method when the boundary is still unknown or the symptom belongs to
+SSE/CDN/application protocol behavior. This keeps one concrete operator instead
+of forcing the user to choose between two overlapping proxy doctors.
 
 ## Conflict Layers
 
@@ -60,6 +67,7 @@ Determine which scenario applies:
 - **`tailscale ssh` returns "not available on App Store builds"** → Wrong Tailscale distribution on macOS (Step 5B)
 - **Any tool using system DNS (`ssh`, `curl`, `git`) hangs ~60s before resolving, but `nslookup` returns instantly** → Stalled resolver in `getaddrinfo` chain (Step 2I)
 - **Windows+WSL host: everything offline at once (domestic AND overseas), WSL dead too, "even Tailscale won't come online" — and/or the user tried several recovery actions (switched NICs, toggled TUN) and can't tell which one fixed it** → Windows host TUN cascade + event-log forensics (Step 5C)
+- **Tailscale, DNS, route ownership, and proxy reachability all pass, but large transfers remain slow and switching the active proxy node changes throughput** → proxy node / exit / chain capacity workflow in [references/proxy_node_chain_throughput.md](references/proxy_node_chain_throughput.md)
 
 **Key distinctions**:
 - SSH does NOT use `http_proxy`/`NO_PROXY` env vars. If SSH works but HTTP doesn't → Layer 2.
@@ -1134,5 +1142,6 @@ Before starting remote development, verify:
 
 ## References
 
+- [references/proxy_node_chain_throughput.md](references/proxy_node_chain_throughput.md) — single-hop and chained proxy capacity diagnosis, serial node comparison, real-client verification, and full-workload replay
 - [references/proxy_conflict_reference.md](references/proxy_conflict_reference.md) — Per-tool configuration (Shadowrocket, Clash, Surge), NO_PROXY syntax, SSH ProxyCommand, and conflict architecture
 - [references/windows_host_tun_wsl_cascade.md](references/windows_host_tun_wsl_cascade.md) — Windows host TUN outage cascading into WSL and its Tailscale: event-log timeline forensics, WSL→Windows interop pitfalls, dual-tailscaled disambiguation, prevention
