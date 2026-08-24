@@ -54,6 +54,12 @@
       "prompt": "看看我 Kimi CLI 里有没有关于支付重试 bug 的对话。",
       "expected_output": "Routes the request to claude-code-history-files-finder with --kimi instead of the recent-inventory command, because the task is keyword search inside full Kimi CLI session content.",
       "files": []
+    },
+    {
+      "id": 10,
+      "prompt": "我记得我们以前用 DINO 做过分类器测试，但不记得是在 Claude 还是 Codex，也不确定在哪个仓。先找那次历史对话和 session ID；不要只列最近会话。",
+      "expected_output": "Routes directly to claude-code-history-files-finder rather than running the recent inventory; preserves the unknown scope by searching all projects across Claude, Codex, and Kimi CLI, and excludes the current session before interpreting hits as historical evidence.",
+      "files": []
     }
   ]
 }
