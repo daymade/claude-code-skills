@@ -43,6 +43,26 @@ always required or always harmful; the requested topology is an input, not a fix
    depth still match the user's requested topology, then report the before/after
    rates and the full-workload result.
 
+Use one read-only measurement shape for every candidate so the numbers remain
+comparable. Point it at a sufficiently large neutral object; change only the
+active node between runs:
+
+```bash
+PROXY_URL=http://127.0.0.1:<proxy-port>
+TARGET_URL=https://<host>/<large-object>
+
+curl -sS -o /dev/null --max-time 20 --proxy "$PROXY_URL" \
+  --write-out 'http=%{http_code} bytes=%{size_download} wall=%{time_total}s rate=%{speed_download}B/s\n' \
+  "$TARGET_URL"
+CURL_EXIT=$?
+printf 'curl_exit=%s\n' "$CURL_EXIT"
+```
+
+For this fixed-time sample, exit 28 is usable only when the cutoff was intended
+and the reported byte count is nonzero; DNS, connection, TLS, or authentication
+failures are invalid measurements, not “slow” nodes. The final original-workload
+replay must still meet its own success exit and completeness contract.
+
 RFC 6349 separates sustained TCP throughput from RTT and liveness and recommends
 tests long enough for transfer behavior to dominate setup cost. The practical
 translation here is simple: choose a payload or fixed time budget large enough to
