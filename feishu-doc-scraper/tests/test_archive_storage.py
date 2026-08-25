@@ -90,6 +90,21 @@ class ArchiveStorageContractTests(unittest.TestCase):
         self.assertTrue(any("not a structured Git role" in error for error in errors))
         self.assertTrue(any("incompatible" in error for error in errors))
 
+    def test_double_extension_is_rejected_even_with_structured_role_and_mime(self) -> None:
+        errors = MODULE.validate_manifest(
+            {
+                "files": [
+                    {
+                        "storage": "git",
+                        "role": "document_snapshot",
+                        "path": "archive/raw.mp4.md",
+                        "mime": "text/plain",
+                    }
+                ]
+            }
+        )
+        self.assertTrue(any("cannot be hidden" in error for error in errors))
+
     def test_unknown_system_and_local_path_are_not_stable_locators(self) -> None:
         unknown = MODULE.validate_manifest(
             {
@@ -117,7 +132,46 @@ class ArchiveStorageContractTests(unittest.TestCase):
                 ]
             }
         )
-        self.assertTrue(any("stable https://*.feishu.cn" in error for error in local_path))
+        self.assertTrue(any("stable Feishu/Lark" in error for error in local_path))
+
+    def test_locator_rejects_local_path_hidden_beside_valid_feishu_fields(self) -> None:
+        errors = MODULE.validate_manifest(
+            {
+                "files": [
+                    {
+                        "storage": "source",
+                        "locator": {
+                            "system": "feishu",
+                            "token": "FileTokenAbCdEfGhIjKlMnOpQr",
+                            "source_url": (
+                                "https://example.feishu.cn/wiki/"
+                                "AbCdEfGhIjKlMnOpQrStUvWxYz1"
+                            ),
+                            "path": "/Users/example/local/raw.mp4",
+                        },
+                    }
+                ]
+            }
+        )
+        self.assertTrue(any("unsupported fields" in error for error in errors))
+
+    def test_lark_locator_is_accepted(self) -> None:
+        payload = {
+            "files": [
+                {
+                    "storage": "source",
+                    "locator": {
+                        "system": "feishu",
+                        "token": "MinuteTokenAbCdEfGhIjKlMnOp",
+                        "source_url": (
+                            "https://example.larkoffice.com/minutes/"
+                            "MinuteTokenAbCdEfGhIjKlMnOp"
+                        ),
+                    },
+                }
+            ]
+        }
+        self.assertEqual(MODULE.validate_manifest(payload), [])
 
 
 if __name__ == "__main__":

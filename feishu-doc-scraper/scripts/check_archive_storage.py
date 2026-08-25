@@ -39,11 +39,17 @@ STRUCTURED_MIME_BY_SUFFIX = {
 }
 VALID_STORAGE = {"git", "source", "oss"}
 FEISHU_LOCATOR_URL_RE = re.compile(
-    r"^https://[A-Za-z0-9.-]+\.feishu\.cn/(?:wiki|docx|sheets|base|file)/[A-Za-z0-9]{20,}$"
+    r"^https://[A-Za-z0-9.-]+\.(?:feishu\.cn|larkoffice\.com|larksuite\.com)/"
+    r"(?:wiki|docx|sheets|base|file|minutes)/[A-Za-z0-9]{20,}$"
 )
 FEISHU_LOCATOR_TOKEN_RE = re.compile(r"^[A-Za-z0-9]{20,}$")
 WECHAT_MESSAGE_ID_RE = re.compile(r"^[0-9]{10,}$")
 OSS_URI_RE = re.compile(r"^oss://[^/\s]+/.+$")
+RAW_BINARY_SUFFIXES = {
+    ".7z", ".avi", ".doc", ".docx", ".gif", ".jpeg", ".jpg", ".m4a",
+    ".mkv", ".mov", ".mp3", ".mp4", ".pdf", ".png", ".ppt", ".pptx",
+    ".rar", ".svg", ".wav", ".webm", ".webp", ".xls", ".xlsx", ".zip",
+}
 
 
 def stable_locator_error(locator: object, storage: str) -> str | None:
@@ -51,6 +57,9 @@ def stable_locator_error(locator: object, storage: str) -> str | None:
         return "locator must be an object"
     system = locator.get("system")
     if storage == "oss":
+        unexpected = set(locator) - {"system", "uri"}
+        if unexpected:
+            return f"oss locator contains unsupported fields: {sorted(unexpected)}"
         uri = locator.get("uri")
         if system != "oss" or not isinstance(uri, str) or not OSS_URI_RE.fullmatch(uri):
             return "oss locator requires system=oss and oss://bucket/key uri"
@@ -58,14 +67,20 @@ def stable_locator_error(locator: object, storage: str) -> str | None:
     if storage != "source":
         return f"unsupported external storage: {storage!r}"
     if system == "feishu":
+        unexpected = set(locator) - {"system", "token", "source_url"}
+        if unexpected:
+            return f"feishu locator contains unsupported fields: {sorted(unexpected)}"
         token = locator.get("token")
         source_url = locator.get("source_url")
         if not isinstance(token, str) or not FEISHU_LOCATOR_TOKEN_RE.fullmatch(token):
             return "feishu locator requires an alphanumeric token of at least 20 characters"
         if not isinstance(source_url, str) or not FEISHU_LOCATOR_URL_RE.fullmatch(source_url):
-            return "feishu locator requires a stable https://*.feishu.cn/<type>/<token> source_url"
+            return "feishu locator requires a stable Feishu/Lark document URL and token"
         return None
     if system == "wechat":
+        unexpected = set(locator) - {"system", "message_id", "chat"}
+        if unexpected:
+            return f"wechat locator contains unsupported fields: {sorted(unexpected)}"
         message_id = locator.get("message_id")
         chat = locator.get("chat")
         if not isinstance(message_id, str) or not WECHAT_MESSAGE_ID_RE.fullmatch(message_id):
@@ -99,6 +114,14 @@ def validate_manifest(payload: object) -> list[str]:
                 errors.append(f"{label}: git artifact requires path")
                 continue
             suffix = Path(path).suffix.lower()
+            hidden_raw_suffixes = {
+                item.lower() for item in Path(path).suffixes[:-1]
+            } & RAW_BINARY_SUFFIXES
+            if hidden_raw_suffixes:
+                errors.append(
+                    f"{label}: raw binary suffix cannot be hidden before {suffix}: "
+                    f"{sorted(hidden_raw_suffixes)}"
+                )
             if entry.get("role") not in STRUCTURED_GIT_ROLES:
                 errors.append(
                     f"{label}: role {entry.get('role')!r} is not a structured Git role"

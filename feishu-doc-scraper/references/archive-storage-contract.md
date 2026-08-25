@@ -10,7 +10,7 @@ For each artifact record:
 2. `locator` says how to retrieve that durable object.
 3. `cache_path` is optional and never changes the source of record. A cache may disappear on another machine without making the archive incomplete.
 
-Git is the default only for searchable structured material: Markdown, CSV, JSON, YAML, text, XML, and source HTML. The artifact role and MIME must also match that structured format; renaming `clip.mp4` to `clip.mp4.md` does not make it Git material. MP4, Office files, PDFs, and raster/vector images are raw binaries and must not use `storage: git` or Git LFS under this contract.
+Git is the default only for searchable structured material: Markdown, CSV, JSON, YAML, text, XML, and source HTML. The artifact role and MIME must also match that structured format; renaming `clip.mp4` to `clip.mp4.md` does not make it Git material, and the validator rejects a known raw suffix hidden before a structured suffix. MP4, Office files, PDFs, and raster/vector images are raw binaries and must not use `storage: git` or Git LFS under this contract.
 
 ## Source-of-record examples
 
@@ -64,7 +64,7 @@ Independent object-storage copy:
 
 ## Decision rule
 
-- Use `source` when Feishu still exposes the original through a stable document/file/whiteboard locator. A temporary CDN URL is not stable; store its token and parent source instead.
+- Use `source` when Feishu or Lark still exposes the original through a stable document/file/whiteboard/minutes locator. A temporary CDN URL or local path is not stable; store the source token and parent source instead. Locator fields are provider-specific allowlists, so an unrelated local `path` cannot hide beside otherwise valid fields.
 - Use `oss` when independent retention is a real requirement or the original platform locator is not a reliable future retrieval path. Uploading changes external state, so it must be authorized and independently read back.
 - Use `git` for the structured layer that makes the archive searchable, diffable, and maintainable. Git is not a generic blob store here, and Git LFS does not change that boundary.
 
