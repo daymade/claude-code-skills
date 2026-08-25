@@ -101,10 +101,10 @@
     },
     {
       "name": "daymade-claude-code",
-      "description": "Claude Code operations suite that bundles archive-aware local conversation discovery across Claude Code and Codex, internal-timestamp full-event session search and recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full claude.ai conversation extraction with tool-call rendering and file download, plugin marketplace development, writing/testing/debugging Claude Code hooks, multi-provider profile isolation for running Kimi/MiniMax/GLM/DeepSeek/StepFun/Anthropic in separate windows, local source sync for Claude/Codex skill installs, personal-memory migration into tool-agnostic AGENTS.md reference docs, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
+      "description": "Claude Code operations suite that bundles archive-aware local conversation discovery across Claude Code and Codex, internal-timestamp full-event session search and recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full claude.ai conversation extraction with tool-call rendering and file download, plugin marketplace development and suite consolidation, writing/testing/debugging Claude Code hooks, multi-provider profile isolation for running Kimi/MiniMax/GLM/DeepSeek/StepFun/Anthropic in separate windows, local source sync for Claude/Codex skill installs, personal-memory migration into tool-agnostic AGENTS.md reference docs, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.51.1",
+      "version": "1.52.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -286,10 +286,10 @@
     },
     {
       "name": "daymade-skill",
-      "description": "Daymade skills core suite. Bundles skill creation, quality review, governance, and marketplace development tooling under one shared namespace. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
+      "description": "Daymade skills core suite. Bundles skill creation, quality review, source/cache and post-suite-migration governance, and marketplace development tooling under one shared namespace. Skill verification separates risk classification from evaluation spend: bounded fixes use targeted checks, narrow behavior changes use sampled replays, and paired baselines, graders, benchmarks, or a viewer run only after explicit user authorization or a decision-bearing evidence plan plus opt-in; that authorization does not change the risk tier. Existing-skill edits retain an old-vs-new capability audit and content-bound packaging attestation so prompt compression cannot silently delete runtime contracts. When the official skill-creator plugin is also installed, skill-creator detects the coexistence and offers a consent-based, reversible SessionStart routing hook so the daymade edition wins deterministically; on machines without the official plugin nothing is ever installed.",
       "source": "./daymade-skill",
       "strict": false,
-      "version": "1.28.0",
+      "version": "1.29.0",
       "category": "suite",
       "keywords": [
         "suite",

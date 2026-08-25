@@ -1,7 +1,17 @@
 ---
 name: skill-governance
 description: >-
-  Enforce source-of-truth discipline for Claude Code skill marketplaces, caches, and loose userSettings skills. Use whenever the user says "check skill drift", "检查 skill 漂移", "sync skills from source", "以源码为准同步 skill 缓存", "clean old skill cache versions", "清理 skill 缓存旧版本", "switch marketplace to local source", "marketplace 切到本地源码", "thin skills", "薄 skill", "loose skills", "清理 user skills", or talks about skill caches being stale, version mismatches, orphaned plugins, duplicate direct-copy skills, untracked user skills, or rebuilding the marketplace cache from a local source repo.
+  Enforce source-of-truth discipline for Claude Code skill marketplaces, caches,
+  suite migrations, and loose userSettings skills. Use whenever the user says
+  "check skill drift", "检查 skill 漂移", "sync skills from source",
+  "以源码为准同步 skill 缓存", "reconcile installs after a suite migration",
+  "清理旧 standalone skill 安装", "clean old skill cache versions",
+  "清理 skill 缓存旧版本", "switch marketplace to local source",
+  "marketplace 切到本地源码", "thin skills", "薄 skill", "loose skills",
+  "清理 user skills", or reports stale caches, version mismatches, orphaned
+  plugins, duplicate direct-copy skills, untracked user skills, a marketplace
+  cache that must be rebuilt from a local source repo, or a newly merged suite
+  whose installed state still exposes the old plugin identities.
 ---
 
 # Skill Governance
@@ -64,7 +74,9 @@ This mutates cache state. Confirm with the user before proceeding unless they ex
      claude plugin install <plugin>@<marketplace> --scope <scope>
      ```
    - This forces the cache to re-fetch from the current local source.
-5. For orphaned plugins, uninstall them at the scope they were installed at.
+5. For orphaned plugins, uninstall them at the scope they were installed at. If
+   an orphan is a superseded standalone plugin from a known suite migration, use
+   Workflow F instead; verify the replacement suite before uninstalling it.
 6. After installation, run Workflow C to clean old version subdirectories.
 7. Report what was updated, what was uninstalled, and any failures.
 
@@ -112,15 +124,49 @@ Use when the user asks where thin skills came from, why generic skills are loade
    - The retired directories contain the expected `SKILL.md` files and hashes.
 6. Report kept, retired, backup locations, unresolved drift, and whether the current running session may still have a cached skill list.
 
-## Suite plugins
+## Workflow F: Reconcile installed state after a suite migration
 
-The following suites bundle multiple sub-skills. Install or reinstall the suite once; never try to install the individual sub-skills separately:
+Use only after the canonical source migration has merged and the user explicitly asks
+to update the current machine's installed state. This workflow consumes a declared
+migration mapping; it does not design or edit marketplace topology. Use
+`daymade-claude-code:marketplace-dev` for the source migration itself.
 
-- `daymade-audio`
-- `daymade-claude-code`
-- `daymade-docs`
-- `daymade-financial`
-- `daymade-skill`
+1. Require an explicit mapping of superseded standalone plugin names to replacement
+   suite plugins and invocation names. If the mapping is unavailable, stop; do not
+   infer it from matching directory names.
+2. Read the current source `marketplace.json` and `installed_plugins.json`. Verify each
+   replacement suite exists, has a non-empty `skills` array, and contains the expected
+   member path.
+3. Group installed superseded plugins by scope. Preserve each original scope; do not
+   collapse project installs into user scope or vice versa.
+4. Run `claude plugin marketplace update <marketplace>`.
+5. Install the replacement suite once at each required scope.
+6. Verify before removing anything:
+   - `claude plugin list` shows the suite enabled at that scope;
+   - the installed suite version matches the source manifest;
+   - the suite cache contains every expected member `SKILL.md`;
+   - the new `<suite>:<skill>` invocation name matches the member's frontmatter name.
+7. Uninstall each superseded standalone plugin at its original scope only after the
+   replacement suite passes step 6.
+8. Re-run Workflow A. Run Workflow C only when the user also confirmed old-version
+   cache cleanup.
+9. Report the installed suites, retired standalone identities, preserved scopes,
+   remaining orphaned state, and any invocation changes the user must update.
+
+## Discover suite plugins dynamically
+
+Never maintain a hand-written suite inventory. Derive it from the current source
+manifest on every run:
+
+```bash
+jq -r '.plugins[] | select(((.skills // []) | length) > 0) | .name' \
+  .claude-plugin/marketplace.json
+```
+
+Treat a top-level plugin entry with a non-empty `skills` array as a suite. Install or
+reinstall that plugin once; never install its member paths as standalone plugins unless
+the manifest separately registers them. If the manifest is missing or invalid, fail
+fast instead of falling back to a remembered suite list.
 
 ## Reporting format
 
