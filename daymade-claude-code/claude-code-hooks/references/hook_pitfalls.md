@@ -1852,9 +1852,10 @@ this list and describe defects you reach by asking a different question):
 
 ## 37. A keyword-whitelist review-loop guard, once built, still needs calibrating against the phrasing its own author actually types — not the phrasing it was designed around
 
-- **Symptom:** `review-loop-budget-guard.sh` (the PreToolUse hook this skill's
-  own pitfall 36 prescribes — a real mechanization, not vaporware) never fired
-  once in a session where the same artifact (`probe_writer_liveness.py`)
+- **Symptom:** `review-loop-budget-guard.sh` (the PreToolUse hook pitfall 36
+  names as the fix for its own "nothing mechanically enforces this" gap — a
+  real mechanization, not vaporware) never fired once in a session where the
+  same artifact (`probe_writer_liveness.py`)
   received three separate independent-review Agent dispatches back to back,
   exactly the pattern it exists to catch. The user twice told the agent to
   stop dispatching more reviews (correct — the agent complied and self-fixed
@@ -1905,27 +1906,49 @@ this list and describe defects you reach by asking a different question):
   regex requiring `independent` followed by 0–3 words from a **closed set of
   review-methodology adjectives** (`fresh-context`, `fresh`, `read-only`,
   `adversarial`, `thorough`, `rigorous`, `unbiased`, `blind`, `critical`,
-  `code`) and then one of `review|reviewer|acceptance|pass`. The closed set is
-  load-bearing, not incidental — an open "any word(s) between independent and
-  review" pattern (tried first) false-positived on 4 of 6 adversarial negative
-  probes in under a minute of testing ("independent contractor review",
-  "independent so a future review", "independent before you review",
-  "independent variable review board"), reproducing exactly the "misfires on
-  healthy input" failure mode this same file's rule 1 warns is worse than the
+  `code`, `second`, `skeptical`, `outside`) and then one of
+  `review|reviewer|acceptance|pass`. The closed set is load-bearing, not
+  incidental — an open "any word(s) between independent and review" pattern
+  (tried first) false-positived on 4 of 6 adversarial negative probes in
+  under a minute of testing ("independent contractor review", "independent
+  so a future review", "independent before you review", "independent
+  variable review board"), reproducing exactly the "misfires on healthy
+  input" failure mode this same file's rule 1 warns is worse than the
   original miss. The literal Chinese/English phrase list for the *other*
   marker families (`独立审阅`, `reader-review`, `fresh reviewer`, …) was left
   untouched — there was no evidence they were broken, and widening scope past
   the diagnosed bug would itself violate the calibrate-before-arm discipline.
+- **The fix's own first calibration pass was itself under-calibrated —
+  caught only by pointing the same discipline at the fix.** The independent
+  reviewer dispatched against this exact diff was told to execute the shipped
+  regex directly (not read it and guess), and did: `second`, `skeptical`, and
+  `outside` — plain, plausible review-methodology words — all returned
+  `False` against the first-shipped adjective set. This is the pitfall's own
+  lesson recurring one level up: a closed set calibrated against the author's
+  own guess at "what a real reviewer says" is still a guess, just a narrower
+  one, and the fix for that is the same as the fix for the original bug —
+  run the detector against inputs an adversarial party actually constructs,
+  not inputs the author pre-approved. The three words are now in the set
+  above; two more `--selftest` cases (8 and 9) exercise them through the real
+  call path — a positive combining two of the new words in one prompt, and a
+  negative built from the exact grammatical shape (`independent of the
+  second X`, `outside temperature`) that would make a naive keyword-only
+  check misfire if the words were added carelessly.
 - **Verification, in order of strength:** (1) 6 real/plausible positive
   phrases and 8 adversarial negative phrases, hand-constructed, all correct;
-  (2) the actual `--selftest` cases checked into the guard, so the regression
-  is enforced mechanically, not just asserted in this prose; (3) **the
-  strongest check — replaying the three byte-for-byte real prompts extracted
-  from the actual incident's session transcript** through the fixed hook:
-  dispatch 1 and 2 silent, dispatch 3 correctly produces the full
-  `additionalContext` budget warning with the correct extracted key. A
-  synthetic reconstruction of "what I probably wrote" would not have caught
-  the exact insertion pattern; only the transcript's literal text would.
+  (2) four `--selftest` cases checked into the guard (two from the initial
+  fix, two more — see above — from the fix's own independent review), so the
+  regression is enforced mechanically, not just asserted in this prose; (3)
+  **the strongest check — replaying the three byte-for-byte real prompts
+  extracted from the actual incident's session transcript** through the
+  fixed hook: dispatch 1 and 2 silent, dispatch 3 correctly produces the full
+  `additionalContext` budget warning with the correct extracted key,
+  independently re-derived (not just re-read) by the same reviewer parsing
+  the raw transcript itself. A synthetic reconstruction of "what I probably
+  wrote" would not have caught the exact insertion pattern, and would not
+  have caught the second-round gap either; only real, adversarially-supplied
+  input catches a blind spot the author cannot see from inside their own
+  guess.
 - **Generalizes to every keyword/phrase-based hook in this skill, not just
   this one:** a marker list is a claim about how agents phrase things, and
   that claim goes stale the moment the *teaching material* (a skill, a
