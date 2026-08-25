@@ -205,7 +205,7 @@ claude plugin install daymade-codex@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨 Claude Code/Codex 的快速本地对话发现、会话恢复、CLAUDE.md 调优、故障诊断、statusline 配置、导出修复、marketplace 开发、终端截图渲染、用量分析、多 Provider 模型切换，以及 Claude Code/Codex 安装目录的自动本地 skill 源码同步：
+一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨 Claude Code/Codex 的快速本地对话发现、会话恢复、CLAUDE.md 调优、故障诊断、statusline 配置、导出修复、marketplace 开发与 suite 收敛、终端截图渲染、用量分析、多 Provider 模型切换，以及 Claude Code/Codex 安装目录的自动本地 skill 源码同步：
 
 ```text
 /daymade-claude-code:local-conversation-history
@@ -2344,12 +2344,13 @@ claude plugin install daymade-audio@daymade-skills
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:marketplace-dev`）
 
-把任意 Claude Code 技能仓库转换成官方插件市场，让用户通过 `claude plugin marketplace add` 安装技能并获得自动更新。生成符合规范的 `.claude-plugin/marketplace.json`，用 `claude plugin validate` 校验，测试真实安装，并向上游仓库提 PR——把来之不易的 schema、版本与 description 反模式固化进流程。
+创建并维护 Claude Code 插件市场：把仓库转换为 marketplace、将 standalone skills 收敛进新建或既有 suite、在 suite 之间迁移 skill、验证真实安装与缓存边界，并通过 PR 完成发布。
 
 **使用场景：**
 - 让技能仓库可通过 `claude plugin install` 安装
 - 生成或修复 `marketplace.json`（插件分发、一键安装、自动更新）
 - 向已有市场新增插件并正确 bump 版本
+- 把已有 skills 放进 suite、在 suite 之间迁移，或改成 suite-only 发布
 - 排查 schema 报错，如 `Unrecognized key: "$schema"` 或插件名重复
 
 **主要功能：**
@@ -2357,6 +2358,7 @@ claude plugin install daymade-audio@daymade-skills
 - 固化非显然的 schema 规则：`$schema` 被拒、`metadata` 只有 3 个有效字段、`strict: false` 语义、单技能 vs 套件的 `source`/`skills` 模式
 - 内置 `check_marketplace.sh` 跑四道检查（JSON 语法 → `claude plugin validate` → source/skills 解析 → 反向同步），任一必需项失败即非零退出
 - 安装测试、缓存足迹测试与 GitHub 安装测试配方，确认 `source` 产出的快照符合预期
+- 专门的 suite consolidation workflow，覆盖 canonical move、字节/权限保真、全仓安装路径漂移、已有用户迁移、隔离真实安装与不可变 ref 审阅
 - 两个 PostToolUse hook（编辑 `marketplace.json` 时校验；改了 `SKILL.md` 但没 bump 版本时告警），随插件启用自动生效
 
 **示例用法：**
@@ -2368,6 +2370,7 @@ claude plugin install daymade-claude-code@daymade-skills
 "turn this skills repo into a plugin marketplace"
 "给这个仓库生成 marketplace.json 并校验"
 "把我的新 skill 加进市场并提一个 PR"
+"把这些 standalone skills 挪进 daymade-macos 并改成 suite-only"
 ```
 
 **要求**：`claude` CLI（用于 `claude plugin validate` / 安装测试）、`jq`。若要提上游 PR，需配置好 git remote。
@@ -3061,17 +3064,19 @@ claude plugin install openclaw-model-switch@daymade-skills
 
 > **安装**：`claude plugin install daymade-skill@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-skill:skill-governance`）
 
-让 Claude Code skill marketplace 和已安装缓存与源码仓库保持一致。用于只读漂移检查、通过官方 Claude plugin 命令从源码同步、清理旧缓存版本，以及把 marketplace 条目切到本地源码。
+让 Claude Code skill marketplace 和已安装缓存与源码仓库保持一致。用于只读漂移检查、通过官方 Claude plugin 命令从源码同步、suite 迁移后的安全收敛、清理旧缓存版本，以及把 marketplace 条目切到本地源码。
 
 **使用场景：**
 - 某个 skill 看起来过期、缺失、重复，或来自异常缓存版本
 - 需要对比 `.claude-plugin/marketplace.json`、源码目录和 Claude/Codex 已安装 skill
 - 从源码仓库重建本地 skill marketplace，但不手动复制派生缓存文件
+- suite 迁移已经合并，但本机仍保留旧 standalone plugin identity
 
 **主要功能：**
 - 把源码目录视为权威来源，plugin/cache 目录视为派生产物
 - 使用官方 `claude plugin` 命令执行同步操作
 - 检测孤儿缓存版本、源码/缓存漂移、marketplace 条目指向错误源码
+- 从 manifest 动态发现 suite，并在按原 scope 退役 standalone 安装前先验证替代 suite
 - 检查发布面时忽略 `scripts/`、`references/`、`tests/`、demo 和构建产物等工作区专用目录
 
 ### 84. **photo-to-scanned-pdf** - 手机文档照片转扫描件 PDF

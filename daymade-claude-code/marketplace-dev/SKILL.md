@@ -1,13 +1,16 @@
 ---
 name: marketplace-dev
 description: >-
-  Converts any Claude Code skills repository into an official plugin marketplace —
-  generates spec-conforming .claude-plugin/marketplace.json, validates with
-  `claude plugin validate`, tests real installation, and PRs the upstream repo,
+  Creates and maintains Claude Code plugin marketplaces, consolidates standalone
+  skills into a new or existing suite, and moves skills between suites. Converts any
+  Claude Code skills repository into an official plugin marketplace, generates
+  spec-conforming .claude-plugin/marketplace.json, validates with `claude plugin
+  validate`, tests real installation and cache boundaries, and PRs the upstream repo,
   encoding hard-won schema/version/description anti-patterns. Use when the user
-  mentions marketplace, plugin support, one-click install, marketplace.json,
-  plugin distribution, auto-update, or wants a skills repo installable via
-  `claude plugin install`.
+  mentions marketplace, plugin support, one-click install, marketplace.json, plugin
+  distribution, auto-update, suite-only migration, "put these skills in a suite",
+  "move this skill into daymade-*", or wants a skills repo installable via `claude
+  plugin install`.
 argument-hint: "[repo-path]"
 ---
 
@@ -19,6 +22,16 @@ can install skills via `claude plugin marketplace add` and get auto-updates.
 **Input**: a repo with `skills/` directories containing SKILL.md files.
 **Output**: `.claude-plugin/marketplace.json` + validated + installation-tested + PR-ready.
 
+## Route the task before editing
+
+| User intent | Route |
+|---|---|
+| Create marketplace support for a repo that does not have it | Follow Phases 0–4 below |
+| Add or update an ordinary plugin entry | Follow “Maintaining an existing marketplace,” then Phase 3 |
+| Consolidate standalone skills into a suite, create a suite from existing skills, move a skill between suites, or rename a skill while moving it | Read [references/suite_consolidation_workflow.md](references/suite_consolidation_workflow.md) completely and follow it instead of the generic Phase 4 constraints |
+| Reconcile installed caches after a merged suite migration | Invoke `daymade-skill:skill-governance` and use its post-migration workflow; do not mutate cache state here |
+| Audit the whole repository across code, docs, security, PRs, issues, and manifest integrity | Invoke `marketplace-health-check:marketplace-health-check` only when the user requested a broad health check; it is not a prerequisite for a targeted suite migration |
+
 ## Phase 0: Evidence Intake
 
 Before editing an existing marketplace, collect evidence instead of relying on the
@@ -27,9 +40,11 @@ default template:
 1. Read the current `.claude-plugin/marketplace.json`.
 2. Read this repo's marketplace rules (`CLAUDE.md`, README install section, changelog).
 3. Read official docs for marketplace/plugin path semantics.
-4. If refining from prior failures, mine local Claude Code session history.
+4. Use the current conversation as evidence. Mine earlier local Claude Code sessions
+   only when the user explicitly asks for or approves that private source.
 
-Each project's sessions live under `~/.claude/projects/<escaped-cwd>/`:
+When that history source is approved, each project's sessions live under
+`~/.claude/projects/<escaped-cwd>/`:
 - Top-level files: `<session-id>.jsonl`
 - Subagent transcripts: `<session-id>/subagents/agent-*.jsonl`
 
@@ -177,6 +192,11 @@ Choose a name that is:
 
 ## Maintaining an existing marketplace
 
+Use this section for ordinary entry additions or metadata updates. For a suite
+consolidation, source relocation, suite membership transfer, or standalone-to-suite
+migration, use the dedicated workflow linked in the routing table; those operations
+have a wider breaking-change and documentation surface than an ordinary entry addition.
+
 When adding a new plugin to an existing marketplace.json:
 
 1. **Bump `metadata.version`** — this is the marketplace catalog version.
@@ -322,7 +342,11 @@ only when you have consciously decided to leave a SKILL.md unregistered.
 ## Phase 4: Create PR
 
 ### Principles
-- **Pure incremental**: do NOT modify any existing files (skills, README, etc.)
+- Apply these pure-incremental constraints only when adding marketplace support to an
+  upstream repository. A user-approved suite consolidation necessarily moves existing
+  skill directories and updates the repository's install documentation; follow the
+  dedicated consolidation workflow for that route.
+- **Pure incremental (new-marketplace route only)**: do NOT modify existing skill files; update README only when needed to expose the new install path
 - **Squash commits**: avoid binary bloat in git history from iterative changes
 - Only add: `.claude-plugin/marketplace.json`, optionally `scripts/`, optionally update README
 

@@ -207,7 +207,7 @@ These skills are bundle-only under `daymade-codex`.
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-This suite bundles the skills that extend Claude Code itself — fast local conversation discovery across Claude Code and Codex, session recovery, CLAUDE.md tuning, troubleshooting, statusline configuration, export repair, marketplace development, terminal screenshot rendering, usage analysis, multi-provider model switching, and automatic local skill-source sync for Claude Code/Codex installs:
+This suite bundles the skills that extend Claude Code itself — fast local conversation discovery across Claude Code and Codex, session recovery, CLAUDE.md tuning, troubleshooting, statusline configuration, export repair, marketplace development and suite consolidation, terminal screenshot rendering, usage analysis, multi-provider model switching, and automatic local skill-source sync for Claude Code/Codex installs:
 
 ```text
 /daymade-claude-code:local-conversation-history
@@ -2347,12 +2347,13 @@ claude plugin install daymade-audio@daymade-skills
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:marketplace-dev`)
 
-Convert any Claude Code skills repository into an official plugin marketplace so users can install skills via `claude plugin marketplace add` and get auto-updates. Generates a spec-conforming `.claude-plugin/marketplace.json`, validates with `claude plugin validate`, tests real installation, and opens an upstream PR — encoding hard-won schema, version, and description anti-patterns.
+Create and maintain Claude Code plugin marketplaces: convert a repository, consolidate standalone skills into a new or existing suite, move skills between suites, validate real installation/cache boundaries, and ship the result through a PR.
 
 **When to use:**
 - Making a skills repo installable via `claude plugin install`
 - Generating or fixing a `marketplace.json` (plugin distribution, one-click install, auto-update)
 - Adding a new plugin to an existing marketplace and bumping the right versions
+- Putting existing skills into a suite, moving a skill between suites, or making members suite-only
 - Debugging schema rejections like `Unrecognized key: "$schema"` or duplicate plugin names
 
 **Key features:**
@@ -2360,6 +2361,7 @@ Convert any Claude Code skills repository into an official plugin marketplace so
 - Encodes non-obvious schema rules: `$schema` is rejected, `metadata` has only 3 valid fields, `strict: false` semantics, single-skill vs suite `source`/`skills` patterns
 - Bundled `check_marketplace.sh` runs four checks (JSON syntax → `claude plugin validate` → source/skills resolution → reverse sync) and exits non-zero on failure
 - Installation, cache-footprint, and GitHub-install test recipes to confirm `source` produced the intended snapshot
+- Dedicated suite-consolidation workflow covering canonical moves, byte/mode preservation, repository-wide install/path drift, existing-user migration, isolated real installation, and immutable review
 - Two PostToolUse hooks (validate on `marketplace.json` edit; warn on un-bumped version when a `SKILL.md` changes) that auto-activate with the plugin
 
 **Example usage:**
@@ -2371,6 +2373,7 @@ claude plugin install daymade-claude-code@daymade-skills
 "turn this skills repo into a plugin marketplace"
 "generate a marketplace.json for this repo and validate it"
 "add my new skill to the marketplace and open a PR"
+"move these standalone skills into daymade-macos and make them suite-only"
 ```
 
 **Requirements**: `claude` CLI (for `claude plugin validate` / install tests), `jq`. Git remotes configured if opening an upstream PR.
@@ -3029,17 +3032,19 @@ Analyze Google Takeout exports of Gemini conversation history — extract and ca
 
 > **Install**: `claude plugin install daymade-skill@daymade-skills` (suite-only — invoked as `daymade-skill:skill-governance`)
 
-Keep Claude Code skill marketplaces and installed caches aligned with source repositories. Use it for read-only drift checks, source-backed syncs through official Claude plugin commands, old cache cleanup, and local-source marketplace switching.
+Keep Claude Code skill marketplaces and installed caches aligned with source repositories. Use it for read-only drift checks, source-backed syncs through official Claude plugin commands, safe reconciliation after suite migrations, old cache cleanup, and local-source marketplace switching.
 
 **When to use:**
 - A skill appears stale, missing, duplicated, or installed from an unexpected cache version
 - Need to compare `.claude-plugin/marketplace.json`, source directories, and Claude/Codex installed skills
 - Rebuilding a local skill marketplace from a source repo without hand-copying derived cache files
+- A merged suite migration left old standalone plugin identities installed locally
 
 **Key features:**
 - Treats source directories as canonical and plugin/cache folders as derived artifacts
 - Uses official `claude plugin` commands for sync operations
 - Detects orphaned cache versions, source/cache drift, and marketplace entries pointing at the wrong source
+- Discovers suites dynamically from the manifest and verifies the replacement suite before retiring standalone installs at their original scopes
 - Ignores workspace-only folders such as `scripts/`, `references/`, `tests/`, demos, and build outputs when checking published skill surfaces
 
 ### 84. **photo-to-scanned-pdf** - Phone Photos to Scanner-Quality PDF
