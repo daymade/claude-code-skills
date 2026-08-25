@@ -168,9 +168,37 @@ claude plugin install daymade-docs@daymade-skills
 /daymade-docs:pdf-creator
 /daymade-docs:ppt-creator
 /daymade-docs:docs-cleaner
+/daymade-docs:excel-automation
 ```
 
 这些技能以套件形式整体发布，不再提供单独的单技能插件。所有文档技能都在 `daymade-docs/` 下，随套件一起安装。
+
+**Apple 平台套件**（为 macOS/iOS 开发与运维提供统一命名空间）：
+```bash
+claude plugin install daymade-macos@daymade-skills
+```
+
+```text
+/daymade-macos:capture-screen
+/daymade-macos:developing-ios-apps
+/daymade-macos:macos-cleaner
+/daymade-macos:macos-watchdog
+```
+
+这些技能仅作为 `daymade-macos` 套件成员发布。
+
+**Codex 套件**（为 Codex 辅助编码与视觉探索提供统一命名空间）：
+```bash
+claude plugin install daymade-codex@daymade-skills
+```
+
+```text
+/daymade-codex:codex-image-gallery
+/daymade-codex:local-codex
+/daymade-codex:design-style-picker
+```
+
+这些技能仅作为 `daymade-codex` 套件成员发布。
 
 **Claude Code 操作套件**（为 Claude Code 本体扩展工作流提供统一命名空间）：
 ```bash
@@ -201,15 +229,17 @@ claude plugin install daymade-claude-code@daymade-skills
 claude plugin install daymade-financial@daymade-skills
 ```
 
-一次安装即可获得完整的金融数据与投研技能——Bigdata.com（RavenPack）结构化财务与情绪数据、美股基本面数据（yfinance）、Gangtise（岗底斯）OpenAPI 投研套件安装与编排、A 股消息面与政策聚合、A 股医药板块日报，以及投资论点的结构化「魔鬼代言人」压力测试：
+一次安装即可获得完整的金融数据与投研技能——Bigdata.com（RavenPack）结构化财务与情绪数据、美股基本面数据（yfinance）、Gangtise（岗底斯）OpenAPI 投研套件安装与编排、A 股消息面与政策聚合、A 股医药板块日报、投资论点的结构化「魔鬼代言人」压力测试，以及对成功样板宣传水分与可复制性的对抗尽调：
 
 ```text
 /daymade-financial:bigdata-skill
 /daymade-financial:financial-data-collector
 /daymade-financial:gangtise-copilot
 /daymade-financial:ashare-news-fetcher
+/daymade-financial:daymade-sector-research
 /daymade-financial:pharma-daily-report
 /daymade-financial:devils-advocate
+/daymade-financial:benchmark-due-diligence
 ```
 
 安装后调用统一显示为 `daymade-financial:<skill>`，共享同一命名空间。这些技能仅作为套件发布——安装套件即可获得全部技能。
@@ -261,14 +291,8 @@ claude plugin install daymade-skill@daymade-skills
 # Promptfoo LLM 评测框架
 claude plugin install promptfoo-evaluation@daymade-skills
 
-# iOS 应用开发
-claude plugin install iOS-APP-developer@daymade-skills
-
 # Twitter/X 内容获取
 claude plugin install twitter-reader@daymade-skills
-
-# macOS 磁盘空间清理
-claude plugin install macos-cleaner@daymade-skills
 
 # 技能质量审查与改进
 claude plugin install daymade-skill@daymade-skills
@@ -281,12 +305,6 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 # 产品审计与优化
 claude plugin install product-analysis@daymade-skills
-
-# Excel 创建、解析与 macOS 自动化控制
-claude plugin install excel-automation@daymade-skills
-
-# macOS 程序化窗口截图工作流
-claude plugin install capture-screen@daymade-skills
 
 # Scrapling CLI 抽取与故障排查
 claude plugin install scrapling-skill@daymade-skills
@@ -304,7 +322,7 @@ claude plugin install terraform-skill@daymade-skills
 claude plugin install llm-eval-harness@daymade-skills
 ```
 
-每个技能都可以独立安装 - 只选择你需要的！
+独立插件可以单独安装；套件成员会随所属套件一起安装。
 
 ---
 
@@ -1123,7 +1141,9 @@ npx promptfoo@latest view
 
 ---
 
-### 24. **iOS-APP-developer** - iOS 应用开发
+### 24. **developing-ios-apps** - iOS 应用开发
+
+> **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:developing-ios-apps`）
 
 使用 XcodeGen、SwiftUI 与 SPM 构建、配置和调试 iOS 应用。
 
@@ -1149,7 +1169,7 @@ xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build
 
 *即将推出*
 
-📚 **文档**：参见 [iOS-APP-developer/references/xcodegen-full.md](./iOS-APP-developer/references/xcodegen-full.md)。
+📚 **文档**：参见 [developing-ios-apps/references/xcodegen-full.md](./daymade-macos/developing-ios-apps/references/xcodegen-full.md)。
 
 **要求**：macOS + Xcode，XcodeGen
 
@@ -1206,6 +1226,8 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 
 ### 26. **macos-cleaner** - 智能 macOS 磁盘空间恢复
 
+> **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:macos-cleaner`）
+
 **在 macOS 上恢复磁盘空间最安全的方式。** 已知具体嫌疑源时先做定向只读取证（包括 Apple 内容缓存），只有来源未知时才扩大到系统缓存、应用残留、大文件和开发环境。
 
 **为什么 macos-cleaner 与众不同：**
@@ -1251,8 +1273,8 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 
 **示例用法：**
 ```bash
-# 安装技能
-claude plugin install macos-cleaner@daymade-skills
+# 安装 Apple 平台套件
+claude plugin install daymade-macos@daymade-skills
 
 # 要求 Claude Code 分析你的 Mac
 "我的 Mac 快没空间了，帮我分析一下是什么在占用存储空间"
@@ -1294,7 +1316,7 @@ claude plugin install macos-cleaner@daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [macos-cleaner/references/](./macos-cleaner/references/) 了解：
+📚 **文档**：参见 [macos-cleaner/references/](./daymade-macos/macos-cleaner/references/) 了解：
 - `apple_content_caching.md` - Apple 内容缓存的定向诊断与受支持修复
 - `cleanup_targets.md` - 每个清理目标的详细说明
 - `mole_integration.md` - 如何将脚本与 Mole 可视化工具结合使用
@@ -1820,6 +1842,8 @@ claude plugin install daymade-financial@daymade-skills
 
 ### 40. **excel-automation** - Excel 创建、解析与 macOS 控制
 
+> **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:excel-automation`）
+
 用于创建专业格式化 Excel、通过标准库 XML/ZIP 解析复杂 `.xlsm` 模型，并在 macOS 上通过 AppleScript 控制 Excel 窗口。
 
 **使用场景：**
@@ -1837,8 +1861,8 @@ claude plugin install daymade-financial@daymade-skills
 
 **示例用法：**
 ```bash
-# 安装技能
-claude plugin install excel-automation@daymade-skills
+# 安装文档套件
+claude plugin install daymade-docs@daymade-skills
 
 # 然后请求 Claude 自动化 Excel 工作流
 "创建一个格式化的估值模板工作簿"
@@ -1850,13 +1874,15 @@ claude plugin install excel-automation@daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [excel-automation/SKILL.md](./excel-automation/SKILL.md) 和 [formatting-reference.md](./excel-automation/references/formatting-reference.md)。
+📚 **文档**：参见 [excel-automation/SKILL.md](./daymade-docs/excel-automation/SKILL.md) 和 [formatting-reference.md](./daymade-docs/excel-automation/references/formatting-reference.md)。
 
 **要求**：Python 3.8+、`uv`、`openpyxl`（通过 `uv run --with openpyxl` 自动安装）；AppleScript 窗口控制需要 macOS。
 
 ---
 
 ### 41. **capture-screen** - macOS 程序化截图
+
+> **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:capture-screen`）
 
 通过三步法实现稳定的窗口截图自动化：Swift 获取 CGWindowID、AppleScript 控制应用状态、`screencapture` 输出截图文件。
 
@@ -1875,8 +1901,8 @@ claude plugin install excel-automation@daymade-skills
 
 **示例用法：**
 ```bash
-# 安装技能
-claude plugin install capture-screen@daymade-skills
+# 安装 Apple 平台套件
+claude plugin install daymade-macos@daymade-skills
 
 # 然后请求 Claude 执行程序化截图
 "找到 Excel 窗口 ID 并静默截图"
@@ -1888,7 +1914,7 @@ claude plugin install capture-screen@daymade-skills
 
 *即将推出*
 
-📚 **文档**：参见 [capture-screen/SKILL.md](./capture-screen/SKILL.md)。
+📚 **文档**：参见 [capture-screen/SKILL.md](./daymade-macos/capture-screen/SKILL.md)。
 
 **要求**：macOS（Swift + AppleScript + `screencapture`）。
 
@@ -2522,6 +2548,8 @@ claude plugin install llm-wiki-setup@daymade-skills
 
 ### 62. **benchmark-due-diligence** - 对标对象的对抗式尽调拆解
 
+> **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:benchmark-due-diligence`）
+
 对一个你眼红的对标对象——创始人、KOL、公司或产品，其宣称的成功看着虚高——做对抗式尽调，把营销泡沫与真实信号分开，再把验证过的打法映射到你自己的资源上。它是 `deep-research` 的对抗式、决策导向版本：默认这幅图是注水的，直到被证明，并以「这对我意味着什么」收尾，而不是一份中立报告。
 
 **使用场景：**
@@ -2539,8 +2567,8 @@ claude plugin install llm-wiki-setup@daymade-skills
 
 **示例用法：**
 ```bash
-# 安装技能
-claude plugin install benchmark-due-diligence@daymade-skills
+# 安装金融投研套件
+claude plugin install daymade-financial@daymade-skills
 
 # 然后自然地让 Claude 做
 "帮我尽调一下这个创始人，他到底有没有水分"
@@ -2850,9 +2878,7 @@ claude plugin install github-sensitive-data-cleanup@daymade-skills
 
 ### 73. **codex-image-gallery** - Codex 生成图片本地浏览器
 
-```bash
-claude plugin install codex-image-gallery@daymade-skills
-```
+> **安装**：`claude plugin install daymade-codex@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-codex:codex-image-gallery`）
 
 启动一个自包含的本地网页 gallery 浏览 Codex 生成图片。Skill 自带 Node server 和 HTML UI，默认扫描 `~/.codex/generated_images`，也可用 `GALLERY_ROOT` 指向其他目录。
 
@@ -2965,9 +2991,7 @@ claude plugin install wps-doc-scraper@daymade-skills
 
 ### 79. **local-codex** - 本地 OpenAI Codex CLI Agent
 
-```bash
-claude plugin install local-codex@daymade-skills
-```
+> **安装**：`claude plugin install daymade-codex@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-codex:local-codex`）
 
 通过 ChatGPT Pro OAuth 固定费率订阅，把编码任务委托给本地 OpenAI Codex CLI agent。封装 `codex exec` / `codex review`，用于代码生成、重构和 review，无逐 token API 计费。
 
@@ -3195,7 +3219,7 @@ main 真的全部合并了吗，还是还有东西被滞留在某个分支？
 
 ### 89. **design-style-picker** - 批量生成并对比视觉设计方向
 
-> **安装**：`claude plugin install design-style-picker@daymade-skills`
+> **安装**：`claude plugin install daymade-codex@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-codex:design-style-picker`）
 
 把说不清的审美偏好变成具体的视觉选项。不再靠猜一个"最终设计"，而是批量生成
 一组结构化的设计方向，让用户亲眼挑出真正想要的风格——目标是快速摸清审美边界。
@@ -3209,13 +3233,13 @@ main 真的全部合并了吗，还是还有东西被滞留在某个分支？
 
 **示例：**
 ```text
-/design-style-picker
+/daymade-codex:design-style-picker
 我说不清想要什么风格，给我一批选项看看
 这版太花哨也太通用了，再生成一些方向
 在现有设计系统基础上演进，别丢掉已有资产
 ```
 
-📚 **文档**：参见 [selection-playbook.md](./design-style-picker/selection-playbook.md)。
+📚 **文档**：参见 [selection-playbook.md](./daymade-codex/design-style-picker/references/selection-playbook.md)。
 
 ---
 
@@ -3303,7 +3327,7 @@ completion drive 随时能盖过它；hook 才是一堵墙。
 
 ### 93. **macos-watchdog** - 设计与纪律化 macOS launchd 看门狗
 
-> **安装**：`claude plugin install macos-watchdog@daymade-skills`
+> **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:macos-watchdog`）
 
 设计、部署、纪律化 macOS launchd 看门狗——检测复发问题并自动修复的
 LaunchAgent / LaunchDaemon，同时不让看门狗自己变成干扰源。提炼自
@@ -3499,7 +3523,7 @@ Codex 会话的存量上下文，把精确 ID 交给 **continue-codex-work**；�
 使用 **promptfoo-evaluation** 运行提示词测试、对比模型输出并执行自定义断言评测。使用 **llm-eval-harness** 从速度（thinking-aware tokens/秒）、并发/稳定性、Anthropic 协议合规、以及针对你自己用例的质量回归四个维度给端点跑基准——核验厂商宣称的 tokens/秒，或在采用新发布的模型前先验货。两者可组合：promptfoo 负责快速的逐用例 rubric 门控，llm-eval-harness 负责盲审 precision 与原始的速度/并发探测。
 
 ### iOS 应用开发
-使用 **iOS-APP-developer** 配置 XcodeGen 项目，处理 SPM 依赖、签名与部署问题。
+使用 **developing-ios-apps** 配置 XcodeGen 项目，处理 SPM 依赖、签名与部署问题。
 
 ### Twitter/X 内容研究
 使用 **twitter-reader** 无需 JavaScript 渲染或身份验证即可获取推文内容。非常适合记录社交媒体讨论、归档话题、分析推文内容或从 Twitter/X 收集参考资料。与 **doc-to-markdown** 结合可将获取的内容转换为其他格式，或与 **repomix-safe-mixer** 结合安全地打包研究集合。
@@ -3586,9 +3610,9 @@ Codex 会话的存量上下文，把精确 ID 交给 **continue-codex-work**；�
 - **claude-md-progressive-disclosurer**：参见 `daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md` 了解 CLAUDE.md 优化工作流
 - **skills-search**：参见 `daymade-skill/skills-search/SKILL.md` 了解 CCPM CLI 命令和注册表操作
 - **promptfoo-evaluation**：参见 `promptfoo-evaluation/references/promptfoo_api.md` 了解评测模式
-- **iOS-APP-developer**：参见 `iOS-APP-developer/references/xcodegen-full.md` 了解 XcodeGen 选项与 project.yml 细节
+- **developing-ios-apps**：参见 `daymade-macos/developing-ios-apps/references/xcodegen-full.md` 了解 XcodeGen 选项与 project.yml 细节
 - **twitter-reader**：参见 `twitter-reader/SKILL.md` 了解 API 密钥设置和 URL 格式支持
-- **macos-cleaner**：参见 `macos-cleaner/references/apple_content_caching.md` 了解 Apple 内容缓存、`macos-cleaner/references/cleanup_targets.md` 了解清理目标语义、`macos-cleaner/references/mole_integration.md` 了解 Mole、`macos-cleaner/references/safety_rules.md` 了解安全指南
+- **macos-cleaner**：参见 `daymade-macos/macos-cleaner/references/apple_content_caching.md` 了解 Apple 内容缓存、`daymade-macos/macos-cleaner/references/cleanup_targets.md` 了解清理目标语义、`daymade-macos/macos-cleaner/references/mole_integration.md` 了解 Mole、`daymade-macos/macos-cleaner/references/safety_rules.md` 了解安全指南
 - **skill-reviewer**：参见 `daymade-skill/skill-reviewer/references/evaluation_checklist.md` 了解完整评估标准、`daymade-skill/skill-reviewer/references/pr_template.md` 了解 PR 模板
 - **github-contributor**：参见 `github-contributor/references/pr_checklist.md` 了解 PR 质量清单、`github-contributor/references/project_evaluation.md` 了解项目评估标准、`github-contributor/references/communication_templates.md` 了解 issue/PR 沟通模板
 - **i18n-expert**：参见 `i18n-expert/SKILL.md` 了解完整的 i18n 设置工作流程、键架构指导和审计程序
@@ -3597,8 +3621,8 @@ Codex 会话的存量上下文，把精确 ID 交给 **continue-codex-work**；�
 - **competitors-analysis**：参见 `competitors-analysis/SKILL.md` 了解 discover/ingest/profile/landscape 工作流，参见 `competitors-analysis/references/profile_template.md` 了解竞品档案模板
 - **windows-remote-desktop-connection-doctor**：参见 `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` 了解日志解析模式和 `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` 了解传输协议详情
 - **product-analysis**：参见 `product-analysis/SKILL.md` 了解工作流，参见 `product-analysis/references/synthesis_methodology.md` 了解跨代理加权与推荐逻辑
-- **excel-automation**：参见 `excel-automation/SKILL.md` 了解创建/解析/控制工作流，参见 `excel-automation/references/formatting-reference.md` 了解格式规范
-- **capture-screen**：参见 `capture-screen/SKILL.md` 了解基于 CGWindowID 的 macOS 截图流程
+- **excel-automation**：参见 `daymade-docs/excel-automation/SKILL.md` 了解创建/解析/控制工作流，参见 `daymade-docs/excel-automation/references/formatting-reference.md` 了解格式规范
+- **capture-screen**：参见 `daymade-macos/capture-screen/SKILL.md` 了解基于 CGWindowID 的 macOS 截图流程
 - **continue-claude-work**：参见 `daymade-claude-code/continue-claude-work/SKILL.md` 了解本地会话产物恢复、漂移检查与续做流程
 - **continue-codex-work**：参见 `daymade-claude-code/continue-codex-work/SKILL.md` 了解 Codex rollout 定位、结束原因诊断与续做流程
 - **scrapling-skill**：参见 `scrapling-skill/SKILL.md` 了解 CLI 工作流，参见 `scrapling-skill/references/troubleshooting.md` 了解已验证的 Scrapling 故障模式
@@ -3628,7 +3652,7 @@ Codex 会话的存量上下文，把精确 ID 交给 **continue-codex-work**；�
 - **weasyprint、markdown**（用于 pdf-creator）
 - **CCPM CLI**（用于 skills-search）：`npm install -g @daymade/ccpm`
 - **Promptfoo**（用于 promptfoo-evaluation）：`npx promptfoo@latest`
-- **macOS + Xcode、XcodeGen**（用于 iOS-APP-developer）
+- **macOS + Xcode、XcodeGen**（用于 developing-ios-apps）
 - **Jina.ai API 密钥**（用于 twitter-reader）：https://jina.ai/ 提供免费套餐
 - **Codex CLI**（可选，用于 product-analysis 多模型并行模式）
 - **Mole**（可选，用于 macos-cleaner 可视化清理）：从 https://github.com/tw93/Mole 下载

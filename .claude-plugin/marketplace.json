@@ -5,7 +5,7 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (fast local conversation discovery across Claude Code and Codex, session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-docs, daymade-financial, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
+    "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (fast local conversation discovery across Claude Code and Codex, session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins (daymade-audio, daymade-claude-code, daymade-codex, daymade-docs, daymade-financial, daymade-macos, daymade-skill) bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
     "version": "1.90.0"
   },
   "plugins": [
@@ -45,24 +45,6 @@
         "data-source",
         "financial-data",
         "gui-automation"
-      ]
-    },
-    {
-      "name": "capture-screen",
-      "description": "Programmatic screenshot capture on macOS. Get window IDs via Swift CGWindowListCopyWindowInfo, capture specific windows with screencapture -l, and control application windows via AppleScript. Supports multi-shot workflows for capturing different sections of the same window. Use when taking automated screenshots, capturing application windows, or creating visual documentation",
-      "source": "./capture-screen",
-      "strict": false,
-      "version": "1.0.1",
-      "category": "utilities",
-      "keywords": [
-        "screenshot",
-        "screencapture",
-        "macos",
-        "window-capture",
-        "swift",
-        "applescript",
-        "automation",
-        "visual-documentation"
       ]
     },
     {
@@ -161,11 +143,33 @@
       ]
     },
     {
+      "name": "daymade-codex",
+      "description": "Codex and visual exploration suite bundling local OpenAI Codex CLI delegation, a browser gallery for Codex-generated images, and batch generation and comparison of visual design directions under one shared namespace. Install once for Codex-assisted coding, image review, and design-style exploration workflows.",
+      "source": "./daymade-codex",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "suite",
+      "keywords": [
+        "suite",
+        "codex",
+        "openai",
+        "code-review",
+        "image-gallery",
+        "design",
+        "visual-direction"
+      ],
+      "skills": [
+        "./codex-image-gallery",
+        "./local-codex",
+        "./design-style-picker"
+      ]
+    },
+    {
       "name": "daymade-docs",
-      "description": "Documentation suite plugin that exposes document conversion, Mermaid diagram generation, PDF/PPT/DOCX creation, and documentation cleanup skills under one shared namespace",
+      "description": "Documentation suite plugin that exposes document conversion, Mermaid diagram generation, PDF/PPT/DOCX creation, Excel workbook creation/parsing/control, and documentation cleanup skills under one shared namespace",
       "source": "./daymade-docs",
       "strict": false,
-      "version": "1.8.0",
+      "version": "1.9.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -176,6 +180,9 @@
         "pptx",
         "docx",
         "word",
+        "excel",
+        "xlsx",
+        "xlsm",
         "meeting-minutes",
         "scan",
         "photo-to-pdf"
@@ -188,15 +195,16 @@
         "./docx-creator",
         "./docs-cleaner",
         "./pdf-to-html",
-        "./photo-to-scanned-pdf"
+        "./photo-to-scanned-pdf",
+        "./excel-automation"
       ]
     },
     {
       "name": "daymade-financial",
-      "description": "Financial data and investment-research suite covering the full China A-share and global equity data pipeline: Bigdata.com (RavenPack) structured financials and news sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite installation and orchestration, A-share news and policy aggregation, A-share pharmaceutical sector daily reporting, and structured devil's-advocate pressure-testing of investment theses (assumption decomposition, evidence-linked counterarguments, monitoring signposts). Install once for the complete financial data workflow.",
+      "description": "Financial data and investment-research suite covering the full China A-share and global equity data pipeline: Bigdata.com (RavenPack) structured financials and news sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite installation and orchestration, A-share news and policy aggregation, A-share pharmaceutical sector daily reporting, structured devil's-advocate pressure-testing of investment theses, and adversarial due diligence on inflated benchmark claims with replicability mapping. Install once for the complete financial research workflow.",
       "source": "./daymade-financial",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -210,7 +218,9 @@
         "news",
         "yfinance",
         "devils-advocate",
-        "thesis-pressure-test"
+        "thesis-pressure-test",
+        "benchmark",
+        "due-diligence"
       ],
       "skills": [
         "./bigdata-skill",
@@ -219,7 +229,33 @@
         "./ashare-news-fetcher",
         "./daymade-sector-research",
         "./pharma-daily-report",
-        "./devils-advocate"
+        "./devils-advocate",
+        "./benchmark-due-diligence"
+      ]
+    },
+    {
+      "name": "daymade-macos",
+      "description": "Apple-platform development and operations suite bundling programmatic macOS window capture, iOS/macOS app development with XcodeGen and SwiftUI, safe disk-space diagnosis and cleanup, and disciplined launchd watchdog design under one shared namespace. Install once for the complete macOS and iOS toolkit.",
+      "source": "./daymade-macos",
+      "strict": false,
+      "version": "1.0.0",
+      "category": "suite",
+      "keywords": [
+        "suite",
+        "macos",
+        "ios",
+        "xcodegen",
+        "swiftui",
+        "screenshot",
+        "disk-space",
+        "launchd",
+        "watchdog"
+      ],
+      "skills": [
+        "./capture-screen",
+        "./developing-ios-apps",
+        "./macos-cleaner",
+        "./macos-watchdog"
       ]
     },
     {
@@ -307,26 +343,6 @@
         "backup",
         "rss",
         "frodo"
-      ]
-    },
-    {
-      "name": "excel-automation",
-      "description": "Create, parse, and control Excel files on macOS. Professional formatting with openpyxl (font colors, fills, borders, conditional formatting), complex xlsm parsing with stdlib zipfile+xml for investment bank financial models, and Excel window control via AppleScript (zoom, scroll, select). Use when creating formatted Excel reports, parsing financial models, or automating Excel on macOS",
-      "source": "./excel-automation",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "productivity",
-      "keywords": [
-        "excel",
-        "openpyxl",
-        "xlsm",
-        "spreadsheet",
-        "formatting",
-        "financial-model",
-        "applescript",
-        "macos",
-        "dcf",
-        "investment-banking"
       ]
     },
     {
@@ -470,27 +486,6 @@
       ]
     },
     {
-      "name": "iOS-APP-developer",
-      "description": "Develops iOS applications with XcodeGen, SwiftUI, and SPM. Use when configuring XcodeGen project.yml, resolving SPM dependency issues, deploying to devices, handling code signing, debugging camera/AVFoundation, iOS version compatibility issues, or fixing Library not loaded @rpath framework errors. Includes state machine testing patterns for @MainActor classes",
-      "source": "./iOS-APP-developer",
-      "strict": false,
-      "version": "1.1.0",
-      "category": "developer-tools",
-      "keywords": [
-        "ios",
-        "xcodegen",
-        "swiftui",
-        "spm",
-        "avfoundation",
-        "camera",
-        "code-signing",
-        "device-deployment",
-        "swift",
-        "xcode",
-        "testing"
-      ]
-    },
-    {
       "name": "ima-copilot",
       "description": "One-stop companion and installer for the official Tencent IMA skill (ima.qq.com). Installs upstream ima-skill to Claude Code/Codex/OpenClaw via npx skills add, guides API key setup, detects and fixes known issues (including the missing-YAML-frontmatter bug in submodule SKILL.md files) with user consent, and implements a personalized fan-out search strategy with priority-based knowledge base boosting and silent truncation detection",
       "source": "./ima-copilot",
@@ -549,26 +544,6 @@
         "llm",
         "branding",
         "lobe-icons"
-      ]
-    },
-    {
-      "name": "macos-cleaner",
-      "description": "Diagnoses and safely reclaims macOS disk space. Use for low-storage Macs, Apple Content Caching or AssetCacheManagerUtil growth, caches, logs, application remnants, large or duplicate files, Docker or OrbStack, Homebrew, npm, pip, and Xcode. Routes known suspects to targeted read-only diagnosis before broad scans, distinguishes logical from physical usage, requires an impact-and-recovery plan plus explicit confirmation before state changes, and verifies disk space and co-resident services afterward. Docker build cache is analysis-only because prune-family deletion is intentionally excluded.",
-      "source": "./macos-cleaner",
-      "strict": false,
-      "version": "1.4.0",
-      "category": "utilities",
-      "keywords": [
-        "macos",
-        "disk-space",
-        "cleanup",
-        "cache",
-        "storage",
-        "developer-tools",
-        "docker",
-        "homebrew",
-        "system-maintenance",
-        "safety"
       ]
     },
     {
@@ -927,26 +902,6 @@
       ]
     },
     {
-      "name": "benchmark-due-diligence",
-      "description": "Adversarial due-diligence on a benchmark you envy (a founder, KOL, company, or product whose claimed success you suspect is inflated). Inline four-phase orchestration: fan-out collection, adversarial verification grading every claim L1-L4 to separate marketing bubble from real signal, attribution weighting (product vs timing vs personal-IP vs luck, and which parts are replicable), then mapping the validated playbook onto the commissioner's own resources with concrete next moves. Use whenever the user wants to 尽调/对标/拆解 a competitor or role-model, suspects 水分/泡沫 in someone's claims (Product Hunt #1, 0-to-1M-users, funding rounds), asks what they can actually steal from a benchmark, or wants to know if a benchmark's wins are real and copyable before betting on the same strategy. Prefer over deep-research when the goal is debunking inflated claims and extracting a replicable playbook, not a neutral briefing.",
-      "source": "./benchmark-due-diligence",
-      "strict": false,
-      "version": "1.0.1",
-      "category": "productivity",
-      "keywords": [
-        "due-diligence",
-        "benchmark",
-        "competitor-teardown",
-        "对标尽调",
-        "破泡沫",
-        "bubble-busting",
-        "attribution",
-        "playbook-teardown",
-        "role-model",
-        "竞品对标"
-      ]
-    },
-    {
       "name": "llm-wiki-setup",
       "description": "Co-create a personal investment-research LLM Wiki (Andrej Karpathy's pattern) where the user's OWN analysis framework becomes a living CLAUDE.md — by interviewing them, NOT by handing them a template. Use whenever the user wants to build a compounding research knowledge base, 投研第二大脑, 投研知识库, or 个人投研 wiki; instantiate Karpathy's LLM Wiki gist for finance/investing; turn their stock-picking, analyst-tracking, or earnings-watching workflow into a structured markdown vault; or build a wiki tracking companies / industries / macro / analysts over time. Pure markdown + wikilinks, NO RAG / vector DB (Karpathy's core idea — do not over-engineer). Also triggers for ingesting research reports / earnings calls / expert notes into an existing wiki, and for post-earnings prediction→fulfillment reviews. Core value = extracting the user's personal investment preferences into THEIR OWN schema, never imposing a standard one.",
       "source": "./llm-wiki-setup",
@@ -971,7 +926,7 @@
       "description": "Run a full 6-dimension health check of this Claude Code skills marketplace repo — code/script safety, documentation/SSOT consistency, security/PII leaks, open-PR triage, open-issue triage, and marketplace-manifest integrity — via a parallel fan-out Dynamic Workflow, then verify the serious findings and report by priority. Use this whenever the user asks to check the repo, run a health check, do a full sweep/audit before a release, 全面体检, 检查仓库状态, 看看仓库健康吗, 审计一下仓库, or asks whether the PRs / issues / docs / versions / PII are in good shape across the board — even if they never say workflow. Reach for it for any broad is-this-whole-repo-OK request, not just one-file checks.",
       "source": "./marketplace-health-check",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "developer-tools",
       "keywords": [
         "health-check",
@@ -1037,24 +992,6 @@
         "force-push",
         "cleanup",
         "claude-code"
-      ]
-    },
-    {
-      "name": "codex-image-gallery",
-      "description": "Start or reuse a self-contained local web gallery for browsing Codex-generated images. Use when the user asks to browse Codex generated images, open a local image gallery, inspect ~/.codex/generated_images, view a Codex image output folder, or browse image files produced by Codex.",
-      "source": "./codex-image-gallery",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "utilities",
-      "keywords": [
-        "codex",
-        "generated-images",
-        "image-gallery",
-        "local-server",
-        "browser",
-        "generated_images",
-        "gpt-image",
-        "image-review"
       ]
     },
     {
@@ -1146,26 +1083,6 @@
       ]
     },
     {
-      "name": "local-codex",
-      "description": "Delegate coding tasks to the local OpenAI Codex CLI agent using ChatGPT Pro OAuth flat-rate subscription. Wraps `codex exec` and `codex review` for code generation, refactoring, and review without per-token API charges. Use when the user wants to run coding tasks through Codex, generate or refactor code, or run code reviews via the local Codex CLI.",
-      "source": "./local-codex",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "developer-tools",
-      "keywords": [
-        "codex",
-        "openai",
-        "coding",
-        "code-generation",
-        "code-review",
-        "refactoring",
-        "oauth",
-        "chatgpt-pro",
-        "claude-code",
-        "sub-agent"
-      ]
-    },
-    {
       "name": "openclaw-model-switch",
       "description": "Switch or repair the model configuration of an OpenClaw instance (e.g., Kimi k2p6 → k3): change the default model, add model definitions, and fix model-config failures — 401 \"Invalid token\", \"No available channel / model not found\", thinking-level rejections, and config edits that don't take effect. Ships a config-discovering switch script with backup + mirror sync, an endpoint probe protocol, and a field-tested trap catalog (env-var key hijack, provider-plugin thinking restrictions, relay availability).",
       "source": "./openclaw-model-switch",
@@ -1187,49 +1104,6 @@
         "openclaw",
         "relay",
         "thinking-levels"
-      ]
-    },
-    {
-      "name": "design-style-picker",
-      "description": "Batch-generate and compare visual design directions so a user can choose the style they actually want. Use when the user says they cannot describe an abstract visual style, asks for many style options, wants to choose from generated UI/design-system images, rejects outputs as too colorful/too dead/too generic, or needs an existing UI/design system evolved without discarding current assets.",
-      "source": "./design-style-picker",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "design",
-      "keywords": [
-        "design",
-        "style",
-        "ui",
-        "visual-direction",
-        "moodboard",
-        "设计",
-        "风格"
-      ]
-    },
-    {
-      "name": "macos-watchdog",
-      "description": "Design, deploy, and discipline macOS launchd watchdogs — LaunchAgents/LaunchDaemons that detect a recurring problem and auto-remediate it. Use whenever creating or editing a persistent background monitor / daemon / agent on macOS, writing a launchd plist, scheduling a self-healing script, or when a watchdog has become a disturbance itself: re-launching apps the user quit, firing repeated notifications, re-running its full repair ladder every few minutes on an unfixable network, or hammering the system (crash loops, fork storms, runaway restarts). Also use for stop/disable semantics (bootout vs bootstrap vs disable vs unload), adding cooldown / backoff / notification throttling to a self-healer, binding a monitor's lifecycle to its premise state, or auditing existing LaunchAgents. 中文触发：launchd 守护进程、常驻任务、开机自启、后台监控、定时自愈脚本。 Covers KeepAlive/ThrottleInterval/domains/logging, premise self-checks, auto-cooldown, alert layering, batch throttling.",
-      "source": "./macos-watchdog",
-      "strict": false,
-      "version": "1.0.0",
-      "category": "developer-tools",
-      "keywords": [
-        "macos",
-        "launchd",
-        "launchagent",
-        "launchdaemon",
-        "daemon",
-        "watchdog",
-        "plist",
-        "bootout",
-        "bootstrap",
-        "monitoring",
-        "self-healing",
-        "cooldown",
-        "backoff",
-        "守护进程",
-        "常驻任务",
-        "后台监控"
       ]
     },
     {

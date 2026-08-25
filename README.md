@@ -170,9 +170,37 @@ This suite exposes related skills under one namespace, including:
 /daymade-docs:pdf-creator
 /daymade-docs:ppt-creator
 /daymade-docs:docs-cleaner
+/daymade-docs:excel-automation
 ```
 
 These skills ship as a bundle — there are no separate single-skill plugins. All documentation skills live under `daymade-docs/` and install together from the suite.
+
+**Apple Platform Suite** (shared namespace for macOS and iOS development/operations):
+```bash
+claude plugin install daymade-macos@daymade-skills
+```
+
+```text
+/daymade-macos:capture-screen
+/daymade-macos:developing-ios-apps
+/daymade-macos:macos-cleaner
+/daymade-macos:macos-watchdog
+```
+
+These skills are bundle-only under `daymade-macos`.
+
+**Codex Suite** (shared namespace for Codex-assisted coding and visual exploration):
+```bash
+claude plugin install daymade-codex@daymade-skills
+```
+
+```text
+/daymade-codex:codex-image-gallery
+/daymade-codex:local-codex
+/daymade-codex:design-style-picker
+```
+
+These skills are bundle-only under `daymade-codex`.
 
 **Claude Code Operations Suite** (shared namespace for Claude Code power-user workflows):
 ```bash
@@ -203,15 +231,17 @@ Installed names render as `daymade-claude-code:<skill>` under a single shared na
 claude plugin install daymade-financial@daymade-skills
 ```
 
-This suite bundles the skills that fetch and analyze financial data — Bigdata.com (RavenPack) structured financials and sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite orchestration, A-share news and policy aggregation, A-share pharmaceutical sector daily reporting, and structured devil's-advocate pressure-testing of investment theses:
+This suite bundles the skills that fetch and analyze financial data — Bigdata.com (RavenPack) structured financials and sentiment, US equity fundamentals via yfinance, Gangtise (岗底斯) OpenAPI research suite orchestration, A-share news and policy aggregation, A-share pharmaceutical sector daily reporting, structured devil's-advocate pressure-testing of investment theses, and adversarial due diligence on inflated benchmark claims:
 
 ```text
 /daymade-financial:bigdata-skill
 /daymade-financial:financial-data-collector
 /daymade-financial:gangtise-copilot
 /daymade-financial:ashare-news-fetcher
+/daymade-financial:daymade-sector-research
 /daymade-financial:pharma-daily-report
 /daymade-financial:devils-advocate
+/daymade-financial:benchmark-due-diligence
 ```
 
 Installed names render as `daymade-financial:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all members.
@@ -263,9 +293,6 @@ claude plugin install daymade-skill@daymade-skills
 # Promptfoo LLM evaluation framework
 claude plugin install promptfoo-evaluation@daymade-skills
 
-# iOS app development
-claude plugin install iOS-APP-developer@daymade-skills
-
 # Twitter/X content fetching
 claude plugin install twitter-reader@daymade-skills
 
@@ -280,12 +307,6 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 # Product analysis and optimization
 claude plugin install product-analysis@daymade-skills
-
-# Excel automation for creation, parsing, and macOS control
-claude plugin install excel-automation@daymade-skills
-
-# Programmatic macOS screenshot capture workflows
-claude plugin install capture-screen@daymade-skills
 
 # Scrapling CLI extraction and troubleshooting
 claude plugin install scrapling-skill@daymade-skills
@@ -303,7 +324,7 @@ claude plugin install terraform-skill@daymade-skills
 claude plugin install llm-eval-harness@daymade-skills
 ```
 
-Each skill can be installed independently - choose only what you need!
+Standalone plugins can be installed independently; suite members install together with their suite.
 
 ---
 
@@ -1084,7 +1105,9 @@ npx promptfoo@latest view
 
 ---
 
-### 24. **iOS-APP-developer** - iOS App Development
+### 24. **developing-ios-apps** - iOS App Development
+
+> **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:developing-ios-apps`)
 
 Build, configure, and debug iOS apps with XcodeGen, SwiftUI, and Swift Package Manager.
 
@@ -1110,7 +1133,7 @@ xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build
 
 *Coming soon*
 
-📚 **Documentation**: See [iOS-APP-developer/references/xcodegen-full.md](./iOS-APP-developer/references/xcodegen-full.md).
+📚 **Documentation**: See [developing-ios-apps/references/xcodegen-full.md](./daymade-macos/developing-ios-apps/references/xcodegen-full.md).
 
 **Requirements**: macOS + Xcode, XcodeGen
 
@@ -1167,6 +1190,8 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 
 ### 26. **macos-cleaner** - Intelligent macOS Disk Space Recovery
 
+> **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:macos-cleaner`)
+
 **The safest way to reclaim disk space on macOS.** Start with targeted read-only diagnosis when a subsystem is already suspect—including Apple Content Caching—then analyze caches, application remnants, large files, and development environments only as needed.
 
 **Why macos-cleaner stands out:**
@@ -1212,8 +1237,8 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 
 **Example usage:**
 ```bash
-# Install the skill
-claude plugin install macos-cleaner@daymade-skills
+# Install the Apple platform suite
+claude plugin install daymade-macos@daymade-skills
 
 # Ask Claude Code to analyze your Mac
 "My Mac is running out of space, help me analyze what's using storage"
@@ -1255,7 +1280,7 @@ Recommendation: Start with 🟢 Safe items (95 GB), then review 🟡 items toget
 
 *Coming soon*
 
-📚 **Documentation**: See [macos-cleaner/references/](./macos-cleaner/references/) for:
+📚 **Documentation**: See [macos-cleaner/references/](./daymade-macos/macos-cleaner/references/) for:
 - `apple_content_caching.md` - Targeted Apple Content Caching diagnosis and supported repair
 - `cleanup_targets.md` - Detailed explanations of every cleanup target
 - `mole_integration.md` - How to combine scripts with Mole visual tool
@@ -1781,6 +1806,8 @@ claude plugin install daymade-financial@daymade-skills
 
 ### 40. **excel-automation** - Excel Creation, Parsing, and macOS Control
 
+> **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:excel-automation`)
+
 Create professionally formatted Excel files, parse complex `.xlsm` models with stdlib XML/ZIP workflows, and control Microsoft Excel windows on macOS via AppleScript.
 
 **When to use:**
@@ -1798,8 +1825,8 @@ Create professionally formatted Excel files, parse complex `.xlsm` models with s
 
 **Example usage:**
 ```bash
-# Install the skill
-claude plugin install excel-automation@daymade-skills
+# Install the documentation suite
+claude plugin install daymade-docs@daymade-skills
 
 # Then ask Claude to automate Excel workflows
 "Create a formatted valuation template workbook"
@@ -1811,13 +1838,15 @@ claude plugin install excel-automation@daymade-skills
 
 *Coming soon*
 
-📚 **Documentation**: See [excel-automation/SKILL.md](./excel-automation/SKILL.md) and [formatting-reference.md](./excel-automation/references/formatting-reference.md).
+📚 **Documentation**: See [excel-automation/SKILL.md](./daymade-docs/excel-automation/SKILL.md) and [formatting-reference.md](./daymade-docs/excel-automation/references/formatting-reference.md).
 
 **Requirements**: Python 3.8+, `uv`, `openpyxl` (auto via `uv run --with openpyxl`), macOS for AppleScript window control.
 
 ---
 
 ### 41. **capture-screen** - Programmatic macOS Screenshot Capture
+
+> **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:capture-screen`)
 
 Capture application windows by CGWindowID with a reliable three-step workflow: discover window IDs via Swift, control app state via AppleScript, and capture outputs with `screencapture`.
 
@@ -1836,8 +1865,8 @@ Capture application windows by CGWindowID with a reliable three-step workflow: d
 
 **Example usage:**
 ```bash
-# Install the skill
-claude plugin install capture-screen@daymade-skills
+# Install the Apple platform suite
+claude plugin install daymade-macos@daymade-skills
 
 # Then ask Claude to capture windows programmatically
 "Find the Excel window ID and capture it silently"
@@ -1849,7 +1878,7 @@ claude plugin install capture-screen@daymade-skills
 
 *Coming soon*
 
-📚 **Documentation**: See [capture-screen/SKILL.md](./capture-screen/SKILL.md).
+📚 **Documentation**: See [capture-screen/SKILL.md](./daymade-macos/capture-screen/SKILL.md).
 
 **Requirements**: macOS (Swift + AppleScript + `screencapture`).
 
@@ -2523,6 +2552,8 @@ claude plugin install llm-wiki-setup@daymade-skills
 
 ### 63. **benchmark-due-diligence** - Adversarial Teardown of an Envied Benchmark
 
+> **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:benchmark-due-diligence`)
+
 Run adversarial due-diligence on a benchmark the user envies — a founder, KOL, company, or product whose claimed success looks inflated — separating marketing bubble from real signal, then mapping the validated playbook onto the user's own resources. The adversarial, decision-oriented cousin of `deep-research`: it assumes the picture is inflated until proven otherwise and ends in "what this means for ME", not a neutral report.
 
 **When to use:**
@@ -2540,8 +2571,8 @@ Run adversarial due-diligence on a benchmark the user envies — a founder, KOL,
 
 **Example usage:**
 ```bash
-# Install the skill
-claude plugin install benchmark-due-diligence@daymade-skills
+# Install the financial research suite
+claude plugin install daymade-financial@daymade-skills
 
 # Then ask Claude naturally
 "帮我尽调一下这个创始人，他到底有没有水分"
@@ -2815,9 +2846,7 @@ Scan and remove sensitive data from GitHub repository history, with backup, visi
 
 ### 73. **codex-image-gallery** - Local Browser for Codex Generated Images
 
-```bash
-claude plugin install codex-image-gallery@daymade-skills
-```
+> **Install**: `claude plugin install daymade-codex@daymade-skills` (suite-only — invoked as `daymade-codex:codex-image-gallery`)
 
 Start a self-contained local web gallery for Codex-generated image outputs. The skill bundles its Node server and HTML UI, scans `~/.codex/generated_images` by default, and can point at another folder with `GALLERY_ROOT`.
 
@@ -2930,9 +2959,7 @@ Aggregate A-share (Chinese stock market) news, policy, and sentiment from public
 
 ### 79. **local-codex** - Local OpenAI Codex CLI Agent
 
-```bash
-claude plugin install local-codex@daymade-skills
-```
+> **Install**: `claude plugin install daymade-codex@daymade-skills` (suite-only — invoked as `daymade-codex:local-codex`)
 
 Delegate coding tasks to the local OpenAI Codex CLI agent using your ChatGPT Pro OAuth flat-rate subscription. Wraps `codex exec` / `codex review` for code generation, refactoring, and review without per-token API charges.
 
@@ -3176,7 +3203,7 @@ requires network access, while offline audits use cached remote-tracking refs.
 
 ### 89. **design-style-picker** - Batch-Compare Visual Design Directions
 
-> **Install**: `claude plugin install design-style-picker@daymade-skills`
+> **Install**: `claude plugin install daymade-codex@daymade-skills` (suite-only — invoked as `daymade-codex:design-style-picker`)
 
 Turn vague taste into concrete visual choices. Instead of guessing one final design,
 batch-generate a structured set of visual directions so the user picks the style they
@@ -3191,13 +3218,13 @@ actually want — the goal is exposing the taste boundary quickly, not reading m
 
 **Example usage:**
 ```text
-/design-style-picker
+/daymade-codex:design-style-picker
 I can't describe the style I want — show me a batch of options
 this draft is too colorful and too generic, generate more directions
 evolve our current design system without throwing away existing assets
 ```
 
-📚 **Documentation**: See [selection-playbook.md](./design-style-picker/selection-playbook.md).
+📚 **Documentation**: See [selection-playbook.md](./daymade-codex/design-style-picker/references/selection-playbook.md).
 
 ---
 
@@ -3288,7 +3315,7 @@ debug this hook that's poisoning my session
 
 ### 93. **macos-watchdog** - Design & Discipline macOS launchd Watchdogs
 
-> **Install**: `claude plugin install macos-watchdog@daymade-skills`
+> **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:macos-watchdog`)
 
 Design, deploy, and discipline macOS launchd watchdogs — LaunchAgents /
 LaunchDaemons that detect a recurring problem and auto-remediate it, without
@@ -3494,7 +3521,7 @@ Use **skills-search** to find, install, and manage Claude Code skills from the C
 Use **promptfoo-evaluation** to set up prompt tests, compare model outputs, and run automated evaluations with custom assertions. Use **llm-eval-harness** to benchmark an endpoint across speed (thinking-aware tok/s), concurrency/stability, Anthropic protocol compliance, and quality regression against your own use cases — verifying a vendor's tokens-per-second claim or vetting a newly released model before adopting it. The two compose: promptfoo for fast per-case rubric gating, llm-eval-harness for blind-judge precision and raw speed/concurrency probing.
 
 ### For iOS App Development
-Use **iOS-APP-developer** to configure XcodeGen projects, resolve SPM dependency issues, and troubleshoot code signing or device deployment.
+Use **developing-ios-apps** to configure XcodeGen projects, resolve SPM dependency issues, and troubleshoot code signing or device deployment.
 
 ### For macOS System Maintenance & Disk Space Recovery
 Use **macos-cleaner** to diagnose and reclaim disk space on macOS with a safety-first approach. It routes known suspects such as Apple Content Caching to targeted read-only checks before any broad scan, distinguishes logical from physical usage, explains impact and recovery, and requires explicit confirmation before state changes. It also covers Docker/OrbStack, Homebrew/npm/pip, application remnants, large files, and optional Mole exploration.
@@ -3578,9 +3605,9 @@ Each skill includes:
 - **claude-md-progressive-disclosurer**: See `daymade-claude-code/claude-md-progressive-disclosurer/SKILL.md` for CLAUDE.md optimization workflow
 - **skills-search**: See `daymade-skill/skills-search/SKILL.md` for CCPM CLI commands and registry operations
 - **promptfoo-evaluation**: See `promptfoo-evaluation/references/promptfoo_api.md` for evaluation patterns
-- **iOS-APP-developer**: See `iOS-APP-developer/references/xcodegen-full.md` for XcodeGen options and project.yml details
+- **developing-ios-apps**: See `daymade-macos/developing-ios-apps/references/xcodegen-full.md` for XcodeGen options and project.yml details
 - **twitter-reader**: See `twitter-reader/SKILL.md` for API key setup and URL format support
-- **macos-cleaner**: See `macos-cleaner/references/apple_content_caching.md` for Apple Content Caching, `macos-cleaner/references/cleanup_targets.md` for cleanup target semantics, `macos-cleaner/references/mole_integration.md` for Mole, and `macos-cleaner/references/safety_rules.md` for safety guidelines
+- **macos-cleaner**: See `daymade-macos/macos-cleaner/references/apple_content_caching.md` for Apple Content Caching, `daymade-macos/macos-cleaner/references/cleanup_targets.md` for cleanup target semantics, `daymade-macos/macos-cleaner/references/mole_integration.md` for Mole, and `daymade-macos/macos-cleaner/references/safety_rules.md` for safety guidelines
 - **skill-reviewer**: See `daymade-skill/skill-reviewer/references/evaluation_checklist.md` for complete evaluation criteria and `daymade-skill/skill-reviewer/references/pr_template.md` for PR templates
 - **github-contributor**: See `github-contributor/references/pr_checklist.md` for PR quality checklist, `github-contributor/references/project_evaluation.md` for project evaluation criteria, and `github-contributor/references/communication_templates.md` for issue/PR templates
 - **i18n-expert**: See `i18n-expert/SKILL.md` for complete i18n setup workflow, key architecture guidance, and audit procedures
@@ -3589,8 +3616,8 @@ Each skill includes:
 - **competitors-analysis**: See `competitors-analysis/SKILL.md` for the discover/ingest/profile/landscape workflow and `competitors-analysis/references/profile_template.md` for the competitor profile template
 - **windows-remote-desktop-connection-doctor**: See `windows-remote-desktop-connection-doctor/references/windows_app_log_analysis.md` for log parsing patterns and `windows-remote-desktop-connection-doctor/references/avd_transport_protocols.md` for transport protocol details
 - **product-analysis**: See `product-analysis/SKILL.md` for workflow and `product-analysis/references/synthesis_methodology.md` for cross-agent weighting and recommendation logic
-- **excel-automation**: See `excel-automation/SKILL.md` for create/parse/control workflows and `excel-automation/references/formatting-reference.md` for formatting standards
-- **capture-screen**: See `capture-screen/SKILL.md` for CGWindowID-based screenshot workflows on macOS
+- **excel-automation**: See `daymade-docs/excel-automation/SKILL.md` for create/parse/control workflows and `daymade-docs/excel-automation/references/formatting-reference.md` for formatting standards
+- **capture-screen**: See `daymade-macos/capture-screen/SKILL.md` for CGWindowID-based screenshot workflows on macOS
 - **continue-claude-work**: See `daymade-claude-code/continue-claude-work/SKILL.md` for local artifact recovery, drift checks, and resume workflow
 - **continue-codex-work**: See `daymade-claude-code/continue-codex-work/SKILL.md` for Codex rollout discovery, end-reason diagnosis, and continuation workflow
 - **scrapling-skill**: See `scrapling-skill/SKILL.md` for the CLI workflow and `scrapling-skill/references/troubleshooting.md` for verified Scrapling failure modes
@@ -3625,7 +3652,7 @@ Each skill includes:
 - **repomix** (for repomix-safe-mixer): `npm install -g repomix`
 - **CCPM CLI** (for skills-search): `npm install -g @daymade/ccpm`
 - **Promptfoo** (for promptfoo-evaluation): `npx promptfoo@latest`
-- **macOS + Xcode, XcodeGen** (for iOS-APP-developer)
+- **macOS + Xcode, XcodeGen** (for developing-ios-apps)
 - **Codex CLI** (optional, for product-analysis multi-model mode)
 - **uv + openpyxl** (for excel-automation): `uv run --with openpyxl ...`
 - **Bigdata.com API key** (for `daymade-financial:bigdata-skill`): `bd_v2_` key from [https://www.bigdata.com/](https://www.bigdata.com/)
