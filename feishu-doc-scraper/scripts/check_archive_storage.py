@@ -31,7 +31,7 @@ STRUCTURED_MIME_BY_SUFFIX = {
     ".csv": {"text/csv", "text/plain", "application/octet-stream"},
     ".html": {"text/html", "text/plain"},
     ".json": {"application/json", "text/plain"},
-    ".md": {"text/plain", "text/html"},
+    ".md": {"text/markdown", "text/plain", "text/html"},
     ".txt": {"text/plain"},
     ".xml": {"application/xml", "text/xml", "text/plain"},
     ".yaml": {"application/yaml", "application/x-yaml", "text/plain"},
@@ -45,11 +45,14 @@ FEISHU_LOCATOR_URL_RE = re.compile(
 FEISHU_LOCATOR_TOKEN_RE = re.compile(r"^[A-Za-z0-9]{20,}$")
 WECHAT_MESSAGE_ID_RE = re.compile(r"^[0-9]{10,}$")
 OSS_URI_RE = re.compile(r"^oss://[^/\s]+/.+$")
-RAW_BINARY_SUFFIXES = {
-    ".7z", ".avi", ".doc", ".docx", ".gif", ".jpeg", ".jpg", ".m4a",
-    ".mkv", ".mov", ".mp3", ".mp4", ".pdf", ".png", ".ppt", ".pptx",
-    ".rar", ".svg", ".wav", ".webm", ".webp", ".xls", ".xlsx", ".zip",
+VERSIONED_STEM_RE = re.compile(r"(?:^|[-_.])v[0-9]+(?:\.[0-9]+)*$", re.IGNORECASE)
+COMMON_ENTRY_FIELDS = {
+    "role", "storage", "bytes", "sha256", "mime", "duplicate_of",
+    "source_token", "replicas",
 }
+GIT_ENTRY_FIELDS = COMMON_ENTRY_FIELDS | {"path"}
+EXTERNAL_ENTRY_FIELDS = COMMON_ENTRY_FIELDS | {"locator", "cache_path"}
+REPLICA_FIELDS = {"storage", "locator"}
 
 
 def stable_locator_error(locator: object, storage: str) -> str | None:
@@ -91,6 +94,59 @@ def stable_locator_error(locator: object, storage: str) -> str | None:
     return f"unsupported source locator system: {system!r}"
 
 
+def locator_identity(locator: object, storage: str) -> str:
+    if not isinstance(locator, dict):
+        return "invalid"
+    if storage == "oss":
+        return str(locator.get("uri") or "invalid")
+    if locator.get("system") == "wechat":
+        return f"{locator.get('chat')}:{locator.get('message_id')}"
+    return f"{locator.get('source_url')}:{locator.get('token')}"
+
+
+def structured_path_error(path: str) -> str | None:
+    suffixes = Path(path).suffixes
+    if len(suffixes) <= 1:
+        return None
+    final_suffix = suffixes[-1]
+    stem = Path(path).name[: -len(final_suffix)]
+    if VERSIONED_STEM_RE.search(stem):
+        return None
+    return (
+        "structured Git paths may have one extension only; "
+        "the sole exception is an explicit version suffix such as -v2.0.md"
+    )
+
+
+def validate_replicas(entry: dict, label: str) -> tuple[list[str], list[tuple[str, str]]]:
+    replicas = entry.get("replicas")
+    if replicas is None:
+        return [], []
+    if not isinstance(replicas, list):
+        return [f"{label}: replicas must be an array"], []
+    errors: list[str] = []
+    identities: list[tuple[str, str]] = []
+    for replica_index, replica in enumerate(replicas):
+        replica_label = f"{label}.replicas[{replica_index}]"
+        if not isinstance(replica, dict):
+            errors.append(f"{replica_label}: replica must be an object")
+            continue
+        unexpected = set(replica) - REPLICA_FIELDS
+        if unexpected:
+            errors.append(
+                f"{replica_label}: unsupported fields: {sorted(unexpected)}"
+            )
+        storage = replica.get("storage")
+        if storage not in {"source", "oss"}:
+            errors.append(f"{replica_label}: storage must be source or oss")
+            continue
+        locator_error = stable_locator_error(replica.get("locator"), storage)
+        if locator_error:
+            errors.append(f"{replica_label}: locator invalid: {locator_error}")
+        identities.append((storage, locator_identity(replica.get("locator"), storage)))
+    return errors, identities
+
+
 def validate_manifest(payload: object) -> list[str]:
     if not isinstance(payload, dict):
         return ["manifest root must be an object"]
@@ -108,20 +164,21 @@ def validate_manifest(payload: object) -> list[str]:
         if storage not in VALID_STORAGE:
             errors.append(f"{label}: storage must be one of {sorted(VALID_STORAGE)}")
             continue
+        allowed_fields = GIT_ENTRY_FIELDS if storage == "git" else EXTERNAL_ENTRY_FIELDS
+        unexpected_fields = set(entry) - allowed_fields
+        if unexpected_fields:
+            errors.append(f"{label}: unsupported fields: {sorted(unexpected_fields)}")
+        replica_errors, replica_identities = validate_replicas(entry, label)
+        errors.extend(replica_errors)
         if storage == "git":
             path = entry.get("path")
             if not isinstance(path, str) or not path:
                 errors.append(f"{label}: git artifact requires path")
                 continue
             suffix = Path(path).suffix.lower()
-            hidden_raw_suffixes = {
-                item.lower() for item in Path(path).suffixes[:-1]
-            } & RAW_BINARY_SUFFIXES
-            if hidden_raw_suffixes:
-                errors.append(
-                    f"{label}: raw binary suffix cannot be hidden before {suffix}: "
-                    f"{sorted(hidden_raw_suffixes)}"
-                )
+            path_error = structured_path_error(path)
+            if path_error:
+                errors.append(f"{label}: {path_error}: {path}")
             if entry.get("role") not in STRUCTURED_GIT_ROLES:
                 errors.append(
                     f"{label}: role {entry.get('role')!r} is not a structured Git role"
@@ -143,11 +200,17 @@ def validate_manifest(payload: object) -> list[str]:
             cache_path = entry.get("cache_path")
             if cache_path is not None and (not isinstance(cache_path, str) or not cache_path):
                 errors.append(f"{label}: cache_path must be a non-empty string when present")
-            locator = entry.get("locator") if isinstance(entry.get("locator"), dict) else {}
-            identity = (storage, str(locator.get("uri") or locator.get("token") or locator.get("message_id") or locator.get("source_url") or index))
+            identity = (storage, locator_identity(entry.get("locator"), storage))
         if identity in seen:
             errors.append(f"{label}: duplicate durable artifact identity: {identity[0]}:{identity[1]}")
         seen.add(identity)
+        for replica_identity in replica_identities:
+            if replica_identity in seen:
+                errors.append(
+                    f"{label}: duplicate durable artifact identity: "
+                    f"{replica_identity[0]}:{replica_identity[1]}"
+                )
+            seen.add(replica_identity)
     return errors
 
 

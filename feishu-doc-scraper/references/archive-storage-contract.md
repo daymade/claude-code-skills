@@ -10,7 +10,9 @@ For each artifact record:
 2. `locator` says how to retrieve that durable object.
 3. `cache_path` is optional and never changes the source of record. A cache may disappear on another machine without making the archive incomplete.
 
-Git is the default only for searchable structured material: Markdown, CSV, JSON, YAML, text, XML, and source HTML. The artifact role and MIME must also match that structured format; renaming `clip.mp4` to `clip.mp4.md` does not make it Git material, and the validator rejects a known raw suffix hidden before a structured suffix. MP4, Office files, PDFs, and raster/vector images are raw binaries and must not use `storage: git` or Git LFS under this contract.
+Git is the default only for searchable structured material: Markdown, CSV, JSON, YAML, text, XML, and source HTML. The artifact role, path, and MIME must also agree with that structured format. A structured path normally has exactly one extension; the only multi-extension exception is an explicit version suffix such as `report-v2.0.md`. This closed rule rejects `clip.mp4.md`, `photo.heic.md`, and unknown future raw formats without maintaining a binary-extension blacklist. MP4, Office files, PDFs, and raster/vector images are raw binaries and must not use `storage: git` or Git LFS under this contract.
+
+`mime` records the capture-time detector result for the local artifact bytes. Markdown may therefore be `text/markdown`, `text/plain`, or `text/html` when faithful Markdown contains enough embedded HTML for the detector to classify it as HTML; the artifact role and path still remain structured Markdown.
 
 ## Source-of-record examples
 
@@ -68,7 +70,24 @@ Independent object-storage copy:
 - Use `oss` when independent retention is a real requirement or the original platform locator is not a reliable future retrieval path. Uploading changes external state, so it must be authorized and independently read back.
 - Use `git` for the structured layer that makes the archive searchable, diffable, and maintainable. Git is not a generic blob store here, and Git LFS does not change that boundary.
 
-If an artifact is both on Feishu and OSS, choose the intended authority as `storage` and record the other under `replicas`. Do not create two competing source-of-truth fields.
+If an artifact is both on Feishu and OSS, choose the intended authority as `storage` and record the other under `replicas`. Each replica is exactly `{storage, locator}`; its locator is validated by the same provider allowlist as the primary. Do not add `path`, `cache_path`, or a second authority field inside a replica.
+
+```json
+{
+  "storage": "source",
+  "locator": {
+    "system": "feishu",
+    "source_url": "https://example.feishu.cn/wiki/<node-token>",
+    "token": "<file-token>"
+  },
+  "replicas": [
+    {
+      "storage": "oss",
+      "locator": {"system": "oss", "uri": "oss://<bucket>/<key>"}
+    }
+  ]
+}
+```
 
 ## Validation
 
@@ -82,8 +101,10 @@ The validator fails when:
 
 - a raw binary is declared `storage: git`;
 - a Git artifact's role, suffix, and declared MIME do not describe the same structured format;
+- a structured Git path hides an unapproved intermediate extension;
 - an external artifact has no stable locator;
 - a locator does not satisfy its source-system contract (Feishu URL + token, WeChat chat + message ID, or OSS URI);
+- a primary entry or replica carries fields outside its storage-specific allowlist;
 - a Git artifact has no `path`;
 - an external artifact uses `path` instead of `cache_path`, which would make a working copy look authoritative;
 - `storage` is absent or unknown.

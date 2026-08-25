@@ -103,7 +103,36 @@ class ArchiveStorageContractTests(unittest.TestCase):
                 ]
             }
         )
-        self.assertTrue(any("cannot be hidden" in error for error in errors))
+        self.assertTrue(any("one extension only" in error for error in errors))
+
+    def test_unknown_double_extensions_are_rejected_but_versions_are_allowed(self) -> None:
+        for path in ("archive/photo.heic.md", "archive/payload.bin.md"):
+            with self.subTest(path=path):
+                errors = MODULE.validate_manifest(
+                    {
+                        "files": [
+                            {
+                                "storage": "git",
+                                "role": "document_snapshot",
+                                "path": path,
+                                "mime": "text/plain",
+                            }
+                        ]
+                    }
+                )
+                self.assertTrue(any("one extension only" in error for error in errors))
+
+        versioned = {
+            "files": [
+                {
+                    "storage": "git",
+                    "role": "document_snapshot",
+                    "path": "archive/report-v2.0.md",
+                    "mime": "text/markdown",
+                }
+            ]
+        }
+        self.assertEqual(MODULE.validate_manifest(versioned), [])
 
     def test_unknown_system_and_local_path_are_not_stable_locators(self) -> None:
         unknown = MODULE.validate_manifest(
@@ -169,6 +198,88 @@ class ArchiveStorageContractTests(unittest.TestCase):
                         ),
                     },
                 }
+            ]
+        }
+        self.assertEqual(MODULE.validate_manifest(payload), [])
+
+    def test_git_row_rejects_locator_and_replica_locators_are_validated(self) -> None:
+        git_with_locator = {
+            "files": [
+                {
+                    "storage": "git",
+                    "role": "document_snapshot",
+                    "path": "archive/source.md",
+                    "mime": "text/markdown",
+                    "locator": {
+                        "system": "feishu",
+                        "token": "FileTokenAbCdEfGhIjKlMnOpQr",
+                        "source_url": (
+                            "https://example.feishu.cn/wiki/"
+                            "AbCdEfGhIjKlMnOpQrStUvWxYz1"
+                        ),
+                    },
+                }
+            ]
+        }
+        self.assertTrue(
+            any("unsupported fields" in error for error in MODULE.validate_manifest(git_with_locator))
+        )
+
+        invalid_replica = {
+            "files": [
+                {
+                    "storage": "source",
+                    "locator": {
+                        "system": "feishu",
+                        "token": "FileTokenAbCdEfGhIjKlMnOpQr",
+                        "source_url": (
+                            "https://example.feishu.cn/wiki/"
+                            "AbCdEfGhIjKlMnOpQrStUvWxYz1"
+                        ),
+                    },
+                    "replicas": [
+                        {
+                            "storage": "oss",
+                            "locator": {
+                                "system": "oss",
+                                "uri": "oss://archive/raw.mp4",
+                                "path": "/Users/example/local/raw.mp4",
+                            },
+                        }
+                    ],
+                }
+            ]
+        }
+        self.assertTrue(
+            any("unsupported fields" in error for error in MODULE.validate_manifest(invalid_replica))
+        )
+
+    def test_valid_oss_replica_wechat_source_and_markdown_mime_are_accepted(self) -> None:
+        payload = {
+            "files": [
+                {
+                    "storage": "git",
+                    "role": "document_snapshot",
+                    "path": "archive/source.md",
+                    "mime": "text/markdown",
+                    "replicas": [
+                        {
+                            "storage": "oss",
+                            "locator": {
+                                "system": "oss",
+                                "uri": "oss://archive/source.md",
+                            },
+                        }
+                    ],
+                },
+                {
+                    "storage": "source",
+                    "locator": {
+                        "system": "wechat",
+                        "message_id": "1786003683000244",
+                        "chat": "project-group",
+                    },
+                },
             ]
         }
         self.assertEqual(MODULE.validate_manifest(payload), [])
