@@ -1845,4 +1845,116 @@ this list and describe defects you reach by asking a different question):
 - **Honest enforcement boundary:** nothing in Claude Code mechanically enforces
   a hookless review budget. This remains an agent-executed contract. Its safety
   comes from the predeclared cap and visible capped exit, not from pretending a
-  reminder is a hard gate.
+  reminder is a hard gate. **When a hook is built to close that gap** (see
+  pitfall 37), the hook's own detection vocabulary needs the same real-prompt
+  calibration as any other pattern-matcher — building the mechanism does not
+  retire the need to verify it fires on what agents actually type.
+
+## 37. A keyword-whitelist review-loop guard, once built, still needs calibrating against the phrasing its own author actually types — not the phrasing it was designed around
+
+- **Symptom:** `review-loop-budget-guard.sh` (the PreToolUse hook pitfall 36
+  names as the fix for its own nothing-mechanically-enforces-this gap — a
+  real mechanization, not vaporware) never fired once in a session where the
+  same artifact (`probe_writer_liveness.py`)
+  received three separate independent-review Agent dispatches back to back,
+  exactly the pattern it exists to catch. The user twice told the agent to
+  stop dispatching more reviews (correct — the agent complied and self-fixed
+  the remaining findings directly) before separately asking, in a later turn,
+  *why the review loop kept happening at all and whether the mechanized guard
+  had ever actually covered this case* — a question the prose-discipline
+  compliance in the moment could not have answered, because the loop's root
+  cause was not agent judgment but the guard silently never firing.
+- **Cause:** the guard's marker check was a fixed phrase list — literal
+  substrings `"independent review"`, `"independent reviewer"`,
+  `"independent acceptance"`. But the actual dispatch prompts, written by the
+  same agent following **this very skill-creator's discipline 5** ("an
+  independent, fresh-context adversarial pass"), read "an **independent
+  adversarial** review", "an independent, **READ-ONLY adversarial code**
+  review" — discipline 5's own canonical phrasing inserts one or more
+  methodology adjectives between "independent" and the terminal noun. A
+  substring check requires the two words to be exactly adjacent, so it exits
+  before the per-lineage counter is even touched. Replaying the real session's
+  transcript (`grep`-extracting the three actual Agent `tool_input.prompt`
+  values, not reconstructing them from memory) showed the damage precisely:
+  of 5 genuine independent-review dispatches across two artifacts that
+  session, **4 were invisible to the guard**, including the exact 3rd
+  dispatch on the same key that should have crossed `BUDGET=2` — only one
+  dispatch happened to phrase it as the literal, unmodified "independent
+  review" and got counted.
+- **Rule 9's own worked example is the mirror image of this one, and the gap
+  it names is exactly the gap here.** Rule 9's finding was a *false-positive*
+  incident — a guard's 26-case hand-written table looked thorough and still
+  had a ~22% wrong-block rate against a real 11,903-command replay, "because
+  you wrote its inputs from the same mental model that produced the
+  detector." This pitfall is that sentence's *false-negative* sibling: the
+  five hand-written `--selftest` fixtures this guard shipped with (`p_a`/`p_b`
+  and friends) were also written from the same mental model that produced the
+  marker list, so they could not have caught a phrasing the author hadn't
+  thought to test — which is exactly what a later, real session then typed.
+  Rule 9's four-step method (harvest real transcripts → pre-filter with the
+  shipped detector, sliced out verbatim → feed real inputs to the real hook →
+  hand-check the disagreements) is direction-agnostic despite its own example
+  being about over-blocking; running it here would have surfaced this
+  under-triggering just as reliably. Skill-creator's own discipline 6 names
+  the general form — calibrate a check against real, known material before
+  trusting it — and separately warns that the frustration of hitting the same
+  trap repeatedly is itself the state in which a miscalibrated defense gets
+  shipped, which is a fair description of the session that first wrote this
+  guard in the small hours, right after a real recurrence of pitfall 36's
+  mixcut incident (see this guard's own file header).
+- **Fix:** replace the rigid three-phrase "independent ..." family with a
+  regex requiring `independent` followed by 0–3 words from a **closed set of
+  review-methodology adjectives** (`fresh-context`, `fresh`, `read-only`,
+  `adversarial`, `thorough`, `rigorous`, `unbiased`, `blind`, `critical`,
+  `code`, `second`, `skeptical`, `outside`) and then one of
+  `review|reviewer|acceptance|pass`. The closed set is load-bearing, not
+  incidental — an open "any word(s) between independent and review" pattern
+  (tried first) false-positived on 4 of 6 adversarial negative probes in
+  under a minute of testing ("independent contractor review", "independent
+  so a future review", "independent before you review", "independent
+  variable review board"), reproducing exactly the "misfires on healthy
+  input" failure mode this same file's rule 1 warns is worse than the
+  original miss. The literal Chinese/English phrase list for the *other*
+  marker families (`独立审阅`, `reader-review`, `fresh reviewer`, …) was left
+  untouched — there was no evidence they were broken, and widening scope past
+  the diagnosed bug would itself violate the calibrate-before-arm discipline.
+- **The fix's own first calibration pass was itself under-calibrated —
+  caught only by pointing the same discipline at the fix.** The independent
+  reviewer dispatched against this exact diff was told to execute the shipped
+  regex directly (not read it and guess), and did: `second`, `skeptical`, and
+  `outside` — plain, plausible review-methodology words — all returned
+  `False` against the first-shipped adjective set. This is the pitfall's own
+  lesson recurring one level up: a closed set calibrated against the author's
+  own guess at "what a real reviewer says" is still a guess, just a narrower
+  one, and the fix for that is the same as the fix for the original bug —
+  run the detector against inputs an adversarial party actually constructs,
+  not inputs the author pre-approved. The three words are now in the set
+  above; two more `--selftest` cases (8 and 9) exercise them through the real
+  call path — a positive combining two of the new words in one prompt, and a
+  negative built from the exact grammatical shape (`independent of the
+  second X`, `outside temperature`) that would make a naive keyword-only
+  check misfire if the words were added carelessly.
+- **Verification, in order of strength:** (1) 6 real/plausible positive
+  phrases and 8 adversarial negative phrases, hand-constructed, all correct;
+  (2) four `--selftest` cases checked into the guard (two from the initial
+  fix, two more — see above — from the fix's own independent review), so the
+  regression is enforced mechanically, not just asserted in this prose; (3)
+  **the strongest check — replaying the three byte-for-byte real prompts
+  extracted from the actual incident's session transcript** through the
+  fixed hook: dispatch 1 and 2 silent, dispatch 3 correctly produces the full
+  `additionalContext` budget warning with the correct extracted key,
+  independently re-derived (not just re-read) by the same reviewer parsing
+  the raw transcript itself. A synthetic reconstruction of "what I probably
+  wrote" would not have caught the exact insertion pattern, and would not
+  have caught the second-round gap either; only real, adversarially-supplied
+  input catches a blind spot the author cannot see from inside their own
+  guess.
+- **Generalizes to every keyword/phrase-based hook in this skill, not just
+  this one:** a marker list is a claim about how agents phrase things, and
+  that claim goes stale the moment the *teaching material* (a skill, a
+  discipline, a style guide) changes its own recommended wording — which is
+  exactly what happened here, since discipline 5's phrasing predates or
+  postdates the guard's marker list without either side knowing about the
+  other. When a hook's trigger condition is "does the prompt contain phrase
+  X", periodically re-derive X from what agents are actually instructed to
+  write, not from what seemed reasonable when the hook was first built.
