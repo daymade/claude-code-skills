@@ -288,8 +288,8 @@ class EndReasonTests(unittest.TestCase):
         self.assertEqual(data["end_reason"], "completed")
 
     # -- task_complete carrying an error (real shapes, ~/.codex/sessions scan:
-    # 468 records, 6 distinct codex_error_info values, 466/468 with a null
-    # last_agent_message, 2/468 with a real closing message anyway) --
+    # 468 records, 6 distinct codex_error_info values, 464/468 with a null
+    # last_agent_message, 4/468 with a real closing message anyway) --
 
     def test_task_complete_usage_limit_error_with_null_message_is_errored(self):
         rollout = _write_rollout([
@@ -332,7 +332,7 @@ class EndReasonTests(unittest.TestCase):
         self.assertNotIn("may resume this session on its own", briefing)
 
     def test_task_complete_error_with_real_closing_message_stays_completed(self):
-        # The 2/468 counter-example: error present AND a full, coherent
+        # The 4/468 counter-example: error present AND a full, coherent
         # closing message. Presence of error must not override completion.
         rollout = _write_rollout([
             {"type": "session_meta", "payload": {"id": "e6", "cwd": "/tmp"}},
@@ -376,13 +376,15 @@ class EndReasonTests(unittest.TestCase):
         self.assertNotIn("also carried an error", briefing)
 
     def test_dangling_open_call_plus_task_complete_error_still_surfaces_error(self):
-        # Found by independent review, then confirmed as the exact shape of
-        # the real session that motivated this fix: open_calls is checked
-        # BEFORE the task_complete/error branches in _detect_end_reason, so
-        # end_reason stays "interrupted" here — but the error detail must
-        # still surface somewhere, since usage_limit_exceeded /
-        # context_window_exceeded are exactly the errors likely to strand a
-        # tool call mid-flight (not a rare combination).
+        # Found by independent review. NOT the shape of the session that
+        # motivated this whole fix — that session's actual error tail,
+        # re-checked directly against its original un-grown bytes, had zero
+        # open calls; this is a distinct, synthetic scenario. open_calls is
+        # checked BEFORE the task_complete/error branches in
+        # _detect_end_reason, so end_reason stays "interrupted" here — but
+        # the error detail must still surface somewhere, since
+        # usage_limit_exceeded / context_window_exceeded are exactly the
+        # errors likely to strand a tool call mid-flight in general.
         rollout = _write_rollout([
             {"type": "session_meta", "payload": {"id": "e8", "cwd": "/tmp"}},
             _msg("user", "继续", "input_text"),

@@ -13,6 +13,14 @@ Extract a Feishu/Lark source into faithful local Markdown. **Prefer the lark-cli
 
 This skill's contract is **faithful per-source Markdown + a record of what was extracted**. It does *not* decide how the resulting files are named, indexed, deduplicated against existing notes, or organized into a knowledge base — that belongs to the host PKM / the user's own conventions. Stopping at faithful extraction keeps this skill orthogonal and reusable. When the user wants the output filed into a vault, extract first, then hand the clean Markdown to their organizing workflow.
 
+**Extraction and durable storage are separate decisions.** A downloaded MP4/XLSX/DOCX/image is a working copy, not evidence that the file belongs in Git or Git LFS. For a knowledge-base archive, default to:
+
+- Git: faithful Markdown plus structured CSV/JSON/HTML, source locators, revision/permission state, byte counts, MIME types, and hashes.
+- Platform original: Feishu remains the source of record for raw binary attachments when the stable document/file token is still retrievable. A local download is an optional cache and may be absent on a fresh clone.
+- OSS/object storage: only when the archive needs an independent durable copy or the platform source is not a reliable long-term retrieval path. Uploading is a separate authorized operation, not a fallback the extractor chooses by itself.
+
+Before filing an archive, declare this split in an artifact manifest and run the bundled storage validator. The complete schema and examples are in **[references/archive-storage-contract.md](references/archive-storage-contract.md)**.
+
 ## Choose the path
 
 ```
@@ -95,7 +103,7 @@ Run this once per fetched document — the root, then every newly-fetched child 
 lark-cli whiteboard +export --whiteboard-token <token> --output-type preview --output <path>.jpg --overwrite
 ```
 
-Then use the Read tool on the resulting `.jpg` to see the diagram's actual content. `--output-type raw` is also available (structured node JSON — useful as a cross-check/searchable index, but not a substitute for looking at the rendered image); `svg` and `source` output types also exist. The output path must have a real image extension matching what the command actually produces (it errors if you ask for `.png` when the true format is `.jpg` — match the extension to what the command reports, or omit the extension per its own `--help`). This matters because diagrams frequently carry decision-relevant content absent from the document's plain-text sections — e.g. a swimlane/process diagram can carry role-by-role steps and concrete numeric thresholds nowhere else in the doc. Treating a document as "fully extracted" without opening these blocks silently discards exactly the content most likely to carry its actual operating logic.
+Then use the Read tool on the resulting `.jpg` to see the diagram's actual content. `--output-type raw` is also available (structured node JSON — useful as a cross-check/searchable index, but not a substitute for looking at the rendered image); `svg` and `source` output types also exist. The output path must have a real image extension matching what the command actually produces (it errors if you ask for `.png` when the true format is `.jpg` — match the extension to what the command reports, or omit the extension per its own `--help`). The preview is a **working cache by default**: record the whiteboard token, observed MIME/bytes/hash, and optional cache path in the artifact manifest; do not silently promote the JPEG to Git/LFS. If the durable archive needs an independent binary copy, route it explicitly to OSS. This matters because diagrams frequently carry decision-relevant content absent from the document's plain-text sections — e.g. a swimlane/process diagram can carry role-by-role steps and concrete numeric thresholds nowhere else in the doc. Treating a document as "fully extracted" without opening these blocks silently discards exactly the content most likely to carry its actual operating logic.
 
 **5. Final residual-tag check (acceptance gate — run this on every fetched document, not just collections).** A single standalone document with no cross-doc references still needs this: an inline `whiteboard` or unresolved reference tag can appear with zero other documents involved (this is exactly what happened on a real single-doc extraction 2026-08-16 — no hub, no recursion, just 3 unread whiteboards). Every rich-media reference must have been resolved and rendered. Run this recursively over the whole working directory, not a single file — a collection has one `<sanitized-title>.html`/`.md` pair per document (step 3), and the pandoc-converted `.md` can report "clean" on its own while real tags were silently dropped (see step 3's callout), so the scan needs to reach every `.html` on disk:
 
@@ -130,6 +138,7 @@ These are the rules whose violation silently ruins the output. Each has a reason
 - **A generated docx Markdown is not done until it has been *visually* verified** against the source (render to image, read it). Feishu-exported docx uses font-size+bold for headings rather than Word heading styles, so a "no errors, word count matches" check passes while the entire heading hierarchy is silently flat. Text-level checks cannot catch this.
 - **Do not 死磕 (grind) on docx embedded-image download.** lark-cli (through 1.0.32) cannot download `<image>` tokens from a docx — exhaustively verified. Register the image tokens and note "needs document owner to right-click → save"; the text is the value, images are a tracked gap.
 - **Rich-media tag verification must run on each document's own `.html`, never its `.md`, on the pandoc fallback path — and each document needs its own filename, not a shared literal `source.html`.** `pandoc -f html -t gfm` silently strips Feishu's custom embedded tags — verified on a real document: 3 raw `whiteboard token="…"` tags in `.data.document.content` left zero trace in the converted `.md` (2026-08-16). Checking only the `.md` for residual tags on this path always reports "clean," even when content was silently discarded; reusing one hardcoded filename across a hub's multiple fetches (step 3) would additionally let a later document silently overwrite an earlier one's raw capture before it was ever checked.
+- **Never equate "downloaded" with "belongs in Git/LFS."** Raw video, Office files, PDFs, and images default to the Feishu original plus a stable locator; the local file is a cache. Git stores structured/searchable derivatives and provenance. OSS is an explicit durability route when source-only retention is insufficient. Run `python3 scripts/check_archive_storage.py <artifact-manifest.json>` before a package is committed.
 - **HTTP 200 from anonymous curl ≠ accessible.** A Feishu login wall returns 200 with a body containing `accounts.feishu.cn` / `login` / `passport` / an empty `<title>`. Check the body, never infer "public" from the status code.
 - **A file "not found" by a search agent is not authoritative.** Verify against authoritative sources before concluding (this is general Inference Discipline; relevant when locating where ingested content already lives).
 - **U+FFFD final check on every produced file:** `LC_ALL=C grep -rl $'\xef\xbf\xbd' .` must be empty. A replacement character means an encoding step corrupted the text.
@@ -139,7 +148,8 @@ These are the rules whose violation silently ruins the output. Each has a reason
 Stop only when all that apply are true:
 
 - Every fetched body reached disk via `jq`/script, not retyped by the model.
-- **Every fetched document — a lone doc as much as a collection**: every hit from the residual rich-media-tag check (Path A step 5, run recursively over the whole working directory) maps to a verified on-disk artifact — every `mention-doc`/`cite doc-id=`/`sheet`/cross-tenant reference was **followed** to a fetched leaf file, and every `whiteboard` reference was **exported and read** (not followed — a whiteboard is inline visual content, never a link to recurse into). This is not a collections-only check: a standalone document can contain an unresolved `whiteboard` with zero other documents involved. Each document's own `.html` legitimately keeps showing its tags forever (it's an immutable raw capture, never rewritten — as long as each document got its own filename per step 3) — don't chase the grep itself to a literal zero.
+- **Every fetched document — a lone doc as much as a collection**: every hit from the residual rich-media-tag check (Path A step 5, run recursively over the whole working directory) maps to a handled artifact — every `mention-doc`/`cite doc-id=`/`sheet`/cross-tenant reference was **followed** to a fetched leaf file, and every `whiteboard` reference was **exported and read** (not followed — a whiteboard is inline visual content, never a link to recurse into). Raw binaries then map to a stable platform/OSS locator plus optional verified local cache; structured/searchable derivatives map to versioned files. This is not a collections-only check: a standalone document can contain an unresolved `whiteboard` with zero other documents involved. Each document's own `.html` legitimately keeps showing its tags forever (it's an immutable raw capture, never rewritten — as long as each document got its own filename per step 3) — don't chase the grep itself to a literal zero.
+- The artifact manifest passes `python3 scripts/check_archive_storage.py <manifest>`: no raw binary is declared as Git storage, every external artifact has a stable locator, and every local cache is clearly marked as non-authoritative.
 - `LC_ALL=C grep -rl $'\xef\xbf\xbd' .` is empty.
 - docx path: rendered to an image and visually compared to the source; heading hierarchy and highlights match (see docx reference's checklist).
 - Browser fallback only: TOC coverage + scale check (see browser-failure-rules.md).
@@ -164,12 +174,14 @@ Verified dead-ends — retrying them only wastes the session. Full table with fa
 - `scripts/download_feishu_images.py` — Path D: SSR image extraction when browser automation is unavailable.
 - `scripts/build_feishu_markdown.py` — Path D: render a capture manifest into Markdown.
 - `scripts/check_heading_coverage.py` — coverage verification (both paths).
+- `scripts/check_archive_storage.py` — fail-closed validator for the source/Git/OSS storage split; blocks raw binaries declared as Git artifacts.
 - `references/lark-cli-api-extraction.md` — Path A full reference (commands, recursion, sheets, cross-tenant).
 - `references/feishu-minutes-transcript.md` — Path C native transcript API + scope auth.
 - `references/permission-and-failure-boundaries.md` — error codes + the full Do-NOT-attempt table.
 - `references/docx-export-to-markdown.md` — Path B faithful conversion procedure.
 - `references/browser-dom-fallback.md` + `references/browser-failure-rules.md` — Path D.
 - `references/capture-manifest.md` — manifest shape for `build_feishu_markdown.py`.
+- `references/archive-storage-contract.md` — durable storage contract for structured Git artifacts, platform originals, optional caches, and OSS copies.
 
 ## Next step
 

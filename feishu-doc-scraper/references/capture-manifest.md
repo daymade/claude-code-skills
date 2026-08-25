@@ -2,6 +2,8 @@
 
 Use `scripts/build_feishu_markdown.py` when extraction is easier to stage as structured data before rendering.
 
+This capture manifest describes the Markdown body. It is not the artifact-storage manifest for attachments. When a capture includes video, Office, PDF, image, or whiteboard resources, keep their durable-storage decisions in the separate `files[]` schema from [archive-storage-contract.md](archive-storage-contract.md) and validate that manifest before filing the archive.
+
 ## Minimal Shape
 
 ```json
