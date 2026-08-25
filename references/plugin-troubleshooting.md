@@ -90,14 +90,14 @@ cat .claude-plugin/marketplace.json | jq '.plugins[] | select(.name == "skill-na
 ```json
 // ❌ Wrong: name vs source mismatch
 {
-  "name": "macos_cleaner",  // Underscore
-  "source": "./macos-cleaner"  // Dash
+  "name": "github_ops",  // Underscore
+  "source": "./github-ops"  // Dash
 }
 
 // ✅ Correct: consistent naming
 {
-  "name": "macos-cleaner",
-  "source": "./macos-cleaner"
+  "name": "github-ops",
+  "source": "./github-ops"
 }
 ```
 
@@ -340,6 +340,8 @@ claude plugin install my_plugin@marketplace  # ✅ Works, but confusing
 
 ## Real-World Example: macos-cleaner Installation Issue
 
+> Historical note: this incident happened while `macos-cleaner` was a standalone plugin. It now ships in the `daymade-macos` suite; the current install command is `claude plugin install daymade-macos@daymade-skills`, and the skill is invoked as `daymade-macos:macos-cleaner`.
+
 **Scenario**: After creating macos-cleaner skill and updating all documentation, `claude plugin install macos-cleaner@daymade-skills` failed with "Plugin not found".
 
 **Investigation**:
@@ -361,15 +363,15 @@ ls -la ~/.claude/plugins/cache/daymade-skills/
 
 **Solution**:
 ```bash
-# 1. Commit and push
-git add -A
+# 1. Commit and push (stage only the files changed for the release)
+git add .claude-plugin/marketplace.json <skill-directory>/
 git commit -m "Release v1.21.0: Add macos-cleaner"
 git push
 
 # 2. Update marketplace
 claude plugin marketplace update daymade-skills
 
-# 3. Install
+# 3. Install (historical standalone command)
 claude plugin install macos-cleaner@daymade-skills
 # ✔ Successfully installed plugin: macos-cleaner@daymade-skills
 ```

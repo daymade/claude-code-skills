@@ -61,7 +61,7 @@ const dims = [
       'YOUR DIMENSION: Code & script quality + safety across all Python + Bash scripts in the repo.',
       'Grep high-risk patterns across all scripts (find . -name "*.py" -o -name "*.sh", exclude *-workspace/), then deep-read 3-5 of the most safety-critical scripts.',
       'Check for: (1) Dangerous deletes — rm -rf without confirmation, shutil.rmtree, os.remove/unlink without a guard — ESPECIALLY any file-deleting skill (e.g. macos-cleaner) and any cleanup / safe_delete script. (2) NO-FALLBACK violations (a repo CLAUDE.md rule): secret fallback like process.env.X || a-literal, apiKey/token default literals, || DEFAULT masking missing config. (3) Hardcoded real user paths /Users/<name>/ or /home/<name>/ (not placeholders). (4) Bare except: that swallows KeyboardInterrupt/SystemExit, and overly broad exception handling. (5) Dangerous eval/exec/os.system with interpolated input (injection). (6) Missing shebang / not executable on directly-run scripts.',
-      'Deep-read sample: any deletion-capable skill (e.g. macos-cleaner/scripts/safe_delete.py + cleanup_report.py), repomix-safe-mixer/*, financial-data-collector/*, anything touching credentials or deletion.',
+      'Deep-read sample: any deletion-capable skill (e.g. daymade-macos/macos-cleaner/scripts/safe_delete.py + cleanup_report.py), repomix-safe-mixer/*, daymade-financial/financial-data-collector/*, anything touching credentials or deletion.',
       'stats: how many scripts grepped, hits per pattern.',
     ].join('\n'),
   },

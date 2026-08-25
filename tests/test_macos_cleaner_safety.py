@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_script(name):
-    script_path = REPO_ROOT / 'macos-cleaner' / 'scripts' / f'{name}.py'
+    script_path = REPO_ROOT / 'daymade-macos' / 'macos-cleaner' / 'scripts' / f'{name}.py'
     spec = importlib.util.spec_from_file_location(name, str(script_path))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
