@@ -10,7 +10,7 @@ For each artifact record:
 2. `locator` says how to retrieve that durable object.
 3. `cache_path` is optional and never changes the source of record. A cache may disappear on another machine without making the archive incomplete.
 
-Git is the default only for searchable structured material: Markdown, CSV, JSON, YAML, text, XML, and source HTML. MP4, Office files, PDFs, and raster/vector images are raw binaries and must not use `storage: git` or Git LFS under this contract.
+Git is the default only for searchable structured material: Markdown, CSV, JSON, YAML, text, XML, and source HTML. The artifact role and MIME must also match that structured format; renaming `clip.mp4` to `clip.mp4.md` does not make it Git material. MP4, Office files, PDFs, and raster/vector images are raw binaries and must not use `storage: git` or Git LFS under this contract.
 
 ## Source-of-record examples
 
@@ -81,7 +81,9 @@ python3 scripts/check_archive_storage.py <artifact-manifest.json>
 The validator fails when:
 
 - a raw binary is declared `storage: git`;
+- a Git artifact's role, suffix, and declared MIME do not describe the same structured format;
 - an external artifact has no stable locator;
+- a locator does not satisfy its source-system contract (Feishu URL + token, WeChat chat + message ID, or OSS URI);
 - a Git artifact has no `path`;
 - an external artifact uses `path` instead of `cache_path`, which would make a working copy look authoritative;
 - `storage` is absent or unknown.
