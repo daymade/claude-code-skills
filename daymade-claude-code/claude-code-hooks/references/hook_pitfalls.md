@@ -1853,7 +1853,7 @@ this list and describe defects you reach by asking a different question):
 ## 37. A keyword-whitelist review-loop guard, once built, still needs calibrating against the phrasing its own author actually types — not the phrasing it was designed around
 
 - **Symptom:** `review-loop-budget-guard.sh` (the PreToolUse hook pitfall 36
-  names as the fix for its own "nothing mechanically enforces this" gap — a
+  names as the fix for its own nothing-mechanically-enforces-this gap — a
   real mechanization, not vaporware) never fired once in a session where the
   same artifact (`probe_writer_liveness.py`)
   received three separate independent-review Agent dispatches back to back,
