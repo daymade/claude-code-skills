@@ -197,8 +197,44 @@ Run the smallest independent checks that cover every changed contract:
    resources. Distinguish ignored local workspace directories from content that a Git
    install would actually ship.
 
-Use a temporary config root rather than modifying the user's active plugin registry.
-Name scratch files with the repository's required temporary-file prefix when one exists.
+Use a clean archive of the immutable commit, not a dirty working tree, so ignored local
+workspace directories cannot contaminate the cache result. Replace the four placeholders
+below, then run the block as one test. Every `claude` command in this test must carry the
+same `CLAUDE_CONFIG_DIR` prefix. If any command omits it, stop: isolation from the user's
+active plugin registry has not been established.
+
+```bash
+set -eu
+SUITE_TEST_SOURCE="<absolute-path-to-source-repo>"
+SUITE_TEST_REF="<immutable-commit-sha>"
+SUITE_TEST_MARKETPLACE="<marketplace-name>"
+SUITE_TEST_PLUGIN="<suite-plugin-name>"
+SUITE_TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/tinkle_suite-install.XXXXXX")"
+
+mkdir "$SUITE_TEST_ROOT/tinkle_repo" "$SUITE_TEST_ROOT/tinkle_config"
+git -C "$SUITE_TEST_SOURCE" archive --format=tar \
+  --output "$SUITE_TEST_ROOT/tinkle_repo.tar" "$SUITE_TEST_REF"
+tar -xf "$SUITE_TEST_ROOT/tinkle_repo.tar" -C "$SUITE_TEST_ROOT/tinkle_repo"
+
+CLAUDE_CONFIG_DIR="$SUITE_TEST_ROOT/tinkle_config" \
+  claude plugin marketplace add "$SUITE_TEST_ROOT/tinkle_repo"
+CLAUDE_CONFIG_DIR="$SUITE_TEST_ROOT/tinkle_config" \
+  claude plugin install "$SUITE_TEST_PLUGIN@$SUITE_TEST_MARKETPLACE" --scope user
+CLAUDE_CONFIG_DIR="$SUITE_TEST_ROOT/tinkle_config" \
+  claude plugin update "$SUITE_TEST_PLUGIN@$SUITE_TEST_MARKETPLACE"
+CLAUDE_CONFIG_DIR="$SUITE_TEST_ROOT/tinkle_config" claude plugin list
+
+SUITE_TEST_INSTALL_PATH="$(jq -er \
+  --arg id "$SUITE_TEST_PLUGIN@$SUITE_TEST_MARKETPLACE" \
+  '.plugins[$id][0].installPath' \
+  "$SUITE_TEST_ROOT/tinkle_config/plugins/installed_plugins.json")"
+find "$SUITE_TEST_INSTALL_PATH" -mindepth 1 -maxdepth 2 -name SKILL.md -print
+```
+
+Compare the installed member paths with the target plugin's manifest `skills` array and
+inspect suite-scoped top-level resources. Repeat the install/update/inspection portion for
+each affected suite while reusing the same isolated config root. Keep every scratch file
+under the prefixed temporary root shown above.
 
 ## 8. Freeze, review, and ship
 
