@@ -138,6 +138,8 @@ Also note `drive +download --output` only accepts a **relative path** under the 
 
 Both calls above were verified with the default identity; if they return a permission error on a user-owned spreadsheet, append `--as user` (the raw-API pattern used elsewhere in this file).
 
+The downloaded file is a working cache, not the default durable archive. Preserve the stable `fileToken`, parent spreadsheet/sheet locator, observed filename/size/MIME, and downloaded SHA-256 in the artifact manifest. For a knowledge base, keep the CSV/JSON and manifest in Git; keep the raw attachment authoritative on Feishu unless an explicitly authorized OSS replica is needed. The storage schema and validator are in `archive-storage-contract.md`.
+
 ## Step 5: the reference-graph recursion (collections/hubs)
 
 A hub is the root of a reference graph. Treat it as BFS/DFS over references until every branch reaches a leaf (a doc with no further references).
@@ -164,7 +166,7 @@ The references it recognizes (the full rich-media inventory): `<mention-doc toke
 | `meeting.tencent.com/crm/` | Tencent Meeting tooling (outside this skill — its native transcript API; never download+re-ASR) |
 | `<lark-table>` | render inline to a Markdown table (pandas `read_html` handles colspan/rowspan); it is content, not a link |
 | `<image token>` | register the token; lark-cli cannot download it (see permission-and-failure-boundaries.md) |
-| `<whiteboard token>` | NOT recursed — export a preview image (`lark-cli whiteboard +export --whiteboard-token <token> --output-type preview --output <path>.jpg --overwrite`) and Read it; see SKILL.md Path A step 4 |
+| `<whiteboard token>` | NOT recursed — export a preview image (`lark-cli whiteboard +export --whiteboard-token <token> --output-type preview --output <path>.jpg --overwrite`) and Read it; keep the JPEG as a cache by default, with the whiteboard token as the stable source locator; see SKILL.md Path A step 4 and `archive-storage-contract.md` |
 | `<view><file>` | attachment — record token + filename; treat like an image gap unless separately retrievable |
 
 **Recursion loop:** fetch root → extract refs → for each new ref, dispatch and fetch → run the extractor on each newly fetched body → repeat until no new tokens appear. A child doc can itself embed another reference (e.g. a summary doc that embeds a third Minutes link); the loop must re-scan every newly fetched file, not only the root.
