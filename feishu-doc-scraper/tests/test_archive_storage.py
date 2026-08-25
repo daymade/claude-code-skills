@@ -133,6 +133,19 @@ class ArchiveStorageContractTests(unittest.TestCase):
             ]
         }
         self.assertEqual(MODULE.validate_manifest(versioned), [])
+        composed = {
+            "files": [
+                {
+                    "storage": "git",
+                    "role": "document_snapshot",
+                    "path": "archive/raw.mp4-v2.0.md",
+                    "mime": "text/markdown",
+                }
+            ]
+        }
+        self.assertTrue(
+            any("one extension only" in error for error in MODULE.validate_manifest(composed))
+        )
 
     def test_unknown_system_and_local_path_are_not_stable_locators(self) -> None:
         unknown = MODULE.validate_manifest(
@@ -155,7 +168,7 @@ class ArchiveStorageContractTests(unittest.TestCase):
                         "locator": {
                             "system": "feishu",
                             "token": "FileTokenAbCdEfGhIjKlMnOpQr",
-                            "source_url": "/Users/example/local/raw.docx",
+                            "source_url": "local-cache/raw.docx",
                         },
                     }
                 ]
@@ -176,7 +189,7 @@ class ArchiveStorageContractTests(unittest.TestCase):
                                 "https://example.feishu.cn/wiki/"
                                 "AbCdEfGhIjKlMnOpQrStUvWxYz1"
                             ),
-                            "path": "/Users/example/local/raw.mp4",
+                            "path": "local-cache/raw.mp4",
                         },
                     }
                 ]
@@ -243,7 +256,7 @@ class ArchiveStorageContractTests(unittest.TestCase):
                             "locator": {
                                 "system": "oss",
                                 "uri": "oss://archive/raw.mp4",
-                                "path": "/Users/example/local/raw.mp4",
+                                "path": "local-cache/raw.mp4",
                             },
                         }
                     ],
@@ -283,6 +296,16 @@ class ArchiveStorageContractTests(unittest.TestCase):
             ]
         }
         self.assertEqual(MODULE.validate_manifest(payload), [])
+
+    def test_manifest_root_rejects_storage_authority_fields(self) -> None:
+        payload = {
+            "files": [],
+            "storage": "source",
+            "locator": {"system": "unknown", "token": "x"},
+            "path": "local-cache/raw.mp4",
+        }
+        errors = MODULE.validate_manifest(payload)
+        self.assertTrue(any("manifest root" in error for error in errors))
 
 
 if __name__ == "__main__":

@@ -45,7 +45,14 @@ FEISHU_LOCATOR_URL_RE = re.compile(
 FEISHU_LOCATOR_TOKEN_RE = re.compile(r"^[A-Za-z0-9]{20,}$")
 WECHAT_MESSAGE_ID_RE = re.compile(r"^[0-9]{10,}$")
 OSS_URI_RE = re.compile(r"^oss://[^/\s]+/.+$")
-VERSIONED_STEM_RE = re.compile(r"(?:^|[-_.])v[0-9]+(?:\.[0-9]+)*$", re.IGNORECASE)
+VERSIONED_STEM_RE = re.compile(
+    r"^(?P<base>.+?)[-_]v[0-9]+(?:\.[0-9]+)*$", re.IGNORECASE
+)
+ROOT_FIELDS = {
+    "captured_at", "files", "relations", "resource_summary", "schema_version",
+    "source", "sources", "storage_contract", "structured_resource",
+    "structured_resources",
+}
 COMMON_ENTRY_FIELDS = {
     "role", "storage", "bytes", "sha256", "mime", "duplicate_of",
     "source_token", "replicas",
@@ -110,7 +117,8 @@ def structured_path_error(path: str) -> str | None:
         return None
     final_suffix = suffixes[-1]
     stem = Path(path).name[: -len(final_suffix)]
-    if VERSIONED_STEM_RE.search(stem):
+    version_match = VERSIONED_STEM_RE.fullmatch(stem)
+    if version_match and "." not in version_match.group("base"):
         return None
     return (
         "structured Git paths may have one extension only; "
@@ -150,6 +158,9 @@ def validate_replicas(entry: dict, label: str) -> tuple[list[str], list[tuple[st
 def validate_manifest(payload: object) -> list[str]:
     if not isinstance(payload, dict):
         return ["manifest root must be an object"]
+    unexpected_root_fields = set(payload) - ROOT_FIELDS
+    if unexpected_root_fields:
+        return [f"manifest root contains unsupported fields: {sorted(unexpected_root_fields)}"]
     files = payload.get("files")
     if not isinstance(files, list):
         return ["manifest files must be an array"]
