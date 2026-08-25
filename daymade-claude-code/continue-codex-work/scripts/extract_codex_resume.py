@@ -182,8 +182,8 @@ def _detect_end_reason(data: dict) -> str:
         # A task_complete can carry an error and still be the tail signal —
         # measured on a real corpus, this is NOT rare (468/5554 sessions with
         # a task_complete had one). Compose the two rather than letting error
-        # presence override completion: 466/468 had no closing message (a
-        # real interruption), but 2/468 had a full, coherent closing message
+        # presence override completion: 464/468 had no closing message (a
+        # real interruption), but 4/468 had a full, coherent closing message
         # despite the error (e.g. usage_limit_exceeded mid-turn, recovered
         # before the turn ended) — that case must stay "completed".
         if data["last_sig"] == "task_complete" and data["task_error"] and not data["task_tail"]:
@@ -515,7 +515,7 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
             sections.append(hint)
     elif data["end_reason"] == "completed" and data["last_sig"] == "task_complete" and task_error:
         # The turn genuinely closed (a real last_agent_message exists) but the
-        # same task_complete also carried an error — measured 2/468 times in
+        # same task_complete also carried an error — measured 4/468 times in
         # the corpus scan. Composing rather than hiding: neither "completed"
         # nor "errored" alone tells the whole story here.
         sections.append(
@@ -530,11 +530,13 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
             # _detect_end_reason checks open_calls before ever reaching the
             # task_complete/error branches above, so without this the error
             # detail would be invisible everywhere in the briefing whenever a
-            # dangling call and a task_complete error co-occur — which is
-            # common, not a corner case: usage_limit_exceeded and
-            # context_window_exceeded are exactly the errors likely to strand
-            # a tool call mid-flight (confirmed on the real session that
-            # motivated this fix, which hit precisely this combination).
+            # dangling call and a task_complete error co-occur. Found by
+            # independent review — not observed in the session that
+            # motivated this whole fix (that session's actual error tail,
+            # re-checked directly against its original un-grown bytes, had
+            # zero open calls). The mechanism is still real in general:
+            # usage_limit_exceeded and context_window_exceeded are exactly
+            # the errors likely to strand a call mid-flight.
             sections.append(
                 f"> The last recorded `task_complete` also carried an error "
                 f"(`{_format_task_error(task_error)}`) — plausibly why the "
