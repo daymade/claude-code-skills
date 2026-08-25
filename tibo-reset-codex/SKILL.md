@@ -1,11 +1,11 @@
 ---
 name: tibo-reset-codex
 description: >-
-  查询 ChatGPT/Codex 额度重置时间、解读 Tibo（OpenAI Codex 负责人 @thsottiaux）的重置公告。
-  Use when 用户问「ChatGPT/Codex 什么时候重置」「额度什么时候恢复」「下次全员重置几点」
-  「banked reset 到了吗」「Tibo 说了什么」「usage limit when reset」，或从微信群/社媒看到
-  重置截图/转述要核实时间并换算北京时间。覆盖：权威追踪站 API 速查、Tibo 糙时间写法解读、
-  太平洋时间→北京时间的当场实测换算。别凭记忆回答重置时间——用本 skill 的通道现查。
+  查询 ChatGPT/Codex 额度重置时间，区分 Tibo 官宣、未官宣的平台静默重置、banked reset
+  与账户级周期重置。Use when 用户问「什么时候重置」「额度什么时候恢复」「下次全员重置几点」
+  「banked reset 到了吗」「Tibo 说了什么」「usage limit when reset」，或说「额度突然回到
+  100%」「好像/肯定又重置了」。必须用实时产品状态、独立用户实测与公告交叉核验；禁止因
+  Tibo Radar 没有新条目就否定已经发生的重置，并须把太平洋时间当场换算为北京时间。
 ---
 
 # Tibo Reset — ChatGPT/Codex 额度重置速查
@@ -13,52 +13,110 @@ description: >-
 ## 这是什么
 
 「Tibo reset」= OpenAI Codex/ChatGPT Work 负责人 **Thibault Sottiaux（X: @thsottiaux）**
-个人在 X 上宣布的**全员额度重置**传统。社区昵称「Lord Tibo」，有第三方追踪站
-**Tibo Radar**（域名 `codex-reset.com`）和「祈祷重置」亚文化。重置是**善意姿态，
-没有固定排期**——每次由他发推宣布。
+在 X 上宣布的广域额度重置传统。社区昵称「Lord Tibo」，有第三方追踪站 **Tibo Radar**
+（`codex-reset.com`）和「祈祷重置」亚文化。Tibo 官宣没有固定排期；但平台也会在限额
+配置切换时**不发 reset 帖而直接重置账户**。所以「没有 Tibo 帖」只证明没有官宣，不能证明
+没有重置。
 
-**三种「重置」别混淆**（回答用户前先分清问的是哪种）：
+**四种「重置」别混淆**（回答用户前先分清问的是哪种）：
 
 | 类型 | 谁触发 | 在哪看 | 性质 |
 |---|---|---|---|
-| **全员 RESET** | Tibo 推文 | 追踪站 API / X | 无排期，庆祝里程碑或补偿 bug |
+| **官宣广域 RESET** | Tibo / OpenAI | 官方 X 原帖；追踪站只作公告索引 | 无固定排期，常用于里程碑或故障补偿 |
+| **静默平台重置** | OpenAI 后端或限额配置发布 | 产品 usage 状态 + 同时段多账户第一手实测 + 排除各自正常周期；官方限额变更只作上下文 | 可以没有 reset 帖；未获官方范围声明时只能称「大范围观测到」，不能称「全员」 |
 | **BANKED reset** | Tibo 推文 | 官宣：追踪站 API（`type=credits`）；到账确认：ChatGPT 产品内余额 | 一次性「存着随你用」的额度包；官宣 ≠ 人人到账（有过分批延迟） |
 | **账户级周重置** | 系统按开通日 | ChatGPT 产品内「Next reset: …」 | 每人时间不同，与 Tibo 无关 |
 
-## 速查工作流（30 秒）
+## 入口分流
 
-1. **主通道 = Tibo Radar 的 JSON API**（2026-08-23 实测 200，51 条，无需登录）：
+- 用户问「Tibo 说了什么 / 下一次几点」→ 查**公告路径**。
+- 用户说自己的 weekly/5h 回到 100%、`Next reset` 改了，或贴出 usage 截图 → 先把它记为
+  **该账户的直接观测**，再查是个人周期还是跨账户事件。
+- 用户明确说「肯定又重置了」且聚合器无记录 → 立即走**静默重置路径**；禁止重复查询同一
+  聚合器后再次用空结果驳回用户。
+- 用户只问自己的周期性时间 → 以产品 usage 页或 Codex CLI `/status` 为权威，不拿 Tibo
+  时间线代替。
 
-   ```bash
-   curl -s -m 15 "https://codex-reset.com/api/timeline" | python3 -c "
-   import json,sys
-   for e in json.load(sys.stdin)['events'][:5]:
-       print(e['announced_at'], '|', e.get('type'), '|', str(e.get('summary'))[:100])
-       ow = e.get('official_window')
-       if ow: print('   窗口:', ow.get('label'), '=', ow.get('start_at'), '→', ow.get('end_at'), 'UTC')"
-   ```
+## 输出合同：先给结论，再交代边界
 
-   新条目在前。关键字段：`announced_at`（UTC ISO）、`summary`（推文内容，长推文可能截断，
-   完整原文看 `url` 字段）、`official_window`（见第 3 步）、`reset_verification_status`
-   （`pending` = 预告未落地；该字段只有 pending/rejected/null，**永不翻转成「已到账」**，
-   见证据纪律节）。`type` 是内部小写值：`reset` = 全员重置、`credits` = banked/额度包、
-   `boost`/`promo` = 消耗规则类，别拿大写词去匹配 API。
+用户原话（2026-08-26）：「**你必须给出结论而不是让我给结论。**」
 
-   ⚠️ **别用 HTML 页面 `codex-reset.com/tibo` 当数据源**：它是 SPA，静态 HTML 只渲染旧条目
-   （2026-08-23 实测最新一条滞后两天，且无任何过期提示）；WebFetch 还可能被域名安全拦截。
-   页面只作「给人看的视图」，数据永远走 API。
-2. **双源核对**：`curl -s -m 30 "https://codexlimitwatch.com/codex-reset-history"`——每次重置带
-   UTC 时间戳 + 推文引用，与 API 互证（2026-08-23 实测 curl 200）。**外部站一律 curl 直连为
-   主通道**：WebFetch 的域名安全校验走 claude.ai，部分网络环境下不稳定——被拦不是站点挂，
-   换 curl 即可。
-3. **`official_window` 优先用、自己换算做交叉验证**：API 对带时间的预告已算好窗口
-   （`label` 太平洋时刻 + `start_at`/`end_at` UTC）。「几点重置」直接读它；再按下方规则
-   自算一遍互证，不一致以实测换算为准并报出差异。
-4. **fallback 链**：API curl 挂 → codexlimitwatch curl 单源（标注「单源未交叉」）→ WebSearch
-   `thsottiaux reset`。都拿不到就明说「无法核实」，别凭记忆答。`feed.xml` 滞后更多
-   （实测最新只到 8-13），不作 fallback。X 原文（x.com/thsottiaux）抓不到，不必试。
-5. 用户若说「群里看到的」：截图源头通常就是 Tibo Radar 页面；如有群聊归档可搜关键词
-   「重置/reset/Tibo」交叉验证群友实测（如到账与否）。
+- 第一段第一句必须给出当前证据支持的**唯一最强结论**，禁止用「可能是 A/B/C、请你再看」
+  把分类责任交还用户。
+- 不确定性用于**收窄结论的属性**，不是取消结论：
+  - 只证实一个账户 → 「该账户已经重置；触发原因与影响范围未核实」。
+  - 多账户提前跳变且正常周期解释不了 → 「发生了未官宣的大范围静默重置」。
+  - 官方明确 all/every → 「官方确认全员重置」。
+- 证据、竞争解释和待核字段放在结论之后。拿不到某账户的 `Next reset` 或 banked 状态时，
+  仍先对已知事实下结论，再说明哪一层属性不能确认；禁止以「你检查后自行判断」收尾。
+- 后续核验动作只用于证实/证伪这个结论，不得把它写成让用户代替 agent 做判断的选择题。
+
+## 查证工作流
+
+### 1. 公告路径：Radar 是索引，不是产品状态
+
+用 Tibo Radar JSON API 找最新公开公告（2026-08-26 实测 200）：
+
+```bash
+curl -s -m 15 "https://codex-reset.com/api/timeline" | python3 -c "
+import json,sys
+for e in json.load(sys.stdin)['events'][:5]:
+    print(e['announced_at'], '|', e.get('type'), '|', str(e.get('summary'))[:100])
+    ow = e.get('official_window')
+    if ow: print('   窗口:', ow.get('label'), '=', ow.get('start_at'), '→', ow.get('end_at'), 'UTC')"
+```
+
+新条目在前。关键字段：`announced_at`（UTC ISO）、`summary`（可能截断）、`url`（原帖）、
+`official_window`、`reset_verification_status`。`type` 是内部小写值：`reset` = 广域
+重置公告、`credits` = banked/额度包、`boost`/`promo` = 消耗规则类。
+
+拿到 `url` 后优先读原帖；X 直连失败时可用 Jina Reader（2026-08-26 实测）：
+
+```bash
+curl -fsS -m 30 "https://r.jina.ai/https://x.com/thsottiaux/status/<status-id>"
+```
+
+`codexlimitwatch.com/codex-reset-history` 与 Radar 都以 Tibo 动态为核心上游，属于**同一来源
+家族**，只能互查转录/解析是否一致，不能称为独立双源。HTML `codex-reset.com/tibo` 是 SPA，
+静态内容可能滞后；只作人类视图。
+
+### 2. 静默重置路径：查账户事实，而不是继续等帖子
+
+在用户直接观测与公告索引冲突时，按顺序取证：
+
+1. **定账户事实**：记录 weekly 与 5h 是否回到 100%、`Next reset` 是否移动、banked reset
+   是否仍在，以及变化是否正好发生在此前已显示的正常重置时刻。产品 usage 页或 `/status`
+   只证明该账户，但证据级别高于聚合器的空结果。
+2. **找同时段实测**：用当前 UTC/PT 日期搜索最近帖子，例如 `Codex reset today back to 100%`、
+   `Codex reset again 5h`、`site:reddit.com/r/codex reset today`。优先截图、明确的前后百分比、
+   `Next reset` 变化和「banked 仍在」；转载同一条消息不增加独立性。用户说「群里看到的」
+   且当前环境有群聊归档能力时，再搜「重置/reset/Tibo」核对群友实测，并分清截图是产品状态
+   还是 Radar 转发。
+3. **找发布上下文**：搜索 Tibo/OpenAI 是否正在切换 5h/weekly 限额、修计量或处理事故。上下文
+   与重置同刻发生只支持因果推断；官方没说「因此重置」就明确标为推断。
+4. **按证据范围命名**：
+   - 只有一个账户 → 「该账户已重置；原因未定」，不能外推。
+   - 多个不同账户在紧邻时间内回满，但尚未排除各自正常周期 → 「观测到跨账户近同时重置；
+     是否为同一平台事件未定」。
+   - 多个独立账户的预告 `Next reset`/正常周期均解释不了这次提前跳变 → 「观测到大范围
+     静默重置」；同期限额发布只能补上下文，不能代替这项反证。
+   - 只有官方明确写 all/every paid account → 才称「全员重置」。
+
+静默事件没有官宣时间戳时，报告「最迟在最早公开证据的时间前已发生」，不要把发帖时间伪装成
+精确落地时刻。
+
+### 3. 公告时间换算
+
+`official_window` 存在时优先读其 `start_at`/`end_at`；再按下方规则自己换算一遍。
+不一致时报告差异，以操作系统时区数据库的实测换算为准。
+
+### 4. 通道失败时
+
+Radar API 挂 → 读原始 X（已知 URL 用 Jina）→ codexlimitwatch 单源（标注同源镜像）→ WebSearch
+`thsottiaux reset`。用户报告产品已变化时，公告通道全空仍要走静默重置路径；全部产品/社区
+证据也取不到，才写「只能确认该用户的观测，无法核实影响范围」，不要写「没有重置」。
+外部站优先用 `curl` 直连；WebFetch 被安全校验拦截不证明站点已挂。`feed.xml` 的历史实测
+比 API 更滞后，不作 fallback。
 
 ## Tibo 的时间写法是糙的（解读规则）
 
@@ -91,6 +149,16 @@ TZ=America/Los_Angeles date "+%F %T %Z(%z)"
 
 ## 证据纪律（踩过的坑）
 
+- **聚合器没记录 ≠ 没重置**：Radar 与 codexlimitwatch 主要回答「Tibo 公开说了什么」，不是
+  「后端账户状态发生了什么」。2026-08-25 的实测反例：两站都停在 8-24，用户却在
+  2026-08-25 14:18 UTC 起密集贴出 weekly 回到 100% 的截图/前后值，且多人明确表示原
+  `Next reset` 尚未到期或被意外后移、banked 仍在；同日 Tibo 只官宣恢复 Plus 5h 限额。
+  正确结论是「观测到未官宣的大范围静默重置」，
+  不是「没有新重置」，也不是未经官方范围证明的「全员重置」。
+- **先分清证据证明哪一层**：产品页证明一个账户；多个不同账户的同时段实测只证明「跨账户
+  近同时观测」，各自的正常周期仍是竞争解释；再证明这些账户尚未到预告重置时刻，才支持共同的
+  静默平台事件；官方 all/every wording 才证明全员范围。把这些层级写进结论，禁止一条截图
+  外推全局，也禁止一条聚合器空结果抹掉产品事实。
 - **tracker 的 confirmed 类标签对未来的预告也会打**（两站均有此形态：codexlimitwatch 给
   8-23 那条预告打了「Reset confirmed」——预告未落地也标 confirmed；Radar 历史上也有）。判「已到账」
   只看落地后的实际信号，不看标签：API 的 `reset_verification_status` 只有 pending/rejected/null
