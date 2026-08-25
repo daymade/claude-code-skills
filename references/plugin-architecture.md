@@ -72,7 +72,7 @@ Suite plugin (multiple skills under one namespace — `skills` required):
 }
 ```
 
-**Example**: The `skill-creator` plugin contains one skill (`source: "./daymade-skill/skill-creator"`), while the `daymade-docs` suite plugin bundles multiple skills like `doc-to-markdown`, `pdf-creator`, `mermaid-tools`.
+**Example**: The `github-ops` plugin contains one skill (`source: "./github-ops"`), while the `daymade-docs` suite plugin bundles multiple skills like `doc-to-markdown`, `pdf-creator`, `mermaid-tools`, and `excel-automation`.
 
 ### 3. Agents (Subagents)
 
@@ -137,7 +137,7 @@ Claude Code Context
 
 ### Step 1: User initiates installation
 ```bash
-claude plugin install macos-cleaner@daymade-skills
+claude plugin install daymade-macos@daymade-skills
 ```
 
 ### Step 2: CLI locates marketplace
@@ -151,9 +151,15 @@ claude plugin install macos-cleaner@daymade-skills
 {
   "plugins": [
     {
-      "name": "macos-cleaner",
-      "source": "./macos-cleaner",
-      "version": "1.0.0"
+      "name": "daymade-macos",
+      "source": "./daymade-macos",
+      "version": "1.0.0",
+      "skills": [
+        "./capture-screen",
+        "./developing-ios-apps",
+        "./macos-cleaner",
+        "./macos-watchdog"
+      ]
     }
   ]
 }
@@ -161,11 +167,11 @@ claude plugin install macos-cleaner@daymade-skills
 
 ### Step 4: Download to cache
 ```bash
-# Clone entire marketplace repo to:
-~/.claude/plugins/cache/daymade-skills/macos-cleaner/1.0.0/
+# Copy the suite source to:
+~/.claude/plugins/cache/daymade-skills/daymade-macos/1.0.0/
 
-# Extract skill to:
-~/.claude/plugins/cache/daymade-skills/macos-cleaner/1.0.0/macos-cleaner/
+# Suite members are available beneath that cache root:
+~/.claude/plugins/cache/daymade-skills/daymade-macos/1.0.0/macos-cleaner/
 ```
 
 ### Step 5: Record installation
@@ -173,9 +179,9 @@ claude plugin install macos-cleaner@daymade-skills
 // ~/.claude/plugins/installed_plugins.json
 {
   "plugins": {
-    "macos-cleaner@daymade-skills": [{
+    "daymade-macos@daymade-skills": [{
       "scope": "user",
-      "installPath": "~/.claude/plugins/cache/daymade-skills/macos-cleaner/1.0.0",
+      "installPath": "~/.claude/plugins/cache/daymade-skills/daymade-macos/1.0.0",
       "version": "1.0.0",
       "installedAt": "2026-01-11T08:03:46.593Z"
     }]
@@ -221,12 +227,15 @@ Loads references/scripts as needed
 │   │   └── anthropic-agent-skills/
 │   ├── cache/                       # Installed plugins
 │   │   └── daymade-skills/
-│   │       └── macos-cleaner/
+│   │       └── daymade-macos/
 │   │           └── 1.0.0/           # Version
-│   │               └── macos-cleaner/  # Skill directory
-│   │                   ├── SKILL.md
-│   │                   ├── scripts/
-│   │                   └── references/
+│   │               ├── capture-screen/
+│   │               ├── developing-ios-apps/
+│   │               ├── macos-cleaner/  # Skill directory
+│   │               │   ├── SKILL.md
+│   │               │   ├── scripts/
+│   │               │   └── references/
+│   │               └── macos-watchdog/
 │   ├── installed_plugins.json       # Installation registry
 │   └── known_marketplaces.json      # Marketplace registry
 ```
