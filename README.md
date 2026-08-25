@@ -2385,7 +2385,7 @@ claude plugin install daymade-skill@daymade-skills
 
 ---
 
-### 59. **feishu-doc-scraper** - Feishu/Lark → Faithful Markdown
+### 59. **feishu-doc-scraper** - Feishu/Lark → Faithful Markdown + Source-First Archive
 
 Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets (including cell-attachment file download), and Minutes (妙记) transcripts into faithful local Markdown. The primary path uses the `lark-cli` API — it extracts the document body programmatically (no model paraphrasing), recursively follows a collection's reference graph, and reads permission boundaries from error codes; a browser-DOM path is the fallback only when lark-cli cannot reach the content.
 
@@ -2400,6 +2400,7 @@ Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets (including cell
 - Recursive reference-graph traversal (BFS) with `feishu_extract_refs.py`, plus a residual rich-media-tag acceptance gate so no referenced doc is silently missed
 - Native Minutes transcript export (never re-runs ASR on downloaded media)
 - Permission-denied path: owner-exported `.docx` → Markdown with font-size→heading and `w:shd`→highlight restoration, then visual verification
+- Source-first artifact manifest + fail-closed validator: structured/searchable derivatives go to Git, raw binaries remain on Feishu or an explicitly chosen object store, and local downloads stay optional caches instead of Git LFS payloads
 - `LARK_CLI_NO_PROXY=1` discipline for `*.feishu.cn` (avoids credential leak/DNS hijack) and a U+FFFD encoding-corruption final check
 - Works with both Feishu (feishu.cn) and Lark (larkoffice.com)
 
