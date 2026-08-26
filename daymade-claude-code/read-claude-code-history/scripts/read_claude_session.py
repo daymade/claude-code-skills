@@ -268,7 +268,12 @@ def validate_selected_session_identity(
             f"{sorted(observed_ids)!r}; requested {expected_session_id!r}. "
             "Records cannot be attributed safely."
         )
-    if observed_ids and expected_session_id not in observed_ids:
+    if not observed_ids:
+        raise SessionEvidenceError(
+            "selected Claude Session has no record-level Session identity; "
+            f"the filename cannot prove requested Session {expected_session_id!r}"
+        )
+    if expected_session_id not in observed_ids:
         raise SessionEvidenceError(
             "selected Claude Session identity mismatch: requested "
             f"{expected_session_id!r}, observed {sorted(observed_ids)!r}"

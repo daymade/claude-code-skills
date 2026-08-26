@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -195,6 +198,108 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
             MODULE.validate_selected_session_identity(
                 {"requested-session", "foreign-session"}, "requested-session"
             )
+
+    def test_missing_session_identity_fails_closed(self):
+        with self.assertRaisesRegex(
+            MODULE.SessionEvidenceError, "no record-level Session identity"
+        ):
+            MODULE.validate_selected_session_identity(set(), "requested-session")
+
+    def test_cli_rejects_text_or_blank_file_without_record_identity(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            active_home = root / "active-home"
+            (active_home / "projects").mkdir(parents=True)
+            archive_home = root / "archive-home"
+            project_dir = (
+                archive_home
+                / "projects"
+                / str(workspace.resolve()).replace("/", "-")
+            )
+            project_dir.mkdir(parents=True)
+            session_id = "missing-record-identity"
+            session_file = project_dir / f"{session_id}.jsonl"
+            manifest = root / "history-sources.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "sources": [
+                            {
+                                "provider": "claude",
+                                "kind": "archive",
+                                "label": "identity-test",
+                                "home": str(archive_home),
+                                "required": True,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            process_env = os.environ.copy()
+            process_env["HOME"] = str(root / "home")
+            process_env["CLAUDE_CONFIG_DIR"] = str(active_home)
+
+            def run_reader() -> subprocess.CompletedProcess[str]:
+                return subprocess.run(
+                    [
+                        sys.executable,
+                        str(SCRIPT),
+                        "--project",
+                        str(workspace),
+                        "--history-sources",
+                        str(manifest),
+                        "--session",
+                        session_id,
+                        "--full",
+                    ],
+                    text=True,
+                    encoding="utf-8",
+                    capture_output=True,
+                    env=process_env,
+                    check=False,
+                )
+
+            session_file.write_text(
+                json.dumps(
+                    {
+                        "type": "user",
+                        "cwd": str(workspace),
+                        "message": {
+                            "role": "user",
+                            "content": "unattributed objective",
+                        },
+                    }
+                )
+                + "\n"
+                + json.dumps(
+                    {
+                        "type": "assistant",
+                        "cwd": str(workspace),
+                        "message": {
+                            "role": "assistant",
+                            "content": [
+                                {"type": "text", "text": "unattributed asset"}
+                            ],
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            text_result = run_reader()
+            self.assertNotEqual(text_result.returncode, 0)
+            self.assertEqual(text_result.stdout, "")
+            self.assertIn("no record-level Session identity", text_result.stderr)
+
+            session_file.write_text("\n \t\n", encoding="utf-8")
+            blank_result = run_reader()
+            self.assertNotEqual(blank_result.returncode, 0)
+            self.assertEqual(blank_result.stdout, "")
+            self.assertIn("no record-level Session identity", blank_result.stderr)
 
     def test_archive_only_session_is_discovered_from_registry(self):
         with tempfile.TemporaryDirectory() as temp_dir:

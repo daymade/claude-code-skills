@@ -85,7 +85,8 @@ workspace state. The exact reader always parses every physical Session record,
 including records before compaction; `--full` only removes output character
 clipping. It checks active and registered-archive copies, accepts only identical
 or strict append-only supersets, and fails visibly on divergent copies, multiple
-Session identities, malformed JSONL, or unreadable bytes.
+Session identities, a missing record-level Session identity, malformed JSONL, or
+unreadable bytes. A filename alone never proves Session identity.
 
 ### Full-event keyword search
 
