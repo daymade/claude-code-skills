@@ -302,6 +302,19 @@ def resolve_inherited_lineage(
     return lineage_nearest_first, warnings
 
 
+def validate_selected_rollout_identity(
+    data: dict[str, Any], expected_session_id: str
+) -> None:
+    """Fail closed before following lineage from a stale or wrong rollout path."""
+    meta = data.get("meta") or {}
+    observed_session_id = meta.get("id")
+    if observed_session_id != expected_session_id:
+        raise LineageResolutionError(
+            "selected rollout identity mismatch: requested "
+            f"{expected_session_id!r}, session_meta.id={observed_session_id!r}"
+        )
+
+
 def _compacted_summary(payload: dict) -> str:
     """Distill a compaction record into the surviving conversation thread.
 
@@ -1205,6 +1218,11 @@ def main() -> int:
     print(f"Parsing Codex session {conv.session_id} "
           f"({rollout.stat().st_size / 1_000_000:.1f} MB)...", file=sys.stderr)
     data = parse_codex_rollout(rollout)
+    try:
+        validate_selected_rollout_identity(data, conv.session_id)
+    except LineageResolutionError as exc:
+        print(f"Error: cannot recover selected Codex session: {exc}", file=sys.stderr)
+        return 1
     meta = data.get("meta") or {}
     if meta.get("history_base") is not None or meta.get("forked_from_id"):
         try:

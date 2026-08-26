@@ -140,8 +140,9 @@ unrelated hooks:
 
 - `UserPromptSubmit` marks a new prompt-scoped requirement and injects the Skill
   route when prior-work or production signals are present.
-- `PreToolUse` blocks only substantial new/large writes, patches, and delegated
-  production until the current requirement has a receipt. Read-only discovery,
+- `PreToolUse` blocks substantial new/large writes, patches, delegated
+  production, and Bash/Codex exec paths that carry a write signal or an unknown
+  executable until the current requirement has a receipt. Read-only discovery,
   small mechanical edits, and `tinkle_` scratch files remain available.
 - `Stop` catches substantial chat-only deliverables that never wrote a file.
 
@@ -155,7 +156,8 @@ through `/hooks`; the installer never forges it.
 The user can explicitly say not to search prior work for the current prompt.
 That opt-out becomes prompt-scoped state, not an environment-variable bypass.
 Malformed/missing manifest or receipt state fails closed only at substantial
-production; read-only investigation remains possible so the agent can repair it.
+production; read-only investigation and a write targeting exactly the manifest
+path remain possible so the agent can repair the gate without bypassing it.
 
 ## Search routing
 

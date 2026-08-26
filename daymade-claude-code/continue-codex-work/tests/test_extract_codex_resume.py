@@ -501,6 +501,17 @@ class InheritedLineageTests(unittest.TestCase):
     parent's current tail. These fixtures reproduce the shape that exposed the
     bug: a child whose only local request is `继续`."""
 
+    def test_selected_rollout_identity_must_match_requested_session(self):
+        with self.assertRaisesRegex(
+            mod.LineageResolutionError, "selected rollout identity mismatch"
+        ):
+            mod.validate_selected_rollout_identity(
+                {"meta": {"id": "other-session"}}, "requested-session"
+            )
+        mod.validate_selected_rollout_identity(
+            {"meta": {"id": "requested-session"}}, "requested-session"
+        )
+
     def test_continue_only_child_recovers_parent_and_excludes_later_tail(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

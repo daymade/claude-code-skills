@@ -425,13 +425,39 @@ def _command_candidates(
     raw_results = payload.get("results") if isinstance(payload, dict) else None
     if not isinstance(raw_results, list):
         return [], {"status": "failed", "error": "missing_results_array"}
+    for index, item in enumerate(raw_results):
+        if not isinstance(item, dict):
+            return [], {
+                "status": "failed",
+                "error": f"malformed_result_{index}:not_object",
+            }
+        required_shapes = {
+            "session_id": str,
+            "path": str,
+            "snippet": str,
+            "sources": list,
+        }
+        for field, expected_type in required_shapes.items():
+            value = item.get(field)
+            if not isinstance(value, expected_type) or (
+                isinstance(value, str) and not value
+            ):
+                return [], {
+                    "status": "failed",
+                    "error": f"malformed_result_{index}:{field}",
+                }
+        if not all(isinstance(value, str) for value in item["sources"]):
+            return [], {
+                "status": "failed",
+                "error": f"malformed_result_{index}:sources",
+            }
     candidates = []
     for item in raw_results[: source["max_results"]]:
-        if not isinstance(item, dict):
-            continue
         path_value = item.get("path")
-        session_id = item.get("session_id")
-        identity = f"{session_id}:{item.get('timestamp')}:{item.get('snippet')}"
+        candidate_session_id = item.get("session_id")
+        identity = (
+            f"{candidate_session_id}:{item.get('timestamp')}:{item.get('snippet')}"
+        )
         path = Path(path_value) if isinstance(path_value, str) else None
         candidates.append(
             {
@@ -443,7 +469,7 @@ def _command_candidates(
                 "line": None,
                 "snippet": str(item.get("snippet") or "")[:800],
                 "matched_terms": [],
-                "session_id": session_id,
+                "session_id": candidate_session_id,
                 "timestamp": item.get("timestamp"),
                 "record_sources": item.get("sources"),
                 "retrieval_mode": payload.get("mode"),
@@ -612,6 +638,20 @@ def _verify_candidate_source(candidate: dict[str, Any]) -> dict[str, Any]:
         raise PriorWorkError(
             f"Candidate source changed after retrieval: {path}; retrieve again"
         )
+    expected_git_head = candidate.get("git_head")
+    git_root_value = candidate.get("git_root")
+    observed_git_head = None
+    if isinstance(expected_git_head, str) and expected_git_head:
+        if not isinstance(git_root_value, str) or not git_root_value:
+            raise PriorWorkError(
+                f"Candidate {candidate.get('candidate_id')} lost its Git provenance"
+            )
+        observed_git_head = _git_head(Path(git_root_value))
+        if observed_git_head != expected_git_head:
+            raise PriorWorkError(
+                f"Candidate repository HEAD changed after retrieval: {git_root_value}; "
+                "retrieve again against the current authority"
+            )
     line_number = candidate.get("line")
     expected_line_hash = candidate.get("line_sha256")
     observed_line_hash = None
@@ -631,6 +671,7 @@ def _verify_candidate_source(candidate: dict[str, Any]) -> dict[str, Any]:
         "verified_at": utc_now(),
         "path_mtime_ns": stat.st_mtime_ns,
         "line_sha256": observed_line_hash,
+        "git_head": observed_git_head,
     }
 
 
