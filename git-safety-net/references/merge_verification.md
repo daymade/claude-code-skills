@@ -245,7 +245,10 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    includes linked-worktree HEAD refs; truly dangling objects appear only after pinning. Keep any
    ignored-file copies from step 3 beside this backup—the bundle does not contain them.
 7. **Obtain current-session deletion authority, then remove through Git without force:** run
-   `git worktree remove <absolute-worktree-path>`. Never use `rm -rf` or
+   the tracked/untracked status check again and re-hash every preserved ignored source against the
+   pre-removal manifest. Any new path or hash aborts the removal. Make
+   `git worktree remove <absolute-worktree-path>` the next operation—no intervening command may
+   reopen the race. Never use `rm -rf` or
    `git worktree remove --force` to make a dirty/uninspectable worktree disappear.
 8. **Verify the postconditions independently:** re-run `git worktree list --porcelain`, prove the
    exact path no longer exists, resolve the kept local branch if one exists, and re-run the

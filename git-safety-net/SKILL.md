@@ -325,7 +325,8 @@ use repeated `--branch` instead. The exporter never drops or deletes anything.
   files, and no bundle can preserve them; copy out anything not proven reproducible, preserve its
   relative path, and verify it against a recorded pre-removal content hash.
   Record the exact HEAD, prove it contained/superseded against a freshly fetched base, export all
-  refs, and obtain current-session deletion authority. Remove only with
+  refs, and obtain current-session deletion authority. As the final pre-remove gate, re-run the
+  empty status and source-vs-manifest hash checks; removal must be the next operation. Remove only with
   `git worktree remove <absolute-path>` **without `--force`**. Afterwards prove the path and
   registration are gone while the recorded HEAD still resolves through the kept branch/base or the
   verified bundle and every copied ignored item still matches its recorded hash. Never remove the

@@ -62,7 +62,8 @@ exact HEAD capture, content containment proof against a fresh base, a verified a
 and current-session deletion authority. Only then use non-forced `git worktree remove`, followed
 by path/registration/ref postcondition checks. The bundle preserves Git objects, not ignored files;
 copy any ignored item that is not proven reproducible and verify it against a recorded pre-removal
-content hash before and after deletion. The complete gate lives in
+content hash. After authority, repeat the source hash/status checks immediately before removal and
+recheck the surviving copy afterward. The complete gate lives in
 [merge_verification.md](merge_verification.md) § Worktree retirement.
 
 ## Ladder step 1 — `git reflog` (first move)

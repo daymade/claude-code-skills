@@ -81,7 +81,7 @@ class CheckoutDiscoveryTests(unittest.TestCase):
             text=True,
             encoding="utf-8",
             capture_output=True,
-            env={**os.environ, "DEPTH": "3"},
+            env={**os.environ, "DEPTH": "3", "STALE_AFTER": "3600"},
         )
 
     def test_clone_without_origin_is_still_found_by_shared_history(self) -> None:
