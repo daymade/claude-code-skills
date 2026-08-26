@@ -226,13 +226,14 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
 3. **Inventory ignored physical files separately:** run
    `git -C <worktree-path> status --porcelain=v1 --ignored --untracked-files=all` and inspect every
    `!!` path. A normal clean status and `git worktree remove` both ignore this layer, while
-   bundle/archive/format-patch cannot reach it. Explicitly classify reproducible caches/build
-   outputs as disposable; copy any user-authored or uncertain item outside the worktree first.
-   Preserve its relative path under the backup and record a path-to-content-hash manifest before
-   removal. For each regular file, `git hash-object --no-filters -- <path>` supplies a portable
-   content hash; run it on both source and copy and require equality. Repeat for every regular file
-   under an ignored directory, and record/compare `readlink` output for symlinks. Use
-   `git check-ignore -v <path>` when the ignore rule itself is unclear.
+   bundle/archive/format-patch cannot reach it. Freeze the complete ignored inventory before
+   removal: expand ignored directories to leaf entries and record every relative path and entry
+   type, including items classified as disposable. For every regular leaf, record
+   `git hash-object --no-filters -- <path>`; for every symlink, record its `readlink` output. Stop on
+   an unsupported special-file type. Explicitly classify reproducible caches/build outputs as
+   disposable; copy any user-authored or uncertain item outside the worktree first, preserving its
+   relative path under the backup. Run the same hash/readlink check on each source and backup copy
+   and require equality. Use `git check-ignore -v <path>` when the ignore rule itself is unclear.
 4. **Record the exact identity:** copy `git -C <worktree-path> rev-parse HEAD` and
    `git -C <worktree-path> branch --show-current`. An empty branch means detached HEAD, not "no
    work". Confirm the recorded HEAD appears in the all-worktree loss audit.
@@ -245,8 +246,11 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    includes linked-worktree HEAD refs; truly dangling objects appear only after pinning. Keep any
    ignored-file copies from step 3 beside this backup—the bundle does not contain them.
 7. **Obtain current-session deletion authority, then remove through Git without force:** run
-   the tracked/untracked status check again and re-hash every preserved ignored source against the
-   pre-removal manifest. Any new path or hash aborts the removal. Make
+   the tracked/untracked status check again. Then re-run the exact ignored-inventory command from
+   step 3, expand directories the same way, and rebuild the ignored manifest. Its path set, entry
+   types, regular-file hashes, and symlink targets must exactly equal the frozen step 3 manifest;
+   any added or missing path, type change, content change, or link-target change aborts removal.
+   Also require every preserved source and backup copy to match that manifest. Make
    `git worktree remove <absolute-worktree-path>` the next operation—no intervening command may
    reopen the race. Never use `rm -rf` or
    `git worktree remove --force` to make a dirty/uninspectable worktree disappear.
