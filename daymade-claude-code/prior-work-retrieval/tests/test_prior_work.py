@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -194,6 +195,75 @@ class PriorWorkTests(unittest.TestCase):
         self.assertEqual(receipt["status"], "complete")
         checked = prior_work.check_receipt(manifest, "session-B", 60)
         self.assertEqual(checked["status"], "valid")
+
+    def test_malformed_command_adapter_is_failed_coverage_not_zero_hits(self) -> None:
+        malformed = self.root / "malformed_adapter.py"
+        malformed.write_text(
+            "import json\nprint(json.dumps({'results':['bad-shape']}))\n",
+            encoding="utf-8",
+        )
+        payload = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+        command_source = next(
+            source for source in payload["sources"] if source["id"] == "conversation"
+        )
+        command_source["argv"] = [sys.executable, str(malformed)]
+        self.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+        manifest = self.manifest()
+        run = prior_work.retrieve(manifest, "unseen subject", ["unseen"], "session-bad")
+        coverage = {row["source_id"]: row for row in run["coverage"]}
+        self.assertEqual(coverage["conversation"]["status"], "failed")
+        self.assertFalse(run["coverage_complete"])
+        with self.assertRaisesRegex(prior_work.PriorWorkError, "Required carriers"):
+            prior_work.complete(
+                manifest,
+                run["run_id"],
+                "session-bad",
+                [],
+                [],
+                [],
+                ["live-wechat=manual route completed with no current override"],
+                "Inspected the available artifacts and verified that their lifecycle differs.",
+            )
+
+    def test_repository_head_change_invalidates_an_unchanged_candidate(self) -> None:
+        subprocess.run(["git", "init", "-q", str(self.docs)], check=True)
+        subprocess.run(
+            ["git", "-C", str(self.docs), "config", "user.email", "test@example.invalid"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(self.docs), "config", "user.name", "Test"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(self.docs), "add", "provider-contract.md"], check=True
+        )
+        subprocess.run(
+            ["git", "-C", str(self.docs), "commit", "-qm", "baseline"], check=True
+        )
+        manifest = self.manifest()
+        run = prior_work.retrieve(manifest, "Mercury", ["Mercury"], "session-git")
+        candidate = next(
+            item for item in run["candidates"] if item["source_id"] == "docs"
+        )
+        (self.docs / "north-star.md").write_text("new decision\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(self.docs), "add", "north-star.md"], check=True
+        )
+        subprocess.run(
+            ["git", "-C", str(self.docs), "commit", "-qm", "new decision"], check=True
+        )
+        with self.assertRaisesRegex(prior_work.PriorWorkError, "HEAD changed"):
+            prior_work.complete(
+                manifest,
+                run["run_id"],
+                "session-git",
+                [f"{candidate['candidate_id']}=reuse verified provider contract"],
+                [],
+                [],
+                ["live-wechat=manual route completed with no current override"],
+                None,
+            )
 
     def test_no_reuse_requires_verified_reason_not_zero_hits(self) -> None:
         manifest = self.manifest()

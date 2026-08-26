@@ -140,6 +140,53 @@ class PriorWorkHookTests(unittest.TestCase):
         self.assertFalse(substantial)
         self.assertIn("new=False", reason)
 
+    def test_shell_and_exec_writes_gate_while_read_only_discovery_passes(self) -> None:
+        bash_write = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "python3 -c \"from pathlib import Path; Path('x').write_text('y')\""
+            },
+        }
+        self.assertTrue(hook.substantial_tool_use(bash_write)[0])
+        exec_patch = {
+            "tool_name": "functions.exec",
+            "tool_input": "await tools.apply_patch('*** Add File: x\\n+content')",
+        }
+        self.assertTrue(hook.substantial_tool_use(exec_patch)[0])
+        read_only = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rg -n 'needle' README.md"},
+        }
+        self.assertFalse(hook.substantial_tool_use(read_only)[0])
+        retrieval = {
+            "tool_name": "functions.exec",
+            "tool_input": "uv run python scripts/prior_work.py retrieve --query x",
+        }
+        self.assertFalse(hook.substantial_tool_use(retrieval)[0])
+        for event in (
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "printf x > production.md"},
+            },
+            {
+                "tool_name": "exec_command",
+                "tool_input": {"cmd": "sed -n '1p' source.md > production.md"},
+            },
+            {
+                "tool_name": "functions.exec",
+                "tool_input": {
+                    "code": "await tools.exec_command({cmd: 'printf x > production.md'})"
+                },
+            },
+        ):
+            with self.subTest(event=event):
+                self.assertTrue(hook.substantial_tool_use(event)[0])
+        scratch_redirect = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "printf x > /tmp/tinkle_probe.txt"},
+        }
+        self.assertFalse(hook.substantial_tool_use(scratch_redirect)[0])
+
     def test_implicit_pretool_requirement_blocks_until_receipt(self) -> None:
         event = {
             "hook_event_name": "PreToolUse",
@@ -260,6 +307,25 @@ class PriorWorkHookTests(unittest.TestCase):
         }
         self.assertIsNone(hook.handle_event(read_only))
 
+    def test_missing_manifest_allows_only_its_exact_repair_target(self) -> None:
+        missing = self.root / "missing.json"
+        os.environ["PRIOR_WORK_MANIFEST"] = str(missing)
+        repair = {
+            "hook_event_name": "PreToolUse",
+            "session_id": "session-repair",
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": str(missing),
+                "content": '{"schema_version":1}',
+            },
+        }
+        self.assertIsNone(hook.handle_event(repair))
+        repair["tool_input"]["file_path"] = str(self.root / "other.json")
+        self.assertEqual(
+            hook.handle_event(repair)["hookSpecificOutput"]["permissionDecision"],
+            "deny",
+        )
+
     def test_hook_config_merge_is_additive_idempotent_and_retires_legacy(self) -> None:
         wrapper = self.root / "prior-work-retrieval.sh"
         wrapper.write_text("#!/bin/sh\n", encoding="utf-8")
@@ -297,6 +363,31 @@ class PriorWorkHookTests(unittest.TestCase):
         )
         self.assertEqual(second, merged)
 
+    def test_hook_merge_preserves_unrelated_similar_command_name(self) -> None:
+        wrapper = self.root / "prior-work-retrieval" / "scripts" / "prior-work-retrieval.sh"
+        wrapper.parent.mkdir(parents=True)
+        wrapper.write_text("#!/bin/sh\n", encoding="utf-8")
+        unrelated = "/opt/hooks/prior-work-retrieval-report.sh"
+        current = {
+            "hooks": {
+                "Stop": [
+                    {"hooks": [{"type": "command", "command": unrelated}]}
+                ]
+            }
+        }
+        merged = hook.merged_hooks(
+            current, wrapper, "claude", remove_legacy_recall=True
+        )
+        self.assertIn(unrelated, json.dumps(merged))
+        lookalike = "/opt/thirdparty/prior-work-retrieval/scripts/prior-work-retrieval.sh"
+        current["hooks"]["Stop"][0]["hooks"].append(
+            {"type": "command", "command": lookalike}
+        )
+        merged = hook.merged_hooks(
+            current, wrapper, "claude", remove_legacy_recall=True
+        )
+        self.assertIn(lookalike, json.dumps(merged))
+
     def test_codex_and_claude_matchers_cover_native_write_tools(self) -> None:
         wrapper = self.root / "prior-work-retrieval.sh"
         wrapper.write_text("#!/bin/sh\n", encoding="utf-8")
@@ -306,6 +397,8 @@ class PriorWorkHookTests(unittest.TestCase):
         self.assertIn("Agent", claude["PreToolUse"]["matcher"])
         self.assertIn("apply_patch", codex["PreToolUse"]["matcher"])
         self.assertIn("spawn_agent", codex["PreToolUse"]["matcher"])
+        self.assertIn("Bash", claude["PreToolUse"]["matcher"])
+        self.assertIn("functions\\.exec", codex["PreToolUse"]["matcher"])
 
 
 if __name__ == "__main__":

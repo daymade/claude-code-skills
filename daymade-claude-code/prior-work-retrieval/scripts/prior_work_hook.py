@@ -56,6 +56,35 @@ READ_ONLY_QUESTION = re.compile(
     r"(?:什么是|什么意思|为什么|怎么理解|解释一下|是否|是不是|what is|why|explain)",
     re.IGNORECASE,
 )
+SHELL_WRITE_SIGNAL = re.compile(
+    r"(?:tools\.apply_patch|\bapply_patch\b|\.write_(?:text|bytes)\s*\(|"
+    r"\bopen\s*\([^\n)]*,\s*['\"](?:w|a|x)|\b(?:tee|touch|mkdir|install|cp|mv|rsync)\b|"
+    r"\b(?:sed|perl)\b[^\n]*(?:\s-i\b|\s-pi\b)|"
+    r"\bgit\s+(?:add|commit|push|merge|rebase|tag|checkout|switch|reset|clean)\b)",
+    re.IGNORECASE | re.MULTILINE,
+)
+SHELL_UNKNOWN_EXECUTOR = re.compile(
+    r"\b(?:python(?:3)?|node|bash|zsh|sh)\b",
+    re.IGNORECASE,
+)
+SHELL_READ_ONLY_EXECUTOR = re.compile(
+    r"(?:--help\b|\s-m\s+unittest\b|\bpytest\b|\bruff\s+check\b|"
+    r"\b(?:status|validate|check)(?:\s|\(|\b))",
+    re.IGNORECASE,
+)
+SHELL_RETRIEVAL_ROUTE = re.compile(
+    r"(?:prior_work\.py\s+(?:validate-manifest|retrieve|complete|check)\b|"
+    r"history_index\.py\s+(?:recall|status)\b|"
+    r"analyze_sessions\.py\s+(?:search|locate-codex)\b|read_chat\.py\b)",
+    re.IGNORECASE,
+)
+EXEC_COMMAND_LITERAL = re.compile(
+    r"\b(?:cmd|command)\s*:\s*([\"'`])(?P<body>.*?)(?<!\\)\1",
+    re.DOTALL,
+)
+FILE_REDIRECTION = re.compile(
+    r"(?<![<>=])(?:1|2|&)?(?:>>|>)(?![=&])\s*(?P<target>[^\s;|]+)"
+)
 
 
 def _manifest() -> dict[str, Any]:
@@ -101,9 +130,66 @@ def _temporary_target(path_value: Any) -> bool:
     return Path(path_value).name.startswith("tinkle_")
 
 
+def _base_tool_name(event: dict[str, Any]) -> str:
+    return _tool_name(event).rsplit("__", 1)[-1].rsplit(".", 1)[-1]
+
+
+def _tool_payload_text(event: dict[str, Any]) -> str:
+    tool_input = _tool_input(event)
+    for key in ("command", "cmd", "input", "code", "source"):
+        value = tool_input.get(key)
+        if isinstance(value, str):
+            return value
+    return ""
+
+
+def _shell_fragments(event: dict[str, Any]) -> list[str]:
+    payload = _tool_payload_text(event)
+    if _tool_name(event).endswith("functions.exec"):
+        return [match.group("body") for match in EXEC_COMMAND_LITERAL.finditer(payload)]
+    return [payload]
+
+
+def _has_formal_file_redirection(event: dict[str, Any]) -> bool:
+    for fragment in _shell_fragments(event):
+        for match in FILE_REDIRECTION.finditer(fragment):
+            target = match.group("target").strip("\"'")
+            if target in {"/dev/null", "&1", "&2"}:
+                continue
+            if Path(target).name.startswith("tinkle_"):
+                continue
+            return True
+    return False
+
+
+def _is_manifest_repair(event: dict[str, Any]) -> bool:
+    manifest_path = prior_work.default_manifest_path().expanduser().resolve()
+    tool_input = _tool_input(event)
+    path_value = tool_input.get("file_path") or tool_input.get("path")
+    if isinstance(path_value, str):
+        target = Path(path_value).expanduser()
+        event_cwd = event.get("cwd")
+        if not target.is_absolute() and isinstance(event_cwd, str):
+            target = Path(event_cwd).expanduser() / target
+        try:
+            if target.resolve() == manifest_path:
+                return True
+        except OSError:
+            pass
+    patch_text = _tool_payload_text(event)
+    patch_targets = re.findall(
+        r"^\*\*\* (?:Add|Update) File:\s*(.+?)\s*$", patch_text, re.MULTILINE
+    )
+    if not patch_targets:
+        return False
+    try:
+        return all(Path(value).expanduser().resolve() == manifest_path for value in patch_targets)
+    except OSError:
+        return False
+
+
 def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
-    name = _tool_name(event)
-    base = name.rsplit("__", 1)[-1].rsplit(".", 1)[-1]
+    base = _base_tool_name(event)
     tool_input = _tool_input(event)
     path_value = tool_input.get("file_path") or tool_input.get("path")
     if _temporary_target(path_value):
@@ -155,6 +241,17 @@ def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
         prompt = tool_input.get("prompt") or tool_input.get("message")
         size = len(prompt) if isinstance(prompt, str) else 0
         return size >= 240, f"{base}:prompt_chars={size}"
+    if base in {"Bash", "exec", "exec_command"}:
+        payload = _tool_payload_text(event)
+        if SHELL_WRITE_SIGNAL.search(payload) or _has_formal_file_redirection(event):
+            return True, f"{base}:write_signal"
+        if SHELL_RETRIEVAL_ROUTE.search(payload):
+            return False, f"{base}:retrieval_route"
+        if SHELL_UNKNOWN_EXECUTOR.search(payload) and not SHELL_READ_ONLY_EXECUTOR.search(
+            payload
+        ):
+            return True, f"{base}:unknown_executor"
+        return False, f"{base}:read_only"
     return False, "unsupported_tool"
 
 
@@ -209,9 +306,9 @@ def desired_hook_groups(wrapper: Path, host: str) -> dict[str, dict[str, Any]]:
     command = _hook_command(wrapper)
     base: dict[str, Any] = {"type": "command", "command": command, "timeout": 15}
     matcher = (
-        "Write|Edit|MultiEdit|NotebookEdit|Agent|Task"
+        "Write|Edit|MultiEdit|NotebookEdit|Agent|Task|Bash"
         if host == "claude"
-        else "^(apply_patch|Write|Edit|MultiEdit|NotebookEdit|spawn_agent)$"
+        else "^(apply_patch|Write|Edit|MultiEdit|NotebookEdit|spawn_agent|exec|exec_command|functions\\.exec)$"
     )
     return {
         "UserPromptSubmit": {
@@ -250,12 +347,19 @@ def merged_hooks(
             kept = []
             for handler in group["hooks"]:
                 command = handler.get("command") if isinstance(handler, dict) else None
-                ours = isinstance(command, str) and "prior-work-retrieval" in command
+                command_parts = []
+                if isinstance(command, str):
+                    try:
+                        command_parts = shlex.split(command)
+                    except ValueError:
+                        command_parts = []
+                command_path = Path(command_parts[0]) if len(command_parts) == 1 else None
+                ours = bool(command_path and command_path == wrapper.resolve())
                 legacy = (
                     remove_legacy_recall
                     and event_name == "UserPromptSubmit"
-                    and isinstance(command, str)
-                    and "recall-first-evidence" in command
+                    and command_path is not None
+                    and command_path.name == "recall-first-evidence.sh"
                 )
                 if not ours and not legacy:
                     kept.append(handler)
@@ -435,6 +539,8 @@ def handle_pre_tool(event: dict[str, Any]) -> dict[str, Any] | None:
             return None
         error = _receipt_error(manifest, session_id)
     except prior_work.PriorWorkError as error:
+        if _is_manifest_repair(event):
+            return None
         return _pretool_deny(
             f"Prior Work Retrieval configuration/state failed: {error}. "
             "Repair it instead of bypassing the check."
