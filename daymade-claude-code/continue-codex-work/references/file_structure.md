@@ -24,7 +24,7 @@ Every line is one JSON object with a top-level `timestamp`, `type`, and (usually
 
 | `type` | `payload.type` | Carries | Used for |
 |--------|----------------|---------|----------|
-| `session_meta` | — | `id`, `cwd`, `timestamp`, `cli_version`, `model_provider` | Session Info header |
+| `session_meta` | — | `id`, `cwd`, `timestamp`, `cli_version`, `model_provider`; forks may also carry `forked_from_id` + `history_base` | Session Info header; exact inherited lineage |
 | `compacted` | — | `message` (often empty), `replacement_history` (list of messages), `window_number` | Compact Summary |
 | `event_msg` | `context_compacted` | just a marker | (the real content is in the `compacted` record) |
 | `event_msg` | `user_message` | `message` (plain string) | turn stream (see version note below) |
@@ -58,6 +58,27 @@ When Codex compacts, it emits a `compacted` record whose `replacement_history` i
 - a `role: "user"` item whose content is `# AGENTS.md instructions for <cwd>` (~50 KB) — re-injected standing instructions, not a real turn (noise)
 
 So the parser keeps only `role` in `{user, assistant}` **and** drops anything `is_noise_text` recognizes (`<permissions instructions`, `<system-reminder`, `# AGENTS.md instructions for`, …), then truncates each surviving item. The result is the real request thread, without the harness scaffolding.
+
+## Forked-session lineage
+
+A fork can have an almost empty local rollout — for example, its only local user message may be `继续` — while inheriting the actual task from one or more ancestors. Current Codex records the edge in the child's `session_meta`:
+
+```json
+{
+  "forked_from_id": "<parent-session-id>",
+  "history_base": {
+    "thread_id": "<parent-session-id>",
+    "end_ordinal_exclusive": 4200,
+    "end_byte_offset": 12345678
+  }
+}
+```
+
+`end_byte_offset` is the executable snapshot boundary. The extractor reads the parent in the half-open byte range `[0, end_byte_offset)` and requires the offset to land exactly between JSONL records. It then repeats the same process if that parent has its own `history_base`, producing a root-first lineage. `end_ordinal_exclusive` is retained as provenance but is not guessed to be a physical line count; the byte boundary decides what was inherited.
+
+The current physical parent file is **not** the snapshot: it may have gained later records after the fork. Those bytes are reported and excluded. `forked_from_id` is only a cross-check; if it conflicts with `history_base.thread_id`, the extractor fails. If the parent id exists without `history_base`, no exact snapshot can be proven, so the briefing reports the gap instead of reading the full current parent.
+
+This restores only retained rollout text and structured events. It cannot reverse compaction, recreate details omitted from `replacement_history`, or turn an image-only marker back into the original attachment. The briefing keeps the last compact summary from each ancestor separately; when the selected child contains only a continuation cue, those summaries auto-expand because otherwise the hidden task can still sit beyond the default character cutoff. `--full` removes character clipping from the remaining retained sections but keeps the deliberate message/tool/file count caps.
 
 ## Session end reason
 

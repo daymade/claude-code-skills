@@ -9,8 +9,9 @@ Codex-rollout-specific parser + briefing renderer.
 
 Why not `codex resume`: replaying a full rollout burns the context window on
 resolved turns and stale tool output. This selectively reconstructs only the
-high-signal context — the last compaction summary, recent user/assistant turns,
-tool calls, files edited, and how the session ended.
+high-signal context — exact inherited fork snapshots, each ancestor's retained
+compaction summary, recent user/assistant turns, tool calls, files edited, and
+how the selected session ended.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Optional
@@ -38,6 +40,7 @@ MAX_USER_REQUESTS = 6
 MAX_ASSISTANT_RESPONSES = 4
 MAX_TOOL_CALLS = 20
 MAX_FILES = 40
+MAX_LINEAGE_DEPTH = 16
 
 END_REASON_LABELS = {
     "completed": "Clean exit — the last turn completed",
@@ -106,14 +109,194 @@ def resolve_rollout(conv) -> Optional[Path]:
         candidate = Path(conv.path)
         if candidate.is_file():
             return candidate
-    sessions_dir = CODEX_HOME / "sessions"
-    if sessions_dir.is_dir():
-        for match in sessions_dir.rglob(f"rollout-*{conv.session_id}*.jsonl"):
-            return match
+    for dirname in ("sessions", "archived_sessions"):
+        sessions_dir = CODEX_HOME / dirname
+        if sessions_dir.is_dir():
+            for match in sessions_dir.rglob(f"rollout-*{conv.session_id}*.jsonl"):
+                return match
     return None
 
 
 # ── Rollout parsing ──────────────────────────────────────────────────────────
+
+
+class LineageResolutionError(RuntimeError):
+    """The inherited history declared by a rollout cannot be proven exactly."""
+
+
+def _iter_rollout_records(
+    path: Path, end_byte_offset: Optional[int] = None
+) -> Iterator[dict[str, Any]]:
+    """Yield rollout records, optionally stopping at an exact byte boundary.
+
+    Whole-file parsing keeps the shared tolerant reader used by the existing
+    skill. Inherited history is different: `history_base.end_byte_offset` is
+    the only source of truth for what bytes a fork actually inherited, so a
+    missing byte, malformed record, or offset through the middle of a JSONL
+    line must fail visibly rather than silently reading a nearby approximation.
+    """
+    if end_byte_offset is None:
+        yield from iter_jsonl(path)
+        return
+
+    physical_size = path.stat().st_size
+    if isinstance(end_byte_offset, bool) or not isinstance(end_byte_offset, int):
+        raise LineageResolutionError(
+            f"invalid history_base.end_byte_offset for {path}: {end_byte_offset!r}"
+        )
+    if end_byte_offset < 0 or end_byte_offset > physical_size:
+        raise LineageResolutionError(
+            f"history_base.end_byte_offset {end_byte_offset} is outside {path} "
+            f"(physical size {physical_size})"
+        )
+
+    with path.open("rb") as handle:
+        line_number = 0
+        while handle.tell() < end_byte_offset:
+            start = handle.tell()
+            raw_line = handle.readline()
+            line_number += 1
+            if not raw_line:
+                raise LineageResolutionError(
+                    f"rollout ended at byte {start} before declared history boundary "
+                    f"{end_byte_offset}: {path}"
+                )
+            if handle.tell() > end_byte_offset:
+                raise LineageResolutionError(
+                    f"history_base.end_byte_offset {end_byte_offset} splits JSONL line "
+                    f"{line_number} in {path}"
+                )
+            if not raw_line.strip():
+                continue
+            try:
+                record = json.loads(raw_line.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise LineageResolutionError(
+                    f"cannot decode inherited JSONL line {line_number} in {path}: {exc}"
+                ) from exc
+            if not isinstance(record, dict):
+                raise LineageResolutionError(
+                    f"inherited JSONL line {line_number} is not an object in {path}"
+                )
+            yield record
+
+        if handle.tell() != end_byte_offset:
+            raise LineageResolutionError(
+                f"could not stop at exact history boundary {end_byte_offset} in {path}"
+            )
+
+
+def _history_base(meta: dict[str, Any], session_id: str) -> Optional[dict[str, Any]]:
+    """Validate one fork edge and return its exact parent snapshot contract."""
+    history_base = meta.get("history_base")
+    if history_base is None:
+        return None
+    if not isinstance(history_base, dict):
+        raise LineageResolutionError(
+            f"session {session_id} has a non-object history_base"
+        )
+
+    parent_id = history_base.get("thread_id")
+    end_byte_offset = history_base.get("end_byte_offset")
+    if not isinstance(parent_id, str) or not parent_id.strip():
+        raise LineageResolutionError(
+            f"session {session_id} history_base has no valid thread_id"
+        )
+    if isinstance(end_byte_offset, bool) or not isinstance(end_byte_offset, int):
+        raise LineageResolutionError(
+            f"session {session_id} history_base has no valid end_byte_offset"
+        )
+
+    forked_from_id = meta.get("forked_from_id")
+    if forked_from_id is not None and forked_from_id != parent_id:
+        raise LineageResolutionError(
+            f"session {session_id} declares forked_from_id={forked_from_id!r} but "
+            f"history_base.thread_id={parent_id!r}"
+        )
+
+    return {
+        "thread_id": parent_id,
+        "end_byte_offset": end_byte_offset,
+        "end_ordinal_exclusive": history_base.get("end_ordinal_exclusive"),
+    }
+
+
+def resolve_inherited_lineage(
+    selected_data: dict[str, Any],
+    resolve_session: Callable[[str], Optional[Path]],
+    *,
+    max_depth: int = MAX_LINEAGE_DEPTH,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Resolve every declared ancestor at the exact snapshot inherited by its child.
+
+    The returned lineage is root-first and excludes the selected session. A
+    `forked_from_id` without `history_base` is reported but never guessed: the
+    current parent file may contain work appended after the fork.
+    """
+    lineage_nearest_first: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    current_data = selected_data
+    current_meta = current_data.get("meta") or {}
+    current_id = str(current_meta.get("id") or "?")
+    seen = {current_id}
+    depth = 0
+
+    while True:
+        history_base = _history_base(current_meta, current_id)
+        if history_base is None:
+            forked_from_id = current_meta.get("forked_from_id")
+            if forked_from_id:
+                warnings.append(
+                    f"Session `{current_id}` names parent `{forked_from_id}` but has no "
+                    "`history_base` byte boundary; the parent was not read because an "
+                    "exact inherited snapshot cannot be proven."
+                )
+            break
+        if depth >= max_depth:
+            raise LineageResolutionError(
+                f"history lineage exceeds the safety limit of {max_depth} ancestors"
+            )
+
+        parent_id = history_base["thread_id"]
+        if parent_id in seen:
+            raise LineageResolutionError(
+                f"history lineage cycle detected at session {parent_id}"
+            )
+        parent_path = resolve_session(parent_id)
+        if parent_path is None:
+            raise LineageResolutionError(
+                f"parent rollout {parent_id} declared by session {current_id} was not found"
+            )
+
+        parent_data = parse_codex_rollout(
+            parent_path, end_byte_offset=history_base["end_byte_offset"]
+        )
+        parent_meta = parent_data.get("meta") or {}
+        parsed_parent_id = parent_meta.get("id")
+        if parsed_parent_id != parent_id:
+            raise LineageResolutionError(
+                f"parent snapshot expected session {parent_id} but its session_meta id is "
+                f"{parsed_parent_id!r}: {parent_path}"
+            )
+
+        lineage_nearest_first.append(
+            {
+                "session_id": parent_id,
+                "inherited_by": current_id,
+                "path": parent_path,
+                "end_byte_offset": history_base["end_byte_offset"],
+                "end_ordinal_exclusive": history_base["end_ordinal_exclusive"],
+                "data": parent_data,
+            }
+        )
+        seen.add(parent_id)
+        depth += 1
+        current_data = parent_data
+        current_meta = parent_meta
+        current_id = parent_id
+
+    lineage_nearest_first.reverse()
+    return lineage_nearest_first, warnings
 
 
 def _compacted_summary(payload: dict) -> str:
@@ -220,7 +403,7 @@ def _message_text(content: Any, wanted_types: set[str]) -> str:
     return " ".join(parts)
 
 
-def parse_codex_rollout(path: Path) -> dict:
+def parse_codex_rollout(path: Path, end_byte_offset: Optional[int] = None) -> dict:
     """Stream a rollout JSONL into a structured resume payload.
 
     Where the user/assistant turns live depends on the Codex version (measured
@@ -239,8 +422,16 @@ def parse_codex_rollout(path: Path) -> dict:
     FileChange items (0.147+); both feed the same set, so versions emitting
     both union harmlessly.
     """
+    physical_file_size = path.stat().st_size
     data: dict[str, Any] = {
-        "file_size": path.stat().st_size,
+        # Keep file_size as the physical on-disk size for backward-compatible
+        # selected-session reporting. parsed_bytes names the exact prefix used
+        # for an inherited snapshot and equals file_size for a normal parse.
+        "file_size": physical_file_size,
+        "parsed_bytes": (
+            end_byte_offset if end_byte_offset is not None else physical_file_size
+        ),
+        "snapshot_end_byte_offset": end_byte_offset,
         "total_lines": 0,
         "meta": None,
         "compact_summaries": [],
@@ -258,7 +449,7 @@ def parse_codex_rollout(path: Path) -> dict:
         "last_sig": None,
     }
 
-    for record in iter_jsonl(path):
+    for record in _iter_rollout_records(path, end_byte_offset):
         data["total_lines"] += 1
         rtype = record.get("type")
         payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
@@ -448,7 +639,8 @@ def _clip(text: str, limit: int, full: bool) -> str:
         return text
     return (
         text[:limit]
-        + f"\n… (truncated at {limit}/{len(text)} chars — rerun with --full for the complete text)"
+        + f"\n… (truncated at {limit}/{len(text)} chars — rerun with --full for "
+        "the untruncated retained text)"
     )
 
 
@@ -477,6 +669,133 @@ def _transient_hint(codex_error_info: str) -> str:
         "is still open, it may resume this session on its own — check for "
         "that before assuming manual continuation is the only path."
     )
+
+
+def _dedupe_adjacent(items: list[Any]) -> list[Any]:
+    """Drop only adjacent duplicates while preserving chronology and type."""
+    result: list[Any] = []
+    for item in items:
+        if not result or result[-1] != item:
+            result.append(item)
+    return result
+
+
+def _inherited_context(lineage: list[dict[str, Any]]) -> dict[str, Any]:
+    """Merge root→parent high-signal context without mixing in the child turn."""
+    context: dict[str, Any] = {
+        "user_messages": [],
+        "assistant_messages": [],
+        "latest_plan": None,
+        "tool_calls": [],
+        "files_touched": set(),
+        "errors": [],
+    }
+    for edge in lineage:
+        ancestor = edge["data"]
+        context["user_messages"].extend(ancestor["user_messages"])
+        context["assistant_messages"].extend(ancestor["assistant_messages"])
+        if ancestor["latest_plan"] is not None:
+            context["latest_plan"] = ancestor["latest_plan"]
+        context["tool_calls"].extend(ancestor["tool_calls"])
+        context["files_touched"].update(ancestor["files_touched"])
+        context["errors"].extend(ancestor["errors"])
+    context["user_messages"] = _dedupe_adjacent(context["user_messages"])
+    context["assistant_messages"] = _dedupe_adjacent(context["assistant_messages"])
+    context["errors"] = _dedupe_adjacent(context["errors"])
+    return context
+
+
+def _is_continuation_cue(text: str) -> bool:
+    """Recognize only explicit, context-dependent continuation prompts."""
+    normalized = re.sub(r"[\s。！!？?]+", "", text).casefold()
+    return normalized in {
+        "继续",
+        "继续做",
+        "接着",
+        "接着做",
+        "continue",
+        "continueworking",
+        "goon",
+    }
+
+
+def _append_plan(sections: list[str], heading: str, plan: dict[str, Any]) -> None:
+    sections.append(f"\n## {heading}\n")
+    explanation = plan.get("explanation")
+    if explanation:
+        sections.append(f"_{explanation}_\n")
+    for step in plan.get("plan", []):
+        if not isinstance(step, dict):
+            continue
+        status = str(step.get("status") or "pending")
+        step_text = str(step.get("step") or "")
+        mark = "x" if status == "completed" else " "
+        sections.append(f"- [{mark}] {step_text} ({status})")
+
+
+def _append_inherited_context(
+    sections: list[str],
+    lineage: list[dict[str, Any]],
+    full: bool,
+    *,
+    expand_summaries: bool = False,
+) -> None:
+    """Render actionable ancestor state separately from the selected child."""
+    context = _inherited_context(lineage)
+    sections.append("\n## Inherited Actionable Context\n")
+
+    summary_edges = [edge for edge in lineage if edge["data"]["compact_summaries"]]
+    if summary_edges:
+        sections.append("\n### Inherited Compact Summaries (last one per ancestor)\n")
+        for edge in summary_edges:
+            sections.append(f"\n#### From `{edge['session_id']}`\n")
+            sections.append(
+                _clip(
+                    edge["data"]["compact_summaries"][-1],
+                    MAX_SUMMARY_CHARS,
+                    full or expand_summaries,
+                )
+            )
+
+    user_messages = context["user_messages"][-MAX_USER_REQUESTS:]
+    if user_messages:
+        sections.append("\n### Last Inherited User Requests\n")
+        for i, message in enumerate(user_messages, 1):
+            sections.append(f"#### Request {i}\n{_clip(message, 500, full)}\n")
+
+    assistant_messages = context["assistant_messages"][-MAX_ASSISTANT_RESPONSES:]
+    if assistant_messages:
+        sections.append("\n### Last Inherited Assistant Responses\n")
+        for i, message in enumerate(assistant_messages, 1):
+            sections.append(f"#### Response {i}\n{_clip(message, 1000, full)}\n")
+
+    if context["latest_plan"]:
+        _append_plan(
+            sections,
+            "Latest Inherited Plan State (from the nearest ancestor's last `update_plan` call)",
+            context["latest_plan"],
+        )
+
+    if context["tool_calls"]:
+        recent = context["tool_calls"][-MAX_TOOL_CALLS:]
+        sections.append(
+            f"\n### Recent Inherited Tool Calls ({len(context['tool_calls'])} total)\n"
+        )
+        for name, preview in recent:
+            sections.append(f"- **{name}**: `{preview}`" if preview else f"- **{name}**")
+
+    if context["files_touched"]:
+        sections.append("\n### Files Edited Across Inherited Sessions\n")
+        files = sorted(context["files_touched"])
+        for filepath in files[:MAX_FILES]:
+            sections.append(f"- `{filepath}`")
+        if len(files) > MAX_FILES:
+            sections.append(f"- ... ({len(files) - MAX_FILES} more)")
+
+    if context["errors"]:
+        sections.append("\n### Errors Encountered in Inherited Sessions\n")
+        for error in context["errors"]:
+            sections.append(f"```\n{error}\n```")
 
 
 def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> str:
@@ -546,20 +865,110 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
             if hint:
                 sections.append(hint)
 
+    lineage = data.get("lineage") or []
+    lineage_warnings = data.get("lineage_warnings") or []
+    has_lineage_context = bool(lineage or lineage_warnings)
+    if has_lineage_context:
+        sections.append("\n## Inherited Session Lineage\n")
+        for edge in lineage:
+            ancestor = edge["data"]
+            offset = edge["end_byte_offset"]
+            ordinal = edge.get("end_ordinal_exclusive")
+            ordinal_text = (
+                f", ordinal `< {ordinal}`" if isinstance(ordinal, int) else ""
+            )
+            physical_size = ancestor["file_size"]
+            later_bytes = physical_size - offset
+            later_text = (
+                f"; {later_bytes} later byte(s) excluded"
+                if later_bytes > 0
+                else "; boundary equals current file size"
+            )
+            sections.append(
+                f"- `{edge['session_id']}` → `{edge['inherited_by']}`: exact parent "
+                f"prefix `[0, {offset})` bytes{ordinal_text}{later_text}"
+            )
+        for warning in lineage_warnings:
+            sections.append(f"- ⚠️ {warning}")
+
+        if lineage:
+            sections.append(
+                "\n**Snapshot guarantee**: every ancestor above was parsed only through "
+                "the exact byte boundary recorded by its child; content appended to a "
+                "parent after the fork was not imported."
+            )
+        sections.append(
+            "**Recovery boundary**: lineage recovery restores only text and structured "
+            "events still retained in those snapshots. It cannot undo Codex compaction, "
+            "reconstruct details omitted by a compacted history, or recover image/audio "
+            "content from a text-only marker. `--full` removes character truncation from "
+            "retained sections; message/tool/file count caps still apply."
+        )
+
+        selected_requests = data["user_messages"]
+        continuation_only = bool(
+            len(selected_requests) == 1
+            and _is_continuation_cue(selected_requests[-1])
+        )
+        if selected_requests and _is_continuation_cue(selected_requests[-1]):
+            if len(selected_requests) == 1:
+                sections.append(
+                    f"> The selected session's only local request is "
+                    f"`{selected_requests[-1]}`. That is a continuation cue, not a "
+                    "standalone task; recover the actual objective from the inherited "
+                    "context below."
+                )
+            else:
+                sections.append(
+                    f"> The selected session's last local request is "
+                    f"`{selected_requests[-1]}`. Treat it as a continuation cue and read "
+                    "the inherited context before deciding the task."
+                )
+
+        if lineage:
+            if continuation_only and not full:
+                sections.append(
+                    "**Continuation recovery**: inherited compaction summaries are "
+                    "automatically shown without character clipping because the child "
+                    "contains no standalone task. Other message/tool/file count caps "
+                    "still apply."
+                )
+            _append_inherited_context(
+                sections,
+                lineage,
+                full,
+                expand_summaries=continuation_only,
+            )
+
     if data["compact_summaries"]:
         summary = data["compact_summaries"][-1]
-        sections.append("\n## Compact Summary (from the session's last compaction)\n")
+        heading = (
+            "Selected Session Compact Summary (from its last compaction)"
+            if has_lineage_context
+            else "Compact Summary (from the session's last compaction)"
+        )
+        sections.append(f"\n## {heading}\n")
         sections.append(_clip(summary, MAX_SUMMARY_CHARS, full))
 
     user_messages = data["user_messages"][-MAX_USER_REQUESTS:]
     if user_messages:
-        sections.append("\n## Last User Requests\n")
+        heading = (
+            "Last User Requests (selected session only)"
+            if has_lineage_context
+            else "Last User Requests"
+        )
+        sections.append(f"\n## {heading}\n")
         for i, text in enumerate(user_messages, 1):
             sections.append(f"### Request {i}\n{_clip(text, 500, full)}\n")
 
     assistant_messages = data["assistant_messages"][-MAX_ASSISTANT_RESPONSES:]
     if assistant_messages:
-        sections.append("\n## Last Assistant Responses\n")
+        heading = (
+            "Last Assistant Responses (selected session only)"
+            if has_lineage_context
+            else "Last Assistant Responses"
+        )
+        sections.append(f"\n## {heading}\n")
         for i, text in enumerate(assistant_messages, 1):
             sections.append(f"### Response {i}\n{_clip(text, 1000, full)}\n")
 
@@ -569,18 +978,12 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
         # below — in a long session (thousands of tool calls) this is
         # otherwise reliably evicted, yet it's the highest-signal "what stage
         # is this task at" artifact Codex produces.
-        plan = data["latest_plan"]
-        sections.append("\n## Latest Plan State (from the last `update_plan` call)\n")
-        explanation = plan.get("explanation")
-        if explanation:
-            sections.append(f"_{explanation}_\n")
-        for step in plan.get("plan", []):
-            if not isinstance(step, dict):
-                continue
-            status = str(step.get("status") or "pending")
-            text = str(step.get("step") or "")
-            mark = "x" if status == "completed" else " "
-            sections.append(f"- [{mark}] {text} ({status})")
+        heading = (
+            "Latest Plan State (selected session's last `update_plan` call)"
+            if has_lineage_context
+            else "Latest Plan State (from the last `update_plan` call)"
+        )
+        _append_plan(sections, heading, data["latest_plan"])
 
     if data["tool_calls"]:
         recent = data["tool_calls"][-MAX_TOOL_CALLS:]
@@ -652,6 +1055,48 @@ def _find_session_by_id(session_id: str, project_path: str):
     return None
 
 
+def _make_exact_rollout_resolver(
+    project_path: str,
+) -> Callable[[str], Optional[Path]]:
+    """Return a lazy exact-id resolver for inherited parent sessions.
+
+    State indexes are preferred, but lineage must survive a stale/missing DB,
+    so the fallback checks both live and archived rollout directories. Unlike
+    the user-facing `--session` selector, a lineage edge never accepts an
+    unambiguous prefix: `history_base.thread_id` is already an exact identity.
+    """
+    indexed: Optional[dict[str, Any]] = None
+
+    def resolve(session_id: str) -> Optional[Path]:
+        nonlocal indexed
+        if indexed is None:
+            convs, _ = list_sessions(
+                project_path, all_projects=True, explicit_id=True
+            )
+            indexed = {conv.session_id: conv for conv in convs}
+
+        conv = indexed.get(session_id)
+        if conv is not None:
+            rollout = resolve_rollout(conv)
+            if rollout is not None:
+                return rollout
+
+        matches: list[Path] = []
+        for dirname in ("sessions", "archived_sessions"):
+            root = CODEX_HOME / dirname
+            if root.is_dir():
+                matches.extend(root.rglob(f"rollout-*{session_id}*.jsonl"))
+        unique_matches = sorted(set(matches))
+        if len(unique_matches) > 1:
+            raise LineageResolutionError(
+                f"session {session_id} resolves to multiple rollout files: "
+                + ", ".join(str(path) for path in unique_matches)
+            )
+        return unique_matches[0] if unique_matches else None
+
+    return resolve
+
+
 def _first_resumable(convs: list) -> tuple:
     """Return (conv, rollout) for the newest conv whose rollout file resolves.
 
@@ -684,8 +1129,9 @@ def main() -> int:
     parser.add_argument("--exclude-current", default=None,
                         help="Session ID to exclude (e.g. a currently active session)")
     parser.add_argument("--full", action="store_true",
-                        help="Do not truncate long sections (summary / user requests / "
-                             "assistant responses); count caps still apply")
+                        help="Do not truncate retained long-section text (summary / user "
+                             "requests / assistant responses); count caps and compaction "
+                             "loss still apply")
     args = parser.parse_args()
 
     project_path = os.path.abspath(args.project)
@@ -756,6 +1202,17 @@ def main() -> int:
     print(f"Parsing Codex session {conv.session_id} "
           f"({rollout.stat().st_size / 1_000_000:.1f} MB)...", file=sys.stderr)
     data = parse_codex_rollout(rollout)
+    meta = data.get("meta") or {}
+    if meta.get("history_base") is not None or meta.get("forked_from_id"):
+        try:
+            lineage, lineage_warnings = resolve_inherited_lineage(
+                data, _make_exact_rollout_resolver(project_path)
+            )
+        except LineageResolutionError as exc:
+            print(f"Error: cannot recover inherited Codex history: {exc}", file=sys.stderr)
+            return 1
+        data["lineage"] = lineage
+        data["lineage_warnings"] = lineage_warnings
     print(build_briefing(conv, data, project_path, full=args.full))
     return 0
 

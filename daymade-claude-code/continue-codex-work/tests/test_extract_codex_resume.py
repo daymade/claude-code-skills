@@ -43,6 +43,14 @@ def _write_rollout(records: list[dict]) -> Path:
     return Path(handle.name)
 
 
+def _write_rollout_path(path: Path, records: list[dict], mode: str = "w") -> int:
+    """Write exact JSONL bytes and return the resulting physical byte size."""
+    with path.open(mode, encoding="utf-8") as handle:
+        for record in records:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return path.stat().st_size
+
+
 def _msg(role: str, text: str, ctype: str) -> dict:
     return {
         "type": "response_item",
@@ -486,6 +494,263 @@ class UpdatePlanTests(unittest.TestCase):
         self.assertIsNone(data["latest_plan"])
         briefing = mod.build_briefing(None, data, "/tmp")
         self.assertNotIn("## Latest Plan State", briefing)
+
+
+class InheritedLineageTests(unittest.TestCase):
+    """Forks must use the child's exact history_base snapshot, never the
+    parent's current tail. These fixtures reproduce the shape that exposed the
+    bug: a child whose only local request is `继续`."""
+
+    def test_continue_only_child_recovers_parent_and_excludes_later_tail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            parent = root / "parent.jsonl"
+            objective = "实际目标：对账学习系统并重建交付物"
+            summary_tail = "压缩历史末尾的关键业务目标"
+            parent_snapshot = [
+                {
+                    "type": "session_meta",
+                    "payload": {"id": "parent", "cwd": "/tmp"},
+                },
+                {
+                    "type": "compacted",
+                    "payload": {
+                        "message": "背景" * (mod.MAX_SUMMARY_CHARS // 2 + 50) + summary_tail,
+                        "replacement_history": [],
+                    },
+                },
+                _msg("user", objective, "input_text"),
+                _function_call(
+                    "update_plan",
+                    {
+                        "plan": [
+                            {"step": "对账设计、实现、注册和实际消费", "status": "in_progress"}
+                        ]
+                    },
+                    call_id="parent-plan",
+                ),
+            ]
+            fork_offset = _write_rollout_path(parent, parent_snapshot)
+            _write_rollout_path(
+                parent,
+                [_msg("user", "fork 后追加、子会话不应继承", "input_text")],
+                mode="a",
+            )
+
+            child = _write_rollout(
+                [
+                    {
+                        "type": "session_meta",
+                        "payload": {
+                            "id": "child",
+                            "cwd": "/tmp",
+                            "forked_from_id": "parent",
+                            "history_base": {
+                                "thread_id": "parent",
+                                "end_ordinal_exclusive": len(parent_snapshot),
+                                "end_byte_offset": fork_offset,
+                            },
+                        },
+                    },
+                    _msg("user", "继续", "input_text"),
+                ]
+            )
+            data = mod.parse_codex_rollout(child)
+            lineage, warnings = mod.resolve_inherited_lineage(
+                data, lambda session_id: parent if session_id == "parent" else None
+            )
+            data["lineage"] = lineage
+            data["lineage_warnings"] = warnings
+            briefing = mod.build_briefing(None, data, "/tmp")
+
+            self.assertEqual(len(lineage), 1)
+            self.assertEqual(lineage[0]["data"]["user_messages"], [objective])
+            self.assertIn(objective, briefing)
+            self.assertIn(summary_tail, briefing)
+            self.assertIn("automatically shown without character clipping", briefing)
+            self.assertIn("对账设计、实现、注册和实际消费", briefing)
+            self.assertNotIn("fork 后追加、子会话不应继承", briefing)
+            self.assertIn("exact parent prefix", briefing)
+            self.assertIn("continuation cue, not a standalone task", briefing)
+            self.assertIn("Last User Requests (selected session only)", briefing)
+            self.assertIn("compaction", briefing)
+
+    def test_multigeneration_lineage_is_root_first_and_merges_context(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            grandparent = root / "grandparent.jsonl"
+            grand_offset = _write_rollout_path(
+                grandparent,
+                [
+                    {"type": "session_meta", "payload": {"id": "grand", "cwd": "/tmp"}},
+                    _msg("user", "根会话业务目标", "input_text"),
+                ],
+            )
+            parent = root / "parent.jsonl"
+            parent_offset = _write_rollout_path(
+                parent,
+                [
+                    {
+                        "type": "session_meta",
+                        "payload": {
+                            "id": "parent",
+                            "cwd": "/tmp",
+                            "forked_from_id": "grand",
+                            "history_base": {
+                                "thread_id": "grand",
+                                "end_ordinal_exclusive": 2,
+                                "end_byte_offset": grand_offset,
+                            },
+                        },
+                    },
+                    _msg("assistant", "父会话阶段结论", "output_text"),
+                ],
+            )
+            child = _write_rollout(
+                [
+                    {
+                        "type": "session_meta",
+                        "payload": {
+                            "id": "child",
+                            "cwd": "/tmp",
+                            "forked_from_id": "parent",
+                            "history_base": {
+                                "thread_id": "parent",
+                                "end_ordinal_exclusive": 2,
+                                "end_byte_offset": parent_offset,
+                            },
+                        },
+                    },
+                    _msg("user", "继续", "input_text"),
+                ]
+            )
+            paths = {"grand": grandparent, "parent": parent}
+            data = mod.parse_codex_rollout(child)
+            lineage, warnings = mod.resolve_inherited_lineage(data, paths.get)
+            data["lineage"] = lineage
+            data["lineage_warnings"] = warnings
+            briefing = mod.build_briefing(None, data, "/tmp")
+
+            self.assertEqual([edge["session_id"] for edge in lineage], ["grand", "parent"])
+            self.assertIn("根会话业务目标", briefing)
+            self.assertIn("父会话阶段结论", briefing)
+
+    def test_byte_offset_that_splits_jsonl_line_fails_closed(self):
+        parent = _write_rollout(
+            [
+                {"type": "session_meta", "payload": {"id": "parent", "cwd": "/tmp"}},
+                _msg("user", "目标", "input_text"),
+            ]
+        )
+        child = _write_rollout(
+            [
+                {
+                    "type": "session_meta",
+                    "payload": {
+                        "id": "child",
+                        "forked_from_id": "parent",
+                        "history_base": {
+                            "thread_id": "parent",
+                            "end_byte_offset": parent.stat().st_size - 1,
+                        },
+                    },
+                }
+            ]
+        )
+        with self.assertRaisesRegex(mod.LineageResolutionError, "splits JSONL line"):
+            mod.resolve_inherited_lineage(mod.parse_codex_rollout(child), lambda _: parent)
+
+    def test_forked_from_and_history_base_mismatch_fails_closed(self):
+        child = _write_rollout(
+            [
+                {
+                    "type": "session_meta",
+                    "payload": {
+                        "id": "child",
+                        "forked_from_id": "parent-a",
+                        "history_base": {
+                            "thread_id": "parent-b",
+                            "end_byte_offset": 0,
+                        },
+                    },
+                }
+            ]
+        )
+        with self.assertRaisesRegex(mod.LineageResolutionError, "declares forked_from_id"):
+            mod.resolve_inherited_lineage(mod.parse_codex_rollout(child), lambda _: None)
+
+    def test_lineage_cycle_fails_before_reparsing_selected_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            parent = root / "parent.jsonl"
+            parent_offset = _write_rollout_path(
+                parent,
+                [
+                    {
+                        "type": "session_meta",
+                        "payload": {
+                            "id": "parent",
+                            "forked_from_id": "child",
+                            "history_base": {
+                                "thread_id": "child",
+                                "end_byte_offset": 1,
+                            },
+                        },
+                    }
+                ],
+            )
+            child = _write_rollout(
+                [
+                    {
+                        "type": "session_meta",
+                        "payload": {
+                            "id": "child",
+                            "forked_from_id": "parent",
+                            "history_base": {
+                                "thread_id": "parent",
+                                "end_byte_offset": parent_offset,
+                            },
+                        },
+                    }
+                ]
+            )
+            with self.assertRaisesRegex(mod.LineageResolutionError, "cycle detected"):
+                mod.resolve_inherited_lineage(
+                    mod.parse_codex_rollout(child),
+                    lambda session_id: parent if session_id == "parent" else child,
+                )
+
+    def test_parent_without_exact_history_boundary_is_reported_not_guessed(self):
+        child = _write_rollout(
+            [
+                {
+                    "type": "session_meta",
+                    "payload": {
+                        "id": "child",
+                        "cwd": "/tmp",
+                        "forked_from_id": "parent",
+                    },
+                },
+                _msg("user", "继续", "input_text"),
+            ]
+        )
+        resolver_called = False
+
+        def resolver(_: str):
+            nonlocal resolver_called
+            resolver_called = True
+            return None
+
+        data = mod.parse_codex_rollout(child)
+        lineage, warnings = mod.resolve_inherited_lineage(data, resolver)
+        data["lineage"] = lineage
+        data["lineage_warnings"] = warnings
+        briefing = mod.build_briefing(None, data, "/tmp")
+
+        self.assertFalse(resolver_called)
+        self.assertEqual(lineage, [])
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("exact inherited snapshot cannot be proven", briefing)
 
 
 class TruncationContractTests(unittest.TestCase):
