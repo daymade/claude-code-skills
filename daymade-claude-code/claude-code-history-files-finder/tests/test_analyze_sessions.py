@@ -242,6 +242,135 @@ class SessionAnalyzerTests(unittest.TestCase):
         )
         self.assertIn("No matches found.", signature_only.stdout)
 
+    def test_search_excludes_user_sidechain_prompts_but_keeps_agent_output(self) -> None:
+        session_id = "33333333-3333-4333-8333-333333333333"
+        session_file = project_dir(self.active_home, self.workspace) / f"{session_id}.jsonl"
+        write_jsonl(
+            session_file,
+            [
+                {
+                    **user_record(
+                        session_id,
+                        self.workspace,
+                        "sidechain-user-marker",
+                        "2026-04-18T09:00:00Z",
+                    ),
+                    "isSidechain": True,
+                },
+                {
+                    "type": "assistant",
+                    "sessionId": session_id,
+                    "cwd": str(self.workspace),
+                    "timestamp": "2026-04-18T09:00:01Z",
+                    "isSidechain": True,
+                    "message": {
+                        "role": "assistant",
+                        "content": "sidechain-assistant-marker",
+                    },
+                },
+                {
+                    "type": "user",
+                    "sessionId": session_id,
+                    "cwd": str(self.workspace),
+                    "timestamp": "2026-04-18T09:00:02Z",
+                    "isSidechain": True,
+                    "message": {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "tool-sidechain-1",
+                                "content": "sidechain-tool-result-marker",
+                            }
+                        ],
+                    },
+                },
+                {
+                    "type": "user",
+                    "sessionId": session_id,
+                    "cwd": str(self.workspace),
+                    "timestamp": "2026-04-18T09:00:03Z",
+                    "isSidechain": True,
+                    "message": {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "mixed-agent-prompt-marker"},
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "tool-sidechain-2",
+                                "content": "mixed-tool-result-marker",
+                            },
+                        ],
+                    },
+                },
+            ],
+        )
+
+        hidden = self.run_cli(
+            "search",
+            str(self.workspace),
+            "sidechain-user-marker",
+            "--history-sources",
+            str(self.manifest),
+        )
+        self.assertIn("No matches found.", hidden.stdout)
+
+        included = self.run_cli(
+            "search",
+            str(self.workspace),
+            "sidechain-user-marker",
+            "--include-agent-prompts",
+            "--history-sources",
+            str(self.manifest),
+        )
+        self.assertIn(session_id, included.stdout)
+
+        agent_output = self.run_cli(
+            "search",
+            str(self.workspace),
+            "sidechain-assistant-marker",
+            "--history-sources",
+            str(self.manifest),
+        )
+        self.assertIn(session_id, agent_output.stdout)
+
+        tool_result = self.run_cli(
+            "search",
+            str(self.workspace),
+            "sidechain-tool-result-marker",
+            "--history-sources",
+            str(self.manifest),
+        )
+        self.assertIn(session_id, tool_result.stdout)
+        self.assertIn("tool_result", tool_result.stdout)
+
+        mixed_hidden = self.run_cli(
+            "search",
+            str(self.workspace),
+            "mixed-agent-prompt-marker",
+            "--history-sources",
+            str(self.manifest),
+        )
+        self.assertIn("No matches found.", mixed_hidden.stdout)
+        mixed_included = self.run_cli(
+            "search",
+            str(self.workspace),
+            "mixed-agent-prompt-marker",
+            "--include-agent-prompts",
+            "--history-sources",
+            str(self.manifest),
+        )
+        self.assertIn(session_id, mixed_included.stdout)
+        mixed_tool_result = self.run_cli(
+            "search",
+            str(self.workspace),
+            "mixed-tool-result-marker",
+            "--history-sources",
+            str(self.manifest),
+        )
+        self.assertIn(session_id, mixed_tool_result.stdout)
+        self.assertIn("tool_result", mixed_tool_result.stdout)
+
     def test_prefilter_and_no_prefilter_agree_byte_for_byte(self) -> None:
         """The 2026-08 pre-filter (rg/grep file-level + in-process line-level)
         must be a pure speedup: identical stdout with and without it, on a
