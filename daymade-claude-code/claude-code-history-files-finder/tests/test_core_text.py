@@ -15,10 +15,12 @@ that safety property, not just the happy path.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKILL_DIR / "scripts"))
@@ -108,6 +110,43 @@ class FilesPossiblyMatchingTests(unittest.TestCase):
         if result is not None:
             self.assertNotIn(missing, result)
 
+    def test_prefilter_polls_progress_while_scanner_is_still_running(self) -> None:
+        hay = self._write("slow.jsonl", '{"message": "noise"}\n')
+
+        class FakeProcess:
+            returncode = 1
+
+            def __init__(self):
+                self.calls = 0
+                self.running = True
+
+            def communicate(self, timeout=None):
+                self.calls += 1
+                if self.calls == 1:
+                    raise subprocess.TimeoutExpired(["rg"], timeout)
+                self.running = False
+                return "", ""
+
+            def poll(self):
+                return None if self.running else self.returncode
+
+            def terminate(self):
+                self.running = False
+
+            def kill(self):
+                self.running = False
+
+        progress: list[str] = []
+        with mock.patch("_core.text.subprocess.Popen", return_value=FakeProcess()):
+            result = files_possibly_matching(
+                [hay],
+                ["needle"],
+                progress_interval_seconds=0.01,
+                on_progress=lambda: progress.append("tick"),
+            )
+        self.assertEqual(result, set())
+        self.assertTrue(progress)
+
 
 class IterJsonlLineKeywordsTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -179,6 +218,14 @@ class IterJsonlLineKeywordsTests(unittest.TestCase):
         path = self._write_lines(records)
         results = list(iter_jsonl(path, bounded=True, line_keywords=["needle"]))
         self.assertEqual([r["message"] for r in results], ["has needle"])
+
+    def test_strict_mode_raises_instead_of_hiding_malformed_tail(self) -> None:
+        path = self._write_lines([{"message": "valid"}])
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write('{"message":"truncated"\n')
+        self.assertEqual(list(iter_jsonl(path))[0]["message"], "valid")
+        with self.assertRaises(json.JSONDecodeError):
+            list(iter_jsonl(path, strict=True))
 
 
 if __name__ == "__main__":
