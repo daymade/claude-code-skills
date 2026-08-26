@@ -6,6 +6,7 @@ missing, or ambiguous local store.
 ## Contents
 
 - Source order: Claude Code, archive registry, Codex, and Kimi CLI
+- Codex verbatim user-input ledger
 - Codex writer-lock observation
 - Verified format boundary
 - Cross-platform behavior
@@ -104,6 +105,28 @@ before raw-rollout recovery is attempted, so the alternate path is visible
 rather than a silent fallback.
 Codex raw-rollout fallback and Kimi CLI state/wire parsing continue to compute
 internal record bounds without using file mtime.
+
+### Codex verbatim user-input ledger
+
+`<codex-home>/history.jsonl` is a separate prompt-history ledger whose observed
+rows contain a string `session_id`, numeric epoch-second `ts`, and string
+`text`. It is the direct source for “what did I type?” output; the state
+database remains the source for conversation inventory metadata, and rollout
+JSONL remains the source for full-event search or continuation. Do not replace
+one with another merely because all three mention the same Session ID.
+
+The verbatim-input command reads the ledger strictly. A malformed or unsupported
+row aborts before output so a partial read cannot look complete. Global recent
+mode sorts all rows by internal `ts`, selects the requested window, then groups
+it by Session. Explicit Session mode preserves the IDs in the caller's order
+and applies one newest-first limit to each Session. Physical line order is only
+a stable tie-breaker when timestamps are equal; file mtime is never consulted.
+
+Markdown escapes table delimiters and renders stored newlines as `<br>`; JSON
+keeps the exact text string. Neither format deduplicates repeated inputs or
+invents a topic/title for a Session. This ledger path was verified against a
+real Codex CLI 0.147.0 store on 2026-08-27; it is a tested private-format
+boundary, not a guarantee that future Codex versions cannot change it.
 
 ### Codex writer-lock observation
 
@@ -244,6 +267,10 @@ persisted workspace through `--cwd` or use `--all-projects` to discover it.
   Memory use stays bounded, but large archives can take longer than a
   prefix-only inventory.
 - Titles are whitespace-normalized and truncated before printing.
+- Verbatim Codex input mode intentionally exposes full prompt text, which may
+  contain credentials or private business context. Keep its output local unless
+  the user explicitly asks to share it; do not sanitize or summarize a private
+  readback that was requested as exact wording.
 - No transcript, title, or path is uploaded or written to a cache.
 - Writer-lock observation neither writes lock bytes nor exposes process IDs. It
   annotates only conversations already admitted by the inventory filters.
@@ -259,6 +286,7 @@ persisted workspace through `--cwd` or use `--all-projects` to discover it.
 | Invalid history source registry | The source set cannot be trusted | Fix the reported JSON/schema/path error and rerun |
 | Project directory not found | Claude's encoded project directory did not match | Use the exact workspace path or `--all-projects` |
 | No compatible Codex database | SQLite is absent, unreadable, or has an unknown schema | Review the warning; raw rollout scanning runs next |
+| Codex prompt history missing or malformed | Exact user-input output cannot be proven complete | Fix or restore `<codex-home>/history.jsonl`; do not fall back to inferred transcript text or render a partial table |
 | Codex row says `writer-lock file held` | A process owned that exact advisory lock during the snapshot; its identity is unknown | Use the exact ID with `daymade-claude-code:continue-codex-work` to inspect stored thread context; do not infer process identity or progress from the lock alone |
 | Writer-lock observation is `busy` | Another process held the coordination lock; its identity and purpose are unknown | Report the unresolved runtime boundary and make no inactivity claim; take a fresh snapshot only on a new user request |
 | Writer-lock observation is `partial` or `unavailable` | The runtime lock surface was not fully observable on this platform/store | Keep the history result, but do not classify unmarked sessions as stopped |
