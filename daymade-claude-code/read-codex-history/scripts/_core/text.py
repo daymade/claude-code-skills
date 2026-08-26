@@ -141,6 +141,12 @@ def iter_jsonl(
                 lines += 1
                 if bounded and (consumed > MAX_PREFIX_BYTES or lines > MAX_PREFIX_LINES):
                     return
+                # Empty physical separators carry no JSONL record. Strict mode is
+                # strict about malformed records, not about harmless whitespace
+                # between them; the exact inherited-prefix reader follows the same
+                # rule so selected and parent paths cannot disagree.
+                if not line.strip():
+                    continue
                 if line_keywords is not None:
                     haystack = line.casefold()
                     if not any(kw in haystack for kw in line_keywords) and not any(

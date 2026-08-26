@@ -103,6 +103,70 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
             ["GOVERNING-OBJECTIVE：完成真实业务结果", "继续"],
         )
 
+    def test_middle_assistant_success_asset_is_not_compressed_away(self):
+        session_file = self._session_file(
+            [
+                {
+                    "type": "user",
+                    "sessionId": "session-assets",
+                    "message": {"role": "user", "content": "ORIGINAL OBJECTIVE"},
+                },
+                {
+                    "type": "assistant",
+                    "sessionId": "session-assets",
+                    "message": {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "assistant first state"}],
+                    },
+                },
+                {
+                    "type": "assistant",
+                    "sessionId": "session-assets",
+                    "message": {
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "MIDDLE-PROVEN-ASSET=/assets/success.md",
+                            }
+                        ],
+                    },
+                },
+                {
+                    "type": "assistant",
+                    "sessionId": "session-assets",
+                    "message": {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "assistant latest state"}],
+                    },
+                },
+                {
+                    "type": "user",
+                    "sessionId": "session-assets",
+                    "message": {"role": "user", "content": "继续"},
+                },
+            ]
+        )
+        parsed = MODULE.parse_session_structure(session_file)
+        briefing = MODULE.build_briefing(
+            {"sessionId": "session-assets"},
+            parsed,
+            str(session_file.parent),
+            session_file.parent,
+            session_file,
+            full=True,
+        )
+
+        self.assertIn("MIDDLE-PROVEN-ASSET=/assets/success.md", briefing)
+        self.assertLess(
+            briefing.index("assistant first state"),
+            briefing.index("MIDDLE-PROVEN-ASSET=/assets/success.md"),
+        )
+        self.assertLess(
+            briefing.index("MIDDLE-PROVEN-ASSET=/assets/success.md"),
+            briefing.index("assistant latest state"),
+        )
+
     def test_malformed_record_fails_closed(self):
         handle = tempfile.NamedTemporaryFile(
             mode="w", suffix=".jsonl", delete=False, encoding="utf-8"

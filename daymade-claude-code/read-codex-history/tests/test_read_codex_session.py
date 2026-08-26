@@ -78,6 +78,64 @@ class SchemaSelectionTests(unittest.TestCase):
         self.assertEqual(data["assistant_messages"], [LONG_RESPONSE])
         self.assertEqual(data["end_reason"], "completed")
 
+    def test_middle_assistant_success_asset_survives_handoff_rendering(self):
+        rollout = _write_rollout(
+            [
+                {"type": "session_meta", "payload": {"id": "asset-session", "cwd": "/tmp"}},
+                _msg("user", "ORIGINAL OBJECTIVE", "input_text"),
+                _msg("assistant", "assistant first state", "output_text"),
+                _msg(
+                    "assistant",
+                    "MIDDLE-PROVEN-ASSET=/assets/only-middle-success.md",
+                    "output_text",
+                ),
+                _msg("assistant", "assistant latest state", "output_text"),
+                _msg("user", "continue", "input_text"),
+            ]
+        )
+        data = mod.parse_codex_rollout(rollout)
+        briefing = mod.build_briefing(None, data, "/tmp", full=True)
+
+        self.assertIn(
+            "MIDDLE-PROVEN-ASSET=/assets/only-middle-success.md", briefing
+        )
+        self.assertLess(
+            briefing.index("assistant first state"),
+            briefing.index("MIDDLE-PROVEN-ASSET=/assets/only-middle-success.md"),
+        )
+        self.assertLess(
+            briefing.index("MIDDLE-PROVEN-ASSET=/assets/only-middle-success.md"),
+            briefing.index("assistant latest state"),
+        )
+
+    def test_selected_and_inherited_rollout_paths_accept_blank_lines(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "blank-lines.jsonl"
+            records = [
+                {"type": "session_meta", "payload": {"id": "blank-session", "cwd": "/tmp"}},
+                _ev("user_message", message="legal old schema with blanks"),
+            ]
+            path.write_text(
+                "\n"
+                + json.dumps(records[0])
+                + "\n \t\n"
+                + json.dumps(records[1])
+                + "\n",
+                encoding="utf-8",
+            )
+
+            selected = mod.parse_codex_rollout(path)
+            inherited = mod.parse_codex_rollout(
+                path, end_byte_offset=path.stat().st_size
+            )
+
+            self.assertEqual(
+                selected["user_messages"], ["legal old schema with blanks"]
+            )
+            self.assertEqual(
+                inherited["user_messages"], ["legal old schema with blanks"]
+            )
+
 
 class RolloutIdentityResolutionTests(unittest.TestCase):
     def test_fused_rollout_with_two_session_meta_ids_is_rejected(self):
@@ -1184,7 +1242,7 @@ class TruncationContractTests(unittest.TestCase):
         self.assertNotIn("omitted", expanded)
         self.assertIn("用户段 5", expanded)
 
-    def test_full_keeps_every_assistant_only_state(self):
+    def test_default_and_full_keep_every_assistant_only_state(self):
         timeline = [
             {
                 "session_id": "parent",
@@ -1199,7 +1257,7 @@ class TruncationContractTests(unittest.TestCase):
         mod._append_handoff_timeline(default_sections, timeline, full=False)
         default = "\n".join(default_sections)
         self.assertIn("状态 1", default)
-        self.assertNotIn("状态 2", default)
+        self.assertIn("状态 2", default)
         self.assertIn("状态 3", default)
 
         full_sections: list[str] = []

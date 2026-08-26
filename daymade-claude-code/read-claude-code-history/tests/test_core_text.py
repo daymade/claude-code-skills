@@ -227,6 +227,17 @@ class IterJsonlLineKeywordsTests(unittest.TestCase):
         with self.assertRaises(json.JSONDecodeError):
             list(iter_jsonl(path, strict=True))
 
+    def test_strict_mode_ignores_blank_physical_lines(self) -> None:
+        path = self.root / "session-with-blanks.jsonl"
+        path.write_text(
+            "\n" + json.dumps({"message": "valid"}) + "\n \t\n",
+            encoding="utf-8",
+        )
+
+        self.assertEqual(
+            list(iter_jsonl(path, strict=True)), [{"message": "valid"}]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

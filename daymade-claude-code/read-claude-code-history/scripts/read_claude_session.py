@@ -625,47 +625,14 @@ def extract_turn_timeline(messages: List[Dict]) -> List[Dict]:
 
 
 def _handoff_segments(timeline: List[Dict]) -> List[List[Dict]]:
-    """Keep every human turn and first/latest assistant state before the next."""
-    user_positions = [
-        index for index, turn in enumerate(timeline) if turn["role"] == "user"
-    ]
-    if not user_positions:
-        assistants = [turn for turn in timeline if turn["role"] == "assistant"]
-        if not assistants:
-            return []
-        if len(assistants) == 1:
-            return [[assistants[0]]]
-        return [[assistants[0], assistants[-1]]]
+    """Retain every textual turn in physical record order.
 
-    segments = []
-    leading_assistants = [
-        turn
-        for turn in timeline[: user_positions[0]]
-        if turn["role"] == "assistant"
-    ]
-    if leading_assistants:
-        leading = [leading_assistants[0]]
-        if leading_assistants[-1] != leading_assistants[0]:
-            leading.append(leading_assistants[-1])
-        segments.append(leading)
-    for number, position in enumerate(user_positions):
-        end = (
-            user_positions[number + 1]
-            if number + 1 < len(user_positions)
-            else len(timeline)
-        )
-        assistants = [
-            turn
-            for turn in timeline[position + 1 : end]
-            if turn["role"] == "assistant"
-        ]
-        segment = [timeline[position]]
-        if assistants:
-            segment.append(assistants[0])
-            if assistants[-1] != assistants[0]:
-                segment.append(assistants[-1])
-        segments.append(segment)
-    return segments
+    First/latest assistant compression can erase the only proven asset or
+    successful route between two user messages. Character clipping already bounds
+    default output; ``--full`` removes that clipping without changing which turns
+    exist in the evidence receipt.
+    """
+    return [timeline] if timeline else []
 
 
 def _clip(text: str, limit: int, full: bool) -> str:
@@ -680,8 +647,8 @@ def _append_timeline(sections: List[str], messages: List[Dict], full: bool) -> N
         return
     sections.append("\n## Chronological Handoff Timeline\n")
     sections.append(
-        "Every retained human turn is shown in record order with the first and "
-        "latest assistant state before the next human turn.\n"
+        "Every retained human and assistant text turn is shown in physical record "
+        "order. Default mode clips long turns; `--full` changes only clipping.\n"
     )
     for segment in _handoff_segments(timeline):
         for turn in segment:

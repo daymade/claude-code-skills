@@ -925,49 +925,13 @@ def _is_continuation_cue(text: str) -> bool:
 def _handoff_timeline_segments(
     timeline: list[dict[str, Any]], full: bool
 ) -> list[Any]:
-    """Keep every user turn plus the first/latest assistant state before the next.
+    """Retain every selected textual turn in record order.
 
-    A role-separated tail cannot show which reply preceded which correction. The
-    handoff view therefore preserves record order while compressing tool-heavy
-    assistant narration. No retained user turn is count-capped; ``--full``
-    removes per-message character clipping.
+    The richer stream selection has already removed schema mirrors. Dropping
+    middle assistant turns here would instead discard unique work products and
+    successful routes. ``full`` affects character clipping at render time only.
     """
-    user_positions = [
-        index for index, turn in enumerate(timeline) if turn.get("role") == "user"
-    ]
-    segments: list[list[dict[str, Any]]] = []
-    if not user_positions:
-        assistant_turns = [
-            turn for turn in timeline if turn.get("role") == "assistant"
-        ]
-        if assistant_turns:
-            segment = list(assistant_turns) if full else [assistant_turns[0]]
-            if not full and assistant_turns[-1] != assistant_turns[0]:
-                segment.append(assistant_turns[-1])
-            segments.append(segment)
-    else:
-        for ordinal, position in enumerate(user_positions):
-            next_position = (
-                user_positions[ordinal + 1]
-                if ordinal + 1 < len(user_positions)
-                else len(timeline)
-            )
-            assistant_turns = [
-                turn
-                for turn in timeline[position + 1 : next_position]
-                if turn.get("role") == "assistant"
-            ]
-            segment = [timeline[position]]
-            if assistant_turns:
-                segment.append(assistant_turns[0])
-                if assistant_turns[-1] != assistant_turns[0]:
-                    segment.append(assistant_turns[-1])
-            segments.append(segment)
-
-    # Never drop a retained user turn in default mode: the actual objective or
-    # correction can occur anywhere in an un-compacted history. Character
-    # clipping still bounds each message; --full removes that clipping.
-    return segments
+    return [timeline] if timeline else []
 
 
 def _append_handoff_timeline(
@@ -984,9 +948,8 @@ def _append_handoff_timeline(
         return
     sections.append(f"\n{'#' * heading_level} {heading}\n")
     sections.append(
-        "Every retained user turn is shown in record order, with the first and latest "
-        "assistant state before the next user turn. This keeps corrections attached to "
-        "the state they corrected without replaying every tool-progress narration.\n"
+        "Every retained user and assistant text turn is shown in record order. "
+        "Default mode clips long turns; `--full` changes only clipping.\n"
     )
     for segment in _handoff_timeline_segments(timeline, full):
         for turn in segment:
