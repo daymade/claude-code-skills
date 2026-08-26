@@ -124,6 +124,32 @@ class HistoryIndexTests(unittest.TestCase):
             all_projects=True,
         )
 
+    def test_embed_defaults_are_bounded_and_invalid_limits_fail_before_backend(self) -> None:
+        args = history_index.build_parser().parse_args(["embed"])
+        self.assertEqual(args.batch_size, 16)
+        self.assertEqual(args.memory_limit_gb, 8.0)
+        self.assertEqual(args.cache_limit_gb, 0.5)
+        with self.assertRaisesRegex(history_index.IndexError, "memory-limit"):
+            history_index.embed_chunks(
+                self.db,
+                model_path=None,
+                download_model=False,
+                max_seconds=1,
+                batch_size=16,
+                memory_limit_gb=0,
+                cache_limit_gb=0,
+            )
+        with self.assertRaisesRegex(history_index.IndexError, "cache-limit"):
+            history_index.embed_chunks(
+                self.db,
+                model_path=None,
+                download_model=False,
+                max_seconds=1,
+                batch_size=16,
+                memory_limit_gb=8,
+                cache_limit_gb=9,
+            )
+
     def test_fresh_build_has_versioned_schema_and_usable_column(self) -> None:
         session_id = "11111111-1111-4111-8111-111111111111"
         write_jsonl(

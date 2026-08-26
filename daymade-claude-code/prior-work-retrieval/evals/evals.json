@@ -1,0 +1,95 @@
+{
+  "skill_name": "prior-work-retrieval",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我们以前在另一个项目解决过类似的 provider API 对接，先复用，不要猜 token 和 endpoint。",
+      "expected_output": "Loads the explicit manifest, searches code/docs/skills and history carriers, opens the prior provider contract, and records a reuse/adapt receipt before implementation.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "做这个报告前先看看其他项目的成功 SOP 和成品，不要重新造流程。",
+      "expected_output": "Searches declared cross-project docs, deliverables, skills, and conversations; verifies authority and currentness; cites adopted candidate IDs.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "我记得以前聊过这个能力，但关键词不一样。找到那次对话。",
+      "expected_output": "Uses the declared semantic conversation adapter, treats ranked hits as candidates, and opens the original session path before reuse.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "仓库里没有专门 runner，所以这套能力应该不存在，对吧？",
+      "expected_output": "Rejects carrier-equals-capability reasoning, searches artifacts/tests/history for finished outputs, and does not declare absence from one missing implementation shape.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "历史会议里说过 A，但北极星后来改成 B。给我今天该执行的方案。",
+      "expected_output": "Reads current operating context first, marks the historical meeting as raw history, and prevents it from overriding the newer project SSOT.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "某个 agent 说年份未核实，所以对外别写年份。",
+      "expected_output": "Searches the entire declared batch/source set, checks adjacent evidence, and does not globalize one agent's local not-found result.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "写一个新的视觉 QA 流程。",
+      "expected_output": "Finds the existing visual-QA Skill and runtime contracts before proposing changes; chooses reuse/adapt rather than replacing it from memory.",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "改这套 deck 的截图生成方式。",
+      "expected_output": "Searches downstream consumer docs and accepted deck artifacts, verifies their filenames/contracts, and records the compatibility decision.",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "读取项目最新进展，群里和私聊也要覆盖。",
+      "expected_output": "Searches project docs, meeting and archived WeChat carriers, invokes the live-WeChat manual route when relevant, and reports any uncovered voice/media instead of claiming global coverage.",
+      "files": []
+    },
+    {
+      "id": 10,
+      "prompt": "代码搜索没命中，所以以前没有做过这个功能。",
+      "expected_output": "Refuses the absence claim, widens to documents, artifacts, Skills, conversations, meetings, and declared manual carriers before concluding.",
+      "files": []
+    },
+    {
+      "id": 11,
+      "prompt": "只要流程完整、检查项全绿，就说明方案成功了。",
+      "expected_output": "Keeps the business outcome as the first receipt field and prefers operating-result evidence over proxy/process completeness.",
+      "files": []
+    },
+    {
+      "id": 12,
+      "prompt": "搜索结果是零，直接写 no prior work。",
+      "expected_output": "Explains that zero results are an observation, checks carrier failures and term widening, and refuses a no-reuse receipt whose only reason is zero hits.",
+      "files": []
+    },
+    {
+      "id": 13,
+      "prompt": "已有 Skill 的参考文档里可能有答案，但主 SKILL 没写。",
+      "expected_output": "Searches declared Skill references as well as SKILL.md and verifies the referenced contract at its source.",
+      "files": []
+    },
+    {
+      "id": 14,
+      "prompt": "会议纪要说某人同意了，拿它做决策依据。",
+      "expected_output": "Routes to raw transcript, checks speaker turn and current decision status, and treats a historical quote as what was said rather than automatic truth.",
+      "files": []
+    },
+    {
+      "id": 15,
+      "prompt": "微信归档里没找到，说明群里从没讨论过。",
+      "expected_output": "Distinguishes registered archive coverage from live WeChat, invokes the manual live route when required, and does not turn an archive miss into a global negative claim.",
+      "files": []
+    }
+  ]
+}

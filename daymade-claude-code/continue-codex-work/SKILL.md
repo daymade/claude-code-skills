@@ -16,9 +16,9 @@ argument-hint: "[session-id]"
 
 ## Overview
 
-Recover actionable context from a prior **Codex CLI** session and continue execution in the current conversation. Codex records each session as a rollout JSONL under `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (with an optional `state_*.sqlite` index). Use those local files as the source of truth, then continue with concrete edits and checks — not just summarizing.
+Recover actionable context from a prior **Codex CLI** session and continue execution in the current conversation. Codex records each session as a rollout JSONL under `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (with an optional `state_*.sqlite` index). If the selected session inherited history from a parent, the extractor automatically follows the complete declared lineage and reads every ancestor only through the exact fork snapshot recorded in `history_base`. Use those local files as the source of truth, then continue with concrete edits and checks — not just summarizing.
 
-**Why this exists instead of `codex resume`**: replaying a full rollout re-feeds every reasoning step, tool call, and tool output back into the context window. For long sessions that wastes the window on resolved turns and stale output. This skill **selectively reconstructs** only actionable context — the last compaction's surviving requests, recent user/assistant turns, the tool calls and files edited, and how the session ended — giving a fresh start with prior knowledge.
+**Why this exists instead of `codex resume`**: replaying a full rollout re-feeds every reasoning step, tool call, and tool output back into the context window. For long sessions that wastes the window on resolved turns and stale output. This skill **selectively reconstructs** only actionable context — inherited fork snapshots, the last compaction's surviving requests, recent user/assistant turns, the tool calls and files edited, and how the session ended — giving a fresh start with prior knowledge.
 
 This is the Codex sibling of `continue-claude-work`. The two are deliberately split because the on-disk formats differ: Claude Code writes `~/.claude/projects/<encoded>/<session>.jsonl`, Codex writes `~/.codex/sessions/.../rollout-*.jsonl` with a different record schema. Use **this** skill for Codex sessions; use `continue-claude-work` for Claude Code sessions.
 
@@ -48,7 +48,7 @@ python3 scripts/extract_codex_resume.py --list
 # List across all projects (not just the current cwd)
 python3 scripts/extract_codex_resume.py --all-projects --list
 
-# Complete text of long sections (default output truncates and prints this hint itself)
+# Untruncated retained text (does not reverse compaction or remove count caps)
 python3 scripts/extract_codex_resume.py --session <SESSION_ID> --full
 ```
 
@@ -56,6 +56,8 @@ python3 scripts/extract_codex_resume.py --session <SESSION_ID> --full
 
 - A `# Codex Resume Context Briefing` header, then `## Session Info` (id, project cwd, last-active time, title, Codex version).
 - A one-line `**Session end reason**` — the single most important routing signal (see Step 2).
+- `## Inherited Session Lineage` — when the selected session is a fork, every parent edge from the oldest retained ancestor to the selected child. Each line shows the exact inherited byte prefix and whether the parent later grew. A child whose only local prompt is `继续` is called out explicitly: that prompt is a continuation cue, not the task.
+- `## Inherited Actionable Context` — each ancestor's last retained compact summary plus the combined recent requests/responses, latest plan, tool calls, and edited files, kept separate from the selected child's local turns. If the child's only prompt is a continuation cue, those inherited summaries auto-expand even without `--full`; making the agent manually discover that escape hatch would recreate the original failure. This is what prevents a tiny fork rollout from hiding the actual task.
 - `## Compact Summary` — if the session was compacted, the surviving user/assistant thread (system preamble and re-injected `AGENTS.md` are stripped out).
 - `## Last User Requests` and `## Last Assistant Responses` — the most recent turns. Long entries are truncated and end with a `rerun with --full` hint — that hint means there is more, and names exactly how to get it. A user turn shown as `[skill invoked: <name> — injected body omitted]` is a skill invocation (Codex delivers the whole bundle as the message; the fact matters, the bytes don't).
 - `## Latest Plan State` — if the session used Codex's `update_plan` tool, the single most recent plan call, rendered as a step checklist. This is the highest-signal "what stage is this task at" artifact for a multi-step task, and it survives even in very long sessions where the generic tool-call list below would have evicted or truncated it.
@@ -80,10 +82,11 @@ The briefing's **Session end reason** tells you how the prior run stopped. Route
 ### Step 3: Reconcile and Continue
 
 Before making changes:
-1. Confirm the current directory matches the session's `cwd`.
-2. If the git branch differs from what the briefing shows, note it and decide whether to switch.
-3. Inspect the files listed under **Files Edited** — verify the prior run's changes actually landed (a rollout records that a patch was *attempted*; confirm the current file state).
-4. Do not assume old claims hold without checking — compaction and tool output are lossy.
+1. If `Inherited Session Lineage` appears, identify the actual objective from `Inherited Actionable Context`; never treat a local `继续` / `continue` cue as a standalone specification.
+2. Confirm the current directory matches the session's `cwd`.
+3. If the git branch differs from what the briefing shows, note it and decide whether to switch.
+4. Inspect the files listed under **Files Edited** — verify the prior run's changes actually landed (a rollout records that a patch was *attempted*; confirm the current file state).
+5. Read the `Recovery boundary` literally: exact byte ancestry does not reverse Codex compaction, restore omitted attachment content, or prove old tool claims. Verify the current workspace.
 
 Then:
 - Implement the next concrete step aligned with the latest user request.
@@ -111,6 +114,12 @@ Codex's rollout schema is not Claude's. The parser reads:
 - **Tool calls** from `response_item/function_call` and `custom_tool_call`, paired with their `*_output` by `call_id` (an unpaired call means it never returned). The most recent `update_plan` call gets extra treatment: its full parsed `plan` (and `explanation` when present) is tracked separately, last-call-wins, exempt from the 120-char tool-call preview and the last-20 window — measured stable on ~4,000 real calls, always a JSON string parsing to `{"plan": [...]}` or `{"explanation": ..., "plan": [...]}`, each step `{"step", "status"}`.
 - **Compaction** from `compacted` records — Codex replaces the compacted window with a `replacement_history` of messages (not a single summary), and re-injects the system preamble; the parser keeps only the user/assistant turns.
 
+### Fork lineage and exact snapshots
+
+A fork's `session_meta.history_base` declares the parent `thread_id`, `end_byte_offset`, and (when present) `end_ordinal_exclusive`. The extractor follows that chain recursively, root first, and parses each parent only in the half-open byte range `[0, end_byte_offset)`. This matters because the parent's rollout may keep growing after the child forks; reading the parent's current tail would import events the child never inherited and can silently change the recovered task.
+
+Lineage recovery is fail-fast. A `forked_from_id` / `history_base.thread_id` mismatch, missing parent rollout, cycle, out-of-range offset, or offset through the middle of a JSONL record stops extraction with the exact reason. If a rollout names only `forked_from_id` but provides no byte boundary, the briefing reports that limitation and does **not** guess from the parent's current file. Archived parents are resolved as well as live sessions.
+
 ### Session end reason detection
 
 Classified from the tail of the rollout: a trailing `task_complete` or `final_answer`-phase assistant message is **completed**; unpaired tool calls or a trailing `turn_aborted` are **interrupted**; tools that ran with no closing message, or a tail stuck at a `commentary`-phase message (cut off mid-turn), are **in progress**; a trailing user message is **abandoned**; three or more tool failures are an **error cascade**. A `task_complete` can also carry an `error` (`{"message", "codex_error_info"}`) — measured on a corpus scan of 468 real occurrences across 6,650 rollouts, spanning 6 distinct `codex_error_info` values. This is captured on every `task_complete` (last-wins, so a later clean turn correctly clears a stale earlier error) and composed with the closing message rather than treated as mutually exclusive with it: error present **and** no closing message (464/468 in the scan) is **errored**, inlining the exact `codex_error_info` and message; error present **but** a real closing message anyway (4/468) stays **completed**, with a caveat noting the error rather than hiding it.
@@ -123,6 +132,7 @@ Codex re-injects large system blocks after compaction and between turns — the 
 
 - Do not run `codex resume` or `codex --continue` — this skill provides context recovery within the current conversation.
 - Do not treat the compact summary or tool output as complete truth — they are lossy. Always verify claims against the current workspace.
+- Do not replace an exact inherited snapshot with the parent's current full rollout. Post-fork parent events did not belong to the child.
 - Do not overwrite unrelated working-tree changes.
 - Do not load a whole rollout file into context — always use the script (rollouts are routinely multiple MB).
 
@@ -130,8 +140,8 @@ Codex re-injects large system blocks after compaction and between turns — the 
 
 - Cannot recover sessions whose rollout files were deleted from `~/.codex/sessions/`.
 - Cannot access sessions from other machines (files are local only).
-- Long briefing sections (compact summary, user requests, assistant responses) are truncated by default; each truncation point prints a `rerun with --full` hint, and `--full` prints the complete text (per-section count caps still apply). Tool-call previews stay capped at 120 chars by design — for a full command or patch, grep the rollout for the call's `call_id`.
-- Compaction is lossy — early-conversation detail may be gone.
+- Long briefing sections (compact summary, user requests, assistant responses) are truncated by default; each truncation point prints a `rerun with --full` hint, and `--full` prints the untruncated **retained** text. Per-section message/file/tool count caps still apply. Tool-call previews stay capped at 120 chars by design — for a full command or patch, grep the rollout for the call's `call_id`.
+- Compaction is lossy — early-conversation detail may be gone even when lineage is exact and `--full` is used. Image-only turns remain markers; the original image/audio bytes are not reconstructed into the briefing.
 - Codex has no per-session auto-memory equivalent to Claude Code's `MEMORY.md`; the project's `AGENTS.md` is deliberately filtered out as re-injected noise, so read it separately if you need the project's standing instructions.
 
 ## Example Trigger Phrases

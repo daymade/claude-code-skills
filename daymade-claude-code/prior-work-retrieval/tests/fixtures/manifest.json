@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "state_dir": "/tmp/tinkle_prior-work-state",
+  "sources": [
+    {
+      "id": "fixture-docs",
+      "carrier": "docs",
+      "mode": "filesystem",
+      "root": "/tmp/tinkle_prior-work-docs",
+      "includes": ["**/*.md"],
+      "authority": "project_ssot",
+      "required": true,
+      "max_results": 5
+    }
+  ]
+}

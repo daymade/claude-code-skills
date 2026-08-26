@@ -101,10 +101,10 @@
     },
     {
       "name": "daymade-claude-code",
-      "description": "Claude Code operations suite that bundles archive-aware local conversation discovery across Claude Code and Codex, internal-timestamp full-event session search and recovery, interrupted-work continuation, plugin/skill troubleshooting, CLAUDE.md progressive disclosure optimization, statusline configuration, exported .txt repair, full claude.ai conversation extraction with tool-call rendering and file download, plugin marketplace development and suite consolidation, writing/testing/debugging Claude Code hooks, multi-provider profile isolation for running Kimi/MiniMax/GLM/DeepSeek/StepFun/Anthropic in separate windows, local source sync for Claude/Codex skill installs, personal-memory migration into tool-agnostic AGENTS.md reference docs, and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
+      "description": "Claude Code operations suite that bundles cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; archive-aware local conversation discovery across Claude Code and Codex; internal-timestamp full-event session search and recovery; interrupted-work continuation; plugin/skill troubleshooting; CLAUDE.md progressive disclosure optimization; statusline configuration; exported .txt repair; full claude.ai conversation extraction with tool-call rendering and file download; plugin marketplace development and suite consolidation; writing/testing/debugging Claude Code hooks; multi-provider profile isolation; personal-memory migration into tool-agnostic AGENTS.md reference docs; and terminal-output-to-PNG rendering for visual CLI verification under one shared namespace. Install once to get the full Claude Code power-user toolkit.",
       "source": "./daymade-claude-code",
       "strict": false,
-      "version": "1.55.0",
+      "version": "1.56.0",
       "category": "suite",
       "keywords": [
         "suite",
@@ -112,6 +112,9 @@
         "session-recovery",
         "conversation-history",
         "local-history",
+        "prior-work",
+        "retrieval",
+        "reuse",
         "claude-md",
         "statusline",
         "troubleshooting",
@@ -139,7 +142,8 @@
         "./claude-switch-models-setup",
         "./read-claude-web-conversation",
         "./claude-migrate-memory-to-doc",
-        "./claude-code-hooks"
+        "./claude-code-hooks",
+        "./prior-work-retrieval"
       ]
     },
     {

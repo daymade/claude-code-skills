@@ -205,7 +205,7 @@ claude plugin install daymade-codex@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨 Claude Code/Codex 的快速本地对话发现、会话恢复、CLAUDE.md 调优、故障诊断、statusline 配置、导出修复、marketplace 开发与 suite 收敛、终端截图渲染、用量分析、多 Provider 模型切换，以及 Claude Code/Codex 安装目录的自动本地 skill 源码同步：
+一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨代码、项目文档、Skill/SOP、会议、微信归档与对话历史的已有工作检索；跨 Claude Code/Codex 的快速本地对话发现；会话恢复；CLAUDE.md 调优；故障诊断；statusline 配置；导出修复；marketplace 开发与 suite 收敛；终端截图渲染；用量分析；以及多 Provider 模型切换：
 
 ```text
 /daymade-claude-code:local-conversation-history
@@ -220,6 +220,10 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:terminal-screenshot
 /daymade-claude-code:claude-usage-analyst
 /daymade-claude-code:claude-switch-models-setup
+/daymade-claude-code:read-claude-web-conversation
+/daymade-claude-code:claude-migrate-memory-to-doc
+/daymade-claude-code:claude-code-hooks
+/daymade-claude-code:prior-work-retrieval
 ```
 
 安装后调用统一显示为 `daymade-claude-code:<skill>`，共享同一命名空间。这些技能仅作为套件发布——安装套件即可获得全部技能。
@@ -3499,6 +3503,9 @@ review 后修复/落地时，使用 **github-review-pr**。
 ### 会话历史与文件恢复
 使用 **claude-code-history-files-finder** 从之前的 Claude Code 会话中恢复已删除的文件、在对话历史中搜索特定实现，或跟踪文件随时间的演变。对于恢复意外删除的代码或查找你记得但找不到的功能实现至关重要。
 
+### 产出前复用已有工作
+当新的实现、方案、报告、流程、文档或对外消息可能在别处已有答案时，先使用 **prior-work-retrieval**。它按显式清单检索当前代码、项目决策、Skill/SOP、会议、微信归档与对话历史，再要求回到原始来源核验，并留下可审计的复用／适配／淘汰回执；排序检索零命中不会被偷换成「不存在」。
+
 ### 续做中断的 Claude 会话
 使用 **continue-claude-work** 从本地 `~/.claude` 产物中恢复最后一个可执行请求，并在不重新打开原始会话的情况下继续实现。若还需要跨会话搜索、统计分析或恢复已删除文件，可与 **claude-code-history-files-finder** 配合使用。
 
@@ -3609,6 +3616,7 @@ Codex 会话的存量上下文，把精确 ID 交给 **continue-codex-work**；�
 - **prompt-optimizer**：参见 `prompt-optimizer/references/ears_syntax.md` 了解 EARS 转换模式、`prompt-optimizer/references/domain_theories.md` 了解理论目录和 `prompt-optimizer/references/examples.md` 了解完整转换示例
 - **local-conversation-history**：参见 `daymade-claude-code/local-conversation-history/references/storage_and_portability.md` 了解本地数据源选择、跨平台路径、隐私边界和诊断方法
 - **claude-code-history-files-finder**：参见 `daymade-claude-code/claude-code-history-files-finder/references/session_file_format.md` 了解 JSONL 结构和 `daymade-claude-code/claude-code-history-files-finder/references/workflow_examples.md` 了解恢复工作流
+- **prior-work-retrieval**：参见 `daymade-claude-code/prior-work-retrieval/SKILL.md` 了解检索／核验工作流，参见 `daymade-claude-code/prior-work-retrieval/references/source-manifest.md` 了解显式载体清单契约
 - **docs-cleaner**：参见 `daymade-docs/docs-cleaner/SKILL.md` 了解整合工作流
 - **deep-research**：参见 `deep-research/references/research_report_template.md` 了解报告结构，并参见 `deep-research/references/source_quality_rubric.md` 了解来源分级标准
 - **pdf-creator**：参见 `daymade-docs/pdf-creator/SKILL.md` 了解 PDF 转换与字体设置

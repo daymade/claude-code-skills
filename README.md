@@ -207,7 +207,7 @@ These skills are bundle-only under `daymade-codex`.
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-This suite bundles the skills that extend Claude Code itself — fast local conversation discovery across Claude Code and Codex, session recovery, CLAUDE.md tuning, troubleshooting, statusline configuration, export repair, marketplace development and suite consolidation, terminal screenshot rendering, usage analysis, multi-provider model switching, and automatic local skill-source sync for Claude Code/Codex installs:
+This suite bundles the skills that extend Claude Code itself — cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; fast local conversation discovery across Claude Code and Codex; session recovery; CLAUDE.md tuning; troubleshooting; statusline configuration; export repair; marketplace development and suite consolidation; terminal screenshot rendering; usage analysis; and multi-provider model switching:
 
 ```text
 /daymade-claude-code:local-conversation-history
@@ -222,6 +222,10 @@ This suite bundles the skills that extend Claude Code itself — fast local conv
 /daymade-claude-code:terminal-screenshot
 /daymade-claude-code:claude-usage-analyst
 /daymade-claude-code:claude-switch-models-setup
+/daymade-claude-code:read-claude-web-conversation
+/daymade-claude-code:claude-migrate-memory-to-doc
+/daymade-claude-code:claude-code-hooks
+/daymade-claude-code:prior-work-retrieval
 ```
 
 Installed names render as `daymade-claude-code:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all members.
@@ -3492,6 +3496,9 @@ Use **prompt-optimizer** to transform vague feature requests into precise EARS s
 ### For Session History & File Recovery
 Use **claude-code-history-files-finder** to recover deleted files from previous Claude Code sessions, search for specific implementations across conversation history, or track file evolution over time. Essential for recovering accidentally deleted code or finding that feature implementation you remember but can't locate.
 
+### For Reusing Existing Work Before Producing
+Use **prior-work-retrieval** before a substantial implementation, plan, report, workflow, document, or external message may already have an answer elsewhere. It searches the explicit local source manifest across current code, project decisions, Skills/SOPs, meetings, archived WeChat, and conversation history; then requires source verification plus an auditable reuse/adapt/reject receipt. A zero-hit ranked search never becomes an absence claim.
+
 ### For Resuming Interrupted Claude Sessions
 Use **continue-claude-work** to recover the last actionable request from local `~/.claude` artifacts and continue implementation without reopening the original session. Combine with **claude-code-history-files-finder** when you need broader cross-session search, statistics, or deleted-file recovery.
 
@@ -3604,6 +3611,7 @@ Each skill includes:
 - **prompt-optimizer**: See `prompt-optimizer/references/ears_syntax.md` for EARS transformation patterns, `prompt-optimizer/references/domain_theories.md` for theory catalog, and `prompt-optimizer/references/examples.md` for complete transformations
 - **local-conversation-history**: See `daymade-claude-code/local-conversation-history/references/storage_and_portability.md` for local-store selection, cross-platform paths, privacy boundaries, and diagnostics
 - **claude-code-history-files-finder**: See `daymade-claude-code/claude-code-history-files-finder/references/session_file_format.md` for JSONL structure and `daymade-claude-code/claude-code-history-files-finder/references/workflow_examples.md` for recovery workflows
+- **prior-work-retrieval**: See `daymade-claude-code/prior-work-retrieval/SKILL.md` for the retrieval/verification workflow and `daymade-claude-code/prior-work-retrieval/references/source-manifest.md` for the explicit carrier contract
 - **docs-cleaner**: See `daymade-docs/docs-cleaner/SKILL.md` for consolidation workflows
 - **deep-research**: See `deep-research/references/research_report_template.md` for report structure and `deep-research/references/source_quality_rubric.md` for source triage
 - **pdf-creator**: See `daymade-docs/pdf-creator/SKILL.md` for PDF conversion and font setup
