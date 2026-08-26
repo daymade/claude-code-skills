@@ -15,6 +15,7 @@ The index is user-owned mutable state under ``~/.claude-history-index`` (or
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import json
 import os
@@ -60,6 +61,9 @@ RRF_K = 60
 CHUNK_SIZE = 512
 OVERLAP = 0.15
 MAX_LENGTH = 1024
+DEFAULT_EMBED_BATCH_SIZE = 16
+DEFAULT_EMBED_MEMORY_LIMIT_GB = 8.0
+DEFAULT_EMBED_CACHE_LIMIT_GB = 0.5
 
 # Official wangfenjin/simple v0.7.1 assets, observed through the GitHub release
 # API on 2026-08-26. GitHub supplies the SHA-256 digests; setup refuses any
@@ -1066,12 +1070,21 @@ def embed_chunks(
     download_model: bool,
     max_seconds: int | None,
     batch_size: int,
+    memory_limit_gb: float,
+    cache_limit_gb: float,
     simple_root: Path | None = None,
 ) -> dict[str, Any]:
     if batch_size <= 0:
         raise IndexError("--batch-size must be a positive integer")
     if max_seconds is not None and max_seconds <= 0:
         raise IndexError("--max-seconds must be a positive integer")
+    if memory_limit_gb <= 0:
+        raise IndexError("--memory-limit-gb must be positive")
+    if cache_limit_gb < 0 or cache_limit_gb > memory_limit_gb:
+        raise IndexError(
+            "--cache-limit-gb must be non-negative and no larger than "
+            "--memory-limit-gb"
+        )
     if platform.system() != "Darwin" or platform.machine() not in {"arm64", "aarch64"}:
         raise IndexError(
             "The verified vector backend uses MLX and currently supports Apple Silicon only. "
@@ -1087,6 +1100,11 @@ def embed_chunks(
             "uv run --with mlx-embeddings --with numpy --with sqlite-vec ..."
         ) from error
     resolved_model = _resolve_model_path(model_path, allow_download=download_model)
+    memory_limit_bytes = int(memory_limit_gb * 1024**3)
+    cache_limit_bytes = int(cache_limit_gb * 1024**3)
+    mx.set_memory_limit(memory_limit_bytes)
+    mx.set_cache_limit(cache_limit_bytes)
+    mx.reset_peak_memory()
     connection = _connect(
         db_path, simple_root=simple_root, load_vectors=True
     )
@@ -1114,11 +1132,13 @@ def embed_chunks(
     )
     _meta_set(connection, "vectors_complete", "false")
     connection.commit()
-    rows = connection.execute(
-        "SELECT id,text FROM chunks WHERE usable=1 AND id NOT IN "
-        "(SELECT rowid FROM vec_chunks) ORDER BY ntok,id"
-    ).fetchall()
-    if not rows:
+    missing_count = connection.execute(
+        "SELECT count(*) FROM chunks WHERE usable=1 AND id NOT IN "
+        "(SELECT rowid FROM vec_chunks)"
+    ).fetchone()[0]
+    if not missing_count:
+        mx.clear_cache()
+        gc.collect()
         _meta_set(connection, "embedding_model_id", EMBEDDING_MODEL_ID)
         _meta_set(connection, "embedding_model_path", str(resolved_model))
         _meta_set(connection, "embedding_model_revision", resolved_model.name)
@@ -1132,41 +1152,85 @@ def embed_chunks(
             "remaining": 0,
             "model_path": str(resolved_model),
             "elapsed_seconds": 0.0,
+            "memory_limit_bytes": memory_limit_bytes,
+            "cache_limit_bytes": cache_limit_bytes,
+            "peak_mlx_bytes": 0,
         }
-    model, tokenizer = load(str(resolved_model))
-    generate(model, tokenizer, texts=[rows[0][1]], max_length=MAX_LENGTH)
-    started = time.time()
-    embedded = 0
-    for offset in range(0, len(rows), batch_size):
-        batch = rows[offset : offset + batch_size]
-        vectors = generate(
+    rows = connection.execute(
+        "SELECT id,text FROM chunks WHERE usable=1 AND id NOT IN "
+        "(SELECT rowid FROM vec_chunks) ORDER BY ntok,id"
+    )
+    first_batch = rows.fetchmany(batch_size)
+    try:
+        model, tokenizer = load(str(resolved_model))
+        warmup = generate(
             model,
             tokenizer,
-            texts=[row[1] for row in batch],
+            texts=[first_batch[0][1]],
             max_length=MAX_LENGTH,
         ).text_embeds
-        mx.eval(vectors)
-        raw = np.array(vectors.astype(mx.float32), dtype=np.float32).tobytes()
-        stride = EMBEDDING_DIM * 4
-        connection.executemany(
-            "INSERT INTO vec_chunks(rowid,embedding) VALUES(?,?)",
-            [
-                (row[0], raw[index * stride : (index + 1) * stride])
-                for index, row in enumerate(batch)
-            ],
-        )
-        embedded += len(batch)
-        if (offset // batch_size) % 8 == 7:
-            time.sleep(4)
-        if embedded % 6400 < batch_size:
-            connection.commit()
-            elapsed = max(time.time() - started, 0.001)
-            print(
-                f"  embedded {embedded}/{len(rows)} · {embedded/elapsed:.0f} chunks/s",
-                flush=True,
+        mx.eval(warmup)
+        del warmup
+        mx.clear_cache()
+        gc.collect()
+    except RuntimeError as error:
+        connection.close()
+        raise IndexError(
+            "MLX failed during embedding warmup under the configured memory limit "
+            f"({memory_limit_gb:g} GiB): {error}"
+        ) from error
+    started = time.time()
+    embedded = 0
+    batch = first_batch
+    batch_number = 0
+    try:
+        while batch:
+            generated = generate(
+                model,
+                tokenizer,
+                texts=[row[1] for row in batch],
+                max_length=MAX_LENGTH,
             )
-        if max_seconds and time.time() - started >= max_seconds:
-            break
+            vectors = generated.text_embeds
+            mx.eval(vectors)
+            raw = np.array(vectors.astype(mx.float32), dtype=np.float32).tobytes()
+            stride = EMBEDDING_DIM * 4
+            connection.executemany(
+                "INSERT INTO vec_chunks(rowid,embedding) VALUES(?,?)",
+                [
+                    (row[0], raw[index * stride : (index + 1) * stride])
+                    for index, row in enumerate(batch)
+                ],
+            )
+            embedded += len(batch)
+            batch_number += 1
+            del raw, vectors, generated
+            mx.clear_cache()
+            if batch_number % 8 == 0:
+                gc.collect()
+                time.sleep(4)
+            if embedded % 1600 < batch_size:
+                connection.commit()
+                elapsed = max(time.time() - started, 0.001)
+                mlx_now = mx.get_active_memory() + mx.get_cache_memory()
+                print(
+                    f"  embedded {embedded}/{missing_count} · "
+                    f"{embedded/elapsed:.0f} chunks/s · MLX {mlx_now / 1024**3:.2f} GiB",
+                    flush=True,
+                )
+            if max_seconds and time.time() - started >= max_seconds:
+                break
+            batch = rows.fetchmany(batch_size)
+    except RuntimeError as error:
+        connection.commit()
+        active = mx.get_active_memory()
+        cached = mx.get_cache_memory()
+        connection.close()
+        raise IndexError(
+            "MLX embedding stopped at the configured memory boundary instead of "
+            f"risking system pressure: active={active} cache={cached} "
+            f"limit={memory_limit_bytes}; original error: {error}"
+        ) from error
     connection.commit()
     remaining = connection.execute(
         "SELECT count(*) FROM chunks WHERE usable=1 AND id NOT IN "
@@ -1179,12 +1243,18 @@ def embed_chunks(
     _meta_set(connection, "last_embedded_at", utc_now())
     _meta_set(connection, "vectors_complete", "true" if remaining == 0 else "false")
     connection.commit()
+    peak_mlx_bytes = mx.get_peak_memory()
+    mx.clear_cache()
+    gc.collect()
     connection.close()
     return {
         "embedded": embedded,
         "remaining": remaining,
         "model_path": str(resolved_model),
         "elapsed_seconds": round(time.time() - started, 3),
+        "memory_limit_bytes": memory_limit_bytes,
+        "cache_limit_bytes": cache_limit_bytes,
+        "peak_mlx_bytes": peak_mlx_bytes,
     }
 
 
@@ -1663,7 +1733,15 @@ def build_parser() -> argparse.ArgumentParser:
     embed_parser.add_argument("--model-path", type=Path)
     embed_parser.add_argument("--download-model", action="store_true")
     embed_parser.add_argument("--max-seconds", type=int)
-    embed_parser.add_argument("--batch-size", type=int, default=64)
+    embed_parser.add_argument(
+        "--batch-size", type=int, default=DEFAULT_EMBED_BATCH_SIZE
+    )
+    embed_parser.add_argument(
+        "--memory-limit-gb", type=float, default=DEFAULT_EMBED_MEMORY_LIMIT_GB
+    )
+    embed_parser.add_argument(
+        "--cache-limit-gb", type=float, default=DEFAULT_EMBED_CACHE_LIMIT_GB
+    )
     embed_parser.add_argument("--json", action="store_true")
 
     recall_parser = subparsers.add_parser("recall", help="Ranked BM25/vector recall")
@@ -1734,6 +1812,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 download_model=args.download_model,
                 max_seconds=args.max_seconds,
                 batch_size=args.batch_size,
+                memory_limit_gb=args.memory_limit_gb,
+                cache_limit_gb=args.cache_limit_gb,
                 simple_root=args.simple_root,
             )
             _print_payload(payload, json_output=args.json)

@@ -68,6 +68,7 @@ class PriorWorkHookTests(unittest.TestCase):
     def test_prompt_classifier_preserves_old_recall_hook_families(self) -> None:
         prompts = [
             "我们之前在本地跑这个用的是哪个框架？",
+            "之前用的那个框架是什么来着？",
             "上次做的方案叫什么来着？",
             "我记得是某个脚本，但记不清是哪一个",
             "已有代码和 SOP，别重复造轮子",
@@ -117,6 +118,27 @@ class PriorWorkHookTests(unittest.TestCase):
             },
         }
         self.assertFalse(hook.substantial_tool_use(temporary)[0])
+
+    def test_tool_input_and_names_normalize_across_hosts(self) -> None:
+        raw_patch = {
+            "tool_name": "functions.apply_patch",
+            "tool_input": "*** Add File: formal.py\n+one\n+two\n+three\n+four\n+five\n",
+        }
+        self.assertTrue(hook.substantial_tool_use(raw_patch)[0])
+
+        existing = self.root / "existing.md"
+        existing.write_text("present\n", encoding="utf-8")
+        relative_write = {
+            "tool_name": "Write",
+            "cwd": str(self.root),
+            "tool_input": {
+                "file_path": "existing.md",
+                "content": "small",
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(relative_write)
+        self.assertFalse(substantial)
+        self.assertIn("new=False", reason)
 
     def test_implicit_pretool_requirement_blocks_until_receipt(self) -> None:
         event = {

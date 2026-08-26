@@ -113,6 +113,21 @@ message lacks chunks or any usable chunk lacks a vector. Chunks, vectors, and
 queries must all resolve the same recorded model revision; mixing revisions is
 an error that requires a rebuild.
 
+Embedding is memory-bounded by default: batch size 16, an 8 GiB MLX memory
+limit, and a 0.5 GiB Metal cache limit. Source rows are streamed from SQLite,
+and every completed batch drops its arrays and clears the MLX cache. Override
+with `--batch-size`, `--memory-limit-gb`, or `--cache-limit-gb` only after a
+bounded canary demonstrates a stable working set; the memory limit is a hard
+stop, not a throughput recommendation.
+
+Why this is load-bearing: on 2026-08-27 the former batch-64 loop had no cache
+limit and never called `mx.clear_cache()`. During a real incremental run, its
+process was user-observed past 70 GiB and was killed with exit 137 after 12,800 chunks. MLX's
+Metal allocator keeps freed buffers for reuse unless its cache is bounded or
+cleared. After the fix, a 90-second real-index canary embedded 1,872 chunks,
+held observed process RSS near 1.5 GiB, reported a 2.13 GB MLX active-memory
+peak, and exited normally under the 8 GiB limit.
+
 ## Query
 
 Auto-select hybrid only when the indexed model revision and every usable vector

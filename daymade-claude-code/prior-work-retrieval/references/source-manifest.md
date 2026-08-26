@@ -62,8 +62,8 @@ Filesystem sources require `root` and non-empty `includes`. `excludes` is
 optional. Patterns are passed as explicit `rg --glob` arguments; the script does
 not invent an include convention.
 
-Command sources require an `argv` array. Only `{query}` and `{limit}` are
-expanded. The executable is invoked directly, never through a shell. Supported
+Command sources require an `argv` array. Only `{query}`, `{limit}`, and
+`{session_id}` are expanded. The executable is invoked directly, never through a shell. Supported
 result formats are named in the script; an unknown format fails validation.
 
 Manual sources never pretend to be searched. The receipt reports

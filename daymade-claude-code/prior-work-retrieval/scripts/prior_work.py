@@ -18,6 +18,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,7 @@ AUTHORITY_ORDER = {
     "archive": 4,
     "unknown": 5,
 }
+MAX_ADAPTER_WORKERS = 4
 
 
 class PriorWorkError(RuntimeError):
@@ -264,91 +266,91 @@ def _filesystem_candidates(
     if rg is None:
         return [], {"status": "failed", "error": "rg_not_found"}
     candidates: dict[tuple[str, int], dict[str, Any]] = {}
-    errors: list[str] = []
     maximum = source["max_results"]
-    git_cache: dict[Path, str | None] = {}
+    command = [
+        rg,
+        "--json",
+        "--fixed-strings",
+        "--ignore-case",
+        "--line-number",
+        "--no-messages",
+        "--max-count",
+        "1",
+        "--max-filesize",
+        "50M",
+    ]
+    for pattern in source["includes"]:
+        command.extend(["--glob", pattern])
+    for pattern in source["excludes"]:
+        command.extend(["--glob", pattern if pattern.startswith("!") else f"!{pattern}"])
     for term in terms:
-        command = [
-            rg,
-            "--json",
-            "--fixed-strings",
-            "--ignore-case",
-            "--line-number",
-            "--no-messages",
-            "--max-count",
-            "1",
-            "--max-filesize",
-            "50M",
-        ]
-        for pattern in source["includes"]:
-            command.extend(["--glob", pattern])
-        for pattern in source["excludes"]:
-            command.extend(["--glob", pattern if pattern.startswith("!") else f"!{pattern}"])
-        command.extend(["--", term, str(root)])
+        command.extend(["--regexp", term])
+    command.extend(["--", str(root)])
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=source.get("timeout_seconds", 30),
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return [], {"status": "partial", "errors": ["timeout"]}
+    except OSError as error:
+        return [], {
+            "status": "partial",
+            "errors": [f"spawn:{type(error).__name__}"],
+        }
+    if completed.returncode not in {0, 1}:
+        return [], {
+            "status": "partial",
+            "errors": [f"rg_exit_{completed.returncode}"],
+        }
+    folded_terms = [(term, term.casefold()) for term in terms]
+    for raw_line in completed.stdout.splitlines():
         try:
-            completed = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=source.get("timeout_seconds", 30),
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            errors.append(f"timeout:{term}")
+            event = json.loads(raw_line)
+        except json.JSONDecodeError:
             continue
-        except OSError as error:
-            errors.append(f"spawn:{type(error).__name__}")
+        if event.get("type") != "match":
             continue
-        if completed.returncode not in {0, 1}:
-            errors.append(f"rg_exit_{completed.returncode}:{term}")
+        data = event.get("data")
+        if not isinstance(data, dict):
             continue
-        for raw_line in completed.stdout.splitlines():
-            try:
-                event = json.loads(raw_line)
-            except json.JSONDecodeError:
-                continue
-            if event.get("type") != "match":
-                continue
-            data = event.get("data")
-            if not isinstance(data, dict):
-                continue
-            path_data = data.get("path")
-            lines_data = data.get("lines")
-            line_number = data.get("line_number")
-            if not (
-                isinstance(path_data, dict)
-                and isinstance(path_data.get("text"), str)
-                and isinstance(lines_data, dict)
-                and isinstance(lines_data.get("text"), str)
-                and isinstance(line_number, int)
-            ):
-                continue
-            path = Path(path_data["text"])
-            key = (str(path), line_number)
-            snippet = lines_data["text"].rstrip("\r\n")
-            repo_root = _git_root(path)
-            if repo_root is not None and repo_root not in git_cache:
-                git_cache[repo_root] = _git_head(repo_root)
-            entry = candidates.setdefault(
-                key,
-                {
-                    "source_id": source["id"],
-                    "carrier": source["carrier"],
-                    "authority": source["authority"],
-                    "path": str(path),
-                    "line": line_number,
-                    "snippet": snippet[:800],
-                    "line_sha256": "sha256:"
-                    + hashlib.sha256(snippet.encode("utf-8")).hexdigest(),
-                    "matched_terms": set(),
-                    "git_root": str(repo_root) if repo_root else None,
-                    "git_head": git_cache.get(repo_root) if repo_root else None,
-                    **_file_metadata(path),
-                },
-            )
-            entry["matched_terms"].add(term)
+        path_data = data.get("path")
+        lines_data = data.get("lines")
+        line_number = data.get("line_number")
+        if not (
+            isinstance(path_data, dict)
+            and isinstance(path_data.get("text"), str)
+            and isinstance(lines_data, dict)
+            and isinstance(lines_data.get("text"), str)
+            and isinstance(line_number, int)
+        ):
+            continue
+        path = Path(path_data["text"])
+        key = (str(path), line_number)
+        snippet = lines_data["text"].rstrip("\r\n")
+        snippet_folded = snippet.casefold()
+        entry = candidates.setdefault(
+            key,
+            {
+                "source_id": source["id"],
+                "carrier": source["carrier"],
+                "authority": source["authority"],
+                "path": str(path),
+                "line": line_number,
+                "snippet": snippet[:800],
+                "line_sha256": "sha256:"
+                + hashlib.sha256(snippet.encode("utf-8")).hexdigest(),
+                "matched_terms": set(),
+            },
+        )
+        entry["matched_terms"].update(
+            term for term, folded in folded_terms if folded in snippet_folded
+        )
     rows = []
     for entry in candidates.values():
         entry["matched_terms"] = sorted(entry["matched_terms"])
@@ -364,10 +366,23 @@ def _filesystem_candidates(
             item["line"],
         )
     )
-    status = "searched" if not errors else "partial"
-    return rows[:maximum], {
-        "status": status,
-        "errors": errors,
+    limited = rows[:maximum]
+    git_cache: dict[Path, str | None] = {}
+    for entry in limited:
+        path = Path(entry["path"])
+        repo_root = _git_root(path)
+        if repo_root is not None and repo_root not in git_cache:
+            git_cache[repo_root] = _git_head(repo_root)
+        entry.update(
+            {
+                "git_root": str(repo_root) if repo_root else None,
+                "git_head": git_cache.get(repo_root) if repo_root else None,
+                **_file_metadata(path),
+            }
+        )
+    return limited, {
+        "status": "searched",
+        "errors": [],
         "matches_before_limit": len(rows),
     }
 
@@ -443,6 +458,20 @@ def _command_candidates(
     }
 
 
+def _automatic_source_result(
+    source: dict[str, Any], query: str, terms: Sequence[str], session_id: str
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    started = time.perf_counter()
+    if source["mode"] == "filesystem":
+        candidates, detail = _filesystem_candidates(source, terms)
+    elif source["mode"] == "command":
+        candidates, detail = _command_candidates(source, query, session_id)
+    else:
+        raise PriorWorkError(f"Source {source['id']} is not an automatic adapter")
+    detail["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1)
+    return candidates, detail
+
+
 def retrieve(
     manifest: dict[str, Any],
     query: str,
@@ -450,6 +479,7 @@ def retrieve(
     session_id: str,
     required_sources: Sequence[str] = (),
 ) -> dict[str, Any]:
+    retrieval_started = time.perf_counter()
     if not session_id:
         raise PriorWorkError("A non-empty --session-id is required for retrieval")
     cleaned_terms = list(dict.fromkeys(term.strip() for term in terms if term.strip()))
@@ -474,20 +504,38 @@ def retrieve(
         )
     coverage = []
     candidates = []
+    automatic_sources = [
+        source for source in manifest["sources"] if source["mode"] != "manual"
+    ]
+    automatic_results: dict[str, tuple[list[dict[str, Any]], dict[str, Any]]] = {}
+    if automatic_sources:
+        worker_count = min(MAX_ADAPTER_WORKERS, len(automatic_sources))
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            future_to_source = {
+                executor.submit(
+                    _automatic_source_result,
+                    source,
+                    query,
+                    cleaned_terms,
+                    session_id,
+                ): source
+                for source in automatic_sources
+            }
+            for future in as_completed(future_to_source):
+                source = future_to_source[future]
+                automatic_results[source["id"]] = future.result()
+
     for source in manifest["sources"]:
-        if source["mode"] == "filesystem":
-            found, detail = _filesystem_candidates(source, cleaned_terms)
-            candidates.extend(found)
-        elif source["mode"] == "command":
-            found, detail = _command_candidates(source, query, session_id)
-            candidates.extend(found)
-        else:
-            found = []
+        if source["mode"] == "manual":
+            found: list[dict[str, Any]] = []
             detail = {
                 "status": "manual_required",
                 "route": source["route"],
                 "instruction": source.get("instruction", ""),
             }
+        else:
+            found, detail = automatic_results[source["id"]]
+            candidates.extend(found)
         required = source["required"] or source["id"] in required_sources
         coverage.append(
             {
@@ -518,6 +566,7 @@ def retrieve(
         "query": query,
         "terms": cleaned_terms,
         "created_at": utc_now(),
+        "elapsed_ms": round((time.perf_counter() - retrieval_started) * 1000, 1),
         "manifest_path": manifest["manifest_path"],
         "manifest_sha256": manifest["manifest_sha256"],
         "coverage": coverage,

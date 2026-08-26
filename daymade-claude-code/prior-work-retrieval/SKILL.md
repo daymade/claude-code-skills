@@ -50,7 +50,8 @@ The manifest is the only discovery scope. No directory exists merely because a
 convention says it should. Default path:
 
 ```bash
-python3 scripts/prior_work.py --manifest <path> validate-manifest
+uv run --no-project python scripts/prior_work.py \
+  --manifest <path> validate-manifest
 ```
 
 The default is `~/.config/daymade/prior-work/sources.json`; a project may pin
@@ -64,7 +65,7 @@ names, technical nouns, old project names, and failure symptoms. Do not pass
 generic verbs such as “做 / 优化 / 系统” alone.
 
 ```bash
-python3 scripts/prior_work.py retrieve \
+uv run --no-project python scripts/prior_work.py retrieve \
   --query 'the real task in one sentence' \
   --term 'distinctive entity' \
   --term 'old workflow name' \
@@ -103,7 +104,7 @@ Open promising candidates at their original path. Check:
 Classify the items you actually inspected:
 
 ```bash
-python3 scripts/prior_work.py complete \
+uv run --no-project python scripts/prior_work.py complete \
   --run <run_id> \
   --reuse '<candidate_id>=reuse unchanged because ...' \
   --adapt '<candidate_id>=adapt boundary X because ...' \
@@ -117,7 +118,8 @@ resolving a failed carrier.
 Then verify:
 
 ```bash
-python3 scripts/prior_work.py check --session-id "$CODEX_SESSION_ID"
+uv run --no-project python scripts/prior_work.py check \
+  --session-id "$CODEX_SESSION_ID"
 ```
 
 Only after this passes should substantial production begin. Cite adopted
@@ -182,8 +184,9 @@ production; read-only investigation remains possible so the agent can repair it.
 ## Maintainer verification
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_*.py'
-python3 scripts/prior_work.py --manifest tests/fixtures/manifest.json validate-manifest
+uv run --no-project python -m unittest discover -s tests -p 'test_*.py'
+uv run --no-project python scripts/prior_work.py \
+  --manifest tests/fixtures/manifest.json validate-manifest
 scripts/prior-work-retrieval.sh --selftest
 ```
 

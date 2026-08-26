@@ -36,7 +36,7 @@ DELIVERABLE_NOUN = re.compile(
     re.IGNORECASE,
 )
 PRIOR_WORK_SIGNAL = re.compile(
-    r"(?:我们之前|以前|之前做过|已有|现有|历史经验|历史决策|以前的代码|已有代码|"
+    r"(?:我们之前|以前|之前做过|之前(?:用|跑|做|配|装|搭|建|写)|已有|现有|历史经验|历史决策|以前的代码|已有代码|"
     r"成功经验|别重复|不要重新|不要重造|复用|类似的问题|类似问题|上次|当时用的|"
     r"什么来着|叫什么来着|哪个来着|用的是?哪个|我记得是|好像是|记不清|"
     r"项目最近进展|会议逐字稿|微信记录|prior work|previous work|existing code|"
@@ -88,7 +88,11 @@ def _tool_name(event: dict[str, Any]) -> str:
 
 def _tool_input(event: dict[str, Any]) -> dict[str, Any]:
     value = event.get("tool_input")
-    return value if isinstance(value, dict) else {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        return {"input": value}
+    return {}
 
 
 def _temporary_target(path_value: Any) -> bool:
@@ -99,7 +103,7 @@ def _temporary_target(path_value: Any) -> bool:
 
 def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
     name = _tool_name(event)
-    base = name.rsplit("__", 1)[-1]
+    base = name.rsplit("__", 1)[-1].rsplit(".", 1)[-1]
     tool_input = _tool_input(event)
     path_value = tool_input.get("file_path") or tool_input.get("path")
     if _temporary_target(path_value):
@@ -107,6 +111,9 @@ def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
     if base == "Write":
         content = tool_input.get("content")
         target = Path(path_value).expanduser() if isinstance(path_value, str) else None
+        event_cwd = event.get("cwd")
+        if target is not None and not target.is_absolute() and isinstance(event_cwd, str):
+            target = Path(event_cwd).expanduser() / target
         new_file = bool(target and not target.exists())
         size = len(content) if isinstance(content, str) else 0
         return new_file or size >= 120, f"Write:new={new_file}:chars={size}"

@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SKILL_DIR / "scripts" / "prior_work.py"
@@ -146,6 +147,20 @@ class PriorWorkTests(unittest.TestCase):
         self.assertEqual(coverage["live-wechat"]["status"], "manual_required")
         self.assertFalse(run["coverage_complete"])
         self.assertTrue(Path(run["run_path"]).is_file())
+
+    def test_filesystem_adapter_scans_once_for_multiple_terms(self) -> None:
+        source = self.manifest()["sources"][0]
+        with mock.patch.object(
+            prior_work.subprocess, "run", wraps=prior_work.subprocess.run
+        ) as run_spy:
+            candidates, detail = prior_work._filesystem_candidates(
+                source, ["Mercury", "provider contract"]
+            )
+        self.assertEqual(run_spy.call_count, 1)
+        command = run_spy.call_args.args[0]
+        self.assertEqual(command.count("--regexp"), 2)
+        self.assertEqual(detail["status"], "searched")
+        self.assertTrue(candidates)
 
     def test_required_manual_route_blocks_receipt_until_completed(self) -> None:
         manifest = self.manifest()
