@@ -3181,7 +3181,8 @@ main 在上次 review 后变了，重新告诉我现在真正会合进去什么
 从本地 Codex CLI rollout 中恢复可执行上下文，在当前对话继续工作，无需用
 `codex resume` 重放整个旧会话。内置提取器支持按会话 ID、标题关键词、当前
 项目最近活动或列表定位，并在续做前报告结束原因、遗留请求、近期工具与文件、
-错误和当前工作区状态。
+错误和当前工作区状态。它支持 Codex compaction：仍在磁盘上的压缩前原始记录与
+压缩后保留的 `replacement_history` 都会进入简报。
 
 ```text
 /daymade-claude-code:continue-codex-work 019f66...
