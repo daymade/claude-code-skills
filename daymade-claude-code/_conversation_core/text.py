@@ -490,6 +490,42 @@ def searchable_segments(record: dict[str, Any]) -> list[SearchSegment]:
     return list(dict.fromkeys(segments))
 
 
+def is_claude_agent_prompt_record(record: dict[str, Any]) -> bool:
+    """Return whether a Claude user record is a prompt sent to a subagent.
+
+    Claude stores both human input and main-agent-to-subagent instructions as
+    top-level ``type=user`` records. ``isSidechain`` identifies the latter, but
+    a user-side sidechain record may also carry a ``tool_result`` block. Tool
+    results are real execution evidence and must remain searchable, so this
+    policy applies only to prose-shaped message content.
+
+    Unknown block types fail open: do not hide a record unless its shape is
+    unambiguously a prompt. Assistant-side sidechain records never match this
+    predicate; they contain the subagent's real output.
+    """
+    if record.get("type") != "user" or record.get("isSidechain") is not True:
+        return False
+
+    message = record.get("message")
+    if isinstance(message, dict):
+        content = message.get("content")
+    elif isinstance(message, str):
+        content = message
+    else:
+        content = record.get("content")
+
+    if isinstance(content, str):
+        return True
+    if not isinstance(content, list) or not content:
+        return False
+
+    prompt_block_types = {"text", "input_text", "image", "image_url"}
+    for block in content:
+        if isinstance(block, dict) and block.get("type") in prompt_block_types:
+            return True
+    return False
+
+
 def is_noise_text(text: str) -> bool:
     lowered = text.lstrip().casefold()
     return not lowered or any(lowered.startswith(prefix) for prefix in NOISE_PREFIXES)

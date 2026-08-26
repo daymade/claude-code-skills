@@ -69,6 +69,12 @@ Conversation messages are the lines you usually want. In current Claude Code (>=
 
 - **Role lives in `message.role`**; the top-level `type` only labels the line. Older sessions stored `role`/`content` at the top level, and some records carry `message: null`, so first type-check the nested object: `message = data.get("message"); role = data.get("role") or (message.get("role") if isinstance(message, dict) else None)` (the bundled scripts do this).
 - `message.content` is either a string or an array of content blocks (`text`, `tool_use`, `tool_result`, ...).
+- `type=user` does not prove the human authored the content. A prose-shaped
+  record with `isSidechain=true` is normally the main agent's prompt to a
+  subagent, so history search and ranked recall exclude it by default. Do not
+  drop the whole record class: a user-side sidechain record can carry a
+  `tool_result`, which remains real execution evidence. Assistant-side
+  sidechain records are the subagent's real output and remain searchable.
 
 ### Non-message event lines
 
