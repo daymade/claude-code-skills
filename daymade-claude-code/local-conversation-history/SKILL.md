@@ -1,30 +1,27 @@
 ---
 name: local-conversation-history
 description: >-
-  Lists recent local Claude Code, OpenAI Codex, and Kimi CLI conversations for
-  a workspace in one read-only command. Claude inventory combines active config
-  homes with every archive registered in ~/.claude/history-sources.json,
-  de-duplicates IDs, and uses internal timestamps instead of file mtime. Marks
-  every in-scope Codex session whose canonical per-thread advisory lock is held,
-  appending hits outside the recent limit; this proves lock state, not holder
-  identity or liveness, and no marker does not prove “stopped.” Outputs
-  Markdown or JSON with titles, timezone-qualified timestamps, provenance,
-  session IDs, runtime/archive markers, and visible diagnostics while excluding
-  internal sub-agents by default. Use when the user asks to list or browse local
-  chats, task history, or session IDs across Claude Code, Codex, and Kimi CLI
-  (kimi-code), or asks which Codex session locks are held or may still be in
-  use. Do not use for keyword/full-event search, deleted-file recovery, or
-  resuming work.
+  Lists recent local Claude Code, OpenAI Codex, and Kimi CLI conversations, and
+  extracts exact recent Codex user inputs grouped by session, through bundled
+  read-only commands. Inventory covers registered Claude archives, internal
+  timestamps, session IDs, provenance, archive/runtime markers, and
+  positive-only Codex writer-lock evidence. Verbatim-input mode preserves the
+  user's wording, duplicates, chronology, and session boundaries without
+  thematic classification. Outputs Markdown or JSON. Use when the user asks to
+  list or browse local chats, task history, session IDs, what they recently
+  said, their original/verbatim inputs, chronological user wording, or expanded
+  inputs for several Codex sessions. Do not use for keyword/full-event search,
+  deleted-file recovery, or resuming work.
 argument-hint: "[workspace-path]"
 ---
 
 # Local Conversation History
 
-List project-scoped local histories without reconstructing ad hoc `rg`, `stat`,
-`jq`, or SQLite pipelines. The bundled script performs provider and archive
-discovery, schema introspection, filtering, de-duplication, title extraction,
-internal-time sorting, positive-only Codex writer-lock observation, and rendering
-in one process.
+List project-scoped histories or exact Codex prompt-ledger rows without
+reconstructing ad hoc `rg`, `stat`, `jq`, SQLite, or JSONL pipelines. The two
+bundled commands keep the two jobs separate: conversation inventory returns
+titles and metadata; verbatim-input mode returns only session IDs, timestamps,
+and the user's stored input text.
 
 ## Decide the job before calling a tool
 
@@ -34,12 +31,16 @@ mean inventory.
 | User intent | Route |
 |---|---|
 | List recent conversations, titles, dates, session IDs, or held Codex writer locks | Run this skill's bundled inventory once |
+| List what the user recently said in Codex, from newest to oldest, as original/verbatim inputs grouped by Session | Run the bundled Codex verbatim-input command; do not invoke the history finder |
+| Expand several Codex Sessions from a previous result while keeping each Session intact | Re-run the verbatim-input command with those exact Session IDs and one per-Session limit |
 | Find the conversation where a topic, action, quote, file, or tool result appeared — including “I remember we did X,” “find that old chat,” or “did we ever discuss Y?” | Invoke `daymade-claude-code:claude-code-history-files-finder` directly; do not run the recent inventory first |
 | Continue work from an already identified session | Invoke the matching `daymade-claude-code:continue-claude-work` or `daymade-claude-code:continue-codex-work` skill |
 
-A topic clue wins over inventory wording. For example, “find our historical
-conversation records about DINO” is full-content search even though it says
-“conversation records.”
+The requested output wins over background motivation. If the user explains a
+problem and asks to inspect a chronological window of their own raw inputs,
+return that window even though the explanation contains topic clues. Route to
+full-content search only when the requested result is *the matching
+conversation/content*, such as “find our historical conversation about DINO.”
 
 When routing a content search, preserve the unknown parts of the user's scope:
 
@@ -72,6 +73,12 @@ bypasses the registry; never use it for a completeness claim.
 ## Route the request
 
 - List/recent/show/browse local conversations: run the bundled script once.
+- List recent original Codex inputs: run `scripts/list_codex_user_inputs.py`
+  with `--recent <N>`. It groups the selected global input window by Session;
+  it does not title, classify, summarize, or split Sessions by inferred topic.
+- Expand specific Codex Sessions: repeat `--session-id <ID>` in the order the
+  user already saw, then set `--per-session <N>`. Preserve duplicate inputs;
+  duplicates are part of the input ledger, not noise to deduplicate.
 - Triage Codex sessions that may still be in use: use the automatic
   `writer-lock file held` marker. The command probes every admitted Codex row
   and appends any positive hit outside the recent-row limit. A hit proves only
@@ -99,7 +106,9 @@ bypasses the registry; never use it for a completeness claim.
   `daymade-claude-code:continue-claude-work`; use
   `daymade-claude-code:continue-codex-work` for a Codex thread.
 
-## Run exactly one inventory command
+## Run the matching bundled command
+
+### Conversation inventory
 
 Resolve `scripts/list_local_history.py` relative to this SKILL.md. Do not search
 the machine for the script and do not recreate its logic inline.
@@ -136,14 +145,53 @@ When the user asks what a marked Codex thread is doing, the sanctioned follow-up
 is `daymade-claude-code:continue-codex-work` for that exact ID, not a
 process-name or cwd guess.
 
+### Verbatim Codex user inputs
+
+Resolve `scripts/list_codex_user_inputs.py` relative to this SKILL.md. The
+prompt-history ledger already stores `session_id`, `ts`, and the input-box text;
+use the bundled parser rather than rebuilding this join with Node, SQLite, or a
+one-off JSONL script.
+
+For a recent global input window:
+
+```text
+<skill-dir>/scripts/list_codex_user_inputs.py --recent 100 --language zh
+```
+
+For a follow-up that expands the Sessions already shown:
+
+```text
+<skill-dir>/scripts/list_codex_user_inputs.py \
+  --session-id <first-id> --session-id <second-id> \
+  --per-session 50 --language zh
+```
+
+Use `--format json` only when the user requests machine-readable output. The
+Markdown is already presentation-ready: Session headings contain only the exact
+ID and counts, and rows contain only timezone-qualified time plus the readable
+original input. It HTML-escapes literal markup and normalizes line-ending forms
+for display; use `--format json` only when byte-level string fidelity matters.
+Return either format without adding thematic titles or a second classification
+layer.
+
+If the exact Markdown cannot fit in one response, redirect the same command's
+stdout to a clearly reported persistent `.md` file and give the user its link.
+Do not silently truncate, select “important” rows, or substitute a summary.
+
 ## Preserve the evidence boundary
 
-Treat the command as an inventory, not a transcript export:
+Treat each command according to its evidence source:
 
 - Keep the script read-only. It never resumes, renames, archives, deletes, or
   repairs a conversation.
-- Report titles only; do not paste raw JSONL or full prompts unless the user asks
-  for a specific session afterward.
+- Inventory mode reports titles and metadata only. Verbatim-input mode is an
+  explicit exception requested by the user: it reports Codex prompt-ledger rows
+  across one or many Sessions, but never assistant text, thinking, tool calls,
+  or transcript bodies.
+- Treat prompt-ledger rows as the exact stored input sequence. Preserve wording,
+  line breaks, duplicate rows, and Session boundaries; do not infer which rows
+  are “feedback,” merge repeated inputs, or split one Session into semantic
+  types.
 - Keep every displayed timestamp's explicit timezone offset.
 - For Claude Code, treat the minimum and maximum valid top-level `timestamp`
   values across the JSONL as the session range. Never substitute file mtime:
@@ -172,6 +220,9 @@ Treat the command as an inventory, not a transcript export:
 - Do not claim Claude Desktop native chats are included. The Claude source here
   is Claude Code history; Codex covers local Codex CLI/Desktop thread stores;
   Kimi CLI covers the local kimi-code session store, not the Kimi web product.
+- Codex verbatim-input mode is currently Codex-only. It reads
+  `<codex-home>/history.jsonl` strictly and fails instead of rendering a partial
+  result when the ledger is absent, malformed, or has an unsupported row shape.
 
 ## Handle source configuration and failures
 
@@ -182,8 +233,8 @@ another registry. Use `--claude-home <dir>`, `--codex-home <dir>`, or
 `--kimi-home <dir>` only when the user explicitly requests an exact
 single-store diagnostic scope.
 
-If no conversations appear, use the diagnostics already printed by the same
-command. Read
+If no conversations appear or the Codex prompt ledger cannot support a complete
+result, use the diagnostics already printed by the same command. Read
 [references/storage_and_portability.md](references/storage_and_portability.md)
 when the format, path, or writer-lock observation needs diagnosis; it documents
 the source registry, inspected stores, internal-time policy, lock semantics,
