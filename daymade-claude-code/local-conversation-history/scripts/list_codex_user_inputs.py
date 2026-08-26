@@ -8,6 +8,7 @@ classify, resume, rename, or modify a Codex session.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import sys
@@ -140,7 +141,7 @@ def newest_first(records: Iterable[UserInput]) -> list[UserInput]:
 
 
 def unique_in_order(values: Iterable[str]) -> list[str]:
-    return list(dict.fromkeys(value.strip() for value in values if value.strip()))
+    return list(dict.fromkeys(value for value in values if value.strip()))
 
 
 def select_groups(
@@ -161,6 +162,8 @@ def select_groups(
         return groups, "recent", len(records)
 
     session_ids = unique_in_order(args.session_ids or [])
+    if not session_ids:
+        raise PromptHistoryError("--session-id must not be blank")
     missing = [session_id for session_id in session_ids if session_id not in totals]
     if missing:
         raise PromptHistoryError(
@@ -192,8 +195,9 @@ def iso_timestamp(value: float) -> str:
 
 
 def markdown_cell(value: str) -> str:
+    escaped = html.escape(value, quote=False).replace("|", "&#124;")
     return (
-        value.replace("|", "\\|")
+        escaped
         .replace("\r\n", "<br>")
         .replace("\n", "<br>")
         .replace("\r", "<br>")

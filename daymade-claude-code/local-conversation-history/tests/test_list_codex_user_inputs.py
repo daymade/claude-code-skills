@@ -65,7 +65,7 @@ class CodexUserInputTests(unittest.TestCase):
 
         self.assertLess(result.stdout.index("Session `session-b`"), result.stdout.index("Session `session-a`"))
         self.assertLess(result.stdout.index("Session `session-a`"), result.stdout.index("Session `session-c`"))
-        self.assertLess(result.stdout.index("newer A"), result.stdout.index("older \\| input<br>line 2"))
+        self.assertLess(result.stdout.index("newer A"), result.stdout.index("older &#124; input<br>line 2"))
         self.assertNotIn("outside window", result.stdout)
         self.assertNotIn("latest B`", result.stdout)
         self.assertIn("共显示 4 条", result.stdout)
@@ -113,6 +113,39 @@ class CodexUserInputTests(unittest.TestCase):
         )
 
         self.assertEqual(result.stdout.count("## Session `session-a`"), 1)
+
+    def test_markdown_encoding_distinguishes_markup_newlines_and_pipes(self) -> None:
+        self.write_rows(
+            [
+                {"session_id": "session-a", "ts": 400, "text": "literal<br>text"},
+                {"session_id": "session-a", "ts": 300, "text": "literal\ntext"},
+                {"session_id": "session-a", "ts": 200, "text": "literal&#124;text"},
+                {"session_id": "session-a", "ts": 100, "text": "literal|text"},
+            ]
+        )
+
+        result = self.run_cli("--recent", "4", "--language", "en")
+
+        self.assertEqual(result.stdout.count("literal&lt;br&gt;text"), 1)
+        self.assertEqual(result.stdout.count("literal<br>text"), 1)
+        self.assertEqual(result.stdout.count("literal&amp;#124;text"), 1)
+        self.assertEqual(result.stdout.count("literal&#124;text"), 1)
+
+    def test_whitespace_bearing_session_id_is_preserved_in_both_modes(self) -> None:
+        stored_id = " session-a "
+        self.write_rows([{"session_id": stored_id, "ts": 100, "text": "one"}])
+
+        recent = json.loads(self.run_cli("--recent", "1", "--format", "json").stdout)
+        explicit = json.loads(
+            self.run_cli(
+                "--session-id", stored_id, "--per-session", "1", "--format", "json"
+            ).stdout
+        )
+
+        self.assertEqual(recent["sessions"][0]["session_id"], stored_id)
+        self.assertEqual(recent["sessions"][0]["shown"], 1)
+        self.assertEqual(explicit["sessions"][0]["session_id"], stored_id)
+        self.assertEqual(explicit["sessions"][0]["shown"], 1)
 
     def test_missing_session_fails_without_partial_stdout(self) -> None:
         self.write_rows([{"session_id": "session-a", "ts": 100, "text": "one"}])
