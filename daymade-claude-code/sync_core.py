@@ -24,13 +24,11 @@ import sys
 from pathlib import Path
 from typing import Dict
 
-# Skills that bundle the shared core. Add a skill here when it starts importing
-# `_core` (e.g. continue-codex-work in a later phase).
+# Reader skills that bundle the shared core. Continuation skills consume the
+# readers' evidence receipts and deliberately own no parser implementation.
 TARGET_SKILLS = [
-    "claude-code-history-files-finder",
-    "local-conversation-history",
-    "continue-claude-work",
-    "continue-codex-work",
+    "read-claude-code-history",
+    "read-codex-history",
 ]
 
 HERE = Path(__file__).resolve().parent

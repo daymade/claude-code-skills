@@ -1,0 +1,41 @@
+{
+  "skill_name": "read-codex-history",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "从新到旧列出我最近 200 条 Codex 原始输入，按 Session 分组，不要分类、总结或给 Session 起主题名。",
+      "expected_output": "Uses list_codex_user_inputs.py --recent 200 and returns only exact prompt-ledger wording, explicit timestamps, Session IDs and counts in newest-first order.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "把刚才这 8 个 Codex Session 每个都扩到最近 100 条，保持我给的 Session 顺序和每个 Session 内的新到旧顺序。",
+      "expected_output": "Repeats --session-id in the supplied order with --per-session 100; preserves duplicates and does not split one Session into inferred categories.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "读取 Codex Session 019f0000-0000-7000-8000-000000000001，告诉我 Agent 当时做了什么；如果本地记录本身有问题要明确说。",
+      "expected_output": "Checks prompt ledger, state metadata and internal rollout identities separately. It reports the fused two-session_meta rollout as an attribution gap and does not present the other Session's events as this Session's behavior.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "这个 Codex 记录只有一条 /fork 01a0395d...，帮我把子 Session 的完整对话读出来。",
+      "expected_output": "Distinguishes a prompt-ledger fork command from a child rollout. If no rollout with the requested internal Session ID exists, reports prompt-only coverage and does not substitute the sibling continuation.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "只在 Codex 的所有 rollout 里搜‘attachment-b.pdf’，不要把 Claude Code 的命中混进来；当前 Session 自匹配要排除。",
+      "expected_output": "Runs analyze_sessions.py search --codex-only --all-projects with --exclude-session and a bounded scan; every match is a Codex rollout and incomplete input cannot become a complete-looking zero result.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "列出这个仓最近的 Codex Session，并告诉我哪些 Session 的规范 writer-lock 现在被持有。",
+      "expected_output": "Runs list_local_history.py --source codex. It treats a held marker as positive-only lock evidence, never infers holder identity or liveness, and never treats an unmarked row as stopped.",
+      "files": []
+    }
+  ]
+}

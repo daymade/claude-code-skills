@@ -1,0 +1,41 @@
+{
+  "skill_name": "read-claude-code-history",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "列出当前项目最近的 Claude Code 会话，给我时间、标题和完整 Session ID；不要搜 Codex。",
+      "expected_output": "Runs list_local_history.py --source claude and reports internal timestamps, active/archive provenance and exact Session IDs without including Codex rows.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "完整读取这个 Claude Code Session 的上下文，按用户和 Assistant 实际交替顺序列出来；我工作中途打断它的 queued prompt 不能漏。",
+      "expected_output": "Runs read_claude_session.py for the exact ID and emits a chronological handoff timeline that retains human queued_command prompts at their physical position rather than separate role buckets.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "在所有 Claude Code 项目和已登记备份里找‘release codename’，它可能只在 tool_result 或附件中；不要把我刚输入的这句话当历史命中。",
+      "expected_output": "Runs analyze_sessions.py search --all-projects with the current Session excluded, searches structured event fields and reports the exact source and internal match range.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "我记得我们以前做过一个大约 0.5 秒的中文对话历史索引，但措辞肯定不一样，先从已有索引里召回，不要再跑全量慢扫描。",
+      "expected_output": "Checks history_index.py status and uses ranked BM25/vector recall when complete; it reports index scope/freshness and never turns zero ranked hits into an absence claim.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "把我最近两天在 Claude Code 里真正说过的话按 Session 分组导出来，保留时间和重复输入，不要按主题分类。",
+      "expected_output": "Runs extract_user_messages.py with --group-by session, recovers human queued prompts, separates known storage pollution, preserves Session boundaries and does not invent topics.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "昨天 Claude Code 生成的临时 HTML 不见了；先找到写它的 Session，再恢复最后一次 Edit 后的精确版本，不要直接覆盖项目。",
+      "expected_output": "Searches all Claude sources, selects the exact printed Session path, produces a recovery report, verifies file-history bytes and SHA-256, and writes only to a separate destination after the user requested recovery.",
+      "files": []
+    }
+  ]
+}

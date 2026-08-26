@@ -1,0 +1,1411 @@
+#!/usr/bin/env python3
+"""Regression tests for the local conversation inventory CLI."""
+
+from __future__ import annotations
+
+import errno
+import importlib.util
+import json
+import os
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import unittest
+from datetime import datetime
+from pathlib import Path
+from unittest import mock
+
+
+SKILL_DIR = Path(__file__).resolve().parents[1]
+SCRIPT = SKILL_DIR / "scripts" / "list_local_history.py"
+
+
+def write_jsonl(path: Path, records: list[object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        for record in records:
+            if isinstance(record, str):
+                handle.write(record + "\n")
+            else:
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def claude_project_dir(claude_home: Path, workspace: Path) -> Path:
+    encoded = str(workspace.resolve()).replace("/", "-")
+    path = claude_home / "projects" / encoded
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def claude_user_record(
+    session_id: str, workspace: Path, content: object, timestamp: str
+) -> dict[str, object]:
+    return {
+        "type": "user",
+        "sessionId": session_id,
+        "cwd": str(workspace),
+        "timestamp": timestamp,
+        "message": {"role": "user", "content": content},
+    }
+
+
+def create_codex_database(path: Path, rows: list[tuple[object, ...]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            """
+            CREATE TABLE threads (
+                id TEXT PRIMARY KEY,
+                cwd TEXT NOT NULL,
+                title TEXT,
+                first_user_message TEXT,
+                preview TEXT,
+                created_at INTEGER NOT NULL,
+                created_at_ms INTEGER,
+                updated_at INTEGER NOT NULL,
+                updated_at_ms INTEGER,
+                source TEXT,
+                thread_source TEXT,
+                agent_role TEXT,
+                archived INTEGER NOT NULL DEFAULT 0,
+                rollout_path TEXT
+            )
+            """
+        )
+        connection.executemany(
+            """
+            INSERT INTO threads (
+                id, cwd, title, first_user_message, preview,
+                created_at, created_at_ms, updated_at, updated_at_ms,
+                source, thread_source, agent_role, archived, rollout_path
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+class LocalConversationHistoryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.workspace = self.root / "workspaces" / "demo-project"
+        self.workspace.mkdir(parents=True)
+        self.claude_home = self.root / "claude-home"
+        self.codex_home = self.root / "codex-home"
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def run_cli(
+        self, *arguments: str, env: dict[str, str] | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        process_env = os.environ.copy()
+        if env:
+            process_env.update(env)
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), *arguments],
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=True,
+            env=process_env,
+        )
+
+    def write_history_sources(
+        self, config_home: Path, archive_home: Path, *, required: bool = True
+    ) -> Path:
+        manifest = config_home / "history-sources.json"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "sources": [
+                        {
+                            "provider": "claude",
+                            "kind": "archive",
+                            "label": "full-backup",
+                            "home": str(archive_home),
+                            "required": required,
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return manifest
+
+    def seed_claude(self) -> None:
+        project_dir = claude_project_dir(self.claude_home, self.workspace)
+        write_jsonl(
+            project_dir / "11111111-1111-4111-8111-111111111111.jsonl",
+            [
+                claude_user_record(
+                    "11111111-1111-4111-8111-111111111111",
+                    self.workspace,
+                    "# AGENTS.md instructions for /workspace/demo-project",
+                    "2026-01-10T08:00:00Z",
+                ),
+                claude_user_record(
+                    "11111111-1111-4111-8111-111111111111",
+                    self.workspace,
+                    "Audit the release workflow",
+                    "2026-01-10T08:01:00Z",
+                ),
+            ],
+        )
+        write_jsonl(
+            project_dir / "22222222-2222-4222-8222-222222222222.jsonl",
+            [
+                claude_user_record(
+                    "22222222-2222-4222-8222-222222222222",
+                    self.workspace,
+                    [
+                        {
+                            "type": "text",
+                            "text": "Fix | table rendering\n----\n/transcript-fixer",
+                        }
+                    ],
+                    "2026-01-11T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / "33333333-3333-4333-8333-333333333333.jsonl",
+            [
+                claude_user_record(
+                    "33333333-3333-4333-8333-333333333333",
+                    self.workspace,
+                    "Reply with exactly TEST_OK",
+                    "2026-01-12T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / "agent-worker.jsonl",
+            [
+                claude_user_record(
+                    "44444444-4444-4444-8444-444444444444",
+                    self.workspace,
+                    "Internal review task",
+                    "2026-01-13T08:00:00Z",
+                )
+            ],
+        )
+
+    def seed_codex_database(self) -> None:
+        workspace = str(self.workspace)
+        other_workspace = str(self.root / "workspaces" / "other-project")
+        rows = [
+            (
+                "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                workspace,
+                "Review API limits",
+                "",
+                "",
+                1768000000,
+                1768000000000,
+                1768000100,
+                1768000100000,
+                "cli",
+                "user",
+                None,
+                0,
+                "sessions/example.jsonl",
+            ),
+            (
+                "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                workspace,
+                "Internal worker",
+                "",
+                "",
+                1768000000,
+                1768000000000,
+                1768000200,
+                1768000200000,
+                json.dumps({"subagent": "review"}),
+                "subagent",
+                "worker",
+                0,
+                "sessions/worker.jsonl",
+            ),
+            (
+                "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                workspace,
+                "Archived design discussion",
+                "",
+                "",
+                1768000000,
+                1768000000000,
+                1768000300,
+                1768000300000,
+                "cli",
+                "user",
+                None,
+                1,
+                "archived_sessions/design.jsonl",
+            ),
+            (
+                "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                workspace,
+                "Reply with exactly CODEX_OK",
+                "",
+                "",
+                1768000000,
+                1768000000000,
+                1768000400,
+                1768000400000,
+                "vscode",
+                "user",
+                None,
+                0,
+                "sessions/smoke.jsonl",
+            ),
+            (
+                "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+                other_workspace,
+                "Other project",
+                "",
+                "",
+                1768000000,
+                1768000000000,
+                1768000500,
+                1768000500000,
+                "cli",
+                "user",
+                None,
+                0,
+                "sessions/other.jsonl",
+            ),
+        ]
+        create_codex_database(self.codex_home / "state_5.sqlite", rows)
+
+    def start_lock_holder(self, path: Path) -> subprocess.Popen[str]:
+        code = """
+import fcntl
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+with path.open("r+b") as handle:
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    print("READY", flush=True)
+    sys.stdin.read()
+"""
+        holder = subprocess.Popen(
+            [sys.executable, "-c", code, str(path)],
+            text=True,
+            encoding="utf-8",
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        assert holder.stdout is not None
+        ready = holder.stdout.readline().strip()
+        if ready != "READY":
+            stderr = holder.stderr.read() if holder.stderr is not None else ""
+            holder.kill()
+            holder.wait()
+            self.fail(f"lock holder did not start: {ready!r} {stderr}")
+        return holder
+
+    def stop_lock_holder(self, holder: subprocess.Popen[str]) -> None:
+        if holder.poll() is None:
+            assert holder.stdin is not None
+            holder.stdin.close()
+            holder.wait(timeout=5)
+        if holder.stdout is not None:
+            holder.stdout.close()
+        if holder.stderr is not None:
+            holder.stderr.close()
+
+    def test_combined_json_inventory_filters_noise(self) -> None:
+        self.seed_claude()
+        self.seed_codex_database()
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--claude-home",
+            str(self.claude_home),
+            "--codex-home",
+            str(self.codex_home),
+            "--format",
+            "json",
+        )
+        payload = json.loads(completed.stdout)
+        claude = payload["providers"]["claude"]
+        codex = payload["providers"]["codex"]
+        self.assertEqual(claude["total"], 2)
+        self.assertNotIn("recent_rows", claude)
+        self.assertEqual(claude["excluded"]["subagents"], 1)
+        self.assertEqual(claude["excluded"]["automated"], 1)
+        self.assertEqual(codex["total"], 1)
+        self.assertEqual(codex["excluded"]["subagents"], 1)
+        self.assertEqual(codex["excluded"]["archived"], 1)
+        self.assertEqual(codex["excluded"]["automated"], 1)
+        self.assertEqual(codex["runtime_observation"]["status"], "unavailable")
+        self.assertEqual(
+            codex["conversations"][0]["title"], "Review API limits"
+        )
+        self.assertNotIn("runtime", codex["conversations"][0])
+        self.assertNotIn("AGENTS.md", completed.stdout)
+        self.assertNotIn("Internal worker", completed.stdout)
+
+    def test_markdown_is_readable_and_timezone_qualified(self) -> None:
+        self.seed_claude()
+        self.seed_codex_database()
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--claude-home",
+            str(self.claude_home),
+            "--codex-home",
+            str(self.codex_home),
+            "--language",
+            "zh",
+        )
+        self.assertIn("# 本地对话历史", completed.stdout)
+        self.assertIn("Audit the release workflow", completed.stdout)
+        self.assertIn("Fix \\| table rendering", completed.stdout)
+        self.assertIn("writer-lock 观测为 `unavailable`", completed.stdout)
+        self.assertRegex(completed.stdout, r"\d{4}-\d{2}-\d{2} \d{2}:\d{2} [+-]\d{2}:\d{2}")
+
+    @unittest.skipUnless(os.name == "posix", "writer-lock probe uses POSIX flock")
+    def test_codex_writer_lock_is_positive_only_and_structured(self) -> None:
+        self.seed_codex_database()
+        lock_root = self.codex_home / "thread-writer-locks"
+        lock_root.mkdir(parents=True)
+        (lock_root / ".coordination.lock").touch()
+        session_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        lock_path = lock_root / f"{session_id}.lock"
+        lock_path.touch()
+
+        stale = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "codex",
+            "--codex-home",
+            str(self.codex_home),
+            "--format",
+            "json",
+        )
+        stale_payload = json.loads(stale.stdout)["providers"]["codex"]
+        self.assertEqual(stale_payload["runtime_observation"]["status"], "observed")
+        self.assertNotIn("runtime", stale_payload["conversations"][0])
+        self.assertTrue(lock_path.is_file())
+        self.assertEqual(lock_path.read_bytes(), b"")
+
+        holder = self.start_lock_holder(lock_path)
+        try:
+            markdown = self.run_cli(
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "codex",
+                "--codex-home",
+                str(self.codex_home),
+                "--language",
+                "zh",
+            )
+            structured = self.run_cli(
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "codex",
+                "--codex-home",
+                str(self.codex_home),
+                "--format",
+                "json",
+            )
+        finally:
+            self.stop_lock_holder(holder)
+
+        self.assertIn("写入锁文件已持有", markdown.stdout)
+        self.assertIn("不证明持锁者身份", markdown.stdout)
+        self.assertIn("无标记也不证明会话已停止", markdown.stdout)
+        payload = json.loads(structured.stdout)["providers"]["codex"]
+        self.assertEqual(payload["runtime_observation"]["status"], "observed")
+        self.assertIn(
+            "holder identity is not established",
+            payload["runtime_observation"]["semantics"],
+        )
+        self.assertEqual(
+            payload["conversations"][0]["runtime"],
+            {"writer_lock": "held"},
+        )
+        self.assertTrue(lock_path.is_file())
+        self.assertEqual(lock_path.read_bytes(), b"")
+
+    @unittest.skipUnless(os.name == "posix", "writer-lock probe uses POSIX flock")
+    def test_lock_held_outside_recent_limit_is_appended(self) -> None:
+        rows = []
+        for index in range(11):
+            session_id = (
+                f"{index:08x}-0000-4000-8000-{index:012x}"
+            )
+            rows.append(
+                (
+                    session_id,
+                    str(self.workspace),
+                    f"Conversation {index}",
+                    "",
+                    "",
+                    1768000000 + index,
+                    (1768000000 + index) * 1000,
+                    1768000100 + index,
+                    (1768000100 + index) * 1000,
+                    "cli",
+                    "user",
+                    None,
+                    0,
+                    f"sessions/{index}.jsonl",
+                )
+            )
+        create_codex_database(self.codex_home / "state_5.sqlite", rows)
+        held_session_id = "00000000-0000-4000-8000-000000000000"
+        lock_root = self.codex_home / "thread-writer-locks"
+        lock_root.mkdir(parents=True)
+        (lock_root / ".coordination.lock").touch()
+        lock_path = lock_root / f"{held_session_id}.lock"
+        lock_path.touch()
+
+        holder = self.start_lock_holder(lock_path)
+        try:
+            structured = self.run_cli(
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "codex",
+                "--codex-home",
+                str(self.codex_home),
+                "--limit",
+                "10",
+                "--format",
+                "json",
+            )
+            markdown = self.run_cli(
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "codex",
+                "--codex-home",
+                str(self.codex_home),
+                "--limit",
+                "10",
+                "--language",
+                "en",
+            )
+        finally:
+            self.stop_lock_holder(holder)
+
+        payload = json.loads(structured.stdout)["providers"]["codex"]
+        self.assertEqual(payload["total"], 11)
+        self.assertEqual(payload["recent_rows"], 10)
+        self.assertEqual(payload["shown"], 11)
+        self.assertEqual(payload["runtime_observation"]["held_rows_appended"], 1)
+        held_rows = [
+            row
+            for row in payload["conversations"]
+            if row.get("runtime") == {"writer_lock": "held"}
+        ]
+        self.assertEqual([row["session_id"] for row in held_rows], [held_session_id])
+        self.assertIn("plus 1 lock-held row(s) outside the recent window", markdown.stdout)
+
+    @unittest.skipUnless(os.name == "posix", "writer-lock probe uses POSIX flock")
+    def test_thread_unlock_failure_returns_partial_observation(self) -> None:
+        import fcntl
+
+        lock_root = self.codex_home / "thread-writer-locks"
+        lock_root.mkdir(parents=True)
+        (lock_root / ".coordination.lock").touch()
+        session_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        (lock_root / f"{session_id}.lock").touch()
+
+        spec = importlib.util.spec_from_file_location(
+            f"local_history_under_test_{id(self)}",
+            SCRIPT,
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        conversation = module.Conversation(
+            provider="codex",
+            session_id=session_id,
+            title="Unlock failure",
+            cwd=str(self.workspace),
+            updated_at=1768000100.0,
+            created_at=1768000000.0,
+            archived=False,
+            kind="main",
+            path="sessions/example.jsonl",
+            metadata_source="sqlite",
+            timestamp_source="sqlite",
+        )
+
+        real_flock = fcntl.flock
+        failed_unlock = False
+
+        def flaky_flock(file_descriptor: int, operation: int) -> None:
+            nonlocal failed_unlock
+            if operation == fcntl.LOCK_UN and not failed_unlock:
+                failed_unlock = True
+                raise OSError(errno.EIO, "injected unlock failure")
+            real_flock(file_descriptor, operation)
+
+        with mock.patch.object(fcntl, "flock", side_effect=flaky_flock):
+            observation = module.probe_codex_writer_locks(
+                self.codex_home,
+                [conversation],
+            )
+
+        self.assertTrue(failed_unlock)
+        self.assertEqual(observation.status, "partial")
+        self.assertEqual(observation.held_session_ids, frozenset())
+        self.assertIn("1 inventory session lock operation(s) failed", observation.detail)
+
+    @unittest.skipUnless(os.name == "posix", "writer-lock probe uses POSIX flock")
+    def test_busy_coordination_lock_makes_no_runtime_claim(self) -> None:
+        self.seed_codex_database()
+        lock_root = self.codex_home / "thread-writer-locks"
+        lock_root.mkdir(parents=True)
+        coordination_path = lock_root / ".coordination.lock"
+        coordination_path.touch()
+        session_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        (lock_root / f"{session_id}.lock").touch()
+
+        holder = self.start_lock_holder(coordination_path)
+        try:
+            completed = self.run_cli(
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "codex",
+                "--codex-home",
+                str(self.codex_home),
+                "--format",
+                "json",
+            )
+            markdown = self.run_cli(
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "codex",
+                "--codex-home",
+                str(self.codex_home),
+                "--language",
+                "en",
+            )
+        finally:
+            self.stop_lock_holder(holder)
+
+        payload = json.loads(completed.stdout)["providers"]["codex"]
+        self.assertEqual(payload["runtime_observation"]["status"], "busy")
+        self.assertEqual(
+            payload["runtime_observation"]["detail"],
+            "writer-lock coordination is busy; no runtime claim was made",
+        )
+        self.assertNotIn("runtime", payload["conversations"][0])
+        self.assertIn("writer-lock observation is `busy`", markdown.stdout)
+        self.assertNotIn("Codex is changing writer-lock ownership", markdown.stdout)
+        self.assertIn("no unflagged session is classified as stopped", markdown.stdout)
+
+    @unittest.skipUnless(os.name == "posix", "writer-lock probe uses POSIX flock")
+    def test_invalid_session_id_makes_lock_observation_partial(self) -> None:
+        self.seed_codex_database()
+        connection = sqlite3.connect(self.codex_home / "state_5.sqlite")
+        try:
+            connection.execute(
+                "UPDATE threads SET id = 'not-a-session-id' "
+                "WHERE id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'"
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        lock_root = self.codex_home / "thread-writer-locks"
+        lock_root.mkdir(parents=True)
+        (lock_root / ".coordination.lock").touch()
+
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "codex",
+            "--codex-home",
+            str(self.codex_home),
+            "--format",
+            "json",
+        )
+        payload = json.loads(completed.stdout)["providers"]["codex"]
+        self.assertEqual(payload["runtime_observation"]["status"], "partial")
+        self.assertNotIn("runtime", payload["conversations"][0])
+
+    def test_claude_title_uses_structure_instead_of_text_length(self) -> None:
+        project_dir = claude_project_dir(self.claude_home, self.workspace)
+        image_session_id = "55555555-5555-4555-8555-555555555555"
+        command_session_id = "66666666-6666-4666-8666-666666666666"
+        file_session_id = "77777777-7777-4777-8777-777777777777"
+        ordinary_session_id = "88888888-8888-4888-8888-888888888888"
+        path_tail_session_id = "99999999-9999-4999-8999-999999999999"
+        combined_session_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        same_segment_session_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        reordered_session_id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        root_path_session_id = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        attachment_tail_session_id = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+        write_jsonl(
+            project_dir / f"{image_session_id}.jsonl",
+            [
+                claude_user_record(
+                    image_session_id,
+                    self.workspace,
+                    f"[Image #1] {self.root / 'images' / 'error.png'}\n----\n修复这个问题",
+                    "2026-01-13T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{command_session_id}.jsonl",
+            [
+                claude_user_record(
+                    command_session_id,
+                    self.workspace,
+                    "Fix authentication bug\n----\n/transcript-fixer --mode preserve-formatting",
+                    "2026-01-14T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{file_session_id}.jsonl",
+            [
+                claude_user_record(
+                    file_session_id,
+                    self.workspace,
+                    f"{self.root / 'fixtures' / 'input.json'}\n----\n总结这个文件",
+                    "2026-01-15T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{ordinary_session_id}.jsonl",
+            [
+                claude_user_record(
+                    ordinary_session_id,
+                    self.workspace,
+                    "Background context\n----\nKeep this ordinary long request as the title",
+                    "2026-01-16T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{path_tail_session_id}.jsonl",
+            [
+                claude_user_record(
+                    path_tail_session_id,
+                    self.workspace,
+                    "Inspect the referenced location\n----\n/tmp/example/input.json is the source file",
+                    "2026-01-17T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{combined_session_id}.jsonl",
+            [
+                claude_user_record(
+                    combined_session_id,
+                    self.workspace,
+                    (
+                        f"[Image #1] {self.root / 'images' / 'error.png'}\n"
+                        "----\n"
+                        "修复这个问题\n"
+                        "----\n"
+                        "/transcript-fixer --mode preserve-formatting"
+                    ),
+                    "2026-01-18T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{same_segment_session_id}.jsonl",
+            [
+                claude_user_record(
+                    same_segment_session_id,
+                    self.workspace,
+                    (
+                        f"[Image #1] {self.root / 'images' / 'error.png'}\n"
+                        "修复这个同段问题\n"
+                        "----\n"
+                        "/transcript-fixer --mode preserve-formatting"
+                    ),
+                    "2026-01-19T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{reordered_session_id}.jsonl",
+            [
+                claude_user_record(
+                    reordered_session_id,
+                    self.workspace,
+                    (
+                        f"[Image #1] {self.root / 'images' / 'error.png'}\n"
+                        "----\n"
+                        "/transcript-fixer --mode preserve-formatting\n"
+                        "----\n"
+                        "修复重新排序的问题"
+                    ),
+                    "2026-01-20T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{root_path_session_id}.jsonl",
+            [
+                claude_user_record(
+                    root_path_session_id,
+                    self.workspace,
+                    "Background context\n----\n/README.md please review this file",
+                    "2026-01-21T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{attachment_tail_session_id}.jsonl",
+            [
+                claude_user_record(
+                    attachment_tail_session_id,
+                    self.workspace,
+                    (
+                        "Background context\n"
+                        "----\n"
+                        f"{self.root / 'fixtures' / 'input.json'}\n"
+                        "总结文件"
+                    ),
+                    "2026-01-22T08:00:00Z",
+                )
+            ],
+        )
+
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "claude",
+            "--claude-home",
+            str(self.claude_home),
+            "--format",
+            "json",
+        )
+        conversations = json.loads(completed.stdout)["providers"]["claude"][
+            "conversations"
+        ]
+        titles = {item["session_id"]: item["title"] for item in conversations}
+        self.assertEqual(titles[image_session_id], "修复这个问题")
+        self.assertEqual(titles[command_session_id], "Fix authentication bug")
+        self.assertEqual(titles[file_session_id], "总结这个文件")
+        self.assertEqual(
+            titles[ordinary_session_id],
+            "Keep this ordinary long request as the title",
+        )
+        self.assertEqual(
+            titles[path_tail_session_id],
+            "/tmp/example/input.json is the source file",
+        )
+        self.assertEqual(titles[combined_session_id], "修复这个问题")
+        self.assertEqual(titles[same_segment_session_id], "修复这个同段问题")
+        self.assertEqual(titles[reordered_session_id], "修复重新排序的问题")
+        self.assertEqual(
+            titles[root_path_session_id],
+            "/README.md please review this file",
+        )
+        self.assertEqual(titles[attachment_tail_session_id], "总结文件")
+
+    def test_codex_raw_rollout_fallback_skips_bad_json(self) -> None:
+        session_id = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+        rollout = (
+            self.codex_home
+            / "sessions"
+            / "2026"
+            / "01"
+            / "15"
+            / f"rollout-2026-01-15T10-00-00-{session_id}.jsonl"
+        )
+        write_jsonl(
+            rollout,
+            [
+                "not-json",
+                {
+                    "timestamp": "2026-01-15T10:00:00Z",
+                    "type": "session_meta",
+                    "payload": {
+                        "id": session_id,
+                        "cwd": str(self.workspace),
+                        "timestamp": "2026-01-15T10:00:00Z",
+                        "source": "cli",
+                    },
+                },
+                {
+                    "timestamp": "2026-01-15T12:30:00Z",
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": "Fallback conversation"}
+                        ],
+                    },
+                },
+            ],
+        )
+        # Migration/copy time must not become conversation time.
+        os.utime(rollout, (1, 1))
+        archived_session_id = "abababab-abab-4bab-8bab-abababababab"
+        write_jsonl(
+            self.codex_home
+            / "archived_sessions"
+            / f"rollout-{archived_session_id}.jsonl",
+            [
+                {
+                    "type": "session_meta",
+                    "payload": {
+                        "id": archived_session_id,
+                        "cwd": str(self.workspace),
+                        "timestamp": "2026-01-14T10:00:00Z",
+                        "source": "cli",
+                    },
+                },
+                {
+                    "type": "event_msg",
+                    "payload": {
+                        "type": "user_message",
+                        "message": "Archived rollout conversation",
+                    },
+                },
+            ],
+        )
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "codex",
+            "--codex-home",
+            str(self.codex_home),
+            "--format",
+            "json",
+        )
+        payload = json.loads(completed.stdout)["providers"]["codex"]
+        self.assertEqual(payload["backend"], "rollout-jsonl")
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["excluded"]["archived"], 1)
+        conversation = payload["conversations"][0]
+        self.assertEqual(conversation["title"], "Fallback conversation")
+        self.assertEqual(conversation["timestamp_source"], "rollout-record-minmax")
+        self.assertEqual(
+            datetime.fromisoformat(conversation["created_at"]).timestamp(),
+            datetime.fromisoformat("2026-01-15T10:00:00+00:00").timestamp(),
+        )
+        self.assertEqual(
+            datetime.fromisoformat(conversation["updated_at"]).timestamp(),
+            datetime.fromisoformat("2026-01-15T12:30:00+00:00").timestamp(),
+        )
+
+    def test_codex_raw_fallback_prefers_latest_live_copy_over_stale_archive(self) -> None:
+        session_id = "dededede-dede-4ded-8ded-dededededede"
+        live = (
+            self.codex_home
+            / "sessions"
+            / "2026"
+            / "08"
+            / "27"
+            / f"rollout-2026-08-27T10-00-00-{session_id}.jsonl"
+        )
+        write_jsonl(
+            live,
+            [
+                {
+                    "timestamp": "2026-08-27T10:00:00Z",
+                    "type": "session_meta",
+                    "payload": {"id": session_id, "cwd": str(self.workspace)},
+                },
+                {
+                    "timestamp": "2026-08-27T11:00:00Z",
+                    "type": "event_msg",
+                    "payload": {
+                        "type": "user_message",
+                        "message": "LIVE-LATEST-CORRECTION",
+                    },
+                },
+            ],
+        )
+        archive = (
+            self.codex_home
+            / "archived_sessions"
+            / f"rollout-2026-08-27T09-00-00-{session_id}.jsonl"
+        )
+        write_jsonl(
+            archive,
+            [
+                {
+                    "timestamp": "2026-08-27T09:00:00Z",
+                    "type": "session_meta",
+                    "payload": {"id": session_id, "cwd": str(self.workspace)},
+                },
+                {
+                    "timestamp": "2026-08-27T09:30:00Z",
+                    "type": "event_msg",
+                    "payload": {
+                        "type": "user_message",
+                        "message": "ARCHIVE-STALE-SNAPSHOT",
+                    },
+                },
+            ],
+        )
+
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "codex",
+            "--codex-home",
+            str(self.codex_home),
+            "--include-archived",
+            "--format",
+            "json",
+        )
+        conversations = json.loads(completed.stdout)["providers"]["codex"][
+            "conversations"
+        ]
+
+        self.assertEqual(len(conversations), 1)
+        self.assertEqual(conversations[0]["title"], "LIVE-LATEST-CORRECTION")
+        self.assertEqual(conversations[0]["path"], str(live))
+        self.assertFalse(conversations[0]["archived"])
+
+    def test_codex_unknown_database_schema_reports_visible_fallback(self) -> None:
+        self.codex_home.mkdir(parents=True)
+        connection = sqlite3.connect(self.codex_home / "state_5.sqlite")
+        try:
+            connection.execute("CREATE TABLE threads (id TEXT PRIMARY KEY)")
+            connection.commit()
+        finally:
+            connection.close()
+        session_id = "99999999-9999-4999-8999-999999999999"
+        write_jsonl(
+            self.codex_home / "sessions" / f"rollout-{session_id}.jsonl",
+            [
+                {
+                    "type": "session_meta",
+                    "payload": {
+                        "id": session_id,
+                        "cwd": str(self.workspace),
+                        "timestamp": "2026-01-16T10:00:00Z",
+                        "source": "cli",
+                    },
+                },
+                {
+                    "type": "event_msg",
+                    "payload": {
+                        "type": "user_message",
+                        "message": "Recovered from rollout",
+                    },
+                },
+            ],
+        )
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "codex",
+            "--codex-home",
+            str(self.codex_home),
+            "--format",
+            "json",
+        )
+        provider = json.loads(completed.stdout)["providers"]["codex"]
+        self.assertEqual(provider["total"], 1)
+        self.assertTrue(
+            any("No compatible Codex state database" in item for item in provider["warnings"])
+        )
+
+    def test_windows_path_normalization_without_user_directory(self) -> None:
+        rows = [
+            (
+                "12121212-1212-4212-8212-121212121212",
+                r"\\?\C:\workspace\demo-project",
+                "Windows path conversation",
+                "",
+                "",
+                1768000000,
+                1768000000000,
+                1768000100,
+                1768000100000,
+                "cli",
+                "user",
+                None,
+                0,
+                "sessions/windows.jsonl",
+            )
+        ]
+        create_codex_database(self.codex_home / "state_5.sqlite", rows)
+        completed = self.run_cli(
+            "--cwd",
+            "c:/workspace/demo-project/",
+            "--source",
+            "codex",
+            "--codex-home",
+            str(self.codex_home),
+            "--format",
+            "json",
+        )
+        provider = json.loads(completed.stdout)["providers"]["codex"]
+        self.assertEqual(provider["total"], 1)
+        self.assertEqual(
+            provider["conversations"][0]["title"], "Windows path conversation"
+        )
+
+    def test_missing_database_timestamp_is_unknown_not_epoch(self) -> None:
+        rows = [
+            (
+                "34343434-3434-4434-8434-343434343434",
+                str(self.workspace),
+                "Conversation with unknown time",
+                "",
+                "",
+                0,
+                0,
+                0,
+                0,
+                "cli",
+                "user",
+                None,
+                0,
+                "sessions/unknown-time.jsonl",
+            )
+        ]
+        create_codex_database(self.codex_home / "state_5.sqlite", rows)
+        json_result = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "codex",
+            "--codex-home",
+            str(self.codex_home),
+            "--format",
+            "json",
+        )
+        conversation = json.loads(json_result.stdout)["providers"]["codex"][
+            "conversations"
+        ][0]
+        self.assertIsNone(conversation["updated_at"])
+
+        markdown_result = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "codex",
+            "--codex-home",
+            str(self.codex_home),
+            "--language",
+            "zh",
+        )
+        self.assertIn("未知", markdown_result.stdout)
+        self.assertNotIn("1970-", markdown_result.stdout)
+
+    def test_rollout_without_authoritative_or_uuid_id_is_skipped(self) -> None:
+        write_jsonl(
+            self.codex_home / "sessions" / "rollout-no-id.jsonl",
+            [
+                {
+                    "type": "session_meta",
+                    "payload": {
+                        "cwd": str(self.workspace),
+                        "timestamp": "2026-01-17T10:00:00Z",
+                        "source": "cli",
+                    },
+                },
+                {
+                    "type": "event_msg",
+                    "payload": {
+                        "type": "user_message",
+                        "message": "Must not receive a guessed ID",
+                    },
+                },
+            ],
+        )
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "codex",
+            "--codex-home",
+            str(self.codex_home),
+            "--format",
+            "json",
+        )
+        provider = json.loads(completed.stdout)["providers"]["codex"]
+        self.assertEqual(provider["total"], 0)
+        self.assertTrue(
+            any("without a session ID" in item for item in provider["warnings"])
+        )
+
+    def test_registered_archive_uses_internal_range_and_deduplicates(self) -> None:
+        user_home = self.root / "user-home"
+        active_home = user_home / ".claude"
+        archive_home = self.root / "conversation-archive"
+        active_project = claude_project_dir(active_home, self.workspace)
+        archive_project = claude_project_dir(archive_home, self.workspace)
+        duplicate_id = "10101010-1010-4010-8010-101010101010"
+        archive_only_id = "20202020-2020-4020-8020-202020202020"
+        active_only_id = "30303030-3030-4030-8030-303030303030"
+
+        write_jsonl(
+            active_project / f"{duplicate_id}.jsonl",
+            [
+                claude_user_record(
+                    duplicate_id,
+                    self.workspace,
+                    "Active copy wins the tie",
+                    "2026-03-05T08:00:00Z",
+                ),
+                {
+                    "type": "assistant",
+                    "sessionId": duplicate_id,
+                    "cwd": str(self.workspace),
+                    "timestamp": "2026-03-06T09:30:00Z",
+                    "message": {"role": "assistant", "content": "done"},
+                },
+            ],
+        )
+        write_jsonl(
+            archive_project / f"{duplicate_id}.jsonl",
+            [
+                claude_user_record(
+                    duplicate_id,
+                    self.workspace,
+                    "Older archive copy",
+                    "2026-03-04T08:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            archive_project / f"{archive_only_id}.jsonl",
+            [
+                claude_user_record(
+                    archive_only_id,
+                    self.workspace,
+                    "Archive-only April conversation",
+                    "2026-04-20T10:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            active_project / f"{active_only_id}.jsonl",
+            [
+                claude_user_record(
+                    active_only_id,
+                    self.workspace,
+                    "Active March conversation",
+                    "2026-03-20T10:00:00Z",
+                )
+            ],
+        )
+
+        # Deliberately make mtimes contradict the internal chronology. A migrated
+        # archive can have a fresh mtime even when its conversation is older.
+        os.utime(archive_project / f"{archive_only_id}.jsonl", (1, 1))
+        os.utime(
+            active_project / f"{active_only_id}.jsonl",
+            (2_000_000_000, 2_000_000_000),
+        )
+        self.write_history_sources(active_home, archive_home)
+
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "claude",
+            "--format",
+            "json",
+            env={"HOME": str(user_home), "CLAUDE_CONFIG_DIR": str(active_home)},
+        )
+        provider = json.loads(completed.stdout)["providers"]["claude"]
+        conversations = provider["conversations"]
+        self.assertEqual(
+            [item["session_id"] for item in conversations],
+            [archive_only_id, active_only_id, duplicate_id],
+        )
+        duplicate = next(
+            item for item in conversations if item["session_id"] == duplicate_id
+        )
+        self.assertEqual(duplicate["title"], "Active copy wins the tie")
+        self.assertEqual(
+            datetime.fromisoformat(duplicate["created_at"]).timestamp(),
+            datetime.fromisoformat("2026-03-04T08:00:00+00:00").timestamp(),
+        )
+        self.assertEqual(
+            datetime.fromisoformat(duplicate["updated_at"]).timestamp(),
+            datetime.fromisoformat("2026-03-06T09:30:00+00:00").timestamp(),
+        )
+        self.assertEqual(duplicate["timestamp_source"], "session-record-minmax")
+        self.assertEqual(
+            duplicate["source_labels"],
+            ["active:main", "archive:full-backup"],
+        )
+        archive_only = next(
+            item for item in conversations if item["session_id"] == archive_only_id
+        )
+        self.assertEqual(archive_only["source_kind"], "archive")
+        self.assertEqual(archive_only["source_labels"], ["archive:full-backup"])
+
+    def test_date_filter_uses_session_overlap_and_excludes_unknown_time(self) -> None:
+        project_dir = claude_project_dir(self.claude_home, self.workspace)
+        spanning_id = "40404040-4040-4040-8040-404040404040"
+        outside_id = "50505050-5050-4050-8050-505050505050"
+        unknown_id = "60606060-6060-4060-8060-606060606060"
+        write_jsonl(
+            project_dir / f"{spanning_id}.jsonl",
+            [
+                claude_user_record(
+                    spanning_id,
+                    self.workspace,
+                    "Conversation spanning the boundary",
+                    "2026-03-31T10:00:00Z",
+                ),
+                {
+                    "type": "assistant",
+                    "sessionId": spanning_id,
+                    "cwd": str(self.workspace),
+                    "timestamp": "2026-04-01T00:01:00Z",
+                    "message": {"role": "assistant", "content": "done"},
+                },
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{outside_id}.jsonl",
+            [
+                claude_user_record(
+                    outside_id,
+                    self.workspace,
+                    "Outside the requested window",
+                    "2026-05-01T00:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir / f"{unknown_id}.jsonl",
+            [
+                {
+                    "type": "user",
+                    "sessionId": unknown_id,
+                    "cwd": str(self.workspace),
+                    "message": {"role": "user", "content": "Unknown time"},
+                }
+            ],
+        )
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "claude",
+            "--claude-home",
+            str(self.claude_home),
+            "--from-date",
+            "2026-03-01",
+            "--to-date",
+            "2026-03-31",
+            "--format",
+            "json",
+        )
+        provider = json.loads(completed.stdout)["providers"]["claude"]
+        self.assertEqual(
+            [item["session_id"] for item in provider["conversations"]],
+            [spanning_id],
+        )
+        self.assertTrue(
+            any(
+                "without an internal timestamp" in warning
+                for warning in provider["warnings"]
+            )
+        )
+
+    def test_explicit_claude_home_does_not_silently_add_registered_archives(self) -> None:
+        user_home = self.root / "user-home"
+        active_home = user_home / ".claude"
+        archive_home = self.root / "conversation-archive"
+        active_project = claude_project_dir(active_home, self.workspace)
+        archive_project = claude_project_dir(archive_home, self.workspace)
+        active_id = "70707070-7070-4070-8070-707070707070"
+        archive_id = "80808080-8080-4080-8080-808080808080"
+        write_jsonl(
+            active_project / f"{active_id}.jsonl",
+            [
+                claude_user_record(
+                    active_id,
+                    self.workspace,
+                    "Explicit active home",
+                    "2026-04-01T00:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            archive_project / f"{archive_id}.jsonl",
+            [
+                claude_user_record(
+                    archive_id,
+                    self.workspace,
+                    "Must stay outside explicit scope",
+                    "2026-04-02T00:00:00Z",
+                )
+            ],
+        )
+        self.write_history_sources(active_home, archive_home)
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "claude",
+            "--claude-home",
+            str(active_home),
+            "--format",
+            "json",
+            env={"HOME": str(user_home)},
+        )
+        conversations = json.loads(completed.stdout)["providers"]["claude"][
+            "conversations"
+        ]
+        self.assertEqual([item["session_id"] for item in conversations], [active_id])
+
+    def test_missing_required_registered_archive_fails_loudly(self) -> None:
+        user_home = self.root / "user-home"
+        active_home = user_home / ".claude"
+        claude_project_dir(active_home, self.workspace)
+        self.write_history_sources(
+            active_home, self.root / "missing-archive", required=True
+        )
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--cwd",
+                str(self.workspace),
+                "--source",
+                "claude",
+                "--format",
+                "json",
+            ],
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+            env={**os.environ, "HOME": str(user_home)},
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("required history source", completed.stderr.lower())
+
+
+if __name__ == "__main__":
+    unittest.main()

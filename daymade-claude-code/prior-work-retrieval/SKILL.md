@@ -165,7 +165,7 @@ path remain possible so the agent can repair the gate without bypassing it.
 |---|---|
 | Known exact string, symbol, path | Filesystem carrier (`rg`) |
 | Meaning remembered, wording changed | Declared semantic adapter (gbrain or Claude-history hybrid recall) |
-| Exact prior Claude tool/thinking/file-history evidence | `claude-code-history-files-finder search` |
+| Exact prior Claude tool/thinking/file-history evidence | `read-claude-code-history search` |
 | Meeting decision or speaker claim | Project transcript carrier; open raw speaker turn |
 | Archived WeChat text/voice transcription | Declared WeChat archive carrier |
 | Live/latest WeChat | `read-wechat-messages`; record manual coverage |
