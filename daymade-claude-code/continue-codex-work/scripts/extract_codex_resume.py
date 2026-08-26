@@ -41,6 +41,7 @@ MAX_ASSISTANT_RESPONSES = 4
 MAX_TOOL_CALLS = 20
 MAX_FILES = 40
 MAX_LINEAGE_DEPTH = 16
+MAX_HANDOFF_USER_TURNS = 40
 
 END_REASON_LABELS = {
     "completed": "Clean exit — the last turn completed",
@@ -431,9 +432,11 @@ def parse_codex_rollout(path: Path, end_byte_offset: Optional[int] = None) -> di
     that `response_item/message` never has, while mid-turn queued user inputs
     appear only in message records. So both streams are collected and the
     RICHER one wins PER ROLE (ties go to the event stream, the historical
-    display stream), which never silently drops either role's bigger half. `task_complete`'s
-    last message is a tail safeguard. `response_item/agent_message` records
-    are inter-agent traffic, never main-thread text. Files edited come from
+    display stream), which never silently drops either role's bigger half.
+    Selected turns retain record ordinals so inherited context can be rendered
+    chronologically. `task_complete`'s last message is a tail safeguard at its
+    original ordinal, used only when neither chosen stream contains that text.
+    `response_item/agent_message` records are inter-agent traffic, never main-thread text. Files edited come from
     `event_msg/patch_apply_end` (≤0.146) and `event_msg/item_completed`
     FileChange items (0.147+); both feed the same set, so versions emitting
     both union harmlessly.
@@ -453,9 +456,15 @@ def parse_codex_rollout(path: Path, end_byte_offset: Optional[int] = None) -> di
         "compact_summaries": [],
         "user_messages": [],
         "assistant_messages": [],
+        "event_user_turns": [],
+        "event_assistant_turns": [],
         "ri_user": [],  # response_item/message stream (preferred when present)
         "ri_assistant": [],
+        "ri_user_turns": [],
+        "ri_assistant_turns": [],
+        "turn_timeline": [],
         "task_tail": "",  # last task_complete.last_agent_message (tail safeguard)
+        "task_tail_ordinal": None,
         "task_error": None,  # last task_complete.error dict, last-task_complete-wins
         "latest_plan": None,  # last update_plan call's parsed {explanation?, plan}
         "tool_calls": [],  # (name, preview)
@@ -482,11 +491,27 @@ def parse_codex_rollout(path: Path, end_byte_offset: Optional[int] = None) -> di
                 message = _user_turn_text(str(payload.get("message") or "").strip())
                 if message and not is_noise_text(message):
                     data["user_messages"].append(message)
+                    data["event_user_turns"].append(
+                        {
+                            "ordinal": data["total_lines"],
+                            "role": "user",
+                            "phase": None,
+                            "text": message,
+                        }
+                    )
                     data["last_sig"] = "user_message"
             elif ptype == "agent_message":
                 message = str(payload.get("message") or "").strip()
                 if message:
                     data["assistant_messages"].append(message)
+                    data["event_assistant_turns"].append(
+                        {
+                            "ordinal": data["total_lines"],
+                            "role": "assistant",
+                            "phase": None,
+                            "text": message,
+                        }
+                    )
                     data["last_sig"] = "agent_message"
             elif ptype == "patch_apply_end":
                 changes = payload.get("changes")
@@ -519,6 +544,7 @@ def parse_codex_rollout(path: Path, end_byte_offset: Optional[int] = None) -> di
                 # last_agent_message repeats the turn's final assistant text;
                 # appended at end-of-parse only if the chosen stream lacks it.
                 data["task_tail"] = str(payload.get("last_agent_message") or "").strip()
+                data["task_tail_ordinal"] = data["total_lines"]
                 # Captured on EVERY task_complete (last-wins, same as task_tail
                 # above) — not only when present — so a later clean
                 # task_complete correctly clears a stale error from an earlier
@@ -543,11 +569,27 @@ def parse_codex_rollout(path: Path, end_byte_offset: Optional[int] = None) -> di
                         text = "[image-only user message]"
                     if text and not is_noise_text(text):
                         data["ri_user"].append(text)
+                        data["ri_user_turns"].append(
+                            {
+                                "ordinal": data["total_lines"],
+                                "role": "user",
+                                "phase": None,
+                                "text": text,
+                            }
+                        )
                         data["last_sig"] = "user_message"
                 elif role == "assistant":
                     text = _message_text(payload.get("content"), {"output_text", "text"}).strip()
                     if text:
                         data["ri_assistant"].append(text)
+                        data["ri_assistant_turns"].append(
+                            {
+                                "ordinal": data["total_lines"],
+                                "role": "assistant",
+                                "phase": payload.get("phase"),
+                                "text": text,
+                            }
+                        )
                         # phase=commentary is mid-turn narration; a session
                         # whose tail is commentary was cut off mid-turn.
                         phase = payload.get("phase")
@@ -594,19 +636,37 @@ def parse_codex_rollout(path: Path, end_byte_offset: Optional[int] = None) -> di
     # either role can be richer — commentary inflates the event stream, while
     # mid-turn queued user inputs appear only in message records (whole-stream
     # selection was measured to lose the final user request on real files).
-    # The briefing displays the roles in separate sections, so picking the
-    # richer stream per role never silently drops either role's bigger half.
-    # Ties go to the event stream, the historical display stream.
+    # The chosen role streams retain physical record ordinals and are merged
+    # into a chronological handoff timeline. Ties go to the event stream, the
+    # historical display stream.
     # task_complete's tail message is a safeguard for sessions whose final
     # assistant text never landed in either stream.
-    if len(data["ri_user"]) > len(data["user_messages"]):
-        data["user_messages"] = data["ri_user"]
-    if len(data["ri_assistant"]) > len(data["assistant_messages"]):
-        data["assistant_messages"] = data["ri_assistant"]
-    if data["task_tail"] and (
-        not data["assistant_messages"] or data["assistant_messages"][-1] != data["task_tail"]
-    ):
+    selected_user_turns = data["event_user_turns"]
+    if len(data["ri_user_turns"]) > len(selected_user_turns):
+        selected_user_turns = data["ri_user_turns"]
+    selected_assistant_turns = data["event_assistant_turns"]
+    if len(data["ri_assistant_turns"]) > len(selected_assistant_turns):
+        selected_assistant_turns = data["ri_assistant_turns"]
+
+    data["user_messages"] = [turn["text"] for turn in selected_user_turns]
+    data["assistant_messages"] = [turn["text"] for turn in selected_assistant_turns]
+    # A task_complete tail is a fallback only when the chosen stream lacks that
+    # text anywhere. Checking only the final selected message relocates an old
+    # final_answer to the end when later commentary exists in the same rollout.
+    if data["task_tail"] and data["task_tail"] not in data["assistant_messages"]:
+        fallback_turn = {
+            "ordinal": data["task_tail_ordinal"] or (data["total_lines"] + 1),
+            "role": "assistant",
+            "phase": "task_complete_tail",
+            "text": data["task_tail"],
+        }
+        selected_assistant_turns = [*selected_assistant_turns, fallback_turn]
         data["assistant_messages"].append(data["task_tail"])
+
+    data["turn_timeline"] = sorted(
+        [*selected_user_turns, *selected_assistant_turns],
+        key=lambda turn: int(turn["ordinal"]),
+    )
 
     data["end_reason"] = _detect_end_reason(data)
     return data
@@ -701,6 +761,7 @@ def _inherited_context(lineage: list[dict[str, Any]]) -> dict[str, Any]:
     context: dict[str, Any] = {
         "user_messages": [],
         "assistant_messages": [],
+        "turn_timeline": [],
         "latest_plan": None,
         "tool_calls": [],
         "files_touched": set(),
@@ -710,6 +771,10 @@ def _inherited_context(lineage: list[dict[str, Any]]) -> dict[str, Any]:
         ancestor = edge["data"]
         context["user_messages"].extend(ancestor["user_messages"])
         context["assistant_messages"].extend(ancestor["assistant_messages"])
+        for turn in ancestor.get("turn_timeline") or []:
+            context["turn_timeline"].append(
+                {**turn, "session_id": edge["session_id"]}
+            )
         if ancestor["latest_plan"] is not None:
             context["latest_plan"] = ancestor["latest_plan"]
         context["tool_calls"].extend(ancestor["tool_calls"])
@@ -733,6 +798,97 @@ def _is_continuation_cue(text: str) -> bool:
         "continueworking",
         "goon",
     }
+
+
+def _handoff_timeline_segments(
+    timeline: list[dict[str, Any]], full: bool
+) -> list[Any]:
+    """Keep every user turn plus the first/latest assistant state before the next.
+
+    A role-separated tail cannot show which reply preceded which correction. The
+    handoff view therefore preserves record order while compressing tool-heavy
+    assistant narration. ``--full`` removes the user-segment count cap as well as
+    the per-message character cap.
+    """
+    user_positions = [
+        index for index, turn in enumerate(timeline) if turn.get("role") == "user"
+    ]
+    segments: list[list[dict[str, Any]]] = []
+    if not user_positions:
+        assistant_turns = [
+            turn for turn in timeline if turn.get("role") == "assistant"
+        ]
+        if assistant_turns:
+            segment = [assistant_turns[0]]
+            if assistant_turns[-1] != assistant_turns[0]:
+                segment.append(assistant_turns[-1])
+            segments.append(segment)
+    else:
+        for ordinal, position in enumerate(user_positions):
+            next_position = (
+                user_positions[ordinal + 1]
+                if ordinal + 1 < len(user_positions)
+                else len(timeline)
+            )
+            assistant_turns = [
+                turn
+                for turn in timeline[position + 1 : next_position]
+                if turn.get("role") == "assistant"
+            ]
+            segment = [timeline[position]]
+            if assistant_turns:
+                segment.append(assistant_turns[0])
+                if assistant_turns[-1] != assistant_turns[0]:
+                    segment.append(assistant_turns[-1])
+            segments.append(segment)
+
+    if full or len(segments) <= MAX_HANDOFF_USER_TURNS:
+        return segments
+    head_count = min(5, MAX_HANDOFF_USER_TURNS)
+    tail_count = MAX_HANDOFF_USER_TURNS - head_count
+    omitted = len(segments) - head_count - tail_count
+    return [
+        *segments[:head_count],
+        {"omitted_user_segments": omitted},
+        *segments[-tail_count:],
+    ]
+
+
+def _append_handoff_timeline(
+    sections: list[str], timeline: list[dict[str, Any]], full: bool
+) -> None:
+    if not timeline:
+        return
+    sections.append("\n### Inherited Continuation Timeline (chronological)\n")
+    sections.append(
+        "Every retained user turn is shown in record order, with the first and latest "
+        "assistant state before the next user turn. This keeps corrections attached to "
+        "the state they corrected without replaying every tool-progress narration.\n"
+    )
+    for segment in _handoff_timeline_segments(timeline, full):
+        if isinstance(segment, dict):
+            omitted = segment["omitted_user_segments"]
+            sections.append(
+                f"> … {omitted} middle user segment(s) omitted — rerun with --full "
+                "to include every retained segment.\n"
+            )
+            continue
+        for turn in segment:
+            role = str(turn.get("role") or "?").upper()
+            phase = str(turn.get("phase") or "").strip()
+            phase_text = f" ({phase})" if phase else ""
+            session_id = str(turn.get("session_id") or "?")
+            record_ordinal = turn.get("ordinal")
+            sections.append(
+                f"#### `{session_id}` · record {record_ordinal} · {role}{phase_text}\n"
+            )
+            limit = 800 if role == "USER" else 1400
+            sections.append(f"{_clip(str(turn.get('text') or ''), limit, full)}\n")
+    if timeline[-1].get("role") == "user":
+        sections.append(
+            f"> **Unanswered inherited request**: the snapshot ends on the user turn at "
+            f"record {timeline[-1].get('ordinal')}.\n"
+        )
 
 
 def _append_plan(sections: list[str], heading: str, plan: dict[str, Any]) -> None:
@@ -773,17 +929,7 @@ def _append_inherited_context(
                 )
             )
 
-    user_messages = context["user_messages"][-MAX_USER_REQUESTS:]
-    if user_messages:
-        sections.append("\n### Last Inherited User Requests\n")
-        for i, message in enumerate(user_messages, 1):
-            sections.append(f"#### Request {i}\n{_clip(message, 500, full)}\n")
-
-    assistant_messages = context["assistant_messages"][-MAX_ASSISTANT_RESPONSES:]
-    if assistant_messages:
-        sections.append("\n### Last Inherited Assistant Responses\n")
-        for i, message in enumerate(assistant_messages, 1):
-            sections.append(f"#### Response {i}\n{_clip(message, 1000, full)}\n")
+    _append_handoff_timeline(sections, context["turn_timeline"], full)
 
     if context["latest_plan"]:
         _append_plan(
@@ -917,8 +1063,9 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
             "**Recovery boundary**: lineage recovery restores only text and structured "
             "events still retained in those snapshots. It cannot undo Codex compaction, "
             "reconstruct details omitted by a compacted history, or recover image/audio "
-            "content from a text-only marker. `--full` removes character truncation from "
-            "retained sections; message/tool/file count caps still apply."
+            "content from a text-only marker. `--full` removes character truncation and "
+            "the inherited timeline's user-segment cap; selected-session message caps "
+            "and inherited tool/file caps still apply."
         )
 
         selected_requests = data["user_messages"]
