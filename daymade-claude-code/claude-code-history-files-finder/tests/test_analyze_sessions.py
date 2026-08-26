@@ -828,6 +828,122 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertIn("Total mentions: 1", completed.stdout)
         self.assertIn("Match fields: message", completed.stdout)
 
+    def test_locate_codex_uses_exact_metadata_path_and_returns_all_copies(self) -> None:
+        codex_home = self.root / "codex-home"
+        session_id = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+        self.seed_codex_rollout(
+            codex_home,
+            session_id,
+            self.workspace,
+            "content should not need parsing",
+            archived_copy=True,
+        )
+        completed = self.run_cli(
+            "locate-codex",
+            session_id,
+            "--codex-home",
+            str(codex_home),
+        )
+        self.assertIn("2 physical copy/copies", completed.stdout)
+        self.assertIn("Storage: active", completed.stdout)
+        self.assertIn("Storage: archived", completed.stdout)
+        self.assertEqual(completed.stdout.count(f"Codex session {session_id}"), 1)
+
+    def test_exact_uuid_search_auto_routes_before_claude_history_scan(self) -> None:
+        codex_home = self.root / "codex-home"
+        session_id = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+        self.seed_codex_rollout(
+            codex_home, session_id, self.workspace, "different body text"
+        )
+        completed = self.run_cli(
+            "search",
+            "--all-projects",
+            session_id,
+            "--codex",
+            "--codex-home",
+            str(codex_home),
+            "--home",
+            str(self.active_home),
+        )
+        self.assertIn("Exact Codex session ID detected", completed.stdout)
+        self.assertIn(f"Codex session {session_id}", completed.stdout)
+        self.assertNotIn("Searching ", completed.stdout)
+
+    def test_locate_codex_rejects_filename_candidate_with_wrong_metadata_id(self) -> None:
+        codex_home = self.root / "codex-home"
+        wanted = "12121212-1212-4121-8121-121212121212"
+        wrong = "34343434-3434-4343-8343-343434343434"
+        path = (
+            codex_home
+            / "sessions"
+            / "2026"
+            / "04"
+            / "20"
+            / f"rollout-2026-04-20T10-00-00-{wanted}.jsonl"
+        )
+        write_jsonl(
+            path,
+            [
+                {
+                    "type": "session_meta",
+                    "timestamp": "2026-04-20T10:00:00Z",
+                    "payload": {"id": wrong, "cwd": str(self.workspace)},
+                }
+            ],
+        )
+        completed = self.run_cli(
+            "locate-codex",
+            wanted,
+            "--codex-home",
+            str(codex_home),
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("No Codex rollout with session_meta.id", completed.stderr)
+
+    def test_codex_scan_budget_stops_without_returning_partial_matches(self) -> None:
+        module = _load_analyze_module()
+        codex_home = self.root / "codex-home"
+        first = "56565656-5656-4565-8565-565656565656"
+        second = "78787878-7878-4787-8787-787878787878"
+        self.seed_codex_rollout(codex_home, first, self.workspace, "budget-marker")
+        self.seed_codex_rollout(codex_home, second, self.workspace, "budget-marker")
+        ticks = iter([0.0, 0.6, 1.2, 1.8, 2.4])
+        with self.assertRaises(module.CodexScanBudgetExceeded):
+            module.search_codex_rollouts(
+                module.discover_codex_rollouts(codex_home),
+                ["budget-marker"],
+                use_prefilter=False,
+                max_scan_seconds=1.0,
+                clock=lambda: next(ticks),
+                progress_interval_seconds=100.0,
+            )
+
+    def test_codex_scan_emits_progress_heartbeat(self) -> None:
+        module = _load_analyze_module()
+        codex_home = self.root / "codex-home"
+        session_id = "90909090-9090-4909-8909-909090909090"
+        self.seed_codex_rollout(codex_home, session_id, self.workspace, "heartbeat")
+        messages: list[str] = []
+        tick = -0.6
+
+        def clock() -> float:
+            nonlocal tick
+            tick += 0.6
+            return tick
+
+        module.search_codex_rollouts(
+            module.discover_codex_rollouts(codex_home),
+            ["heartbeat"],
+            use_prefilter=False,
+            max_scan_seconds=0,
+            clock=clock,
+            progress_interval_seconds=1.0,
+            progress=messages.append,
+        )
+        self.assertTrue(messages)
+        self.assertIn("Codex scan progress", messages[0])
+
     def test_codex_search_filters_rollouts_by_project_cwd(self) -> None:
         codex_home = self.root / "codex-home"
         matching_id = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"

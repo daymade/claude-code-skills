@@ -20,10 +20,12 @@ never covers.
 import hashlib
 import json
 import os
+import re
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Callable, Dict, List, Optional
 from collections import Counter, defaultdict
 
 
@@ -66,6 +68,28 @@ from _core.text import (  # noqa: E402
     keywords_are_raw_byte_safe,
     searchable_segments,
 )
+
+
+CODEX_EXACT_SESSION_ID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+DEFAULT_CODEX_SCAN_BUDGET_SECONDS = 300.0
+CODEX_PROGRESS_INTERVAL_SECONDS = 15.0
+
+
+class CodexScanBudgetExceeded(RuntimeError):
+    """Raised instead of silently returning an incomplete broad-search result."""
+
+    def __init__(self, scanned: int, total: int, elapsed: float, stage: str):
+        self.scanned = scanned
+        self.total = total
+        self.elapsed = elapsed
+        self.stage = stage
+        super().__init__(
+            f"Codex scan exceeded its time budget during {stage}: "
+            f"{scanned}/{total} rollouts inspected in {elapsed:.1f}s"
+        )
 
 
 def _record_identity(record: Dict[str, Any]) -> str:
@@ -351,6 +375,83 @@ def discover_codex_rollouts(codex_home: Path) -> List[Path]:
     return rollouts
 
 
+def locate_codex_rollouts(codex_home: Path, session_id: str) -> List[Dict[str, Any]]:
+    """Locate one exact Codex session without parsing the rollout corpus.
+
+    Current Codex rollout filenames carry the session UUID. Globbing that
+    exact UUID touches directory entries only, then each small candidate is
+    validated against the authoritative ``session_meta.id`` before it is
+    returned. A UUID is metadata, not conversation text; scanning multi-GB
+    rollout bodies for metadata is the failure mode this function prevents.
+    """
+    normalized = session_id.strip().lower()
+    if not CODEX_EXACT_SESSION_ID_RE.fullmatch(normalized):
+        raise ValueError(f"invalid Codex session id: {session_id!r}")
+
+    candidates: set[Path] = set()
+    sessions_dir = codex_home / "sessions"
+    if sessions_dir.is_dir():
+        candidates.update(
+            sessions_dir.glob(f"*/*/*/rollout-*-{normalized}.jsonl")
+        )
+    archived_dir = codex_home / "archived_sessions"
+    if archived_dir.is_dir():
+        candidates.update(archived_dir.glob(f"rollout-*-{normalized}.jsonl"))
+
+    located: List[Dict[str, Any]] = []
+    for path in sorted(candidates):
+        try:
+            meta = codex_meta_from_rollout(path)
+        except OSError as error:
+            print(f"Warning: Error reading {path}: {error}", file=sys.stderr)
+            continue
+        if not isinstance(meta, dict):
+            continue
+        authoritative_id = codex_session_id(meta, path)
+        if (
+            not isinstance(authoritative_id, str)
+            or authoritative_id.lower() != normalized
+        ):
+            continue
+        located.append(
+            {
+                "session_id": authoritative_id,
+                "path": path,
+                "cwd": meta.get("cwd"),
+                "timestamp": parse_timestamp(meta.get("timestamp")),
+                "storage": "archived" if archived_dir in path.parents else "active",
+            }
+        )
+    located.sort(key=lambda item: (item["storage"] == "archived", str(item["path"])))
+    return located
+
+
+def _print_codex_locations(codex_home: Path, session_id: str) -> int:
+    try:
+        locations = locate_codex_rollouts(codex_home, session_id)
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    if not locations:
+        print(
+            f"No Codex rollout with session_meta.id={session_id} under {codex_home}.",
+            file=sys.stderr,
+        )
+        return 1
+    print(
+        f"Codex session {locations[0]['session_id']} "
+        f"({len(locations)} physical copy/copies):"
+    )
+    for item in locations:
+        print(f"  - Storage: {item['storage']}")
+        if isinstance(item.get("cwd"), str) and item["cwd"]:
+            print(f"    cwd: {item['cwd']}")
+        if item.get("timestamp") is not None:
+            print(f"    Created: {format_timestamp(item['timestamp'])}")
+        print(f"    Path: {item['path']}")
+    return 0
+
+
 def file_content_digest(path: Path) -> Optional[str]:
     """SHA-256 over a file's bytes, or ``None`` when it cannot be read.
 
@@ -392,6 +493,10 @@ def search_codex_rollouts(
     project_path: Optional[str] = None,
     exclude_ids: Optional[set] = None,
     use_prefilter: bool = True,
+    max_scan_seconds: Optional[float] = DEFAULT_CODEX_SCAN_BUDGET_SECONDS,
+    progress_interval_seconds: float = CODEX_PROGRESS_INTERVAL_SECONDS,
+    clock: Callable[[], float] = time.monotonic,
+    progress: Optional[Callable[[str], None]] = None,
 ) -> List[Dict[str, Any]]:
     """Search Codex rollouts for keywords, one match dict per session.
 
@@ -421,11 +526,39 @@ def search_codex_rollouts(
     matches: List[Dict[str, Any]] = []
     seen_ids: set[str] = set()
 
+    started = clock()
+    next_progress = started + progress_interval_seconds
+    progress_sink = progress or (
+        lambda message: print(message, file=sys.stderr, flush=True)
+    )
+    scanned_files = 0
+
+    def check_liveness(stage: str) -> None:
+        nonlocal next_progress
+        now = clock()
+        elapsed = now - started
+        if (
+            max_scan_seconds is not None
+            and max_scan_seconds > 0
+            and elapsed > max_scan_seconds
+        ):
+            raise CodexScanBudgetExceeded(scanned_files, len(rollouts), elapsed, stage)
+        if progress_interval_seconds > 0 and now >= next_progress:
+            progress_sink(
+                "Codex scan progress: "
+                f"stage={stage}, {scanned_files}/{len(rollouts)} rollouts, "
+                f"matches={len(matches)}, elapsed={elapsed:.1f}s"
+            )
+            while next_progress <= now:
+                next_progress += progress_interval_seconds
+
     matched_files: Optional[set[Path]] = None
     if use_prefilter:
+        check_liveness("prefilter-start")
         matched_files = files_possibly_matching(
             rollouts, keywords, case_sensitive=case_sensitive
         )
+        check_liveness("prefilter-complete")
     # Codex gets FILE-level pre-filtering only, never line-level.
     #
     # ``session_range.observe()`` has to see every record — including the
@@ -440,7 +573,9 @@ def search_codex_rollouts(
     # so that layer stays safe and stays on.
     line_keywords = None
 
-    for path in rollouts:
+    for path_index, path in enumerate(rollouts, start=1):
+        scanned_files = path_index - 1
+        check_liveness("rollout-open")
         try:
             meta = codex_meta_from_rollout(path)
         except OSError as e:
@@ -477,7 +612,11 @@ def search_codex_rollouts(
         match_range = TimestampRange()
         excluded_untimed = 0
         try:
-            for record in iter_jsonl(path, line_keywords=line_keywords):
+            for record_index, record in enumerate(
+                iter_jsonl(path, line_keywords=line_keywords)
+            ):
+                if record_index % 512 == 0:
+                    check_liveness("rollout-parse")
                 record_timestamp = parse_timestamp(record.get("timestamp"))
                 if record_timestamp is not None:
                     session_range.observe(record_timestamp)
@@ -520,6 +659,9 @@ def search_codex_rollouts(
         except (OSError, UnicodeError) as e:
             print(f"Warning: Error processing {path}: {e}", file=sys.stderr)
             continue
+
+        scanned_files = path_index
+        check_liveness("rollout-complete")
 
         if total_mentions > 0:
             matches.append(
@@ -1883,6 +2025,17 @@ def main():
     )
     _add_home_flags(triage_parser)
 
+    locate_codex_parser = subparsers.add_parser(
+        "locate-codex",
+        help="Locate an exact Codex session UUID from metadata without a corpus scan",
+    )
+    locate_codex_parser.add_argument("session_id", help="Exact Codex session UUID")
+    locate_codex_parser.add_argument(
+        "--codex-home",
+        metavar="DIR",
+        help="Codex home (default: $CODEX_HOME or ~/.codex).",
+    )
+
     # Search command
     search_parser = subparsers.add_parser("search", help="Search sessions for keywords")
     search_parser.add_argument(
@@ -1919,6 +2072,15 @@ def main():
         "--codex-home",
         metavar="DIR",
         help="Codex home for --codex (default: $CODEX_HOME or ~/.codex).",
+    )
+    search_parser.add_argument(
+        "--codex-max-scan-seconds",
+        type=float,
+        default=DEFAULT_CODEX_SCAN_BUDGET_SECONDS,
+        metavar="SECONDS",
+        help="Stop a broad Codex rollout scan after SECONDS (default: 300). "
+        "Use 0 only to explicitly accept an unbounded scan; partial results "
+        "are never reported as complete.",
     )
     search_parser.add_argument(
         "--kimi",
@@ -1962,8 +2124,26 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    if args.command == "locate-codex":
+        raise SystemExit(_print_codex_locations(_codex_home_for(args), args.session_id))
+
     if args.command == "search":
         _normalize_search_scope(args, parser)
+        if args.codex_max_scan_seconds < 0:
+            parser.error("--codex-max-scan-seconds must be 0 or greater")
+        if (
+            args.codex
+            and len(args.keywords) == 1
+            and CODEX_EXACT_SESSION_ID_RE.fullmatch(args.keywords[0])
+            and args.keywords[0] not in set(args.exclude_session)
+        ):
+            print(
+                "Exact Codex session ID detected; using session_meta locator "
+                "instead of searching conversation bytes."
+            )
+            raise SystemExit(
+                _print_codex_locations(_codex_home_for(args), args.keywords[0])
+            )
 
     if args.command == "list":
         _validate_project_scope(args, parser)
@@ -2209,18 +2389,32 @@ def main():
             rollouts = discover_codex_rollouts(codex_home)
             print(
                 f"Also searching {len(rollouts)} Codex rollout(s) under "
-                f"{codex_home} (--codex)\n"
+                f"{codex_home} (--codex; {args.codex_max_scan_seconds:g}s stop-loss)\n",
+                flush=True,
             )
-            codex_matches = search_codex_rollouts(
-                rollouts,
-                args.keywords,
-                args.case_sensitive,
-                from_timestamp,
-                to_timestamp,
-                None if args.all_projects else args.project_path,
-                set(args.exclude_session),
-                not args.no_prefilter,
-            )
+            try:
+                codex_matches = search_codex_rollouts(
+                    rollouts,
+                    args.keywords,
+                    args.case_sensitive,
+                    from_timestamp,
+                    to_timestamp,
+                    None if args.all_projects else args.project_path,
+                    set(args.exclude_session),
+                    not args.no_prefilter,
+                    args.codex_max_scan_seconds,
+                )
+            except CodexScanBudgetExceeded as error:
+                print(
+                    f"Stopped Codex scan after {error.elapsed:.1f}s at "
+                    f"{error.scanned}/{error.total} rollouts ({error.stage}). "
+                    "No partial result is being presented as complete. Narrow by "
+                    "project/date, use locate-codex for a session UUID, or pass "
+                    "--codex-max-scan-seconds 0 only after explicitly accepting an "
+                    "unbounded scan.",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
 
         kimi_matches: List[Dict[str, Any]] = []
         kimi_home: Optional[Path] = None

@@ -9,8 +9,8 @@ description: >-
   attachments, summaries, titles, and file-history paths. Recovers exact
   captured bytes from Claude file-history snapshots, including post-Write edits
   and binary files; otherwise labels Write checkpoints as lower fidelity. Use
-  for keyword/date-bounded history search, prior-conversation forensics,
-  deleted-file recovery, vanished ~/.claude/jobs artifacts, tool/file-operation
+  for keyword/date-bounded history search, exact Codex session-ID lookup,
+  prior-conversation forensics, deleted-file recovery, vanished ~/.claude/jobs artifacts, tool/file-operation
   analysis, or requests mentioning session history, find in history, previous
   conversation, or .claude/projects. For a recent Claude+Codex+Kimi CLI
   inventory, use local-conversation-history instead.
@@ -29,6 +29,7 @@ homes and explicitly registered long-term archives.
 - Analyze file modifications across past sessions
 - Track tool usage and file operations over time
 - Find sessions containing specific keywords or topics
+- Resolve an exact Codex session UUID from metadata without scanning rollout bodies
 
 ## Completeness invariant
 
@@ -217,6 +218,26 @@ them entirely; `--codex` adds a rollout pass:
 ```bash
 python3 scripts/analyze_sessions.py search /path/to/project 'some phrase' --codex
 ```
+
+If you already have the exact Codex session UUID, **do not search for it as
+conversation text**. Use the metadata fast path:
+
+```bash
+python3 scripts/analyze_sessions.py locate-codex \
+  01234567-89ab-4cde-8fab-0123456789ab
+```
+
+The locator only globs filenames carrying that UUID, reads each candidate's
+bounded `session_meta`, and validates the authoritative `session_meta.id`. It
+does not parse unrelated rollout bodies. For safety, `search ... --codex`
+automatically routes a sole UUID keyword to the same locator before Claude or
+Codex history scanning begins.
+
+Broad Codex searches print a progress heartbeat every 15 seconds and stop
+after 300 seconds by default. A timeout exits non-zero and explicitly refuses
+to present partial matches as a complete result. Narrow by project/date or use
+`locate-codex`; `--codex-max-scan-seconds 0` is the explicit opt-in to an
+unbounded scan when exhaustive keyword search is genuinely required.
 
 Codex hits print in their own section (📦) with session id, cwd, internal
 ranges, mention counts, and match fields. A project positional filters
