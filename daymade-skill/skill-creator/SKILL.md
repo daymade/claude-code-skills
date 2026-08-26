@@ -594,7 +594,7 @@ C) No thanks — [the current output is sufficient]
 youtube-downloader → asr-transcribe-to-text → transcript-fixer → meeting-minutes-taker → pdf-creator
 deep-research → fact-checker → ppt-creator
 doc-to-markdown → docs-cleaner
-claude-code-history-files-finder → continue-claude-work
+read-claude-code-history → continue-claude-code-work
 ```
 
 **Rules for pipeline handoff:**

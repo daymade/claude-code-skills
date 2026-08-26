@@ -312,7 +312,7 @@ This applies when you change ANY file under a skill directory:
 16. **video-comparer** - Video comparison and quality analysis with interactive HTML reports
 17. **qa-expert** - Comprehensive QA testing infrastructure with autonomous LLM execution and Google Testing Standards
 18. **prompt-optimizer** - Transform vague prompts into precise EARS specifications with domain theory grounding
-19. **claude-code-history-files-finder** - Search messages, thinking, tool inputs/results, queues, attachments, and summaries across active Claude homes plus registered long-term archives using internal JSONL timestamps; sweep every project with --all-projects or include Codex rollouts with --codex; recover prior files and analyze session operations
+19. **read-claude-code-history** - Read Claude Code inventory, exact chronological Session evidence, queued human prompts, full-event search, hybrid recall, end-state triage, and deleted-file checkpoints across active homes plus registered archives without continuing the task
 20. **docs-cleaner** - Consolidate redundant documentation while preserving valuable content
 21. **pdf-creator** - Create PDF documents from markdown with Chinese font support using weasyprint
 22. **claude-md-progressive-disclosurer** - Optimize CLAUDE.md files using progressive disclosure principles
@@ -335,7 +335,7 @@ This applies when you change ANY file under a skill directory:
 39. **financial-data-collector** - Collect real financial data for US public companies via yfinance with validation, NaN detection, and NO FALLBACK principle (daymade-financial suite member)
 40. **excel-automation** - Create formatted Excel files, parse complex xlsm models, and control Excel windows on macOS via AppleScript (daymade-docs suite member)
 41. **capture-screen** - Programmatically capture macOS application windows using Swift window ID discovery and screencapture workflows (daymade-macos suite member)
-42. **continue-claude-work** - Recover local `.claude` session context via compact-boundary extraction, subagent workflow recovery, and session end reason detection, then continue interrupted work without `claude --resume`
+42. **continue-claude-code-work** - Consume a verified Claude history receipt, restore the original business outcome, unfulfilled requests, corrections, and prior successful assets, then execute the next direct action without `claude --resume`
 43. **scrapling-skill** - Install, troubleshoot, and use Scrapling CLI for static/dynamic web extraction, WeChat article capture, and verified output validation
 44. **ima-copilot** - One-stop companion and installer for the official Tencent IMA skill with zero-config three-agent installation via vercel-labs/skills, XDG credential management, read-only diagnostic, known-issue auto-repair under user consent, and personalized fan-out search with priority-based knowledge base boosting
 45. **claude-export-txt-better** - Fixes broken line wrapping in Claude Code exported `.txt` conversation files; reconstructs tables, paragraphs, paths, and tool calls hard-wrapped at fixed column widths; ships with a 53-check automated validation suite
@@ -377,7 +377,7 @@ This applies when you change ANY file under a skill directory:
 81. **skill-governance** - Enforce source-of-truth discipline for Claude Code skill marketplaces and caches: check drift, sync through official plugin commands, reconcile installed state after suite migrations, clean old cache versions, and switch marketplaces to local source (daymade-skill suite member)
 82. **photo-to-scanned-pdf** - Turn phone photos of paper documents into a scanner-quality A4 PDF with perspective correction, noteshrink enhancement, colored-paper handling, content-based page ordering, and mandatory whole-document visual verification (daymade-docs suite member)
 83. **github-review-pr** - Review one named contributor PR (open or closed under reconsideration) or all open PRs newest-to-oldest against the live base, with immutable OID snapshots, history-discontinuity detection, isolated current-base contribution projection, three-way merge analysis, PR/BASE/SHARED ownership, explicit personal maintainer context, and per-PR review-gated repair or landing
-84. **local-conversation-history** - List recent local Claude Code, Codex, and Kimi CLI conversations in one read-only command; Claude inventory combines active homes with registered archives, every provider uses internal timestamps instead of file mtime, and every in-scope Codex session gets a positive-only marker when its canonical writer-lock file is held, with lock-held rows appended beyond the recent limit (daymade-claude-code suite member)
+84. **read-codex-history** - Read Codex inventory, exact prompt-ledger inputs by Session, verified rollout identity, chronological fork/compaction lineage, and bounded Codex-only full-event search without continuing the task (daymade-claude-code suite member)
 85. **continue-codex-work** - Recover compaction-aware actionable context and exact fork snapshots from prior Codex CLI rollouts, then continue interrupted work without running `codex resume` (daymade-claude-code suite member)
 86. **git-safety-net** - Audit, preserve, recover, and safely retire local Git state across branches, linked/detached worktrees, stashes, dangling commits, and squash/rebase merge uncertainty
 87. **design-style-picker** - Batch-generate and compare visual design directions so a user can choose the style they actually want, instead of guessing one final design (daymade-codex suite member)
@@ -389,6 +389,7 @@ This applies when you change ANY file under a skill directory:
 93. **daymade-sector-research** - A-share sector research workflow: compute Top-N gainers across all sector constituents, retrieve announcement windows (weekly/monthly), grade market-sentiment evidence (L1/L2/L3), and run Agent Team parallel orchestration with fresh-context adversarial verification (daymade-financial suite member)
 94. **kimi-use** - Drive the logged-in Kimi desktop app through computer-use to query its built-in company, financial, market, academic, and legal data plugins without separate API keys; includes source-labeled query patterns and independent verification for screen-transcribed results
 95. **tibo-reset-codex** - Query current ChatGPT/Codex usage-limit reset timing, interpret Tibo reset announcements, and convert Pacific times to Beijing time through live evidence rather than memory
+96. **prior-work-retrieval** - Find and verify existing successful code, documents, Skills, SOPs, decisions, meetings, WeChat archives, and conversation history before producing new work; leave an auditable reuse/adapt/reject receipt (daymade-claude-code suite member)
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 

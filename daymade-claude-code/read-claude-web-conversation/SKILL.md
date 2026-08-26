@@ -12,7 +12,7 @@ description: >-
   placeholders (~5% of it); a share payload uses block shapes a /chat/-only renderer
   drops without error. Works even when the claude-in-chrome extension cannot pair
   (different account), via CDP or a macOS AppleScript fallback. Scope: ONLINE
-  claude.ai. For LOCAL Claude Code sessions use claude-code-history-files-finder; for
+  claude.ai. For LOCAL Claude Code sessions use read-claude-code-history; for
   an exported .txt/.json file use claude-export-txt-better.
 ---
 
@@ -33,7 +33,7 @@ Pick by the *source you are holding*, not by the word "conversation":
 | Source | Use |
 |--------|-----|
 | A live **`claude.ai/chat/…`** or **`claude.ai/share/…`** URL | **This skill** |
-| Local Claude Code sessions (`~/.claude/projects/*.jsonl`) | `claude-code-history-files-finder` |
+| Local Claude Code sessions (`~/.claude/projects/*.jsonl`) | `read-claude-code-history` |
 | An already-exported `.txt` / `.json` conversation file | `claude-export-txt-better` |
 
 ## Why the obvious approaches fail (read this first)
