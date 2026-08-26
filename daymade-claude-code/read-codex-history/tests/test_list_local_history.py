@@ -913,6 +913,78 @@ with path.open("r+b") as handle:
             datetime.fromisoformat("2026-01-15T12:30:00+00:00").timestamp(),
         )
 
+    def test_codex_raw_fallback_prefers_latest_live_copy_over_stale_archive(self) -> None:
+        session_id = "dededede-dede-4ded-8ded-dededededede"
+        live = (
+            self.codex_home
+            / "sessions"
+            / "2026"
+            / "08"
+            / "27"
+            / f"rollout-2026-08-27T10-00-00-{session_id}.jsonl"
+        )
+        write_jsonl(
+            live,
+            [
+                {
+                    "timestamp": "2026-08-27T10:00:00Z",
+                    "type": "session_meta",
+                    "payload": {"id": session_id, "cwd": str(self.workspace)},
+                },
+                {
+                    "timestamp": "2026-08-27T11:00:00Z",
+                    "type": "event_msg",
+                    "payload": {
+                        "type": "user_message",
+                        "message": "LIVE-LATEST-CORRECTION",
+                    },
+                },
+            ],
+        )
+        archive = (
+            self.codex_home
+            / "archived_sessions"
+            / f"rollout-2026-08-27T09-00-00-{session_id}.jsonl"
+        )
+        write_jsonl(
+            archive,
+            [
+                {
+                    "timestamp": "2026-08-27T09:00:00Z",
+                    "type": "session_meta",
+                    "payload": {"id": session_id, "cwd": str(self.workspace)},
+                },
+                {
+                    "timestamp": "2026-08-27T09:30:00Z",
+                    "type": "event_msg",
+                    "payload": {
+                        "type": "user_message",
+                        "message": "ARCHIVE-STALE-SNAPSHOT",
+                    },
+                },
+            ],
+        )
+
+        completed = self.run_cli(
+            "--cwd",
+            str(self.workspace),
+            "--source",
+            "codex",
+            "--codex-home",
+            str(self.codex_home),
+            "--include-archived",
+            "--format",
+            "json",
+        )
+        conversations = json.loads(completed.stdout)["providers"]["codex"][
+            "conversations"
+        ]
+
+        self.assertEqual(len(conversations), 1)
+        self.assertEqual(conversations[0]["title"], "LIVE-LATEST-CORRECTION")
+        self.assertEqual(conversations[0]["path"], str(live))
+        self.assertFalse(conversations[0]["archived"])
+
     def test_codex_unknown_database_schema_reports_visible_fallback(self) -> None:
         self.codex_home.mkdir(parents=True)
         connection = sqlite3.connect(self.codex_home / "state_5.sqlite")

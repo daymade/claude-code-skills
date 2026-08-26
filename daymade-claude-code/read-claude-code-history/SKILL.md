@@ -81,7 +81,11 @@ internal time range, project, title, and archive/subagent markers. Use
 Expected output: `# Claude Code Session Evidence Briefing`, session identity,
 compaction boundary, chronological user/assistant handoff, queued human prompts,
 end reason, unresolved calls, subagent state, files touched, memory, and current
-workspace state. Re-run with `--full` when any retained message is visibly clipped.
+workspace state. The exact reader always parses every physical Session record,
+including records before compaction; `--full` only removes output character
+clipping. It checks active and registered-archive copies, accepts only identical
+or strict append-only supersets, and fails visibly on divergent copies, multiple
+Session identities, malformed JSONL, or unreadable bytes.
 
 ### Full-event keyword search
 

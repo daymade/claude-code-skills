@@ -59,9 +59,130 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
         timeline = MODULE.extract_turn_timeline(parsed["messages"])
 
         self.assertEqual(parsed["observed_session_ids"], {"session-1"})
-        self.assertEqual(timeline[0]["text"], "中途纠正")
-        self.assertTrue(timeline[0]["queued"])
-        self.assertEqual(timeline[1]["text"], "纠正后的回复")
+        self.assertEqual(timeline[0]["text"], "初始要求")
+        self.assertEqual(timeline[1]["text"], "中途纠正")
+        self.assertTrue(timeline[1]["queued"])
+        self.assertEqual(timeline[2]["text"], "纠正后的回复")
+
+    def test_original_objective_before_compaction_is_still_read(self):
+        session_file = self._session_file(
+            [
+                {
+                    "type": "user",
+                    "sessionId": "session-full",
+                    "message": {
+                        "role": "user",
+                        "content": "GOVERNING-OBJECTIVE：完成真实业务结果",
+                    },
+                },
+                {
+                    "type": "system",
+                    "sessionId": "session-full",
+                    "subtype": "compact_boundary",
+                },
+                {
+                    "type": "user",
+                    "sessionId": "session-full",
+                    "isCompactSummary": True,
+                    "message": {"role": "user", "content": "压缩摘要" * 30},
+                },
+                {
+                    "type": "user",
+                    "sessionId": "session-full",
+                    "message": {"role": "user", "content": "继续"},
+                },
+            ]
+        )
+
+        parsed = MODULE.parse_session_structure(session_file)
+        timeline = MODULE.extract_turn_timeline(parsed["messages"])
+
+        self.assertEqual(parsed["parsed_range_start"], 0)
+        self.assertEqual(
+            [turn["text"] for turn in timeline],
+            ["GOVERNING-OBJECTIVE：完成真实业务结果", "继续"],
+        )
+
+    def test_malformed_record_fails_closed(self):
+        handle = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+        )
+        handle.write(
+            json.dumps(
+                {
+                    "type": "user",
+                    "sessionId": "session-broken",
+                    "message": {"role": "user", "content": "可见记录"},
+                },
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+        handle.write('{"type":"user","message":')
+        handle.close()
+
+        with self.assertRaisesRegex(MODULE.SessionEvidenceError, "physical line 2"):
+            MODULE.parse_session_structure(Path(handle.name))
+
+    def test_fused_session_identities_fail_closed(self):
+        with self.assertRaisesRegex(
+            MODULE.SessionEvidenceError, "multiple Session identities"
+        ):
+            MODULE.validate_selected_session_identity(
+                {"requested-session", "foreign-session"}, "requested-session"
+            )
+
+    def test_archive_only_session_is_discovered_from_registry(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            archive_home = root / "archive-home"
+            project_dir = archive_home / "projects" / str(workspace.resolve()).replace("/", "-")
+            project_dir.mkdir(parents=True)
+            session_id = "archive-session"
+            (project_dir / f"{session_id}.jsonl").write_text(
+                json.dumps(
+                    {
+                        "type": "user",
+                        "sessionId": session_id,
+                        "cwd": str(workspace),
+                        "timestamp": "2026-08-27T00:00:00Z",
+                        "message": {"role": "user", "content": "archive objective"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            manifest = root / "history-sources.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "sources": [
+                            {
+                                "provider": "claude",
+                                "kind": "archive",
+                                "label": "test-archive",
+                                "home": str(archive_home),
+                                "required": True,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            refs, warnings = MODULE.discover_session_refs(
+                str(workspace), str(manifest)
+            )
+
+            self.assertEqual(warnings, [])
+            self.assertEqual([ref["session_id"] for ref in refs], [session_id])
+            selected, labels, copies = MODULE.select_session_copy(refs[0])
+            self.assertEqual(selected, project_dir / f"{session_id}.jsonl")
+            self.assertIn("archive:test-archive", labels)
+            self.assertEqual(copies, [selected])
 
     def test_briefing_keeps_user_and_reply_together(self):
         with tempfile.TemporaryDirectory() as temp_dir:

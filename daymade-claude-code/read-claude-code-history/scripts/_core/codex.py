@@ -375,7 +375,33 @@ def collect_codex(args: argparse.Namespace, home: Path) -> ProviderResult:
     else:
         result.backend = "rollout-jsonl"
         collect_codex_from_rollouts(args, home, result)
-    deduplicated = {item.session_id: item for item in result.conversations}
+    # Live and archived directories can hold different snapshots of the same
+    # Session. The old dict-comprehension was traversal-order last-wins: because
+    # archives are appended after live files, an older archive silently replaced
+    # a live copy containing the user's latest correction. Inventory still needs
+    # one row per Session, so choose by internal rollout time and prefer live on a
+    # tie. Completeness-sensitive exact reading separately compares every physical
+    # copy and fails closed when they are divergent rather than append-only.
+    deduplicated: dict[str, Conversation] = {}
+    for item in result.conversations:
+        existing = deduplicated.get(item.session_id)
+        if existing is None:
+            deduplicated[item.session_id] = item
+            continue
+        existing_time = (
+            existing.updated_at
+            if existing.updated_at is not None
+            else float("-inf")
+        )
+        candidate_time = (
+            item.updated_at if item.updated_at is not None else float("-inf")
+        )
+        if candidate_time > existing_time or (
+            candidate_time == existing_time
+            and not item.archived
+            and existing.archived
+        ):
+            deduplicated[item.session_id] = item
     result.conversations = sorted(
         deduplicated.values(),
         key=lambda item: item.updated_at if item.updated_at is not None else float("-inf"),

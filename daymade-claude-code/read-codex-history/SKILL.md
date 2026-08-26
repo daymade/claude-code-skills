@@ -95,7 +95,10 @@ root-to-child fork lineage, exact parent byte boundaries, chronological handoff,
 compacted context, latest plan, tool calls, files, errors, end reason, and workspace
 state. If the state DB points to a rollout with the wrong identity, the reader must
 reject it and try the exact `session_meta.id` locator; never continue from the wrong
-file because its title or filename looked close.
+file because its title or filename looked close. When live and archived copies share
+an ID, the reader accepts byte-identical copies or a strict append-only superset and
+otherwise fails as ambiguous. Every selected and inherited JSONL record is parsed
+strictly; malformed lines cannot become a complete-looking receipt.
 
 ### Bounded full-event search
 

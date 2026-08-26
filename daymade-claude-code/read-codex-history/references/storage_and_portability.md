@@ -243,9 +243,11 @@ vendors will never change their private local formats.
   `time` epoch-ms field; `agents/agent-N/` wires are subagent runs of the same
   session, not separate conversations.
 
-The parser skips malformed JSON lines, but it does not invent metadata. A
-session with neither a usable title nor a real first prompt is shown as untitled
-with its exact session ID.
+Inventory title/preview parsing may skip malformed JSON lines, but it does not
+invent metadata. Exact Claude/Codex Session readers and complete/negative search
+claims are stricter: malformed or unreadable records abort and surface the gap.
+A session with neither a usable title nor a real first prompt is shown as untitled
+with its exact session ID only on the non-authoritative inventory surface.
 
 ## Cross-platform behavior
 

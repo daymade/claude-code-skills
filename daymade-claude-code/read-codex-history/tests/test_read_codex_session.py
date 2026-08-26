@@ -125,6 +125,106 @@ class RolloutIdentityResolutionTests(unittest.TestCase):
 
             self.assertEqual(resolved, exact)
 
+    def test_live_append_only_copy_beats_stale_archive_snapshot(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            session_id = "same-session"
+            archive = (
+                root
+                / "archived_sessions"
+                / f"rollout-2026-08-27T00-00-00-{session_id}.jsonl"
+            )
+            archive.parent.mkdir(parents=True)
+            prefix = [
+                {
+                    "type": "session_meta",
+                    "payload": {"id": session_id, "cwd": "/tmp"},
+                },
+                _msg("user", "ARCHIVE-STALE-SNAPSHOT", "input_text"),
+            ]
+            _write_rollout_path(archive, prefix)
+            live = (
+                root
+                / "sessions"
+                / "2026"
+                / "08"
+                / "27"
+                / f"rollout-2026-08-27T00-00-00-{session_id}.jsonl"
+            )
+            live.parent.mkdir(parents=True)
+            _write_rollout_path(live, prefix)
+            _write_rollout_path(
+                live,
+                [_msg("user", "LIVE-LATEST-CORRECTION", "input_text")],
+                mode="a",
+            )
+            previous_home = mod.CODEX_HOME
+            mod.CODEX_HOME = root
+            try:
+                resolved = mod.resolve_rollout(
+                    SimpleNamespace(path=str(archive), session_id=session_id)
+                )
+                parsed = mod.parse_codex_rollout(resolved)
+            finally:
+                mod.CODEX_HOME = previous_home
+
+            self.assertEqual(resolved, live)
+            self.assertIn("LIVE-LATEST-CORRECTION", parsed["user_messages"])
+
+    def test_divergent_physical_copies_fail_closed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            session_id = "divergent-session"
+            live = root / "sessions" / f"rollout-live-{session_id}.jsonl"
+            archive = root / "archived_sessions" / f"rollout-old-{session_id}.jsonl"
+            live.parent.mkdir(parents=True)
+            archive.parent.mkdir(parents=True)
+            _write_rollout_path(
+                live,
+                [
+                    {"type": "session_meta", "payload": {"id": session_id}},
+                    _msg("user", "live branch", "input_text"),
+                ],
+            )
+            _write_rollout_path(
+                archive,
+                [
+                    {"type": "session_meta", "payload": {"id": session_id}},
+                    _msg("user", "archive branch", "input_text"),
+                ],
+            )
+            previous_home = mod.CODEX_HOME
+            mod.CODEX_HOME = root
+            try:
+                with self.assertRaisesRegex(
+                    mod.LineageResolutionError, "divergent physical rollout copies"
+                ):
+                    mod.resolve_rollout(
+                        SimpleNamespace(path=str(live), session_id=session_id)
+                    )
+            finally:
+                mod.CODEX_HOME = previous_home
+
+    def test_malformed_selected_rollout_fails_closed(self):
+        handle = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+        )
+        handle.write(
+            json.dumps(
+                {"type": "session_meta", "payload": {"id": "broken", "cwd": "/tmp"}}
+            )
+            + "\n"
+        )
+        handle.write('{"type":"response_item","payload":')
+        handle.write("\n")
+        handle.write(json.dumps(_msg("user", "later valid turn", "input_text")) + "\n")
+        handle.close()
+
+        with self.assertRaisesRegex(
+            mod.LineageResolutionError, "cannot read complete rollout JSONL"
+        ):
+            mod.parse_codex_rollout(Path(handle.name))
+
     def test_old_schema_mirrors_do_not_double_count(self):
         rollout = _write_rollout([
             {"type": "session_meta", "payload": {"id": "s2", "cwd": "/tmp", "cli_version": "0.142.4"}},

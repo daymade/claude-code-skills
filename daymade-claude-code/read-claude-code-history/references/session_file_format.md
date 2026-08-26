@@ -475,14 +475,22 @@ file_path = item.get("input", {}).get("file_path", "")
 
 ### JSON Decode Errors
 
-Session files may contain malformed lines:
+Session files may contain malformed lines. The correct behavior depends on the
+claim being made:
 
 ```python
 try:
     data = json.loads(line)
 except json.JSONDecodeError:
-    continue  # Skip malformed lines
+    if completeness_sensitive:
+        raise  # exact Session evidence, verbatim export, or negative claim
+    continue   # title/preview inventory may remain available with a visible warning
 ```
+
+`read_claude_session.py` is completeness-sensitive: it parses every physical
+record, including pre-compaction history, and aborts on the first malformed
+non-empty line. A tolerant inventory result must never be reused as proof that a
+request, correction, or action was absent.
 
 ### Tool Use / Tool Result Ordering
 

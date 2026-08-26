@@ -4,8 +4,9 @@ Read chronological evidence from Claude Code session files.
 
 Produces a structured Markdown briefing by fusing:
 - Session index metadata (sessions-index.json)
-- Compact boundary summaries (highest-signal context)
-- Post-compact user/assistant messages (the "hot zone")
+- Every physical user/assistant record, including pre-compaction history
+- Compact boundary summaries (continuation context, not human-authored turns)
+- Active-home and registered-archive copy identity
 - Subagent workflow state (multi-agent recovery)
 - Session end reason detection
 - Git workspace state
@@ -30,12 +31,12 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
-import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -47,6 +48,11 @@ PROJECTS_DIR = CLAUDE_DIR / "projects"  # default home only; discovery below spa
 # project whose history lives under a per-model profile home is not missed.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _core.homes import discover_claude_homes  # noqa: E402
+from _core.sources import (  # noqa: E402
+    HistorySourceConfigError,
+    discover_claude_sources,
+)
+from analyze_sessions import SessionAnalyzer  # noqa: E402
 
 # Message types that are noise — skip when extracting context
 NOISE_TYPES = {"progress", "queue-operation", "file-history-snapshot", "last-prompt"}
@@ -59,6 +65,10 @@ NOISE_USER_PATTERNS = [
     "<task-notification>",
     "<system-reminder>",
 ]
+
+
+class SessionEvidenceError(RuntimeError):
+    """A selected Claude Session cannot be rendered as complete evidence."""
 
 
 def normalize_path(project_path: str) -> str:
@@ -137,6 +147,134 @@ def find_project_dir(project_path: str) -> Optional[Path]:
     return hits[0]
 
 
+def discover_session_refs(
+    project_path: str, manifest_path: Optional[str] = None
+) -> tuple[List[Dict], List[str]]:
+    """Find project Sessions across active homes and registered archives."""
+    sources, warnings = discover_claude_sources(manifest_path=manifest_path)
+    analyzer = SessionAnalyzer(sources=sources, warnings=warnings)
+    return analyzer.find_project_sessions(project_path), warnings
+
+
+def _resolved_path_key(path: Path) -> str:
+    try:
+        return str(path.resolve())
+    except (OSError, RuntimeError):
+        return str(path.absolute())
+
+
+def _file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for block in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(block)
+    except OSError as error:
+        raise SessionEvidenceError(f"cannot read Claude Session copy {path}: {error}") from error
+    return digest.hexdigest()
+
+
+def _is_byte_prefix(shorter: Path, longer: Path) -> bool:
+    """Return whether ``shorter`` is exactly the initial bytes of ``longer``."""
+    try:
+        if shorter.stat().st_size > longer.stat().st_size:
+            return False
+        with shorter.open("rb") as left, longer.open("rb") as right:
+            while True:
+                block = left.read(1 << 20)
+                if not block:
+                    return True
+                if right.read(len(block)) != block:
+                    return False
+    except OSError as error:
+        raise SessionEvidenceError(
+            f"cannot compare Claude Session copies {shorter} and {longer}: {error}"
+        ) from error
+
+
+def select_session_copy(ref: Dict) -> tuple[Path, List[str], List[Path]]:
+    """Choose one provably complete physical copy for a merged Session ref.
+
+    Byte-identical active/archive copies are one evidence object. An older
+    append-only snapshot is also safe when it is an exact byte prefix of a longer
+    copy. Divergent copies cannot be merged into a trustworthy chronology without
+    inventing ordering, so the exact reader fails closed and names every path.
+    """
+    raw_copies = ref.get("copies") or [
+        {
+            "path": ref["path"],
+            "source": (ref.get("sources") or [None])[0],
+        }
+    ]
+    by_real_path: Dict[str, Dict] = {}
+    all_labels: List[str] = []
+    for item in raw_copies:
+        path = Path(item["path"])
+        source = item.get("source")
+        label = getattr(source, "display_label", None)
+        if label and label not in all_labels:
+            all_labels.append(label)
+        key = _resolved_path_key(path)
+        existing = by_real_path.get(key)
+        if existing is None:
+            by_real_path[key] = {
+                "path": path,
+                "active": getattr(source, "kind", None) == "active",
+            }
+        elif getattr(source, "kind", None) == "active":
+            existing["active"] = True
+
+    candidates = list(by_real_path.values())
+    if not candidates:
+        raise SessionEvidenceError(
+            f"Session {ref.get('session_id', '?')} has no readable physical copy"
+        )
+    if len(candidates) == 1:
+        return candidates[0]["path"], all_labels, [candidates[0]["path"]]
+
+    digests: Dict[str, List[Dict]] = {}
+    for candidate in candidates:
+        digests.setdefault(_file_digest(candidate["path"]), []).append(candidate)
+    if len(digests) == 1:
+        chosen = max(candidates, key=lambda item: bool(item["active"]))
+        return chosen["path"], all_labels, [item["path"] for item in candidates]
+
+    longest_size = max(item["path"].stat().st_size for item in candidates)
+    longest = [
+        item for item in candidates if item["path"].stat().st_size == longest_size
+    ]
+    for candidate in sorted(longest, key=lambda item: bool(item["active"]), reverse=True):
+        if all(
+            other is candidate
+            or _is_byte_prefix(other["path"], candidate["path"])
+            for other in candidates
+        ):
+            return candidate["path"], all_labels, [item["path"] for item in candidates]
+
+    paths = ", ".join(str(item["path"]) for item in candidates)
+    raise SessionEvidenceError(
+        f"Session {ref.get('session_id', '?')} resolves to divergent physical copies; "
+        f"no copy is a complete append-only superset: {paths}"
+    )
+
+
+def validate_selected_session_identity(
+    observed_ids: set[str], expected_session_id: str
+) -> None:
+    """Reject fused or mismatched Claude Session evidence."""
+    if len(observed_ids) > 1:
+        raise SessionEvidenceError(
+            "selected Claude Session file contains multiple Session identities: "
+            f"{sorted(observed_ids)!r}; requested {expected_session_id!r}. "
+            "Records cannot be attributed safely."
+        )
+    if observed_ids and expected_session_id not in observed_ids:
+        raise SessionEvidenceError(
+            "selected Claude Session identity mismatch: requested "
+            f"{expected_session_id!r}, observed {sorted(observed_ids)!r}"
+        )
+
+
 def load_sessions_index(project_dir: Path) -> List[Dict]:
     """Load and parse sessions-index.json, sorted by modified desc."""
     index_file = project_dir / "sessions-index.json"
@@ -176,7 +314,19 @@ def format_session_entry(entry: Dict, file_exists: bool = True) -> str:
 
 
 def parse_session_structure(session_file: Path) -> Dict:
-    """Parse a session JSONL file and return structured data."""
+    """Parse every physical record in one selected Claude Session.
+
+    This reader is the evidence source for continuation. A previous resume-oriented
+    implementation deliberately read only a size-adaptive tail (or only records
+    after the last compaction boundary). That was useful for saving context, but it
+    could erase the original business outcome while still returning exit 0. Exact
+    Session evidence therefore scans the whole file; output clipping remains a
+    presentation concern handled by ``--full``.
+
+    Any non-empty malformed JSONL line aborts the read. Returning a polished partial
+    receipt would make the missing record indistinguishable from "the user never
+    said it," which is the failure this Skill exists to prevent.
+    """
     file_size = session_file.stat().st_size
     total_lines = 0
 
@@ -222,20 +372,8 @@ def parse_session_structure(session_file: Path) -> Dict:
                     compact_boundaries.append((prev_boundary_line, ""))
                 prev_boundary_line = None
 
-    # Determine hot zone: everything after last compact boundary + its summary
-    if compact_boundaries:
-        last_boundary_line = compact_boundaries[-1][0]
-        hot_zone_start = last_boundary_line + 2  # skip boundary + summary
-    else:
-        # No compact boundaries: use size-adaptive strategy
-        if file_size < 500_000:  # <500KB: read last 60%
-            hot_zone_start = max(0, int(total_lines * 0.4))
-        elif file_size < 5_000_000:  # <5MB: read last 30%
-            hot_zone_start = max(0, int(total_lines * 0.7))
-        else:  # >5MB: read last 15%
-            hot_zone_start = max(0, int(total_lines * 0.85))
-
-    # Second pass: extract hot zone messages
+    # Second pass: extract the complete physical Session chronology.
+    parsed_range_start = 0
     messages = []
     unresolved_tool_calls = {}  # tool_use_id -> tool_use_info
     errors = []
@@ -246,12 +384,19 @@ def parse_session_structure(session_file: Path) -> Dict:
 
     with open(session_file, encoding="utf-8") as f:
         for i, raw_line in enumerate(f):
-            if i < hot_zone_start:
+            if not raw_line.strip():
                 continue
             try:
                 obj = json.loads(raw_line)
-            except json.JSONDecodeError:
-                continue
+            except json.JSONDecodeError as error:
+                raise SessionEvidenceError(
+                    f"malformed JSONL at physical line {i + 1} in {session_file}: "
+                    f"{error}"
+                ) from error
+            if not isinstance(obj, dict):
+                raise SessionEvidenceError(
+                    f"JSONL line {i + 1} in {session_file} is not an object"
+                )
 
             observed_id = obj.get("sessionId")
             if isinstance(observed_id, str) and observed_id:
@@ -348,7 +493,7 @@ def parse_session_structure(session_file: Path) -> Dict:
         "total_lines": total_lines,
         "file_size": file_size,
         "compact_boundaries": compact_boundaries,
-        "hot_zone_start": hot_zone_start,
+        "parsed_range_start": parsed_range_start,
         "messages": messages,
         "unresolved_tool_calls": dict(unresolved_tool_calls),
         "errors": errors,
@@ -455,6 +600,10 @@ def extract_turn_timeline(messages: List[Dict]) -> List[Dict]:
     """Return human/assistant text in physical record order."""
     turns = []
     for ordinal, msg_obj in enumerate(messages):
+        if msg_obj.get("isCompactSummary"):
+            # Claude-generated continuation context is evidence, but it is not a
+            # human request and must not be attributed as one in the chronology.
+            continue
         msg = msg_obj.get("message", {})
         role = msg.get("role")
         if role not in ("user", "assistant"):
@@ -753,6 +902,16 @@ def build_briefing(
         sections.append(f"- **First prompt**: {first_prompt}")
         if summary:
             sections.append(f"- **Summary**: {summary[:300]}")
+    elif parsed.get("selected_session_id"):
+        sections.append("## Session Info\n")
+        sections.append(f"- **ID**: `{parsed['selected_session_id']}`")
+
+    source_labels = parsed.get("source_labels") or []
+    copy_paths = parsed.get("copy_paths") or []
+    if source_labels:
+        sections.append(f"- **Sources read**: {', '.join(source_labels)}")
+    if copy_paths:
+        sections.append(f"- **Physical copies checked**: {len(copy_paths)}")
 
     # File stats + end reason
     file_mb = parsed["file_size"] / 1_000_000
@@ -764,7 +923,8 @@ def build_briefing(
     if observed_ids:
         sections.append(f"**Observed Session identity**: `{', '.join(observed_ids)}`")
     else:
-        sections.append("**Observed Session identity**: unavailable in retained records")
+        sections.append("**Observed Session identity**: unavailable in parsed records")
+    sections.append("**Chronology coverage**: every physical JSONL record")
     if parsed["error_count"] > 0:
         sections.append(f"**API errors**: {parsed['error_count']}")
 
@@ -893,149 +1053,166 @@ def main():
     parser.add_argument(
         "--full",
         action="store_true",
-        help="Do not clip retained compact-summary or timeline text",
+        help="Do not clip compact-summary or full-session timeline text",
+    )
+    parser.add_argument(
+        "--history-sources",
+        metavar="FILE",
+        help=(
+            "History source registry (default: ~/.claude/history-sources.json "
+            "when present)"
+        ),
     )
     args = parser.parse_args()
 
     project_path = os.path.abspath(args.project)
-    project_dir = find_project_dir(project_path)
+    try:
+        session_refs, source_warnings = discover_session_refs(
+            project_path, args.history_sources
+        )
+    except HistorySourceConfigError as error:
+        print(f"History source configuration error: {error}", file=sys.stderr)
+        sys.exit(2)
+    for warning in source_warnings:
+        print(f"History source warning: {warning}", file=sys.stderr)
+    if args.exclude_current:
+        session_refs = [
+            ref for ref in session_refs
+            if ref.get("session_id") != args.exclude_current
+        ]
 
-    if not project_dir:
+    if not session_refs:
         print(f"Error: no Claude session data found for {project_path}", file=sys.stderr)
-        searched = ", ".join(str(h / "projects") for h in discover_claude_homes()) or str(PROJECTS_DIR)
-        print(f"Looked across all config homes: {searched}", file=sys.stderr)
+        print(
+            "Looked across active Claude homes and every registered archive.",
+            file=sys.stderr,
+        )
         sys.exit(1)
-
-    entries = load_sessions_index(project_dir)
 
     # ── List mode ──
     if args.list:
-        # Show both index entries and actual files, with file-exists status
-        file_status = _check_session_files(entries, project_dir)
-        existing = sum(1 for v in file_status.values() if v)
-        missing = sum(1 for v in file_status.values() if not v)
-
-        if not entries and not list(project_dir.glob("*.jsonl")):
-            print("No sessions found.")
-            sys.exit(0)
-
         print(f"Sessions for {project_path}:\n")
-        if missing > 0:
-            print(f"  (index has {len(entries)} entries, {existing} with files, {missing} with missing files)\n")
-
-        for entry in entries[:args.limit]:
-            sid = entry.get("sessionId", "")
-            exists = file_status.get(sid, False)
-            print(format_session_entry(entry, file_exists=exists))
-            print()
-
-        # Also show files NOT in index
-        indexed_ids = {e.get("sessionId") for e in entries}
-        orphan_files = [
-            f for f in sorted(project_dir.glob("*.jsonl"), key=lambda f: f.stat().st_mtime, reverse=True)
-            if f.stem not in indexed_ids
-        ]
-        if orphan_files:
-            print(f"  Files not in index ({len(orphan_files)}):")
-            for f in orphan_files[:5]:
-                size_kb = f.stat().st_size / 1000
-                print(f"    {f.stem}  ({size_kb:.0f} KB)")
+        for ref in session_refs[:args.limit]:
+            labels = ", ".join(
+                source.display_label for source in ref.get("sources", [])
+            ) or "unknown source"
+            print(f"  {ref.get('session_id', '?')}  [{labels}]")
+            print(f"    {ref.get('path')}")
             print()
 
         sys.exit(0)
 
     # ── Query mode ──
+    selected_ref = None
+    expected_session_id = None
     if args.query:
-        results = search_sessions(entries, args.query)
+        needle = args.query.casefold()
+        matching_ids: set[str] = set()
+        for ref in session_refs:
+            for copy in ref.get("copies") or [{"path": ref["path"]}]:
+                for entry in load_sessions_index(Path(copy["path"]).parent):
+                    if entry.get("sessionId") != ref.get("session_id"):
+                        continue
+                    first_prompt = str(entry.get("firstPrompt") or "").casefold()
+                    summary = str(entry.get("summary") or "").casefold()
+                    if needle in first_prompt or needle in summary:
+                        matching_ids.add(ref["session_id"])
+        results = [ref for ref in session_refs if ref["session_id"] in matching_ids]
         if not results:
             print(f"No sessions matching '{args.query}'.", file=sys.stderr)
             sys.exit(1)
         print(f"Sessions matching '{args.query}' ({len(results)} found):\n")
-        for entry in results[: args.limit]:
-            print(format_session_entry(entry))
+        for ref in results[: args.limit]:
+            print(f"  {ref['session_id']}\n    {ref['path']}")
             print()
         if len(results) == 1:
-            args.session = results[0]["sessionId"]
+            selected_ref = results[0]
+            expected_session_id = selected_ref["session_id"]
         else:
             sys.exit(0)
 
     # ── Extract mode ──
-    session_id = args.session
-    session_entry = None
+    if selected_ref is None and args.session:
+        exact = [ref for ref in session_refs if ref["session_id"] == args.session]
+        if exact:
+            selected_ref = exact[0]
+            expected_session_id = args.session
+        else:
+            # A fused file can end with a foreign internal Session ID, causing
+            # metadata discovery to index it under the wrong identity. The exact
+            # filename is still a candidate worth parsing so the identity gate can
+            # report the fusion instead of disguising it as "not found."
+            filename_matches = [
+                ref
+                for ref in session_refs
+                if any(
+                    Path(copy["path"]).stem == args.session
+                    for copy in ref.get("copies") or [{"path": ref["path"]}]
+                )
+            ]
+            if len(filename_matches) == 1:
+                selected_ref = filename_matches[0]
+                expected_session_id = args.session
+            elif len(filename_matches) > 1:
+                print(
+                    f"Error: exact Session filename {args.session!r} resolves to "
+                    "multiple evidence groups.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            matches = [
+                ref for ref in session_refs if args.session in ref["session_id"]
+            ]
+            if selected_ref is not None:
+                pass
+            elif len(matches) == 1:
+                selected_ref = matches[0]
+                expected_session_id = selected_ref["session_id"]
+            elif len(matches) > 1:
+                print(
+                    f"Error: session id fragment {args.session!r} is ambiguous; "
+                    "pass the full Session ID.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            else:
+                print(f"Error: session file not found for {args.session}", file=sys.stderr)
+                sys.exit(1)
+    if selected_ref is None:
+        selected_ref = session_refs[0]
+        expected_session_id = selected_ref["session_id"]
 
-    if session_id:
-        for entry in entries:
-            if entry.get("sessionId") == session_id:
-                session_entry = entry
-                break
-        session_file = project_dir / f"{session_id}.jsonl"
-        if not session_file.exists():
-            if session_entry:
-                full_path = session_entry.get("fullPath", "")
-                if full_path and Path(full_path).exists():
-                    session_file = Path(full_path)
-            if not session_file.exists():
-                matches = [
-                    jsonl
-                    for jsonl in project_dir.glob("*.jsonl")
-                    if session_id in jsonl.name
-                ]
-                if len(matches) == 1:
-                    session_file = matches[0]
-                    session_id = session_file.stem
-                elif len(matches) > 1:
-                    print(
-                        f"Error: session id fragment {session_id!r} is ambiguous; "
-                        "pass the full Session ID.",
-                        file=sys.stderr,
-                    )
-                    sys.exit(1)
-                else:
-                    print(f"Error: session file not found for {session_id}", file=sys.stderr)
-                    sys.exit(1)
-    else:
-        # Use latest session — prefer actual files, skip current session
-        jsonl_files = sorted(
-            project_dir.glob("*.jsonl"),
-            key=lambda f: f.stat().st_mtime,
-            reverse=True,
-        )
-        if args.exclude_current:
-            jsonl_files = [f for f in jsonl_files if f.stem != args.exclude_current]
-        if not jsonl_files:
-            print("Error: no session files found.", file=sys.stderr)
-            sys.exit(1)
-
-        # Skip the most recent file if it's likely the current active session
-        # (modified within the last 60 seconds and no explicit session requested)
-        if len(jsonl_files) > 1:
-            newest = jsonl_files[0]
-            age_seconds = time.time() - newest.stat().st_mtime
-            if age_seconds < 60:
-                print(f"Skipping active session {newest.stem} (modified {age_seconds:.0f}s ago)",
-                      file=sys.stderr)
-                jsonl_files = jsonl_files[1:]
-
-        session_file = jsonl_files[0]
-        session_id = session_file.stem
-        for entry in entries:
-            if entry.get("sessionId") == session_id:
-                session_entry = entry
-                break
+    session_id = expected_session_id or selected_ref["session_id"]
+    try:
+        session_file, source_labels, copy_paths = select_session_copy(selected_ref)
+    except SessionEvidenceError as error:
+        print(f"Error: cannot recover complete Claude Session evidence: {error}", file=sys.stderr)
+        sys.exit(1)
+    project_dir = session_file.parent
+    entries = load_sessions_index(project_dir)
+    session_entry = next(
+        (entry for entry in entries if entry.get("sessionId") == session_id),
+        None,
+    )
 
     # Parse and build briefing
     print(f"Reading session {session_id} ({session_file.stat().st_size / 1_000_000:.1f} MB)...",
           file=sys.stderr)
 
-    parsed = parse_session_structure(session_file)
-    observed_ids = parsed.get("observed_session_ids") or set()
-    if observed_ids and session_id not in observed_ids:
+    try:
+        parsed = parse_session_structure(session_file)
+        validate_selected_session_identity(
+            parsed.get("observed_session_ids") or set(), session_id
+        )
+    except (SessionEvidenceError, OSError, UnicodeError) as error:
         print(
-            "Error: selected Claude Session identity mismatch: requested "
-            f"{session_id!r}, observed {sorted(observed_ids)!r}",
+            f"Error: cannot recover complete Claude Session evidence: {error}",
             file=sys.stderr,
         )
         sys.exit(1)
+    parsed["selected_session_id"] = session_id
+    parsed["source_labels"] = source_labels
+    parsed["copy_paths"] = copy_paths
     briefing = build_briefing(
         session_entry,
         parsed,

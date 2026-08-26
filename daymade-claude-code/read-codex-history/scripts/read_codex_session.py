@@ -17,6 +17,7 @@ how the selected session ended.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -112,23 +113,105 @@ def _rollout_session_id(path: Path) -> Optional[str]:
     return None
 
 
+def _resolved_path_key(path: Path) -> str:
+    try:
+        return str(path.resolve())
+    except (OSError, RuntimeError):
+        return str(path.absolute())
+
+
+def _rollout_candidates(session_id: str, indexed_path: str = "") -> list[Path]:
+    """Return every physical rollout whose first session_meta proves the ID."""
+    candidates: list[Path] = []
+    if indexed_path:
+        candidates.append(Path(indexed_path))
+    for dirname in ("sessions", "archived_sessions"):
+        root = CODEX_HOME / dirname
+        if root.is_dir():
+            candidates.extend(root.rglob(f"rollout-*{session_id}*.jsonl"))
+
+    verified: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        key = _resolved_path_key(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if _rollout_session_id(candidate) == session_id:
+            verified.append(candidate)
+    return verified
+
+
+def _file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for block in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(block)
+    except OSError as error:
+        raise LineageResolutionError(f"cannot read rollout copy {path}: {error}") from error
+    return digest.hexdigest()
+
+
+def _is_byte_prefix(shorter: Path, longer: Path) -> bool:
+    try:
+        if shorter.stat().st_size > longer.stat().st_size:
+            return False
+        with shorter.open("rb") as left, longer.open("rb") as right:
+            while True:
+                block = left.read(1 << 20)
+                if not block:
+                    return True
+                if right.read(len(block)) != block:
+                    return False
+    except OSError as error:
+        raise LineageResolutionError(
+            f"cannot compare rollout copies {shorter} and {longer}: {error}"
+        ) from error
+
+
+def _is_live_rollout(path: Path) -> bool:
+    live_root = CODEX_HOME / "sessions"
+    try:
+        return live_root == path or live_root in path.parents
+    except RuntimeError:
+        return False
+
+
 def resolve_rollout(conv) -> Optional[Path]:
     """Resolve a conversation to its rollout JSONL file on disk.
 
-    Prefer the path the state DB recorded; fall back to globbing sessions/ by the
-    session id (the id is embedded in the rollout filename).
+    Enumerate the state-index candidate plus every live/archive filename candidate,
+    then validate internal identity. Byte-identical copies collapse. A shorter
+    append-only snapshot may defer to a longer exact superset. Divergent copies are
+    ambiguous evidence and fail closed instead of letting directory traversal order
+    decide whether the latest user correction survives.
     """
-    if conv.path:
-        candidate = Path(conv.path)
-        if candidate.is_file() and _rollout_session_id(candidate) == conv.session_id:
+    candidates = _rollout_candidates(conv.session_id, str(conv.path or ""))
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    digests = {_file_digest(path) for path in candidates}
+    if len(digests) == 1:
+        return max(candidates, key=_is_live_rollout)
+
+    longest_size = max(path.stat().st_size for path in candidates)
+    longest = [path for path in candidates if path.stat().st_size == longest_size]
+    for candidate in sorted(longest, key=_is_live_rollout, reverse=True):
+        if all(
+            other == candidate or _is_byte_prefix(other, candidate)
+            for other in candidates
+        ):
             return candidate
-    for dirname in ("sessions", "archived_sessions"):
-        sessions_dir = CODEX_HOME / dirname
-        if sessions_dir.is_dir():
-            for match in sessions_dir.rglob(f"rollout-*{conv.session_id}*.jsonl"):
-                if _rollout_session_id(match) == conv.session_id:
-                    return match
-    return None
+
+    raise LineageResolutionError(
+        f"session {conv.session_id} resolves to divergent physical rollout copies: "
+        + ", ".join(str(path) for path in candidates)
+    )
 
 
 # ── Rollout parsing ──────────────────────────────────────────────────────────
@@ -143,14 +226,18 @@ def _iter_rollout_records(
 ) -> Iterator[dict[str, Any]]:
     """Yield rollout records, optionally stopping at an exact byte boundary.
 
-    Whole-file parsing keeps the shared tolerant reader used by the existing
-    skill. Inherited history is different: `history_base.end_byte_offset` is
-    the only source of truth for what bytes a fork actually inherited, so a
-    missing byte, malformed record, or offset through the middle of a JSONL
-    line must fail visibly rather than silently reading a nearby approximation.
+    Both whole-file and inherited-prefix parsing are completeness-sensitive. A
+    missing or malformed record must fail visibly; otherwise a later valid turn
+    can make a partial receipt look complete even though the omitted line could
+    contain the original objective or latest correction.
     """
     if end_byte_offset is None:
-        yield from iter_jsonl(path)
+        try:
+            yield from iter_jsonl(path, strict=True)
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise LineageResolutionError(
+                f"cannot read complete rollout JSONL {path}: {error}"
+            ) from error
         return
 
     physical_size = path.stat().st_size
@@ -1258,23 +1345,9 @@ def _make_exact_rollout_resolver(
             indexed = {conv.session_id: conv for conv in convs}
 
         conv = indexed.get(session_id)
-        if conv is not None:
-            rollout = resolve_rollout(conv)
-            if rollout is not None:
-                return rollout
-
-        matches: list[Path] = []
-        for dirname in ("sessions", "archived_sessions"):
-            root = CODEX_HOME / dirname
-            if root.is_dir():
-                matches.extend(root.rglob(f"rollout-*{session_id}*.jsonl"))
-        unique_matches = sorted(set(matches))
-        if len(unique_matches) > 1:
-            raise LineageResolutionError(
-                f"session {session_id} resolves to multiple rollout files: "
-                + ", ".join(str(path) for path in unique_matches)
-            )
-        return unique_matches[0] if unique_matches else None
+        if conv is None:
+            conv = SimpleNamespace(path="", session_id=session_id)
+        return resolve_rollout(conv)
 
     return resolve
 
@@ -1366,7 +1439,11 @@ def main() -> int:
             for warning in warnings:
                 print(f"  note: {warning}", file=sys.stderr)
             return 1
-        conv, rollout = _first_resumable(convs)
+        try:
+            conv, rollout = _first_resumable(convs)
+        except LineageResolutionError as exc:
+            print(f"Error: cannot resolve Codex rollout evidence: {exc}", file=sys.stderr)
+            return 1
         if conv is None:
             print(
                 f"Error: found {len(convs)} session(s) for {project_path} but none had a "
@@ -1376,15 +1453,19 @@ def main() -> int:
             return 1
 
     if rollout is None:
-        rollout = resolve_rollout(conv)
+        try:
+            rollout = resolve_rollout(conv)
+        except LineageResolutionError as exc:
+            print(f"Error: cannot resolve Codex rollout evidence: {exc}", file=sys.stderr)
+            return 1
         if rollout is None:
             print(f"Error: rollout file not found for session {conv.session_id}", file=sys.stderr)
             return 1
 
     print(f"Reading Codex session {conv.session_id} "
           f"({rollout.stat().st_size / 1_000_000:.1f} MB)...", file=sys.stderr)
-    data = parse_codex_rollout(rollout)
     try:
+        data = parse_codex_rollout(rollout)
         validate_selected_rollout_identity(data, conv.session_id)
     except LineageResolutionError as exc:
         print(f"Error: cannot recover selected Codex session: {exc}", file=sys.stderr)
