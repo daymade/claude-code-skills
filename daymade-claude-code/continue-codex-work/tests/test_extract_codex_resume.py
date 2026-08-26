@@ -122,6 +122,10 @@ class SchemaSelectionTests(unittest.TestCase):
         data = mod.parse_codex_rollout(rollout)
         self.assertEqual(data["user_messages"], ["请求一", "请求二（只在消息流）"])
         self.assertEqual(data["assistant_messages"], ["旁白一", "旁白二", "最终回复"])
+        self.assertEqual(
+            [turn["text"] for turn in data["turn_timeline"]],
+            ["请求一", "请求二（只在消息流）", "旁白一", "旁白二", "最终回复"],
+        )
 
     def test_image_only_user_message_gets_marker(self):
         rollout = _write_rollout([
@@ -175,6 +179,38 @@ class SchemaSelectionTests(unittest.TestCase):
         ])
         data = mod.parse_codex_rollout(rollout)
         self.assertEqual(data["assistant_messages"], ["只存在于收尾记录的回复"])
+
+    def test_task_complete_tail_is_not_relocated_after_later_commentary(self):
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "s5b", "cwd": "/tmp"}},
+            _msg("user", "早先请求", "input_text"),
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "final_answer",
+                    "content": [{"type": "output_text", "text": "早先最终答复"}],
+                },
+            },
+            _ev("task_complete", last_agent_message="早先最终答复"),
+            _msg("user", "后来请求", "input_text"),
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "phase": "commentary",
+                    "content": [{"type": "output_text", "text": "后来处理中"}],
+                },
+            },
+        ])
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["assistant_messages"], ["早先最终答复", "后来处理中"])
+        self.assertEqual(
+            [turn["text"] for turn in data["turn_timeline"]],
+            ["早先请求", "早先最终答复", "后来请求", "后来处理中"],
+        )
 
     def test_skill_injection_collapses_to_marker(self):
         rollout = _write_rollout([
@@ -652,6 +688,75 @@ class InheritedLineageTests(unittest.TestCase):
             self.assertIn("根会话业务目标", briefing)
             self.assertIn("父会话阶段结论", briefing)
 
+    def test_no_compaction_parent_renders_chronological_handoff_without_old_caps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            parent = root / "parent.jsonl"
+            objective = "业务目标：核实住宅拆墙是否涉及结构构件，并明确停工支撑和权威核验路径"
+            missing = "资料B.pdf 已存档；资料A.pdf 仍缺；下一步把三条红线映射到结构平面图"
+            records = [
+                {"type": "session_meta", "payload": {"id": "parent", "cwd": "/tmp"}},
+                _msg("user", "先关注住宅结构安全业务", "input_text"),
+                _msg("assistant", objective, "output_text"),
+                _ev("task_complete", last_agent_message=objective),
+            ]
+            for index in range(7):
+                records.extend(
+                    [
+                        _msg("user", f"中间纠偏 {index}", "input_text"),
+                        _msg("assistant", f"中间状态 {index}", "output_text"),
+                    ]
+                )
+            records.extend(
+                [
+                    _msg("user", "先存档", "input_text"),
+                    _msg("assistant", "开始归档原始资料", "output_text"),
+                    _msg("assistant", missing, "output_text"),
+                    _msg("user", "为什么不给他拉进来？", "input_text"),
+                    _ev("turn_aborted"),
+                ]
+            )
+            fork_offset = _write_rollout_path(parent, records)
+            _write_rollout_path(
+                parent,
+                [_msg("assistant", "fork 后追加，不得继承", "output_text")],
+                mode="a",
+            )
+            child = _write_rollout(
+                [
+                    {
+                        "type": "session_meta",
+                        "payload": {
+                            "id": "child",
+                            "cwd": "/tmp",
+                            "forked_from_id": "parent",
+                            "history_base": {
+                                "thread_id": "parent",
+                                "end_ordinal_exclusive": len(records),
+                                "end_byte_offset": fork_offset,
+                            },
+                        },
+                    },
+                    _msg("user", "继续", "input_text"),
+                ]
+            )
+            data = mod.parse_codex_rollout(child)
+            lineage, warnings = mod.resolve_inherited_lineage(
+                data, lambda session_id: parent if session_id == "parent" else None
+            )
+            data["lineage"] = lineage
+            data["lineage_warnings"] = warnings
+            briefing = mod.build_briefing(None, data, "/tmp")
+
+            self.assertIn("Inherited Continuation Timeline (chronological)", briefing)
+            self.assertLess(briefing.index(objective), briefing.index(missing))
+            self.assertLess(briefing.index(missing), briefing.index("为什么不给他拉进来？"))
+            self.assertIn("Unanswered inherited request", briefing)
+            self.assertEqual(briefing.count(objective), 1)
+            self.assertNotIn("fork 后追加，不得继承", briefing)
+            self.assertNotIn("Last Inherited User Requests", briefing)
+            self.assertNotIn("Last Inherited Assistant Responses", briefing)
+
     def test_byte_offset_that_splits_jsonl_line_fails_closed(self):
         parent = _write_rollout(
             [
@@ -791,6 +896,65 @@ class TruncationContractTests(unittest.TestCase):
         briefing = self._briefing(full=True)
         self.assertIn(LONG_RESPONSE, briefing)
         self.assertNotIn("rerun with --full", briefing)
+
+    def test_default_keeps_every_inherited_user_segment(self):
+        timeline = []
+        for index in range(45):
+            timeline.extend(
+                [
+                    {
+                        "session_id": "parent",
+                        "ordinal": index * 2 + 1,
+                        "role": "user",
+                        "phase": None,
+                        "text": f"用户段 {index}",
+                    },
+                    {
+                        "session_id": "parent",
+                        "ordinal": index * 2 + 2,
+                        "role": "assistant",
+                        "phase": "commentary",
+                        "text": f"状态段 {index}",
+                    },
+                ]
+            )
+        default_sections: list[str] = []
+        mod._append_handoff_timeline(default_sections, timeline, full=False)
+        default = "\n".join(default_sections)
+        self.assertNotIn("omitted", default)
+        self.assertIn("用户段 5", default)
+        self.assertIn("用户段 44", default)
+
+        full_sections: list[str] = []
+        mod._append_handoff_timeline(full_sections, timeline, full=True)
+        expanded = "\n".join(full_sections)
+        self.assertNotIn("omitted", expanded)
+        self.assertIn("用户段 5", expanded)
+
+    def test_full_keeps_every_assistant_only_state(self):
+        timeline = [
+            {
+                "session_id": "parent",
+                "ordinal": index,
+                "role": "assistant",
+                "phase": "commentary",
+                "text": f"状态 {index}",
+            }
+            for index in range(1, 4)
+        ]
+        default_sections: list[str] = []
+        mod._append_handoff_timeline(default_sections, timeline, full=False)
+        default = "\n".join(default_sections)
+        self.assertIn("状态 1", default)
+        self.assertNotIn("状态 2", default)
+        self.assertIn("状态 3", default)
+
+        full_sections: list[str] = []
+        mod._append_handoff_timeline(full_sections, timeline, full=True)
+        expanded = "\n".join(full_sections)
+        self.assertIn("状态 1", expanded)
+        self.assertIn("状态 2", expanded)
+        self.assertIn("状态 3", expanded)
 
 
 if __name__ == "__main__":
