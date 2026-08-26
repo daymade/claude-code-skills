@@ -22,8 +22,9 @@
 # THE SECOND AXIS — FRESHNESS:
 #   `unpushed` below is measured against the checkout's repository-wide `origin/*` refs,
 #   which are a CACHED SNAPSHOT from its last fetch, not the remote. Linked worktrees share
-#   those refs and FETCH_HEAD through their common Git directory, so they must report the
-#   common repository's fetch age rather than the private worktree-admin directory's age.
+#   those refs, but each checkout can write its own private FETCH_HEAD receipt. Report the
+#   newest receipt across the common Git dir and all linked-worktree admin dirs; reading only
+#   either side makes a fresh shared ref cache look stale when fetch ran from the other side.
 #
 #   Read the number in the right direction. For "what would be lost" a stale cache is safe:
 #   it can only over-report unpushed work, never hide it. For "is this already upstream?" it
@@ -81,19 +82,30 @@ file_mtime() {
 # is the right signal: git rewrites it on every fetch even when nothing changed, whereas
 # a remote-tracking reflog only gains an entry when the remote actually moved — so a
 # reflog-based age reads "old" after a fetch that found no news, which is the opposite
-# of what we need. Use --git-common-dir, not --git-dir: a linked worktree's private admin
-# directory has its own FETCH_HEAD (or none), while the remote-tracking refs used by
-# `rev-list --not --remotes` live in the common repository. Prints seconds; returns 1
-# when the repository has never fetched.
+# of what we need. Remote-tracking refs are common, but FETCH_HEAD itself is not: a fetch from
+# the primary checkout writes <common>/FETCH_HEAD, while a fetch from a linked checkout can
+# write <common>/worktrees/<name>/FETCH_HEAD. Use the newest receipt in that common-dir group
+# so every linked checkout reports the freshness of the same shared ref cache. Prints seconds;
+# returns 1 when the repository has never fetched.
 fetch_age_seconds() {
-  local common_dir fetch_head mtime
+  local common_dir fetch_head mtime latest_mtime now
   common_dir="$(safe_git -C "$1" rev-parse --git-common-dir 2>/dev/null)" || return 1
   case "$common_dir" in /*) ;; *) common_dir="$1/$common_dir" ;; esac
-  fetch_head="$common_dir/FETCH_HEAD"
-  [ -f "$fetch_head" ] || return 1
-  mtime="$(file_mtime "$fetch_head")" || return 1
-  [ -n "$mtime" ] || return 1
-  echo $(( $(date +%s) - mtime ))
+  latest_mtime=""
+  for fetch_head in "$common_dir/FETCH_HEAD" "$common_dir"/worktrees/*/FETCH_HEAD; do
+    [ -f "$fetch_head" ] || continue
+    mtime="$(file_mtime "$fetch_head")" || continue
+    if [ -z "$latest_mtime" ] || [ "$mtime" -gt "$latest_mtime" ]; then
+      latest_mtime="$mtime"
+    fi
+  done
+  [ -n "$latest_mtime" ] || return 1
+  now="$(date +%s)"
+  if [ "$latest_mtime" -gt "$now" ]; then
+    echo 0
+  else
+    echo $(( now - latest_mtime ))
+  fi
 }
 
 human_age() {

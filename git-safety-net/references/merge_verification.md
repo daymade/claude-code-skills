@@ -228,7 +228,11 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    `!!` path. A normal clean status and `git worktree remove` both ignore this layer, while
    bundle/archive/format-patch cannot reach it. Explicitly classify reproducible caches/build
    outputs as disposable; copy any user-authored or uncertain item outside the worktree first.
-   Use `git check-ignore -v <path>` when the ignore rule itself is unclear.
+   Preserve its relative path under the backup and record a path-to-content-hash manifest before
+   removal. For each regular file, `git hash-object --no-filters -- <path>` supplies a portable
+   content hash; run it on both source and copy and require equality. Repeat for every regular file
+   under an ignored directory, and record/compare `readlink` output for symlinks. Use
+   `git check-ignore -v <path>` when the ignore rule itself is unclear.
 4. **Record the exact identity:** copy `git -C <worktree-path> rev-parse HEAD` and
    `git -C <worktree-path> branch --show-current`. An empty branch means detached HEAD, not "no
    work". Confirm the recorded HEAD appears in the all-worktree loss audit.
@@ -246,7 +250,9 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
 8. **Verify the postconditions independently:** re-run `git worktree list --porcelain`, prove the
    exact path no longer exists, resolve the kept local branch if one exists, and re-run the
    recorded-HEAD containment check (or locate that HEAD in the verified bundle). These observations
-   distinguish "checkout removed, history preserved" from a partial cleanup.
+   distinguish "checkout removed, history preserved" from a partial cleanup. Re-hash every copied
+   ignored file at its backup-relative path and compare it with the pre-removal manifest; merely
+   seeing a destination file is not an integrity check.
 9. **Retire its branch separately:** prefer `git branch -d <branch>`. Worktree-removal authority
    does not authorize branch deletion. If Git refuses after a
    proven squash/supersession case, require the verified backup and explicit deletion authority

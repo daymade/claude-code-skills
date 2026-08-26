@@ -322,12 +322,14 @@ use repeated `--branch` instead. The exporter never drops or deletes anything.
   shift as you drop, and top-down keeps every number meaning what your backup filenames say.
 - Linked worktrees: require an empty `git -C <path> status --porcelain=v1 --untracked-files=all`,
   then inventory ignored paths separately with `--ignored`. A normal clean status hides `!!`
-  files, and no bundle can preserve them; copy out anything not proven reproducible before removal.
+  files, and no bundle can preserve them; copy out anything not proven reproducible, preserve its
+  relative path, and verify it against a recorded pre-removal content hash.
   Record the exact HEAD, prove it contained/superseded against a freshly fetched base, export all
   refs, and obtain current-session deletion authority. Remove only with
   `git worktree remove <absolute-path>` **without `--force`**. Afterwards prove the path and
   registration are gone while the recorded HEAD still resolves through the kept branch/base or the
-  verified bundle. Never remove the primary/current checkout; retire its branch only as a separate,
+  verified bundle and every copied ignored item still matches its recorded hash. Never remove the
+  primary/current checkout; retire its branch only as a separate,
   separately authorized action. Follow
   **[references/merge_verification.md](references/merge_verification.md)** § Worktree retirement.
 - Local branches: prefer `git branch -d` (refuses unmerged); use `-D` only for items Step 1

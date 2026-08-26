@@ -146,10 +146,12 @@ also clean. The linked checkout may hold untracked files or a detached commit th
 **Prevention:** run `git_loss_audit.sh`, then inspect the selected path with both
 `git -C <worktree-path> status --porcelain=v1 --untracked-files=all` and the corresponding
 `--ignored` inventory. The first must be empty; every ignored item must be proven reproducible
-or copied out because Git bundles cannot reach it. Record the exact HEAD, prove containment against
+or copied out with its relative path and verified against a recorded content hash because Git
+bundles cannot reach it. Record the exact HEAD, prove containment against
 a freshly fetched maintained base, and create a verified all-refs bundle before current-session
 authorization and non-forced removal. Afterwards verify the path/registration disappeared and the
-recorded HEAD still resolves through a kept ref/base or the bundle. Never reduce the worktree count
+recorded HEAD still resolves through a kept ref/base or the bundle, then recheck every copied
+ignored item against its pre-removal hash. Never reduce the worktree count
 with `rm -rf` or `git worktree remove --force`; the safe target is one maintained primary checkout,
 not zero checkouts.
 
