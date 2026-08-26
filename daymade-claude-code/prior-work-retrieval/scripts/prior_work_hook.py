@@ -78,6 +78,13 @@ SHELL_RETRIEVAL_ROUTE = re.compile(
     r"analyze_sessions\.py\s+(?:search|locate-codex)\b|read_chat\.py\b)",
     re.IGNORECASE,
 )
+EXEC_COMMAND_LITERAL = re.compile(
+    r"\b(?:cmd|command)\s*:\s*([\"'`])(?P<body>.*?)(?<!\\)\1",
+    re.DOTALL,
+)
+FILE_REDIRECTION = re.compile(
+    r"(?<![<>=])(?:1|2|&)?(?:>>|>)(?![=&])\s*(?P<target>[^\s;|]+)"
+)
 
 
 def _manifest() -> dict[str, Any]:
@@ -134,6 +141,25 @@ def _tool_payload_text(event: dict[str, Any]) -> str:
         if isinstance(value, str):
             return value
     return ""
+
+
+def _shell_fragments(event: dict[str, Any]) -> list[str]:
+    payload = _tool_payload_text(event)
+    if _tool_name(event).endswith("functions.exec"):
+        return [match.group("body") for match in EXEC_COMMAND_LITERAL.finditer(payload)]
+    return [payload]
+
+
+def _has_formal_file_redirection(event: dict[str, Any]) -> bool:
+    for fragment in _shell_fragments(event):
+        for match in FILE_REDIRECTION.finditer(fragment):
+            target = match.group("target").strip("\"'")
+            if target in {"/dev/null", "&1", "&2"}:
+                continue
+            if Path(target).name.startswith("tinkle_"):
+                continue
+            return True
+    return False
 
 
 def _is_manifest_repair(event: dict[str, Any]) -> bool:
@@ -217,7 +243,7 @@ def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
         return size >= 240, f"{base}:prompt_chars={size}"
     if base in {"Bash", "exec", "exec_command"}:
         payload = _tool_payload_text(event)
-        if SHELL_WRITE_SIGNAL.search(payload):
+        if SHELL_WRITE_SIGNAL.search(payload) or _has_formal_file_redirection(event):
             return True, f"{base}:write_signal"
         if SHELL_RETRIEVAL_ROUTE.search(payload):
             return False, f"{base}:retrieval_route"
@@ -328,18 +354,7 @@ def merged_hooks(
                     except ValueError:
                         command_parts = []
                 command_path = Path(command_parts[0]) if len(command_parts) == 1 else None
-                ours = bool(
-                    command_path
-                    and (
-                        command_path == wrapper.resolve()
-                        or (
-                            command_path.name == "prior-work-retrieval.sh"
-                            and command_path.parent.name == "scripts"
-                            and command_path.parent.parent.name
-                            == "prior-work-retrieval"
-                        )
-                    )
-                )
+                ours = bool(command_path and command_path == wrapper.resolve())
                 legacy = (
                     remove_legacy_recall
                     and event_name == "UserPromptSubmit"

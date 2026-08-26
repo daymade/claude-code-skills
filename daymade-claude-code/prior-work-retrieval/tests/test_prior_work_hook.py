@@ -163,6 +163,29 @@ class PriorWorkHookTests(unittest.TestCase):
             "tool_input": "uv run python scripts/prior_work.py retrieve --query x",
         }
         self.assertFalse(hook.substantial_tool_use(retrieval)[0])
+        for event in (
+            {
+                "tool_name": "Bash",
+                "tool_input": {"command": "printf x > production.md"},
+            },
+            {
+                "tool_name": "exec_command",
+                "tool_input": {"cmd": "sed -n '1p' source.md > production.md"},
+            },
+            {
+                "tool_name": "functions.exec",
+                "tool_input": {
+                    "code": "await tools.exec_command({cmd: 'printf x > production.md'})"
+                },
+            },
+        ):
+            with self.subTest(event=event):
+                self.assertTrue(hook.substantial_tool_use(event)[0])
+        scratch_redirect = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "printf x > /tmp/tinkle_probe.txt"},
+        }
+        self.assertFalse(hook.substantial_tool_use(scratch_redirect)[0])
 
     def test_implicit_pretool_requirement_blocks_until_receipt(self) -> None:
         event = {
@@ -356,6 +379,14 @@ class PriorWorkHookTests(unittest.TestCase):
             current, wrapper, "claude", remove_legacy_recall=True
         )
         self.assertIn(unrelated, json.dumps(merged))
+        lookalike = "/opt/thirdparty/prior-work-retrieval/scripts/prior-work-retrieval.sh"
+        current["hooks"]["Stop"][0]["hooks"].append(
+            {"type": "command", "command": lookalike}
+        )
+        merged = hook.merged_hooks(
+            current, wrapper, "claude", remove_legacy_recall=True
+        )
+        self.assertIn(lookalike, json.dumps(merged))
 
     def test_codex_and_claude_matchers_cover_native_write_tools(self) -> None:
         wrapper = self.root / "prior-work-retrieval.sh"
