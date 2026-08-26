@@ -262,6 +262,84 @@ def _function_call_output(call_id: str = "call-1", output: str = "done") -> dict
     }
 
 
+class CompactionTests(unittest.TestCase):
+    def test_compacted_context_keeps_raw_history_and_full_retained_text(self):
+        raw_detail = "压缩前仍保存在 rollout 中的原始业务细节"
+        compact_tail = "压缩上下文尾部必须由 --full 恢复"
+        compact_user = "压缩后保留的用户上下文：" + "甲" * (mod.MAX_SUMMARY_CHARS + 100) + compact_tail
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "c1", "cwd": "/tmp"}},
+            _msg("user", raw_detail, "input_text"),
+            {
+                "type": "compacted",
+                "payload": {
+                    "message": "压缩记录自己的消息",
+                    "replacement_history": [
+                        {
+                            "role": "developer",
+                            "content": [{"type": "input_text", "text": "<permissions instructions>噪声"}],
+                        },
+                        {
+                            "role": "user",
+                            "content": [{"type": "input_text", "text": compact_user}],
+                        },
+                        {
+                            "role": "assistant",
+                            "content": [{"type": "output_text", "text": "压缩后保留的助手状态"}],
+                        },
+                    ],
+                },
+            },
+        ])
+
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(data["user_messages"], [raw_detail])
+        self.assertIn(compact_tail, data["compact_summaries"][-1])
+        self.assertIn("压缩后保留的助手状态", data["compact_summaries"][-1])
+        self.assertNotIn("permissions instructions", data["compact_summaries"][-1])
+
+        default = mod.build_briefing(None, data, "/tmp")
+        full = mod.build_briefing(None, data, "/tmp", full=True)
+        self.assertIn("## Compacted Context", default)
+        self.assertIn(raw_detail, default)
+        self.assertNotIn(compact_tail, default)
+        self.assertIn("rerun with --full", default)
+        self.assertIn(compact_tail, full)
+
+    def test_all_compactions_are_ingested_but_only_latest_is_rendered(self):
+        first = "FIRST_COMPACTION_ONLY"
+        second = "SECOND_COMPACTION_ONLY"
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "c2", "cwd": "/tmp"}},
+            {
+                "type": "compacted",
+                "payload": {
+                    "replacement_history": [
+                        {"role": "user", "content": [{"type": "input_text", "text": first}]}
+                    ]
+                },
+            },
+            {
+                "type": "compacted",
+                "payload": {
+                    "replacement_history": [
+                        {"role": "user", "content": [{"type": "input_text", "text": second}]}
+                    ]
+                },
+            },
+        ])
+
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(len(data["compact_summaries"]), 2)
+        self.assertIn(first, data["compact_summaries"][0])
+        self.assertIn(second, data["compact_summaries"][1])
+
+        briefing = mod.build_briefing(None, data, "/tmp", full=True)
+        self.assertNotIn(first, briefing)
+        self.assertIn(second, briefing)
+        self.assertIn("from the session's last compaction", briefing)
+
+
 class FileChangeTests(unittest.TestCase):
     """0.147+ records file edits as item_completed/FileChange items, not
     patch_apply_end (measured 0 vs 1086 in one real 0.147.0 rollout)."""
@@ -626,7 +704,7 @@ class InheritedLineageTests(unittest.TestCase):
             self.assertIn("exact parent prefix", briefing)
             self.assertIn("continuation cue, not a standalone task", briefing)
             self.assertIn("Selected Session Timeline (chronological)", briefing)
-            self.assertIn("compaction", briefing)
+            self.assertIn("compaction-aware", briefing)
 
     def test_multigeneration_lineage_is_root_first_and_merges_context(self):
         with tempfile.TemporaryDirectory() as tmp:

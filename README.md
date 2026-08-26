@@ -3159,7 +3159,9 @@ Recover actionable context from a prior Codex CLI rollout and continue in the
 current conversation without replaying the full session through `codex resume`.
 The bundled extractor can select a session by ID, title query, latest project
 activity, or list view; it reports the end reason, surviving requests, recent
-tools/files, errors, and current workspace state before work resumes.
+tools/files, errors, and current workspace state before work resumes. It is
+compaction-aware: raw pre-compaction records still on disk and the retained
+`replacement_history` are both incorporated into the briefing.
 
 ```text
 /daymade-claude-code:continue-codex-work 019f66...

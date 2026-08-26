@@ -10,7 +10,7 @@ Codex-rollout-specific parser + briefing renderer.
 Why not `codex resume`: replaying a full rollout burns the context window on
 resolved turns and stale tool output. This selectively reconstructs only the
 high-signal context — exact inherited fork snapshots, each ancestor's retained
-compaction summary, recent user/assistant turns, tool calls, files edited, and
+compacted context, recent user/assistant turns, tool calls, files edited, and
 how the selected session ended.
 """
 
@@ -314,13 +314,15 @@ def validate_selected_rollout_identity(
 
 
 def _compacted_summary(payload: dict) -> str:
-    """Distill a compaction record into the surviving conversation thread.
+    """Extract the surviving context from one compaction record without loss.
 
     Codex compaction stores a `replacement_history` of messages that replace the
     compacted window, NOT a single summary string. That history also re-injects
     the system preamble (the permissions block, the agent-role message, the
     project's AGENTS.md), so we keep only user/assistant turns and drop the
-    noise-prefixed system dumps that is_noise_text recognizes.
+    noise-prefixed system dumps that is_noise_text recognizes. Do not truncate
+    here: build_briefing owns default display clipping, and --full must be able
+    to expose every retained character.
     """
     parts: list[str] = []
     message = payload.get("message")
@@ -333,9 +335,15 @@ def _compacted_summary(payload: dict) -> str:
                 continue
             if item.get("role") not in ("user", "assistant"):
                 continue
-            text = _user_turn_text(extract_text(item.get("content")).strip())
+            content = item.get("content")
+            text = (
+                _message_text(content, {"text", "input_text", "output_text"})
+                if isinstance(content, list)
+                else extract_text(content)
+            )
+            text = _user_turn_text(text.strip())
             if text and not is_noise_text(text):
-                parts.append(text[:800])
+                parts.append(text)
     return "\n\n".join(parts).strip()
 
 
@@ -910,7 +918,7 @@ def _append_inherited_context(
 
     summary_edges = [edge for edge in lineage if edge["data"]["compact_summaries"]]
     if summary_edges:
-        sections.append("\n### Inherited Compact Summaries (last one per ancestor)\n")
+        sections.append("\n### Inherited Compacted Context (last one per ancestor)\n")
         for edge in summary_edges:
             sections.append(f"\n#### From `{edge['session_id']}`\n")
             sections.append(
@@ -1052,10 +1060,11 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
                 "parent after the fork was not imported."
             )
         sections.append(
-            "**Recovery boundary**: lineage recovery restores only text and structured "
-            "events still retained in those snapshots. It cannot undo Codex compaction, "
-            "reconstruct details omitted by a compacted history, or recover image/audio "
-            "content from a text-only marker. User turns in both timelines are never "
+            "**Recovery boundary**: compaction-aware lineage recovery reads both raw "
+            "pre-compaction records still present in each snapshot and every compacted "
+            "record's surviving `message` / `replacement_history`. It cannot reconstruct "
+            "content absent from both on-disk sources or recover image/audio bytes from "
+            "a text-only marker. User turns in both timelines are never "
             "count-capped; `--full` removes character truncation and restores every "
             "state in assistant-only histories. Inherited tool/file caps still apply."
         )
@@ -1083,7 +1092,7 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
         if lineage:
             if continuation_only and not full:
                 sections.append(
-                    "**Continuation recovery**: inherited compaction summaries are "
+                    "**Continuation recovery**: inherited compacted context is "
                     "automatically shown without character clipping because the child "
                     "contains no standalone task. Other message/tool/file count caps "
                     "still apply."
@@ -1098,9 +1107,9 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
     if data["compact_summaries"]:
         summary = data["compact_summaries"][-1]
         heading = (
-            "Selected Session Compact Summary (from its last compaction)"
+            "Selected Session Compacted Context (from its last compaction)"
             if has_lineage_context
-            else "Compact Summary (from the session's last compaction)"
+            else "Compacted Context (from the session's last compaction)"
         )
         sections.append(f"\n## {heading}\n")
         sections.append(_clip(summary, MAX_SUMMARY_CHARS, full))
@@ -1273,8 +1282,8 @@ def main() -> int:
                         help="Session ID to exclude (e.g. a currently active session)")
     parser.add_argument("--full", action="store_true",
                         help="Do not truncate retained long-section text (summary / user "
-                             "requests / assistant responses); count caps and compaction "
-                             "loss still apply")
+                             "requests / assistant responses / compacted context); "
+                             "tool/file preview caps still apply")
     args = parser.parse_args()
 
     project_path = os.path.abspath(args.project)
