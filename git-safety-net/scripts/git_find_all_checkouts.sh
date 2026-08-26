@@ -20,9 +20,11 @@
 #   was pushed, and the work was still one `rm -rf` away from being gone for good.
 #
 # THE SECOND AXIS — FRESHNESS:
-#   `unpushed` below is measured against this checkout's `origin/*` refs, which are a CACHED
-#   SNAPSHOT from its last fetch, not the remote. So every checkout also reports how long ago
-#   it last heard from its remote, and a stale one is called out explicitly.
+#   `unpushed` below is measured against the checkout's repository-wide `origin/*` refs,
+#   which are a CACHED SNAPSHOT from its last fetch, not the remote. Linked worktrees share
+#   those refs, but each checkout can write its own private FETCH_HEAD receipt. Report the
+#   newest receipt across the common Git dir and all linked-worktree admin dirs; reading only
+#   either side makes a fresh shared ref cache look stale when fetch ran from the other side.
 #
 #   Read the number in the right direction. For "what would be lost" a stale cache is safe:
 #   it can only over-report unpushed work, never hide it. For "is this already upstream?" it
@@ -76,20 +78,34 @@ file_mtime() {
   printf '%s\n' "$mtime"
 }
 
-# How long ago a checkout last heard from its remote. FETCH_HEAD's mtime is the right
-# signal: git rewrites it on every fetch even when nothing changed, whereas a
-# remote-tracking reflog only gains an entry when the remote actually moved — so a
+# How long ago this checkout's repository last heard from its remote. FETCH_HEAD's mtime
+# is the right signal: git rewrites it on every fetch even when nothing changed, whereas
+# a remote-tracking reflog only gains an entry when the remote actually moved — so a
 # reflog-based age reads "old" after a fetch that found no news, which is the opposite
-# of what we need. Prints seconds; returns 1 when this checkout has never fetched.
+# of what we need. Remote-tracking refs are common, but FETCH_HEAD itself is not: a fetch from
+# the primary checkout writes <common>/FETCH_HEAD, while a fetch from a linked checkout can
+# write <common>/worktrees/<name>/FETCH_HEAD. Use the newest receipt in that common-dir group
+# so every linked checkout reports the freshness of the same shared ref cache. Prints seconds;
+# returns 1 when the repository has never fetched.
 fetch_age_seconds() {
-  local gitdir fetch_head mtime
-  gitdir="$(safe_git -C "$1" rev-parse --git-dir 2>/dev/null)" || return 1
-  case "$gitdir" in /*) ;; *) gitdir="$1/$gitdir" ;; esac
-  fetch_head="$gitdir/FETCH_HEAD"
-  [ -f "$fetch_head" ] || return 1
-  mtime="$(file_mtime "$fetch_head")" || return 1
-  [ -n "$mtime" ] || return 1
-  echo $(( $(date +%s) - mtime ))
+  local common_dir fetch_head mtime latest_mtime now
+  common_dir="$(safe_git -C "$1" rev-parse --git-common-dir 2>/dev/null)" || return 1
+  case "$common_dir" in /*) ;; *) common_dir="$1/$common_dir" ;; esac
+  latest_mtime=""
+  for fetch_head in "$common_dir/FETCH_HEAD" "$common_dir"/worktrees/*/FETCH_HEAD; do
+    [ -f "$fetch_head" ] || continue
+    mtime="$(file_mtime "$fetch_head")" || continue
+    if [ -z "$latest_mtime" ] || [ "$mtime" -gt "$latest_mtime" ]; then
+      latest_mtime="$mtime"
+    fi
+  done
+  [ -n "$latest_mtime" ] || return 1
+  now="$(date +%s)"
+  if [ "$latest_mtime" -gt "$now" ]; then
+    echo 0
+  else
+    echo $(( now - latest_mtime ))
+  fi
 }
 
 human_age() {
@@ -241,7 +257,7 @@ for gitpath in "${CANDIDATES[@]}"; do
       STALE_SEEN=$((STALE_SEEN + 1))
     fi
   else
-    freshness="never fetched in this checkout"
+    freshness="never fetched in this repository"
     STALE_SEEN=$((STALE_SEEN + 1))
   fi
 

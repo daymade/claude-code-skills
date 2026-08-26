@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -80,7 +81,7 @@ class CheckoutDiscoveryTests(unittest.TestCase):
             text=True,
             encoding="utf-8",
             capture_output=True,
-            env={**os.environ, "DEPTH": "3"},
+            env={**os.environ, "DEPTH": "3", "STALE_AFTER": "3600"},
         )
 
     def test_clone_without_origin_is_still_found_by_shared_history(self) -> None:
@@ -165,6 +166,118 @@ class CheckoutDiscoveryTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertFalse(marker.exists())
+
+    def test_linked_worktree_reads_primary_fetch_freshness(self) -> None:
+        linked = self.checkouts / "linked"
+        self.git("-C", str(self.current), "fetch", "origin")
+        self.git(
+            "-C",
+            str(self.current),
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "linked-audit",
+            str(linked),
+            "HEAD",
+        )
+
+        completed = self.run_scanner(self.checkouts)
+
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        lines = completed.stdout.splitlines()
+        linked_index = next(
+            index
+            for index, line in enumerate(lines)
+            if line.startswith(str(linked.resolve()))
+        )
+        linked_block = "\n".join(lines[linked_index : linked_index + 5])
+        self.assertIn("remote:    last fetched", linked_block)
+        self.assertNotIn("never fetched in this repository", linked_block)
+        self.assertNotIn("STALE", linked_block)
+
+    def test_linked_fetch_refreshes_the_shared_repository_verdict(self) -> None:
+        linked = self.checkouts / "linked-fetch"
+        self.git(
+            "-C",
+            str(self.current),
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "linked-fetch-audit",
+            str(linked),
+            "HEAD",
+        )
+        self.git("-C", str(self.current), "fetch", "origin")
+
+        common_dir_raw = Path(
+            self.git(
+                "-C", str(self.current), "rev-parse", "--git-common-dir"
+            ).stdout.strip()
+        )
+        common_dir = (
+            common_dir_raw
+            if common_dir_raw.is_absolute()
+            else self.current / common_dir_raw
+        )
+        common_fetch_head = common_dir / "FETCH_HEAD"
+        old_time = time.time() - 7200
+        os.utime(common_fetch_head, (old_time, old_time))
+
+        self.git("-C", str(linked), "fetch", "origin")
+        linked_fetch_raw = Path(
+            self.git(
+                "-C", str(linked), "rev-parse", "--git-path", "FETCH_HEAD"
+            ).stdout.strip()
+        )
+        linked_fetch_head = (
+            linked_fetch_raw if linked_fetch_raw.is_absolute() else linked / linked_fetch_raw
+        )
+        self.assertNotEqual(common_fetch_head.resolve(), linked_fetch_head.resolve())
+        self.assertGreater(
+            linked_fetch_head.stat().st_mtime, common_fetch_head.stat().st_mtime
+        )
+
+        completed = self.run_scanner(self.checkouts)
+
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        lines = completed.stdout.splitlines()
+        for checkout in (self.current, linked):
+            checkout_index = next(
+                index
+                for index, line in enumerate(lines)
+                if line.startswith(str(checkout.resolve()))
+            )
+            checkout_block = "\n".join(lines[checkout_index : checkout_index + 5])
+            self.assertIn("remote:    last fetched", checkout_block)
+            self.assertNotIn("STALE", checkout_block)
+
+    def test_independent_clone_keeps_its_own_fetch_freshness(self) -> None:
+        self.git("-C", str(self.current), "fetch", "origin")
+        self.git("-C", str(self.candidate), "fetch", "origin")
+        candidate_fetch_head = self.candidate / ".git" / "FETCH_HEAD"
+        old_time = time.time() - 7200
+        os.utime(candidate_fetch_head, (old_time, old_time))
+
+        completed = self.run_scanner(self.checkouts)
+
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        lines = completed.stdout.splitlines()
+        current_index = next(
+            index
+            for index, line in enumerate(lines)
+            if line.startswith(str(self.current.resolve()))
+        )
+        candidate_index = next(
+            index
+            for index, line in enumerate(lines)
+            if line.startswith(str(self.candidate.resolve()))
+        )
+        current_block = "\n".join(lines[current_index : current_index + 5])
+        candidate_block = "\n".join(lines[candidate_index : candidate_index + 5])
+        self.assertNotIn("STALE", current_block)
+        self.assertIn("STALE", candidate_block)
 
 
 if __name__ == "__main__":

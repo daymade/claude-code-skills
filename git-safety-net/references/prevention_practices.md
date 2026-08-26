@@ -143,11 +143,19 @@ Local-only commits or dirty/unavailable worktrees → preserve them before the d
 **Failure mode:** checking `git status` in the primary checkout and assuming a linked worktree is
 also clean. The linked checkout may hold untracked files or a detached commit that no branch names.
 
-**Prevention:** run `git_loss_audit.sh`, then inspect the selected path with
-`git -C <worktree-path> status --short --branch`. Record its exact HEAD, prove containment against
-the maintained base, and create a verified all-refs bundle before non-forced removal. Never reduce
-the worktree count with `rm -rf` or `git worktree remove --force`; the safe target is one maintained
-primary checkout, not zero checkouts.
+**Prevention:** run `git_loss_audit.sh`, then inspect the selected path with both
+`git -C <worktree-path> status --porcelain=v1 --untracked-files=all` and the corresponding
+`--ignored` inventory. The first must be empty; every ignored item must be proven reproducible
+or copied out with its relative path and verified against a recorded content hash because Git
+bundles cannot reach it. Record the exact HEAD, prove containment against
+a freshly fetched maintained base, and create a verified all-refs bundle before current-session
+authorization and non-forced removal. Afterwards verify the path/registration disappeared and the
+recorded HEAD still resolves through a kept ref/base or the bundle, then recheck every copied
+ignored item against its pre-removal hash. Immediately before removal, repeat the worktree status
+and source-hash checks and make removal the next operation; otherwise a writer can change ignored
+bytes after the early backup check. Never reduce the worktree count
+with `rm -rf` or `git worktree remove --force`; the safe target is one maintained primary checkout,
+not zero checkouts.
 
 ## Snapshot before any history rewrite
 

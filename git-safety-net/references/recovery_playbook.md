@@ -57,8 +57,16 @@ Treat each path from `git worktree list --porcelain` as a separate working tree.
 `git -C <path>` against that exact path. A detached linked worktree can carry a unique commit even
 when every named branch is on a remote; `git_loss_audit.sh` includes those HEADs explicitly.
 
-Before removal, require clean status, exact HEAD capture, content containment proof, a verified
-all-refs bundle, and only then non-forced `git worktree remove`.
+Before removal, require empty tracked/untracked status **and a separate ignored-file inventory**,
+exact HEAD capture, content containment proof against a fresh base, a verified all-refs bundle,
+and current-session deletion authority. Only then use non-forced `git worktree remove`, followed
+by path/registration/ref postcondition checks. The bundle preserves Git objects, not ignored files;
+copy any ignored item that is not proven reproducible and verify it against a recorded pre-removal
+content hash. Freeze the complete ignored path/type/hash-or-link-target manifest, including
+disposable entries. After authority, repeat both status checks and rebuild that manifest; any
+added, missing, or changed entry aborts, and the removal command must come next. Recheck every
+surviving copy afterward. The complete gate lives in
+[merge_verification.md](merge_verification.md) § Worktree retirement.
 
 ## Ladder step 1 — `git reflog` (first move)
 
