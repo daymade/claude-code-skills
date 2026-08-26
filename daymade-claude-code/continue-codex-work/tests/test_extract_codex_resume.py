@@ -556,14 +556,20 @@ class InheritedLineageTests(unittest.TestCase):
                 ]
             )
             data = mod.parse_codex_rollout(child)
+            progress = []
             lineage, warnings = mod.resolve_inherited_lineage(
-                data, lambda session_id: parent if session_id == "parent" else None
+                data,
+                lambda session_id: parent if session_id == "parent" else None,
+                on_parent=lambda session_id, path, offset: progress.append(
+                    (session_id, path, offset)
+                ),
             )
             data["lineage"] = lineage
             data["lineage_warnings"] = warnings
             briefing = mod.build_briefing(None, data, "/tmp")
 
             self.assertEqual(len(lineage), 1)
+            self.assertEqual(progress, [("parent", parent, fork_offset)])
             self.assertEqual(lineage[0]["data"]["user_messages"], [objective])
             self.assertIn(objective, briefing)
             self.assertIn(summary_tail, briefing)

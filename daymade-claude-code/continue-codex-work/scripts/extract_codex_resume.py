@@ -226,6 +226,7 @@ def resolve_inherited_lineage(
     resolve_session: Callable[[str], Optional[Path]],
     *,
     max_depth: int = MAX_LINEAGE_DEPTH,
+    on_parent: Optional[Callable[[str, Path, int], None]] = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Resolve every declared ancestor at the exact snapshot inherited by its child.
 
@@ -268,6 +269,8 @@ def resolve_inherited_lineage(
                 f"parent rollout {parent_id} declared by session {current_id} was not found"
             )
 
+        if on_parent is not None:
+            on_parent(parent_id, parent_path, history_base["end_byte_offset"])
         parent_data = parse_codex_rollout(
             parent_path, end_byte_offset=history_base["end_byte_offset"]
         )
@@ -1206,7 +1209,13 @@ def main() -> int:
     if meta.get("history_base") is not None or meta.get("forked_from_id"):
         try:
             lineage, lineage_warnings = resolve_inherited_lineage(
-                data, _make_exact_rollout_resolver(project_path)
+                data,
+                _make_exact_rollout_resolver(project_path),
+                on_parent=lambda parent_id, _path, offset: print(
+                    f"Parsing inherited parent {parent_id} through exact byte "
+                    f"{offset} ({offset / 1_000_000:.1f} MB)...",
+                    file=sys.stderr,
+                ),
             )
         except LineageResolutionError as exc:
             print(f"Error: cannot recover inherited Codex history: {exc}", file=sys.stderr)
