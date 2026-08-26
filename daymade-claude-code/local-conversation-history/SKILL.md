@@ -168,8 +168,10 @@ For a follow-up that expands the Sessions already shown:
 
 Use `--format json` only when the user requests machine-readable output. The
 Markdown is already presentation-ready: Session headings contain only the exact
-ID and counts, and rows contain only timezone-qualified time plus original
-input. Return it without adding thematic titles or a second classification
+ID and counts, and rows contain only timezone-qualified time plus the readable
+original input. It HTML-escapes literal markup and normalizes line-ending forms
+for display; use `--format json` only when byte-level string fidelity matters.
+Return either format without adding thematic titles or a second classification
 layer.
 
 If the exact Markdown cannot fit in one response, redirect the same command's

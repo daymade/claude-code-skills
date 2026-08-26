@@ -122,11 +122,16 @@ it by Session. Explicit Session mode preserves the IDs in the caller's order
 and applies one newest-first limit to each Session. Physical line order is only
 a stable tie-breaker when timestamps are equal; file mtime is never consulted.
 
-Markdown escapes table delimiters and renders stored newlines as `<br>`; JSON
-keeps the exact text string. Neither format deduplicates repeated inputs or
-invents a topic/title for a Session. This ledger path was verified against a
-real Codex CLI 0.147.0 store on 2026-08-27; it is a tested private-format
-boundary, not a guarantee that future Codex versions cannot change it.
+Markdown is the human-reading surface: it HTML-escapes literal markup and table
+delimiters, and renders LF, CRLF, or CR as a visible line break. That preserves
+the wording and compact table layout while intentionally normalizing the
+line-ending encoding. `--format json` is the machine/forensic surface and keeps
+the original string value directly. Neither format deduplicates repeated inputs
+or invents a topic/title for a Session. Prompt-ledger and CLI Session IDs with
+surrounding whitespace fail as unsupported instead of being normalized. This
+ledger path was verified against a real Codex CLI 0.147.0 store on 2026-08-27;
+it is a tested private-format boundary, not a guarantee that future Codex
+versions cannot change it.
 
 ### Codex writer-lock observation
 

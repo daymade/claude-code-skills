@@ -117,13 +117,15 @@ def load_user_inputs(path: Path) -> list[UserInput]:
             if (
                 not isinstance(session_id, str)
                 or not session_id.strip()
+                or session_id != session_id.strip()
                 or isinstance(timestamp, bool)
                 or not isinstance(timestamp, (int, float))
                 or not isinstance(text, str)
             ):
                 raise PromptHistoryError(
                     f"Unsupported prompt-history schema at {path}:{line_number}; "
-                    "expected string session_id, numeric ts, and string text"
+                    "expected session_id without surrounding whitespace, numeric ts, "
+                    "and string text"
                 )
             records.append(
                 UserInput(
@@ -161,9 +163,15 @@ def select_groups(
         ]
         return groups, "recent", len(records)
 
-    session_ids = unique_in_order(args.session_ids or [])
-    if not session_ids:
-        raise PromptHistoryError("--session-id must not be blank")
+    requested_session_ids = args.session_ids or []
+    if any(
+        not session_id.strip() or session_id != session_id.strip()
+        for session_id in requested_session_ids
+    ):
+        raise PromptHistoryError(
+            "--session-id must not be blank or contain surrounding whitespace"
+        )
+    session_ids = unique_in_order(requested_session_ids)
     missing = [session_id for session_id in session_ids if session_id not in totals]
     if missing:
         raise PromptHistoryError(
@@ -194,11 +202,15 @@ def iso_timestamp(value: float) -> str:
     return datetime.fromtimestamp(value).astimezone().isoformat(timespec="seconds")
 
 
+def markdown_inline(value: str) -> str:
+    escaped = html.escape(value, quote=False).replace("|", "&#124;")
+    return f"<code>{escaped}</code>"
+
+
 def markdown_cell(value: str) -> str:
     escaped = html.escape(value, quote=False).replace("|", "&#124;")
     return (
-        escaped
-        .replace("\r\n", "<br>")
+        escaped.replace("\r\n", "<br>")
         .replace("\n", "<br>")
         .replace("\r", "<br>")
     )
@@ -246,7 +258,7 @@ def render_markdown(
             )
         lines.extend(
             [
-                f"## Session `{session_id}`（{count_text}）",
+                f"## Session {markdown_inline(session_id)}（{count_text}）",
                 "",
                 f"| {time_label} | {input_label} |",
                 "|---|---|",
