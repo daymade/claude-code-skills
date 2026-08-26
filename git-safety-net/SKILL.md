@@ -320,9 +320,15 @@ use repeated `--branch` instead. The exporter never drops or deletes anything.
 
 - Stashes: drop from the **highest index down** (`drop stash@{2}` before `stash@{1}`) — indices
   shift as you drop, and top-down keeps every number meaning what your backup filenames say.
-- Linked worktrees: require a clean `git -C <path> status --short --branch`, record its exact HEAD,
-  prove that HEAD is contained/superseded, then use `git worktree remove <absolute-path>` **without
-  `--force`** and re-run `git worktree list`. Never remove the primary/current checkout. Follow
+- Linked worktrees: require an empty `git -C <path> status --porcelain=v1 --untracked-files=all`,
+  then inventory ignored paths separately with `--ignored`. A normal clean status hides `!!`
+  files, and no bundle can preserve them; copy out anything not proven reproducible before removal.
+  Record the exact HEAD, prove it contained/superseded against a freshly fetched base, export all
+  refs, and obtain current-session deletion authority. Remove only with
+  `git worktree remove <absolute-path>` **without `--force`**. Afterwards prove the path and
+  registration are gone while the recorded HEAD still resolves through the kept branch/base or the
+  verified bundle. Never remove the primary/current checkout; retire its branch only as a separate,
+  separately authorized action. Follow
   **[references/merge_verification.md](references/merge_verification.md)** § Worktree retirement.
 - Local branches: prefer `git branch -d` (refuses unmerged); use `-D` only for items Step 1
   proved superseded, backed up, and the user authorized deleting. **A squash-merge is the usual

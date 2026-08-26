@@ -166,6 +166,35 @@ class CheckoutDiscoveryTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertFalse(marker.exists())
 
+    def test_linked_worktree_uses_common_fetch_freshness(self) -> None:
+        linked = self.checkouts / "linked"
+        self.git("-C", str(self.current), "fetch", "origin")
+        self.git(
+            "-C",
+            str(self.current),
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "linked-audit",
+            str(linked),
+            "HEAD",
+        )
+
+        completed = self.run_scanner(self.checkouts)
+
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        lines = completed.stdout.splitlines()
+        linked_index = next(
+            index
+            for index, line in enumerate(lines)
+            if line.startswith(str(linked.resolve()))
+        )
+        linked_block = "\n".join(lines[linked_index : linked_index + 5])
+        self.assertIn("remote:    last fetched", linked_block)
+        self.assertNotIn("never fetched in this repository", linked_block)
+        self.assertNotIn("STALE", linked_block)
+
 
 if __name__ == "__main__":
     unittest.main()

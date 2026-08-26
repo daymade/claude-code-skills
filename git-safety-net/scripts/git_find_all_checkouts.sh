@@ -20,9 +20,10 @@
 #   was pushed, and the work was still one `rm -rf` away from being gone for good.
 #
 # THE SECOND AXIS — FRESHNESS:
-#   `unpushed` below is measured against this checkout's `origin/*` refs, which are a CACHED
-#   SNAPSHOT from its last fetch, not the remote. So every checkout also reports how long ago
-#   it last heard from its remote, and a stale one is called out explicitly.
+#   `unpushed` below is measured against the checkout's repository-wide `origin/*` refs,
+#   which are a CACHED SNAPSHOT from its last fetch, not the remote. Linked worktrees share
+#   those refs and FETCH_HEAD through their common Git directory, so they must report the
+#   common repository's fetch age rather than the private worktree-admin directory's age.
 #
 #   Read the number in the right direction. For "what would be lost" a stale cache is safe:
 #   it can only over-report unpushed work, never hide it. For "is this already upstream?" it
@@ -76,16 +77,19 @@ file_mtime() {
   printf '%s\n' "$mtime"
 }
 
-# How long ago a checkout last heard from its remote. FETCH_HEAD's mtime is the right
-# signal: git rewrites it on every fetch even when nothing changed, whereas a
-# remote-tracking reflog only gains an entry when the remote actually moved — so a
+# How long ago this checkout's repository last heard from its remote. FETCH_HEAD's mtime
+# is the right signal: git rewrites it on every fetch even when nothing changed, whereas
+# a remote-tracking reflog only gains an entry when the remote actually moved — so a
 # reflog-based age reads "old" after a fetch that found no news, which is the opposite
-# of what we need. Prints seconds; returns 1 when this checkout has never fetched.
+# of what we need. Use --git-common-dir, not --git-dir: a linked worktree's private admin
+# directory has its own FETCH_HEAD (or none), while the remote-tracking refs used by
+# `rev-list --not --remotes` live in the common repository. Prints seconds; returns 1
+# when the repository has never fetched.
 fetch_age_seconds() {
-  local gitdir fetch_head mtime
-  gitdir="$(safe_git -C "$1" rev-parse --git-dir 2>/dev/null)" || return 1
-  case "$gitdir" in /*) ;; *) gitdir="$1/$gitdir" ;; esac
-  fetch_head="$gitdir/FETCH_HEAD"
+  local common_dir fetch_head mtime
+  common_dir="$(safe_git -C "$1" rev-parse --git-common-dir 2>/dev/null)" || return 1
+  case "$common_dir" in /*) ;; *) common_dir="$1/$common_dir" ;; esac
+  fetch_head="$common_dir/FETCH_HEAD"
   [ -f "$fetch_head" ] || return 1
   mtime="$(file_mtime "$fetch_head")" || return 1
   [ -n "$mtime" ] || return 1
@@ -241,7 +245,7 @@ for gitpath in "${CANDIDATES[@]}"; do
       STALE_SEEN=$((STALE_SEEN + 1))
     fi
   else
-    freshness="never fetched in this checkout"
+    freshness="never fetched in this repository"
     STALE_SEEN=$((STALE_SEEN + 1))
   fi
 
