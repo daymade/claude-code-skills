@@ -11,6 +11,7 @@ from unittest import mock
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SKILL_DIR / "scripts" / "prior_work.py"
+FAKE_RG = SKILL_DIR / "tests" / "fake_rg.py"
 
 
 def load_module():
@@ -27,6 +28,10 @@ prior_work = load_module()
 class PriorWorkTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
+        self.rg_patcher = mock.patch.object(
+            prior_work.shutil, "which", return_value=str(FAKE_RG)
+        )
+        self.rg_patcher.start()
         self.root = Path(self.temp.name)
         self.docs = self.root / "docs"
         self.code = self.root / "code"
@@ -59,6 +64,7 @@ class PriorWorkTests(unittest.TestCase):
         self.write_manifest()
 
     def tearDown(self) -> None:
+        self.rg_patcher.stop()
         self.temp.cleanup()
 
     def write_manifest(self, *, docs_root: str | None = None) -> None:
@@ -162,6 +168,14 @@ class PriorWorkTests(unittest.TestCase):
         self.assertEqual(command.count("--regexp"), 2)
         self.assertEqual(detail["status"], "searched")
         self.assertTrue(candidates)
+
+    def test_filesystem_adapter_fails_closed_when_rg_is_missing(self) -> None:
+        source = self.manifest()["sources"][0]
+        with mock.patch.object(prior_work.shutil, "which", return_value=None):
+            candidates, detail = prior_work._filesystem_candidates(source, ["Mercury"])
+
+        self.assertEqual(candidates, [])
+        self.assertEqual(detail, {"status": "failed", "error": "rg_not_found"})
 
     def test_required_manual_route_blocks_receipt_until_completed(self) -> None:
         manifest = self.manifest()

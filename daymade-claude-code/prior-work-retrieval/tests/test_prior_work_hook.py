@@ -11,6 +11,7 @@ from unittest import mock
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = SKILL_DIR / "scripts"
+FAKE_RG = SKILL_DIR / "tests" / "fake_rg.py"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 
@@ -29,6 +30,10 @@ hook = load_module("prior_work_hook_under_test", SCRIPTS_DIR / "prior_work_hook.
 class PriorWorkHookTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
+        self.rg_patcher = mock.patch.object(
+            prior_work.shutil, "which", return_value=str(FAKE_RG)
+        )
+        self.rg_patcher.start()
         self.root = Path(self.temp.name)
         self.source = self.root / "source"
         self.source.mkdir()
@@ -62,6 +67,7 @@ class PriorWorkHookTests(unittest.TestCase):
         self.env.start()
 
     def tearDown(self) -> None:
+        self.rg_patcher.stop()
         self.env.stop()
         self.temp.cleanup()
 
