@@ -48,7 +48,7 @@ python3 scripts/extract_codex_resume.py --list
 # List across all projects (not just the current cwd)
 python3 scripts/extract_codex_resume.py --all-projects --list
 
-# Untruncated retained text; also removes the inherited-timeline segment cap
+# Untruncated retained text; default mode already keeps every user turn
 python3 scripts/extract_codex_resume.py --session <SESSION_ID> --full
 ```
 
@@ -118,7 +118,7 @@ Codex's rollout schema is not Claude's. The parser reads:
 
 A fork's `session_meta.history_base` declares the parent `thread_id`, `end_byte_offset`, and (when present) `end_ordinal_exclusive`. The extractor follows that chain recursively, root first, and parses each parent only in the half-open byte range `[0, end_byte_offset)`. This matters because the parent's rollout may keep growing after the child forks; reading the parent's current tail would import events the child never inherited and can silently change the recovered task.
 
-For the handoff view, each retained user turn stays in record order with the first and latest assistant state before the next user turn. This keeps the state that a correction responded to and the state reached before the next correction without replaying every tool-progress message. Default output caps this at 40 user segments only for unusually long un-compacted histories and names `--full` at the omission point; `--full` restores every retained segment.
+For the handoff view, each retained user turn stays in record order with the first and latest assistant state before the next user turn. This keeps the state that a correction responded to and the state reached before the next correction without replaying every tool-progress message. Default output never drops a retained user turn because the actual objective can occur anywhere; it clips each message instead. `--full` removes character clipping and, for an assistant-only history, restores every retained assistant state.
 
 Lineage recovery is fail-fast. A `forked_from_id` / `history_base.thread_id` mismatch, missing parent rollout, cycle, out-of-range offset, or offset through the middle of a JSONL record stops extraction with the exact reason. If a rollout names only `forked_from_id` but provides no byte boundary, the briefing reports that limitation and does **not** guess from the parent's current file. Archived parents are resolved as well as live sessions.
 
@@ -142,7 +142,7 @@ Codex re-injects large system blocks after compaction and between turns — the 
 
 - Cannot recover sessions whose rollout files were deleted from `~/.codex/sessions/`.
 - Cannot access sessions from other machines (files are local only).
-- Long briefing sections are truncated by default; each truncation point prints a `rerun with --full` hint, and `--full` prints the untruncated **retained** text. It also removes the inherited handoff timeline's 40-user-segment cap. Selected-session request/response caps and inherited file/tool caps still apply. Tool-call previews stay capped at 120 chars by design — for a full command or patch, grep the rollout for the call's `call_id`.
+- Long briefing sections are truncated by default; each truncation point prints a `rerun with --full` hint, and `--full` prints the untruncated **retained** text. Inherited user turns are never count-capped; selected-session request/response caps and inherited file/tool caps still apply. Tool-call previews stay capped at 120 chars by design — for a full command or patch, grep the rollout for the call's `call_id`.
 - Compaction is lossy — early-conversation detail may be gone even when lineage is exact and `--full` is used. Image-only turns remain markers; the original image/audio bytes are not reconstructed into the briefing.
 - Codex has no per-session auto-memory equivalent to Claude Code's `MEMORY.md`; the project's `AGENTS.md` is deliberately filtered out as re-injected noise, so read it separately if you need the project's standing instructions.
 

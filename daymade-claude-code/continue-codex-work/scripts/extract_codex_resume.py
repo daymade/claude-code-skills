@@ -41,7 +41,6 @@ MAX_ASSISTANT_RESPONSES = 4
 MAX_TOOL_CALLS = 20
 MAX_FILES = 40
 MAX_LINEAGE_DEPTH = 16
-MAX_HANDOFF_USER_TURNS = 40
 
 END_REASON_LABELS = {
     "completed": "Clean exit — the last turn completed",
@@ -819,8 +818,8 @@ def _handoff_timeline_segments(
             turn for turn in timeline if turn.get("role") == "assistant"
         ]
         if assistant_turns:
-            segment = [assistant_turns[0]]
-            if assistant_turns[-1] != assistant_turns[0]:
+            segment = list(assistant_turns) if full else [assistant_turns[0]]
+            if not full and assistant_turns[-1] != assistant_turns[0]:
                 segment.append(assistant_turns[-1])
             segments.append(segment)
     else:
@@ -842,16 +841,10 @@ def _handoff_timeline_segments(
                     segment.append(assistant_turns[-1])
             segments.append(segment)
 
-    if full or len(segments) <= MAX_HANDOFF_USER_TURNS:
-        return segments
-    head_count = min(5, MAX_HANDOFF_USER_TURNS)
-    tail_count = MAX_HANDOFF_USER_TURNS - head_count
-    omitted = len(segments) - head_count - tail_count
-    return [
-        *segments[:head_count],
-        {"omitted_user_segments": omitted},
-        *segments[-tail_count:],
-    ]
+    # Never drop a retained user turn in default mode: the actual objective or
+    # correction can occur anywhere in an un-compacted history. Character
+    # clipping still bounds each message; --full removes that clipping.
+    return segments
 
 
 def _append_handoff_timeline(

@@ -897,9 +897,9 @@ class TruncationContractTests(unittest.TestCase):
         self.assertIn(LONG_RESPONSE, briefing)
         self.assertNotIn("rerun with --full", briefing)
 
-    def test_full_removes_inherited_timeline_segment_cap(self):
+    def test_default_keeps_every_inherited_user_segment(self):
         timeline = []
-        for index in range(mod.MAX_HANDOFF_USER_TURNS + 5):
+        for index in range(45):
             timeline.extend(
                 [
                     {
@@ -921,15 +921,40 @@ class TruncationContractTests(unittest.TestCase):
         default_sections: list[str] = []
         mod._append_handoff_timeline(default_sections, timeline, full=False)
         default = "\n".join(default_sections)
-        self.assertIn("5 middle user segment(s) omitted", default)
-        self.assertNotIn("用户段 5\n", default)
-        self.assertIn(f"用户段 {mod.MAX_HANDOFF_USER_TURNS + 4}", default)
+        self.assertNotIn("omitted", default)
+        self.assertIn("用户段 5", default)
+        self.assertIn("用户段 44", default)
 
         full_sections: list[str] = []
         mod._append_handoff_timeline(full_sections, timeline, full=True)
         expanded = "\n".join(full_sections)
         self.assertNotIn("omitted", expanded)
         self.assertIn("用户段 5", expanded)
+
+    def test_full_keeps_every_assistant_only_state(self):
+        timeline = [
+            {
+                "session_id": "parent",
+                "ordinal": index,
+                "role": "assistant",
+                "phase": "commentary",
+                "text": f"状态 {index}",
+            }
+            for index in range(1, 4)
+        ]
+        default_sections: list[str] = []
+        mod._append_handoff_timeline(default_sections, timeline, full=False)
+        default = "\n".join(default_sections)
+        self.assertIn("状态 1", default)
+        self.assertNotIn("状态 2", default)
+        self.assertIn("状态 3", default)
+
+        full_sections: list[str] = []
+        mod._append_handoff_timeline(full_sections, timeline, full=True)
+        expanded = "\n".join(full_sections)
+        self.assertIn("状态 1", expanded)
+        self.assertIn("状态 2", expanded)
+        self.assertIn("状态 3", expanded)
 
 
 if __name__ == "__main__":
