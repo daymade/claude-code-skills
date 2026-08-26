@@ -22,6 +22,38 @@ Prevent losing work in a tangle of branches/stashes/rebases, and recover it fore
 when something already went sideways. The commands here are all **non-destructive or additive**
 until a step is explicitly labeled destructive — recovery must never make the loss worse.
 
+## Outcome contract — keep the safety net subordinate to the user's job
+
+Before Mode B/E or any command that writes a ref or backup, state four lines in the conversation
+(do not create another file):
+
+- **Outcome:** the user-visible end state, in the user's words.
+- **Current phase:** what is authorized now. "Later" work is not authorized in this phase.
+- **Authorized targets:** the named repositories, checkouts, refs, and files this phase may change.
+- **Stop condition:** observable facts that end the task.
+
+Then enforce these boundaries:
+
+- **Evidence scope is not action scope.** A read-only audit may discover another clone, ref,
+   repository, or dangling object. That discovery may widen the report; it does not authorize
+   preserving, uploading, merging, deleting, or otherwise changing the newly found object.
+- **Preserve the smallest set threatened by the next authorized destructive action.** If the
+   current phase is only commit/push/verify and no deletion, reset, gc, history rewrite, or
+   worktree removal is authorized, do not create an all-refs bundle or pin every dangler.
+- **Classify an artifact before choosing its transport.** Durable project source follows the
+   repository's normal Git/LFS policy. A temporary recovery artifact (bundle, working-tree diff,
+   snapshot, transport chunk) belongs in a repository-external backup directory. Do not stage,
+   commit, push, or route it through Git LFS merely to make the backup remote; Git LFS is for
+   durable versioned project binaries, not a fallback transport for temporary recovery material.
+- **Treat a new storage or execution surface as a scope change.** A second repository, new
+   remote, cloud upload, Git LFS, or full-history export requires re-planning and explicit authority
+   when the stated outcome actually depends on it. Do not solve a transport problem the user did
+   not ask to create.
+- **Prove completion in the user's world.** A remote containing the intended commit, preserved
+   WIP, and the requested branch/worktree state are outcomes. Bundle counts, checksums, upload
+   receipts, and audit breadth are supporting evidence, never substitutes for that outcome. Stop
+   when the contract is satisfied; record unrelated findings separately without acting on them.
+
 ## Entry router — pick the mode from what the user is worried about
 
 | The user says / needs… | Go to |
@@ -33,14 +65,16 @@ until a step is explicitly labeled destructive — recovery must never make the 
 | "clean up worktrees/stashes/branches", "converge everything onto main", "only keep one main branch" | **Mode E — Retire safely** |
 | "an audit already said it's clean, but is anything *else* lost?", "check again" | **Mode B, starting at Step 0** — a repeat request usually means the first pass had the wrong scope, not that it looked carelessly |
 
-When in doubt, **run Mode B first**, beginning with `git_find_all_checkouts.sh` (Step 0) and then
-`git_loss_audit.sh` in each checkout it finds. Both are cheap and non-destructive, and they answer
-"is anything at risk" for the whole machine rather than for whichever directory you started in.
+When in doubt, run the **smallest read-only probe that selects a mode**. Use Mode B Step 0's
+machine-wide discovery only when the outcome is an exhaustive loss audit or the target checkout is
+unknown. A named repository/branch/worktree task stays named; findings outside that target are
+report-only until the user expands the authorized targets.
 
 ## The six load-bearing rules (internalize these; the modes apply them)
 
-1. **Get the SCOPE right before you trust any verdict: every instrument here only sees the
-   repository it runs in.** `git worktree list`, `git branch -a`, `git fsck`, `git stash list`,
+1. **Get the EVIDENCE SCOPE right before you trust any verdict, without silently expanding the
+   work scope: every instrument here only sees the repository it runs in.** `git worktree list`,
+   `git branch -a`, `git fsck`, `git stash list`,
    `git log --not --remotes` — all of them are structurally blind to an **independent clone** of
    the same repository elsewhere on the machine. A linked worktree (`git worktree add`) has a
    gitlink *file* pointing home, so it shows up; a second `git clone` has its own complete `.git`
@@ -62,7 +96,8 @@ When in doubt, **run Mode B first**, beginning with `git_find_all_checkouts.sh` 
    against every remote, then inspects each worktree for tracked/untracked changes plus stashes and
    dangling commits. The shorter `git log HEAD --branches --tags --not --remotes` misses a detached
    HEAD in a different worktree and all uncommitted files. Ahead/behind counts do **not** answer
-   this. Run it once per checkout that rule 1 turned up, not just in the one you happen to be in.
+   this. Run it in the named checkout, and once per additional checkout that an authorized
+   exhaustive Step 0 turned up.
 3. **`git reflog` is the first move for "I lost a commit," not `fsck`.** Reflog records every
    HEAD position (commits, checkouts, resets, rebases) for ~90 days and the lost commit is
    usually in its top few lines. `git fsck` is the deeper net for commits reflog can't reach.
@@ -84,11 +119,11 @@ When in doubt, **run Mode B first**, beginning with `git_find_all_checkouts.sh` 
    files by 5×**), and a file-level existence check (a file present on base can still be missing
    the ref's lines). Only the trial merge (`git merge-tree`, what `git_verify_branch_merged.sh`
    runs) was right every time. Diff-form and rung-by-rung reliability: **[references/merge_verification.md](references/merge_verification.md)**.
-6. **For a high-stakes "is everything merged?" call, verify adversarially — ideally with a
-   fan-out of independent agents each trying to *disprove* it.** One reviewer (human or model)
-   scanning many branches reliably misses a real gap; independent cross-checks catch it. Give at
-   least one agent the explicit job of widening the *scope* (rule 1) rather than re-checking the
-   branches already on the table — scope gaps hide from reviewers who accept the given frame.
+6. **For a high-stakes exhaustive "is everything merged?" call that will authorize deletion,
+   verify adversarially.** One independent reviewer is the default. Use multiple reviewers only
+   when distinct repositories or evidence axes cannot be covered by one pass and the user has
+   authorized that fan-out. Make one pass try to falsify the declared evidence scope (rule 1), but
+   keep any newly found target report-only under the Outcome contract.
 
 ## Mode A — Recover lost work
 
@@ -107,7 +142,10 @@ If reflog doesn't show it (e.g. a dropped stash, an orphan from a rebase), fall 
 
 ## Mode B — Audit what's at risk, then preserve it
 
-**Step 0 — establish the scope (rule 1).** Find every checkout of this repository on the machine,
+**Step 0 — establish the evidence scope (rule 1).** Run machine-wide checkout discovery only when
+the Outcome contract calls for an exhaustive audit or the target checkout is unknown. For a named
+target, record that checkout and continue to Step 1 without turning an unrelated clone into work.
+When exhaustive discovery is warranted, find every checkout of this repository on the machine,
 including the independent clones no in-repo command can see:
 
 ```bash
@@ -124,8 +162,8 @@ name matching fails. It canonicalizes path aliases before identifying the curren
 disables repository-provided fsmonitor commands while inspecting candidates, and treats commits
 reachable from any locally known remote-tracking ref as pushed even when a branch has no upstream.
 Exit is 1 when any *other* checkout holds uncommitted, untracked, unpushed, or uninspectable work.
-Run Steps 1–2 in **each** checkout it reports, then treat "nothing at risk" as a claim about all of
-them, not just this one.
+Run Step 1 in **each** checkout it reports. Apply Step 2 only to items inside the authorized target
+set, then treat "nothing at risk" as a claim about all checkouts actually audited.
 
 ### Maintainer verification
 
@@ -148,8 +186,10 @@ danglers remain visible but do not alone make the audit fail. Exit 0 is therefor
 to delete a visible stash/dangler: triage or preserve every reported item. Do not claim cleanup is
 safe until the named worktree is clean and its HEAD is proven contained or deliberately preserved.
 
-**Step 2 — preserve (additive, gc-proof).** If anything showed up, make it un-loseable *before*
-touching branches or running gc:
+**Step 2 — preserve only what the next authorized destructive action threatens (additive,
+gc-proof).** A finding alone does not need a backup. If deletion, gc, or history rewriting can make
+a reported commit unreachable, preserve that exact commit before the action. Use the whole-set
+helper only when every reported dangler is actually in the authorized target set:
 
 ```bash
 scripts/git_preserve_danglers.sh --patch-dir ~/git-danglers   # pin + export patches
@@ -161,7 +201,8 @@ non-stash commit. For a *specific* important commit, also give it the full treat
 branch **and** a pushed remote branch **and** a `git format-patch` file — so a single disk or a
 single `git gc` can't take it. Details + why triple-backup: **[references/recovery_playbook.md](references/recovery_playbook.md)**.
 
-**Untracked files need a different tool — plain copying (rule 4).** Everything above moves *git
+**Untracked files need a different tool — plain copying (rule 4).** Put `<backup>` outside the
+target repository and every checkout being retired. Everything above moves *git
 objects*; a file git was never told about is not one. Preserve those explicitly, and keep the
 three channels separate so a later reader knows what each restores:
 
@@ -305,16 +346,23 @@ early draft; judge content against the current base, never the name. Worked exam
 rungs (including the squash-artifact and absorbed-into-refactor cases):
 **[references/merge_verification.md](references/merge_verification.md)** § Supersession triage.
 
-**Step 2 — pin true orphans, then back up every addressable ref:**
+**Step 2 — after deletion authority exists and immediately before deletion, preserve exactly what
+that deletion threatens:**
 
 ```bash
-scripts/git_preserve_danglers.sh --patch-dir <backup-dir>/dangling-patches
-scripts/git_export_before_drop.sh --all-stashes --all-refs --out <backup-dir>
+# Targeted branch cleanup: prefer the narrow export.
+scripts/git_export_before_drop.sh --branch <branch> --out <external-backup-dir>
+
+# Full ref topology / linked-worktree retirement: use only when the authorized target requires it.
+scripts/git_preserve_danglers.sh --patch-dir <external-backup-dir>/dangling-patches
+scripts/git_export_before_drop.sh --all-stashes --all-refs --out <external-backup-dir>
 ```
 
-The first command makes unreferenced commits reachable; `--all-refs` then captures branch, stash,
-hidden-backup, and linked-worktree HEAD refs in one verified bundle. For a small targeted cleanup,
-use repeated `--branch` instead. The exporter never drops or deletes anything.
+The preserve-danglers command makes unreferenced commits reachable; `--all-refs` then captures
+branch, stash, hidden-backup, and linked-worktree HEAD refs in one verified bundle. Keep every
+backup directory outside the repository. For a targeted cleanup, use repeated `--branch` instead;
+do not turn "preserve this branch" into "export the repository." The exporter never drops or
+deletes anything.
 
 **Step 3 — destroy, in the safe order:**
 
@@ -418,6 +466,11 @@ it works offline and behind a proxy.
   want them past the gc window, then inspect with `git show <sha>` at leisure.
 - **A branch shows huge "commits ahead" but you suspect it's merged** — trust
   `git_verify_branch_merged.sh` (content), not the count. See Mode C.
+- **A recovery artifact becomes unexpectedly large, or an upload/LFS transfer stalls** — stop
+  retrying and re-run the Outcome contract. This is a scope/placement signal, not a transport
+  puzzle. If no authorized imminent deletion threatens the data, the backup was premature. If the
+  backup is necessary, keep and verify it in the external backup directory; remote transport is a
+  separate decision, not an automatic fallback.
 - **`git fetch` in a script hangs behind a proxy / offline** — loss detection still works on
   cached remote refs, because a stale cache can only over-report unpushed work. Merge and
   supersession verdicts (Mode C, Mode E) are the exception and genuinely need a fetch; without
