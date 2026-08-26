@@ -29,7 +29,7 @@ Before Mode B/E or any command that writes a ref or backup, state four lines in 
 
 - **Outcome:** the user-visible end state, in the user's words.
 - **Current phase:** what is authorized now. "Later" work is not authorized in this phase.
-- **Authorized targets:** the named repositories, checkouts, refs, and files this phase may change.
+- **Authorized targets:** named objects this phase may inspect, plus the subset it may change.
 - **Stop condition:** observable facts that end the task.
 
 Then enforce these boundaries:
@@ -78,10 +78,10 @@ report-only until the user expands the authorized targets.
    `git log --not --remotes` — all of them are structurally blind to an **independent clone** of
    the same repository elsewhere on the machine. A linked worktree (`git worktree add`) has a
    gitlink *file* pointing home, so it shows up; a second `git clone` has its own complete `.git`
-   and no back-reference, so it shows up in **nothing**. Run `git_find_all_checkouts.sh` first —
-   otherwise a clean audit means "clean in this one directory," which is not the question the
-   user asked. Real incident: a repository audited clean, every branch pushed, while 440 lines of
-   a working feature sat as untracked files in a sibling clone one `rm -rf` from gone.
+   and no back-reference, so it shows up in **nothing**. Run `git_find_all_checkouts.sh` first only
+   for an exhaustive audit or unknown target; otherwise audit the named target. Real incident: a
+   repository audited clean, every branch pushed, while 440 lines of a working feature sat as
+   untracked files in a sibling clone one `rm -rf` from gone.
    **Scope has a second axis: TIME.** Every `origin/*` ref is a cached snapshot from your last
    fetch, not the remote — so `git fetch --all --prune` before you trust any verdict that depends
    on one. Read a stale cache in the right direction: for *"what would be lost"* it errs safe
@@ -96,8 +96,8 @@ report-only until the user expands the authorized targets.
    against every remote, then inspects each worktree for tracked/untracked changes plus stashes and
    dangling commits. The shorter `git log HEAD --branches --tags --not --remotes` misses a detached
    HEAD in a different worktree and all uncommitted files. Ahead/behind counts do **not** answer
-   this. Run it in the named checkout, and once per additional checkout that an authorized
-   exhaustive Step 0 turned up.
+   this. Run it in the named checkout, and in additional Step 0 checkouts only after each is
+   explicitly change-authorized.
 3. **`git reflog` is the first move for "I lost a commit," not `fsck`.** Reflog records every
    HEAD position (commits, checkouts, resets, rebases) for ~90 days and the lost commit is
    usually in its top few lines. `git fsck` is the deeper net for commits reflog can't reach.
@@ -162,8 +162,9 @@ name matching fails. It canonicalizes path aliases before identifying the curren
 disables repository-provided fsmonitor commands while inspecting candidates, and treats commits
 reachable from any locally known remote-tracking ref as pushed even when a branch has no upstream.
 Exit is 1 when any *other* checkout holds uncommitted, untracked, unpushed, or uninspectable work.
-Run Step 1 in **each** checkout it reports. Apply Step 2 only to items inside the authorized target
-set, then treat "nothing at risk" as a claim about all checkouts actually audited.
+For an inspect-only checkout, stop at discovery: Step 1 fetches and changes its remote-tracking
+refs. Run Step 1 only after that checkout is change-authorized; apply Step 2 only to authorized
+items. A "nothing at risk" claim covers only the checkouts actually audited.
 
 ### Maintainer verification
 
@@ -317,10 +318,9 @@ The habits that keep a branch tangle from ever stranding work:
 
 The opposite worry from Mode A: not "I lost something" but "these leftovers are piling up —
 which can I destroy?" Deleting is trivial; **proving each item is superseded is the work**.
-Start with `git_find_all_checkouts.sh` — `git worktree list --porcelain` alone will not show an
-independent clone, and those are the leftovers most likely to be forgotten — then `git_loss_audit.sh`
-inside each checkout it reports. Treat every checkout as an independent place where uncommitted or
-detached work can hide. Then triage, backup, and retire:
+Start from the Outcome contract. For an exhaustive audit or unknown target, run checkout discovery;
+for one named worktree/branch, stay in its owning repository. Run `git_loss_audit.sh` only in
+change-authorized checkouts; treat inspect-only checkouts as report-only, then retire named targets:
 
 **Step 1 — classify each leftover: live WIP, or superseded draft?** Evidence ladder, strongest first:
 
@@ -352,17 +352,16 @@ that deletion threatens:**
 ```bash
 # Targeted branch cleanup: prefer the narrow export.
 scripts/git_export_before_drop.sh --branch <branch> --out <external-backup-dir>
-
-# Full ref topology / linked-worktree retirement: use only when the authorized target requires it.
-scripts/git_preserve_danglers.sh --patch-dir <external-backup-dir>/dangling-patches
-scripts/git_export_before_drop.sh --all-stashes --all-refs --out <external-backup-dir>
+# Pin only an authorized dangling SHA; leave unrelated danglers report-only.
+git update-ref refs/dangling-backup/<sha> <sha>
+# Full ref topology / linked-worktree retirement: only when the named target requires it.
+scripts/git_export_before_drop.sh --all-refs --out <external-backup-dir>
 ```
 
-The preserve-danglers command makes unreferenced commits reachable; `--all-refs` then captures
-branch, stash, hidden-backup, and linked-worktree HEAD refs in one verified bundle. Keep every
-backup directory outside the repository. For a targeted cleanup, use repeated `--branch` instead;
-do not turn "preserve this branch" into "export the repository." The exporter never drops or
-deletes anything.
+The targeted `update-ref` reaches only the authorized dangling commit. If every reported dangler is
+in scope, the whole-set `git_preserve_danglers.sh` may replace it. `--all-refs` captures branch,
+stash, hidden-backup, and linked-worktree HEAD refs; add `--all-stashes` only when stashes are also
+deletion targets. Keep backups outside the repository; never turn one branch into a repo export.
 
 **Step 3 — destroy, in the safe order:**
 
