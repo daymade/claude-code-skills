@@ -15,9 +15,10 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Optional
+from typing import Any, Callable, Iterable, Iterator, Optional
 
 from .parse import looks_like_windows_path
 
@@ -92,6 +93,7 @@ def iter_jsonl(
     *,
     bounded: bool = False,
     line_keywords: Optional[list[str]] = None,
+    strict: bool = False,
 ) -> Iterator[dict[str, Any]]:
     """Yield each JSONL record as a dict.
 
@@ -116,7 +118,13 @@ def iter_jsonl(
     an under-approximation — never skip a line that a full parse would have
     matched — which is what makes it safe to use as a pure speedup.
 
-    Only pass this from a call site that has independently confirmed
+    ``strict=True`` converts malformed JSON, decoding failures, and I/O errors
+    into exceptions. Completeness-sensitive callers use it so a partially read
+    file can never be rendered as an authoritative zero-match result. The
+    default stays tolerant for title/preview inventory paths where one damaged
+    record should not erase the rest of a session listing.
+
+    Only pass ``line_keywords`` from a call site that has independently confirmed
     skipping unselected lines cannot corrupt some other accounting the
     caller performs across every record (see ``search_sessions``'s
     ``use_prefilter`` docstring for the specific case this codebase hit —
@@ -125,7 +133,9 @@ def iter_jsonl(
     consumed = 0
     lines = 0
     try:
-        with path.open("r", encoding="utf-8", errors="replace") as handle:
+        with path.open(
+            "r", encoding="utf-8", errors="strict" if strict else "replace"
+        ) as handle:
             for line in handle:
                 consumed += len(line.encode("utf-8", errors="replace"))
                 lines += 1
@@ -143,10 +153,14 @@ def iter_jsonl(
                 try:
                     value = json.loads(line)
                 except (json.JSONDecodeError, TypeError):
+                    if strict:
+                        raise
                     continue
                 if isinstance(value, dict):
                     yield value
     except (OSError, UnicodeError):
+        if strict:
+            raise
         return
 
 
@@ -239,7 +253,14 @@ def keywords_are_raw_byte_safe(keywords: Iterable[str]) -> bool:
 
 
 def files_possibly_matching(
-    paths: Iterable[Path], keywords: Iterable[str], *, case_sensitive: bool = False
+    paths: Iterable[Path],
+    keywords: Iterable[str],
+    *,
+    case_sensitive: bool = False,
+    deadline: Optional[float] = None,
+    clock: Callable[[], float] = time.monotonic,
+    progress_interval_seconds: float = 15.0,
+    on_progress: Optional[Callable[[], None]] = None,
 ) -> Optional[set[Path]]:
     """Raw-byte pre-filter: which of ``paths`` could possibly contain any of
     ``keywords``, without paying per-line ``json.loads`` + structured
@@ -328,18 +349,52 @@ def files_possibly_matching(
     def run_batch(scan_prefix: list[str], paths_chunk: list[str]) -> bool:
         """Returns False if the scanner failed — caller degrades to no filter."""
         try:
-            result = subprocess.run(
-                scan_prefix + paths_chunk, capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=120,
+            process = subprocess.Popen(
+                scan_prefix + paths_chunk,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
-        except (OSError, subprocess.TimeoutExpired):
+        except OSError:
             return False
+        batch_deadline = clock() + 120.0
+        stdout = ""
+        try:
+            while True:
+                now = clock()
+                stop_at = batch_deadline
+                if deadline is not None:
+                    stop_at = min(stop_at, deadline)
+                remaining = stop_at - now
+                if remaining <= 0:
+                    if on_progress is not None:
+                        on_progress()
+                    return False
+                wait_for = remaining
+                if progress_interval_seconds > 0:
+                    wait_for = min(wait_for, progress_interval_seconds)
+                try:
+                    stdout, _stderr = process.communicate(timeout=wait_for)
+                    break
+                except subprocess.TimeoutExpired:
+                    if on_progress is not None:
+                        on_progress()
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.communicate(timeout=1.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.communicate()
         # Both rg and grep: 0 = matches found, 1 = no matches (not an error).
         # Any other code (bad invocation, I/O error) is a scanner failure ->
         # degrade to "don't filter" rather than trust a broken result.
-        if result.returncode not in (0, 1):
+        if process.returncode not in (0, 1):
             return False
-        matched.update(Path(line) for line in result.stdout.splitlines() if line)
+        matched.update(Path(line) for line in stdout.splitlines() if line)
         return True
 
     def scan_all(scan_prefix: list[str]) -> bool:

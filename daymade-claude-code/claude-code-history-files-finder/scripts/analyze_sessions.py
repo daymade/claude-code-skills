@@ -81,14 +81,27 @@ CODEX_PROGRESS_INTERVAL_SECONDS = 15.0
 class CodexScanBudgetExceeded(RuntimeError):
     """Raised instead of silently returning an incomplete broad-search result."""
 
-    def __init__(self, scanned: int, total: int, elapsed: float, stage: str):
+    def __init__(
+        self, scanned: int, total: Optional[int], elapsed: float, stage: str
+    ):
         self.scanned = scanned
         self.total = total
         self.elapsed = elapsed
         self.stage = stage
+        total_text = "?" if total is None else str(total)
         super().__init__(
             f"Codex scan exceeded its time budget during {stage}: "
-            f"{scanned}/{total} rollouts inspected in {elapsed:.1f}s"
+            f"{scanned}/{total_text} rollouts inspected in {elapsed:.1f}s"
+        )
+
+
+class CodexScanIncomplete(RuntimeError):
+    """One or more rollout files could not be parsed completely."""
+
+    def __init__(self, paths: List[Path]):
+        self.paths = list(dict.fromkeys(paths))
+        super().__init__(
+            f"{len(self.paths)} Codex rollout(s) could not be read completely"
         )
 
 
@@ -363,16 +376,28 @@ def codex_searchable_segments(record: Dict[str, Any]) -> List[SearchSegment]:
     return list(dict.fromkeys(segments))
 
 
-def discover_codex_rollouts(codex_home: Path) -> List[Path]:
+def discover_codex_rollouts(
+    codex_home: Path,
+    *,
+    on_progress: Optional[Callable[[int], None]] = None,
+) -> List[Path]:
     """Enumerate Codex rollout files under a Codex home (sessions + archived)."""
     rollouts: List[Path] = []
     sessions_dir = codex_home / "sessions"
     if sessions_dir.is_dir():
-        rollouts.extend(sorted(sessions_dir.rglob("*.jsonl")))
+        for path in sessions_dir.rglob("*.jsonl"):
+            rollouts.append(path)
+            if on_progress is not None and len(rollouts) % 256 == 0:
+                on_progress(len(rollouts))
     archived_dir = codex_home / "archived_sessions"
     if archived_dir.is_dir():
-        rollouts.extend(sorted(archived_dir.glob("*.jsonl")))
-    return rollouts
+        for path in archived_dir.glob("*.jsonl"):
+            rollouts.append(path)
+            if on_progress is not None and len(rollouts) % 256 == 0:
+                on_progress(len(rollouts))
+    if on_progress is not None:
+        on_progress(len(rollouts))
+    return sorted(rollouts)
 
 
 def locate_codex_rollouts(codex_home: Path, session_id: str) -> List[Dict[str, Any]]:
@@ -400,16 +425,13 @@ def locate_codex_rollouts(codex_home: Path, session_id: str) -> List[Dict[str, A
 
     located: List[Dict[str, Any]] = []
     for path in sorted(candidates):
-        try:
-            meta = codex_meta_from_rollout(path)
-        except OSError as error:
-            print(f"Warning: Error reading {path}: {error}", file=sys.stderr)
-            continue
+        meta = codex_meta_from_rollout(path, strict=True)
         if not isinstance(meta, dict):
             continue
-        authoritative_id = codex_session_id(meta, path)
+        authoritative_id = meta.get("id")
         if (
             not isinstance(authoritative_id, str)
+            or not authoritative_id.strip()
             or authoritative_id.lower() != normalized
         ):
             continue
@@ -429,8 +451,8 @@ def locate_codex_rollouts(codex_home: Path, session_id: str) -> List[Dict[str, A
 def _print_codex_locations(codex_home: Path, session_id: str) -> int:
     try:
         locations = locate_codex_rollouts(codex_home, session_id)
-    except ValueError as error:
-        print(str(error), file=sys.stderr)
+    except (ValueError, OSError, UnicodeError, json.JSONDecodeError) as error:
+        print(f"Codex session lookup was incomplete: {error}", file=sys.stderr)
         return 2
     if not locations:
         print(
@@ -497,6 +519,7 @@ def search_codex_rollouts(
     progress_interval_seconds: float = CODEX_PROGRESS_INTERVAL_SECONDS,
     clock: Callable[[], float] = time.monotonic,
     progress: Optional[Callable[[str], None]] = None,
+    started_at: Optional[float] = None,
 ) -> List[Dict[str, Any]]:
     """Search Codex rollouts for keywords, one match dict per session.
 
@@ -525,8 +548,9 @@ def search_codex_rollouts(
     exclude = exclude_ids or set()
     matches: List[Dict[str, Any]] = []
     seen_ids: set[str] = set()
+    incomplete_paths: List[Path] = []
 
-    started = clock()
+    started = clock() if started_at is None else started_at
     next_progress = started + progress_interval_seconds
     progress_sink = progress or (
         lambda message: print(message, file=sys.stderr, flush=True)
@@ -555,8 +579,17 @@ def search_codex_rollouts(
     matched_files: Optional[set[Path]] = None
     if use_prefilter:
         check_liveness("prefilter-start")
+        deadline = None
+        if max_scan_seconds is not None and max_scan_seconds > 0:
+            deadline = started + max_scan_seconds
         matched_files = files_possibly_matching(
-            rollouts, keywords, case_sensitive=case_sensitive
+            rollouts,
+            keywords,
+            case_sensitive=case_sensitive,
+            deadline=deadline,
+            clock=clock,
+            progress_interval_seconds=progress_interval_seconds,
+            on_progress=lambda: check_liveness("prefilter"),
         )
         check_liveness("prefilter-complete")
     # Codex gets FILE-level pre-filtering only, never line-level.
@@ -577,9 +610,10 @@ def search_codex_rollouts(
         scanned_files = path_index - 1
         check_liveness("rollout-open")
         try:
-            meta = codex_meta_from_rollout(path)
-        except OSError as e:
+            meta = codex_meta_from_rollout(path, strict=True)
+        except (OSError, UnicodeError, json.JSONDecodeError) as e:
             print(f"Warning: Error reading {path}: {e}", file=sys.stderr)
+            incomplete_paths.append(path)
             continue
         sid = codex_session_id(meta, path) if meta else None
         if not sid:
@@ -613,7 +647,7 @@ def search_codex_rollouts(
         excluded_untimed = 0
         try:
             for record_index, record in enumerate(
-                iter_jsonl(path, line_keywords=line_keywords)
+                iter_jsonl(path, line_keywords=line_keywords, strict=True)
             ):
                 if record_index % 512 == 0:
                     check_liveness("rollout-parse")
@@ -656,8 +690,9 @@ def search_codex_rollouts(
                 match_sources.update(record_sources)
                 if record_timestamp is not None:
                     match_range.observe(record_timestamp)
-        except (OSError, UnicodeError) as e:
+        except (OSError, UnicodeError, json.JSONDecodeError) as e:
             print(f"Warning: Error processing {path}: {e}", file=sys.stderr)
+            incomplete_paths.append(path)
             continue
 
         scanned_files = path_index
@@ -679,6 +714,9 @@ def search_codex_rollouts(
                     "excluded_untimed_records": excluded_untimed,
                 }
             )
+
+    if incomplete_paths:
+        raise CodexScanIncomplete(incomplete_paths)
 
     matches.sort(
         key=lambda match: (
@@ -2386,13 +2424,41 @@ def main():
         codex_home: Optional[Path] = None
         if args.codex:
             codex_home = _codex_home_for(args)
-            rollouts = discover_codex_rollouts(codex_home)
-            print(
-                f"Also searching {len(rollouts)} Codex rollout(s) under "
-                f"{codex_home} (--codex; {args.codex_max_scan_seconds:g}s stop-loss)\n",
-                flush=True,
-            )
+            scan_started = time.monotonic()
+            next_discovery_progress = scan_started + CODEX_PROGRESS_INTERVAL_SECONDS
+
+            def discovery_progress(discovered: int) -> None:
+                nonlocal next_discovery_progress
+                now = time.monotonic()
+                elapsed = now - scan_started
+                if (
+                    args.codex_max_scan_seconds > 0
+                    and elapsed > args.codex_max_scan_seconds
+                ):
+                    raise CodexScanBudgetExceeded(
+                        discovered, None, elapsed, "rollout-discovery"
+                    )
+                if now >= next_discovery_progress:
+                    print(
+                        "Codex scan progress: "
+                        f"stage=rollout-discovery, discovered={discovered}, "
+                        f"elapsed={elapsed:.1f}s",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    while next_discovery_progress <= now:
+                        next_discovery_progress += CODEX_PROGRESS_INTERVAL_SECONDS
+
             try:
+                rollouts = discover_codex_rollouts(
+                    codex_home, on_progress=discovery_progress
+                )
+                print(
+                    f"Also searching {len(rollouts)} Codex rollout(s) under "
+                    f"{codex_home} "
+                    f"(--codex; {args.codex_max_scan_seconds:g}s stop-loss)\n",
+                    flush=True,
+                )
                 codex_matches = search_codex_rollouts(
                     rollouts,
                     args.keywords,
@@ -2403,15 +2469,27 @@ def main():
                     set(args.exclude_session),
                     not args.no_prefilter,
                     args.codex_max_scan_seconds,
+                    started_at=scan_started,
                 )
             except CodexScanBudgetExceeded as error:
+                total_text = "?" if error.total is None else str(error.total)
                 print(
                     f"Stopped Codex scan after {error.elapsed:.1f}s at "
-                    f"{error.scanned}/{error.total} rollouts ({error.stage}). "
+                    f"{error.scanned}/{total_text} rollouts ({error.stage}). "
                     "No partial result is being presented as complete. Narrow by "
                     "project/date, use locate-codex for a session UUID, or pass "
                     "--codex-max-scan-seconds 0 only after explicitly accepting an "
                     "unbounded scan.",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            except CodexScanIncomplete as error:
+                sample = ", ".join(str(path) for path in error.paths[:3])
+                extra = "" if len(error.paths) <= 3 else f" (+{len(error.paths) - 3} more)"
+                print(
+                    "Codex scan stopped because rollout input was incomplete; "
+                    "no partial result is being presented as complete. "
+                    f"Unreadable/malformed: {sample}{extra}",
                     file=sys.stderr,
                 )
                 sys.exit(2)

@@ -227,8 +227,10 @@ def load_codex_session_index(home: Path, max_chars: int) -> dict[str, str]:
     return titles
 
 
-def codex_meta_from_rollout(path: Path) -> Optional[dict[str, Any]]:
-    for record in iter_jsonl(path, bounded=True):
+def codex_meta_from_rollout(
+    path: Path, *, strict: bool = False
+) -> Optional[dict[str, Any]]:
+    for record in iter_jsonl(path, bounded=True, strict=strict):
         if record.get("type") == "session_meta" and isinstance(
             record.get("payload"), dict
         ):

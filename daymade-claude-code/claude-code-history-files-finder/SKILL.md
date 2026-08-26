@@ -234,8 +234,10 @@ automatically routes a sole UUID keyword to the same locator before Claude or
 Codex history scanning begins.
 
 Broad Codex searches print a progress heartbeat every 15 seconds and stop
-after 300 seconds by default. A timeout exits non-zero and explicitly refuses
-to present partial matches as a complete result. Narrow by project/date or use
+after 300 seconds by default. The same clock covers rollout discovery, the
+native `rg`/`grep` pre-filter, and structured JSONL parsing. A timeout or any
+unreadable/malformed candidate exits non-zero and explicitly refuses to present
+partial matches as a complete result. Narrow by project/date or use
 `locate-codex`; `--codex-max-scan-seconds 0` is the explicit opt-in to an
 unbounded scan when exhaustive keyword search is genuinely required.
 
