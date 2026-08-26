@@ -306,6 +306,39 @@ class CompactionTests(unittest.TestCase):
         self.assertIn("rerun with --full", default)
         self.assertIn(compact_tail, full)
 
+    def test_all_compactions_are_ingested_but_only_latest_is_rendered(self):
+        first = "FIRST_COMPACTION_ONLY"
+        second = "SECOND_COMPACTION_ONLY"
+        rollout = _write_rollout([
+            {"type": "session_meta", "payload": {"id": "c2", "cwd": "/tmp"}},
+            {
+                "type": "compacted",
+                "payload": {
+                    "replacement_history": [
+                        {"role": "user", "content": [{"type": "input_text", "text": first}]}
+                    ]
+                },
+            },
+            {
+                "type": "compacted",
+                "payload": {
+                    "replacement_history": [
+                        {"role": "user", "content": [{"type": "input_text", "text": second}]}
+                    ]
+                },
+            },
+        ])
+
+        data = mod.parse_codex_rollout(rollout)
+        self.assertEqual(len(data["compact_summaries"]), 2)
+        self.assertIn(first, data["compact_summaries"][0])
+        self.assertIn(second, data["compact_summaries"][1])
+
+        briefing = mod.build_briefing(None, data, "/tmp", full=True)
+        self.assertNotIn(first, briefing)
+        self.assertIn(second, briefing)
+        self.assertIn("from the session's last compaction", briefing)
+
 
 class FileChangeTests(unittest.TestCase):
     """0.147+ records file edits as item_completed/FileChange items, not
