@@ -625,7 +625,7 @@ class InheritedLineageTests(unittest.TestCase):
             self.assertNotIn("fork 后追加、子会话不应继承", briefing)
             self.assertIn("exact parent prefix", briefing)
             self.assertIn("continuation cue, not a standalone task", briefing)
-            self.assertIn("Last User Requests (selected session only)", briefing)
+            self.assertIn("Selected Session Timeline (chronological)", briefing)
             self.assertIn("compaction", briefing)
 
     def test_multigeneration_lineage_is_root_first_and_merges_context(self):
@@ -896,6 +896,33 @@ class TruncationContractTests(unittest.TestCase):
         briefing = self._briefing(full=True)
         self.assertIn(LONG_RESPONSE, briefing)
         self.assertNotIn("rerun with --full", briefing)
+
+    def test_selected_timeline_keeps_earliest_objective_without_full(self):
+        records = [
+            {"type": "session_meta", "payload": {"id": "selected", "cwd": "/tmp"}},
+            _msg("user", "ACTUAL OBJECTIVE: repair roof", "input_text"),
+            _msg("assistant", "Objective accepted", "output_text"),
+        ]
+        for index in range(6):
+            records.extend(
+                [
+                    _msg("user", f"follow-up {index}", "input_text"),
+                    _msg("assistant", f"state {index}", "output_text"),
+                ]
+            )
+        data = mod.parse_codex_rollout(_write_rollout(records))
+        default = mod.build_briefing(None, data, "/tmp", full=False)
+        expanded = mod.build_briefing(None, data, "/tmp", full=True)
+
+        for briefing in (default, expanded):
+            self.assertIn("Selected Session Timeline (chronological)", briefing)
+            self.assertIn("ACTUAL OBJECTIVE: repair roof", briefing)
+            self.assertEqual(briefing.count(" · USER"), 7)
+            self.assertNotIn("Last User Requests", briefing)
+            self.assertLess(
+                briefing.index("ACTUAL OBJECTIVE: repair roof"),
+                briefing.index("follow-up 5"),
+            )
 
     def test_default_keeps_every_inherited_user_segment(self):
         timeline = []

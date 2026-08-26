@@ -36,8 +36,6 @@ from _core.text import extract_text, is_noise_text, iter_jsonl  # noqa: E402
 
 CODEX_HOME = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
 MAX_SUMMARY_CHARS = 8000
-MAX_USER_REQUESTS = 6
-MAX_ASSISTANT_RESPONSES = 4
 MAX_TOOL_CALLS = 20
 MAX_FILES = 40
 MAX_LINEAGE_DEPTH = 16
@@ -806,8 +804,8 @@ def _handoff_timeline_segments(
 
     A role-separated tail cannot show which reply preceded which correction. The
     handoff view therefore preserves record order while compressing tool-heavy
-    assistant narration. ``--full`` removes the user-segment count cap as well as
-    the per-message character cap.
+    assistant narration. No retained user turn is count-capped; ``--full``
+    removes per-message character clipping.
     """
     user_positions = [
         index for index, turn in enumerate(timeline) if turn.get("role") == "user"
@@ -848,38 +846,39 @@ def _handoff_timeline_segments(
 
 
 def _append_handoff_timeline(
-    sections: list[str], timeline: list[dict[str, Any]], full: bool
+    sections: list[str],
+    timeline: list[dict[str, Any]],
+    full: bool,
+    *,
+    heading: str = "Inherited Continuation Timeline (chronological)",
+    heading_level: int = 3,
+    default_session_id: str = "?",
+    unanswered_label: str = "Unanswered inherited request",
 ) -> None:
     if not timeline:
         return
-    sections.append("\n### Inherited Continuation Timeline (chronological)\n")
+    sections.append(f"\n{'#' * heading_level} {heading}\n")
     sections.append(
         "Every retained user turn is shown in record order, with the first and latest "
         "assistant state before the next user turn. This keeps corrections attached to "
         "the state they corrected without replaying every tool-progress narration.\n"
     )
     for segment in _handoff_timeline_segments(timeline, full):
-        if isinstance(segment, dict):
-            omitted = segment["omitted_user_segments"]
-            sections.append(
-                f"> … {omitted} middle user segment(s) omitted — rerun with --full "
-                "to include every retained segment.\n"
-            )
-            continue
         for turn in segment:
             role = str(turn.get("role") or "?").upper()
             phase = str(turn.get("phase") or "").strip()
             phase_text = f" ({phase})" if phase else ""
-            session_id = str(turn.get("session_id") or "?")
+            session_id = str(turn.get("session_id") or default_session_id)
             record_ordinal = turn.get("ordinal")
             sections.append(
-                f"#### `{session_id}` · record {record_ordinal} · {role}{phase_text}\n"
+                f"{'#' * (heading_level + 1)} `{session_id}` · record "
+                f"{record_ordinal} · {role}{phase_text}\n"
             )
             limit = 800 if role == "USER" else 1400
             sections.append(f"{_clip(str(turn.get('text') or ''), limit, full)}\n")
     if timeline[-1].get("role") == "user":
         sections.append(
-            f"> **Unanswered inherited request**: the snapshot ends on the user turn at "
+            f"> **{unanswered_label}**: the snapshot ends on the user turn at "
             f"record {timeline[-1].get('ordinal')}.\n"
         )
 
@@ -1056,9 +1055,9 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
             "**Recovery boundary**: lineage recovery restores only text and structured "
             "events still retained in those snapshots. It cannot undo Codex compaction, "
             "reconstruct details omitted by a compacted history, or recover image/audio "
-            "content from a text-only marker. `--full` removes character truncation and "
-            "the inherited timeline's user-segment cap; selected-session message caps "
-            "and inherited tool/file caps still apply."
+            "content from a text-only marker. User turns in both timelines are never "
+            "count-capped; `--full` removes character truncation and restores every "
+            "state in assistant-only histories. Inherited tool/file caps still apply."
         )
 
         selected_requests = data["user_messages"]
@@ -1106,27 +1105,15 @@ def build_briefing(conv, data: dict, project_path: str, full: bool = False) -> s
         sections.append(f"\n## {heading}\n")
         sections.append(_clip(summary, MAX_SUMMARY_CHARS, full))
 
-    user_messages = data["user_messages"][-MAX_USER_REQUESTS:]
-    if user_messages:
-        heading = (
-            "Last User Requests (selected session only)"
-            if has_lineage_context
-            else "Last User Requests"
-        )
-        sections.append(f"\n## {heading}\n")
-        for i, text in enumerate(user_messages, 1):
-            sections.append(f"### Request {i}\n{_clip(text, 500, full)}\n")
-
-    assistant_messages = data["assistant_messages"][-MAX_ASSISTANT_RESPONSES:]
-    if assistant_messages:
-        heading = (
-            "Last Assistant Responses (selected session only)"
-            if has_lineage_context
-            else "Last Assistant Responses"
-        )
-        sections.append(f"\n## {heading}\n")
-        for i, text in enumerate(assistant_messages, 1):
-            sections.append(f"### Response {i}\n{_clip(text, 1000, full)}\n")
+    _append_handoff_timeline(
+        sections,
+        data.get("turn_timeline") or [],
+        full,
+        heading="Selected Session Timeline (chronological)",
+        heading_level=2,
+        default_session_id=str(session_id),
+        unanswered_label="Unanswered selected-session request",
+    )
 
     if data["latest_plan"]:
         # The single most recent update_plan call, full text, exempt from both
