@@ -64,6 +64,7 @@ from _core.text import (  # noqa: E402
     extract_text,
     files_possibly_matching,
     is_automated_title,
+    is_claude_agent_prompt_record,
     iter_jsonl,
     keywords_are_raw_byte_safe,
     searchable_segments,
@@ -1326,6 +1327,7 @@ class SessionAnalyzer:
         from_timestamp: Optional[float] = None,
         to_timestamp: Optional[float] = None,
         use_prefilter: bool = True,
+        include_agent_prompts: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Search sessions for keywords.
@@ -1342,6 +1344,11 @@ class SessionAnalyzer:
                 cannot contain any keyword (see ``files_possibly_matching``).
                 Forced off automatically when a date window is active — see
                 below for why.
+            include_agent_prompts: Include Claude ``type=user`` records marked
+                ``isSidechain``. Those records are prompts written by the main
+                agent to a subagent, not human-authored conversation. They are
+                excluded by default; assistant-side sidechain records remain
+                searchable because they contain the subagent's real output.
 
         Returns:
             List of match dicts (session ref + match counts), most mentions
@@ -1473,6 +1480,10 @@ class SessionAnalyzer:
                     records = iter_jsonl(session_file, line_keywords=line_keywords)
                     for data in records:
                         record_identity = _record_identity(data)
+                        hide_agent_prompt = (
+                            not include_agent_prompts
+                            and is_claude_agent_prompt_record(data)
+                        )
                         record_timestamp = parse_timestamp(data.get("timestamp"))
                         if (
                             record_timestamp is None
@@ -1534,6 +1545,8 @@ class SessionAnalyzer:
                         record_counts = defaultdict(int)
                         record_sources: set[str] = set()
                         for segment in searchable_segments(data):
+                            if hide_agent_prompt and segment.source == "message":
+                                continue
                             search_text = (
                                 segment.text
                                 if case_sensitive
@@ -2136,6 +2149,13 @@ def main():
         "--case-sensitive", action="store_true", help="Case-sensitive search"
     )
     search_parser.add_argument(
+        "--include-agent-prompts",
+        action="store_true",
+        help="Include Claude user-side isSidechain records. These are prompts "
+        "the main agent sent to subagents, so they are excluded by default. "
+        "Assistant-side subagent output remains searchable either way.",
+    )
+    search_parser.add_argument(
         "--no-prefilter",
         action="store_true",
         help="Disable the rg/grep raw-byte pre-filter and fully parse every "
@@ -2415,6 +2435,7 @@ def main():
                 from_timestamp,
                 to_timestamp,
                 not args.no_prefilter,
+                args.include_agent_prompts,
             )
             if sessions
             else []

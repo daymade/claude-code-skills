@@ -1,19 +1,20 @@
 ---
 name: claude-code-history-files-finder
 description: >-
-  Searches and recovers Claude Code JSONL history across all active config homes
-  and archives registered in ~/.claude/history-sources.json. Use --all-projects
-  when the project is unknown, --codex to include Codex rollout search, and
-  --kimi to include Kimi CLI (kimi-code) session search. Uses internal
-  timestamps and searches messages, thinking, tool inputs/results, queues,
-  attachments, summaries, titles, and file-history paths. Recovers exact
-  captured bytes from Claude file-history snapshots, including post-Write edits
-  and binary files; otherwise labels Write checkpoints as lower fidelity. Use
-  for keyword/date-bounded history search, exact Codex session-ID lookup,
-  prior-conversation forensics, deleted-file recovery, vanished ~/.claude/jobs artifacts, tool/file-operation
-  analysis, or requests mentioning session history, find in history, previous
-  conversation, or .claude/projects. For a recent Claude+Codex+Kimi CLI
-  inventory, use local-conversation-history instead.
+  Searches and recovers Claude Code JSONL history across active config homes and
+  registered archives. Use --all-projects when the project is unknown, --codex
+  for Codex rollouts, and --kimi for Kimi CLI sessions. Uses internal timestamps
+  and searches messages, thinking, tool inputs/results, queues, attachments,
+  summaries, titles, and file-history paths. Recovers exact bytes from Claude
+  file-history snapshots, including post-Write edits and binary files; otherwise
+  labels Write checkpoints lower fidelity. Use for keyword/date-bounded search,
+  Codex session-ID lookup, prior-conversation forensics, deleted-file
+  recovery, vanished ~/.claude/jobs artifacts, tool/file-operation analysis,
+  semantic recall when meaning is remembered but wording changed, or requests
+  mentioning session history, find in history, previous conversation, or
+  .claude/projects. Optional Claude-only recall uses Chinese-aware BM25 plus
+  vectors; exact search stays authoritative. For a recent Claude+Codex+Kimi
+  inventory, use local-conversation-history.
 ---
 
 # Claude Code History Files Finder
@@ -26,6 +27,7 @@ homes and explicitly registered long-term archives.
 - Recover exact captured bytes for deleted or lost files from file-history
   snapshots, including files changed after their original Write call
 - Search for specific code or content across conversation history
+- Recall semantically similar user/assistant prose when the wording changed
 - Analyze file modifications across past sessions
 - Track tool usage and file operations over time
 - Find sessions containing specific keywords or topics
@@ -184,6 +186,12 @@ session mtime. `--exclude-session <id>` (repeatable) drops sessions — pass the
 current session's id whenever you search for a phrase you just typed, because
 your own command makes this session match.
 
+Claude stores prompts sent by the main agent to subagents as user-side
+`isSidechain` records. Exact search excludes prose-shaped records of that kind
+by default while retaining assistant-side subagent output and sidechain
+`tool_result` evidence. Add `--include-agent-prompts` only when the instructions
+given to subagents are themselves the target.
+
 Date-only bounds cover the whole local calendar day. Datetime bounds must carry
 `Z` or an explicit UTC offset. Records without a valid internal timestamp are
 excluded with a visible note while a date filter is active; never substitute
@@ -290,6 +298,23 @@ in the same command.
 The zero-match hint printed by the script already suggests whichever of
 `--all-projects` / `--codex` / `--kimi` / shorter substrings was not yet
 applied — read stderr before concluding anything is absent.
+
+### 2d. Ranked recall when the wording changed
+
+Use the optional hybrid index when you remember the meaning but not the exact
+words:
+
+```bash
+python3 scripts/history_index.py recall 'meaning remembered, wording forgotten'
+```
+
+This is a candidate generator over Claude user/assistant prose, not a substitute
+for exact search and never evidence that something is absent. Results include
+project, session ID, source labels, internal timestamp, path, and snippet so the
+original JSONL remains the evidence source. Setup, versioned rebuild, incremental
+refresh, BM25/vector modes, freshness status, platform boundaries, and real
+smoke checks are in `references/hybrid_history_recall.md`; read that reference
+before first use or maintenance.
 
 ### 3. Recover Deleted Content
 
@@ -607,7 +632,7 @@ SSOT shared by this skill, `local-conversation-history`,
 package into each skill's `scripts/_core/`; never edit a bundled copy directly.
 
 After shared-code changes, synchronize and verify all four bundles, then run the
-finder's isolated fixtures:
+finder's isolated fixtures, including the versioned recall index:
 
 ```text
 uv run python ../sync_core.py sync
