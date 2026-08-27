@@ -89,6 +89,15 @@ deterministic, Linux-verified) and the runner types (`python-unittest` via
 check the registry before assuming otherwise, and note `unittest discover`
 only collects `unittest.TestCase` subclasses, not bare pytest-style functions.
 
+### WeCom Send Boundary
+
+WeCom sender skills must read an explicit target class. `self` may send to the
+user's own delivery channel without authorization; `others` requires the exact
+label and message at a human confirmation gate. Unknown target identity fails
+fast. Automatic self delivery also requires the config-bound sender path and
+digest; a matching basename is not identity. A pending item is not a delivery
+receipt, and an automatic outbox path gets one non-retrying HTTP attempt.
+
 ### Testing Skills Locally
 
 ```bash

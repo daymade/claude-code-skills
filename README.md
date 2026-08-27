@@ -2817,7 +2817,7 @@ developer-menu toggle.
 claude plugin install setup-notifications-via-wecom@daymade-skills
 ```
 
-Set up reusable WeCom (Enterprise WeChat) webhook notifications for technical status reports, alerts, and completion messages.
+Set up reusable WeCom (Enterprise WeChat) webhook notifications for technical status reports, alerts, and completion messages. The target is explicitly classified: the user's own channel may send automatically; every other target requires human confirmation.
 
 **When to use:**
 - Configuring a reusable 企业微信 / WeCom notification channel
@@ -2834,14 +2834,14 @@ Set up reusable WeCom (Enterprise WeChat) webhook notifications for technical st
 claude plugin install notify-wecom@daymade-skills
 ```
 
-Send a single WeCom group-bot message without setting up a reusable notification workflow.
+Send a single WeCom group-bot message using the configured target identity: `self` sends directly, while `others` requires human confirmation.
 
 **When to use:**
 - `/notify-wecom`
 - 临时发一条企业微信 / 企微通知一下
 - One-shot alerts that do not need templates or persistent setup
 
-**Requirements**: WeCom bot webhook URL.
+**Requirements**: WeCom bot webhook URL plus the explicit recipient scope/label and canonical sender binding created by the setup command.
 
 ---
 

@@ -2848,7 +2848,7 @@ AppleScript fallback 需要 macOS，以及由用户手动开启一次 Chrome 开
 claude plugin install setup-notifications-via-wecom@daymade-skills
 ```
 
-配置可复用的企业微信/WeCom webhook 通知，用于技术状态报告、告警和任务完成消息。
+配置可复用的企业微信/WeCom webhook 通知，用于技术状态报告、告警和任务完成消息。收件目标必须显式分类：用户本人通道可自动发送，其他目标必须经人类确认。
 
 **使用场景：**
 - 配置可复用的企业微信 / WeCom 通知通道
@@ -2865,14 +2865,14 @@ claude plugin install setup-notifications-via-wecom@daymade-skills
 claude plugin install notify-wecom@daymade-skills
 ```
 
-发送单条企业微信群机器人消息，不建立可复用通知工作流。
+按显式收件目标发送单条企业微信群机器人消息：`self` 直接发送，`others` 必须经人类确认。
 
 **使用场景：**
 - `/notify-wecom`
 - 临时发一条企业微信 / 企微通知一下
 - 不需要模板或持久配置的一次性提醒
 
-**要求**：企业微信机器人 webhook URL。
+**要求**：企业微信机器人 webhook URL，以及由配置命令写入的显式收件范围、标签和规范 sender 绑定。
 
 ---
 
