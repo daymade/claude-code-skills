@@ -81,6 +81,16 @@ class ProjectSkillRootsAuditTests(unittest.TestCase):
         self.assertEqual(payload["result"], "invalid")
         self.assertIn("neither .claude/skills nor .agents/skills exists", payload["errors"][0]["message"])
 
+    def test_present_but_empty_roots_are_invalid_not_clean(self):
+        (self.project / ".claude/skills").mkdir(parents=True)
+        (self.project / ".agents/skills").mkdir(parents=True)
+
+        completed, payload = self.run_audit()
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(payload["result"], "invalid")
+        self.assertIn("contain no auditable SKILL.md bundles", payload["errors"][0]["message"])
+
     def test_single_root_skill_is_informational_and_clean(self):
         self.write_skill(".claude/skills", "alpha", "alpha")
 
@@ -102,6 +112,20 @@ class ProjectSkillRootsAuditTests(unittest.TestCase):
         finding = self.finding(payload, "alpha")
         self.assertEqual(finding["status"], "identical_copy")
         self.assertEqual(len(set(finding["bundle_sha256"].values())), 1)
+
+    def test_router_marker_quoted_in_full_skill_prose_is_not_a_router(self):
+        body = (
+            "# Rules\n\n"
+            "This full skill documents the phrase "
+            "`# Compatibility router — no business rules live here` without being a router.\n"
+        )
+        self.write_skill(".claude/skills", "alpha-source", "alpha", body)
+        self.write_skill(".agents/skills", "alpha-copy", "alpha", body)
+
+        completed, payload = self.run_audit()
+
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(self.finding(payload, "alpha")["status"], "identical_copy")
 
     def test_divergent_same_name_full_copies_fail_with_both_hashes(self):
         self.write_skill(".claude/skills", "alpha", "alpha", "# Rules\n\nLeft.\n")
@@ -130,6 +154,25 @@ class ProjectSkillRootsAuditTests(unittest.TestCase):
         self.assertEqual(finding["status"], "canonical_router")
         self.assertEqual(finding["canonical"], ".claude/skills/alpha")
         self.assertEqual(finding["router"], ".agents/skills/alpha")
+
+    def test_router_paths_support_directory_names_independent_of_frontmatter_name(self):
+        self.write_skill(
+            ".claude/skills", "alpha source", "alpha", "# Canonical\n\nAll rules.\n"
+        )
+        router_bundle = self.project / ".agents/skills/alpha 路由"
+        router_bundle.mkdir(parents=True)
+        (router_bundle / "SKILL.md").write_text(
+            router_text("alpha", ".claude/skills/alpha source/SKILL.md"),
+            encoding="utf-8",
+        )
+
+        completed, payload = self.run_audit()
+
+        self.assertEqual(completed.returncode, 0)
+        finding = self.finding(payload, "alpha")
+        self.assertEqual(finding["status"], "canonical_router")
+        self.assertEqual(finding["canonical"], ".claude/skills/alpha source")
+        self.assertEqual(finding["router"], ".agents/skills/alpha 路由")
 
     def test_router_marker_with_extra_business_file_is_invalid(self):
         self.write_skill(".claude/skills", "alpha", "alpha")
@@ -241,6 +284,18 @@ class ProjectSkillRootsAuditTests(unittest.TestCase):
         self.assertEqual(self.finding(payload, "alpha")["status"], "shared_target")
 
     @unittest.skipIf(os.name == "nt", "symlink creation requires privileges on Windows")
+    def test_shared_skill_file_without_extra_material_reports_shared_target(self):
+        canonical = self.write_skill(".claude/skills", "alpha", "alpha")
+        agent_bundle = self.project / ".agents/skills/alpha"
+        agent_bundle.mkdir(parents=True)
+        (agent_bundle / "SKILL.md").symlink_to(canonical / "SKILL.md")
+
+        completed, payload = self.run_audit()
+
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(self.finding(payload, "alpha")["status"], "shared_target")
+
+    @unittest.skipIf(os.name == "nt", "symlink creation requires privileges on Windows")
     def test_shared_skill_file_with_extra_business_file_is_drift(self):
         canonical = self.write_skill(".claude/skills", "alpha", "alpha")
         agent_bundle = self.project / ".agents/skills/alpha"
@@ -253,6 +308,23 @@ class ProjectSkillRootsAuditTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 1)
         self.assertEqual(payload["result"], "drift")
         self.assertEqual(self.finding(payload, "alpha")["status"], "drift")
+
+    @unittest.skipIf(os.name == "nt", "symlink creation requires privileges on Windows")
+    def test_shared_router_target_is_invalid(self):
+        router = self.project / ".claude/skills/alpha"
+        router.mkdir(parents=True)
+        (router / "SKILL.md").write_text(
+            router_text("alpha", ".agents/skills/alpha/SKILL.md"), encoding="utf-8"
+        )
+        agent_root = self.project / ".agents/skills"
+        agent_root.mkdir(parents=True)
+        (agent_root / "alpha").symlink_to(router, target_is_directory=True)
+
+        completed, payload = self.run_audit()
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(payload["result"], "invalid")
+        self.assertIn("shared target cannot itself be a compatibility router", payload["errors"][0]["message"])
 
     @unittest.skipIf(os.name == "nt", "symlink creation requires privileges on Windows")
     def test_identical_broken_nested_symlinks_are_invalid(self):

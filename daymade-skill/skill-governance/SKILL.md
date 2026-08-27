@@ -68,19 +68,22 @@ This is a read-only report. It does not modify anything.
    directory basename, and returns:
 
    - **`canonical_router` (pass)** — one full canonical bundle plus a one-file
-     router carrying the exact heading
+     router whose first nonblank body line is the exact heading
      `# Compatibility router — no business rules live here`; the router must
-     point only to its paired canonical `SKILL.md`, tell the runtime to read it
-     completely, and fail visibly if it is unavailable.
-   - **`shared_target` (pass)** — both roots resolve to the same `SKILL.md`, such
-     as a symlink into the canonical bundle.
+     point only to its paired canonical `SKILL.md` using a backtick-quoted
+     project-relative path, tell the runtime to read it completely, and fail
+     visibly if it is unavailable.
+   - **`shared_target` (pass)** — both roots resolve to the same canonical
+     `SKILL.md`, such as a symlink into the canonical bundle, and neither side
+     carries extra bundle material outside that shared target.
    - **`identical_copy` (pass, report)** — two byte-identical bundles. This is
      not current drift, but it remains duplication debt because either copy can
      diverge later.
    - **`drift` (exit 1)** — same-name bundles differ and neither side satisfies
      the explicit router contract.
    - **`invalid` (exit 2)** — malformed/duplicate frontmatter identity, a broken
-     symlink, an invalid router, or a project path with neither declared root.
+     symlink, an invalid router, declared roots with no auditable `SKILL.md`
+     bundles, or a project path with neither declared root.
    - **`single_root` (pass, report)** — the name exists in only one root.
 
    Do not infer a router from short length or router-like prose. Without the
