@@ -3,12 +3,12 @@
 # requires-python = ">=3.10"
 # dependencies = ["pyannote.audio", "torch", "torchaudio"]
 # ///
-"""Multi-speaker transcription, DECOUPLED (WhisperX-style): full-audio ASR +
-word-level timing + diarization, aligned after the fact — the audio is never
-cut before transcription, so ASR keeps its full context and Chinese fidelity.
+"""Multi-speaker transcription, DECOUPLED (WhisperX-style): session ASR +
+word-level timing + diarization, aligned after the fact. Audio is never cut at
+speaker turns before ASR; the Qwen leg owns bounded low-energy long-audio chunks.
 
 Three legs + one aligner:
-  1. Qwen3-ASR MLX full-audio transcript (subprocess: transcribe_local_mlx.py)
+  1. Qwen3-ASR MLX session transcript    (subprocess: transcribe_local_mlx.py)
   2. mlx-whisper word timestamps        (subprocess: word_timestamps_whisper.py)
   3. pyannote diarization               (in-process, MPS/CUDA; pipeline loaded
                                           ONCE for the whole batch, not per file)
@@ -44,8 +44,11 @@ Usage:
 import argparse
 import json
 import os
+import signal
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -83,6 +86,10 @@ PYANNOTE_ACCESS_KEYWORDS = (
     "private repository", "user conditions", "credentials", "not authenticated",
 )
 
+PROCESS_HEARTBEAT_SECONDS = 60.0
+PROCESS_TERM_GRACE_SECONDS = 5.0
+OWNER_POLL_SECONDS = 5.0
+
 # Map the orchestrator's --language to a whisper language code. The whisper leg
 # is a TIMING lattice, but it still must decode in the right language or its
 # word tokenization is garbage and the difflib anchor ratio collapses.
@@ -101,9 +108,105 @@ def log(msg):
     print(msg, file=sys.stderr, flush=True)
 
 
+class ParentTermination(SystemExit):
+    """The pipeline supervisor received a termination signal."""
+
+
+def _owner_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def start_owner_watchdog(owner_pid, poll_seconds=OWNER_POLL_SECONDS):
+    """Terminate this orchestrator if its managed caller disappears."""
+    if owner_pid is None:
+        return None
+    if owner_pid <= 1 or owner_pid == os.getpid() or not _owner_alive(owner_pid):
+        raise RuntimeError(f"invalid or dead speaker pipeline owner: pid={owner_pid}")
+
+    def watch():
+        while True:
+            time.sleep(poll_seconds)
+            if _owner_alive(owner_pid):
+                continue
+            log(f"Owner pid={owner_pid} disappeared; terminating speaker pipeline")
+            os.kill(os.getpid(), signal.SIGTERM)
+            return
+
+    thread = threading.Thread(target=watch, name="speaker-owner-watchdog", daemon=True)
+    thread.start()
+    return thread
+
+
+def _terminate_process_group(process, grace_seconds=PROCESS_TERM_GRACE_SECONDS):
+    """Terminate a full uv/Python process tree, then reap its group leader."""
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    except OSError:
+        if process.poll() is None:
+            process.terminate()
+    try:
+        process.wait(timeout=grace_seconds)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            if process.poll() is None:
+                process.kill()
+        process.wait(timeout=grace_seconds)
+
+
 def run(cmd, timeout=None):
     log("+ " + " ".join(str(c) for c in cmd))
-    subprocess.run(cmd, check=True, timeout=timeout)
+    process = subprocess.Popen(cmd, start_new_session=True)
+    started = time.monotonic()
+    next_heartbeat = started + PROCESS_HEARTBEAT_SECONDS
+    previous_handlers = {}
+
+    def interrupted(signum, _frame):
+        raise ParentTermination(128 + signum)
+
+    for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        previous_handlers[signum] = signal.signal(signum, interrupted)
+    try:
+        while True:
+            elapsed = time.monotonic() - started
+            if timeout is not None and elapsed >= timeout:
+                raise subprocess.TimeoutExpired(cmd, timeout)
+            wait_slice = 1.0
+            if timeout is not None:
+                wait_slice = max(0.001, min(wait_slice, timeout - elapsed))
+            try:
+                returncode = process.wait(timeout=wait_slice)
+                break
+            except subprocess.TimeoutExpired:
+                now = time.monotonic()
+                if now >= next_heartbeat:
+                    log(
+                        f"Still running pid={process.pid}, elapsed={int(now - started)}s: "
+                        + " ".join(str(c) for c in cmd[:4])
+                    )
+                    next_heartbeat = now + PROCESS_HEARTBEAT_SECONDS
+        # A wrapper that exits while descendants remain is not success. Clear the
+        # original group before returning so inherited pipes cannot hold callers open.
+        _terminate_process_group(process)
+        if returncode != 0:
+            raise subprocess.CalledProcessError(returncode, cmd)
+    except BaseException:
+        _terminate_process_group(process)
+        raise
+    finally:
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
 
 
 def _whisper_lang(language):
@@ -161,7 +264,7 @@ def _hf_token_present():
 
 
 def plain_text_path(args, timeout):
-    """Plain-text fast path: full-audio Qwen3 text, no speakers."""
+    """Plain-text fast path: session-wide Qwen3 text, no speakers."""
     if args.text_file:
         for wav in args.inputs:
             out = args.out_dir / f"{wav.stem}.txt"
@@ -169,7 +272,8 @@ def plain_text_path(args, timeout):
             log(f"Wrote {out} (from --text-file)")
         return
     cmd = ["uv", "run", str(HERE / "transcribe_local_mlx.py"),
-           "--output-dir", str(args.out_dir), "--language", args.language]
+           "--output-dir", str(args.out_dir), "--language", args.language,
+           "--owner-pid", str(os.getpid())]
     cmd += [str(w) for w in args.inputs]
     run(cmd, timeout=timeout)
 
@@ -230,13 +334,14 @@ def _run_batched_leg(wavs, work_root, script, staging_name, staging_suffix,
 
 
 def leg_text(wavs, work_root, language, force, timeout):
-    """Leg 1: full-audio Qwen3 transcript (one model load for the batch)."""
+    """Leg 1: session-wide Qwen3 transcript (one model load for the batch)."""
     # transcribe_local_mlx.py writes flat <stem>.txt into --output-dir; stage then
     # move to work_root/<stem>/<stem>.qwen.txt (different name — the .qwen. prefix).
     _run_batched_leg(
         wavs, work_root, "transcribe_local_mlx.py", "_qwen", ".txt",
         dest_for=lambda stem: work_root / stem / f"{stem}.qwen.txt",
-        extra_args=["--language", language], force=force, timeout=timeout,
+        extra_args=["--language", language, "--owner-pid", str(os.getpid())],
+        force=force, timeout=timeout,
         cache_label="Leg 1 (Qwen3 full text)", missing_label="no Qwen3 transcript for")
 
 
@@ -308,7 +413,11 @@ def main():
     ap.add_argument("--force", action="store_true", help="redo cached intermediate legs")
     ap.add_argument("--timeout", type=int, default=1800,
                     help="per-leg subprocess timeout in seconds (default 1800)")
+    ap.add_argument("--owner-pid", type=int, default=None,
+                    help="terminate if this managed caller disappears")
     args = ap.parse_args()
+
+    start_owner_watchdog(args.owner_pid)
 
     # The flat output contract (<stem>.txt/.csv/.diarization.json) keys on stem
     # alone, so duplicate stems can't be disambiguated — refuse rather than

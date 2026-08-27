@@ -38,7 +38,8 @@ If the dependency stack differs, the agent is probably running an installed/stal
 | Setting | Value | Why |
 |---------|-------|-----|
 | Model | `mlx-community/Qwen3-ASR-1.7B-8bit` | 8-bit quantized, fast inference, good quality |
-| max_tokens | `200000` | Default 8192 silently truncates audio >40min |
+| chunk_duration | `1200` seconds | The pinned Qwen3 implementation already splits long audio near low-energy boundaries at about 20 minutes |
+| max_tokens | `8192` **per chunk** | About twice the observed 20-minute Chinese requirement; bounds KV-cache growth and repetition loops |
 | Audio format | WAV 16kHz mono PCM | Best compatibility with ASR models |
 
 ## Performance Benchmarks (M5 Pro 48GB, April 2026)
@@ -53,16 +54,53 @@ If the dependency stack differs, the agent is probably running an installed/stal
 
 Model load: ~4s (cached), ~130s (first download).
 
-## Critical: max_tokens Truncation
+## Critical: `max_tokens` is per chunk, not per recording
 
-The `model.generate()` method in mlx-audio has `max_tokens=8192` as default. This is a **global budget shared across all audio chunks**, not per-chunk. When exhausted, remaining chunks are silently skipped.
+The pinned `mlx-audio 0.3.1` Qwen3-ASR implementation calls
+`_generate_single_chunk(..., max_tokens=max_tokens)` inside its chunk loop. The
+same limit is therefore available to **every** roughly 20-minute chunk. Passing
+`200000` does not give a five-hour recording one shared 200K budget; it permits
+each chunk to grow toward 200K tokens.
 
-For 123 minutes of Chinese speech:
-- Required: ~24,000 tokens
-- Default budget: 8,192 tokens
-- Result: only first ~40 minutes transcribed, rest silently dropped
+This distinction is the resource boundary. A verified failure on 2026-08-27
+used `200000` on a 4h39m recording: one MLX worker remained inside GPU
+generation for more than nine hours, reached a 33.4 GB physical footprint
+(44.0 GB peak), and produced no final transcript because the caller only wrote
+after the whole recording returned.
 
-Always pass `max_tokens=200000` for any audio longer than 20 minutes.
+The bundled script now keeps `8192` as the default per-chunk budget and rejects
+values above `16384` unless `--allow-high-token-budget` is stated explicitly.
+If a chunk reaches the ceiling, the script fails that chunk instead of shipping
+a possibly repeated or truncated transcript. Do not double the limit blindly:
+first inspect whether that chunk contains unusually dense speech or a
+music/silence repetition loop.
+
+## Chunk checkpoints and recovery
+
+The bundled script reproduces the pinned upstream low-energy chunking before
+calling the model, then commits each chunk atomically under
+`<output-dir>/_mlx_checkpoints/`. The model still loads once; only the generation
+cache resets between chunks. On a retry with the same input identity and
+parameters, completed chunk hashes are verified and skipped.
+
+Expected long-run progress looks like:
+
+```text
+Chunk 1/14 starting at 0.0s (max_tokens=8192)
+Chunk 1/14 committed: 6310 chars, 3812 tokens
+Chunk 2/14 starting at 1198.4s (max_tokens=8192)
+```
+
+A missing/corrupt completed part fails fast. A crash while one chunk is running
+leaves earlier parts intact and reruns only the incomplete chunk. The final
+`.txt` is still an atomic all-chunks projection, so downstream readers never
+mistake a partial recording for a complete transcript.
+
+Managed callers pass `--owner-pid`; the MLX worker exits with its checkpoints
+intact if that supervisor disappears. `speaker_transcribe.py` separately runs
+each uv child in a process group, prints a heartbeat, and terminates the whole
+group on timeout or parent termination. These two protections cover both the
+normal timeout path and the orphan-worker path.
 
 ## Model Weight Compatibility
 

@@ -1,11 +1,14 @@
 # Decoupled Speaker Alignment (the default architecture)
 
-The default speaker pipeline never cuts audio before transcription. Three
-independent layers are produced and merged afterward:
+The default speaker pipeline never cuts audio at diarization/speaker turns
+before transcription. Qwen3-ASR still applies its own low-energy long-audio
+boundaries at about 20 minutes; those chunks are checkpointed and composed into
+one session transcript. Three independent layers are produced and merged
+afterward:
 
 ```
 16kHz mono WAV
- ├─ leg 1  Qwen3-ASR full-audio transcript   → best text, no timing
+ ├─ leg 1  Qwen3-ASR session transcript      → best text, no timing
  ├─ leg 2  mlx-whisper word timestamps       → timing lattice (text secondary)
  ├─ leg 3  pyannote diarization              → speaker × time segments
  └─ leg 4  align_speakers.py                 → speaker-labeled transcript
@@ -26,11 +29,11 @@ structural costs:
 3. **Two failure modes welded together.** A bad slice boundary and an ASR
    error are indistinguishable in the output and can't be re-run separately.
 
-Decoupling keeps each layer at full strength: Qwen3-ASR sees the whole file
-(context intact, best Chinese WER in this skill), whisper only lends its
-cross-attention word timing (its Chinese text quality is irrelevant — the
-words are a time lattice, not a transcript), pyannote only answers
-who-spoke-when.
+Decoupling keeps each layer at full strength: Qwen3-ASR sees long, low-energy
+bounded chunks instead of tiny speaker turns (best Chinese WER in this skill),
+whisper only lends its cross-attention word timing (its Chinese text quality is
+irrelevant — the words are a time lattice, not a transcript), and pyannote only
+answers who-spoke-when.
 
 ## The alignment algorithm (`scripts/align_speakers.py`, stdlib only)
 

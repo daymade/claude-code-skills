@@ -1,15 +1,16 @@
 # Speaker Diarization (Multi-Speaker Transcription)
 
 The default pipeline produces speaker-labeled transcripts by **decoupling**:
-full-audio Qwen3-ASR text + whisper word timing + pyannote segments, aligned
-after the fact. Architecture, alignment algorithm, and trust signals:
+session-wide Qwen3-ASR text (checkpointed in low-energy long-audio chunks) +
+whisper word timing + pyannote segments, aligned after the fact. Architecture,
+alignment algorithm, and trust signals:
 **`references/decoupled_speaker_alignment.md`** — read that first. This file
 carries the production pitfalls (architecture-independent) and the legacy
 cascade notes.
 
 ```
 16kHz mono WAV
-  1. Qwen3-ASR full audio       -> text (context intact)
+  1. Qwen3-ASR session audio    -> text (no speaker-turn cuts)
   2. mlx-whisper word timestamps -> time lattice
   3. pyannote 3.1 diarization    -> segments {start, end, speaker}
   4. align                       -> [start-end] SPEAKER_xx: text
@@ -33,7 +34,7 @@ Intermediate legs are cached under `OUTPUT_DIR/_align/`; `--force` redoes them.
 
 1. **16k mono WAV** — pyannote, whisper, and Qwen3-ASR all want 16 kHz:
    `ffmpeg -i in.mp4 -vn -acodec pcm_s16le -ar 16000 -ac 1 in.wav`
-2. **Full-audio text** — `transcribe_local_mlx.py` (or any ASR; pass the text
+2. **Session text** — `transcribe_local_mlx.py` (or any ASR; pass the text
    via `--text-file` to skip this leg).
 3. **Word timing** — `word_timestamps_whisper.py in.wav --output-dir DIR`
    (mlx, Apple Silicon).
@@ -80,7 +81,7 @@ or to **unify a speaker across files**, you need a voiceprint reference set →
 context at every cut and measurably lowers text quality; on monologue it can
 also manufacture a second fake speaker. Kept for one narrow case: extremely
 noisy / heavy-overlap audio where per-slice isolation of a dominant
-near-field speaker beats full-audio ASR. Everything else uses the decoupled
+near-field speaker beats session-level ASR. Everything else uses the decoupled
 default.
 
 ## Alternative engines (context, not a benchmark)
