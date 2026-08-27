@@ -68,7 +68,7 @@ This is a read-only report. It does not modify anything.
    directory basename, and returns:
 
    - **`canonical_router` (pass)** — one full canonical bundle plus a one-file
-     router carrying the exact heading
+     router whose first nonblank body line is the exact heading
      `# Compatibility router — no business rules live here`; the router must
      point only to its paired canonical `SKILL.md` using a backtick-quoted
      project-relative path, tell the runtime to read it completely, and fail
