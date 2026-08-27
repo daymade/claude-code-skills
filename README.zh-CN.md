@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-2.1.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -187,15 +187,23 @@ claude plugin install daymade-macos@daymade-skills
 
 这些技能仅作为 `daymade-macos` 套件成员发布。
 
-**Codex 套件**（为 Codex 辅助编码与视觉探索提供统一命名空间）：
+**Codex 套件**（为 Codex 工作站配置、辅助编码与视觉探索提供统一命名空间）：
 ```bash
 claude plugin install daymade-codex@daymade-skills
+```
+
+Codex CLI 与 Desktop 用户也可以直接通过 Codex 插件市场安装同一套件：
+
+```bash
+codex plugin marketplace add daymade/claude-code-skills
+codex plugin add daymade-codex@daymade-skills
 ```
 
 ```text
 /daymade-codex:codex-image-gallery
 /daymade-codex:local-codex
 /daymade-codex:design-style-picker
+/daymade-codex:codex-1m-context-window-setup
 ```
 
 这些技能仅作为 `daymade-codex` 套件成员发布。
@@ -2848,7 +2856,7 @@ AppleScript fallback 需要 macOS，以及由用户手动开启一次 Chrome 开
 claude plugin install setup-notifications-via-wecom@daymade-skills
 ```
 
-配置可复用的企业微信/WeCom webhook 通知，用于技术状态报告、告警和任务完成消息。
+配置可复用的企业微信/WeCom webhook 通知，用于技术状态报告、告警和任务完成消息。收件目标必须显式分类：用户本人通道可自动发送，其他目标必须经人类确认。
 
 **使用场景：**
 - 配置可复用的企业微信 / WeCom 通知通道
@@ -2865,14 +2873,14 @@ claude plugin install setup-notifications-via-wecom@daymade-skills
 claude plugin install notify-wecom@daymade-skills
 ```
 
-发送单条企业微信群机器人消息，不建立可复用通知工作流。
+按显式收件目标发送单条企业微信群机器人消息：`self` 直接发送，`others` 必须经人类确认。
 
 **使用场景：**
 - `/notify-wecom`
 - 临时发一条企业微信 / 企微通知一下
 - 不需要模板或持久配置的一次性提醒
 
-**要求**：企业微信机器人 webhook URL。
+**要求**：企业微信机器人 webhook URL，以及由配置命令写入的显式收件范围、标签和规范 sender 绑定。
 
 ---
 
@@ -3472,6 +3480,29 @@ Tibo 最新的重置公告换算成北京时间是几点
 先检查现有 Skill、SOP 和历史，不要重新造工作流
 ```
 
+### 99. **codex-1m-context-window-setup** - 为 Codex 设置模型感知的长上下文
+
+> **安装**：`claude plugin install daymade-codex@daymade-skills`
+>（仅作为套件成员发布，调用方式 `daymade-codex:codex-1m-context-window-setup`）
+
+为 Codex CLI 与 Desktop 共用的基础配置写入当前模型真实支持的最大上下文，
+请求上限为 100 万 token。该 Skill 会读取实时模型契约、解释常见的约 258K
+默认值、把自动压缩阈值设为可达窗口的 60%，同时保留无关 TOML；若 Codex
+严格配置校验失败，则精确回滚。
+
+**核心功能：**
+- 按模型上限计算，不把「1M」硬说成每个模型都能达到
+- 提供只读 `doctor`、事务式 `apply` 与漂移检测 `verify`
+- 变更前备份、无变化不重复写入，并支持 macOS 与 Windows
+- 只修改 `model_context_window` 和 `model_auto_compact_token_limit`
+
+**使用示例：**
+```text
+/daymade-codex:codex-1m-context-window-setup doctor
+把 Codex CLI 和 Desktop 配成当前模型可验证的最大上下文
+验证长上下文设置在升级或切换模型后是否仍然正确
+```
+
 ---
 
 ## 🎬 交互式演示画廊
@@ -3541,6 +3572,12 @@ review 后修复/落地时，使用 **github-review-pr**。
 
 ### 产出前复用已有工作
 当新的实现、方案、报告、流程、文档或对外消息可能在别处已有答案时，先使用 **prior-work-retrieval**。它按显式清单检索当前代码、项目决策、Skill/SOP、会议、微信归档与对话历史，再要求回到原始来源核验，并留下可审计的复用／适配／淘汰回执；排序检索零命中不会被偷换成「不存在」。
+
+### Codex 工作站配置
+当 Codex CLI 或 Desktop 只显示约 258K 上下文、过早自动压缩，或需要给课堂／
+工作站复制同一套长上下文策略时，使用 **codex-1m-context-window-setup**。
+它读取当前模型的实时目录项，请求最多 100 万 raw token，并核验基础配置的
+精确值；不会顺手修改模型、sandbox、审批、插件或其他个人设置。
 
 ### 续做中断的 Claude 会话
 使用 **continue-claude-code-work** 从本地 `~/.claude` 产物中恢复最后一个可执行请求，并在不重新打开原始会话的情况下继续实现。若还需要跨会话搜索、统计分析或恢复已删除文件，可与 **read-claude-code-history** 配合使用。
@@ -3650,6 +3687,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **read-codex-history**：参见 `daymade-claude-code/read-codex-history/references/storage_and_portability.md` 了解本地数据源选择、跨平台路径、隐私边界和诊断方法
 - **read-claude-code-history**：参见 `daymade-claude-code/read-claude-code-history/references/session_file_format.md` 了解 JSONL 结构和 `daymade-claude-code/read-claude-code-history/references/workflow_examples.md` 了解恢复工作流
 - **prior-work-retrieval**：参见 `daymade-claude-code/prior-work-retrieval/SKILL.md` 了解检索／核验工作流，参见 `daymade-claude-code/prior-work-retrieval/references/source-manifest.md` 了解显式载体清单契约
+- **codex-1m-context-window-setup**：参见 `daymade-codex/codex-1m-context-window-setup/SKILL.md` 了解 doctor/apply/verify 工作流，参见 `daymade-codex/codex-1m-context-window-setup/references/context_window_contract.md` 了解模型上限、可用窗口和压缩语义
 - **docs-cleaner**：参见 `daymade-docs/docs-cleaner/SKILL.md` 了解整合工作流
 - **deep-research**：参见 `deep-research/references/research_report_template.md` 了解报告结构，并参见 `deep-research/references/source_quality_rubric.md` 了解来源分级标准
 - **pdf-creator**：参见 `daymade-docs/pdf-creator/SKILL.md` 了解 PDF 转换与字体设置
@@ -3685,6 +3723,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 ## 🛠️ 系统要求
 
 - **Claude Code** 2.0.13 或更高版本
+- **支持 `doctor --json` 与 `debug models` 的 Codex CLI + uv/Python 3.11+**（用于 codex-1m-context-window-setup）
 - **Python 3.10+**（市场整体基线；个别 skill 可能支持更旧版本）
 - **gh CLI**（用于 github-ops 和 github-review-pr）
 - **支持 `merge-tree --write-tree` 的 git + jq**（用于 github-review-pr）
@@ -3720,7 +3759,8 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 
 ### 没有 Claude Code 可以使用这些技能吗？
 
-不可以，这些技能是专门为 Claude Code 设计的。你需要 Claude Code 2.0.13 或更高版本。
+大多数 marketplace 技能面向 Claude Code。`daymade-codex` 套件中明确标注支持
+Codex 的技能也可以通过 Codex 插件市场安装；使用前请查看对应 Skill 的要求。
 
 ### 如何更新技能？
 
