@@ -46,6 +46,8 @@ import sys
 from cli import (
     cmd_init,
     cmd_add_correction,
+    cmd_add_context_rule,
+    cmd_list_context_rules,
     cmd_audit,
     cmd_list_corrections,
     cmd_export_corrections,
@@ -127,6 +129,11 @@ def main() -> None:
     elif args.add_correction:
         args.from_text, args.to_text = args.add_correction
         cmd_add_correction(args)
+    elif args.add_context_rule:
+        args.from_text, args.to_text = args.add_context_rule
+        cmd_add_context_rule(args)
+    elif getattr(args, 'list_context_rules', False):
+        cmd_list_context_rules(args)
     elif getattr(args, 'audit_dictionary', False):
         cmd_audit(args)
     elif args.list_corrections:

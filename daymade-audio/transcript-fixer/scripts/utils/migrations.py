@@ -457,6 +457,26 @@ MIGRATION_V2_3 = Migration(
     is_breaking=False
 )
 
+# Migration from v2.3 to v2.4 (domain-scoped context rules)
+MIGRATION_V2_4 = Migration(
+    version="2.4",
+    name="Domain-scoped context rules",
+    description="Add domain column to context_rules (NULL = global, applies to every domain) so context rules can be scoped per domain",
+    forward_sql="""
+    -- Existing rows keep domain = NULL, i.e. global — behavior unchanged.
+    ALTER TABLE context_rules ADD COLUMN domain TEXT;
+    CREATE INDEX IF NOT EXISTS idx_context_rules_domain ON context_rules(domain);
+    """,
+    backward_sql="""
+    -- The index must go first: SQLite cannot drop a column an index uses.
+    DROP INDEX IF EXISTS idx_context_rules_domain;
+    ALTER TABLE context_rules DROP COLUMN domain;
+    """,
+    dependencies=["2.3"],
+    check_function=None,
+    is_breaking=False
+)
+
 # Registry of all migrations
 # Order matters - add new migrations at the end
 ALL_MIGRATIONS = [
@@ -465,6 +485,7 @@ ALL_MIGRATIONS = [
     MIGRATION_V2_1,
     MIGRATION_V2_2,
     MIGRATION_V2_3,
+    MIGRATION_V2_4,
 ]
 
 # Migration registry by version

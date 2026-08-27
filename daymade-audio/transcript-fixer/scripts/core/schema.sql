@@ -32,6 +32,8 @@ CREATE INDEX IF NOT EXISTS idx_corrections_from_text ON corrections(from_text);
 
 -- Table: context_rules
 -- Regex-based context-aware correction rules
+-- domain is NULL for global rules (apply to every domain); a named rule only
+-- loads when its domain is active (migration v2.4).
 CREATE TABLE IF NOT EXISTS context_rules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pattern TEXT NOT NULL UNIQUE,
@@ -40,11 +42,19 @@ CREATE TABLE IF NOT EXISTS context_rules (
     priority INTEGER NOT NULL DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT 1,
     added_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    added_by TEXT
+    added_by TEXT,
+    domain TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_context_rules_priority ON context_rules(priority DESC);
 CREATE INDEX IF NOT EXISTS idx_context_rules_is_active ON context_rules(is_active);
+-- NOTE: no idx_context_rules_domain here. schema.sql also runs against
+-- pre-v2.4 databases whose context_rules has no domain column yet
+-- (CREATE TABLE IF NOT EXISTS no-ops there), and an index on a missing
+-- column would abort the whole init. The v2.4 migration creates the index
+-- together with the column; fresh databases created from this file simply
+-- have no domain index until a migration adds it — harmless for a table
+-- this small.
 
 -- Table: correction_history
 -- Audit log for all correction runs

@@ -154,12 +154,13 @@ Read [references/false_positive_guide.md](references/false_positive_guide.md) an
 |---|---|
 | Stable non-word or unique garble → canonical term | `--add ... --domain <project>` |
 | Important recurring person and observed ASR variants | People roster |
+| Correction right only inside a specific recurring phrase | `--add-context-rule PATTERN REPLACEMENT --domain <project>` (regex, domain-scoped; omit `--domain` for global) |
 | Common/real word wrong only under a cue | Domain context trap, never a bare rule |
 | Real name → different real name | Domain context + human/audio verification, never a bare rule |
 | Confirmed-correct entity repeatedly reopened | Confirmed-correct context record |
 | One-off sentence-local wording | Edit only; do not add |
 
-A context trap is a cue, not permission to replace blindly. `--scan-traps` supports canonical `→` and legacy `≈` mappings with the same directional contract: left is observed ASR, right is intended text. Wrap an exact FROM phrase containing spaces in backticks:
+A context trap is a cue, not permission to replace blindly. Two annotation classes in a domain context file are **machine-readable vetoes that Stage 1 enforces** (when the domain is named via `--domain` — a whole-library run has no owner to veto with): a trap marked `禁裸词`/`禁入词典` demotes any dictionary rule with the same FROM to review, and a confirmed-correct （勿修） record demotes any rule whose FROM is that token — demotion beats `--apply-domain` trust-flattening, so a real-word rule (the 绿点→绿电 class: right in business context, wrong in UI context) can stay in the dictionary without firing blindly. `--apply-all` remains the operator's explicit override. Without the veto the only escape was `--report-false-positive`, which disables the rule in the contexts where it is right too. `--scan-traps` supports canonical `→` and legacy `≈` mappings with the same directional contract: left is observed ASR, right is intended text. Wrap an exact FROM phrase containing spaces in backticks:
 
 ~~~markdown
 - **`CC 思维链`/`CC 思维连` → 目标术语** — only under the domain's documented cue

@@ -600,21 +600,50 @@ class CorrectionService:
 
         return conflicts
 
-    def load_context_rules(self) -> List[Dict]:
+    def load_context_rules(self, domains: Optional[List[str]] = None) -> List[Dict]:
         """
         Load active context-aware regex rules.
+
+        A rule with domain = NULL is global and always loads; a rule with a
+        named domain only loads when that domain is in `domains`. Passing no
+        filter (None) keeps the legacy union behavior and loads every active
+        rule — mirroring how corrections load without --domain.
+
+        On a database not yet migrated to v2.4 there IS no domain column, and
+        by construction no rule could have been added with a domain — so every
+        rule is global and the legacy query is the correct one.
+
+        Args:
+            domains: Active domain names, or None for no filter
 
         Returns:
             List of rule dictionaries with pattern, replacement, description
         """
         try:
             with self.repository._pool.get_connection() as conn:
-                cursor = conn.execute("""
-                    SELECT pattern, replacement, description
-                    FROM context_rules
-                    WHERE is_active = 1
-                    ORDER BY priority DESC
-                """)
+                has_domain_col = any(
+                    row[1] == "domain"
+                    for row in conn.execute("PRAGMA table_info(context_rules)")
+                )
+                if has_domain_col and domains:
+                    placeholders = ", ".join("?" for _ in domains)
+                    cursor = conn.execute(
+                        f"""
+                        SELECT pattern, replacement, description
+                        FROM context_rules
+                        WHERE is_active = 1
+                          AND (domain IS NULL OR domain IN ({placeholders}))
+                        ORDER BY priority DESC
+                        """,
+                        domains,
+                    )
+                else:
+                    cursor = conn.execute("""
+                        SELECT pattern, replacement, description
+                        FROM context_rules
+                        WHERE is_active = 1
+                        ORDER BY priority DESC
+                    """)
 
                 rules = []
                 for row in cursor.fetchall():
@@ -630,6 +659,140 @@ class CorrectionService:
         except Exception as e:
             logger.error(f"Failed to load context rules: {e}")
             return []
+
+    def add_context_rule(
+        self,
+        pattern: str,
+        replacement: str,
+        domain: Optional[str] = None,
+        description: Optional[str] = None,
+        priority: int = 0,
+        added_by: Optional[str] = None,
+    ) -> int:
+        """
+        Add a context-aware regex rule.
+
+        Args:
+            pattern: Regex pattern matched against the transcript text
+            replacement: Replacement text for each match
+            domain: Scope the rule to one domain; None = global (applies to
+                every domain)
+            description: Human-readable rule name (used as the change's
+                rule_name in reports)
+            priority: Higher priority rules apply first
+            added_by: Provenance label
+
+        Returns:
+            ID of the inserted rule
+
+        Raises:
+            ValidationError: On empty pattern/replacement, a bad regex, a
+                malformed domain, a duplicate pattern, or a database not yet
+                migrated to v2.4 (domain column missing).
+        """
+        if not pattern or not pattern.strip():
+            raise ValidationError("context rule pattern must not be empty")
+        if not replacement or not replacement.strip():
+            raise ValidationError("context rule replacement must not be empty")
+        import re as _re
+        try:
+            _re.compile(pattern)
+        except _re.error as e:
+            raise ValidationError(f"invalid context rule pattern {pattern!r}: {e}")
+        if domain is not None:
+            self.validate_domain_name(domain)
+
+        with self.repository._pool.get_connection() as conn:
+            has_domain_col = any(
+                row[1] == "domain"
+                for row in conn.execute("PRAGMA table_info(context_rules)")
+            )
+            if not has_domain_col:
+                raise ValidationError(
+                    "context_rules has no domain column — migrate the "
+                    "database to v2.4. Canonical path: fix_transcription.py "
+                    "--migration migrate. If that runner reports version 0.0 "
+                    "on this DB (a pre-existing runner issue on schema.sql-"
+                    "built databases), apply the additive column directly "
+                    "instead: sqlite3 <db> \"ALTER TABLE context_rules "
+                    "ADD COLUMN domain TEXT\""
+                )
+            duplicate = conn.execute(
+                "SELECT id FROM context_rules WHERE pattern = ?", (pattern,)
+            ).fetchone()
+            if duplicate:
+                raise ValidationError(
+                    f"context rule pattern already exists (id {duplicate[0]}): {pattern!r}"
+                )
+            cursor = conn.execute(
+                """
+                INSERT INTO context_rules
+                    (pattern, replacement, description, priority, added_by, domain)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (pattern, replacement, description, priority, added_by, domain),
+            )
+            rule_id = cursor.lastrowid
+            conn.execute(
+                """
+                INSERT INTO audit_log (action, entity_type, entity_id, details)
+                VALUES ('add_context_rule', 'context_rules', ?, ?)
+                """,
+                (rule_id, f"{pattern!r} -> {replacement!r} (domain: {domain or 'global'})"),
+            )
+            conn.commit()
+            logger.info(f"Added context rule {rule_id}: {pattern!r} (domain: {domain or 'global'})")
+            return rule_id
+
+    def list_context_rules(
+        self, domain: Optional[str] = None, include_inactive: bool = False
+    ) -> List[Dict]:
+        """
+        List context rules, optionally filtered to one domain plus globals.
+
+        Args:
+            domain: Show global rules plus rules of this domain; None lists
+                every rule regardless of domain
+            include_inactive: Also list disabled rules
+
+        Returns:
+            List of rule dicts with id/pattern/replacement/description/
+            priority/domain/is_active
+        """
+        with self.repository._pool.get_connection() as conn:
+            has_domain_col = any(
+                row[1] == "domain"
+                for row in conn.execute("PRAGMA table_info(context_rules)")
+            )
+            domain_expr = "domain" if has_domain_col else "NULL AS domain"
+            sql = f"""
+                SELECT id, pattern, replacement, description, priority,
+                       {domain_expr}, is_active
+                FROM context_rules
+            """
+            params: list = []
+            clauses = []
+            if not include_inactive:
+                clauses.append("is_active = 1")
+            if domain is not None and has_domain_col:
+                clauses.append("(domain IS NULL OR domain = ?)")
+                params.append(domain)
+            if clauses:
+                sql += " WHERE " + " AND ".join(clauses)
+            sql += " ORDER BY priority DESC, id"
+            cursor = conn.execute(sql, params)
+            return [
+                {
+                    "id": row[0],
+                    "pattern": row[1],
+                    "replacement": row[2],
+                    "description": row[3],
+                    "priority": row[4],
+                    "domain": row[5],
+                    "is_active": bool(row[6]),
+                }
+                for row in cursor.fetchall()
+            ]
 
     def save_history(self, filename: str, domain: str, original_length: int,
                     stage1_changes: int, stage2_changes: int, model: str,

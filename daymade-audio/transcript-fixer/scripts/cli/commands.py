@@ -66,6 +66,34 @@ def _parse_domains(raw: str | None) -> list[str] | None:
     return normalize_domains(raw)
 
 
+def _load_trap_demotion_sets(domains: list[str] | None) -> tuple[frozenset, frozenset]:
+    """Collect 禁裸词/勿修 demotion tokens from each named domain's context file.
+
+    Convention: ``~/.transcript-fixer/contexts/<domain>.md``. No --domain (or
+    the "all" alias) means no specific domain's file to consult, so nothing
+    demotes — demotion is a domain-scoped veto, and a whole-library run has
+    no owner to veto with. A missing or malformed context file must never
+    break Stage 1, so failures return empty sets for that domain.
+    """
+    if not domains:
+        return frozenset(), frozenset()
+    from core.trap_scanner import extract_demotion_sets
+    banned: set = set()
+    keep: set = set()
+    ctx_home = Path.home() / ".transcript-fixer" / "contexts"
+    for domain in domains:
+        context_path = ctx_home / f"{domain}.md"
+        if not context_path.is_file():
+            continue
+        try:
+            sets = extract_demotion_sets(context_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        banned.update(sets.banned_froms)
+        keep.update(sets.keep_tokens)
+    return frozenset(banned), frozenset(keep)
+
+
 def _is_all_alias(raw) -> bool:
     """True when the raw --domain value is the whole-library alias ("all",
     any case, alone or inside a comma-separated list).
@@ -393,6 +421,80 @@ def cmd_add_correction(args: argparse.Namespace) -> None:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # Post-add advisory: if the domain's context file already marks this FROM
+    # 禁裸词/勿修, the new rule will be demoted to review at Stage 1 — say so
+    # now, while the author is still at the decision point, rather than letting
+    # them read "Added" as "will auto-apply".
+    _demote_froms, _keep_tokens = _load_trap_demotion_sets([domain_to_write])
+    if args.from_text in _demote_froms or args.from_text in _keep_tokens:
+        print(f"⚠️  '{args.from_text}' is marked 禁裸词/勿修 in the "
+              f"{domain_to_write} domain context — this rule will DEFER to "
+              f"review at Stage 1 instead of auto-applying. If the correction "
+              f"is only right in a specific context, prefer "
+              f"--add-context-rule with a context pattern.",
+              file=sys.stderr)
+
+
+def cmd_add_context_rule(args: argparse.Namespace) -> None:
+    """Add a context-aware regex rule (--add-context-rule)."""
+    service = _get_service()
+    # A rule lives in exactly one domain (or global); a comma-separated
+    # --domain is a read-side filter, not a write target.
+    domains = _parse_domains(getattr(args, "domain", None))
+    if domains and len(domains) > 1:
+        print(
+            f"Error: --add-context-rule writes to exactly one domain, got "
+            f"{len(domains)}: {', '.join(domains)}. Run one per domain, or "
+            f"omit --domain for a global rule.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    _reject_all_on_write(getattr(args, "domain", None), "--add-context-rule")
+    domain_to_write = domains[0] if domains else None
+    try:
+        rule_id = service.add_context_rule(
+            args.from_text,
+            args.to_text,
+            domain=domain_to_write,
+            description=getattr(args, "description", None),
+            priority=getattr(args, "priority", 0) or 0,
+            added_by="cli",
+        )
+        print(f"Added context rule #{rule_id}: {args.from_text!r} -> "
+              f"{args.to_text!r} (domain: {domain_to_write or 'global'})")
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_list_context_rules(args: argparse.Namespace) -> None:
+    """List context rules (--list-context-rules)."""
+    service = _get_service()
+    domains = _parse_domains(getattr(args, "domain", None))
+    if domains and len(domains) > 1:
+        print(
+            f"Error: --list-context-rules filters to one domain at a time, "
+            f"got {len(domains)}: {', '.join(domains)}.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    rules = service.list_context_rules(
+        domain=domains[0] if domains else None,
+        include_inactive=getattr(args, "all", False),
+    )
+    if getattr(args, "json_output", False):
+        print(json.dumps(rules, ensure_ascii=False, indent=2))
+        return
+    if not rules:
+        print("No context rules found.")
+        return
+    for r in rules:
+        scope = r["domain"] or "global"
+        inactive = "" if r["is_active"] else " [DISABLED]"
+        desc = f" — {r['description']}" if r.get("description") else ""
+        print(f"#{r['id']} [{scope}] {r['pattern']!r} -> {r['replacement']!r}"
+              f" (priority {r['priority']}){desc}{inactive}")
 
 
 def cmd_scan_traps(args: argparse.Namespace) -> None:
@@ -749,7 +851,10 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
     # rationale holds per-rule.
     domains = _parse_domains(args.domain)
     corrections, correction_meta = service.get_corrections_with_metadata(domains)
-    context_rules = service.load_context_rules()
+    # Context rules follow the same domain scoping as corrections: global
+    # (domain-less) rules always load; a domain-named rule loads only when its
+    # domain is active. None = no filter, the legacy union behavior.
+    context_rules = service.load_context_rules(domains)
     domain_stats = service.get_domain_stats()
 
     # --apply-domain: the user explicitly asserted this transcript belongs to
@@ -777,6 +882,39 @@ def cmd_run_correction(args: argparse.Namespace) -> dict | None:
               "(whole-library run stays in safe mode; medium/high corrections "
               "go to review). To trust a domain, name it: --domain <name>.",
               file=sys.stderr)
+
+    # Trap-aware demotion: a named domain's context file
+    # (~/.transcript-fixer/contexts/<domain>.md) can veto auto-application of
+    # the same-named dictionary rule — traps annotated 禁裸词/禁入词典 and
+    # confirmed-correct (勿修) records are the domain owner's machine-readable
+    # "judge the context, never auto-apply" (the 绿点→绿电 class: a real-word
+    # rule that is right in some contexts and wrong in others). Runs AFTER the
+    # trusted_domain marking above so the veto wins over the flattening; it
+    # only sets a meta flag, _assess_risk does the grading. Without the veto
+    # the flattening auto-applies a 2-char real-word rule that safe mode would
+    # otherwise defer.
+    demote_froms, keep_tokens = _load_trap_demotion_sets(domains)
+    if demote_froms or keep_tokens:
+        _demoted = [
+            _wrong for _wrong in correction_meta
+            if _wrong in demote_froms or _wrong in keep_tokens
+        ]
+        for _wrong in _demoted:
+            correction_meta[_wrong]["demoted_by_trap"] = True
+        if _demoted:
+            if getattr(args, "apply_all", False):
+                # The demotion flag is graded below, but --apply-all applies
+                # every risk level anyway — say what will actually happen.
+                print(f"🛡️  Trap demotion: {len(_demoted)} rule(s) marked by "
+                      f"domain-context markers (禁裸词/勿修) — applied anyway "
+                      f"under --apply-all: "
+                      f"{', '.join(sorted(_demoted)[:5])}"
+                      f"{' …' if len(_demoted) > 5 else ''}", file=sys.stderr)
+            else:
+                print(f"🛡️  Trap demotion: {len(_demoted)} rule(s) deferred to review "
+                      f"by domain-context markers (禁裸词/勿修): "
+                      f"{', '.join(sorted(_demoted)[:5])}"
+                      f"{' …' if len(_demoted) > 5 else ''}", file=sys.stderr)
 
     # Merge person-name ASR variants from the people roster (if configured).
     # Source: env TRANSCRIPT_FIXER_PEOPLE_ROSTER > config.json paths.people_roster_path (there is no --people-roster CLI flag).
