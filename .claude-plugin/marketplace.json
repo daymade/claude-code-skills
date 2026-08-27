@@ -5,8 +5,8 @@
     "email": "daymadev89@gmail.com"
   },
   "metadata": {
-    "description": "Professional Claude Code skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, and Claude Code operations (fast local conversation discovery across Claude Code and Codex, session recovery, CLAUDE.md optimization, statusline, multi-provider profile isolation, troubleshooting, marketplace development, repo health-check). Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
-    "version": "2.0.0"
+    "description": "Professional Claude Code and Codex skills marketplace — production-ready skills spanning GitHub and git operations (including current-base contributor PR review), document conversion and generation (Markdown, PDF, PPTX, DOCX), diagram and UI-design extraction, the full audio pipeline (ASR transcription, TTS, transcript correction, meeting minutes), financial and investment-research data, web scraping and content capture, security/PII tooling and secure repomix packaging, macOS and iOS development, CLI demo and terminal automation, prompt and skill engineering, deep research and fact-checking, QA and LLM-evaluation infrastructure, internationalization, network/Tailscale and remote-desktop diagnostics, Claude Code operations, and model-aware Codex workstation setup. Suite plugins bundle related skills under shared namespaces, including the StepFun StepAudio 2.5 audio family. See the Available Skills list in the README for the authoritative per-skill breakdown.",
+    "version": "2.1.0"
   },
   "plugins": [
     {
@@ -148,15 +148,18 @@
     },
     {
       "name": "daymade-codex",
-      "description": "Codex and visual exploration suite bundling local OpenAI Codex CLI delegation, a browser gallery for Codex-generated images, and batch generation and comparison of visual design directions under one shared namespace. Install once for Codex-assisted coding, image review, and design-style exploration workflows.",
+      "description": "OpenAI Codex operations and visual exploration suite bundling model-aware long-context workstation setup for CLI and Desktop, local Codex CLI delegation, a browser gallery for generated images, and batch generation and comparison of visual design directions under one shared namespace.",
       "source": "./daymade-codex",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "suite",
       "keywords": [
         "suite",
         "codex",
         "openai",
+        "context-window",
+        "codex-desktop",
+        "workstation-setup",
         "code-review",
         "image-gallery",
         "design",
@@ -165,7 +168,8 @@
       "skills": [
         "./codex-image-gallery",
         "./local-codex",
-        "./design-style-picker"
+        "./design-style-picker",
+        "./codex-1m-context-window-setup"
       ]
     },
     {

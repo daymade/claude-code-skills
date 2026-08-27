@@ -390,6 +390,7 @@ This applies when you change ANY file under a skill directory:
 94. **kimi-use** - Drive the logged-in Kimi desktop app through computer-use to query its built-in company, financial, market, academic, and legal data plugins without separate API keys; includes source-labeled query patterns and independent verification for screen-transcribed results
 95. **tibo-reset-codex** - Query current ChatGPT/Codex usage-limit reset timing, interpret Tibo reset announcements, and convert Pacific times to Beijing time through live evidence rather than memory
 96. **prior-work-retrieval** - Find and verify existing successful code, documents, Skills, SOPs, decisions, meetings, WeChat archives, and conversation history before producing new work; leave an auditable reuse/adapt/reject receipt (daymade-claude-code suite member)
+97. **codex-1m-context-window-setup** - Configure and verify the largest context window the selected Codex model declares, up to a one-million-token request, for CLI and Desktop; preserves unrelated config, backs up changed bytes, and rolls back on strict-config failure (daymade-codex suite member)
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
