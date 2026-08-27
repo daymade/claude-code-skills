@@ -7,7 +7,9 @@ description: >-
   Codex was interrupted, fused, compacted, or stuck, or wants the current Agent
   to take over without `codex resume`. Restores the original business outcome,
   unfulfilled requests, user corrections, proven prior assets, current workspace
-  truth, and the next action that directly advances the goal.
+  truth, and the next action that directly advances the goal. Do not use when
+  Codex itself natively resumed this same conversation and its prior turns or
+  compaction state are already present in the current context.
 argument-hint: "[session-id]"
 ---
 
@@ -15,6 +17,17 @@ argument-hint: "[session-id]"
 
 Continue means finish the still-unfulfilled business task. Reading history is a
 mandatory evidence phase, not the deliverable.
+
+## Entry gate: external takeover, not native resume
+
+| Current situation | Action |
+|---|---|
+| Codex itself natively resumed this same conversation, and the restored turns or compaction state are already in the current context | Do not invoke this Skill or `read-codex-history`. Continue directly from the retained context, then verify current workspace and external state before changing anything. |
+| A new/different Agent context must take over an earlier Codex rollout, or the user identifies another Session ID whose continuity is not already present here | Use this Skill. Step 1's verified history receipt remains mandatory. |
+
+A restart is not enough to choose the second row. The deciding fact is whether
+the current conversation is the host-restored continuation of the same Session,
+not whether a Codex process was restarted.
 
 ## Step 1: Obtain a verified Codex read receipt
 
