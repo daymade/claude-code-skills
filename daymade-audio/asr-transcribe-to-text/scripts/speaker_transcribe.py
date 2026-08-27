@@ -20,8 +20,9 @@ Outputs per input (flat under OUTPUT_DIR — same contract downstream tools read
   <stem>.txt                [MM:SS - MM:SS] SPEAKER_xx + text
   <stem>.csv                file,start,end,duration,speaker,text
   <stem>.alignment.json     alignment provenance + anchored_ratio trust signal
-Intermediate legs are cached under OUTPUT_DIR/_align/ and reused on re-run
-(pass --force to redo them).
+Intermediate legs are cached under OUTPUT_DIR/_align/ and reused only when a
+sidecar proves the source-audio bytes, producer bytes, parameters, and cached
+artifact bytes still match (pass --force to redo them).
 
 Speaker labels are anonymous (SPEAKER_00...). Map them to real names with
 voiceprint_id.py — references/voiceprint_speaker_id.md.
@@ -53,6 +54,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+
+from transcribe_local_mlx import _sha256_file, atomic_write_json
 
 PYANNOTE_SETUP_HINT = """
 ============================================================
@@ -89,6 +92,8 @@ PYANNOTE_ACCESS_KEYWORDS = (
 PROCESS_HEARTBEAT_SECONDS = 60.0
 PROCESS_TERM_GRACE_SECONDS = 5.0
 OWNER_POLL_SECONDS = 5.0
+CACHE_PROVENANCE_SCHEMA = 1
+_SOURCE_IDENTITY_CACHE = {}
 
 # Map the orchestrator's --language to a whisper language code. The whisper leg
 # is a TIMING lattice, but it still must decode in the right language or its
@@ -106,6 +111,81 @@ _WHISPER_LANG_MAP = {
 
 def log(msg):
     print(msg, file=sys.stderr, flush=True)
+
+
+def _source_audio_identity(path):
+    source = Path(path).resolve()
+    state = source.stat()
+    cache_key = (
+        str(source),
+        state.st_dev,
+        state.st_ino,
+        state.st_size,
+        state.st_mtime_ns,
+        state.st_ctime_ns,
+    )
+    identity = _SOURCE_IDENTITY_CACHE.get(cache_key)
+    if identity is None:
+        identity = {
+            "path": str(source),
+            "size": state.st_size,
+            "sha256": _sha256_file(source),
+        }
+        _SOURCE_IDENTITY_CACHE[cache_key] = identity
+    return dict(identity)
+
+
+def _artifact_provenance_path(artifact):
+    artifact = Path(artifact)
+    return artifact.with_name(f"{artifact.name}.provenance.json")
+
+
+def _cache_contract(wav, producer_script, parameters):
+    producer = HERE / producer_script
+    return {
+        "schema_version": CACHE_PROVENANCE_SCHEMA,
+        "source_audio": _source_audio_identity(wav),
+        "producer": {
+            "script": producer.name,
+            "sha256": _sha256_file(producer),
+        },
+        "parameters": parameters,
+    }
+
+
+def _artifact_cache_valid(wav, artifact, producer_script, parameters):
+    artifact = Path(artifact)
+    provenance_path = _artifact_provenance_path(artifact)
+    if not artifact.is_file() or not provenance_path.is_file():
+        return False
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    expected = _cache_contract(wav, producer_script, parameters)
+    if any(provenance.get(key) != value for key, value in expected.items()):
+        return False
+    return provenance.get("artifact_sha256") == _sha256_file(artifact)
+
+
+def _write_artifact_provenance(wav, artifact, producer_script, parameters):
+    artifact = Path(artifact)
+    provenance = {
+        **_cache_contract(wav, producer_script, parameters),
+        "artifact_sha256": _sha256_file(artifact),
+    }
+    atomic_write_json(_artifact_provenance_path(artifact), provenance)
+
+
+def _stamp_alignment_source(wav, out_dir, stem):
+    alignment_path = Path(out_dir) / f"{stem}.alignment.json"
+    payload = json.loads(alignment_path.read_text(encoding="utf-8"))
+    payload["source_audio"] = _source_audio_identity(wav)
+    payload["pipeline"] = {
+        "speaker_transcribe_sha256": _sha256_file(Path(__file__)),
+        "align_speakers_sha256": _sha256_file(HERE / "align_speakers.py"),
+    }
+    atomic_write_json(alignment_path, payload)
 
 
 class ParentTermination(SystemExit):
@@ -305,8 +385,18 @@ def diarize_all(wavs, out_dir, device, force):
         from diarize_speakers import load_pipeline, run_pipeline, write_diarization_json
     except Exception as e:
         _hint_import_error(e)
-    pending = [(w, out_dir / f"{w.stem}.diarization.json") for w in wavs
-               if force or not (out_dir / f"{w.stem}.diarization.json").exists()]
+    cache_parameters = {"device": device}
+    pending = [
+        (w, out_dir / f"{w.stem}.diarization.json")
+        for w in wavs
+        if force
+        or not _artifact_cache_valid(
+            w,
+            out_dir / f"{w.stem}.diarization.json",
+            "diarize_speakers.py",
+            cache_parameters,
+        )
+    ]
     if not pending:
         log("Leg 3 (diarization): all cached")
         return
@@ -329,14 +419,25 @@ def diarize_all(wavs, out_dir, device, force):
             log(f"WARNING: diarization failed for {wav.name} ({e}); skipping")
             continue
         write_diarization_json(segments, wav, dev, diar_json)
+        _write_artifact_provenance(
+            wav, diar_json, "diarize_speakers.py", cache_parameters
+        )
 
 
 def _run_batched_leg(wavs, work_root, script, staging_name, staging_suffix,
-                     dest_for, extra_args, force, timeout, cache_label, missing_label):
+                     dest_for, extra_args, force, timeout, cache_label, missing_label,
+                     cache_parameters):
     """Shared staging+move ceremony for legs 1 and 2: run `script` once on all
     uncached inputs (it writes flat <stem><staging_suffix> into a staging dir),
     then move each output to dest_for(stem). One model load per leg, not per file."""
-    todo = [w for w in wavs if force or not dest_for(w.stem).exists()]
+    todo = [
+        w
+        for w in wavs
+        if force
+        or not _artifact_cache_valid(
+            w, dest_for(w.stem), script, cache_parameters
+        )
+    ]
     if not todo:
         log(f"{cache_label}: all cached")
         return
@@ -351,6 +452,7 @@ def _run_batched_leg(wavs, work_root, script, staging_name, staging_suffix,
         dest = dest_for(w.stem)
         dest.parent.mkdir(parents=True, exist_ok=True)
         staged.replace(dest)
+        _write_artifact_provenance(w, dest, script, cache_parameters)
 
 
 def leg_text(wavs, work_root, language, force, timeout):
@@ -362,7 +464,8 @@ def leg_text(wavs, work_root, language, force, timeout):
         dest_for=lambda stem: work_root / stem / f"{stem}.qwen.txt",
         extra_args=["--language", language, "--owner-pid", str(os.getpid())],
         force=force, timeout=timeout,
-        cache_label="Leg 1 (Qwen3 full text)", missing_label="no Qwen3 transcript for")
+        cache_label="Leg 1 (Qwen3 full text)", missing_label="no Qwen3 transcript for",
+        cache_parameters={"language": language})
 
 
 def leg_words(wavs, work_root, language, initial_prompt, force, timeout):
@@ -374,7 +477,11 @@ def leg_words(wavs, work_root, language, initial_prompt, force, timeout):
         wavs, work_root, "word_timestamps_whisper.py", "_words", ".words.json",
         dest_for=lambda stem: work_root / stem / f"{stem}.words.json",
         extra_args=extra, force=force, timeout=timeout,
-        cache_label="Leg 2 (whisper word lattice)", missing_label="no word lattice for")
+        cache_label="Leg 2 (whisper word lattice)", missing_label="no word lattice for",
+        cache_parameters={
+            "language": _whisper_lang(language),
+            "initial_prompt": initial_prompt,
+        })
 
 
 def leg_align(wavs, out_dir, work_root, max_gap, text_file=None):
@@ -412,6 +519,7 @@ def leg_align(wavs, out_dir, work_root, max_gap, text_file=None):
             failed.append(stem)
             continue
         write_outputs(turns, report, wav.name, out_dir, stem)
+        _stamp_alignment_source(wav, out_dir, stem)
     if failed:
         log(f"FAILED/skipped files: {failed}")
         sys.exit(1)

@@ -319,8 +319,11 @@ Outputs per input: `<stem>.txt` (`[MM:SS - MM:SS] SPEAKER_xx` + text),
 voiceprint ID), `<stem>.diarization.json`, `<stem>.alignment.json` (provenance
 + `anchored_ratio` trust signal; < 0.5 prints a loud warning — verify labels
 against the audio before trusting them). Intermediate legs are cached in
-`OUTPUT_DIR/_align/` so re-runs are cheap (`--force` redoes final legs). Qwen
-chunk checkpoints live below its staging directory; an interrupted run verifies
+`OUTPUT_DIR/_align/` so re-runs are cheap (`--force` redoes final legs). Each
+intermediate cache sidecar binds source-audio bytes, producer-script bytes,
+semantic parameters, and artifact bytes; file existence alone is never a cache
+hit. The final alignment JSON records the source-audio SHA-256 for downstream
+completion checks. Qwen chunk checkpoints live below its staging directory; an interrupted run verifies
 the source-audio SHA-256 plus completed chunk hashes, then skips completed chunks
 instead of starting the recording over. A language-agnostic 12-character n-gram
 guard rejects highly repetitive chunk or whole-session text before final delivery;

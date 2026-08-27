@@ -93,6 +93,13 @@ normalized characters below `0.20` is rejected as a repetition loop even if
 generation stopped below the token ceiling. The quality-policy version is part
 of checkpoint identity, preventing unchecked older parts from being resumed.
 
+The speaker orchestrator has a separate outer cache for Qwen text, Whisper
+words, and pyannote segments. Each artifact has a provenance sidecar containing
+the source-audio SHA-256, producer-script SHA-256, semantic parameters, and
+artifact SHA-256. Missing or mismatched provenance reruns that leg; an existing
+file alone is not completion. The final alignment JSON records the current
+source-audio identity so downstream automation can reject a stale bundle.
+
 Expected long-run progress looks like:
 
 ```text

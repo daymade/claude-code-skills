@@ -8,6 +8,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -313,6 +314,63 @@ class LongAudioSafetyTests(unittest.TestCase):
                     "SIGTERM-ignoring grandchild survived leader-first cleanup: "
                     f"pid={grandchild_pid}"
                 )
+
+    def test_speaker_leg_rejects_unproven_exists_only_qwen_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wav = root / "audio.wav"
+            wav.write_bytes(b"first-audio")
+            fixed_mtime_ns = 1_700_000_000_123_456_789
+            os.utime(wav, ns=(fixed_mtime_ns, fixed_mtime_ns))
+            work_root = root / "work"
+            destination = work_root / wav.stem / f"{wav.stem}.qwen.txt"
+            destination.parent.mkdir(parents=True)
+            destination.write_text("stale transcript", encoding="utf-8")
+            calls = []
+
+            def fake_run(command, timeout=None):
+                calls.append(command)
+                staging = Path(command[command.index("--output-dir") + 1])
+                staging.mkdir(parents=True, exist_ok=True)
+                (staging / f"{wav.stem}.txt").write_text(
+                    f"fresh transcript {len(calls)}", encoding="utf-8"
+                )
+
+            with mock.patch.object(speaker, "run", side_effect=fake_run):
+                speaker.leg_text([wav], work_root, "Chinese", False, 30)
+                self.assertEqual(len(calls), 1)
+                speaker.leg_text([wav], work_root, "Chinese", False, 30)
+                self.assertEqual(len(calls), 1)
+
+                wav.write_bytes(b"other-audio")
+                os.utime(wav, ns=(fixed_mtime_ns, fixed_mtime_ns))
+                speaker.leg_text([wav], work_root, "Chinese", False, 30)
+
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(
+                destination.read_text(encoding="utf-8"), "fresh transcript 2"
+            )
+
+    def test_alignment_provenance_binds_final_bundle_to_source_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wav = root / "audio.wav"
+            wav.write_bytes(b"source-audio")
+            alignment = root / "audio.alignment.json"
+            alignment.write_text(
+                json.dumps({"report": {"trustworthy": True}}),
+                encoding="utf-8",
+            )
+
+            speaker._stamp_alignment_source(wav, root, wav.stem)
+
+            payload = json.loads(alignment.read_text(encoding="utf-8"))
+            self.assertEqual(payload["source_audio"]["path"], str(wav.resolve()))
+            self.assertEqual(payload["source_audio"]["size"], wav.stat().st_size)
+            self.assertEqual(
+                payload["source_audio"]["sha256"],
+                local_mlx._sha256_file(wav),
+            )
 
     def test_mlx_worker_exits_when_explicit_owner_disappears(self):
         owner = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.3)"])
