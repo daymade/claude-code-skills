@@ -145,6 +145,15 @@ Chinese transliteration (`艾达`) — and a Chinese nickname produces homophone
 variants plus honorific forms (`小铭老师`). List every form you have actually
 seen; each one is a rule that fires for free.
 
+**Keep legitimate aliases out of the replacement field.** An English name,
+Chinese full name, and nickname may all identify one person while each remains
+correct speech. Record that identity relationship in the roster's relationship
+context or the owning domain's alias ledger, but put only observed ASR
+*misrecognitions* on `ASR 变体`. Do not turn a confirmed English-name / Chinese-name /
+nickname relationship into replacement pairs; doing so rewrites words the
+speaker actually said. Public examples must stay synthetic rather than copying
+a real person's aliases.
+
 **Setup** (once):
 ```bash
 # Edit ~/.transcript-fixer/config.json and add:
@@ -205,16 +214,16 @@ as a unit:
    what a speaker actually said, so never *replace* it with the bare name, but
    the surname inside it gets the same sweep and the same roster entry.
 
-**Mid-turn verdicts compound immediately — never defer them.** When the user
-answers a name/number question while you are still working (a mid-message
-correction, a one-word answer to your shortlist), the verdict is the strongest
-source in the whole loop and costs nothing to bank: fix the file, `--add` the
-confirmed variant, and update the roster/context in the SAME turn — not "after
-the batch", which is where deferrals die. Four mid-turn verdicts in one real
-batch session all compounded the turn they were given (2026-08-08), including
-one that corrected the reviewer's own stale training data about a version
-number. A user verdict that contradicts your search results is the verdict
-winning, not an anomaly to double-check.
+**Mid-turn verdicts land immediately — reusability is a separate decision.**
+When the user answers a name/number question while you are still working (a
+mid-message correction, a one-word answer to your shortlist), fix the file in
+the same turn. Then run the destination matrix above. Add only a recurring,
+deterministic ASR variant; update relationship context for a confirmed identity;
+leave a rare sentence-local mishearing file-only. The user's answer is the
+strongest source for what this occurrence says, but it does not prove that the
+same from→to pair is safe on future transcripts. A user verdict that
+contradicts your search results is still the verdict winning, not an anomaly to
+double-check.
 
 ## Domain Correction Contexts (per-domain AI priors)
 

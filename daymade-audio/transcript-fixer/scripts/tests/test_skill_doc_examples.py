@@ -34,6 +34,8 @@ TROUBLESHOOTING = SKILL_DIR / "references" / "troubleshooting.md"
 FILE_FORMATS = SKILL_DIR / "references" / "file_formats.md"
 DJI_EXAMPLE = SKILL_DIR / "references" / "example_session_dji_minutes.md"
 ARGUMENT_PARSER_PY = SKILL_DIR / "scripts" / "cli" / "argument_parser.py"
+ADVANCED_EVIDENCE = SKILL_DIR / "references" / "advanced_correction_evidence.md"
+IDENTITY_CONTEXT = SKILL_DIR / "references" / "dictionary_identity_and_context.md"
 
 PRODUCTION_FUNC = "_frontmatter_audio"
 PRODUCTION_IDIOM = 'line.split(":", 1)[1].strip()'
@@ -231,3 +233,38 @@ def test_public_json_contract_lists_the_complete_always_present_shape():
     for field in fields:
         assert field.strip('"') in help_text
     assert "All ten status fields are always present" in " ".join(help_text.split())
+
+
+def test_multi_recording_completion_is_not_satisfied_by_sampled_clips():
+    skill = SKILL_MD.read_text(encoding="utf-8")
+    evidence = ADVANCED_EVIDENCE.read_text(encoding="utf-8")
+    evidence_flat = " ".join(evidence.split())
+
+    assert "a sampled clip settles only that anchored item" in skill
+    assert "run an independent ASR across the complete" in evidence_flat
+    assert "sampled cross-check only — incomplete" in evidence_flat
+    assert "Entity disagreement is a human gate, not a vote" in evidence
+    assert "This is mandatory for person names" in evidence
+
+
+def test_high_quality_claim_is_blocked_by_pending_review_rows():
+    skill = SKILL_MD.read_text(encoding="utf-8")
+    evidence = ADVANCED_EVIDENCE.read_text(encoding="utf-8")
+    evidence_flat = " ".join(evidence.split())
+
+    assert "Detection and enqueueing are not correction" in skill
+    assert "zero pending rows is required" in skill
+    assert "Queue presence is not issue resolution" in evidence
+    assert "draft / unresolved — incomplete" in evidence_flat
+    assert "recognizer count is not a verdict" in evidence_flat
+
+
+def test_human_verdict_does_not_auto_promote_a_one_off_rule():
+    skill = SKILL_MD.read_text(encoding="utf-8")
+    identity = IDENTITY_CONTEXT.read_text(encoding="utf-8")
+    identity_flat = " ".join(identity.split())
+
+    assert "they do not make a replacement reusable" in skill
+    assert "a rare sentence-local mishearing stays file-only" in skill
+    assert "reusability is a separate decision" in identity
+    assert "put only observed ASR *misrecognitions* on `ASR 变体`" in identity_flat

@@ -121,6 +121,81 @@ def write_receipt_backed_bundle(root, wav):
 
 
 class LongAudioSafetyTests(unittest.TestCase):
+    def test_supported_audio_uses_the_direct_decoder(self):
+        calls = []
+
+        def loader(path, *, sr):
+            calls.append((path, sr))
+            return [0.0, 0.5]
+
+        decoded = local_mlx.load_audio_with_ffmpeg_fallback(
+            "/example/audio.wav",
+            16000,
+            loader,
+            ffmpeg_path="/unused/ffmpeg",
+            run_command=lambda *_args, **_kwargs: self.fail(
+                "ffmpeg must not run for a supported input"
+            ),
+        )
+
+        self.assertEqual(decoded, [0.0, 0.5])
+        self.assertEqual(calls, [("/example/audio.wav", 16000)])
+
+    def test_unsupported_container_is_normalized_by_ffmpeg(self):
+        loader_calls = []
+        runner_calls = []
+
+        def loader(path, *, sr):
+            loader_calls.append((path, sr))
+            if path.endswith(".ogg"):
+                raise RuntimeError("direct decoder rejected opus")
+            return [0.25, -0.25]
+
+        def runner(command, **kwargs):
+            runner_calls.append((command, kwargs))
+            Path(command[-1]).write_bytes(b"RIFF-normalized")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        decoded = local_mlx.load_audio_with_ffmpeg_fallback(
+            "/example/audio.ogg",
+            16000,
+            loader,
+            ffmpeg_path="/opt/ffmpeg",
+            run_command=runner,
+        )
+
+        self.assertEqual(decoded, [0.25, -0.25])
+        self.assertEqual(loader_calls[0], ("/example/audio.ogg", 16000))
+        self.assertTrue(loader_calls[1][0].endswith("tinkle_normalized.wav"))
+        command, kwargs = runner_calls[0]
+        self.assertEqual(command[0], "/opt/ffmpeg")
+        self.assertIn("pcm_s16le", command)
+        self.assertEqual(kwargs["check"], False)
+
+    def test_decode_failure_without_ffmpeg_is_explicit(self):
+        def loader(_path, *, sr):
+            self.assertEqual(sr, 16000)
+            raise RuntimeError("unsupported container")
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "ffmpeg is unavailable for temporary PCM normalization",
+        ):
+            local_mlx.load_audio_with_ffmpeg_fallback(
+                "/example/audio.ogg",
+                16000,
+                loader,
+                ffmpeg_path="",
+            )
+
+    def test_skill_requires_full_source_for_high_stakes_cross_check(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        skill_flat = " ".join(skill.split())
+
+        self.assertIn("the entire baseline recording", skill_flat)
+        self.assertIn("Selected clips can settle selected utterances", skill_flat)
+        self.assertIn("proper-name forks", skill_flat)
+
     def test_default_budget_is_per_chunk_and_bounded(self):
         parser = local_mlx.build_parser()
         args = parser.parse_args(["--smoke-test"])

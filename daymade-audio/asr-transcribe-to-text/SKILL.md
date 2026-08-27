@@ -296,6 +296,14 @@ Run the decoupled speaker pipeline — it handles dependency pins, bounded
 per-chunk generation, resumable checkpoints, model loading, and process-tree
 cleanup internally.
 
+Input extensions are not trusted as decoder contracts. The Qwen worker first
+uses the pinned MLX decoder; if that decoder rejects an otherwise valid
+container such as Ogg/Opus, it uses `ffmpeg` to create a temporary 16 kHz mono
+PCM WAV for the pinned default model (custom local models use their declared
+sample rate) and retries. The checkpoint, output name, and provenance remain
+bound to the original source bytes; the temporary WAV is never a completion
+artifact.
+
 ```bash
 uv run ${CLAUDE_SKILL_DIR}/scripts/speaker_transcribe.py \
   INPUT_AUDIO [INPUT_AUDIO2 ...] OUTPUT_DIR
@@ -631,6 +639,13 @@ After transcription, check completeness:
 5. Show user the first and last ~200 characters as preview
 6. **Speaker path**: check the alignment report — `anchored_ratio` should be ≥ 0.5 (the script warns when lower), the speaker count should be plausible for the recording (a two-person interview showing 5 speakers, or a monologue split into 2+, means diarization over-segmented — see `references/speaker_diarization.md` for when to distrust labels)
 
+When this run is the independent evidence track for an existing high-stakes
+transcript, completeness means the entire baseline recording reached a complete
+checkpoint/final receipt. Selected clips can settle selected utterances, but
+they cannot support a whole-transcript or “higher-quality final” claim. Hand the
+complete output to `transcript-fixer`; let its human gate settle unresolved
+proper-name forks.
+
 If truncated or wrong, use **AskUserQuestion**:
 ```
 Transcription may be truncated:
@@ -695,6 +710,11 @@ C) Later — I'll run it myself when ready
 ```
 
 If the user chooses A, invoke the `transcript-fixer` skill with the output file path. The two skills form a natural pipeline: **transcribe → correct → review**.
+
+If the user already requested correction, multi-track merging, or a
+higher-quality transcript in the same turn, that request already selects A.
+Continue into `transcript-fixer` without asking the user to approve the same
+work again.
 
 ## Reconfigure
 

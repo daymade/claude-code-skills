@@ -29,7 +29,10 @@ import numbers
 import os
 import platform
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import threading
 import time
 from importlib.metadata import version
@@ -216,6 +219,85 @@ def atomic_write_bytes(path, payload):
 
 def atomic_write_text(path, text):
     atomic_write_bytes(path, text.encode("utf-8"))
+
+
+def load_audio_with_ffmpeg_fallback(
+    audio_path,
+    sample_rate,
+    loader,
+    *,
+    ffmpeg_path=None,
+    run_command=None,
+):
+    """Decode with MLX first, then normalize unsupported containers via ffmpeg.
+
+    The checkpoint and output identities remain bound to ``audio_path``. The
+    normalized WAV is a short-lived decoder input only.
+    """
+    try:
+        return loader(str(audio_path), sr=sample_rate)
+    except Exception as direct_error:
+        executable = ffmpeg_path
+        if executable is None:
+            executable = shutil.which("ffmpeg")
+        if not executable:
+            raise RuntimeError(
+                f"MLX could not decode {audio_path!s}, and ffmpeg is unavailable "
+                "for temporary PCM normalization"
+            ) from direct_error
+
+        command_runner = run_command or subprocess.run
+        with tempfile.TemporaryDirectory(prefix="tinkle_mlx_audio_") as temp_dir:
+            normalized = Path(temp_dir) / "tinkle_normalized.wav"
+            command = [
+                str(executable),
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(audio_path),
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                str(sample_rate),
+                "-c:a",
+                "pcm_s16le",
+                str(normalized),
+            ]
+            try:
+                result = command_runner(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except OSError as ffmpeg_error:
+                raise RuntimeError(
+                    f"MLX could not decode {audio_path!s}; ffmpeg could not start: "
+                    f"{ffmpeg_error}"
+                ) from direct_error
+            if result.returncode != 0 or not normalized.is_file():
+                detail = (result.stderr or result.stdout or "no ffmpeg output").strip()
+                raise RuntimeError(
+                    f"MLX could not decode {audio_path!s}; ffmpeg normalization "
+                    f"failed with exit {result.returncode}: {detail[-500:]}"
+                ) from direct_error
+
+            print(
+                f"MLX decoder could not read {Path(audio_path).name}; "
+                "using a temporary ffmpeg-normalized PCM WAV",
+                file=sys.stderr,
+                flush=True,
+            )
+            try:
+                return loader(str(normalized), sr=sample_rate)
+            except Exception as normalized_error:
+                raise RuntimeError(
+                    f"MLX could not decode ffmpeg-normalized audio for {audio_path!s}: "
+                    f"{normalized_error}"
+                ) from direct_error
 
 
 def atomic_write_json(path, value):
@@ -677,7 +759,9 @@ def main():
         import numpy as np
 
         sample_rate = int(getattr(model, "sample_rate", 16000))
-        waveform = np.array(load_audio(audio_path, sr=sample_rate))
+        waveform = np.array(
+            load_audio_with_ffmpeg_fallback(audio_path, sample_rate, load_audio)
+        )
         chunks = split_audio_into_chunks(
             waveform,
             sr=sample_rate,
