@@ -21,6 +21,7 @@
 #
 # Usage:
 #   git_export_before_drop.sh [--out DIR] [--all-stashes] [--stash N]... [--branch NAME]... [--all-refs]
+#   git_export_before_drop.sh --verify-current BUNDLE
 #
 #   --out DIR       output directory (default: ~/.git-backups/<date>-<repo>)
 #   --all-stashes   export every stash in `git stash list`
@@ -28,6 +29,10 @@
 #   --branch NAME   include NAME in branches.bundle (repeatable)
 #   --all-refs      create all-refs.bundle from `git bundle create --all`; use before
 #                   repo/worktree convergence. Mutually exclusive with --branch.
+#   --verify-current BUNDLE
+#                   fail if any ref recorded in BUNDLE is now missing or points to
+#                   a different object. Run immediately before the destructive step;
+#                   a mismatch means the ref set moved and the bundle must be rebuilt.
 #
 # Recovery later:
 #   patch:     git apply <file>.patch            (or `git am` for mail-format)
@@ -48,6 +53,7 @@ REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
 OUT=""
 ALL_STASHES=0
 ALL_REFS=0
+VERIFY_CURRENT=""
 STASH_ARGS=()
 BRANCH_ARGS=()
 
@@ -58,10 +64,50 @@ while [ $# -gt 0 ]; do
     --stash)        STASH_ARGS+=("${2:?--stash needs an index}"); shift 2 ;;
     --branch)       BRANCH_ARGS+=("${2:?--branch needs a name}"); shift 2 ;;
     --all-refs)     ALL_REFS=1; shift ;;
+    --verify-current)
+                    [ -z "$VERIFY_CURRENT" ] || die "--verify-current may be passed only once"
+                    VERIFY_CURRENT="${2:?--verify-current needs a bundle path}"; shift 2 ;;
     -h|--help)      grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)              die "unknown argument: $1 (see --help)" ;;
   esac
 done
+
+if [ -n "$VERIFY_CURRENT" ]; then
+  if [ "$ALL_STASHES" = 1 ] || [ "$ALL_REFS" = 1 ] || [ ${#STASH_ARGS[@]} -gt 0 ] || [ ${#BRANCH_ARGS[@]} -gt 0 ] || [ -n "$OUT" ]; then
+    die "--verify-current is a standalone read-only mode; do not combine it with export options"
+  fi
+
+  git bundle verify "$VERIFY_CURRENT" >/dev/null || die "bundle verification failed: $VERIFY_CURRENT"
+  HEAD_LIST=$(git bundle list-heads "$VERIFY_CURRENT") || die "cannot list bundle refs: $VERIFY_CURRENT"
+  [ -n "$HEAD_LIST" ] || die "bundle records no refs: $VERIFY_CURRENT"
+
+  CHECKED=0
+  MOVED=0
+  while read -r EXPECTED REF_NAME; do
+    [ -n "${EXPECTED:-}" ] || continue
+    CHECKED=$((CHECKED+1))
+    if CURRENT=$(git rev-parse -q --verify "$REF_NAME" 2>/dev/null); then
+      if [ "$CURRENT" = "$EXPECTED" ]; then
+        echo "UNCHANGED $REF_NAME $EXPECTED"
+      else
+        echo "MOVED $REF_NAME expected=$EXPECTED current=$CURRENT"
+        MOVED=$((MOVED+1))
+      fi
+    else
+      echo "MISSING $REF_NAME expected=$EXPECTED"
+      MOVED=$((MOVED+1))
+    fi
+  done <<EOF
+$HEAD_LIST
+EOF
+
+  if [ "$MOVED" -gt 0 ]; then
+    echo "REFSET_CHANGED checked=$CHECKED changed=$MOVED — rebuild and re-verify the bundle before deletion" >&2
+    exit 1
+  fi
+  echo "REFS_UNCHANGED checked=$CHECKED bundle=$VERIFY_CURRENT"
+  exit 0
+fi
 
 if [ "$ALL_REFS" = 1 ] && [ ${#BRANCH_ARGS[@]} -gt 0 ]; then
   die "--all-refs and --branch are mutually exclusive"

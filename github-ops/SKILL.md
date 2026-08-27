@@ -1,6 +1,12 @@
 ---
 name: github-ops
-description: Provides comprehensive GitHub operations using gh CLI and GitHub API. Activates when working with pull requests, issues, repositories, workflows, or GitHub API operations including creating/viewing/merging PRs, managing issues, querying API endpoints, and handling GitHub workflows in enterprise or public GitHub environments.
+description: >-
+  Operates GitHub through gh CLI and the REST/GraphQL APIs for pull requests,
+  issues, repositories, workflows, and API automation. Use when creating,
+  viewing, merging, closing, or reconciling PRs; comparing parallel or
+  superseded PRs; verifying squash/rebase landing; retiring remote branches;
+  recovering from gh GraphQL failures through authoritative REST endpoints;
+  managing issues or Actions; or operating public and enterprise GitHub.
 ---
 
 # GitHub Operations
@@ -39,6 +45,10 @@ gh pr comment 123 --body "LGTM"
 ```
 
 📚 See `references/pr_operations.md` for comprehensive PR workflows
+
+For parallel PRs, squash-merge verification, superseded PR closure, or remote
+branch convergence, read `references/pr_operations.md` § Converging parallel PRs
+and retiring remote branches before mutating the PR or branch.
 
 **PR Title Convention:**
 - With JIRA ticket: `GR-1234: Descriptive title`

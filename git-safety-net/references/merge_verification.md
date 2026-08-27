@@ -7,6 +7,7 @@
 - Pick the diff FORM from the question you're asking (two-dot vs three-dot)
 - Why safety-biased: a false "merged" loses work, a false "unmerged" only costs a look
 - Manual-only investigation hints (do NOT auto-decide on these)
+- Converging many branches to one main under active concurrency
 - Worktree retirement — prove the checkout is disposable before removal
 - Adversarial multi-agent verification (for a whole repo of branches)
 - Rules for the verification agents
@@ -211,6 +212,96 @@ name sounds. The same applies in reverse to *size*: a substantial-looking file t
 most likely to be restored on instinct.
 
 Same safety bias as everywhere else in this skill: prove supersession per item, or keep the item.
+
+## Converging many branches to one main under active concurrency
+
+Use this READ-DO sequence when the outcome is not one deletion but a repository-wide convergence:
+keep every unique behavior, preserve current WIP, and leave exactly one maintained `main`. A branch
+list is a moving snapshot while other sessions are alive, so the start-of-task audit cannot double
+as the deletion gate.
+
+The executing agent owns this sequence. `--verify-current` mechanically decides only whether exact
+ref tips stayed unchanged; unique-behavior and supersession judgments still require the content
+evidence below and have no automatic enforcement.
+
+### 1. Freeze the outcome and the first ref snapshot
+
+Record the exact local and remote-tracking refs, then query the hosting service for its current
+branch list and PR heads. Keep the two inventories separate: remote-tracking refs are a Git cache;
+the hosting API is authority for branches that exist on the server. Record every exact tip SHA.
+
+Classify each non-main ref by content. Use the trial-merge verdict first. For NEEDS REVIEW refs,
+walk the supersession ladder above and open distinctive code/tests at authority. `git cherry` may
+surface candidates, but every `+` after a squash merge is still only a hypothesis. Merge or adapt
+the smallest unique behavior; never merge an old whole branch merely because it has many `+`
+commits or a compelling name.
+
+### 2. Build keeper commits without touching a shared writer
+
+When another session is actively changing files, do not switch the shared checkout or use its real
+index. Build from the freshly fetched base with Mode D's alternate-index plumbing. Preserve each
+candidate as an exact `(mode, object ID, path)` tuple from an immutable commit; copying only blob
+bytes can silently strip executable (`100755`), symlink (`120000`), or gitlink (`160000`) behavior.
+An owned temporary regular file may be hashed only after its intended `100644`/`100755` mode is
+verified explicitly; symlinks and submodules must use the immutable-entry route. Never hash the
+shared worktree, which can silently capture someone else's in-progress bytes. Run the candidate's
+deterministic tests and the exact hook/security gates that a normal commit would have run before
+opening the PR.
+
+After a squash merge, do not compare commit SHAs: GitHub creates a new base-branch commit. If the
+base did not otherwise move, equal tree IDs prove byte-identical landing. If it did move, compare
+the owned path set or re-run the trial merge so unrelated base work does not manufacture a failure.
+GitHub-side duplicate/superseded PR handling belongs to the `github-ops` skill.
+
+### 3. Preserve refs and dirty WIP through different channels
+
+Create a repository-external bundle containing every branch/ref whose deletion is authorized, then
+verify it. The bundle is the ref manifest: immediately before deletion run:
+
+```bash
+scripts/git_export_before_drop.sh --all-refs --out <external-backup-dir>
+scripts/git_export_before_drop.sh --verify-current <external-backup-dir>/all-refs.bundle
+```
+
+Bundles cannot preserve untracked bytes. Freeze an explicit dirty-path manifest, save tracked
+changes as a binary diff, copy or tar the exact dirty/untracked paths outside the repository, then
+extract to a fresh verification directory and byte-compare every declared path. Do not use stash,
+a temporary clone, or a worktree as the backup mechanism.
+
+If the new base now tracks a path that was untracked WIP at the first snapshot, it will collide
+with checkout materialization. Move that exact path to the verified external backup, update the
+clean base, then restore the saved bytes; it should naturally become a tracked modification. Never
+drop it because "main now has a file with that name."
+
+If another writer is still active, leave the real HEAD/index/worktree alone and postpone local
+branch convergence. Publishing an isolated PR is safe; switching the shared checkout is not. When
+an exclusive window exists, update only paths proven clean, or restore the complete verified WIP
+set after materializing the new base.
+
+### 4. Re-freeze immediately before deletion
+
+Fetch again, re-query hosting branches/PRs, and re-enumerate local refs. Compare the result with the
+bundle heads. A new branch, a changed tip, or a late PR is new evidence: stop, classify its unique
+behavior, and rebuild the bundle. This is not an optional "final check"; it is the only check that
+covers work created after the first audit.
+
+Delete only refs whose current SHA still equals the verified snapshot. For remote branch deletion,
+query the exact hosted ref one last time; then delete it through the normal push/API route and prune
+stale local remote-tracking refs.
+
+### 5. Prove the user-visible terminal state
+
+The task is complete only when all are independently true:
+
+- the hosting service lists only the intended maintained branch;
+- local `refs/heads/` contains only `main`, and `HEAD`, local `main`, and the refreshed
+  `origin/main` resolve to the intended commit;
+- the index has no staged residue from the convergence;
+- every pre-existing WIP path still byte-matches its frozen source/backup, even if Git now reports
+  a different tracked/untracked classification;
+- the recovery bundle still verifies and lists the retired exact tips.
+
+Counts and checksums support those claims; they do not replace them.
 
 ## Worktree retirement — prove the checkout is disposable before removal
 

@@ -2,6 +2,13 @@
 
 Comprehensive examples for GitHub pull request operations using gh CLI.
 
+## Contents
+
+- Creating, viewing, managing, commenting on, and reviewing pull requests
+- Advanced PR operations and checks
+- Converging parallel PRs and retiring remote branches
+- Output formatting, bulk operations, and best practices
+
 ## Creating Pull Requests
 
 ### Basic PR Creation
@@ -144,6 +151,83 @@ gh pr review 123 --request-changes --body "Please fix X"
 ---
 
 ## Advanced PR Operations
+
+### Converging parallel PRs and retiring remote branches
+
+Use this workflow when several sessions or branches target the same base, a squash merge rewrites
+the commit identity, or the user wants the remote to end with one maintained branch.
+
+The acting agent runs these commands. GitHub's APIs decide hosted state and Git decides object/tree
+identity; whether two implementations are business-equivalent remains an evidence-backed judgment,
+not an automated gate.
+
+#### 1. Read authority, not a stale local name
+
+Record the current PR base/head SHAs and the hosted branch list. `gh pr view` and `gh pr list` use
+GraphQL; an `EOF` or GraphQL error proves only that query path failed. Fall back to REST instead of
+guessing that the PR/branch is absent:
+
+```bash
+gh api repos/{owner}/{repo}/pulls/{number} \
+  --jq '{state,merged,base_sha:.base.sha,head_sha:.head.sha,merge_commit_sha}'
+gh api 'repos/{owner}/{repo}/branches?per_page=100' --paginate \
+  --jq '.[].name'
+```
+
+Refresh `origin/main` before any local content comparison. Keep the GitHub branch list and local
+remote-tracking refs separate: the first is server authority; the second is a cache.
+
+#### 2. Verify what landed after squash/rebase
+
+Squash merge creates a new commit on the base branch, so head-SHA equality is the wrong test. When
+the base did not otherwise advance, candidate and merged-main tree equality proves byte-identical
+landing:
+
+```bash
+git rev-parse '<candidate>^{tree}' 'origin/main^{tree}'
+```
+
+If main also received unrelated work, whole-tree inequality is expected. Compare the PR's frozen
+owned path set, or ask `git-safety-net` to run its trial-merge containment check. Never infer loss
+from a new squash SHA or from the branch still showing commits "ahead."
+
+#### 3. When another PR lands first, compare outcomes before resolving conflicts
+
+A late sibling PR can make your still-open PR `dirty` even when it already delivered the same
+business behavior. Compare immutable head trees, implementation blobs, and the named acceptance
+tests:
+
+- **Equivalent or main is a strict superset:** close your PR as superseded and delete its head
+  branch. Do not resolve conflicts merely so "your" PR also merges.
+- **One unique behavior remains:** transplant only that bounded delta onto the fresh base, test it,
+  and update/open one PR. Do not merge the stale whole branch and reintroduce old registry/docs.
+- **Evidence differs:** keep both refs and ask for the real product decision; PR identity does not
+  decide which behavior is correct.
+
+Shared registry/changelog conflicts are normally additive. Preserve both authors' entries and
+prove the only base-relative change left is yours; never accept all of `ours` or `theirs`.
+
+#### 4. Retire remote branches only against an exact saved tip
+
+The local/ref backup and dirty-WIP gates belong to `git-safety-net`. Once it has produced and
+re-verified a bundle, query each remote deletion target immediately before deleting it:
+
+```bash
+gh api repos/{owner}/{repo}/git/ref/heads/{branch/path} --jq '.object.sha'
+git push origin --delete {branch/path}
+gh api 'repos/{owner}/{repo}/branches?per_page=100' --paginate --jq '.[].name'
+git remote prune origin
+```
+
+If the hosted SHA differs from the bundle's recorded SHA, stop: a parallel writer moved the branch
+after the audit. Classify the new tip and rebuild the backup. After deletion, verify both the hosted
+branch list and local remote-tracking refs; success in one does not prove the other converged.
+
+#### 5. Terminal state
+
+Report the GitHub outcome only when the PR is merged/closed as intended, required checks passed,
+the hosted branch set matches the user's target, and the fetched base contains the accepted
+behavior. Local one-main state and WIP byte preservation are separate `git-safety-net` postconditions.
 
 ### Checking PR Status
 
