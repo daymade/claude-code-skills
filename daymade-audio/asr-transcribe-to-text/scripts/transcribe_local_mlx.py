@@ -182,6 +182,14 @@ def _sha256_text(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _sha256_file(path, chunk_bytes=8 * 1024 * 1024):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        while block := handle.read(chunk_bytes):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def _checkpoint_identity(audio_path, model_name, language, chunk_duration, max_tokens):
     source = Path(audio_path).resolve()
     state = source.stat()
@@ -189,6 +197,7 @@ def _checkpoint_identity(audio_path, model_name, language, chunk_duration, max_t
         "source": str(source),
         "source_size": state.st_size,
         "source_mtime_ns": state.st_mtime_ns,
+        "source_sha256": _sha256_file(source),
         "model": model_name,
         "language": language,
         "chunk_duration_s": chunk_duration,

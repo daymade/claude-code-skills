@@ -321,7 +321,8 @@ voiceprint ID), `<stem>.diarization.json`, `<stem>.alignment.json` (provenance
 against the audio before trusting them). Intermediate legs are cached in
 `OUTPUT_DIR/_align/` so re-runs are cheap (`--force` redoes final legs). Qwen
 chunk checkpoints live below its staging directory; an interrupted run verifies
-and skips completed chunks instead of starting the recording over.
+the source-audio SHA-256 plus completed chunk hashes, then skips completed chunks
+instead of starting the recording over.
 
 Before a long first run, smoke-test the Qwen3 leg once:
 

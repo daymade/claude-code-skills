@@ -143,25 +143,45 @@ def start_owner_watchdog(owner_pid, poll_seconds=OWNER_POLL_SECONDS):
     return thread
 
 
-def _terminate_process_group(process, grace_seconds=PROCESS_TERM_GRACE_SECONDS):
-    """Terminate a full uv/Python process tree, then reap its group leader."""
+def _process_group_exists(process_group_id):
+    """Return whether any process still belongs to a managed process group."""
     try:
-        os.killpg(process.pid, signal.SIGTERM)
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _terminate_process_group(process, grace_seconds=PROCESS_TERM_GRACE_SECONDS):
+    """Terminate a full uv/Python process tree, even if its leader exits first."""
+    process_group_id = process.pid
+    try:
+        os.killpg(process_group_id, signal.SIGTERM)
     except ProcessLookupError:
         pass
     except OSError:
         if process.poll() is None:
             process.terminate()
-    try:
-        process.wait(timeout=grace_seconds)
-    except subprocess.TimeoutExpired:
+
+    deadline = time.monotonic() + grace_seconds
+    while _process_group_exists(process_group_id) and time.monotonic() < deadline:
+        time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
+
+    if _process_group_exists(process_group_id):
         try:
-            os.killpg(process.pid, signal.SIGKILL)
+            os.killpg(process_group_id, signal.SIGKILL)
         except ProcessLookupError:
             pass
         except OSError:
             if process.poll() is None:
                 process.kill()
+
+    try:
+        process.wait(timeout=grace_seconds)
+    except subprocess.TimeoutExpired:
+        process.kill()
         process.wait(timeout=grace_seconds)
 
 

@@ -49,6 +49,7 @@ def identity():
         "source": "/example/audio.wav",
         "source_size": 123,
         "source_mtime_ns": 456,
+        "source_sha256": "example-sha256",
         "model": "example/model",
         "language": "Chinese",
         "chunk_duration_s": 1200.0,
@@ -180,6 +181,27 @@ class LongAudioSafetyTests(unittest.TestCase):
                     1200.0,
                 )
 
+    def test_checkpoint_identity_changes_when_same_size_audio_content_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            audio = Path(tmp) / "audio.wav"
+            fixed_mtime_ns = 1_700_000_000_123_456_789
+            audio.write_bytes(b"first-audio")
+            os.utime(audio, ns=(fixed_mtime_ns, fixed_mtime_ns))
+            first_identity, first_digest = local_mlx._checkpoint_identity(
+                audio, "example/model", "Chinese", 1200.0, 8192
+            )
+
+            audio.write_bytes(b"other-audio")
+            os.utime(audio, ns=(fixed_mtime_ns, fixed_mtime_ns))
+            second_identity, second_digest = local_mlx._checkpoint_identity(
+                audio, "example/model", "Chinese", 1200.0, 8192
+            )
+
+            self.assertEqual(first_identity["source_size"], second_identity["source_size"])
+            self.assertEqual(first_identity["source_mtime_ns"], second_identity["source_mtime_ns"])
+            self.assertNotEqual(first_identity["source_sha256"], second_identity["source_sha256"])
+            self.assertNotEqual(first_digest, second_digest)
+
     def test_speaker_timeout_reaps_grandchild_process_group(self):
         with tempfile.TemporaryDirectory() as tmp:
             pid_file = Path(tmp) / "grandchild.pid"
@@ -213,6 +235,54 @@ class LongAudioSafetyTests(unittest.TestCase):
                 except ProcessLookupError:
                     pass
                 self.fail(f"grandchild process survived timeout: pid={grandchild_pid}")
+
+    def test_group_cleanup_kills_sigterm_ignoring_child_after_leader_exits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "grandchild.pid"
+            grandchild_program = (
+                "import signal,time; "
+                "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                "time.sleep(60)"
+            )
+            leader_program = (
+                "import pathlib,subprocess,sys; "
+                f"p=subprocess.Popen([sys.executable,'-c',{grandchild_program!r}]); "
+                f"pathlib.Path({str(pid_file)!r}).write_text(str(p.pid))"
+            )
+            leader = subprocess.Popen(
+                [sys.executable, "-c", leader_program],
+                start_new_session=True,
+            )
+            deadline = time.monotonic() + 3
+            while not pid_file.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(pid_file.exists())
+            leader.wait(timeout=3)
+            grandchild_pid = int(pid_file.read_text(encoding="utf-8"))
+
+            speaker._terminate_process_group(leader, grace_seconds=0.2)
+
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline:
+                try:
+                    os.kill(grandchild_pid, 0)
+                except ProcessLookupError:
+                    break
+                proc_stat = Path(f"/proc/{grandchild_pid}/stat")
+                if proc_stat.exists():
+                    fields = proc_stat.read_text(encoding="utf-8").split()
+                    if len(fields) > 2 and fields[2] == "Z":
+                        break
+                time.sleep(0.05)
+            else:
+                try:
+                    os.kill(grandchild_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                self.fail(
+                    "SIGTERM-ignoring grandchild survived leader-first cleanup: "
+                    f"pid={grandchild_pid}"
+                )
 
     def test_mlx_worker_exits_when_explicit_owner_disappears(self):
         owner = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.3)"])

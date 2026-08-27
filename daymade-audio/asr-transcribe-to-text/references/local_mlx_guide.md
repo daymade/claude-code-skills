@@ -80,8 +80,11 @@ music/silence repetition loop.
 The bundled script reproduces the pinned upstream low-energy chunking before
 calling the model, then commits each chunk atomically under
 `<output-dir>/_mlx_checkpoints/`. The model still loads once; only the generation
-cache resets between chunks. On a retry with the same input identity and
-parameters, completed chunk hashes are verified and skipped.
+cache resets between chunks. Input identity includes the full source-audio
+SHA-256 in addition to path and metadata, so a same-size replacement with a
+restored mtime cannot reuse another recording's checkpoint. On a retry with the
+same input identity and parameters, completed chunk hashes are verified and
+skipped.
 
 Expected long-run progress looks like:
 
