@@ -188,16 +188,36 @@ def cmd_match(model, args):
             mapping[spk] = name
 
     if args.csv and mapping:
-        rows = list(csvmod.DictReader(open(args.csv, encoding="utf-8")))
-        if rows:
-            fields = list(rows[0].keys())
-            for r in rows:
-                r["speaker"] = mapping.get(r["speaker"], r["speaker"])
-            with open(args.csv, "w", encoding="utf-8", newline="") as f:
-                w = csvmod.DictWriter(f, fieldnames=fields)
-                w.writeheader()
-                w.writerows(rows)
-            log(f"Rewrote speaker column in {args.csv}")
+        csv_path = Path(args.csv)
+        receipt_path = csv_path.with_name(f"{csv_path.stem}.receipt.json")
+        if receipt_path.is_file():
+            from speaker_transcribe import apply_speaker_mapping_transaction
+
+            apply_speaker_mapping_transaction(
+                csv_path.parent,
+                csv_path.stem,
+                mapping,
+                "voiceprint_id.py match",
+            )
+            log(f"Rewrote receipt-backed speaker bundle for {args.csv}")
+        else:
+            # Legacy standalone CSVs predate the final bundle receipt. Preserve
+            # that public behavior; receipt-backed bundles must use the atomic
+            # multi-artifact transaction above.
+            with csv_path.open(newline="", encoding="utf-8") as handle:
+                reader = csvmod.DictReader(handle)
+                fields = list(reader.fieldnames or [])
+                rows = list(reader)
+            if rows:
+                for row in rows:
+                    row["speaker"] = mapping.get(
+                        row["speaker"], row["speaker"]
+                    )
+                with csv_path.open("w", encoding="utf-8", newline="") as handle:
+                    writer = csvmod.DictWriter(handle, fieldnames=fields)
+                    writer.writeheader()
+                    writer.writerows(rows)
+                log(f"Rewrote legacy speaker column in {args.csv}")
     print(json.dumps(mapping, ensure_ascii=False))
 
 

@@ -45,13 +45,16 @@ Usage:
 """
 import argparse
 import csv
+import io
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -66,7 +69,9 @@ from transcribe_local_mlx import (
     QUALITY_POLICY_ID,
     _sha256_file,
     _sha256_text,
+    atomic_write_bytes,
     atomic_write_json,
+    atomic_write_text,
 )
 
 PYANNOTE_SETUP_HINT = """
@@ -311,6 +316,120 @@ def _write_final_receipt(
         },
     }
     atomic_write_json(_final_receipt_path(out_dir, stem), payload)
+
+
+def _final_artifact_paths(out_dir, stem):
+    return {
+        name: Path(out_dir) / f"{stem}{suffix}"
+        for name, suffix in FINAL_ARTIFACT_SUFFIXES.items()
+    }
+
+
+def _artifact_receipt(path):
+    return {
+        "file": path.name,
+        "size": path.stat().st_size,
+        "sha256": _sha256_file(path),
+    }
+
+
+def apply_speaker_mapping_transaction(out_dir, stem, mapping, source):
+    """Relabel TXT/CSV and commit alignment+receipt last, with rollback."""
+    if not mapping:
+        return
+    if not isinstance(mapping, dict) or any(
+        not isinstance(old, str)
+        or not old
+        or not isinstance(new, str)
+        or not new
+        for old, new in mapping.items()
+    ):
+        raise ValueError("speaker mapping must contain non-empty string pairs")
+
+    paths = _final_artifact_paths(out_dir, stem)
+    receipt_path = _final_receipt_path(out_dir, stem)
+    mutable_paths = {**paths, "receipt": receipt_path}
+    missing = [name for name, path in mutable_paths.items() if not path.is_file()]
+    if missing:
+        raise RuntimeError(
+            f"receipt-aware speaker relabel requires complete bundle; missing {missing}"
+        )
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    if receipt.get("schema") != FINAL_RECEIPT_SCHEMA:
+        raise RuntimeError("speaker bundle receipt schema is invalid")
+    recorded_artifacts = receipt.get("artifacts")
+    if not isinstance(recorded_artifacts, dict) or any(
+        recorded_artifacts.get(name) != _artifact_receipt(path)
+        for name, path in paths.items()
+    ):
+        raise RuntimeError("speaker bundle bytes do not match the final receipt")
+
+    snapshots = {
+        name: path.read_bytes() for name, path in mutable_paths.items()
+    }
+    try:
+        transcript = paths["txt"].read_text(encoding="utf-8")
+        for old, new in mapping.items():
+            transcript = re.sub(
+                rf"(?m)^(\[\d+:\d{{2}}\.\d{{3}} - "
+                rf"\d+:\d{{2}}\.\d{{3}}\] ){re.escape(old)}$",
+                rf"\g<1>{new}",
+                transcript,
+            )
+        atomic_write_text(paths["txt"], transcript)
+
+        with paths["csv"].open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            if reader.fieldnames is None or "speaker" not in reader.fieldnames:
+                raise ValueError("speaker CSV is missing the speaker column")
+            fieldnames = list(reader.fieldnames)
+            rows = list(reader)
+        for row in rows:
+            row["speaker"] = mapping.get(row["speaker"], row["speaker"])
+        csv_buffer = io.StringIO(newline="")
+        writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+        atomic_write_text(paths["csv"], csv_buffer.getvalue())
+
+        alignment = json.loads(paths["alignment"].read_text(encoding="utf-8"))
+        recorded_mapping = alignment.get("label_mapping")
+        if not isinstance(recorded_mapping, dict):
+            recorded_mapping = {}
+        recorded_mapping.update(mapping)
+        alignment["label_mapping"] = recorded_mapping
+        alignment["turn_contract"] = {
+            "schema": "speaker-csv-v1",
+            "sha256": _csv_turn_contract_sha256(paths["csv"]),
+        }
+        alignment["component_sha256"] = {
+            name: _sha256_file(paths[name])
+            for name in ("txt", "csv", "diarization")
+        }
+        sources = alignment.get("label_mapping_sources")
+        if not isinstance(sources, list):
+            sources = []
+        sources.append(source)
+        alignment["label_mapping_sources"] = sources[-8:]
+        atomic_write_json(paths["alignment"], alignment)
+
+        receipt["artifacts"] = {
+            name: _artifact_receipt(path) for name, path in paths.items()
+        }
+        atomic_write_json(receipt_path, receipt)
+    except BaseException:
+        restore_errors = []
+        for name, payload in snapshots.items():
+            try:
+                atomic_write_bytes(mutable_paths[name], payload)
+            except Exception as exc:
+                restore_errors.append(f"{name}:{exc}")
+        if restore_errors:
+            raise RuntimeError(
+                "speaker relabel failed and rollback was incomplete: "
+                + "; ".join(restore_errors)
+            )
+        raise
 
 
 class ParentTermination(SystemExit):
@@ -574,7 +693,8 @@ def _run_batched_leg(wavs, work_root, script, staging_name, staging_suffix,
     if not todo:
         log(f"{cache_label}: all cached")
         return
-    staging = work_root / staging_name
+    staging_root = work_root / staging_name
+    staging = staging_root / f".tinkle_run_{uuid.uuid4().hex}"
     cmd = ["uv", "run", str(HERE / script), "--output-dir", str(staging)] + extra_args + [str(w) for w in todo]
     run(cmd, timeout=timeout)
     missing_outputs = []
@@ -601,7 +721,11 @@ def leg_text(wavs, work_root, language, force, timeout):
     _run_batched_leg(
         wavs, work_root, "transcribe_local_mlx.py", "_qwen", ".txt",
         dest_for=lambda stem: work_root / stem / f"{stem}.qwen.txt",
-        extra_args=["--language", language, "--owner-pid", str(os.getpid())],
+        extra_args=[
+            "--language", language,
+            "--owner-pid", str(os.getpid()),
+            "--checkpoint-dir", str(work_root / "_qwen" / "_mlx_checkpoints"),
+        ],
         force=force, timeout=timeout,
         cache_label="Leg 1 (Qwen3 full text)", missing_label="no Qwen3 transcript for",
         cache_parameters={"language": language})
@@ -648,13 +772,39 @@ def leg_align(
             log(f"ERROR {stem}: missing {[str(p) for p in missing]} — cannot align")
             failed.append(stem)
             continue
-        provenance_inputs = [(diar_json, "diarization"), (wpath, "word lattice")]
+        parameters = receipt_parameters or {}
+        provenance_inputs = [
+            (
+                diar_json,
+                "diarization",
+                "diarize_speakers.py",
+                {"device": parameters.get("device")},
+            ),
+            (
+                wpath,
+                "word lattice",
+                "word_timestamps_whisper.py",
+                {
+                    "language": _whisper_lang(parameters.get("language")),
+                    "initial_prompt": parameters.get("initial_prompt"),
+                },
+            ),
+        ]
         if text_file is None:
-            provenance_inputs.append((tpath, "Qwen transcript"))
+            provenance_inputs.append(
+                (
+                    tpath,
+                    "Qwen transcript",
+                    "transcribe_local_mlx.py",
+                    {"language": parameters.get("language")},
+                )
+            )
         stale = [
             label
-            for path, label in provenance_inputs
-            if not _artifact_provenance_matches_source(wav, path)
+            for path, label, producer, cache_parameters in provenance_inputs
+            if not _artifact_cache_valid(
+                wav, path, producer, cache_parameters
+            )
         ]
         if stale:
             log(f"ERROR {stem}: stale/unproven {stale} — cannot align")

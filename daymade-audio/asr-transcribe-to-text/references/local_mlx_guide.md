@@ -38,7 +38,7 @@ If the dependency stack differs, the agent is probably running an installed/stal
 | Setting | Value | Why |
 |---------|-------|-----|
 | Model | `mlx-community/Qwen3-ASR-1.7B-8bit` | 8-bit quantized, fast inference, good quality |
-| Model revision | Script-pinned immutable HuggingFace commit | The exact revision lives once in `DEFAULT_MODEL_REVISION`; a same-ID weight update gets a new checkpoint namespace |
+| Model revision | Script-pinned immutable HuggingFace commit | Remote revisions must be full commit SHAs; branch/tag names are rejected. Custom local model directories are content-addressed from their files instead of trusting a caller label |
 | chunk_duration | `1200` seconds | The pinned Qwen3 implementation already splits long audio near low-energy boundaries at about 20 minutes |
 | max_tokens | `8192` **per chunk** | About twice the observed 20-minute Chinese requirement; bounds KV-cache growth and repetition loops |
 | Audio format | WAV 16kHz mono PCM | Best compatibility with ASR models |

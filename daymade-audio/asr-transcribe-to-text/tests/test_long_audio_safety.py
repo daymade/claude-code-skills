@@ -67,6 +67,58 @@ def identity():
     }
 
 
+def write_receipt_backed_bundle(root, wav):
+    stem = wav.stem
+    (root / f"{stem}.txt").write_text(
+        "[00:00.000 - 00:01.000] SPEAKER_00\nhello\n",
+        encoding="utf-8",
+    )
+    (root / f"{stem}.csv").write_text(
+        "file,start,end,duration,speaker,text\n"
+        f"{wav.name},0,1,1,SPEAKER_00,hello\n",
+        encoding="utf-8",
+    )
+    (root / f"{stem}.diarization.json").write_text(
+        json.dumps({
+            "num_segments": 1,
+            "num_speakers": 1,
+            "segments": [
+                {"start": 0.0, "end": 1.0, "speaker": "SPEAKER_00"}
+            ],
+        }),
+        encoding="utf-8",
+    )
+    (root / f"{stem}.alignment.json").write_text(
+        json.dumps({
+            "report": {
+                "trustworthy": True,
+                "anchored_ratio": 1.0,
+                "num_turns": 1,
+                "speakers": ["SPEAKER_00"],
+            }
+        }),
+        encoding="utf-8",
+    )
+    speaker._stamp_alignment_source(
+        wav, root, stem, speaker._source_audio_identity(wav)
+    )
+    parameters = {
+        "language": "Chinese",
+        "initial_prompt": None,
+        "device": None,
+        "max_gap": 2.0,
+        "text_file": None,
+    }
+    speaker._write_final_receipt(wav, root, stem, parameters)
+    return {
+        name: root / f"{stem}{suffix}"
+        for name, suffix in {
+            **speaker.FINAL_ARTIFACT_SUFFIXES,
+            "receipt": ".receipt.json",
+        }.items()
+    }
+
+
 class LongAudioSafetyTests(unittest.TestCase):
     def test_default_budget_is_per_chunk_and_bounded(self):
         parser = local_mlx.build_parser()
@@ -83,6 +135,16 @@ class LongAudioSafetyTests(unittest.TestCase):
         custom = parser.parse_args(["--smoke-test", "--model", "example/custom"])
         with self.assertRaises(SystemExit):
             local_mlx.validate_args(parser, custom)
+
+        mutable = parser.parse_args([
+            "--smoke-test",
+            "--model",
+            "example/custom",
+            "--model-revision",
+            "main",
+        ])
+        with self.assertRaises(SystemExit):
+            local_mlx.validate_args(parser, mutable)
 
     def test_each_chunk_commits_and_second_run_resumes_without_inference(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -257,6 +319,49 @@ class LongAudioSafetyTests(unittest.TestCase):
                     1200.0,
                 )
 
+    def test_malformed_checkpoint_root_and_chunk_entry_are_integrity_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_path = Path(tmp) / "manifest.json"
+            manifest_path.write_text("[]", encoding="utf-8")
+            with self.assertRaisesRegex(
+                local_mlx.CheckpointIntegrityError,
+                "root must be an object",
+            ):
+                local_mlx._load_or_create_manifest(
+                    manifest_path, identity(), 1
+                )
+
+            manifest_path.unlink()
+            local_mlx._load_or_create_manifest(manifest_path, identity(), 1)
+            unsafe = json.loads(manifest_path.read_text(encoding="utf-8"))
+            unsafe["chunks"] = [{
+                "index": 0,
+                "status": "done",
+                "part": "../outside.txt",
+                "sha256": "a" * 64,
+            }]
+            manifest_path.write_text(json.dumps(unsafe), encoding="utf-8")
+            with self.assertRaisesRegex(
+                local_mlx.CheckpointIntegrityError,
+                "unsafe or malformed identity",
+            ):
+                local_mlx._load_or_create_manifest(
+                    manifest_path, identity(), 1
+                )
+
+            manifest_path.unlink()
+            local_mlx._load_or_create_manifest(manifest_path, identity(), 1)
+            malformed = json.loads(manifest_path.read_text(encoding="utf-8"))
+            malformed["chunks"] = [None]
+            manifest_path.write_text(json.dumps(malformed), encoding="utf-8")
+            with self.assertRaisesRegex(
+                local_mlx.CheckpointIntegrityError,
+                "chunk entries are missing",
+            ):
+                local_mlx._load_or_create_manifest(
+                    manifest_path, identity(), 1
+                )
+
     def test_checkpoint_identity_changes_when_same_size_audio_content_changes(self):
         with tempfile.TemporaryDirectory() as tmp:
             audio = Path(tmp) / "audio.wav"
@@ -341,6 +446,25 @@ class LongAudioSafetyTests(unittest.TestCase):
                 first_identity["model_revision"],
                 revision_identity["model_revision"],
             )
+
+    def test_local_model_revision_is_derived_from_model_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model_dir = Path(tmp) / "model"
+            model_dir.mkdir()
+            weights = model_dir / "weights.safetensors"
+            weights.write_bytes(b"first-weights")
+            source, kind, first_revision = local_mlx._resolve_model_source(
+                model_dir, None
+            )
+            self.assertEqual(source, str(model_dir.resolve()))
+            self.assertEqual(kind, "local-content-addressed")
+            self.assertRegex(first_revision, r"^local-sha256:[0-9a-f]{64}$")
+
+            weights.write_bytes(b"other-weights")
+            _source, _kind, second_revision = local_mlx._resolve_model_source(
+                model_dir, None
+            )
+            self.assertNotEqual(first_revision, second_revision)
 
     def test_speaker_timeout_reaps_grandchild_process_group(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -549,6 +673,63 @@ class LongAudioSafetyTests(unittest.TestCase):
             )
         self.assertEqual(raised.exception.code, 4)
 
+    def test_receipt_backed_speaker_mapping_updates_complete_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wav = root / "audio.wav"
+            wav.write_bytes(b"wav")
+            paths = write_receipt_backed_bundle(root, wav)
+
+            speaker.apply_speaker_mapping_transaction(
+                root,
+                wav.stem,
+                {"SPEAKER_00": "Alice"},
+                "test mapping",
+            )
+
+            self.assertIn(" Alice\n", paths["txt"].read_text(encoding="utf-8"))
+            self.assertIn(",Alice,", paths["csv"].read_text(encoding="utf-8"))
+            alignment = json.loads(paths["alignment"].read_text(encoding="utf-8"))
+            self.assertEqual(alignment["label_mapping"]["SPEAKER_00"], "Alice")
+            receipt = json.loads(paths["receipt"].read_text(encoding="utf-8"))
+            for name in speaker.FINAL_ARTIFACT_SUFFIXES:
+                self.assertEqual(
+                    receipt["artifacts"][name]["sha256"],
+                    local_mlx._sha256_file(paths[name]),
+                )
+
+    def test_receipt_backed_speaker_mapping_rolls_back_partial_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wav = root / "audio.wav"
+            wav.write_bytes(b"wav")
+            paths = write_receipt_backed_bundle(root, wav)
+            before = {name: path.read_bytes() for name, path in paths.items()}
+            original_atomic_json = speaker.atomic_write_json
+
+            def fail_final_receipt(path, payload):
+                if Path(path).name.endswith(".receipt.json"):
+                    raise TypeError("injected final receipt failure")
+                return original_atomic_json(path, payload)
+
+            with (
+                mock.patch.object(
+                    speaker, "atomic_write_json", side_effect=fail_final_receipt
+                ),
+                self.assertRaisesRegex(TypeError, "injected final receipt failure"),
+            ):
+                speaker.apply_speaker_mapping_transaction(
+                    root,
+                    wav.stem,
+                    {"SPEAKER_00": "Alice"},
+                    "test mapping",
+                )
+
+            self.assertEqual(
+                {name: path.read_bytes() for name, path in paths.items()},
+                before,
+            )
+
     def test_required_leg_rerun_without_fresh_output_fails_before_alignment(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -570,6 +751,60 @@ class LongAudioSafetyTests(unittest.TestCase):
             )
             self.assertFalse(
                 speaker._artifact_provenance_matches_source(wav, destination)
+            )
+
+    def test_persistent_staging_file_cannot_masquerade_as_fresh_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wav = root / "audio.wav"
+            wav.write_bytes(b"source-b")
+            work_root = root / "work"
+            persistent_staging = work_root / "_qwen" / f"{wav.stem}.txt"
+            persistent_staging.parent.mkdir(parents=True)
+            persistent_staging.write_text("old source-a text", encoding="utf-8")
+            destination = work_root / wav.stem / f"{wav.stem}.qwen.txt"
+
+            with (
+                mock.patch.object(speaker, "run", return_value=None),
+                self.assertRaisesRegex(RuntimeError, "produced no fresh artifact"),
+            ):
+                speaker.leg_text([wav], work_root, "Chinese", False, 30)
+
+            self.assertFalse(destination.exists())
+            self.assertEqual(
+                persistent_staging.read_text(encoding="utf-8"),
+                "old source-a text",
+            )
+
+    def test_full_cache_contract_rejects_wrong_parameters_at_consumption(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wav = root / "audio.wav"
+            wav.write_bytes(b"source")
+            artifact = root / "audio.qwen.txt"
+            artifact.write_text("transcript", encoding="utf-8")
+            speaker._write_artifact_provenance(
+                wav,
+                artifact,
+                "transcribe_local_mlx.py",
+                {"language": "Chinese"},
+            )
+
+            self.assertTrue(
+                speaker._artifact_cache_valid(
+                    wav,
+                    artifact,
+                    "transcribe_local_mlx.py",
+                    {"language": "Chinese"},
+                )
+            )
+            self.assertFalse(
+                speaker._artifact_cache_valid(
+                    wav,
+                    artifact,
+                    "transcribe_local_mlx.py",
+                    {"language": "English"},
+                )
             )
 
     def test_mlx_worker_exits_when_explicit_owner_disappears(self):

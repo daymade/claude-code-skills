@@ -28,6 +28,7 @@ import json
 import numbers
 import os
 import platform
+import re
 import sys
 import threading
 import time
@@ -52,6 +53,7 @@ REPETITION_NGRAM_CHARS = 12
 REPETITION_MIN_NORMALIZED_CHARS = 400
 REPETITION_MIN_UNIQUE_RATIO = 0.20
 QUALITY_POLICY_ID = "unique-12gram-v1"
+IMMUTABLE_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 class ChunkTokenLimitError(RuntimeError):
@@ -117,10 +119,23 @@ def build_parser():
 
 
 def validate_args(parser, args):
-    if args.model_revision is None:
-        if args.model != DEFAULT_MODEL_ID:
-            parser.error("custom --model requires an immutable --model-revision")
-        args.model_revision = DEFAULT_MODEL_REVISION
+    local_model = Path(args.model).expanduser().is_dir()
+    if local_model:
+        if args.model_revision is not None:
+            parser.error(
+                "local --model paths are content-addressed automatically; "
+                "omit --model-revision"
+            )
+    else:
+        if args.model_revision is None:
+            if args.model != DEFAULT_MODEL_ID:
+                parser.error("custom --model requires an immutable --model-revision")
+            args.model_revision = DEFAULT_MODEL_REVISION
+        if not IMMUTABLE_COMMIT_RE.fullmatch(args.model_revision):
+            parser.error(
+                "remote --model-revision must be a full 40-character lowercase "
+                "commit SHA; branch/tag names such as main are mutable"
+            )
     if not args.inputs and not args.smoke_test:
         parser.error("at least one input file is required unless --smoke-test is set")
     if args.max_tokens <= 0:
@@ -260,34 +275,57 @@ def _runtime_dependency_versions():
     return actual
 
 
+def _sha256_model_tree(model_path):
+    """Content-address a local model directory, including symlink targets."""
+    root = Path(model_path).expanduser().resolve()
+    records = []
+    for candidate in sorted(root.rglob("*"), key=lambda path: path.as_posix()):
+        if candidate.is_symlink():
+            target = candidate.resolve(strict=True)
+            if not target.is_file():
+                raise ValueError(f"local model symlink is not a file: {candidate}")
+        elif candidate.is_file():
+            target = candidate
+        else:
+            continue
+        records.append(
+            (
+                candidate.relative_to(root).as_posix(),
+                target.stat().st_size,
+                _sha256_file(target),
+            )
+        )
+    if not records:
+        raise ValueError(f"local model directory contains no files: {root}")
+    return hashlib.sha256(
+        json.dumps(records, ensure_ascii=False, separators=(",", ":")).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+
+
 def _resolve_model_source(model_name, model_revision):
-    """Use the exact cached snapshot offline; otherwise keep the pinned remote ref."""
+    """Resolve remote refs to a commit snapshot or hash local model bytes."""
     model_path = Path(model_name).expanduser()
     if model_path.is_dir():
-        return str(model_path.resolve()), "local-path"
-    from huggingface_hub.constants import HF_HUB_CACHE
-    from huggingface_hub.file_download import repo_folder_name
-
-    exact_snapshot = (
-        Path(HF_HUB_CACHE)
-        / repo_folder_name(repo_id=model_name, repo_type="model")
-        / "snapshots"
-        / model_revision
-    )
-    if exact_snapshot.is_dir():
-        return str(exact_snapshot.resolve()), "cached-pinned"
-    from huggingface_hub import snapshot_download
-    from huggingface_hub.errors import LocalEntryNotFoundError
-
-    try:
-        cached = snapshot_download(
-            repo_id=model_name,
-            revision=model_revision,
-            local_files_only=True,
+        content_digest = _sha256_model_tree(model_path)
+        return (
+            str(model_path.resolve()),
+            "local-content-addressed",
+            f"local-sha256:{content_digest}",
         )
-    except LocalEntryNotFoundError:
-        return model_name, "remote-pinned"
-    return cached, "cached-pinned"
+    from huggingface_hub import snapshot_download
+
+    snapshot = Path(
+        snapshot_download(repo_id=model_name, revision=model_revision)
+    ).resolve()
+    resolved_revision = snapshot.name.lower()
+    if not IMMUTABLE_COMMIT_RE.fullmatch(resolved_revision):
+        raise RuntimeError(
+            f"HuggingFace did not resolve {model_name}@{model_revision} "
+            f"to an immutable commit snapshot: {snapshot}"
+        )
+    return str(snapshot), "resolved-pinned", resolved_revision
 
 
 def _checkpoint_identity(
@@ -344,6 +382,10 @@ def _load_or_create_manifest(path, identity, chunk_count):
             raise CheckpointIntegrityError(
                 f"checkpoint manifest cannot be decoded: {path}: {exc}"
             ) from exc
+        if not isinstance(manifest, dict):
+            raise CheckpointIntegrityError(
+                "checkpoint manifest root must be an object"
+            )
         for key, value in expected.items():
             if manifest.get(key) != value:
                 raise CheckpointIntegrityError(
@@ -355,6 +397,30 @@ def _load_or_create_manifest(path, identity, chunk_count):
             raise CheckpointIntegrityError(
                 "checkpoint chunk table is missing or malformed"
             )
+        allowed_statuses = {"pending", "running", "failed", "done"}
+        for index, entry in enumerate(chunks):
+            if (
+                not isinstance(entry, dict)
+                or type(entry.get("index")) is not int
+                or entry.get("index") != index
+                or entry.get("status") not in allowed_statuses
+            ):
+                raise CheckpointIntegrityError(
+                    "checkpoint chunk entries are missing, malformed, or out of order"
+                )
+            if entry.get("status") == "done":
+                part_name = entry.get("part")
+                part_hash = entry.get("sha256")
+                if (
+                    not isinstance(part_name, str)
+                    or Path(part_name).name != part_name
+                    or not re.fullmatch(r"chunk-[0-9]{4}\.txt", part_name)
+                    or not isinstance(part_hash, str)
+                    or not re.fullmatch(r"[0-9a-f]{64}", part_hash)
+                ):
+                    raise CheckpointIntegrityError(
+                        f"completed checkpoint entry {index} has unsafe or malformed identity"
+                    )
         return manifest
     manifest = {
         **expected,
@@ -368,11 +434,19 @@ def _load_or_create_manifest(path, identity, chunk_count):
 
 
 def _validated_completed_part(checkpoint_dir, entry):
+    if not isinstance(entry, dict):
+        raise CheckpointIntegrityError("checkpoint chunk entry is not an object")
     if entry.get("status") != "done":
         return None
     part_name = entry.get("part")
     expected_hash = entry.get("sha256")
-    if not part_name or not expected_hash:
+    if (
+        not isinstance(part_name, str)
+        or Path(part_name).name != part_name
+        or not re.fullmatch(r"chunk-[0-9]{4}\.txt", part_name)
+        or not isinstance(expected_hash, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", expected_hash)
+    ):
         raise CheckpointIntegrityError(
             f"completed checkpoint entry is incomplete: {entry}"
         )
@@ -558,9 +632,10 @@ def main():
           f"mlx-lm {dependency_versions['mlx-lm']}, "
           f"transformers {dependency_versions['transformers']}",
           file=sys.stderr, flush=True)
-    model_source, model_source_kind = _resolve_model_source(
+    model_source, model_source_kind, resolved_model_revision = _resolve_model_source(
         args.model, args.model_revision
     )
+    args.model_revision = resolved_model_revision
     print(
         f"Loading model {args.model}@{args.model_revision} "
         f"({model_source_kind})...",
@@ -568,10 +643,7 @@ def main():
         flush=True,
     )
     t0 = time.time()
-    if model_source_kind == "remote-pinned":
-        model = load_model(model_source, revision=args.model_revision)
-    else:
-        model = load_model(model_source)
+    model = load_model(model_source)
     load_time = time.time() - t0
     print(f"Model loaded in {load_time:.1f}s", file=sys.stderr, flush=True)
 
