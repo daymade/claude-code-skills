@@ -148,15 +148,18 @@
     },
     {
       "name": "daymade-codex",
-      "description": "Codex and visual exploration suite bundling local OpenAI Codex CLI delegation, a browser gallery for Codex-generated images, and batch generation and comparison of visual design directions under one shared namespace. Install once for Codex-assisted coding, image review, and design-style exploration workflows.",
+      "description": "OpenAI Codex operations and visual exploration suite bundling model-aware long-context workstation setup for CLI and Desktop, local Codex CLI delegation, a browser gallery for generated images, and batch generation and comparison of visual design directions under one shared namespace.",
       "source": "./daymade-codex",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "suite",
       "keywords": [
         "suite",
         "codex",
         "openai",
+        "context-window",
+        "codex-desktop",
+        "workstation-setup",
         "code-review",
         "image-gallery",
         "design",
@@ -165,7 +168,8 @@
       "skills": [
         "./codex-image-gallery",
         "./local-codex",
-        "./design-style-picker"
+        "./design-style-picker",
+        "./codex-1m-context-window-setup"
       ]
     },
     {
