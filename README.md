@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.0.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-2.1.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -189,15 +189,24 @@ claude plugin install daymade-macos@daymade-skills
 
 These skills are bundle-only under `daymade-macos`.
 
-**Codex Suite** (shared namespace for Codex-assisted coding and visual exploration):
+**Codex Suite** (shared namespace for Codex workstation setup, assisted coding, and visual exploration):
 ```bash
 claude plugin install daymade-codex@daymade-skills
+```
+
+Codex CLI and Desktop users can install the same suite through Codex's plugin
+marketplace:
+
+```bash
+codex plugin marketplace add daymade/claude-code-skills
+codex plugin add daymade-codex@daymade-skills
 ```
 
 ```text
 /daymade-codex:codex-image-gallery
 /daymade-codex:local-codex
 /daymade-codex:design-style-picker
+/daymade-codex:codex-1m-context-window-setup
 ```
 
 These skills are bundle-only under `daymade-codex`.
@@ -2819,7 +2828,7 @@ developer-menu toggle.
 claude plugin install setup-notifications-via-wecom@daymade-skills
 ```
 
-Set up reusable WeCom (Enterprise WeChat) webhook notifications for technical status reports, alerts, and completion messages.
+Set up reusable WeCom (Enterprise WeChat) webhook notifications for technical status reports, alerts, and completion messages. The target is explicitly classified: the user's own channel may send automatically; every other target requires human confirmation.
 
 **When to use:**
 - Configuring a reusable 企业微信 / WeCom notification channel
@@ -2836,14 +2845,14 @@ Set up reusable WeCom (Enterprise WeChat) webhook notifications for technical st
 claude plugin install notify-wecom@daymade-skills
 ```
 
-Send a single WeCom group-bot message without setting up a reusable notification workflow.
+Send a single WeCom group-bot message using the configured target identity: `self` sends directly, while `others` requires human confirmation.
 
 **When to use:**
 - `/notify-wecom`
 - 临时发一条企业微信 / 企微通知一下
 - One-shot alerts that do not need templates or persistent setup
 
-**Requirements**: WeCom bot webhook URL.
+**Requirements**: WeCom bot webhook URL plus the explicit recipient scope/label and canonical sender binding created by the setup command.
 
 ---
 
@@ -3467,6 +3476,30 @@ we solved this before; find the code and successful path before changing anythin
 don't rebuild the workflow until you have checked our existing Skills and history
 ```
 
+### 99. **codex-1m-context-window-setup** - Model-Aware Long Context for Codex
+
+> **Install**: `claude plugin install daymade-codex@daymade-skills`
+> (suite-only — invoked as `daymade-codex:codex-1m-context-window-setup`)
+
+Configure the shared Codex CLI/Desktop base config for the largest context window
+the selected model actually declares, up to a one-million-token request. The Skill
+discovers the live model contract, explains the familiar ~258K default, applies a
+60% auto-compaction threshold, preserves unrelated TOML, backs up changed bytes,
+and rolls back if Codex strict-config validation fails.
+
+**Key features:**
+- Model-aware ceiling instead of a hard-coded 1M claim
+- Read-only `doctor`, transactional `apply`, and drift-detecting `verify` modes
+- Exact rollback, idempotent no-op behavior, and macOS/Windows support
+- Changes only `model_context_window` and `model_auto_compact_token_limit`
+
+**Example usage:**
+```text
+/daymade-codex:codex-1m-context-window-setup doctor
+configure Codex CLI and Desktop for the largest verified context window
+verify that my long-context setup still matches the selected model
+```
+
 ---
 
 ## 🎬 Interactive Demo Gallery
@@ -3537,6 +3570,13 @@ Use **read-claude-code-history** to recover deleted files from previous Claude C
 
 ### For Reusing Existing Work Before Producing
 Use **prior-work-retrieval** before a substantial implementation, plan, report, workflow, document, or external message may already have an answer elsewhere. It searches the explicit local source manifest across current code, project decisions, Skills/SOPs, meetings, archived WeChat, and conversation history; then requires source verification plus an auditable reuse/adapt/reject receipt. A zero-hit ranked search never becomes an absence claim.
+
+### For Codex Workstation Setup
+Use **codex-1m-context-window-setup** when Codex CLI or Desktop shows about 258K
+context, compacts too early, or a classroom/workstation needs a reproducible
+long-context policy. It reads the selected model's live catalog entry, requests up
+to 1M raw tokens, and verifies the exact base-config values without touching the
+model, sandbox, approvals, plugins, or other user settings.
 
 ### For Resuming Interrupted Claude Sessions
 Use **continue-claude-code-work** to recover the last actionable request from local `~/.claude` artifacts and continue implementation without reopening the original session. Combine with **read-claude-code-history** when you need broader cross-session search, statistics, or deleted-file recovery.
@@ -3647,6 +3687,7 @@ Each skill includes:
 - **read-codex-history**: See `daymade-claude-code/read-codex-history/references/storage_and_portability.md` for local-store selection, cross-platform paths, privacy boundaries, and diagnostics
 - **read-claude-code-history**: See `daymade-claude-code/read-claude-code-history/references/session_file_format.md` for JSONL structure and `daymade-claude-code/read-claude-code-history/references/workflow_examples.md` for recovery workflows
 - **prior-work-retrieval**: See `daymade-claude-code/prior-work-retrieval/SKILL.md` for the retrieval/verification workflow and `daymade-claude-code/prior-work-retrieval/references/source-manifest.md` for the explicit carrier contract
+- **codex-1m-context-window-setup**: See `daymade-codex/codex-1m-context-window-setup/SKILL.md` for the doctor/apply/verify workflow and `daymade-codex/codex-1m-context-window-setup/references/context_window_contract.md` for model-cap, usable-window, and compaction semantics
 - **docs-cleaner**: See `daymade-docs/docs-cleaner/SKILL.md` for consolidation workflows
 - **deep-research**: See `deep-research/references/research_report_template.md` for report structure and `deep-research/references/source_quality_rubric.md` for source triage
 - **pdf-creator**: See `daymade-docs/pdf-creator/SKILL.md` for PDF conversion and font setup
@@ -3682,6 +3723,7 @@ Each skill includes:
 ## 🛠️ Requirements
 
 - **Claude Code** 2.0.13 or higher
+- **Codex CLI with `doctor --json` and `debug models` + uv/Python 3.11+** (for codex-1m-context-window-setup)
 - **Python 3.10+** (marketplace-wide baseline; individual skills may support older versions)
 - **gh CLI** (for github-ops and github-review-pr)
 - **git with `merge-tree --write-tree` + jq** (for github-review-pr)
@@ -3720,7 +3762,9 @@ Start with **skill-creator** if you want to create your own skills. Otherwise, b
 
 ### Can I use these skills without Claude Code?
 
-No, these skills are specifically designed for Claude Code. You'll need Claude Code 2.0.13 or higher.
+Most marketplace skills target Claude Code. Skills in the `daymade-codex` suite
+that explicitly document Codex support can also be installed through Codex's
+plugin marketplace; check each Skill's requirements before use.
 
 ### How do I update skills?
 

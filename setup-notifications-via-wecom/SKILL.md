@@ -20,7 +20,8 @@ It covers two things:
    the misleading patterns that made earlier backup-sync notifications confusing.
 
 The bundled script `scripts/send_wecom.py` handles the actual HTTP call, including the proxy-unset rule
-required for Tencent services in mainland China.
+required for Tencent services in mainland China. Recipient identity is explicit configuration:
+`self` may send automatically; `others` requires human confirmation; missing identity fails fast.
 
 ## When to Use This Skill
 
@@ -51,9 +52,19 @@ Trigger this skill when the user:
    chmod 600 ~/.config/setup-notifications-via-wecom/config.json
    ```
 
-4. **Test connectivity** by sending a test message (run from the skill directory):
+4. **Classify the exact target and bind the canonical sender** without exposing or rewriting the webhook value:
    ```bash
-   uv run --with requests scripts/send_wecom.py --message "WeCom webhook test ✅"
+   uv run --no-project python scripts/set_recipient.py \
+     --scope self --label "My private self channel"
+   ```
+   Use `self` only when the configured webhook is visible only to the user. Use
+   `others` for every other person or group. Do not guess when the target is unknown.
+   The command also records this sender's absolute path and digest; after the sender
+   is upgraded, rerun the command before sending again.
+
+5. **Test connectivity** by sending a test message (run from the skill directory):
+   ```bash
+   uv run --no-project python scripts/send_wecom.py --message "WeCom webhook test ✅"
    ```
    If you see the message in the WeCom group, setup is done.
 
@@ -172,10 +183,16 @@ Use for routine "all good" updates.
 
 ## Send a Message
 
+Read `recipient_scope` and `recipient_label` before sending. A `self` target is
+the user's own delivery channel and needs no authorization. An `others` target
+is an external send: show the exact label and message and wait for the active
+human-confirmation gate. Missing/invalid metadata is a configuration error, not
+permission to guess.
+
 ### Option A: Use the bundled script directly
 
 ```bash
-uv run --with requests scripts/send_wecom.py \
+uv run --no-project python scripts/send_wecom.py \
   --message "你的消息内容"
 ```
 
@@ -188,7 +205,7 @@ Claude Code 备份同步完成 ✅
 - 验证：0 缺失，0 滞后
 EOF
 
-uv run --with requests scripts/send_wecom.py \
+uv run --no-project python scripts/send_wecom.py \
   --file /tmp/wecom_msg.txt
 ```
 
@@ -215,17 +232,21 @@ env -u http_proxy -u https_proxy -u all_proxy -u HTTP_PROXY -u HTTPS_PROXY -u AL
 When a user asks "let my backup script send WeCom notifications", do the following:
 
 1. Confirm the webhook is configured (see Quick Start).
-2. Identify the notification type (backup-complete, alert, status-update, custom).
-3. Collect the exact numbers and their definitions from the script output.
-4. Craft the message using the templates above.
-5. Call `scripts/send_wecom.py` with the message.
-6. Verify the message arrived in the WeCom group.
+2. Read the explicit recipient scope/label; auto-send only when scope is `self`.
+3. Identify the notification type (backup-complete, alert, status-update, custom).
+4. Collect the exact numbers and their definitions from the script output.
+5. Craft the message using the templates above.
+6. For `others`, obtain human confirmation; then call `scripts/send_wecom.py`.
+7. Verify the message arrived at the configured target.
 
 ## What This Skill Does NOT Do
 
 - It does not create or manage WeCom group bots — get the webhook key from WeCom first.
+- It does not infer who a webhook reaches — classify the target explicitly with `set_recipient.py`.
 - It does not handle rich media messages (markdown cards, news, images) — only plain text.
-- It does not retry indefinitely — the script retries transient errors 3 times and then fails.
+- Manual `--message` / `--file` sends retry transient errors up to 3 times. Guard-owned
+  automatic `--outbox` delivery makes exactly one HTTP attempt and requires the
+  guard-approved payload digest; a later run never sends a pre-existing payload.
 - It does not send messages without the proxy-unset guard.
 
 ## Troubleshooting
@@ -252,3 +273,4 @@ Run the setup step again. The script expects `~/.config/setup-notifications-via-
 
 - `references/message_best_practices.md` — condensed checklist distilled from this session's corrections.
 - `scripts/send_wecom.py` — the sender script.
+- `scripts/set_recipient.py` — atomically records `self` versus `others` plus the canonical sender path/digest without printing the webhook.

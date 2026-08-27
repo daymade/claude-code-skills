@@ -89,6 +89,15 @@ deterministic, Linux-verified) and the runner types (`python-unittest` via
 check the registry before assuming otherwise, and note `unittest discover`
 only collects `unittest.TestCase` subclasses, not bare pytest-style functions.
 
+### WeCom Send Boundary
+
+WeCom sender skills must read an explicit target class. `self` may send to the
+user's own delivery channel without authorization; `others` requires the exact
+label and message at a human confirmation gate. Unknown target identity fails
+fast. Automatic self delivery also requires the config-bound sender path and
+digest; a matching basename is not identity. A pending item is not a delivery
+receipt, and an automatic outbox path gets one non-retrying HTTP attempt.
+
 ### Testing Skills Locally
 
 ```bash
@@ -390,6 +399,7 @@ This applies when you change ANY file under a skill directory:
 94. **kimi-use** - Drive the logged-in Kimi desktop app through computer-use to query its built-in company, financial, market, academic, and legal data plugins without separate API keys; includes source-labeled query patterns and independent verification for screen-transcribed results
 95. **tibo-reset-codex** - Query current ChatGPT/Codex usage-limit reset timing, interpret Tibo reset announcements, and convert Pacific times to Beijing time through live evidence rather than memory
 96. **prior-work-retrieval** - Find and verify existing successful code, documents, Skills, SOPs, decisions, meetings, WeChat archives, and conversation history before producing new work; leave an auditable reuse/adapt/reject receipt (daymade-claude-code suite member)
+97. **codex-1m-context-window-setup** - Configure and verify the largest context window the selected Codex model declares, up to a one-million-token request, for CLI and Desktop; preserves unrelated config, backs up changed bytes, and rolls back on strict-config failure (daymade-codex suite member)
 
 **Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
 
