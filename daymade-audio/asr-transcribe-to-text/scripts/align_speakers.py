@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Decoupled speaker alignment: attach speaker labels to a full-audio transcript.
+"""Decoupled speaker alignment: attach speaker labels to a session-wide transcript.
 
 This is the core of the decoupled (WhisperX-style) pipeline. Instead of cutting
 audio by speaker and transcribing each slice (cascade — breaks ASR context), we
 align three independent layers and never touch the ASR text:
 
-  Layer 1  full-audio transcript (Qwen3-ASR)   — best text, no timing
+  Layer 1  session transcript (Qwen3-ASR)      — best text, no timing
   Layer 2  word-level timestamps (mlx-whisper) — timing lattice, text secondary
   Layer 3  diarization segments (pyannote)     — speaker x time, no text
 
@@ -253,7 +253,7 @@ def write_outputs(turns, report, wav_name, out_dir, stem):
             w.writerow([wav_name, t["start"], t["end"], t["duration"], t["speaker"], t["text"]])
     (out_dir / f"{stem}.alignment.json").write_text(
         json.dumps({"wav": wav_name, "report": report,
-                    "note": "turn text comes from the full-audio ASR transcript; "
+                    "note": "turn text comes from the session-wide ASR transcript; "
                             "times/speakers aligned from whisper word lattice + pyannote"},
                    ensure_ascii=False, indent=2),
         encoding="utf-8")
@@ -262,7 +262,7 @@ def write_outputs(turns, report, wav_name, out_dir, stem):
 
 def main():
     ap = argparse.ArgumentParser(description="Align full transcript + word lattice + diarization")
-    ap.add_argument("--text", type=Path, required=True, help="full-audio transcript (plain text)")
+    ap.add_argument("--text", type=Path, required=True, help="session-wide transcript (plain text)")
     ap.add_argument("--words", type=Path, required=True, help='JSON {"words":[{word,start,end}]}')
     ap.add_argument("--diarization", type=Path, required=True, help='JSON {"segments":[{start,end,speaker}]}')
     ap.add_argument("--out-dir", type=Path, required=True)

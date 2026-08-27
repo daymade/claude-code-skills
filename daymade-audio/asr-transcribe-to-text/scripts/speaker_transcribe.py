@@ -3,12 +3,12 @@
 # requires-python = ">=3.10"
 # dependencies = ["pyannote.audio", "torch", "torchaudio"]
 # ///
-"""Multi-speaker transcription, DECOUPLED (WhisperX-style): full-audio ASR +
-word-level timing + diarization, aligned after the fact — the audio is never
-cut before transcription, so ASR keeps its full context and Chinese fidelity.
+"""Multi-speaker transcription, DECOUPLED (WhisperX-style): session ASR +
+word-level timing + diarization, aligned after the fact. Audio is never cut at
+speaker turns before ASR; the Qwen leg owns bounded low-energy long-audio chunks.
 
 Three legs + one aligner:
-  1. Qwen3-ASR MLX full-audio transcript (subprocess: transcribe_local_mlx.py)
+  1. Qwen3-ASR MLX session transcript    (subprocess: transcribe_local_mlx.py)
   2. mlx-whisper word timestamps        (subprocess: word_timestamps_whisper.py)
   3. pyannote diarization               (in-process, MPS/CUDA; pipeline loaded
                                           ONCE for the whole batch, not per file)
@@ -20,8 +20,10 @@ Outputs per input (flat under OUTPUT_DIR — same contract downstream tools read
   <stem>.txt                [MM:SS - MM:SS] SPEAKER_xx + text
   <stem>.csv                file,start,end,duration,speaker,text
   <stem>.alignment.json     alignment provenance + anchored_ratio trust signal
-Intermediate legs are cached under OUTPUT_DIR/_align/ and reused on re-run
-(pass --force to redo them).
+  <stem>.receipt.json       atomic final contract: source + four artifact hashes
+Intermediate legs are cached under OUTPUT_DIR/_align/ and reused only when a
+sidecar proves the source-audio bytes, producer bytes, parameters, and cached
+artifact bytes still match (pass --force to redo them).
 
 Speaker labels are anonymous (SPEAKER_00...). Map them to real names with
 voiceprint_id.py — references/voiceprint_speaker_id.md.
@@ -42,14 +44,35 @@ Usage:
   --timeout SEC      per-leg subprocess timeout (default 1800)
 """
 import argparse
+import csv
+import io
 import json
 import os
+import re
+import signal
 import subprocess
 import sys
+import threading
+import time
+import uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+
+from transcribe_local_mlx import (
+    DEFAULT_CHUNK_DURATION_S,
+    DEFAULT_MAX_TOKENS_PER_CHUNK,
+    DEFAULT_MODEL_ID,
+    DEFAULT_MODEL_REVISION,
+    PINNED_DEPENDENCY_VERSIONS,
+    QUALITY_POLICY_ID,
+    _sha256_file,
+    _sha256_text,
+    atomic_write_bytes,
+    atomic_write_json,
+    atomic_write_text,
+)
 
 PYANNOTE_SETUP_HINT = """
 ============================================================
@@ -83,6 +106,19 @@ PYANNOTE_ACCESS_KEYWORDS = (
     "private repository", "user conditions", "credentials", "not authenticated",
 )
 
+PROCESS_HEARTBEAT_SECONDS = 60.0
+PROCESS_TERM_GRACE_SECONDS = 5.0
+OWNER_POLL_SECONDS = 5.0
+CACHE_PROVENANCE_SCHEMA = 1
+FINAL_RECEIPT_SCHEMA = "speaker-bundle-receipt-v1"
+FINAL_ARTIFACT_SUFFIXES = {
+    "txt": ".txt",
+    "csv": ".csv",
+    "diarization": ".diarization.json",
+    "alignment": ".alignment.json",
+}
+_SOURCE_IDENTITY_CACHE = {}
+
 # Map the orchestrator's --language to a whisper language code. The whisper leg
 # is a TIMING lattice, but it still must decode in the right language or its
 # word tokenization is garbage and the difflib anchor ratio collapses.
@@ -101,9 +137,424 @@ def log(msg):
     print(msg, file=sys.stderr, flush=True)
 
 
+def _source_audio_identity(path):
+    source = Path(path).resolve()
+    state = source.stat()
+    cache_key = (
+        str(source),
+        state.st_dev,
+        state.st_ino,
+        state.st_size,
+        state.st_mtime_ns,
+        state.st_ctime_ns,
+    )
+    identity = _SOURCE_IDENTITY_CACHE.get(cache_key)
+    if identity is None:
+        identity = {
+            "path": str(source),
+            "size": state.st_size,
+            "sha256": _sha256_file(source),
+        }
+        _SOURCE_IDENTITY_CACHE[cache_key] = identity
+    return dict(identity)
+
+
+def _artifact_provenance_path(artifact):
+    artifact = Path(artifact)
+    return artifact.with_name(f"{artifact.name}.provenance.json")
+
+
+def _cache_contract(wav, producer_script, parameters):
+    producer = HERE / producer_script
+    return {
+        "schema_version": CACHE_PROVENANCE_SCHEMA,
+        "source_audio": _source_audio_identity(wav),
+        "producer": {
+            "script": producer.name,
+            "sha256": _sha256_file(producer),
+        },
+        "parameters": parameters,
+    }
+
+
+def _artifact_cache_valid(wav, artifact, producer_script, parameters):
+    artifact = Path(artifact)
+    provenance_path = _artifact_provenance_path(artifact)
+    if not artifact.is_file() or not provenance_path.is_file():
+        return False
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    expected = _cache_contract(wav, producer_script, parameters)
+    if any(provenance.get(key) != value for key, value in expected.items()):
+        return False
+    return provenance.get("artifact_sha256") == _sha256_file(artifact)
+
+
+def _write_artifact_provenance(wav, artifact, producer_script, parameters):
+    artifact = Path(artifact)
+    provenance = {
+        **_cache_contract(wav, producer_script, parameters),
+        "artifact_sha256": _sha256_file(artifact),
+    }
+    atomic_write_json(_artifact_provenance_path(artifact), provenance)
+
+
+def _artifact_provenance_matches_source(wav, artifact):
+    artifact = Path(artifact)
+    provenance_path = _artifact_provenance_path(artifact)
+    if not artifact.is_file() or not provenance_path.is_file():
+        return False
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    return (
+        provenance.get("source_audio") == _source_audio_identity(wav)
+        and provenance.get("artifact_sha256") == _sha256_file(artifact)
+    )
+
+
+def _csv_turn_contract_sha256(csv_path):
+    fields = ("file", "start", "end", "duration", "speaker", "text")
+    with Path(csv_path).open(newline="", encoding="utf-8") as handle:
+        rows = [
+            {field: row.get(field) for field in fields}
+            for row in csv.DictReader(handle)
+        ]
+    return _sha256_text(
+        json.dumps(rows, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    )
+
+
+def _stamp_alignment_source(wav, out_dir, stem, expected_source):
+    alignment_path = Path(out_dir) / f"{stem}.alignment.json"
+    current_source = _source_audio_identity(wav)
+    if current_source != expected_source:
+        raise RuntimeError(f"source audio changed while aligning: {wav}")
+    payload = json.loads(alignment_path.read_text(encoding="utf-8"))
+    payload["source_audio"] = current_source
+    payload["pipeline"] = {
+        "speaker_transcribe_sha256": _sha256_file(Path(__file__)),
+        "align_speakers_sha256": _sha256_file(HERE / "align_speakers.py"),
+    }
+    payload["turn_contract"] = {
+        "schema": "speaker-csv-v1",
+        "sha256": _csv_turn_contract_sha256(
+            Path(out_dir) / f"{stem}.csv"
+        ),
+    }
+    payload["component_sha256"] = {
+        "txt": _sha256_file(Path(out_dir) / f"{stem}.txt"),
+        "csv": _sha256_file(Path(out_dir) / f"{stem}.csv"),
+        "diarization": _sha256_file(
+            Path(out_dir) / f"{stem}.diarization.json"
+        ),
+    }
+    payload["label_mapping"] = {}
+    atomic_write_json(alignment_path, payload)
+
+
+def _final_receipt_path(out_dir, stem):
+    return Path(out_dir) / f"{stem}.receipt.json"
+
+
+def _pipeline_contract():
+    scripts = (
+        "speaker_transcribe.py",
+        "transcribe_local_mlx.py",
+        "word_timestamps_whisper.py",
+        "diarize_speakers.py",
+        "align_speakers.py",
+    )
+    return {
+        name: _sha256_file(HERE / name)
+        for name in scripts
+    }
+
+
+def _external_text_identity(text_file):
+    if text_file is None:
+        return None
+    path = Path(text_file).resolve()
+    state = path.stat()
+    return {
+        "path": str(path),
+        "size": state.st_size,
+        "sha256": _sha256_file(path),
+    }
+
+
+def _write_final_receipt(
+    wav, out_dir, stem, parameters, pipeline_contract=None
+):
+    """Atomically commit the complete bundle after every final artifact exists."""
+    artifacts = {}
+    for name, suffix in FINAL_ARTIFACT_SUFFIXES.items():
+        path = Path(out_dir) / f"{stem}{suffix}"
+        if not path.is_file():
+            raise RuntimeError(f"cannot write final receipt; missing {path}")
+        artifacts[name] = {
+            "file": path.name,
+            "size": path.stat().st_size,
+            "sha256": _sha256_file(path),
+        }
+    payload = {
+        "schema": FINAL_RECEIPT_SCHEMA,
+        "source_audio": _source_audio_identity(wav),
+        "artifacts": artifacts,
+        "pipeline": pipeline_contract or _pipeline_contract(),
+        "parameters": parameters,
+        "model_contract": {
+            "id": DEFAULT_MODEL_ID,
+            "revision": DEFAULT_MODEL_REVISION,
+            "chunk_duration_s": DEFAULT_CHUNK_DURATION_S,
+            "max_tokens_per_chunk": DEFAULT_MAX_TOKENS_PER_CHUNK,
+            "quality_policy": QUALITY_POLICY_ID,
+            "dependencies": dict(sorted(PINNED_DEPENDENCY_VERSIONS.items())),
+        },
+    }
+    atomic_write_json(_final_receipt_path(out_dir, stem), payload)
+
+
+def _final_artifact_paths(out_dir, stem):
+    return {
+        name: Path(out_dir) / f"{stem}{suffix}"
+        for name, suffix in FINAL_ARTIFACT_SUFFIXES.items()
+    }
+
+
+def _artifact_receipt(path):
+    return {
+        "file": path.name,
+        "size": path.stat().st_size,
+        "sha256": _sha256_file(path),
+    }
+
+
+def apply_speaker_mapping_transaction(out_dir, stem, mapping, source):
+    """Relabel TXT/CSV and commit alignment+receipt last, with rollback."""
+    if not mapping:
+        return
+    if not isinstance(mapping, dict) or any(
+        not isinstance(old, str)
+        or not old
+        or not isinstance(new, str)
+        or not new
+        for old, new in mapping.items()
+    ):
+        raise ValueError("speaker mapping must contain non-empty string pairs")
+
+    paths = _final_artifact_paths(out_dir, stem)
+    receipt_path = _final_receipt_path(out_dir, stem)
+    mutable_paths = {**paths, "receipt": receipt_path}
+    missing = [name for name, path in mutable_paths.items() if not path.is_file()]
+    if missing:
+        raise RuntimeError(
+            f"receipt-aware speaker relabel requires complete bundle; missing {missing}"
+        )
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    if receipt.get("schema") != FINAL_RECEIPT_SCHEMA:
+        raise RuntimeError("speaker bundle receipt schema is invalid")
+    recorded_artifacts = receipt.get("artifacts")
+    if not isinstance(recorded_artifacts, dict) or any(
+        recorded_artifacts.get(name) != _artifact_receipt(path)
+        for name, path in paths.items()
+    ):
+        raise RuntimeError("speaker bundle bytes do not match the final receipt")
+
+    snapshots = {
+        name: path.read_bytes() for name, path in mutable_paths.items()
+    }
+    try:
+        transcript = paths["txt"].read_text(encoding="utf-8")
+        for old, new in mapping.items():
+            transcript = re.sub(
+                rf"(?m)^(\[\d+:\d{{2}}\.\d{{3}} - "
+                rf"\d+:\d{{2}}\.\d{{3}}\] ){re.escape(old)}$",
+                rf"\g<1>{new}",
+                transcript,
+            )
+        atomic_write_text(paths["txt"], transcript)
+
+        with paths["csv"].open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            if reader.fieldnames is None or "speaker" not in reader.fieldnames:
+                raise ValueError("speaker CSV is missing the speaker column")
+            fieldnames = list(reader.fieldnames)
+            rows = list(reader)
+        for row in rows:
+            row["speaker"] = mapping.get(row["speaker"], row["speaker"])
+        csv_buffer = io.StringIO(newline="")
+        writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+        atomic_write_text(paths["csv"], csv_buffer.getvalue())
+
+        alignment = json.loads(paths["alignment"].read_text(encoding="utf-8"))
+        recorded_mapping = alignment.get("label_mapping")
+        if not isinstance(recorded_mapping, dict):
+            recorded_mapping = {}
+        recorded_mapping.update(mapping)
+        alignment["label_mapping"] = recorded_mapping
+        alignment["turn_contract"] = {
+            "schema": "speaker-csv-v1",
+            "sha256": _csv_turn_contract_sha256(paths["csv"]),
+        }
+        alignment["component_sha256"] = {
+            name: _sha256_file(paths[name])
+            for name in ("txt", "csv", "diarization")
+        }
+        sources = alignment.get("label_mapping_sources")
+        if not isinstance(sources, list):
+            sources = []
+        sources.append(source)
+        alignment["label_mapping_sources"] = sources[-8:]
+        atomic_write_json(paths["alignment"], alignment)
+
+        receipt["artifacts"] = {
+            name: _artifact_receipt(path) for name, path in paths.items()
+        }
+        atomic_write_json(receipt_path, receipt)
+    except BaseException:
+        restore_errors = []
+        for name, payload in snapshots.items():
+            try:
+                atomic_write_bytes(mutable_paths[name], payload)
+            except Exception as exc:
+                restore_errors.append(f"{name}:{exc}")
+        if restore_errors:
+            raise RuntimeError(
+                "speaker relabel failed and rollback was incomplete: "
+                + "; ".join(restore_errors)
+            )
+        raise
+
+
+class ParentTermination(SystemExit):
+    """The pipeline supervisor received a termination signal."""
+
+
+def _owner_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def start_owner_watchdog(owner_pid, poll_seconds=OWNER_POLL_SECONDS):
+    """Terminate this orchestrator if its managed caller disappears."""
+    if owner_pid is None:
+        return None
+    if owner_pid <= 1 or owner_pid == os.getpid() or not _owner_alive(owner_pid):
+        raise RuntimeError(f"invalid or dead speaker pipeline owner: pid={owner_pid}")
+
+    def watch():
+        while True:
+            time.sleep(poll_seconds)
+            if _owner_alive(owner_pid):
+                continue
+            log(f"Owner pid={owner_pid} disappeared; terminating speaker pipeline")
+            os.kill(os.getpid(), signal.SIGTERM)
+            return
+
+    thread = threading.Thread(target=watch, name="speaker-owner-watchdog", daemon=True)
+    thread.start()
+    return thread
+
+
+def _process_group_exists(process_group_id):
+    """Return whether any process still belongs to a managed process group."""
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _terminate_process_group(process, grace_seconds=PROCESS_TERM_GRACE_SECONDS):
+    """Terminate a full uv/Python process tree, even if its leader exits first."""
+    process_group_id = process.pid
+    try:
+        os.killpg(process_group_id, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    except OSError:
+        if process.poll() is None:
+            process.terminate()
+
+    deadline = time.monotonic() + grace_seconds
+    while _process_group_exists(process_group_id) and time.monotonic() < deadline:
+        time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
+
+    if _process_group_exists(process_group_id):
+        try:
+            os.killpg(process_group_id, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            if process.poll() is None:
+                process.kill()
+
+    try:
+        process.wait(timeout=grace_seconds)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=grace_seconds)
+
+
 def run(cmd, timeout=None):
     log("+ " + " ".join(str(c) for c in cmd))
-    subprocess.run(cmd, check=True, timeout=timeout)
+    process = subprocess.Popen(cmd, start_new_session=True)
+    started = time.monotonic()
+    next_heartbeat = started + PROCESS_HEARTBEAT_SECONDS
+    previous_handlers = {}
+
+    def interrupted(signum, _frame):
+        raise ParentTermination(128 + signum)
+
+    for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        previous_handlers[signum] = signal.signal(signum, interrupted)
+    try:
+        while True:
+            elapsed = time.monotonic() - started
+            if timeout is not None and elapsed >= timeout:
+                raise subprocess.TimeoutExpired(cmd, timeout)
+            wait_slice = 1.0
+            if timeout is not None:
+                wait_slice = max(0.001, min(wait_slice, timeout - elapsed))
+            try:
+                returncode = process.wait(timeout=wait_slice)
+                break
+            except subprocess.TimeoutExpired:
+                now = time.monotonic()
+                if now >= next_heartbeat:
+                    log(
+                        f"Still running pid={process.pid}, elapsed={int(now - started)}s: "
+                        + " ".join(str(c) for c in cmd[:4])
+                    )
+                    next_heartbeat = now + PROCESS_HEARTBEAT_SECONDS
+        # A wrapper that exits while descendants remain is not success. Clear the
+        # original group before returning so inherited pipes cannot hold callers open.
+        _terminate_process_group(process)
+        if returncode != 0:
+            # Preserve the child pipeline's machine-readable failure class for
+            # the DJI supervisor.  Human stderr wording is not an API.
+            if returncode in {2, 3, 4, 5}:
+                raise SystemExit(returncode)
+            raise subprocess.CalledProcessError(returncode, cmd)
+    except BaseException:
+        _terminate_process_group(process)
+        raise
+    finally:
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
 
 
 def _whisper_lang(language):
@@ -161,7 +612,7 @@ def _hf_token_present():
 
 
 def plain_text_path(args, timeout):
-    """Plain-text fast path: full-audio Qwen3 text, no speakers."""
+    """Plain-text fast path: session-wide Qwen3 text, no speakers."""
     if args.text_file:
         for wav in args.inputs:
             out = args.out_dir / f"{wav.stem}.txt"
@@ -169,7 +620,8 @@ def plain_text_path(args, timeout):
             log(f"Wrote {out} (from --text-file)")
         return
     cmd = ["uv", "run", str(HERE / "transcribe_local_mlx.py"),
-           "--output-dir", str(args.out_dir), "--language", args.language]
+           "--output-dir", str(args.out_dir), "--language", args.language,
+           "--owner-pid", str(os.getpid())]
     cmd += [str(w) for w in args.inputs]
     run(cmd, timeout=timeout)
 
@@ -181,8 +633,18 @@ def diarize_all(wavs, out_dir, device, force):
         from diarize_speakers import load_pipeline, run_pipeline, write_diarization_json
     except Exception as e:
         _hint_import_error(e)
-    pending = [(w, out_dir / f"{w.stem}.diarization.json") for w in wavs
-               if force or not (out_dir / f"{w.stem}.diarization.json").exists()]
+    cache_parameters = {"device": device}
+    pending = [
+        (w, out_dir / f"{w.stem}.diarization.json")
+        for w in wavs
+        if force
+        or not _artifact_cache_valid(
+            w,
+            out_dir / f"{w.stem}.diarization.json",
+            "diarize_speakers.py",
+            cache_parameters,
+        )
+    ]
     if not pending:
         log("Leg 3 (diarization): all cached")
         return
@@ -194,6 +656,7 @@ def diarize_all(wavs, out_dir, device, force):
             log(PYANNOTE_SETUP_HINT)
             sys.exit(3)
         raise
+    failed = []
     for wav, diar_json in pending:
         try:
             segments = run_pipeline(pipeline, wav, dev)
@@ -203,41 +666,69 @@ def diarize_all(wavs, out_dir, device, force):
                 log(PYANNOTE_SETUP_HINT)
                 sys.exit(3)
             log(f"WARNING: diarization failed for {wav.name} ({e}); skipping")
+            failed.append(wav.name)
             continue
         write_diarization_json(segments, wav, dev, diar_json)
+        _write_artifact_provenance(
+            wav, diar_json, "diarize_speakers.py", cache_parameters
+        )
+    if failed:
+        raise RuntimeError(f"diarization produced no fresh artifact for: {failed}")
 
 
 def _run_batched_leg(wavs, work_root, script, staging_name, staging_suffix,
-                     dest_for, extra_args, force, timeout, cache_label, missing_label):
+                     dest_for, extra_args, force, timeout, cache_label, missing_label,
+                     cache_parameters):
     """Shared staging+move ceremony for legs 1 and 2: run `script` once on all
     uncached inputs (it writes flat <stem><staging_suffix> into a staging dir),
     then move each output to dest_for(stem). One model load per leg, not per file."""
-    todo = [w for w in wavs if force or not dest_for(w.stem).exists()]
+    todo = [
+        w
+        for w in wavs
+        if force
+        or not _artifact_cache_valid(
+            w, dest_for(w.stem), script, cache_parameters
+        )
+    ]
     if not todo:
         log(f"{cache_label}: all cached")
         return
-    staging = work_root / staging_name
+    staging_root = work_root / staging_name
+    staging = staging_root / f".tinkle_run_{uuid.uuid4().hex}"
     cmd = ["uv", "run", str(HERE / script), "--output-dir", str(staging)] + extra_args + [str(w) for w in todo]
     run(cmd, timeout=timeout)
+    missing_outputs = []
     for w in todo:
         staged = staging / f"{w.stem}{staging_suffix}"
         if not staged.exists():
             log(f"WARNING: {missing_label} {w.name} — alignment will fail for this file")
+            missing_outputs.append(w.name)
             continue
         dest = dest_for(w.stem)
         dest.parent.mkdir(parents=True, exist_ok=True)
         staged.replace(dest)
+        _write_artifact_provenance(w, dest, script, cache_parameters)
+    if missing_outputs:
+        raise RuntimeError(
+            f"{script} exited 0 but produced no fresh artifact for: {missing_outputs}"
+        )
 
 
 def leg_text(wavs, work_root, language, force, timeout):
-    """Leg 1: full-audio Qwen3 transcript (one model load for the batch)."""
+    """Leg 1: session-wide Qwen3 transcript (one model load for the batch)."""
     # transcribe_local_mlx.py writes flat <stem>.txt into --output-dir; stage then
     # move to work_root/<stem>/<stem>.qwen.txt (different name — the .qwen. prefix).
     _run_batched_leg(
         wavs, work_root, "transcribe_local_mlx.py", "_qwen", ".txt",
         dest_for=lambda stem: work_root / stem / f"{stem}.qwen.txt",
-        extra_args=["--language", language], force=force, timeout=timeout,
-        cache_label="Leg 1 (Qwen3 full text)", missing_label="no Qwen3 transcript for")
+        extra_args=[
+            "--language", language,
+            "--owner-pid", str(os.getpid()),
+            "--checkpoint-dir", str(work_root / "_qwen" / "_mlx_checkpoints"),
+        ],
+        force=force, timeout=timeout,
+        cache_label="Leg 1 (Qwen3 full text)", missing_label="no Qwen3 transcript for",
+        cache_parameters={"language": language})
 
 
 def leg_words(wavs, work_root, language, initial_prompt, force, timeout):
@@ -249,10 +740,22 @@ def leg_words(wavs, work_root, language, initial_prompt, force, timeout):
         wavs, work_root, "word_timestamps_whisper.py", "_words", ".words.json",
         dest_for=lambda stem: work_root / stem / f"{stem}.words.json",
         extra_args=extra, force=force, timeout=timeout,
-        cache_label="Leg 2 (whisper word lattice)", missing_label="no word lattice for")
+        cache_label="Leg 2 (whisper word lattice)", missing_label="no word lattice for",
+        cache_parameters={
+            "language": _whisper_lang(language),
+            "initial_prompt": initial_prompt,
+        })
 
 
-def leg_align(wavs, out_dir, work_root, max_gap, text_file=None):
+def leg_align(
+    wavs,
+    out_dir,
+    work_root,
+    max_gap,
+    text_file=None,
+    receipt_parameters=None,
+    receipt_pipeline=None,
+):
     """Leg 4: attach speakers to full text, write the output contract.
     Per-file resilient — one bad file is recorded as failed, not a batch crash;
     an untrustworthy alignment is NOT written (would ship fake timestamps)."""
@@ -269,6 +772,45 @@ def leg_align(wavs, out_dir, work_root, max_gap, text_file=None):
             log(f"ERROR {stem}: missing {[str(p) for p in missing]} — cannot align")
             failed.append(stem)
             continue
+        parameters = receipt_parameters or {}
+        provenance_inputs = [
+            (
+                diar_json,
+                "diarization",
+                "diarize_speakers.py",
+                {"device": parameters.get("device")},
+            ),
+            (
+                wpath,
+                "word lattice",
+                "word_timestamps_whisper.py",
+                {
+                    "language": _whisper_lang(parameters.get("language")),
+                    "initial_prompt": parameters.get("initial_prompt"),
+                },
+            ),
+        ]
+        if text_file is None:
+            provenance_inputs.append(
+                (
+                    tpath,
+                    "Qwen transcript",
+                    "transcribe_local_mlx.py",
+                    {"language": parameters.get("language")},
+                )
+            )
+        stale = [
+            label
+            for path, label, producer, cache_parameters in provenance_inputs
+            if not _artifact_cache_valid(
+                wav, path, producer, cache_parameters
+            )
+        ]
+        if stale:
+            log(f"ERROR {stem}: stale/unproven {stale} — cannot align")
+            failed.append(stem)
+            continue
+        source_identity = _source_audio_identity(wav)
         try:
             qwen_text = tpath.read_text(encoding="utf-8")
             words = json.loads(wpath.read_text(encoding="utf-8"))["words"]
@@ -287,6 +829,14 @@ def leg_align(wavs, out_dir, work_root, max_gap, text_file=None):
             failed.append(stem)
             continue
         write_outputs(turns, report, wav.name, out_dir, stem)
+        _stamp_alignment_source(wav, out_dir, stem, source_identity)
+        _write_final_receipt(
+            wav,
+            out_dir,
+            stem,
+            receipt_parameters or {},
+            receipt_pipeline,
+        )
     if failed:
         log(f"FAILED/skipped files: {failed}")
         sys.exit(1)
@@ -308,7 +858,11 @@ def main():
     ap.add_argument("--force", action="store_true", help="redo cached intermediate legs")
     ap.add_argument("--timeout", type=int, default=1800,
                     help="per-leg subprocess timeout in seconds (default 1800)")
+    ap.add_argument("--owner-pid", type=int, default=None,
+                    help="terminate if this managed caller disappears")
     args = ap.parse_args()
+
+    start_owner_watchdog(args.owner_pid)
 
     # The flat output contract (<stem>.txt/.csv/.diarization.json) keys on stem
     # alone, so duplicate stems can't be disambiguated — refuse rather than
@@ -345,6 +899,10 @@ def main():
 
     work_root = args.out_dir / "_align"
     work_root.mkdir(parents=True, exist_ok=True)
+    # Freeze producer bytes before any long-running leg. If files change while
+    # this process runs, downstream current-contract validation rejects the old
+    # process instead of attributing its outputs to the new on-disk code.
+    receipt_pipeline = _pipeline_contract()
 
     diarize_all(args.inputs, args.out_dir, args.device, args.force)
     if args.text_file:
@@ -352,7 +910,22 @@ def main():
     else:
         leg_text(args.inputs, work_root, args.language, args.force, args.timeout)
     leg_words(args.inputs, work_root, args.language, args.initial_prompt, args.force, args.timeout)
-    leg_align(args.inputs, args.out_dir, work_root, args.max_gap, args.text_file)
+    receipt_parameters = {
+        "language": args.language,
+        "initial_prompt": args.initial_prompt,
+        "device": args.device,
+        "max_gap": args.max_gap,
+        "text_file": _external_text_identity(args.text_file),
+    }
+    leg_align(
+        args.inputs,
+        args.out_dir,
+        work_root,
+        args.max_gap,
+        args.text_file,
+        receipt_parameters,
+        receipt_pipeline,
+    )
     log("Done.")
 
 

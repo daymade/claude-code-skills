@@ -2334,7 +2334,7 @@ claude plugin install daymade-docs@daymade-skills
 **主要功能：**
 - 双推理路径——本地 MLX（15-27 倍实时、免费）与远端 API，自动检测平台
 - 内置 `transcribe_local_mlx.py`：只加载一次模型并顺序处理多个文件（无 GPU 争用）
-- 默认 `max_tokens=200000`，规避上游 `mlx-audio` 的 8192 token 截断（会静默截掉 ~40 分钟以上的音频）
+- 采用约 20 分钟的低能量切块、单块 8192 token 上限、原子 checkpoint/续跑与完整进程树回收，避免单个异常块演变成无边界 GPU 任务
 - 远端兜底 `overlap_merge_transcribe.py`：切成 18 分钟片段、2 分钟重叠、模糊合并
 - ffmpeg 视频→16kHz 单声道 WAV 提取、截断校验与代理绕过处理
 - 主动建议用 `transcript-fixer` 清理输出中的 ASR 识别错误

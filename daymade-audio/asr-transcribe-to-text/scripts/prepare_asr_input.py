@@ -7,7 +7,8 @@
 
 Two jobs:
   A. Merge recorder dumps split into fixed-length segments (body mics, Sony/TX-style
-     recorders) into one continuous file, so transcription keeps full-audio context.
+     recorders) into one continuous session file, preserving order and letting the
+     ASR engine choose stable low-energy long-audio boundaries instead of device cuts.
   B. Normalize for ASR (16 kHz mono) and optionally apply a pitch-PRESERVED speedup
      (--speed) to shrink uploads billed by duration (Feishu Minutes and similar).
 

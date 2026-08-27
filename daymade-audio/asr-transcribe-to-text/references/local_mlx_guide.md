@@ -38,8 +38,15 @@ If the dependency stack differs, the agent is probably running an installed/stal
 | Setting | Value | Why |
 |---------|-------|-----|
 | Model | `mlx-community/Qwen3-ASR-1.7B-8bit` | 8-bit quantized, fast inference, good quality |
-| max_tokens | `200000` | Default 8192 silently truncates audio >40min |
+| Model revision | Script-pinned immutable HuggingFace commit | Remote revisions must be full commit SHAs; branch/tag names are rejected. Custom local model directories are content-addressed from their files instead of trusting a caller label |
+| chunk_duration | `1200` seconds | The pinned Qwen3 implementation already splits long audio near low-energy boundaries at about 20 minutes |
+| max_tokens | `8192` **per chunk** | About twice the observed 20-minute Chinese requirement; bounds KV-cache growth and repetition loops |
 | Audio format | WAV 16kHz mono PCM | Best compatibility with ASR models |
+
+The built-in immutable revision resolves its exact local Hugging Face snapshot
+before attempting the network. A warmed machine therefore remains a genuinely
+local ASR path even when the proxy or Hugging Face metadata endpoint is down;
+first-time model acquisition still uses the same pinned remote revision.
 
 ## Performance Benchmarks (M5 Pro 48GB, April 2026)
 
@@ -53,16 +60,78 @@ If the dependency stack differs, the agent is probably running an installed/stal
 
 Model load: ~4s (cached), ~130s (first download).
 
-## Critical: max_tokens Truncation
+## Critical: `max_tokens` is per chunk, not per recording
 
-The `model.generate()` method in mlx-audio has `max_tokens=8192` as default. This is a **global budget shared across all audio chunks**, not per-chunk. When exhausted, remaining chunks are silently skipped.
+The pinned `mlx-audio 0.3.1` Qwen3-ASR implementation calls
+`_generate_single_chunk(..., max_tokens=max_tokens)` inside its chunk loop. The
+same limit is therefore available to **every** roughly 20-minute chunk. Passing
+`200000` does not give a five-hour recording one shared 200K budget; it permits
+each chunk to grow toward 200K tokens.
 
-For 123 minutes of Chinese speech:
-- Required: ~24,000 tokens
-- Default budget: 8,192 tokens
-- Result: only first ~40 minutes transcribed, rest silently dropped
+This distinction is the resource boundary. A verified failure on 2026-08-27
+used `200000` on a 4h39m recording: one MLX worker remained inside GPU
+generation for more than nine hours, reached a 33.4 GB physical footprint
+(44.0 GB peak), and produced no final transcript because the caller only wrote
+after the whole recording returned.
 
-Always pass `max_tokens=200000` for any audio longer than 20 minutes.
+The bundled script now keeps `8192` as the default per-chunk budget and rejects
+values above `16384` unless `--allow-high-token-budget` is stated explicitly.
+If a chunk reaches the ceiling, the script fails that chunk instead of shipping
+a possibly repeated or truncated transcript. Do not double the limit blindly:
+first inspect whether that chunk contains unusually dense speech or a
+music/silence repetition loop.
+
+## Chunk checkpoints and recovery
+
+The bundled script reproduces the pinned upstream low-energy chunking before
+calling the model, then commits each chunk atomically under
+`<output-dir>/_mlx_checkpoints/`. The model still loads once; only the generation
+cache resets between chunks. Input identity includes the full source-audio
+SHA-256 in addition to path and metadata, so a same-size replacement with a
+restored mtime cannot reuse another recording's checkpoint. Identity also binds
+the transcriber script bytes, splitter contract, pinned dependency versions,
+sample rate, quality policy, generation parameters, and immutable model
+revision. Any producer/model/contract change selects a new checkpoint namespace;
+the older successful chunks remain on disk but are not mislabeled as output from
+the new producer. On a retry with the same complete contract, completed chunk
+hashes are verified and skipped.
+
+Resource bounds are not treated as transcript quality. Before committing a
+chunk and again before publishing the joined transcript, the script measures
+the ratio of unique 12-character alphanumeric windows. Text of at least 400
+normalized characters below `0.20` is rejected as a repetition loop even if
+generation stopped below the token ceiling. The quality-policy version is part
+of checkpoint identity, preventing unchecked older parts from being resumed.
+
+The speaker orchestrator has a separate outer cache for Qwen text, Whisper
+words, and pyannote segments. Each artifact has a provenance sidecar containing
+the source-audio SHA-256, producer-script SHA-256, semantic parameters, and
+artifact SHA-256. Missing or mismatched provenance reruns that leg; an existing
+file alone is not completion. After all four final artifacts are written, the
+speaker orchestrator atomically commits `<stem>.receipt.json`; it binds source
+bytes, final TXT/CSV/diarization/alignment hashes, all producer-script hashes,
+semantic parameters, and the pinned model/dependency contract. Downstream
+automation must validate that receipt rather than treating alignment existence
+as completion.
+
+Expected long-run progress looks like:
+
+```text
+Chunk 1/14 starting at 0.0s (max_tokens=8192)
+Chunk 1/14 committed: 6310 chars, 3812 tokens
+Chunk 2/14 starting at 1198.4s (max_tokens=8192)
+```
+
+A missing/corrupt completed part fails fast. A crash while one chunk is running
+leaves earlier parts intact and reruns only the incomplete chunk. The final
+`.txt` is still an atomic all-chunks projection, so downstream readers never
+mistake a partial recording for a complete transcript.
+
+Managed callers pass `--owner-pid`; the MLX worker exits with its checkpoints
+intact if that supervisor disappears. `speaker_transcribe.py` separately runs
+each uv child in a process group, prints a heartbeat, and terminates the whole
+group on timeout or parent termination. These two protections cover both the
+normal timeout path and the orphan-worker path.
 
 ## Model Weight Compatibility
 

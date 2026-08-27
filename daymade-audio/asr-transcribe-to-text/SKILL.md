@@ -8,10 +8,11 @@ argument-hint: "[audio-or-video-file-path-or-url ...]"
 # ASR Transcribe to Text
 
 Transcribe audio/video to **speaker-labeled** text. Default pipeline (decoupled,
-WhisperX-style): Qwen3-ASR transcribes the full audio with context intact,
-mlx-whisper supplies a word-level timing lattice, pyannote supplies speaker
-segments, and an aligner merges the three — the audio is never cut before ASR,
-so transcription quality stays at full-audio fidelity.
+WhisperX-style): Qwen3-ASR produces one session-wide text result, mlx-whisper
+supplies a word-level timing lattice, pyannote supplies speaker segments, and an
+aligner merges the three. The pipeline never cuts audio at diarization turns;
+for long recordings, pinned Qwen3-ASR uses low-energy boundaries around 20
+minutes and the wrapper checkpoints those chunks before composing the session.
 
 | Mode | When | Speed | Cost |
 |------|------|-------|------|
@@ -103,7 +104,7 @@ import json
 config = {
     'mode': 'MODE',           # 'local-mlx' or 'remote-api'
     'model': 'MODEL_ID',      # local: 'mlx-community/Qwen3-ASR-1.7B-8bit', remote: 'Qwen/Qwen3-ASR-1.7B'
-    'max_tokens': 200000,     # local only, critical for long audio
+    'max_tokens': 8192,       # local only; PER 20-minute chunk, not per recording
     'endpoint': 'URL',        # remote only
     'noproxy': True,
     'max_timeout': 900        # remote only
@@ -175,9 +176,9 @@ Run this BEFORE transcription when either applies:
   sessions into fixed-length files (e.g. `TX02_MIC024_....wav`, `TX02_MIC025_....wav`;
   `TX01/TX02` = DJI MIC MINI 2S internal recording — device roster and the
   recorder→Feishu-Minutes paths: the meeting-ingest skill's `meeting-ingest/references/architecture.md` §①-L0).
-  Merge them and transcribe the merged file: full-audio context is the quality basis
-  of the decoupled pipeline (Step 3), so transcribing segments separately throws away
-  exactly what the architecture buys.
+  Merge them once to preserve session order; the decoupled pipeline (Step 3)
+  then chooses stable long-audio boundaries itself. Transcribing device
+  segments separately throws away cross-segment context inside those chunks.
 - **The audio goes to a metered ASR** (Feishu Minutes, any per-minute quota) — a
   pitch-PRESERVED speedup cuts billed duration directly, and modern ASR does not care:
   1.3x was user-verified on Feishu Minutes (2026-07-16) with no perceptible recognition
@@ -291,8 +292,9 @@ this section.
 
 ### Path A: Local MLX (macOS Apple Silicon) — default
 
-Run the decoupled speaker pipeline — it handles dependency pins, model loading,
-and the critical `max_tokens` parameter internally.
+Run the decoupled speaker pipeline — it handles dependency pins, bounded
+per-chunk generation, resumable checkpoints, model loading, and process-tree
+cleanup internally.
 
 ```bash
 uv run ${CLAUDE_SKILL_DIR}/scripts/speaker_transcribe.py \
@@ -303,19 +305,33 @@ Expected output (per file):
 
 ```text
 Device: mps
-+ uv run .../transcribe_local_mlx.py ...        (leg 1: full-audio text)
++ uv run .../transcribe_local_mlx.py ...        (leg 1: session text)
+Chunk 1/6 starting at 0.0s (max_tokens=8192)
+Chunk 1/6 committed: 6310 chars, 3812 tokens
 + uv run .../word_timestamps_whisper.py ...     (leg 2: timing lattice)
 ... diarization ...                             (leg 3: pyannote segments)
 STEM: 42 turns, speakers=['SPEAKER_00', 'SPEAKER_01'], anchored_ratio=0.93
-Wrote STEM.txt, STEM.csv, STEM.alignment.json
+Wrote STEM.txt, STEM.csv, STEM.alignment.json, STEM.receipt.json
 ```
 
 Outputs per input: `<stem>.txt` (`[MM:SS - MM:SS] SPEAKER_xx` + text),
 `<stem>.csv` (`file,start,end,duration,speaker,text` — feeds review UIs and
 voiceprint ID), `<stem>.diarization.json`, `<stem>.alignment.json` (provenance
 + `anchored_ratio` trust signal; < 0.5 prints a loud warning — verify labels
-against the audio before trusting them). Intermediate legs are cached in
-`OUTPUT_DIR/_align/` so re-runs are cheap (`--force` redoes them).
+against the audio before trusting them), and `<stem>.receipt.json` (the atomic
+completion record binding source bytes, all four final artifact hashes, producer
+scripts, pinned model/dependencies, and semantic parameters). Intermediate legs are cached in
+`OUTPUT_DIR/_align/` so re-runs are cheap (`--force` redoes final legs). Each
+intermediate cache sidecar binds source-audio bytes, producer-script bytes,
+semantic parameters, and artifact bytes; file existence alone is never a cache
+hit. Downstream completion checks require the final receipt, not a non-empty
+artifact or alignment JSON alone. Qwen chunk checkpoints live below its staging directory; an interrupted run verifies
+the source-audio SHA-256, producer/splitter/dependency contract, immutable model
+revision, generation parameters, and completed chunk hashes, then skips completed chunks
+instead of starting the recording over. A language-agnostic 12-character n-gram
+guard rejects highly repetitive chunk or whole-session text before final delivery;
+the quality-policy ID is part of checkpoint identity, so older unchecked parts
+cannot silently bypass the guard.
 
 Before a long first run, smoke-test the Qwen3 leg once:
 
@@ -324,13 +340,15 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/transcribe_local_mlx.py --smoke-test
 ```
 
 Expected output includes `Dependency stack: mlx-audio 0.3.1, mlx-lm 0.30.5,
-transformers 5.0.0rc3` and `Smoke test OK`. For performance details and the
-max_tokens truncation issue, see `references/local_mlx_guide.md`.
+transformers 5.0.0rc3` and `Smoke test OK`. For performance, per-chunk token
+semantics, resource bounds, and recovery, read `references/local_mlx_guide.md`.
 
-**How it works (and why):** full-audio Qwen3-ASR text + mlx-whisper word
-timestamps + pyannote speaker segments, aligned after the fact — the audio is
-never cut before transcription, so ASR keeps full context. Architecture,
-alignment algorithm, and failure modes: `references/decoupled_speaker_alignment.md`.
+**How it works (and why):** session-wide Qwen3-ASR text + mlx-whisper word
+timestamps + pyannote speaker segments, aligned after the fact. It avoids the
+quality-damaging old cascade that transcribed each diarized speaker turn in
+isolation; Qwen's own long-audio chunks stay near 20 minutes and are cut at
+low-energy boundaries. Architecture, alignment algorithm, and failure modes:
+`references/decoupled_speaker_alignment.md`.
 
 **First run: pyannote needs a one-time HuggingFace token.** If the script exits
 with the setup hint (exit code 3), STOP and use **AskUserQuestion**:
@@ -603,13 +621,15 @@ The same trap applies to any `pkill -f` whose pattern you also typed on that lin
 
 ## Step 4: Verify Output
 
-After transcription, check for truncation — the most common failure mode:
+After transcription, check completeness:
 
 1. Confirm output is not empty
 2. Check character count is plausible (~400 chars/min for Chinese, ~200 words/min for English)
-3. Check the **ending** — does it trail off mid-sentence? If so, `max_tokens` was exhausted
-4. Show user the first and last ~200 characters as preview
-5. **Speaker path**: check the alignment report — `anchored_ratio` should be ≥ 0.5 (the script warns when lower), the speaker count should be plausible for the recording (a two-person interview showing 5 speakers, or a monologue split into 2+, means diarization over-segmented — see `references/speaker_diarization.md` for when to distrust labels)
+3. For local MLX, confirm the checkpoint manifest says `status: complete`; the
+   script refuses to write the final `.txt` when any chunk hits its token ceiling
+4. For legacy/remote output, check the **ending** — a mid-sentence tail can mean truncation
+5. Show user the first and last ~200 characters as preview
+6. **Speaker path**: check the alignment report — `anchored_ratio` should be ≥ 0.5 (the script warns when lower), the speaker count should be plausible for the recording (a two-person interview showing 5 speakers, or a monologue split into 2+, means diarization over-segmented — see `references/speaker_diarization.md` for when to distrust labels)
 
 If truncated or wrong, use **AskUserQuestion**:
 ```
@@ -619,9 +639,10 @@ Transcription may be truncated:
 - Last line: "[last 100 chars...]"
 
 Options:
-A) Retry with higher max_tokens (current: [N], try: [N*2])
-B) Switch mode — try [local/remote] instead
-C) Save as-is — the output looks complete to me
+A) Inspect the failed chunk; if it is dense real speech, retry with a measured
+   per-chunk budget up to 16384
+B) If it is music/silence repetition, classify or preprocess that chunk instead
+C) Switch mode — try [local/remote] instead
 D) Abort
 ```
 
@@ -653,7 +674,9 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/overlap_merge_transcribe.py \
 
 Splits into 18-minute chunks with 2-minute overlap, merges using punctuation-stripped fuzzy matching. See `references/overlap_merge_strategy.md` for algorithm details.
 
-For local MLX mode, overlap-merge is unnecessary — the bundled script handles chunking internally with `max_tokens=200000`.
+For local MLX mode, overlap-merge is unnecessary — the bundled script uses the
+pinned Qwen low-energy splitter, commits every chunk atomically, and defaults to
+`max_tokens=8192` **per chunk**.
 
 ## Step 6: Recommend Transcript Correction
 
@@ -685,7 +708,7 @@ Then re-run Step 0.
 
 Passing many files to one `transcribe_local_mlx.py` invocation is efficient (model loads once) — **but only when every file contains actual speech.** If the batch may include music-only / BGM-only clips (short promo videos, montage clips with subtitles instead of voiceover), do NOT batch them in one process:
 
-- On music/rhythm-only audio the model can fall into a **repetition loop hallucination** (e.g. endless "One, two, three, one, two, three...") that burns toward `max_tokens=200000` — one such file can stall for 10+ minutes and starve the whole batch.
+- On music/rhythm-only audio the model can fall into a **repetition loop hallucination** (e.g. endless "One, two, three, one, two, three..."). The 8192-token per-chunk ceiling bounds resource growth, while the 12-character n-gram quality gate rejects a loop even when it stops below that ceiling; one bad file can still consume the whole chunk timeout and starve a batch.
 - **Drive batch jobs one-file-per-process with a per-file timeout** (e.g. `timeout 240` / `perl -e 'alarm 240; exec @ARGV'` around each invocation, skip on timeout, second pass for failures). A stuck file then costs 4 minutes, not the batch.
 - For a stuck file, retry with `--max-tokens 3000`: real speech in a short clip fits comfortably; a looping file gets truncated output you can classify.
 - **Detect "no speech" instead of shipping garbage**: if the transcript's unique-word ratio is extremely low (e.g. `len(set(words))/len(words) < 0.06` on a 40+ char output), the clip almost certainly has no voiceover — label it as such rather than delivering the loop text. (Downstream OCR of on-screen captions is the actual fix for subtitle-only videos.)
@@ -705,7 +728,7 @@ Key facts (full recipe in `references/whisper_word_timestamps.md`):
 ## Speaker Diarization & Identification (who said what)
 
 Speaker labels are the DEFAULT output of Step 3 (decoupled architecture:
-full-audio Qwen3-ASR text + whisper timing lattice + pyannote segments,
+session-wide Qwen3-ASR text + whisper timing lattice + pyannote segments,
 aligned — never cut-then-transcribe). This section covers the pieces.
 
 - **The pipeline** — `scripts/speaker_transcribe.py` runs all three legs +
@@ -720,7 +743,7 @@ aligned — never cut-then-transcribe). This section covers the pieces.
   cut-then-transcribe variant (diarize → slice audio per turn → ASR each
   slice). It breaks ASR context at every cut and lowers text quality; kept
   only for extremely noisy / heavy-overlap audio where per-slice isolation of
-  a dominant near-field speaker beats full-audio ASR. Everything else uses
+  a dominant near-field speaker beats session-level ASR. Everything else uses
   the decoupled default.
 - **Voiceprint identification** — diarization labels are anonymous
   (`SPEAKER_00`…) and per-file. To map them to real names, unify a speaker
@@ -834,8 +857,8 @@ Substitute the resolved absolute path for `${CLAUDE_SKILL_DIR}` everywhere in th
 **Scripts:**
 - `resolve_media_input.py` — Resolve local paths, direct media URLs, and podcast/web pages into validated local media files
 - `prepare_asr_input.py` — Merge multi-segment recordings + normalize for ASR (16 kHz mono), optional pitch-preserved speedup for metered uploads; self-verifies duration math and splice boundaries
-- `transcribe_local_mlx.py` — Local MLX transcription (macOS ARM64, PEP 723 deps)
-- `speaker_transcribe.py` — **DEFAULT pipeline**: decoupled multi-speaker transcription (full-audio Qwen3-ASR + whisper word timing + pyannote diarization, aligned) → speaker-labeled transcript + CSV; `--no-diarization` plain-text fast path; `--text-file` for remote/pre-made ASR text
+- `transcribe_local_mlx.py` — Local MLX transcription (macOS ARM64, PEP 723 deps), bounded low-energy chunks, atomic checkpoints/resume, owner-liveness binding
+- `speaker_transcribe.py` — **DEFAULT pipeline**: decoupled multi-speaker transcription (session-wide Qwen3-ASR + whisper word timing + pyannote diarization, aligned) → speaker-labeled transcript + CSV; `--no-diarization` plain-text fast path; `--text-file` for remote/pre-made ASR text
 - `align_speakers.py` — Decoupled alignment core (stdlib): maps full transcript onto whisper word lattice + pyannote segments; usable standalone for debugging
 - `word_timestamps_whisper.py` — mlx-whisper word-level timestamps → JSON timing lattice (Apple Silicon)
 - `speaker_transcribe_cascade.py` — LEGACY cut-then-transcribe variant (extremely noisy / heavy-overlap audio only)
@@ -848,6 +871,6 @@ Substitute the resolved absolute path for `${CLAUDE_SKILL_DIR}` everywhere in th
 - `decoupled_speaker_alignment.md` — The default architecture: why decouple, alignment algorithm, trust signals, failure modes
 - `speaker_diarization.md` — Production pitfalls: over-segmentation, mic-domain effects, when to distrust labels; legacy cascade notes
 - `voiceprint_speaker_id.md` — CAM++ speaker ID: enroll/match, threshold+margin gates, the acoustic-domain caveat, bootstrap
-- `local_mlx_guide.md` — Performance benchmarks, max_tokens truncation, model compatibility
+- `local_mlx_guide.md` — Performance benchmarks, per-chunk token/resource contract, checkpoint recovery, model compatibility
 - `whisper_word_timestamps.md` — mlx-whisper word timing: the timing leg of the default pipeline; standalone subtitle/AV-alignment recipe
 - `overlap_merge_strategy.md` — Why naive chunking fails, fuzzy merge algorithm

@@ -10,7 +10,7 @@ attaches speaker labels afterward, keeping ASR context intact.
 
 Kept for one narrow case: extremely noisy / heavy-overlap audio where
 per-slice transcription isolates a dominant near-field speaker better than
-full-audio ASR. Everything else should use speaker_transcribe.py.
+session-level ASR. Everything else should use speaker_transcribe.py.
 
 Chains the full pipeline so you don't reassemble it each time:
   diarize (pyannote @ MPS) -> merge same-speaker turns -> transcribe each turn

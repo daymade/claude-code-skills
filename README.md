@@ -2338,7 +2338,7 @@ Transcribe audio and video files to text using Qwen3-ASR via two interchangeable
 **Key features:**
 - Dual inference paths — local MLX (15-27x realtime, free) and remote API, with automatic platform detection
 - Bundled `transcribe_local_mlx.py` loads the model once and processes files sequentially (no GPU contention)
-- Defaults `max_tokens=200000` to defeat the upstream `mlx-audio` 8192-token truncation that silently cuts audio past ~40 minutes
+- Uses low-energy ~20-minute chunks with an 8192-token per-chunk bound, atomic checkpoints/resume, and full process-tree cleanup so one bad chunk cannot become an unbounded GPU job
 - Remote fallback `overlap_merge_transcribe.py` splits into 18-minute chunks with 2-minute overlap and fuzzy-merges
 - ffmpeg video→16kHz mono WAV extraction, truncation verification, and proxy-bypass handling
 - Proactively suggests `transcript-fixer` to clean ASR recognition errors on the output

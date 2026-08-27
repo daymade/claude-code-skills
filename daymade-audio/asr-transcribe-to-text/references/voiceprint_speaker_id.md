@@ -38,7 +38,11 @@ uv run scripts/voiceprint_id.py match --refs refs.json --audio rec.wav \
 ```
 
 For each `SPEAKER_xx` it embeds the longest turns, matches to `refs.json`, prints
-the mapping, and (with `--csv`) rewrites the CSV's speaker column. Unmatched
+the mapping, and (with `--csv`) rewrites speaker labels. For a current
+receipt-backed bundle, this is one transaction across TXT, CSV, alignment
+mapping/turn hashes, and the final receipt; any exception restores the anonymous
+bundle. A legacy standalone CSV without a sibling receipt keeps the historical
+CSV-only behavior. Unmatched
 speakers keep their `SPEAKER_xx` label for a human to resolve.
 
 ## ⚠ The acoustic-domain caveat (the biggest real-world trap)
