@@ -341,7 +341,44 @@ def compare_pair(
     errors: List[Dict[str, str]] = []
 
     if _same_underlying_file(left.skill_file, right.skill_file):
-        base["status"] = "shared_target"
+        try:
+            shared_text = left.skill_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            base["status"] = "invalid"
+            errors.append(
+                {
+                    "path": left.relative_skill_file(project_root),
+                    "message": f"cannot read shared SKILL.md target: {exc}",
+                }
+            )
+            return base, errors
+
+        if ROUTER_MARKER in shared_text:
+            base["status"] = "invalid"
+            errors.append(
+                {
+                    "path": left.relative_skill_file(project_root),
+                    "message": "shared target cannot itself be a compatibility router; no canonical bundle exists",
+                }
+            )
+            return base, errors
+
+        left_records = bundle_records(left.bundle_path)
+        right_records = bundle_records(right.bundle_path)
+        same_bundle_target = _same_underlying_file(left.bundle_path, right.bundle_path)
+        left_extra = [record for record in left_records if record["path"] != "SKILL.md"]
+        right_extra = [record for record in right_records if record["path"] != "SKILL.md"]
+        if same_bundle_target or (not left_extra and not right_extra):
+            base["status"] = "shared_target"
+            return base, errors
+
+        left_digest = bundle_digest(left_records)
+        right_digest = bundle_digest(right_records)
+        base["bundle_sha256"] = {
+            left.root_label: left_digest,
+            right.root_label: right_digest,
+        }
+        base["status"] = "drift"
         return base, errors
 
     left_router_state, left_router_error = inspect_router(left, right, project_root)
@@ -462,6 +499,14 @@ def audit_project(project_argument: str) -> Dict[str, object]:
             pair_errors = [{"path": name, "message": str(exc)}]
         findings.append(finding)
         errors.extend(pair_errors)
+
+    if not errors and not findings:
+        errors.append(
+            {
+                "path": project_root.as_posix(),
+                "message": "declared skill roots contain no auditable SKILL.md bundles; refusing a silent empty audit",
+            }
+        )
 
     counts = collections.Counter(str(finding["status"]) for finding in findings)
     for status_name in (

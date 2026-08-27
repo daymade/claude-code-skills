@@ -240,6 +240,60 @@ class ProjectSkillRootsAuditTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0)
         self.assertEqual(self.finding(payload, "alpha")["status"], "shared_target")
 
+    @unittest.skipIf(os.name == "nt", "symlink creation requires privileges on Windows")
+    def test_shared_skill_file_without_extra_material_reports_shared_target(self):
+        canonical = self.write_skill(".claude/skills", "alpha", "alpha")
+        shadow = self.project / ".agents/skills/alpha"
+        shadow.mkdir(parents=True)
+        (shadow / "SKILL.md").symlink_to(canonical / "SKILL.md")
+
+        completed, payload = self.run_audit()
+
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(self.finding(payload, "alpha")["status"], "shared_target")
+
+    @unittest.skipIf(os.name == "nt", "symlink creation requires privileges on Windows")
+    def test_shared_skill_file_with_extra_material_is_drift(self):
+        canonical = self.write_skill(".claude/skills", "alpha", "alpha")
+        shadow = self.project / ".agents/skills/alpha"
+        shadow.mkdir(parents=True)
+        (shadow / "SKILL.md").symlink_to(canonical / "SKILL.md")
+        (shadow / "rules.md").write_text("copied rule\n", encoding="utf-8")
+
+        completed, payload = self.run_audit()
+
+        self.assertEqual(completed.returncode, 1)
+        finding = self.finding(payload, "alpha")
+        self.assertEqual(finding["status"], "drift")
+        self.assertEqual(len(set(finding["bundle_sha256"].values())), 2)
+
+    @unittest.skipIf(os.name == "nt", "symlink creation requires privileges on Windows")
+    def test_shared_router_target_is_invalid(self):
+        router = self.project / ".claude/skills/alpha"
+        router.mkdir(parents=True)
+        (router / "SKILL.md").write_text(
+            router_text("alpha", ".agents/skills/alpha/SKILL.md"), encoding="utf-8"
+        )
+        agent_root = self.project / ".agents/skills"
+        agent_root.mkdir(parents=True)
+        (agent_root / "alpha").symlink_to(router, target_is_directory=True)
+
+        completed, payload = self.run_audit()
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(payload["result"], "invalid")
+        self.assertIn("shared target cannot itself be a compatibility router", payload["errors"][0]["message"])
+
+    def test_present_but_empty_roots_are_invalid_not_clean(self):
+        (self.project / ".claude/skills").mkdir(parents=True)
+        (self.project / ".agents/skills").mkdir(parents=True)
+
+        completed, payload = self.run_audit()
+
+        self.assertEqual(completed.returncode, 2)
+        self.assertEqual(payload["result"], "invalid")
+        self.assertIn("contain no auditable SKILL.md bundles", payload["errors"][0]["message"])
+
     def test_human_output_names_result_and_each_status(self):
         self.write_skill(".claude/skills", "alpha", "alpha")
         completed = subprocess.run(
