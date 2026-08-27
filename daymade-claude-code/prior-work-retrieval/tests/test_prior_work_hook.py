@@ -79,28 +79,22 @@ class PriorWorkHookTests(unittest.TestCase):
                     hook.classify_prompt(prompt, False), "required_prior_signal"
                 )
 
-    def test_production_prompt_marks_requirement_and_injects_context(self) -> None:
+    def test_ordinary_production_prompt_does_not_create_requirement(self) -> None:
         event = {
             "hook_event_name": "UserPromptSubmit",
             "session_id": "session-1",
             "prompt": "帮我设计并实现一套新的报告流程",
         }
-        output = hook.handle_event(event)
-        self.assertIn(
-            "Prior Work Retrieval",
-            output["hookSpecificOutput"]["additionalContext"],
-        )
+        self.assertIsNone(hook.handle_event(event))
         requirement = prior_work.load_requirement(hook._manifest(), "session-1")
-        self.assertTrue(requirement["required"])
+        self.assertIsNone(requirement)
 
     def test_explicit_read_only_maintenance_does_not_trigger_production(self) -> None:
         prompt = (
             "这是只读仓库维护任务：检查 Git 脏文件和会议规则，输出状态摘要；"
             "不要修改文件，不要派 agent。"
         )
-        self.assertEqual(
-            hook.classify_prompt(prompt, False), "not_required_read_only"
-        )
+        self.assertEqual(hook.classify_prompt(prompt, False), "none")
         event = {
             "hook_event_name": "UserPromptSubmit",
             "session_id": "session-read-only",
@@ -110,7 +104,7 @@ class PriorWorkHookTests(unittest.TestCase):
         requirement = prior_work.load_requirement(
             hook._manifest(), "session-read-only"
         )
-        self.assertFalse(requirement["required"])
+        self.assertIsNone(requirement)
 
     def test_prior_work_signal_still_wins_inside_read_only_request(self) -> None:
         prompt = "只读检查我们之前的 provider contract，不要修改文件"
@@ -118,7 +112,7 @@ class PriorWorkHookTests(unittest.TestCase):
             hook.classify_prompt(prompt, False), "required_prior_signal"
         )
 
-    def test_new_or_large_writes_gate_but_small_edit_and_tinkle_file_pass(self) -> None:
+    def test_new_or_large_writes_classify_but_small_edit_passes(self) -> None:
         new_write = {
             "tool_name": "Write",
             "tool_input": {
@@ -135,14 +129,14 @@ class PriorWorkHookTests(unittest.TestCase):
             },
         }
         self.assertFalse(hook.substantial_tool_use(small_edit)[0])
-        temporary = {
+        named_scratch = {
             "tool_name": "Write",
             "tool_input": {
                 "file_path": str(self.root / "tinkle_probe.py"),
                 "content": "x" * 1000,
             },
         }
-        self.assertFalse(hook.substantial_tool_use(temporary)[0])
+        self.assertTrue(hook.substantial_tool_use(named_scratch)[0])
 
     def test_tool_input_and_names_normalize_across_hosts(self) -> None:
         raw_patch = {
@@ -210,7 +204,7 @@ class PriorWorkHookTests(unittest.TestCase):
             "tool_name": "Bash",
             "tool_input": {"command": "printf x > /tmp/tinkle_probe.txt"},
         }
-        self.assertFalse(hook.substantial_tool_use(scratch_redirect)[0])
+        self.assertTrue(hook.substantial_tool_use(scratch_redirect)[0])
 
     def test_retrieval_route_prose_does_not_trip_write_signal(self) -> None:
         # Regression (2026-08-27): a --reject reason quoting "cp→symlink" let
@@ -228,6 +222,104 @@ class PriorWorkHookTests(unittest.TestCase):
         }
         substantial, reason = hook.substantial_tool_use(prose_complete)
         self.assertFalse(substantial, reason)
+
+    def test_quoted_comparison_operators_are_argument_data(self) -> None:
+        # Regression (2026-08-27): '未合并>7天' inside a quoted --reuse reason
+        # scanned as `> 7天...` file redirection (the redirection check ran on
+        # raw text, outside the retrieval-route exemption), blocking the
+        # gate's own receipt-completion command.
+        single_quoted = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": (
+                    "uv run --no-project python scripts/prior_work.py complete "
+                    "--run RUN_ID --reuse 'id=reuse: 两级判定(未合并>7天、已合并>30天)' "
+                    "--session-id SID"
+                )
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(single_quoted)
+        self.assertFalse(substantial, reason)
+        double_quoted = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": (
+                    "uv run python scripts/prior_work.py retrieve "
+                    '--outcome-term "age>30" --query q'
+                )
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(double_quoted)
+        self.assertFalse(substantial, reason)
+
+    def test_unquoted_redirection_even_after_route_stays_gated(self) -> None:
+        # Stripping quoted text must not weaken the gate: a real redirection
+        # in unquoted position — even trailing a whitelisted route command —
+        # is still a write.
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "uv run python scripts/prior_work.py check > receipt.json"
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(event)
+        self.assertTrue(substantial, reason)
+        self.assertEqual(reason, "Bash:write_signal")
+
+    def test_gate_messages_carry_the_real_session_id(self) -> None:
+        # Regression (2026-08-27): the deny message only ever showed the
+        # sha256 receipt filename, so the agent could not recover its real
+        # --session-id from the gate message and completed the receipt under
+        # a made-up id (the hash itself) — the gate kept rejecting every
+        # substantial write even though a receipt existed.
+        prior_work.mark_requirement(
+            hook._manifest(),
+            "session-guidance-9f2",
+            prompt="复用以前的正式实现",
+            trigger="required_prior_signal",
+            required=True,
+        )
+        event = {
+            "hook_event_name": "PreToolUse",
+            "session_id": "session-guidance-9f2",
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": str(self.root / "formal.py"),
+                "content": "x = 1\n" * 30,
+            },
+        }
+        denied = hook.handle_event(event)
+        reason = denied["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("--session-id 'session-guidance-9f2'", reason)
+        self.assertIn("sha256", reason)
+
+    def test_dot_sh_paths_are_not_unknown_executors(self) -> None:
+        # Regression (2026-08-27, session self-review finding 3): \bsh\b
+        # matched the "sh" inside `.sh` path suffixes, so reading a script
+        # with cat was gated as running an unknown interpreter.
+        read_script = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "cat /scripts/stale-branch-watch/report.sh; ls -la /tmp",
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(read_script)
+        self.assertFalse(substantial, reason)
+        # The bare interpreter form still gates.
+        bare = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sh -c 'echo hi'"},
+        }
+        substantial, reason = hook.substantial_tool_use(bare)
+        self.assertTrue(substantial, reason)
+        self.assertEqual(reason, "Bash:unknown_executor")
+        # Interpreter via absolute path still gates.
+        absolute = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "/bin/zsh script.zsh"},
+        }
+        substantial, reason = hook.substantial_tool_use(absolute)
+        self.assertTrue(substantial, reason)
 
     def test_retrieval_name_inside_arbitrary_code_cannot_launder_write(self) -> None:
         event = {
@@ -337,7 +429,7 @@ class PriorWorkHookTests(unittest.TestCase):
         substantial, reason = hook.substantial_tool_use(event)
         self.assertFalse(substantial, reason)
 
-    def test_implicit_pretool_requirement_blocks_until_receipt(self) -> None:
+    def test_pretool_never_invents_requirement_for_ordinary_write(self) -> None:
         event = {
             "hook_event_name": "PreToolUse",
             "session_id": "session-2",
@@ -346,33 +438,12 @@ class PriorWorkHookTests(unittest.TestCase):
                 "patch": "*** Add File: formal.py\n+one\n+two\n+three\n+four\n+five\n"
             },
         }
-        denied = hook.handle_event(event)
-        self.assertEqual(
-            denied["hookSpecificOutput"]["permissionDecision"], "deny"
-        )
-        manifest = hook._manifest()
-        run = prior_work.retrieve(
-            manifest,
-            "Reuse the verified provider contract before writing new code.",
-            ["provider contract"],
-            "reuse provider contract",
-            ["provider contract"],
-            "session-2",
-        )
-        candidate = run["candidates"][0]
-        prior_work.complete(
-            manifest,
-            run["run_id"],
-            "session-2",
-            [f"{candidate['candidate_id']}=reuse verified provider contract"],
-            [],
-            [],
-            [],
-            None,
-        )
         self.assertIsNone(hook.handle_event(event))
+        self.assertIsNone(
+            prior_work.load_requirement(hook._manifest(), "session-2")
+        )
 
-    def test_new_substantial_prompt_invalidates_old_receipt(self) -> None:
+    def test_new_explicit_prior_prompt_invalidates_old_receipt(self) -> None:
         first = {
             "hook_event_name": "UserPromptSubmit",
             "session_id": "session-3",
@@ -403,11 +474,52 @@ class PriorWorkHookTests(unittest.TestCase):
             {
                 "hook_event_name": "UserPromptSubmit",
                 "session_id": "session-3",
-                "prompt": "现在设计另一套报告系统",
+                "prompt": "现在复用以前那套报告系统",
             }
         )
         with self.assertRaisesRegex(prior_work.PriorWorkError, "older prompt"):
             prior_work.check_receipt(manifest, "session-3", None)
+
+    def test_ordinary_followup_does_not_invalidate_explicit_receipt(self) -> None:
+        session_id = "session-ordinary-followup"
+        hook.handle_event(
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": session_id,
+                "prompt": "复用以前的 provider contract",
+            }
+        )
+        manifest = hook._manifest()
+        run = prior_work.retrieve(
+            manifest,
+            "Reuse the verified provider contract.",
+            ["provider contract"],
+            "reuse provider",
+            ["provider contract"],
+            session_id,
+        )
+        candidate = run["candidates"][0]
+        prior_work.complete(
+            manifest,
+            run["run_id"],
+            session_id,
+            [f"{candidate['candidate_id']}=reuse current contract"],
+            [],
+            [],
+            [],
+            None,
+        )
+        hook.handle_event(
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": session_id,
+                "prompt": "现在实现报告系统",
+            }
+        )
+        self.assertEqual(
+            prior_work.check_receipt(manifest, session_id, None)["status"],
+            "valid",
+        )
 
     def test_user_optout_is_prompt_scoped_and_allows_write(self) -> None:
         hook.handle_event(
@@ -457,7 +569,7 @@ class PriorWorkHookTests(unittest.TestCase):
         }
         self.assertIsNone(hook.handle_event(event))
 
-    def test_missing_manifest_fails_closed_only_for_substantial_action(self) -> None:
+    def test_missing_manifest_does_not_turn_ordinary_write_into_gate(self) -> None:
         os.environ["PRIOR_WORK_MANIFEST"] = str(self.root / "missing.json")
         large = {
             "hook_event_name": "PreToolUse",
@@ -468,10 +580,7 @@ class PriorWorkHookTests(unittest.TestCase):
                 "content": "x" * 300,
             },
         }
-        self.assertEqual(
-            hook.handle_event(large)["hookSpecificOutput"]["permissionDecision"],
-            "deny",
-        )
+        self.assertIsNone(hook.handle_event(large))
         read_only = {
             "hook_event_name": "PreToolUse",
             "session_id": "session-6",
@@ -480,23 +589,26 @@ class PriorWorkHookTests(unittest.TestCase):
         }
         self.assertIsNone(hook.handle_event(read_only))
 
-    def test_missing_manifest_allows_only_its_exact_repair_target(self) -> None:
+    def test_missing_manifest_injects_error_only_for_explicit_prior_prompt(self) -> None:
         missing = self.root / "missing.json"
         os.environ["PRIOR_WORK_MANIFEST"] = str(missing)
-        repair = {
-            "hook_event_name": "PreToolUse",
+        ordinary = {
+            "hook_event_name": "UserPromptSubmit",
             "session_id": "session-repair",
-            "tool_name": "Write",
-            "tool_input": {
-                "file_path": str(missing),
-                "content": '{"schema_version":1}',
-            },
+            "prompt": "实现新的解析器",
         }
-        self.assertIsNone(hook.handle_event(repair))
-        repair["tool_input"]["file_path"] = str(self.root / "other.json")
-        self.assertEqual(
-            hook.handle_event(repair)["hookSpecificOutput"]["permissionDecision"],
-            "deny",
+        self.assertIsNone(hook.handle_event(ordinary))
+        explicit = {
+            "hook_event_name": "UserPromptSubmit",
+            "session_id": "session-repair",
+            "prompt": "复用以前的解析器实现",
+        }
+        message = hook.handle_event(explicit)["hookSpecificOutput"][
+            "additionalContext"
+        ]
+        self.assertIn(
+            "Prior-work manifest is unavailable",
+            message,
         )
 
     def test_hook_config_merge_is_additive_idempotent_and_retires_legacy(self) -> None:

@@ -5,8 +5,8 @@ description: >-
   Finds and verifies existing successful work before substantial new production when reuse is
   materially plausible. Use when the user explicitly references earlier work, existing code/SOPs,
   history, prior decisions, another project, or says 以前做过, 已有代码, 别重复造轮子, reuse, or
-  retrieve before produce. Also use when a genuinely new implementation would likely duplicate a
-  known artifact. Do not invoke for read-only repo status, current-file inspection, simple
+  retrieve before produce. Do not infer the trigger merely because a new implementation might
+  duplicate something. Do not invoke for read-only repo status, current-file inspection, simple
   explanation, mechanical verification, or merely because the final answer is a report/summary.
   Produces a source-verified reuse/adapt/reject receipt; zero hits never prove absence.
 argument-hint: "<task or question>"
@@ -86,6 +86,14 @@ uv run --no-project python scripts/prior_work.py retrieve \
   --session-id "$CODEX_SESSION_ID"
 ```
 
+`--session-id`: use it only with `retrieve`, `complete`, and `check`; `validate-manifest`
+does not accept it. On Codex use `$CODEX_SESSION_ID`. Claude Code has no such env
+var, so take the exact id carried verbatim in prior-work hook messages
+(UserPromptSubmit inject / PreToolUse deny / Stop block). The receipt filename
+shown beside it is the id's sha256, not the id itself; completing a receipt
+under a guessed id writes a file `check` will never read and the gate keeps
+rejecting. Never substitute the hash-looking filename for the id.
+
 When a normally optional live carrier is material to the request, promote it
 explicitly: `--require-source live-wechat`. The receipt cannot complete until
 that manual route is recorded.
@@ -160,15 +168,14 @@ scripts/prior-work-retrieval.sh --install
 The installer adds three handlers to both Claude and Codex without replacing
 unrelated hooks:
 
-- `UserPromptSubmit` marks a new prompt-scoped requirement and injects the Skill
-  route when prior-work or production signals are present.
-- `PreToolUse` blocks substantial new/large writes, patches, delegated
-  production, and Bash/Codex exec paths that carry a write signal or an unknown
-  executable until the current requirement has a receipt. Read-only discovery,
-  small mechanical edits, and `tinkle_` scratch files remain available.
-- `Stop` validates a requirement that was already created by the current prompt
-  or a substantial tool attempt. It never invents a new requirement merely
-  because the final answer is long, list-shaped, or contains code.
+- `UserPromptSubmit` creates a prompt-scoped requirement only for an explicit
+  prior-work/reuse/history signal and injects the Skill route.
+- `PreToolUse` blocks substantial writes only when that explicit requirement
+  already exists and lacks a valid receipt. It never turns an ordinary write
+  into a retrieval obligation. Read-only discovery and small mechanical edits
+  remain available while a requirement is active.
+- `Stop` validates an explicit requirement that already exists. It never invents
+  one from output length, code, tool use, or a generic production request.
 
 It migrates the narrower unversioned `recall-first-evidence` UserPromptSubmit
 handler into this superset while leaving its script on disk for recovery. The

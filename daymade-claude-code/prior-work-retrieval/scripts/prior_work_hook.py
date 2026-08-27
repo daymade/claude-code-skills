@@ -23,18 +23,6 @@ from typing import Any
 import prior_work
 
 RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
-PRODUCTION_ACTION = re.compile(
-    r"(?:写|做|建|创建|设计|实现|开发|修复|修改|重构|迁移|部署|生成|起草|准备|"
-    r"规划|分析|整理|审核|回复|build|implement|create|write|design|develop|"
-    r"fix|refactor|migrate|deploy|prepare|draft|analy[sz]e|review)",
-    re.IGNORECASE,
-)
-DELIVERABLE_NOUN = re.compile(
-    r"(?:代码|方案|报告|文档|流程|系统|功能|脚本|skill|sop|会议|材料|回复|消息|"
-    r"邮件|合同|ppt|表格|应用|架构|设计|计划|实现|pipeline|workflow|report|"
-    r"document|code|feature|system|script|message|email|contract|deck|plan)",
-    re.IGNORECASE,
-)
 PRIOR_WORK_SIGNAL = re.compile(
     r"(?:我们之前|以前|之前做过|之前(?:用|跑|做|配|装|搭|建|写)|已有|现有|历史经验|历史决策|以前的代码|已有代码|"
     r"成功经验|别重复|不要重新|不要重造|复用|类似的问题|类似问题|上次|当时用的|"
@@ -43,22 +31,10 @@ PRIOR_WORK_SIGNAL = re.compile(
     r"reuse|did this before|history)",
     re.IGNORECASE,
 )
+HOOK_GUIDANCE_MARKER = "Prior Work Retrieval is required before substantial production"
 USER_OPTOUT = re.compile(
     r"(?:不用|不要|无需|跳过).{0,12}(?:查历史|检索历史|已有工作检索|prior work|历史检索)"
     r"|(?:skip|disable).{0,8}(?:prior[- ]work|history retrieval)",
-    re.IGNORECASE,
-)
-CONTINUATION = re.compile(
-    r"^(?:继续|可以|好的|好|行|开始吧|接着|往下做|go ahead|continue|ok|yes)[。.!！\s]*$",
-    re.IGNORECASE,
-)
-READ_ONLY_QUESTION = re.compile(
-    r"(?:什么是|什么意思|为什么|怎么理解|解释一下|是否|是不是|what is|why|explain)",
-    re.IGNORECASE,
-)
-EXPLICIT_READ_ONLY = re.compile(
-    r"(?:只读|不得|不要|无需|不需要|不(?:要)?).{0,8}(?:修改|写入|创建|编辑|改动|派\s*agent)"
-    r"|(?:read[- ]only|do not|don't|without).{0,12}(?:modify|write|edit|create|spawn)",
     re.IGNORECASE,
 )
 SHELL_WRITE_SIGNAL = re.compile(
@@ -69,7 +45,10 @@ SHELL_WRITE_SIGNAL = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 SHELL_UNKNOWN_EXECUTOR = re.compile(
-    r"\b(?:python(?:3)?|node|bash|zsh|sh)\b",
+    # The lookbehind keeps file-suffix collisions out: `report.sh` is a path
+    # argument to read, not the interpreter `sh` — a dot (or word char)
+    # immediately before the token means it is a filename component.
+    r"(?<![\w.])(?:python(?:3)?|node|bash|zsh|sh)\b",
     re.IGNORECASE,
 )
 SHELL_READ_ONLY_EXECUTOR = re.compile(
@@ -97,24 +76,16 @@ def _manifest() -> dict[str, Any]:
     return prior_work.load_manifest(prior_work.default_manifest_path().resolve())
 
 
-def classify_prompt(prompt: str, current_required: bool) -> str:
+def classify_prompt(prompt: str, _current_required: bool = False) -> str:
     text = prompt.strip()
     if not text:
         return "none"
+    if HOOK_GUIDANCE_MARKER in text:
+        return "none"
     if USER_OPTOUT.search(text):
         return "opt_out"
-    if CONTINUATION.fullmatch(text):
-        return "preserve"
     if PRIOR_WORK_SIGNAL.search(text):
         return "required_prior_signal"
-    if EXPLICIT_READ_ONLY.search(text):
-        return "not_required_read_only"
-    if READ_ONLY_QUESTION.search(text):
-        return "not_required_question"
-    if len(text) >= 8 and PRODUCTION_ACTION.search(text) and DELIVERABLE_NOUN.search(text):
-        return "required_production"
-    if current_required and len(text) <= 120:
-        return "preserve"
     return "none"
 
 
@@ -130,12 +101,6 @@ def _tool_input(event: dict[str, Any]) -> dict[str, Any]:
     if isinstance(value, str):
         return {"input": value}
     return {}
-
-
-def _temporary_target(path_value: Any) -> bool:
-    if not isinstance(path_value, str) or not path_value:
-        return False
-    return Path(path_value).name.startswith("tinkle_")
 
 
 def _base_tool_name(event: dict[str, Any]) -> str:
@@ -294,50 +259,62 @@ def _segment_is_retrieval_route(segment: str) -> bool:
     return index + 1 < len(words) and words[index + 1] in subcommands
 
 
+def _strip_quoted_text(fragment: str) -> str:
+    """Blank out quoted regions so argument data is not scanned as redirection.
+
+    A prose token like '未合并>7天' inside a quoted retrieval-route argument is
+    data, not `> 7天...` redirection. Unquoted `>` survives the strip, so real
+    redirections — including one chained after a route command — stay gated.
+    """
+    out: list[str] = []
+    quote: str | None = None
+    i = 0
+    while i < len(fragment):
+        ch = fragment[i]
+        if quote == '"':
+            if ch == "\\" and i + 1 < len(fragment) and fragment[i + 1] in '"\\$`':
+                out.append("  ")
+                i += 2
+                continue
+            if ch == '"':
+                quote = None
+            out.append(" ")
+            i += 1
+            continue
+        if quote == "'":
+            if ch == "'":
+                quote = None
+            out.append(" ")
+            i += 1
+            continue
+        if ch in {'"', "'"}:
+            quote = ch
+            out.append(" ")
+            i += 1
+            continue
+        if ch == "\\" and i + 1 < len(fragment):
+            out.append(fragment[i : i + 2])
+            i += 2
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def _has_formal_file_redirection(event: dict[str, Any]) -> bool:
     for fragment in _shell_fragments(event):
-        for match in FILE_REDIRECTION.finditer(fragment):
+        for match in FILE_REDIRECTION.finditer(_strip_quoted_text(fragment)):
             target = match.group("target").strip("\"'")
             if target in {"/dev/null", "&1", "&2"}:
                 continue
-            if Path(target).name.startswith("tinkle_"):
-                continue
             return True
     return False
-
-
-def _is_manifest_repair(event: dict[str, Any]) -> bool:
-    manifest_path = prior_work.default_manifest_path().expanduser().resolve()
-    tool_input = _tool_input(event)
-    path_value = tool_input.get("file_path") or tool_input.get("path")
-    if isinstance(path_value, str):
-        target = Path(path_value).expanduser()
-        event_cwd = event.get("cwd")
-        if not target.is_absolute() and isinstance(event_cwd, str):
-            target = Path(event_cwd).expanduser() / target
-        try:
-            if target.resolve() == manifest_path:
-                return True
-        except OSError:
-            pass
-    patch_text = _tool_payload_text(event)
-    patch_targets = re.findall(
-        r"^\*\*\* (?:Add|Update) File:\s*(.+?)\s*$", patch_text, re.MULTILINE
-    )
-    if not patch_targets:
-        return False
-    try:
-        return all(Path(value).expanduser().resolve() == manifest_path for value in patch_targets)
-    except OSError:
-        return False
 
 
 def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
     base = _base_tool_name(event)
     tool_input = _tool_input(event)
     path_value = tool_input.get("file_path") or tool_input.get("path")
-    if _temporary_target(path_value):
-        return False, "temporary_file"
     if base == "Write":
         content = tool_input.get("content")
         target = Path(path_value).expanduser() if isinstance(path_value, str) else None
@@ -606,8 +583,8 @@ def _receipt_error(manifest: dict[str, Any], session_id: str) -> str | None:
     return None
 
 
-def _guidance(reason: str) -> str:
-    return (
+def _guidance(reason: str, session_id: Any = None) -> str:
+    text = (
         "Prior Work Retrieval is required before substantial production. "
         f"Trigger: {reason}. Load the prior-work-retrieval Skill, run "
         "scripts/prior_work.py retrieve with one --business-outcome sentence, "
@@ -616,6 +593,13 @@ def _guidance(reason: str) -> str:
         "verify candidates, then complete a reuse/adapt/no-reuse receipt for this "
         "session. Read-only discovery remains allowed."
     )
+    if isinstance(session_id, str) and session_id:
+        text += (
+            f" Pass exactly this id to retrieve, complete, and check: "
+            f"--session-id '{session_id}'. validate-manifest has no session-id option. "
+            "The receipt filename in Trigger is its sha256, not the id itself."
+        )
+    return text
 
 
 def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
@@ -634,9 +618,7 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
         manifest = _manifest()
         current = prior_work.load_requirement(manifest, session_id)
     except prior_work.PriorWorkError as error:
-        if PRIOR_WORK_SIGNAL.search(prompt) or (
-            PRODUCTION_ACTION.search(prompt) and DELIVERABLE_NOUN.search(prompt)
-        ):
+        if PRIOR_WORK_SIGNAL.search(prompt):
             return _inject(
                 f"Prior-work manifest is unavailable ({error}). Fix the explicit "
                 "manifest before substantial production; do not silently fall back."
@@ -645,13 +627,9 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
     classification = classify_prompt(
         prompt, bool(current and current.get("required"))
     )
-    if classification == "preserve" or classification == "none":
+    if classification == "none":
         return None
-    required = classification not in {
-        "opt_out",
-        "not_required_question",
-        "not_required_read_only",
-    }
+    required = classification != "opt_out"
     requirement = prior_work.mark_requirement(
         manifest,
         session_id,
@@ -661,42 +639,29 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
     )
     if not required:
         return None
-    return _inject(_guidance(requirement["trigger"]))
+    return _inject(_guidance(requirement["trigger"], session_id))
 
 
 def handle_pre_tool(event: dict[str, Any]) -> dict[str, Any] | None:
-    substantial, reason = substantial_tool_use(event)
-    if not substantial:
-        return None
     session_id = event.get("session_id")
     if not isinstance(session_id, str) or not session_id:
-        return _pretool_deny(
-            "Prior Work Retrieval could not scope this substantial write because "
-            "the hook event lacks session_id."
-        )
+        return None
     try:
         manifest = _manifest()
         requirement = prior_work.load_requirement(manifest, session_id)
-        if requirement is None:
-            requirement = prior_work.mark_requirement(
-                manifest,
-                session_id,
-                prompt=f"Substantial tool action: {reason}",
-                trigger="implicit_substantial_tool",
-                required=True,
-            )
-        if not requirement.get("required"):
+        if requirement is None or not requirement.get("required"):
             return None
-        error = _receipt_error(manifest, session_id)
-    except prior_work.PriorWorkError as error:
-        if _is_manifest_repair(event):
-            return None
-        return _pretool_deny(
-            f"Prior Work Retrieval configuration/state failed: {error}. "
-            "Repair it instead of bypassing the check."
-        )
+    except prior_work.PriorWorkError:
+        # This feature is explicit-only. If no readable requirement can prove
+        # that the current prompt opted into prior-work retrieval, an ordinary
+        # write must not be converted into a global production gate.
+        return None
+    substantial, reason = substantial_tool_use(event)
+    if not substantial:
+        return None
+    error = _receipt_error(manifest, session_id)
     if error is not None:
-        return _pretool_deny(_guidance(f"{reason}; receipt: {error}"))
+        return _pretool_deny(_guidance(f"{reason}; receipt: {error}", session_id))
     return None
 
 
@@ -718,7 +683,7 @@ def handle_stop(event: dict[str, Any]) -> dict[str, Any] | None:
             "Repair it before finishing this substantial response."
         )
     if error is not None:
-        return _stop_block(_guidance(f"final response; receipt: {error}"))
+        return _stop_block(_guidance(f"final response; receipt: {error}", session_id))
     return None
 
 
@@ -734,7 +699,7 @@ def handle_event(event: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def selftest() -> None:
-    with tempfile.TemporaryDirectory(prefix="tinkle_prior-work-hook-") as name:
+    with tempfile.TemporaryDirectory(prefix="prior-work-hook-") as name:
         root = Path(name)
         source = root / "source"
         source.mkdir()
@@ -813,6 +778,16 @@ def selftest() -> None:
                 "stop_hook_active": False,
                 "last_assistant_message": "- item\n" * 100,
             }
+            # No requirement yet: Stop must not invent one from a long,
+            # list-shaped final message.
+            assert handle_event(stop_event) is None
+            prior_work.mark_requirement(
+                manifest,
+                "new-session",
+                prompt="Produce the requested implementation",
+                trigger="required_prior_signal",
+                required=True,
+            )
             assert handle_event(stop_event) is not None
             stop_event["stop_hook_active"] = True
             assert handle_event(stop_event) is None
