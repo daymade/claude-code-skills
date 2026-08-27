@@ -106,8 +106,13 @@ of checkpoint identity, preventing unchecked older parts from being resumed.
 The speaker orchestrator has a separate outer cache for Qwen text, Whisper
 words, and pyannote segments. Each artifact has a provenance sidecar containing
 the source-audio SHA-256, producer-script SHA-256, semantic parameters, and
-artifact SHA-256. Missing or mismatched provenance reruns that leg; an existing
-file alone is not completion. After all four final artifacts are written, the
+artifact SHA-256. Source and producer identities are frozen before each leg;
+if either changes before publication, the result is rejected instead of being
+signed with the later bytes. Schema-v1 sidecars are invalidated so a prior
+post-run signature cannot survive this repair. Missing or mismatched provenance
+reruns that leg; an existing file alone is not completion. Completed checkpoint
+entry `i` must name exactly `chunk-{i:04d}.txt`, not merely any chunk-shaped
+filename. After all four final artifacts are written, the
 speaker orchestrator atomically commits `<stem>.receipt.json`; it binds source
 bytes, final TXT/CSV/diarization/alignment hashes, all producer-script hashes,
 semantic parameters, and the pinned model/dependency contract. Downstream

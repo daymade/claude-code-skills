@@ -104,12 +104,14 @@ Use vocabulary and stakes as the primary tier signals; use length only as a tieb
    - Confident: the sound change is plausible and context or an authoritative local source settles it.
    - Needs verification: a person, company, product, model, ticker, place, number, or other load-bearing term without a source.
    - Uncertain: evidence does not settle it; leave the original and enqueue.
+   - Multi-channel entity fork: when independent transcripts disagree on a person name or other proper noun and no local authority settles it, collect the unresolved forks and ask the human once. Do not guess, and do not treat a majority vote as identity evidence.
 7. **Apply the smallest edit that explains the sound.** Do not add words the speaker did not say. Correct ASR-derived metadata too, while leaving `asr_note` intact.
 8. **Run a second pass.**
    - Every tier: run `--scan-traps` and inspect both hits and `unparsed`.
    - Full tier: use a fresh-context reviewer on exactly one corrected file. Require a compact residual table or explicit `no new residuals`; an empty/truncated response is a failed review.
-9. **Enqueue every unresolved item.** Follow `Review queue safety` below and [review_queue_dashboard.md](references/review_queue_dashboard.md).
-10. **Verify and finalize.** Diff the file actually edited, run numeric consistency when numbers matter, rerun plain Stage 1, re-grep known corrections, and confirm every change traces to a triage decision.
+   - High-stakes multi-recording: a sampled clip settles only that anchored item. If the user asked for a higher-quality or complete transcript and the baseline audio is available, load **`/daymade-audio:asr-transcribe-to-text`** and run its full-file transcription path across the complete clearest/canonical recording before claiming whole-transcript coverage; otherwise report `sampled cross-check only — incomplete`. Prefer a recognizer different from the producer of the canonical body. If only the same recognizer is available, the run proves complete-source coverage but is not independent cross-recognizer corroboration; state that boundary.
+9. **Enqueue every unresolved item.** Follow `Review queue safety` below and [review_queue_dashboard.md](references/review_queue_dashboard.md). Detection and enqueueing are not correction: for a higher-quality/final claim, every queue row anchored to this exact file must leave `pending`. If a human is unavailable, keep the artifact explicitly labeled `draft / unresolved — incomplete` and enumerate the rows; do not ship the raw suspect text under a completed quality claim.
+10. **Verify and finalize.** Diff the file actually edited, run numeric consistency when numbers matter, rerun plain Stage 1, re-grep known corrections, and confirm every change traces to a triage decision. Re-list the review queue for the exact file as a separate final gate: zero pending rows is required before saying `high-quality final transcript`.
 11. **Compound the learning in the same turn.** Route each stable pattern to its correct home; do not leave confirmed fixes only in chat. Native-pass edits never reach Stage 1's correction history, so harvest them mechanically right after the final diff:
 
     ~~~bash
@@ -176,7 +178,7 @@ uv run scripts/fix_transcription.py \
   --check-corpus --corpus /path/to/project-transcripts/
 ~~~
 
-User verdicts compound immediately: fix the file, update the proper destination, and record confirmed-correct results so later runs do not ask again.
+User verdicts settle the occurrence immediately, but they do not make a replacement reusable. Fix the file first, then route the result through the table above: only a stable recurring pattern goes to the dictionary/roster/context; a rare sentence-local mishearing stays file-only. When the user confirms that two legitimate names or nicknames identify the same person, preserve whichever form was actually spoken and store the identity relationship as context, not as a replacement rule.
 
 ## Review queue safety
 
@@ -205,6 +207,7 @@ Safety rules:
 - `context` is copied verbatim; `line` is the key, not `line_hint`.
 - `suggested` is the key, not `suggestion`. Use `actions`, not `action_pack`.
 - Resolve one occurrence at a time; sweep sibling entity occurrences only after the whole batch is resolved.
+- A `pending` row is a blocking state for a high-quality/final transcript, not proof that the issue was handled. Queue detection without a human/evidence verdict leaves the artifact incomplete.
 - Read `resolved_text` after an override; the listing can still display the rejected suggestion.
 - If the file moved or drifted, run `--reanchor-review`. Add `--reanchor-root` or `--reanchor-to` when requested. Do not hand-edit around a pending item.
 - Promote every `decision_note` by meaning; storing a note does not change the dictionary, roster, context, or false-positive state.

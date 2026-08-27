@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -120,6 +121,197 @@ def write_receipt_backed_bundle(root, wav):
 
 
 class LongAudioSafetyTests(unittest.TestCase):
+    def test_supported_audio_uses_the_direct_decoder(self):
+        calls = []
+
+        def loader(path, *, sr):
+            calls.append((path, sr))
+            return [0.0, 0.5]
+
+        decoded = local_mlx.load_audio_with_ffmpeg_fallback(
+            "/example/audio.wav",
+            16000,
+            loader,
+            ffmpeg_path="/unused/ffmpeg",
+            run_command=lambda *_args, **_kwargs: self.fail(
+                "ffmpeg must not run for a supported input"
+            ),
+        )
+
+        self.assertEqual(decoded, [0.0, 0.5])
+        self.assertEqual(calls, [("/example/audio.wav", 16000)])
+
+    def test_unsupported_container_is_normalized_by_ffmpeg(self):
+        loader_calls = []
+        runner_calls = []
+
+        def loader(path, *, sr):
+            loader_calls.append((path, sr))
+            if path.endswith(".ogg"):
+                decode_error = type(
+                    "DecodeError",
+                    (Exception,),
+                    {"__module__": "miniaudio"},
+                )
+                raise decode_error("could not open/decode file")
+            return [0.25, -0.25]
+
+        def runner(command, **kwargs):
+            runner_calls.append((command, kwargs))
+            Path(command[-1]).write_bytes(b"RIFF-normalized")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        decoded = local_mlx.load_audio_with_ffmpeg_fallback(
+            "/example/audio.ogg",
+            16000,
+            loader,
+            ffmpeg_path="/opt/ffmpeg",
+            run_command=runner,
+        )
+
+        self.assertEqual(decoded, [0.25, -0.25])
+        self.assertEqual(loader_calls[0], ("/example/audio.ogg", 16000))
+        self.assertTrue(loader_calls[1][0].endswith("tinkle_normalized.wav"))
+        command, kwargs = runner_calls[0]
+        self.assertEqual(command[0], "/opt/ffmpeg")
+        self.assertIn("pcm_s16le", command)
+        self.assertEqual(command[command.index("-ac") + 1], "1")
+        self.assertEqual(command[command.index("-ar") + 1], "16000")
+        self.assertEqual(kwargs["check"], False)
+
+    def test_decode_failure_without_ffmpeg_is_explicit(self):
+        def loader(_path, *, sr):
+            self.assertEqual(sr, 16000)
+            raise ValueError("Unsupported format: ogg")
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "ffmpeg is unavailable for temporary PCM normalization",
+        ):
+            local_mlx.load_audio_with_ffmpeg_fallback(
+                "/example/audio.ogg",
+                16000,
+                loader,
+                ffmpeg_path="",
+            )
+
+    def test_unrelated_runtime_failure_propagates_without_ffmpeg(self):
+        runtime_error = RuntimeError("GPU allocator unavailable")
+
+        def loader(_path, *, sr):
+            self.assertEqual(sr, 16000)
+            raise runtime_error
+
+        with self.assertRaises(RuntimeError) as raised:
+            local_mlx.load_audio_with_ffmpeg_fallback(
+                "/example/audio.ogg",
+                16000,
+                loader,
+                ffmpeg_path="/opt/ffmpeg",
+                run_command=lambda *_args, **_kwargs: self.fail(
+                    "ffmpeg must not run for a non-decoder failure"
+                ),
+            )
+        self.assertIs(raised.exception, runtime_error)
+
+    def test_ffmpeg_nonzero_is_explicit(self):
+        def loader(_path, *, sr):
+            self.assertEqual(sr, 16000)
+            raise ValueError("Unsupported format: ogg")
+
+        def runner(command, **_kwargs):
+            return subprocess.CompletedProcess(command, 7, "", "bad packet")
+
+        with self.assertRaisesRegex(RuntimeError, "failed with exit 7: bad packet"):
+            local_mlx.load_audio_with_ffmpeg_fallback(
+                "/example/audio.ogg",
+                16000,
+                loader,
+                ffmpeg_path="/opt/ffmpeg",
+                run_command=runner,
+            )
+
+    def test_ffmpeg_start_failure_preserves_its_cause(self):
+        def loader(_path, *, sr):
+            self.assertEqual(sr, 16000)
+            raise ValueError("Unsupported format: ogg")
+
+        start_error = FileNotFoundError("ffmpeg disappeared")
+
+        def runner(_command, **_kwargs):
+            raise start_error
+
+        with self.assertRaisesRegex(RuntimeError, "ffmpeg could not start") as raised:
+            local_mlx.load_audio_with_ffmpeg_fallback(
+                "/example/audio.ogg",
+                16000,
+                loader,
+                ffmpeg_path="/opt/ffmpeg",
+                run_command=runner,
+            )
+        self.assertIs(raised.exception.__cause__, start_error)
+
+    def test_normalized_decode_failure_preserves_the_second_error(self):
+        calls = 0
+        normalized_error = ValueError("Unsupported format: wav")
+
+        def loader(path, *, sr):
+            nonlocal calls
+            calls += 1
+            self.assertEqual(sr, 16000)
+            if path.endswith(".ogg"):
+                raise ValueError("Unsupported format: ogg")
+            raise normalized_error
+
+        def runner(command, **_kwargs):
+            Path(command[-1]).write_bytes(b"RIFF-normalized")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "could not decode ffmpeg-normalized audio",
+        ) as raised:
+            local_mlx.load_audio_with_ffmpeg_fallback(
+                "/example/audio.ogg",
+                16000,
+                loader,
+                ffmpeg_path="/opt/ffmpeg",
+                run_command=runner,
+            )
+        self.assertEqual(calls, 2)
+        self.assertIs(raised.exception.__cause__, normalized_error)
+
+    def test_unrelated_failure_after_normalization_propagates(self):
+        normalized_error = MemoryError("allocator exhausted")
+
+        def loader(path, *, sr):
+            self.assertEqual(sr, 16000)
+            if path.endswith(".ogg"):
+                raise ValueError("Unsupported format: ogg")
+            raise normalized_error
+
+        def runner(command, **_kwargs):
+            Path(command[-1]).write_bytes(b"RIFF-normalized")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with self.assertRaises(MemoryError) as raised:
+            local_mlx.load_audio_with_ffmpeg_fallback(
+                "/example/audio.ogg",
+                16000,
+                loader,
+                ffmpeg_path="/opt/ffmpeg",
+                run_command=runner,
+            )
+        self.assertIs(raised.exception, normalized_error)
+
+    def test_skill_requires_full_source_for_high_stakes_cross_check(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        skill_flat = " ".join(skill.split())
+
+        self.assertIn("the entire baseline recording", skill_flat)
+        self.assertIn("Selected clips can settle selected utterances", skill_flat)
+        self.assertIn("proper-name forks", skill_flat)
+
     def test_default_budget_is_per_chunk_and_bounded(self):
         parser = local_mlx.build_parser()
         args = parser.parse_args(["--smoke-test"])
@@ -341,6 +533,33 @@ class LongAudioSafetyTests(unittest.TestCase):
                 "sha256": "a" * 64,
             }]
             manifest_path.write_text(json.dumps(unsafe), encoding="utf-8")
+            with self.assertRaisesRegex(
+                local_mlx.CheckpointIntegrityError,
+                "unsafe or malformed identity",
+            ):
+                local_mlx._load_or_create_manifest(
+                    manifest_path, identity(), 1
+                )
+
+            manifest_path.unlink()
+            checkpoint_root = manifest_path.parent
+            local_mlx._load_or_create_manifest(manifest_path, identity(), 1)
+            forged_text = "FORGED TEXT FROM OUT-OF-RANGE PART"
+            (checkpoint_root / "chunk-9999.txt").write_text(
+                forged_text, encoding="utf-8"
+            )
+            out_of_range = json.loads(
+                manifest_path.read_text(encoding="utf-8")
+            )
+            out_of_range["chunks"] = [{
+                "index": 0,
+                "status": "done",
+                "part": "chunk-9999.txt",
+                "sha256": local_mlx._sha256_text(forged_text),
+            }]
+            manifest_path.write_text(
+                json.dumps(out_of_range), encoding="utf-8"
+            )
             with self.assertRaisesRegex(
                 local_mlx.CheckpointIntegrityError,
                 "unsafe or malformed identity",
@@ -698,6 +917,58 @@ class LongAudioSafetyTests(unittest.TestCase):
                     local_mlx._sha256_file(paths[name]),
                 )
 
+    def test_receipt_backed_speaker_mapping_is_idempotent_and_rejects_conflict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wav = root / "audio.wav"
+            wav.write_bytes(b"wav")
+            paths = write_receipt_backed_bundle(root, wav)
+
+            speaker.apply_speaker_mapping_transaction(
+                root,
+                wav.stem,
+                {"SPEAKER_00": "Alice"},
+                "first mapping",
+            )
+            committed = {
+                name: path.read_bytes() for name, path in paths.items()
+            }
+
+            speaker.apply_speaker_mapping_transaction(
+                root,
+                wav.stem,
+                {"SPEAKER_00": "Alice"},
+                "idempotent replay",
+            )
+            self.assertEqual(
+                {name: path.read_bytes() for name, path in paths.items()},
+                committed,
+            )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "already mapped to 'Alice'.*conflicting remap to 'Bob'",
+            ):
+                speaker.apply_speaker_mapping_transaction(
+                    root,
+                    wav.stem,
+                    {"SPEAKER_00": "Bob"},
+                    "conflicting replay",
+                )
+
+            self.assertEqual(
+                {name: path.read_bytes() for name, path in paths.items()},
+                committed,
+            )
+            self.assertIn(" Alice\n", paths["txt"].read_text(encoding="utf-8"))
+            self.assertIn(",Alice,", paths["csv"].read_text(encoding="utf-8"))
+            alignment = json.loads(
+                paths["alignment"].read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                alignment["label_mapping"], {"SPEAKER_00": "Alice"}
+            )
+
     def test_receipt_backed_speaker_mapping_rolls_back_partial_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -776,6 +1047,138 @@ class LongAudioSafetyTests(unittest.TestCase):
                 "old source-a text",
             )
 
+    def test_leg_refuses_provenance_when_source_changes_during_child_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            producer = root / "producer.py"
+            producer.write_text("# producer-a\n", encoding="utf-8")
+            wav = root / "audio.wav"
+            wav.write_bytes(b"SOURCE-A")
+            work_root = root / "work"
+            destination = work_root / wav.stem / f"{wav.stem}.qwen.txt"
+
+            def fake_run(command, timeout=None):
+                self.assertEqual(wav.read_bytes(), b"SOURCE-A")
+                staging = Path(command[command.index("--output-dir") + 1])
+                staging.mkdir(parents=True, exist_ok=True)
+                (staging / f"{wav.stem}.txt").write_text(
+                    "TRANSCRIPT OF SOURCE-A", encoding="utf-8"
+                )
+                wav.write_bytes(b"SOURCE-B")
+
+            with (
+                mock.patch.object(speaker, "HERE", root),
+                mock.patch.object(speaker, "run", side_effect=fake_run),
+                self.assertRaisesRegex(
+                    RuntimeError, "source or producer changed while processing"
+                ),
+            ):
+                speaker._run_batched_leg(
+                    [wav],
+                    work_root,
+                    "producer.py",
+                    "_qwen",
+                    ".txt",
+                    dest_for=lambda stem: work_root / stem / f"{stem}.qwen.txt",
+                    extra_args=[],
+                    force=False,
+                    timeout=30,
+                    cache_label="test leg",
+                    missing_label="missing",
+                    cache_parameters={"language": "Chinese"},
+                )
+
+            self.assertFalse(destination.exists())
+            self.assertFalse(
+                speaker._artifact_provenance_path(destination).exists()
+            )
+
+    def test_leg_refuses_provenance_when_producer_changes_during_child_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            producer = root / "producer.py"
+            producer.write_text("# producer-a\n", encoding="utf-8")
+            wav = root / "audio.wav"
+            wav.write_bytes(b"SOURCE-A")
+            work_root = root / "work"
+            destination = work_root / wav.stem / f"{wav.stem}.qwen.txt"
+
+            def fake_run(command, timeout=None):
+                staging = Path(command[command.index("--output-dir") + 1])
+                staging.mkdir(parents=True, exist_ok=True)
+                (staging / f"{wav.stem}.txt").write_text(
+                    "TRANSCRIPT FROM PRODUCER-A", encoding="utf-8"
+                )
+                producer.write_text("# producer-b\n", encoding="utf-8")
+
+            with (
+                mock.patch.object(speaker, "HERE", root),
+                mock.patch.object(speaker, "run", side_effect=fake_run),
+                self.assertRaisesRegex(
+                    RuntimeError, "source or producer changed while processing"
+                ),
+            ):
+                speaker._run_batched_leg(
+                    [wav],
+                    work_root,
+                    "producer.py",
+                    "_qwen",
+                    ".txt",
+                    dest_for=lambda stem: work_root / stem / f"{stem}.qwen.txt",
+                    extra_args=[],
+                    force=False,
+                    timeout=30,
+                    cache_label="test leg",
+                    missing_label="missing",
+                    cache_parameters={"language": "Chinese"},
+                )
+
+            self.assertFalse(destination.exists())
+            self.assertFalse(
+                speaker._artifact_provenance_path(destination).exists()
+            )
+
+    def test_diarization_refuses_provenance_when_source_changes_during_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wav = root / "audio.wav"
+            wav.write_bytes(b"SOURCE-A")
+            artifact = root / "audio.diarization.json"
+            artifact.write_text("sentinel", encoding="utf-8")
+
+            fake_diarizer = types.ModuleType("diarize_speakers")
+            fake_diarizer.load_pipeline = lambda device: (object(), device)
+
+            def fake_pipeline(_pipeline, source, _device):
+                self.assertEqual(Path(source).read_bytes(), b"SOURCE-A")
+                Path(source).write_bytes(b"SOURCE-B")
+                return [{"start": 0.0, "end": 1.0, "speaker": "SPEAKER_00"}]
+
+            def fake_write(segments, source, device, output):
+                Path(output).write_text(
+                    json.dumps({"segments": segments}), encoding="utf-8"
+                )
+
+            fake_diarizer.run_pipeline = fake_pipeline
+            fake_diarizer.write_diarization_json = fake_write
+
+            with (
+                mock.patch.dict(
+                    sys.modules, {"diarize_speakers": fake_diarizer}
+                ),
+                self.assertRaisesRegex(
+                    RuntimeError, "diarization produced no fresh artifact"
+                ),
+            ):
+                speaker.diarize_all([wav], root, "mps", False)
+
+            self.assertEqual(
+                artifact.read_text(encoding="utf-8"), "sentinel"
+            )
+            self.assertFalse(
+                speaker._artifact_provenance_path(artifact).exists()
+            )
+
     def test_full_cache_contract_rejects_wrong_parameters_at_consumption(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -784,10 +1187,12 @@ class LongAudioSafetyTests(unittest.TestCase):
             artifact = root / "audio.qwen.txt"
             artifact.write_text("transcript", encoding="utf-8")
             speaker._write_artifact_provenance(
-                wav,
                 artifact,
-                "transcribe_local_mlx.py",
-                {"language": "Chinese"},
+                speaker._cache_contract(
+                    wav,
+                    "transcribe_local_mlx.py",
+                    {"language": "Chinese"},
+                ),
             )
 
             self.assertTrue(
@@ -804,6 +1209,18 @@ class LongAudioSafetyTests(unittest.TestCase):
                     artifact,
                     "transcribe_local_mlx.py",
                     {"language": "English"},
+                )
+            )
+            provenance_path = speaker._artifact_provenance_path(artifact)
+            legacy = json.loads(provenance_path.read_text(encoding="utf-8"))
+            legacy["schema_version"] = 1
+            provenance_path.write_text(json.dumps(legacy), encoding="utf-8")
+            self.assertFalse(
+                speaker._artifact_cache_valid(
+                    wav,
+                    artifact,
+                    "transcribe_local_mlx.py",
+                    {"language": "Chinese"},
                 )
             )
 

@@ -29,7 +29,10 @@ import numbers
 import os
 import platform
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import threading
 import time
 from importlib.metadata import version
@@ -216,6 +219,118 @@ def atomic_write_bytes(path, payload):
 
 def atomic_write_text(path, text):
     atomic_write_bytes(path, text.encode("utf-8"))
+
+
+def _is_audio_input_decode_error(error):
+    """Return true only for source-container/audio-decoder failures.
+
+    ``mlx_audio.stt.utils.load_audio`` uses miniaudio for most containers and
+    its own ffmpeg wrapper for M4A/AAC. Runtime failures outside those decoder
+    paths (GPU allocation, memory pressure, programming errors) must propagate
+    unchanged instead of being disguised as container incompatibility.
+    """
+    error_type = type(error)
+    if (
+        error_type.__module__ == "miniaudio"
+        and error_type.__name__ in {"DecodeError", "MiniaudioError"}
+    ):
+        return True
+
+    message = str(error)
+    if isinstance(error, ValueError) and message.startswith("Unsupported format:"):
+        return True
+    if isinstance(error, RuntimeError):
+        return (
+            "ffmpeg not found!" in message
+            or message.startswith("ffprobe not found")
+            or message.startswith("ffprobe failed:")
+            or message == "No audio streams found in file"
+            or message.startswith("ffmpeg decoding failed:")
+        )
+    return False
+
+
+def load_audio_with_ffmpeg_fallback(
+    audio_path,
+    sample_rate,
+    loader,
+    *,
+    ffmpeg_path=None,
+    run_command=None,
+):
+    """Decode with MLX first, then normalize unsupported containers via ffmpeg.
+
+    The checkpoint and output identities remain bound to ``audio_path``. The
+    normalized WAV is a short-lived decoder input only.
+    """
+    try:
+        return loader(str(audio_path), sr=sample_rate)
+    except Exception as direct_error:
+        if not _is_audio_input_decode_error(direct_error):
+            raise
+        executable = ffmpeg_path
+        if executable is None:
+            executable = shutil.which("ffmpeg")
+        if not executable:
+            raise RuntimeError(
+                f"MLX could not decode {audio_path!s}, and ffmpeg is unavailable "
+                "for temporary PCM normalization"
+            ) from direct_error
+
+        command_runner = run_command or subprocess.run
+        with tempfile.TemporaryDirectory(prefix="tinkle_mlx_audio_") as temp_dir:
+            normalized = Path(temp_dir) / "tinkle_normalized.wav"
+            command = [
+                str(executable),
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(audio_path),
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                str(sample_rate),
+                "-c:a",
+                "pcm_s16le",
+                str(normalized),
+            ]
+            try:
+                result = command_runner(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except OSError as ffmpeg_error:
+                raise RuntimeError(
+                    f"MLX could not decode {audio_path!s}; ffmpeg could not start: "
+                    f"{ffmpeg_error}"
+                ) from ffmpeg_error
+            if result.returncode != 0 or not normalized.is_file():
+                detail = (result.stderr or result.stdout or "no ffmpeg output").strip()
+                raise RuntimeError(
+                    f"MLX could not decode {audio_path!s}; ffmpeg normalization "
+                    f"failed with exit {result.returncode}: {detail[-500:]}"
+                ) from direct_error
+
+            print(
+                f"MLX decoder could not read {Path(audio_path).name}; "
+                "using a temporary ffmpeg-normalized PCM WAV",
+                file=sys.stderr,
+                flush=True,
+            )
+            try:
+                return loader(str(normalized), sr=sample_rate)
+            except Exception as normalized_error:
+                if not _is_audio_input_decode_error(normalized_error):
+                    raise
+                raise RuntimeError(
+                    f"MLX could not decode ffmpeg-normalized audio for {audio_path!s}: "
+                    f"{normalized_error}"
+                ) from normalized_error
 
 
 def atomic_write_json(path, value):
@@ -411,10 +526,11 @@ def _load_or_create_manifest(path, identity, chunk_count):
             if entry.get("status") == "done":
                 part_name = entry.get("part")
                 part_hash = entry.get("sha256")
+                expected_part_name = f"chunk-{index:04d}.txt"
                 if (
                     not isinstance(part_name, str)
                     or Path(part_name).name != part_name
-                    or not re.fullmatch(r"chunk-[0-9]{4}\.txt", part_name)
+                    or part_name != expected_part_name
                     or not isinstance(part_hash, str)
                     or not re.fullmatch(r"[0-9a-f]{64}", part_hash)
                 ):
@@ -433,17 +549,23 @@ def _load_or_create_manifest(path, identity, chunk_count):
     return manifest
 
 
-def _validated_completed_part(checkpoint_dir, entry):
+def _validated_completed_part(checkpoint_dir, entry, expected_index):
     if not isinstance(entry, dict):
         raise CheckpointIntegrityError("checkpoint chunk entry is not an object")
     if entry.get("status") != "done":
         return None
+    if type(entry.get("index")) is not int or entry.get("index") != expected_index:
+        raise CheckpointIntegrityError(
+            f"completed checkpoint entry index mismatch: expected "
+            f"{expected_index}, got {entry.get('index')!r}"
+        )
     part_name = entry.get("part")
     expected_hash = entry.get("sha256")
+    expected_part_name = f"chunk-{expected_index:04d}.txt"
     if (
         not isinstance(part_name, str)
         or Path(part_name).name != part_name
-        or not re.fullmatch(r"chunk-[0-9]{4}\.txt", part_name)
+        or part_name != expected_part_name
         or not isinstance(expected_hash, str)
         or not re.fullmatch(r"[0-9a-f]{64}", expected_hash)
     ):
@@ -489,7 +611,7 @@ def transcribe_chunks(
 
     for index, (chunk_audio, offset_seconds) in enumerate(chunks):
         entry = manifest["chunks"][index]
-        completed = _validated_completed_part(checkpoint_dir, entry)
+        completed = _validated_completed_part(checkpoint_dir, entry, index)
         if completed is not None:
             texts.append(completed)
             print(
@@ -670,7 +792,9 @@ def main():
         import numpy as np
 
         sample_rate = int(getattr(model, "sample_rate", 16000))
-        waveform = np.array(load_audio(audio_path, sr=sample_rate))
+        waveform = np.array(
+            load_audio_with_ffmpeg_fallback(audio_path, sample_rate, load_audio)
+        )
         chunks = split_audio_into_chunks(
             waveform,
             sr=sample_rate,

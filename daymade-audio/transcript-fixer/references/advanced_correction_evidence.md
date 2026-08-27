@@ -77,6 +77,38 @@ spoken instead of re-reading them. For names and terms rather than numbers, a
 photographed in-room artifact can stand in as the second system — see "In-room
 artifacts are another independent engine" below.
 
+**Coverage is a separate claim from item correctness.** A clip can settle one
+anchored name or number; a handful of clips cannot prove that a two-hour
+transcript was checked end to end. For a high-stakes request to produce a
+higher-quality or complete transcript, designate one canonical body, run an
+independent ASR across the complete clearest/canonical recording by loading
+**`/daymade-audio:asr-transcribe-to-text`** and using its full-file route, then compare
+the complete overlap from every additional recording. Bring over only a
+genuinely non-overlapping tail; never interleave two bodies or their speaker
+labels. If the independent ASR covered only selected clips, say `sampled
+cross-check only — incomplete` and keep the whole-transcript completion gate
+open. Prefer a recognizer different from the canonical body's producer. A
+full-file run with the same recognizer proves coverage, not independent recognizer
+agreement, so label that evidence boundary instead of calling it corroboration.
+
+**Entity disagreement is a human gate, not a vote.** When channels produce
+different plausible people, companies, products, or places and the local
+authority ladder does not settle the slot, collect the forks into one shortlist
+and ask the user. This is mandatory for person names. After the user confirms
+that two legitimate forms are aliases for the same person, preserve the form
+actually spoken in each utterance; identity equivalence does not authorize
+normalizing one valid alias into another.
+
+**Queue presence is not issue resolution.** A native pass can correctly detect
+a nonsense span and enqueue it while the canonical body still contains that
+span verbatim. Before claiming a higher-quality or final transcript, re-list
+the queue against the exact canonical file and require zero `pending` rows. If
+any remain, enumerate them and label the artifact `draft / unresolved —
+incomplete`; never translate “the tool caught it” into “the transcript fixed
+it.” When independent channels support different plausible replacements, the
+row stays pending until evidence or the human settles it — recognizer count is
+not a verdict.
+
 **Numeric-slot damage — when a replacement overshoots into a number.** A
 distinct failure with the same symptom: a global replace aimed at something else
 lands inside a numeral. The classic trigger is relabelling a speaker whose
@@ -189,7 +221,7 @@ When fixing multiple files (e.g., 5 transcripts from one day):
 4. **Apply the remaining one-off corrections** (sed with multiple `-e` flags, for genuinely non-recurring fixes only), then per-file context-dependent fixes
 5. **Verify all diffs**, archive all final files, and clean only disposable sidecars; retain every `*_changes.md` and `*_needs_review.md` report until step 7 closes the decisions it represents. Then do one dictionary addition pass
 6. **Run the trap-scan** ([native_ai_full_workflow.md](native_ai_full_workflow.md) step 6) across the whole batch once — the domain's documented homophone traps, mechanically, after your read-through, to catch what the read missed
-7. **Reconcile your uncertains against the user in ONE pass, then compound immediately** — a batch produces a shortlist of unverifiable candidates (a garbled name, a version number your training data contradicts, a name variant you cannot canonicalize). Present the whole shortlist at once (not item-by-item as you go): the user can hear the audio / know the person, and each verdict lands the same way — fix the file, `--add` the confirmed variant to the `--domain` dictionary, and record it in the people roster or domain context in the same session. Only after every item represented by a retained `*_changes.md` / `*_needs_review.md` report has an explicit disposition may that report be removed. Four such mid-turn verdicts in one real session (2026-08-08) all compounded the same turn they were given. A version-number claim your training data contradicts is NOT an error until the user says so — "the current date is 2026, v4 exists" outranks a stale recollection of when v3 shipped; present, don't pre-judge.
+7. **Reconcile your uncertains against the user in ONE pass, then route each verdict** — a batch produces a shortlist of unverifiable candidates (a garbled name, a version number your training data contradicts, a name variant you cannot canonicalize). Present the whole shortlist at once (not item-by-item as you go): the user can hear the audio / know the person. Fix every confirmed occurrence immediately, then use the destination matrix in `SKILL.md`: only recurring deterministic garbles go to `--add`; important people go to the roster; contextual traps go to the domain context; rare sentence-local errors stay file-only. A human verdict proves the occurrence, not the replacement's reusability. Only after every item represented by a retained `*_changes.md` / `*_needs_review.md` report has an explicit disposition may that report be removed. A version-number claim your training data contradicts is NOT an error until the user says so — "the current date is 2026, v4 exists" outranks a stale recollection of when v3 shipped; present, don't pre-judge.
 
 ### Parallel via Dynamic Workflow (large batches)
 

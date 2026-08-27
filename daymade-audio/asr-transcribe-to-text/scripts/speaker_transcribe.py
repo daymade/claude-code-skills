@@ -109,7 +109,7 @@ PYANNOTE_ACCESS_KEYWORDS = (
 PROCESS_HEARTBEAT_SECONDS = 60.0
 PROCESS_TERM_GRACE_SECONDS = 5.0
 OWNER_POLL_SECONDS = 5.0
-CACHE_PROVENANCE_SCHEMA = 1
+CACHE_PROVENANCE_SCHEMA = 2
 FINAL_RECEIPT_SCHEMA = "speaker-bundle-receipt-v1"
 FINAL_ARTIFACT_SUFFIXES = {
     "txt": ".txt",
@@ -173,7 +173,7 @@ def _cache_contract(wav, producer_script, parameters):
             "script": producer.name,
             "sha256": _sha256_file(producer),
         },
-        "parameters": parameters,
+        "parameters": dict(parameters),
     }
 
 
@@ -192,13 +192,19 @@ def _artifact_cache_valid(wav, artifact, producer_script, parameters):
     return provenance.get("artifact_sha256") == _sha256_file(artifact)
 
 
-def _write_artifact_provenance(wav, artifact, producer_script, parameters):
+def _write_artifact_provenance(artifact, frozen_contract):
     artifact = Path(artifact)
     provenance = {
-        **_cache_contract(wav, producer_script, parameters),
+        **frozen_contract,
         "artifact_sha256": _sha256_file(artifact),
     }
     atomic_write_json(_artifact_provenance_path(artifact), provenance)
+
+
+def _cache_contract_still_matches(
+    wav, producer_script, parameters, frozen_contract
+):
+    return _cache_contract(wav, producer_script, parameters) == frozen_contract
 
 
 def _artifact_provenance_matches_source(wav, artifact):
@@ -369,35 +375,92 @@ def apply_speaker_mapping_transaction(out_dir, stem, mapping, source):
     }
     try:
         transcript = paths["txt"].read_text(encoding="utf-8")
-        for old, new in mapping.items():
-            transcript = re.sub(
-                rf"(?m)^(\[\d+:\d{{2}}\.\d{{3}} - "
-                rf"\d+:\d{{2}}\.\d{{3}}\] ){re.escape(old)}$",
-                rf"\g<1>{new}",
-                transcript,
-            )
-        atomic_write_text(paths["txt"], transcript)
-
+        transcript_label = re.compile(
+            r"(?m)^(?P<prefix>\[\d+:\d{2}\.\d{3} - "
+            r"\d+:\d{2}\.\d{3}\] )(?P<speaker>.+)$"
+        )
+        txt_speakers = {
+            match.group("speaker")
+            for match in transcript_label.finditer(transcript)
+        }
         with paths["csv"].open(newline="", encoding="utf-8") as handle:
             reader = csv.DictReader(handle)
             if reader.fieldnames is None or "speaker" not in reader.fieldnames:
                 raise ValueError("speaker CSV is missing the speaker column")
             fieldnames = list(reader.fieldnames)
             rows = list(reader)
+        csv_speakers = {row["speaker"] for row in rows}
+
+        alignment = json.loads(paths["alignment"].read_text(encoding="utf-8"))
+        recorded_mapping = alignment.get("label_mapping")
+        if not isinstance(recorded_mapping, dict):
+            recorded_mapping = {}
+        diarization = json.loads(
+            paths["diarization"].read_text(encoding="utf-8")
+        )
+        canonical_speakers = {
+            segment.get("speaker")
+            for segment in diarization.get("segments", [])
+            if isinstance(segment, dict)
+            and isinstance(segment.get("speaker"), str)
+        }
+
+        effective_mapping = {}
+        for old, new in mapping.items():
+            if old not in canonical_speakers:
+                raise ValueError(
+                    f"speaker mapping source {old!r} is not a canonical "
+                    "diarization label"
+                )
+            committed = recorded_mapping.get(old)
+            if committed is not None:
+                if committed != new:
+                    raise ValueError(
+                        f"speaker label {old!r} is already mapped to "
+                        f"{committed!r}; refusing conflicting remap to {new!r}"
+                    )
+                continue
+            if old == new:
+                continue
+            in_txt = old in txt_speakers
+            in_csv = old in csv_speakers
+            if in_txt != in_csv:
+                raise ValueError(
+                    f"speaker label {old!r} is not consistent across TXT and CSV"
+                )
+            if in_txt:
+                effective_mapping[old] = new
+                continue
+            raise ValueError(
+                f"speaker label {old!r} is absent from the current bundle"
+            )
+        if not effective_mapping:
+            return
+
+        transcript = transcript_label.sub(
+            lambda match: (
+                match.group("prefix")
+                + effective_mapping.get(
+                    match.group("speaker"), match.group("speaker")
+                )
+            ),
+            transcript,
+        )
         for row in rows:
-            row["speaker"] = mapping.get(row["speaker"], row["speaker"])
+            row["speaker"] = effective_mapping.get(
+                row["speaker"], row["speaker"]
+            )
+
+        updated_mapping = {**recorded_mapping, **effective_mapping}
+
+        atomic_write_text(paths["txt"], transcript)
         csv_buffer = io.StringIO(newline="")
         writer = csv.DictWriter(csv_buffer, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
         atomic_write_text(paths["csv"], csv_buffer.getvalue())
 
-        alignment = json.loads(paths["alignment"].read_text(encoding="utf-8"))
-        recorded_mapping = alignment.get("label_mapping")
-        if not isinstance(recorded_mapping, dict):
-            recorded_mapping = {}
-        recorded_mapping.update(mapping)
-        alignment["label_mapping"] = recorded_mapping
+        alignment["label_mapping"] = updated_mapping
         alignment["turn_contract"] = {
             "schema": "speaker-csv-v1",
             "sha256": _csv_turn_contract_sha256(paths["csv"]),
@@ -629,10 +692,6 @@ def plain_text_path(args, timeout):
 def diarize_all(wavs, out_dir, device, force):
     """Leg 3: pyannote pipeline loaded ONCE, run per file (cached — not a
     per-wav reload, which the old loop did and which cost 10-30s/file)."""
-    try:
-        from diarize_speakers import load_pipeline, run_pipeline, write_diarization_json
-    except Exception as e:
-        _hint_import_error(e)
     cache_parameters = {"device": device}
     pending = [
         (w, out_dir / f"{w.stem}.diarization.json")
@@ -648,6 +707,14 @@ def diarize_all(wavs, out_dir, device, force):
     if not pending:
         log("Leg 3 (diarization): all cached")
         return
+    frozen_contracts = {
+        w: _cache_contract(w, "diarize_speakers.py", cache_parameters)
+        for w, _diar_json in pending
+    }
+    try:
+        from diarize_speakers import load_pipeline, run_pipeline, write_diarization_json
+    except Exception as e:
+        _hint_import_error(e)
     try:
         pipeline, dev = load_pipeline(device)
     except Exception as e:
@@ -668,10 +735,18 @@ def diarize_all(wavs, out_dir, device, force):
             log(f"WARNING: diarization failed for {wav.name} ({e}); skipping")
             failed.append(wav.name)
             continue
+        frozen_contract = frozen_contracts[wav]
+        if not _cache_contract_still_matches(
+            wav, "diarize_speakers.py", cache_parameters, frozen_contract
+        ):
+            log(
+                f"WARNING: source or diarization producer changed while "
+                f"processing {wav.name}; refusing provenance"
+            )
+            failed.append(wav.name)
+            continue
         write_diarization_json(segments, wav, dev, diar_json)
-        _write_artifact_provenance(
-            wav, diar_json, "diarize_speakers.py", cache_parameters
-        )
+        _write_artifact_provenance(diar_json, frozen_contract)
     if failed:
         raise RuntimeError(f"diarization produced no fresh artifact for: {failed}")
 
@@ -695,23 +770,45 @@ def _run_batched_leg(wavs, work_root, script, staging_name, staging_suffix,
         return
     staging_root = work_root / staging_name
     staging = staging_root / f".tinkle_run_{uuid.uuid4().hex}"
+    frozen_contracts = {
+        w: _cache_contract(w, script, cache_parameters) for w in todo
+    }
     cmd = ["uv", "run", str(HERE / script), "--output-dir", str(staging)] + extra_args + [str(w) for w in todo]
     run(cmd, timeout=timeout)
-    missing_outputs = []
+    staged_outputs = {
+        w: staging / f"{w.stem}{staging_suffix}" for w in todo
+    }
+    missing_outputs = [
+        w.name for w, staged in staged_outputs.items() if not staged.exists()
+    ]
+    if missing_outputs:
+        for name in missing_outputs:
+            log(
+                f"WARNING: {missing_label} {name} — alignment will fail for "
+                "this file"
+            )
+        raise RuntimeError(
+            f"{script} exited 0 but produced no fresh artifact for: "
+            f"{missing_outputs}"
+        )
+    changed_contracts = [
+        w.name
+        for w in todo
+        if not _cache_contract_still_matches(
+            w, script, cache_parameters, frozen_contracts[w]
+        )
+    ]
+    if changed_contracts:
+        raise RuntimeError(
+            f"{script} source or producer changed while processing: "
+            f"{changed_contracts}; refusing stale provenance"
+        )
     for w in todo:
-        staged = staging / f"{w.stem}{staging_suffix}"
-        if not staged.exists():
-            log(f"WARNING: {missing_label} {w.name} — alignment will fail for this file")
-            missing_outputs.append(w.name)
-            continue
+        staged = staged_outputs[w]
         dest = dest_for(w.stem)
         dest.parent.mkdir(parents=True, exist_ok=True)
         staged.replace(dest)
-        _write_artifact_provenance(w, dest, script, cache_parameters)
-    if missing_outputs:
-        raise RuntimeError(
-            f"{script} exited 0 but produced no fresh artifact for: {missing_outputs}"
-        )
+        _write_artifact_provenance(dest, frozen_contracts[w])
 
 
 def leg_text(wavs, work_root, language, force, timeout):
