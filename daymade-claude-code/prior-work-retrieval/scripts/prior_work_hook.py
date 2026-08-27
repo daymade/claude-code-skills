@@ -72,12 +72,13 @@ SHELL_READ_ONLY_EXECUTOR = re.compile(
     r"\b(?:status|validate|check)(?:\s|\(|\b))",
     re.IGNORECASE,
 )
-SHELL_RETRIEVAL_ROUTE = re.compile(
-    r"(?:prior_work\.py\s+(?:validate-manifest|retrieve|complete|check)\b|"
-    r"history_index\.py\s+(?:recall|status)\b|"
-    r"analyze_sessions\.py\s+(?:search|locate-codex)\b|read_chat\.py\b)",
-    re.IGNORECASE,
-)
+RETRIEVAL_ROUTES = {
+    "prior_work.py": {"validate-manifest", "retrieve", "complete", "check"},
+    "history_index.py": {"recall", "status"},
+    "analyze_sessions.py": {"search", "locate-codex"},
+    "read_chat.py": None,
+}
+DIRECT_EXEC_WRITE_SIGNAL = re.compile(r"\b(?:tools\.)?apply_patch\s*\(")
 EXEC_COMMAND_LITERAL = re.compile(
     r"\b(?:cmd|command)\s*:\s*([\"'`])(?P<body>.*?)(?<!\\)\1",
     re.DOTALL,
@@ -148,6 +149,139 @@ def _shell_fragments(event: dict[str, Any]) -> list[str]:
     if _tool_name(event).endswith("functions.exec"):
         return [match.group("body") for match in EXEC_COMMAND_LITERAL.finditer(payload)]
     return [payload]
+
+
+def _shell_segments(fragment: str) -> list[str]:
+    """Split a shell fragment on command separators outside quotes.
+
+    Single pass, quote state only — no parallel arrays. Substitution bodies
+    ($(...) and backticks) are deliberately not parsed; the write-signal scan
+    already treats their contents as plain text.
+    """
+    segments: list[str] = []
+    buf: list[str] = []
+    quote: str | None = None
+    i = 0
+    while i < len(fragment):
+        ch = fragment[i]
+        if quote == '"':
+            if ch == "\\" and i + 1 < len(fragment) and fragment[i + 1] in '"\\$`':
+                buf.append(fragment[i : i + 2])
+                i += 2
+                continue
+            if ch == '"':
+                quote = None
+            buf.append(ch)
+            i += 1
+            continue
+        if quote == "'":
+            if ch == "'":
+                quote = None
+            buf.append(ch)
+            i += 1
+            continue
+        if ch in {'"', "'"}:
+            quote = ch
+            buf.append(ch)
+            i += 1
+            continue
+        if ch == "\\" and i + 1 < len(fragment):
+            # Outside quotes, a backslash escapes the next byte. In particular,
+            # `\;` is argument data, not a command separator.
+            buf.append(fragment[i : i + 2])
+            i += 2
+            continue
+        if fragment.startswith("&&", i) or fragment.startswith("||", i):
+            segments.append("".join(buf))
+            buf = []
+            i += 2
+            continue
+        if ch == "&" and not (i > 0 and fragment[i - 1] in "><"):
+            segments.append("".join(buf))
+            buf = []
+            i += 1
+            continue
+        if ch in ";|\n":
+            segments.append("".join(buf))
+            buf = []
+            i += 1
+            continue
+        buf.append(ch)
+        i += 1
+    segments.append("".join(buf))
+    return segments
+
+
+def _segment_is_retrieval_route(segment: str) -> bool:
+    """True when the segment's main command is a whitelisted retrieval tool.
+
+    Its arguments are data, so prose tokens there (e.g. a --reject reason
+    quoting "cp→symlink") must not trip the write signal. Stay closed when a
+    real write hides around the retrieval token: a write command in the
+    prefix (git commit -m "prior_work.py complete ...") or a command
+    substitution in the arguments (which the shell would really execute).
+    """
+    try:
+        words = shlex.split(segment, posix=True)
+    except ValueError:
+        return False
+    if not words or any("$(" in word or "`" in word for word in words):
+        return False
+
+    assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.*$", re.DOTALL)
+    index = 0
+    while index < len(words) and assignment.match(words[index]):
+        index += 1
+
+    if index < len(words) and Path(words[index]).name == "env":
+        index += 1
+        while index < len(words):
+            word = words[index]
+            if word in {"-u", "--unset"}:
+                index += 2
+            elif word.startswith("-") or assignment.match(word):
+                index += 1
+            else:
+                break
+
+    if index < len(words) and words[index] == "command":
+        index += 1
+        while index < len(words) and words[index].startswith("-"):
+            index += 1
+
+    if index < len(words) and Path(words[index]).name == "uv":
+        index += 1
+        if index >= len(words) or words[index] != "run":
+            return False
+        index += 1
+        uv_value_options = {
+            "--with", "--with-editable", "--project", "--directory",
+            "--python", "--index", "--default-index", "--find-links",
+            "--env-file",
+        }
+        while index < len(words) and words[index].startswith("-"):
+            option = words[index].split("=", 1)[0]
+            index += 1
+            if option in uv_value_options and "=" not in words[index - 1]:
+                if index >= len(words):
+                    return False
+                index += 1
+
+    if index < len(words) and re.fullmatch(r"python(?:3(?:\.\d+)?)?", Path(words[index]).name):
+        index += 1
+        # `python -c '...prior_work.py...'` is arbitrary code, not a route.
+        if index < len(words) and words[index].startswith("-"):
+            return False
+
+    if index >= len(words):
+        return False
+    script = Path(words[index]).name
+    subcommands = RETRIEVAL_ROUTES.get(script)
+    if script not in RETRIEVAL_ROUTES:
+        return False
+    if subcommands is None:
+        return True
+    return index + 1 < len(words) and words[index + 1] in subcommands
 
 
 def _has_formal_file_redirection(event: dict[str, Any]) -> bool:
@@ -243,14 +377,34 @@ def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
         return size >= 240, f"{base}:prompt_chars={size}"
     if base in {"Bash", "exec", "exec_command"}:
         payload = _tool_payload_text(event)
-        if SHELL_WRITE_SIGNAL.search(payload) or _has_formal_file_redirection(event):
+        if DIRECT_EXEC_WRITE_SIGNAL.search(payload):
             return True, f"{base}:write_signal"
-        if SHELL_RETRIEVAL_ROUTE.search(payload):
-            return False, f"{base}:retrieval_route"
-        if SHELL_UNKNOWN_EXECUTOR.search(payload) and not SHELL_READ_ONLY_EXECUTOR.search(
-            payload
+        fragments = _shell_fragments(event)
+        # functions.exec can carry either JavaScript orchestration or a plain
+        # command string. With no cmd/command literal, treat the payload itself
+        # as the command so direct retrieval calls keep working.
+        if not fragments:
+            fragments = [payload]
+        segments = [
+            segment
+            for fragment in fragments
+            for segment in _shell_segments(fragment)
+            if segment.strip()
+        ]
+        route_flags = [_segment_is_retrieval_route(segment) for segment in segments]
+        gated = [segment for segment, is_route in zip(segments, route_flags) if not is_route]
+        if any(SHELL_WRITE_SIGNAL.search(s) for s in gated):
+            return True, f"{base}:write_signal"
+        if _has_formal_file_redirection(event):
+            return True, f"{base}:write_signal"
+        if any(
+            SHELL_UNKNOWN_EXECUTOR.search(segment)
+            and not SHELL_READ_ONLY_EXECUTOR.search(segment)
+            for segment in gated
         ):
             return True, f"{base}:unknown_executor"
+        if any(route_flags):
+            return False, f"{base}:retrieval_route"
         return False, f"{base}:read_only"
     return False, "unsupported_tool"
 

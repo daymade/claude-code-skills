@@ -9,9 +9,10 @@ description: >-
   "清理 skill 缓存旧版本", "switch marketplace to local source",
   "marketplace 切到本地源码", "thin skills", "薄 skill", "loose skills",
   "清理 user skills", or reports stale caches, version mismatches, orphaned
-  plugins, duplicate direct-copy skills, untracked user skills, a marketplace
-  cache that must be rebuilt from a local source repo, or a newly merged suite
-  whose installed state still exposes the old plugin identities.
+  plugins, duplicate direct-copy skills, untracked user skills, project-local
+  `.claude/skills` and `.agents/skills` drift, a marketplace cache that must be
+  rebuilt from a local source repo, or a newly merged suite whose installed
+  state still exposes the old plugin identities.
 ---
 
 # Skill Governance
@@ -27,10 +28,11 @@ This skill keeps Claude Code skill marketplaces and their caches aligned with th
 5. **No-op safety** — Drift checks are read-only. Sync and cleanup run only after user confirmation or an explicit trigger.
 6. **Workspace dirs are not plugins** — Ignore `*-workspace`, `dist`, `scripts`, `tests`, `references`, `demos`, and other non-plugin directories when deciding what belongs in the cache.
 7. **Retire loose skills, do not destroy them** — For untracked userSettings skills that have no SSOT or are obsolete duplicates, move the active directory to a dated `retired-skills/` backup instead of deleting outright.
+8. **Project dual roots need one owner** — When the same frontmatter `name` is present under both `.claude/skills` and `.agents/skills`, prefer one canonical bundle plus an explicit compatibility router (or a shared symlink). Two divergent full bundles are drift, even if both still load.
 
 ## What to ignore when comparing source to cache
 
-`.git`, `.in_use`, `.security-scan-passed`, `.orphaned_at`, `.DS_Store`, `.gitignore`, `__pycache__`, `.pytest_cache`, `.venv`, `node_modules`, `*.pyc`, `*.pyo`.
+`.git`, `.in_use`, `.security-scan-passed`, `.skill-regression-reviewed`, `.orphaned_at`, `.DS_Store`, `.gitignore`, `__pycache__`, `.pytest_cache`, `.venv`, `node_modules`, `*.pyc`, `*.pyo`.
 
 Also ignore top-level directories that are not skills: `*-workspace`, `dist`, `scripts`, `tests`, `references`, `demos`.
 
@@ -53,7 +55,39 @@ This is a read-only report. It does not modify anything.
 4. Check `~/.claude/skills/` for direct-copy installs:
    - Any directory there that is not a symlink and differs from its source is flagged as a direct-copy drift.
    - Symlinks are expected for dev skills and are ignored.
-5. Return a concise markdown report grouped by marketplace, with sections: Stale, Version mismatch, Missing, Orphaned, Direct-copy drift.
+5. When the target is a project repository that may expose Skills through both
+   `.claude/skills` and `.agents/skills`, run the bundled deterministic audit from
+   this Skill's bundle directory:
+
+   ```bash
+   uv run --no-project python scripts/audit_project_skill_roots.py <project-root> --json
+   ```
+
+   The project root is explicit; the script does not search sibling projects or
+   mutate either root. It pairs direct child bundles by frontmatter `name`, not
+   directory basename, and returns:
+
+   - **`canonical_router` (pass)** — one full canonical bundle plus a one-file
+     router carrying the exact heading
+     `# Compatibility router — no business rules live here`; the router must
+     point only to its paired canonical `SKILL.md`, tell the runtime to read it
+     completely, and fail visibly if it is unavailable.
+   - **`shared_target` (pass)** — both roots resolve to the same `SKILL.md`, such
+     as a symlink into the canonical bundle.
+   - **`identical_copy` (pass, report)** — two byte-identical bundles. This is
+     not current drift, but it remains duplication debt because either copy can
+     diverge later.
+   - **`drift` (exit 1)** — same-name bundles differ and neither side satisfies
+     the explicit router contract.
+   - **`invalid` (exit 2)** — malformed/duplicate frontmatter identity, a broken
+     symlink, an invalid router, or a project path with neither declared root.
+   - **`single_root` (pass, report)** — the name exists in only one root.
+
+   Do not infer a router from short length or router-like prose. Without the
+   exact marker and the fail-closed pointer contract, treat differing content as
+   drift. The audit only reports; selecting the canonical source and replacing
+   a full copy still requires the repository owner's decision.
+6. Return a concise markdown report grouped by marketplace and project, with sections: Stale, Version mismatch, Missing, Orphaned, Direct-copy drift, and Project dual-root drift.
 
 ## Workflow B: Sync skills from source / 以源码为准同步 skill 缓存
 
