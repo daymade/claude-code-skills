@@ -93,6 +93,31 @@ class PriorWorkHookTests(unittest.TestCase):
         requirement = prior_work.load_requirement(hook._manifest(), "session-1")
         self.assertTrue(requirement["required"])
 
+    def test_explicit_read_only_maintenance_does_not_trigger_production(self) -> None:
+        prompt = (
+            "这是只读仓库维护任务：检查 Git 脏文件和会议规则，输出状态摘要；"
+            "不要修改文件，不要派 agent。"
+        )
+        self.assertEqual(
+            hook.classify_prompt(prompt, False), "not_required_read_only"
+        )
+        event = {
+            "hook_event_name": "UserPromptSubmit",
+            "session_id": "session-read-only",
+            "prompt": prompt,
+        }
+        self.assertIsNone(hook.handle_event(event))
+        requirement = prior_work.load_requirement(
+            hook._manifest(), "session-read-only"
+        )
+        self.assertFalse(requirement["required"])
+
+    def test_prior_work_signal_still_wins_inside_read_only_request(self) -> None:
+        prompt = "只读检查我们之前的 provider contract，不要修改文件"
+        self.assertEqual(
+            hook.classify_prompt(prompt, False), "required_prior_signal"
+        )
+
     def test_new_or_large_writes_gate_but_small_edit_and_tinkle_file_pass(self) -> None:
         new_write = {
             "tool_name": "Write",
@@ -405,15 +430,31 @@ class PriorWorkHookTests(unittest.TestCase):
         status = prior_work.check_receipt(hook._manifest(), "session-4", None)
         self.assertEqual(status["status"], "not_required")
 
-    def test_stop_blocks_substantial_reply_and_anti_loop_releases_retry(self) -> None:
+    def test_stop_enforces_existing_requirement_but_never_creates_one(self) -> None:
         event = {
             "hook_event_name": "Stop",
             "session_id": "session-5",
             "stop_hook_active": False,
             "last_assistant_message": "- detailed item\n" * 80,
         }
+        self.assertIsNone(hook.handle_event(event))
+        prior_work.mark_requirement(
+            hook._manifest(),
+            "session-5",
+            prompt="Produce the requested implementation",
+            trigger="required_prior_signal",
+            required=True,
+        )
         self.assertEqual(hook.handle_event(event)["decision"], "block")
         event["stop_hook_active"] = True
+        self.assertIsNone(hook.handle_event(event))
+
+    def test_stop_without_session_id_does_not_invent_a_requirement(self) -> None:
+        event = {
+            "hook_event_name": "Stop",
+            "stop_hook_active": False,
+            "last_assistant_message": "- detailed item\n" * 80,
+        }
         self.assertIsNone(hook.handle_event(event))
 
     def test_missing_manifest_fails_closed_only_for_substantial_action(self) -> None:

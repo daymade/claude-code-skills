@@ -85,6 +85,30 @@ def _manifest_hash(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _source_definition_hash(sources: Sequence[dict[str, Any]]) -> str:
+    """Hash only source definitions that can make coverage mandatory."""
+
+    required = [source for source in sources if source.get("required")]
+    encoded = json.dumps(
+        required,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _required_contract_matches(
+    recorded: dict[str, Any], manifest: dict[str, Any]
+) -> bool:
+    fingerprint = recorded.get("required_sources_sha256")
+    if isinstance(fingerprint, str) and fingerprint:
+        return fingerprint == manifest["required_sources_sha256"]
+    # Compatibility for receipts created before the required-source fingerprint:
+    # preserve them only while the complete original manifest still matches.
+    return recorded.get("manifest_sha256") == manifest["manifest_sha256"]
+
+
 def _absolute_path(value: str, field: str) -> Path:
     path = Path(value).expanduser()
     if not path.is_absolute():
@@ -191,6 +215,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
         "sources": normalized_sources,
         "manifest_path": str(path.resolve()),
         "manifest_sha256": _manifest_hash(path),
+        "required_sources_sha256": _source_definition_hash(normalized_sources),
     }
 
 
@@ -256,6 +281,29 @@ def _git_root(path: Path) -> Path | None:
     return None
 
 
+def _looks_like_path_term(term: str) -> bool:
+    """Return whether a term explicitly asks for a path or filename match."""
+
+    candidate = term.strip()
+    if not candidate or any(character.isspace() for character in candidate):
+        return False
+    if "/" in candidate or "\\" in candidate:
+        return True
+    if candidate in {"Makefile", "Dockerfile", "Containerfile"}:
+        return True
+    if (
+        len(candidate) == 10
+        and candidate[4] == "-"
+        and candidate[7] == "-"
+        and candidate[:4].isdigit()
+        and candidate[5:7].isdigit()
+        and candidate[8:].isdigit()
+    ):
+        return True
+    suffix = Path(candidate).suffix
+    return bool(suffix and 1 < len(suffix) <= 12)
+
+
 def _filesystem_candidates(
     source: dict[str, Any], terms: Sequence[str]
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -286,26 +334,10 @@ def _filesystem_candidates(
     for term in terms:
         command.extend(["--regexp", term])
     command.extend(["--", str(root)])
-    files_command = [rg, "--files", "--no-messages"]
-    for pattern in source["includes"]:
-        files_command.extend(["--glob", pattern])
-    for pattern in source["excludes"]:
-        files_command.extend(
-            ["--glob", pattern if pattern.startswith("!") else f"!{pattern}"]
-        )
-    files_command.extend(["--", str(root)])
+    path_search_terms = [term for term in terms if _looks_like_path_term(term)]
     try:
         completed = subprocess.run(
             command,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=source.get("timeout_seconds", 30),
-            check=False,
-        )
-        files_completed = subprocess.run(
-            files_command,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -324,11 +356,6 @@ def _filesystem_candidates(
         return [], {
             "status": "partial",
             "errors": [f"rg_exit_{completed.returncode}"],
-        }
-    if files_completed.returncode not in {0, 1}:
-        return [], {
-            "status": "partial",
-            "errors": [f"rg_files_exit_{files_completed.returncode}"],
         }
     folded_terms = [(term, term.casefold()) for term in terms]
     for raw_line in completed.stdout.splitlines():
@@ -378,19 +405,55 @@ def _filesystem_candidates(
     entries_by_path: dict[str, list[dict[str, Any]]] = {}
     for (candidate_path, _line), entry in candidates.items():
         entries_by_path.setdefault(candidate_path, []).append(entry)
-    for raw_path in files_completed.stdout.splitlines():
+    path_output = ""
+    if path_search_terms:
+        files_command = [rg, "--files", "--no-messages"]
+        for pattern in source["includes"]:
+            files_command.extend(["--glob", pattern])
+        for pattern in source["excludes"]:
+            files_command.extend(
+                ["--glob", pattern if pattern.startswith("!") else f"!{pattern}"]
+            )
+        files_command.extend(["--", str(root)])
+        try:
+            files_completed = subprocess.run(
+                files_command,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=source.get("timeout_seconds", 30),
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return [], {"status": "partial", "errors": ["path_scan_timeout"]}
+        except OSError as error:
+            return [], {
+                "status": "partial",
+                "errors": [f"path_scan_spawn:{type(error).__name__}"],
+            }
+        if files_completed.returncode not in {0, 1}:
+            return [], {
+                "status": "partial",
+                "errors": [f"rg_files_exit_{files_completed.returncode}"],
+            }
+        path_output = files_completed.stdout
+    folded_path_terms = [
+        (term, term.casefold()) for term in path_search_terms
+    ]
+    for raw_path in path_output.splitlines():
         path = Path(raw_path)
         path_folded = str(path).casefold()
-        path_terms = {
-            term for term, folded in folded_terms if folded in path_folded
+        matched_path_terms = {
+            term for term, folded in folded_path_terms if folded in path_folded
         }
-        if not path_terms:
+        if not matched_path_terms:
             continue
         path_match_count += 1
         existing_entries = entries_by_path.get(str(path), [])
         if existing_entries:
             for entry in existing_entries:
-                entry["matched_terms"].update(path_terms)
+                entry["matched_terms"].update(matched_path_terms)
                 if "path" not in entry["match_origins"]:
                     entry["match_origins"].append("path")
             continue
@@ -401,7 +464,7 @@ def _filesystem_candidates(
             "path": str(path),
             "line": None,
             "snippet": f"[path] {path.name}"[:800],
-            "matched_terms": set(path_terms),
+            "matched_terms": set(matched_path_terms),
             "match_origins": ["path"],
         }
         candidates[(str(path), 0)] = entry
@@ -440,6 +503,7 @@ def _filesystem_candidates(
         "errors": [],
         "matches_before_limit": len(rows),
         "path_matches_before_limit": path_match_count,
+        "path_scan_performed": bool(folded_path_terms),
     }
 
 
@@ -692,6 +756,7 @@ def retrieve(
         "elapsed_ms": round((time.perf_counter() - retrieval_started) * 1000, 1),
         "manifest_path": manifest["manifest_path"],
         "manifest_sha256": manifest["manifest_sha256"],
+        "required_sources_sha256": manifest["required_sources_sha256"],
         "coverage": coverage,
         "candidates": candidates,
         "coverage_complete": not any(
@@ -847,8 +912,10 @@ def complete(
     run = _read_json(_run_path(manifest, run_id))
     if not isinstance(run, dict) or run.get("kind") != "prior_work_retrieval_run":
         raise PriorWorkError("Run file has the wrong shape")
-    if run.get("manifest_sha256") != manifest["manifest_sha256"]:
-        raise PriorWorkError("Manifest changed after retrieval; run retrieve again")
+    if not _required_contract_matches(run, manifest):
+        raise PriorWorkError(
+            "Required source definitions changed after retrieval; run retrieve again"
+        )
     if run.get("session_id") and run.get("session_id") != session_id:
         raise PriorWorkError("Run belongs to another session")
     requirement = load_requirement(manifest, session_id)
@@ -945,6 +1012,7 @@ def complete(
         "terms": run["terms"],
         "manifest_path": manifest["manifest_path"],
         "manifest_sha256": manifest["manifest_sha256"],
+        "required_sources_sha256": manifest["required_sources_sha256"],
         "coverage": final_coverage,
         "decisions": decisions,
         "no_reuse_reason": no_reuse_reason.strip() if no_reuse_reason else None,
@@ -978,8 +1046,8 @@ def check_receipt(
         raise PriorWorkError("Receipt is missing or incomplete")
     if receipt.get("session_id") != session_id:
         raise PriorWorkError("Receipt session mismatch")
-    if receipt.get("manifest_sha256") != manifest["manifest_sha256"]:
-        raise PriorWorkError("Receipt manifest is stale; retrieve again")
+    if not _required_contract_matches(receipt, manifest):
+        raise PriorWorkError("Receipt required-source contract is stale; retrieve again")
     if receipt.get("requirement_id") != requirement.get("requirement_id"):
         raise PriorWorkError("Receipt belongs to an older prompt; retrieve again")
     if not isinstance(receipt.get("business_outcome"), str) or not receipt[

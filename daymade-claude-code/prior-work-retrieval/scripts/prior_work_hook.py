@@ -56,6 +56,11 @@ READ_ONLY_QUESTION = re.compile(
     r"(?:什么是|什么意思|为什么|怎么理解|解释一下|是否|是不是|what is|why|explain)",
     re.IGNORECASE,
 )
+EXPLICIT_READ_ONLY = re.compile(
+    r"(?:只读|不得|不要|无需|不需要|不(?:要)?).{0,8}(?:修改|写入|创建|编辑|改动|派\s*agent)"
+    r"|(?:read[- ]only|do not|don't|without).{0,12}(?:modify|write|edit|create|spawn)",
+    re.IGNORECASE,
+)
 SHELL_WRITE_SIGNAL = re.compile(
     r"(?:tools\.apply_patch|\bapply_patch\b|\.write_(?:text|bytes)\s*\(|"
     r"\bopen\s*\([^\n)]*,\s*['\"](?:w|a|x)|\b(?:tee|touch|mkdir|install|cp|mv|rsync)\b|"
@@ -102,10 +107,12 @@ def classify_prompt(prompt: str, current_required: bool) -> str:
         return "preserve"
     if PRIOR_WORK_SIGNAL.search(text):
         return "required_prior_signal"
-    if len(text) >= 8 and PRODUCTION_ACTION.search(text) and DELIVERABLE_NOUN.search(text):
-        return "required_production"
+    if EXPLICIT_READ_ONLY.search(text):
+        return "not_required_read_only"
     if READ_ONLY_QUESTION.search(text):
         return "not_required_question"
+    if len(text) >= 8 and PRODUCTION_ACTION.search(text) and DELIVERABLE_NOUN.search(text):
+        return "required_production"
     if current_required and len(text) <= 120:
         return "preserve"
     return "none"
@@ -412,26 +419,6 @@ def substantial_tool_use(event: dict[str, Any]) -> tuple[bool, str]:
     return False, "unsupported_tool"
 
 
-def _assistant_text(event: dict[str, Any]) -> str:
-    value = event.get("last_assistant_message")
-    if isinstance(value, str):
-        return value
-    if isinstance(value, dict):
-        content = value.get("content")
-        if isinstance(content, str):
-            return content
-    return ""
-
-
-def substantial_reply(text: str) -> bool:
-    if len(text) >= 700 or "```" in text:
-        return True
-    list_lines = sum(
-        1 for line in text.splitlines() if re.match(r"\s*(?:[-*]|\d+[.)])\s+", line)
-    )
-    return len(text) >= 360 and list_lines >= 3
-
-
 def _pretool_deny(reason: str) -> dict[str, Any]:
     return {
         "hookSpecificOutput": {
@@ -660,7 +647,11 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
     )
     if classification == "preserve" or classification == "none":
         return None
-    required = classification not in {"opt_out", "not_required_question"}
+    required = classification not in {
+        "opt_out",
+        "not_required_question",
+        "not_required_read_only",
+    }
     requirement = prior_work.mark_requirement(
         manifest,
         session_id,
@@ -712,24 +703,12 @@ def handle_pre_tool(event: dict[str, Any]) -> dict[str, Any] | None:
 def handle_stop(event: dict[str, Any]) -> dict[str, Any] | None:
     if event.get("stop_hook_active") is True:
         return None
-    text = _assistant_text(event)
     session_id = event.get("session_id")
     if not isinstance(session_id, str) or not session_id:
-        return _stop_block(
-            "A substantial final response could not be tied to a prior-work receipt "
-            "because the Stop event lacks session_id."
-        ) if substantial_reply(text) else None
+        return None
     try:
         manifest = _manifest()
         requirement = prior_work.load_requirement(manifest, session_id)
-        if requirement is None and substantial_reply(text):
-            requirement = prior_work.mark_requirement(
-                manifest,
-                session_id,
-                prompt="Substantial final response",
-                trigger="implicit_substantial_reply",
-                required=True,
-            )
         if requirement is None or not requirement.get("required"):
             return None
         error = _receipt_error(manifest, session_id)

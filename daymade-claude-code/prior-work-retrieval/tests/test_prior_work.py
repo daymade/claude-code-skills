@@ -170,7 +170,7 @@ class PriorWorkTests(unittest.TestCase):
             )
         )
 
-    def test_filesystem_adapter_uses_one_content_and_one_path_scan(self) -> None:
+    def test_filesystem_adapter_skips_unrequested_full_path_scan(self) -> None:
         source = self.manifest()["sources"][0]
         with mock.patch.object(
             prior_work.subprocess, "run", wraps=prior_work.subprocess.run
@@ -178,12 +178,24 @@ class PriorWorkTests(unittest.TestCase):
             candidates, detail = prior_work._filesystem_candidates(
                 source, ["Mercury", "provider contract"]
             )
-        self.assertEqual(run_spy.call_count, 2)
+        self.assertEqual(run_spy.call_count, 1)
         command = run_spy.call_args_list[0].args[0]
-        files_command = run_spy.call_args_list[1].args[0]
         self.assertEqual(command.count("--regexp"), 2)
-        self.assertIn("--files", files_command)
         self.assertEqual(detail["status"], "searched")
+        self.assertFalse(detail["path_scan_performed"])
+        self.assertTrue(candidates)
+
+    def test_filesystem_adapter_scans_paths_for_explicit_filename_term(self) -> None:
+        source = self.manifest()["sources"][0]
+        with mock.patch.object(
+            prior_work.subprocess, "run", wraps=prior_work.subprocess.run
+        ) as run_spy:
+            candidates, detail = prior_work._filesystem_candidates(
+                source, ["provider-contract.md"]
+            )
+        self.assertEqual(run_spy.call_count, 2)
+        self.assertIn("--files", run_spy.call_args_list[1].args[0])
+        self.assertTrue(detail["path_scan_performed"])
         self.assertTrue(candidates)
 
     def test_required_manual_route_blocks_receipt_until_completed(self) -> None:
@@ -344,7 +356,7 @@ class PriorWorkTests(unittest.TestCase):
         )
         self.assertEqual(receipt["no_reuse_reason"][:9], "Inspected")
 
-    def test_manifest_change_invalidates_run_and_receipt(self) -> None:
+    def test_required_source_change_invalidates_run_and_receipt(self) -> None:
         manifest = self.manifest()
         run = prior_work.retrieve(
             manifest,
@@ -371,8 +383,42 @@ class PriorWorkTests(unittest.TestCase):
         payload = json.loads(self.manifest_path.read_text(encoding="utf-8"))
         payload["sources"][0]["max_results"] = 9
         self.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
-        with self.assertRaisesRegex(prior_work.PriorWorkError, "manifest is stale"):
+        with self.assertRaisesRegex(prior_work.PriorWorkError, "contract is stale"):
             prior_work.check_receipt(self.manifest(), "session-D", None)
+
+    def test_optional_source_change_keeps_receipt_valid(self) -> None:
+        manifest = self.manifest()
+        run = prior_work.retrieve(
+            manifest,
+            "Reuse the current Mercury provider contract.",
+            ["Mercury"],
+            "Mercury",
+            ["Mercury"],
+            "session-optional",
+        )
+        candidate = next(
+            item for item in run["candidates"] if item["source_id"] == "docs"
+        )
+        prior_work.complete(
+            manifest,
+            run["run_id"],
+            "session-optional",
+            [f"{candidate['candidate_id']}=reuse verified provider contract"],
+            [],
+            [],
+            ["live-wechat=manual route completed and recorded"],
+            None,
+        )
+        payload = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+        optional_source = next(
+            source for source in payload["sources"] if source["id"] == "meetings"
+        )
+        optional_source["max_results"] = 9
+        self.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+        checked = prior_work.check_receipt(
+            self.manifest(), "session-optional", None
+        )
+        self.assertEqual(checked["status"], "valid")
 
     def test_candidate_disappearance_blocks_completion(self) -> None:
         manifest = self.manifest()
