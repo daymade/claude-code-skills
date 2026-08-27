@@ -272,6 +272,8 @@ def test_human_verdict_does_not_auto_promote_a_one_off_rule():
     assert "dictionary is usually less effort" not in identity
     assert "Capture every confirmed variant" not in identity
     assert "- **ASR 变体**: 晓明, 小铭老师" not in identity
+    assert "One-off / minor name | **DB**" not in identity
+    assert "One-off / minor name | **Exact transcript file only**" in identity
     assert "whole honorific-bearing phrase" in identity
 
 

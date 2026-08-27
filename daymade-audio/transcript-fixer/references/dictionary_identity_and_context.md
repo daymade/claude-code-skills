@@ -191,7 +191,7 @@ tell those apart from a real failure.
 | Person | Go to | Why |
 |--------|-------|-----|
 | Long-term recurring (coworker, client, family, workshop attendee) | **people.md** | SSOT with relationship context; survives DB resets |
-| One-off / minor name | **DB** (`--add --domain`) | Quick, no context needed |
+| One-off / minor name | **Exact transcript file only** | A rare occurrence does not justify reusable state; do not add it to the DB or roster |
 
 **Name-variant explosion — one person, every initial consonant.** A person
 whose name a diarizer labels once can still shatter in the body into a whole
