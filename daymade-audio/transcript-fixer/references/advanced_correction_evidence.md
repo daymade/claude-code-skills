@@ -81,12 +81,15 @@ artifacts are another independent engine" below.
 anchored name or number; a handful of clips cannot prove that a two-hour
 transcript was checked end to end. For a high-stakes request to produce a
 higher-quality or complete transcript, designate one canonical body, run an
-independent ASR across the complete clearest/canonical recording, and compare
+independent ASR across the complete clearest/canonical recording by loading
+**`/daymade-audio:asr-transcribe-to-text`** and using its full-file route, then compare
 the complete overlap from every additional recording. Bring over only a
 genuinely non-overlapping tail; never interleave two bodies or their speaker
 labels. If the independent ASR covered only selected clips, say `sampled
 cross-check only — incomplete` and keep the whole-transcript completion gate
-open.
+open. Prefer a recognizer different from the canonical body's producer. A
+full-file run with the same recognizer proves coverage, not independent recognizer
+agreement, so label that evidence boundary instead of calling it corroboration.
 
 **Entity disagreement is a human gate, not a vote.** When channels produce
 different plausible people, companies, products, or places and the local

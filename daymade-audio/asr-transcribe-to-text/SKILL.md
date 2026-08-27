@@ -297,12 +297,13 @@ per-chunk generation, resumable checkpoints, model loading, and process-tree
 cleanup internally.
 
 Input extensions are not trusted as decoder contracts. The Qwen worker first
-uses the pinned MLX decoder; if that decoder rejects an otherwise valid
-container such as Ogg/Opus, it uses `ffmpeg` to create a temporary 16 kHz mono
-PCM WAV for the pinned default model (custom local models use their declared
-sample rate) and retries. The checkpoint, output name, and provenance remain
-bound to the original source bytes; the temporary WAV is never a completion
-artifact.
+uses the pinned MLX decoder; if that decoder reports a recognized input/container
+decode failure (for example miniaudio rejecting Ogg/Opus), it uses `ffmpeg` to
+create a temporary 16 kHz mono PCM WAV for the pinned default model (custom local
+models use their declared sample rate) and retries. GPU, memory, and unrelated
+runtime failures propagate unchanged and never trigger normalization. The
+checkpoint, output name, and provenance remain bound to the original source
+bytes; the temporary WAV is never a completion artifact.
 
 ```bash
 uv run ${CLAUDE_SKILL_DIR}/scripts/speaker_transcribe.py \

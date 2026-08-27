@@ -268,3 +268,18 @@ def test_human_verdict_does_not_auto_promote_a_one_off_rule():
     assert "a rare sentence-local mishearing stays file-only" in skill
     assert "reusability is a separate decision" in identity
     assert "put only observed ASR *misrecognitions* on `ASR 变体`" in identity_flat
+    assert "For one-off names: ✅ `--add --domain`" not in identity
+    assert "dictionary is usually less effort" not in identity
+    assert "Capture every confirmed variant" not in identity
+    assert "- **ASR 变体**: 晓明, 小铭老师" not in identity
+    assert "whole honorific-bearing phrase" in identity
+
+
+def test_full_source_handoff_names_the_asr_skill_and_independence_boundary():
+    skill = SKILL_MD.read_text(encoding="utf-8")
+    evidence = ADVANCED_EVIDENCE.read_text(encoding="utf-8")
+
+    for text in (skill, evidence):
+        assert "/daymade-audio:asr-transcribe-to-text" in text
+        assert "same recognizer" in text
+        assert "complete-source coverage" in text or "proves coverage" in text

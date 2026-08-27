@@ -221,6 +221,35 @@ def atomic_write_text(path, text):
     atomic_write_bytes(path, text.encode("utf-8"))
 
 
+def _is_audio_input_decode_error(error):
+    """Return true only for source-container/audio-decoder failures.
+
+    ``mlx_audio.stt.utils.load_audio`` uses miniaudio for most containers and
+    its own ffmpeg wrapper for M4A/AAC. Runtime failures outside those decoder
+    paths (GPU allocation, memory pressure, programming errors) must propagate
+    unchanged instead of being disguised as container incompatibility.
+    """
+    error_type = type(error)
+    if (
+        error_type.__module__ == "miniaudio"
+        and error_type.__name__ in {"DecodeError", "MiniaudioError"}
+    ):
+        return True
+
+    message = str(error)
+    if isinstance(error, ValueError) and message.startswith("Unsupported format:"):
+        return True
+    if isinstance(error, RuntimeError):
+        return (
+            "ffmpeg not found!" in message
+            or message.startswith("ffprobe not found")
+            or message.startswith("ffprobe failed:")
+            or message == "No audio streams found in file"
+            or message.startswith("ffmpeg decoding failed:")
+        )
+    return False
+
+
 def load_audio_with_ffmpeg_fallback(
     audio_path,
     sample_rate,
@@ -237,6 +266,8 @@ def load_audio_with_ffmpeg_fallback(
     try:
         return loader(str(audio_path), sr=sample_rate)
     except Exception as direct_error:
+        if not _is_audio_input_decode_error(direct_error):
+            raise
         executable = ffmpeg_path
         if executable is None:
             executable = shutil.which("ffmpeg")
@@ -277,7 +308,7 @@ def load_audio_with_ffmpeg_fallback(
                 raise RuntimeError(
                     f"MLX could not decode {audio_path!s}; ffmpeg could not start: "
                     f"{ffmpeg_error}"
-                ) from direct_error
+                ) from ffmpeg_error
             if result.returncode != 0 or not normalized.is_file():
                 detail = (result.stderr or result.stdout or "no ffmpeg output").strip()
                 raise RuntimeError(
@@ -294,10 +325,12 @@ def load_audio_with_ffmpeg_fallback(
             try:
                 return loader(str(normalized), sr=sample_rate)
             except Exception as normalized_error:
+                if not _is_audio_input_decode_error(normalized_error):
+                    raise
                 raise RuntimeError(
                     f"MLX could not decode ffmpeg-normalized audio for {audio_path!s}: "
                     f"{normalized_error}"
-                ) from direct_error
+                ) from normalized_error
 
 
 def atomic_write_json(path, value):

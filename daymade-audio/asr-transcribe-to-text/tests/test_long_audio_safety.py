@@ -148,7 +148,12 @@ class LongAudioSafetyTests(unittest.TestCase):
         def loader(path, *, sr):
             loader_calls.append((path, sr))
             if path.endswith(".ogg"):
-                raise RuntimeError("direct decoder rejected opus")
+                decode_error = type(
+                    "DecodeError",
+                    (Exception,),
+                    {"__module__": "miniaudio"},
+                )
+                raise decode_error("could not open/decode file")
             return [0.25, -0.25]
 
         def runner(command, **kwargs):
@@ -170,12 +175,14 @@ class LongAudioSafetyTests(unittest.TestCase):
         command, kwargs = runner_calls[0]
         self.assertEqual(command[0], "/opt/ffmpeg")
         self.assertIn("pcm_s16le", command)
+        self.assertEqual(command[command.index("-ac") + 1], "1")
+        self.assertEqual(command[command.index("-ar") + 1], "16000")
         self.assertEqual(kwargs["check"], False)
 
     def test_decode_failure_without_ffmpeg_is_explicit(self):
         def loader(_path, *, sr):
             self.assertEqual(sr, 16000)
-            raise RuntimeError("unsupported container")
+            raise ValueError("Unsupported format: ogg")
 
         with self.assertRaisesRegex(
             RuntimeError,
@@ -187,6 +194,115 @@ class LongAudioSafetyTests(unittest.TestCase):
                 loader,
                 ffmpeg_path="",
             )
+
+    def test_unrelated_runtime_failure_propagates_without_ffmpeg(self):
+        runtime_error = RuntimeError("GPU allocator unavailable")
+
+        def loader(_path, *, sr):
+            self.assertEqual(sr, 16000)
+            raise runtime_error
+
+        with self.assertRaises(RuntimeError) as raised:
+            local_mlx.load_audio_with_ffmpeg_fallback(
+                "/example/audio.ogg",
+                16000,
+                loader,
+                ffmpeg_path="/opt/ffmpeg",
+                run_command=lambda *_args, **_kwargs: self.fail(
+                    "ffmpeg must not run for a non-decoder failure"
+                ),
+            )
+        self.assertIs(raised.exception, runtime_error)
+
+    def test_ffmpeg_nonzero_is_explicit(self):
+        def loader(_path, *, sr):
+            self.assertEqual(sr, 16000)
+            raise ValueError("Unsupported format: ogg")
+
+        def runner(command, **_kwargs):
+            return subprocess.CompletedProcess(command, 7, "", "bad packet")
+
+        with self.assertRaisesRegex(RuntimeError, "failed with exit 7: bad packet"):
+            local_mlx.load_audio_with_ffmpeg_fallback(
+                "/example/audio.ogg",
+                16000,
+                loader,
+                ffmpeg_path="/opt/ffmpeg",
+                run_command=runner,
+            )
+
+    def test_ffmpeg_start_failure_preserves_its_cause(self):
+        def loader(_path, *, sr):
+            self.assertEqual(sr, 16000)
+            raise ValueError("Unsupported format: ogg")
+
+        start_error = FileNotFoundError("ffmpeg disappeared")
+
+        def runner(_command, **_kwargs):
+            raise start_error
+
+        with self.assertRaisesRegex(RuntimeError, "ffmpeg could not start") as raised:
+            local_mlx.load_audio_with_ffmpeg_fallback(
+                "/example/audio.ogg",
+                16000,
+                loader,
+                ffmpeg_path="/opt/ffmpeg",
+                run_command=runner,
+            )
+        self.assertIs(raised.exception.__cause__, start_error)
+
+    def test_normalized_decode_failure_preserves_the_second_error(self):
+        calls = 0
+        normalized_error = ValueError("Unsupported format: wav")
+
+        def loader(path, *, sr):
+            nonlocal calls
+            calls += 1
+            self.assertEqual(sr, 16000)
+            if path.endswith(".ogg"):
+                raise ValueError("Unsupported format: ogg")
+            raise normalized_error
+
+        def runner(command, **_kwargs):
+            Path(command[-1]).write_bytes(b"RIFF-normalized")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "could not decode ffmpeg-normalized audio",
+        ) as raised:
+            local_mlx.load_audio_with_ffmpeg_fallback(
+                "/example/audio.ogg",
+                16000,
+                loader,
+                ffmpeg_path="/opt/ffmpeg",
+                run_command=runner,
+            )
+        self.assertEqual(calls, 2)
+        self.assertIs(raised.exception.__cause__, normalized_error)
+
+    def test_unrelated_failure_after_normalization_propagates(self):
+        normalized_error = MemoryError("allocator exhausted")
+
+        def loader(path, *, sr):
+            self.assertEqual(sr, 16000)
+            if path.endswith(".ogg"):
+                raise ValueError("Unsupported format: ogg")
+            raise normalized_error
+
+        def runner(command, **_kwargs):
+            Path(command[-1]).write_bytes(b"RIFF-normalized")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with self.assertRaises(MemoryError) as raised:
+            local_mlx.load_audio_with_ffmpeg_fallback(
+                "/example/audio.ogg",
+                16000,
+                loader,
+                ffmpeg_path="/opt/ffmpeg",
+                run_command=runner,
+            )
+        self.assertIs(raised.exception, normalized_error)
 
     def test_skill_requires_full_source_for_high_stakes_cross_check(self):
         skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")

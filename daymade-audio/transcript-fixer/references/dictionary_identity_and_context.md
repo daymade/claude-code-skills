@@ -17,7 +17,7 @@ After native AI correction, review all applied fixes and decide which to save. U
 |-------------|---------|--------|
 | Non-word → correct term | 克劳锐→Claude, cloucode→Claude Code | ✅ Add (zero false positive risk) |
 | Rare word → correct term | 拉行链→LangChain, 哈金费斯→Hugging Face | ✅ Add (verify it's not a real word first) |
-| Person/company name ASR error | 卡帕西→Karpathy, Anthropics→Anthropic | For **important recurring people**, add to your **people roster** instead (see "People Roster" below) — it carries relationship context and survives DB resets. For one-off names: ✅ `--add --domain` (stable, unique) |
+| Person/company name ASR error | 卡帕西→Karpathy, Anthropics→Anthropic | For an **important recurring** person/entity and a recurring deterministic garble, use the **people roster** or `--add --domain` as described below. A one-off or rare sentence-local name error is a file-only edit; do not create a reusable rule. |
 | Common word → context word | 争→蒸, 减→剪, affect→effect | ❌ Never add as a rule — record the trap + its disambiguating cue in the domain's context file instead (see "Domain Correction Contexts") |
 | Real brand → different brand | Xcode→Claude Code, Clover→Claude | ❌ Skip (real words in other contexts) |
 | Real name → different real name | `李明`→`黎明` (two real people in different projects) | ❌ Never a rule — same hazard as real brand → brand, but it corrupts a real person's name. Domain context trap with a disambiguating cue instead (see [native_ai_full_workflow.md](native_ai_full_workflow.md)) |
@@ -116,9 +116,9 @@ Facing a transcript — or a whole batch — full of the same ASR-garbled names,
 - The dictionary **compounds**: `--add` once, and every future transcript auto-corrects via `--stage 1 --domain <project>`. Wire that one command into the project's ingest step and the names are fixed forever, for free.
 - The dictionary has false-positive protection (short-word warnings, the `audit` command, `--report-false-positive`); a raw `sed` has none and will silently corrupt look-alike words.
 
-**Rule of thumb: recurring or project-specific error → `--add ... --domain <project>` (it compounds). Never a throwaway sed/python replace.** A one-off script is acceptable only for a genuinely one-time, never-recurring fix — and even then the dictionary is usually less effort.
+**Rule of thumb: recurring, deterministic project error → `--add ... --domain <project>` (it compounds). Never use a throwaway cross-file sed/python replace.** For a genuinely one-time, never-recurring fix, edit only the exact occurrence in the file and stop; a reusable dictionary row would add blast radius without compounding value.
 
-ASR is especially unstable on Chinese names: one person can shatter into a dozen homophone variants (in one real project a single surname+given-name was seen as 13+ `[姓变体]×[名变体]` combinations). Capture every confirmed variant with `--add --domain <project>` so they all collapse to the canonical name on every future run.
+ASR is especially unstable on Chinese names: one person can shatter into a dozen homophone variants (in one real project a single surname+given-name was seen as 13+ `[姓变体]×[名变体]` combinations). Capture every confirmed **recurring deterministic** variant with `--add --domain <project>` so it collapses to the canonical name on future runs; leave rare sentence-local variants file-only.
 
 
 ### People Roster (long-term person-name SSOT)
@@ -136,14 +136,16 @@ at Stage 1 time when `people_roster_path` is set in
 - **ASR 变体**: Aida, 艾达
 
 ### 小明
-- **ASR 变体**: 晓明, 小铭老师
+- **ASR 变体**: 晓明, 小铭
 ```
 
 Both example shapes are worth copying. An English given name spoken inside
 Chinese speech produces *two* kinds of variant — a misspelling (`Aida`) and a
-Chinese transliteration (`艾达`) — and a Chinese nickname produces homophone
-variants plus honorific forms (`小铭老师`). List every form you have actually
-seen; each one is a rule that fires for free.
+Chinese transliteration (`艾达`) — and a Chinese name produces homophone
+variants (`小铭`). List only the misrecognized name token, not a whole
+honorific-bearing form: the `小铭` rule can correct `小铭老师` while preserving
+the spoken `老师`; a whole-string `小铭老师` roster entry would wrongly replace
+the honorific too. List only forms that actually recurred and are safe to reuse.
 
 **Keep legitimate aliases out of the replacement field.** An English name,
 Chinese full name, and nickname may all identify one person while each remains
@@ -210,9 +212,11 @@ as a unit:
    you actually saw, including the weird ones. The next transcript will
    produce new members of the family, and the roster is what keeps the
    canonical stable while the family grows.
-4. **Honorific forms (`X老师` / `X总`) are variants too** — an honorific is
-   what a speaker actually said, so never *replace* it with the bare name, but
-   the surname inside it gets the same sweep and the same roster entry.
+4. **Preserve honorific forms (`X老师` / `X总`)** — an honorific is what a
+   speaker actually said, so never store the whole honorific-bearing phrase as
+   a variant that maps to a bare name. Sweep and record only the misrecognized
+   name token inside it; that lets Stage 1 correct the name while retaining the
+   spoken suffix.
 
 **Mid-turn verdicts land immediately — reusability is a separate decision.**
 When the user answers a name/number question while you are still working (a
