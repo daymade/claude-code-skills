@@ -1,802 +1,202 @@
 ---
 name: claude-md-progressive-disclosurer
 description: >-
-  Optimize, slim, or restructure CLAUDE.md/AGENTS.md with progressive disclosure and zero
-  information loss. Use when the user explicitly asks to audit, 精简, 瘦身, 重构, split, or
-  diagnose adherence problems in instruction files. Profiles the whole resident startup surface,
-  allocates rules among prose, path rules, Skills, hooks, and references, then moves low-frequency
-  sections verbatim with content-integrity checks. Also use when an active task starts moving or
-  compressing instruction sections. Not for generic task drift unless instruction files are in scope.
+  Audit and repair CLAUDE.md, AGENTS.md, path-scoped rules, Skill triggers, and hooks when the
+  user explicitly asks for an instruction-stack audit, slimming, progressive disclosure, or a
+  diagnosis of agent drift. Evaluates current content and runtime behavior, retires stale rules,
+  assigns each surviving rule to the right carrier, and validates representative tasks. This is
+  an explicit governance workflow, not an automatic prerequisite for ordinary implementation.
+argument-hint: "[instruction files or observed drift]"
+disable-model-invocation: true
 ---
 
-# CLAUDE.md 渐进式披露优化器
+# Instruction Stack Auditor
 
-## 核心理念
+The outcome is not a smaller file. The outcome is an agent that completes the intended work with
+less irrelevant ceremony, fewer conflicts, and no loss of current safety or business constraints.
 
-> "找到最小的高信号 token 集合，最大化期望结果的可能性。" — Anthropic
+Treat every existing rule—including this Skill—as a revisable hypothesis. Current user decisions,
+current product behavior, authoritative business sources, and current host documentation outrank
+old local methodology.
 
-**目标是最大化信息效率、可读性、可维护性。**
+## 1. Fix the real symptom before editing
 
-> 本 skill 自身遵守渐进式披露：新方法论以"精炼规则 + 触发条件"留在 SKILL.md，深度战例 / 引文沉到 references/。SKILL.md 行数由信息密度决定、**不设为硬目标**（约 500 行量级；新增高价值规则可略超，但深度永远沉 references）——skill 自己示范它教别人的事：**行数不是 KPI**，自洽地不拿"≤N 行"约束自己。
+Write down three things in the working notes or conversation; do not create a governance document
+just for this step:
 
-### 铁律：行数禁作 KPI，可作诊断症状
+1. The user-visible failure, such as task drift, repeated permission prompts, stale business facts,
+   missed safety boundaries, or excessive startup context.
+2. Two to five representative tasks that expose the failure. Include at least one small ordinary
+   task and one task that should activate a real guardrail.
+3. A falsifiable success condition. Example: “A typo fix proceeds without history retrieval, while
+   an explicit ‘reuse our old implementation’ request retrieves prior work before writing.”
 
-**禁作优化目标 / 成功指标**（不可削弱——案例 7/8/9 的防线就是这条）：
+Do not define success as line count, byte reduction, number of references, number of hooks, review
+count, or completion of this workflow.
 
-- 行数少不代表更好，行数多不代表更差
-- 评判标准是：**单一信息源**（同一信息不在多处维护）、**认知相关性**（当前任务不需要的信息不干扰注意力）、**维护一致性**（改一处不需要同步另一处）——不是行数
-- 禁止在优化方案 / 总结中出现"从 X 行精简到 Y 行"、"减少 Z%"作为成果
-- 禁止把"减少行数"作为移动 / 删除某内容的理由
-- 一个结构清晰、信息不重复的长文件，胜过砍掉关键信息的短文件
+## 2. Measure the actual loaded surface
 
-**可作诊断症状**（官方依据：Claude Code 文档"文件太长 → 规则被淹没 → Claude 不遵守"）：
+Inventory the instruction sources the current host really loads. Do not infer loading from a file
+existing on disk.
 
-- 允许把"行数异常大 + Claude 反复不遵守某规则"当成**触发调查的信号**，不是结论
-- 调查动作仍是信号分诊（Step 2.1）+ 分层，**不是"砍到 N 行"**
-- 一句话区分：行数可以让你**开始怀疑**，不可以成为你**优化的目标**或**汇报的成果**
+- Claude Code: use `/memory`, `/skills`, `/hooks`, `/doctor`, or the current debug/config surface.
+- Codex: inspect `$CODEX_HOME/AGENTS.md`, the repository hierarchy, current `config.toml`, and
+  `codex debug prompt-input` from the relevant working directory.
+- Resolve symlinks before deciding ownership. Record the source-of-truth repository for every file
+  that may be edited.
+- Note duplicate Skill names, retired entries still advertised, and hooks that inject context on
+  broad events.
 
-#### 触发即 reframe（用户说「太大 / 太长 / 精简 / 瘦身」时——最易在此处跑偏）
+Use `scripts/profile_claude_md.py <path>` when section size or long fused paragraphs may be hiding
+the signal. Its output is diagnostic evidence, not an optimization target.
 
-这些词触发的本能是「砍行数」。**先 reframe，再动手**：① 当场声明「行数不是目标，单一信息源 / 认知相关性才是」；② 直接进 Step 2.1 信号分诊，用「这段有没有 canonical source 重复 / 是不是反信号」决定去留，**不是**用「文件多长」；③ 把「太大吗」当**调查的起点**，不是**砍的许可**。用户连续追问「还是太大」时同理——回应是「再做一轮分诊找重复 / 反信号」，分诊空了就诚实说「剩下都是高频核心，再砍会丢信号」，**不是**继续砍有信息的内容。（实战：把「太大吗」做成减行数任务、一路用「省 39%」当成果汇报、被连续追问拽着越砍越多 → 案例 15、16。）
+## 3. Audit content, not just placement
 
-### 两层架构
+Read the full resident instruction file and every conditional file proposed for change. Classify
+each actionable rule with exactly one disposition:
 
-```
-Level 1 (CLAUDE.md) - 每次对话都加载
-├── 信息记录原则               ← 防止未来膨胀的自我约束
-├── Reference 索引（开头）     ← 入口1：遇到问题查这里
-├── 核心命令表
-├── 铁律/禁令（含代码示例）
-├── 常见错误诊断（症状→原因→修复）
-├── 代码模式（可直接复制）
-├── 目录映射（功能→文件）
-├── 修改代码前必读             ← 入口2：改代码前查这里
-└── Reference 触发索引（末尾） ← 入口3：长对话后复述
+Do not widen an instruction-stack audit into a rewrite of unrelated domain Skills. A domain Skill's
+trigger metadata may be in scope when over-activation is part of the observed drift; its creative or
+business methodology is a separate audit requiring explicit scope, the domain SSOT, representative
+accepted examples, and real outcome evidence. Generic safety or compliance preferences are not
+evidence that a distinctive domain method has failed.
 
-Level 2 (references/) - 按需即时加载
-├── 详细 SOP 流程
-├── 边缘情况处理
-├── 完整配置示例
-└── 历史决策记录
-```
-
-### 但「两层」只是文件层——先选载体，再选层级
-
-渐进式披露不是一个文件内部的事，它在**多个层**同时发生：MCP 懒加载工具、RAG 按需取知识、
-Skills 描述常驻正文按需、以及 **Claude Code 的动态工具选择（工具索引层的渐进式披露）**。
-只在 CLAUDE.md 内部搬 L1↔L2，等于把**下表四种载体**里的两种（常驻 L1 / reference）当成全部。
-
-**先问载体，再问层级。** 判据一句话：**模型能不能在违规之前就知道自己需要这条规则？**
-
-|  | **违规可恢复** | **违规不可恢复** |
+| Disposition | Use when | Required action |
 |---|---|---|
-| **触发自报**（我知道我要做 X） | → **Skill**（触发词加载） | → **Hook 拦截器**（散文拦不住，见下） |
-| **触发不自报，但「时刻」工具事件可观测** | → **reference**（复盘时查） | → **Hook 注入器**（确定性 100%、常驻成本 0） |
-| **触发不自报，且无可观测时刻** | → **reference** | → **常驻 L1**（真正必须常驻的只剩这一格） |
+| KEEP | Current, stable, broadly applicable, and changes the next action | Keep concise in the appropriate resident scope |
+| REWRITE | The intent remains valid but wording, scope, trigger, or authority is wrong | Replace with current, testable language |
+| ROUTE | Valid only for a recognizable task, path, product area, or tool | Move the current rule to a conditional carrier and leave a useful route only if discovery needs it |
+| ENFORCE | A deterministic, low-false-positive machine check must run at a known event | Put the check in permissions or a hook; keep prose only for judgment the code cannot make |
+| RETIRE | Superseded, stale, duplicated, ceremonial, or no longer changes a decision | Delete it and remove all active references; Git history is the archive |
+| DECIDE | It encodes a live business or risk policy that available evidence cannot settle | Present the concrete choice to the user |
 
-**两条轴的定义**：
-- **触发自报** = 动手前那一刻，命令/文件名/关键词里就写着「我要做这件事」——
-  `aliyun ...`、写 `.tf`、跑打包。skill 的描述匹配能接住这类。
-- **「时刻」可观测** ≠ 触发自报。**这是第三行存在的全部理由**：
-  「我在修测试」不自报「我正要删功能」，但 `Write` 一个 `.py` 文件**是一个工具事件**，
-  hook 能在那一刻开火。**规则的语义 hook 判断不了，但时刻它看得见** —— 于是
-  hook 只负责报时刻、把规则怼到面前，判断仍归模型。
-- 只有**连一个可挂载的工具事件都找不到**的规则（例：「怎么跟这个用户沟通」「他的资源观」），
-  才真正必须常驻。
+For every rule, answer:
 
-**Hook 两种形态**：**拦截器** exit 2 挡住可判定的形态；**注入器** exit 0 但在 stdout 输出
-`hookSpecificOutput`，把文本送进模型上下文。注入器让**确定性与常驻解耦** ——
-一条规则可以 100% 每次出现，却零常驻成本。
+- What event triggers it?
+- What action changes because it exists?
+- When does it stop applying?
+- Which current source proves it is still true?
+- Does another active rule contradict or duplicate it?
+- What representative failure appears if it is removed?
 
-**⚠️ 别把注入器当成万能替代**：它 exit 0、**不阻断**，模型可以读完照样违反 ——
-它换来的是「规则必定在场」，不是「规则必定被遵守」。所以：**不可逆 + 形态可判定 → 拦截器**；
-**不可逆 + 只能语义判断 → 注入器 + 常驻规则句两者并存**（注入器保证在场，常驻句保证
-它出现在最该出现的位置）。同一条规则挂两个载体不算违反 SSOT，前提是
-**只有一处写规则正文，另一处指向它**。
+If those questions have no concrete answer, the default disposition is RETIRE, not “archive in a
+second file.” Do not preserve stale text merely to claim zero information loss.
 
-**官方载体新增（2026-08 对照 code.claude.com 官方文档核过）**：`~/.claude/rules/`（用户级）与项目级 `.claude/rules/` 可把规则拆成多主题文件；带 `paths:` frontmatter 的 rule **只在 Claude 操作匹配文件时加载**——官方版的按需载体。⚠️ 边界：paths 按**文件读写**触发、不按 Bash 命令触发——代理 / git 类"Bash 时刻"规则用不了它，文件类规则（`*.py` / `*.docx` / 测试文件）适用。另外三条官方事实随手可用：单文件目标 **<200 行**（官方原文 "Longer files consume more context and reduce adherence"）；`/doctor` 自带 CLAUDE.md trim 检查（v2.1.206+，可当独立第二意见）；**块级 HTML 注释在注入前被剥掉**——维护者备注零 token 成本。auto memory 的 MEMORY.md 只加载前 200 行 / 25KB，塞过期条目挤占的是活配额。
+### Common content defects
 
-**🚫 缩正文前必须实证「真有别的机制在强制吗」，禁止推断。**
-把 L1 正文缩成「由 X 强制 + 指针」之前，构造一条真实的违规命令喂给 X，看它到底拦不拦：
+Actively look for these, because moving them to a reference does not fix them:
 
-```bash
-# ① 名单从「注册表」来，不是从目录来（见下方两个坑）
-python3 - <<'PY' > /tmp/registered-hooks.txt
-import json, os
-s = json.load(open(os.path.expanduser('~/.claude/settings.json')))
-for ev, groups in (s.get('hooks') or {}).items():
-    for g in groups:
-        for h in g.get('hooks', []):
-            print(ev, g.get('matcher', '*'), h.get('command', ''))
-PY
+- historical project phases, prices, people, counts, versions, paths, or current-state claims;
+- rules generalized from one incident without a demonstrated recurrence;
+- a safety rule whose prose scope is broader than the hook that allegedly enforces it;
+- a semantic judgment encoded in a regex hook;
+- “always browse / always retrieve / always review / always spawn” gates applied to ordinary work;
+- process receipts, self-review reports, or reviewer counts used as completion criteria;
+- two authorities both defining the same mutable fact;
+- an old Skill asserting that its own workflow is mandatory.
 
-# ② 从上面的名单里挑一条填进来。用变量而不是 <占位符> —— 在 shell 里 `<` 是重定向符，
-#    整块粘贴会得到一个莫名的重定向错误，而不是「这里要你填」
-# ⚠️ HOOK_CMD 必须是**数组**：写成字符串 + 不加引号展开 `$HOOK_CMD`，
-#    bash 会词分割成「解释器 + 路径」，**zsh 不会**（整串当一个命令名 → exit 127）。
-#    实测本块第一版就栽在这，与附录 C 的 REFDIRS 是同一个坑。
-HOOK_CMD=(bash /绝对路径/那个hook.sh)      # ← 换成 registered-hooks.txt 里那条（注意它自己的解释器）
-BAD_CMD='一条真实的违规命令'                # ← 换成你要试探的那条
+## 4. Choose the smallest correct carrier
 
-# payload 必须完整——缺字段会让判决翻转（见下方第一个坑）
-# ⚠️ 必须用 json.dumps 构造，**不能手搓字符串**：BAD_CMD 里只要有 `"` / `\` / 换行，
-#    手搓出来就不是合法 JSON，fail-open 的 hook 会答 0 → 你得出「无人强制」并去删规则，
-#    而它其实一直拦着。实测同一条含引号的违规命令：手搓 → exit 0，json.dumps → exit 2。
-#    **而最典型的探针形状 `git commit -m "msg" --no-verify` 恰好就带引号。**
-# ⚠️ 下面三道前置检查不能省。**这个探针所有的失败模式都指向「假放行」** ——
-#    而假放行正是会让你去删掉一条其实有效的规则的那个方向（实测过的三种）：
-#    ① 没有 python3 → 管道首段崩、hook 收到空 stdin → fail-open 答 0 → 打印「exit=0」
-#    ② 只粘贴了探针行、漏掉上面两行赋值 → 同样打印「exit=0」（`set -u` 也救不回，
-#       unbound 发生在管道首段的子 shell 里，脚本不死）
-#    ③ 贴进 `set -euo pipefail` 脚本时，**hook 拦截（exit 2 = 阳性结果）会先杀死脚本**，
-#       `echo` 根本执行不到 → strict 宿主里这个探针只可能打印出「放行」一种判决
-command -v python3 >/dev/null || { echo "探针不可用：没有 python3（换机器或先装）" >&2; exit 9; }
-: "${BAD_CMD:?探针不可用：BAD_CMD 未赋值——你大概只粘贴了下半段}"
-[ "${#HOOK_CMD[@]}" -gt 0 ] || { echo "探针不可用：HOOK_CMD 未赋值" >&2; exit 9; }
+Use the current host’s behavior rather than a universal two-layer diagram.
 
-# 用 if 包住：`if` 的条件位豁免 set -e，所以「拦截」这个阳性结果也打得出来
-if BAD_CMD="$BAD_CMD" python3 -c 'import json,os,sys; sys.stdout.write(json.dumps({
-  "hook_event_name":"PreToolUse","tool_name":"Bash",
-  "tool_input":{"command":os.environ["BAD_CMD"]},
-  "cwd":os.getcwd(),"session_id":"probe","transcript_path":"/dev/null"}))' \
-  | "${HOOK_CMD[@]}" >/dev/null 2>&1
-then ec=0; else ec=$?; fi
-echo "exit=$ec   # 2 = 拦截（这条规则有人强制），0 = 放行"
-```
-
-**这个探针有两个会让你得出相反结论的坑，都实测踩过：**
-
-- **payload 缺字段 → 判决翻转。** 真实事件还带 `cwd`/`session_id`/`transcript_path`/`hook_event_name`，
-  很多 hook 读它们。实测同一条 `rm -rf important-data`：**不带 `cwd` → exit 0**（该 guard 的设计是
-  「相对路径 + 无 cwd = 判不出，放行」），**带 `cwd` → exit 2**。用精简 payload 探，你会给一条
-  **真的有防护**的规则判「无人强制」，然后动手拆掉它的正文。
-- **枚举目录 ≠ 枚举注册表，而且两个方向都错。** 实测某机器：注册 28 条，其中 **1 条在 hooks 目录之外
-  且是 `.py`**（拿 `bash` 跑它 → 语法错 → 非 2 → 被记成「没拦」＝**漏**）；目录里反而躺着一个
-  `.json` 配置和一个陈旧的 `*.sh.bak-*`（被误当 hook 跑出 exit 2 → 记成「有人强制」＝**误**，
-  于是授权你删掉真正在起作用的正文）。此外项目级 `.claude/settings.json`、plugin 自带 hook
-  都不在那个目录里，而 `matcher` 决定某个 hook 根本不对这个工具开火。**权威源是 settings.json 的
-  `hooks` 块（配合 `claude --debug`），不是 `ls` 一个目录。**
-
-（hook 事件 schema / 注册方式 / exit 语义的完整说明见 `daymade-claude-code:claude-code-hooks` skill。）
-**从「装了 N 个 hook」推断「这条被覆盖了」是最危险的一步** —— 若 X 其实不存在，你就
-亲手拆掉了唯一在起作用的防线，还留下一句让后来者以为有保护的谎。实测比推断便宜得多
-（详见 `references/progressive_disclosure_principles.md` 案例 18）。
-
-### 多入口原则（重要！）
-
-同一 Level 2 资源可以有**多个入口**，服务于不同查找路径：
-
-| 入口 | 位置 | 触发场景 | 用户心态 |
-|------|------|----------|----------|
-| Reference 索引 | 开头 | 遇到错误/问题 | "出 bug 了，查哪个文档？" |
-| 修改代码前必读 | 中间 | 准备改代码 | "我要改 X，要注意什么？" |
-| Reference 触发索引 | 末尾 | 长对话定位 | "刚才说的那个文档是哪个？" |
-
-**这不是重复，是多入口。** 就像书有目录（按章节）、索引（按关键词）、快速参考卡（按任务）。
-
-**边界（与 SSOT 的张力，必须守住）**：多入口成立**仅当**——每个入口 keyed 方式不同（错误索引 / 任务索引 / 末尾复述），且都只**指向**同一 Level 2 资源、**不复制它的正文**。如果你把同一段规则正文抄到 3 个地方，那是违反 SSOT 的重复（会各自漂移），不是多入口。一句话判据：入口存的是"路标 + 触发条件"，不是"内容副本"。
-
----
-
-## 优化工作流
-
-### Step 1: 备份
-
-```bash
-cp CLAUDE.md CLAUDE.md.bak.$(date +%Y%m%d_%H%M%S)
-```
-
-### Step 2: 内容分类
-
-分三阶段。**先测量，再分诊，再分层**——跳过测量会把力气花在小头上，跳过分诊会把噪音忠实搬进 Level 2，把 reference 变垃圾场。
-
-#### 2.0 热点测量（先于一切提案——性能优化的第一课）
-
-**先量化，后动手；按贡献度排序，先打最大的。** 优化提案落在 3% 的小头上、而 70% 的热点在旁边没人动，是本 skill 实战里被用户当场打断的真实失败（案例 19：一份 168KB 的全局 CLAUDE.md 占每 session 启动上下文 69%，执行者却先端出一盘扩展清理——用户原话「你没有先去管热点，而是先找了一堆很小很小的东西」）。`scripts/profile_claude_md.py` 只量单文件内部；先完成下面的**整套启动面**盘点，才知道该不该先改它：
-
-1. **宿主真实注入面**：Claude 用 `/context` 看类别占比、`/memory` 看实际加载的 memory/instruction 文件；需要持续观测加载事件时用官方 `InstructionsLoaded` hook。Codex 用自己的权威渲染器，不凭配置猜：
-
-   ```bash
-   codex debug prompt-input 'startup-instruction-audit' |
-     jq -r '.[] | [.role, ([.content[]? | select(.type == "input_text") | .text] | join("") | utf8bytelength)] | @tsv'
-   ```
-
-   同时读各条 developer message 的开头，区分全局指令、项目指令、Skill catalog、hook/plugin 注入；**单量 CLAUDE.md 会漏掉常驻 Skill 描述和 hook 文字**。
-2. **分节字节表**：按 heading 统计每节 bytes/lines 并降序——**工作顺序 = 这张表的降序**（⚠️ 父节字节含全部子节：降序在**同层之间**比较，容器节跳过看它最大的子节）；提案端出去前自问：这是当前最大贡献者吗？不是的话，最大的那个为什么不在最前面？
-3. **行长分布**：>1KB 的巨型行是「规则+战例焊死在一个 bullet」的签名（实战：4.4% 的行承载 35.6% 的字节）
-4. **载入语义与上限**：逐宿主实测，禁把历史版本的默认值当当前不变量。当前 Codex 的 `project_doc_max_bytes` 是**项目层级文档的累计预算**；全局用户指令可走另一条加载路径，不能拿该值推断它是否截断。先查 `~/.codex/config.toml`，再以同 cwd 的 `codex debug prompt-input` 实际字节为裁决。历史上确有 96 KiB 配置配合旧加载行为导致 164KB 文件尾部 41% 不可见的事故，但它只证明「必须实测」，不证明今天仍按 32 KiB 或同一路径截断。发现真截断时才做「调预算 + 瘦常驻内容 + 机械监控」三件套。
-5. **常驻触发器审计**：Skill frontmatter `description` 会进入常驻 catalog；generic 纠偏句、普通质量词或维护动作若写成触发词，会让 Skill 和 Stop hook 自激活。逐条查描述是否只声明**明确任务意图**，并检查 hook 是否会在最终回答阶段临时创造一个开工前本不存在的新 obligation。描述按官方上限保持 ≤1024 字符；不用列完整方法论。
-
-Claude 侧若某些 instruction 文件对当前项目永远无关，可用官方 `claudeMdExcludes` 显式排除；它是 scope 配置，不是拿 `@import` 假装省上下文。路径相关规则优先放 `.claude/rules/` 的 `paths:` 条件载体。
-
-⚠️ 测量仪器自身的两个坑（都实测踩过，脚本已内建规避；先在已知答案的样本上校准，见案例 17/19）：
-- **heading 正则必须感知 code fence**——fence 里的 `# 注释` 会被当成标题，凭空造出不存在的大节（实测造出过一个假的 45.9KB 节，热点排序整个失真）
-- **CJK 文件禁用 chars/4 估 token**——中文密集文本实测 ~0.42 token/byte（≈2.4 bytes/token），chars/4 低估一倍以上；有 `/context` 实测值就按实测比率折算，并一律标「est.」
-
-#### 2.1 信号分诊（必要性闸门，先决）
-
-对每个章节先问 Anthropic 官方 litmus：**"删掉这一条，Claude 会不会犯错？"**
-
-- **会犯错** → 是信号，进入 2.2 分层
-- **不会犯错**，且属以下任一 → 是**反信号**，列入"候选删除"清单：
-  - 能从代码 / 项目结构 / 文件名推断的（如"本项目用 TypeScript"）
-  - 语言 / 框架的标准约定（如"遵循 PEP 8"）
-  - 自明常识（如"写干净的代码""提交前测试"）
-  - 已有独立 canonical source 覆盖的（注明 source 在哪）
-  - 已过时的一次性修复（不会再复发）
-  - **确定性必须每次发生**的（如"提交前必跑 lint"）→ 标记"建议转 hook"，不替用户实现（散文保证不了确定性）。**先按上方载体表查它落在哪一格**，把那一格的结论写进候选清单——deliverable 是**带载体判定的建议**，不是替用户写 hook。⚠️ **别预设答案一定是 hook**：本例「提交前必跑 lint」是**触发自报**（`git commit` 自己就报了）且**违规可恢复**（事后补跑），查表落在 **Skill** 格，不是任何一种 hook。「确定性必须每次发生」只说明散文不够，**没说必须用 hook**——哪个载体由表决定
-
-**安全栏（与移动同等严格，不可削弱）**：候选删除 ≠ 立即删除。必须事前逐项列出 + 注明属上面哪类 + 征求用户确认。说不出理由 = 不是反信号，回 2.2 当信号处理。
-
-> 与案例 8/9 的边界：8/9 是把**真信号**（debug 提示、代码模式）在移动时压缩掉 = 永远错；这一步是移除**已确认反信号**（可推断 / 自明）= 正确。区别在"删的是不是信号"，不在"删不删"。详见 `references/progressive_disclosure_principles.md` 案例 10。
-
-#### 2.2 分层分类
-
-对**通过分诊的信号**分类：
-
-| 问题 | 是 | 否 |
-|------|----|-----|
-| 高频使用？ | Level 1 | ↓ |
-| 违反后果严重？ | Level 1 | ↓ |
-| 有代码模式需要直接复制？ | Level 1 保留模式 | ↓ |
-| 有明确触发条件？ | Level 2 + 触发条件 | ↓ |
-| 历史/参考资料？ | Level 2 | 考虑删除 |
-
-### Step 3: 创建 Reference 文件
-
-命名：`docs/references/{主题}-sop.md`
-
-**铁律：原样移动，禁止压缩**
-
-移动内容到 Level 2 时，必须**完整保留原始内容**。不要在移动的同时"顺便精简"。
-
-```
-✅ 正确：把 100 行原封不动搬到 Level 2（100 行 → Level 2 100 行）
-❌ 错误：把 100 行"精简"到 60 行搬到 Level 2（100 行 → Level 2 60 行，40 行消失）
-```
-
-**为什么**：压缩 = 变相删除。你认为"不重要"而删掉的内容，可能是某个未来 debug session 的关键线索。优化的目标是**改变信息的位置**（Level 1 → Level 2），不是**改变信息的存在**。
-
-**怎么做**：
-1. 从原始 CLAUDE.md 中精确复制要移动的段落
-2. 原样粘贴到 Level 2 文件中
-3. 可以在 Level 2 中添加结构（标题、分隔线），但**不要删减、改写、合并**原始内容
-4. 如果确实有冗余（同一段话在原文中出现了多次），在 Level 2 中保留一份完整的，注释说明去重
-
-#### 整节批量下沉的机械流程（≥3 节时脚本化，禁手搬）
-
-手工复制粘贴 10 个节必出错。用 `scripts/sink_sections.py`（spec 驱动；实战一次通过 10 节 / 119KB，整串验证 10/10 零丢失）：**按精确标题行定界提取原文（fence 感知）→ verbatim 追加到目标 reference（带日期 provenance header，新文件配 intro）→ 自底向上替换 L1 压缩版（行号不失效）→ 每节整串子串验证（grep 对多行原文按行 OR、会放过丢半段的搬运，必须 python `in` 整串判断）→ 任一验证失败自动回滚源文件**。两条硬规则：
-
-- **拒写 symlink 目标（含父目录）**：目标路径任一环节是 symlink（文件本身、或**父目录**——文件级 `islink` 检查会被目录级 symlink 静默穿透，独立审阅实测打穿过），"本地追加"实际在改 link 指向的那个仓（触发它的版本 bump / commit 义务，且那个仓可能 public）。脚本按 `realpath ≠ abspath` 判定并 abort，特意跨 link（如 macOS `/tmp`）用 `--allow-symlinked-target` 显式放行；正确动作是落一个本地兄弟文件 + provenance 注明「与 symlink 源后续合并」
-- **先全部提取、后统一替换**：提取按原始行号一次做完，替换自底向上——两步交错会让未处理节的行号漂移。压缩版 snippet **必须保留原 start_heading 行**（验证器逐个检查标题存活，改名即 FAIL 回滚）；用作定界的标题在源文件里必须唯一（重名 abort）
-
-### Step 4: 更新 Level 1
-
-1. **在开头添加「信息记录原则」**（项目概述之后，Reference 索引之前）
-2. **添加 Reference 索引**（紧随信息记录原则之后）
-3. 用触发条件格式替换详细内容
-4. 保留代码模式和错误诊断
-5. **添加「修改代码前必读」表格**（按"要改什么"索引）
-6. **在末尾再放一份触发索引表**
-
-**⚠️ 写指针前的硬 gate（事中验证，最易跳过、本次最大踩坑）**：每写一条「→ 某 reference / 详见 X」指针前，**当场确认目标文件真有这段内容**。
-⚠️ **验的方式看你要验什么**（Step 5.0 表已实测）：只验「这段在不在」→ 抽 3–5 个**特异串**用 `grep -F` 查即可；
-要验「**整段完整搬过去了**」→ **不能用 grep** —— 原句多行时 `grep -F` 按行 OR，**丢半段照样报命中**，
-必须用 python3 整串子串判断。三种结果：① 目标已有完整内容 → 写指针；② 目标没有 / 不确定是否完整 → 先把原文 verbatim cut 到目标（回 Step 3），再写指针；③ **绝不写「指向一个其实没有该内容的文件」的假指针**。假指针比丢内容更隐蔽——它让 5a「文件存在」通过、却在读者点进去时才发现是空的。Why：5a/5b 是**事后**验证，假指针那一刻已写进文件；事中 gate 才能在源头拦住。（实战：写「详见 anti-patterns」但那里 0 命中 Stripe 端点 → 案例 15。）
-
-### Step 5: 验证（三项全部通过才算完成）
-
-#### 5.0 先标定判据本身 —— 验证器会骗你，而且两个方向都会
-
-下面 5a/5b 全建立在 `grep`/`find` 上。**一个错的判据会和对的判据一样自信地报告结果**，
-而这一步的产物（「这段已经下沉了」「这个指针是真的」）会被当成事实写进交付。
-所以：**先在一个你已知答案的样本上跑一遍判据，确认它真的会命中，再用它去查你不知道答案的。**
-这一行成本，把「我查过了」变成「我用标定过的判据查过了」。
-
-实测踩过的形态如下。**注意它们的坏法不一样**——多数是静默假阴性（0 命中被读成「内容丢了」），
-但有一条给**假阳性**（为有损搬运开脱，最危险），还有一条是**响亮报错**（exit 2，在 `2>/dev/null` 的
-脚本里同样被吞成「没找到」）。所以标定时**别只看有没有输出，要看 exit code**：
-
-| 陷阱 | 症状 | 修法 |
+| Carrier | Put here | Do not put here |
 |---|---|---|
-| **递归搜索悄悄跳过 symlink** | reference 目录里只要有一个 symlink（**skill 安装、SSOT 外置极常见**），整片内容对验证器不可见 → 把「已下沉」误报成「未下沉」 | **别去挑递归 flag —— 先把路径解析成真身再读**：`readlink -f <path>` 拿到真实文件，或 `find -L <dir> -type f -name '*.md'` 枚举后逐个读（两种都不依赖任何实现，实测三种 grep + BSD/GNU find 行为一致）。⚠️ **递归 flag 的 symlink 语义因实现而异，且没有可移植组合**——挑哪个都会坑掉一部分读者；三实现实测矩阵见案例 17 ①，此处不复述数值（会漂） |
-| **代理判据**（拿 A 的存在证明 B 已完成） | 用「日期锚点是否出现在 reference」判是否已下沉 —— 而 reference 的**节标题里带个日期**就让整段显示为「已下沉」，实际那节里一条子发现都没有 | 判据必须落在**被判对象本身**上：抽该段的 3–5 个**特异串**（具体值/命令/专名）逐个查 |
-| **行级度量高估工作量** | 「含该锚点的整行」包含大量**不需搬**的规则正文，量到的是「含有它的行的总长」而非内容本身 | 按**段落**量，不按含关键词的行的字节数 |
-| **`grep -F` 对多行原句退化成「按行 OR」**（唯一会给**假阳性**的一条，最危险） | 验 verbatim 搬运时，原句是多行的：`grep -F` 把它当成**多个独立 pattern**，命中任意一行就报成功。**搬运时丢了半个段落，判据照样报「还在」** —— 它为一次有损搬运出具了无罪证明，而这正是 5b 存在的理由 | 存原句到临时文件用 `python3 - <<'PY'` 做**整串子串判断**（`需要的原文 in 目标文件内容`）—— 它要求连续完整匹配，丢一行就 False。**必须 `python3`**：裸 `python` 在 stock macOS（12.3 起）已被移除。⚠️ 精简 Linux 镜像（如 `debian:*-slim`）**两个都没有**，实测 `python3` 也 ABSENT —— 那种环境下先装再用，别以为换成 `python3` 就一定跑得起来 |
-| **探针串含正则元字符**（**三种**坏法，且同一字符换个位置就换一种） | 实测（BSD 2.6.0 / GNU 3.11）：① 中段 `*`（`use * wildcard`）→ 两边都 **静默** exit 1，长得就像「内容丢了」；② **开头的 `**`（markdown 粗体 —— CLAUDE.md 里最常见的探针形状）→ BSD **响亮报错** exit 2 `repetition-operator operand invalid`，而 GNU **exit 0 命中** —— 同一个串，一边硬错一边成功；③ 方括号日期 `[2026-07-26]` → 两边都 exit 2（BSD `invalid character range` / GNU `Invalid range end`）。**报错在 `2>/dev/null` 的脚本里和「没找到」长得一模一样。** | 一律 `grep -F`（固定串），或走上面的 python3 子串判断。**脚本里别把 stderr 丢掉** —— exit 2（判据坏了）和 exit 1（真没命中）必须分开处理 |
-
-**⚠️ 别把「重新折行」算进上面第 4 行**：搬运时重新折行**本身就违反反模式 6「原样复制，不改一字」**，
-判据判它失败是**对的**，不是误伤。python3 子串判断在这种情况下同样返回 False（实测）——
-它不是用来给折行开脱的，**没有任何判据该给折行开脱**。
-
-**完整战例（判据陷阱如何连环误导同一个执行者）→ `references/progressive_disclosure_principles.md` 案例 17**
-（该案例覆盖上表前三行；第 4、5 行来自同期对判据本身的实测，无独立战例）。
-
-**判据陷阱有第二层，比第一层更隐蔽**：不只**判据**会骗你，**修法**也会。
-一个依赖具体实现的修法（换个 flag、加个选项）在你机器上验证通过，换台机器静默失效 ——
-而你不会收到任何信号。**优先选不依赖实现的做法**（解析路径而非调递归 flag、
-子串判断而非行级匹配）；实在要用 flag，就在**标准实现**（`/usr/bin/<tool>`）上复验一次。
-
-> **这一条是在写它的过程中自己撞出来的**，所以它不是理论。为修上表第一行的 symlink 问题，
-> 作者写了一段 `find -L` 的替代脚本 —— **在 bash 下完全正确，在 zsh 下把 4 个真实存在的
-> 章节全报「NOT FOUND」**。原因是 `for d in $REFDIRS` 依赖词分割：bash 有，**zsh 没有**，
-> 而 zsh 是现代 macOS 的默认登录 shell。改成数组 `"${ARR[@]}"` 后两个 shell 输出一致。
-> **教训**：「修法也会骗你」不只跨 *工具实现*（BSD/GNU），还跨 ***shell***、跨 locale、跨版本。
-> 所以定案标准不是「我跑通了」，是「**我在读者最可能用的那个环境里跑通了**」——
-> 对 macOS 读者，那至少意味着 bash 和 zsh 各跑一遍。
-
-**元规则**：本节几条的共同点不是「grep 用法要小心」，而是
-**判据与被判对象之间只要隔了一层代理，缝隙里就能穿过去东西**。
-写任何一条验证命令时问一句：*它测的到底是不是我想知道的那件事？*
-
-#### 5a. 引用文件存在性
-
-```bash
-# 抓出正文里所有反引号包起来的 .md 路径（不写死 docs/references/——用户级布局是
-# ~/.claude/references/，写死会一条都抓不到）
-# 尾巴不能省，但**也不能写成 `|| true`**：
-#   · 为什么需要：一条指针都没有时 grep exit 1。在 **`set -e` 与 `pipefail` 同时开**时
-#     （单开任一个都不会）整条管道致命，整块在打印任何东西之前就死 —— 而「0 条」
-#     正是下面要报的那种情况。实测：`set -o pipefail` 单开跑完、`set -e` 单开跑完、
-#     `set -eo pipefail` 输出为空 exit 1。
-#   · 为什么不能用 `|| true`：它把 grep 的 **exit 2（判据坏了，如 cwd 里根本没有 CLAUDE.md）**
-#     和 **exit 1（真的 0 命中）** 一起吞掉，于是误报「抓到 0 条 + 🚨 模式没命中」还 exit 0 ——
-#     正好违反本文件 5.0 表第 5 行「exit 2 和 exit 1 必须分开处理」。
-#   · `|| [ $? -eq 1 ]` 只放行 exit 1；exit 2 仍然响亮致死（两 shell 实测）。
-grep -oh '`[^`]*\.md`' CLAUDE.md | tr -d '`' | sort -u > /tmp/pointers.txt || [ $? -eq 1 ]
-
-# ⚠️ 先标定：抓到 0 条 ≠ 全部通过，而是「这个模式没匹配上你的写法」
-n=$(wc -l < /tmp/pointers.txt | tr -d ' ')     # BSD wc 会补空格，去掉
-echo "抓到 $n 条指针"
-# 用 if 而不是 `[ … ] && echo`：后者在 n>0 时整行 rc=1。
-# ⚠️ 别把这说成「会中断 set -e 脚本」——实测 bash/zsh 都**不会**（POSIX 豁免 AND 列表
-# 非末位的失败）。真正会出事的是它**作为最后一行**时把 rc=1 泄漏成整个脚本的退出码。
-# 用 if 是 rc 中性的卫生做法，不是在修一个「中断」bug。
-if [ "$n" -eq 0 ]; then
-  echo "🚨 0 条 = 模式没命中，不是没问题——先手工确认正文到底怎么写引用的"
-fi
-
-while read -r f; do
-  # ⚠️ 分「可判定 / 不可判定」，别把散文里的东西一律报成断链（见下方真实语料实测）
-  case "$f" in
-    *\**|*\?*)   echo "– 跳过(glob):      $f"; continue ;;
-    *\<*|*\>*)   echo "– 跳过(模板占位):  $f"; continue ;;
-    *" "*)       echo "– 跳过(含空格,散文): $f"; continue ;;
-    */*)         ;;
-    *)           echo "– 跳过(裸文件名,无根): $f"; continue ;;
-  esac
-  case "$f" in
-    /*|\~/*|./*) p="${f/#\~/$HOME}" ;;   # 绝对 / 家目录 / 显式相对 → 可判定
-    *)  # 相对路径：首段在 cwd 里存在才可判定。**这条不能省** ——
-        # Step 3 规定的命名就是 `docs/references/{主题}-sop.md`（无 ./ 前缀），
-        # 一律当「未知根」跳过 = 5a 对本 skill 自己规定的布局一条都不检
-        first="${f%%/*}"
-        if [ -d "$first" ]; then p="$f"
-        else echo "– 跳过(相对未知根): $f"; continue; fi ;;
-  esac
-  [ -e "$p" ] && echo "✓ $f" || echo "✗ MISSING: $f"
-done < /tmp/pointers.txt
-```
-
-> **为什么要那段标定**：原版把 `docs/references/` 写死在模式里。在本 skill 自己定义的
-> 用户级布局（`~/.claude/references/`）上跑，它匹配 0 条 → while 循环一次都不进 →
-> **零输出、exit 0**，和「所有引用都存在」的输出**完全一样**。实测：一份含真断链的
-> CLAUDE.md 被它判为干净。这正是 5.0 那条「`0 命中` 必须双向读」，而 5a 自己没做。
->
-> **为什么要分「可判定 / 不可判定」**：这段的第一版**只在合成 fixture 上验过**、全绿。
-> 拿**真实语料**（一份 120KB 的全局 CLAUDE.md）一跑，32 条候选里 **10 条「MISSING」是误报** ——
-> 散文里提到的裸文件名（`incident-2026-04-18-*.md`）、glob（`*/memory/*.md`）、
-> 带占位符的模板（`<config>/…`），以及一对被反引号连在一起、中间有箭头的两个路径。
-> 按本 skill 自己的规矩：**误杀健康输入比漏报更糟** —— 31% 的误报率会直接训练读者忽略这个检查。
-> 分类后：可判定 21 条全部正确，不可判定 11 条单独列出待人工确认，**误报 0**。
-> 而那一轮**真的抓到 1 条断链**（指向的 memory 文件被挪进了 `.memory-archive-*` dot 目录，
-> 且路径大小写也变了）—— 合成 fixture 永远造不出这种形状。
->
-> 本段命令已在 **bash 与 zsh 下各跑一遍、输出字节一致**。
-> **为什么要跨 shell 验**：见附录 C 里那个「字符串 + 词分割」的坑 —— 同一段脚本
-> bash 全对、zsh 全错，而 zsh 是现代 macOS 的默认 shell。
-
-#### 5b. 内容完整性（最关键）
-
-对每个从原始 CLAUDE.md 移走的章节，逐一检查：
-
-1. **取到「改动前」的原始文件**当对照物。**首选 Step 1 那份备份**——
-   `CLAUDE.md.bak.<时间戳>` 建于一切编辑之前、之后再没被写过，
-   天然满足推论②「对照物必须在你的写入范围之外」，**且不依赖任何 git**：
-
-   ```bash
-   ORIG=$(command ls -1t CLAUDE.md.bak.* 2>/dev/null | tail -1)   # 最早那份 = 动手前
-   echo "对照物：$ORIG"
-   ```
-
-   ⚠️ **别默认目标在 git 里。** 最常见的优化对象是全局 `~/.claude/CLAUDE.md`，
-   而 `~/.claude` **通常根本不是 git 仓库**（`fatal: not a git repository`）——
-   本 skill 两个新战例都出自这个场景。备份法在这里是**唯一**可行的，git 法直接死在第一步。
-
-   目标确实在 git 仓里时，git 法可作交叉验证，但有两个坑：
-   - **别用 `HEAD`**：中途 commit 过的话 HEAD 已在你的写入范围内，等于自己给自己作证。
-     先 `git log --oneline -- <文件>` 找到本次工作**之前**的那个 ref。
-   - **`git show <ref>:CLAUDE.md` 从仓根解析，不是从当前目录**。在 monorepo 里优化
-     `packages/x/CLAUDE.md`，它会静默返回**仓根那份**（exit 0、无任何警告），
-     你之后每一条 5b 判定都是噪音。要当前目录那份必须写 **`<ref>:./CLAUDE.md`**（实测有别）。
-2. **逐节对比**：对原始文件的每个 `##` 章节，确认其内容在以下位置之一完整存在：
-   - 新 CLAUDE.md 中（保留在 Level 1）
-   - 某个 Level 2 reference 文件中（完整移动）
-
-   **📖 快速暴露整章遗漏的辅助脚本见 `references/progressive_disclosure_principles.md` 附录 C**：触发场景——做下面逐节对比前的第一道筛查（脚本不替代人工逐节对比，只查章节标题是否存在）。
-
-3. **标记所有差异**：
-   - 如果某段内容在新文件中被缩短 → **必须补回被删减的部分**
-   - 如果某段内容在两个位置都不存在 → **必须补回**
-   - 唯一允许删除的情况：**该信息已有独立的 canonical source**（如 `docs/README.md` 已是文档索引的 canonical source），且在 Level 1 中有明确的指向
-
-**禁止将"故意删除"作为分类来掩盖信息丢失。** 每一项"故意删除"都必须说明 canonical source 在哪里。如果说不出来，就不是"故意删除"，而是"遗漏"。
-
-**压缩重述的保真审计（L1 留了压缩版时必查）**：压缩最容易丢的不是整段——是**限定词**。实战（案例 19）：原句「public + 0 stars/forks 且用户明确授权」被压成「0 stars 且明确授权」，6 个字符消失，一道闸门的条件字面上放宽了一半；同场审计还抓到「自称只省略战例、实际连 4 条可执行判据也省了」的申报口径不符。两个审计动作：① 对每条压缩重述，把**操作性子句**（条件 / 数值 / 枚举 / hook 名 / 否定词）与原句逐词 diff——整段丢失 5b 能抓，一个 "/forks" 只有子句级 diff 能抓；② 全文跑 expected-hunks-only 检查——difflib 比对基线，每个非 equal hunk 必须指认到一条已声明的改动，指认不了的就是计划外差异。
-
-**一次有界的独立 agent 5b 是默认动作，不是审阅列车**：执行者自审有「乐观偏差」——倾向相信自己砍掉的内容都有归属。冻结最终候选后，启动**恰好一个 fresh-context 普通 subagent，禁 fork、禁再派 agent**，做完整逐节 5b（读不可变原始基线 + 最终文件 + 所有 reference，逐个信息点验证归属，只返回「真丢失 / 指针失准」清单）。prompt 模板 + 批量内容点 grep 脚本见 `references/progressive_disclosure_principles.md` 附录 D。
-
-**为什么保留这一次独立审阅**：本 skill 的真实使用中，执行者抽查 5 点「自我感觉良好」，独立 agent 逐节查 55 点才暴露真问题；另一次重写中，完整保真规则已在眼前，执行者仍删掉一条仅存约束。独立视角有价值，但 reviewer 数量不是质量代理指标：默认只有这一轮，不因「修过 reviewer finding」自动再派下一轮。
-
-**审阅后的收敛规则**：逐条复现 finding 后修复，并用 whole-string/expected-hunks/指针存在性等机械检查验证最终字节；这比再找一个模型看一遍更有判别力。只有第一位 reviewer 发现了**高风险语义丢失**、其修复又无法被独立机械判据证伪，或用户明确要求时，才允许新增一轮 fresh reviewer。把「为什么无需第二轮」写进**审阅记录**：一个 `independent-review.md`，含**审阅者 prompt 原文**、**每条 finding 及其处置与理由**、机械复验结果，以及**查不了的东西**。
-   **放哪**（别让读者自己发明路径）：放**你自己的、纳入版本控制的私人知识仓**，路径 `skill-reviews/<被优化对象>/independent-review.md`。三条禁区：**别放进被优化的那个项目仓**（记录里必然带私有路径 / 真名 / 项目细节，而那个仓可能是公开的或将来会公开）；**别放 `/tmp` 或任何会被清掉的暂存目录**（这是跨 session 的证据，必须活过重启）；**优化 `~/.claude/CLAUDE.md` 时尤其注意 `~/.claude` 通常不是 git 仓**，记录放进去等于没版本控制。不知道自己的私人知识仓是哪个 → **问用户，别猜**。② **对照物必须在你的写入范围之外**：拿一份你自己刚改过的 reference 去证明「内容还在」，等于自己给自己作证。优先用早于本次工作的 git ref。
-
-#### 5c. 行数不进验证标准
-
-验证**不以行数为通过条件**，不计算"原始 X 行 vs 新 Y 行 = 减少 Z%"——这种对账会把你拉回 KPI 思维。
-
-验证标准只有三条：
-- 每段信息都有归属（Level 1 或 Level 2 或 canonical source）
-- 没有信号丢失（反信号经确认删除不算丢失）
-- Level 2 引用都有触发条件
-
-（注：诊断阶段可以看行数当怀疑信号，见开头「铁律」；但**验证阶段**行数不是任何标准——这两个阶段对行数的态度不同，别混。）
-
----
-
-## Level 1 内容分类
-
-### 🔴 绝对不能移走
-
-| 内容类型 | 原因 |
-|---------|------|
-| **核心命令** | 高频使用 |
-| **铁律/禁令** | 违反后果严重，必须始终可见 |
-| **代码模式** | LLM 需要直接复制，避免重新推导 |
-| **错误诊断** | 完整的症状→原因→修复流程 |
-| **目录映射** | 帮助 LLM 快速定位文件 |
-| **触发索引表** | 帮助 LLM 在长对话中定位 Level 2 |
-
-### 🟡 保留摘要 + 触发条件
-
-| 内容类型 | Level 1 | Level 2 |
-|---------|---------|---------|
-| SOP 流程 | 触发条件 + 关键陷阱 | 完整步骤 |
-| 配置示例 | 最常用的 1-2 个 | 完整配置 |
-| API 文档 | 常用方法签名 | 完整参数说明 |
-
-### 🟢 可以完全移走
-
-| 内容类型 | 原因 |
-|---------|------|
-| 历史决策记录 | 低频访问 |
-| 性能数据 | 参考性质 |
-| 技术债务清单 | 按需查看 |
-| 边缘情况 | 有明确触发条件时再加载 |
-
----
-
-## 引用格式（四种）
-
-四种引用格式各服务不同场景；规范的"触发条件"写法见下方 `原则 2`（已含可复制示例）。
-
-| 格式 | 用途 | 触发场景 |
-|---|---|---|
-| 详细格式 | 正文中的重要引用 | 单条 reference 需展开说明何时读 |
-| 问题触发表格 | 开头/末尾 Reference 索引 | 按"错误/问题"查 |
-| 任务触发表格 | 「修改代码前必读」 | 按"要改什么"查 |
-| 内联格式 | 简短引用 | 正文一句话带过 |
-
-**📖 四种格式的完整可复制模板见 `references/progressive_disclosure_principles.md` 附录 B**：触发场景——产出 Reference 索引 / 任务表 / 内联 / 详细引用时。
-
-**多样性原则**：不要所有引用都用同一格式。
-
-### ⚠️ @import 不省上下文（技术正确性，最易踩）
-
-`@path` import 在**启动时全量展开载入**——拆成 `@import` 只改善组织，**不减少任何上下文**（官方 *memory* 文档原文）。"我把内容拆进 `@import` 了所以优化了"是假优化。
-
-全局 `~/.claude/CLAUDE.md` 真正能省上下文的杠杆只有三条：
-
-1. 把非通用内容**移到项目级 CLAUDE.md**（全局文件会被无关项目加载）
-2. 留**纯文字指针**（"需要时 Read `references/xxx.md`"，**不是 `@`**），让模型按需拉
-3. 转 **skill**（描述常驻、正文按需）
-
-本 skill 产出的引用一律用反引号路径，**禁止用 `@import` 做卸载**。详见 `references/progressive_disclosure_principles.md` 案例 11。
-
----
-
-## 核心原则
-
-### 原则 0：添加「信息记录原则」（防止未来膨胀）
-
-**问题**：优化完成后，用户会继续要求 Claude "记录这个信息到 CLAUDE.md"，如果没有规则指导，CLAUDE.md 会再次膨胀。
-
-**解决**：在目标 CLAUDE.md 开头（项目概述之后）注入一段「信息记录原则」——规定 Level 1 只记核心命令 / 铁律 / 代码模式 / 触发索引，Level 2 记详细 SOP / 边缘情况 / 历史决策，并定义"用户要求记录信息时"的高频→L1、低频→L2 判断流程（引用 L2 必带触发条件）。
-
-**📖 完整可注入模板见 `references/progressive_disclosure_principles.md` 附录 A**：触发场景——执行 Step 4 更新 Level 1 时；附录含可整块复制进目标 CLAUDE.md 的 markdown。
-
-**原因**：这条规则让 Claude 自己知道什么该记在哪里，实现"自我约束"，避免后续对话中 CLAUDE.md 再次膨胀。
-
-### 原则 1：触发索引表放开头和末尾
-
-**原因**：LLM 注意力呈 U 型分布——开头和末尾强，中间弱。
-
-| 位置 | 作用 |
-|------|------|
-| **开头** | 对话开始时建立全局认知："有哪些 Level 2 可用" |
-| **末尾** | 对话变长后复述提醒："现在应该读哪个 Level 2" |
-
-**📖 首/尾索引表完整写法示例见 `references/progressive_disclosure_principles.md` 案例 4**：触发场景——决定触发索引表放哪、按什么格式写时。
-
-### 原则 2：引用必须有触发条件
-
-**错误**：`详见 native-modules-sop.md`
-
-**正确**：
-```markdown
-**📖 何时读 `native-modules-sop.md`**：
-- 遇到 `ERR_DLOPEN_FAILED` 错误
-- 需要添加新的原生模块
-
-> 包含：ABI 机制、懒加载模式、手动修复命令
-```
-
-**原因**：没有触发条件，LLM 不知道什么时候该去读。
-
-### 原则 3：代码模式必须保留在 Level 1
-
-**错误**：把代码示例移到 Level 2，Level 1 只写"使用懒加载模式"。
-
-**正确**：Level 1 保留完整的可复制代码：
-```javascript
-// ✅ 正确：懒加载，只在需要时加载
-let _Database = null;
-function getDatabase() {
-  if (!_Database) {
-    _Database = require("better-sqlite3");
-  }
-  return _Database;
-}
-```
-
-**原因**：LLM 需要直接复制代码，移走后每次都要重新推导或读取 Level 2。
-
-### 原则 4：用三态优先级，不要"全标铁律"
-
-**问题**：把每条规则都标"铁律 / HIGHEST / 全局" = 没有优先级。模型无法 triage，注意力被摊薄，最关键的不可逆规则反而被淹没。指令遵循存在约 150–200 条的上限，远超即整体衰减。
-
-**第二个机制，比注意力稀释更隐蔽：指令互相干扰。** 一个上下文里堆着 20 个工作流的指令时，
-它们会彼此冲突（"输出一律 JSON" 撞上一个面向客户、JSON 完全不对的流程）。
-**模型不会报错，它只是悄悄做出更差的决定。** 所以「多写一条总没坏处」是错的 ——
-每多一条都在提高与既有指令冲突的概率，而这种劣化**没有任何报错信号**，
-你只会看到「它最近好像笨了点」。这也是为什么分层不只是省 token：
-把当前任务用不上的指令挪出上下文，本身就在减少干扰源。
-
-**诊断信号**：同一份文件里出现两条在某个场景下会给出相反建议的规则，
-而没有一条说明「哪种情况听哪条」—— 那不是两条规则，是一个待解决的冲突。
-
-> **出处**：这一现象在文献里有名字 —— **context pollution**（冗余 / 冲突信息扭曲推理）
-> 与 **context confusion**（模型无法区分指令、数据与结构标记，尤其在系统指令**自相矛盾**时）。
-> 与 Anthropic「有限注意力预算 → 找最小高信号 token 集」是同一个根因的两面
-> （见 `references/progressive_disclosure_principles.md` §研究背书）。
-
-**解决**（GitHub 2500 仓库实证最有效的结构）：输出 Level 1 规则时用三态，而不是一律"铁律"：
-
-| 标记 | 含义 | 例 |
-|------|------|----|
-| ✅ | 总是这样做 | ✅ 提交前跑测试套件 |
-| ⚠️ | 先停下问 / 谨慎 | ⚠️ 改 schema 前先确认迁移脚本 |
-| 🚫 | 绝不 | 🚫 绝不提交 secret |
-
-**位置即优先级**（Lost-in-the-Middle，TACL 2024）：LLM 注意力 U 型分布，最高危的不可逆规则放文件**首或尾**，不要埋中间。真正"违反即不可逆伤害"的应是少数（5–7 条），其余降为普通规则——稀缺才有信号。
-
-### 原则 5：每条保留规则带一行 Why
-
-**问题**：不带原因的规则，一旦场景变化就被忽略（Builder.io 实证）。带 Why 的规则能跨场景泛化。
-
-**解决**：Level 1 保留的每条铁律 / 禁令，跟一行 `Why:`，说明违反会发生什么具体坏事。
-
-**错误**：`🚫 禁止 fallback 默认值`
-
-**正确**：`🚫 禁止 fallback 默认值。Why：一个 || 'sk-xxx' 兜底在 .env 缺失时静默回退明文 key，曾在 48h 内被公开仓库扫描器用掉额度。`
-
-> ⚠️ 重述规则时的硬边界：若原句嵌在 case study 混合段落里，原则 4/5 不得直接改写原句——见反模式 6（先整段 verbatim 移 L2，案例 14）。
-
----
-
-## 反模式警告
-
-### ⚠️ 反模式 1：以行数为目标的过度精简
-
-**案例**：为了"减少行数"，移走了代码模式、诊断流程、目录映射
-
-**结果**：
-- 丢失代码模式，LLM 每次重新推导
-- 丢失诊断流程，遇错不知查哪
-- 丢失目录映射，找文件效率低
-
-**正确**：保留所有高频使用的内容。优化的判断标准是信息是否重复维护、是否与当前任务无关，而不是"文件太长"。
-
-### ⚠️ 反模式 2：无触发条件的引用
-
-**案例**：`详见 xxx.md`
-
-**问题**：LLM 不知道何时加载，要么忽略，要么每次都读。
-
-**正确**：触发条件 + 内容摘要。
-
-### ⚠️ 反模式 3：移走代码模式
-
-**案例**：把常用代码示例移到 Level 2
-
-**问题**：LLM 每次写代码都要先读 Level 2，增加延迟和 token 消耗。
-
-**正确**：高频使用的代码模式保留在 Level 1。
-
-### ⚠️ 反模式 4：删除而非移动
-
-**案例**：删除"不重要"的章节
-
-**问题**：信息丢失，未来需要时无处可查。
-
-**正确**：移到 Level 2，保留触发条件。
-
-### ⚠️ 反模式 5：用行数当 KPI
-
-**案例**：优化方案写"从 2000 行精简到 500 行，减少 75%"
-
-**问题**：把行数当成功指标，会驱动错误决策——为了凑数字而砍掉有用的信息。
-
-**正确**：用信息质量评估优化效果——信息是否有重复？维护负担是否降低？LLM 是否能更快找到需要的信息？
-
-### ⚠️ 反模式 6：移动时压缩（变相删除）
-
-**规则**：移动是移动，精简是精简。这是两个独立操作，**不要同时执行**。
-
-- 移动内容到 Level 2 时，必须**原样复制，不改一字**
-- 如果发现冗余需要精简：作为**单独的后续步骤**，逐项列出要删除的内容及理由，征求用户确认
-- "既然都在改了，顺便精简一下"是最隐蔽的删除——它披着"优化"的外衣，做着"删除"的事
-- **混合段落（规则句 + case study/叙事）的硬边界**：原则 4/5、反模式 8 想把规则重述成 ✅/🚫+Why，但混合段落与本反模式冲突——**整段必须先 verbatim 移 L2**（规则句原句一字不改）；L1 的重述是**派生副本，与 L2 原句共存、不取代**。判据：优化后原规则句的**逐字节文本**仍完整存在于 L2 verbatim 块。
-  ⚠️ **这条判据别用 grep 验**（Step 5.0 表第 4 行实测）：原句多行时 `grep -F` 把它拆成多个 pattern 按行 OR，
-  **丢了半段照样报命中** —— 它会为一次有损搬运出具无罪证明。用整串子串判断：
-  把原句存进临时文件，`python3 -c "print(open('orig').read() in open('target').read())"`，要求连续完整匹配。
-  原则 4/5 管 L1 *如何呈现*，不授权销毁信号原句
-
-> 完整案例分析见 `references/progressive_disclosure_principles.md` 案例 8、案例 14
-
-### ⚠️ 反模式 7：用"故意删除"掩盖信息丢失
-
-**规则**：任何"删除"都必须是**事前决策**（征求用户确认），不是**事后分类**（发现少了再编理由）。
-
-- 对每项计划删除的内容，必须说明其 canonical source 在哪里
-- 如果无法指出 canonical source → 不是"故意删除"，是"信息丢失"，必须补回
-- 对丢失内容分类"严重性"（高/低风险）是在为自己的错误找台阶。正确的态度是：任何丢失都是 bug，fix it
-
-> 完整案例分析见 `references/progressive_disclosure_principles.md` 案例 9
-
-### ⚠️ 反模式 8：纯否定规则（不给替代）
-
-**案例**：`🚫 不要用 X` —— 没说改用什么。
-
-**问题**：纯否定会让 agent 瘫痪——它知道不能走这条路，但不知道该走哪条，于是要么卡住要么乱试（Shankar + GitHub 2500 仓库均实证）。
-
-**正确**：每条 `🚫` 必配一个 `✅ 改用 Y`。
-
-```
-🚫 不要用全局 mutable 单例存请求状态
-✅ 改用显式参数传递或 request-scoped context
-```
-
-优化时遇到孤立的禁令，补上正向替代再保留；补不出替代的禁令，说明规则本身没想清楚。
-
-> ⚠️ 但若禁令原句嵌在 case study 混合段落里，先按反模式 6 整段 verbatim 移 L2，再在 L1 派生重述——不可改写原句（案例 14）。
-
-### ⚠️ 反模式 9：假指针（指向不存在的内容）
-
-**案例**：移走一段内容后写「详见 `X.md`」，但 `X.md` 里根本没有这段——指针指向空。
-
-**问题**：比直接丢内容更隐蔽。`5a`「文件存在」会通过（`X.md` 确实存在），但内容不在那里；读者点进去才发现，且此时已无从知道原文是什么。本质是反模式 6（移动时压缩）+ 反模式 7（掩盖丢失）的组合：内容被砍 + 用一个看似合规的指针掩盖。
-
-**正确**：写指针前当场验证目标真有该内容（Step 4 硬 gate；**验「在不在」用 `grep -F` 抽特异串，验「整段完整」必须用 python3 子串判断——grep 会给假阳性，见 Step 5.0 表**）。指针指错文件（内容在 A、却写「详见 B」）是同类问题，按内容实际所在地修正、不是删指针。
-
-> 完整案例分析见 `references/progressive_disclosure_principles.md` 案例 15
-
----
-
-## 信息量检验
-
-### ✅ 正确的信息量
-
-| 检验项 | 通过标准 |
-|--------|---------|
-| 日常命令 | 不需要读 Level 2 |
-| 常见错误 | 有完整诊断流程 |
-| 代码编写 | 有可复制的模式 |
-| 特定问题 | 知道读哪个 Level 2 |
-| 触发索引 | 在文档末尾，表格形式 |
-
-### ❌ 不足的信号
-
-- LLM 反复问同样的问题
-- LLM 每次重新推导代码模式
-- 用户需要反复提醒规则
-
-### ❌ 过多的信号
-
-- 大段低频详细流程在 Level 1
-- **完全相同的内容**在多处（注意：多入口指向同一资源 ≠ 重复）
-- 边缘情况和常见情况混在一起
-
----
-
-## 项目级 vs 用户级
-
-| 维度 | 用户级 | 项目级 |
-|------|--------|--------|
-| 位置 | `~/.claude/CLAUDE.md` | `项目/CLAUDE.md` |
-| References | `~/.claude/references/` | `docs/references/` |
-| 信息范围 | 个人偏好、全局规则 | 项目架构、团队规范 |
-
-### 硬检查：scope 错放（官方层级文档裁定）
-
-用户级 `~/.claude/CLAUDE.md` 会被**所有项目**加载，**只能放普遍适用**的东西。优化时对每节做 scope 检查：
-
-| 内容特征 | 归属 | 不这样做的后果 |
-|---|---|---|
-| 项目名 / 部署目标 / 逐项目路径 / 项目凭据 | **项目级**，绝不全局 | 无关项目被污染；没人按项目维护 → 路径/状态腐烂（典型 staleness） |
-| 个人偏好、跨项目行为规则 | 用户级 | — |
-| 团队规范、项目架构 | 项目级（入 VCS） | — |
-
-工作流加一条：**Step 2.1 分诊时，项目特定内容在用户级文件 = 自动判"搬到项目级"**，不是搬 Level 2、更不是原地修路径。详见 `references/progressive_disclosure_principles.md` 案例 13。
-
----
-
-## 金丝雀检测法（可选，长期维护）
-
-> 来源：HN 社区单源（"Mr Tinkleberry"），方法论成立、成本极低，作诊断不作保证。
-
-优化后想知道 CLAUDE.md 哪天又膨胀到"规则开始被忽略"——在文件里植入一条**无害的命名指令**（如"提到临时变量时命名为 `tinkle_tmp`"）。日常对话中观察：Claude 还遵守 = 文件仍在遵守度阈值内；Claude 开始无视这条 = 文件已越过阈值，该重新分诊。比凭感觉判断"是不是太长了"廉价且客观。
-
----
-
-## 快速检查清单
-
-优化完成后，**必须逐项检查**（不可跳过）：
-
-### 信息完整性（最重要）
-- [ ] **原始文件的每个章节都有归属**——在新 Level 1、Level 2、或有明确 canonical source
-- [ ] **Level 2 文件内容与原始内容完全一致**——没有在移动过程中被"精简"
-- [ ] **没有信号被静默删除**——每项删除是反信号且有用户确认/canonical source（反信号删除正当，见 Step 2.1）
-- [ ] **没有把行数当成果/KPI/移动理由/汇报指标**（诊断性观察不在此限，见「铁律」）
-- [ ] **每条「→ reference」指针都验证过目标真有该内容**，且**用对了工具**：验「在不在」= `grep -F` 抽特异串；验「整段完整搬到」= python3 整串子串判断（grep 对多行原句会给假阳性）（无假指针 / 指针失准，Step 4 硬 gate；反模式 9；Step 5.0 表）
-- [ ] **跑了恰好一位有界的独立 agent 5b 审计**（fresh context、禁 fork、禁嵌套派发；Step 5b）
-- [ ] **审阅后的改动已机械复验**；只有高风险语义修复无法机械证伪或用户明确要求时才加第二轮（Step 5b）
-
-### 结构质量
-- [ ] 「信息记录原则」在文档开头（防止未来膨胀）
-- [ ] Reference 索引在文档开头（入口1：遇到问题查这里）
-- [ ] 核心命令表完整
-- [ ] 铁律/禁令有代码示例
-- [ ] 常见错误有完整诊断流程（症状→原因→修复）
-- [ ] 代码模式可直接复制
-- [ ] 目录映射（功能→文件）
-- [ ] 「修改代码前必读」表格（入口2：按"要改什么"索引）
-- [ ] Reference 触发索引在文档末尾（入口3：长对话后复述）
-- [ ] 每个 Level 2 引用都有触发条件
-- [ ] 引用的文件都存在
-- [ ] 信号分诊已执行：反信号有候选删除清单 + 用户确认（Step 2.1）
-- [ ] 每条铁律/禁令带一行 `Why:`（原则 5）
-- [ ] 优先级用 ✅/⚠️/🚫 三态，不是一律"铁律"（原则 4）
-- [ ] 每条 🚫 都配了 ✅ 替代（反模式 8）
-- [ ] 项目特定内容没有留在用户级文件（scope 硬检查）
-- [ ] 引用未使用 `@import` 做卸载（@import 不省上下文）
+| Root CLAUDE.md / AGENTS.md | Small set of cross-task conventions, decision boundaries, core commands, and a map to current sources | Detailed SOPs, war stories, volatile project state, every tool’s manual |
+| Nested AGENTS.md / CLAUDE.md or path rule | Rules whose scope follows a directory or file pattern | Global user preferences or Bash events unrelated to files |
+| Skill | A reusable workflow or body of knowledge with a recognizable intent | Generic mandatory preflight for every task |
+| Hook / permission | Deterministic event automation or a precisely detectable irreversible boundary | Open-ended semantic review, business judgment, or “make the agent think globally” |
+| Reference / product docs | Authoritative detail that a live route actually opens when needed | A retirement graveyard or an unverified pointer |
+| Code / config / schema | Facts the runtime can read directly | Duplicated values in prose |
+
+OpenAI’s current harness guidance treats a short `AGENTS.md` as a map rather than an encyclopedia.
+Claude Code likewise separates always-on `CLAUDE.md`, path-scoped rules, on-demand Skills, and
+deterministic hooks. These are defaults to test against the actual installation, not fixed byte or
+line quotas.
+
+### Routes must be operational
+
+A route is useful only when it names a recognizable trigger and a current source. Before writing a
+pointer:
+
+1. Verify the target exists now.
+2. Verify the target actually contains the promised rule or fact.
+3. Verify the host or Skill will load it before the decision it governs.
+4. Remove old pointers and duplicate active definitions.
+
+If a retired file has no live caller, delete it. Do not replace it with a marker saying it was
+retired. Changelog and Git history already preserve provenance.
+
+## 5. Edit with repository ownership intact
+
+- Inspect `git status -sb` in every owning repository and preserve unrelated work.
+- Prefer the tracked pre-edit revision as the baseline. For an untracked source that truly needs a
+  recovery copy, use a system temporary path and remove it after verification; do not leave backup
+  snapshots in an active instruction or reference tree.
+- Make explicit, scoped edits. Do not mechanically copy whole sections merely because deletion
+  feels risky.
+- When changing a mutable fact, find active duplicates before editing and converge them on one
+  authority.
+- When changing a Skill, update its trigger description and host metadata as part of the same
+  change. Manual-only governance Skills should not advertise themselves on ordinary tasks.
+- When changing a hook, inspect its matcher and real decision code, then add both a healthy control
+  and a triggering control.
+
+## 6. Validate behavior, not ceremony
+
+Run the smallest checks that can disprove the desired result.
+
+### Structural checks
+
+- YAML/JSON/TOML parses.
+- All live pointers resolve and contain the claimed content.
+- Retired names and duplicate definitions are absent from active discovery surfaces.
+- The actual host prompt shows the intended files and Skill descriptions, without unexpected
+  compatibility copies.
+- Hook matchers fire only for the intended event class.
+
+### Representative-task checks
+
+Exercise the tasks recorded in section 1. At minimum verify:
+
+1. A small ordinary task does not activate history retrieval, mandatory review, agent delegation,
+   or unrelated setup.
+2. An explicit prior-work request does activate the retrieval route.
+3. A real irreversible action still reaches its deterministic guardrail.
+4. A domain request loads the intended Skill and obtains volatile facts from the current business
+   source rather than resident prose.
+5. The originally reported drift case now takes the action that advances the business outcome.
+
+Use an independent reviewer only when the edited policy is high-risk or ambiguous and no mechanical
+or business-source oracle can decide it. A fixed reviewer requirement would recreate the process
+problem this Skill is meant to remove.
+
+## 7. Report the semantic delta
+
+The final handoff should state:
+
+- which behaviors changed for ordinary tasks;
+- which rules were kept, rewritten, routed, enforced, or retired, with the reason that matters;
+- which current authority now owns volatile facts;
+- which representative checks passed and what remains unverified;
+- any live business-policy choice still needing the user.
+
+Size measurements may be included as context-load diagnostics, never as proof that the agent will
+produce better business outcomes.
+
+## Current primary sources
+
+- OpenAI, “Harness engineering: leveraging Codex in an agent-first world”:
+  https://openai.com/index/harness-engineering/
+- OpenAI, “Unrolling the Codex agent loop”:
+  https://openai.com/index/unrolling-the-codex-agent-loop/
+- Claude Code, “Extend Claude Code”:
+  https://code.claude.com/docs/en/features-overview
+- Claude Code, “How Claude remembers your project”:
+  https://code.claude.com/docs/en/memory
+- Claude Code, “Extend Claude with skills”:
+  https://code.claude.com/docs/en/slash-commands
+- Claude Code, “Hooks reference”:
+  https://code.claude.com/docs/en/hooks
+
+Recheck these sources when host behavior or supported frontmatter changes; do not freeze their
+current details into permanent doctrine.

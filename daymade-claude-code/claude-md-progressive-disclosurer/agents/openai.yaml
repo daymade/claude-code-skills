@@ -1,0 +1,6 @@
+interface:
+  display_name: "Instruction Stack Auditor"
+  short_description: "Audit CLAUDE.md, AGENTS.md, Skills, and hooks"
+  default_prompt: "Use $claude-md-progressive-disclosurer to audit this instruction stack against current runtime behavior and representative tasks."
+policy:
+  allow_implicit_invocation: false
