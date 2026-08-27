@@ -30,7 +30,7 @@ ROOT_LABELS = tuple(path.as_posix() for path in ROOT_RELATIVE_PATHS)
 ROUTER_MARKER = "# Compatibility router — no business rules live here"
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ROOT_SKILL_REFERENCE_PATTERN = re.compile(
-    r"(?:\.claude|\.agents)/skills/[A-Za-z0-9._-]+/SKILL\.md"
+    r"`((?:\.claude|\.agents)/skills/[^`\r\n]+/SKILL\.md)`"
 )
 
 IGNORED_NAMES = {
@@ -307,6 +307,8 @@ def inspect_router(
         )
 
     expected_reference = expected_canonical.relative_skill_file(project_root)
+    if "`" in expected_reference:
+        return "invalid", "canonical Skill path contains a backtick and cannot form the router contract"
     references = set(ROOT_SKILL_REFERENCE_PATTERN.findall(text))
     if references != {expected_reference}:
         return (

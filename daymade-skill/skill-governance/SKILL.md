@@ -70,8 +70,9 @@ This is a read-only report. It does not modify anything.
    - **`canonical_router` (pass)** — one full canonical bundle plus a one-file
      router carrying the exact heading
      `# Compatibility router — no business rules live here`; the router must
-     point only to its paired canonical `SKILL.md`, tell the runtime to read it
-     completely, and fail visibly if it is unavailable.
+     point only to its paired canonical `SKILL.md` using a backtick-quoted
+     project-relative path, tell the runtime to read it completely, and fail
+     visibly if it is unavailable.
    - **`shared_target` (pass)** — both roots resolve to the same canonical
      `SKILL.md`, such as a symlink into the canonical bundle, and neither side
      carries extra bundle material outside that shared target.

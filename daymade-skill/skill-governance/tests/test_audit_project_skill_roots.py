@@ -131,6 +131,25 @@ class ProjectSkillRootsAuditTests(unittest.TestCase):
         self.assertEqual(finding["canonical"], ".claude/skills/alpha")
         self.assertEqual(finding["router"], ".agents/skills/alpha")
 
+    def test_router_paths_support_directory_names_independent_of_frontmatter_name(self):
+        self.write_skill(
+            ".claude/skills", "alpha source", "alpha", "# Canonical\n\nAll rules.\n"
+        )
+        router_bundle = self.project / ".agents/skills/alpha 路由"
+        router_bundle.mkdir(parents=True)
+        (router_bundle / "SKILL.md").write_text(
+            router_text("alpha", ".claude/skills/alpha source/SKILL.md"),
+            encoding="utf-8",
+        )
+
+        completed, payload = self.run_audit()
+
+        self.assertEqual(completed.returncode, 0)
+        finding = self.finding(payload, "alpha")
+        self.assertEqual(finding["status"], "canonical_router")
+        self.assertEqual(finding["canonical"], ".claude/skills/alpha source")
+        self.assertEqual(finding["router"], ".agents/skills/alpha 路由")
+
     def test_router_marker_with_extra_business_file_is_invalid(self):
         self.write_skill(".claude/skills", "alpha", "alpha")
         router_bundle = self.project / ".agents/skills/alpha"
