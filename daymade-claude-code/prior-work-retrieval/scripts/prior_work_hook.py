@@ -225,7 +225,10 @@ def _segment_is_retrieval_route(segment: str) -> bool:
         words = shlex.split(segment, posix=True)
     except ValueError:
         return False
-    if not words or any("$(" in word or "`" in word for word in words):
+    substitution_tokens = ("$(", "`", "<(", ">(", "=(")
+    if not words or any(
+        token in word for word in words for token in substitution_tokens
+    ):
         return False
 
     assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.*$", re.DOTALL)

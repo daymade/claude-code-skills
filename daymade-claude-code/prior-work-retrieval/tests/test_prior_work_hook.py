@@ -272,6 +272,16 @@ class PriorWorkHookTests(unittest.TestCase):
         substantial, reason = hook.substantial_tool_use(event)
         self.assertTrue(substantial, reason)
 
+    def test_process_substitution_cannot_hide_write_in_retrieval_args(self) -> None:
+        for command in (
+            "prior_work.py check < <(git push)",
+            "prior_work.py check =(git push)",
+        ):
+            with self.subTest(command=command):
+                event = {"tool_name": "Bash", "tool_input": {"command": command}}
+                substantial, reason = hook.substantial_tool_use(event)
+                self.assertTrue(substantial, reason)
+
     def test_write_signal_still_wins_outside_retrieval_args(self) -> None:
         cases = [
             # Magic words inside a git message must not launder a real write.
