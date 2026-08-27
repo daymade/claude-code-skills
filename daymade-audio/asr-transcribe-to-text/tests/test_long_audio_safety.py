@@ -1148,13 +1148,22 @@ class LongAudioSafetyTests(unittest.TestCase):
 
             fake_diarizer = types.ModuleType("diarize_speakers")
             fake_diarizer.load_pipeline = lambda device: (object(), device)
+            fake_diarizer.ffmpeg_contract = lambda _path: {
+                "path": "/fixture/ffmpeg",
+                "version": "fixture",
+                "sha256": "f" * 64,
+            }
 
-            def fake_pipeline(_pipeline, source, _device):
+            def fake_pipeline(_pipeline, source, _device, ffmpeg_path=None):
+                self.assertEqual(ffmpeg_path, "/fixture/ffmpeg")
                 self.assertEqual(Path(source).read_bytes(), b"SOURCE-A")
                 Path(source).write_bytes(b"SOURCE-B")
                 return [{"start": 0.0, "end": 1.0, "speaker": "SPEAKER_00"}]
 
-            def fake_write(segments, source, device, output):
+            def fake_write(
+                segments, source, device, output, decoder_contract=None
+            ):
+                self.assertEqual(decoder_contract["version"], "fixture")
                 Path(output).write_text(
                     json.dumps({"segments": segments}), encoding="utf-8"
                 )

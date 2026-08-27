@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.10"
-# dependencies = ["pyannote.audio", "torch", "torchaudio"]
+# requires-python = "==3.13.*"
+# dependencies = ["pyannote.audio==4.0.7", "torch==2.13.0", "torchaudio==2.11.0"]
 # ///
 """Multi-speaker transcription, DECOUPLED (WhisperX-style): session ASR +
 word-level timing + diarization, aligned after the fact. Audio is never cut at
@@ -689,10 +689,20 @@ def plain_text_path(args, timeout):
     run(cmd, timeout=timeout)
 
 
-def diarize_all(wavs, out_dir, device, force):
+def diarize_all(wavs, out_dir, device, force, ffmpeg_path=None):
     """Leg 3: pyannote pipeline loaded ONCE, run per file (cached — not a
     per-wav reload, which the old loop did and which cost 10-30s/file)."""
-    cache_parameters = {"device": device}
+    try:
+        from diarize_speakers import (
+            ffmpeg_contract,
+            load_pipeline,
+            run_pipeline,
+            write_diarization_json,
+        )
+    except Exception as e:
+        _hint_import_error(e)
+    decoder = ffmpeg_contract(ffmpeg_path)
+    cache_parameters = {"device": device, "decoder": decoder}
     pending = [
         (w, out_dir / f"{w.stem}.diarization.json")
         for w in wavs
@@ -706,15 +716,11 @@ def diarize_all(wavs, out_dir, device, force):
     ]
     if not pending:
         log("Leg 3 (diarization): all cached")
-        return
+        return decoder
     frozen_contracts = {
         w: _cache_contract(w, "diarize_speakers.py", cache_parameters)
         for w, _diar_json in pending
     }
-    try:
-        from diarize_speakers import load_pipeline, run_pipeline, write_diarization_json
-    except Exception as e:
-        _hint_import_error(e)
     try:
         pipeline, dev = load_pipeline(device)
     except Exception as e:
@@ -726,7 +732,9 @@ def diarize_all(wavs, out_dir, device, force):
     failed = []
     for wav, diar_json in pending:
         try:
-            segments = run_pipeline(pipeline, wav, dev)
+            segments = run_pipeline(
+                pipeline, wav, dev, ffmpeg_path=decoder["path"]
+            )
         except Exception as e:
             if _is_pyannote_access_error(e):
                 log(f"pyannote access error on {wav.name}: {e}")
@@ -745,10 +753,17 @@ def diarize_all(wavs, out_dir, device, force):
             )
             failed.append(wav.name)
             continue
-        write_diarization_json(segments, wav, dev, diar_json)
+        write_diarization_json(
+            segments,
+            wav,
+            dev,
+            diar_json,
+            decoder_contract=decoder,
+        )
         _write_artifact_provenance(diar_json, frozen_contract)
     if failed:
         raise RuntimeError(f"diarization produced no fresh artifact for: {failed}")
+    return decoder
 
 
 def _run_batched_leg(wavs, work_root, script, staging_name, staging_suffix,
@@ -875,7 +890,10 @@ def leg_align(
                 diar_json,
                 "diarization",
                 "diarize_speakers.py",
-                {"device": parameters.get("device")},
+                {
+                    "device": parameters.get("device"),
+                    "decoder": parameters.get("decoder"),
+                },
             ),
             (
                 wpath,
@@ -944,6 +962,11 @@ def main():
     ap.add_argument("inputs", nargs="+", type=Path, help="16kHz mono WAV(s)")
     ap.add_argument("out_dir", type=Path)
     ap.add_argument("--device", default=None, help="mps / cuda / cpu (default: auto)")
+    ap.add_argument(
+        "--ffmpeg-path",
+        default=None,
+        help="explicit FFmpeg executable (or set ASR_FFMPEG_PATH)",
+    )
     ap.add_argument("--max-gap", type=float, default=2.0, help="turn split gap (s)")
     ap.add_argument("--language", default="Chinese")
     ap.add_argument("--initial-prompt", default=None,
@@ -1001,7 +1024,13 @@ def main():
     # process instead of attributing its outputs to the new on-disk code.
     receipt_pipeline = _pipeline_contract()
 
-    diarize_all(args.inputs, args.out_dir, args.device, args.force)
+    decoder = diarize_all(
+        args.inputs,
+        args.out_dir,
+        args.device,
+        args.force,
+        args.ffmpeg_path,
+    )
     if args.text_file:
         log("Leg 1 skipped (--text-file)")
     else:
@@ -1011,6 +1040,7 @@ def main():
         "language": args.language,
         "initial_prompt": args.initial_prompt,
         "device": args.device,
+        "decoder": decoder,
         "max_gap": args.max_gap,
         "text_file": _external_text_identity(args.text_file),
     }
