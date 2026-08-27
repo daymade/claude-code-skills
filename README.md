@@ -3185,6 +3185,9 @@ The Skill first requires `read-codex-history` to prove selected identity, fork
 lineage, chronology, compacted context, and gaps; it then rebuilds the original
 business outcome, unfulfilled requests, user corrections, proven assets, and one
 direct next action before changing the project.
+It is for a new/different Agent context taking over an earlier rollout. When
+Codex itself natively resumes the same conversation and prior context is already
+present, continue directly instead of invoking this Skill.
 
 ```text
 /daymade-claude-code:continue-codex-work 019f66...
