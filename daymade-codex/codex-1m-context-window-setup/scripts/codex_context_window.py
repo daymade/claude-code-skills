@@ -193,9 +193,8 @@ def build_report(
         if value is not None and (isinstance(value, bool) or not isinstance(value, int)):
             raise SetupError(f"top-level {key} must be an integer when present")
 
-    supported = target_raw > default_raw
     configured = current_window == target_raw and current_compact == compact_limit
-    status = "unsupported" if not supported else "configured" if configured else "needs_apply"
+    status = "configured" if configured else "needs_apply"
     return {
         "status": status,
         "model": model_slug,
@@ -210,7 +209,7 @@ def build_report(
         "recommended_auto_compact_tokens": compact_limit,
         "compact_ratio_percent": 60,
         "capped_by_model": maximum_raw < TARGET_CONTEXT_CEILING,
-        "expands_catalog_default": supported,
+        "expands_catalog_default": target_raw > default_raw,
         "current_model_context_window": current_window,
         "current_model_auto_compact_token_limit": current_compact,
     }
@@ -327,10 +326,6 @@ def strict_config_check(codex_bin: str) -> None:
 
 def apply_configuration(inspection: Inspection) -> dict[str, Any]:
     report = dict(inspection.report)
-    if report["status"] == "unsupported":
-        raise SetupError(
-            f"model {report['model']} does not advertise an expandable context window"
-        )
     values = {
         "model_context_window": report["recommended_raw_tokens"],
         "model_auto_compact_token_limit": report["recommended_auto_compact_tokens"],
@@ -397,12 +392,17 @@ def print_human(report: dict[str, Any]) -> None:
     ordered = (
         "status",
         "model",
+        "catalog_default_raw_tokens",
         "catalog_default_usable_tokens",
         "catalog_max_raw_tokens",
+        "effective_context_window_percent",
+        "requested_ceiling_tokens",
         "recommended_raw_tokens",
         "recommended_usable_tokens",
         "recommended_auto_compact_tokens",
+        "compact_ratio_percent",
         "capped_by_model",
+        "expands_catalog_default",
         "current_model_context_window",
         "current_model_auto_compact_token_limit",
         "config_path",

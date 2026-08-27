@@ -111,6 +111,31 @@ class CodexContextWindowTests(unittest.TestCase):
         self.assertEqual(600_000, payload["recommended_auto_compact_tokens"])
         self.assertFalse(payload["capped_by_model"])
 
+    def test_model_with_1m_default_still_applies_compaction_policy(self) -> None:
+        doctor = self.run_script(
+            "doctor",
+            FAKE_SELECTED_MODEL="gpt-1m-default",
+            FAKE_CATALOG_MODEL="gpt-1m-default",
+            FAKE_CONTEXT="1000000",
+            FAKE_MAX="1000000",
+        )
+        self.assertEqual(0, doctor.returncode, doctor.stderr)
+        payload = self.payload(doctor)
+        self.assertEqual("needs_apply", payload["status"])
+        self.assertFalse(payload["expands_catalog_default"])
+
+        applied = self.run_script(
+            "apply",
+            FAKE_SELECTED_MODEL="gpt-1m-default",
+            FAKE_CATALOG_MODEL="gpt-1m-default",
+            FAKE_CONTEXT="1000000",
+            FAKE_MAX="1000000",
+        )
+        self.assertEqual(0, applied.returncode, applied.stderr)
+        written = (self.home / "config.toml").read_text(encoding="utf-8")
+        self.assertIn("model_context_window = 1000000", written)
+        self.assertIn("model_auto_compact_token_limit = 600000", written)
+
     def test_models_above_1m_are_capped_at_named_ceiling(self) -> None:
         result = self.run_script("doctor", FAKE_MAX="1050000")
         self.assertEqual(0, result.returncode, result.stderr)
@@ -118,6 +143,31 @@ class CodexContextWindowTests(unittest.TestCase):
         self.assertEqual(1_000_000, payload["recommended_raw_tokens"])
         self.assertEqual(600_000, payload["recommended_auto_compact_tokens"])
         self.assertFalse(payload["capped_by_model"])
+
+    def test_human_doctor_prints_every_promised_catalog_value(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "doctor",
+                "--codex-bin",
+                str(self.fake),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env={
+                **os.environ,
+                "CODEX_HOME": str(self.home),
+                "HOME": str(self.os_home),
+                "USERPROFILE": str(self.os_home),
+            },
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("catalog_default_raw_tokens: 272000", result.stdout)
+        self.assertIn("effective_context_window_percent: 95", result.stdout)
+        self.assertIn("requested_ceiling_tokens: 1000000", result.stdout)
 
     def test_apply_preserves_comments_tables_and_nested_same_named_key(self) -> None:
         config = self.home / "config.toml"
@@ -224,13 +274,16 @@ class CodexContextWindowTests(unittest.TestCase):
         self.assertEqual(0, verified.returncode, verified.stderr)
         self.assertEqual("configured", self.payload(verified)["status"])
 
-    def test_model_without_expansion_is_reported_and_not_applied(self) -> None:
+    def test_model_without_expansion_still_gets_truthful_base_policy(self) -> None:
         doctor = self.run_script("doctor", FAKE_MAX="272000")
         self.assertEqual(0, doctor.returncode)
-        self.assertEqual("unsupported", self.payload(doctor)["status"])
+        self.assertEqual("needs_apply", self.payload(doctor)["status"])
+        self.assertFalse(self.payload(doctor)["expands_catalog_default"])
         applied = self.run_script("apply", FAKE_MAX="272000")
-        self.assertEqual(2, applied.returncode)
-        self.assertFalse((self.home / "config.toml").exists())
+        self.assertEqual(0, applied.returncode, applied.stderr)
+        written = (self.home / "config.toml").read_text(encoding="utf-8")
+        self.assertIn("model_context_window = 272000", written)
+        self.assertIn("model_auto_compact_token_limit = 163200", written)
 
 
 if __name__ == "__main__":

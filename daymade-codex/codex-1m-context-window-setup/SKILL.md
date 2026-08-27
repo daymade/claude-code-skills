@@ -33,16 +33,33 @@ the script derives the attainable values.
 
 ## Run the workflow
 
-Resolve this Skill's directory, then execute its bundled script with `uv`:
+When this Skill loads, the host exposes its installed path. Resolve it explicitly:
+
+- In Codex, take the directory containing `SKILL.md` from this Skill's `file:`
+  entry in the current **Available skills** catalog.
+- In Claude Code, use the **Base directory for this skill** shown by the Skill
+  load result.
+
+Do not search a home directory for another copy. If the host did not expose an
+installed path, stop with `installed Skill path not exposed` rather than guessing.
+
+On macOS/Linux, set that exact directory and run:
 
 ```bash
-uv run --no-project python scripts/codex_context_window.py doctor
-uv run --no-project python scripts/codex_context_window.py apply
-uv run --no-project python scripts/codex_context_window.py verify
+SKILL_DIR="/absolute/path/from-the-loaded-skill-metadata"
+uv run --no-project python "$SKILL_DIR/scripts/codex_context_window.py" doctor
+uv run --no-project python "$SKILL_DIR/scripts/codex_context_window.py" apply
+uv run --no-project python "$SKILL_DIR/scripts/codex_context_window.py" verify
 ```
 
-On Windows, run the same commands in PowerShell. Use forward-slash paths when an
-absolute script path is required.
+On Windows PowerShell, use the same exposed directory with forward slashes:
+
+```powershell
+$SkillDir = "C:/absolute/path/from-the-loaded-skill-metadata"
+uv run --no-project python "$SkillDir/scripts/codex_context_window.py" doctor
+uv run --no-project python "$SkillDir/scripts/codex_context_window.py" apply
+uv run --no-project python "$SkillDir/scripts/codex_context_window.py" verify
+```
 
 ### `doctor`
 
