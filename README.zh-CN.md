@@ -3203,6 +3203,8 @@ main 在上次 review 后变了，重新告诉我现在真正会合进去什么
 `read-codex-history` 证明所选 rollout 身份、fork lineage、时间顺序、compaction
 与证据缺口，再恢复原始业务结果、尚未完成的要求、用户纠正、既有成功资产和
 一个直接推进目标的下一步。
+它只用于新会话/不同 Agent 接手旧 rollout。若 Codex 自己原生恢复的是同一个
+会话，且旧 turns 或 compaction 已在当前上下文中，就直接继续，不触发本 Skill。
 
 ```text
 /daymade-claude-code:continue-codex-work 019f66...
