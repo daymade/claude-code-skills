@@ -54,6 +54,7 @@ def identity():
         "language": "Chinese",
         "chunk_duration_s": 1200.0,
         "max_tokens_per_chunk": 8192,
+        "quality_policy": local_mlx.QUALITY_POLICY_ID,
     }
 
 
@@ -150,6 +151,35 @@ class LongAudioSafetyTests(unittest.TestCase):
             self.assertEqual(len(retry.calls), 1)
             self.assertEqual(retry.calls[0][0], "chunk-b")
             self.assertEqual(state["status"], "complete")
+
+    def test_repetition_loop_below_token_ceiling_is_rejected_before_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "result.txt"
+            checkpoint = root / "checkpoint"
+            loop_text = "谢谢大家收看欢迎继续关注" * 500
+            model = FakeModel([FakeResult(loop_text, 3000)])
+
+            with self.assertRaisesRegex(
+                local_mlx.TranscriptQualityError,
+                "repetition-loop quality gate",
+            ):
+                local_mlx.transcribe_chunks(
+                    model,
+                    [("chunk-a", 0.0)],
+                    output,
+                    checkpoint,
+                    identity(),
+                    8192,
+                    "Chinese",
+                    1200.0,
+                )
+
+            self.assertFalse(output.exists())
+            self.assertFalse((checkpoint / "chunk-0000.txt").exists())
+            state = json.loads((checkpoint / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(state["status"], "failed")
+            self.assertIn("repetition-loop quality gate", state["error"])
 
     def test_corrupt_completed_checkpoint_fails_instead_of_silent_reuse(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -86,6 +86,13 @@ restored mtime cannot reuse another recording's checkpoint. On a retry with the
 same input identity and parameters, completed chunk hashes are verified and
 skipped.
 
+Resource bounds are not treated as transcript quality. Before committing a
+chunk and again before publishing the joined transcript, the script measures
+the ratio of unique 12-character alphanumeric windows. Text of at least 400
+normalized characters below `0.20` is rejected as a repetition loop even if
+generation stopped below the token ceiling. The quality-policy version is part
+of checkpoint identity, preventing unchecked older parts from being resumed.
+
 Expected long-run progress looks like:
 
 ```text

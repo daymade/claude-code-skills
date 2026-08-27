@@ -39,10 +39,18 @@ DEFAULT_CHUNK_DURATION_S = 1200.0
 DEFAULT_MAX_TOKENS_PER_CHUNK = 8192
 MAX_SAFE_TOKENS_PER_CHUNK = 16384
 OWNER_POLL_SECONDS = 5.0
+REPETITION_NGRAM_CHARS = 12
+REPETITION_MIN_NORMALIZED_CHARS = 400
+REPETITION_MIN_UNIQUE_RATIO = 0.20
+QUALITY_POLICY_ID = "unique-12gram-v1"
 
 
 class ChunkTokenLimitError(RuntimeError):
     """A chunk exhausted its bounded generation budget."""
+
+
+class TranscriptQualityError(RuntimeError):
+    """Generated text is bounded but still unusable ASR output."""
 
 
 def build_parser():
@@ -190,6 +198,29 @@ def _sha256_file(path, chunk_bytes=8 * 1024 * 1024):
     return digest.hexdigest()
 
 
+def _unique_character_ngram_ratio(text, ngram_chars=REPETITION_NGRAM_CHARS):
+    """Language-agnostic repetition signal for Chinese and whitespace text."""
+    normalized = "".join(character.casefold() for character in text if character.isalnum())
+    if len(normalized) < REPETITION_MIN_NORMALIZED_CHARS:
+        return None
+    window_count = len(normalized) - ngram_chars + 1
+    unique_count = len(
+        {normalized[index:index + ngram_chars] for index in range(window_count)}
+    )
+    return unique_count / window_count
+
+
+def _assert_transcript_quality(text, scope):
+    ratio = _unique_character_ngram_ratio(text)
+    if ratio is not None and ratio < REPETITION_MIN_UNIQUE_RATIO:
+        raise TranscriptQualityError(
+            f"{scope} failed repetition-loop quality gate "
+            f"(unique_{REPETITION_NGRAM_CHARS}gram_ratio={ratio:.4f} "
+            f"< {REPETITION_MIN_UNIQUE_RATIO:.4f}); refusing unusable ASR text"
+        )
+    return ratio
+
+
 def _checkpoint_identity(audio_path, model_name, language, chunk_duration, max_tokens):
     source = Path(audio_path).resolve()
     state = source.stat()
@@ -202,6 +233,7 @@ def _checkpoint_identity(audio_path, model_name, language, chunk_duration, max_t
         "language": language,
         "chunk_duration_s": chunk_duration,
         "max_tokens_per_chunk": max_tokens,
+        "quality_policy": QUALITY_POLICY_ID,
     }
     digest = hashlib.sha256(
         json.dumps(identity, ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -321,6 +353,9 @@ def transcribe_chunks(
                     f"({generation_tokens}/{max_tokens}); refusing a possibly repeated or "
                     "truncated transcript"
                 )
+            quality_ratio = _assert_transcript_quality(
+                text, f"chunk {index + 1}/{len(chunks)}"
+            )
             part_name = f"chunk-{index:04d}.txt"
             atomic_write_text(checkpoint_dir / part_name, text)
             entry.update(
@@ -333,6 +368,8 @@ def transcribe_chunks(
                     "elapsed_s": round(time.monotonic() - started, 3),
                 }
             )
+            if quality_ratio is not None:
+                entry["unique_12gram_ratio"] = round(quality_ratio, 6)
             manifest["updated_at"] = time.time()
             atomic_write_json(manifest_path, manifest)
             texts.append(text)
@@ -359,6 +396,19 @@ def transcribe_chunks(
                 clear_cache()
 
     final_text = " ".join(text.strip() for text in texts if text.strip())
+    try:
+        final_quality_ratio = _assert_transcript_quality(final_text, "complete transcript")
+    except TranscriptQualityError as exc:
+        manifest.update(
+            {
+                "status": "failed",
+                "current_chunk": None,
+                "error": str(exc)[:500],
+                "updated_at": time.time(),
+            }
+        )
+        atomic_write_json(manifest_path, manifest)
+        raise
     atomic_write_text(output_path, final_text)
     manifest.update(
         {
@@ -369,6 +419,8 @@ def transcribe_chunks(
             "updated_at": time.time(),
         }
     )
+    if final_quality_ratio is not None:
+        manifest["output_unique_12gram_ratio"] = round(final_quality_ratio, 6)
     manifest.pop("error", None)
     atomic_write_json(manifest_path, manifest)
     return final_text, manifest

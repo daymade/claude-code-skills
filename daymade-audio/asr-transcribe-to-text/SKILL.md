@@ -322,7 +322,10 @@ against the audio before trusting them). Intermediate legs are cached in
 `OUTPUT_DIR/_align/` so re-runs are cheap (`--force` redoes final legs). Qwen
 chunk checkpoints live below its staging directory; an interrupted run verifies
 the source-audio SHA-256 plus completed chunk hashes, then skips completed chunks
-instead of starting the recording over.
+instead of starting the recording over. A language-agnostic 12-character n-gram
+guard rejects highly repetitive chunk or whole-session text before final delivery;
+the quality-policy ID is part of checkpoint identity, so older unchecked parts
+cannot silently bypass the guard.
 
 Before a long first run, smoke-test the Qwen3 leg once:
 
@@ -699,7 +702,7 @@ Then re-run Step 0.
 
 Passing many files to one `transcribe_local_mlx.py` invocation is efficient (model loads once) — **but only when every file contains actual speech.** If the batch may include music-only / BGM-only clips (short promo videos, montage clips with subtitles instead of voiceover), do NOT batch them in one process:
 
-- On music/rhythm-only audio the model can fall into a **repetition loop hallucination** (e.g. endless "One, two, three, one, two, three..."). The 8192-token per-chunk ceiling now bounds it and refuses the final transcript, but one bad file can still consume the whole chunk timeout and starve a batch.
+- On music/rhythm-only audio the model can fall into a **repetition loop hallucination** (e.g. endless "One, two, three, one, two, three..."). The 8192-token per-chunk ceiling bounds resource growth, while the 12-character n-gram quality gate rejects a loop even when it stops below that ceiling; one bad file can still consume the whole chunk timeout and starve a batch.
 - **Drive batch jobs one-file-per-process with a per-file timeout** (e.g. `timeout 240` / `perl -e 'alarm 240; exec @ARGV'` around each invocation, skip on timeout, second pass for failures). A stuck file then costs 4 minutes, not the batch.
 - For a stuck file, retry with `--max-tokens 3000`: real speech in a short clip fits comfortably; a looping file gets truncated output you can classify.
 - **Detect "no speech" instead of shipping garbage**: if the transcript's unique-word ratio is extremely low (e.g. `len(set(words))/len(words) < 0.06` on a 40+ char output), the clip almost certainly has no voiceover — label it as such rather than delivering the loop text. (Downstream OCR of on-screen captions is the actual fix for subtitle-only videos.)
