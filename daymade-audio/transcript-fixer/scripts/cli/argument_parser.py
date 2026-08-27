@@ -380,7 +380,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
         "--list-review",
         action="store_true",
         dest="list_review",
-        help="List review-queue items (filter with --review-status/--domain/--review-source)"
+        help="List review-queue items (filter with --review-status/--domain/"
+             "--review-source/--review-file)"
     )
     parser.add_argument(
         "--review-status",
@@ -394,6 +395,13 @@ def create_argument_parser() -> argparse.ArgumentParser:
         dest="review_source",
         choices=["native_pass", "stage1_deferred", "learned_suggestion", "manual"],
         help="Source filter for --list-review"
+    )
+    parser.add_argument(
+        "--review-file",
+        metavar="FILE",
+        dest="review_file",
+        help="Exact transcript path for --list-review. Resolves to an absolute "
+             "path and scopes both items and status totals to that one file."
     )
     parser.add_argument(
         "--show-review",

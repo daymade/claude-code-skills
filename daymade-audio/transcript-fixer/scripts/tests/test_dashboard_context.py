@@ -15,9 +15,12 @@ Matrix covered here: {pending, accepted, overridden, skipped, drifted} ×
 from __future__ import annotations
 
 import importlib
+import json
 import sqlite3
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -172,6 +175,29 @@ class TestStatusFeatureMatrix:
         assert data["audio"] is None
         assert env["client"].get(f"/api/audio/{item_id}").status_code == 404
 
+    def test_queue_file_scope_and_item_scope_do_not_leak_other_pending_rows(self, env, tmp_path):
+        first = _enqueue(env["queue"], env["transcript"])
+        other = tmp_path / "other.md"
+        other.write_text(TRANSCRIPT.format(audio_path=tmp_path / "other.m4a"), encoding="utf-8")
+        second = _enqueue(env["queue"], other)
+
+        file_result = env["client"].get(
+            "/api/queue",
+            params={"status": "all", "file_path": str(env["transcript"])},
+        ).json()
+        assert [item["id"] for item in file_result["items"]] == [first]
+        assert file_result["stats"]["pending_total"] == 1
+        assert file_result["scope"]["file_path"] == str(env["transcript"].resolve())
+
+        env["queue"].resolve(first, "kept_original")
+        decided = env["client"].get(
+            "/api/queue", params={"status": "all", "item_id": first}
+        ).json()
+        assert [item["id"] for item in decided["items"]] == [first]
+        assert decided["items"][0]["status"] == "kept_original"
+        assert decided["stats"]["pending_total"] == 0
+        assert second != first
+
 
 class TestFrontmatterAudioParsing:
     """Adversarial-probe regressions: six bugs once lived in this one function
@@ -227,3 +253,41 @@ class TestFrontmatterAudioParsing:
         filler = [f"k{i}: v{i}" for i in range(80)]
         md = self._md(tmp_path, filler + [f"audio: {wav}"])
         assert parse(md) == wav  # was: silent 60-line cap
+
+
+class TestDashboardDeepLink:
+    def test_file_and_item_are_url_encoded_and_item_defaults_to_all(self, env):
+        import server
+
+        url = server._dashboard_url(
+            file_path=str(env["transcript"]), item_id=42
+        )
+        parsed = urlparse(url)
+        query = parse_qs(parsed.query)
+        assert parsed.netloc == "127.0.0.1:8767"
+        assert query == {
+            "status": ["all"],
+            "file": [str(env["transcript"].resolve())],
+            "item": ["42"],
+        }
+
+    def test_cli_readback_json_is_scoped_to_the_exact_file(self, env, tmp_path, capsys):
+        first = _enqueue(env["queue"], env["transcript"])
+        other = tmp_path / "cli-other.md"
+        other.write_text(TRANSCRIPT.format(audio_path=tmp_path / "other.m4a"), encoding="utf-8")
+        _enqueue(env["queue"], other)
+        env["queue"].resolve(first, "kept_original")
+
+        from cli.commands import cmd_list_review
+
+        cmd_list_review(SimpleNamespace(
+            review_status="all",
+            review_file=str(env["transcript"]),
+            domain=None,
+            review_source=None,
+            json_output=True,
+        ))
+        payload = json.loads(capsys.readouterr().out)
+        assert [item["id"] for item in payload["items"]] == [first]
+        assert payload["stats"]["pending_total"] == 0
+        assert payload["scope"]["file_path"] == str(env["transcript"].resolve())

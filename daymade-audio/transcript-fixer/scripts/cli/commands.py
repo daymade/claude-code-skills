@@ -1909,24 +1909,36 @@ def cmd_list_review(args: argparse.Namespace) -> None:
     """List review-queue items."""
     queue = _get_review_queue()
     status = getattr(args, "review_status", "pending")
+    review_file = getattr(args, "review_file", None)
+    resolved_file = str(Path(review_file).resolve()) if review_file else None
+    domain = getattr(args, "domain", None)
+    source = getattr(args, "review_source", None)
     items = queue.list_items(
         status=None if status == "all" else status,
-        domain=getattr(args, "domain", None),
-        source=getattr(args, "review_source", None),
+        domain=domain,
+        source=source,
+        file_path=resolved_file,
     )
-    stats = queue.stats()
+    stats = queue.stats(domain=domain, source=source, file_path=resolved_file)
+    scope = {
+        "domain": domain,
+        "source": source,
+        "file_path": resolved_file,
+    }
 
     if getattr(args, "json_output", False):
-        _emit_json({"items": [i.to_dict() for i in items], "stats": stats})
+        _emit_json({"items": [i.to_dict() for i in items], "stats": stats, "scope": scope})
         return
 
     if not items:
-        print(f"No review items with status '{status}'.")
-        print(f"   Queue totals: {stats['by_status'] or '{}'}")
+        suffix = f" for {resolved_file}" if resolved_file else ""
+        print(f"No review items with status '{status}'{suffix}.")
+        print(f"   Scope totals: {stats['by_status'] or '{}'}")
         return
 
-    print(f"📋 Review queue — {len(items)} item(s) [{status}] "
-          f"(pending total: {stats['pending_total']})")
+    scope_label = f" · {Path(resolved_file).name}" if resolved_file else ""
+    print(f"📋 Review queue{scope_label} — {len(items)} item(s) [{status}] "
+          f"(scope pending: {stats['pending_total']})")
     print("=" * 70)
     for item in items:
         anchor = ""

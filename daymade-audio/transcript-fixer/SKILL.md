@@ -110,8 +110,8 @@ Use vocabulary and stakes as the primary tier signals; use length only as a tieb
    - Every tier: run `--scan-traps` and inspect both hits and `unparsed`.
    - Full tier: use a fresh-context reviewer on exactly one corrected file. Require a compact residual table or explicit `no new residuals`; an empty/truncated response is a failed review.
    - High-stakes multi-recording: a sampled clip settles only that anchored item. If the user asked for a higher-quality or complete transcript and the baseline audio is available, load **`/daymade-audio:asr-transcribe-to-text`** and run its full-file transcription path across the complete clearest/canonical recording before claiming whole-transcript coverage; otherwise report `sampled cross-check only — incomplete`. Prefer a recognizer different from the producer of the canonical body. If only the same recognizer is available, the run proves complete-source coverage but is not independent cross-recognizer corroboration; state that boundary.
-9. **Enqueue every unresolved item.** Follow `Review queue safety` below and [review_queue_dashboard.md](references/review_queue_dashboard.md). Detection and enqueueing are not correction: for a higher-quality/final claim, every queue row anchored to this exact file must leave `pending`. If a human is unavailable, keep the artifact explicitly labeled `draft / unresolved — incomplete` and enumerate the rows; do not ship the raw suspect text under a completed quality claim.
-10. **Verify and finalize.** Diff the file actually edited, run numeric consistency when numbers matter, rerun plain Stage 1, re-grep known corrections, and confirm every change traces to a triage decision. Re-list the review queue for the exact file as a separate final gate: zero pending rows is required before saying `high-quality final transcript`.
+9. **Enqueue every unresolved item and open only this file.** Follow `Review queue safety` below and [review_queue_dashboard.md](references/review_queue_dashboard.md). Detection and enqueueing are not correction: for a higher-quality/final claim, every queue row anchored to this exact file must leave `pending`. Start the dashboard with `uv run scripts/review-dashboard/server.py --file "<absolute-canonical-file>"`; add `--item <id>` to land on one fork. If a human is unavailable, keep the artifact explicitly labeled `draft / unresolved — incomplete` and enumerate the rows; do not ship the raw suspect text under a completed quality claim.
+10. **Read back the human state, then finalize.** When the human says they marked the dashboard, do not rerun ASR or ask the same questions again. First run `uv run scripts/fix_transcription.py --list-review --review-file "<absolute-canonical-file>" --review-status all --json`, apply any resulting file state, and require `stats.pending_total == 0` for that exact path; zero pending rows is required before the high-quality/final claim. Then diff the file actually edited, run numeric consistency when numbers matter, rerun plain Stage 1, re-grep known corrections, and confirm every change traces to a triage decision. Global queue counts cannot close or reopen this file's quality claim.
 11. **Compound the learning in the same turn.** Route each stable pattern to its correct home; do not leave confirmed fixes only in chat. Native-pass edits never reach Stage 1's correction history, so harvest them mechanically right after the final diff:
 
     ~~~bash
@@ -216,7 +216,9 @@ Core commands:
 
 ~~~bash
 uv run scripts/fix_transcription.py --enqueue-review items.json
-uv run scripts/fix_transcription.py --list-review --review-status all --json
+uv run scripts/fix_transcription.py \
+  --list-review --review-file "<absolute-canonical-file>" \
+  --review-status all --json
 uv run scripts/fix_transcription.py --show-review <id> --json
 uv run scripts/fix_transcription.py --reanchor-review <id>
 uv run scripts/fix_transcription.py \

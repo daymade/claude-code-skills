@@ -136,6 +136,23 @@ class TestEnqueue:
         assert again["added"] == []
         assert again["skipped_duplicates"] == 1
 
+    def test_exact_file_filter_and_stats_do_not_leak_global_queue(self, queue, transcript):
+        other = transcript.parent / "other-meeting.md"
+        other.write_text(transcript.read_text(encoding="utf-8"), encoding="utf-8")
+        first = queue.enqueue([_item(transcript)])["added"][0]
+        queue.enqueue([_item(other)])
+
+        scoped = queue.list_items(status="pending", file_path=str(transcript))
+        assert [item.id for item in scoped] == [first]
+        assert scoped[0].file_path == str(transcript.resolve())
+
+        queue.resolve(first, "kept_original")
+        assert queue.stats(file_path=str(transcript))["by_status"] == {
+            "kept_original": 1,
+        }
+        assert queue.stats(file_path=str(transcript))["pending_total"] == 0
+        assert queue.stats(file_path=str(other))["pending_total"] == 1
+
     def test_temp_dir_anchor_skipped(self, queue, fake_tempdir):
         staged = fake_tempdir / "staged-copy.md"
         staged.write_text("临时目录里的待改词。\n", encoding="utf-8")
