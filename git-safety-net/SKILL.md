@@ -91,6 +91,11 @@ report-only until the user expands the authorized targets.
    silently **reverts** those improvements while looking like a rescue. Real incident: a
    comparison base one day old made an already-merged change look unshipped; the rescue PR would
    have reverted three fixes a later review added on top, one of them a security fix.
+   **Scope has a third axis: the REF SET itself moves.** A branch inventory and a verified bundle
+   prove what existed at one instant; they do not authorize deletion five minutes later. Immediately
+   before deleting, re-enumerate local refs and hosting-service branches, then require every target
+   ref to still equal the object recorded in the bundle. A new branch, a moved tip, or a new parallel
+   PR reopens classification and requires a new bundle. Do not delete against a stale inventory.
 2. **Run `git_loss_audit.sh` for the authoritative "what would be lost" check *within a
    checkout*.** It compares the current HEAD, every linked-worktree HEAD, local branches, and tags
    against every remote, then inspects each worktree for tracked/untracked changes plus stashes and
@@ -295,19 +300,37 @@ The habits that keep a branch tangle from ever stranding work:
   work — don't `switch`, `add`, or `reset` at all: each would either strand their uncommitted work
   or trip a worktree guard. When your own change is self-contained (new files, or edits that belong
   on `origin/main` rather than on their in-progress tree), build the commit with plumbing that never
-  touches the working tree, then push it to a branch and open a PR:
+  touches the working tree, then push it to a branch and open a PR. Freeze every candidate as the
+  exact Git entry tuple `(mode, object ID, path)` — bytes alone are insufficient because `100755`,
+  `120000`, and `160000` carry executable, symlink, and gitlink behavior. The safest source is an
+  immutable candidate commit:
   ```bash
-  export GIT_INDEX_FILE=$(mktemp)     # a scratch index — the tree's real index is untouched
+  candidate_ref=<immutable-candidate-commit-oid>
+  candidate_path=path/to/file
+  candidate_entry=$(git ls-tree "$candidate_ref" -- "$candidate_path")
+  candidate_mode=$(printf '%s\n' "$candidate_entry" | awk 'NR == 1 { print $1 }')
+  candidate_oid=$(printf '%s\n' "$candidate_entry" | awk 'NR == 1 { print $3 }')
+  test -n "$candidate_mode" && test -n "$candidate_oid" || exit 1
+
+  candidate_index=$(mktemp /tmp/tinkle_git_index.XXXXXX)
+  export GIT_INDEX_FILE="$candidate_index"   # the tree's real index is untouched
   git read-tree origin/main           # start from the pushed base, not the dirty tree
-  git update-index --add --cacheinfo 100644,"$(git hash-object -w path/to/file)",path/to/file
+  git update-index --add --cacheinfo "$candidate_mode,$candidate_oid,$candidate_path"
   tree=$(git write-tree)
   commit=$(git commit-tree "$tree" -p origin/main -m "…")   # HEAD does not move
   unset GIT_INDEX_FILE
+  rm "$candidate_index"
   git push origin "$commit":refs/heads/<branch>             # open the PR from here
   ```
-  The sequence reads and writes only the object store and a throwaway index, so `git status` in the
-  shared tree is byte-for-byte unchanged and the other session never sees a ripple. This is the
-  escape hatch for when commit-then-switch is off the table because someone else holds the tree.
+  For an owned temporary **regular file** that is not yet in an immutable commit, derive its intended
+  mode explicitly (`100755` when executable, otherwise `100644`) and hash its bytes; fail instead of
+  applying that route to a symlink or submodule. For those entry types, first freeze an immutable
+  candidate commit and copy its mode/object tuple as above. Never source an entry from a shared path
+  that another session is editing. The sequence reads and writes only the object store and a
+  throwaway index, so `git status` in the shared tree is byte-for-byte unchanged. `commit-tree`
+  does not run the normal `git commit` hook path: execute the repository's exact pre-commit/security
+  gates against the candidate before push, and still let pre-push run. This is the escape hatch for
+  when commit-then-switch is off the table because someone else holds the tree.
 - **Before any rebase or branch-delete, run the Mode B audit.** Ten seconds; it's the difference
   between "nothing to lose" and finding out after gc.
 - **Before bumping a shared version/lockfile, check the base's current value** so two parallel
@@ -324,18 +347,21 @@ change-authorized checkouts; treat inspect-only checkouts as report-only, then r
 
 **Step 1 — classify each leftover: live WIP, or superseded draft?** Evidence ladder, strongest first:
 
-1. **`git cherry <base> <branch>`** — judges by *patch content*, not message text. Every commit
-   showing `-` is already on the base (survives rebases and reworded messages); any `+` needs
-   the next rungs. Never grep commit messages to decide this — the same work often lands under
-   a different message.
-2. **Same-file supersession check** — for a stash or `+` commit touching files that were later
+1. **Fresh authority plus trial merge** — refresh the base and exact branch tip, then run
+   `scripts/git_verify_branch_merged.sh`. An ancestor/content-contained verdict is deletion-grade
+   evidence. If it returns NEEDS REVIEW, continue down this ladder; do not convert uncertainty to
+   MERGED with a weaker heuristic.
+2. **`git cherry <base> <branch>` is a hint, not a verdict.** A `-` proves that one patch-id is
+   upstream; a `+` does not prove missing work because squash merges deliberately create a new
+   patch-id. Never rescue or delete a whole branch from this output alone.
+3. **Same-file supersession check** — for a stash or `+` commit touching files that were later
    reworked on the base: extract its version of the file and compare with the base's current
    version (`git show <ref>:<path> | wc -l` vs `git show <base>:<path> | wc -l`, then spot-diff).
    If the base's version is a **superset** (has everything the leftover has, plus later work),
    the leftover is a superseded draft. Real case: a stash labeled "unfinished dev" held a 1128-line
    renderer; main's version was 1151 lines — the same functions *plus* a later feature parameter.
    Restoring that stash would have been a regression, not a recovery.
-3. **Function/marker-level probe** — grep the base for the leftover's distinctive additions
+4. **Function/marker-level probe** — grep the base for the leftover's distinctive additions
    (`def new_helper`, a constant, an error string). All present on the base → superseded.
    This catches "absorbed into a refactor" cases where file shapes changed too much for rung 2.
 
@@ -356,12 +382,21 @@ scripts/git_export_before_drop.sh --branch <branch> --out <external-backup-dir>
 git update-ref refs/dangling-backup/<sha> <sha>
 # Full ref topology / linked-worktree retirement: only when the named target requires it.
 scripts/git_export_before_drop.sh --all-refs --out <external-backup-dir>
+scripts/git_export_before_drop.sh --verify-current <external-backup-dir>/all-refs.bundle
 ```
 
 The targeted `update-ref` reaches only the authorized dangling commit. If every reported dangler is
 in scope, the whole-set `git_preserve_danglers.sh` may replace it. `--all-refs` captures branch,
 stash, hidden-backup, and linked-worktree HEAD refs; add `--all-stashes` only when stashes are also
-deletion targets. Keep backups outside the repository; never turn one branch into a repo export.
+deletion targets. `--verify-current` is the final compare-and-swap gate: it exits 1 if any recorded
+ref moved or disappeared. Refresh remote authority before it, and rebuild the bundle on any
+mismatch. Keep backups outside the repository; never turn one branch into a repo export.
+
+For a multi-branch "only one main" cleanup while other sessions may still commit or open PRs, read
+**[references/merge_verification.md](references/merge_verification.md)** § Converging many branches
+to one main under active concurrency before Step 3. It adds the moving-ref inventory, dirty-WIP
+preservation, immutable-candidate, duplicate-PR, and final branch-count gates that a single-branch
+retirement does not need.
 
 **Step 3 — destroy, in the safe order:**
 
@@ -437,7 +472,8 @@ in place; the bundle restores full history via `git fetch <file>.bundle <branch>
 | `scripts/git_loss_audit.sh [remote]` | Refresh one remote, then report every worktree, local-only commit, stash, and dangler | Remote-tracking refs only |
 | `scripts/git_preserve_danglers.sh [--patch-dir DIR]` | Pin danglers to `refs/dangling-backup/`, optional patches | Adds refs only (never deletes/gc) |
 | `scripts/git_verify_branch_merged.sh <branch> [base]` | Refresh remotes, then give a content-level MERGED/UNMERGED verdict | Remote-tracking refs only |
-| `scripts/git_export_before_drop.sh [--all-stashes] [--stash N] [--branch B] [--all-refs] [--out DIR]` | Export stashes plus selected branches or every current ref into verified bundles | Writes backup files only (never drops/deletes) |
+| `scripts/git_export_before_drop.sh [export options]` | Export stashes plus selected branches or every current ref into verified bundles | Writes backup files only (never drops/deletes) |
+| `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |
 
 All five run from the repository root. They only ever `find`, `fetch`, `log`, `diff`, `show`,
 `status`, `cat-file`, `rev-list`, `rev-parse`, `fsck`, `for-each-ref`, `remote get-url`,
