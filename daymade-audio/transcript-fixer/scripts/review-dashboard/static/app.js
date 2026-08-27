@@ -35,6 +35,7 @@ const state = {
   itemOnly: Number.isFinite(initialItem) && !initialFile,
   undoStack: [],   // ids resolved this session, most recent last
   doneCount: 0,
+  loadError: "",
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -51,6 +52,14 @@ async function fetchQueue() {
   if (state.itemOnly && state.selectedId) params.set("item_id", String(state.selectedId));
   const res = await fetch(`/api/queue?${params}`);
   const data = await res.json();
+  if (!res.ok) {
+    state.items = [];
+    state.stats = {};
+    state.loadError = data.detail || `审核范围读取失败（HTTP ${res.status}）`;
+    render();
+    return;
+  }
+  state.loadError = "";
   if (state.itemOnly && data.items.length && data.items[0].file_path) {
     state.filePath = data.items[0].file_path;
     state.itemOnly = false;
@@ -92,6 +101,17 @@ function renderScope() {
     banner.innerHTML = "";
     return;
   }
+  if (state.loadError) {
+    banner.hidden = false;
+    banner.innerHTML = `
+      <div class="scope-summary" title="${esc(state.filePath)}">
+        <span class="scope-kicker">无法验证</span>
+        <span class="scope-file">${esc(fileName(state.filePath))}</span>
+        <span class="scope-state">${esc(state.loadError)}</span>
+      </div>
+      <button class="btn scope-clear" data-clear-scope>查看全部队列</button>`;
+    return;
+  }
   const pending = Number(state.stats.pending_total || 0);
   banner.hidden = false;
   banner.innerHTML = `
@@ -112,6 +132,10 @@ function syncUrl() {
 }
 
 function renderStats() {
+  if (state.loadError) {
+    $("#header-stats").innerHTML = `<div class="stat"><b>—</b><br>范围无效</div>`;
+    return;
+  }
   const s = state.stats.by_status || {};
   const scopeLabel = state.filePath ? "本文件" : "全队列";
   $("#header-stats").innerHTML = `
@@ -155,11 +179,20 @@ function renderRail() {
 
 async function renderCard() {
   const area = $("#focus-area");
+  if (state.loadError) {
+    area.innerHTML = `<div class="empty-state">${esc(state.loadError)}</div>`;
+    return;
+  }
   const it = selected();
   if (!it) {
+    const filePending = Number(state.stats.pending_total || 0);
     area.innerHTML = `<div class="empty-state">${
       state.status === "pending"
-        ? (state.filePath ? "这份逐字稿已无待裁定项 ✓" : "队列为空 — 没有待裁定的修正 🎉")
+        ? (state.filePath
+            ? (filePending
+                ? `当前筛选没有条目；整份逐字稿仍有 ${filePending} 条待裁定`
+                : "这份逐字稿已无待裁定项 ✓")
+            : "队列为空 — 没有待裁定的修正 🎉")
         : "该筛选下没有条目"
     }</div>`;
     return;

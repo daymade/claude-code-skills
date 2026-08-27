@@ -1910,7 +1910,14 @@ def cmd_list_review(args: argparse.Namespace) -> None:
     queue = _get_review_queue()
     status = getattr(args, "review_status", "pending")
     review_file = getattr(args, "review_file", None)
-    resolved_file = str(Path(review_file).resolve()) if review_file else None
+    review_path = Path(review_file).expanduser().resolve() if review_file else None
+    if review_path is not None and not review_path.is_file():
+        _queue_cmd_error(
+            args,
+            "review_file_not_found",
+            f"exact transcript file does not exist: {review_path}",
+        )
+    resolved_file = str(review_path) if review_path is not None else None
     domain = getattr(args, "domain", None)
     source = getattr(args, "review_source", None)
     items = queue.list_items(
@@ -1919,11 +1926,26 @@ def cmd_list_review(args: argparse.Namespace) -> None:
         source=source,
         file_path=resolved_file,
     )
-    stats = queue.stats(domain=domain, source=source, file_path=resolved_file)
+    # A file-complete verdict must use the whole file, even when the visible
+    # item list is narrowed by domain/source. Otherwise a subfilter can report
+    # zero while another domain still has pending rows in the same transcript.
+    stats = (
+        queue.stats(file_path=resolved_file)
+        if resolved_file
+        else queue.stats(domain=domain, source=source)
+    )
+    if resolved_file and not stats["by_status"]:
+        _queue_cmd_error(
+            args,
+            "review_scope_not_found",
+            "no review history exists for the exact transcript path; "
+            "refusing to treat an unmatched file as human-review complete",
+        )
     scope = {
         "domain": domain,
         "source": source,
         "file_path": resolved_file,
+        "stats_scope": "exact_file" if resolved_file else "active_filters",
     }
 
     if getattr(args, "json_output", False):

@@ -198,6 +198,48 @@ class TestStatusFeatureMatrix:
         assert decided["stats"]["pending_total"] == 0
         assert second != first
 
+    def test_wrong_or_untracked_file_scope_fails_closed(self, env, tmp_path):
+        missing = env["client"].get(
+            "/api/queue",
+            params={"status": "all", "file_path": str(tmp_path / "missing.md")},
+        )
+        assert missing.status_code == 404
+        assert "does not exist" in missing.json()["detail"]
+
+        untracked = tmp_path / "untracked.md"
+        untracked.write_text("没有进入审核队列。\n", encoding="utf-8")
+        no_history = env["client"].get(
+            "/api/queue",
+            params={"status": "all", "file_path": str(untracked)},
+        )
+        assert no_history.status_code == 404
+        assert "no review history" in no_history.json()["detail"]
+
+    def test_file_completion_count_ignores_domain_subfilter(self, env):
+        decided_id = _enqueue(env["queue"], env["transcript"])
+        pending_id = env["queue"].enqueue([{
+            "original": "第一句话", "suggested": "第一句话（人工核）",
+            "file": str(env["transcript"]), "line": 7,
+            "context": "第一句话，含有目标错词在里面。",
+            "kind": "wording", "domain": "other-domain", "source": "manual",
+        }])["added"][0]
+        env["queue"].resolve(decided_id, "kept_original")
+
+        result = env["client"].get(
+            "/api/queue",
+            params={
+                "status": "pending",
+                "file_path": str(env["transcript"]),
+                "domain": "matrix-test",
+            },
+        )
+        assert result.status_code == 200
+        payload = result.json()
+        assert payload["items"] == []
+        assert payload["stats"]["pending_total"] == 1
+        assert payload["scope"]["stats_scope"] == "exact_file"
+        assert pending_id != decided_id
+
 
 class TestFrontmatterAudioParsing:
     """Adversarial-probe regressions: six bugs once lived in this one function
@@ -291,3 +333,42 @@ class TestDashboardDeepLink:
         assert [item["id"] for item in payload["items"]] == [first]
         assert payload["stats"]["pending_total"] == 0
         assert payload["scope"]["file_path"] == str(env["transcript"].resolve())
+
+    def test_cli_readback_wrong_file_fails_closed(self, env, tmp_path, capsys):
+        from cli.commands import cmd_list_review
+
+        with pytest.raises(SystemExit) as exc:
+            cmd_list_review(SimpleNamespace(
+                review_status="all",
+                review_file=str(tmp_path / "wrong.md"),
+                domain=None,
+                review_source=None,
+                json_output=True,
+            ))
+        assert exc.value.code == 1
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["error"] == "review_file_not_found"
+
+    def test_cli_file_totals_ignore_domain_subfilter(self, env, capsys):
+        first = _enqueue(env["queue"], env["transcript"])
+        env["queue"].enqueue([{
+            "original": "第一句话", "suggested": "第一句话（人工核）",
+            "file": str(env["transcript"]), "line": 7,
+            "context": "第一句话，含有目标错词在里面。",
+            "kind": "wording", "domain": "other-domain", "source": "manual",
+        }])
+        env["queue"].resolve(first, "kept_original")
+
+        from cli.commands import cmd_list_review
+
+        cmd_list_review(SimpleNamespace(
+            review_status="pending",
+            review_file=str(env["transcript"]),
+            domain="matrix-test",
+            review_source=None,
+            json_output=True,
+        ))
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["items"] == []
+        assert payload["stats"]["pending_total"] == 1
+        assert payload["scope"]["stats_scope"] == "exact_file"

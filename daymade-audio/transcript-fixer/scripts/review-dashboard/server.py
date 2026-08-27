@@ -141,7 +141,10 @@ def api_queue(
     if kind:
         scope_sql += " AND kind = ?"
         scope_params.append(kind)
-    resolved_file = str(Path(file_path).resolve()) if file_path else ""
+    resolved_path = Path(file_path).expanduser().resolve() if file_path else None
+    if resolved_path is not None and not resolved_path.is_file():
+        raise HTTPException(404, f"exact transcript file does not exist: {resolved_path}")
+    resolved_file = str(resolved_path) if resolved_path is not None else ""
     if resolved_file:
         scope_sql += " AND file_path = ?"
         scope_params.append(resolved_file)
@@ -156,11 +159,34 @@ def api_queue(
         params.append(status)
     query += " ORDER BY priority DESC, id ASC LIMIT 500"
     with _connect_ro() as conn:
+        if resolved_file:
+            file_row_count = conn.execute(
+                "SELECT COUNT(*) FROM review_items WHERE file_path = ?",
+                (resolved_file,),
+            ).fetchone()[0]
+            if not file_row_count:
+                raise HTTPException(
+                    404,
+                    "no review history exists for the exact transcript path; "
+                    "the file cannot be certified as human-review complete",
+                )
         rows = conn.execute(query, params).fetchall()
+        if item_id is not None and not rows:
+            raise HTTPException(404, "review item not found in the requested scope")
+
+        # Completion is file-wide. Domain/source/kind/item filters narrow only
+        # what is visible, never the count used to say a transcript is cleared.
+        stats_sql = scope_sql
+        stats_params = scope_params
+        stats_scope = "active_filters"
+        if resolved_file:
+            stats_sql = " AND file_path = ?"
+            stats_params = [resolved_file]
+            stats_scope = "exact_file"
         by_status = dict(conn.execute(
-            f"SELECT status, COUNT(*) FROM review_items WHERE 1=1{scope_sql} "
+            f"SELECT status, COUNT(*) FROM review_items WHERE 1=1{stats_sql} "
             "GROUP BY status",
-            scope_params,
+            stats_params,
         ).fetchall())
         domains = [r[0] for r in conn.execute(
             "SELECT DISTINCT domain FROM review_items ORDER BY domain").fetchall()]
@@ -178,6 +204,7 @@ def api_queue(
             "kind": kind or None,
             "file_path": resolved_file or None,
             "item_id": item_id,
+            "stats_scope": stats_scope,
         },
     }
 
