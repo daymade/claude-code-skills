@@ -103,6 +103,20 @@ class ProjectSkillRootsAuditTests(unittest.TestCase):
         self.assertEqual(finding["status"], "identical_copy")
         self.assertEqual(len(set(finding["bundle_sha256"].values())), 1)
 
+    def test_router_marker_quoted_in_full_skill_prose_is_not_a_router(self):
+        body = (
+            "# Rules\n\n"
+            "This full skill documents the phrase "
+            "`# Compatibility router — no business rules live here` without being a router.\n"
+        )
+        self.write_skill(".claude/skills", "alpha-source", "alpha", body)
+        self.write_skill(".agents/skills", "alpha-copy", "alpha", body)
+
+        completed, payload = self.run_audit()
+
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(self.finding(payload, "alpha")["status"], "identical_copy")
+
     def test_divergent_same_name_full_copies_fail_with_both_hashes(self):
         self.write_skill(".claude/skills", "alpha", "alpha", "# Rules\n\nLeft.\n")
         self.write_skill(".agents/skills", "alpha", "alpha", "# Rules\n\nRight.\n")

@@ -281,6 +281,25 @@ def _same_underlying_file(left: Path, right: Path) -> bool:
         return left.resolve(strict=False) == right.resolve(strict=False)
 
 
+def has_router_marker_heading(text: str) -> bool:
+    """Require the router marker as the first nonblank body line, not a quote."""
+
+    lines = text.lstrip("\ufeff").splitlines()
+    if not lines or lines[0].strip() != "---":
+        return False
+    try:
+        closing_index = next(
+            index for index, line in enumerate(lines[1:], start=1) if line.strip() == "---"
+        )
+    except StopIteration:
+        return False
+    for line in lines[closing_index + 1 :]:
+        stripped = line.strip()
+        if stripped:
+            return stripped == ROUTER_MARKER
+    return False
+
+
 def inspect_router(
     candidate: SkillEntry, expected_canonical: SkillEntry, project_root: Path
 ) -> Tuple[str, Optional[str]]:
@@ -291,7 +310,7 @@ def inspect_router(
     except (OSError, UnicodeError) as exc:
         return "invalid", f"cannot read router candidate: {exc}"
 
-    if ROUTER_MARKER not in text:
+    if not has_router_marker_heading(text):
         return "not_router", None
 
     try:
@@ -355,7 +374,7 @@ def compare_pair(
             )
             return base, errors
 
-        if ROUTER_MARKER in shared_text:
+        if has_router_marker_heading(shared_text):
             base["status"] = "invalid"
             errors.append(
                 {
