@@ -23,18 +23,100 @@ from typing import Any
 import prior_work
 
 RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
-PRIOR_WORK_SIGNAL = re.compile(
-    r"(?:我们之前|以前|之前做过|之前(?:用|跑|做|配|装|搭|建|写)|已有|现有|历史经验|历史决策|以前的代码|已有代码|"
-    r"成功经验|别重复|不要重新|不要重造|复用|类似的问题|类似问题|上次|当时用的|"
-    r"什么来着|叫什么来着|哪个来着|用的是?哪个|我记得是|好像是|记不清|"
+# Strong signals name prior work outright ("我们之前…", "复用", "reuse"). They
+# arm the gate on their own.
+PRIOR_WORK_STRONG_SIGNAL = re.compile(
+    r"(?:我们之前|以前|之前做过|之前(?:用|跑|做|配|装|搭|建|写)|已有|现有|既有|历史经验|历史决策|以前的代码|已有代码|"
+    # 成功的经验 — the 的 particle broke the literal 成功经验.
+    r"成功(?:的)?经验|"
+    # 不希望你重新造轮子 — the literal 不要重新/不要重造/别重复 missed every
+    # natural phrasing of the same ask.
+    r"(?:别|不要|不想|不希望)(?:你)?\s*(?:重复|重新|重造|再造)|"
+    r"复用|类似的问题|类似问题|当时用的|"
+    r"什么来着|叫什么来着|哪个来着|用的是?哪个|"
     r"项目最近进展|会议逐字稿|微信记录|prior work|previous work|existing code|"
-    r"reuse|did this before|history)",
+    r"reuse|did this before|"
+    # `history` only counts with a carrier in front of it. Bare `history`
+    # matched `git history`, `browser history`, and this repo's own
+    # read-claude-code-history skill name.
+    r"(?:chat|conversation|session|work|project|prior|previous)\s+history)",
     re.IGNORECASE,
 )
+# Weak signals are hedge/recall phrasing ("好像是", "上次", "记不清"). They are
+# the skill's core recall use-case but fire on ordinary speech too, so each
+# needs a concrete work noun nearby before it arms anything.
+PRIOR_WORK_WEAK_SIGNAL = re.compile(
+    r"(?:上次|我记得是|好像是|记不清)",
+    re.IGNORECASE,
+)
+_WORK_NOUN_INNER = (
+    r"(?:代码|脚本|方案|框架|配置|文档|流程|做法|工具|库|项目|接口|命令|模板|"
+    r"仓库|分支|函数|模块|服务|规则|SOP|skill|agent|prompt|hook|schema)"
+)
+WORK_NOUN = re.compile(_WORK_NOUN_INNER, re.IGNORECASE)
+# The weak tier needs the noun to point AWAY from the current object. 这个脚本
+# is the script in front of us ("这个脚本好像是死循环" is a bug report); 那个/某个/
+# 哪个 script is one being recalled. Distal and indefinite determiners are the
+# grammatical marker for that, so the weak tier keys on them rather than on the
+# bare noun.
+DISTAL_WORK_NOUN = re.compile(
+    r"(?:那|某|哪)(?:[一二三四五六七八九十]+)?[个种份条次回台款道位家份套版]?\s*"
+    + _WORK_NOUN_INNER,
+    re.IGNORECASE,
+)
+# Not the user talking: Claude Code's own internal templates (safety
+# classifier, suggestion generator), sub-agent role prompts, and pasted
+# transcript fragments all arrive through UserPromptSubmit and each opened
+# its own gated session.
+NON_USER_PROMPT = re.compile(
+    r"\A\s*(?:"
+    r"You are (?:a|an|the)\b"
+    r"|#\s*Overview\s*$"
+    # Harness-generated envelopes, not typed by anyone: <agent-message …>,
+    # <task-notification …> (a background workflow finishing reaches the same
+    # handler), <system-reminder …>.
+    r"|<[a-z][a-z0-9-]*-(?:message|notification|reminder)\b"
+    r"|⏺\s"
+    # Another hook's block message echoed back as a prompt:
+    # "• UserPromptSubmit (blocked) says: …". This hook's own guidance is
+    # already excluded by HOOK_GUIDANCE_MARKER; every other hook's was not.
+    r"|•\s*\w+\s*\(blocked\)\s+says:"
+    r")",
+    re.IGNORECASE | re.MULTILINE,
+)
+# "不要复用 X" is a decision against reuse, not a request to retrieve it.
+# Excised before signal matching so a same-sentence genuine ask still counts.
+# Deliberately excludes 重复造轮子/重造/重新造, which ask FOR reuse.
+NEGATED_PRIOR_SIGNAL = re.compile(
+    r"(?:不要|不用|无需|不需要|不必|别|勿)\s*(?:再\s*)?(?:去\s*)?"
+    r"(?:复用|重用|沿用|参考(?:以前|之前|历史|已有))"
+    r"|(?:不要|不用|无需|不需要|不必|别|勿)\s*(?:再\s*)?(?:用|看|查|翻)\s*"
+    r"(?:以前|之前|历史|旧)(?:的)?"
+    r"|(?:don't|do not|no need to|stop)\s+(?:reuse|reusing|referencing)",
+    re.IGNORECASE,
+)
+# "这些 Skill 也是很久之前写的" dates something to argue it is stale — the
+# opposite of asking to go find it. Excised like a negation.
+STALE_AGE_IDIOM = re.compile(r"(?:很久|太久|好久|老早|早就)\s*(?:以前|之前)")
 HOOK_GUIDANCE_MARKER = "Prior Work Retrieval is required before substantial production"
 USER_OPTOUT = re.compile(
     r"(?:不用|不要|无需|跳过).{0,12}(?:查历史|检索历史|已有工作检索|prior work|历史检索)"
-    r"|(?:skip|disable).{0,8}(?:prior[- ]work|history retrieval)",
+    # Recorded sub-agent prompts said "Do NOT perform prior-work retrieval" and
+    # "The user explicitly opts out of prior-work retrieval" and were gated
+    # anyway: the old pattern only accepted skip/disable, and only the
+    # space-separated spelling.
+    r"|(?:skip|disable|opts?\s+out\s+of|opting\s+out\s+of|"
+    r"do\s+not\s+(?:perform|use|load|run|invoke)|don't\s+(?:perform|use|load|run|invoke))"
+    r"[^\n]{0,24}(?:prior[-\s]work|history retrieval)",
+    re.IGNORECASE,
+)
+# A prompt that forbids its executor from reading skills or running the shell
+# has removed the very capabilities completing a receipt requires. Gating it
+# cannot be satisfied — it only blocks work. Recorded scope-restricted
+# sub-agent prompts did exactly this and were gated for it.
+INCAPABLE_EXECUTOR = re.compile(
+    r"(?:do\s+not|don't|never)\s+(?:read|load|use|execute|inspect|run)"
+    r"[^\n]{0,90}(?:SKILL\.md|skills?/|\.claude/|\.agents/|\.codex/)",
     re.IGNORECASE,
 )
 SHELL_WRITE_SIGNAL = re.compile(
@@ -76,16 +158,29 @@ def _manifest() -> dict[str, Any]:
     return prior_work.load_manifest(prior_work.default_manifest_path().resolve())
 
 
-def classify_prompt(prompt: str, _current_required: bool = False) -> str:
+def classify_prompt(prompt: str, receipt_valid: bool = False) -> str:
+    """Classify one UserPromptSubmit body.
+
+    `receipt_valid` says this session already holds a receipt that passes
+    check_receipt. Hedge-phrased recall is then already covered, so it must
+    not mint a fresh requirement and strand the completed one.
+    """
     text = prompt.strip()
     if not text:
         return "none"
     if HOOK_GUIDANCE_MARKER in text:
         return "none"
+    if NON_USER_PROMPT.search(text):
+        return "none"
+    if INCAPABLE_EXECUTOR.search(text):
+        return "none"
     if USER_OPTOUT.search(text):
         return "opt_out"
-    if PRIOR_WORK_SIGNAL.search(text):
+    scannable = STALE_AGE_IDIOM.sub(" ", NEGATED_PRIOR_SIGNAL.sub(" ", text))
+    if PRIOR_WORK_STRONG_SIGNAL.search(scannable):
         return "required_prior_signal"
+    if PRIOR_WORK_WEAK_SIGNAL.search(scannable) and DISTAL_WORK_NOUN.search(scannable):
+        return "none" if receipt_valid else "required_prior_signal"
     return "none"
 
 
@@ -608,7 +703,7 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(prompt, str) or not prompt.strip():
         return None
     if not isinstance(session_id, str) or not session_id:
-        if PRIOR_WORK_SIGNAL.search(prompt):
+        if classify_prompt(prompt) == "required_prior_signal":
             return _inject(
                 "Prior-work retrieval applies, but this hook event has no session_id; "
                 "do not produce until the session identity and receipt can be recorded."
@@ -618,15 +713,14 @@ def handle_user_prompt(event: dict[str, Any]) -> dict[str, Any] | None:
         manifest = _manifest()
         current = prior_work.load_requirement(manifest, session_id)
     except prior_work.PriorWorkError as error:
-        if PRIOR_WORK_SIGNAL.search(prompt):
+        if classify_prompt(prompt) == "required_prior_signal":
             return _inject(
                 f"Prior-work manifest is unavailable ({error}). Fix the explicit "
                 "manifest before substantial production; do not silently fall back."
             )
         return None
-    classification = classify_prompt(
-        prompt, bool(current and current.get("required"))
-    )
+    receipt_valid = current is not None and _receipt_error(manifest, session_id) is None
+    classification = classify_prompt(prompt, receipt_valid)
     if classification == "none":
         return None
     required = classification != "opt_out"

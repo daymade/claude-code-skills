@@ -521,6 +521,214 @@ class PriorWorkHookTests(unittest.TestCase):
             "valid",
         )
 
+    def test_internal_templates_and_transcripts_are_not_user_prompts(self) -> None:
+        # Every one of these opened its own gated session in production and
+        # never produced a receipt: Claude Code's safety classifier and
+        # suggestion generator, a sub-agent role prompt, an inter-agent
+        # message, and a pasted transcript line.
+        # Each body carries a signal word on purpose: the stored 240-char
+        # previews are truncated, and it is the full template text that
+        # matched and armed these sessions in production.
+        not_the_user = [
+            "You are an expert at upholding safety and compliance standards for "
+            "Codex. Weigh the conversation history before you decide.",
+            "You are a fresh-context Goal Translation Reviewer. This is a real "
+            "task. 我们之前定的目标是什么？",
+            "# Overview\n\nGenerate 0 to 3 hyperpersonalized suggestions from the "
+            "user's existing code and previous work.",
+            '<agent-message from="hook-fix-reviewer-2">\n收到，预计 25 分钟。'
+            "先复用以前那份排查结论",
+            # A background workflow finishing reaches this handler too — caught
+            # live while hardening this very hook.
+            "<task-notification>\n<task-id>abc123</task-id>\n复用以前那套方案",
+            "<system-reminder>\n我们之前已有代码，别重复造轮子\n</system-reminder>",
+            # Another hook's block message echoed back as a prompt.
+            "• UserPromptSubmit (blocked) says: Codex session 01a03f20 is fused; "
+            "复用以前那份配置",
+            '⏺ Bash(rg -n "已有代码" --glob "*.py" | head -20)',
+        ]
+        for prompt in not_the_user:
+            with self.subTest(prompt=prompt[:40]):
+                self.assertEqual(hook.classify_prompt(prompt, False), "none")
+        event = {
+            "hook_event_name": "UserPromptSubmit",
+            "session_id": "session-subagent",
+            "prompt": not_the_user[1],
+        }
+        self.assertIsNone(hook.handle_event(event))
+        self.assertIsNone(
+            prior_work.load_requirement(hook._manifest(), "session-subagent")
+        )
+        # A prompt the user typed that merely starts with a tag is still theirs.
+        for prompt in ["<div> 这个组件我们之前写过吗？", "<Button> 复用以前那个实现"]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    hook.classify_prompt(prompt, False), "required_prior_signal"
+                )
+
+    def test_negated_reuse_is_not_a_retrieval_request(self) -> None:
+        for prompt in [
+            "新建一个 knowledge-base，不要复用现在的 aicms-docs 了，从 0 开始",
+            "别沿用旧的那套配置",
+            "不要参考以前的做法",
+            "don't reuse the old provider contract",
+        ]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt, False), "none")
+        # These read as negations but ask FOR reuse, and must still arm.
+        for prompt in [
+            "别重复造轮子，用已有代码",
+            "不要重新造一套，看看之前做过什么",
+            "不要复用 aicms-docs，但看看我们以前是怎么做的",
+        ]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    hook.classify_prompt(prompt, False), "required_prior_signal"
+                )
+
+    def test_hedge_recall_needs_a_work_noun(self) -> None:
+        for prompt in [
+            "好像是下载的时候没有进度条",
+            "这个 bug 上次也出现过吗",
+            "看一下 git history 里这个文件改了什么",
+            "把 browser history 导出来",
+            "帮我读一下 read-claude-code-history 这个 skill",
+        ]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt, False), "none")
+        for prompt in [
+            "上次做的方案叫什么来着？",
+            "我记得是某个脚本，但记不清是哪一个",
+            "看看 conversation history 里我们怎么定的",
+        ]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    hook.classify_prompt(prompt, False), "required_prior_signal"
+                )
+
+    def test_completed_receipt_survives_negated_and_hedge_followups(self) -> None:
+        # The real 2026-08-28 block: a completed receipt was stranded when
+        # "不要复用现在的 aicms-docs" minted a fresh requirement, and the next
+        # Write was denied for belonging to an older prompt.
+        session_id = "session-negated-followup"
+        hook.handle_event(
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "session_id": session_id,
+                "prompt": "复用以前的 provider contract",
+            }
+        )
+        manifest = hook._manifest()
+        run = prior_work.retrieve(
+            manifest,
+            "Reuse the verified provider contract.",
+            ["provider contract"],
+            "reuse provider",
+            ["provider contract"],
+            session_id,
+        )
+        candidate = run["candidates"][0]
+        prior_work.complete(
+            manifest,
+            run["run_id"],
+            session_id,
+            [f"{candidate['candidate_id']}=reuse current contract"],
+            [],
+            [],
+            [],
+            None,
+        )
+        for followup in [
+            "新建一个 knowledge-base，不要复用现在的 aicms-docs 了，从 0 开始",
+            "上次那个脚本怎么写的",
+        ]:
+            with self.subTest(followup=followup):
+                hook.handle_event(
+                    {
+                        "hook_event_name": "UserPromptSubmit",
+                        "session_id": session_id,
+                        "prompt": followup,
+                    }
+                )
+                self.assertEqual(
+                    prior_work.check_receipt(manifest, session_id, None)["status"],
+                    "valid",
+                )
+        write = {
+            "hook_event_name": "PreToolUse",
+            "session_id": session_id,
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": str(self.root / "kb.md"),
+                "content": "substantial" * 100,
+            },
+        }
+        self.assertIsNone(hook.handle_event(write))
+
+    def test_executor_stripped_of_retrieval_capability_is_never_gated(self) -> None:
+        # Real recorded sub-agent prompts. Each was gated and none could ever
+        # complete a receipt: two are forbidden from reading skills at all, and
+        # two say outright that prior-work retrieval is off for this prompt.
+        for prompt in [
+            "IMPORTANT: Do NOT read or execute any files under ~/.claude/, "
+            "~/.agents/, .claude/skills/. Stay focused on repository code. 复用现有的解析器",
+            "IMPORTANT: Stay inside /workspace/js/app. Do NOT read or execute "
+            "anything under ~/.codex/skills/ or any SKILL.md.",
+        ]:
+            with self.subTest(prompt=prompt[:40]):
+                self.assertEqual(hook.classify_prompt(prompt, False), "none")
+        for prompt in [
+            "The user explicitly opts out of prior-work retrieval for this prompt.",
+            "Do NOT perform prior-work retrieval for this task.",
+        ]:
+            with self.subTest(prompt=prompt[:40]):
+                self.assertEqual(hook.classify_prompt(prompt, False), "opt_out")
+
+    def test_natural_phrasings_of_a_reuse_ask_still_arm(self) -> None:
+        # Recorded prompts that a human plainly reads as "find what we already
+        # built", which the literal term table missed.
+        for prompt in [
+            "我不希望你重新造轮子，我们写了很多很多 AdHoc 的脚本",
+            "历史原话、确认边界与既有资产在叙事设计前可由用户核验",
+            "最后成功的经验又是什么？如果我们以后还想去抓微信公众号",
+        ]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    hook.classify_prompt(prompt, False), "required_prior_signal"
+                )
+
+    def test_dating_something_as_old_is_not_a_request_to_find_it(self) -> None:
+        self.assertEqual(
+            hook.classify_prompt(
+                "我的这些 skill 并不一定是必须遵守的公理，因为这些 Skill 也是很久之前写的",
+                False,
+            ),
+            "none",
+        )
+        self.assertEqual(
+            hook.classify_prompt("之前写的那个导出脚本在哪", False),
+            "required_prior_signal",
+        )
+
+    def test_hedge_recall_needs_a_distal_referent_not_the_current_object(self) -> None:
+        # 这个脚本 is the script in front of us; 那个/某个 script is a remembered
+        # one. Without this the weak tier fired on ordinary bug reports.
+        for prompt in [
+            "这个脚本好像是死循环，你看一下",
+            "这个报错好像是配置问题，你检查一下环境变量",
+            "我记不清具体版本号了，不过不影响这次的命令执行",
+        ]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt, False), "none")
+        for prompt in [
+            "上次那个脚本怎么写的",
+            "好像是之前那个方案更好",
+        ]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    hook.classify_prompt(prompt, False), "required_prior_signal"
+                )
+
     def test_user_optout_is_prompt_scoped_and_allows_write(self) -> None:
         hook.handle_event(
             {

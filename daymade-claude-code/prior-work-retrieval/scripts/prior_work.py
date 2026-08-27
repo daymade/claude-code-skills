@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -1081,6 +1082,270 @@ def check_receipt(
     }
 
 
+def _load_hook_module() -> tuple[Any | None, str | None]:
+    """Best-effort load of prior_work_hook.py for its classifier and patterns.
+
+    Returns (module, None) on success, or (None, error) when the sibling
+    hook script is missing, broken, or fails to import for any reason.
+    Never raises: audit_state must keep working even when the hook module
+    cannot be loaded.
+    """
+    hook_path = Path(__file__).with_name("prior_work_hook.py")
+    if not hook_path.is_file():
+        return None, f"hook module not found: {hook_path}"
+    cached = sys.modules.get("prior_work_hook")
+    if cached is not None:
+        return cached, None
+    try:
+        self_module = sys.modules.get(__name__)
+        if self_module is not None:
+            # prior_work_hook.py does `import prior_work` at module scope.
+            # Make that resolve to this already-loaded module -- whatever
+            # name it was registered under (__main__, prior_work, or a test
+            # harness's own spec name) -- instead of depending on sys.path
+            # or on some other module having imported "prior_work" first.
+            sys.modules.setdefault("prior_work", self_module)
+        spec = importlib.util.spec_from_file_location("prior_work_hook", hook_path)
+        if spec is None or spec.loader is None:
+            return None, f"could not build an import spec for {hook_path}"
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["prior_work_hook"] = module
+        spec.loader.exec_module(module)
+        required_attrs = (
+            "classify_prompt",
+            "NON_USER_PROMPT",
+            "PRIOR_WORK_STRONG_SIGNAL",
+            "PRIOR_WORK_WEAK_SIGNAL",
+            "WORK_NOUN",
+            "NEGATED_PRIOR_SIGNAL",
+        )
+        missing = [name for name in required_attrs if not hasattr(module, name)]
+        if missing:
+            raise AttributeError(f"hook module missing expected attributes: {missing}")
+        module.classify_prompt("selftest", False)  # smoke-test the live contract
+    except Exception as error:  # the hook may be mid-edit by another session
+        sys.modules.pop("prior_work_hook", None)
+        return None, f"{type(error).__name__}: {error}"
+    return module, None
+
+
+def _matched_signal_token(hook_module: Any, prompt_preview: str) -> str | None:
+    """Best-effort extraction of which literal span armed today's classifier.
+
+    classify_prompt() returns only the classification, not the match text.
+    This replays the *same* compiled patterns it already used internally
+    (never new ones) purely to surface evidence, so an over-firing term is
+    visible without hand-testing regexes. Mirrors classify_prompt's own
+    strong-then-weak+noun branch order; if a future hook version adds a new
+    branch this simply reports no token rather than guessing.
+    """
+    scannable = hook_module.NEGATED_PRIOR_SIGNAL.sub(" ", prompt_preview)
+    strong = hook_module.PRIOR_WORK_STRONG_SIGNAL.search(scannable)
+    if strong:
+        return strong.group(0)
+    weak = hook_module.PRIOR_WORK_WEAK_SIGNAL.search(scannable)
+    noun = hook_module.WORK_NOUN.search(scannable)
+    if weak and noun:
+        return f"{weak.group(0)}+{noun.group(0)}"
+    return None
+
+
+def _try_read_json(path: Path) -> tuple[Any | None, str | None]:
+    """Non-raising JSON read for audit_state: returns (payload, error)."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        return None, f"read_error:{error}"
+    try:
+        return json.loads(text), None
+    except json.JSONDecodeError as error:
+        return None, f"invalid_json:{error}"
+
+
+AUDIT_PREVIEW_TRUNCATION_NOTE = (
+    "prompt_preview is truncated to the first 240 chars of the original prompt. "
+    "non_user_prompt_count and still_required_prior_signal_count are computed "
+    "against that prefix only: a real match past char 240 is invisible here, so "
+    "both counts are a floor, never inflated -- a prefix match always matches "
+    "in the full text too, so truncation cannot manufacture a false positive."
+)
+
+
+def audit_state(manifest: dict[str, Any], *, limit: int = 20) -> dict[str, Any]:
+    """Report the health of the gate's own recorded requirement/receipt state.
+
+    Read-only: never writes, never mutates state_dir. Tolerant: a malformed
+    or missing JSON file is reported in the output, never raised.
+    """
+    if limit < 0:
+        raise PriorWorkError("--limit must be >= 0")
+    state_dir = Path(manifest["state_dir"])
+    requirements_dir = state_dir / "requirements"
+    receipts_dir = state_dir / "receipts"
+
+    hook_module, hook_error = _load_hook_module()
+
+    total_requirement_files = 0
+    by_trigger: dict[str, int] = {}
+    required_true_count = 0
+    empty_gate_entries: list[dict[str, Any]] = []
+    stranded_entries: list[dict[str, Any]] = []
+    non_user_prompt_entries: list[dict[str, Any]] = []
+    signal_entries: list[dict[str, Any]] = []
+    matched_token_frequency: dict[str, int] = {}
+    malformed_requirement_files: list[dict[str, Any]] = []
+    malformed_receipt_files: list[dict[str, Any]] = []
+
+    requirement_paths = (
+        sorted(requirements_dir.glob("*.json")) if requirements_dir.is_dir() else []
+    )
+    for path in requirement_paths:
+        total_requirement_files += 1
+        payload, error = _try_read_json(path)
+        if error is not None:
+            malformed_requirement_files.append({"file": path.name, "error": error})
+            continue
+        if not isinstance(payload, dict):
+            malformed_requirement_files.append(
+                {"file": path.name, "error": "not_an_object"}
+            )
+            continue
+        trigger = payload.get("trigger")
+        required = payload.get("required")
+        if not isinstance(trigger, str) or not trigger or not isinstance(required, bool):
+            malformed_requirement_files.append(
+                {
+                    "file": path.name,
+                    "error": (
+                        f"missing_or_invalid_fields:trigger={trigger!r}:"
+                        f"required={required!r}"
+                    ),
+                }
+            )
+            continue
+
+        by_trigger[trigger] = by_trigger.get(trigger, 0) + 1
+        session_id = payload.get("session_id")
+        entry_id = session_id if isinstance(session_id, str) and session_id else path.stem
+        requirement_id = payload.get("requirement_id")
+        preview_value = payload.get("prompt_preview")
+        prompt_preview = preview_value if isinstance(preview_value, str) else ""
+
+        if required:
+            required_true_count += 1
+            receipt_path = receipts_dir / path.name
+            if not receipt_path.is_file():
+                empty_gate_entries.append(
+                    {
+                        "file": path.name,
+                        "session_id": entry_id,
+                        "requirement_id": requirement_id,
+                        "trigger": trigger,
+                        "prompt_preview": prompt_preview,
+                    }
+                )
+            else:
+                receipt_payload, receipt_error = _try_read_json(receipt_path)
+                if receipt_error is not None:
+                    malformed_receipt_files.append(
+                        {"file": receipt_path.name, "error": receipt_error}
+                    )
+                elif not isinstance(receipt_payload, dict):
+                    malformed_receipt_files.append(
+                        {"file": receipt_path.name, "error": "not_an_object"}
+                    )
+                else:
+                    receipt_requirement_id = receipt_payload.get("requirement_id")
+                    if receipt_requirement_id != requirement_id:
+                        stranded_entries.append(
+                            {
+                                "file": path.name,
+                                "session_id": entry_id,
+                                "requirement_id": requirement_id,
+                                "receipt_requirement_id": receipt_requirement_id,
+                                "trigger": trigger,
+                                "prompt_preview": prompt_preview,
+                            }
+                        )
+
+            if hook_module is not None and prompt_preview:
+                if hook_module.NON_USER_PROMPT.search(prompt_preview):
+                    non_user_prompt_entries.append(
+                        {
+                            "file": path.name,
+                            "session_id": entry_id,
+                            "requirement_id": requirement_id,
+                            "trigger": trigger,
+                            "prompt_preview": prompt_preview,
+                        }
+                    )
+
+        if hook_module is not None and prompt_preview:
+            classification = hook_module.classify_prompt(prompt_preview, False)
+            if classification == "required_prior_signal":
+                token = _matched_signal_token(hook_module, prompt_preview)
+                if token:
+                    matched_token_frequency[token] = (
+                        matched_token_frequency.get(token, 0) + 1
+                    )
+                signal_entries.append(
+                    {
+                        "file": path.name,
+                        "session_id": entry_id,
+                        "requirement_id": requirement_id,
+                        "trigger": trigger,
+                        "required": required,
+                        "matched_token": token,
+                        "prompt_preview": prompt_preview,
+                    }
+                )
+
+    empty_gate_count = len(empty_gate_entries)
+    empty_gate_percent = (
+        round(100 * empty_gate_count / required_true_count, 1)
+        if required_true_count
+        else 0.0
+    )
+    sorted_token_frequency = dict(
+        sorted(matched_token_frequency.items(), key=lambda item: (-item[1], item[0]))
+    )
+
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "prior_work_audit",
+        "generated_at": utc_now(),
+        "state_dir": str(state_dir),
+        "limit": limit,
+        "hook_module_available": hook_module is not None,
+        "hook_module_error": hook_error,
+        "note": AUDIT_PREVIEW_TRUNCATION_NOTE,
+        "total_requirements": total_requirement_files,
+        "valid_requirements": total_requirement_files - len(malformed_requirement_files),
+        "malformed_requirement_count": len(malformed_requirement_files),
+        "malformed_receipt_count": len(malformed_receipt_files),
+        "by_trigger": by_trigger,
+        "required_true_count": required_true_count,
+        "empty_gate_count": empty_gate_count,
+        "empty_gate_percent": empty_gate_percent,
+        "stranded_receipt_count": len(stranded_entries),
+        "non_user_prompt_count": (
+            len(non_user_prompt_entries) if hook_module is not None else None
+        ),
+        "still_required_prior_signal_count": (
+            len(signal_entries) if hook_module is not None else None
+        ),
+        "matched_token_frequency": (
+            sorted_token_frequency if hook_module is not None else None
+        ),
+        "empty_gate_entries": empty_gate_entries[:limit],
+        "stranded_receipt_entries": stranded_entries[:limit],
+        "non_user_prompt_entries": non_user_prompt_entries[:limit],
+        "still_required_prior_signal_entries": signal_entries[:limit],
+        "malformed_requirement_files": malformed_requirement_files[:limit],
+        "malformed_receipt_files": malformed_receipt_files[:limit],
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Retrieve and verify prior work")
     parser.add_argument("--manifest", type=Path, default=default_manifest_path())
@@ -1112,6 +1377,10 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument("--session-id", default=os.environ.get("CODEX_SESSION_ID"))
     check_parser.add_argument("--max-age-seconds", type=int)
     check_parser.add_argument("--json", action="store_true")
+
+    audit_parser = subparsers.add_parser("audit")
+    audit_parser.add_argument("--limit", type=int, default=20)
+    audit_parser.add_argument("--json", action="store_true")
     return parser
 
 
@@ -1134,7 +1403,78 @@ def _print(payload: dict[str, Any], json_output: bool) -> None:
             print(f"    {item.get('snippet', '')[:240]}")
         print(f"run_path: {payload['run_path']}")
         return
+    if payload.get("kind") == "prior_work_audit":
+        _print_audit(payload)
+        return
     print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def _print_audit_entries(title: str, entries: list[dict[str, Any]], limit: int) -> None:
+    if not entries:
+        return
+    print(f"-- {title} (showing {len(entries)}, --limit={limit}) --")
+    for entry in entries:
+        preview = (entry.get("prompt_preview") or "")[:100]
+        matched = entry.get("matched_token")
+        matched_part = f" matched={matched!r}" if matched is not None else ""
+        print(
+            f"  session={entry.get('session_id')} req={entry.get('requirement_id')} "
+            f"trigger={entry.get('trigger')}{matched_part} preview={preview!r}"
+        )
+
+
+def _print_audit(payload: dict[str, Any]) -> None:
+    print(f"state_dir: {payload['state_dir']}")
+    print(
+        f"requirements: total={payload['total_requirements']} "
+        f"valid={payload['valid_requirements']} "
+        f"malformed={payload['malformed_requirement_count']}"
+    )
+    for trigger, count in sorted(
+        payload["by_trigger"].items(), key=lambda item: (-item[1], item[0])
+    ):
+        print(f"  trigger={trigger}: {count}")
+    print(f"required=True: {payload['required_true_count']}")
+    print(
+        f"empty_gate (required=True, no receipt): {payload['empty_gate_count']} "
+        f"({payload['empty_gate_percent']}%)"
+    )
+    print(f"stranded_receipts (requirement_id no longer matches): {payload['stranded_receipt_count']}")
+    print(f"malformed_receipt_files: {payload['malformed_receipt_count']}")
+    if payload["hook_module_available"]:
+        print(
+            "non_user_prompt (required=True, prompt_preview matches "
+            f"NON_USER_PROMPT): {payload['non_user_prompt_count']}"
+        )
+        print(
+            "still_required_prior_signal (re-classified against the live "
+            f"hook, receipt_valid=False): {payload['still_required_prior_signal_count']}"
+        )
+        top_tokens = list(payload["matched_token_frequency"].items())[: payload["limit"]]
+        if top_tokens:
+            print("  matched token frequency:")
+            for token, count in top_tokens:
+                print(f"    {token!r}: {count}")
+        print(f"note: {payload['note']}")
+    else:
+        print(f"hook module unavailable ({payload['hook_module_error']}); "
+              "non_user_prompt and still_required_prior_signal checks skipped")
+    _print_audit_entries("empty_gate entries", payload["empty_gate_entries"], payload["limit"])
+    _print_audit_entries("stranded_receipt entries", payload["stranded_receipt_entries"], payload["limit"])
+    _print_audit_entries("non_user_prompt entries", payload["non_user_prompt_entries"], payload["limit"])
+    _print_audit_entries(
+        "still_required_prior_signal entries",
+        payload["still_required_prior_signal_entries"],
+        payload["limit"],
+    )
+    if payload["malformed_requirement_files"]:
+        print("-- malformed requirement files --")
+        for item in payload["malformed_requirement_files"]:
+            print(f"  {item['file']}: {item['error']}")
+    if payload["malformed_receipt_files"]:
+        print("-- malformed receipt files --")
+        for item in payload["malformed_receipt_files"]:
+            print(f"  {item['file']}: {item['error']}")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1171,8 +1511,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.manual_complete,
                 args.no_reuse_reason,
             )
-        else:
+        elif args.command == "check":
             payload = check_receipt(manifest, args.session_id, args.max_age_seconds)
+        else:
+            payload = audit_state(manifest, limit=args.limit)
         _print(payload, getattr(args, "json", False))
         return 0
     except PriorWorkError as error:
