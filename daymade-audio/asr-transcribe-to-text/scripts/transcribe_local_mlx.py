@@ -411,10 +411,11 @@ def _load_or_create_manifest(path, identity, chunk_count):
             if entry.get("status") == "done":
                 part_name = entry.get("part")
                 part_hash = entry.get("sha256")
+                expected_part_name = f"chunk-{index:04d}.txt"
                 if (
                     not isinstance(part_name, str)
                     or Path(part_name).name != part_name
-                    or not re.fullmatch(r"chunk-[0-9]{4}\.txt", part_name)
+                    or part_name != expected_part_name
                     or not isinstance(part_hash, str)
                     or not re.fullmatch(r"[0-9a-f]{64}", part_hash)
                 ):
@@ -433,17 +434,23 @@ def _load_or_create_manifest(path, identity, chunk_count):
     return manifest
 
 
-def _validated_completed_part(checkpoint_dir, entry):
+def _validated_completed_part(checkpoint_dir, entry, expected_index):
     if not isinstance(entry, dict):
         raise CheckpointIntegrityError("checkpoint chunk entry is not an object")
     if entry.get("status") != "done":
         return None
+    if type(entry.get("index")) is not int or entry.get("index") != expected_index:
+        raise CheckpointIntegrityError(
+            f"completed checkpoint entry index mismatch: expected "
+            f"{expected_index}, got {entry.get('index')!r}"
+        )
     part_name = entry.get("part")
     expected_hash = entry.get("sha256")
+    expected_part_name = f"chunk-{expected_index:04d}.txt"
     if (
         not isinstance(part_name, str)
         or Path(part_name).name != part_name
-        or not re.fullmatch(r"chunk-[0-9]{4}\.txt", part_name)
+        or part_name != expected_part_name
         or not isinstance(expected_hash, str)
         or not re.fullmatch(r"[0-9a-f]{64}", expected_hash)
     ):
@@ -489,7 +496,7 @@ def transcribe_chunks(
 
     for index, (chunk_audio, offset_seconds) in enumerate(chunks):
         entry = manifest["chunks"][index]
-        completed = _validated_completed_part(checkpoint_dir, entry)
+        completed = _validated_completed_part(checkpoint_dir, entry, index)
         if completed is not None:
             texts.append(completed)
             print(
