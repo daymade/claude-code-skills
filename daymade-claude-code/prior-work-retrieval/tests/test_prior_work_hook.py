@@ -187,6 +187,121 @@ class PriorWorkHookTests(unittest.TestCase):
         }
         self.assertFalse(hook.substantial_tool_use(scratch_redirect)[0])
 
+    def test_retrieval_route_prose_does_not_trip_write_signal(self) -> None:
+        # Regression (2026-08-27): a --reject reason quoting "cp→symlink" let
+        # \bcp\b match the write signal before the retrieval-route exemption
+        # ran, blocking the gate's own receipt-completion command.
+        prose_complete = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": (
+                    "uv run --no-project python scripts/prior_work.py complete "
+                    "--run RUN_ID --reject 'abc=独立评审讲 cp→symlink 部署演进' "
+                    "--session-id SID"
+                )
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(prose_complete)
+        self.assertFalse(substantial, reason)
+
+    def test_retrieval_name_inside_arbitrary_code_cannot_launder_write(self) -> None:
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": (
+                    "python3 -c \"print('prior_work.py retrieve'); "
+                    "from pathlib import Path; Path('x').write_text('y')\""
+                )
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(event)
+        self.assertTrue(substantial, reason)
+        self.assertEqual(reason, "Bash:write_signal")
+
+    def test_unknown_prefix_before_retrieval_route_stays_gated(self) -> None:
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": (
+                    'python3 -c "print(123)" && '
+                    "uv run python scripts/prior_work.py check"
+                )
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(event)
+        self.assertTrue(substantial, reason)
+        self.assertEqual(reason, "Bash:unknown_executor")
+
+    def test_route_classifier_requires_real_argv_entry(self) -> None:
+        self.assertTrue(hook._segment_is_retrieval_route(
+            "uv run --no-project python scripts/prior_work.py complete --reason 'cp→symlink'"
+        ))
+        self.assertTrue(hook._segment_is_retrieval_route(
+            "env -u HTTP_PROXY MODE=test uv run --with PyYAML python scripts/prior_work.py check"
+        ))
+        self.assertTrue(hook._segment_is_retrieval_route(
+            "command python3 /some/path/read_chat.py --talker example"
+        ))
+        self.assertFalse(hook._segment_is_retrieval_route(
+            "python3 -c \"print('prior_work.py retrieve')\""
+        ))
+        self.assertFalse(hook._segment_is_retrieval_route(
+            "echo 'prior_work.py retrieve'"
+        ))
+
+    def test_escaped_separator_in_retrieval_reason_is_argument_data(self) -> None:
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": (
+                    "uv run python scripts/prior_work.py complete "
+                    "--reason escaped\\;cp"
+                )
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(event)
+        self.assertFalse(substantial, reason)
+
+    def test_background_write_after_retrieval_route_stays_gated(self) -> None:
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "uv run python scripts/prior_work.py check & git commit -a"
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(event)
+        self.assertTrue(substantial, reason)
+
+    def test_write_signal_still_wins_outside_retrieval_args(self) -> None:
+        cases = [
+            # Magic words inside a git message must not launder a real write.
+            'git commit -m "prior_work.py complete 修复"',
+            # A write chained after the retrieval command is still a write.
+            "uv run python scripts/prior_work.py check && git commit -a",
+            # Substitution inside retrieval args still executes; stay closed.
+            'uv run python scripts/prior_work.py check "$(git commit -a)"',
+            # A write before the retrieval token in another segment.
+            "git commit -a; uv run python scripts/prior_work.py check",
+        ]
+        for command in cases:
+            with self.subTest(command=command):
+                event = {"tool_name": "Bash", "tool_input": {"command": command}}
+                substantial, reason = hook.substantial_tool_use(event)
+                self.assertTrue(substantial, reason)
+
+    def test_retrieval_chain_and_benign_segments_pass(self) -> None:
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": (
+                    "cd /some/path && uv run python scripts/prior_work.py retrieve "
+                    "--query x --term y 2>&1 | tail -5"
+                )
+            },
+        }
+        substantial, reason = hook.substantial_tool_use(event)
+        self.assertFalse(substantial, reason)
+
     def test_implicit_pretool_requirement_blocks_until_receipt(self) -> None:
         event = {
             "hook_event_name": "PreToolUse",
