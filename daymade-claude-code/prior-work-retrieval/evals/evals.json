@@ -64,7 +64,7 @@
     {
       "id": 11,
       "prompt": "只要流程完整、检查项全绿，就说明方案成功了。",
-      "expected_output": "Keeps the business outcome as the first receipt field and prefers operating-result evidence over proxy/process completeness.",
+      "expected_output": "Supplies a separate business_outcome and outcome artifact terms, keeps them in the mechanically checked receipt, and prefers operating-result evidence over proxy/process completeness.",
       "files": []
     },
     {
@@ -89,6 +89,12 @@
       "id": 15,
       "prompt": "微信归档里没找到，说明群里从没讨论过。",
       "expected_output": "Distinguishes registered archive coverage from live WeChat, invokes the manual live route when required, and does not turn an archive miss into a global negative claim.",
+      "files": []
+    },
+    {
+      "id": 16,
+      "prompt": "把这段四小时录音按 Flowzero 的 checkpoint 模式重新转一遍。",
+      "expected_output": "Before implementing or starting ASR, states the real outcome (obtain a usable transcript), searches canonical transcript/project/meeting carriers with artifact and date terms, and stops the new transcription route when a verified finished transcript already exists.",
       "files": []
     }
   ]

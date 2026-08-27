@@ -1,22 +1,22 @@
 # Speaker Diarization (Multi-Speaker Transcription)
 
-The default pipeline produces speaker-labeled transcripts by **decoupling**:
-session-wide Qwen3-ASR text (checkpointed in low-energy long-audio chunks) +
-whisper word timing + pyannote segments, aligned after the fact. Architecture,
-alignment algorithm, and trust signals:
+The default long-recording pipeline produces speaker-labeled transcripts by
+**decoupling**: whisper.cpp + Silero VAD text/timing, pyannote speech/speaker
+segments, then late fusion. `speaker_transcribe.py` remains the short/medium
+Qwen3-ASR + mlx-whisper alternative. Architecture, alignment algorithm, and trust signals:
 **`references/decoupled_speaker_alignment.md`** — read that first. This file
 carries the production pitfalls (architecture-independent) and the legacy
 cascade notes.
 
 ```
-16kHz mono WAV
-  1. Qwen3-ASR session audio    -> text (no speaker-turn cuts)
-  2. mlx-whisper word timestamps -> time lattice
-  3. pyannote 3.1 diarization    -> segments {start, end, speaker}
-  4. align                       -> [start-end] SPEAKER_xx: text
+16kHz mono PCM16 WAV
+  1. Source-time base blocks (+2s overlap) -> checkpoint units
+  2. whisper.cpp + Silero VAD              -> speech-only text + time
+  3. pyannote diarization                   -> segments {start,end,speaker}
+  4. late fusion                            -> [start-end] SPEAKER_xx + text
 ```
 
-## Fastest path: the bundled pipeline
+## Short/medium alternative: bundled Qwen pipeline
 
 `scripts/speaker_transcribe.py` runs all four steps in one command:
 
@@ -44,12 +44,38 @@ Intermediate legs are cached under `OUTPUT_DIR/_align/`; `--force` redoes them.
 5. **Align** — `align_speakers.py --text T --words W --diarization D
    --out-dir OUT --stem NAME` (standalone for debugging/custom chains).
 
+## Long-audio facts verified on real production audio
+
+- A 4h39m37.75s body-mic WAV disproved fixed Qwen generation windows: 20,
+  10, and 5 minute variants each hit the 8192-token ceiling on different source
+  regions. Short canaries had passed; they did not establish long-form safety.
+- whisper.cpp without VAD also hallucinated repeated text over silence. With
+  Silero VAD v6.2.0, the same source exposed 12,609.78 seconds of speech and
+  excluded roughly 1h09m28s of silence/noise before ASR. Two known failure
+  windows then transcribed without the previous loops.
+- `-mc 0` (no stored prior-window text context) stopped cross-window repetition
+  propagation. Compression/logprob/no-speech fallbacks remain enabled.
+- Outer blocks are cut by FFmpeg on the **original source timeline**. Do not use
+  whisper.cpp `--offset-t` to checkpoint a VAD-compressed full file: with VAD
+  enabled, its offset applies after speech compaction and no longer names the
+  original source time.
+- Each block owns decoded segments by source-time midpoint. Adjacent blocks may
+  still segment the same boundary phrase differently, so seam-only temporal +
+  text similarity de-duplication is required and independently tested.
+- A recorder file can outlive the business session. Persist an explicit
+  evidence-backed `--end-at` boundary instead of forcing post-meeting ambient
+  audio into the meeting transcript.
+
+Official references: [whisper.cpp VAD](https://github.com/ggml-org/whisper.cpp),
+[faster-whisper VAD/long-form options](https://github.com/SYSTRAN/faster-whisper),
+[WhisperX late-fusion architecture](https://github.com/m-bain/whisperX), and
+[NeMo long-audio buffered inference](https://docs.nvidia.com/nemo/speech/nightly/asr/inference.html).
+
 ## Key facts & pitfalls (from production)
 
-- **All on GPU; CPU forbidden as the primary path.** pyannote 3.1 @ MPS runs
-  ~16× realtime on Apple Silicon; Qwen3-ASR @ MLX is 15–27×. The scripts only
-  drop to CPU if a specific MPS op is unimplemented for one file — never by
-  default.
+- **All on accelerated paths; no silent CPU fallback.** whisper.cpp uses Metal
+  on Apple Silicon; pyannote uses explicit MPS. Runtime failures propagate
+  instead of turning a minutes-long job into an unattended many-hour CPU run.
 - **HF token required** — pyannote models are gated. Accept the terms at
   `hf.co/pyannote/speaker-diarization-3.1` and `huggingface-cli login` once.
   The Step 3 state machine in SKILL.md handles the no-token case: fail the
@@ -87,9 +113,9 @@ default.
 
 ## Alternative engines (context, not a benchmark)
 
-This path pairs pyannote (diarization) + whisper (timing) + Qwen3-ASR (text)
-because the skill already ships the Qwen3-ASR MLX path and it's strong on
-Chinese. Other stacks exist (FunASR Paraformer bundles diarization +
-transcription; NeMo Sortformer is an end-to-end diarizer; cloud ASR services
-do the whole chain server-side). They haven't been benchmarked head-to-head
-here — see `decoupled_speaker_alignment.md` § Alternatives for the landscape.
+The short/medium path pairs pyannote (diarization) + mlx-whisper (timing) +
+Qwen3-ASR (text). The long path pairs whisper.cpp/Silero with pyannote. Other
+stacks exist (FunASR Paraformer bundles diarization + transcription; NeMo
+Sortformer is an end-to-end diarizer; cloud ASR services do the whole chain
+server-side). They have not been benchmarked head-to-head here — see
+`decoupled_speaker_alignment.md` § Alternatives for the landscape.

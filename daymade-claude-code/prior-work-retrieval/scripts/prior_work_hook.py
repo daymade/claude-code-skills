@@ -466,7 +466,9 @@ def _guidance(reason: str) -> str:
     return (
         "Prior Work Retrieval is required before substantial production. "
         f"Trigger: {reason}. Load the prior-work-retrieval Skill, run "
-        "scripts/prior_work.py retrieve across the explicit manifest, open and "
+        "scripts/prior_work.py retrieve with one --business-outcome sentence, "
+        "artifact/event --outcome-term values, and separate implementation terms "
+        "across the explicit manifest; open and "
         "verify candidates, then complete a reuse/adapt/no-reuse receipt for this "
         "session. Read-only discovery remains allowed."
     )
@@ -644,6 +646,8 @@ def selftest() -> None:
             manifest = _manifest()
             run = prior_work.retrieve(
                 manifest,
+                "Reuse the verified existing contract before writing new code.",
+                ["known existing"],
                 "reuse known contract",
                 ["known existing"],
                 "selftest-session",
