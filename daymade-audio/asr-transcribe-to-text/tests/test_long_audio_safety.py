@@ -52,10 +52,18 @@ def identity():
         "source_mtime_ns": 456,
         "source_sha256": "example-sha256",
         "model": "example/model",
+        "model_revision": "a" * 40,
         "language": "Chinese",
         "chunk_duration_s": 1200.0,
         "max_tokens_per_chunk": 8192,
+        "sample_rate": 16000,
         "quality_policy": local_mlx.QUALITY_POLICY_ID,
+        "producer": {
+            "script": "transcribe_local_mlx.py",
+            "sha256": "b" * 64,
+        },
+        "splitter_contract": local_mlx.SPLITTER_CONTRACT_ID,
+        "dependencies": dict(sorted(local_mlx.PINNED_DEPENDENCY_VERSIONS.items())),
     }
 
 
@@ -66,10 +74,15 @@ class LongAudioSafetyTests(unittest.TestCase):
         self.assertEqual(args.max_tokens, 8192)
         self.assertEqual(args.chunk_duration, 1200.0)
         local_mlx.validate_args(parser, args)
+        self.assertEqual(args.model_revision, local_mlx.DEFAULT_MODEL_REVISION)
 
         unsafe = parser.parse_args(["--smoke-test", "--max-tokens", "200000"])
         with self.assertRaises(SystemExit):
             local_mlx.validate_args(parser, unsafe)
+
+        custom = parser.parse_args(["--smoke-test", "--model", "example/custom"])
+        with self.assertRaises(SystemExit):
+            local_mlx.validate_args(parser, custom)
 
     def test_each_chunk_commits_and_second_run_resumes_without_inference(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -212,6 +225,38 @@ class LongAudioSafetyTests(unittest.TestCase):
                     1200.0,
                 )
 
+    def test_missing_completed_checkpoint_part_is_a_blocking_integrity_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            output = root / "result.txt"
+            checkpoint = root / "checkpoint"
+            local_mlx.transcribe_chunks(
+                FakeModel([FakeResult("safe", 100)]),
+                [("chunk-a", 0.0)],
+                output,
+                checkpoint,
+                identity(),
+                8192,
+                "Chinese",
+                1200.0,
+            )
+            (checkpoint / "chunk-0000.txt").unlink()
+
+            with self.assertRaisesRegex(
+                local_mlx.CheckpointIntegrityError,
+                "checkpoint part is missing",
+            ):
+                local_mlx.transcribe_chunks(
+                    FakeModel([]),
+                    [("chunk-a", 0.0)],
+                    output,
+                    checkpoint,
+                    identity(),
+                    8192,
+                    "Chinese",
+                    1200.0,
+                )
+
     def test_checkpoint_identity_changes_when_same_size_audio_content_changes(self):
         with tempfile.TemporaryDirectory() as tmp:
             audio = Path(tmp) / "audio.wav"
@@ -219,19 +264,83 @@ class LongAudioSafetyTests(unittest.TestCase):
             audio.write_bytes(b"first-audio")
             os.utime(audio, ns=(fixed_mtime_ns, fixed_mtime_ns))
             first_identity, first_digest = local_mlx._checkpoint_identity(
-                audio, "example/model", "Chinese", 1200.0, 8192
+                audio,
+                "example/model",
+                "1" * 40,
+                "Chinese",
+                1200.0,
+                8192,
+                16000,
+                local_mlx.PINNED_DEPENDENCY_VERSIONS,
+                producer_sha256="a" * 64,
             )
 
             audio.write_bytes(b"other-audio")
             os.utime(audio, ns=(fixed_mtime_ns, fixed_mtime_ns))
             second_identity, second_digest = local_mlx._checkpoint_identity(
-                audio, "example/model", "Chinese", 1200.0, 8192
+                audio,
+                "example/model",
+                "1" * 40,
+                "Chinese",
+                1200.0,
+                8192,
+                16000,
+                local_mlx.PINNED_DEPENDENCY_VERSIONS,
+                producer_sha256="a" * 64,
             )
 
             self.assertEqual(first_identity["source_size"], second_identity["source_size"])
             self.assertEqual(first_identity["source_mtime_ns"], second_identity["source_mtime_ns"])
             self.assertNotEqual(first_identity["source_sha256"], second_identity["source_sha256"])
             self.assertNotEqual(first_digest, second_digest)
+
+    def test_checkpoint_identity_changes_with_producer_and_model_revision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            audio = Path(tmp) / "audio.wav"
+            audio.write_bytes(b"audio")
+            common = (
+                audio,
+                "example/model",
+            )
+            first_identity, first_digest = local_mlx._checkpoint_identity(
+                *common,
+                "1" * 40,
+                "Chinese",
+                1200.0,
+                8192,
+                16000,
+                local_mlx.PINNED_DEPENDENCY_VERSIONS,
+                producer_sha256="a" * 64,
+            )
+            producer_identity, producer_digest = local_mlx._checkpoint_identity(
+                *common,
+                "1" * 40,
+                "Chinese",
+                1200.0,
+                8192,
+                16000,
+                local_mlx.PINNED_DEPENDENCY_VERSIONS,
+                producer_sha256="b" * 64,
+            )
+            revision_identity, revision_digest = local_mlx._checkpoint_identity(
+                *common,
+                "2" * 40,
+                "Chinese",
+                1200.0,
+                8192,
+                16000,
+                local_mlx.PINNED_DEPENDENCY_VERSIONS,
+                producer_sha256="a" * 64,
+            )
+            self.assertNotEqual(first_digest, producer_digest)
+            self.assertNotEqual(first_digest, revision_digest)
+            self.assertNotEqual(
+                first_identity["producer"], producer_identity["producer"]
+            )
+            self.assertNotEqual(
+                first_identity["model_revision"],
+                revision_identity["model_revision"],
+            )
 
     def test_speaker_timeout_reaps_grandchild_process_group(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -361,8 +470,38 @@ class LongAudioSafetyTests(unittest.TestCase):
                 json.dumps({"report": {"trustworthy": True}}),
                 encoding="utf-8",
             )
+            (root / "audio.csv").write_text(
+                "file,start,end,duration,speaker,text\n"
+                "audio.wav,0,1,1,SPEAKER_00,hello\n",
+                encoding="utf-8",
+            )
+            (root / "audio.txt").write_text(
+                "[00:00.000 - 00:01.000] SPEAKER_00\nhello\n",
+                encoding="utf-8",
+            )
+            (root / "audio.diarization.json").write_text(
+                json.dumps(
+                    {
+                        "num_segments": 1,
+                        "num_speakers": 1,
+                        "segments": [
+                            {
+                                "start": 0.0,
+                                "end": 1.0,
+                                "speaker": "SPEAKER_00",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
 
-            speaker._stamp_alignment_source(wav, root, wav.stem)
+            speaker._stamp_alignment_source(
+                wav,
+                root,
+                wav.stem,
+                speaker._source_audio_identity(wav),
+            )
 
             payload = json.loads(alignment.read_text(encoding="utf-8"))
             self.assertEqual(payload["source_audio"]["path"], str(wav.resolve()))
@@ -370,6 +509,67 @@ class LongAudioSafetyTests(unittest.TestCase):
             self.assertEqual(
                 payload["source_audio"]["sha256"],
                 local_mlx._sha256_file(wav),
+            )
+            self.assertEqual(payload["turn_contract"]["schema"], "speaker-csv-v1")
+            self.assertEqual(
+                payload["component_sha256"]["csv"],
+                local_mlx._sha256_file(root / "audio.csv"),
+            )
+            parameters = {
+                "language": "Chinese",
+                "initial_prompt": None,
+                "device": None,
+                "max_gap": 2.0,
+                "text_file": None,
+            }
+            speaker._write_final_receipt(
+                wav, root, wav.stem, parameters
+            )
+            receipt_path = root / "audio.receipt.json"
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(receipt["schema"], speaker.FINAL_RECEIPT_SCHEMA)
+            self.assertEqual(receipt["parameters"], parameters)
+            self.assertEqual(
+                receipt["model_contract"]["revision"],
+                local_mlx.DEFAULT_MODEL_REVISION,
+            )
+            for name in speaker.FINAL_ARTIFACT_SUFFIXES:
+                self.assertEqual(
+                    receipt["artifacts"][name]["sha256"],
+                    local_mlx._sha256_file(
+                        root / f"audio{speaker.FINAL_ARTIFACT_SUFFIXES[name]}"
+                    ),
+                )
+
+    def test_speaker_leg_propagates_machine_readable_checkpoint_exit(self):
+        with self.assertRaises(SystemExit) as raised:
+            speaker.run(
+                [sys.executable, "-c", "raise SystemExit(4)"],
+                timeout=3,
+            )
+        self.assertEqual(raised.exception.code, 4)
+
+    def test_required_leg_rerun_without_fresh_output_fails_before_alignment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wav = root / "audio.wav"
+            wav.write_bytes(b"source-audio")
+            work_root = root / "work"
+            destination = work_root / wav.stem / f"{wav.stem}.qwen.txt"
+            destination.parent.mkdir(parents=True)
+            destination.write_text("stale transcript", encoding="utf-8")
+
+            with (
+                mock.patch.object(speaker, "run", return_value=None),
+                self.assertRaisesRegex(RuntimeError, "produced no fresh artifact"),
+            ):
+                speaker.leg_text([wav], work_root, "Chinese", False, 30)
+
+            self.assertEqual(
+                destination.read_text(encoding="utf-8"), "stale transcript"
+            )
+            self.assertFalse(
+                speaker._artifact_provenance_matches_source(wav, destination)
             )
 
     def test_mlx_worker_exits_when_explicit_owner_disappears(self):

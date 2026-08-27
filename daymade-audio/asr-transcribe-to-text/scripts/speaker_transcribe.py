@@ -20,6 +20,7 @@ Outputs per input (flat under OUTPUT_DIR — same contract downstream tools read
   <stem>.txt                [MM:SS - MM:SS] SPEAKER_xx + text
   <stem>.csv                file,start,end,duration,speaker,text
   <stem>.alignment.json     alignment provenance + anchored_ratio trust signal
+  <stem>.receipt.json       atomic final contract: source + four artifact hashes
 Intermediate legs are cached under OUTPUT_DIR/_align/ and reused only when a
 sidecar proves the source-audio bytes, producer bytes, parameters, and cached
 artifact bytes still match (pass --force to redo them).
@@ -43,6 +44,7 @@ Usage:
   --timeout SEC      per-leg subprocess timeout (default 1800)
 """
 import argparse
+import csv
 import json
 import os
 import signal
@@ -55,7 +57,17 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from transcribe_local_mlx import _sha256_file, atomic_write_json
+from transcribe_local_mlx import (
+    DEFAULT_CHUNK_DURATION_S,
+    DEFAULT_MAX_TOKENS_PER_CHUNK,
+    DEFAULT_MODEL_ID,
+    DEFAULT_MODEL_REVISION,
+    PINNED_DEPENDENCY_VERSIONS,
+    QUALITY_POLICY_ID,
+    _sha256_file,
+    _sha256_text,
+    atomic_write_json,
+)
 
 PYANNOTE_SETUP_HINT = """
 ============================================================
@@ -93,6 +105,13 @@ PROCESS_HEARTBEAT_SECONDS = 60.0
 PROCESS_TERM_GRACE_SECONDS = 5.0
 OWNER_POLL_SECONDS = 5.0
 CACHE_PROVENANCE_SCHEMA = 1
+FINAL_RECEIPT_SCHEMA = "speaker-bundle-receipt-v1"
+FINAL_ARTIFACT_SUFFIXES = {
+    "txt": ".txt",
+    "csv": ".csv",
+    "diarization": ".diarization.json",
+    "alignment": ".alignment.json",
+}
 _SOURCE_IDENTITY_CACHE = {}
 
 # Map the orchestrator's --language to a whisper language code. The whisper leg
@@ -177,15 +196,121 @@ def _write_artifact_provenance(wav, artifact, producer_script, parameters):
     atomic_write_json(_artifact_provenance_path(artifact), provenance)
 
 
-def _stamp_alignment_source(wav, out_dir, stem):
+def _artifact_provenance_matches_source(wav, artifact):
+    artifact = Path(artifact)
+    provenance_path = _artifact_provenance_path(artifact)
+    if not artifact.is_file() or not provenance_path.is_file():
+        return False
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    return (
+        provenance.get("source_audio") == _source_audio_identity(wav)
+        and provenance.get("artifact_sha256") == _sha256_file(artifact)
+    )
+
+
+def _csv_turn_contract_sha256(csv_path):
+    fields = ("file", "start", "end", "duration", "speaker", "text")
+    with Path(csv_path).open(newline="", encoding="utf-8") as handle:
+        rows = [
+            {field: row.get(field) for field in fields}
+            for row in csv.DictReader(handle)
+        ]
+    return _sha256_text(
+        json.dumps(rows, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    )
+
+
+def _stamp_alignment_source(wav, out_dir, stem, expected_source):
     alignment_path = Path(out_dir) / f"{stem}.alignment.json"
+    current_source = _source_audio_identity(wav)
+    if current_source != expected_source:
+        raise RuntimeError(f"source audio changed while aligning: {wav}")
     payload = json.loads(alignment_path.read_text(encoding="utf-8"))
-    payload["source_audio"] = _source_audio_identity(wav)
+    payload["source_audio"] = current_source
     payload["pipeline"] = {
         "speaker_transcribe_sha256": _sha256_file(Path(__file__)),
         "align_speakers_sha256": _sha256_file(HERE / "align_speakers.py"),
     }
+    payload["turn_contract"] = {
+        "schema": "speaker-csv-v1",
+        "sha256": _csv_turn_contract_sha256(
+            Path(out_dir) / f"{stem}.csv"
+        ),
+    }
+    payload["component_sha256"] = {
+        "txt": _sha256_file(Path(out_dir) / f"{stem}.txt"),
+        "csv": _sha256_file(Path(out_dir) / f"{stem}.csv"),
+        "diarization": _sha256_file(
+            Path(out_dir) / f"{stem}.diarization.json"
+        ),
+    }
+    payload["label_mapping"] = {}
     atomic_write_json(alignment_path, payload)
+
+
+def _final_receipt_path(out_dir, stem):
+    return Path(out_dir) / f"{stem}.receipt.json"
+
+
+def _pipeline_contract():
+    scripts = (
+        "speaker_transcribe.py",
+        "transcribe_local_mlx.py",
+        "word_timestamps_whisper.py",
+        "diarize_speakers.py",
+        "align_speakers.py",
+    )
+    return {
+        name: _sha256_file(HERE / name)
+        for name in scripts
+    }
+
+
+def _external_text_identity(text_file):
+    if text_file is None:
+        return None
+    path = Path(text_file).resolve()
+    state = path.stat()
+    return {
+        "path": str(path),
+        "size": state.st_size,
+        "sha256": _sha256_file(path),
+    }
+
+
+def _write_final_receipt(
+    wav, out_dir, stem, parameters, pipeline_contract=None
+):
+    """Atomically commit the complete bundle after every final artifact exists."""
+    artifacts = {}
+    for name, suffix in FINAL_ARTIFACT_SUFFIXES.items():
+        path = Path(out_dir) / f"{stem}{suffix}"
+        if not path.is_file():
+            raise RuntimeError(f"cannot write final receipt; missing {path}")
+        artifacts[name] = {
+            "file": path.name,
+            "size": path.stat().st_size,
+            "sha256": _sha256_file(path),
+        }
+    payload = {
+        "schema": FINAL_RECEIPT_SCHEMA,
+        "source_audio": _source_audio_identity(wav),
+        "artifacts": artifacts,
+        "pipeline": pipeline_contract or _pipeline_contract(),
+        "parameters": parameters,
+        "model_contract": {
+            "id": DEFAULT_MODEL_ID,
+            "revision": DEFAULT_MODEL_REVISION,
+            "chunk_duration_s": DEFAULT_CHUNK_DURATION_S,
+            "max_tokens_per_chunk": DEFAULT_MAX_TOKENS_PER_CHUNK,
+            "quality_policy": QUALITY_POLICY_ID,
+            "dependencies": dict(sorted(PINNED_DEPENDENCY_VERSIONS.items())),
+        },
+    }
+    atomic_write_json(_final_receipt_path(out_dir, stem), payload)
 
 
 class ParentTermination(SystemExit):
@@ -300,6 +425,10 @@ def run(cmd, timeout=None):
         # original group before returning so inherited pipes cannot hold callers open.
         _terminate_process_group(process)
         if returncode != 0:
+            # Preserve the child pipeline's machine-readable failure class for
+            # the DJI supervisor.  Human stderr wording is not an API.
+            if returncode in {2, 3, 4, 5}:
+                raise SystemExit(returncode)
             raise subprocess.CalledProcessError(returncode, cmd)
     except BaseException:
         _terminate_process_group(process)
@@ -408,6 +537,7 @@ def diarize_all(wavs, out_dir, device, force):
             log(PYANNOTE_SETUP_HINT)
             sys.exit(3)
         raise
+    failed = []
     for wav, diar_json in pending:
         try:
             segments = run_pipeline(pipeline, wav, dev)
@@ -417,11 +547,14 @@ def diarize_all(wavs, out_dir, device, force):
                 log(PYANNOTE_SETUP_HINT)
                 sys.exit(3)
             log(f"WARNING: diarization failed for {wav.name} ({e}); skipping")
+            failed.append(wav.name)
             continue
         write_diarization_json(segments, wav, dev, diar_json)
         _write_artifact_provenance(
             wav, diar_json, "diarize_speakers.py", cache_parameters
         )
+    if failed:
+        raise RuntimeError(f"diarization produced no fresh artifact for: {failed}")
 
 
 def _run_batched_leg(wavs, work_root, script, staging_name, staging_suffix,
@@ -444,15 +577,21 @@ def _run_batched_leg(wavs, work_root, script, staging_name, staging_suffix,
     staging = work_root / staging_name
     cmd = ["uv", "run", str(HERE / script), "--output-dir", str(staging)] + extra_args + [str(w) for w in todo]
     run(cmd, timeout=timeout)
+    missing_outputs = []
     for w in todo:
         staged = staging / f"{w.stem}{staging_suffix}"
         if not staged.exists():
             log(f"WARNING: {missing_label} {w.name} — alignment will fail for this file")
+            missing_outputs.append(w.name)
             continue
         dest = dest_for(w.stem)
         dest.parent.mkdir(parents=True, exist_ok=True)
         staged.replace(dest)
         _write_artifact_provenance(w, dest, script, cache_parameters)
+    if missing_outputs:
+        raise RuntimeError(
+            f"{script} exited 0 but produced no fresh artifact for: {missing_outputs}"
+        )
 
 
 def leg_text(wavs, work_root, language, force, timeout):
@@ -484,7 +623,15 @@ def leg_words(wavs, work_root, language, initial_prompt, force, timeout):
         })
 
 
-def leg_align(wavs, out_dir, work_root, max_gap, text_file=None):
+def leg_align(
+    wavs,
+    out_dir,
+    work_root,
+    max_gap,
+    text_file=None,
+    receipt_parameters=None,
+    receipt_pipeline=None,
+):
     """Leg 4: attach speakers to full text, write the output contract.
     Per-file resilient — one bad file is recorded as failed, not a batch crash;
     an untrustworthy alignment is NOT written (would ship fake timestamps)."""
@@ -501,6 +648,19 @@ def leg_align(wavs, out_dir, work_root, max_gap, text_file=None):
             log(f"ERROR {stem}: missing {[str(p) for p in missing]} — cannot align")
             failed.append(stem)
             continue
+        provenance_inputs = [(diar_json, "diarization"), (wpath, "word lattice")]
+        if text_file is None:
+            provenance_inputs.append((tpath, "Qwen transcript"))
+        stale = [
+            label
+            for path, label in provenance_inputs
+            if not _artifact_provenance_matches_source(wav, path)
+        ]
+        if stale:
+            log(f"ERROR {stem}: stale/unproven {stale} — cannot align")
+            failed.append(stem)
+            continue
+        source_identity = _source_audio_identity(wav)
         try:
             qwen_text = tpath.read_text(encoding="utf-8")
             words = json.loads(wpath.read_text(encoding="utf-8"))["words"]
@@ -519,7 +679,14 @@ def leg_align(wavs, out_dir, work_root, max_gap, text_file=None):
             failed.append(stem)
             continue
         write_outputs(turns, report, wav.name, out_dir, stem)
-        _stamp_alignment_source(wav, out_dir, stem)
+        _stamp_alignment_source(wav, out_dir, stem, source_identity)
+        _write_final_receipt(
+            wav,
+            out_dir,
+            stem,
+            receipt_parameters or {},
+            receipt_pipeline,
+        )
     if failed:
         log(f"FAILED/skipped files: {failed}")
         sys.exit(1)
@@ -582,6 +749,10 @@ def main():
 
     work_root = args.out_dir / "_align"
     work_root.mkdir(parents=True, exist_ok=True)
+    # Freeze producer bytes before any long-running leg. If files change while
+    # this process runs, downstream current-contract validation rejects the old
+    # process instead of attributing its outputs to the new on-disk code.
+    receipt_pipeline = _pipeline_contract()
 
     diarize_all(args.inputs, args.out_dir, args.device, args.force)
     if args.text_file:
@@ -589,7 +760,22 @@ def main():
     else:
         leg_text(args.inputs, work_root, args.language, args.force, args.timeout)
     leg_words(args.inputs, work_root, args.language, args.initial_prompt, args.force, args.timeout)
-    leg_align(args.inputs, args.out_dir, work_root, args.max_gap, args.text_file)
+    receipt_parameters = {
+        "language": args.language,
+        "initial_prompt": args.initial_prompt,
+        "device": args.device,
+        "max_gap": args.max_gap,
+        "text_file": _external_text_identity(args.text_file),
+    }
+    leg_align(
+        args.inputs,
+        args.out_dir,
+        work_root,
+        args.max_gap,
+        args.text_file,
+        receipt_parameters,
+        receipt_pipeline,
+    )
     log("Done.")
 
 

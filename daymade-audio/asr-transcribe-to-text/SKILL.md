@@ -311,20 +311,23 @@ Chunk 1/6 committed: 6310 chars, 3812 tokens
 + uv run .../word_timestamps_whisper.py ...     (leg 2: timing lattice)
 ... diarization ...                             (leg 3: pyannote segments)
 STEM: 42 turns, speakers=['SPEAKER_00', 'SPEAKER_01'], anchored_ratio=0.93
-Wrote STEM.txt, STEM.csv, STEM.alignment.json
+Wrote STEM.txt, STEM.csv, STEM.alignment.json, STEM.receipt.json
 ```
 
 Outputs per input: `<stem>.txt` (`[MM:SS - MM:SS] SPEAKER_xx` + text),
 `<stem>.csv` (`file,start,end,duration,speaker,text` — feeds review UIs and
 voiceprint ID), `<stem>.diarization.json`, `<stem>.alignment.json` (provenance
 + `anchored_ratio` trust signal; < 0.5 prints a loud warning — verify labels
-against the audio before trusting them). Intermediate legs are cached in
+against the audio before trusting them), and `<stem>.receipt.json` (the atomic
+completion record binding source bytes, all four final artifact hashes, producer
+scripts, pinned model/dependencies, and semantic parameters). Intermediate legs are cached in
 `OUTPUT_DIR/_align/` so re-runs are cheap (`--force` redoes final legs). Each
 intermediate cache sidecar binds source-audio bytes, producer-script bytes,
 semantic parameters, and artifact bytes; file existence alone is never a cache
-hit. The final alignment JSON records the source-audio SHA-256 for downstream
-completion checks. Qwen chunk checkpoints live below its staging directory; an interrupted run verifies
-the source-audio SHA-256 plus completed chunk hashes, then skips completed chunks
+hit. Downstream completion checks require the final receipt, not a non-empty
+artifact or alignment JSON alone. Qwen chunk checkpoints live below its staging directory; an interrupted run verifies
+the source-audio SHA-256, producer/splitter/dependency contract, immutable model
+revision, generation parameters, and completed chunk hashes, then skips completed chunks
 instead of starting the recording over. A language-agnostic 12-character n-gram
 guard rejects highly repetitive chunk or whole-session text before final delivery;
 the quality-policy ID is part of checkpoint identity, so older unchecked parts

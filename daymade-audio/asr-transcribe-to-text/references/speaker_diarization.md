@@ -27,7 +27,8 @@ uv run scripts/speaker_transcribe.py INPUT.wav OUTPUT_DIR --device mps
 It writes `<stem>.txt` (readable), `<stem>.csv`
 (`file,start,end,duration,speaker,text` — the tabular form review UIs and the
 voiceprint step consume), `<stem>.diarization.json`, and
-`<stem>.alignment.json` (provenance + `anchored_ratio` trust signal).
+`<stem>.alignment.json` (provenance + `anchored_ratio` trust signal), and
+`<stem>.receipt.json` (atomic final bundle contract; required for automated completion).
 Intermediate legs are cached under `OUTPUT_DIR/_align/`; `--force` redoes them.
 
 ## The pieces (if you need to customize)

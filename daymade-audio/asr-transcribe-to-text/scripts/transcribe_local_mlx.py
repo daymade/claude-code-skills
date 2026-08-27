@@ -38,6 +38,15 @@ from pathlib import Path
 DEFAULT_CHUNK_DURATION_S = 1200.0
 DEFAULT_MAX_TOKENS_PER_CHUNK = 8192
 MAX_SAFE_TOKENS_PER_CHUNK = 16384
+DEFAULT_MODEL_ID = "mlx-community/Qwen3-ASR-1.7B-8bit"
+DEFAULT_MODEL_REVISION = "a8379a2e2f9e313c9292cdf1af4055ab56d50d55"
+PINNED_DEPENDENCY_VERSIONS = {
+    "mlx-audio": "0.3.1",
+    "mlx-lm": "0.30.5",
+    "transformers": "5.0.0rc3",
+}
+CHECKPOINT_SCHEMA_VERSION = 2
+SPLITTER_CONTRACT_ID = "mlx_audio.qwen3_asr.split_audio_into_chunks-v1"
 OWNER_POLL_SECONDS = 5.0
 REPETITION_NGRAM_CHARS = 12
 REPETITION_MIN_NORMALIZED_CHARS = 400
@@ -53,12 +62,23 @@ class TranscriptQualityError(RuntimeError):
     """Generated text is bounded but still unusable ASR output."""
 
 
+class CheckpointIntegrityError(RuntimeError):
+    """Persisted checkpoint state is corrupt or belongs to another contract."""
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="Transcribe audio/video using local MLX Qwen3-ASR")
     parser.add_argument("inputs", nargs="*", help="Audio/video file paths")
     parser.add_argument("--output-dir", default=None, help="Output directory (default: same as input)")
-    parser.add_argument("--model", default="mlx-community/Qwen3-ASR-1.7B-8bit",
-                        help="HuggingFace model ID (default: mlx-community/Qwen3-ASR-1.7B-8bit)")
+    parser.add_argument("--model", default=DEFAULT_MODEL_ID,
+                        help=f"HuggingFace model ID (default: {DEFAULT_MODEL_ID})")
+    parser.add_argument(
+        "--model-revision",
+        default=None,
+        help=("Immutable HuggingFace commit for --model. The built-in model "
+              "uses its pinned tested revision; custom remote models must "
+              "declare one explicitly."),
+    )
     parser.add_argument("--language", default="Chinese",
                         help="Language for transcription output (default: Chinese)")
     parser.add_argument(
@@ -97,6 +117,10 @@ def build_parser():
 
 
 def validate_args(parser, args):
+    if args.model_revision is None:
+        if args.model != DEFAULT_MODEL_ID:
+            parser.error("custom --model requires an immutable --model-revision")
+        args.model_revision = DEFAULT_MODEL_REVISION
     if not args.inputs and not args.smoke_test:
         parser.error("at least one input file is required unless --smoke-test is set")
     if args.max_tokens <= 0:
@@ -221,19 +245,85 @@ def _assert_transcript_quality(text, scope):
     return ratio
 
 
-def _checkpoint_identity(audio_path, model_name, language, chunk_duration, max_tokens):
+def _runtime_dependency_versions():
+    actual = {name: version(name) for name in PINNED_DEPENDENCY_VERSIONS}
+    mismatches = {
+        name: {"expected": expected, "actual": actual[name]}
+        for name, expected in PINNED_DEPENDENCY_VERSIONS.items()
+        if actual[name] != expected
+    }
+    if mismatches:
+        raise RuntimeError(
+            "runtime dependency contract mismatch: "
+            + json.dumps(mismatches, sort_keys=True)
+        )
+    return actual
+
+
+def _resolve_model_source(model_name, model_revision):
+    """Use the exact cached snapshot offline; otherwise keep the pinned remote ref."""
+    model_path = Path(model_name).expanduser()
+    if model_path.is_dir():
+        return str(model_path.resolve()), "local-path"
+    from huggingface_hub.constants import HF_HUB_CACHE
+    from huggingface_hub.file_download import repo_folder_name
+
+    exact_snapshot = (
+        Path(HF_HUB_CACHE)
+        / repo_folder_name(repo_id=model_name, repo_type="model")
+        / "snapshots"
+        / model_revision
+    )
+    if exact_snapshot.is_dir():
+        return str(exact_snapshot.resolve()), "cached-pinned"
+    from huggingface_hub import snapshot_download
+    from huggingface_hub.errors import LocalEntryNotFoundError
+
+    try:
+        cached = snapshot_download(
+            repo_id=model_name,
+            revision=model_revision,
+            local_files_only=True,
+        )
+    except LocalEntryNotFoundError:
+        return model_name, "remote-pinned"
+    return cached, "cached-pinned"
+
+
+def _checkpoint_identity(
+    audio_path,
+    model_name,
+    model_revision,
+    language,
+    chunk_duration,
+    max_tokens,
+    sample_rate,
+    dependency_versions,
+    producer_sha256=None,
+):
     source = Path(audio_path).resolve()
     state = source.stat()
+    if not model_revision:
+        raise ValueError("checkpoint identity requires an immutable model revision")
+    producer_sha256 = producer_sha256 or _sha256_file(Path(__file__))
     identity = {
         "source": str(source),
         "source_size": state.st_size,
         "source_mtime_ns": state.st_mtime_ns,
         "source_sha256": _sha256_file(source),
         "model": model_name,
+        "model_revision": model_revision,
         "language": language,
         "chunk_duration_s": chunk_duration,
         "max_tokens_per_chunk": max_tokens,
+        "sample_rate": sample_rate,
         "quality_policy": QUALITY_POLICY_ID,
+        "producer": {
+            "script": Path(__file__).name,
+            "sha256": producer_sha256,
+        },
+        "splitter_contract": SPLITTER_CONTRACT_ID,
+        "dependencies": dict(sorted(dependency_versions.items())),
     }
     digest = hashlib.sha256(
         json.dumps(identity, ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -243,21 +333,28 @@ def _checkpoint_identity(audio_path, model_name, language, chunk_duration, max_t
 
 def _load_or_create_manifest(path, identity, chunk_count):
     expected = {
-        "schema_version": 1,
+        "schema_version": CHECKPOINT_SCHEMA_VERSION,
         **identity,
         "chunk_count": chunk_count,
     }
     if path.exists():
-        manifest = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise CheckpointIntegrityError(
+                f"checkpoint manifest cannot be decoded: {path}: {exc}"
+            ) from exc
         for key, value in expected.items():
             if manifest.get(key) != value:
-                raise RuntimeError(
+                raise CheckpointIntegrityError(
                     f"checkpoint identity mismatch for {key}: "
                     f"expected {value!r}, got {manifest.get(key)!r}"
                 )
         chunks = manifest.get("chunks")
         if not isinstance(chunks, list) or len(chunks) != chunk_count:
-            raise RuntimeError("checkpoint chunk table is missing or malformed")
+            raise CheckpointIntegrityError(
+                "checkpoint chunk table is missing or malformed"
+            )
         return manifest
     manifest = {
         **expected,
@@ -276,13 +373,24 @@ def _validated_completed_part(checkpoint_dir, entry):
     part_name = entry.get("part")
     expected_hash = entry.get("sha256")
     if not part_name or not expected_hash:
-        raise RuntimeError(f"completed checkpoint entry is incomplete: {entry}")
+        raise CheckpointIntegrityError(
+            f"completed checkpoint entry is incomplete: {entry}"
+        )
     part = checkpoint_dir / part_name
     if not part.is_file():
-        raise RuntimeError(f"completed checkpoint part is missing: {part}")
-    text = part.read_text(encoding="utf-8")
+        raise CheckpointIntegrityError(
+            f"completed checkpoint part is missing: {part}"
+        )
+    try:
+        text = part.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise CheckpointIntegrityError(
+            f"completed checkpoint part cannot be read: {part}: {exc}"
+        ) from exc
     if _sha256_text(text) != expected_hash:
-        raise RuntimeError(f"completed checkpoint part hash mismatch: {part}")
+        raise CheckpointIntegrityError(
+            f"completed checkpoint part hash mismatch: {part}"
+        )
     return text
 
 
@@ -440,17 +548,30 @@ def main():
 
     check_platform()
     start_owner_watchdog(args.owner_pid)
+    running_producer_sha256 = _sha256_file(Path(__file__))
 
-    from mlx_audio.stt.generate import load_model
+    from mlx_audio.stt.utils import load_model
 
+    dependency_versions = _runtime_dependency_versions()
     print("Dependency stack: "
-          f"mlx-audio {version('mlx-audio')}, "
-          f"mlx-lm {version('mlx-lm')}, "
-          f"transformers {version('transformers')}",
+          f"mlx-audio {dependency_versions['mlx-audio']}, "
+          f"mlx-lm {dependency_versions['mlx-lm']}, "
+          f"transformers {dependency_versions['transformers']}",
           file=sys.stderr, flush=True)
-    print(f"Loading model {args.model}...", file=sys.stderr, flush=True)
+    model_source, model_source_kind = _resolve_model_source(
+        args.model, args.model_revision
+    )
+    print(
+        f"Loading model {args.model}@{args.model_revision} "
+        f"({model_source_kind})...",
+        file=sys.stderr,
+        flush=True,
+    )
     t0 = time.time()
-    model = load_model(args.model)
+    if model_source_kind == "remote-pinned":
+        model = load_model(model_source, revision=args.model_revision)
+    else:
+        model = load_model(model_source)
     load_time = time.time() - t0
     print(f"Model loaded in {load_time:.1f}s", file=sys.stderr, flush=True)
 
@@ -486,23 +607,38 @@ def main():
         identity, digest = _checkpoint_identity(
             audio_path,
             args.model,
+            args.model_revision,
             args.language,
             args.chunk_duration,
             args.max_tokens,
+            sample_rate,
+            dependency_versions,
+            producer_sha256=running_producer_sha256,
         )
         checkpoint_root = Path(args.checkpoint_dir) if args.checkpoint_dir else Path(out_dir) / "_mlx_checkpoints"
         checkpoint_dir = checkpoint_root / f"{name}-{digest[:16]}"
-        text, manifest = transcribe_chunks(
-            model,
-            chunks,
-            output_path,
-            checkpoint_dir,
-            identity,
-            args.max_tokens,
-            args.language,
-            args.chunk_duration,
-            clear_cache=mx.clear_cache,
-        )
+        try:
+            text, manifest = transcribe_chunks(
+                model,
+                chunks,
+                output_path,
+                checkpoint_dir,
+                identity,
+                args.max_tokens,
+                args.language,
+                args.chunk_duration,
+                clear_cache=mx.clear_cache,
+            )
+        except CheckpointIntegrityError as exc:
+            print(f"CHECKPOINT_BLOCKED: {exc}", file=sys.stderr, flush=True)
+            raise SystemExit(4) from exc
+        except (ChunkTokenLimitError, TranscriptQualityError) as exc:
+            print(
+                f"ASR_DETERMINISTIC_BLOCKED: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            raise SystemExit(5) from exc
 
         elapsed = time.time() - t1
         total_tokens = sum(
