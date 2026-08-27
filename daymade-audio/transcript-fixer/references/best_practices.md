@@ -461,7 +461,7 @@ When a provider setting changes (model, base URL, auth header, timeout, file per
 7. Monitor learning quality
 8. Backup before bulk operations
 
-**ROI timeline**:
-- Week 1: Build foundation (10-20 manual corrections)
-- Week 2-3: Learning kicks in (20-50 suggestions)
-- Month 2+: Mature vocabulary (80%+ dictionary coverage, minimal AI calls)
+**Expected learning shape**:
+- Early runs mostly produce file-local fixes and a small number of proven recurring rules.
+- Repeated deterministic patterns gradually move from human judgment into Stage 1.
+- Native AI remains the primary whole-transcript reader; dictionary coverage is not a quality target, and a high percentage can indicate over-broad rules rather than maturity.

@@ -739,38 +739,37 @@ python3 scripts/safe_mix.py /path/to/codebase
 
 > **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:transcript-fixer`）
 
-通过基于字典的规则和 AI 驱动的校正来纠正语音转文本（ASR/STT）转录错误。
+用 Stage 1 字典预处理、必须执行的 Native AI 全文通读，以及带原始音频的人审门，纠正语音转文本（ASR/STT）中的措辞、人名、数字和实体错误。
 
 **使用场景：**
 - 纠正会议记录、讲座录音、访谈中的转录错误
-- 修复同音词错误（"their"/"there"，"to"/"too"）
-- 处理 ASR/STT 转录文件
-- 改进转录文本的可读性和准确性
+- 修复中英文同音、术语和专名错误
+- 只打开当前这份逐字稿的待审项，并直接听对应时间片段
+- 让稳定错误复用，同时把一次性误识留在当前文件
 
 **主要功能：**
-- 基于字典的规则引擎
-- AI 驱动的上下文校正
-- 自动学习和字典更新
-- 批处理
-- 团队协作模式（共享字典）
-- 支持多种 ASR 引擎（Whisper、Google Speech、Azure Speech）
+- Stage 1 + Native AI 完整纠错；Stage 1 单独运行不算完成
+- 精确文件审核队列、deep link、时间戳音频播放和机器可读的 zero-pending 读回
+- file-only / dictionary / roster / context 四种沉淀边界，避免一次性错误污染长期规则
+- SQLite 审计、批处理和团队知识协作
 
 **示例用法：**
 ```bash
-# 校正转录文件
-python3 scripts/fix_transcript.py meeting_notes.txt
+# 执行完整纠错
+uv run scripts/fix_transcription.py --input meeting.md --stage 3
 
-# 使用自定义字典
-python3 scripts/fix_transcript.py transcript.txt --dictionary custom_dict.json
+# 只打开这份逐字稿并听音频裁定
+uv run scripts/review-dashboard/server.py --file "/absolute/meeting.md"
+
+# 人审结束后精确读回；pending_total 必须为 0
+uv run scripts/fix_transcription.py \
+  --list-review --review-file "/absolute/meeting.md" \
+  --review-status all --json
 ```
-
-**🎬 实时演示**
-
-*即将推出*
 
 📚 **文档**：参见 [daymade-audio/transcript-fixer/references/workflow_guide.md](./daymade-audio/transcript-fixer/references/workflow_guide.md) 了解分步工作流
 
-**要求**：Python 3.8+
+**要求**：Python 3.10+ 与 uv。Native AI 使用当前 Agent；只有可选的无 Agent API 路线需要外部 API key。
 
 ---
 

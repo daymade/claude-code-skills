@@ -540,6 +540,7 @@ class ReviewQueue:
         status: Optional[str] = None,
         domain: Optional[str] = None,
         source: Optional[str] = None,
+        file_path: Optional[str] = None,
         limit: int = 500,
     ) -> list[ReviewItem]:
         query = "SELECT * FROM review_items WHERE 1=1"
@@ -553,6 +554,9 @@ class ReviewQueue:
         if source:
             query += " AND source = ?"
             params.append(source)
+        if file_path:
+            query += " AND file_path = ?"
+            params.append(str(Path(file_path).resolve()))
         query += " ORDER BY priority DESC, id ASC LIMIT ?"
         params.append(limit)
         with self._connect() as conn:
@@ -566,18 +570,41 @@ class ReviewQueue:
             ).fetchone()
         return self._row_to_item(row) if row else None
 
-    def stats(self) -> dict[str, Any]:
+    def stats(
+        self,
+        domain: Optional[str] = None,
+        source: Optional[str] = None,
+        file_path: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Return queue totals within one explicit review scope.
+
+        Status is deliberately not a scope input: callers need all status totals
+        for the selected file/domain/source so a human verdict can be read back
+        as pending→decided without falling back to global queue counts.
+        """
+        where = " WHERE 1=1"
+        params: list[Any] = []
+        if domain:
+            where += " AND domain = ?"
+            params.append(domain)
+        if source:
+            where += " AND source = ?"
+            params.append(source)
+        if file_path:
+            where += " AND file_path = ?"
+            params.append(str(Path(file_path).resolve()))
         with self._connect() as conn:
             by_status = dict(conn.execute(
-                "SELECT status, COUNT(*) FROM review_items GROUP BY status"
+                f"SELECT status, COUNT(*) FROM review_items{where} GROUP BY status",
+                params,
             ).fetchall())
             pending_by_kind = dict(conn.execute(
-                "SELECT kind, COUNT(*) FROM review_items WHERE status = ? GROUP BY kind",
-                (PENDING,),
+                f"SELECT kind, COUNT(*) FROM review_items{where} AND status = ? GROUP BY kind",
+                [*params, PENDING],
             ).fetchall())
             pending_by_domain = dict(conn.execute(
-                "SELECT domain, COUNT(*) FROM review_items WHERE status = ? GROUP BY domain",
-                (PENDING,),
+                f"SELECT domain, COUNT(*) FROM review_items{where} AND status = ? GROUP BY domain",
+                [*params, PENDING],
             ).fetchall())
         return {
             "by_status": by_status,

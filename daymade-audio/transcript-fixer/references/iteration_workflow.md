@@ -10,7 +10,7 @@ The core value of transcript-fixer is building a personalized correction diction
 │                    ↓                            │
 │  2. Identify new ASR errors during fixing       │
 │                    ↓                            │
-│  3. IMMEDIATELY save to dictionary              │
+│  3. Route only reusable learning to its home    │
 │                    ↓                            │
 │  4. Next time: Stage 1 auto-corrects these      │
 └─────────────────────────────────────────────────┘
@@ -28,14 +28,18 @@ Correction Progress:
 - [ ] Read the domain context and the entire transcript
 - [ ] Run Native AI Correction; leave uncertain text unchanged and enqueue it
 - [ ] Run trap-scan and verify the final diff
-- [ ] Save EACH correction to dictionary with --add
-- [ ] Verify with --list that corrections were saved
-- [ ] Next time: Stage 1 handles these automatically
+- [ ] Fix every confirmed occurrence in the exact transcript file
+- [ ] Classify each verdict: file-only / dictionary / roster / context
+- [ ] Persist only stable reusable learning; leave one-off wording file-local
+- [ ] Verify any reusable state you intentionally wrote
 ```
 
-## Save Corrections Immediately
+## Route Learning Immediately
 
-After fixing any transcript, save stable corrections:
+After fixing a transcript, classify the correction before writing reusable state.
+Use `--add` only for a stable recurring FROM→TO pattern with a controlled false-positive
+surface. A rare sentence-local mishearing is already complete once the exact file is
+fixed; adding it to the dictionary creates blast radius without future value.
 
 ```bash
 # Single correction
@@ -119,7 +123,7 @@ Patterns appearing ≥3 times at ≥80% confidence are suggested for review.
 
 ## Best Practices
 
-1. **Save immediately**: Don't batch corrections - save each one right after fixing
+1. **Classify immediately**: Fix the exact file now; persist only corrections that independently qualify as reusable
 2. **Be specific**: Use exact phrases, not partial words
 3. **Use domains**: Organize corrections by topic for better precision
 4. **Verify**: Always run --list to confirm saves

@@ -149,6 +149,11 @@ shape: `database_schema.md`).
 # What's waiting? (priority-sorted: entity names first)
 uv run scripts/fix_transcription.py --list-review
 
+# This transcript only — use after the human says they finished marking
+uv run scripts/fix_transcription.py \
+  --list-review --review-file "/absolute/canonical.md" \
+  --review-status all --json
+
 # Inspect one item (evidence + proposed action pack)
 uv run scripts/fix_transcription.py --show-review 12
 

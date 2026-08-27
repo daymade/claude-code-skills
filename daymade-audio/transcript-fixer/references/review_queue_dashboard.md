@@ -28,6 +28,7 @@ between "AI suspects an error" and "the dictionary learns the answer."
 uv run scripts/fix_transcription.py --enqueue-review items.json
 # Inspect
 uv run scripts/fix_transcription.py --list-review            # pending, priority-sorted
+uv run scripts/fix_transcription.py --list-review --review-file /absolute/canonical.md --review-status all --json
 uv run scripts/fix_transcription.py --show-review 12         # full evidence + action pack
 # Decide (agent path — humans use the dashboard)
 uv run scripts/fix_transcription.py --resolve-review 12 --decision accepted --by reviewer
@@ -37,8 +38,9 @@ uv run scripts/fix_transcription.py --resolve-review 12 --decision reopen       
 ```
 
 Each item carries: the original text (left untouched in the file), a pre-filled
-suggestion, `kind` (`entity`/`unknown` lead the queue — they compound into
-dictionary+roster; `homophone`/`wording` trail), the evidence your search ladder
+suggestion, `kind` (`entity`/`unknown` lead the queue because a wrong identity
+has higher business impact; the verdict is still file-only unless it separately
+passes the reuse matrix; `homophone`/`wording` trail), the evidence your search ladder
 produced, and an optional **action pack** executed on accept: `file_edit`
 (replace in the transcript), `dict_add` (add to a `--domain` dictionary),
 `append_note` (add a trap line to a domain context file). No action pack + a
@@ -184,18 +186,21 @@ measurement above counted.
 occurrence that a still-pending item is anchored to will fail that item's guard
 (`re_anchor_needed`, exit 2) and have to be re-enqueued.
 
-**An override does not compound on its own — finish it with `--add`.** On
+**An override fixes this occurrence; reusable learning is a separate decision.** On
 `overridden` the queue drops the `dict_add` / `append_note` actions (they were
 planned for the suggestion the human rejected), so the strongest signal in the
-whole loop — a human personally correcting the AI — is the one case that never
-reaches the dictionary unless you put it there:
-`--add "<original>" "<resolved_text>" --domain <project>`, subject to the
-real-word rules in [dictionary_identity_and_context.md](dictionary_identity_and_context.md).
+whole loop — a human personally correcting the AI — first lands only in the
+exact file. Route it through [dictionary_identity_and_context.md](dictionary_identity_and_context.md):
+only a stable recurring pattern gets `--add`; a rare sentence-local correction
+stops file-local, and an identity relationship belongs in roster/context rather
+than a replacement rule.
 
 **Dashboard** (single reviewer, local):
 
 ```bash
-uv run scripts/review-dashboard/server.py   # opens http://127.0.0.1:8767
+uv run scripts/review-dashboard/server.py --file "/absolute/canonical.md"
+# Optional: land on one entity fork while keeping the rest of this file visible
+uv run scripts/review-dashboard/server.py --file "/absolute/canonical.md" --item <id>
 ```
 
 Prodigy-style single-focus card: live file context with the anchor line
@@ -208,6 +213,20 @@ the mouse). Env knobs: `REVIEW_DASHBOARD_PORT` (default 8767),
 Reads go straight to the DB (read-only); **every write shells out to the CLI**,
 so the state machine, anchor guards, and audit log stay the single source of
 truth, and agent (CLI) and human (page) are equal writers.
+
+The blue scope bar is a hard review boundary: its counts and cards belong only
+to that canonical path. When the human says the markings are done, read the
+same scope back before doing any more transcription work:
+
+```bash
+uv run scripts/fix_transcription.py \
+  --list-review --review-file "/absolute/canonical.md" \
+  --review-status all --json
+```
+
+`stats.pending_total: 0` closes this file's human gate. A global pending count,
+the dashboard merely being open, or the human's chat message without this
+readback does not.
 
 **Audio playback (`Q`)** — often the reviewer can't judge a garbled utterance
 from text alone; hearing the original second settles it. A transcript opts in

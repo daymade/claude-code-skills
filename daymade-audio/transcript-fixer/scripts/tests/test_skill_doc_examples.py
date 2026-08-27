@@ -36,6 +36,10 @@ DJI_EXAMPLE = SKILL_DIR / "references" / "example_session_dji_minutes.md"
 ARGUMENT_PARSER_PY = SKILL_DIR / "scripts" / "cli" / "argument_parser.py"
 ADVANCED_EVIDENCE = SKILL_DIR / "references" / "advanced_correction_evidence.md"
 IDENTITY_CONTEXT = SKILL_DIR / "references" / "dictionary_identity_and_context.md"
+ITERATION_WORKFLOW = SKILL_DIR / "references" / "iteration_workflow.md"
+BEST_PRACTICES = SKILL_DIR / "references" / "best_practices.md"
+NATIVE_WORKFLOW = SKILL_DIR / "references" / "native_ai_full_workflow.md"
+QUICK_REFERENCE = SKILL_DIR / "references" / "quick_reference.md"
 
 PRODUCTION_FUNC = "_frontmatter_audio"
 PRODUCTION_IDIOM = 'line.split(":", 1)[1].strip()'
@@ -275,6 +279,34 @@ def test_human_verdict_does_not_auto_promote_a_one_off_rule():
     assert "One-off / minor name | **DB**" not in identity
     assert "One-off / minor name | **Exact transcript file only**" in identity
     assert "whole honorific-bearing phrase" in identity
+
+
+def test_exact_file_review_is_executable_and_old_dictionary_advice_is_unreachable():
+    parser = runpy.run_path(str(ARGUMENT_PARSER_PY))["create_argument_parser"]()
+    help_text = parser.format_help()
+    assert "--review-file FILE" in help_text
+
+    runtime_docs = (
+        SKILL_MD,
+        REVIEW_QUEUE_MD,
+        ITERATION_WORKFLOW,
+        BEST_PRACTICES,
+        WORKFLOW_GUIDE,
+        NATIVE_WORKFLOW,
+        QUICK_REFERENCE,
+    )
+    combined = "\n".join(path.read_text(encoding="utf-8") for path in runtime_docs)
+    assert '--review-file "<absolute-canonical-file>"' in combined
+    assert "stats.pending_total == 0" in combined
+    for forbidden in (
+        "IMMEDIATELY save to dictionary",
+        "Save EACH correction to dictionary",
+        "finish it with `--add`",
+        "80%+ dictionary coverage",
+        "they compound into dictionary+roster",
+        "Check if dictionary corrections are sufficient.",
+    ):
+        assert forbidden not in combined
 
 
 def test_full_source_handoff_names_the_asr_skill_and_independence_boundary():

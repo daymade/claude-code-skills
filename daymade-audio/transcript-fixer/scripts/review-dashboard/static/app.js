@@ -20,15 +20,22 @@ const ACTION_LABEL = {
   append_note: "📝 补语境注",
 };
 
+const initialParams = new URLSearchParams(window.location.search);
+const initialItem = Number.parseInt(initialParams.get("item") || "", 10);
+const initialFile = initialParams.get("file") || "";
+
 const state = {
   items: [],
   stats: {},
   filters: { domains: [], kinds: [], sources: [] },
-  status: "pending",
+  status: initialParams.get("status") || (Number.isFinite(initialItem) ? "all" : "pending"),
   domain: "",
-  selectedId: null,
+  filePath: initialFile,
+  selectedId: Number.isFinite(initialItem) ? initialItem : null,
+  itemOnly: Number.isFinite(initialItem) && !initialFile,
   undoStack: [],   // ids resolved this session, most recent last
   doneCount: 0,
+  loadError: "",
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -41,14 +48,31 @@ const kindClass = (k) => (KIND_CLASSES.includes(k) ? k : "wording");
 async function fetchQueue() {
   const params = new URLSearchParams({ status: state.status });
   if (state.domain) params.set("domain", state.domain);
+  if (state.filePath) params.set("file_path", state.filePath);
+  if (state.itemOnly && state.selectedId) params.set("item_id", String(state.selectedId));
   const res = await fetch(`/api/queue?${params}`);
   const data = await res.json();
+  if (!res.ok) {
+    state.items = [];
+    state.stats = {};
+    state.loadError = data.detail || `审核范围读取失败（HTTP ${res.status}）`;
+    render();
+    return;
+  }
+  state.loadError = "";
+  if (state.itemOnly && data.items.length && data.items[0].file_path) {
+    state.filePath = data.items[0].file_path;
+    state.itemOnly = false;
+    syncUrl();
+    return fetchQueue();
+  }
   state.items = data.items;
   state.stats = data.stats;
   state.filters = data.filters;
   if (!state.items.find((i) => i.id === state.selectedId)) {
     state.selectedId = state.items.length ? state.items[0].id : null;
   }
+  syncUrl();
   render();
 }
 
@@ -59,16 +83,63 @@ function selected() {
 /* ── rendering ── */
 
 function render() {
+  renderScope();
   renderStats();
   renderDomainChips();
   renderRail();
   renderCard();
 }
 
+function fileName(path) {
+  return String(path || "").split(/[\\/]/).filter(Boolean).pop() || "";
+}
+
+function renderScope() {
+  const banner = $("#scope-banner");
+  if (!state.filePath) {
+    banner.hidden = true;
+    banner.innerHTML = "";
+    return;
+  }
+  if (state.loadError) {
+    banner.hidden = false;
+    banner.innerHTML = `
+      <div class="scope-summary" title="${esc(state.filePath)}">
+        <span class="scope-kicker">无法验证</span>
+        <span class="scope-file">${esc(fileName(state.filePath))}</span>
+        <span class="scope-state">${esc(state.loadError)}</span>
+      </div>
+      <button class="btn scope-clear" data-clear-scope>查看全部队列</button>`;
+    return;
+  }
+  const pending = Number(state.stats.pending_total || 0);
+  banner.hidden = false;
+  banner.innerHTML = `
+    <div class="scope-summary" title="${esc(state.filePath)}">
+      <span class="scope-kicker">本次逐字稿</span>
+      <span class="scope-file">${esc(fileName(state.filePath))}</span>
+      <span class="scope-state">${pending ? `还剩 ${pending} 条待裁定` : "人审已清零"}</span>
+    </div>
+    <button class="btn scope-clear" data-clear-scope>查看全部队列</button>`;
+}
+
+function syncUrl() {
+  const params = new URLSearchParams();
+  params.set("status", state.status);
+  if (state.filePath) params.set("file", state.filePath);
+  if (state.selectedId) params.set("item", String(state.selectedId));
+  window.history.replaceState(null, "", `${window.location.pathname}?${params}`);
+}
+
 function renderStats() {
+  if (state.loadError) {
+    $("#header-stats").innerHTML = `<div class="stat"><b>—</b><br>范围无效</div>`;
+    return;
+  }
   const s = state.stats.by_status || {};
+  const scopeLabel = state.filePath ? "本文件" : "全队列";
   $("#header-stats").innerHTML = `
-    <div class="stat"><b>${s.pending || 0}</b><br>待裁定</div>
+    <div class="stat"><b>${s.pending || 0}</b><br>${scopeLabel}待裁</div>
     <div class="stat"><b>${state.doneCount}</b><br>本次已裁</div>
     <div class="stat"><b>${(s.accepted || 0) + (s.overridden || 0) + (s.kept_original || 0) + (s.skipped || 0)}</b><br>累计已裁</div>`;
 }
@@ -86,6 +157,7 @@ function renderDomainChips() {
 
 function renderRail() {
   const rail = $("#queue-rail");
+  rail.hidden = !state.items.length;
   if (!state.items.length) { rail.innerHTML = ""; return; }
   rail.innerHTML = state.items.map((it) => {
     const to = it.suggested_text
@@ -107,10 +179,21 @@ function renderRail() {
 
 async function renderCard() {
   const area = $("#focus-area");
+  if (state.loadError) {
+    area.innerHTML = `<div class="empty-state">${esc(state.loadError)}</div>`;
+    return;
+  }
   const it = selected();
   if (!it) {
+    const filePending = Number(state.stats.pending_total || 0);
     area.innerHTML = `<div class="empty-state">${
-      state.status === "pending" ? "队列为空 — 没有待裁定的修正 🎉" : "该筛选下没有条目"
+      state.status === "pending"
+        ? (state.filePath
+            ? (filePending
+                ? `当前筛选没有条目；整份逐字稿仍有 ${filePending} 条待裁定`
+                : "这份逐字稿已无待裁定项 ✓")
+            : "队列为空 — 没有待裁定的修正 🎉")
+        : "该筛选下没有条目"
     }</div>`;
     return;
   }
@@ -283,12 +366,14 @@ function setStatusFilter(status) {
   state.status = status;
   document.querySelectorAll("#status-chips .chip").forEach((c) =>
     c.classList.toggle("active", c.dataset.status === status));
+  syncUrl();
 }
 
 /* ── actions ── */
 
 async function resolve(id, decision, overrideTo) {
   stopAudio();
+  const current = selected();
   const note = $("#note-input") ? $("#note-input").value.trim() : "";
   const body = { id, decision };
   if (overrideTo) body.override_to = overrideTo;
@@ -320,6 +405,9 @@ async function resolve(id, decision, overrideTo) {
       state.doneCount += 1;
       toast(`#${id} ${STATUS_LABEL[decision] || decision}${logs.length ? " · " + logs.join("；") : ""}`);
     }
+    if (!state.filePath && current?.file_path) state.filePath = current.file_path;
+    state.itemOnly = false;
+    syncUrl();
     await advanceAfter(id, decision);
   } catch (e) {
     toast(`请求失败：${e}`, true);
@@ -403,8 +491,24 @@ document.addEventListener("click", (e) => {
   }
   const dchip = e.target.closest("[data-domain]");
   if (dchip) { state.domain = dchip.dataset.domain; fetchQueue(); return; }
+  const clearScope = e.target.closest("[data-clear-scope]");
+  if (clearScope) {
+    stopAudio();
+    state.filePath = "";
+    state.itemOnly = false;
+    state.selectedId = null;
+    syncUrl();
+    fetchQueue();
+    return;
+  }
   const rail = e.target.closest(".rail-item");
-  if (rail) { stopAudio(); state.selectedId = parseInt(rail.dataset.id, 10); render(); return; }
+  if (rail) {
+    stopAudio();
+    state.selectedId = parseInt(rail.dataset.id, 10);
+    syncUrl();
+    render();
+    return;
+  }
   const audioBtn = e.target.closest("[data-audio]");
   if (audioBtn) {
     if (audioBtn.dataset.audio === "toggle") toggleClip();
@@ -474,6 +578,7 @@ document.addEventListener("keydown", (e) => {
   else if (key === "arrowup" || key === "k") { e.preventDefault(); stopAudio(); move(-1); }
 });
 
+setStatusFilter(state.status);
 fetchQueue();
 setInterval(() => {
   if (document.hidden) return;

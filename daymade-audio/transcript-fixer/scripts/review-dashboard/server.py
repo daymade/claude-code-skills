@@ -31,6 +31,7 @@ import sys
 import webbrowser
 from pathlib import Path
 from threading import Timer
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -51,6 +52,19 @@ DB_PATH = get_config().database.path
 PORT = int(os.environ.get("REVIEW_DASHBOARD_PORT", "8767"))
 
 app = FastAPI(title="转写修正审核台")
+
+
+def _dashboard_url(
+    *, file_path: str = "", item_id: int | None = None, status: str = ""
+) -> str:
+    params: dict[str, str] = {
+        "status": status or ("all" if item_id is not None else "pending")
+    }
+    if file_path:
+        params["file"] = str(Path(file_path).resolve())
+    if item_id is not None:
+        params["item"] = str(item_id)
+    return f"http://127.0.0.1:{PORT}/?{urlencode(params)}"
 
 
 def _connect_ro() -> sqlite3.Connection:
@@ -101,26 +115,79 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
 
 
 @app.get("/api/queue")
-def api_queue(status: str = "pending", domain: str = "", source: str = "", kind: str = ""):
-    query = f"SELECT {ITEM_COLUMNS} FROM review_items WHERE 1=1"
-    params: list = []
+def api_queue(
+    status: str = "pending",
+    domain: str = "",
+    source: str = "",
+    kind: str = "",
+    file_path: str = "",
+    item_id: int | None = None,
+):
+    """Return one explicitly scoped review queue.
+
+    `file_path` is resolved exactly as enqueue does, and `item_id` supports a
+    stable deep link to one verdict. Status totals deliberately ignore the
+    current status tab but keep every other scope filter, so pending→decided is
+    visible without leaking the unrelated global queue into the page header.
+    """
+    scope_sql = ""
+    scope_params: list = []
+    if domain:
+        scope_sql += " AND domain = ?"
+        scope_params.append(domain)
+    if source:
+        scope_sql += " AND source = ?"
+        scope_params.append(source)
+    if kind:
+        scope_sql += " AND kind = ?"
+        scope_params.append(kind)
+    resolved_path = Path(file_path).expanduser().resolve() if file_path else None
+    if resolved_path is not None and not resolved_path.is_file():
+        raise HTTPException(404, f"exact transcript file does not exist: {resolved_path}")
+    resolved_file = str(resolved_path) if resolved_path is not None else ""
+    if resolved_file:
+        scope_sql += " AND file_path = ?"
+        scope_params.append(resolved_file)
+    if item_id is not None:
+        scope_sql += " AND id = ?"
+        scope_params.append(item_id)
+
+    query = f"SELECT {ITEM_COLUMNS} FROM review_items WHERE 1=1{scope_sql}"
+    params = list(scope_params)
     if status and status != "all":
         query += " AND status = ?"
         params.append(status)
-    if domain:
-        query += " AND domain = ?"
-        params.append(domain)
-    if source:
-        query += " AND source = ?"
-        params.append(source)
-    if kind:
-        query += " AND kind = ?"
-        params.append(kind)
     query += " ORDER BY priority DESC, id ASC LIMIT 500"
     with _connect_ro() as conn:
+        if resolved_file:
+            file_row_count = conn.execute(
+                "SELECT COUNT(*) FROM review_items WHERE file_path = ?",
+                (resolved_file,),
+            ).fetchone()[0]
+            if not file_row_count:
+                raise HTTPException(
+                    404,
+                    "no review history exists for the exact transcript path; "
+                    "the file cannot be certified as human-review complete",
+                )
         rows = conn.execute(query, params).fetchall()
+        if item_id is not None and not rows:
+            raise HTTPException(404, "review item not found in the requested scope")
+
+        # Completion is file-wide. Domain/source/kind/item filters narrow only
+        # what is visible, never the count used to say a transcript is cleared.
+        stats_sql = scope_sql
+        stats_params = scope_params
+        stats_scope = "active_filters"
+        if resolved_file:
+            stats_sql = " AND file_path = ?"
+            stats_params = [resolved_file]
+            stats_scope = "exact_file"
         by_status = dict(conn.execute(
-            "SELECT status, COUNT(*) FROM review_items GROUP BY status").fetchall())
+            f"SELECT status, COUNT(*) FROM review_items WHERE 1=1{stats_sql} "
+            "GROUP BY status",
+            stats_params,
+        ).fetchall())
         domains = [r[0] for r in conn.execute(
             "SELECT DISTINCT domain FROM review_items ORDER BY domain").fetchall()]
         kinds = [r[0] for r in conn.execute(
@@ -131,6 +198,14 @@ def api_queue(status: str = "pending", domain: str = "", source: str = "", kind:
         "items": [_row_to_dict(r) for r in rows],
         "stats": {"by_status": by_status, "pending_total": by_status.get("pending", 0)},
         "filters": {"domains": domains, "kinds": kinds, "sources": sources},
+        "scope": {
+            "domain": domain or None,
+            "source": source or None,
+            "kind": kind or None,
+            "file_path": resolved_file or None,
+            "item_id": item_id,
+            "stats_scope": stats_scope,
+        },
     }
 
 
@@ -361,10 +436,27 @@ def _preflight():
 
 
 if __name__ == "__main__":
+    import argparse
     import uvicorn
 
+    parser = argparse.ArgumentParser(description="Start the local transcript review dashboard")
+    parser.add_argument("--file", dest="file_path", help="Open only this exact transcript")
+    parser.add_argument("--item", dest="item_id", type=int, help="Select this review item")
+    parser.add_argument(
+        "--status",
+        choices=["pending", "accepted", "overridden", "kept_original", "skipped", "all"],
+        default="",
+        help="Initial status tab (item-only links default to all; otherwise pending)",
+    )
+    args = parser.parse_args()
+    if args.file_path and not Path(args.file_path).resolve().is_file():
+        parser.error(f"--file is not a readable transcript: {Path(args.file_path).resolve()}")
+
     _preflight()
+    start_url = _dashboard_url(
+        file_path=args.file_path or "", item_id=args.item_id, status=args.status
+    )
     if not os.environ.get("REVIEW_DASHBOARD_NO_BROWSER"):
-        Timer(1.0, lambda: webbrowser.open(f"http://127.0.0.1:{PORT}")).start()
-    print(f"转写修正审核台 → http://127.0.0.1:{PORT}   (DB: {DB_PATH})")
+        Timer(1.0, lambda: webbrowser.open(start_url)).start()
+    print(f"转写修正审核台 → {start_url}   (DB: {DB_PATH})")
     uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")

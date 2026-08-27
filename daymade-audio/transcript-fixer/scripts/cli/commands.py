@@ -1909,24 +1909,58 @@ def cmd_list_review(args: argparse.Namespace) -> None:
     """List review-queue items."""
     queue = _get_review_queue()
     status = getattr(args, "review_status", "pending")
+    review_file = getattr(args, "review_file", None)
+    review_path = Path(review_file).expanduser().resolve() if review_file else None
+    if review_path is not None and not review_path.is_file():
+        _queue_cmd_error(
+            args,
+            "review_file_not_found",
+            f"exact transcript file does not exist: {review_path}",
+        )
+    resolved_file = str(review_path) if review_path is not None else None
+    domain = getattr(args, "domain", None)
+    source = getattr(args, "review_source", None)
     items = queue.list_items(
         status=None if status == "all" else status,
-        domain=getattr(args, "domain", None),
-        source=getattr(args, "review_source", None),
+        domain=domain,
+        source=source,
+        file_path=resolved_file,
     )
-    stats = queue.stats()
+    # A file-complete verdict must use the whole file, even when the visible
+    # item list is narrowed by domain/source. Otherwise a subfilter can report
+    # zero while another domain still has pending rows in the same transcript.
+    stats = (
+        queue.stats(file_path=resolved_file)
+        if resolved_file
+        else queue.stats(domain=domain, source=source)
+    )
+    if resolved_file and not stats["by_status"]:
+        _queue_cmd_error(
+            args,
+            "review_scope_not_found",
+            "no review history exists for the exact transcript path; "
+            "refusing to treat an unmatched file as human-review complete",
+        )
+    scope = {
+        "domain": domain,
+        "source": source,
+        "file_path": resolved_file,
+        "stats_scope": "exact_file" if resolved_file else "active_filters",
+    }
 
     if getattr(args, "json_output", False):
-        _emit_json({"items": [i.to_dict() for i in items], "stats": stats})
+        _emit_json({"items": [i.to_dict() for i in items], "stats": stats, "scope": scope})
         return
 
     if not items:
-        print(f"No review items with status '{status}'.")
-        print(f"   Queue totals: {stats['by_status'] or '{}'}")
+        suffix = f" for {resolved_file}" if resolved_file else ""
+        print(f"No review items with status '{status}'{suffix}.")
+        print(f"   Scope totals: {stats['by_status'] or '{}'}")
         return
 
-    print(f"📋 Review queue — {len(items)} item(s) [{status}] "
-          f"(pending total: {stats['pending_total']})")
+    scope_label = f" · {Path(resolved_file).name}" if resolved_file else ""
+    print(f"📋 Review queue{scope_label} — {len(items)} item(s) [{status}] "
+          f"(scope pending: {stats['pending_total']})")
     print("=" * 70)
     for item in items:
         anchor = ""

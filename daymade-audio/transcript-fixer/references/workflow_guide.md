@@ -284,7 +284,7 @@ uv run scripts/fix_transcription.py --input file.md --stage 1 --domain general
 
 **Output**: `file_stage1.md` with dictionary corrections only (written only when corrections were applied; a 0-correction run skips it and safe-mode deferrals go to `_needs_review.md`).
 
-**Review**: Check if dictionary corrections are sufficient.
+**Review**: Check whether the new dictionary rule behaves as intended. This is a rule test, not a final-transcript completion check; Native AI and unresolved-item review are still owed.
 
 #### Stage 2 (Stage 1 + API AI, no diff report)
 

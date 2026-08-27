@@ -689,18 +689,19 @@ Safely package codebases with repomix by automatically detecting and removing ha
 
 > **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:transcript-fixer`)
 
-Correct speech-to-text (ASR/STT) transcription errors through dictionary-based rules and AI-powered corrections with automatic pattern learning.
+Correct speech-to-text (ASR/STT) errors with a Stage 1 dictionary pre-filter, a required Native AI whole-transcript pass, and an audio-backed human gate for unresolved wording, names, numbers, and entities.
 
 **When to use:**
 - Correcting meeting notes, lecture recordings, or interview transcripts
 - Fixing Chinese/English homophone errors and technical terminology
-- Building domain-specific correction dictionaries
-- Improving transcript accuracy through iterative learning
+- Reviewing one exact transcript with its original audio instead of searching a global queue
+- Improving future transcripts without turning one-off fixes into broad dictionary rules
 - Collaborating with teams on shared correction knowledge bases
 
 **Key features:**
-- Two-stage correction pipeline (dictionary + AI)
-- Automatic pattern detection and learning
+- Stage 1 + Native AI correction pipeline; Stage 1 alone is never completion
+- Exact-file review queue, deep-linked dashboard, timestamped audio playback, and machine-readable zero-pending readback
+- Conservative pattern learning: file-only, dictionary, roster, and context have separate admission rules
 - Domain-specific dictionaries (general, embodied_ai, finance, medical)
 - SQLite-based correction repository
 - Team collaboration with import/export
@@ -716,17 +717,18 @@ uv run scripts/fix_transcription.py --add "错误词" "正确词" --domain gener
 # Run full correction pipeline
 uv run scripts/fix_transcription.py --input meeting.md --stage 3
 
-# Review and approve learned patterns
-uv run scripts/fix_transcription.py --review-learned
+# Open only this transcript's unresolved items and listen before deciding
+uv run scripts/review-dashboard/server.py --file "/absolute/meeting.md"
+
+# Read the human verdicts back; pending_total must be 0 before final delivery
+uv run scripts/fix_transcription.py \
+  --list-review --review-file "/absolute/meeting.md" \
+  --review-status all --json
 ```
-
-**🎬 Live Demo**
-
-*Coming soon*
 
 📚 **Documentation**: See [daymade-audio/transcript-fixer/references/](./daymade-audio/transcript-fixer/references/) for workflow guides, SQL queries, troubleshooting, best practices, team collaboration, and API setup.
 
-**Requirements**: Python 3.6+, uv package manager, GLM API key (get from https://open.bigmodel.cn/)
+**Requirements**: Python 3.10+ and uv. Native AI correction uses the active agent; an external API key is needed only for the optional agent-less API route.
 
 ---
 
