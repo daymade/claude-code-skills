@@ -1,21 +1,21 @@
 ---
 name: prior-work-retrieval
 description: >-
-  Finds and verifies the user's existing successful work before producing a new
-  implementation, plan, report, workflow, document, or external message. Use
-  whenever the task may already have an answer in another project, repository,
-  Skill, SOP, decision record, meeting transcript, WeChat archive, or prior
-  Claude conversation; especially when the user says “以前做过”, “已有代码”,
-  “历史经验”, “别重复造轮子”, “先看看项目最近进展”, “retrieve before produce”,
-  or asks to generalize a previous solution. Produces an auditable retrieval
-  receipt with source coverage, authority/freshness checks, and explicit
-  reuse/adapt/reject decisions. Never treats zero ranked hits as absence.
+  Only for explicit prior-work/reuse/history requests; never for read-only status or inspection.
+  Finds and verifies existing successful work before substantial new production when reuse is
+  materially plausible. Use when the user explicitly references earlier work, existing code/SOPs,
+  history, prior decisions, another project, or says 以前做过, 已有代码, 别重复造轮子, reuse, or
+  retrieve before produce. Also use when a genuinely new implementation would likely duplicate a
+  known artifact. Do not invoke for read-only repo status, current-file inspection, simple
+  explanation, mechanical verification, or merely because the final answer is a report/summary.
+  Produces a source-verified reuse/adapt/reject receipt; zero hits never prove absence.
 argument-hint: "<task or question>"
 ---
 
 # Prior Work Retrieval
 
-Run this before substantial production. Its job is not to generate another
+Run this before substantial production **only when the trigger above is present**. Read-only
+current-state checks stay direct unless the user asks for history. Its job is not to generate another
 summary. Its job is to answer: **what already exists, which source is current,
 what should be reused, and what remains genuinely new?**
 
@@ -92,8 +92,12 @@ that manual route is recorded.
 
 The command searches filesystem carriers with `rg`, calls explicitly declared
 command adapters (for example the formal Claude-history finder), and surfaces
-manual routes such as live WeChat. It writes an immutable run JSON under the
-manifest's `state_dir` and returns its `run_id`.
+manual routes such as live WeChat. Content search is always bounded by declared
+globs; full path enumeration runs only when an outcome/implementation term is
+explicitly path-shaped (a filename, path, or ISO date). A symbol such as
+`project_doc_max_bytes` does not justify walking every filename in a workspace.
+The command writes an immutable run JSON under the manifest's `state_dir` and
+returns its `run_id`.
 
 If a required carrier says `manual_required`, perform that named Skill route and
 record its result before completion. A local WeChat archive search does not
@@ -129,7 +133,11 @@ is not a reason; it is a retrieval observation and may require widening terms or
 resolving a failed carrier.
 
 The completed receipt preserves `business_outcome` and `outcome_terms`; `check`
-rejects legacy or hand-built receipts that omit either field. Then verify:
+rejects legacy or hand-built receipts that omit either field. Receipt freshness
+is bound to the definitions of **required** carriers. Editing an optional carrier
+does not invalidate already verified required coverage; changing a required root,
+route, mode, authority, or limit does. The full manifest hash remains provenance.
+Then verify:
 
 ```bash
 uv run --no-project python scripts/prior_work.py check \
@@ -158,7 +166,9 @@ unrelated hooks:
   production, and Bash/Codex exec paths that carry a write signal or an unknown
   executable until the current requirement has a receipt. Read-only discovery,
   small mechanical edits, and `tinkle_` scratch files remain available.
-- `Stop` catches substantial chat-only deliverables that never wrote a file.
+- `Stop` validates a requirement that was already created by the current prompt
+  or a substantial tool attempt. It never invents a new requirement merely
+  because the final answer is long, list-shaped, or contains code.
 
 It migrates the narrower unversioned `recall-first-evidence` UserPromptSubmit
 handler into this superset while leaving its script on disk for recovery. The
@@ -194,8 +204,8 @@ path remain possible so the agent can repair the gate without bypassing it.
 - External web research starts after local prior work, unless the user explicitly
   asks for current external facts or the local evidence cannot answer.
 - This Skill is the workflow. Companion hooks may require a fresh receipt before
-  `Write`/`Edit` or a substantial final response, but hooks do not decide which
-  candidate is good.
+  `Write`/`Edit`; Stop may enforce that same existing obligation, but final-answer
+  shape cannot create a new one. Hooks do not decide which candidate is good.
 
 ## Maintainer verification
 

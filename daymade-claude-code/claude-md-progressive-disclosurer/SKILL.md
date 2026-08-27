@@ -1,7 +1,12 @@
 ---
 name: claude-md-progressive-disclosurer
-description: |
-  Optimize / slim down / restructure a CLAUDE.md (or AGENTS.md) using progressive disclosure — move low-frequency detail to Level 2 references while keeping Level 1 lean, WITHOUT losing information. Use this whenever the user asks to optimize / 精简 / 瘦身 / 重构 CLAUDE.md, asks "CLAUDE.md 是不是太大了 / 太长了" (is my CLAUDE.md too big / too long / bloated), wants to 把内容拆到 reference / 外部 / Level 2, do 整段外移 / 渐进式披露 / progressive disclosure, or whenever a CLAUDE.md duplicates info across files or the LLM keeps failing to follow its rules. ALSO trigger the moment an optimization turns into moving / cutting / compressing sections of a CLAUDE.md — even mid-task while another claude-md skill is already running. Distinct from claude-md quality auditors / scorers: this is the restructuring-and-offloading methodology that guarantees zero information loss (grep-verified pointers, verbatim moves, 5b content-integrity audit). Covers hotspot-first profiling (先打热点) and cross-tool truncation (Codex project_doc_max_bytes).
+description: >-
+  Optimize, slim, or restructure CLAUDE.md/AGENTS.md with progressive disclosure and zero
+  information loss. Use when the user explicitly asks to audit, 精简, 瘦身, 重构, split, or
+  diagnose adherence problems in instruction files. Profiles the whole resident startup surface,
+  allocates rules among prose, path rules, Skills, hooks, and references, then moves low-frequency
+  sections verbatim with content-integrity checks. Also use when an active task starts moving or
+  compressing instruction sections. Not for generic task drift unless instruction files are in scope.
 ---
 
 # CLAUDE.md 渐进式披露优化器
@@ -187,12 +192,22 @@ cp CLAUDE.md CLAUDE.md.bak.$(date +%Y%m%d_%H%M%S)
 
 #### 2.0 热点测量（先于一切提案——性能优化的第一课）
 
-**先量化，后动手；按贡献度排序，先打最大的。** 优化提案落在 3% 的小头上、而 70% 的热点在旁边没人动，是本 skill 实战里被用户当场打断的真实失败（案例 19：一份 168KB 的全局 CLAUDE.md 占每 session 启动上下文 69%，执行者却先端出一盘扩展清理——用户原话「你没有先去管热点，而是先找了一堆很小很小的东西」）。测量四步（`scripts/profile_claude_md.py` 产出第 2/3 步；第 1 步是会话内命令、第 4 步手查各消费方配置）：
+**先量化，后动手；按贡献度排序，先打最大的。** 优化提案落在 3% 的小头上、而 70% 的热点在旁边没人动，是本 skill 实战里被用户当场打断的真实失败（案例 19：一份 168KB 的全局 CLAUDE.md 占每 session 启动上下文 69%，执行者却先端出一盘扩展清理——用户原话「你没有先去管热点，而是先找了一堆很小很小的东西」）。`scripts/profile_claude_md.py` 只量单文件内部；先完成下面的**整套启动面**盘点，才知道该不该先改它：
 
-1. **全局占比**：`/context` 看这份文件在整个启动上下文里占多大——确认它是不是热点，还是别的类别才是
+1. **宿主真实注入面**：Claude 用 `/context` 看类别占比、`/memory` 看实际加载的 memory/instruction 文件；需要持续观测加载事件时用官方 `InstructionsLoaded` hook。Codex 用自己的权威渲染器，不凭配置猜：
+
+   ```bash
+   codex debug prompt-input 'startup-instruction-audit' |
+     jq -r '.[] | [.role, ([.content[]? | select(.type == "input_text") | .text] | join("") | utf8bytelength)] | @tsv'
+   ```
+
+   同时读各条 developer message 的开头，区分全局指令、项目指令、Skill catalog、hook/plugin 注入；**单量 CLAUDE.md 会漏掉常驻 Skill 描述和 hook 文字**。
 2. **分节字节表**：按 heading 统计每节 bytes/lines 并降序——**工作顺序 = 这张表的降序**（⚠️ 父节字节含全部子节：降序在**同层之间**比较，容器节跳过看它最大的子节）；提案端出去前自问：这是当前最大贡献者吗？不是的话，最大的那个为什么不在最前面？
 3. **行长分布**：>1KB 的巨型行是「规则+战例焊死在一个 bullet」的签名（实战：4.4% 的行承载 35.6% 的字节）
-4. **消费方上限**：这份文件若被其他工具消费（如 Codex 经 `~/.codex/AGENTS.md` symlink 读同一文件），逐个查它们的截断上限——Codex `project_doc_max_bytes` 默认 32 KiB，超出的**尾部静默不可见、无任何报错**（实战：上限配过 96 KiB 当时够用，文件长到 164KB 后 41% 的正文对 Codex 隐形数周，整个协作规则 cluster 都在盲区）。修法 = 提上限 + 瘦文件双管齐下；再把「文件 size vs 上限」装进 SessionStart 体检哨兵——没有机械力量看着这个数字，它必然再次静默失效
+4. **载入语义与上限**：逐宿主实测，禁把历史版本的默认值当当前不变量。当前 Codex 的 `project_doc_max_bytes` 是**项目层级文档的累计预算**；全局用户指令可走另一条加载路径，不能拿该值推断它是否截断。先查 `~/.codex/config.toml`，再以同 cwd 的 `codex debug prompt-input` 实际字节为裁决。历史上确有 96 KiB 配置配合旧加载行为导致 164KB 文件尾部 41% 不可见的事故，但它只证明「必须实测」，不证明今天仍按 32 KiB 或同一路径截断。发现真截断时才做「调预算 + 瘦常驻内容 + 机械监控」三件套。
+5. **常驻触发器审计**：Skill frontmatter `description` 会进入常驻 catalog；generic 纠偏句、普通质量词或维护动作若写成触发词，会让 Skill 和 Stop hook 自激活。逐条查描述是否只声明**明确任务意图**，并检查 hook 是否会在最终回答阶段临时创造一个开工前本不存在的新 obligation。描述按官方上限保持 ≤1024 字符；不用列完整方法论。
+
+Claude 侧若某些 instruction 文件对当前项目永远无关，可用官方 `claudeMdExcludes` 显式排除；它是 scope 配置，不是拿 `@import` 假装省上下文。路径相关规则优先放 `.claude/rules/` 的 `paths:` 条件载体。
 
 ⚠️ 测量仪器自身的两个坑（都实测踩过，脚本已内建规避；先在已知答案的样本上校准，见案例 17/19）：
 - **heading 正则必须感知 code fence**——fence 里的 `# 注释` 会被当成标题，凭空造出不存在的大节（实测造出过一个假的 45.9KB 节，热点排序整个失真）
@@ -419,11 +434,11 @@ done < /tmp/pointers.txt
 
 **压缩重述的保真审计（L1 留了压缩版时必查）**：压缩最容易丢的不是整段——是**限定词**。实战（案例 19）：原句「public + 0 stars/forks 且用户明确授权」被压成「0 stars 且明确授权」，6 个字符消失，一道闸门的条件字面上放宽了一半；同场审计还抓到「自称只省略战例、实际连 4 条可执行判据也省了」的申报口径不符。两个审计动作：① 对每条压缩重述，把**操作性子句**（条件 / 数值 / 枚举 / hook 名 / 否定词）与原句逐词 diff——整段丢失 5b 能抓，一个 "/forks" 只有子句级 diff 能抓；② 全文跑 expected-hunks-only 检查——difflib 比对基线，每个非 equal hunk 必须指认到一条已声明的改动，指认不了的就是计划外差异。
 
-**独立 agent 做 5b 是默认动作，不是「大量压缩时才用」**：执行者自审有「乐观偏差」——倾向相信自己砍掉的内容都有归属。启动一个**独立 sub-agent**（**普通 subagent，禁 fork**——fork 继承你的盲区，只会盖个「已审」的章）做完整逐节 5b（读原始文件 + 当前文件 + 所有 reference，逐个信息点验证归属，只返回「真丢失 / 指针失准」清单）。它没有你的 sunk-cost，能抓到你抽查会放过的。prompt 模板 + 批量内容点 grep 脚本见 `references/progressive_disclosure_principles.md` 附录 D。
+**一次有界的独立 agent 5b 是默认动作，不是审阅列车**：执行者自审有「乐观偏差」——倾向相信自己砍掉的内容都有归属。冻结最终候选后，启动**恰好一个 fresh-context 普通 subagent，禁 fork、禁再派 agent**，做完整逐节 5b（读不可变原始基线 + 最终文件 + 所有 reference，逐个信息点验证归属，只返回「真丢失 / 指针失准」清单）。prompt 模板 + 批量内容点 grep 脚本见 `references/progressive_disclosure_principles.md` 附录 D。
 
-**为什么从「强烈推荐」升级为默认**：本 skill 的真实使用中，执行者抽查 5 点「自我感觉良好」，独立 agent 逐节查 55 点才暴露真问题。更硬的一次（2026-07-26）：**反模式 6 的规则完整、连「grep 原句逐字节仍命中」的判据都写在文件里，执行者读过、认同、自认在遵守，重写时仍删掉了一条约束**——而且它只存在于被删的那处，reference 里没有副本。**这不是缺规则，是散文规则由缺陷源本人执行时对该缺陷源天然失效**（poka-yoke 的 control vs warning：警告依赖警觉，而警觉正是完成驱动碾过的东西）。唯一逮住它的是换人的第二轮独立审阅。
+**为什么保留这一次独立审阅**：本 skill 的真实使用中，执行者抽查 5 点「自我感觉良好」，独立 agent 逐节查 55 点才暴露真问题；另一次重写中，完整保真规则已在眼前，执行者仍删掉一条仅存约束。独立视角有价值，但 reviewer 数量不是质量代理指标：默认只有这一轮，不因「修过 reviewer finding」自动再派下一轮。
 
-**推论（同源，别只做一半）**：① **审阅之后的改动同样没被看过** —— 落实审阅结论且逐条复现过，就把「不再派一轮」的理由写进**审阅记录**：一个 `independent-review.md`，含**审阅者 prompt 原文**（让后来者能判断你是不是问了诱导性问题）、**每条 finding 及其处置与理由**（这是「正当筛选」与「把不利的丢掉」的唯一分界）、以及**查不了的东西**。
+**审阅后的收敛规则**：逐条复现 finding 后修复，并用 whole-string/expected-hunks/指针存在性等机械检查验证最终字节；这比再找一个模型看一遍更有判别力。只有第一位 reviewer 发现了**高风险语义丢失**、其修复又无法被独立机械判据证伪，或用户明确要求时，才允许新增一轮 fresh reviewer。把「为什么无需第二轮」写进**审阅记录**：一个 `independent-review.md`，含**审阅者 prompt 原文**、**每条 finding 及其处置与理由**、机械复验结果，以及**查不了的东西**。
    **放哪**（别让读者自己发明路径）：放**你自己的、纳入版本控制的私人知识仓**，路径 `skill-reviews/<被优化对象>/independent-review.md`。三条禁区：**别放进被优化的那个项目仓**（记录里必然带私有路径 / 真名 / 项目细节，而那个仓可能是公开的或将来会公开）；**别放 `/tmp` 或任何会被清掉的暂存目录**（这是跨 session 的证据，必须活过重启）；**优化 `~/.claude/CLAUDE.md` 时尤其注意 `~/.claude` 通常不是 git 仓**，记录放进去等于没版本控制。不知道自己的私人知识仓是哪个 → **问用户，别猜**。② **对照物必须在你的写入范围之外**：拿一份你自己刚改过的 reference 去证明「内容还在」，等于自己给自己作证。优先用早于本次工作的 git ref。
 
 #### 5c. 行数不进验证标准
@@ -764,8 +779,8 @@ function getDatabase() {
 - [ ] **没有信号被静默删除**——每项删除是反信号且有用户确认/canonical source（反信号删除正当，见 Step 2.1）
 - [ ] **没有把行数当成果/KPI/移动理由/汇报指标**（诊断性观察不在此限，见「铁律」）
 - [ ] **每条「→ reference」指针都验证过目标真有该内容**，且**用对了工具**：验「在不在」= `grep -F` 抽特异串；验「整段完整搬到」= python3 整串子串判断（grep 对多行原句会给假阳性）（无假指针 / 指针失准，Step 4 硬 gate；反模式 9；Step 5.0 表）
-- [ ] **跑了独立 agent 5b 审计**（默认动作，非「大量压缩时才用」；禁 fork；Step 5b）
-- [ ] **审阅之后若又改过**：要么理由写进审阅记录，要么再派一轮（Step 5b 推论①）
+- [ ] **跑了恰好一位有界的独立 agent 5b 审计**（fresh context、禁 fork、禁嵌套派发；Step 5b）
+- [ ] **审阅后的改动已机械复验**；只有高风险语义修复无法机械证伪或用户明确要求时才加第二轮（Step 5b）
 
 ### 结构质量
 - [ ] 「信息记录原则」在文档开头（防止未来膨胀）
