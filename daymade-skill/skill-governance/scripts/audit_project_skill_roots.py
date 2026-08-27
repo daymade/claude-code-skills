@@ -30,7 +30,7 @@ ROOT_LABELS = tuple(path.as_posix() for path in ROOT_RELATIVE_PATHS)
 ROUTER_MARKER = "# Compatibility router — no business rules live here"
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ROOT_SKILL_REFERENCE_PATTERN = re.compile(
-    r"(?:\.claude|\.agents)/skills/[A-Za-z0-9._-]+/SKILL\.md"
+    r"`((?:\.claude|\.agents)/skills/[^`\r\n]+/SKILL\.md)`"
 )
 
 IGNORED_NAMES = {
@@ -290,6 +290,25 @@ def _same_underlying_file(left: Path, right: Path) -> bool:
         return left.resolve(strict=False) == right.resolve(strict=False)
 
 
+def has_router_marker_heading(text: str) -> bool:
+    """Require the router marker as the first nonblank body line, not a quote."""
+
+    lines = text.lstrip("\ufeff").splitlines()
+    if not lines or lines[0].strip() != "---":
+        return False
+    try:
+        closing_index = next(
+            index for index, line in enumerate(lines[1:], start=1) if line.strip() == "---"
+        )
+    except StopIteration:
+        return False
+    for line in lines[closing_index + 1 :]:
+        stripped = line.strip()
+        if stripped:
+            return stripped == ROUTER_MARKER
+    return False
+
+
 def inspect_router(
     candidate: SkillEntry, expected_canonical: SkillEntry, project_root: Path
 ) -> Tuple[str, Optional[str]]:
@@ -300,7 +319,7 @@ def inspect_router(
     except (OSError, UnicodeError) as exc:
         return "invalid", f"cannot read router candidate: {exc}"
 
-    if ROUTER_MARKER not in text:
+    if not has_router_marker_heading(text):
         return "not_router", None
 
     try:
@@ -316,6 +335,8 @@ def inspect_router(
         )
 
     expected_reference = expected_canonical.relative_skill_file(project_root)
+    if "`" in expected_reference:
+        return "invalid", "canonical Skill path contains a backtick and cannot form the router contract"
     references = set(ROOT_SKILL_REFERENCE_PATTERN.findall(text))
     if references != {expected_reference}:
         return (
@@ -350,6 +371,28 @@ def compare_pair(
     errors: List[Dict[str, str]] = []
 
     if _same_underlying_file(left.skill_file, right.skill_file):
+        try:
+            shared_text = left.skill_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            base["status"] = "invalid"
+            errors.append(
+                {
+                    "path": left.relative_skill_file(project_root),
+                    "message": f"cannot read shared SKILL.md target: {exc}",
+                }
+            )
+            return base, errors
+
+        if has_router_marker_heading(shared_text):
+            base["status"] = "invalid"
+            errors.append(
+                {
+                    "path": left.relative_skill_file(project_root),
+                    "message": "shared target cannot itself be a compatibility router; no canonical bundle exists",
+                }
+            )
+            return base, errors
+
         left_records = bundle_records(left.bundle_path)
         right_records = bundle_records(right.bundle_path)
 
@@ -498,6 +541,14 @@ def audit_project(project_argument: str) -> Dict[str, object]:
             pair_errors = [{"path": name, "message": str(exc)}]
         findings.append(finding)
         errors.extend(pair_errors)
+
+    if not errors and not findings:
+        errors.append(
+            {
+                "path": project_root.as_posix(),
+                "message": "declared skill roots contain no auditable SKILL.md bundles; refusing a silent empty audit",
+            }
+        )
 
     counts = collections.Counter(str(finding["status"]) for finding in findings)
     for status_name in (
