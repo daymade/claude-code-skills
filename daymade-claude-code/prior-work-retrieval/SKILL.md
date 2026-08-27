@@ -60,13 +60,26 @@ examples are in `references/source-manifest.md`.
 
 ### 3. Retrieve across declared carriers
 
-Write the outcome sentence, then provide 3–8 distinctive terms: product/entity
-names, technical nouns, old project names, and failure symptoms. Do not pass
-generic verbs such as “做 / 优化 / 系统” alone.
+Write the user-world outcome separately from the proposed implementation. Then
+provide two term sets:
+
+- `--outcome-term`: 1–5 artifact/event/entity/date terms that could locate an
+  already-finished result (accepted deliverable, canonical transcript, deployed
+  service, decision, or operating evidence).
+- `--term`: 1–8 implementation terms (code symbols, old workflow names,
+  technical nouns, failure symptoms).
+
+The runtime sends the business-outcome query to documents, meetings, archives,
+and conversations; it sends the implementation query to code and Skill
+carriers. Outcome candidates are ranked first. A code search can therefore no
+longer stand in for checking whether the requested result already exists. Do
+not pass generic verbs such as “做 / 优化 / 系统” alone.
 
 ```bash
 uv run --no-project python scripts/prior_work.py retrieve \
-  --query 'the real task in one sentence' \
+  --business-outcome 'the observable result the user actually needs' \
+  --outcome-term 'accepted artifact, entity, event, or date' \
+  --query 'the implementation or workflow currently being considered' \
   --term 'distinctive entity' \
   --term 'old workflow name' \
   --term 'failure symptom' \
@@ -115,7 +128,8 @@ If none qualify, use `--no-reuse-reason` with the verified mismatch. “No hits�
 is not a reason; it is a retrieval observation and may require widening terms or
 resolving a failed carrier.
 
-Then verify:
+The completed receipt preserves `business_outcome` and `outcome_terms`; `check`
+rejects legacy or hand-built receipts that omit either field. Then verify:
 
 ```bash
 uv run --no-project python scripts/prior_work.py check \

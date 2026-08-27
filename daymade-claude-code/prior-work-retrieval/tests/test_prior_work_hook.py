@@ -203,6 +203,8 @@ class PriorWorkHookTests(unittest.TestCase):
         manifest = hook._manifest()
         run = prior_work.retrieve(
             manifest,
+            "Reuse the verified provider contract before writing new code.",
+            ["provider contract"],
             "reuse provider contract",
             ["provider contract"],
             "session-2",
@@ -229,7 +231,12 @@ class PriorWorkHookTests(unittest.TestCase):
         hook.handle_event(first)
         manifest = hook._manifest()
         run = prior_work.retrieve(
-            manifest, "reuse provider", ["provider contract"], "session-3"
+            manifest,
+            "Reuse the verified provider contract before writing new code.",
+            ["provider contract"],
+            "reuse provider",
+            ["provider contract"],
+            "session-3",
         )
         candidate = run["candidates"][0]
         prior_work.complete(

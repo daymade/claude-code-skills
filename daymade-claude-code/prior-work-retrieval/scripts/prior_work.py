@@ -286,9 +286,26 @@ def _filesystem_candidates(
     for term in terms:
         command.extend(["--regexp", term])
     command.extend(["--", str(root)])
+    files_command = [rg, "--files", "--no-messages"]
+    for pattern in source["includes"]:
+        files_command.extend(["--glob", pattern])
+    for pattern in source["excludes"]:
+        files_command.extend(
+            ["--glob", pattern if pattern.startswith("!") else f"!{pattern}"]
+        )
+    files_command.extend(["--", str(root)])
     try:
         completed = subprocess.run(
             command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=source.get("timeout_seconds", 30),
+            check=False,
+        )
+        files_completed = subprocess.run(
+            files_command,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -307,6 +324,11 @@ def _filesystem_candidates(
         return [], {
             "status": "partial",
             "errors": [f"rg_exit_{completed.returncode}"],
+        }
+    if files_completed.returncode not in {0, 1}:
+        return [], {
+            "status": "partial",
+            "errors": [f"rg_files_exit_{files_completed.returncode}"],
         }
     folded_terms = [(term, term.casefold()) for term in terms]
     for raw_line in completed.stdout.splitlines():
@@ -346,11 +368,44 @@ def _filesystem_candidates(
                 "line_sha256": "sha256:"
                 + hashlib.sha256(snippet.encode("utf-8")).hexdigest(),
                 "matched_terms": set(),
+                "match_origins": ["content"],
             },
         )
         entry["matched_terms"].update(
             term for term, folded in folded_terms if folded in snippet_folded
         )
+    path_match_count = 0
+    entries_by_path: dict[str, list[dict[str, Any]]] = {}
+    for (candidate_path, _line), entry in candidates.items():
+        entries_by_path.setdefault(candidate_path, []).append(entry)
+    for raw_path in files_completed.stdout.splitlines():
+        path = Path(raw_path)
+        path_folded = str(path).casefold()
+        path_terms = {
+            term for term, folded in folded_terms if folded in path_folded
+        }
+        if not path_terms:
+            continue
+        path_match_count += 1
+        existing_entries = entries_by_path.get(str(path), [])
+        if existing_entries:
+            for entry in existing_entries:
+                entry["matched_terms"].update(path_terms)
+                if "path" not in entry["match_origins"]:
+                    entry["match_origins"].append("path")
+            continue
+        entry = {
+            "source_id": source["id"],
+            "carrier": source["carrier"],
+            "authority": source["authority"],
+            "path": str(path),
+            "line": None,
+            "snippet": f"[path] {path.name}"[:800],
+            "matched_terms": set(path_terms),
+            "match_origins": ["path"],
+        }
+        candidates[(str(path), 0)] = entry
+        entries_by_path[str(path)] = [entry]
     rows = []
     for entry in candidates.values():
         entry["matched_terms"] = sorted(entry["matched_terms"])
@@ -384,6 +439,7 @@ def _filesystem_candidates(
         "status": "searched",
         "errors": [],
         "matches_before_limit": len(rows),
+        "path_matches_before_limit": path_match_count,
     }
 
 
@@ -500,6 +556,8 @@ def _automatic_source_result(
 
 def retrieve(
     manifest: dict[str, Any],
+    business_outcome: str,
+    outcome_terms: Sequence[str],
     query: str,
     terms: Sequence[str],
     session_id: str,
@@ -508,6 +566,18 @@ def retrieve(
     retrieval_started = time.perf_counter()
     if not session_id:
         raise PriorWorkError("A non-empty --session-id is required for retrieval")
+    business_outcome = business_outcome.strip()
+    if len(business_outcome) < 10:
+        raise PriorWorkError(
+            "--business-outcome must state the user-world result in one concrete sentence"
+        )
+    cleaned_outcome_terms = list(
+        dict.fromkeys(term.strip() for term in outcome_terms if term.strip())
+    )
+    if not cleaned_outcome_terms:
+        raise PriorWorkError(
+            "At least one --outcome-term is required (artifact, event, entity, or date)"
+        )
     cleaned_terms = list(dict.fromkeys(term.strip() for term in terms if term.strip()))
     if not query.strip():
         raise PriorWorkError("--query must be non-empty")
@@ -530,26 +600,46 @@ def retrieve(
         )
     coverage = []
     candidates = []
-    automatic_sources = [
-        source for source in manifest["sources"] if source["mode"] != "manual"
-    ]
+    implementation_carriers = {"code", "skills"}
+    automatic_specs = []
+    for source in manifest["sources"]:
+        if source["mode"] == "manual":
+            continue
+        if source["carrier"] in implementation_carriers:
+            automatic_specs.append(
+                (source, "implementation", query.strip(), cleaned_terms)
+            )
+        else:
+            automatic_specs.append(
+                (
+                    source,
+                    "business_outcome",
+                    business_outcome,
+                    cleaned_outcome_terms,
+                )
+            )
     automatic_results: dict[str, tuple[list[dict[str, Any]], dict[str, Any]]] = {}
-    if automatic_sources:
-        worker_count = min(MAX_ADAPTER_WORKERS, len(automatic_sources))
+    if automatic_specs:
+        worker_count = min(MAX_ADAPTER_WORKERS, len(automatic_specs))
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            future_to_source = {
+            future_to_spec = {
                 executor.submit(
                     _automatic_source_result,
                     source,
-                    query,
-                    cleaned_terms,
+                    search_query,
+                    search_terms,
                     session_id,
-                ): source
-                for source in automatic_sources
+                ): (source, search_phase, search_query)
+                for source, search_phase, search_query, search_terms in automatic_specs
             }
-            for future in as_completed(future_to_source):
-                source = future_to_source[future]
-                automatic_results[source["id"]] = future.result()
+            for future in as_completed(future_to_spec):
+                source, search_phase, search_query = future_to_spec[future]
+                found, detail = future.result()
+                for candidate in found:
+                    candidate["search_phase"] = search_phase
+                    candidate["search_query"] = search_query
+                detail["search_phase"] = search_phase
+                automatic_results[source["id"]] = (found, detail)
 
     for source in manifest["sources"]:
         if source["mode"] == "manual":
@@ -571,15 +661,19 @@ def retrieve(
                 **detail,
             }
         )
+    phase_order = {"business_outcome": 0, "implementation": 1}
     candidates.sort(
         key=lambda item: (
-            AUTHORITY_ORDER.get(item["authority"], 99),
+            phase_order.get(item.get("search_phase"), 9),
             -len(item.get("matched_terms") or []),
+            AUTHORITY_ORDER.get(item["authority"], 99),
             item["source_id"],
             str(item.get("path") or ""),
         )
     )
-    seed = f"{time.time_ns()}\0{session_id or ''}\0{query}".encode()
+    seed = (
+        f"{time.time_ns()}\0{session_id or ''}\0{business_outcome}\0{query}"
+    ).encode()
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + hashlib.sha256(
         seed
     ).hexdigest()[:12]
@@ -589,6 +683,9 @@ def retrieve(
         "run_id": run_id,
         "session_id": session_id,
         "requirement_id": current_requirement["requirement_id"],
+        "business_outcome": business_outcome,
+        "outcome_terms": cleaned_outcome_terms,
+        "implementation_query": query,
         "query": query,
         "terms": cleaned_terms,
         "created_at": utc_now(),
@@ -759,6 +856,16 @@ def complete(
         raise PriorWorkError("No active prior-work requirement exists for this session")
     if run.get("requirement_id") != requirement.get("requirement_id"):
         raise PriorWorkError("A newer prompt replaced this retrieval run; retrieve again")
+    if not isinstance(run.get("business_outcome"), str) or not run[
+        "business_outcome"
+    ].strip():
+        raise PriorWorkError(
+            "Retrieval run has no business_outcome; run retrieve with the current contract"
+        )
+    if not isinstance(run.get("outcome_terms"), list) or not run["outcome_terms"]:
+        raise PriorWorkError(
+            "Retrieval run has no outcome_terms; run retrieve with the current contract"
+        )
     reuse = _parse_assignments(reuse_values, "--reuse")
     adapt = _parse_assignments(adapt_values, "--adapt")
     reject = _parse_assignments(reject_values, "--reject")
@@ -831,6 +938,9 @@ def complete(
         "session_id": session_id,
         "requirement_id": requirement["requirement_id"],
         "run_id": run_id,
+        "business_outcome": run["business_outcome"],
+        "outcome_terms": run["outcome_terms"],
+        "implementation_query": run.get("implementation_query", run["query"]),
         "query": run["query"],
         "terms": run["terms"],
         "manifest_path": manifest["manifest_path"],
@@ -872,6 +982,14 @@ def check_receipt(
         raise PriorWorkError("Receipt manifest is stale; retrieve again")
     if receipt.get("requirement_id") != requirement.get("requirement_id"):
         raise PriorWorkError("Receipt belongs to an older prompt; retrieve again")
+    if not isinstance(receipt.get("business_outcome"), str) or not receipt[
+        "business_outcome"
+    ].strip():
+        raise PriorWorkError("Receipt has no business_outcome; retrieve again")
+    if not isinstance(receipt.get("outcome_terms"), list) or not receipt[
+        "outcome_terms"
+    ]:
+        raise PriorWorkError("Receipt has no outcome_terms; retrieve again")
     if max_age_seconds is not None:
         try:
             completed = datetime.fromisoformat(
@@ -888,6 +1006,7 @@ def check_receipt(
         "status": "valid",
         "session_id": session_id,
         "run_id": receipt.get("run_id"),
+        "business_outcome": receipt.get("business_outcome"),
         "receipt_path": str(receipt_path),
         "decisions": receipt.get("decisions", []),
         "no_reuse_reason": receipt.get("no_reuse_reason"),
@@ -903,6 +1022,8 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--json", action="store_true")
 
     retrieve_parser = subparsers.add_parser("retrieve")
+    retrieve_parser.add_argument("--business-outcome", required=True)
+    retrieve_parser.add_argument("--outcome-term", action="append", required=True)
     retrieve_parser.add_argument("--query", required=True)
     retrieve_parser.add_argument("--term", action="append", default=[])
     retrieve_parser.add_argument("--require-source", action="append", default=[])
@@ -964,6 +1085,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "retrieve":
             payload = retrieve(
                 manifest,
+                args.business_outcome,
+                args.outcome_term,
                 args.query,
                 args.term,
                 args.session_id,

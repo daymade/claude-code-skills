@@ -138,6 +138,8 @@ class PriorWorkTests(unittest.TestCase):
     def test_retrieve_covers_files_command_and_visible_manual_gap(self) -> None:
         run = prior_work.retrieve(
             self.manifest(),
+            "Reuse the verified provider contract and existing pipeline.",
+            ["Mercury", "North Star"],
             "reuse the Mercury provider pipeline",
             ["Mercury", "existing pipeline", "North Star"],
             "session-A",
@@ -148,8 +150,27 @@ class PriorWorkTests(unittest.TestCase):
         self.assertEqual(coverage["live-wechat"]["status"], "manual_required")
         self.assertFalse(run["coverage_complete"])
         self.assertTrue(Path(run["run_path"]).is_file())
+        self.assertEqual(
+            run["business_outcome"],
+            "Reuse the verified provider contract and existing pipeline.",
+        )
+        self.assertEqual(run["implementation_query"], "reuse the Mercury provider pipeline")
+        self.assertTrue(
+            all(
+                candidate["search_phase"] == "business_outcome"
+                for candidate in run["candidates"]
+                if candidate["carrier"] not in {"code", "skills"}
+            )
+        )
+        self.assertTrue(
+            all(
+                candidate["search_phase"] == "implementation"
+                for candidate in run["candidates"]
+                if candidate["carrier"] in {"code", "skills"}
+            )
+        )
 
-    def test_filesystem_adapter_scans_once_for_multiple_terms(self) -> None:
+    def test_filesystem_adapter_uses_one_content_and_one_path_scan(self) -> None:
         source = self.manifest()["sources"][0]
         with mock.patch.object(
             prior_work.subprocess, "run", wraps=prior_work.subprocess.run
@@ -157,16 +178,23 @@ class PriorWorkTests(unittest.TestCase):
             candidates, detail = prior_work._filesystem_candidates(
                 source, ["Mercury", "provider contract"]
             )
-        self.assertEqual(run_spy.call_count, 1)
-        command = run_spy.call_args.args[0]
+        self.assertEqual(run_spy.call_count, 2)
+        command = run_spy.call_args_list[0].args[0]
+        files_command = run_spy.call_args_list[1].args[0]
         self.assertEqual(command.count("--regexp"), 2)
+        self.assertIn("--files", files_command)
         self.assertEqual(detail["status"], "searched")
         self.assertTrue(candidates)
 
     def test_required_manual_route_blocks_receipt_until_completed(self) -> None:
         manifest = self.manifest()
         run = prior_work.retrieve(
-            manifest, "reuse Mercury provider", ["Mercury"], "session-B"
+            manifest,
+            "Reuse the verified Mercury provider contract.",
+            ["Mercury"],
+            "reuse Mercury provider",
+            ["Mercury"],
+            "session-B",
         )
         candidate = next(
             item for item in run["candidates"] if item["source_id"] == "docs"
@@ -193,6 +221,10 @@ class PriorWorkTests(unittest.TestCase):
             None,
         )
         self.assertEqual(receipt["status"], "complete")
+        self.assertEqual(
+            receipt["business_outcome"],
+            "Reuse the verified Mercury provider contract.",
+        )
         checked = prior_work.check_receipt(manifest, "session-B", 60)
         self.assertEqual(checked["status"], "valid")
 
@@ -209,7 +241,14 @@ class PriorWorkTests(unittest.TestCase):
         command_source["argv"] = [sys.executable, str(malformed)]
         self.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
         manifest = self.manifest()
-        run = prior_work.retrieve(manifest, "unseen subject", ["unseen"], "session-bad")
+        run = prior_work.retrieve(
+            manifest,
+            "Find a verified existing artifact before building anything new.",
+            ["unseen"],
+            "unseen subject",
+            ["unseen"],
+            "session-bad",
+        )
         coverage = {row["source_id"]: row for row in run["coverage"]}
         self.assertEqual(coverage["conversation"]["status"], "failed")
         self.assertFalse(run["coverage_complete"])
@@ -242,7 +281,14 @@ class PriorWorkTests(unittest.TestCase):
             ["git", "-C", str(self.docs), "commit", "-qm", "baseline"], check=True
         )
         manifest = self.manifest()
-        run = prior_work.retrieve(manifest, "Mercury", ["Mercury"], "session-git")
+        run = prior_work.retrieve(
+            manifest,
+            "Reuse the current Mercury provider contract.",
+            ["Mercury"],
+            "Mercury",
+            ["Mercury"],
+            "session-git",
+        )
         candidate = next(
             item for item in run["candidates"] if item["source_id"] == "docs"
         )
@@ -267,7 +313,14 @@ class PriorWorkTests(unittest.TestCase):
 
     def test_no_reuse_requires_verified_reason_not_zero_hits(self) -> None:
         manifest = self.manifest()
-        run = prior_work.retrieve(manifest, "new subject", ["never-present"], "session-C")
+        run = prior_work.retrieve(
+            manifest,
+            "Find a verified artifact that already delivers the requested result.",
+            ["never-present"],
+            "new subject",
+            ["never-present"],
+            "session-C",
+        )
         with self.assertRaisesRegex(prior_work.PriorWorkError, "verified mismatch"):
             prior_work.complete(
                 manifest,
@@ -293,7 +346,14 @@ class PriorWorkTests(unittest.TestCase):
 
     def test_manifest_change_invalidates_run_and_receipt(self) -> None:
         manifest = self.manifest()
-        run = prior_work.retrieve(manifest, "Mercury", ["Mercury"], "session-D")
+        run = prior_work.retrieve(
+            manifest,
+            "Reuse the current Mercury provider contract.",
+            ["Mercury"],
+            "Mercury",
+            ["Mercury"],
+            "session-D",
+        )
         candidate = next(
             item for item in run["candidates"] if item["source_id"] == "docs"
         )
@@ -316,7 +376,14 @@ class PriorWorkTests(unittest.TestCase):
 
     def test_candidate_disappearance_blocks_completion(self) -> None:
         manifest = self.manifest()
-        run = prior_work.retrieve(manifest, "existing pipeline", ["existing pipeline"], "session-E")
+        run = prior_work.retrieve(
+            manifest,
+            "Reuse the existing working pipeline.",
+            ["existing pipeline"],
+            "existing pipeline",
+            ["existing pipeline"],
+            "session-E",
+        )
         candidate = next(
             item for item in run["candidates"] if item["source_id"] == "code"
         )
@@ -338,6 +405,58 @@ class PriorWorkTests(unittest.TestCase):
             ["--manifest", str(self.manifest_path), "validate-manifest", "--json"]
         )
         self.assertEqual(exit_code, 0)
+
+    def test_business_outcome_artifact_ranks_before_implementation_match(self) -> None:
+        (self.docs / "2026-07-30-workshop-transcript.md").write_text(
+            "Complete and human reviewed.\n",
+            encoding="utf-8",
+        )
+        (self.code / "flowzero_asr.py").write_text(
+            "def flowzero_checkpoint():\n    return 'long audio retry'\n",
+            encoding="utf-8",
+        )
+        run = prior_work.retrieve(
+            self.manifest(),
+            "Confirm whether the canonical July 30 workshop transcript already exists.",
+            ["2026-07-30", "workshop"],
+            "Implement Flowzero long-audio checkpoint retry",
+            ["flowzero_checkpoint"],
+            "session-outcome-first",
+        )
+        self.assertEqual(run["candidates"][0]["search_phase"], "business_outcome")
+        self.assertIn(
+            "2026-07-30-workshop-transcript.md", run["candidates"][0]["path"]
+        )
+
+    def test_check_rejects_legacy_receipt_without_business_outcome(self) -> None:
+        manifest = self.manifest()
+        run = prior_work.retrieve(
+            manifest,
+            "Reuse the verified Mercury provider contract.",
+            ["Mercury"],
+            "Mercury",
+            ["Mercury"],
+            "session-legacy-receipt",
+        )
+        candidate = next(
+            item for item in run["candidates"] if item["source_id"] == "docs"
+        )
+        receipt = prior_work.complete(
+            manifest,
+            run["run_id"],
+            "session-legacy-receipt",
+            [f"{candidate['candidate_id']}=reuse verified provider contract"],
+            [],
+            [],
+            ["live-wechat=manual route completed and recorded"],
+            None,
+        )
+        receipt_path = Path(receipt["receipt_path"])
+        payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+        payload.pop("business_outcome")
+        receipt_path.write_text(json.dumps(payload), encoding="utf-8")
+        with self.assertRaisesRegex(prior_work.PriorWorkError, "no business_outcome"):
+            prior_work.check_receipt(manifest, "session-legacy-receipt", None)
 
 
 if __name__ == "__main__":
