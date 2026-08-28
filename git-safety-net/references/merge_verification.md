@@ -288,11 +288,11 @@ scripts/git_export_before_drop.sh \
 ```
 
 This pin is part of preserving the named retirement target; it does not authorize pinning other
-danglers. Use `--all-refs` only for an explicitly authorized full-ref-topology operation. If a
-collaborator worktree is excluded, the repository-wide loss audit and all-refs export are both out
-of scope: the audit inspects every linked worktree, while the bundle captures every worktree HEAD.
-Use the authorized checkout's own status/HEAD/upstream checks plus targeted exports, and make only a
-scoped-cleanup claim.
+danglers. Use `--all-refs` only for an explicitly authorized full-ref-topology operation. The
+repository-wide loss audit is valid only when every worktree/ref/tag/stash/dangler it enumerates is
+inside evidence scope, and the all-refs export only when every ref it captures is change-authorized.
+Otherwise use the authorized checkout/ref's own status/HEAD/upstream checks plus targeted exports,
+and make only a scoped-cleanup claim.
 
 Bundles cannot preserve untracked bytes. Freeze an explicit dirty-path manifest, save tracked
 changes as a binary diff, copy or tar the exact dirty/untracked paths outside the repository, then

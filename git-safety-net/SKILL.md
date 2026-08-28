@@ -110,11 +110,11 @@ report-only until the user expands the authorized targets.
    dangling commits. The shorter `git log HEAD --branches --tags --not --remotes` misses a detached
    HEAD in a different worktree and all uncommitted files. Ahead/behind counts do **not** answer
    this. Run it in the named checkout, and in additional Step 0 checkouts only after each is
-   explicitly change-authorized. **Exception:** if even one linked worktree is excluded from
-   inspection, do not run this repository-wide script—it has no exclusion flag and would inspect
-   that worktree. Limit the claim to the authorized checkout and use its own `status`, `HEAD`,
-   upstream/remote identity, and `git log HEAD --not --remotes` as scoped evidence; report that
-   other refs/worktrees/stashes/danglers were not audited.
+   explicitly change-authorized. Run this repository-wide script only when every surface it
+   enumerates—linked worktrees, local refs/tags, stashes, and dangling commits—is inside the
+   declared evidence scope. It has no exclusion flags. Otherwise limit the claim to the authorized
+   checkout/ref and use its own `status`, `HEAD`, upstream/remote identity, and `git log HEAD --not
+   --remotes` as scoped evidence; report the other surfaces as not audited.
 3. **`git reflog` is the first move for "I lost a commit," not `fsck`.** Reflog records every
    HEAD position (commits, checkouts, resets, rebases) for ~90 days and the lost commit is
    usually in its top few lines. `git fsck` is the deeper net for commits reflog can't reach.
@@ -193,7 +193,8 @@ uv run python -m unittest discover -s tests -p 'test_*.py'
 
 **Step 1 — audit (non-destructive).** What, if anything, is at risk of loss right now:
 
-When every linked worktree is inside the declared evidence scope:
+When every worktree/ref/tag/stash/dangler the script enumerates is inside the declared evidence
+scope:
 
 ```bash
 scripts/git_loss_audit.sh          # defaults to remote "origin"; pass a remote name to override
@@ -357,8 +358,8 @@ The habits that keep a branch tangle from ever stranding work:
   gates against the candidate before push, and still let pre-push run. This is the escape hatch for
   when commit-then-switch is off the table because someone else holds the tree.
 - **Before any rebase or branch-delete, run the applicable Mode B evidence path.** Use the full
-  loss audit only when every linked worktree is in evidence scope; otherwise use the authorized
-  checkout's scoped checks and limit the safety claim accordingly.
+  loss audit only when every worktree/ref/tag/stash/dangler it enumerates is in evidence scope;
+  otherwise use the authorized checkout/ref's scoped checks and limit the safety claim accordingly.
 - **Before bumping a shared version/lockfile, check the base's current value** so two parallel
   branches don't both claim the same bump (a silent collision that blocks the later change from
   shipping).
@@ -368,11 +369,12 @@ The habits that keep a branch tangle from ever stranding work:
 The opposite worry from Mode A: not "I lost something" but "these leftovers are piling up —
 which can I destroy?" Deleting is trivial; **proving each item is superseded is the work**.
 Start from the Outcome contract. For an exhaustive audit or unknown target, run checkout discovery;
-for one named worktree/branch, stay in its owning repository. Run `git_loss_audit.sh` only in
-change-authorized checkouts; treat inspect-only checkouts as report-only, keep explicitly excluded
-collaborator resources out of both the retirement plan and its terminal counts, then retire only
-the named targets. When an excluded linked worktree exists, do not run the full loss audit or an
-`--all-refs` export; use primary-scoped checks and targeted exports for authorized refs instead:
+for one named worktree/branch, stay in its owning repository. Run `git_loss_audit.sh` only when all
+worktrees/refs/tags/stashes/danglers it enumerates are inside evidence scope; treat inspect-only
+objects as report-only, keep explicitly excluded collaborator resources out of both the retirement
+plan and its terminal counts, then retire only the named targets. If any enumerated surface is
+excluded, do not run the full loss audit or an `--all-refs` export; use checkout/ref-scoped checks
+and targeted exports instead:
 
 **Step 1 — classify each leftover: live WIP, or superseded draft?** Evidence ladder, strongest first:
 
@@ -501,8 +503,8 @@ in place; the bundle restores full history via `git fetch <file>.bundle <branch>
 | Script | Does | Mutates? |
 |---|---|---|
 | `scripts/git_find_all_checkouts.sh [root ...]` | Find every checkout of this repo on the machine — including independent clones invisible to `git worktree list` — and flag those holding uncommitted/untracked/unpushed work, plus how stale each one's cached remote refs are (`STALE_AFTER=<s>`, default 3600) | Nothing (read-only, no fetch) |
-| `scripts/git_loss_audit.sh [remote]` | Refresh one remote, then report every worktree, local-only commit, stash, and dangler | Remote-tracking refs only |
-| `scripts/git_preserve_danglers.sh [--patch-dir DIR]` | Pin danglers to `refs/dangling-backup/`, optional patches | Adds refs only (never deletes/gc) |
+| `scripts/git_loss_audit.sh [remote]` | Refresh one remote, then report every worktree, local ref/tag, stash, and dangler; no exclusions, so the whole evidence surface must be in scope | Remote-tracking refs only |
+| `scripts/git_preserve_danglers.sh [--patch-dir DIR]` | Pin every dangling commit to `refs/dangling-backup/`, optional patches; whole-set only | Adds refs only (never deletes/gc) |
 | `scripts/git_verify_branch_merged.sh <branch> [base]` | Refresh remotes, then give a content-level MERGED/UNMERGED verdict | Remote-tracking refs only |
 | `scripts/git_export_before_drop.sh [export options]` | Export stashes plus selected branches or every current ref into verified bundles | Writes backup files only (never drops/deletes) |
 | `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |

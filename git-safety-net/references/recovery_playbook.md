@@ -27,16 +27,16 @@ one thing that permanently loses work is `gc` running while nothing references i
 ## The authoritative "is anything at risk" check
 
 Before anything else, answer the only question that matters — *is any committed or uncommitted
-state present only locally?* When every linked worktree is inside the declared evidence scope,
-check every place local work hides:
+state present only locally?* When every worktree/ref/tag/stash/dangler enumerated by the full audit
+is inside the declared evidence scope, check every place local work hides:
 
 ```bash
 scripts/git_loss_audit.sh
 ```
 
-If any linked worktree is excluded, the script is out of scope because it inspects them all. Use
-the authorized checkout's own `status`, `HEAD`, `git log HEAD --not --remotes`, and exact remote-ref
-lookup instead, and state that other worktrees/refs/stashes/danglers were not audited.
+If any enumerated surface is excluded, the script is out of scope because it has no exclusion flag.
+Use the authorized checkout/ref's own `status`, `HEAD`, `git log HEAD --not --remotes`, and exact
+remote-ref lookup instead, and state that other worktrees/refs/tags/stashes/danglers were not audited.
 
 - **A completely empty verdict = no reported local state is stranded off-remote.** That means no
   local-only commits, dirty/unavailable worktrees, stashes, or dangling commits.

@@ -52,10 +52,11 @@ git merge <branch-for-this-work>                  # the work is now in THIS work
   the missing deps, and it can hand back a stale checkout of an older commit. A shared working tree
   with disciplined *commit-then-switch* is safer and simpler than juggling worktrees.
 
-The safety comes from **committing early**, not from a second checkout. When every linked worktree
-is in evidence scope, confirm the state with `scripts/git_loss_audit.sh`: unlike a raw branch-only
-log, it also inspects detached linked-worktree HEADs and uncommitted files. If another worktree is
-excluded, use only checkout-scoped evidence and do not make the full-repository claim.
+The safety comes from **committing early**, not from a second checkout. When every
+worktree/ref/tag/stash/dangler enumerated by the full audit is in evidence scope, confirm the state
+with `scripts/git_loss_audit.sh`: unlike a raw branch-only log, it also inspects detached
+linked-worktree HEADs and uncommitted files. Otherwise use only checkout/ref-scoped evidence and do
+not make the full-repository claim.
 
 ## Push work-in-progress branches early
 
@@ -69,8 +70,8 @@ git push -u origin <wip-branch>
 ```
 
 It doesn't need to be a PR — just a remote copy. Re-push as you go, then use
-`scripts/git_loss_audit.sh` only when every linked worktree is in evidence scope; otherwise verify
-the current branch against its exact remote ref and leave the broader state unclaimed.
+`scripts/git_loss_audit.sh` only when every surface it enumerates is in evidence scope; otherwise
+verify the current branch against its exact remote ref and leave the broader state unclaimed.
 
 ## Confirm the branch before every commit
 
@@ -132,8 +133,8 @@ expects to find its own branch checked out with its work intact, exactly as it l
 **Failure mode:** deleting a branch or rebasing can orphan commits; if any were local-only, they
 head toward gc.
 
-**Prevention:** select the evidence path first (see recovery_playbook.md). With every linked
-worktree in scope, run the full at-risk check:
+**Prevention:** select the evidence path first (see recovery_playbook.md). With every
+worktree/ref/tag/stash/dangler enumerated by the script in scope, run the full at-risk check:
 
 ```bash
 scripts/git_loss_audit.sh
@@ -148,11 +149,11 @@ destructive step, and excluded state remains explicitly unaudited.
 **Failure mode:** checking `git status` in the primary checkout and assuming a linked worktree is
 also clean. The linked checkout may hold untracked files or a detached commit that no branch names.
 
-**Prevention:** run `git_loss_audit.sh` only when every linked worktree is in evidence scope. Then
-inspect each selected authorized path with both `git -C <worktree-path> status --porcelain=v1
---untracked-files=all` and the corresponding `--ignored` inventory. If another worktree is
-excluded, skip the full script and inspect only the exact authorized retirement path. The first
-status must be empty; every ignored item must be proven reproducible
+**Prevention:** run `git_loss_audit.sh` only when every surface it enumerates is in evidence scope.
+Then inspect each selected authorized path with both `git -C <worktree-path> status --porcelain=v1
+--untracked-files=all` and the corresponding `--ignored` inventory. Otherwise skip the full script
+and inspect only the exact authorized retirement path. The first status must be empty; every ignored
+item must be proven reproducible
 or copied out with its relative path and verified against a recorded content hash because Git
 bundles cannot reach it. Record the exact HEAD, prove containment against
 a freshly fetched maintained base, and create a verified targeted bundle from the worktree's branch

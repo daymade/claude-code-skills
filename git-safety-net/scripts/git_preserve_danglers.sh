@@ -12,6 +12,8 @@
 # Usage (run from anywhere inside the repo):
 #   git_preserve_danglers.sh                       # pin all dangling commits
 #   git_preserve_danglers.sh --patch-dir DIR       # pin AND write DIR/<shortsha>-<slug>.patch each
+# Caller boundary: there is no per-SHA filter. Run only when every dangling commit the script will
+# enumerate is inside the preservation scope; otherwise use targeted `git update-ref` from SKILL.md.
 #
 # After running, `git for-each-ref refs/dangling-backup/` lists what was pinned. To unpin later
 # (only once you've confirmed the content is safe on a remote), see the SKILL.md troubleshooting.
