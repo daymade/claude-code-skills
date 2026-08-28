@@ -161,7 +161,7 @@ elif [ ${#BRANCH_ARGS[@]} -gt 0 ]; then
 fi
 
 if [ "$EXPORTED" = 0 ]; then
-  echo "nothing selected — pass --all-stashes, --stash N, --branch NAME, or --all-refs (see --help)"
+  echo "nothing selected — pass --all-stashes, --stash N, --branch REF, or --all-refs (see --help)"
   exit 1
 fi
 

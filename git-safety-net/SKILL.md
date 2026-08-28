@@ -193,8 +193,19 @@ uv run python -m unittest discover -s tests -p 'test_*.py'
 
 **Step 1 — audit (non-destructive).** What, if anything, is at risk of loss right now:
 
+When every linked worktree is inside the declared evidence scope:
+
 ```bash
 scripts/git_loss_audit.sh          # defaults to remote "origin"; pass a remote name to override
+```
+
+When any linked worktree is excluded, skip that script and collect only checkout-scoped evidence:
+
+```bash
+git status --porcelain=v1 --untracked-files=all
+git rev-parse HEAD
+git log --oneline HEAD --not --remotes
+git ls-remote <remote> <authorized-remote-ref>
 ```
 
 Expected output: every worktree with branch/detached state and cleanliness, plus counts of
@@ -203,6 +214,8 @@ Exit is 1 when commits exist on no remote or a worktree is dirty/uninspectable; 
 danglers remain visible but do not alone make the audit fail. Exit 0 is therefore not permission
 to delete a visible stash/dangler: triage or preserve every reported item. Do not claim cleanup is
 safe until the named worktree is clean and its HEAD is proven contained or deliberately preserved.
+The scoped path proves only the authorized checkout/ref; it says nothing about excluded worktrees,
+other local refs, stashes, or danglers, which must remain listed as not audited.
 
 **Step 2 — preserve only what the next authorized destructive action threatens (additive,
 gc-proof).** A finding alone does not need a backup. If deletion, gc, or history rewriting can make
@@ -343,8 +356,9 @@ The habits that keep a branch tangle from ever stranding work:
   does not run the normal `git commit` hook path: execute the repository's exact pre-commit/security
   gates against the candidate before push, and still let pre-push run. This is the escape hatch for
   when commit-then-switch is off the table because someone else holds the tree.
-- **Before any rebase or branch-delete, run the Mode B audit.** Ten seconds; it's the difference
-  between "nothing to lose" and finding out after gc.
+- **Before any rebase or branch-delete, run the applicable Mode B evidence path.** Use the full
+  loss audit only when every linked worktree is in evidence scope; otherwise use the authorized
+  checkout's scoped checks and limit the safety claim accordingly.
 - **Before bumping a shared version/lockfile, check the base's current value** so two parallel
   branches don't both claim the same bump (a silent collision that blocks the later change from
   shipping).
@@ -515,8 +529,9 @@ it works offline and behind a proxy.
   root commits by hand: `git rev-list --max-parents=0 HEAD`. A copy made by `cp -r` before the repo
   had any remote will only match on root commit.
 - **`git_loss_audit.sh` reports dangling commits that look like old stashes** — expected after
-  stash-heavy work. They're reflog-reachable now; pin them with `git_preserve_danglers.sh` if you
-  want them past the gc window, then inspect with `git show <sha>` at leisure.
+  stash-heavy work. They're reflog-reachable now; pin one authorized SHA with targeted `update-ref`,
+  or use `git_preserve_danglers.sh` only when every reported dangler is in scope, then inspect with
+  `git show <sha>` at leisure.
 - **A branch shows huge "commits ahead" but you suspect it's merged** — trust
   `git_verify_branch_merged.sh` (content), not the count. See Mode C.
 - **A recovery artifact becomes unexpectedly large, or an upload/LFS transfer stalls** — stop

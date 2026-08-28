@@ -374,7 +374,8 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    and require equality. Use `git check-ignore -v <path>` when the ignore rule itself is unclear.
 4. **Record the exact identity:** copy `git -C <worktree-path> rev-parse HEAD` and
    `git -C <worktree-path> branch --show-current`. An empty branch means detached HEAD, not "no
-   work". Confirm the recorded HEAD appears in the all-worktree loss audit.
+   work". Confirm the recorded HEAD resolves as a commit; when a branch is present, require that
+   branch to resolve to the same SHA. The targeted bundle in step 6 preserves this exact identity.
 5. **Prove containment against a fresh base:** fetch the maintained repository, then run
    `scripts/git_verify_branch_merged.sh <recorded-head> <base>`. An
    ancestor/content-contained verdict proves the committed state is on the base; NEEDS REVIEW

@@ -9,7 +9,7 @@ ceremony; adopt the ones whose failure mode you're exposed to.
 - Confirm the branch before every commit
 - Relocate your work when a parallel session switched the shared tree under you
 - Audit before rebase / branch-delete
-- Audit every existing worktree before retirement
+- Audit every authorized worktree before retirement
 - Snapshot before any history rewrite
 - Version / lockfile collisions between parallel branches
 - Commit-scope hygiene (don't sweep unrelated staged work)
@@ -52,9 +52,10 @@ git merge <branch-for-this-work>                  # the work is now in THIS work
   the missing deps, and it can hand back a stale checkout of an older commit. A shared working tree
   with disciplined *commit-then-switch* is safer and simpler than juggling worktrees.
 
-The safety comes from **committing early**, not from a second checkout. Confirm the state with
-`scripts/git_loss_audit.sh`: unlike a raw branch-only log, it also inspects detached linked
-worktree HEADs and uncommitted files.
+The safety comes from **committing early**, not from a second checkout. When every linked worktree
+is in evidence scope, confirm the state with `scripts/git_loss_audit.sh`: unlike a raw branch-only
+log, it also inspects detached linked-worktree HEADs and uncommitted files. If another worktree is
+excluded, use only checkout-scoped evidence and do not make the full-repository claim.
 
 ## Push work-in-progress branches early
 
@@ -68,7 +69,8 @@ git push -u origin <wip-branch>
 ```
 
 It doesn't need to be a PR — just a remote copy. Re-push as you go, then use
-`scripts/git_loss_audit.sh` to confirm there are no other local-only commits or dirty worktrees.
+`scripts/git_loss_audit.sh` only when every linked worktree is in evidence scope; otherwise verify
+the current branch against its exact remote ref and leave the broader state unclaimed.
 
 ## Confirm the branch before every commit
 
@@ -130,22 +132,27 @@ expects to find its own branch checked out with its work intact, exactly as it l
 **Failure mode:** deleting a branch or rebasing can orphan commits; if any were local-only, they
 head toward gc.
 
-**Prevention:** run the ten-second at-risk check first (see recovery_playbook.md):
+**Prevention:** select the evidence path first (see recovery_playbook.md). With every linked
+worktree in scope, run the full at-risk check:
 
 ```bash
 scripts/git_loss_audit.sh
 ```
 
-Local-only commits or dirty/unavailable worktrees → preserve them before the destructive step.
+With an excluded worktree, do not run it; use the authorized checkout's scoped status/HEAD/remote
+checks. Local-only commits or dirty/unavailable authorized worktrees must be preserved before the
+destructive step, and excluded state remains explicitly unaudited.
 
-## Audit every existing worktree before retirement
+## Audit every authorized worktree before retirement
 
 **Failure mode:** checking `git status` in the primary checkout and assuming a linked worktree is
 also clean. The linked checkout may hold untracked files or a detached commit that no branch names.
 
-**Prevention:** run `git_loss_audit.sh`, then inspect the selected path with both
-`git -C <worktree-path> status --porcelain=v1 --untracked-files=all` and the corresponding
-`--ignored` inventory. The first must be empty; every ignored item must be proven reproducible
+**Prevention:** run `git_loss_audit.sh` only when every linked worktree is in evidence scope. Then
+inspect each selected authorized path with both `git -C <worktree-path> status --porcelain=v1
+--untracked-files=all` and the corresponding `--ignored` inventory. If another worktree is
+excluded, skip the full script and inspect only the exact authorized retirement path. The first
+status must be empty; every ignored item must be proven reproducible
 or copied out with its relative path and verified against a recorded content hash because Git
 bundles cannot reach it. Record the exact HEAD, prove containment against
 a freshly fetched maintained base, and create a verified targeted bundle from the worktree's branch
