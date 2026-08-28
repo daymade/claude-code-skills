@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>__BOARD_TITLE__ · Interaction Design Board</title>
+  <style>
+    :root {
+      --ink: #17201b;
+      --muted: #66736c;
+      --line: #d8e0db;
+      --paper: #f4f7f5;
+      --panel: #fff;
+      --accent: #176b48;
+      --soft: #e8f2ed;
+      --warn: #8d5d13;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      color: var(--ink);
+      background: var(--paper);
+      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, textarea, input { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, textarea:focus-visible, input:focus-visible {
+      outline: 3px solid #79b99b;
+      outline-offset: 2px;
+    }
+
+    .top {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(255, 255, 255, .96);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(12px);
+    }
+    .head {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) auto;
+      gap: 20px;
+      padding: 14px 18px 10px;
+    }
+    h1 { margin: 0; font-size: 18px; }
+    .objective { margin: 4px 0 0; color: var(--muted); max-width: 900px; }
+    .task {
+      align-self: center;
+      max-width: 440px;
+      padding: 8px 12px;
+      border: 1px solid #b9d2c4;
+      border-radius: 8px;
+      background: var(--soft);
+    }
+    .task b {
+      display: block;
+      color: var(--accent);
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .toolbar { display: flex; align-items: end; gap: 12px; padding: 0 18px 12px; }
+    .tabs { display: flex; flex: 1; gap: 6px; overflow: auto; }
+    .tab {
+      min-width: 180px;
+      padding: 8px 10px;
+      color: var(--muted);
+      text-align: left;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f9fbfa;
+    }
+    .tab strong { display: block; color: var(--ink); }
+    .tab[aria-selected="true"] {
+      color: var(--ink);
+      border-color: var(--accent);
+      background: #fff;
+      box-shadow: inset 0 -3px 0 var(--accent);
+    }
+    .view-toggle { display: flex; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; }
+    .view-toggle button { padding: 9px 11px; border: 0; background: #fff; }
+    .view-toggle button.active { color: #fff; background: var(--ink); }
+
+    .board { display: grid; grid-template-columns: minmax(0, 1fr) 330px; min-height: calc(100vh - 138px); }
+    .board.focus { grid-template-columns: minmax(0, 1fr); }
+    .board.focus .feedback { display: none; }
+    .stage { min-width: 0; padding: 14px; }
+    .single-card, .comparison-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      box-shadow: 0 8px 24px rgba(23, 32, 27, .06);
+    }
+    .card-meta {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .card-meta strong { display: block; }
+    .card-meta small { color: var(--muted); }
+    .tradeoff { max-width: 360px; color: var(--warn); font-size: 12px; text-align: right; }
+    iframe { display: block; width: 100%; height: calc(100vh - 218px); border: 0; background: #fff; }
+    .comparison {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(560px, 1fr));
+      gap: 14px;
+      overflow: auto;
+      padding-bottom: 14px;
+    }
+    .comparison[hidden], .single[hidden] { display: none; }
+    .comparison iframe { height: 720px; }
+    .comparison-card { min-width: 560px; }
+
+    .feedback {
+      position: sticky;
+      top: 138px;
+      height: calc(100vh - 138px);
+      overflow: auto;
+      padding: 16px;
+      border-left: 1px solid var(--line);
+      background: #fff;
+    }
+    .feedback h2 { margin: 0 0 4px; font-size: 16px; }
+    .feedback .hint { margin: 0 0 14px; color: var(--muted); font-size: 12px; }
+    .field { display: block; margin: 13px 0; }
+    .field > span { display: block; margin-bottom: 5px; font-weight: 650; }
+    textarea {
+      width: 100%;
+      min-height: 68px;
+      padding: 8px;
+      resize: vertical;
+      border: 1px solid #c7d1cb;
+      border-radius: 7px;
+      background: #fbfcfb;
+    }
+    .preferred { display: grid; gap: 6px; }
+    .preferred label {
+      display: flex;
+      align-items: start;
+      gap: 8px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+    }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+    .actions button {
+      padding: 10px;
+      color: var(--accent);
+      font-weight: 700;
+      border: 1px solid var(--accent);
+      border-radius: 7px;
+      background: #fff;
+    }
+    .actions .primary { color: #fff; background: var(--accent); }
+    .status { min-height: 20px; margin-top: 9px; color: var(--muted); font-size: 12px; }
+    .invariants { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; }
+    .states { padding: 0; margin: 4px 0 0; color: var(--muted); font-size: 11px; list-style: none; }
+    .states li::before { content: "• "; color: var(--accent); }
+
+    @media (max-width: 1050px) {
+      .board { grid-template-columns: 1fr; }
+      .feedback { position: static; height: auto; border-top: 1px solid var(--line); border-left: 0; }
+      .head { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="head">
+      <div><h1 id="title"></h1><p class="objective" id="objective"></p></div>
+      <div class="task"><b>Same task in every candidate</b><span id="task"></span></div>
+    </div>
+    <div class="toolbar">
+      <div class="tabs" id="tabs" role="tablist" aria-label="Interaction candidates"></div>
+      <div class="view-toggle" aria-label="Board view">
+        <button id="singleView" class="active">Focus</button>
+        <button id="compareView">Compare</button>
+        <button id="feedbackToggle">Hide notes</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="board" id="board">
+    <section class="stage">
+      <div id="single" class="single" role="tabpanel" tabindex="0"></div>
+      <div id="comparison" class="comparison" hidden></div>
+    </section>
+    <aside class="feedback" id="feedback">
+      <h2>Decision notes</h2>
+      <p class="hint">Operate the task first. Record what happened, not a beauty score.</p>
+      <div id="preferred" class="preferred"></div>
+      <div id="commentFields"></div>
+      <label class="field"><span>Cross-candidate conclusion</span><textarea id="overall" placeholder="What changed your decision?"></textarea></label>
+      <label class="field"><span>Remix brief</span><textarea id="remix" placeholder="Keep X from A; replace Y with B's behavior…"></textarea></label>
+      <strong>Invariants held constant</strong>
+      <ul class="invariants" id="invariants"></ul>
+      <div class="actions"><button id="iterate">Request remix</button><button id="submit" class="primary">Submit direction</button></div>
+      <div class="status" id="status" role="status"></div>
+    </aside>
+  </main>
+
+  <script id="board-data" type="application/json">__BOARD_DATA__</script>
+  <script>
+    const contract = JSON.parse(document.getElementById('board-data').textContent);
+    const board = document.getElementById('board');
+    const storageKey = 'interaction-board:' + contract.prototypeRevision;
+    let active = contract.variants[0].id;
+    let notes = { comments: {}, overall: '', remix: '', preferred: null };
+    try { notes = Object.assign(notes, JSON.parse(localStorage.getItem(storageKey) || '{}')); } catch (_error) {}
+
+    const byId = id => contract.variants.find(variant => variant.id === id);
+    const el = (name, className, text) => {
+      const node = document.createElement(name);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+
+    document.getElementById('title').textContent = contract.title;
+    document.getElementById('objective').textContent = contract.objective;
+    document.getElementById('task').textContent = contract.task;
+    contract.invariants.forEach(invariant => document.getElementById('invariants').append(el('li', '', invariant)));
+
+    function save() {
+      notes.overall = document.getElementById('overall').value;
+      notes.remix = document.getElementById('remix').value;
+      try { localStorage.setItem(storageKey, JSON.stringify(notes)); } catch (_error) {}
+    }
+
+    function securedCandidateHtml(source) {
+      const documentCopy = new DOMParser().parseFromString(source, 'text/html');
+      const policy = documentCopy.createElement('meta');
+      policy.httpEquiv = 'Content-Security-Policy';
+      policy.content = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+      documentCopy.head.prepend(policy);
+      return '<!doctype html>\n' + documentCopy.documentElement.outerHTML;
+    }
+
+    function makeCard(variant, compact) {
+      const article = el('article', compact ? 'comparison-card' : 'single-card');
+      const meta = el('div', 'card-meta');
+      const description = el('div');
+      description.append(el('strong', '', variant.label));
+      description.append(el('small', '', variant.hypothesis));
+      const states = el('ul', 'states');
+      variant.states.forEach(state => states.append(el('li', '', state.name + ' — ' + state.expected)));
+      description.append(states);
+      meta.append(description, el('div', 'tradeoff', 'Trade-off: ' + variant.tradeoff));
+      const frame = el('iframe');
+      frame.title = variant.label + ' runnable prototype';
+      frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
+      frame.srcdoc = securedCandidateHtml(variant.html);
+      article.append(meta, frame);
+      return article;
+    }
+
+    function activate(id) {
+      active = id;
+      renderTabs();
+      const panel = document.getElementById('single');
+      panel.replaceChildren(makeCard(byId(active), false));
+      panel.setAttribute('aria-labelledby', 'tab-' + active);
+      renderComments();
+      save();
+    }
+
+    function renderTabs() {
+      const tabs = document.getElementById('tabs');
+      if (!tabs.childElementCount) {
+        contract.variants.forEach((variant, index) => {
+          const tab = el('button', 'tab');
+          tab.type = 'button';
+          tab.id = 'tab-' + variant.id;
+          tab.dataset.id = variant.id;
+          tab.setAttribute('role', 'tab');
+          tab.setAttribute('aria-controls', 'single');
+          tab.append(el('strong', '', variant.label), el('span', '', variant.hypothesis));
+          tab.addEventListener('click', () => activate(variant.id));
+          tab.addEventListener('keydown', event => {
+            let next = null;
+            if (event.key === 'ArrowRight') next = (index + 1) % contract.variants.length;
+            if (event.key === 'ArrowLeft') next = (index - 1 + contract.variants.length) % contract.variants.length;
+            if (event.key === 'Home') next = 0;
+            if (event.key === 'End') next = contract.variants.length - 1;
+            if (next !== null) {
+              event.preventDefault();
+              const nextId = contract.variants[next].id;
+              activate(nextId);
+              document.querySelector('[data-id="' + nextId + '"]').focus();
+            }
+            if ((event.key === ' ' || event.key === 'Enter') && variant.id !== active) {
+              event.preventDefault();
+              activate(variant.id);
+            }
+          });
+          tabs.append(tab);
+        });
+      }
+      tabs.querySelectorAll('.tab').forEach(tab => {
+        const selected = tab.dataset.id === active;
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      });
+    }
+
+    function renderComments() {
+      const variant = byId(active);
+      const values = notes.comments[active] || { noticedFirst: '', worked: '', failed: '' };
+      const wrapper = document.getElementById('commentFields');
+      wrapper.replaceChildren(el('h3', '', variant.label));
+      [
+        ['noticedFirst', 'What did you notice first?'],
+        ['worked', 'What helped you act?'],
+        ['failed', 'What hid evidence or caused hesitation?']
+      ].forEach(([key, label]) => {
+        const field = el('label', 'field');
+        const input = el('textarea');
+        input.value = values[key] || '';
+        input.addEventListener('input', () => {
+          notes.comments[active] = notes.comments[active] || {};
+          notes.comments[active][key] = input.value;
+          save();
+        });
+        field.append(el('span', '', label), input);
+        wrapper.append(field);
+      });
+    }
+
+    function renderPreferred() {
+      const container = document.getElementById('preferred');
+      container.replaceChildren(el('strong', '', 'Current direction'));
+      contract.variants.forEach(variant => {
+        const label = el('label');
+        const input = el('input');
+        input.type = 'radio';
+        input.name = 'preferred';
+        input.value = variant.id;
+        input.checked = notes.preferred === variant.id;
+        input.addEventListener('change', () => { notes.preferred = variant.id; save(); });
+        const copy = el('span');
+        copy.append(el('b', '', variant.label), el('br'), el('small', '', variant.tradeoff));
+        label.append(input, copy);
+        container.append(label);
+      });
+    }
+
+    function setView(compare) {
+      document.getElementById('comparison').hidden = !compare;
+      document.getElementById('single').hidden = compare;
+      document.getElementById('singleView').classList.toggle('active', !compare);
+      document.getElementById('compareView').classList.toggle('active', compare);
+    }
+
+    function feedbackPayload(regenerated, action) {
+      save();
+      const payload = {
+        schemaVersion: 'interaction-design-board/feedback-v1',
+        prototypeRevision: contract.prototypeRevision,
+        preferred: notes.preferred,
+        comments: notes.comments,
+        overall: notes.overall || null,
+        remix: notes.remix || null,
+        regenerated
+      };
+      if (action) payload.regenerateAction = action;
+      return payload;
+    }
+
+    function download(name, data) {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const link = el('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = name;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 500);
+    }
+
+    async function deliver(data, name) {
+      const status = document.getElementById('status');
+      let endpoint = null;
+      if (window.__GSTACK_SERVER_URL) endpoint = window.__GSTACK_SERVER_URL + '/api/feedback';
+      else if (location.protocol === 'http:' || location.protocol === 'https:') endpoint = './api/feedback';
+      if (endpoint) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          status.textContent = name + ' submitted to the local feedback server.';
+          return;
+        } catch (_error) {
+          status.textContent = 'Server delivery failed; downloaded ' + name + ' instead.';
+        }
+      }
+      download(name, data);
+    }
+
+    const comparison = document.getElementById('comparison');
+    contract.variants.forEach(variant => comparison.append(makeCard(variant, true)));
+    document.getElementById('overall').value = notes.overall || '';
+    document.getElementById('remix').value = notes.remix || '';
+    document.getElementById('overall').addEventListener('input', save);
+    document.getElementById('remix').addEventListener('input', save);
+    document.getElementById('singleView').addEventListener('click', () => setView(false));
+    document.getElementById('compareView').addEventListener('click', () => setView(true));
+    document.getElementById('feedbackToggle').addEventListener('click', () => {
+      board.classList.toggle('focus');
+      document.getElementById('feedbackToggle').textContent = board.classList.contains('focus') ? 'Show notes' : 'Hide notes';
+    });
+    document.getElementById('iterate').addEventListener('click', () => {
+      deliver(feedbackPayload(true, notes.remix ? 'remix' : 'iterate'), 'feedback-pending.json');
+    });
+    document.getElementById('submit').addEventListener('click', () => {
+      if (!notes.preferred) {
+        document.getElementById('status').textContent = 'Choose a current direction or use Request remix.';
+        return;
+      }
+      deliver(feedbackPayload(false, null), 'feedback.json');
+    });
+
+    renderPreferred();
+    activate(active);
+  </script>
+</body>
+</html>

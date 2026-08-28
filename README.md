@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.1.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-2.2.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -206,6 +206,7 @@ codex plugin add daymade-codex@daymade-skills
 /daymade-codex:codex-image-gallery
 /daymade-codex:local-codex
 /daymade-codex:design-style-picker
+/daymade-codex:interaction-design-board
 /daymade-codex:codex-1m-context-window-setup
 ```
 
@@ -3502,6 +3503,39 @@ and rolls back if Codex strict-config validation fails.
 configure Codex CLI and Desktop for the largest verified context window
 verify that my long-context setup still matches the selected model
 ```
+
+---
+
+### 100. **interaction-design-board** - Runnable Interaction Alternatives Before Implementation
+
+> **Install**: `claude plugin install daymade-codex@daymade-skills`
+> (suite-only — invoked as `daymade-codex:interaction-design-board`)
+
+Generate several genuinely different HTML interaction architectures for one bounded
+product surface while holding business facts and the current design language constant.
+The bundled builder combines the self-contained candidates into a keyboard-accessible
+Design Board with Focus/Compare modes, structured task feedback, remix requests, and a
+content-bound approval handoff. Product code stays untouched until the user has operated
+and approved a direction.
+
+**Key features:**
+- Distinguishes interaction architecture from static visual-style exploration
+- Keeps one frozen business/task contract across isolated candidate generation
+- Rejects byte-identical candidates, path traversal, missing states, and external assets
+- Supports gstack's local feedback daemon and direct-file JSON download fallback
+- Preserves prototype content identity separately from the runtime Board instance
+
+**Example usage:**
+```text
+/daymade-codex:interaction-design-board
+show me three clickable ways to organize this review workflow before changing the app
+the visual style is fine, but compare queue-first, object-first, and ledger-first interactions
+use a Design Board so I can try each progressive-disclosure option and request a remix
+```
+
+📚 **Documentation**: See
+[interaction-design-method.md](./daymade-codex/interaction-design-board/references/interaction-design-method.md)
+and [board-contract.md](./daymade-codex/interaction-design-board/references/board-contract.md).
 
 ---
 

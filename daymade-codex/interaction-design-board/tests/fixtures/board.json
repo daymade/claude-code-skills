@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "interaction-design-board/v1",
+  "title": "Operations account review",
+  "objective": "Help an operator identify the highest-priority account, understand the evidence boundary, and start the right action without losing the full ledger",
+  "task": "Find the highest-priority account, inspect why it is first, then choose Review evidence",
+  "invariants": [
+    "North account is the highest-priority object",
+    "The signal is stale and requires human review",
+    "Review evidence is the primary action",
+    "The full account ledger remains available"
+  ],
+  "variants": [
+    {
+      "id": "command-first",
+      "label": "A · Command first",
+      "hypothesis": "Lead with one explicit object, reason, evidence boundary, and action",
+      "tradeoff": "The ledger starts lower on the page",
+      "file": "command-first.html",
+      "states": [
+        {"name": "default", "expected": "North, the stale signal, and Review evidence are visible"},
+        {"name": "evidence-open", "expected": "Secondary evidence opens without hiding the object or action"}
+      ]
+    },
+    {
+      "id": "queue-detail",
+      "label": "B · Queue detail",
+      "hypothesis": "Keep queue position visible while evidence follows the selected account",
+      "tradeoff": "The split workspace uses more horizontal space",
+      "file": "queue-detail.html",
+      "states": [
+        {"name": "north-selected", "expected": "North and its stale signal are selected by default"},
+        {"name": "south-selected", "expected": "Selecting South changes detail while queue context remains"}
+      ]
+    },
+    {
+      "id": "ledger-first",
+      "label": "C · Ledger first",
+      "hypothesis": "Keep the comparison table dominant and expand evidence inside the priority row",
+      "tradeoff": "The primary problem competes with dense row content",
+      "file": "ledger-first.html",
+      "states": [
+        {"name": "default", "expected": "North is pinned as the first ledger row"},
+        {"name": "row-expanded", "expected": "Evidence expands in place while the ledger header remains visible"}
+      ]
+    }
+  ]
+}

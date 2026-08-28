@@ -6,7 +6,7 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.1.0-green.svg)](https://github.com/daymade/claude-code-skills)
+[![Version](https://img.shields.io/badge/version-2.2.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -203,6 +203,7 @@ codex plugin add daymade-codex@daymade-skills
 /daymade-codex:codex-image-gallery
 /daymade-codex:local-codex
 /daymade-codex:design-style-picker
+/daymade-codex:interaction-design-board
 /daymade-codex:codex-1m-context-window-setup
 ```
 
@@ -3503,6 +3504,37 @@ Tibo 最新的重置公告换算成北京时间是几点
 把 Codex CLI 和 Desktop 配成当前模型可验证的最大上下文
 验证长上下文设置在升级或切换模型后是否仍然正确
 ```
+
+---
+
+### 100. **interaction-design-board** - 实现前对比可运行交互方案
+
+> **安装**：`claude plugin install daymade-codex@daymade-skills`
+>（仅作为套件成员发布，调用方式 `daymade-codex:interaction-design-board`）
+
+在业务事实和现有设计语言保持不变的前提下，为一个有边界的产品界面生成多种真正
+不同的 HTML 交互架构。自带的构建器会把自包含候选组合成支持键盘操作的 Design Board，
+提供 Focus／Compare、任务反馈、remix 请求和内容绑定的批准交接；用户实际操作并拍板前，
+不修改正式产品代码。
+
+**核心能力：**
+- 明确区分交互架构探索与静态视觉风格赛马
+- 多个隔离候选共用一份冻结的业务／任务合同
+- 拒绝字节完全相同的候选、路径越界、未声明状态和外部资源依赖
+- 兼容 gstack 本地反馈 daemon，并支持直接打开时下载 JSON
+- 把原型内容身份和运行期 Board 实例身份分开保存
+
+**使用示例：**
+```text
+/daymade-codex:interaction-design-board
+先给我三个可点击的审核工作流方案，不要直接改正式页面
+视觉风格没问题，但把队列优先、对象优先和账本优先做成可操作版本比较
+用 Design Board 让我试完每种渐进式披露，再决定是否 remix
+```
+
+📚 **文档**：参见
+[interaction-design-method.md](./daymade-codex/interaction-design-board/references/interaction-design-method.md)
+与 [board-contract.md](./daymade-codex/interaction-design-board/references/board-contract.md)。
 
 ---
 
