@@ -200,7 +200,8 @@ scope:
 scripts/git_loss_audit.sh          # defaults to remote "origin"; pass a remote name to override
 ```
 
-When any linked worktree is excluded, skip that script and collect only checkout-scoped evidence:
+When any surface listed above is excluded, skip that script and collect only checkout/ref-scoped
+evidence:
 
 ```bash
 git status --porcelain=v1 --untracked-files=all
@@ -209,7 +210,8 @@ git log --oneline HEAD --not --remotes
 git ls-remote <remote> <authorized-remote-ref>
 ```
 
-Expected output: every worktree with branch/detached state and cleanliness, plus counts of
+For the full audit, expected output is every worktree with branch/detached state and cleanliness,
+plus counts of
 **local-only commits**, **dirty/unavailable worktrees**, **stashes**, and **dangling commits**.
 Exit is 1 when commits exist on no remote or a worktree is dirty/uninspectable; stashes and
 danglers remain visible but do not alone make the audit fail. Exit 0 is therefore not permission
