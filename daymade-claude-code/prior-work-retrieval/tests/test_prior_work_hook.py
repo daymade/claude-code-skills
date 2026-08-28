@@ -86,6 +86,36 @@ class PriorWorkHookTests(unittest.TestCase):
             "prompt": "帮我设计并实现一套新的报告流程",
         }
         self.assertIsNone(hook.handle_event(event))
+
+    def test_current_tests_files_and_readme_are_not_prior_work_requests(self) -> None:
+        for prompt in [
+            (
+                "修复报价计算；只修改必要的实现，现有测试或 README "
+                "如果与业务契约冲突才同步"
+            ),
+            "先读当前文件和现有测试，再修这个 bug",
+            "保持现有行为不变，只调整当前函数的错误分支",
+        ]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(hook.classify_prompt(prompt, False), "none")
+
+    def test_explicit_existing_assets_still_trigger(self) -> None:
+        for prompt in [
+            "已有代码和 SOP，先复用再改",
+            "先核对既有资产，再决定是否重写",
+            "已有脚本可以直接沿用",
+            "已有 SOP，先沿用再改",
+            "直接沿用现有实现，不要重写",
+            "已有一套脚本，直接沿用",
+            "请先核对已有两套脚本，再决定怎么改",
+            "请先核对已有 的 SOP，再决定怎么改",
+            "先盘点既有好几批资产，再决定是否重做",
+        ]:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    hook.classify_prompt(prompt, False),
+                    "required_prior_signal",
+                )
         requirement = prior_work.load_requirement(hook._manifest(), "session-1")
         self.assertIsNone(requirement)
 
@@ -615,6 +645,10 @@ class PriorWorkHookTests(unittest.TestCase):
             "别沿用旧的那套配置",
             "不要参考以前的做法",
             "don't reuse the old provider contract",
+            "不要沿用已有脚本，重新写",
+            "无需沿用已有 的 SOP，另起一套",
+            "勿沿用已有两套脚本中的任何一套",
+            "不需要沿用既有资产，从零开始",
         ]:
             with self.subTest(prompt=prompt):
                 self.assertEqual(hook.classify_prompt(prompt, False), "none")
@@ -623,6 +657,7 @@ class PriorWorkHookTests(unittest.TestCase):
             "别重复造轮子，用已有代码",
             "不要重新造一套，看看之前做过什么",
             "不要复用 aicms-docs，但看看我们以前是怎么做的",
+            "不要沿用旧实现，但请复用已有脚本",
         ]:
             with self.subTest(prompt=prompt):
                 self.assertEqual(

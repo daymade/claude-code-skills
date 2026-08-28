@@ -3465,10 +3465,12 @@ Tibo 说的 2pm PST 是北京时间几点
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills`
 > (suite-only — invoked as `daymade-claude-code:prior-work-retrieval`)
 
-Find and verify existing successful code, decisions, Skills/SOPs, meetings,
-WeChat archives, documents, and conversation history before starting a new
-implementation or plan. Every run leaves an auditable reuse/adapt/reject receipt;
-zero ranked hits never become an absence claim.
+When the user explicitly asks to reuse or find earlier work, verify successful
+code, decisions, Skills/SOPs, meetings, WeChat archives, documents, and
+conversation history before producing. References to the current tests, README,
+files, implementation, or behavior do not trigger retrieval. Every real run
+leaves an auditable reuse/adapt/reject receipt; zero ranked hits never become an
+absence claim.
 
 **Key features:**
 - Explicit source manifest and per-carrier coverage
@@ -3631,7 +3633,7 @@ Use **prompt-optimizer** to transform vague feature requests into precise EARS s
 Use **read-claude-code-history** to recover deleted files from previous Claude Code sessions, search for specific implementations across conversation history, or track file evolution over time. Essential for recovering accidentally deleted code or finding that feature implementation you remember but can't locate.
 
 ### For Reusing Existing Work Before Producing
-Use **prior-work-retrieval** before a substantial implementation, plan, report, workflow, document, or external message may already have an answer elsewhere. It searches the explicit local source manifest across current code, project decisions, Skills/SOPs, meetings, archived WeChat, and conversation history; then requires source verification plus an auditable reuse/adapt/reject receipt. A zero-hit ranked search never becomes an absence claim.
+Use **prior-work-retrieval** only when the user explicitly asks to find, reuse, or reconcile earlier work. A mention of current tests, README, files, implementation, behavior, or validation is not enough. For a real prior-work request, it searches the explicit local source manifest across current code, project decisions, Skills/SOPs, meetings, archived WeChat, and conversation history; then requires source verification plus an auditable reuse/adapt/reject receipt. A zero-hit ranked search never becomes an absence claim.
 
 ### For Codex Workstation Setup
 Use **codex-1m-context-window-setup** when Codex CLI or Desktop shows about 258K
