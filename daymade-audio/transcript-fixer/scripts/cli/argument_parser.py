@@ -38,6 +38,38 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Add correction"
     )
     parser.add_argument(
+        "--add-context-rule",
+        nargs=2,
+        metavar=("PATTERN", "REPLACEMENT"),
+        dest="add_context_rule",
+        help="Add a context-aware regex rule (PATTERN is a regex; --domain scopes it, omit for global)"
+    )
+    parser.add_argument(
+        "--list-context-rules",
+        action="store_true",
+        dest="list_context_rules",
+        help="List context rules (--domain filters to one domain plus globals)"
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        dest="all",
+        help="With --list-context-rules: include disabled rules"
+    )
+    parser.add_argument(
+        "--description",
+        metavar="TEXT",
+        default=None,
+        help="Human-readable rule name for --add-context-rule"
+    )
+    parser.add_argument(
+        "--priority",
+        metavar="N",
+        type=int,
+        default=0,
+        help="Priority for --add-context-rule (higher applies first)"
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         default=False,

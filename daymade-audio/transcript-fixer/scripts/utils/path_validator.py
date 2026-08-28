@@ -223,7 +223,7 @@ class PathValidator:
         Example:
             >>> validator = PathValidator()
             >>> safe_path = validator.validate_input_path("~/Documents/file.md")
-            >>> # Returns: Path('/home/username/Documents/file.md') or similar
+            >>> # Returns: Path('<home>/Documents/file.md') or similar
         """
         # Check dangerous patterns in raw string
         self._check_dangerous_patterns(path_str)
@@ -286,7 +286,7 @@ class PathValidator:
         Example:
             >>> validator = PathValidator()
             >>> safe_path = validator.validate_output_path("~/Documents/output.md")
-            >>> # Returns: Path('/home/username/Documents/output.md') or similar
+            >>> # Returns: Path('<home>/Documents/output.md') or similar
         """
         # Check dangerous patterns
         self._check_dangerous_patterns(path_str)
@@ -347,7 +347,7 @@ class PathValidator:
             directory: Directory path to add
 
         Example:
-            >>> validator.add_allowed_directory("/home/username/Projects")
+            >>> validator.add_allowed_directory("<home>/Projects")
         """
         dir_path = Path(directory).expanduser().resolve()
         self.allowed_base_dirs.add(dir_path)

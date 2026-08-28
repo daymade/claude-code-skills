@@ -263,6 +263,61 @@ class TrapEntry:
     kind: str  # "trap" | "confirmed_correct"
 
 
+# A trap annotation carrying one of these literal markers is the domain
+# owner's machine-readable statement that the pair may never auto-apply as a
+# bare dictionary rule — the correction needs the surrounding context judged
+# (by the native pass), so Stage 1 must defer it instead. Authors write the
+# marker in the cue prose exactly as they already did before it became
+# executable (**妙计 → 妙记** — 飞书妙记语境，禁裸词).
+_DEMOTE_MARKERS = ("禁裸词", "禁入词典")
+
+
+@dataclass(frozen=True)
+class DemotionSets:
+    """Machine-readable auto-apply vetoes parsed from a domain context file.
+
+    banned_froms: FROM variants of traps annotated 禁裸词/禁入词典 — a
+        dictionary rule with one of these as its from_text must defer to
+        review, never auto-apply (the 绿点→绿电 class: a real-word rule that
+        is right in some contexts and wrong in others).
+    keep_tokens: confirmed-correct (勿修) tokens — a dictionary rule with one
+        of these as its from_text would rewrite a token the domain already
+        settled as correct, so it must defer too.
+    """
+
+    banned_froms: frozenset
+    keep_tokens: frozenset
+
+
+def extract_demotion_sets(context_text: str) -> DemotionSets:
+    """Parse Stage 1 demotion vetoes out of a domain context markdown.
+
+    Reuses the same bullet-line-start anchored regexes as
+    extract_trap_entries, so every trap the scanner can see is also visible
+    here. The marker is matched against the trap bullet's whole line — the
+    established authoring convention puts it inside the bold parenthesized
+    annotation (**A → B（…，禁裸词）**), and a FROM/TO term literally named
+    禁裸词 is not a plausible correction token, so the wider window adds no
+    false-marker risk.
+    """
+    banned: set = set()
+    keep: set = set()
+    for m in _BOLD_TRAP.finditer(context_text):
+        line_end = context_text.find("\n", m.end())
+        if line_end == -1:
+            line_end = len(context_text)
+        bullet_line = context_text[m.start():line_end]
+        if not any(marker in bullet_line for marker in _DEMOTE_MARKERS):
+            continue
+        for variant in _parse_from_side(m.group(1)):
+            banned.add(variant)
+    for m in _BOLD_CONFIRMED.finditer(context_text):
+        term = _clean_token(m.group(1))
+        if term:
+            keep.add(term)
+    return DemotionSets(frozenset(banned), frozenset(keep))
+
+
 @dataclass(frozen=True)
 class TrapHit:
     """One occurrence of one variant in the scanned text."""

@@ -270,7 +270,9 @@ class DictionaryProcessor:
                 line_num = corrected[:match.start()].count('\n') + 1
                 # Use the same risk classifier as dictionary rules so context
                 # rules do not bypass the common-word / length safety layers.
-                risk = self._assess_risk(matched, replacement)
+                # Trap demotion is excluded: the pattern IS the context.
+                risk = self._assess_risk(matched, replacement,
+                                         allow_trap_demotion=False)
                 changes.append(Change(
                     line_number=line_num,
                     from_text=matched,
@@ -483,7 +485,8 @@ class DictionaryProcessor:
 
         return False
 
-    def _assess_risk(self, wrong: str, correct: str) -> str:
+    def _assess_risk(self, wrong: str, correct: str, *,
+                     allow_trap_demotion: bool = True) -> str:
         """
         Classify a dictionary change as low/medium/high risk.
 
@@ -503,9 +506,25 @@ class DictionaryProcessor:
         - Non-word garbled text (e.g., 克劳锐 -> Claude)
         - High confidence (>= 0.95), length >= 5, and not identified as a
           likely valid Chinese phrase
+
+        `allow_trap_demotion` is False only for context rules: a context rule
+        carries its own context in the pattern, so the trap demotion (which
+        exists to stop context-free bare-word rules) must not fire on it —
+        otherwise a lookahead pattern like 妙计(?=比) whose match text equals
+        a demoted FROM would inherit the demotion and the documented escape
+        channel (--add-context-rule) would silently stop working.
         """
         meta = self.correction_meta.get(wrong, {})
         confidence = meta.get("confidence", 1.0)
+
+        # Trap-demoted: the named domain's context file marks this pair
+        # 禁裸词/禁入词典, or the FROM side as confirmed-correct (勿修) — the
+        # pair may only be corrected with its context judged by the native
+        # pass, so it never auto-applies in safe mode, trusted domain or not.
+        # --apply-all remains the operator's explicit override (review_mode
+        # off applies every level). See cmd Stage 1 demotion wiring.
+        if allow_trap_demotion and meta.get("demoted_by_trap"):
+            return "medium"
 
         # --apply-domain marked this rule as belonging to the domain the user
         # explicitly asserted for this transcript; domain match = trust, so it
