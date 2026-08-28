@@ -61,6 +61,45 @@ def resolve_variant(root: Path, relative: Any, field: str) -> Path:
     return candidate
 
 
+def css_code_only(source: str) -> str:
+    """Remove CSS comments and string contents before checking at-rule tokens."""
+    output: list[str] = []
+    index = 0
+    quote: str | None = None
+    in_comment = False
+    while index < len(source):
+        current = source[index]
+        following = source[index + 1] if index + 1 < len(source) else ""
+        if in_comment:
+            if current == "*" and following == "/":
+                in_comment = False
+                index += 2
+            else:
+                index += 1
+            continue
+        if quote:
+            if current == "\\":
+                index += 2
+                continue
+            if current == quote:
+                quote = None
+                output.append(current)
+            index += 1
+            continue
+        if current == "/" and following == "*":
+            in_comment = True
+            index += 2
+            continue
+        if current in ("'", '"'):
+            quote = current
+            output.append(current)
+            index += 1
+            continue
+        output.append(current)
+        index += 1
+    return "".join(output)
+
+
 def validate_self_contained(source: str, field: str) -> None:
     if not re.search(r"<!doctype\s+html|<html\b", source, re.I):
         raise ContractError(f"{field} is not an HTML document")
@@ -69,7 +108,7 @@ def validate_self_contained(source: str, field: str) -> None:
     if re.search(r"<base\b", source, re.I):
         raise ContractError(f"{field} must not change its base URL")
     for style_block in STYLE_BLOCK_PATTERN.finditer(source):
-        if re.search(r"@import\s", style_block.group(1), re.I):
+        if re.search(r"@import\b", css_code_only(style_block.group(1)), re.I):
             raise ContractError(f"{field} contains CSS @import; inline the imported stylesheet")
     for pattern in RESOURCE_PATTERNS:
         for match in pattern.finditer(source):

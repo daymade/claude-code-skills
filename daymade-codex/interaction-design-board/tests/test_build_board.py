@@ -108,6 +108,29 @@ class BuildBoardTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertIn("contains CSS @import", result.stderr)
 
+    def test_rejects_css_import_without_whitespace(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = self.make_case(root)
+            (root / "a.html").write_text(
+                '<!doctype html><html><head><title>A</title><style>@import"https://example.com/external.css";</style></head></html>',
+                encoding="utf-8",
+            )
+            result = self.run_builder(manifest, root / "out.html")
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("contains CSS @import", result.stderr)
+
+    def test_allows_import_text_in_css_string_or_comment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = self.make_case(root)
+            (root / "a.html").write_text(
+                '<!doctype html><html><head><title>A</title><style>/* @import "old.css"; */ .note::before{content:"@import"}</style></head></html>',
+                encoding="utf-8",
+            )
+            result = self.run_builder(manifest, root / "out.html")
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_rejects_path_traversal(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
