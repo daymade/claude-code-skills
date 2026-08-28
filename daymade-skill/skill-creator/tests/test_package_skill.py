@@ -15,12 +15,14 @@ from scripts.security_scan import calculate_skill_hash
         (Path("my-skill/scripts/__pycache__/bar.py"), True),
         (Path("my-skill/node_modules/lodash/index.js"), True),
         (Path("my-skill/.pytest_cache/v/cache/nodeids"), True),
+        (Path("my-skill/.ruff_cache/CACHEDIR.TAG"), True),
         (Path("my-skill/.DS_Store"), True),
         (Path("my-skill/.skill-regression-reviewed"), True),
         (Path("my-skill/evals/evals.json"), True),
         (Path("my-skill/dist/my-skill.skill"), True),
         (Path("my-skill/tests/test_runtime.py"), True),
         (Path("my-skill/.enrich/run/manifest.json"), True),
+        (Path("my-skill/.in_use/12345"), True),
         (Path("my-skill/scripts/nested/evals/helper.py"), False),
         (Path("my-skill/references/guide.md"), False),
         (Path("my-skill/SKILL.md"), False),
@@ -99,6 +101,10 @@ def test_package_skill_artifact_contains_skill_files(tmp_path):
     (skill_dir / "tests" / "test_runtime.py").write_text("assert True\n", encoding="utf-8")
     (skill_dir / ".enrich" / "run").mkdir(parents=True)
     (skill_dir / ".enrich" / "run" / "manifest.json").write_text("{}\n", encoding="utf-8")
+    (skill_dir / ".in_use").mkdir()
+    (skill_dir / ".in_use" / "12345").write_text("runtime lock\n", encoding="utf-8")
+    (skill_dir / ".ruff_cache").mkdir()
+    (skill_dir / ".ruff_cache" / "CACHEDIR.TAG").write_text("cache\n", encoding="utf-8")
     _add_security_marker(skill_dir)
 
     artifact = package_skill(skill_dir, new_skill=True)
@@ -112,6 +118,8 @@ def test_package_skill_artifact_contains_skill_files(tmp_path):
     assert not any(".security-scan-passed" in n for n in names)
     assert not any("tests/" in n for n in names)
     assert not any(".enrich/" in n for n in names)
+    assert not any(".in_use/" in n for n in names)
+    assert not any(".ruff_cache/" in n for n in names)
 
 
 def test_package_skill_artifact_excludes_dist_directory(tmp_path):

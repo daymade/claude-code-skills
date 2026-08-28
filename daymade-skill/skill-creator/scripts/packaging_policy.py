@@ -6,7 +6,15 @@ import fnmatch
 from pathlib import Path
 
 
-EXCLUDE_DIRS = {"__pycache__", "node_modules", ".pytest_cache", ".venv"}
+# Runtime/development state is never part of a distributable Skill bundle.
+EXCLUDE_DIRS = {
+    "__pycache__",
+    "node_modules",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    ".in_use",
+}
 EXCLUDE_GLOBS = {"*.pyc"}
 EXCLUDE_FILES = {
     ".DS_Store",
