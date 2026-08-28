@@ -81,7 +81,7 @@ The Board creates this payload when the user selects a direction:
 ```
 
 `feedback-pending.json` uses the same shape with `regenerated: true` and an
-additional `regenerateAction` of `iterate`, `remix`, or `more-like-this`.
+additional `regenerateAction` of `iterate` or `remix`.
 
 ## `approved.json`
 

@@ -351,16 +351,17 @@
 
     function feedbackPayload(regenerated, action) {
       save();
-      return {
+      const payload = {
         schemaVersion: 'interaction-design-board/feedback-v1',
         prototypeRevision: contract.prototypeRevision,
         preferred: notes.preferred,
         comments: notes.comments,
         overall: notes.overall || null,
         remix: notes.remix || null,
-        regenerated,
-        regenerateAction: action || null
+        regenerated
       };
+      if (action) payload.regenerateAction = action;
+      return payload;
     }
 
     function download(name, data) {

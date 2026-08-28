@@ -110,7 +110,10 @@ backend response the product does not have.
 Create `board.json` using `references/board-contract.md`, then run:
 
 ```bash
-python3 scripts/build_board.py --manifest <session-dir>/board.json --output <session-dir>/design-board.html
+SKILL_ROOT="<absolute directory containing this loaded SKILL.md>"
+python3 "$SKILL_ROOT/scripts/build_board.py" \
+  --manifest <session-dir>/board.json \
+  --output <session-dir>/design-board.html
 ```
 
 Expected output:
@@ -119,20 +122,28 @@ Expected output:
 BOARD_BUILT variants=<derived count> output=<absolute path>
 ```
 
-The builder rejects duplicate candidates, path traversal, missing declared states,
-and HTML that depends on external styles, scripts, or media. Fix the candidate; do
-not weaken the validator to make the Board green.
+The builder rejects byte-identical candidates, path traversal, missing declared
+states, and HTML that depends on external styles, scripts, or media. Fix the
+candidate; do not weaken the validator to make the Board green.
 
-If gstack's design CLI is available, serve the Board through its existing feedback
-channel:
+If gstack's design executable is already installed, resolve its absolute path from
+the active gstack Skill installation; do not assume `$D` exists in a new shell. Then
+capture the exact Board URL printed by the server:
 
 ```bash
-$D serve --html <session-dir>/design-board.html --timeout 1800
+GSTACK_DESIGN="<resolved gstack design executable>"
+SERVER_OUTPUT="$("$GSTACK_DESIGN" serve \
+  --html <session-dir>/design-board.html --timeout 1800 2>&1)"
+printf '%s\n' "$SERVER_OUTPUT"
+BOARD_URL="$(printf '%s\n' "$SERVER_OUTPUT" | sed -n 's/^BOARD_URL: //p' | tail -1)"
+test -n "$BOARD_URL"
 ```
 
-Otherwise open `design-board.html` directly. Direct-file mode remains functional:
-Submit and Remix download `feedback.json` or `feedback-pending.json` for the agent
-to read. The Board itself is the chooser; chat is only the fallback channel.
+If the executable cannot be resolved or the command prints no `BOARD_URL`, open
+`design-board.html` directly with the host's browser-opening tool. Direct-file mode
+remains functional: Submit and Remix download `feedback.json` or
+`feedback-pending.json` for the agent to read. The Board itself is the chooser;
+chat is only the fallback channel.
 
 ### 5. Observe Tasks, Not Vibes
 

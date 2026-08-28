@@ -22,6 +22,7 @@ RESOURCE_PATTERNS = (
     re.compile(r"url\(\s*(['\"]?)(.*?)\1\s*\)", re.I | re.S),
 )
 ALLOWED_RESOURCE_PREFIXES = ("data:", "blob:", "about:")
+STYLE_BLOCK_PATTERN = re.compile(r"<style\b[^>]*>(.*?)</style>", re.I | re.S)
 
 
 class ContractError(ValueError):
@@ -67,6 +68,9 @@ def validate_self_contained(source: str, field: str) -> None:
         raise ContractError(f"{field} must contain a title")
     if re.search(r"<base\b", source, re.I):
         raise ContractError(f"{field} must not change its base URL")
+    for style_block in STYLE_BLOCK_PATTERN.finditer(source):
+        if re.search(r"@import\s", style_block.group(1), re.I):
+            raise ContractError(f"{field} contains CSS @import; inline the imported stylesheet")
     for pattern in RESOURCE_PATTERNS:
         for match in pattern.finditer(source):
             locator = match.group(2).strip()
