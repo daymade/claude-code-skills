@@ -116,6 +116,15 @@ re-add a marketplace: removing it uninstalls plugins installed from that
 marketplace. Do not `cp -r` a second Skill tree into a user Skill directory; that
 copy immediately creates an independent drift owner.
 
+Marketplace source inventory is not Codex activation policy. On a maintainer
+machine, the explicit selection in
+`~/.config/claude-switch-models-setup/codex-active-skills.json` is the SSOT for
+source Skills linked into `~/.agents/skills`; `~/.codex/skills` is only a bounded
+legacy-compatibility surface. Change the manifest and run the bundled syncer—do
+not restore bulk links in either user root. Detailed topology and recovery rules
+remain in
+`daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md`.
+
 In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude plugin ...`.
 
 ### Source Location Guard for Skill Edits

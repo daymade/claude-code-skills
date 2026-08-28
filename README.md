@@ -216,7 +216,7 @@ These skills are bundle-only under `daymade-codex`.
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-This suite bundles the skills that extend Claude Code itself — cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; fast local conversation discovery across Claude Code and Codex; session recovery; CLAUDE.md tuning; troubleshooting; statusline configuration; export repair; marketplace development and suite consolidation; terminal screenshot rendering; usage analysis; and multi-provider model switching:
+This suite bundles the skills that extend Claude Code itself — cross-project prior-work retrieval across code, docs, Skills, meetings, WeChat archives, and conversation history; fast local conversation discovery across Claude Code and Codex; session recovery; CLAUDE.md tuning; version-synced Lark CLI routing; troubleshooting; statusline configuration; export repair; marketplace development and suite consolidation; terminal screenshot rendering; usage analysis; and multi-provider model switching:
 
 ```text
 /daymade-claude-code:read-claude-code-history
@@ -235,6 +235,7 @@ This suite bundles the skills that extend Claude Code itself — cross-project p
 /daymade-claude-code:claude-migrate-memory-to-doc
 /daymade-claude-code:claude-code-hooks
 /daymade-claude-code:prior-work-retrieval
+/daymade-claude-code:lark-cli-router
 ```
 
 Installed names render as `daymade-claude-code:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all members.
@@ -2721,7 +2722,7 @@ claude plugin install marketplace-health-check@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-Set up multiple isolated Claude Code CLI profiles so you can run different LLM providers (Kimi, MiniMax, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time — each profile gets its own `claude.json` state while sharing skills, projects, hooks, and agents.
+Set up multiple isolated Claude Code CLI profiles so you can run different LLM providers (Kimi, MiniMax, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time — each profile gets its own `.claude.json` state while sharing skills, projects, hooks, and agents.
 
 **When to use:**
 - You want one terminal with Kimi and another with DeepSeek running side-by-side
@@ -2729,11 +2730,12 @@ Set up multiple isolated Claude Code CLI profiles so you can run different LLM p
 - You're setting up a post-workshop environment for students who want the same multi-provider workflow
 
 **Key features:**
-- One-click installer copies the profile manager to `~/.config/claude-switch-models-setup/`
-- Generates provider-specific `~/.claude/settings/<provider>.json` templates with required isolation flags
+- One-click installer links the five runtime scripts into `~/.config/claude-switch-models-setup/` and seeds an empty Codex activation manifest only when none exists
+- Includes provider-specific `~/.claude/settings/<provider>.json` templates with required isolation flags
 - `claude-profiles-init` creates isolated `~/.claude-profiles/<provider>/` directories with symlinked shared resources
 - Profile sync mirrors enabled plugins from the default Claude profile and shares installed plugin state
-- Local source sync links installed Claude plugin caches and Codex skill directories back to the source repos, with a maintainer LaunchAgent for marketplace manifest changes
+- Local source sync keeps Claude plugin caches source-backed, but links only the explicit Codex selection into `~/.agents/skills`; a declared active subset may keep legacy `~/.codex/skills` compatibility links
+- A maintainer LaunchAgent watches the activation manifest and marketplace/install topology, while reporting non-compatible legacy links for reviewed cleanup instead of deleting them
 - Built-in marketplace path pollution fixer runs automatically on every profile launch
 - Includes student setup guide and troubleshooting reference
 
@@ -3479,6 +3481,28 @@ zero ranked hits never become an absence claim.
 /daymade-claude-code:prior-work-retrieval
 we solved this before; find the code and successful path before changing anything
 don't rebuild the workflow until you have checked our existing Skills and history
+```
+
+### **lark-cli-router** - One Version-Synced Lark Router
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills`
+> (suite-only — invoked as `daymade-claude-code:lark-cli-router`)
+
+Route Feishu/Lark/Doubao requests to the matching guide embedded in the installed
+`lark-cli`, instead of loading every Lark domain Skill into the model catalog.
+Tencent IMA stays separate under `ima-skill`.
+
+**Key features:**
+- Selects the smallest matching domain or workflow guide from `lark-cli skills list`
+- Reads version-matched instructions and references through `lark-cli skills read`
+- Keeps unembedded scripts/assets reachable with an embedded-vs-disk guide hash gate
+- Preserves each domain's auth, confirmation, success, and verification contract
+
+**Example usage:**
+```text
+读取这个飞书文档
+查一下这条妙记的逐字稿
+lark-cli says the user identity is missing a scope
 ```
 
 ### **codex-1m-context-window-setup** - Model-Aware Long Context for Codex
