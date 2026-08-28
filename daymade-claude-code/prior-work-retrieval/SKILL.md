@@ -5,9 +5,10 @@ description: >-
   Finds and verifies existing successful work before substantial new production when reuse is
   materially plausible. Use when the user explicitly references earlier work, existing code/SOPs,
   history, prior decisions, another project, or says 以前做过, 已有代码, 别重复造轮子, reuse, or
-  retrieve before produce. Do not infer the trigger merely because a new implementation might
-  duplicate something. Do not invoke for read-only repo status, current-file inspection, simple
-  explanation, mechanical verification, or merely because the final answer is a report/summary.
+  retrieve before produce. A mention of current/现有 tests, README, files, implementation, behavior,
+  or validation is not a prior-work request. Do not infer the trigger merely because new work might
+  duplicate something. Do not invoke for current-file inspection, ordinary bug fixes, mechanical
+  verification, or merely because the final answer is a report/summary.
   Produces a source-verified reuse/adapt/reject receipt; zero hits never prove absence.
 argument-hint: "<task or question>"
 ---

@@ -26,13 +26,21 @@ RECEIPT_MAX_AGE_SECONDS = 24 * 60 * 60
 # Strong signals name prior work outright ("我们之前…", "复用", "reuse"). They
 # arm the gate on their own.
 PRIOR_WORK_STRONG_SIGNAL = re.compile(
-    r"(?:我们之前|以前|之前做过|之前(?:用|跑|做|配|装|搭|建|写)|已有|现有|既有|历史经验|历史决策|以前的代码|已有代码|"
+    r"(?:我们之前|以前|之前做过|之前(?:用|跑|做|配|装|搭|建|写)|"
+    # Bare 已有/现有/既有 used to arm ordinary references to the current
+    # checkout ("现有测试或 README 如果冲突才同步"). Existing work must name a
+    # reusable asset; current tests/files/behavior are not a history request.
+    r"(?:已有|既有)(?:\s*的)?\s*"
+    r"(?:(?:[一二两三四五六七八九十百千万0-9]+|好?几|多|若干)\s*)?"
+    r"(?:个|套|份|条|版|组|批|项|段)?\s*"
+    r"(?:代码|脚本|方案|资产|成果|SOP|流程|做法|工具|模板|系统)|"
+    r"历史经验|历史决策|以前的代码|已有代码|"
     # 成功的经验 — the 的 particle broke the literal 成功经验.
     r"成功(?:的)?经验|"
     # 不希望你重新造轮子 — the literal 不要重新/不要重造/别重复 missed every
     # natural phrasing of the same ask.
     r"(?:别|不要|不想|不希望)(?:你)?\s*(?:重复|重新|重造|再造)|"
-    r"复用|类似的问题|类似问题|当时用的|"
+    r"复用|重用|沿用|类似的问题|类似问题|当时用的|"
     r"什么来着|叫什么来着|哪个来着|用的是?哪个|"
     r"项目最近进展|会议逐字稿|微信记录|prior work|previous work|existing code|"
     r"reuse|did this before|"
@@ -89,10 +97,11 @@ NON_USER_PROMPT = re.compile(
 # Deliberately excludes 重复造轮子/重造/重新造, which ask FOR reuse.
 NEGATED_PRIOR_SIGNAL = re.compile(
     r"(?:不要|不用|无需|不需要|不必|别|勿)\s*(?:再\s*)?(?:去\s*)?"
-    r"(?:复用|重用|沿用|参考(?:以前|之前|历史|已有))"
+    r"(?:复用|重用|沿用|参考(?:以前|之前|历史|已有))[^\n，,。；;]{0,60}"
     r"|(?:不要|不用|无需|不需要|不必|别|勿)\s*(?:再\s*)?(?:用|看|查|翻)\s*"
     r"(?:以前|之前|历史|旧)(?:的)?"
-    r"|(?:don't|do not|no need to|stop)\s+(?:reuse|reusing|referencing)",
+    r"|(?:don't|do not|no need to|stop)\s+(?:reuse|reusing|referencing)"
+    r"[^\n,.!?;]{0,60}",
     re.IGNORECASE,
 )
 # "这些 Skill 也是很久之前写的" dates something to argue it is stale — the
