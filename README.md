@@ -3521,7 +3521,7 @@ and approved a direction.
 **Key features:**
 - Distinguishes interaction architecture from static visual-style exploration
 - Keeps one frozen business/task contract across isolated candidate generation
-- Rejects duplicate candidates, path traversal, missing states, and external assets
+- Rejects byte-identical candidates, path traversal, missing states, and external assets
 - Supports gstack's local feedback daemon and direct-file JSON download fallback
 - Preserves prototype content identity separately from the runtime Board instance
 
