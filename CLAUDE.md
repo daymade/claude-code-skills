@@ -108,18 +108,13 @@ receipt, and an automatic outbox path gets one non-retrying HTTP attempt.
 
 ### Testing Skills Locally
 
-```bash
-# Add local marketplace
-claude plugin marketplace add https://github.com/daymade/claude-code-skills
-# Marketplace name: daymade-skills (from marketplace.json)
-
-# Install the suite that contains skill-creator and skill-reviewer
-claude plugin install daymade-skill@daymade-skills
-
-# Test by copying to user skills directory
-cp -r skill-name ~/.claude/skills/
-# Then restart Claude Code
-```
+Test from the canonical checkout, not from a mutable direct copy. Use the current
+`claude-switch-models-setup` local-source workflow for this maintainer machine,
+and use `daymade-skill:skill-governance` to verify source, installed state,
+discovery policy, and the fresh model-visible catalog. Do not blindly remove and
+re-add a marketplace: removing it uninstalls plugins installed from that
+marketplace. Do not `cp -r` a second Skill tree into a user Skill directory; that
+copy immediately creates an independent drift owner.
 
 In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude plugin ...`.
 

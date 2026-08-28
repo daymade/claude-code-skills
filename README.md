@@ -3054,24 +3054,26 @@ Analyze Google Takeout exports of Gemini conversation history — extract and ca
 - Meeting-transcript vs prompt-response detection; topic categorization; PII flagging
 - Context-verified keyword search (grep is step 1, not the answer) + optional memory-file generation
 
-### **skill-governance** - Skill Marketplace and Cache Governance
+### **skill-governance** - Real Skill-Surface Governance
 
 > **Install**: `claude plugin install daymade-skill@daymade-skills` (suite-only — invoked as `daymade-skill:skill-governance`)
 
-Keep Claude Code skill marketplaces and installed caches aligned with source repositories. Use it for read-only drift checks, source-backed syncs through official Claude plugin commands, safe reconciliation after suite migrations, old cache cleanup, and local-source marketplace switching.
+Govern the Skill surface Claude Code and Codex actually expose without losing cold capability. It separates canonical source, installed inventory, discovery policy, the fresh model-visible catalog, and router-resolved runtime resources.
 
 **When to use:**
-- A skill appears stale, missing, duplicated, or installed from an unexpected cache version
-- Need to compare `.claude-plugin/marketplace.json`, source directories, and Claude/Codex installed skills
-- Rebuilding a local skill marketplace from a source repo without hand-copying derived cache files
+- Codex reports many Skills, truncated descriptions, duplicate identities, or a missing router
+- A Skill appears stale, missing, duplicated, or installed from an unexpected source/version/scope
+- Need to reconcile owned source links under `~/.agents/skills` without treating every disk bundle as active
 - A merged suite migration left old standalone plugin identities installed locally
+- A third-party bundle must stay on disk for runtime resources while only its router remains visible to Codex
 
 **Key features:**
-- Treats source directories as canonical and plugin/cache folders as derived artifacts
-- Uses official `claude plugin` commands for sync operations
-- Detects orphaned cache versions, source/cache drift, and marketplace entries pointing at the wrong source
+- Compares the actual fresh Codex prompt with complete metadata from Codex's own `skills/list`, detecting truncation, omitted enabled entries, identity/source collisions, disabled-path drift, scan errors, and missing direct activation entries
+- Treats owned source as canonical, plugin caches as derived runtime state, and preserves current install scope
+- Routes source-backed activation to its explicit manifest owner instead of mixing third-party inventory into it
 - Discovers suites dynamically from the manifest and verifies the replacement suite before retiring standalone installs at their original scopes
-- Ignores workspace-only folders such as `scripts/`, `references/`, `tests/`, demos, and build outputs when checking published skill surfaces
+- Keeps third-party bundles as cold disk inventory through exact-path Codex discovery policy, then verifies both the clean prompt catalog and preserved runtime resources
+- Leaves Claude's versioned orphan-cache lifecycle to Claude; manual cache removal is exceptional, recoverable repair rather than routine cleanup
 
 ### **photo-to-scanned-pdf** - Phone Photos to Scanner-Quality PDF
 
