@@ -268,19 +268,31 @@ GitHub-side duplicate/superseded PR handling belongs to the `github-ops` skill.
 
 ### 3. Preserve refs and dirty WIP through different channels
 
-Create a repository-external bundle containing every branch/ref whose deletion is authorized, then
-verify it. The bundle is the ref manifest: immediately before deletion run:
+Create a repository-external bundle containing only the branches/refs whose deletion is authorized,
+then verify it. The bundle is the ref manifest: immediately before deletion run:
 
 ```bash
-scripts/git_export_before_drop.sh --all-refs --out <external-backup-dir>
-scripts/git_export_before_drop.sh --verify-current <external-backup-dir>/all-refs.bundle
+scripts/git_export_before_drop.sh \
+  --branch <authorized-ref-1> --branch <authorized-ref-2> \
+  --out <external-backup-dir>
+scripts/git_export_before_drop.sh --verify-current <external-backup-dir>/branches.bundle
 ```
 
-Use `--all-refs` only when every linked worktree/ref it would capture is change-authorized. If a
+For an authorized linked worktree on a branch, export that branch. For an authorized detached HEAD,
+create one collision-checked recovery ref pointing at the recorded HEAD, then export that ref:
+
+```bash
+git update-ref refs/recovery/<worktree-id> <recorded-head> 0000000000000000000000000000000000000000
+scripts/git_export_before_drop.sh \
+  --branch refs/recovery/<worktree-id> --out <external-backup-dir>
+```
+
+This pin is part of preserving the named retirement target; it does not authorize pinning other
+danglers. Use `--all-refs` only for an explicitly authorized full-ref-topology operation. If a
 collaborator worktree is excluded, the repository-wide loss audit and all-refs export are both out
 of scope: the audit inspects every linked worktree, while the bundle captures every worktree HEAD.
-Use the authorized checkout's own status/HEAD/upstream checks plus one targeted `--branch` export
-per authorized deletion target, and make only a scoped-cleanup claim.
+Use the authorized checkout's own status/HEAD/upstream checks plus targeted exports, and make only a
+scoped-cleanup claim.
 
 Bundles cannot preserve untracked bytes. Freeze an explicit dirty-path manifest, save tracked
 changes as a binary diff, copy or tar the exact dirty/untracked paths outside the repository, then
@@ -367,10 +379,11 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    `scripts/git_verify_branch_merged.sh <recorded-head> <base>`. An
    ancestor/content-contained verdict proves the committed state is on the base; NEEDS REVIEW
    requires manual supersession triage or preserving the commit under a branch/ref.
-6. **Back up before deletion:** pin dangling commits, then run
-   `scripts/git_export_before_drop.sh --all-refs --out <backup-dir>` and verify the bundle. `--all`
-   includes linked-worktree HEAD refs; truly dangling objects appear only after pinning. Keep any
-   ignored-file copies from step 3 beside this backup—the bundle does not contain them.
+6. **Back up before deletion:** export the worktree's named branch with `--branch`. For a detached
+   HEAD, create one collision-checked `refs/recovery/<worktree-id>` ref at the recorded HEAD and
+   export that ref. Verify the targeted bundle; do not pin unrelated danglers or use `--all-refs`
+   unless the Outcome contract separately authorizes every captured ref. Keep any ignored-file
+   copies from step 3 beside this backup—the bundle does not contain them.
 7. **Obtain current-session deletion authority, then remove through Git without force:** run
    the tracked/untracked status check again. Then re-run the exact ignored-inventory command from
    step 3, expand directories the same way, and rebuild the ignored manifest. Its path set, entry

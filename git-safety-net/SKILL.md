@@ -395,17 +395,19 @@ that deletion threatens:**
 scripts/git_export_before_drop.sh --branch <branch> --out <external-backup-dir>
 # Pin only an authorized dangling SHA; leave unrelated danglers report-only.
 git update-ref refs/dangling-backup/<sha> <sha>
-# Full ref topology / linked-worktree retirement: only when the named target requires it.
+# Full ref topology: only when every captured ref is explicitly authorized.
 scripts/git_export_before_drop.sh --all-refs --out <external-backup-dir>
 scripts/git_export_before_drop.sh --verify-current <external-backup-dir>/all-refs.bundle
 ```
 
 The targeted `update-ref` reaches only the authorized dangling commit. If every reported dangler is
-in scope, the whole-set `git_preserve_danglers.sh` may replace it. `--all-refs` captures branch,
-stash, hidden-backup, and linked-worktree HEAD refs; add `--all-stashes` only when stashes are also
-deletion targets. `--verify-current` is the final compare-and-swap gate: it exits 1 if any recorded
-ref moved or disappeared. Refresh remote authority before it, and rebuild the bundle on any
-mismatch. Keep backups outside the repository; never turn one branch into a repo export.
+in scope, the whole-set `git_preserve_danglers.sh` may replace it. Prefer repeated `--branch` options
+for named branch/worktree retirement. `--all-refs` captures branches, tags, stashes, hidden backup
+refs, and linked-worktree HEAD refs, so it is valid only when that whole captured set is authorized;
+add `--all-stashes` only when stashes are also deletion targets. `--verify-current` is the final
+compare-and-swap gate: it exits 1 if any recorded ref moved or disappeared. Refresh remote authority
+before it, and rebuild the bundle on any mismatch. Keep backups outside the repository; never turn
+one branch into a repo export.
 
 For a multi-branch "only one main" cleanup while other sessions may still commit or open PRs, read
 **[references/merge_verification.md](references/merge_verification.md)** § Converging many branches
