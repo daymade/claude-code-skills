@@ -112,13 +112,15 @@ def extract_style_blocks(source: str, field: str) -> list[str]:
         raise ContractError(f"{field} cannot be parsed as HTML: {exc}") from exc
 
 
-def consume_css_escape(source: str, index: int) -> tuple[str, int]:
+def consume_css_escape(source: str, index: int) -> tuple[str | None, int]:
     """Decode one CSS escape beginning at a backslash."""
     index += 1
     if index >= len(source):
-        return "", index
+        return None, index
     if source[index] in "\n\r\f":
-        return "", index + 1
+        if source[index] == "\r" and index + 1 < len(source) and source[index + 1] == "\n":
+            return None, index + 2
+        return None, index + 1
     if source[index] in "0123456789abcdefABCDEF":
         end = index
         while end < len(source) and end - index < 6 and source[end] in "0123456789abcdefABCDEF":
@@ -138,6 +140,8 @@ def consume_css_identifier(source: str, index: int) -> tuple[str, int]:
         current = source[index]
         if current == "\\":
             decoded, index = consume_css_escape(source, index)
+            if decoded is None:
+                break
             value.append(decoded)
             continue
         if current.isalnum() or current in "-_" or ord(current) >= 128:

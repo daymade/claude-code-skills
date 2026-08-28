@@ -143,6 +143,19 @@ class BuildBoardTests(unittest.TestCase):
             result = self.run_builder(manifest, root / "out.html")
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_allows_invalid_escaped_newline_that_breaks_at_keyword(self):
+        for newline in ("\n", "\r\n"):
+            with self.subTest(newline=repr(newline)), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                manifest = self.make_case(root)
+                css = "@im\\" + newline + 'port "not-an-import.css";'
+                (root / "a.html").write_text(
+                    f"<!doctype html><html><head><title>A</title><style>{css}</style></head></html>",
+                    encoding="utf-8",
+                )
+                result = self.run_builder(manifest, root / "out.html")
+                self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_allows_style_markup_inside_html_comment_or_textarea(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
