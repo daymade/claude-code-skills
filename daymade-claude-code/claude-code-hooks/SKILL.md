@@ -343,6 +343,17 @@ skeleton: Pattern C in [references/hook_patterns.md](references/hook_patterns.md
 
 ### 4. Registration is per-profile — converge ALL profiles, release via a HUMAN gate
 
+- **There are two registration surfaces, and the health check probably only
+  watches one.** Besides the profile settings below, a repo's own
+  `.claude/settings.json` (and `settings.local.json`) registers hooks for
+  sessions in that repo. Those live outside `~/.claude/hooks/`, so a guard-rail
+  check that walks that directory covers none of them — syntax, path,
+  `--selftest`, nothing. Two silent failures shipped in one such file and
+  survived two months under a SessionStart health check built to prevent
+  exactly that (#38, #39). Register project hooks by **absolute** path — a
+  relative one resolves against the session cwd and breaks the first time
+  someone starts `claude` from a subdirectory — and extend the health check to
+  walk up from the event's cwd for project settings.
 - A hook in `~/.claude/hooks/` protects **nothing** if the *active profile's*
   `settings.json` doesn't call it. Multi-profile users ran with zero guards until
   every profile was converged. Register in the **main** profile's settings
@@ -777,8 +788,10 @@ enforcement you actually need, not simply the first one.
    [alert flapping](https://utcc.utoronto.ca/~cks/space/blog/sysadmin/HysteresisMeaningAndAlerts)):
    after firing, suppress re-evaluation for a window — a stamp file plus
    `[ $(( $(date +%s) - <stamp mtime> )) -lt 900 ] && exit 0` (mtime is
-   `stat -f %m` on BSD/macOS, `stat -c %Y` on GNU — as are the other snippets
-   here). Right for conditions that *oscillate around a threshold*; **wrong** for
+   `stat -L -f %m` on BSD/macOS, `stat -L -c %Y` on GNU — as are the other
+   snippets here; **the `-L` is load-bearing**, since rule 3 puts a symlink at
+   every path you will stat, and without it you read the link's own mtime and
+   the stamp never moves when the SSOT is edited — #41). Right for conditions that *oscillate around a threshold*; **wrong** for
    conditions that remediation **resets** — those need 2 or 3.
    ⚠️ **Hysteresis supplies no V — it is a rate limiter, not a termination
    proof.** The loop ends only if the condition subsides on its own, and what
@@ -1039,6 +1052,35 @@ wall time.
      on `--selftest`, the full regression battery in `test_hook.sh` at build time.
      Shrinking below the mutant-kill line just buys back a selftest that passes
      while the guard is dead.
+     **Give the split a trigger, or the full half never runs.** "At build time" is
+     not a mechanism — a comment saying *run the full battery after you change this*
+     is the same prose-vs-enforcement gap this whole file exists to close, and it
+     fails the same way. The shape that closes it, measured on
+     `shared-repo-head-drift` (21 cases / 17.8 s cold, collapsing SessionStart's
+     health check to a probe of 9 assertions / 2.2 s): keep both halves in the hook
+     as `--selftest` and `--selftest-full`, and let the health check pick — run the
+     full battery when the file has changed since the last full pass, otherwise the
+     probe. The cost then lands on the first session *after an edit*, which is
+     exactly when the full battery is worth paying for.
+     ```bash
+     sig=$(stat -L -f '%m %z' "$h" 2>/dev/null || true)   # -L or you stat the symlink — #41
+     stamp="$STAMPS/$(printf '%s' "$h" | shasum | cut -c1-16).full"
+     [ -n "$sig" ] && [ "$(cat "$stamp" 2>/dev/null || true)" = "$sig" ] || mode="--selftest-full"
+     bash "$h" "$mode" >/dev/null 2>&1 </dev/null || return 1   # </dev/null: an
+     # unknown flag drops into the main path and reads stdin — on SessionStart that
+     # hangs every new session
+     [ "$mode" = "--selftest-full" ] && printf '%s' "$sig" > "$stamp" 2>/dev/null
+     ```
+     Failure direction is *toward the full battery*: signature unreadable,
+     mismatched, or stamp dir unwritable all run full. There is no remediation loop
+     here (rule 7 does not apply) — it only picks which tier to run, so slow beats
+     blind. Write the stamp only on a **passing** full run, so a failure leaves the
+     next session still on full.
+     Choosing the probe's cases is not "the first N": it needs one must-fire and one
+     must-quiet, or the two degradation directions are not both covered. Watch for a
+     must-quiet case that is secretly vacuous — an advisory-only hook always exits 0,
+     so a `run`-style exit-code row proves nothing about false positives there and
+     the assertion has to be a `says`-style one (#40, #14).
 5. **Replay a real command corpus and hand-check every block** (rule 9) — this measures the
    false-block surface, which the fixture table in step 4 structurally cannot. Slice the
    shipped detector out verbatim to pre-filter; feed each candidate **to** the real hook

@@ -42,6 +42,43 @@ The hook reads one JSON object on **stdin**. The fields you care about:
 }
 ```
 
+Non-tool events carry a different shape, and **the user's text is a field on
+stdin — never an environment variable.** There is no `USER_PROMPT_TEXT` or
+anything like it; a hook that reads one gets an empty string on every
+invocation and exits before doing anything, which for an injecting hook is
+indistinguishable from a healthy skip (#38 — it survived two months that way):
+
+```jsonc
+// UserPromptSubmit
+{
+  "session_id": "…",
+  "transcript_path": "…",
+  "cwd": "…",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "…"                              // the user's text, top-level — NOT tool_input
+}
+
+// SessionStart
+{
+  "session_id": "…",
+  "cwd": "…",                                // where claude was started — the only
+                                             // trustworthy cwd; do not assume $PWD
+  "hook_event_name": "SessionStart",
+  "source": "startup"                        // or "resume" / "clear" / "compact" / "fork"
+}
+```
+
+```bash
+PROMPT=$(printf '%s' "$INPUT" | python3 -c "import sys,json;print(json.load(sys.stdin).get('prompt',''))" 2>/dev/null||echo "")
+```
+
+Two consequences worth stating separately. Whatever a UserPromptSubmit hook
+prints on stdout at exit 0 is **injected as context** — that is the injection
+channel, and it makes the message the hook's entire product, so exit-code
+assertions alone cannot test it (#40, #14). And `.prompt` being populated does
+not prove a human typed it: a background task notification's report text
+arrives through the same field with nothing marking the difference (#30).
+
 **`session_id` is the only correct key for per-session state** a hook keeps
 (counters, cool-downs — rule 7 mechanisms 3 and 4). Nothing else is stable:
 `$$` / `$PPID` change on every invocation because each hook run is a fresh

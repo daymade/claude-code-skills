@@ -1958,3 +1958,148 @@ this list and describe defects you reach by asking a different question):
   other. When a hook's trigger condition is "does the prompt contain phrase
   X", periodically re-derive X from what agents are actually instructed to
   write, not from what seemed reasonable when the hook was first built.
+
+---
+
+## 38. A hook reading an env var its host never sets is a no-op indistinguishable from a healthy skip
+
+- **Symptom:** the hook is registered, `bash -n` is clean, it is `chmod +x`, and
+  it never once injects. Nothing errors. For an injecting hook (UserPromptSubmit,
+  PostToolUse) that state is **identical** to the healthy case — "I looked at this
+  prompt and it wasn't relevant, exit 0, no output" — so there is no observable
+  that separates them. Measured: PKM's `people-roster-reminder.sh` ran this way
+  from 2026-07-04 to 2026-08-28; across 542 session transcripts its
+  `attachment.type == "hook_success"` count was **zero** for the whole period.
+- **Cause:** the script took the prompt from an environment variable —
+  `PROMPT="${USER_PROMPT_TEXT:-}"` — that Claude Code does not set. The
+  UserPromptSubmit contract delivers the prompt **only** in the stdin JSON's
+  `.prompt` field (event contract: `hook_patterns.md`). The variable was empty on
+  every invocation, so the next line, `[ -z "$PROMPT" ] && exit 0`, returned
+  before any logic ran.
+- **How it survived two months, which is the part worth copying:** it was exposed
+  by an *unrelated* second bug — a relative registration path (#39) that started
+  printing `No such file or directory` once the user happened to launch `claude`
+  from a subdirectory. Had the path been written correctly on day one, the silent
+  no-op had no remaining route to visibility. **A hook whose failure mode is
+  silence gets found by accident or not at all.**
+- **The near-miss in its own creation, from the session transcript:** `Write` →
+  `chmod +x` → `grep -r 'workshop-skill-loader|UserPromptSubmit' ~/.claude/settings.json`
+  → `Edit` settings.json → `git commit`. The script was **never executed once**
+  before being registered and committed. Note the grep: the author *did* consult a
+  working hook of the same event type — but asked it "how is this registered in
+  settings.json", not "how does this script obtain the prompt". The correct answer
+  (`json.load(sys.stdin).get('prompt','')`, used by all four other UserPromptSubmit
+  hooks on that machine) was one question away.
+- **Fix:** read the prompt from stdin, per the event contract:
+  ```bash
+  INPUT=$(cat)
+  PROMPT=$(printf '%s' "$INPUT" | python3 -c "
+  import sys, json
+  try:    print(json.load(sys.stdin).get('prompt', ''))
+  except Exception: print('')
+  " 2>/dev/null || echo "")
+  ```
+  Then close the observability hole rather than trusting the next author to read
+  this entry: run the real JSON through it before registering (rule 2), and give
+  it a `--selftest` (build order step 4) so the SessionStart health check can tell
+  a live hook from a dead one. A `--selftest` that has never been watched failing
+  proves nothing — calibrate it by injecting this exact defect (swap stdin parsing
+  back for the env var) and confirming the must-fire fixture goes red.
+
+---
+
+## 39. A project-level hook registered with a relative path dies on any cwd change — and nothing was checking project-level hooks at all
+
+- **Symptom:** `UserPromptSubmit hook error / Failed with non-blocking status
+  code: /bin/sh: .claude/hooks/<name>.sh: No such file or directory` — while the
+  file plainly exists, is executable, and runs fine when you test it by hand from
+  the repo root.
+- **Cause:** the repo's own `.claude/settings.json` registered the hook as
+  `".claude/hooks/<name>.sh"`. `/bin/sh -c` resolves that against the **session's
+  cwd**, which is wherever `claude` was started — not the project root.
+- **The timeline is the tell, and it is not what it looks like.** Registered
+  2026-07-04; first error 2026-08-17. Nothing regressed that day: every session
+  between those dates had been started from the repo root, where the relative path
+  happens to resolve. 8/17 was simply the first launch from a subdirectory. A
+  second, genuine change followed at v2.1.247 (2026-08-27), after which the repo
+  root failed too — observed across three versions, mechanism not established, and
+  not worth establishing since the fix is invariant to it.
+- **The second failure, and the larger one:** none of this was visible to the
+  guard-rail health check, because that check walks `~/.claude/hooks/*.sh` only.
+  A hook registered in a repo's own `.claude/settings.json` had **no** coverage —
+  not its syntax, not its path, not its `--selftest`. Two independent silent
+  failures (#38 and this one) lived in the same file for two months inside a setup
+  that runs a SessionStart health check specifically to prevent that.
+- **Fix:** absolute path in the registration. Do **not** dress a relative path up
+  as `${CLAUDE_PROJECT_DIR:-/abs/fallback}/…` and call it belt-and-braces: the
+  fallback only covers "variable unset", not "variable set to something other than
+  the repo root", and you cannot observe which case you are in from inside the
+  hook. On a single-machine personal repo, the literal absolute path has zero
+  unknowns.
+  Then extend the health check to the project layer — cwd from the SessionStart
+  event JSON (never assumed; assuming it is this very bug), walking up for
+  `.claude/settings.json` and `settings.local.json`, excluding `~/.claude` which
+  the profile-registration section already owns:
+  ```python
+  tok = shlex.split(cmd)[0]
+  if "/" in tok and not tok.startswith(("/", "~", "$")):
+      problem("RELATIVE hook path in %s: %r — /bin/sh resolves it against the "
+              "session cwd" % (label, tok))
+  ```
+  and per target: exists, executable, `bash -n`, `--selftest`. Prove the event
+  channel is actually being read rather than a `$PWD` fallback quietly carrying
+  the tests: run it once with the shell cwd somewhere harmless and the event cwd
+  pointing at a broken config (must warn), then the reverse (must stay silent).
+  Both directions, or a dead event channel reads as a green suite.
+
+---
+
+## 40. A bare backtick inside an unquoted heredoc executes the line and eats the paragraph
+
+- **Symptom:** an injecting hook's message comes out with one passage missing, and
+  stderr carries something like `line 33: -: command not found`. The exit code is
+  still 0 and every exit-code assertion still passes.
+- **Cause:** `cat <<EOF` (delimiter unquoted) performs command substitution inside
+  the body. Prose written for a human reader is full of markdown backticks;
+  each pair becomes a command. Measured: a line reading
+  `` 身份、关系和 **ASR 变体标注**（`- **ASR 变体**: ...`）全在里面。`` printed as
+  `（）` with `-: command not found` on stderr — the shell ran `- **ASR 变体**: ...`
+  and substituted its (empty) output. A second backtick pair in the same body,
+  around a file path, produced `…/people.md: Permission denied`.
+- **Not the same as #9,** which is a quote or backtick inside a `python3 -c "…"`
+  block. This one needs no embedded language: plain shell, plain heredoc, and the
+  damage is to the *message*, which is the hook's entire product.
+- **Fix:** quote the delimiter — `cat <<'EOF'` — and drop the now-unnecessary
+  backslash escapes inside. Test it where exit codes cannot reach: assert
+  **stderr is empty** and assert the rendered body **contains a substring from
+  after the first backtick**. Both, and both polarities:
+  ```bash
+  err=$(mktemp); out=$(printf '%s' "$HIT" | bash "$SELF" 2>"$err")
+  [ -z "$(cat "$err")" ] || fail "stderr non-empty (unquoted heredoc)"
+  case "$out" in *'ASR 变体**: ...'*) ;; *) fail "body truncated at the backtick" ;; esac
+  ```
+  An exit-code-only suite is structurally blind here — see the `says` rows in
+  `scripts/test_hook.sh`, and the general statement of this gap in #14.
+
+---
+
+## 41. `stat -f` reports the symlink, not the file — an mtime-keyed state stamp goes blind to every SSOT edit
+
+- **Symptom:** a scheduler built around "re-run the expensive check whenever this
+  file changes" runs the expensive check exactly once, then never again. It looks
+  like it is working: the cheap path runs, the stamp file exists, nothing warns.
+- **Cause:** BSD `stat -f '%m %z'` does **not** follow symlinks — it reports the
+  link's own mtime (when the link was made) and size (the length of the target
+  path string). And rule 3 of this skill *requires* `~/.claude/hooks/` to be
+  symlinks into a version-controlled SSOT. So the two prescriptions compose into a
+  guaranteed defect: editing the SSOT leaves the link untouched, the signature
+  never moves, and the full battery never re-fires. Measured: the stamp held
+  `1787620496 61` — a 61-byte "file" that is really the target path string, and
+  an mtime from when the link was made — while the SSOT it points at was
+  `1787920666 27010`.
+- **Fix:** `stat -L -f '%m %z'` on BSD/macOS, `stat -L -c '%Y %s'` on GNU. The
+  same `-L` applies anywhere this skill suggests keying state on mtime (the
+  hysteresis stamp in rule 7's mechanism 4 among them). And the regression test
+  has to exercise the link: a case that **edits the SSOT without touching the
+  symlink** and asserts the expensive path fires. A suite that stats a real file
+  passes with `-L` missing, which is why the bug shipped in the first cut.
