@@ -110,7 +110,11 @@ report-only until the user expands the authorized targets.
    dangling commits. The shorter `git log HEAD --branches --tags --not --remotes` misses a detached
    HEAD in a different worktree and all uncommitted files. Ahead/behind counts do **not** answer
    this. Run it in the named checkout, and in additional Step 0 checkouts only after each is
-   explicitly change-authorized.
+   explicitly change-authorized. **Exception:** if even one linked worktree is excluded from
+   inspection, do not run this repository-wide script—it has no exclusion flag and would inspect
+   that worktree. Limit the claim to the authorized checkout and use its own `status`, `HEAD`,
+   upstream/remote identity, and `git log HEAD --not --remotes` as scoped evidence; report that
+   other refs/worktrees/stashes/danglers were not audited.
 3. **`git reflog` is the first move for "I lost a commit," not `fsck`.** Reflog records every
    HEAD position (commits, checkouts, resets, rebases) for ~90 days and the lost commit is
    usually in its top few lines. `git fsck` is the deeper net for commits reflog can't reach.
@@ -353,7 +357,8 @@ Start from the Outcome contract. For an exhaustive audit or unknown target, run 
 for one named worktree/branch, stay in its owning repository. Run `git_loss_audit.sh` only in
 change-authorized checkouts; treat inspect-only checkouts as report-only, keep explicitly excluded
 collaborator resources out of both the retirement plan and its terminal counts, then retire only
-the named targets:
+the named targets. When an excluded linked worktree exists, do not run the full loss audit or an
+`--all-refs` export; use primary-scoped checks and targeted exports for authorized refs instead:
 
 **Step 1 — classify each leftover: live WIP, or superseded draft?** Evidence ladder, strongest first:
 

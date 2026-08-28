@@ -276,6 +276,12 @@ scripts/git_export_before_drop.sh --all-refs --out <external-backup-dir>
 scripts/git_export_before_drop.sh --verify-current <external-backup-dir>/all-refs.bundle
 ```
 
+Use `--all-refs` only when every linked worktree/ref it would capture is change-authorized. If a
+collaborator worktree is excluded, the repository-wide loss audit and all-refs export are both out
+of scope: the audit inspects every linked worktree, while the bundle captures every worktree HEAD.
+Use the authorized checkout's own status/HEAD/upstream checks plus one targeted `--branch` export
+per authorized deletion target, and make only a scoped-cleanup claim.
+
 Bundles cannot preserve untracked bytes. Freeze an explicit dirty-path manifest, save tracked
 changes as a binary diff, copy or tar the exact dirty/untracked paths outside the repository, then
 extract to a fresh verification directory and byte-compare every declared path. Do not use stash,
@@ -306,16 +312,22 @@ stale local remote-tracking refs.
 
 ### 5. Prove the user-visible terminal state
 
-If every repository object is explicitly in scope, the task is complete only when all are
-independently true:
+If every local/hosted branch, associated PR head, and linked worktree path in the convergence set is
+explicitly change-authorized, the task is complete only when all are independently true:
 
 - the hosting service lists only the intended maintained branch;
 - local `refs/heads/` contains only `main`, and `HEAD`, local `main`, and the refreshed
   `origin/main` resolve to the intended commit;
+- `git worktree list --porcelain` registers only the primary worktree, and every authorized linked
+  worktree path is absent;
 - the index has no staged residue from the convergence;
 - every pre-existing WIP path still byte-matches its frozen source/backup, even if Git now reports
   a different tracked/untracked classification;
 - the recovery bundle still verifies and lists the retired exact tips.
+
+Tags, stashes, and dangling commits do not block a branch/worktree convergence claim unless the
+Outcome contract separately names them as retirement targets; preserve or report them under their
+own scope.
 
 When collaborator resources are inspect-only or excluded, do not claim repository-wide one-main
 convergence. Report **scoped completion** instead: the authorized refs/PRs are merged or retired,
