@@ -5,8 +5,8 @@ description: >-
   Finds and verifies existing successful work before substantial new production when reuse is
   materially plausible. Use when the user explicitly references earlier work, existing code/SOPs,
   history, prior decisions, another project, or says 以前做过, 已有代码, 别重复造轮子, reuse, or
-  retrieve before produce. Also use when a genuinely new implementation would likely duplicate a
-  known artifact. Do not invoke for read-only repo status, current-file inspection, simple
+  retrieve before produce. Do not infer the trigger merely because a new implementation might
+  duplicate something. Do not invoke for read-only repo status, current-file inspection, simple
   explanation, mechanical verification, or merely because the final answer is a report/summary.
   Produces a source-verified reuse/adapt/reject receipt; zero hits never prove absence.
 argument-hint: "<task or question>"
@@ -86,6 +86,14 @@ uv run --no-project python scripts/prior_work.py retrieve \
   --session-id "$CODEX_SESSION_ID"
 ```
 
+`--session-id`: use it only with `retrieve`, `complete`, and `check`; `validate-manifest`
+does not accept it. On Codex use `$CODEX_SESSION_ID`. Claude Code has no such env
+var, so take the exact id carried verbatim in prior-work hook messages
+(UserPromptSubmit inject / PreToolUse deny / Stop block). The receipt filename
+shown beside it is the id's sha256, not the id itself; completing a receipt
+under a guessed id writes a file `check` will never read and the gate keeps
+rejecting. Never substitute the hash-looking filename for the id.
+
 When a normally optional live carrier is material to the request, promote it
 explicitly: `--require-source live-wechat`. The receipt cannot complete until
 that manual route is recorded.
@@ -160,15 +168,45 @@ scripts/prior-work-retrieval.sh --install
 The installer adds three handlers to both Claude and Codex without replacing
 unrelated hooks:
 
-- `UserPromptSubmit` marks a new prompt-scoped requirement and injects the Skill
-  route when prior-work or production signals are present.
-- `PreToolUse` blocks substantial new/large writes, patches, delegated
-  production, and Bash/Codex exec paths that carry a write signal or an unknown
-  executable until the current requirement has a receipt. Read-only discovery,
-  small mechanical edits, and `tinkle_` scratch files remain available.
-- `Stop` validates a requirement that was already created by the current prompt
-  or a substantial tool attempt. It never invents a new requirement merely
-  because the final answer is long, list-shaped, or contains code.
+- `UserPromptSubmit` creates a prompt-scoped requirement only for an explicit
+  prior-work/reuse/history signal and injects the Skill route. Five filters keep
+  that signal from firing on things the user did not ask for:
+  - **Not the user speaking.** Internal templates (`You are a/an …`,
+    `# Overview`), harness envelopes (`<agent-message …>`,
+    `<task-notification …>`, `<system-reminder …>`) and pasted transcript lines
+    (`⏺ …`) all reach this handler as prompts. They never arm a requirement.
+  - **The executor cannot satisfy a gate.** A prompt that forbids reading
+    skills or running the shell has removed the capabilities completing a
+    receipt needs; gating it blocks work with no path to unblock. A prompt that
+    says outright it is opting out of prior-work retrieval is honoured in the
+    spellings people actually use (`Do NOT perform prior-work retrieval`,
+    `opts out of prior-work retrieval`), not just `skip`/`disable`.
+  - **Negated reuse.** “不要复用 X”, “别沿用”, `don't reuse` decide *against*
+    prior work; dating something as old (“很久之前写的”) argues it is stale
+    rather than asking to find it. Both are excised before matching, so a
+    genuine ask in the same sentence still counts, while 别重复造轮子 /
+    不希望你重新造 — which ask *for* reuse — keep arming.
+  - **Hedge recall needs a distal referent.** 上次 / 好像是 / 我记得是 / 记不清
+    arm only alongside a work noun carrying a distal or indefinite determiner
+    (那个/某个/哪个 脚本), because 这个脚本 is the object in front of you — “这个
+    脚本好像是死循环” is a bug report, not a recall. Bare `history` likewise
+    needs a carrier (`conversation history`, not `git history`).
+  - **A valid receipt already covers this session.** Hedge-phrased recall no
+    longer mints a fresh requirement that strands the completed receipt. An
+    explicit new prior-work ask still does.
+
+Run `scripts/prior_work.py audit` to see whether the gate is behaving: it
+reports the trigger mix, the empty-gate rate (armed requirements that never
+produced a receipt — the signature of gating something that cannot comply),
+stranded receipts, non-user-input arms, and the matched token behind each
+still-arming entry. `--json` for machine output. Judge the gate by that number,
+not by whether its own tests pass.
+- `PreToolUse` blocks substantial writes only when that explicit requirement
+  already exists and lacks a valid receipt. It never turns an ordinary write
+  into a retrieval obligation. Read-only discovery and small mechanical edits
+  remain available while a requirement is active.
+- `Stop` validates an explicit requirement that already exists. It never invents
+  one from output length, code, tool use, or a generic production request.
 
 It migrates the narrower unversioned `recall-first-evidence` UserPromptSubmit
 handler into this superset while leaving its script on disk for recovery. The

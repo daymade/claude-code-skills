@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import subprocess
 import sys
@@ -503,6 +505,266 @@ class PriorWorkTests(unittest.TestCase):
         receipt_path.write_text(json.dumps(payload), encoding="utf-8")
         with self.assertRaisesRegex(prior_work.PriorWorkError, "no business_outcome"):
             prior_work.check_receipt(manifest, "session-legacy-receipt", None)
+
+
+class PriorWorkAuditTests(unittest.TestCase):
+    """Covers the `audit` subcommand's health report over a hand-crafted
+    state dir -- direct control over required/trigger/receipt-correlation
+    shapes that the retrieve/complete flow does not make convenient to
+    construct (a stranded receipt, a malformed file, a non-user preview).
+    """
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.state = self.root / "state"
+        self.requirements_dir = self.state / "requirements"
+        self.receipts_dir = self.state / "receipts"
+        self.requirements_dir.mkdir(parents=True)
+        self.receipts_dir.mkdir(parents=True)
+        self.manifest_path = self.root / "manifest.json"
+        self.manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "state_dir": str(self.state),
+                    "sources": [
+                        {
+                            "id": "docs",
+                            "carrier": "docs",
+                            "mode": "filesystem",
+                            "root": str(self.root),
+                            "includes": ["**/*.md"],
+                            "authority": "project_ssot",
+                            "required": True,
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def manifest(self):
+        return prior_work.load_manifest(self.manifest_path)
+
+    def _write_requirement(
+        self,
+        key: str,
+        *,
+        session_id: str,
+        trigger: str,
+        required: bool,
+        prompt_preview: str = "",
+        requirement_id: str | None = None,
+    ) -> None:
+        payload = {
+            "schema_version": 1,
+            "kind": "prior_work_requirement",
+            "requirement_id": requirement_id or f"req-{key}",
+            "session_id": session_id,
+            "prompt_sha256": "sha256:" + "0" * 64,
+            "prompt_preview": prompt_preview,
+            "trigger": trigger,
+            "required": required,
+            "created_at": "2026-08-27T00:00:00Z",
+            "manifest_sha256": "sha256:" + "0" * 64,
+        }
+        (self.requirements_dir / f"{key}.json").write_text(
+            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+        )
+
+    def _write_receipt(self, key: str, *, session_id: str, requirement_id: str) -> None:
+        payload = {
+            "schema_version": 1,
+            "kind": "prior_work_retrieval_receipt",
+            "status": "complete",
+            "session_id": session_id,
+            "requirement_id": requirement_id,
+            "run_id": "run-1",
+            "business_outcome": "Reuse the verified fixture contract.",
+            "outcome_terms": ["fixture"],
+            "query": "fixture",
+            "terms": ["fixture"],
+            "coverage": [],
+            "decisions": [],
+            "no_reuse_reason": None,
+            "completed_at": "2026-08-27T00:00:00Z",
+        }
+        (self.receipts_dir / f"{key}.json").write_text(
+            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+        )
+
+    def test_empty_gate_counts_required_entries_without_a_receipt(self) -> None:
+        self._write_requirement(
+            "gated", session_id="s-gated", trigger="required_prior_signal", required=True
+        )
+        self._write_requirement(
+            "opted-out", session_id="s-out", trigger="opt_out", required=False
+        )
+        self._write_requirement(
+            "gated-with-receipt",
+            session_id="s-ok",
+            trigger="manual_retrieval",
+            required=True,
+            requirement_id="req-ok",
+        )
+        self._write_receipt("gated-with-receipt", session_id="s-ok", requirement_id="req-ok")
+
+        result = prior_work.audit_state(self.manifest())
+
+        self.assertEqual(result["total_requirements"], 3)
+        self.assertEqual(result["required_true_count"], 2)
+        self.assertEqual(result["empty_gate_count"], 1)
+        self.assertEqual(result["empty_gate_percent"], 50.0)
+        self.assertEqual(
+            {entry["session_id"] for entry in result["empty_gate_entries"]}, {"s-gated"}
+        )
+
+    def test_empty_gate_percent_is_zero_not_a_crash_with_no_required_entries(self) -> None:
+        self._write_requirement(
+            "opted-out", session_id="s-out", trigger="opt_out", required=False
+        )
+        result = prior_work.audit_state(self.manifest())
+        self.assertEqual(result["required_true_count"], 0)
+        self.assertEqual(result["empty_gate_count"], 0)
+        self.assertEqual(result["empty_gate_percent"], 0.0)
+
+    def test_stranded_receipt_counts_requirement_id_mismatch(self) -> None:
+        self._write_requirement(
+            "stranded",
+            session_id="s-stranded",
+            trigger="required_prior_signal",
+            required=True,
+            requirement_id="req-new",
+        )
+        self._write_receipt("stranded", session_id="s-stranded", requirement_id="req-old")
+
+        result = prior_work.audit_state(self.manifest())
+
+        self.assertEqual(result["stranded_receipt_count"], 1)
+        self.assertEqual(result["empty_gate_count"], 0)
+        entry = result["stranded_receipt_entries"][0]
+        self.assertEqual(entry["requirement_id"], "req-new")
+        self.assertEqual(entry["receipt_requirement_id"], "req-old")
+
+    def test_non_user_prompt_flags_required_entries_matching_hook_pattern(self) -> None:
+        self._write_requirement(
+            "non-user",
+            session_id="s-non-user",
+            trigger="required_production",
+            required=True,
+            prompt_preview="You are a careful sub-agent reviewer.",
+        )
+        self._write_requirement(
+            "human",
+            session_id="s-human",
+            trigger="required_prior_signal",
+            required=True,
+            prompt_preview="以前做过类似系统，复用已有代码",
+        )
+
+        result = prior_work.audit_state(self.manifest())
+
+        if not result["hook_module_available"]:
+            self.skipTest(f"hook module unavailable: {result['hook_module_error']}")
+        self.assertEqual(result["non_user_prompt_count"], 1)
+        self.assertEqual(
+            {entry["session_id"] for entry in result["non_user_prompt_entries"]},
+            {"s-non-user"},
+        )
+
+    def test_malformed_files_are_reported_not_raised(self) -> None:
+        (self.requirements_dir / "broken.json").write_text(
+            "{not valid json", encoding="utf-8"
+        )
+        (self.requirements_dir / "no-required-field.json").write_text(
+            json.dumps({"trigger": "required_prior_signal", "session_id": "s-x"}),
+            encoding="utf-8",
+        )
+        self._write_requirement(
+            "ok",
+            session_id="s-ok",
+            trigger="required_prior_signal",
+            required=True,
+            requirement_id="req-ok",
+        )
+        (self.receipts_dir / "ok.json").write_text("{not valid json", encoding="utf-8")
+
+        result = prior_work.audit_state(self.manifest())
+
+        self.assertEqual(result["total_requirements"], 3)
+        self.assertEqual(result["malformed_requirement_count"], 2)
+        self.assertEqual(result["valid_requirements"], 1)
+        self.assertEqual(result["malformed_receipt_count"], 1)
+        # A malformed receipt is neither a clean empty-gate nor a stranded
+        # receipt -- it must be reported on its own, not silently folded in.
+        self.assertEqual(result["empty_gate_count"], 0)
+        self.assertEqual(result["stranded_receipt_count"], 0)
+        malformed_names = {item["file"] for item in result["malformed_requirement_files"]}
+        self.assertEqual(malformed_names, {"broken.json", "no-required-field.json"})
+
+    def test_audit_state_keeps_working_when_hook_module_is_absent(self) -> None:
+        self._write_requirement(
+            "gated",
+            session_id="s-gated",
+            trigger="required_prior_signal",
+            required=True,
+            prompt_preview="以前做过类似系统，复用已有代码",
+        )
+        with mock.patch.object(
+            prior_work, "_load_hook_module", return_value=(None, "boom")
+        ):
+            result = prior_work.audit_state(self.manifest())
+            # The readable-text renderer's degraded branch is only reached
+            # when hook_module_available is False; exercise it directly
+            # rather than trusting it by inspection.
+            captured = io.StringIO()
+            with contextlib.redirect_stdout(captured):
+                prior_work._print_audit(result)
+
+        self.assertFalse(result["hook_module_available"])
+        self.assertEqual(result["hook_module_error"], "boom")
+        self.assertIsNone(result["non_user_prompt_count"])
+        self.assertIsNone(result["still_required_prior_signal_count"])
+        self.assertIsNone(result["matched_token_frequency"])
+        # Non-hook-dependent metrics keep working even though the sibling
+        # hook module could not be loaded.
+        self.assertEqual(result["total_requirements"], 1)
+        self.assertEqual(result["required_true_count"], 1)
+        self.assertEqual(result["empty_gate_count"], 1)
+
+        rendered = captured.getvalue()
+        self.assertIn("hook module unavailable (boom)", rendered)
+        self.assertNotIn("matched token frequency", rendered)
+        self.assertIn("empty_gate entries", rendered)
+
+    def test_limit_caps_entry_lists_but_never_the_counts(self) -> None:
+        for index in range(5):
+            self._write_requirement(
+                f"gated-{index}",
+                session_id=f"s-{index}",
+                trigger="required_prior_signal",
+                required=True,
+            )
+        result = prior_work.audit_state(self.manifest(), limit=2)
+        self.assertEqual(result["empty_gate_count"], 5)
+        self.assertEqual(len(result["empty_gate_entries"]), 2)
+        self.assertEqual(result["limit"], 2)
+
+        with self.assertRaisesRegex(prior_work.PriorWorkError, "--limit"):
+            prior_work.audit_state(self.manifest(), limit=-1)
+
+    def test_cli_audit_json_runs_through_main(self) -> None:
+        self._write_requirement(
+            "gated", session_id="s-cli", trigger="required_prior_signal", required=True
+        )
+        exit_code = prior_work.main(
+            ["--manifest", str(self.manifest_path), "audit", "--json", "--limit", "1"]
+        )
+        self.assertEqual(exit_code, 0)
 
 
 if __name__ == "__main__":

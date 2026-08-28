@@ -89,6 +89,14 @@ deterministic, Linux-verified) and the runner types (`python-unittest` via
 check the registry before assuming otherwise, and note `unittest discover`
 only collects `unittest.TestCase` subclasses, not bare pytest-style functions.
 
+### Prior Work Retrieval Boundary
+
+`prior-work-retrieval` creates an obligation only for an explicit prior-work,
+reuse, or history request. Ordinary implementation, reports, and read-only
+inspection do not arm it; PreToolUse and Stop may enforce only a requirement
+already created by the current prompt. Detailed retrieval mechanics remain in
+`daymade-claude-code/prior-work-retrieval/SKILL.md`.
+
 ### WeCom Send Boundary
 
 WeCom sender skills must read an explicit target class. `self` may send to the
