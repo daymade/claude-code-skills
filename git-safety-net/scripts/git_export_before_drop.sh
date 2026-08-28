@@ -13,22 +13,23 @@
 #                                          `git stash -u` / `-a`. `git stash
 #                                          show -p` does NOT display these, so
 #                                          a patch alone silently loses them.
-#   branches  -> branches.bundle           selected branch history, verified
+#   branches  -> branches.bundle           selected named-ref history, verified
 #   all refs  -> all-refs.bundle           every current ref, including stash,
 #                                          hidden backup refs, and linked-worktree
 #                                          HEADs; truly dangling objects must be
 #                                          pinned first.
 #
 # Usage:
-#   git_export_before_drop.sh [--out DIR] [--all-stashes] [--stash N]... [--branch NAME]... [--all-refs]
+#   git_export_before_drop.sh [--out DIR] [--all-stashes] [--stash N]... [--branch REF]... [--all-refs]
 #   git_export_before_drop.sh --verify-current BUNDLE
 #
 #   --out DIR       output directory (default: ~/.git-backups/<date>-<repo>)
 #   --all-stashes   export every stash in `git stash list`
 #   --stash N       export stash@{N} (repeatable)
-#   --branch NAME   include NAME in branches.bundle (repeatable)
+#   --branch REF    include one branch or other named ref in branches.bundle (repeatable)
 #   --all-refs      create all-refs.bundle from `git bundle create --all`; use before
-#                   repo/worktree convergence. Mutually exclusive with --branch.
+#                   a full-ref-topology operation only when every captured ref is explicitly
+#                   authorized. Mutually exclusive with --branch.
 #   --verify-current BUNDLE
 #                   fail if any ref recorded in BUNDLE is now missing or points to
 #                   a different object. Run immediately before the destructive step;

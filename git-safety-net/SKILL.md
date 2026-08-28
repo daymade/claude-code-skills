@@ -423,9 +423,10 @@ retirement does not need.
   then inventory ignored paths separately with `--ignored`. A normal clean status hides `!!`
   files, and no bundle can preserve them; copy out anything not proven reproducible, preserve its
   relative path, and verify it against a recorded pre-removal content hash.
-  Record the exact HEAD, prove it contained/superseded against a freshly fetched base, export all
-  refs, and obtain current-session deletion authority. As the final pre-remove gate, re-run the
-  empty status and the complete ignored inventory. Require exact equality with the frozen
+  Record the exact HEAD, prove it contained/superseded against a freshly fetched base, export its
+  branch or collision-checked recovery ref into a verified targeted bundle, and obtain
+  current-session deletion authority. As the final pre-remove gate, re-run the empty status and
+  the complete ignored inventory. Require exact equality with the frozen
   pre-removal manifest for every ignored path, entry type, file hash, and symlink target, and
   re-verify each preserved source and backup copy; any difference aborts. Removal must be the next
   operation. Remove only with

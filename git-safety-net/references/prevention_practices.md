@@ -148,9 +148,10 @@ also clean. The linked checkout may hold untracked files or a detached commit th
 `--ignored` inventory. The first must be empty; every ignored item must be proven reproducible
 or copied out with its relative path and verified against a recorded content hash because Git
 bundles cannot reach it. Record the exact HEAD, prove containment against
-a freshly fetched maintained base, and create a verified all-refs bundle before current-session
-authorization and non-forced removal. Afterwards verify the path/registration disappeared and the
-recorded HEAD still resolves through a kept ref/base or the bundle, then recheck every copied
+a freshly fetched maintained base, and create a verified targeted bundle from the worktree's branch
+or collision-checked recovery ref before current-session authorization and non-forced removal.
+Afterwards verify the path/registration disappeared and the recorded HEAD still resolves through a
+kept ref/base or the bundle, then recheck every copied
 ignored item against its pre-removal hash. Immediately before removal, repeat the worktree status
 and source-hash checks and make removal the next operation; otherwise a writer can change ignored
 bytes after the early backup check. Never reduce the worktree count

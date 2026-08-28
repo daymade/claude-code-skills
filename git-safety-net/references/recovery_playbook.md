@@ -58,10 +58,11 @@ Treat each path from `git worktree list --porcelain` as a separate working tree.
 when every named branch is on a remote; `git_loss_audit.sh` includes those HEADs explicitly.
 
 Before removal, require empty tracked/untracked status **and a separate ignored-file inventory**,
-exact HEAD capture, content containment proof against a fresh base, a verified all-refs bundle,
-and current-session deletion authority. Only then use non-forced `git worktree remove`, followed
-by path/registration/ref postcondition checks. The bundle preserves Git objects, not ignored files;
-copy any ignored item that is not proven reproducible and verify it against a recorded pre-removal
+exact HEAD capture, content containment proof against a fresh base, a verified targeted bundle of
+the worktree's branch or collision-checked recovery ref, and current-session deletion authority.
+Only then use non-forced `git worktree remove`, followed by path/registration/ref postcondition
+checks. The bundle preserves Git objects, not ignored files; copy any ignored item that is not
+proven reproducible and verify it against a recorded pre-removal
 content hash. Freeze the complete ignored path/type/hash-or-link-target manifest, including
 disposable entries. After authority, repeat both status checks and rebuild that manifest; any
 added, missing, or changed entry aborts, and the removal command must come next. Recheck every
