@@ -127,7 +127,8 @@ check("missing file NOT created", not (prof3 / ".claude.json").exists())
 print("== is_state_key classifier sanity ==")
 for k in ("projects", "oauthAccount", "tipsHistory", "cachedX", "hasSeenY", "numZ",
           "migrationVersion", "opusProMigrationComplete", "remoteControlReadyPushKey",
-          "unpinOpus48LaunchEffort", "skillUsage", "myApiKeyThing", "changelogLastFetched"):
+          "unpinOpus48LaunchEffort", "skillUsage", "myApiKeyThing", "changelogLastFetched",
+          "feedbackDraftsTurnOffPromptDeclines"):
     check(f"state: {k}", sps.is_state_key(k))
 for k in sps.BEHAVIOR_KEYS:
     check(f"behavior not swallowed: {k}", not sps.is_state_key(k))
