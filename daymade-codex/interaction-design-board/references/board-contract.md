@@ -19,6 +19,15 @@ Keep exploration artifacts outside production source directories:
 Only files produced by the current session belong here. Reuse an earlier workspace
 only when the user explicitly asks to revisit that decision.
 
+## Candidate Runtime Isolation
+
+Candidate HTML runs in a sandboxed `srcdoc` frame. The Board injects a Content
+Security Policy that permits inline prototype CSS and JavaScript plus embedded
+`data:` / `blob:` media, while denying network connections, nested frames, object
+embeds, navigation form submissions, and popup creation. Keep every candidate
+self-contained even when a browser would otherwise allow JavaScript to create a
+dynamic request.
+
 ## `board.json`
 
 Use this schema. Variant files are relative to `board.json`, must remain within the

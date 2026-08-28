@@ -123,8 +123,10 @@ BOARD_BUILT variants=<derived count> output=<absolute path>
 ```
 
 The builder rejects byte-identical candidates, path traversal, missing declared
-states, and HTML that depends on external styles, scripts, or media. Fix the
-candidate; do not weaken the validator to make the Board green.
+states, and static external styles, scripts, or media. The Board also injects a
+network-denying Content Security Policy into every sandboxed candidate so dynamic
+JavaScript cannot create an undeclared runtime dependency. Fix the candidate; do
+not weaken either boundary to make the Board green.
 
 If gstack's design executable is already installed, resolve its absolute path from
 the active gstack Skill installation; do not assume `$D` exists in a new shell. Then

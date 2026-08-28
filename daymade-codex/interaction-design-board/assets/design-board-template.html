@@ -234,6 +234,15 @@
       try { localStorage.setItem(storageKey, JSON.stringify(notes)); } catch (_error) {}
     }
 
+    function securedCandidateHtml(source) {
+      const documentCopy = new DOMParser().parseFromString(source, 'text/html');
+      const policy = documentCopy.createElement('meta');
+      policy.httpEquiv = 'Content-Security-Policy';
+      policy.content = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+      documentCopy.head.prepend(policy);
+      return '<!doctype html>\n' + documentCopy.documentElement.outerHTML;
+    }
+
     function makeCard(variant, compact) {
       const article = el('article', compact ? 'comparison-card' : 'single-card');
       const meta = el('div', 'card-meta');
@@ -246,8 +255,8 @@
       meta.append(description, el('div', 'tradeoff', 'Trade-off: ' + variant.tradeoff));
       const frame = el('iframe');
       frame.title = variant.label + ' runnable prototype';
-      frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-popups');
-      frame.srcdoc = variant.html;
+      frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
+      frame.srcdoc = securedCandidateHtml(variant.html);
       article.append(meta, frame);
       return article;
     }
