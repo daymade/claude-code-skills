@@ -170,7 +170,7 @@ STATE_PREFIX = ("cached", "has", "num", "unpin", "remotecontrol")
 STATE_SUBSTR = (
     "cache", "count", "seen", "dismissed", "fulfilled", "impressions",
     "watermark", "upsell", "nudge", "usage", "oauth", "apikey", "last",
-    "tip", "token", "credential", "secret", "migration",
+    "tip", "token", "credential", "secret", "migration", "declin",
 )
 
 # Gray keys a human already classified as "deliberately not synced", with the
