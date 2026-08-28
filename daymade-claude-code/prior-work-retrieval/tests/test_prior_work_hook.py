@@ -429,6 +429,49 @@ class PriorWorkHookTests(unittest.TestCase):
         substantial, reason = hook.substantial_tool_use(event)
         self.assertFalse(substantial, reason)
 
+    def test_independent_review_adversarial_corpus(self) -> None:
+        # Pins shapes from the 2026-08-27 two-round independent review that the
+        # dedicated tests above do not cover (archive: PKM
+        # next/_meta/skill-reviews/prior-work-retrieval/independent-review.md).
+        # Every shape was verified behaviorally against this hook before pinning.
+        gated = [
+            # F3 literals: an inner shell re-parses the wrapper string.
+            'bash -c "prior_work.py check; git push"',
+            'eval "prior_work.py check && git push"',
+            "printf '%s' 'prior_work.py check; git push' | xargs -I{} sh -c {}",
+            # F4: a backslash-escaped quote outside quotes must not enter quote state.
+            'prior_work.py check \\"& git push',
+            # F5: a substring of a different filename is not the route.
+            "python my_prior_work.py check & git push",
+            # F-new-1: bare &- is a zsh async separator (only >&- is fd close).
+            "prior_work.py check &- git push",
+            # F-new-2: wrapper prefixes beyond the naive five-name list.
+            'env FOO=1 bash -c "prior_work.py check; git push"',
+            'command bash -c "prior_work.py check; git push"',
+            '(bash -c "prior_work.py check; git push")',
+            'ssh host "prior_work.py check; git push"',
+            # F-new-3: $'…' ANSI-C quoting desyncs a naive quote state machine.
+            "prior_work.py check $'x\\'y'; git push",
+        ]
+        for command in gated:
+            with self.subTest(command=command):
+                event = {"tool_name": "Bash", "tool_input": {"command": command}}
+                substantial, reason = hook.substantial_tool_use(event)
+                self.assertTrue(substantial, reason)
+        allowed = [
+            # Backgrounding the route command itself is benign.
+            "uv run python scripts/prior_work.py check --session-id S &",
+            # A wrapped route call without any write token stays allowed.
+            'bash -c "prior_work.py check"',
+            # >&- is fd close, not a separator.
+            "uv run python scripts/prior_work.py check 2>&- --session-id S",
+        ]
+        for command in allowed:
+            with self.subTest(command=command):
+                event = {"tool_name": "Bash", "tool_input": {"command": command}}
+                substantial, reason = hook.substantial_tool_use(event)
+                self.assertFalse(substantial, reason)
+
     def test_pretool_never_invents_requirement_for_ordinary_write(self) -> None:
         event = {
             "hook_event_name": "PreToolUse",
