@@ -1539,7 +1539,7 @@ uv run --with PyYAML python -m scripts.security_scan <path/to/skill-folder> --ve
 - Hardcoded secrets (API keys, passwords, tokens) via gitleaks
 - Personal information (usernames, emails, company names) in verbose mode
 - Unsafe code patterns (command injection risks) in verbose mode
-- The complete package superset: ordinary shipping files plus optional root `evals/`. Non-shipping runtime/development state in `.in_use/`, `.ruff_cache/`, `.enrich/`, `tests/`, and `dist/` is excluded by the same shared policy used by the packager, content-hash attestation, and regression audit.
+- The complete shipping set is defined only by [scripts/packaging_policy.py](scripts/packaging_policy.py). Packaging, security attestation, content hashing, and regression auditing must consume that shared policy; do not maintain a second exclusion list in prose or in a consumer-specific filter.
 
 **What it does NOT cover** — why Step 5's read-through is still required: gitleaks and the regex rules only match *known secret formats and patterns you listed*. They are structurally blind to private content with no keyword — a real person/project name in a non-English language, a verbatim line from a real transcript, a real example lifted from your own work. A green `security_scan` means "no known-format secret was found", **not** "the skill is sanitized". Never treat it as the latter.
 
