@@ -6,7 +6,6 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.2.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -382,7 +381,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ## 📦 其他可用技能
 
-### 1. **github-ops** - GitHub 操作套件
+### **github-ops** - GitHub 操作套件
 
 使用 gh CLI 和 GitHub API 进行全面的 GitHub 操作。
 
@@ -406,7 +405,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### 2. **doc-to-markdown** - 文档转换套件
+### **doc-to-markdown** - 文档转换套件
 
 > **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:doc-to-markdown`）
 
@@ -431,7 +430,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### 3. **mermaid-tools** - 图表生成
+### **mermaid-tools** - 图表生成
 
 > **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:mermaid-tools`）
 
@@ -456,7 +455,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### 4. **statusline-generator** - 状态栏定制
+### **statusline-generator** - 状态栏定制
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:statusline-generator`）
 
@@ -482,7 +481,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### 5. **teams-channel-post-writer** - Teams 通信
+### **teams-channel-post-writer** - Teams 通信
 
 创建用于内部知识分享的教育性 Teams 频道帖子。
 
@@ -506,7 +505,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### 6. **repomix-unmixer** - 仓库提取
+### **repomix-unmixer** - 仓库提取
 
 从 repomix 打包的仓库中提取文件并恢复目录结构。
 
@@ -530,7 +529,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### 7. **llm-icon-finder** - AI/LLM 品牌图标查找器
+### **llm-icon-finder** - AI/LLM 品牌图标查找器
 
 从 lobe-icons 库访问 100+ AI 模型和 LLM 提供商品牌图标。
 
@@ -554,7 +553,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### 8. **cli-demo-generator** - CLI 演示生成器
+### **cli-demo-generator** - CLI 演示生成器
 
 使用 VHS 自动化生成专业的 CLI 动画演示和终端录制。
 
@@ -579,7 +578,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### 9. **cloudflare-troubleshooting** - Cloudflare 诊断
+### **cloudflare-troubleshooting** - Cloudflare 诊断
 
 使用 API 驱动的证据收集来调查和解决 Cloudflare 配置问题。
 
@@ -602,7 +601,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### 10. **ui-designer** - UI 设计系统提取器
+### **ui-designer** - UI 设计系统提取器
 
 从参考 UI 图像中提取设计系统，并生成可实施的设计提示。
 
@@ -627,7 +626,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### 11. **ppt-creator** - 专业演示文稿创建
+### **ppt-creator** - 专业演示文稿创建
 
 > **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:ppt-creator`）
 
@@ -666,7 +665,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ---
 
-### 12. **youtube-downloader** - YouTube 视频和音频下载器
+### **youtube-downloader** - YouTube 视频和音频下载器
 
 使用 yt-dlp 下载 YouTube 视频和音频，具有强大的错误处理功能。
 
@@ -703,7 +702,7 @@ python3 scripts/download_video.py "https://www.youtube.com/watch?v=VIDEO_ID" --a
 
 ---
 
-### 13. **repomix-safe-mixer** - 安全 Repomix 打包
+### **repomix-safe-mixer** - 安全 Repomix 打包
 
 通过在打包前自动检测和删除硬编码凭据来安全地打包代码库。
 
@@ -736,7 +735,7 @@ python3 scripts/safe_mix.py /path/to/codebase
 
 ---
 
-### 14. **transcript-fixer** - ASR 转录校正
+### **transcript-fixer** - ASR 转录校正
 
 > **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:transcript-fixer`）
 
@@ -774,7 +773,7 @@ uv run scripts/fix_transcription.py \
 
 ---
 
-### 15. **video-comparer** - 视频比较和质量分析
+### **video-comparer** - 视频比较和质量分析
 
 比较两个视频并生成带有质量指标和逐帧视觉比较的交互式 HTML 报告。
 
@@ -815,7 +814,7 @@ python3 scripts/compare.py original.mp4 compressed.mp4 -o report.html --interval
 
 ---
 
-### 16. **qa-expert** - 综合 QA 测试基础设施
+### **qa-expert** - 综合 QA 测试基础设施
 
 使用自主 LLM 执行、Google 测试标准和 OWASP 安全最佳实践建立世界级 QA 测试流程。
 
@@ -870,7 +869,7 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 
 ---
 
-### 17. **prompt-optimizer** - 使用 EARS 方法论进行提示词工程
+### **prompt-optimizer** - 使用 EARS 方法论进行提示词工程
 
 使用 EARS（简易需求语法）将模糊的提示词转换为精确、结构化的规范 - 这是罗尔斯·罗伊斯公司创建的一种将自然语言转换为可测试需求的方法论。
 
@@ -929,7 +928,7 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 
 ---
 
-### 18. **read-claude-code-history** - 读取本地 Claude Code 历史
+### **read-claude-code-history** - 读取本地 Claude Code 历史
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:read-claude-code-history`）
 
@@ -996,7 +995,7 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 
 ---
 
-### 19. **docs-cleaner** - 文档整合
+### **docs-cleaner** - 文档整合
 
 > **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:docs-cleaner`）
 
@@ -1020,7 +1019,7 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 
 ---
 
-### 20. **skills-search** - CCPM 技能注册表搜索
+### **skills-search** - CCPM 技能注册表搜索
 
 从 CCPM（Claude Code 插件管理器）注册表中搜索、发现、安装和管理 Claude Code 技能。
 
@@ -1069,7 +1068,7 @@ ccpm install-bundle web-dev  # 安装 Web 开发技能包
 
 ---
 
-### 21. **pdf-creator** - PDF 生成（中文字体支持）
+### **pdf-creator** - PDF 生成（中文字体支持）
 
 > **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:pdf-creator`）
 
@@ -1102,7 +1101,7 @@ uv run --with weasyprint --with markdown scripts/md_to_pdf.py input.md output.pd
 
 ---
 
-### 22. **claude-md-progressive-disclosurer** - CLAUDE.md 优化
+### **claude-md-progressive-disclosurer** - CLAUDE.md 优化
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-md-progressive-disclosurer`）
 
@@ -1131,7 +1130,7 @@ uv run --with weasyprint --with markdown scripts/md_to_pdf.py input.md output.pd
 
 ---
 
-### 23. **promptfoo-evaluation** - Promptfoo LLM 评测
+### **promptfoo-evaluation** - Promptfoo LLM 评测
 
 使用 Promptfoo 配置并运行 LLM 评测，进行提示词测试与模型对比。
 
@@ -1163,7 +1162,7 @@ npx promptfoo@latest view
 
 ---
 
-### 24. **developing-ios-apps** - iOS 应用开发
+### **developing-ios-apps** - iOS 应用开发
 
 > **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:developing-ios-apps`）
 
@@ -1197,7 +1196,7 @@ xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build
 
 ---
 
-### 25. **twitter-reader** - Twitter/X 内容获取
+### **twitter-reader** - Twitter/X 内容获取
 
 使用 Jina.ai API 获取 Twitter/X 帖子内容，无需 JavaScript 渲染或身份验证即可绕过限制。
 
@@ -1246,7 +1245,7 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 
 ---
 
-### 26. **macos-cleaner** - 智能 macOS 磁盘空间恢复
+### **macos-cleaner** - 智能 macOS 磁盘空间恢复
 
 > **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:macos-cleaner`）
 
@@ -1351,7 +1350,7 @@ claude plugin install daymade-macos@daymade-skills
 
 ---
 
-### 27. **fact-checker** - 文档事实核查
+### **fact-checker** - 文档事实核查
 
 使用网络搜索和权威来源验证文档中的事实声明，然后提议更正并等待用户确认。
 
@@ -1396,7 +1395,7 @@ claude plugin install fact-checker@daymade-skills
 
 ---
 
-### 28. **skill-reviewer** - 技能质量审查与改进
+### **skill-reviewer** - 技能质量审查与改进
 
 以三种强大模式审查和改进 Claude Code 技能，确保符合官方最佳实践。
 
@@ -1440,7 +1439,7 @@ claude plugin install daymade-skill@daymade-skills
 
 ---
 
-### 29. **github-contributor** - GitHub 贡献策略
+### **github-contributor** - GitHub 贡献策略
 
 成为高效 GitHub 贡献者并建立开源声誉的战略指南。
 
@@ -1497,7 +1496,7 @@ claude plugin install github-contributor@daymade-skills
 
 ---
 
-### 31. **i18n-expert** - 国际化与本地化
+### **i18n-expert** - 国际化与本地化
 
 为 UI 代码库提供完整的国际化/本地化设置和审计。配置 i18n 框架、将硬编码字符串替换为翻译键、确保 en-US 和 zh-CN 之间的语言环境一致性，并验证复数形式和格式设置。
 
@@ -1548,7 +1547,7 @@ claude plugin install i18n-expert@daymade-skills
 
 ---
 
-### 32. **claude-skills-troubleshooting** - 插件与技能故障排除
+### **claude-skills-troubleshooting** - 插件与技能故障排除
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-skills-troubleshooting`）
 
@@ -1589,7 +1588,7 @@ python3 scripts/enable_all_plugins.py daymade-skills
 
 ---
 
-### 33. **meeting-minutes-taker** - 会议纪要生成器
+### **meeting-minutes-taker** - 会议纪要生成器
 
 > **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:meeting-minutes-taker`）
 
@@ -1626,7 +1625,7 @@ claude plugin install daymade-audio@daymade-skills
 
 ---
 
-### 34. **deep-research** - 深度调研报告生成器
+### **deep-research** - 深度调研报告生成器
 
 生成格式可控的调研报告，支持证据追踪与引用。
 
@@ -1661,7 +1660,7 @@ claude plugin install deep-research@daymade-skills
 
 ---
 
-### 35. **competitors-analysis** - 证据驱动的竞品情报
+### **competitors-analysis** - 证据驱动的竞品情报
 
 发现、克隆、更新并分析竞品仓库，产出可审计的竞争情报。仓库技术结论必须来自本地克隆代码；市场格局结论必须标注来源和易变性。
 
@@ -1704,7 +1703,7 @@ claude plugin install competitors-analysis@daymade-skills
 
 ---
 
-### 36. **tunnel-doctor** - Tailscale + 代理/VPN 冲突修复
+### **tunnel-doctor** - Tailscale + 代理/VPN 冲突修复
 
 诊断和修复 macOS 上 Tailscale 与代理/VPN 工具（Shadowrocket、Clash、Surge）的冲突。覆盖四个独立冲突层，特别针对 SSH 访问 WSL 实例的场景。
 
@@ -1744,7 +1743,7 @@ claude plugin install tunnel-doctor@daymade-skills
 
 ---
 
-### 37. **windows-remote-desktop-connection-doctor** - AVD/W365 连接质量诊断
+### **windows-remote-desktop-connection-doctor** - AVD/W365 连接质量诊断
 
 诊断 macOS 上 Windows App（Microsoft Remote Desktop / Azure Virtual Desktop / W365）连接质量问题，专注于传输协议优化（UDP Shortpath vs WebSocket 回退）。
 
@@ -1783,7 +1782,7 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 ---
 
-### 38. **product-analysis** - 多路径产品审计与优化
+### **product-analysis** - 多路径产品审计与优化
 
 使用并行的 Claude Code 分析代理（必要时结合 Codex CLI）进行产品审计，覆盖 UX、API、架构和竞品对比场景，输出可量化指标与优先级建议。
 
@@ -1822,7 +1821,7 @@ claude plugin install product-analysis@daymade-skills
 
 ---
 
-### 39. **financial-data-collector** - 美股金融数据采集
+### **financial-data-collector** - 美股金融数据采集
 
 > **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:financial-data-collector`）
 
@@ -1862,7 +1861,7 @@ claude plugin install daymade-financial@daymade-skills
 
 ---
 
-### 40. **excel-automation** - Excel 创建、解析与 macOS 控制
+### **excel-automation** - Excel 创建、解析与 macOS 控制
 
 > **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-docs:excel-automation`）
 
@@ -1902,7 +1901,7 @@ claude plugin install daymade-docs@daymade-skills
 
 ---
 
-### 41. **capture-screen** - macOS 程序化截图
+### **capture-screen** - macOS 程序化截图
 
 > **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:capture-screen`）
 
@@ -1942,7 +1941,7 @@ claude plugin install daymade-macos@daymade-skills
 
 ---
 
-### 42. **continue-claude-code-work** - 续做中断的 Claude 工作
+### **continue-claude-code-work** - 续做中断的 Claude 工作
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:continue-claude-code-work`）
 
@@ -1976,7 +1975,7 @@ Session。续做层先消费 `read-claude-code-history`，再恢复原始业务�
 
 ---
 
-### 43. **scrapling-skill** - 可靠的 Scrapling CLI 工作流
+### **scrapling-skill** - 可靠的 Scrapling CLI 工作流
 
 围绕 Scrapling CLI 提供经过验证的安装、排障与网页抽取工作流，用于从网页输出 HTML、Markdown 或纯文本。内置诊断脚本，可检查 extras 安装问题、Playwright 浏览器运行时，以及真实 URL 的烟测结果。
 
@@ -2014,7 +2013,7 @@ claude plugin install scrapling-skill@daymade-skills
 
 ---
 
-### 44. **ima-copilot** - 腾讯 IMA 伴侣与安装器
+### **ima-copilot** - 腾讯 IMA 伴侣与安装器
 
 围绕官方腾讯 IMA skill（`ima.qq.com`）的一站式包装层。通过 `npx skills add` 把官方 `ima-skill` 一键安装到 Claude Code、Codex、OpenClaw 三个平台；引导用户配置 API 凭据；在用户授权下检测并修复上游已知问题；提供按知识库置顶的个人化扇出搜索策略。
 
@@ -2055,7 +2054,7 @@ claude plugin install ima-copilot@daymade-skills
 
 ---
 
-### 45. **claude-export-txt-better** - 修复 Claude Code 导出文件的断行
+### **claude-export-txt-better** - 修复 Claude Code 导出文件的断行
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-export-txt-better`）
 
@@ -2095,7 +2094,7 @@ uv run daymade-claude-code/claude-export-txt-better/scripts/validate-claude-expo
 
 ---
 
-### 46. **douban-skill** - 豆瓣收藏导出与同步
+### **douban-skill** - 豆瓣收藏导出与同步
 
 通过逆向的 Frodo API 导出和同步豆瓣书影音游戏收藏到本地 CSV 文件。全量导出覆盖所有历史，RSS 增量同步保持每日更新。无需登录、无需 cookies、无需浏览器——只要一个用户 ID 就能跑通。
 
@@ -2132,7 +2131,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
-### 47. **terraform-skill** - Terraform 实操陷阱
+### **terraform-skill** - Terraform 实操陷阱
 
 来自真实 Terraform 部署的失败模式——每一条都对应一次真实事故。组织为*确切报错 → 根本原因 → 复制粘贴修复*。覆盖 provisioner 时序竞争、SSH 连接冲突、多环境隔离、DNS 记录重复、数据卷权限、数据库 bootstrap 缺口、快照跨环境污染、Cloudflare 凭据格式错误、Caddyfile/compose 里的硬编码域名，以及 init-data-only-on-first-boot 陷阱。
 
@@ -2167,7 +2166,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
-### 48. **slides-creator** - 叙事优先的幻灯片创建
+### **slides-creator** - 叙事优先的幻灯片创建
 
 引导用户完成结构化叙事设计（ABCDEFG 模型），然后将视觉生成委托给 `baoyu-slide-deck`。专注于机器做不到的事——与人类的叙事共创。
 
@@ -2195,7 +2194,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
-### 49. **debugging-network-issues** - 证据驱动的网络问题排查
+### **debugging-network-issues** - 证据驱动的网络问题排查
 
 针对网络、流式、协议层 bug 的"先证伪、再下结论"方法论。源自一次真实的 5 小时 SSE 生产事故——堆假设浪费的几个小时，10 分钟分层实验就能解决。
 
@@ -2220,7 +2219,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
-### 50. **stepfun-tts** - 阶跃 StepAudio 2.5 Contextual TTS
+### **stepfun-tts** - 阶跃 StepAudio 2.5 Contextual TTS
 
 > **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:stepfun-tts`）
 
@@ -2242,7 +2241,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
-### 52. **stepfun-asr** - 阶跃 StepAudio 2.5 ASR（SSE 端点）
+### **stepfun-asr** - 阶跃 StepAudio 2.5 ASR（SSE 端点）
 
 > **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:stepfun-asr`）
 
@@ -2265,7 +2264,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
-### 53. **terminal-screenshot** - 看见终端输出的真实视觉效果
+### **terminal-screenshot** - 看见终端输出的真实视觉效果
 
 把终端 CLI 程序的彩色输出渲染成 PNG，让 Claude 真正"看见"渲染后的效果——颜色对比、对齐、背景色块、高亮——而不是只读到纯文本和原始 ANSI 转义码。读 hex 值是猜，看真实终端背景上渲染出的对比才是验证。
 
@@ -2296,7 +2295,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### 54. **pdf-to-html** - 把 PDF 读成保真 HTML（可选翻译）
+### **pdf-to-html** - 把 PDF 读成保真 HTML（可选翻译）
 
 把 PDF 转成单文件、可阅读的 HTML，保留图片、图表和阅读顺序——还可选翻译成另一种语言，同时保住每一张图。PDF 是版面而不只是文本流，所以流程会先渲染每一页让你"看"清布局再组装，交付前再渲染 HTML 做视觉验证。
 
@@ -2327,7 +2326,7 @@ claude plugin install daymade-docs@daymade-skills
 
 ---
 
-### 55. **asr-transcribe-to-text** - 用 Qwen3-ASR 把音视频转文字
+### **asr-transcribe-to-text** - 用 Qwen3-ASR 把音视频转文字
 
 > **安装**：`claude plugin install daymade-audio@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-audio:asr-transcribe-to-text`）
 
@@ -2362,7 +2361,7 @@ claude plugin install daymade-audio@daymade-skills
 
 ---
 
-### 56. **marketplace-dev** - 把技能仓库变成插件市场
+### **marketplace-dev** - 把技能仓库变成插件市场
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:marketplace-dev`）
 
@@ -2399,7 +2398,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### 58. **skill-creator** - 创建、改进与基准测试技能
+### **skill-creator** - 创建、改进与基准测试技能
 
 > **安装**：`claude plugin install daymade-skill@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-skill:skill-creator`）
 
@@ -2436,7 +2435,7 @@ claude plugin install daymade-skill@daymade-skills
 
 ---
 
-### 58. **feishu-doc-scraper** - 飞书/Lark → 保真 Markdown
+### **feishu-doc-scraper** - 飞书/Lark → 保真 Markdown
 
 把飞书（Lark）文档、Wiki 页面/合集、表格（含单元格附件文件下载）以及妙记转写提取成保真的本地 Markdown。首选路径用 `lark-cli` API——以编程方式提取正文（不经模型改写）、递归跟随合集的引用图、从错误码读取权限边界；浏览器 DOM 路径只在 lark-cli 触达不到内容时作为兜底。
 
@@ -2469,7 +2468,7 @@ claude plugin install feishu-doc-scraper@daymade-skills
 
 ---
 
-### 59. **bigdata-skill** - Bigdata.com（RavenPack）SDK + REST 工具箱
+### **bigdata-skill** - Bigdata.com（RavenPack）SDK + REST 工具箱
 
 > **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:bigdata-skill`）
 
@@ -2505,7 +2504,7 @@ export BIGDATA_API_KEY=bd_v2_xxxxxxxx
 
 ---
 
-### 60. **gangtise-copilot** - Gangtise 投研技能套件安装器
+### **gangtise-copilot** - Gangtise 投研技能套件安装器
 
 > **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:gangtise-copilot`）
 
@@ -2539,7 +2538,7 @@ claude plugin install daymade-financial@daymade-skills
 
 ---
 
-### 61. **llm-wiki-setup** - 共创个人投研 LLM Wiki
+### **llm-wiki-setup** - 共创个人投研 LLM Wiki
 
 共创一个个人投研 LLM Wiki（Andrej Karpathy 模式），让用户自己的分析框架长成一份活的 CLAUDE.md——靠访谈用户而不是塞给他一份模板。纯 markdown + `[[wikilink]]`，不用 RAG / 向量库（Karpathy 的核心思想——别过度工程化）。其价值在于把用户的个人投资偏好提炼进他自己的 schema，而非强加一份标准 schema。
 
@@ -2571,7 +2570,7 @@ claude plugin install llm-wiki-setup@daymade-skills
 
 ---
 
-### 62. **benchmark-due-diligence** - 对标对象的对抗式尽调拆解
+### **benchmark-due-diligence** - 对标对象的对抗式尽调拆解
 
 > **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:benchmark-due-diligence`）
 
@@ -2605,7 +2604,7 @@ claude plugin install daymade-financial@daymade-skills
 
 ---
 
-### 63. **auto-repo-setup** - 自动化仓库配置与环境修复
+### **auto-repo-setup** - 自动化仓库配置与环境修复
 
 让仓库真正跑起来并可交接，同时不猜技术栈、不改变协作者正常的工作方式。先读项目权威来源，再修已验证的缺口；把启动指令、生命周期 hook 和 Git 状态变更视为三种不同机制。
 
@@ -2644,7 +2643,7 @@ claude plugin install auto-repo-setup@daymade-skills
 
 ---
 
-### 64. **bilibili-source** - 免登录 B站视频数据 + 弹幕抓取
+### **bilibili-source** - 免登录 B站视频数据 + 弹幕抓取
 
 一次 `view/detail` 调用、免登录地拉取任意 B站视频的可引用数据——标题、UP 粉丝数、发布时间、标签、分区、各分P 的 cid、实时互动数据（播放/点赞/投币/收藏/转发/评论/弹幕），以及完整弹幕全文。设计目标：让互动数字"取数便宜、无法伪造"，而不是手敲进文档里慢慢烂掉。
 
@@ -2677,7 +2676,7 @@ claude plugin install bilibili-source@daymade-skills
 
 ---
 
-### 65. **claude-usage-analyst** - 解释 Claude Code Token 用量与额度消耗
+### **claude-usage-analyst** - 解释 Claude Code Token 用量与额度消耗
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（套件专用——通过 `daymade-claude-code:claude-usage-analyst` 调用）
 
@@ -2711,7 +2710,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### 66. **marketplace-health-check** - 仓库 6 维度全面健康体检
+### **marketplace-health-check** - 仓库 6 维度全面健康体检
 
 ```bash
 claude plugin install marketplace-health-check@daymade-skills
@@ -2746,7 +2745,7 @@ claude plugin install marketplace-health-check@daymade-skills
 
 ---
 
-### 67. **claude-switch-models-setup** - 多 Provider Claude Code 配置
+### **claude-switch-models-setup** - 多 Provider Claude Code 配置
 
 ```bash
 claude plugin install daymade-claude-code@daymade-skills
@@ -2783,7 +2782,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### 68. **llm-eval-harness** - 四维度 LLM 端点评测
+### **llm-eval-harness** - 四维度 LLM 端点评测
 
 ```bash
 claude plugin install llm-eval-harness@daymade-skills
@@ -2829,7 +2828,7 @@ uv run --with aiohttp python scripts/concurrency_probe.py \
 
 ---
 
-### 69. **read-claude-web-conversation** - 提取 Claude.ai 网页会话
+### **read-claude-web-conversation** - 提取 Claude.ai 网页会话
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`（套件专用——通过 `daymade-claude-code:read-claude-web-conversation` 调用）
 
@@ -2850,7 +2849,7 @@ AppleScript fallback 需要 macOS，以及由用户手动开启一次 Chrome 开
 
 ---
 
-### 70. **setup-notifications-via-wecom** - 可复用企微通知配置
+### **setup-notifications-via-wecom** - 可复用企微通知配置
 
 ```bash
 claude plugin install setup-notifications-via-wecom@daymade-skills
@@ -2867,7 +2866,7 @@ claude plugin install setup-notifications-via-wecom@daymade-skills
 
 ---
 
-### 71. **notify-wecom** - 发送一次性企微消息
+### **notify-wecom** - 发送一次性企微消息
 
 ```bash
 claude plugin install notify-wecom@daymade-skills
@@ -2884,7 +2883,7 @@ claude plugin install notify-wecom@daymade-skills
 
 ---
 
-### 72. **github-sensitive-data-cleanup** - GitHub 敏感数据清理
+### **github-sensitive-data-cleanup** - GitHub 敏感数据清理
 
 ```bash
 claude plugin install github-sensitive-data-cleanup@daymade-skills
@@ -2901,7 +2900,7 @@ claude plugin install github-sensitive-data-cleanup@daymade-skills
 
 ---
 
-### 73. **codex-image-gallery** - Codex 生成图片本地浏览器
+### **codex-image-gallery** - Codex 生成图片本地浏览器
 
 > **安装**：`claude plugin install daymade-codex@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-codex:codex-image-gallery`）
 
@@ -2920,7 +2919,7 @@ claude plugin install github-sensitive-data-cleanup@daymade-skills
 
 **要求**：Node.js 18+，并能访问目标图片目录。
 
-### 74. **frontend-visual-qa** - 渲染后前端与浏览器输出视觉 QA 门禁
+### **frontend-visual-qa** - 渲染后前端与浏览器输出视觉 QA 门禁
 
 ```bash
 claude plugin install frontend-visual-qa@daymade-skills
@@ -2943,7 +2942,7 @@ claude plugin install frontend-visual-qa@daymade-skills
 - 核心视觉、复杂旅程/页面类型、data-viz 三类按需 reference，覆盖单位/来源/时间/新鲜度、密集碰撞、runtime 文案真实性和真实文件选择器边界
 - 自包含公开 fixture 的行为 eval 与触发 eval
 
-### 75. **openclaw** - OpenClaw (龙虾) 配置管理器
+### **openclaw** - OpenClaw (龙虾) 配置管理器
 
 ```bash
 claude plugin install openclaw@daymade-skills
@@ -2962,7 +2961,7 @@ claude plugin install openclaw@daymade-skills
 - 变更命令自动审计，带 `--no-audit` 逃生口
 - 昵称注册表支持跨配置操作
 
-### 76. **download-gemini-images** - 从 Gemini 对话下载图片
+### **download-gemini-images** - 从 Gemini 对话下载图片
 
 ```bash
 claude plugin install download-gemini-images@daymade-skills
@@ -2980,7 +2979,7 @@ claude plugin install download-gemini-images@daymade-skills
 - lightbox 自动化失败时回退到 `pageAssets`
 - 有序 ZIP 打包 + 完整性校验
 
-### 77. **wps-doc-scraper** - 归档公开 WPS/KDocs 文档
+### **wps-doc-scraper** - 归档公开 WPS/KDocs 文档
 
 ```bash
 claude plugin install wps-doc-scraper@daymade-skills
@@ -2998,7 +2997,7 @@ claude plugin install wps-doc-scraper@daymade-skills
 - 画布和思维导图的原版 SVG/PNG 捕获
 - Markdown 作为源的结构化表示
 
-### 78. **ashare-news-fetcher** - A 股消息面情报聚合
+### **ashare-news-fetcher** - A 股消息面情报聚合
 
 > **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:ashare-news-fetcher`）
 
@@ -3014,7 +3013,7 @@ claude plugin install wps-doc-scraper@daymade-skills
 - 按个股或全市场过滤
 - 结构化 JSON / Markdown 输出
 
-### 79. **local-codex** - 本地 OpenAI Codex CLI Agent
+### **local-codex** - 本地 OpenAI Codex CLI Agent
 
 > **安装**：`claude plugin install daymade-codex@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-codex:local-codex`）
 
@@ -3031,7 +3030,7 @@ claude plugin install wps-doc-scraper@daymade-skills
 - JSONL 输出解析，提取最终 assistant 消息
 - 可配置沙箱级别：read-only / workspace-write / danger-full-access
 
-### 80. **openclaw-model-switch** - OpenClaw 模型切换器
+### **openclaw-model-switch** - OpenClaw 模型切换器
 
 ```bash
 claude plugin install openclaw-model-switch@daymade-skills
@@ -3050,7 +3049,7 @@ claude plugin install openclaw-model-switch@daymade-skills
 - 切换后可选择是否重启 gateway
 - 支持 Kimi K2.x 模型家族及上下文窗口规格
 
-### 81. **pharma-daily-report** - A 股医药板块日报
+### **pharma-daily-report** - A 股医药板块日报
 
 > **安装**：`claude plugin install daymade-financial@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-financial:pharma-daily-report`）
 
@@ -3066,7 +3065,7 @@ claude plugin install openclaw-model-switch@daymade-skills
 - 7 大细分赛道分类 + 涨跌榜 + 资金流向估算
 - 可选飞书富文本推送；默认 20 只医药标的，可自定义增减
 
-### 82. **gemini-history-analyzer** - 分析 Gemini 对话历史
+### **gemini-history-analyzer** - 分析 Gemini 对话历史
 
 > **安装**：`claude plugin install gemini-history-analyzer@daymade-skills`
 
@@ -3082,7 +3081,7 @@ claude plugin install openclaw-model-switch@daymade-skills
 - 会议转录 vs 提问-回答 识别；主题归类；PII 标记
 - 上下文核验的关键词搜索（grep 只是第一步，不是答案）+ 可选的 memory 文件生成
 
-### 83. **skill-governance** - Skill marketplace 与缓存治理
+### **skill-governance** - Skill marketplace 与缓存治理
 
 > **安装**：`claude plugin install daymade-skill@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-skill:skill-governance`）
 
@@ -3101,7 +3100,7 @@ claude plugin install openclaw-model-switch@daymade-skills
 - 从 manifest 动态发现 suite，并在按原 scope 退役 standalone 安装前先验证替代 suite
 - 检查发布面时忽略 `scripts/`、`references/`、`tests/`、demo 和构建产物等工作区专用目录
 
-### 84. **photo-to-scanned-pdf** - 手机文档照片转扫描件 PDF
+### **photo-to-scanned-pdf** - 手机文档照片转扫描件 PDF
 
 > **安装**：`claude plugin install daymade-docs@daymade-skills`（仅作为套件成员发布，
 > 调用方式 `daymade-docs:photo-to-scanned-pdf`）
@@ -3110,7 +3109,7 @@ claude plugin install openclaw-model-switch@daymade-skills
 流程包含透视矫正、扫描风格背景清理、彩纸处理、按内容明确排序，以及强制的
 全册联览核验。
 
-### 85. **github-review-pr** - 基于当前 Base 的贡献者 PR 评审
+### **github-review-pr** - 基于当前 Base 的贡献者 PR 评审
 
 ```bash
 claude plugin install github-review-pr@daymade-skills
@@ -3154,7 +3153,7 @@ main 在上次 review 后变了，重新告诉我现在真正会合进去什么
 
 **依赖**：已认证的 `gh` CLI、支持 `merge-tree --write-tree` 的 `git`、`jq`。
 
-### 86. **read-codex-history** - 读取本地 Codex 历史
+### **read-codex-history** - 读取本地 Codex 历史
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`
 >（仅作为套件成员发布，调用方式 `daymade-claude-code:read-codex-history`）
@@ -3195,7 +3194,7 @@ main 在上次 review 后变了，重新告诉我现在真正会合进去什么
 
 ---
 
-### 87. **continue-codex-work** - 续做中断的 Codex 工作
+### **continue-codex-work** - 续做中断的 Codex 工作
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`
 >（仅作为套件成员发布，调用方式 `daymade-claude-code:continue-codex-work`）
@@ -3219,7 +3218,7 @@ Codex 上次做到一半中断了，读取 rollout 后把工作做完
 
 ---
 
-### 88. **git-safety-net** - 预防与恢复本地 Git 灾难
+### **git-safety-net** - 预防与恢复本地 Git 灾难
 
 > **安装**：`claude plugin install git-safety-net@daymade-skills`
 
@@ -3250,7 +3249,7 @@ main 真的全部合并了吗，还是还有东西被滞留在某个分支？
 
 ---
 
-### 89. **design-style-picker** - 批量生成并对比视觉设计方向
+### **design-style-picker** - 批量生成并对比视觉设计方向
 
 > **安装**：`claude plugin install daymade-codex@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-codex:design-style-picker`）
 
@@ -3276,7 +3275,7 @@ main 真的全部合并了吗，还是还有东西被滞留在某个分支？
 
 ---
 
-### 90. **claude-migrate-memory-to-doc** - 把 Claude 记忆迁移为工具无关文档
+### **claude-migrate-memory-to-doc** - 把 Claude 记忆迁移为工具无关文档
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`
 > （仅随套件提供 — 以 `daymade-claude-code:claude-migrate-memory-to-doc` 调用）
@@ -3303,7 +3302,7 @@ memory 膨胀了，把该共享的内容迁到文档里
 
 ---
 
-### 91. **docx-creator** - 生成生产级 Word 文档
+### **docx-creator** - 生成生产级 Word 文档
 
 > **安装**：`claude plugin install daymade-docs@daymade-skills`
 > （仅随套件提供 — 以 `daymade-docs:docx-creator` 调用）
@@ -3332,7 +3331,7 @@ LibreOffice→PDF→PNG 视觉验证链（禁止用 qlmanage 缩略图——它�
 
 ---
 
-### 92. **claude-code-hooks** - 编写、测试、调试 Claude Code Hook
+### **claude-code-hooks** - 编写、测试、调试 Claude Code Hook
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`
 > （仅随套件提供 — 以 `daymade-claude-code:claude-code-hooks` 调用）
@@ -3358,7 +3357,7 @@ completion drive 随时能盖过它；hook 才是一堵墙。
 ```
 
 
-### 93. **macos-watchdog** - 设计与纪律化 macOS launchd 看门狗
+### **macos-watchdog** - 设计与纪律化 macOS launchd 看门狗
 
 > **安装**：`claude plugin install daymade-macos@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-macos:macos-watchdog`）
 
@@ -3379,7 +3378,7 @@ LaunchAgent / LaunchDaemon，同时不让看门狗自己变成干扰源。提炼
 审查我现有的 LaunchAgent 有没有噪音和崩溃循环
 ```
 
-### 94. **devils-advocate** - 压力测试你的投资论点
+### **devils-advocate** - 压力测试你的投资论点
 
 > **安装**：`claude plugin install daymade-financial@daymade-skills>`
 > （仅随套件提供 — 以 `daymade-financial:devils-advocate` 调用）
@@ -3399,7 +3398,7 @@ LaunchAgent / LaunchDaemon，同时不让看门狗自己变成干扰源。提炼
 这个论点要错的话，需要发生什么？
 ```
 
-### 95. **daymade-sector-research** - A股行业投研工作流
+### **daymade-sector-research** - A股行业投研工作流
 
 > **安装**：`claude plugin install daymade-financial@daymade-skills`
 > （仅随套件提供 — 以 `daymade-financial:daymade-sector-research` 调用）
@@ -3421,7 +3420,7 @@ A 股行业投研工作流：全板块成分股 Top N 涨幅计算、公告窗�
 判断医药板块现在的市场情绪
 ```
 
-### 96. **kimi-use** - 查询 Kimi 桌面客户端内置数据插件
+### **kimi-use** - 查询 Kimi 桌面客户端内置数据插件
 
 通过 computer-use 驱动已登录的 Kimi 桌面客户端，调用其内置的企业、
 金融、市场、学术与法律数据插件，无需另外配置 API key。查询结果必须标明
@@ -3440,7 +3439,7 @@ A 股行业投研工作流：全板块成分股 Top N 涨幅计算、公告窗�
 操作 Kimi 客户端，用已安装插件核对这组市场数据
 ```
 
-### 97. **tibo-reset-codex** - ChatGPT/Codex 额度重置速查
+### **tibo-reset-codex** - ChatGPT/Codex 额度重置速查
 
 > **安装**：`claude plugin install tibo-reset-codex@daymade-skills`
 
@@ -3460,7 +3459,7 @@ banked reset 到了吗
 Tibo 最新的重置公告换算成北京时间是几点
 ```
 
-### 98. **prior-work-retrieval** - 产出前检索并核实已有成功工作
+### **prior-work-retrieval** - 产出前检索并核实已有成功工作
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`
 >（仅作为套件成员发布，调用方式 `daymade-claude-code:prior-work-retrieval`）
@@ -3482,7 +3481,7 @@ Tibo 最新的重置公告换算成北京时间是几点
 先检查现有 Skill、SOP 和历史，不要重新造工作流
 ```
 
-### 99. **codex-1m-context-window-setup** - 为 Codex 设置模型感知的长上下文
+### **codex-1m-context-window-setup** - 为 Codex 设置模型感知的长上下文
 
 > **安装**：`claude plugin install daymade-codex@daymade-skills`
 >（仅作为套件成员发布，调用方式 `daymade-codex:codex-1m-context-window-setup`）
@@ -3507,7 +3506,7 @@ Tibo 最新的重置公告换算成北京时间是几点
 
 ---
 
-### 100. **interaction-design-board** - 实现前对比可运行交互方案
+### **interaction-design-board** - 实现前对比可运行交互方案
 
 > **安装**：`claude plugin install daymade-codex@daymade-skills`
 >（仅作为套件成员发布，调用方式 `daymade-codex:interaction-design-board`）

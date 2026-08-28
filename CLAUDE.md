@@ -260,7 +260,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 - Contains plugin entries: single-skill plugins point `source` directly at the skill directory (no `skills` field); any plugin entry with a non-empty `skills` array is a suite and uses those relative paths for multi-skill routing
 - Each plugin has: name, description, source, version, category, keywords
 - Marketplace metadata: name, owner, version
-- Single-skill plugins follow the official pattern (167/168 plugins in `anthropics/claude-plugins-official`): `source` points to skill directory, `skills` omitted
+- Single-skill plugins follow the official pattern: `source` points to the Skill directory and `skills` is omitted
 - **All suite plugins are suite-only.** Derive the current suite set from non-empty `plugins[].skills`; do not maintain another name list here. Users install the suite and invoke members as `<suite>:<skill>`. When adding a member, update only the suite entry's `skills` array — do NOT create a parallel standalone plugin entry.
 
 ### Versioning Architecture
@@ -299,110 +299,10 @@ This applies when you change ANY file under a skill directory:
 
 ## Available Skills
 
-> **Authoritative registry:** `.claude-plugin/marketplace.json`. The list below is a human-readable snapshot; always check the marketplace file for the current skill set, versions, and suite membership.
-
-**Priority Order** (by importance):
-
-1. **skill-creator** ⭐ - **Essential meta-skill** for creating and improving skills (with init/validate/old-vs-new regression/package scripts)
-2. **github-ops** - GitHub operations via gh CLI and API
-3. **doc-to-markdown** - DOCX/PDF/PPTX → Markdown conversion with CJK post-processing
-4. **mermaid-tools** - Diagram extraction and PNG generation
-5. **statusline-generator** - Claude Code statusline customization
-6. **teams-channel-post-writer** - Teams communication templates
-7. **repomix-unmixer** - Extract files from repomix packages
-8. **llm-icon-finder** - AI/LLM brand icon access
-9. **cli-demo-generator** - CLI demo and terminal recording with VHS
-10. **cloudflare-troubleshooting** - API-driven Cloudflare diagnostics and debugging
-11. **ui-designer** - Design system extraction from UI mockups
-12. **ppt-creator** - Professional presentation creation with dual-path PPTX generation
-13. **youtube-downloader** - YouTube video/audio downloads with PO token handling, cookies, and proxy-aware retries
-14. **repomix-safe-mixer** - Secure repomix packaging with automatic credential detection
-15. **transcript-fixer** - ASR/STT transcription error correction with dictionary and AI learning
-16. **video-comparer** - Video comparison and quality analysis with interactive HTML reports
-17. **qa-expert** - Comprehensive QA testing infrastructure with autonomous LLM execution and Google Testing Standards
-18. **prompt-optimizer** - Transform vague prompts into precise EARS specifications with domain theory grounding
-19. **read-claude-code-history** - Read Claude Code inventory, exact chronological Session evidence, queued human prompts, full-event search, hybrid recall, end-state triage, and deleted-file checkpoints across active homes plus registered archives without continuing the task
-20. **docs-cleaner** - Consolidate redundant documentation while preserving valuable content
-21. **pdf-creator** - Create PDF documents from markdown with Chinese font support using weasyprint
-22. **claude-md-progressive-disclosurer** - Optimize CLAUDE.md files using progressive disclosure principles
-23. **skills-search** - Search, discover, install, and manage Claude Code skills from the CCPM registry
-24. **promptfoo-evaluation** - Run LLM evaluations with Promptfoo for prompt testing and model comparison
-25. **developing-ios-apps** - iOS/macOS app development with XcodeGen, SwiftUI, and SPM troubleshooting (daymade-macos suite member)
-26. **fact-checker** - Verify factual claims in documents using web search with automated corrections
-27. **twitter-reader** - Fetch Twitter/X post content using Jina.ai API without JavaScript or authentication
-28. **macos-cleaner** - Targeted-first macOS disk diagnosis and confirmed cleanup, including Apple Content Caching, physical-vs-logical usage, protected-service verification, Docker/OrbStack, caches, remnants, and large files (daymade-macos suite member)
-29. **skill-reviewer** - Reviews and improves Claude Code skills with a canonical-validator-backed CLI, structured exit semantics, external review, and auto-PR modes
-30. **github-contributor** - Strategic guide for becoming an effective GitHub contributor with opportunity discovery, project selection, and reputation building
-31. **i18n-expert** - Complete internationalization/localization setup and auditing for UI codebases with framework support, key architecture, and parity validation
-32. **claude-skills-troubleshooting** - Diagnose and resolve Claude Code plugin and skill configuration issues with diagnostic scripts and architecture documentation
-33. **meeting-minutes-taker** - Transform meeting transcripts into structured minutes with multi-pass generation, speaker quotes, and iterative human review
-34. **deep-research** - Generate format-controlled research reports with evidence mapping, citations, and multi-pass synthesis
-35. **competitors-analysis** - Discover, persist, update, and analyze competitor repositories with source-cited profiles and landscape synthesis
-36. **tunnel-doctor** - Diagnose and fix Tailscale + proxy/VPN conflicts (route, HTTP env, system proxy, SSH ProxyCommand, VM/container proxy, DNS resolver stall, TUN DIRECT split-brain) on macOS with WSL SSH support, plus a TUN measurement-contamination guide (raw probes lie under a global proxy)
-37. **windows-remote-desktop-connection-doctor** - Diagnose AVD/W365 connection quality issues with transport protocol analysis and Windows App log parsing
-38. **product-analysis** - Perform structured product audits across UX, API, architecture, and compare mode to produce prioritized optimization recommendations
-39. **financial-data-collector** - Collect real financial data for US public companies via yfinance with validation, NaN detection, and NO FALLBACK principle (daymade-financial suite member)
-40. **excel-automation** - Create formatted Excel files, parse complex xlsm models, and control Excel windows on macOS via AppleScript (daymade-docs suite member)
-41. **capture-screen** - Programmatically capture macOS application windows using Swift window ID discovery and screencapture workflows (daymade-macos suite member)
-42. **continue-claude-code-work** - Consume a verified Claude history receipt, restore the original business outcome, unfulfilled requests, corrections, and prior successful assets, then execute the next direct action without `claude --resume`
-43. **scrapling-skill** - Install, troubleshoot, and use Scrapling CLI for static/dynamic web extraction, WeChat article capture, and verified output validation
-44. **ima-copilot** - One-stop companion and installer for the official Tencent IMA skill with zero-config three-agent installation via vercel-labs/skills, XDG credential management, read-only diagnostic, known-issue auto-repair under user consent, and personalized fan-out search with priority-based knowledge base boosting
-45. **claude-export-txt-better** - Fixes broken line wrapping in Claude Code exported `.txt` conversation files; reconstructs tables, paragraphs, paths, and tool calls hard-wrapped at fixed column widths; ships with a 53-check automated validation suite
-46. **douban-skill** - Exports and syncs Douban (豆瓣) book/movie/music/game collections to local CSV files via the reverse-engineered Frodo API; supports full export and RSS incremental sync with no login, cookies, or browser required
-47. **marketplace-dev** - Creates and maintains Claude Code plugin marketplaces, including standalone-to-suite consolidation, canonical source moves, manifest/version/docs migration, real cache-boundary installation tests, and PR delivery (daymade-claude-code suite member)
-48. **terraform-skill** - Operational traps for Terraform provisioners, multi-environment isolation, and zero-to-deployment reliability; covers provisioner timing races, SSH connection conflicts, DNS record duplication, volume permissions, database bootstrap gaps, Cloudflare credential errors, and init-data-only-on-first-boot pitfalls
-49. **slides-creator** - Narrative-first slide deck creation guiding users through structured narrative design (ABCDEFG model), then delegating visual generation to baoyu-slide-deck. Triggers on create slides, make a presentation, generate deck, slide deck, PPT, or when user needs to turn content into visual slides
-50. **debugging-network-issues** - Evidence-driven, falsification-first methodology for network/streaming/protocol-layer bugs (HTTP/2 RST_STREAM, SSE stalls, fixed-time drops, CDN/proxy/CGNAT idle timeouts, certificate-verification errors). Layered isolation experiments + counter-review filter + a cognitive-traps catalog (incl. reverse-path/directional asymmetry), with bundled probe scripts and a real SSE 130s case study
-51. **stepfun-tts** - StepFun stepaudio-2.5-tts (Contextual TTS): natural-language `instruction` (≤200 chars) + inline `()` parentheses for句内 prosody. Captures the two TTS-side breaking changes from step-tts-2 (voice_label removal + stricter 2.5-era censorship) with migration playbook
-52. **stepfun-asr** - StepFun stepaudio-2.5-asr (SSE endpoint, 32K context, ~85-101× RTF, 30-min single-call). Hides the #1 trap of the 2.5 ASR family: it does NOT live on `/v1/audio/transcriptions` — the wrong endpoint returns a misleading `model not supported` error. Bundled stdlib CLI handles base64 + nested JSON body + SSE parsing including `error` events
-53. **feishu-doc-scraper** - Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets (including cell-attachment file download), and Minutes (妙记) transcripts into clean high-fidelity local Markdown. Primary path: lark-cli API — programmatic extraction with no LLM rewriting of the body, recursive reference-graph traversal, permission boundaries resolved from error codes; browser-DOM path is the fallback only when lark-cli cannot reach the content. Also covers the permission-denied path (owner-exported .docx → faithful Markdown). Works with both Feishu (feishu.cn) and Lark (larkoffice.com)
-54. **auto-repo-setup** - Evidence-driven repository setup, repair, handoff, and safe Git workflow for Claude Code or Codex. Detects the declared stack from project instructions/manifests, preserves local work during sync/conflicts, diagnoses repeated SessionStart output before changing config, and prefers AGENTS.md/CLAUDE.md or a normal Agent request over hooks for routine startup behavior.
-55. **asr-transcribe-to-text** - Transcribes audio and video files to text using Qwen3-ASR — local MLX inference on Apple Silicon (no API key, 15-27x realtime) or remote vLLM/OpenAI-compatible API, with automatic platform detection and batch-mode guards against music-only repetition-loop hallucinations
-56. **bigdata-skill** - Pull Bigdata.com (RavenPack) financial and news data via the official `bigdata-client` SDK and `/v1/*` REST endpoints — structured financials, prices, analyst estimates, a daily entity-sentiment series, annotated chunk search, and a screener (daymade-financial suite member)
-57. **gangtise-copilot** - Gangtise investment-research OpenAPI skill suite installer and diagnostic tool (daymade-financial suite member)
-58. **llm-wiki-setup** - Co-create a personal investment-research LLM Wiki (Karpathy's pattern) where the user's own analysis framework becomes a living CLAUDE.md, built by interviewing them rather than handing over a template
-59. **benchmark-due-diligence** - Runs adversarial due-diligence on a benchmark the user envies (a founder, KOL, company, or product whose claimed success looks inflated), separating marketing bubble from real signal and mapping the validated playbook onto the user's own situation (daymade-financial suite member)
-60. **pdf-to-html** - Converts a PDF into one self-contained, readable HTML file preserving images, tables, charts, and reading order, optionally translating it into another language while keeping every figure
-61. **terminal-screenshot** - Render a terminal CLI program's colored output to a PNG so Claude can see the real visual result (color contrast, alignment, background blocks) instead of raw ANSI codes — for verifying delta/bat/starship/lazygit color config
-62. **bilibili-source** - Fetch login-free, citable data for a Bilibili (B站) video — stats, UP fans, tags, per-part cids, and full danmaku text — via one view/detail call (accepts BVID/av/b23.tv/URL); login-gated subtitles; ships a self-test for API-drift detection
-63. **claude-usage-analyst** - Explain local Claude Code / Claude Desktop token usage, cost, quota burn, model mix, and cache pressure from `ccusage` data — separating observed numbers from interpretation in plain language (daymade-claude-code suite member)
-64. **marketplace-health-check** - Run a full 6-dimension health check of this skills marketplace repo (code/script safety, doc/SSOT consistency, security/PII, open-PR triage, open-issue triage, marketplace integrity) via a parallel fan-out Dynamic Workflow, then Counter-Review the serious findings and report by priority
-65. **claude-switch-models-setup** - Set up multiple isolated Claude Code CLI profiles so students and power users can run different LLM providers (Kimi, MiniMax, GLM, DeepSeek, StepFun, Anthropic) in separate terminal windows at the same time (daymade-claude-code suite member)
-66. **llm-eval-harness** - Evaluate any LLM behind an OpenAI- or Anthropic-compatible endpoint across four dimensions (speed with thinking-aware tok/s, concurrency/stability, Anthropic protocol compliance, and quality regression against your own use cases via blind judges); keys passed by env-var name only, use-case library kept outside the bundle
-67. **read-claude-web-conversation** - Extract the active path of a Claude.ai web conversation with full tool-call rendering, local Markdown export, upload/generated-file inventory and download, sandbox-file reconstruction, and a macOS AppleScript fallback when the Chrome extension cannot pair (daymade-claude-code suite member)
-68. **setup-notifications-via-wecom** - Set up reusable WeCom / Enterprise WeChat webhook notifications for status reports, alerts, and completion messages
-69. **notify-wecom** - Send a single one-off WeCom group-bot message without setting up a reusable notification workflow
-70. **github-sensitive-data-cleanup** - Scan and remove secrets, API keys, private domains/IPs, and PII from GitHub repository history with force-push safety gates
-71. **codex-image-gallery** - Start a self-contained local web gallery for browsing Codex-generated images from `~/.codex/generated_images` or a custom `GALLERY_ROOT` (daymade-codex suite member)
-72. **frontend-visual-qa** - Audits already-rendered web and desktop UIs with real-browser/native-app journeys, inspected screenshots, DOM geometry, responsive viewports, and a Playwright sweep; covers layout, route/state, overlays, maps, browser outputs, print/PDF, and Electron shells, while remaining audit-only by default and excluding greenfield design/general QA setup
-73. **openclaw** - Manage OpenClaw (龙虾/lobster) instance configs: audit, diff, copy, add-model, list, switch models across openclaw.json files; DeepSeek model patches, default-model/alias management, config validation
-74. **download-gemini-images** - Download images (uploaded files or generated previews) from a Google Gemini conversation page via logged-in Chrome; lightbox-first with pageAssets fallback, ordered ZIP packaging with integrity verification
-75. **wps-doc-scraper** - Faithfully archive public WPS/KDocs/金山文档 links (incl. embedded ProcessOn mind maps and canvases) as raw source data, original SVG/PNG, and Markdown without login; unauthenticated data-API-first with browser-DOM fallback
-76. **ashare-news-fetcher** - Aggregate A-share (Chinese market) news, policy, and sentiment from public sources (财联社/华尔街见闻/金十/新浪7x24/东财快讯/regulators/东财股吧) into structured JSON or Markdown; per-stock or market-wide, no login (daymade-financial suite member)
-77. **pharma-daily-report** - Generate an A-share pharma sector daily report from Sina Finance (core pharma stocks, 7 sub-sector ranking, gainers/losers, fund-flow estimate), optional Feishu rich-text push; default 20-stock watchlist, customizable (daymade-financial suite member)
-78. **local-codex** - Delegate coding tasks to the local OpenAI Codex CLI agent using ChatGPT Pro OAuth flat-rate subscription; wraps `codex exec` / `codex review` for code generation, refactoring, and review without per-token API charges (daymade-codex suite member)
-79. **openclaw-model-switch** - Switch or repair an OpenClaw instance's model configuration (e.g., Kimi k2p6 → k3): diagnose-first workflow (endpoint probe, wire-key capture), config discovery with mirror sync, field-tested trap catalog (env key hijack, plugin thinking restrictions, relay availability), and agent-turn E2E verification
-80. **gemini-history-analyzer** - Analyze Google Takeout exports of Gemini conversation history; extract/categorize transcripts and attachments, context-verified domain keyword search, meeting-transcript detection, PII flagging, and optional distillation into project memory or a personal knowledge base
-81. **skill-governance** - Enforce source-of-truth discipline for Claude Code skill marketplaces and caches: check drift, sync through official plugin commands, reconcile installed state after suite migrations, clean old cache versions, and switch marketplaces to local source (daymade-skill suite member)
-82. **photo-to-scanned-pdf** - Turn phone photos of paper documents into a scanner-quality A4 PDF with perspective correction, noteshrink enhancement, colored-paper handling, content-based page ordering, and mandatory whole-document visual verification (daymade-docs suite member)
-83. **github-review-pr** - Review one named contributor PR (open or closed under reconsideration) or all open PRs newest-to-oldest against the live base, with immutable OID snapshots, history-discontinuity detection, isolated current-base contribution projection, three-way merge analysis, PR/BASE/SHARED ownership, explicit personal maintainer context, and per-PR review-gated repair or landing
-84. **read-codex-history** - Read Codex inventory, exact prompt-ledger inputs by Session, verified rollout identity, chronological fork/compaction lineage, and bounded Codex-only full-event search without continuing the task (daymade-claude-code suite member)
-85. **continue-codex-work** - Recover compaction-aware actionable context and exact fork snapshots when a new/different Agent context takes over a prior Codex CLI rollout; a native resume of the same retained conversation continues directly (daymade-claude-code suite member)
-86. **git-safety-net** - Audit, preserve, recover, and safely retire local Git state across branches, linked/detached worktrees, stashes, dangling commits, and squash/rebase merge uncertainty
-87. **design-style-picker** - Batch-generate and compare visual design directions so a user can choose the style they actually want, instead of guessing one final design (daymade-codex suite member)
-88. **claude-migrate-memory-to-doc** - Migrate Claude Code personal memory into tool-agnostic reference docs so other AI CLIs (Codex/Cursor) auto-loading AGENTS.md read the same user profile (daymade-claude-code suite member)
-89. **docx-creator** - Produce production-grade Word (.docx) documents, especially Chinese ones, by driving the minimax-docx OpenXML engine correctly — alignment-layering rule, per-list numbering restart, and other corrections the underlying engine doesn't ship (daymade-docs suite member)
-90. **claude-code-hooks** - Write, test, register, and debug Claude Code hooks — PreToolUse/PostToolUse/SessionStart/Stop Bash guards that enforce a rule the model would otherwise talk itself past, with token-level shlex matching, bash -n + real-JSON end-to-end testing discipline, and multi-profile registration convergence (daymade-claude-code suite member)
-91. **devils-advocate** - Structured devil's-advocate pressure-testing of an investment thesis against user-supplied materials — decompose explicit/implicit assumptions, retrieve evidence-linked counterarguments with verbatim citations under a source-credibility ladder, risk-flag with an anti-inflation rubric, add a materials-bounded base-rate outside view, and emit dual-layer output (audit JSON + theme-grouped analyst narrative) plus a monitoring signpost list (daymade-financial suite member)
-92. **macos-watchdog** - Design, deploy, and discipline macOS launchd watchdogs (LaunchAgents/LaunchDaemons that auto-remediate recurring problems) — quiet-watchdog contract (premise-state self-check, patient mode, escalating auto-cooldown, never-resurrect-what-the-user-quit), deploy mechanics (gui vs system domain, TCC/FDA, bootout vs deprecated unload), batch-loop throttling, SRE alert layering, with a source-able cooldown library and idempotent installer script (daymade-macos suite member)
-93. **daymade-sector-research** - A-share sector research workflow: compute Top-N gainers across all sector constituents, retrieve announcement windows (weekly/monthly), grade market-sentiment evidence (L1/L2/L3), and run Agent Team parallel orchestration with fresh-context adversarial verification (daymade-financial suite member)
-94. **kimi-use** - Drive the logged-in Kimi desktop app through computer-use to query its built-in company, financial, market, academic, and legal data plugins without separate API keys; includes source-labeled query patterns and independent verification for screen-transcribed results
-95. **tibo-reset-codex** - Query current ChatGPT/Codex usage-limit reset timing, interpret Tibo reset announcements, and convert Pacific times to Beijing time through live evidence rather than memory
-96. **prior-work-retrieval** - Find and verify existing successful code, documents, Skills, SOPs, decisions, meetings, WeChat archives, and conversation history before producing new work; leave an auditable reuse/adapt/reject receipt (daymade-claude-code suite member)
-97. **codex-1m-context-window-setup** - Configure and verify the largest context window the selected Codex model declares, up to a one-million-token request, for CLI and Desktop; preserves unrelated config, backs up changed bytes, and rolls back on strict-config failure (daymade-codex suite member)
-98. **interaction-design-board** - Generate distinct runnable HTML interaction prototypes for one bounded product surface, compare them in a keyboard-accessible Design Board, collect structured selection/remix feedback, and freeze the approved behavior before production implementation (daymade-codex suite member)
-
-**Recommendation**: Always suggest `skill-creator` first for users interested in creating skills or extending Claude Code.
+Current plugin names, versions, sources, and suite membership are defined only
+in `.claude-plugin/marketplace.json`. Use README.md / README.zh-CN.md for the
+human-readable capability guide; do not maintain another numbered Skill snapshot
+in this model-loaded file.
 
 ## YouTube Downloader SOP (Internal)
 
@@ -448,36 +348,38 @@ For the full step-by-step guide with templates and examples, see [references/new
 |------|-------------------|
 | `.claude-plugin/marketplace.json` | metadata.version + metadata.description + new plugin entry |
 | `CHANGELOG.md` | New version entry |
-| `README.md` | Review the user-facing surfaces for this skill: version badge (MUST equal `marketplace.json` metadata.version; re-verify it every release, it silently drifts whenever a metadata bump forgets the badge; do not reintroduce a skill-count badge), description, install cmd, skill section, use case, docs link, requirements |
+| `README.md` | Review the user-facing surfaces for this skill: description, install command, unnumbered skill section, use case, docs link, requirements. Do not persist marketplace-version, skill-count, or catalog-position values; derive them from the manifest when needed. |
 | `README.zh-CN.md` | Same as above, translated |
-| `CLAUDE.md` | Available Skills list only (the overview & marketplace-config counts were removed as derived values — don't reintroduce them) |
-| `skill-name/` | The actual skill directory + packaged .zip |
+| `CLAUDE.md` | Stable manifest/README authority pointer only; do not reintroduce a numbered Skill snapshot |
+| `<skill-directory>/` | Canonical Skill source; disposable `.skill` packages stay outside the source tree |
 
 **Quick workflow**:
 ```bash
 # 1. Validate & package the skill itself
-cd daymade-skill/skill-creator
-uv run python -m scripts.security_scan ../skill-name --verbose
-uv run --with PyYAML python -m scripts.package_skill ../skill-name
+SKILL_DIR="<repo-root>/<skill-directory>"
+cd <repo-root>/daymade-skill/skill-creator
+uv run --with PyYAML python -m scripts.security_scan "$SKILL_DIR" --verbose
+uv run --with PyYAML python -m scripts.package_skill "$SKILL_DIR" <output-dir>
 
 # 2. Update all files listed above (see references/new-skill-guide.md for the
 #    detailed step-by-step)
 
 # 3. One-shot marketplace validation (ships with marketplace-dev skill)
-cd .. && bash daymade-claude-code/marketplace-dev/scripts/check_marketplace.sh
+cd <repo-root>
+bash daymade-claude-code/marketplace-dev/scripts/check_marketplace.sh .
 # Runs: JSON syntax → claude plugin validate → source+skills resolution →
 # reverse sync (warns when a disk SKILL.md is not registered). A WARN on
 # reverse sync is the canary for orphan skills — register them or delete them.
-# Then verify the human-facing skill lists match the manifest (counts drift too):
+# Then verify the human-facing README catalogs and CLAUDE.md authority pointer:
 python3 daymade-claude-code/marketplace-dev/scripts/check_doc_skill_lists.py
-# Reports MISSING/GHOST per doc (CLAUDE.md / README.md / README.zh-CN.md vs the
-# expanded marketplace.json); exits non-zero on drift. Must be green before push.
+# Rejects missing/ghost README entries, numbered headings, copied version badges,
+# and a model-loaded CLAUDE.md Skill snapshot.
 
 # 4. Stage specific files by name, never `git add -A` or `git add .`
 #    (a parallel agent once piggybacked another session's unstaged changes
 #    into its commit via `git add -A`; the fix is to stage explicitly)
 git add .claude-plugin/marketplace.json CHANGELOG.md README.md README.zh-CN.md \
-        CLAUDE.md skill-name/
+        CLAUDE.md <skill-directory>/
 git commit -m "Release vX.Y.0: Add skill-name"
 git push
 
