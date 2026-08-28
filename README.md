@@ -170,6 +170,7 @@ This suite exposes related skills under one namespace, including:
 /daymade-docs:ppt-creator
 /daymade-docs:docs-cleaner
 /daymade-docs:excel-automation
+/daymade-docs:read-docx-review
 ```
 
 These skills ship as a bundle — there are no separate single-skill plugins. All documentation skills live under `daymade-docs/` and install together from the suite.
