@@ -183,6 +183,8 @@ def main() -> int:
               not should_exclude(Path("skill/evals/evals.json"), include_evals=True))
         check("tests/ never ships", should_exclude(Path("skill/tests/test_runtime.py")))
         check(".enrich/ never ships", should_exclude(Path("skill/.enrich/run/manifest.json")))
+        check(".in_use/ never ships", should_exclude(Path("skill/.in_use/12345")))
+        check(".ruff_cache/ never ships", should_exclude(Path("skill/.ruff_cache/CACHEDIR.TAG")))
         check("__pycache__ always excluded even with opt-in",
               should_exclude(Path("skill/scripts/__pycache__/m.pyc"), include_evals=True))
         check("scan marker never ships", should_exclude(Path("skill/.security-scan-passed")))
