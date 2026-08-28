@@ -9,6 +9,7 @@ import html
 import json
 import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +23,7 @@ RESOURCE_PATTERNS = (
     re.compile(r"url\(\s*(['\"]?)(.*?)\1\s*\)", re.I | re.S),
 )
 ALLOWED_RESOURCE_PREFIXES = ("data:", "blob:", "about:")
-STYLE_BLOCK_PATTERN = re.compile(r"<style\b[^>]*>(.*?)</style>", re.I | re.S)
+RAW_TEXT_CONTAINERS = {"iframe", "noembed", "noframes", "plaintext", "script", "textarea", "xmp"}
 
 
 class ContractError(ValueError):
@@ -61,43 +62,122 @@ def resolve_variant(root: Path, relative: Any, field: str) -> Path:
     return candidate
 
 
-def css_code_only(source: str) -> str:
-    """Remove CSS comments and string contents before checking at-rule tokens."""
-    output: list[str] = []
+class StyleBlockExtractor(HTMLParser):
+    """Collect real style blocks while ignoring comments and raw-text containers."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self.blocks: list[str] = []
+        self._current: list[str] | None = None
+        self._suppressed: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.casefold()
+        if self._suppressed:
+            return
+        if tag == "style":
+            self._current = []
+            return
+        if tag in RAW_TEXT_CONTAINERS:
+            self._suppressed.append(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.casefold()
+        if self._suppressed:
+            if tag == self._suppressed[-1]:
+                self._suppressed.pop()
+            return
+        if tag == "style" and self._current is not None:
+            self.blocks.append("".join(self._current))
+            self._current = None
+
+    def handle_data(self, data: str) -> None:
+        if self._current is not None and not self._suppressed:
+            self._current.append(data)
+
+    def finish(self) -> list[str]:
+        self.close()
+        if self._current is not None:
+            self.blocks.append("".join(self._current))
+            self._current = None
+        return self.blocks
+
+
+def extract_style_blocks(source: str, field: str) -> list[str]:
+    parser = StyleBlockExtractor()
+    try:
+        parser.feed(source)
+        return parser.finish()
+    except Exception as exc:  # HTMLParser can raise on malformed declarations.
+        raise ContractError(f"{field} cannot be parsed as HTML: {exc}") from exc
+
+
+def consume_css_escape(source: str, index: int) -> tuple[str, int]:
+    """Decode one CSS escape beginning at a backslash."""
+    index += 1
+    if index >= len(source):
+        return "", index
+    if source[index] in "\n\r\f":
+        return "", index + 1
+    if source[index] in "0123456789abcdefABCDEF":
+        end = index
+        while end < len(source) and end - index < 6 and source[end] in "0123456789abcdefABCDEF":
+            end += 1
+        value = int(source[index:end], 16)
+        if end < len(source) and source[end].isspace():
+            end += 1
+        if value == 0 or value > 0x10FFFF or 0xD800 <= value <= 0xDFFF:
+            return "\uFFFD", end
+        return chr(value), end
+    return source[index], index + 1
+
+
+def consume_css_identifier(source: str, index: int) -> tuple[str, int]:
+    value: list[str] = []
+    while index < len(source):
+        current = source[index]
+        if current == "\\":
+            decoded, index = consume_css_escape(source, index)
+            value.append(decoded)
+            continue
+        if current.isalnum() or current in "-_" or ord(current) >= 128:
+            value.append(current)
+            index += 1
+            continue
+        break
+    return "".join(value), index
+
+
+def css_contains_import(source: str) -> bool:
+    """Recognize CSS @import at-keywords outside comments and strings."""
     index = 0
-    quote: str | None = None
-    in_comment = False
     while index < len(source):
         current = source[index]
         following = source[index + 1] if index + 1 < len(source) else ""
-        if in_comment:
-            if current == "*" and following == "/":
-                in_comment = False
-                index += 2
-            else:
-                index += 1
-            continue
-        if quote:
-            if current == "\\":
-                index += 2
-                continue
-            if current == quote:
-                quote = None
-                output.append(current)
-            index += 1
-            continue
         if current == "/" and following == "*":
-            in_comment = True
-            index += 2
+            closing = source.find("*/", index + 2)
+            index = len(source) if closing == -1 else closing + 2
             continue
         if current in ("'", '"'):
             quote = current
-            output.append(current)
             index += 1
+            while index < len(source):
+                if source[index] == "\\":
+                    _, index = consume_css_escape(source, index)
+                    continue
+                if source[index] == quote:
+                    index += 1
+                    break
+                index += 1
             continue
-        output.append(current)
+        if current == "@":
+            keyword, end = consume_css_identifier(source, index + 1)
+            if keyword.casefold() == "import":
+                return True
+            index = max(end, index + 1)
+            continue
         index += 1
-    return "".join(output)
+    return False
 
 
 def validate_self_contained(source: str, field: str) -> None:
@@ -107,8 +187,8 @@ def validate_self_contained(source: str, field: str) -> None:
         raise ContractError(f"{field} must contain a title")
     if re.search(r"<base\b", source, re.I):
         raise ContractError(f"{field} must not change its base URL")
-    for style_block in STYLE_BLOCK_PATTERN.finditer(source):
-        if re.search(r"@import\b", css_code_only(style_block.group(1)), re.I):
+    for style_block in extract_style_blocks(source, field):
+        if css_contains_import(style_block):
             raise ContractError(f"{field} contains CSS @import; inline the imported stylesheet")
     for pattern in RESOURCE_PATTERNS:
         for match in pattern.finditer(source):

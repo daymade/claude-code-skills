@@ -120,12 +120,35 @@ class BuildBoardTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertIn("contains CSS @import", result.stderr)
 
+    def test_rejects_css_import_with_escaped_keyword(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = self.make_case(root)
+            (root / "a.html").write_text(
+                r'<!doctype html><html><head><title>A</title><style>@\69mport"data:text/css,.x%7Bcolor:red%7D";</style></head></html>',
+                encoding="utf-8",
+            )
+            result = self.run_builder(manifest, root / "out.html")
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("contains CSS @import", result.stderr)
+
     def test_allows_import_text_in_css_string_or_comment(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             manifest = self.make_case(root)
             (root / "a.html").write_text(
                 '<!doctype html><html><head><title>A</title><style>/* @import "old.css"; */ .note::before{content:"@import"}</style></head></html>',
+                encoding="utf-8",
+            )
+            result = self.run_builder(manifest, root / "out.html")
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_allows_style_markup_inside_html_comment_or_textarea(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = self.make_case(root)
+            (root / "a.html").write_text(
+                '<!doctype html><html><head><title>A</title></head><body><!-- <style>@import "comment.css";</style> --><textarea><style>@import "visible-text.css";</style></textarea></body></html>',
                 encoding="utf-8",
             )
             result = self.run_builder(manifest, root / "out.html")
