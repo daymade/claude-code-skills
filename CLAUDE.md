@@ -61,7 +61,7 @@ claude plugin install daymade-skill@daymade-skills
 
 Behavior evaluation is risk-scaled by `daymade-skill:skill-creator`: bounded fixes use targeted deterministic checks and narrow instruction changes use at most one or two sampled replays. Tier 3 classifies broad/high-risk work but does not authorize paired baselines, agent fan-out, grading, benchmarking, or a viewer; an explicit user request or a decision-bearing plan plus opt-in passes the separate evidence-budget gate without changing the risk tier. A request to "optimize" an existing skill and a long preceding conversation do not by themselves trigger Tier 3 or conversation-mining. Before editing, classify each delta: only behavior-equivalent relocation/deduplication is compression; retirement, scope narrowing, workflow/safety redesign, and bug fixes are separate changes. Existing-skill regression, one bounded fresh-context review with a declared stopping rule, and packaging gates remain separate.
 
-Treat `daymade-skill/skill-creator/scripts/packaging_policy.py` as the shipping-policy SSOT. Runtime/development state such as `.in_use/` and tool caches must be excluded there so packaging, security attestation, and regression audit cannot drift into separate file sets.
+Treat `daymade-skill/skill-creator/scripts/packaging_policy.py` as the shipping-policy SSOT. Add or remove shipping exclusions only there, require every consumer to import it, and do not copy its directory list into documentation or consumer-specific filters.
 
 ```bash
 # Quick validation of a skill
