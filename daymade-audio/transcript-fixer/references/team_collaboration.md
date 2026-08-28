@@ -107,14 +107,14 @@ mkdir ~/transcript-corrections && cd ~/transcript-corrections
 mv ~/path/to/team_corrections.json .
 git init && git add team_corrections.json
 git commit -m "Initial correction export"
-git remote add origin git@github.com:org/transcript-corrections.git
+git remote add origin https://github.com/org/transcript-corrections.git
 git push -u origin main
 ```
 
 ### Team Members Clone + Import
 
 ```bash
-git clone git@github.com:org/transcript-corrections.git ~/transcript-corrections
+git clone https://github.com/org/transcript-corrections.git ~/transcript-corrections
 uv run scripts/fix_transcription.py --import ~/transcript-corrections/team_corrections.json --merge
 # --merge combines with each person's existing local corrections;
 # --import without --merge overwrites (dangerous).
@@ -296,10 +296,10 @@ nano team_corrections.json
 git remote -v
 
 # Re-add if needed
-git remote set-url origin git@github.com:org/corrections.git
+git remote set-url origin https://github.com/org/corrections.git
 
-# Verify SSH keys
-ssh -T git@github.com
+# Verify the configured remote is reachable
+git ls-remote origin
 ```
 
 ### Merge Conflicts Too Complex

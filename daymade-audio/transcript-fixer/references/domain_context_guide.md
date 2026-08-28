@@ -60,6 +60,20 @@ For each trap:
   **`CC 思维链` → 目标术语**. The spaces are part of the literal scan target;
   replace the synthetic target with the domain's intended term.
 - Order by frequency; prune entries that stop recurring.
+- **Machine-readable vetoes (Stage 1 reads these):** add the literal marker
+  `禁裸词` or `禁入词典` to a trap's annotation (**妙计 → 妙记（…，禁裸词）**)
+  and any *dictionary rule with the same FROM* defers to review at Stage 1
+  instead of auto-applying — use it the moment a real-word pair proves
+  context-dependent, so the rule can stay in the dictionary (right in some
+  contexts) without firing blindly everywhere. A confirmed-correct record
+  (**X = 真实实体，勿修**) demotes rules whose FROM is X. Demotion beats
+  `--apply-domain` trust; `--apply-all` still applies by explicit override.
+  Two authoring constraints, both from the matcher being a per-bullet-line
+  literal substring check: write the marker on the trap's own line (a marker
+  on an indented continuation line is silently missed), and never *discuss*
+  the marker word in a trap line's prose (「评审后决定不标禁裸词」 still
+  triggers the demotion it negates) — debate the marking decision anywhere
+  else in the file, just not on a trap bullet line.
 
 ## Authoritative name sources (pointers, not copies)
 This is a **manifest to be read in full**, not a single hint. A project's people
