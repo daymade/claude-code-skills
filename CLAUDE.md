@@ -162,6 +162,12 @@ git commit -m "message"
 git push
 ```
 
+For recovery or repository convergence under concurrent work, treat
+`git-safety-net/SKILL.md` as the canonical authorization and evidence router. It owns the
+change-authorized / inspect-only / excluded partition and the scoped-vs-exhaustive audit boundary;
+do not copy its detailed commands here or treat a visible collaborator ref/worktree as a cleanup
+target merely because it appears in the inventory.
+
 **Closing a PR unmerged (declined, or superseded by another PR) → delete its head
 branch in the same action.** `gh pr merge --delete-branch` only covers merged PRs.
 ⚠️ Deleting the branch does NOT remove `refs/pull/<N>/head` — GitHub keeps serving
