@@ -220,21 +220,34 @@ keep every unique behavior, preserve current WIP, and leave exactly one maintain
 list is a moving snapshot while other sessions are alive, so the start-of-task audit cannot double
 as the deletion gate.
 
-The executing agent owns this sequence. `--verify-current` mechanically decides only whether exact
-ref tips stayed unchanged; unique-behavior and supersession judgments still require the content
-evidence below and have no automatic enforcement.
+The executing agent owns only the explicitly authorized slice of this sequence, not every object
+the inventory reveals. `--verify-current` mechanically decides only whether exact ref tips stayed
+unchanged; it grants no ownership. Unique-behavior and supersession judgments still require the
+content evidence below and have no automatic enforcement.
 
 ### 1. Freeze the outcome and the first ref snapshot
+
+Before interpreting the inventory, partition objects into three sets:
+
+- **change-authorized:** exact checkout/ref/PR targets this task may mutate;
+- **inspect-only:** objects the evidence question genuinely requires reading but not changing;
+- **excluded collaborator resources:** active or user-excluded worktrees/refs/PRs that this task
+  may acknowledge by identity but must not inspect internally, back up, publish, merge, unlock,
+  remove, or count as its own unfinished cleanup.
+
+Generic phrases such as "take over", "continue", or "finish this" do not move an object between
+sets. The user must name the additional object or otherwise make the expansion unambiguous.
 
 Record the exact local and remote-tracking refs, then query the hosting service for its current
 branch list and PR heads. Keep the two inventories separate: remote-tracking refs are a Git cache;
 the hosting API is authority for branches that exist on the server. Record every exact tip SHA.
 
-Classify each non-main ref by content. Use the trial-merge verdict first. For NEEDS REVIEW refs,
-walk the supersession ladder above and open distinctive code/tests at authority. `git cherry` may
-surface candidates, but every `+` after a squash merge is still only a hypothesis. Merge or adapt
-the smallest unique behavior; never merge an old whole branch merely because it has many `+`
-commits or a compelling name.
+Classify each change-authorized non-main ref by content. Use the trial-merge verdict first. For
+NEEDS REVIEW refs, walk the supersession ladder above and open distinctive code/tests at authority.
+`git cherry` may surface candidates, but every `+` after a squash merge is still only a hypothesis.
+Merge or adapt the smallest unique behavior; never merge an old whole branch merely because it has
+many `+` commits or a compelling name. Report inspect-only and excluded refs separately without
+turning their existence into an action item.
 
 ### 2. Build keeper commits without touching a shared writer
 
@@ -255,13 +268,31 @@ GitHub-side duplicate/superseded PR handling belongs to the `github-ops` skill.
 
 ### 3. Preserve refs and dirty WIP through different channels
 
-Create a repository-external bundle containing every branch/ref whose deletion is authorized, then
-verify it. The bundle is the ref manifest: immediately before deletion run:
+Create a repository-external bundle containing only the branches/refs whose deletion is authorized,
+then verify it. The bundle is the ref manifest: immediately before deletion run:
 
 ```bash
-scripts/git_export_before_drop.sh --all-refs --out <external-backup-dir>
-scripts/git_export_before_drop.sh --verify-current <external-backup-dir>/all-refs.bundle
+scripts/git_export_before_drop.sh \
+  --branch <authorized-ref-1> --branch <authorized-ref-2> \
+  --out <external-backup-dir>
+scripts/git_export_before_drop.sh --verify-current <external-backup-dir>/branches.bundle
 ```
+
+For an authorized linked worktree on a branch, export that branch. For an authorized detached HEAD,
+create one collision-checked recovery ref pointing at the recorded HEAD, then export that ref:
+
+```bash
+git update-ref refs/recovery/<worktree-id> <recorded-head> 0000000000000000000000000000000000000000
+scripts/git_export_before_drop.sh \
+  --branch refs/recovery/<worktree-id> --out <external-backup-dir>
+```
+
+This pin is part of preserving the named retirement target; it does not authorize pinning other
+danglers. Use `--all-refs` only for an explicitly authorized full-ref-topology operation. The
+repository-wide loss audit is valid only when every worktree/ref/tag/stash/dangler it enumerates is
+inside evidence scope, and the all-refs export only when every ref it captures is change-authorized.
+Otherwise use the authorized checkout/ref's own status/HEAD/upstream checks plus targeted exports,
+and make only a scoped-cleanup claim.
 
 Bundles cannot preserve untracked bytes. Freeze an explicit dirty-path manifest, save tracked
 changes as a binary diff, copy or tar the exact dirty/untracked paths outside the repository, then
@@ -281,9 +312,11 @@ set after materializing the new base.
 ### 4. Re-freeze immediately before deletion
 
 Fetch again, re-query hosting branches/PRs, and re-enumerate local refs. Compare the result with the
-bundle heads. A new branch, a changed tip, or a late PR is new evidence: stop, classify its unique
-behavior, and rebuild the bundle. This is not an optional "final check"; it is the only check that
-covers work created after the first audit.
+bundle heads. A new branch, changed tip, or late PR inside the change-authorized set is new evidence:
+stop, classify its unique behavior, and rebuild the bundle. A newly discovered collaborator object
+does not silently join that set; record it as inspect-only or excluded and rebuild only if the next
+authorized destructive action could reach it. This is not an optional "final check"; it is the only
+check that covers work created after the first audit.
 
 Delete only refs whose current SHA still equals the verified snapshot. For remote branch deletion,
 query the exact hosted ref one last time; then delete it through the normal push/API route and prune
@@ -291,17 +324,28 @@ stale local remote-tracking refs.
 
 ### 5. Prove the user-visible terminal state
 
-The task is complete only when all are independently true:
+If every local/hosted branch, associated PR head, and linked worktree path in the convergence set is
+explicitly change-authorized, the task is complete only when all are independently true:
 
 - the hosting service lists only the intended maintained branch;
 - local `refs/heads/` contains only `main`, and `HEAD`, local `main`, and the refreshed
   `origin/main` resolve to the intended commit;
+- `git worktree list --porcelain` registers only the primary worktree, and every authorized linked
+  worktree path is absent;
 - the index has no staged residue from the convergence;
 - every pre-existing WIP path still byte-matches its frozen source/backup, even if Git now reports
   a different tracked/untracked classification;
 - the recovery bundle still verifies and lists the retired exact tips.
 
-Counts and checksums support those claims; they do not replace them.
+Tags, stashes, and dangling commits do not block a branch/worktree convergence claim unless the
+Outcome contract separately names them as retirement targets; preserve or report them under their
+own scope.
+
+When collaborator resources are inspect-only or excluded, do not claim repository-wide one-main
+convergence. Report **scoped completion** instead: the authorized refs/PRs are merged or retired,
+the maintained main identities agree, and every excluded branch/worktree/PR is listed as untouched.
+Those exclusions are not blockers and must not be deleted to make a count reach one. Counts and
+checksums support these claims; they do not replace them.
 
 ## Worktree retirement — prove the checkout is disposable before removal
 
@@ -310,7 +354,10 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
 `--branches` checks. Retire one only after this sequence:
 
 1. **Inventory and identify the primary checkout:** run `git worktree list --porcelain`. Keep the
-   first/primary checkout; select only the exact linked path the user intends to retire.
+   first/primary checkout; select only the exact linked path the user intends to retire. A Git
+   worktree lock prevents pruning, moving, and deletion; it is not an ownership lease or deletion
+   authority. If its reason says the worktree is active, or the user assigns it to another worker,
+   stop before inspecting its contents and do not unlock it as a workaround.
 2. **Inspect tracked and untracked state in the linked checkout itself:** run
    `git -C <worktree-path> status --porcelain=v1 --untracked-files=all`. The output must be
    empty. Do not substitute the primary checkout's status.
@@ -327,15 +374,17 @@ the worktree itself has no uncommitted files, and a detached worktree HEAD is ab
    and require equality. Use `git check-ignore -v <path>` when the ignore rule itself is unclear.
 4. **Record the exact identity:** copy `git -C <worktree-path> rev-parse HEAD` and
    `git -C <worktree-path> branch --show-current`. An empty branch means detached HEAD, not "no
-   work". Confirm the recorded HEAD appears in the all-worktree loss audit.
+   work". Confirm the recorded HEAD resolves as a commit; when a branch is present, require that
+   branch to resolve to the same SHA. The targeted bundle in step 6 preserves this exact identity.
 5. **Prove containment against a fresh base:** fetch the maintained repository, then run
    `scripts/git_verify_branch_merged.sh <recorded-head> <base>`. An
    ancestor/content-contained verdict proves the committed state is on the base; NEEDS REVIEW
    requires manual supersession triage or preserving the commit under a branch/ref.
-6. **Back up before deletion:** pin dangling commits, then run
-   `scripts/git_export_before_drop.sh --all-refs --out <backup-dir>` and verify the bundle. `--all`
-   includes linked-worktree HEAD refs; truly dangling objects appear only after pinning. Keep any
-   ignored-file copies from step 3 beside this backup—the bundle does not contain them.
+6. **Back up before deletion:** export the worktree's named branch with `--branch`. For a detached
+   HEAD, create one collision-checked `refs/recovery/<worktree-id>` ref at the recorded HEAD and
+   export that ref. Verify the targeted bundle; do not pin unrelated danglers or use `--all-refs`
+   unless the Outcome contract separately authorizes every captured ref. Keep any ignored-file
+   copies from step 3 beside this backup—the bundle does not contain them.
 7. **Obtain current-session deletion authority, then remove through Git without force:** run
    the tracked/untracked status check again. Then re-run the exact ignored-inventory command from
    step 3, expand directories the same way, and rebuild the ignored manifest. Its path set, entry

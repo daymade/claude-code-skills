@@ -27,11 +27,16 @@ one thing that permanently loses work is `gc` running while nothing references i
 ## The authoritative "is anything at risk" check
 
 Before anything else, answer the only question that matters — *is any committed or uncommitted
-state present only locally?* Check **every** place local work hides, including linked worktrees:
+state present only locally?* When every worktree/ref/tag/stash/dangler enumerated by the full audit
+is inside the declared evidence scope, check every place local work hides:
 
 ```bash
 scripts/git_loss_audit.sh
 ```
+
+If any enumerated surface is excluded, the script is out of scope because it has no exclusion flag.
+Use the authorized checkout/ref's own `status`, `HEAD`, `git log HEAD --not --remotes`, and exact
+remote-ref lookup instead, and state that other worktrees/refs/tags/stashes/danglers were not audited.
 
 - **A completely empty verdict = no reported local state is stranded off-remote.** That means no
   local-only commits, dirty/unavailable worktrees, stashes, or dangling commits.
@@ -53,15 +58,17 @@ git branch -r --contains <sha>       # lists remote branches that contain it (em
 
 ## Linked worktrees and detached worktree HEADs
 
-Treat each path from `git worktree list --porcelain` as a separate working tree. Run status with
-`git -C <path>` against that exact path. A detached linked worktree can carry a unique commit even
-when every named branch is on a remote; `git_loss_audit.sh` includes those HEADs explicitly.
+Treat each authorized path from `git worktree list --porcelain` as a separate working tree. Run
+status with `git -C <path>` only against paths inside the evidence scope. A detached linked worktree
+can carry a unique commit even when every named branch is on a remote; the full loss audit includes
+those HEADs explicitly, so do not run it when another linked path is excluded.
 
 Before removal, require empty tracked/untracked status **and a separate ignored-file inventory**,
-exact HEAD capture, content containment proof against a fresh base, a verified all-refs bundle,
-and current-session deletion authority. Only then use non-forced `git worktree remove`, followed
-by path/registration/ref postcondition checks. The bundle preserves Git objects, not ignored files;
-copy any ignored item that is not proven reproducible and verify it against a recorded pre-removal
+exact HEAD capture, content containment proof against a fresh base, a verified targeted bundle of
+the worktree's branch or collision-checked recovery ref, and current-session deletion authority.
+Only then use non-forced `git worktree remove`, followed by path/registration/ref postcondition
+checks. The bundle preserves Git objects, not ignored files; copy any ignored item that is not
+proven reproducible and verify it against a recorded pre-removal
 content hash. Freeze the complete ignored path/type/hash-or-link-target manifest, including
 disposable entries. After authority, repeat both status checks and rebuild that manifest; any
 added, missing, or changed entry aborts, and the removal command must come next. Recheck every
@@ -156,23 +163,22 @@ git fsck --dangling                  # dangling commits/blobs/trees not reachabl
 Inspect candidates with `git show <sha>`. Dangling *blobs* can be a single lost file:
 `git show <blob-sha> > recovered_file`.
 
-## Preserve: pin danglers so gc can never take them
+## Preserve: pin authorized danglers so gc can never take them
 
-Dangling commits are recoverable **only until gc runs**. To make them permanently safe without
-cluttering `git branch`, pin each under a hidden ref namespace — a referenced object is never
-collected:
+Dangling commits are recoverable **only until gc runs**. For a specific inspected commit that is
+inside the preservation scope, pin exactly that SHA under a hidden ref namespace—a referenced
+object is never collected:
 
 ```bash
-git fsck --dangling 2>/dev/null | awk '/dangling commit/ {print $3}' | while read sha; do
-  git update-ref "refs/dangling-backup/$sha" "$sha"
-done
-git for-each-ref refs/dangling-backup/   # confirm what's pinned
+git update-ref refs/dangling-backup/<sha> <sha> 0000000000000000000000000000000000000000
+git show refs/dangling-backup/<sha>       # confirm the exact object that was pinned
 ```
 
-`scripts/git_preserve_danglers.sh` does exactly this (and optional patch export). Why a hidden
+Use `scripts/git_preserve_danglers.sh` only when the Outcome contract explicitly includes every
+dangling commit it will enumerate; it is a whole-set helper, not the default. Why a hidden
 `refs/dangling-backup/*` and not `git stash store`? These refs don't appear in `git branch` or
-`git stash list`, so they protect the objects without turning your branch/stash lists into noise,
-and you can bulk-delete them once you've verified the content is safe elsewhere.
+`git stash list`, so they protect the authorized objects without turning branch/stash lists into
+noise, and you can delete them once their content is verified safe elsewhere.
 
 ## Triple-backup a critical commit
 

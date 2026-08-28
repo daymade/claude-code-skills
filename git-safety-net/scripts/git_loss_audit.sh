@@ -17,6 +17,8 @@
 #
 # Usage (run from anywhere inside the repo):
 #   git_loss_audit.sh [remote]        # remote defaults to "origin"
+# Caller boundary: this script has no exclusions and inspects every linked worktree, local
+# branch/tag, stash, and dangling commit. Run it only when that whole evidence surface is in scope.
 #
 # Exit code: 0 if nothing is at surprising risk, 1 if LOCAL-ONLY commits or dirty/inaccessible
 # worktrees exist, 2 if not run inside a Git repository. Stashes and dangling commits are reported
