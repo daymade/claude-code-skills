@@ -6,7 +6,6 @@
 [![简体中文](https://img.shields.io/badge/语言-简体中文-red)](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.2.0-green.svg)](https://github.com/daymade/claude-code-skills)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.0.13+-purple.svg)](https://claude.com/code)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/daymade/claude-code-skills/graphs/commit-activity)
@@ -363,7 +362,7 @@ For full documentation in Chinese, see [README.zh-CN.md](./README.zh-CN.md).
 
 ## 📦 Other Available Skills
 
-### 1. **github-ops** - GitHub Operations Suite
+### **github-ops** - GitHub Operations Suite
 
 Comprehensive GitHub operations using gh CLI and GitHub API.
 
@@ -387,7 +386,7 @@ Comprehensive GitHub operations using gh CLI and GitHub API.
 
 ---
 
-### 2. **doc-to-markdown** - Document Conversion Suite
+### **doc-to-markdown** - Document Conversion Suite
 
 > **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:doc-to-markdown`)
 
@@ -412,7 +411,7 @@ Converts documents to markdown with Windows/WSL path handling and PDF image extr
 
 ---
 
-### 3. **mermaid-tools** - Diagram Generation
+### **mermaid-tools** - Diagram Generation
 
 > **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:mermaid-tools`)
 
@@ -437,7 +436,7 @@ Extracts Mermaid diagrams from markdown and generates high-quality PNG images.
 
 ---
 
-### 4. **statusline-generator** - Statusline Customization
+### **statusline-generator** - Statusline Customization
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:statusline-generator`)
 
@@ -463,7 +462,7 @@ Configures Claude Code statuslines with multi-line layouts and cost tracking.
 
 ---
 
-### 5. **teams-channel-post-writer** - Teams Communication
+### **teams-channel-post-writer** - Teams Communication
 
 Creates educational Teams channel posts for internal knowledge sharing.
 
@@ -487,7 +486,7 @@ Creates educational Teams channel posts for internal knowledge sharing.
 
 ---
 
-### 6. **repomix-unmixer** - Repository Extraction
+### **repomix-unmixer** - Repository Extraction
 
 Extracts files from repomix-packed repositories and restores directory structures.
 
@@ -511,7 +510,7 @@ Extracts files from repomix-packed repositories and restores directory structure
 
 ---
 
-### 7. **llm-icon-finder** - AI/LLM Brand Icon Finder
+### **llm-icon-finder** - AI/LLM Brand Icon Finder
 
 Access 100+ AI model and LLM provider brand icons from lobe-icons library.
 
@@ -535,7 +534,7 @@ Access 100+ AI model and LLM provider brand icons from lobe-icons library.
 
 ---
 
-### 8. **cli-demo-generator** - CLI Demo Generation
+### **cli-demo-generator** - CLI Demo Generation
 
 Generate professional animated CLI demos and terminal recordings with VHS automation.
 
@@ -560,7 +559,7 @@ Generate professional animated CLI demos and terminal recordings with VHS automa
 
 ---
 
-### 9. **cloudflare-troubleshooting** - Cloudflare Diagnostics
+### **cloudflare-troubleshooting** - Cloudflare Diagnostics
 
 Investigate and resolve Cloudflare configuration issues using API-driven evidence gathering.
 
@@ -583,7 +582,7 @@ Investigate and resolve Cloudflare configuration issues using API-driven evidenc
 
 ---
 
-### 10. **ui-designer** - UI Design System Extractor
+### **ui-designer** - UI Design System Extractor
 
 Extract design systems from reference UI images and generate implementation-ready design prompts.
 
@@ -608,7 +607,7 @@ Extract design systems from reference UI images and generate implementation-read
 
 ---
 
-### 11. **ppt-creator** - Professional Presentation Creation
+### **ppt-creator** - Professional Presentation Creation
 
 > **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:ppt-creator`)
 
@@ -636,7 +635,7 @@ Create persuasive, audience-ready slide decks from topics or documents with data
 
 ---
 
-### 12. **youtube-downloader** - YouTube Video & Audio Downloader
+### **youtube-downloader** - YouTube Video & Audio Downloader
 
 Download YouTube videos and audio using yt-dlp with robust error handling and automatic workarounds for common issues.
 
@@ -661,7 +660,7 @@ Download YouTube videos and audio using yt-dlp with robust error handling and au
 
 ---
 
-### 13. **repomix-safe-mixer** - Secure Repomix Packaging
+### **repomix-safe-mixer** - Secure Repomix Packaging
 
 Safely package codebases with repomix by automatically detecting and removing hardcoded credentials before packing.
 
@@ -686,7 +685,7 @@ Safely package codebases with repomix by automatically detecting and removing ha
 
 ---
 
-### 14. **transcript-fixer** - ASR Transcription Correction
+### **transcript-fixer** - ASR Transcription Correction
 
 > **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:transcript-fixer`)
 
@@ -733,7 +732,7 @@ uv run scripts/fix_transcription.py \
 
 ---
 
-### 15. **video-comparer** - Video Comparison and Quality Analysis
+### **video-comparer** - Video Comparison and Quality Analysis
 
 Compare two videos and generate interactive HTML reports with quality metrics and frame-by-frame visual comparisons.
 
@@ -781,7 +780,7 @@ done
 
 ---
 
-### 16. **qa-expert** - Comprehensive QA Testing Infrastructure
+### **qa-expert** - Comprehensive QA Testing Infrastructure
 
 Establish world-class QA testing processes with autonomous LLM execution, Google Testing Standards, and OWASP security best practices.
 
@@ -836,7 +835,7 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 
 ---
 
-### 17. **prompt-optimizer** - Prompt Engineering with EARS Methodology
+### **prompt-optimizer** - Prompt Engineering with EARS Methodology
 
 Transform vague prompts into precise, well-structured specifications using EARS (Easy Approach to Requirements Syntax) - a methodology created by Rolls-Royce for converting natural language into testable requirements.
 
@@ -895,7 +894,7 @@ Transform vague prompts into precise, well-structured specifications using EARS 
 
 ---
 
-### 18. **read-claude-code-history** - Read Local Claude Code History
+### **read-claude-code-history** - Read Local Claude Code History
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:read-claude-code-history`)
 
@@ -963,7 +962,7 @@ python3 scripts/analyze_sessions.py stats /path/to/session.jsonl --show-files
 
 ---
 
-### 19. **docs-cleaner** - Documentation Consolidation
+### **docs-cleaner** - Documentation Consolidation
 
 > **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:docs-cleaner`)
 
@@ -987,7 +986,7 @@ Consolidate redundant documentation while preserving all valuable content.
 
 ---
 
-### 20. **skills-search** - CCPM Skill Registry Search
+### **skills-search** - CCPM Skill Registry Search
 
 Search, discover, install, and manage Claude Code skills from the CCPM (Claude Code Plugin Manager) registry.
 
@@ -1036,7 +1035,7 @@ ccpm install-bundle web-dev  # Install web development skills bundle
 
 ---
 
-### 21. **pdf-creator** - PDF Creation with Chinese Font Support
+### **pdf-creator** - PDF Creation with Chinese Font Support
 
 > **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:pdf-creator`)
 
@@ -1069,7 +1068,7 @@ uv run --with weasyprint scripts/md_to_pdf.py input.md output.pdf
 
 ---
 
-### 22. **claude-md-progressive-disclosurer** - CLAUDE.md Optimization
+### **claude-md-progressive-disclosurer** - CLAUDE.md Optimization
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-md-progressive-disclosurer`)
 
@@ -1099,7 +1098,7 @@ Optimize user CLAUDE.md files using progressive disclosure to reduce context blo
 
 ---
 
-### 23. **promptfoo-evaluation** - Promptfoo LLM Evaluation
+### **promptfoo-evaluation** - Promptfoo LLM Evaluation
 
 Configure and run LLM evaluations with Promptfoo for prompt testing and model comparisons.
 
@@ -1131,7 +1130,7 @@ npx promptfoo@latest view
 
 ---
 
-### 24. **developing-ios-apps** - iOS App Development
+### **developing-ios-apps** - iOS App Development
 
 > **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:developing-ios-apps`)
 
@@ -1165,7 +1164,7 @@ xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build
 
 ---
 
-### 25. **twitter-reader** - Twitter/X Content Fetching
+### **twitter-reader** - Twitter/X Content Fetching
 
 Fetch Twitter/X post content using Jina.ai API to bypass JavaScript restrictions without authentication.
 
@@ -1214,7 +1213,7 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 
 ---
 
-### 26. **macos-cleaner** - Intelligent macOS Disk Space Recovery
+### **macos-cleaner** - Intelligent macOS Disk Space Recovery
 
 > **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:macos-cleaner`)
 
@@ -1319,7 +1318,7 @@ Recommendation: Start with 🟢 Safe items (95 GB), then review 🟡 items toget
 
 ---
 
-### 27. **fact-checker** - Document Fact-Checking
+### **fact-checker** - Document Fact-Checking
 
 Verify factual claims in documents using web search and official sources, then propose corrections with user confirmation.
 
@@ -1364,7 +1363,7 @@ claude plugin install fact-checker@daymade-skills
 
 ---
 
-### 28. **skill-reviewer** - Skill Quality Review & Improvement
+### **skill-reviewer** - Skill Quality Review & Improvement
 
 Review and improve Claude Code skills against official best practices with three powerful modes.
 
@@ -1408,7 +1407,7 @@ claude plugin install daymade-skill@daymade-skills
 
 ---
 
-### 29. **github-contributor** - GitHub Contribution Strategy
+### **github-contributor** - GitHub Contribution Strategy
 
 Strategic guide for becoming an effective GitHub contributor and building your open-source reputation.
 
@@ -1465,7 +1464,7 @@ claude plugin install github-contributor@daymade-skills
 
 ---
 
-### 31. **i18n-expert** - Internationalization & Localization
+### **i18n-expert** - Internationalization & Localization
 
 Complete internationalization/localization setup and auditing for UI codebases. Configure i18n frameworks, replace hard-coded strings with translation keys, ensure locale parity between en-US and zh-CN, and validate pluralization and formatting.
 
@@ -1516,7 +1515,7 @@ claude plugin install i18n-expert@daymade-skills
 
 ---
 
-### 32. **claude-skills-troubleshooting** - Plugin & Skill Troubleshooting
+### **claude-skills-troubleshooting** - Plugin & Skill Troubleshooting
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-skills-troubleshooting`)
 
@@ -1557,7 +1556,7 @@ python3 scripts/enable_all_plugins.py daymade-skills
 
 ---
 
-### 33. **meeting-minutes-taker** - Meeting Minutes Generator
+### **meeting-minutes-taker** - Meeting Minutes Generator
 
 > **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:meeting-minutes-taker`)
 
@@ -1594,7 +1593,7 @@ claude plugin install daymade-audio@daymade-skills
 
 ---
 
-### 34. **deep-research** - Research Report Generator
+### **deep-research** - Research Report Generator
 
 Generate format-controlled research reports with evidence tracking and citations.
 
@@ -1629,7 +1628,7 @@ claude plugin install deep-research@daymade-skills
 
 ---
 
-### 35. **competitors-analysis** - Evidence-Based Competitor Intelligence
+### **competitors-analysis** - Evidence-Based Competitor Intelligence
 
 Discover, clone, update, and analyze competitor repositories with evidence-based competitive intelligence. Repository-backed findings must come from local cloned code; market-landscape claims must cite their source and volatility.
 
@@ -1672,7 +1671,7 @@ claude plugin install competitors-analysis@daymade-skills
 
 ---
 
-### 36. **tunnel-doctor** - Tailscale + Proxy/VPN Conflict Fixer
+### **tunnel-doctor** - Tailscale + Proxy/VPN Conflict Fixer
 
 Diagnose and fix conflicts when using Tailscale alongside proxy/VPN tools (Shadowrocket, Clash, Surge) on macOS. Covers four independent conflict layers with specific guidance for SSH access to WSL instances.
 
@@ -1712,7 +1711,7 @@ claude plugin install tunnel-doctor@daymade-skills
 
 ---
 
-### 37. **windows-remote-desktop-connection-doctor** - AVD/W365 Connection Quality Diagnostician
+### **windows-remote-desktop-connection-doctor** - AVD/W365 Connection Quality Diagnostician
 
 Diagnose Windows App (Microsoft Remote Desktop / Azure Virtual Desktop / W365) connection quality issues on macOS, with focus on transport protocol optimization (UDP Shortpath vs WebSocket fallback).
 
@@ -1751,7 +1750,7 @@ claude plugin install windows-remote-desktop-connection-doctor@daymade-skills
 
 ---
 
-### 38. **product-analysis** - Multi-Path Product Analysis & Optimization
+### **product-analysis** - Multi-Path Product Analysis & Optimization
 
 Run a scalable, evidence-driven product audit using parallel Claude Code agents and optional Codex CLI parallelization. Covers UX, API, architecture, and competitive benchmark workflows with quantified findings and priority recommendations.
 
@@ -1790,7 +1789,7 @@ claude plugin install product-analysis@daymade-skills
 
 ---
 
-### 39. **financial-data-collector** - Financial Data Collection for US Equities
+### **financial-data-collector** - Financial Data Collection for US Equities
 
 > **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:financial-data-collector`)
 
@@ -1830,7 +1829,7 @@ claude plugin install daymade-financial@daymade-skills
 
 ---
 
-### 40. **excel-automation** - Excel Creation, Parsing, and macOS Control
+### **excel-automation** - Excel Creation, Parsing, and macOS Control
 
 > **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only — invoked as `daymade-docs:excel-automation`)
 
@@ -1870,7 +1869,7 @@ claude plugin install daymade-docs@daymade-skills
 
 ---
 
-### 41. **capture-screen** - Programmatic macOS Screenshot Capture
+### **capture-screen** - Programmatic macOS Screenshot Capture
 
 > **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:capture-screen`)
 
@@ -1910,7 +1909,7 @@ claude plugin install daymade-macos@daymade-skills
 
 ---
 
-### 42. **continue-claude-code-work** - Resume Interrupted Claude Work
+### **continue-claude-code-work** - Resume Interrupted Claude Work
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:continue-claude-code-work`)
 
@@ -1945,7 +1944,7 @@ proven prior assets, and one next action that directly advances the goal.
 
 ---
 
-### 43. **scrapling-skill** - Reliable Scrapling CLI Workflows
+### **scrapling-skill** - Reliable Scrapling CLI Workflows
 
 Install, troubleshoot, and use Scrapling CLI with a verified static-first workflow for extracting HTML, Markdown, or text from webpages. Includes a diagnostic script for broken extras installs, Playwright browser runtime checks, and smoke tests against real URLs.
 
@@ -1983,7 +1982,7 @@ claude plugin install scrapling-skill@daymade-skills
 
 ---
 
-### 44. **ima-copilot** - Tencent IMA Companion & Installer
+### **ima-copilot** - Tencent IMA Companion & Installer
 
 One-stop wrapper for the official Tencent IMA skill (`ima.qq.com`). Installs upstream `ima-skill` to Claude Code, Codex, and OpenClaw via `npx skills add`, guides API key setup, detects and repairs known upstream issues under user consent, and implements a personalized fan-out search strategy that floats priority knowledge bases to the top.
 
@@ -2024,7 +2023,7 @@ claude plugin install ima-copilot@daymade-skills
 
 ---
 
-### 45. **claude-export-txt-better** - Fix Claude Code Export Formatting
+### **claude-export-txt-better** - Fix Claude Code Export Formatting
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-export-txt-better`)
 
@@ -2064,7 +2063,7 @@ uv run daymade-claude-code/claude-export-txt-better/scripts/validate-claude-expo
 
 ---
 
-### 46. **douban-skill** - Douban Collection Export & Sync
+### **douban-skill** - Douban Collection Export & Sync
 
 Export and sync Douban (豆瓣) book / movie / music / game collections to local CSV files via the reverse-engineered Frodo API. Full export covers all history; RSS incremental sync keeps daily updates current. No login, no cookies, no browser — just a user ID and it works.
 
@@ -2101,7 +2100,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ---
 
-### 47. **terraform-skill** - Terraform Operational Traps
+### **terraform-skill** - Terraform Operational Traps
 
 Failure patterns from real Terraform deployments — every item caused an actual incident. Organized as *exact error → root cause → copy-paste fix*. Covers provisioner timing races, SSH connection conflicts, multi-environment isolation, DNS record duplication, volume permissions, database bootstrap gaps, snapshot cross-contamination, Cloudflare credential format errors, hardcoded domains in Caddyfiles/compose, and init-data-only-on-first-boot pitfalls.
 
@@ -2136,7 +2135,7 @@ Failure patterns from real Terraform deployments — every item caused an actual
 
 ---
 
-### 48. **slides-creator** - Narrative-First Slide Deck Creation
+### **slides-creator** - Narrative-First Slide Deck Creation
 
 Guides users through structured narrative design (ABCDEFG model), then delegates visual generation to `baoyu-slide-deck`. Focuses on what machines can't do — narrative co-design with humans.
 
@@ -2164,7 +2163,7 @@ Guides users through structured narrative design (ABCDEFG model), then delegates
 
 ---
 
-### 49. **debugging-network-issues** - Evidence-Driven Network Investigation
+### **debugging-network-issues** - Evidence-Driven Network Investigation
 
 Falsification-first methodology for network, streaming, and protocol-layer bugs where the obvious cause is probably wrong. Built from a real 5-hour SSE incident where assumption-stacking wasted hours that a 10-minute layered experiment would have resolved.
 
@@ -2189,7 +2188,7 @@ Falsification-first methodology for network, streaming, and protocol-layer bugs 
 
 ---
 
-### 50. **stepfun-tts** - StepFun StepAudio 2.5 Contextual TTS
+### **stepfun-tts** - StepFun StepAudio 2.5 Contextual TTS
 
 > **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:stepfun-tts`)
 
@@ -2211,7 +2210,7 @@ Generate Chinese / Japanese speech with `stepaudio-2.5-tts`. Captures the two no
 
 ---
 
-### 52. **stepfun-asr** - StepFun StepAudio 2.5 ASR (SSE Endpoint)
+### **stepfun-asr** - StepFun StepAudio 2.5 ASR (SSE Endpoint)
 
 > **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:stepfun-asr`)
 
@@ -2234,7 +2233,7 @@ Transcribe Chinese / English audio with `stepaudio-2.5-asr`. Hides the #1 trap o
 
 ---
 
-### 53. **auto-repo-setup** - Automated Repository Setup & Environment Repair
+### **auto-repo-setup** - Automated Repository Setup & Environment Repair
 
 Make a repository runnable and handoff-ready without guessing its stack or changing how collaborators normally work. The skill reads project authority first, repairs the verified gap, and treats startup instructions, lifecycle hooks, and Git mutation as different mechanisms with different safety boundaries.
 
@@ -2273,7 +2272,7 @@ claude plugin install auto-repo-setup@daymade-skills
 
 ---
 
-### 54. **terminal-screenshot** - See the Real Visual Result of Terminal Output
+### **terminal-screenshot** - See the Real Visual Result of Terminal Output
 
 Render a terminal CLI program's colored output to a PNG so Claude can actually *see* the rendered result — color contrast, alignment, background blocks, highlighting — instead of only reading plain text and raw ANSI escape codes. Reading a hex value is guessing; seeing the rendered contrast on the real terminal background is verification.
 
@@ -2304,7 +2303,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### 55. **pdf-to-html** - Read a PDF as Faithful HTML (with Optional Translation)
+### **pdf-to-html** - Read a PDF as Faithful HTML (with Optional Translation)
 
 Convert a PDF into one self-contained, readable HTML file that preserves images, charts and reading order — optionally translating it into another language while keeping every figure. A PDF is a layout, not just a text stream, so the workflow renders each page for you to *see* before building, and renders the HTML for visual verification before delivery.
 
@@ -2335,7 +2334,7 @@ claude plugin install daymade-docs@daymade-skills
 
 ---
 
-### 56. **asr-transcribe-to-text** - Audio/Video Transcription with Qwen3-ASR
+### **asr-transcribe-to-text** - Audio/Video Transcription with Qwen3-ASR
 
 > **Install**: `claude plugin install daymade-audio@daymade-skills` (suite-only — invoked as `daymade-audio:asr-transcribe-to-text`)
 
@@ -2370,7 +2369,7 @@ claude plugin install daymade-audio@daymade-skills
 
 ---
 
-### 57. **marketplace-dev** - Skills Repo → Plugin Marketplace
+### **marketplace-dev** - Skills Repo → Plugin Marketplace
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:marketplace-dev`)
 
@@ -2407,7 +2406,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### 58. **skill-creator** - Create, Improve & Benchmark Skills
+### **skill-creator** - Create, Improve & Benchmark Skills
 
 > **Install**: `claude plugin install daymade-skill@daymade-skills` (suite-only — invoked as `daymade-skill:skill-creator`)
 
@@ -2444,7 +2443,7 @@ claude plugin install daymade-skill@daymade-skills
 
 ---
 
-### 59. **feishu-doc-scraper** - Feishu/Lark → Faithful Markdown + Source-First Archive
+### **feishu-doc-scraper** - Feishu/Lark → Faithful Markdown + Source-First Archive
 
 Extract Feishu (Lark) Docs, Wiki pages/collections, spreadsheets (including cell-attachment file download), and Minutes (妙记) transcripts into faithful local Markdown. The primary path uses the `lark-cli` API — it extracts the document body programmatically (no model paraphrasing), recursively follows a collection's reference graph, and reads permission boundaries from error codes; a browser-DOM path is the fallback only when lark-cli cannot reach the content.
 
@@ -2478,7 +2477,7 @@ claude plugin install feishu-doc-scraper@daymade-skills
 
 ---
 
-### 60. **bigdata-skill** - Bigdata.com (RavenPack) SDK + REST Toolkit
+### **bigdata-skill** - Bigdata.com (RavenPack) SDK + REST Toolkit
 
 > **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:bigdata-skill`)
 
@@ -2514,7 +2513,7 @@ export BIGDATA_API_KEY=bd_v2_xxxxxxxx
 
 ---
 
-### 61. **gangtise-copilot** - Gangtise Investment-Research Suite Installer
+### **gangtise-copilot** - Gangtise Investment-Research Suite Installer
 
 > **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:gangtise-copilot`)
 
@@ -2548,7 +2547,7 @@ claude plugin install daymade-financial@daymade-skills
 
 ---
 
-### 62. **llm-wiki-setup** - Co-Create a Personal Investment-Research LLM Wiki
+### **llm-wiki-setup** - Co-Create a Personal Investment-Research LLM Wiki
 
 Co-create a personal investment-research LLM Wiki (Andrej Karpathy's pattern) where the user's OWN analysis framework becomes a living CLAUDE.md — built by interviewing them rather than handing over a template. Pure markdown + `[[wikilinks]]`, NO RAG / vector DB (Karpathy's core idea — do not over-engineer). The value is extracting the user's personal investment preferences into THEIR OWN schema, never imposing a standard one.
 
@@ -2580,7 +2579,7 @@ claude plugin install llm-wiki-setup@daymade-skills
 
 ---
 
-### 63. **benchmark-due-diligence** - Adversarial Teardown of an Envied Benchmark
+### **benchmark-due-diligence** - Adversarial Teardown of an Envied Benchmark
 
 > **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:benchmark-due-diligence`)
 
@@ -2614,7 +2613,7 @@ claude plugin install daymade-financial@daymade-skills
 
 ---
 
-### 64. **bilibili-source** - Login-Free Bilibili Video Data + Danmaku Fetcher
+### **bilibili-source** - Login-Free Bilibili Video Data + Danmaku Fetcher
 
 Fetch real, citable data for any Bilibili (B站) video — title, UP follower count, publish date, tags, partition, per-part cids, live stats (view/like/coin/favorite/share/reply/danmaku), and full danmaku (bullet-comment) text — in one `view/detail` call, login-free. Built so engagement numbers are cheap to fetch and impossible to fake, instead of hand-typed into a doc where they rot.
 
@@ -2647,7 +2646,7 @@ claude plugin install bilibili-source@daymade-skills
 
 ---
 
-### 65. **claude-usage-analyst** - Explain Claude Code Token Usage & Quota Burn
+### **claude-usage-analyst** - Explain Claude Code Token Usage & Quota Burn
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:claude-usage-analyst`)
 
@@ -2681,7 +2680,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### 66. **marketplace-health-check** - Full 6-Dimension Repo Health Check
+### **marketplace-health-check** - Full 6-Dimension Repo Health Check
 
 ```bash
 claude plugin install marketplace-health-check@daymade-skills
@@ -2716,7 +2715,7 @@ claude plugin install marketplace-health-check@daymade-skills
 
 ---
 
-### 67. **claude-switch-models-setup** - Multi-Provider Claude Code Profiles
+### **claude-switch-models-setup** - Multi-Provider Claude Code Profiles
 
 ```bash
 claude plugin install daymade-claude-code@daymade-skills
@@ -2753,7 +2752,7 @@ claude plugin install daymade-claude-code@daymade-skills
 
 ---
 
-### 68. **llm-eval-harness** - Four-Dimension LLM Endpoint Evaluation
+### **llm-eval-harness** - Four-Dimension LLM Endpoint Evaluation
 
 ```bash
 claude plugin install llm-eval-harness@daymade-skills
@@ -2799,7 +2798,7 @@ uv run --with aiohttp python scripts/concurrency_probe.py \
 
 ---
 
-### 69. **read-claude-web-conversation** - Extract Claude.ai Web Conversations
+### **read-claude-web-conversation** - Extract Claude.ai Web Conversations
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills` (suite-only — invoked as `daymade-claude-code:read-claude-web-conversation`)
 
@@ -2823,7 +2822,7 @@ developer-menu toggle.
 
 ---
 
-### 70. **setup-notifications-via-wecom** - Reusable WeCom Notification Setup
+### **setup-notifications-via-wecom** - Reusable WeCom Notification Setup
 
 ```bash
 claude plugin install setup-notifications-via-wecom@daymade-skills
@@ -2840,7 +2839,7 @@ Set up reusable WeCom (Enterprise WeChat) webhook notifications for technical st
 
 ---
 
-### 71. **notify-wecom** - One-Off WeCom Message
+### **notify-wecom** - One-Off WeCom Message
 
 ```bash
 claude plugin install notify-wecom@daymade-skills
@@ -2857,7 +2856,7 @@ Send a single WeCom group-bot message using the configured target identity: `sel
 
 ---
 
-### 72. **github-sensitive-data-cleanup** - GitHub Sensitive Data Cleanup
+### **github-sensitive-data-cleanup** - GitHub Sensitive Data Cleanup
 
 ```bash
 claude plugin install github-sensitive-data-cleanup@daymade-skills
@@ -2874,7 +2873,7 @@ Scan and remove sensitive data from GitHub repository history, with backup, visi
 
 ---
 
-### 73. **codex-image-gallery** - Local Browser for Codex Generated Images
+### **codex-image-gallery** - Local Browser for Codex Generated Images
 
 > **Install**: `claude plugin install daymade-codex@daymade-skills` (suite-only — invoked as `daymade-codex:codex-image-gallery`)
 
@@ -2893,7 +2892,7 @@ Start a self-contained local web gallery for Codex-generated image outputs. The 
 
 **Requirements**: Node.js 18+ and access to the image folder.
 
-### 74. **frontend-visual-qa** - Rendered Frontend and Browser Output Visual QA Gate
+### **frontend-visual-qa** - Rendered Frontend and Browser Output Visual QA Gate
 
 ```bash
 claude plugin install frontend-visual-qa@daymade-skills
@@ -2916,7 +2915,7 @@ Audit the UI users can actually see, with explicit evidence levels and no source
 - Conditional references for core visual checks, complex journeys/page contracts, and data visualization—including units/source/time/freshness, dense collisions, runtime-label truth, and real file-dialog boundaries
 - Public behavior and trigger evals with self-contained fixtures
 
-### 75. **openclaw** - OpenClaw (龙虾) Config Manager
+### **openclaw** - OpenClaw (龙虾) Config Manager
 
 ```bash
 claude plugin install openclaw@daymade-skills
@@ -2935,7 +2934,7 @@ Manage OpenClaw (龙虾/lobster) instance configurations — audit, diff, copy, 
 - Auto-audit on mutating commands with a `--no-audit` escape hatch
 - Nickname registry for cross-config operations
 
-### 76. **download-gemini-images** - Download Images from Gemini Conversations
+### **download-gemini-images** - Download Images from Gemini Conversations
 
 ```bash
 claude plugin install download-gemini-images@daymade-skills
@@ -2953,7 +2952,7 @@ Download images (uploaded files or generated previews) from a Google Gemini conv
 - `pageAssets` fallback when lightbox automation fails
 - Ordered ZIP packaging with integrity verification
 
-### 77. **wps-doc-scraper** - Archive Public WPS/KDocs Documents
+### **wps-doc-scraper** - Archive Public WPS/KDocs Documents
 
 ```bash
 claude plugin install wps-doc-scraper@daymade-skills
@@ -2971,7 +2970,7 @@ Faithfully archive public WPS / KDocs / 金山文档 links — especially embedd
 - Original SVG/PNG capture for canvases and mind maps
 - Markdown as a structured representation of the source
 
-### 78. **ashare-news-fetcher** - A-Share Market News & Sentiment Aggregator
+### **ashare-news-fetcher** - A-Share Market News & Sentiment Aggregator
 
 > **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:ashare-news-fetcher`)
 
@@ -2987,7 +2986,7 @@ Aggregate A-share (Chinese stock market) news, policy, and sentiment from public
 - Per-stock or market-wide filtering
 - Structured JSON / Markdown output
 
-### 79. **local-codex** - Local OpenAI Codex CLI Agent
+### **local-codex** - Local OpenAI Codex CLI Agent
 
 > **Install**: `claude plugin install daymade-codex@daymade-skills` (suite-only — invoked as `daymade-codex:local-codex`)
 
@@ -3004,7 +3003,7 @@ Delegate coding tasks to the local OpenAI Codex CLI agent using your ChatGPT Pro
 - JSONL output parsing with final assistant message extraction
 - Configurable sandbox levels: read-only / workspace-write / danger-full-access
 
-### 80. **openclaw-model-switch** - OpenClaw Model Switcher
+### **openclaw-model-switch** - OpenClaw Model Switcher
 
 ```bash
 claude plugin install openclaw-model-switch@daymade-skills
@@ -3023,7 +3022,7 @@ Switch the default AI model for an OpenClaw instance (e.g., Kimi K2.6 → K2.7) 
 - Optional gateway restart after switching
 - Supports Kimi K2.x model family with context window specs
 
-### 81. **pharma-daily-report** - A-Share Pharma Sector Daily Report
+### **pharma-daily-report** - A-Share Pharma Sector Daily Report
 
 > **Install**: `claude plugin install daymade-financial@daymade-skills` (suite-only — invoked as `daymade-financial:pharma-daily-report`)
 
@@ -3039,7 +3038,7 @@ Generate an A-share pharmaceutical sector daily report — pull real-time quotes
 - 7 sub-sector classification + gainers/losers + fund-flow estimate
 - Optional Feishu rich-text delivery; default 20-stock watchlist, customizable
 
-### 82. **gemini-history-analyzer** - Analyze Gemini Conversation History
+### **gemini-history-analyzer** - Analyze Gemini Conversation History
 
 > **Install**: `claude plugin install gemini-history-analyzer@daymade-skills`
 
@@ -3055,7 +3054,7 @@ Analyze Google Takeout exports of Gemini conversation history — extract and ca
 - Meeting-transcript vs prompt-response detection; topic categorization; PII flagging
 - Context-verified keyword search (grep is step 1, not the answer) + optional memory-file generation
 
-### 83. **skill-governance** - Skill Marketplace and Cache Governance
+### **skill-governance** - Skill Marketplace and Cache Governance
 
 > **Install**: `claude plugin install daymade-skill@daymade-skills` (suite-only — invoked as `daymade-skill:skill-governance`)
 
@@ -3074,7 +3073,7 @@ Keep Claude Code skill marketplaces and installed caches aligned with source rep
 - Discovers suites dynamically from the manifest and verifies the replacement suite before retiring standalone installs at their original scopes
 - Ignores workspace-only folders such as `scripts/`, `references/`, `tests/`, demos, and build outputs when checking published skill surfaces
 
-### 84. **photo-to-scanned-pdf** - Phone Photos to Scanner-Quality PDF
+### **photo-to-scanned-pdf** - Phone Photos to Scanner-Quality PDF
 
 > **Install**: `claude plugin install daymade-docs@daymade-skills` (suite-only;
 > invoke as `daymade-docs:photo-to-scanned-pdf`)
@@ -3084,7 +3083,7 @@ pages into a clean A4 PDF. The workflow combines perspective correction,
 scanner-style background cleanup, colored-paper handling, explicit content-based
 page ordering, and a mandatory whole-document contact-sheet check.
 
-### 85. **github-review-pr** - Current-Base Contributor PR Review
+### **github-review-pr** - Current-Base Contributor PR Review
 
 ```bash
 claude plugin install github-review-pr@daymade-skills
@@ -3132,7 +3131,7 @@ can we merge this contribution and fix the remaining repo bookkeeping ourselves?
 
 **Requirements**: authenticated `gh` CLI, `git` with `merge-tree --write-tree`, and `jq`.
 
-### 86. **read-codex-history** - Read Local Codex History
+### **read-codex-history** - Read Local Codex History
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills`
 > (suite-only — invoked as `daymade-claude-code:read-codex-history`)
@@ -3176,7 +3175,7 @@ for source selection, path normalization, privacy boundaries, and diagnostics.
 
 ---
 
-### 87. **continue-codex-work** - Resume Interrupted Codex Work
+### **continue-codex-work** - Resume Interrupted Codex Work
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills`
 > (suite-only — invoked as `daymade-claude-code:continue-codex-work`)
@@ -3202,7 +3201,7 @@ Codex was cut off mid-task; recover that rollout and finish the work
 
 ---
 
-### 88. **git-safety-net** - Prevent & Recover From Local-Git Disasters
+### **git-safety-net** - Prevent & Recover From Local-Git Disasters
 
 > **Install**: `claude plugin install git-safety-net@daymade-skills`
 
@@ -3239,7 +3238,7 @@ requires network access, while offline audits use cached remote-tracking refs.
 
 ---
 
-### 89. **design-style-picker** - Batch-Compare Visual Design Directions
+### **design-style-picker** - Batch-Compare Visual Design Directions
 
 > **Install**: `claude plugin install daymade-codex@daymade-skills` (suite-only — invoked as `daymade-codex:design-style-picker`)
 
@@ -3266,7 +3265,7 @@ evolve our current design system without throwing away existing assets
 
 ---
 
-### 90. **claude-migrate-memory-to-doc** - Migrate Claude Memory to Tool-Agnostic Docs
+### **claude-migrate-memory-to-doc** - Migrate Claude Memory to Tool-Agnostic Docs
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills`
 > (suite-only — invoked as `daymade-claude-code:claude-migrate-memory-to-doc`)
@@ -3295,7 +3294,7 @@ memory has grown bloated with content that should live in docs
 
 ---
 
-### 91. **docx-creator** - Produce Production-Grade Word Documents
+### **docx-creator** - Produce Production-Grade Word Documents
 
 > **Install**: `claude plugin install daymade-docs@daymade-skills`
 > (suite-only — invoked as `daymade-docs:docx-creator`)
@@ -3326,7 +3325,7 @@ give me a Word file for this labor contract
 
 ---
 
-### 92. **claude-code-hooks** - Write, Test, and Debug Claude Code Hooks
+### **claude-code-hooks** - Write, Test, and Debug Claude Code Hooks
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills`
 > (suite-only — invoked as `daymade-claude-code:claude-code-hooks`)
@@ -3351,7 +3350,7 @@ my hook is false-blocking a healthy command
 debug this hook that's poisoning my session
 ```
 
-### 93. **macos-watchdog** - Design & Discipline macOS launchd Watchdogs
+### **macos-watchdog** - Design & Discipline macOS launchd Watchdogs
 
 > **Install**: `claude plugin install daymade-macos@daymade-skills` (suite-only — invoked as `daymade-macos:macos-watchdog`)
 
@@ -3373,7 +3372,7 @@ my watchdog keeps re-launching an app I quit — make it stop
 audit my existing LaunchAgents for noise and crash loops
 ```
 
-### 94. **devils-advocate** - Pressure-Test an Investment Thesis
+### **devils-advocate** - Pressure-Test an Investment Thesis
 
 > **Install**: `claude plugin install daymade-financial@daymade-skills`
 > (suite-only — invoked as `daymade-financial:devils-advocate`)
@@ -3394,7 +3393,7 @@ stress-test my bull case on <stock> against these three research reports
 what would have to be true for this thesis to be wrong?
 ```
 
-### 95. **daymade-sector-research** - A-Share Sector Research Workflow
+### **daymade-sector-research** - A-Share Sector Research Workflow
 
 > **Install**: `claude plugin install daymade-financial@daymade-skills`
 > (suite-only — invoked as `daymade-financial:daymade-sector-research`)
@@ -3417,7 +3416,7 @@ adversarial verification. All public, no-login data sources.
 判断医药板块现在的市场情绪
 ```
 
-### 96. **kimi-use** - Query Kimi Desktop Data Plugins
+### **kimi-use** - Query Kimi Desktop Data Plugins
 
 Drive the logged-in Kimi desktop app through computer-use to query its built-in
 company, financial, market, academic, and legal data plugins without separate
@@ -3437,7 +3436,7 @@ they become load-bearing data.
 操作 Kimi 客户端，用已安装插件核对这组市场数据
 ```
 
-### 97. **tibo-reset-codex** - ChatGPT/Codex 额度重置速查
+### **tibo-reset-codex** - ChatGPT/Codex 额度重置速查
 
 > **Install**: `claude plugin install tibo-reset-codex@daymade-skills`
 
@@ -3457,7 +3456,7 @@ banked reset 到了吗
 Tibo 说的 2pm PST 是北京时间几点
 ```
 
-### 98. **prior-work-retrieval** - Retrieve Proven Work Before Producing
+### **prior-work-retrieval** - Retrieve Proven Work Before Producing
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills`
 > (suite-only — invoked as `daymade-claude-code:prior-work-retrieval`)
@@ -3480,7 +3479,7 @@ we solved this before; find the code and successful path before changing anythin
 don't rebuild the workflow until you have checked our existing Skills and history
 ```
 
-### 99. **codex-1m-context-window-setup** - Model-Aware Long Context for Codex
+### **codex-1m-context-window-setup** - Model-Aware Long Context for Codex
 
 > **Install**: `claude plugin install daymade-codex@daymade-skills`
 > (suite-only — invoked as `daymade-codex:codex-1m-context-window-setup`)
@@ -3506,7 +3505,7 @@ verify that my long-context setup still matches the selected model
 
 ---
 
-### 100. **interaction-design-board** - Runnable Interaction Alternatives Before Implementation
+### **interaction-design-board** - Runnable Interaction Alternatives Before Implementation
 
 > **Install**: `claude plugin install daymade-codex@daymade-skills`
 > (suite-only — invoked as `daymade-codex:interaction-design-board`)
