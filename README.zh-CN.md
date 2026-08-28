@@ -213,7 +213,7 @@ codex plugin add daymade-codex@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨代码、项目文档、Skill/SOP、会议、微信归档与对话历史的已有工作检索；跨 Claude Code/Codex 的快速本地对话发现；会话恢复；CLAUDE.md 调优；故障诊断；statusline 配置；导出修复；marketplace 开发与 suite 收敛；终端截图渲染；用量分析；以及多 Provider 模型切换：
+一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨代码、项目文档、Skill/SOP、会议、微信归档与对话历史的已有工作检索；跨 Claude Code/Codex 的快速本地对话发现；会话恢复；CLAUDE.md 调优；随 lark-cli 版本同步的飞书路由；故障诊断；statusline 配置；导出修复；marketplace 开发与 suite 收敛；终端截图渲染；用量分析；以及多 Provider 模型切换：
 
 ```text
 /daymade-claude-code:read-claude-code-history
@@ -232,6 +232,7 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:claude-migrate-memory-to-doc
 /daymade-claude-code:claude-code-hooks
 /daymade-claude-code:prior-work-retrieval
+/daymade-claude-code:lark-cli-router
 ```
 
 安装后调用统一显示为 `daymade-claude-code:<skill>`，共享同一命名空间。这些技能仅作为套件发布——安装套件即可获得全部技能。
@@ -2751,7 +2752,7 @@ claude plugin install marketplace-health-check@daymade-skills
 claude plugin install daymade-claude-code@daymade-skills
 ```
 
-设置多个互相隔离的 Claude Code CLI profile，让你可以在不同终端窗口同时运行不同的 LLM provider（Kimi、MiniMax、GLM、DeepSeek、StepFun、Anthropic）——每个 profile 拥有独立的 `claude.json` 状态，同时共享 skills、projects、hooks 和 agents。
+设置多个互相隔离的 Claude Code CLI profile，让你可以在不同终端窗口同时运行不同的 LLM provider（Kimi、MiniMax、GLM、DeepSeek、StepFun、Anthropic）——每个 profile 拥有独立的 `.claude.json` 状态，同时共享 skills、projects、hooks 和 agents。
 
 **使用场景：**
 - 想在一个终端跑 Kimi、另一个终端跑 DeepSeek
@@ -2759,11 +2760,12 @@ claude plugin install daymade-claude-code@daymade-skills
 - 为学员配置课后环境，复现同样的多 provider 工作流
 
 **主要功能：**
-- 一键安装器将 profile 管理器复制到 `~/.config/claude-switch-models-setup/`
-- 生成 provider 专用的 `~/.claude/settings/<provider>.json` 模板，并带上必要的隔离标志
+- 一键安装器把五个运行脚本链接到 `~/.config/claude-switch-models-setup/`，且只在激活清单不存在时创建空模板
+- 内置 provider 专用的 `~/.claude/settings/<provider>.json` 模板，并带上必要的隔离标志
 - `claude-profiles-init` 创建隔离目录 `~/.claude-profiles/<provider>/`，其余资源通过 symlink 共享
 - profile 同步会镜像默认 Claude profile 的 enabled plugins，并共享 installed plugin state
-- 本地源码同步会把 Claude plugin cache 和 Codex skill 目录链接回源码仓库，并为 maintainer 机器提供监听 marketplace manifest 变化的 LaunchAgent
+- 本地源码同步让 Claude plugin cache 保持源码直连，但只把显式选择的 Codex Skill 链入 `~/.agents/skills`；必要时可为已激活子集保留旧 `~/.codex/skills` 兼容链接
+- maintainer LaunchAgent 监听激活清单及 marketplace／安装拓扑；其余旧兼容链接只报告给人工审核，不自动删除
 - 每次启动 profile 时自动修复 marketplace 路径污染
 - 内置学生安装指南和故障排查参考
 
@@ -3481,6 +3483,27 @@ Tibo 最新的重置公告换算成北京时间是几点
 /daymade-claude-code:prior-work-retrieval
 我们以前解决过，先找到已有代码和成功路径再改
 先检查现有 Skill、SOP 和历史，不要重新造工作流
+```
+
+### **lark-cli-router** - 单一、随版本同步的飞书路由
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`
+>（仅作为套件成员发布，调用方式 `daymade-claude-code:lark-cli-router`）
+
+把飞书／Lark／豆包请求路由到当前 `lark-cli` 内嵌的对应指南，无需把每个
+飞书领域 Skill 都放进模型目录。腾讯 IMA 继续独立使用 `ima-skill`。
+
+**核心能力：**
+- 从 `lark-cli skills list` 选择最小匹配的领域或工作流指南
+- 通过 `lark-cli skills read` 读取与 CLI 版本同步的指令和 reference
+- 用内嵌／磁盘指南哈希闸门保留未内嵌 scripts/assets 的可达性
+- 保留各领域自己的认证、确认、成功判断和写后验证契约
+
+**使用示例：**
+```text
+读取这个飞书文档
+查一下这条妙记的逐字稿
+lark-cli 提示 user 身份缺少 scope
 ```
 
 ### **codex-1m-context-window-setup** - 为 Codex 设置模型感知的长上下文

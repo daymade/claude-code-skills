@@ -199,7 +199,16 @@ Manual repair fallback:
 python3 ~/.config/claude-switch-models-setup/sync-local-skill-sources.py --apply
 ```
 
-The script backs up existing real copies under `.source-sync-backups/` before creating symlinks. If a skill was removed from the marketplace manifest, it prunes only stale Codex/agents symlinks that point into the managed source repos; real directories are left alone. Restart any already-running Claude Code/Codex sessions after repairing because skill metadata is loaded at session start.
+At a selected `~/.agents/skills` name, the script replaces only an empty path,
+the correct link, or a wrong link that still belongs to a managed source repo;
+the last case moves to recoverable backup storage first. A real object,
+relative/broken link, or third-party link fails visibly and stays in place. The
+script moves stale unselected source-owned links out of the active root, but
+never removes entries from legacy `~/.codex/skills`: non-compatible managed
+links are reported for reviewed `skill-governance` cleanup, while real
+directories, third-party links, malformed foreign links, and `.system` stay
+untouched. Restart any already-running Claude Code/Codex sessions after
+repairing because Skill metadata is loaded at session start.
 
 ## Several profiles launched at once fail with sync tracebacks
 

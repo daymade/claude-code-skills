@@ -57,6 +57,7 @@ python-unittest  daymade-claude-code/read-codex-history/tests
 python-unittest  daymade-claude-code/read-claude-code-history/tests
 python-unittest  daymade-claude-code/prior-work-retrieval/tests
 python-unittest  daymade-claude-code/marketplace-dev/tests
+python-unittest  daymade-claude-code/claude-switch-models-setup/tests
 python-unittest  daymade-skill/skill-governance/tests
 python-unittest  daymade-codex/codex-1m-context-window-setup/tests
 python-unittest  daymade-codex/interaction-design-board/tests
