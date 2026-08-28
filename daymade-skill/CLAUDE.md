@@ -7,7 +7,7 @@ This directory bundles skills related to Claude Code skill development, quality,
 - `skill-creator` — Create and improve skills.
 - `skill-reviewer` — Review skill quality and trigger accuracy.
 - `skills-search` — Search across the skill marketplace.
-- `skill-governance` — Enforce source-of-truth discipline for skill caches and marketplaces.
+- `skill-governance` — Govern the real Claude/Codex Skill surface while preserving cold capabilities.
 
 ## Supersede Hook (on-demand, never static)
 
@@ -22,13 +22,21 @@ The kit is also a generator: `skill-creator/scripts/generate_supersede_kit.py` s
 
 ## Governance Principles
 
-The `skill-governance` skill encodes the operational workflow for keeping skill caches aligned with their source repositories. When working in this suite, observe the same principles:
+`skill-governance` separates five layers: canonical source, installed inventory,
+discovery policy, the model-visible catalog, and runtime resources retained behind
+a router. Filesystem counts and cache tidiness do not prove that the intended
+capability is visible or usable.
 
-1. **Source is truth** — The source repo is canonical. If the cache is stale, rebuild from source.
-2. **Official methods only** — Use `claude plugin marketplace`, `claude plugin update`, `claude plugin uninstall`, and `claude plugin install`. Do not manually delete cache directories or copy files as the primary installation method.
-3. **Scope preservation** — Reinstall a plugin at the same scope (`user` or `project`) it was originally installed at.
-4. **One version per skill in cache** — After syncing, remove old semver version subdirectories so only the latest remains.
-5. **No-op safety** — Drift checks are read-only. Sync and cleanup run only after user confirmation or explicit trigger.
-6. **Workspace dirs are not plugins** — Ignore `*-workspace`, `dist`, `scripts`, `tests`, `references`, `demos`, and similar directories when deciding what should be cached.
+- Treat owned source as canonical and plugin caches as derived runtime state.
+- Use current official plugin commands and preserve install scope.
+- Use the explicit source activation manifest only for links its syncer owns;
+  third-party cold inventory stays outside that manifest.
+- Verify Codex with a fresh prompt audit and separately probe any hidden resource
+  a router must still reach.
+- Do not normalize Claude's cache to one version; current orphan-version cleanup
+  belongs to Claude's lifecycle. Manual cache removal is exceptional repair.
+- Audits are read-only. Config, install, uninstall, move, or source changes need
+  explicit authorization and independent readback.
 
-For the full workflow, invoke `daymade-skill:skill-governance`.
+For workflow routing and detailed procedures, invoke
+`daymade-skill:skill-governance`.

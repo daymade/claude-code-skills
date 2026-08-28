@@ -1,255 +1,162 @@
 ---
 name: skill-governance
 description: >-
-  Enforce source-of-truth discipline for Claude Code skill marketplaces, caches,
-  suite migrations, and loose userSettings skills. Use whenever the user says
-  "check skill drift", "检查 skill 漂移", "sync skills from source",
-  "以源码为准同步 skill 缓存", "reconcile installs after a suite migration",
-  "清理旧 standalone skill 安装", "clean old skill cache versions",
-  "清理 skill 缓存旧版本", "switch marketplace to local source",
-  "marketplace 切到本地源码", "thin skills", "薄 skill", "loose skills",
-  "清理 user skills", or reports stale caches, version mismatches, orphaned
-  plugins, duplicate direct-copy skills, untracked user skills, project-local
-  `.claude/skills` and `.agents/skills` drift, a marketplace cache that must be
-  rebuilt from a local source repo, or a newly merged suite whose installed
-  state still exposes the old plugin identities.
+  Govern the real Claude Code and Codex Skill surface without losing cold
+  capability. Use when users ask how many Skills are loaded, why the catalog is
+  huge or descriptions are truncated, want only routers visible while
+  gstack/Lark/IMA/UiPath stay on disk, or need to reconcile
+  source/install/cache drift, `.agents/skills`/`.claude/skills`/legacy
+  `.codex/skills`, loose or duplicate Skills, discovery policy, marketplace
+  sources, suite migrations, superseded plugins, or old cache versions. Verifies
+  the fresh host catalog and router resources; filesystem counts or completed
+  cleanup are not success.
 ---
 
 # Skill Governance
 
-This skill keeps Claude Code skill marketplaces and their caches aligned with their source repositories. The source directory is the single source of truth; the cache is a derived copy. When the source changes, the cache must be rebuilt through official `claude plugin` commands, not by hand-copying files.
+Govern the Skill surface the user actually experiences: the intended hot or
+router entries are fully visible in a fresh host, cold capabilities remain
+reachable, editable behavior has one canonical owner, and every retirement is
+recoverable. A smaller directory count is not the outcome.
 
-## Governance Principles
+## Required outcome contract
 
-1. **Source is truth** — The local source repo is canonical. If the cache is older or different, rebuild the cache from source.
-2. **Official methods only** — Use `claude plugin marketplace`, `claude plugin update`, `claude plugin uninstall`, and `claude plugin install`. Manual cache deletion or file copying is only a cleanup step, never the primary installation method.
-3. **Scope preservation** — Reinstall each plugin at the scope (`user` or `project`) where it was originally installed.
-4. **One version per skill in cache** — After syncing, remove old semver version subdirectories so only the latest remains.
-5. **No-op safety** — Drift checks are read-only. Sync and cleanup run only after user confirmation or an explicit trigger.
-6. **Workspace dirs are not plugins** — Ignore `*-workspace`, `dist`, `scripts`, `tests`, `references`, `demos`, and other non-plugin directories when deciding what belongs in the cache.
-7. **Retire loose skills, do not destroy them** — For untracked userSettings skills that have no SSOT or are obsolete duplicates, move the active directory to a dated `retired-skills/` backup instead of deleting outright.
-8. **Project dual roots need one owner** — When the same frontmatter `name` is present under both `.claude/skills` and `.agents/skills`, prefer one canonical bundle plus an explicit compatibility router (or a shared symlink). Two divergent full bundles are drift, even if both still load.
+Before acting, state in one sentence:
 
-## What to ignore when comparing source to cache
+- which entries or routers must be model-visible;
+- which capabilities must remain available cold;
+- which layer the user authorized changing;
+- what fresh-host evidence will prove success.
 
-`.git`, `.in_use`, `.security-scan-passed`, `.skill-regression-reviewed`, `.orphaned_at`, `.DS_Store`, `.gitignore`, `__pycache__`, `.pytest_cache`, `.venv`, `node_modules`, `*.pyc`, `*.pyo`.
+If the request is only “how many / what is loaded / why”, stay read-only.
 
-Also ignore top-level directories that are not skills: `*-workspace`, `dist`, `scripts`, `tests`, `references`, `demos`.
+## System model
 
-## Workflow A: Check skill drift / 检查 skill 漂移
+Never collapse these layers into one:
 
-This is a read-only report. It does not modify anything.
+1. **Canonical source** — where owned behavior may be edited.
+2. **Installed inventory** — bundles and versions that exist on disk.
+3. **Discovery policy** — what Claude or Codex may discover.
+4. **Model-visible catalog** — metadata in a fresh model prompt.
+5. **Runtime resources** — hidden scripts, references, and assets a router still
+   needs.
 
-1. Identify the marketplaces to check. Defaults are `daymade-skills` and `daymade-skills-pro`; use the marketplace the user names if they name one.
-2. For each marketplace, find its source repo by reading `.claude-plugin/marketplace.json` in the source directory.
-3. For each plugin entry in `marketplace.json`:
-   - Locate the source directory (`source` field).
-   - If the plugin is a suite with a `skills` array, treat the suite root as the source for the bundled sub-skills. Do not inspect the individual sub-skill directories separately.
-   - Find the latest semver version subdirectory in `~/.claude/plugins/cache/<marketplace>/<plugin>/`.
-   - Compare the source directory to that version directory, ignoring the patterns above.
-   - Record:
-     - **Stale** — content differs.
-     - **Version mismatch** — `marketplace.json` version != latest cache version.
-     - **Missing from cache** — listed in source but no cache subdirectory exists.
-     - **Orphaned in cache** — cache subdirectory exists but plugin is not in `marketplace.json`.
-4. Check `~/.claude/skills/` for direct-copy installs:
-   - Any directory there that is not a symlink and differs from its source is flagged as a direct-copy drift.
-   - Symlinks are expected for dev skills and are ignored.
-5. When the target is a project repository that may expose Skills through both
-   `.claude/skills` and `.agents/skills`, run the bundled deterministic audit from
-   this Skill's bundle directory:
+Installed does not mean active; active does not prove visible; visible does not
+prove usable. Counts and byte totals are diagnostic values only.
 
-   ```bash
-   uv run --no-project python scripts/audit_project_skill_roots.py <project-root> --json
-   ```
+## Authority order
 
-   The project root is explicit; the script does not search sibling projects or
-   mutate either root. It pairs direct child bundles by frontmatter `name`, not
-   directory basename, and returns:
+Use current runtime truth, not remembered conventions:
 
-   - **`canonical_router` (pass)** — one full canonical bundle plus a one-file
-     router whose first nonblank body line is the exact heading
-     `# Compatibility router — no business rules live here`; the router must
-     point only to its paired canonical `SKILL.md` using a backtick-quoted
-     project-relative path, tell the runtime to read it completely, and fail
-     visibly if it is unavailable.
-   - **`shared_target` (pass)** — both roots resolve to the same canonical
-     `SKILL.md`, such as a symlink into the canonical bundle, and neither side
-     carries extra bundle material outside that shared target.
-   - **`identical_copy` (pass, report)** — two byte-identical bundles. This is
-     not current drift, but it remains duplication debt because either copy can
-     diverge later.
-   - **`drift` (exit 1)** — same-name bundles differ and neither side satisfies
-     the explicit router contract.
-   - **`invalid` (exit 2)** — malformed/duplicate frontmatter identity, a broken
-     symlink, an invalid router, declared roots with no auditable `SKILL.md`
-     bundles, or a project path with neither declared root.
-   - **`single_root` (pass, report)** — the name exists in only one root.
+- owned source repos and their manifests for editable Skill behavior;
+- `claude plugin ... --json` for current Claude marketplace/install state;
+- the explicit source-sync activation manifest for managed Daymade links;
+- `~/.agents/skills` as Codex's current user Skill root;
+- exact-path `~/.codex/config.toml` policy for Codex discovery disables;
+- `codex debug prompt-input` for the actual fresh Codex catalog;
+- the installed vendor bundle for third-party cold resources.
 
-   Do not infer a router from short length or router-like prose. Without the
-   exact marker and the fail-closed pointer contract, treat differing content as
-   drift. The audit only reports; selecting the canonical source and replacing
-   a full copy still requires the repository owner's decision.
-6. Return a concise markdown report grouped by marketplace and project, with sections: Stale, Version mismatch, Missing, Orphaned, Direct-copy drift, and Project dual-root drift.
+`~/.codex/skills` is legacy/system compatibility unless a current local contract
+explicitly assigns it another role. Never move third-party inventory into an
+owned-source activation manifest just to make ownership look complete.
 
-## Workflow B: Sync skills from source / 以源码为准同步 skill 缓存
+## Route the request
 
-This mutates cache state. Confirm with the user before proceeding unless they explicitly triggered the sync.
+Read the named section of
+[`references/skill-surface-governance.md`](references/skill-surface-governance.md)
+completely before using that workflow.
 
-1. Determine target marketplace(s). If none specified, use both `daymade-skills` and `daymade-skills-pro`.
-2. For each marketplace:
-   - Run `claude plugin marketplace list` to verify the marketplace points to the expected local source path.
-   - If it points elsewhere, run Workflow D first to switch it to the local source.
-   - Run `claude plugin marketplace update <marketplace>`.
-3. Run Workflow A to get the drift report.
-4. For each stale or missing plugin:
-   - Determine its installed scope. Look at the existing install metadata in `~/.claude/plugins/cache/<marketplace>/<plugin>/latest/` or infer from `~/.claude/plugins/installed_plugins.json`. Default to the scope it was originally installed at; if unknown, ask the user.
-   - For suite plugins, install the suite once. Do not install individual sub-skills separately.
-   - Run:
-     ```
-     claude plugin uninstall <plugin>@<marketplace> --scope <scope>
-     claude plugin install <plugin>@<marketplace> --scope <scope>
-     ```
-   - This forces the cache to re-fetch from the current local source.
-5. For orphaned plugins, uninstall them at the scope they were installed at. If
-   an orphan is a superseded standalone plugin from a known suite migration, use
-   Workflow F instead; verify the replacement suite before uninstalling it.
-6. After installation, run Workflow C to clean old version subdirectories.
-7. Report what was updated, what was uninstalled, and any failures.
+| Request | Read and use |
+|---|---|
+| What Codex really loads; count, truncation, duplicate identity, missing router | §3–4, then §11 |
+| Reconcile owned source links or `~/.agents/skills` activation | §2–5, then §11 |
+| Keep gstack/Lark/IMA/UiPath or another bundle cold behind a router | §2–4, §6, then §11 |
+| Claude marketplace/plugin source or installed-state drift | §2–3, §7, then §11 |
+| Old cache versions | §2 and §7 “Exceptional manual cache repair” |
+| Standalone plugins superseded by a suite | §7–8, then §11 |
+| Project `.claude/skills` vs `.agents/skills` drift | §9, then §11 |
+| Retire loose or duplicate Skill directories | §2–3, §10–11 |
 
-## Workflow C: Clean old skill cache versions / 清理 skill 缓存旧版本
+## Fast read-only Codex audit
 
-This deletes cache directories. Confirm with the user before proceeding.
-
-1. For each skill directory under `~/.claude/plugins/cache/<marketplace>/`:
-   - List all semver version subdirectories (e.g., `1.0.0`, `1.1.0`).
-   - Identify the latest version by semver ordering.
-   - Before deleting, verify the latest version matches the source (e.g., by re-running Workflow A or comparing the latest cache dir to source). If it does not match, do not delete old versions; warn the user and stop.
-   - Delete every version subdirectory except the latest.
-2. Report which versions were removed and which remain.
-
-## Workflow D: Switch marketplace to local source / marketplace 切到本地源码
-
-1. Run `claude plugin marketplace list` to see the current source.
-2. If the marketplace is not already pointing to the desired local path:
-   ```
-   claude plugin marketplace remove <marketplace-name>
-   claude plugin marketplace add <local-path> --scope user
-   ```
-3. Verify with `claude plugin marketplace list`.
-4. Report the new source path.
-
-## Workflow E: Audit loose userSettings skills / 清理松散 user skill
-
-Use when the user asks where thin skills came from, why generic skills are loaded, or whether loose user skills should be removed. This workflow covers direct directories under `~/.claude/skills`, `~/.codex/skills`, and `~/.agents/skills`; plugin caches are handled by Workflows A-D.
-
-1. Enumerate direct skill directories and line counts with `find` plus `wc -l`. Do not recurse into unrelated repos.
-2. Classify each candidate:
-   - **Lock-managed** — present in `.skill-lock.json` or installed plugin metadata. Do not manually move it; use official uninstall/sync flows.
-   - **Source-backed copy** — content matches a canonical source repo. Prefer symlink, marketplace install, or source sync before removing the copy.
-   - **Loose template** — short generic prompt, no scripts/references/assets, no user-specific methodology, no source record.
-   - **Loose but valuable** — contains scripts, references, credentials flow, domain-specific SOP, or user-specific methodology. Keep until it is migrated into a source repo.
-   - **Obsolete backup** — active directory name or frontmatter shows backup/deprecated status and a newer canonical skill exists.
-3. For each retire candidate, verify all three before moving:
-   - It is absent from lock-managed sources.
-   - It has a replacement or no meaningful unique capability.
-   - A backup destination under the matching profile's `retired-skills/<reason>-<date>/` does not already exist.
-4. Move retire candidates out of the active skill root with `mv`, preserving the full directory. Do not use `rm -rf`.
-5. Verify:
-   - Active skill roots no longer contain the retired frontmatter names.
-   - Kept valuable skills still exist.
-   - The retired directories contain the expected `SKILL.md` files and hashes.
-6. Report kept, retired, backup locations, unresolved drift, and whether the current running session may still have a cached skill list.
-
-## Workflow F: Reconcile installed state after a suite migration
-
-Use only after the canonical source migration has merged and the user explicitly asks
-to update the current machine's installed state. This workflow consumes a declared
-migration mapping; it does not design or edit marketplace topology. Use
-`daymade-claude-code:marketplace-dev` for the source migration itself.
-
-1. Require an explicit mapping of superseded standalone plugin names to replacement
-   suite plugins and invocation names. If the mapping is unavailable, stop; do not
-   infer it from matching directory names.
-2. Read the current source `marketplace.json` and `installed_plugins.json`. Verify each
-   replacement suite exists, has a non-empty `skills` array, and contains the expected
-   member path.
-3. Group installed superseded plugins by scope. Preserve each original scope; do not
-   collapse project installs into user scope or vice versa.
-4. Run `claude plugin marketplace update <marketplace>`.
-5. Install the replacement suite once at each required scope.
-6. Verify before removing anything:
-   - `claude plugin list` shows the suite enabled at that scope;
-   - the installed suite version matches the source manifest;
-   - the suite cache contains every expected member `SKILL.md`;
-   - the new `<suite>:<skill>` invocation name matches the member's frontmatter name.
-7. Uninstall each superseded standalone plugin at its original scope only after the
-   replacement suite passes step 6.
-8. Re-run Workflow A. Run Workflow C only when the user also confirmed old-version
-   cache cleanup.
-9. Report the installed suites, retired standalone identities, preserved scopes,
-   remaining orphaned state, and any invocation changes the user must update.
-
-## Discover suite plugins dynamically
-
-Never maintain a hand-written suite inventory. Derive it from the current source
-manifest on every run:
+Run from this Skill bundle:
 
 ```bash
-jq -r '.plugins[] | select(((.skills // []) | length) > 0) | .name' \
-  .claude-plugin/marketplace.json
+python3 scripts/audit_codex_skill_surface.py --json
 ```
 
-Treat a top-level plugin entry with a non-empty `skills` array as a suite. Install or
-reinstall that plugin once; never install its member paths as standalone plugins unless
-the manifest separately registers them. If the manifest is missing or invalid, fail
-fast instead of falling back to a remembered suite list.
+Only add policy the user or activation SSOT actually declared:
 
-## Reporting format
-
-Use this markdown template for drift reports and sync summaries:
-
-```markdown
-# Skill Governance Report: <Marketplace>
-
-## Drift Summary
-- Stale: N
-- Version mismatch: N
-- Missing from cache: N
-- Orphaned in cache: N
-- Direct-copy drift: N
-
-## Stale Plugins
-| Plugin | Cache Version | Source Version | Scope |
-|--------|---------------|----------------|-------|
-
-## Version Mismatch
-| Plugin | Cache Version | Marketplace Version |
-|--------|---------------|---------------------|
-
-## Missing from Cache
-| Plugin | Source Version |
-|--------|----------------|
-
-## Orphaned in Cache
-| Plugin | Cache Version |
-|--------|---------------|
-
-## Direct-Copy Drift in ~/.claude/skills/
-| Skill | Issue |
-|-------|-------|
-
-## Actions Taken
-- ...
-
-## Failures
-- ...
+```bash
+python3 scripts/audit_codex_skill_surface.py \
+  --require-visible gstack-router \
+  --json
 ```
 
-## Troubleshooting
+The script compares `codex debug prompt-input` with the complete metadata parsed
+by Codex's own app-server `skills/list`, plus exact activation/discovery policy.
+Exit `0` is clean, `1` is pressure or drift requiring a decision, and `2` means
+the evidence is invalid. It is read-only. Do not convert exit `1` into automatic
+pruning.
 
-- **Cache version differs but marketplace update did nothing** — The marketplace may still point to an old source. Run Workflow D first.
-- **Uninstall fails because scope is wrong** — Re-check `installed_plugins.json` or the cache directory metadata for the actual scope.
-- **Latest cache dir does not match source after sync** — The marketplace may have cached metadata. Run `claude plugin marketplace update <marketplace>` again and reinstall.
-- **Suite sub-skills reported individually** — This is a mistake. Suites are installed as one unit; bundle sub-skills only for comparison purposes, not for install/uninstall.
-- **Old versions reappear after cleanup** — A stale marketplace source or an active Claude Code session may recreate them. Re-run Workflow B first, then Workflow C.
+For a project's dual roots:
+
+```bash
+python3 scripts/audit_project_skill_roots.py <project-root> --json
+```
+
+That audit pairs direct child bundles by frontmatter `name`, recognizes only its
+explicit fail-visible compatibility-router contract, and distinguishes shared
+targets, identical copies, real drift, and invalid state.
+
+## Non-negotiable safety boundaries
+
+- Drift checks are read-only. Config edits, link sync, installs, uninstalls,
+  moves, cache repair, and marketplace source changes require authorization.
+- Preserve Claude plugin scope. Verify replacements before retiring old
+  identities.
+- Never use direct cache copying as installation or source sync.
+- Do not enforce “one cache version”. Current Claude Code owns orphan-version
+  grace for running sessions; manual cache removal is exceptional repair only.
+- Do not use blind marketplace remove-then-add. Removing the last scoped
+  marketplace can uninstall its plugins.
+- Read every candidate's unique instructions, scripts, references, and assets
+  before calling it redundant. Old or short does not mean valueless.
+- Keep cold third-party resources installed; hide only their exact discovery
+  paths, then prove the router still resolves one representative capability.
+- Retire by recoverable move plus file/executable/hash manifest, never by
+  `rm -rf`.
+- Existing sessions retain startup metadata. Restart before treating the
+  interactive catalog as verification.
+
+## Source and activation ownership
+
+For Daymade source-backed Codex activation, route to the current
+`claude-switch-models-setup` dry-run/apply workflow. Its explicit
+`codex-active-skills.json` owns only links created from declared source
+marketplaces. Do not reimplement its collision, symlink, or pruning logic here.
+
+For Claude plugins, inspect current marketplace and install JSON, update or
+reinstall through the official CLI at the original scope, and independently
+read back the result. Treat cache folders as derived runtime artifacts.
+
+For suite topology changes, use `marketplace-dev` to edit the source manifest;
+use this Skill only to reconcile already-landed migrations on the current host.
+
+## Definition of done
+
+All applicable claims must be proven independently:
+
+- canonical source and current owner are named;
+- selected direct entries/routers appear in a fresh prompt with intact
+  descriptions;
+- entries intended cold are absent from that catalog;
+- one representative cold capability still resolves and works;
+- source-backed links or Claude installs read back with the intended identity,
+  source/version, and scope;
+- any retired bundle and its recovery manifest still exist;
+- unresolved ownership, host-version behavior, or deliberately retained
+  exceptions are explicit.
+
+Stop there. Do not create a new hook, manifest, report layer, or cleanup project
+unless the requested outcome still lacks evidence.

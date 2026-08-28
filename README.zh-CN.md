@@ -3081,24 +3081,26 @@ claude plugin install openclaw-model-switch@daymade-skills
 - 会议转录 vs 提问-回答 识别；主题归类；PII 标记
 - 上下文核验的关键词搜索（grep 只是第一步，不是答案）+ 可选的 memory 文件生成
 
-### **skill-governance** - Skill marketplace 与缓存治理
+### **skill-governance** - 真实 Skill 加载面治理
 
 > **安装**：`claude plugin install daymade-skill@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-skill:skill-governance`）
 
-让 Claude Code skill marketplace 和已安装缓存与源码仓库保持一致。用于只读漂移检查、通过官方 Claude plugin 命令从源码同步、suite 迁移后的安全收敛、清理旧缓存版本，以及把 marketplace 条目切到本地源码。
+治理 Claude Code 与 Codex 实际暴露给模型的 Skill 加载面，同时不丢失冷能力。它把权威源码、磁盘安装清单、发现策略、干净会话中的模型目录，以及 router 依赖的运行资源分开处理。
 
 **使用场景：**
-- 某个 skill 看起来过期、缺失、重复，或来自异常缓存版本
-- 需要对比 `.claude-plugin/marketplace.json`、源码目录和 Claude/Codex 已安装 skill
-- 从源码仓库重建本地 skill marketplace，但不手动复制派生缓存文件
+- Codex 出现大量 Skill、描述截断、身份重复，或应该保留的 router 不可见
+- 某个 Skill 看起来过期、缺失、重复，或来自异常 source/version/scope
+- 需要收敛 `~/.agents/skills` 下的自有源码链接，但不能把所有磁盘 bundle 都误当成激活项
 - suite 迁移已经合并，但本机仍保留旧 standalone plugin identity
+- 第三方 bundle 必须为运行资源留在磁盘上，但 Codex 只能看见它的 router
 
 **主要功能：**
-- 把源码目录视为权威来源，plugin/cache 目录视为派生产物
-- 使用官方 `claude plugin` 命令执行同步操作
-- 检测孤儿缓存版本、源码/缓存漂移、marketplace 条目指向错误源码
+- 用 Codex 自己的 `skills/list` 完整元数据核对干净 prompt，检测描述截断、已启用但被省略的入口、身份/源码冲突、禁用路径漂移、扫描错误和直接激活入口缺失
+- 把自有源码视为权威来源、plugin cache 视为派生运行态，并保留当前安装 scope
+- 把自有源码激活交给显式 manifest 的 owner，不把第三方磁盘库存混入其中
 - 从 manifest 动态发现 suite，并在按原 scope 退役 standalone 安装前先验证替代 suite
-- 检查发布面时忽略 `scripts/`、`references/`、`tests/`、demo 和构建产物等工作区专用目录
+- 通过精确路径的 Codex 发现策略把第三方 bundle 保留为磁盘冷库存，并同时验证干净 prompt catalog 与底层运行资源
+- 让 Claude 自己管理版本化 orphan cache 生命周期；手工清缓存只作为可恢复的异常修复，不再当常规治理
 
 ### **photo-to-scanned-pdf** - 手机文档照片转扫描件 PDF
 
