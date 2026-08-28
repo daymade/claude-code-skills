@@ -37,6 +37,11 @@ Then enforce these boundaries:
 - **Evidence scope is not action scope.** A read-only audit may discover another clone, ref,
    repository, or dangling object. That discovery may widen the report; it does not authorize
    preserving, uploading, merging, deleting, or otherwise changing the newly found object.
+- **Authorization is object-specific, not repository-wide by implication.** "Take over",
+   "continue", or "finish the cleanup" applies only to the checkout/ref/PR the user identified.
+   A collaborator-owned worktree, branch, or PR discovered later stays report-only until the user
+   names it as a change target. If the user says to leave it alone, record that exclusion and do
+   not inspect its working-tree contents, back it up, merge it, unlock/remove it, or mutate its refs.
 - **Preserve the smallest set threatened by the next authorized destructive action.** If the
    current phase is only commit/push/verify and no deletion, reset, gc, history rewrite, or
    worktree removal is authorized, do not create an all-refs bundle or pin every dangler.
@@ -96,6 +101,9 @@ report-only until the user expands the authorized targets.
    before deleting, re-enumerate local refs and hosting-service branches, then require every target
    ref to still equal the object recorded in the bundle. A new branch, a moved tip, or a new parallel
    PR reopens classification and requires a new bundle. Do not delete against a stale inventory.
+   **Scope has a fourth axis: OWNERSHIP.** Repository visibility does not make every visible object
+   part of this task. Partition discovered refs/worktrees/PRs into change-authorized, inspect-only,
+   and explicitly excluded sets before acting; compute cleanup success over the authorized set.
 2. **Run `git_loss_audit.sh` for the authoritative "what would be lost" check *within a
    checkout*.** It compares the current HEAD, every linked-worktree HEAD, local branches, and tags
    against every remote, then inspects each worktree for tracked/untracked changes plus stashes and
@@ -343,7 +351,9 @@ The opposite worry from Mode A: not "I lost something" but "these leftovers are 
 which can I destroy?" Deleting is trivial; **proving each item is superseded is the work**.
 Start from the Outcome contract. For an exhaustive audit or unknown target, run checkout discovery;
 for one named worktree/branch, stay in its owning repository. Run `git_loss_audit.sh` only in
-change-authorized checkouts; treat inspect-only checkouts as report-only, then retire named targets:
+change-authorized checkouts; treat inspect-only checkouts as report-only, keep explicitly excluded
+collaborator resources out of both the retirement plan and its terminal counts, then retire only
+the named targets:
 
 **Step 1 — classify each leftover: live WIP, or superseded draft?** Evidence ladder, strongest first:
 
