@@ -203,6 +203,14 @@ class PeopleRosterTests(unittest.TestCase):
             },
         )
 
+    def test_stray_apostrophes_are_not_treated_as_name_punctuation(self) -> None:
+        for payload in ("’Alice", "Alice’", "O’ Connor", "'Alice"):
+            with self.subTest(payload=payload):
+                self.assertEqual(
+                    self.roster(f"### 正名\n- **ASR 变体**: {payload}\n"),
+                    {},
+                )
+
     def test_uncased_and_lower_camel_multilingual_names_are_supported(self) -> None:
         corrections = self.roster(
             "### 正名\n"

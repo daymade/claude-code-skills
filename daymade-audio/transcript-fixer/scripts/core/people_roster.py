@@ -227,6 +227,8 @@ def _normalize_variant(raw: str) -> str | None:
         return None
     if any(ch in _NON_APOSTROPHE_QUOTE_CHARS for ch in value):
         return None
+    if not _apostrophes_are_internal(value):
+        return None
     if _looks_like_note(value):
         return None
     if not _is_name_like_unquoted(value):
@@ -367,3 +369,16 @@ def _looks_like_note(value: str) -> bool:
         for token in value.split()
     }
     return bool(words & _NOTE_LIKE_ENGLISH)
+
+
+def _apostrophes_are_internal(value: str) -> bool:
+    for index, ch in enumerate(value):
+        if ch not in {"'", "’"}:
+            continue
+        if not (
+            0 < index < len(value) - 1
+            and _is_letter_or_mark(value[index - 1])
+            and _is_letter_or_mark(value[index + 1])
+        ):
+            return False
+    return True
