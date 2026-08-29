@@ -1,8 +1,23 @@
 #!/bin/bash
-# Pre-commit hook: scan staged changes for sensitive data
-# Install: git config core.hooksPath .githooks
+# Repository dispatcher: block direct/stale mainline work, then preserve the
+# maintainer's shared PII guard when installed. Contributors without that shared
+# guard still receive the local fallback scan below.
 
 set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$REPO_ROOT"
+
+node "$REPO_ROOT/scripts/git-mainline-guard.mjs" pre-commit
+
+GLOBAL_GUARD_DIR="${GIT_PII_GUARD_DIR:-${HOME:-}/scripts/git-pii-guard}"
+if [ -x "$GLOBAL_GUARD_DIR/pre-commit" ]; then
+  GLOBAL_HOOK_DIR="$(cd "$(dirname "$GLOBAL_GUARD_DIR/pre-commit")" && pwd)"
+  if [ "$GLOBAL_HOOK_DIR" != "$HOOK_DIR" ]; then
+    exec "$GLOBAL_GUARD_DIR/pre-commit"
+  fi
+fi
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

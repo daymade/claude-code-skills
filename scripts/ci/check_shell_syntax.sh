@@ -26,12 +26,14 @@ while IFS= read -r script; do
     printf '%s\n' "$output" | sed 's/^/    /'
   fi
 done < <(
-  find . -name '*.sh' -type f \
-    -not -path './.git/*' \
-    -not -path '*/node_modules/*' \
-    -not -path '*/.venv/*' \
-    -not -path '*/vendor/*' \
-    | sort
+  {
+    find . -name '*.sh' -type f \
+      -not -path './.git/*' \
+      -not -path '*/node_modules/*' \
+      -not -path '*/.venv/*' \
+      -not -path '*/vendor/*'
+    find .githooks -maxdepth 1 -type f 2>/dev/null
+  } | sort -u
 )
 
 if [ "$failed" -gt 0 ]; then

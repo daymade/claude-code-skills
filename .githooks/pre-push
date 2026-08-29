@@ -1,0 +1,26 @@
+#!/bin/bash
+# Repository dispatcher: replay the exact pre-push update set to both the
+# mainline/version guard and the maintainer's shared PII guard.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$REPO_ROOT"
+
+HOOK_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/claude-code-skills-pre-push.XXXXXX")"
+trap 'rm -rf -- "$HOOK_TMP_DIR"' EXIT
+UPDATE_INPUT="$HOOK_TMP_DIR/updates"
+cat >"$UPDATE_INPUT"
+
+node "$REPO_ROOT/scripts/git-mainline-guard.mjs" pre-push "$@" <"$UPDATE_INPUT"
+
+GLOBAL_GUARD_DIR="${GIT_PII_GUARD_DIR:-${HOME:-}/scripts/git-pii-guard}"
+if [ -x "$GLOBAL_GUARD_DIR/pre-push" ]; then
+  GLOBAL_HOOK_DIR="$(cd "$(dirname "$GLOBAL_GUARD_DIR/pre-push")" && pwd)"
+  if [ "$GLOBAL_HOOK_DIR" != "$HOOK_DIR" ]; then
+    "$GLOBAL_GUARD_DIR/pre-push" "$@" <"$UPDATE_INPUT"
+  fi
+else
+  echo "WARNING: shared PII pre-push guard is unavailable; only the repository mainline guard ran." >&2
+fi
