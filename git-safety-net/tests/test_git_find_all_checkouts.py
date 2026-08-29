@@ -191,7 +191,7 @@ class CheckoutDiscoveryTests(unittest.TestCase):
             for index, line in enumerate(lines)
             if line.startswith(str(linked.resolve()))
         )
-        linked_block = "\n".join(lines[linked_index : linked_index + 5])
+        linked_block = "\n".join(lines[linked_index : linked_index + 6])
         self.assertIn("remote:    last fetched", linked_block)
         self.assertNotIn("never fetched in this repository", linked_block)
         self.assertNotIn("STALE", linked_block)
@@ -249,7 +249,7 @@ class CheckoutDiscoveryTests(unittest.TestCase):
                 for index, line in enumerate(lines)
                 if line.startswith(str(checkout.resolve()))
             )
-            checkout_block = "\n".join(lines[checkout_index : checkout_index + 5])
+            checkout_block = "\n".join(lines[checkout_index : checkout_index + 6])
             self.assertIn("remote:    last fetched", checkout_block)
             self.assertNotIn("STALE", checkout_block)
 
@@ -274,10 +274,27 @@ class CheckoutDiscoveryTests(unittest.TestCase):
             for index, line in enumerate(lines)
             if line.startswith(str(self.candidate.resolve()))
         )
-        current_block = "\n".join(lines[current_index : current_index + 5])
-        candidate_block = "\n".join(lines[candidate_index : candidate_index + 5])
+        current_block = "\n".join(lines[current_index : current_index + 6])
+        candidate_block = "\n".join(lines[candidate_index : candidate_index + 6])
         self.assertNotIn("STALE", current_block)
         self.assertIn("STALE", candidate_block)
+
+    def test_shared_clone_reports_borrowed_object_store(self) -> None:
+        shared = self.checkouts / "shared"
+        self.git("clone", "-q", "--shared", str(self.seed), str(shared))
+
+        completed = self.run_scanner(self.checkouts)
+
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        lines = completed.stdout.splitlines()
+        shared_index = next(
+            index
+            for index, line in enumerate(lines)
+            if line.startswith(str(shared.resolve()))
+        )
+        shared_block = "\n".join(lines[shared_index : shared_index + 9])
+        self.assertIn("objects:   borrowed via alternates", shared_block)
+        self.assertIn("preserve this clone's refs before retirement", shared_block)
 
 
 if __name__ == "__main__":

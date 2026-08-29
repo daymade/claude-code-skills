@@ -51,6 +51,12 @@ git merge <branch-for-this-work>                  # the work is now in THIS work
   **not** copy gitignored dependencies (`node_modules`, `.venv`), so tools/tests run there fail on
   the missing deps, and it can hand back a stale checkout of an older commit. A shared working tree
   with disciplined *commit-then-switch* is safer and simpler than juggling worktrees.
+- **`git clone --shared` as temporary isolation** — the clone's refs and object ownership split:
+  `.git/objects/info/alternates` borrows objects from the source while the clone owns its refs.
+  Git's official documentation warns that source maintenance can prune those borrowed objects and
+  corrupt the clone. If a truly independent clone must survive, use `--dissociate` at creation or
+  run `git repack -a` before relying on it; if it is temporary, retire it through
+  `scripts/git_prepare_clone_retirement.sh` rather than inferring “no local objects = no work.”
 
 The safety comes from **committing early**, not from a second checkout. When every
 worktree/ref/tag/stash/dangler enumerated by the full audit is in evidence scope, confirm the state

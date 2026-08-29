@@ -462,21 +462,22 @@ retirement does not need.
   to Step 1's *content* check (`git cherry`, superset diff) and only `-D` once that proves
   containment. Delete remote branches only after re-verifying the exact remote and repository
   visibility/ownership.
-- **Independent clones: there is no safe git-level command — only `rm -rf`, which git cannot
-  undo.** `git worktree remove` does not apply (it isn't a worktree) and refuses to help, so the
-  usual "the tool will stop me if it's unsafe" backstop is absent here. Make the check explicit
-  instead: gate the deletion on the backup actually existing, so a missing file aborts rather
-  than being noticed afterwards.
-
-  ```bash
-  for f in <backup>/<untracked-file> <backup>/uncommitted.diff <backup>/history.bundle; do
-    [ -s "$f" ] || { echo "MISSING: $f — refusing to delete"; exit 1; }
-  done
-  rm -rf <clone-path>
-  ```
-
-  Prefer deleting one clone at a time with its own verification over a loop across several — a
-  glob that deletes five directories has five chances to be wrong and reports none of them.
+- **Independent clones need ref-complete preparation before retirement.** A clean worktree says
+  nothing about clone-only refs, reflog history, ignored bytes, stashes, hooks/config, or an
+  `objects/info/alternates` dependency created by `git clone --shared`. Run
+  `scripts/git_prepare_clone_retirement.sh --clone <absolute-clone> --survivor <absolute-kept-checkout> --out <new-external-backup-dir>`;
+  it refuses those hidden loss states, every clone-only unreachable Git object, partial/promisor
+  clones, attached linked worktrees, local submodule repositories, known Git LFS/annex object stores,
+  tracked content filters, and repository-local config/hook indirection that the recovery archive
+  cannot resolve safely. It disables repository fsmonitor execution, freezes ref tips plus
+  symbolic-ref topology and metadata file types/modes, then creates a self-contained all-refs bundle
+  and a content-bound receipt. Finish every preliminary Git probe, freeze the absent quarantine
+  target, run process occupancy by itself, then run `--verify-current <backup-dir>` as the final
+  probe with the authorized no-clobber quarantine move as the **next operation**. This order keeps
+  `lsof` from observing a sibling Git process without opening a larger post-verification gap. Prove
+  old-path absence + new-path presence; permanent deletion is a separate explicit decision. Full
+  READ-DO sequence and `--shared` boundary:
+  **[references/merge_verification.md](references/merge_verification.md)** § Independent clone retirement.
 
 **Step 4 — after the delete, re-check by content, not by filename.** When a cleanup (or a batch of
 squash-merges) is already done and the question becomes "did any of it drop work?", the naming-based
@@ -504,16 +505,18 @@ in place; the bundle restores full history via `git fetch <file>.bundle <branch>
 
 | Script | Does | Mutates? |
 |---|---|---|
-| `scripts/git_find_all_checkouts.sh [root ...]` | Find every checkout of this repo on the machine — including independent clones invisible to `git worktree list` — and flag those holding uncommitted/untracked/unpushed work, plus how stale each one's cached remote refs are (`STALE_AFTER=<s>`, default 3600) | Nothing (read-only, no fetch) |
+| `scripts/git_find_all_checkouts.sh [root ...]` | Find every checkout of this repo on the machine — including independent clones invisible to `git worktree list` — and flag uncommitted/untracked/unpushed work, remote-cache age, and borrowed alternates object stores | Nothing (read-only, no fetch) |
 | `scripts/git_loss_audit.sh [remote]` | Refresh one remote, then report every worktree, local ref/tag, stash, and dangler; no exclusions, so the whole evidence surface must be in scope | Remote-tracking refs only |
 | `scripts/git_preserve_danglers.sh [--patch-dir DIR]` | Pin every dangling commit to `refs/dangling-backup/`, optional patches; whole-set only | Adds refs only (never deletes/gc) |
 | `scripts/git_verify_branch_merged.sh <branch> [base]` | Refresh remotes, then give a content-level MERGED/UNMERGED verdict | Remote-tracking refs only |
 | `scripts/git_export_before_drop.sh [export options]` | Export stashes plus selected branches or every current ref into verified bundles | Writes backup files only (never drops/deletes) |
 | `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |
+| `scripts/git_prepare_clone_retirement.sh --clone PATH --survivor PATH --out DIR` | Refuse hidden/unhandled clone state, then freeze every ref tip, symbolic-ref target, reflog identity, and scoped config/hooks/info metadata into a self-contained recovery set; after freezing an absent no-clobber destination and process occupancy, `--verify-current DIR` is the final probe and the move must be the next operation | Writes only the new external backup directory; disables lazy fetch/fsmonitor and refuses tracked content filters; never moves/deletes or changes refs |
 
-All five run from the repository root. They only ever `find`, `fetch`, `log`, `diff`, `show`,
-`status`, `cat-file`, `rev-list`, `rev-parse`, `fsck`, `for-each-ref`, `remote get-url`,
-`stash show`, `archive`, `bundle create/verify`, and (preserve only) `update-ref` — never
+All six run from the repository root. They use read-only enumeration/configuration commands such as
+`find`, `config`, `symbolic-ref`, `submodule status`, `status`, `cat-file`, `rev-list`, `rev-parse`,
+`fsck`, `for-each-ref`, and `remote get-url`; plus scoped `fetch`, `archive`, `bundle create/verify`,
+metadata hashing/archive, and (preserve only) `update-ref` where each script's table row says so — never
 `checkout`, `reset`, `push`, `stash drop`, `branch -d`, or `gc`, so they are safe to run in a
 dirty tree or alongside other agents. `git_find_all_checkouts.sh` additionally never fetches, so
 it works offline and behind a proxy.

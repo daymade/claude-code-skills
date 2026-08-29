@@ -230,6 +230,18 @@ for gitpath in "${CANDIDATES[@]}"; do
     kind="gitlink (submodule?)"
   fi
 
+  alternates_path="$(safe_git -C "$checkout" rev-parse --git-path objects/info/alternates 2>/dev/null || true)"
+  case "$alternates_path" in
+    /*) ;;
+    '') ;;
+    *) alternates_path="$checkout/$alternates_path" ;;
+  esac
+  if [ -n "$alternates_path" ] && [ -s "$alternates_path" ]; then
+    object_store="borrowed via alternates"
+  else
+    object_store="owned by this repository"
+  fi
+
   branch="$(safe_git -C "$checkout" rev-parse --abbrev-ref HEAD 2>/dev/null | head -1)"
   head_sha="$(safe_git -C "$checkout" rev-parse --short HEAD 2>/dev/null | head -1)"
   if status_output="$(safe_git -C "$checkout" status --porcelain=v1 --untracked-files=all --ignore-submodules=all 2>/dev/null)"; then
@@ -277,12 +289,16 @@ for gitpath in "${CANDIDATES[@]}"; do
 
   echo "${checkout}${marker}"
   echo "    kind:      ${kind}"
+  echo "    objects:   ${object_store}"
   echo "    branch:    ${branch} @ ${head_sha}"
   echo "    modified:  ${modified}   untracked: ${untracked}   unpushed: ${unpushed} (vs cached refs)"
   echo "    remote:    ${freshness}"
   if [ "${untracked:-0}" -gt 0 ] && [ "$checkout" != "$SELF_ROOT" ]; then
     echo "    NOTE: untracked files are unreachable by bundle/archive/format-patch."
     echo "          Copy them out directly — that disk copy is the only copy."
+  fi
+  if [ "$object_store" = "borrowed via alternates" ] && [ "$checkout" != "$SELF_ROOT" ]; then
+    echo "    NOTE: preserve this clone's refs before retirement; its objects live elsewhere."
   fi
   echo
 done
