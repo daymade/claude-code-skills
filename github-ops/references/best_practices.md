@@ -1,446 +1,260 @@
-# GitHub CLI Best Practices
+# GitHub CLI Automation and Reliability
 
-Shell scripting patterns, bulk operations, and automation strategies for gh CLI.
+Use this reference for machine-readable output, pagination, retries, bulk operations,
+GitHub Enterprise hosts, scripting, debugging, and performance. All writes follow the
+mutation contract in [`../SKILL.md`](../SKILL.md).
 
-## Output Formats and Processing
+## Contents
 
-### JSON Output for Programmatic Parsing
+- Machine-readable output
+- Pagination and large result sets
+- Error handling and retries
+- Safe bulk operations
+- Enterprise hosts and authentication
+- Automation patterns
+- Configuration, performance, and debugging
+
+## Machine-readable output
+
+Prefer `--json` plus `--jq` for decisions. Human output can change formatting and should not
+be parsed with `grep` to extract object IDs.
 
 ```bash
-# Default: Human-readable text
-gh pr list
+# Structured gh output
+gh pr list -R OWNER/REPO --json number,title,state,headRefOid,url
 
-# JSON output for programmatic parsing
-gh pr list --json number,title,state,author
+# Built-in jq projection
+gh pr list -R OWNER/REPO --json number,title,state \
+  --jq '.[] | select(.state == "OPEN") | {number,title}'
 
-# JSON with jq processing
-gh pr list --json number,title | jq '.[] | select(.title | contains("bug"))'
-
-# Template output for custom formatting
-gh pr list --template '{{range .}}{{.number}}: {{.title}}{{"\n"}}{{end}}'
+# Go template for human-readable display
+gh pr list -R OWNER/REPO \
+  --template '{{range .}}{{.number}}: {{.title}}{{"\n"}}{{end}}'
 ```
 
-### Field Selection
+Request only the fields needed to decide or verify the operation. This reduces GraphQL cost and
+makes acceptance checks explicit.
+
+## Pagination and large result sets
+
+High-level `gh ... list` commands use `--limit`; they do not accept a generic `--page` flag.
 
 ```bash
-# Select specific fields
-gh pr view 123 --json number,title,state,reviews
-
-# All available fields
-gh pr view 123 --json
-
-# Nested field extraction
-gh pr list --json number,author | jq '.[].author.login'
+gh pr list -R OWNER/REPO --state all --limit 200 \
+  --json number,title,state,url
 ```
 
----
-
-## Pagination Strategies
-
-### Controlling Result Limits
+For complete REST collections, use `gh api --paginate`. When query fields are supplied with
+`-f` or `-F`, force `GET` because those flags otherwise switch the method to `POST`.
 
 ```bash
-# Limit results (default is usually 30)
-gh pr list --limit 50
+gh api -X GET 'repos/OWNER/REPO/pulls?state=all&per_page=100' \
+  --paginate --slurp \
+  --jq '[.[][] | {number,title,state}]'
 
-# Show all results (use carefully)
-gh pr list --limit 999
-
-# Paginate manually
-gh pr list --limit 100 --page 1
-gh pr list --limit 100 --page 2
+gh api -X GET 'repos/OWNER/REPO/issues?state=all&per_page=100' \
+  --paginate --slurp
 ```
 
-### Processing Large Result Sets
+For GraphQL pagination, the query must accept `$endCursor` and return
+`pageInfo { hasNextPage endCursor }`; then use `--paginate`. Do not simulate “all” with a guessed
+page count.
+
+## Error handling and retries
+
+### Separate transport acceptance from state acceptance
+
+A zero exit code or successful HTTP status proves the request completed at that interface. The
+independent readback in `SKILL.md` decides whether the requested state exists.
 
 ```bash
-# Get all PRs in batches
-for page in {1..10}; do
-  gh pr list --limit 100 --page $page --json number,title
-done
-
-# Stop when no more results
-page=1
-while true; do
-  results=$(gh pr list --limit 100 --page $page --json number)
-  if [ "$results" == "[]" ]; then break; fi
-  echo "$results"
-  ((page++))
-done
-```
-
----
-
-## Error Handling and Reliability
-
-### Exit Code Checking
-
-```bash
-# Check exit codes
-gh pr merge 123 && echo "Success" || echo "Failed"
-
-# Capture exit code
-gh pr create --title "Title" --body "Body"
-exit_code=$?
-if [ $exit_code -eq 0 ]; then
-  echo "PR created successfully"
-else
-  echo "PR creation failed with code $exit_code"
+if ! result=$(gh api 'repos/OWNER/REPO/pulls/123' 2>error.log); then
+  printf 'GitHub read failed\n' >&2
+  sed -n '1,80p' error.log >&2
+  exit 1
 fi
+printf '%s\n' "$result" | jq '{number,state,merged,head_sha:.head.sha}'
 ```
 
-### Error Output Handling
+Avoid suppressing errors with `2>/dev/null` when absence and authorization failure would lead to
+different actions. A `404` can mean absent, hidden, or inaccessible.
+
+### Retry only operations that are safe to repeat
+
+Bounded retries are appropriate for read-only requests and explicitly idempotent writes. Use the
+server's rate-limit or `Retry-After` signal when available.
 
 ```bash
-# Separate stdout and stderr
-gh pr list > success.log 2> error.log
-
-# Redirect errors to stdout
-gh pr list 2>&1 | tee combined.log
-
-# Suppress errors
-gh pr view 999 2>/dev/null || echo "PR not found"
-```
-
-### Retry Logic
-
-```bash
-# Simple retry
-for i in {1..3}; do
-  gh api repos/{owner}/{repo}/pulls && break
-  echo "Retry $i failed, waiting..."
-  sleep 5
-done
-
-# Exponential backoff
-attempt=1
-max_attempts=5
-delay=1
-
-while [ $attempt -le $max_attempts ]; do
-  if gh pr create --title "Title" --body "Body"; then
+result=''
+for delay in 1 2 4; do
+  if result=$(gh api 'repos/OWNER/REPO/pulls/123'); then
     break
   fi
-  echo "Attempt $attempt failed, retrying in ${delay}s..."
-  sleep $delay
-  delay=$((delay * 2))
-  attempt=$((attempt + 1))
+  sleep "$delay"
+done
+test -n "$result" || { printf 'Read failed after bounded retries\n' >&2; exit 1; }
+```
+
+Do not blindly retry comments, reviews, invitations, workflow dispatches, releases, repository
+creation, or PR/issue creation. After a timeout or 5xx, query by exact target/content/idempotency
+key first. Retry only if readback proves the first request did not land.
+
+## Safe bulk operations
+
+Bulk work is a sequence of exact single-object operations, not one unreviewed pipeline.
+
+1. Query and freeze a finite target set with immutable IDs/SHAs.
+2. Display it with the proposed action.
+3. Confirm the current request authorizes that exact set and consequence.
+4. Process one object at a time, recording success/failure.
+5. Read every object back and report partial completion honestly.
+
+```bash
+targets=$(gh issue list -R OWNER/REPO --label needs-triage \
+  --json number,title,state,url)
+printf '%s\n' "$targets" | jq .
+
+# Execute only after this exact set is authorized.
+printf '%s\n' "$targets" | jq -r '.[].number' | while read -r issue; do
+  if gh issue edit "$issue" -R OWNER/REPO --add-label reviewed; then
+    gh issue view "$issue" -R OWNER/REPO --json number,state,labels,url
+  else
+    printf 'Issue %s failed; continuing for a complete per-item report\n' "$issue" >&2
+  fi
 done
 ```
 
----
+Do not stream a live search into `xargs` for merges, approvals, closes, deletes, permission
+changes, workflow control, or messages. The query can change while the writes run, and parallel
+writes make recovery and rate-limit behavior harder to attribute.
 
-## Bulk Operations
+## Enterprise hosts and authentication
 
-### Operating on Multiple Items
+Keep the host explicit when more than one GitHub instance is configured:
 
 ```bash
-# Close all PRs with specific label
-gh pr list --label "wip" --json number -q '.[].number' | \
-  xargs -I {} gh pr close {}
-
-# Add label to multiple issues
-gh issue list --state open --json number -q '.[].number' | \
-  xargs -I {} gh issue edit {} --add-label "needs-triage"
-
-# Approve multiple PRs
-gh pr list --author username --json number -q '.[].number' | \
-  xargs -I {} gh pr review {} --approve
+gh auth login --hostname github.example.com
+gh auth status --hostname github.example.com
+gh api --hostname github.example.com user --jq '.login'
+gh pr list -R github.example.com/OWNER/REPO
 ```
 
-### Parallel Execution
+For a shell session dedicated to one enterprise host:
 
 ```bash
-# Process items in parallel (GNU parallel)
-gh pr list --json number -q '.[].number' | \
-  parallel -j 4 gh pr view {}
-
-# Xargs parallel execution
-gh pr list --json number -q '.[].number' | \
-  xargs -P 4 -I {} gh pr checks {}
-```
-
-### Batch Processing with Confirmation
-
-```bash
-# Confirm before bulk operation
-gh pr list --label "old" --json number,title | \
-  jq -r '.[] | "\(.number): \(.title)"' | \
-  while read -r line; do
-    echo "Close PR $line? (y/n)"
-    read -r answer
-    if [ "$answer" == "y" ]; then
-      pr_num=$(echo "$line" | cut -d: -f1)
-      gh pr close "$pr_num"
-    fi
-  done
-```
-
----
-
-## Enterprise GitHub Patterns
-
-### Working with GitHub Enterprise
-
-```bash
-# Authenticate with enterprise hostname
-gh auth login --hostname github.enterprise.com
-
-# Set environment variable for enterprise
-export GH_HOST=github.enterprise.com
-gh pr list
-
-# Use with specific host
-gh pr list --hostname github.enterprise.com
-
-# Check current authentication
+export GH_HOST=github.example.com
 gh auth status
 ```
 
-### Switching Between Instances
+Use `gh auth login`, a CI secret store, or the platform's credential mechanism. Never place a
+token literal in a command, document, process argument, log, or committed environment file. Do not
+use `gh auth status --show-token` for routine checks.
+
+Enterprise policy can override organization and repository settings. If a mutation returns a
+policy error or readback remains unchanged, inspect the enterprise policy layer instead of trying
+alternate payload spellings.
+
+## Automation patterns
+
+### Create, identify, verify
+
+Do not scrape the PR number from the human URL output. Create once, then identify the PR from the
+verified head branch and read back structured fields.
 
 ```bash
-# Switch between GitHub.com and Enterprise
-gh auth switch
+gh pr create -R OWNER/REPO \
+  --title "Describe the change" \
+  --body-file pr-description.md \
+  --base main \
+  --head feature-branch
 
-# Use specific auth token
-GH_TOKEN=ghp_enterprise_token gh pr list --hostname github.enterprise.com
+gh pr view feature-branch -R OWNER/REPO \
+  --json number,title,state,headRefOid,baseRefOid,url
 ```
 
----
-
-## Automation and Scripting
-
-### Capturing Output
+### Merge only the reviewed head
 
 ```bash
-# Capture PR number
-PR_NUMBER=$(gh pr create --title "Title" --body "Body" | grep -oP '\d+$')
-echo "Created PR #$PR_NUMBER"
-
-# Capture JSON and parse
-pr_data=$(gh pr view 123 --json number,title,state)
-pr_state=$(echo "$pr_data" | jq -r '.state')
-
-# Capture and validate
-if output=$(gh pr merge 123 2>&1); then
-  echo "Merged successfully"
-else
-  echo "Merge failed: $output"
-fi
+head_sha=$(gh pr view 123 -R OWNER/REPO --json headRefOid --jq '.headRefOid')
+gh pr checks 123 -R OWNER/REPO --watch
+gh pr merge 123 -R OWNER/REPO --squash --match-head-commit "$head_sha"
+gh pr view 123 -R OWNER/REPO --json number,state,mergedAt,mergeCommit,url
 ```
 
-### Conditional Operations
+The final GitHub readback proves PR state; fetch the base and run the acceptance check to prove
+the intended behavior landed.
+
+### Poll asynchronous state with a deadline
 
 ```bash
-# Check PR status before merging
-pr_state=$(gh pr view 123 --json state -q '.state')
-if [ "$pr_state" == "OPEN" ]; then
-  gh pr merge 123 --squash
-fi
-
-# Check CI status
-checks=$(gh pr checks 123 --json state -q '.[].state')
-if echo "$checks" | grep -q "FAILURE"; then
-  echo "CI checks failed, cannot merge"
-  exit 1
-fi
-```
-
-### Workflow Automation
-
-```bash
-#!/bin/bash
-# Automated PR workflow
-
-# Create feature branch
-git checkout -b feature/new-feature
-
-# Make changes and commit
-# ...
-
-# Push and create PR
-git push -u origin feature/new-feature
-PR_NUM=$(gh pr create \
-  --title "feat: New feature" \
-  --body "Description of feature" \
-  --label "enhancement" \
-  | grep -oP '\d+$')
-
-# Wait for CI
-echo "Waiting for CI checks..."
-while true; do
-  status=$(gh pr checks "$PR_NUM" --json state -q '.[].state' | grep -v "SUCCESS")
-  if [ -z "$status" ]; then
-    echo "All checks passed!"
-    break
-  fi
-  sleep 30
+deadline=$((SECONDS + 300))
+while (( SECONDS < deadline )); do
+  state=$(gh run view RUN_ID -R OWNER/REPO --json status --jq '.status')
+  test "$state" = completed && break
+  sleep 10
 done
-
-# Auto-merge if checks pass
-gh pr merge "$PR_NUM" --squash --auto
+gh run view RUN_ID -R OWNER/REPO \
+  --json databaseId,status,conclusion,headSha,url
 ```
 
----
+If the deadline expires, report `pending`; do not turn a timeout into a failure or success claim.
 
-## Configuration and Customization
-
-### Setting Defaults
+## Configuration
 
 ```bash
-# Set default repository
-gh repo set-default owner/repo
-
-# Configure editor
-gh config set editor vim
-
-# Configure browser
-gh config set browser firefox
-
-# Set Git protocol preference
-gh config set git_protocol ssh  # or https
-
-# View current configuration
+gh repo set-default OWNER/REPO
+gh config set git_protocol ssh
 gh config list
 ```
 
-### Environment Variables
+Treat the default repository as convenience, not authority for a consequential write. Reconfirm
+the fully qualified target immediately before mutation.
+
+Useful environment variables:
+
+- `GH_HOST`: selected GitHub host.
+- `GH_REPO`: default `[HOST/]OWNER/REPO` for commands that support it.
+- `GH_PAGER`: pager selection.
+- `GH_NO_UPDATE_NOTIFIER=1`: suppress CLI update notices in automation.
+- `GH_TOKEN` / `GITHUB_TOKEN`: non-interactive authentication supplied by a protected runtime;
+  never inline or echo the value.
+
+## Performance
+
+- Cache a read-only response within one decision when the relevant hosted state cannot change
+  underneath the operation.
+- Re-read immediately before a destructive write or when another actor can move the target.
+- Select only required JSON fields.
+- Use REST pagination rather than guessed loops.
+- Check `gh api rate_limit` instead of persisting rate-limit numbers that vary by resource,
+  authentication, plan, and platform policy.
 
 ```bash
-# GitHub token
-export GH_TOKEN=ghp_your_token
-
-# GitHub host
-export GH_HOST=github.enterprise.com
-
-# Default repository
-export GH_REPO=owner/repo
-
-# Pager
-export GH_PAGER=less
-
-# No prompts (for automation)
-export GH_NO_UPDATE_NOTIFIER=1
+gh api rate_limit --jq '.resources | with_entries(.value |= {
+  limit,remaining,reset,used
+})'
 ```
 
----
-
-## Performance Optimization
-
-### Reducing API Calls
+## Debugging
 
 ```bash
-# Cache frequently used data
-pr_list=$(gh pr list --json number,title,state)
-echo "$pr_list" | jq '.[] | select(.state == "OPEN")'
-echo "$pr_list" | jq '.[] | select(.state == "MERGED")'
-
-# Use single API call for multiple fields
-gh pr view 123 --json number,title,state,reviews,comments
+GH_DEBUG=1 gh pr list -R OWNER/REPO
+GH_DEBUG=api gh api 'repos/OWNER/REPO/pulls/123'
+gh api -i 'repos/OWNER/REPO/pulls/123'
 ```
 
-### Selective Field Loading
+Debug output can contain repository names, request bodies, headers, and other sensitive context.
+Inspect it locally and redact it before sharing. Never enable token-printing flags.
 
-```bash
-# Only fetch needed fields
-gh pr list --json number,title  # Fast
+When a `gh` GraphQL-backed subcommand fails but a REST endpoint exists, use REST to recover the
+hosted state. Report the failed query channel separately; one API path failing does not prove the
+resource is absent.
 
-# vs. fetching all fields
-gh pr list --json  # Slower
-```
+## Completion checklist
 
----
-
-## Debugging and Troubleshooting
-
-### Verbose Output
-
-```bash
-# Enable debug logging
-GH_DEBUG=1 gh pr list
-
-# API logging
-GH_DEBUG=api gh pr create --title "Test"
-
-# Full HTTP trace
-GH_DEBUG=api,http gh api repos/{owner}/{repo}
-```
-
-### Testing API Calls
-
-```bash
-# Test API endpoint
-gh api repos/{owner}/{repo}/pulls
-
-# Test with custom headers
-gh api repos/{owner}/{repo}/pulls \
-  -H "Accept: application/vnd.github.v3+json"
-
-# Test pagination
-gh api repos/{owner}/{repo}/pulls --paginate
-```
-
----
-
-## Best Practices Summary
-
-### Do's
-
-✅ **Use JSON output** for programmatic parsing
-✅ **Handle errors** with proper exit code checking
-✅ **Implement retries** for network operations
-✅ **Cache results** when making multiple queries
-✅ **Use bulk operations** for efficiency
-✅ **Set appropriate limits** to avoid rate limiting
-✅ **Validate input** before operations
-✅ **Log operations** for audit trail
-
-### Don'ts
-
-❌ **Don't hardcode credentials** - Use environment variables or gh auth
-❌ **Don't ignore errors** - Always check exit codes
-❌ **Don't fetch all fields** - Select only what you need
-❌ **Don't skip rate limit checks** - Monitor API usage
-❌ **Don't run destructive operations without confirmation**
-❌ **Don't assume unlimited results** - Always paginate
-❌ **Don't mix automation with interactive** - Use GH_NO_UPDATE_NOTIFIER=1
-
----
-
-## Common Patterns
-
-### Create, Wait, Merge Pattern
-
-```bash
-# Create PR
-PR_NUM=$(gh pr create --title "Feature" --body "Description" | grep -oP '\d+$')
-
-# Wait for checks
-gh pr checks "$PR_NUM" --watch
-
-# Merge when ready
-gh pr merge "$PR_NUM" --squash
-```
-
-### Search and Process Pattern
-
-```bash
-# Find and process matching items
-gh pr list --json number,title | \
-  jq -r '.[] | select(.title | contains("bug")) | .number' | \
-  while read -r pr; do
-    gh pr edit "$pr" --add-label "bug"
-  done
-```
-
-### Batch Approval Pattern
-
-```bash
-# Review and approve multiple PRs
-gh pr list --author trusted-user --json number -q '.[].number' | \
-  while read -r pr; do
-    gh pr diff "$pr"
-    gh pr review "$pr" --approve --body "LGTM"
-  done
-```
+- Active account, host, and fully qualified target were verified.
+- Any write used the current operation input contract.
+- Non-idempotent writes were not blindly retried.
+- Bulk targets were frozen and previewed before mutation.
+- The requested state was independently read back.
+- Partial, pending, or policy-blocked outcomes remain visible.

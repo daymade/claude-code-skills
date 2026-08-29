@@ -2,6 +2,10 @@
 
 Comprehensive examples for GitHub pull request operations using gh CLI.
 
+All writes follow the target, authorization, impact-preview, and independent-readback contract
+in [`../SKILL.md`](../SKILL.md). Use `-R OWNER/REPO` whenever the current directory is not itself
+the verified target repository.
+
 ## Contents
 
 - Creating, viewing, managing, commenting on, and reviewing pull requests
@@ -13,24 +17,39 @@ Comprehensive examples for GitHub pull request operations using gh CLI.
 
 ### Basic PR Creation
 
+Prepare the local branch under the repository's Git safety rules, verify the remote's live
+visibility, then push the exact branch before creating the PR:
+
 ```bash
-# Create PR with NOJIRA prefix (bypasses JIRA enforcement checks)
-gh pr create --title "NOJIRA: Your PR title" --body "PR description"
+git checkout -b feature/new-feature
+# Make, review, test, and commit the authorized changes.
+gh repo view OWNER/REPO --json nameWithOwner,visibility,isPrivate,url
+git push -u origin feature/new-feature
+```
 
-# Create PR with JIRA ticket reference
-gh pr create --title "GR-1234: Your PR title" --body "PR description"
+```bash
+# Create a PR against an explicit repository, base, and head
+gh pr create -R OWNER/REPO \
+  --title "Describe the user-visible change" \
+  --body-file pr-description.md \
+  --base main \
+  --head feature/new-feature
 
-# Create PR targeting specific branch
-gh pr create --title "NOJIRA: Feature" --body "Description" --base main --head feature-branch
-
-# Create PR with body from file
-gh pr create --title "NOJIRA: Feature" --body-file pr-description.md
+# Create a draft when the change is not ready for review
+gh pr create -R OWNER/REPO \
+  --title "Describe the work in progress" \
+  --body-file pr-description.md \
+  --base main \
+  --head feature/new-feature \
+  --draft
 ```
 
 ### PR Title Convention
 
-- **With JIRA ticket**: `GR-1234: Descriptive title`
-- **Without JIRA ticket**: `NOJIRA: Descriptive title` (bypasses enforcement check)
+PR title formats are repository policy, not a GitHub-wide convention. Before creating a PR,
+inspect `CONTRIBUTING.md`, the PR template, title-check workflow, or accepted recent PRs. Do not
+invent a ticket prefix or a bypass marker. After creation, read back the new PR's repository,
+base/head SHAs, title, body, and URL.
 
 ---
 
@@ -97,13 +116,17 @@ gh pr edit 123 --remove-label "wip"
 
 ```bash
 # Merge PR (various strategies)
-gh pr merge 123 --merge     # Regular merge commit
-gh pr merge 123 --squash    # Squash and merge
-gh pr merge 123 --rebase    # Rebase and merge
+gh pr merge 123 -R OWNER/REPO --merge --match-head-commit HEAD_SHA
+gh pr merge 123 -R OWNER/REPO --squash --match-head-commit HEAD_SHA
+gh pr merge 123 -R OWNER/REPO --rebase --match-head-commit HEAD_SHA
 
 # Auto-merge after checks pass
-gh pr merge 123 --auto --squash
+gh pr merge 123 -R OWNER/REPO --auto --squash --match-head-commit HEAD_SHA
 ```
+
+Capture `HEAD_SHA` from a fresh `gh pr view` immediately before merging. Afterward, read the PR
+state again and verify the accepted behavior on the fetched base; a changed squash/rebase commit
+identity is not evidence of loss.
 
 ### PR Lifecycle Management
 
@@ -213,15 +236,25 @@ The local/ref backup and dirty-WIP gates belong to `git-safety-net`. Once it has
 re-verified a bundle, query each remote deletion target immediately before deleting it:
 
 ```bash
-gh api repos/{owner}/{repo}/git/ref/heads/{branch/path} --jq '.object.sha'
-git push origin --delete {branch/path}
+bundle_recorded_sha='RECORDED_SHA_FROM_VERIFIED_BUNDLE'
+expected_sha=$(gh api repos/{owner}/{repo}/git/ref/heads/{branch/path} --jq '.object.sha')
+test "$expected_sha" = "$bundle_recorded_sha" || {
+  printf 'Remote branch moved after preservation; rebuild the audit and backup.\n' >&2
+  exit 1
+}
+git push \
+  --force-with-lease="refs/heads/{branch/path}:$expected_sha" \
+  origin \
+  ":refs/heads/{branch/path}"
 gh api 'repos/{owner}/{repo}/branches?per_page=100' --paginate --jq '.[].name'
 git remote prune origin
 ```
 
-If the hosted SHA differs from the bundle's recorded SHA, stop: a parallel writer moved the branch
-after the audit. Classify the new tip and rebuild the backup. After deletion, verify both the hosted
-branch list and local remote-tracking refs; success in one does not prove the other converged.
+Set `bundle_recorded_sha` from the verified preservation receipt. The explicit expected-SHA lease
+closes the race between the last GET and the deletion push: if a parallel writer moves the branch,
+Git rejects the deletion. Never use an unspecified `--force-with-lease` or unconditional
+`--delete` for this path. After deletion, verify both the hosted branch list and local
+remote-tracking refs; success in one does not prove the other converged.
 
 #### 5. Terminal state
 
@@ -239,7 +272,7 @@ gh pr checks 123
 gh pr checks 123 --watch
 
 # Get checks as JSON
-gh pr checks 123 --json name,status,conclusion
+gh pr checks 123 --json name,state,bucket,workflow
 ```
 
 ### PR Metadata Operations
@@ -291,19 +324,30 @@ gh pr list --template '{{range .}}#{{.number}}: {{.title}} (@{{.author.login}}){
 
 ### Operating on Multiple PRs
 
+Freeze and preview the exact objects before any bulk write. Do not pipe a changing live query
+directly into `xargs`.
+
 ```bash
-# Close all PRs with specific label
-gh pr list --label "wip" --json number -q '.[].number' | \
-  xargs -I {} gh pr close {}
+# Freeze and display candidates
+targets=$(gh pr list -R OWNER/REPO --label "wip" \
+  --json number,title,headRefOid,url)
+printf '%s\n' "$targets" | jq .
 
-# Add label to all open PRs
-gh pr list --state open --json number -q '.[].number' | \
-  xargs -I {} gh pr edit {} --add-label "needs-review"
+# After the exact set and consequence are authorized, close one at a time and read back
+printf '%s\n' "$targets" | jq -r '.[].number' | while read -r pr; do
+  gh pr close "$pr" -R OWNER/REPO
+  gh pr view "$pr" -R OWNER/REPO --json number,state,url
+done
 
-# Approve all PRs from specific author
-gh pr list --author username --json number -q '.[].number' | \
-  xargs -I {} gh pr review {} --approve
+# Bulk metadata updates use the same frozen-set pattern
+printf '%s\n' "$targets" | jq -r '.[].number' | while read -r pr; do
+  gh pr edit "$pr" -R OWNER/REPO --add-label "needs-review"
+  gh pr view "$pr" -R OWNER/REPO --json number,labels,url
+done
 ```
+
+Do not bulk-approve by author or label alone. Review each frozen head SHA and its checks; approval
+is an externally visible attestation about that exact revision.
 
 ---
 

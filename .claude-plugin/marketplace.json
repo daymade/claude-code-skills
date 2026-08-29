@@ -428,10 +428,10 @@
     },
     {
       "name": "github-ops",
-      "description": "Operates GitHub through gh CLI and the REST/GraphQL APIs for pull requests, issues, repositories, workflows, and API automation. Use when creating, viewing, merging, closing, or reconciling PRs; comparing parallel or superseded PRs; verifying squash/rebase landing; retiring remote branches; recovering from gh GraphQL failures through authoritative REST endpoints; managing issues or Actions; or operating public and enterprise GitHub.",
+      "description": "Operates GitHub through gh CLI and the REST/GraphQL APIs with explicit target, authorization, impact preview, and independent readback. Use for pull requests, issues, Actions, repositories, collaborators, teams, organization member privileges, base permissions, 2FA enforcement, repository settings, API automation, parallel or superseded PR convergence, and public or enterprise GitHub. Also use when a GitHub write returned success but the requested state did not change, or when deciding whether a setting is writable through CLI, REST, GraphQL, or only the GitHub UI.",
       "source": "./github-ops",
       "strict": false,
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "developer-tools",
       "keywords": [
         "github",
@@ -439,6 +439,9 @@
         "pull-request",
         "issues",
         "workflows",
+        "organizations",
+        "permissions",
+        "2fa",
         "api"
       ]
     },

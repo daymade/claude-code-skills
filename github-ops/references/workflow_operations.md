@@ -2,6 +2,10 @@
 
 Comprehensive guide for GitHub Actions workflow management using gh CLI.
 
+All writes follow the target, authorization, impact-preview, and independent-readback contract
+in [`../SKILL.md`](../SKILL.md). Workflow dispatch, rerun, cancel, enable/disable, secret writes,
+and history deletion are external state changes; a command receipt is not terminal evidence.
+
 ## Listing Workflows
 
 ### View Available Workflows
@@ -150,8 +154,9 @@ gh run watch run-id --interval 10
 ### Retrieve Run Data
 
 ```bash
-# Download workflow run logs
-gh run download run-id
+# Print or save workflow logs
+gh run view run-id --log
+gh run view run-id --log > run-id.log
 
 # Download specific artifact
 gh run download run-id --name artifact-name
@@ -159,8 +164,9 @@ gh run download run-id --name artifact-name
 # Download to specific directory
 gh run download run-id --dir ./downloads
 
-# List available artifacts
-gh run view run-id --log | grep "artifact"
+# List available artifacts for a run
+gh api "repos/OWNER/REPO/actions/runs/run-id/artifacts" \
+  --jq '.artifacts[] | {id,name,size_in_bytes,expired}'
 ```
 
 ---
@@ -229,19 +235,48 @@ gh run list --workflow=ci --limit 100 --json conclusion | \
 
 ### Managing Multiple Runs
 
+Freeze and preview run IDs before any control operation. Do not pipe a changing run query directly
+into `xargs`.
+
 ```bash
-# Cancel all running workflows
-gh run list --status in_progress --json databaseId -q '.[].databaseId' | \
-  xargs -I {} gh run cancel {}
+# Freeze and display cancellation candidates
+cancel_targets=$(gh run list -R OWNER/REPO --status in_progress \
+  --json databaseId,status,headSha,url)
+printf '%s\n' "$cancel_targets" | jq .
 
-# Rerun all failed runs from today
-gh run list --status failure --created today --json databaseId -q '.[].databaseId' | \
-  xargs -I {} gh run rerun {}
+# Freeze failed runs separately for an authorized rerun
+rerun_targets=$(gh run list -R OWNER/REPO --status failure --created today \
+  --json databaseId,attempt,status,conclusion,headSha,url)
+printf '%s\n' "$rerun_targets" | jq .
 
-# Download artifacts from multiple runs
-gh run list --workflow=build --limit 5 --json databaseId -q '.[].databaseId' | \
-  xargs -I {} gh run download {}
+# Freeze completed build runs separately for artifact download
+artifact_targets=$(gh run list -R OWNER/REPO --workflow build --status success --limit 5 \
+  --json databaseId,status,conclusion,headSha,url)
+printf '%s\n' "$artifact_targets" | jq .
+
+# After this exact set is authorized, cancel and read back one at a time
+printf '%s\n' "$cancel_targets" | jq -r '.[].databaseId' | while read -r run_id; do
+  gh run cancel "$run_id" -R OWNER/REPO
+  gh run view "$run_id" -R OWNER/REPO \
+    --json databaseId,attempt,status,conclusion,headSha,url
+done
+
+# Rerun only the separately authorized failed-run set, then read the new attempt state
+printf '%s\n' "$rerun_targets" | jq -r '.[].databaseId' | while read -r run_id; do
+  gh run rerun "$run_id" -R OWNER/REPO
+  gh run view "$run_id" -R OWNER/REPO \
+    --json databaseId,attempt,status,conclusion,headSha,url
+done
+
+# Artifact download is read-only but uses completed build runs with unique destinations
+printf '%s\n' "$artifact_targets" | jq -r '.[].databaseId' | while read -r run_id; do
+  gh run download "$run_id" -R OWNER/REPO --dir "artifacts/$run_id"
+done
 ```
+
+If a workflow is not literally named `build`, replace that filter with the verified workflow file,
+name, or ID. A cancellation, rerun, and artifact download can concern different run populations;
+never reuse one frozen query merely because all three operations accept run IDs.
 
 ---
 
@@ -253,8 +288,8 @@ gh run list --workflow=build --limit 5 --json databaseId -q '.[].databaseId' | \
 # List repository secrets
 gh api repos/{owner}/{repo}/actions/secrets
 
-# Create/update secret
-gh secret set SECRET_NAME --body "secret-value"
+# Create/update secret through the hidden interactive prompt
+gh secret set SECRET_NAME
 
 # Create secret from file
 gh secret set SECRET_NAME < secret.txt
@@ -265,6 +300,10 @@ gh secret delete SECRET_NAME
 # List secrets
 gh secret list
 ```
+
+Do not place secret values in command arguments, shell history, logs, or documentation. Before a
+secret rotation, identify its consumers and rollback source. Afterward, verify secret metadata and
+one authorized consumer path; GitHub intentionally does not return the secret value.
 
 ### Managing Variables
 
@@ -325,7 +364,7 @@ gh run list --status failure --limit 10
 gh run view run-id --log-failed
 
 # Download logs for analysis
-gh run download run-id
+gh run view run-id --log > run-id.log
 
 # Rerun with debug logging
 gh run rerun run-id --debug

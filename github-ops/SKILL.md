@@ -1,221 +1,183 @@
 ---
 name: github-ops
 description: >-
-  Operates GitHub through gh CLI and the REST/GraphQL APIs for pull requests,
-  issues, repositories, workflows, and API automation. Use when creating,
-  viewing, merging, closing, or reconciling PRs; comparing parallel or
-  superseded PRs; verifying squash/rebase landing; retiring remote branches;
-  recovering from gh GraphQL failures through authoritative REST endpoints;
-  managing issues or Actions; or operating public and enterprise GitHub.
+  Operates GitHub through gh CLI and the REST/GraphQL APIs with explicit target,
+  authorization, impact preview, and independent readback. Use for pull requests,
+  issues, Actions, repositories, collaborators, teams, organization member
+  privileges, base permissions, 2FA enforcement, repository settings, API
+  automation, parallel or superseded PR convergence, and public or enterprise
+  GitHub. Also use when a GitHub write returned success but the requested state did
+  not change, or when deciding whether a setting is writable through CLI, REST,
+  GraphQL, or only the GitHub UI.
 ---
 
 # GitHub Operations
 
-## Overview
+Deliver the requested GitHub state, not a successful-looking command. A `200`, `201`,
+`202`, or `204` response is evidence that GitHub accepted a request; it is not proof
+that every requested field changed, an invitation was accepted, an asynchronous job
+finished, or the user's business outcome was achieved.
 
-This skill provides comprehensive guidance for GitHub operations using the `gh` CLI tool and GitHub REST/GraphQL APIs. Use this skill when performing any GitHub-related tasks including pull request management, issue tracking, repository operations, workflow automation, and API interactions.
+## Route by operation
 
-## When to Use This Skill
+Read only the reference required for the task:
 
-This skill activates for tasks involving:
-- Creating, viewing, editing, or merging pull requests
-- Managing GitHub issues or repository settings
-- Querying GitHub API endpoints (REST or GraphQL)
-- Working with GitHub Actions workflows
-- Performing bulk operations on repositories
-- Integrating with GitHub Enterprise
-- Automating GitHub operations via CLI or API
+| Task | Reference |
+|---|---|
+| Create, review, merge, close, compare, or converge PRs; retire remote PR branches | [`references/pr_operations.md`](references/pr_operations.md) |
+| Create, edit, search, transfer, close, or bulk-manage issues | [`references/issue_operations.md`](references/issue_operations.md) |
+| Inspect, clone, create, edit, rename, archive, transfer, change visibility, or delete repositories | [`references/repository_operations.md`](references/repository_operations.md) |
+| Inspect or change collaborators, teams, base permissions, member privileges, or organization 2FA | [`references/organization_access_and_settings.md`](references/organization_access_and_settings.md) |
+| Trigger, inspect, rerun, cancel, or purge Actions; manage secrets or variables | [`references/workflow_operations.md`](references/workflow_operations.md) |
+| Use raw REST/GraphQL endpoints, pagination, rate limits, webhooks, or Enterprise hosts | [`references/api_reference.md`](references/api_reference.md) |
+| Build scripts, retries, bulk operations, or machine-readable output | [`references/best_practices.md`](references/best_practices.md) |
 
-## Core Operations
+For local Git recovery, dirty worktrees, bundles, or lost commits, use `git-safety-net`.
+This skill owns GitHub-hosted state.
 
-### Pull Requests
+## Universal operating contract
 
-```bash
-# Create PR with NOJIRA prefix (bypasses JIRA enforcement checks)
-gh pr create --title "NOJIRA: Your PR title" --body "PR description"
+### 1. Classify the request before touching GitHub
 
-# List and view PRs
-gh pr list --state open
-gh pr view 123
+- **Answer, inspect, diagnose, or review:** read-only. Do not create a PR, issue,
+  comment, invitation, workflow run, or setting change.
+- **Create, change, merge, close, grant, revoke, publish, or delete:** the named
+  state change is authorized. Keep the target and blast radius inside that request.
+- **Destructive, public, credential-related, production-triggering, or externally
+  communicative:** require the exact target, consequence, and recovery path. If the
+  user did not provide a material choice such as repository owner, visibility, or
+  message content, stop before the write.
 
-# Manage PRs
-gh pr merge 123 --squash
-gh pr review 123 --approve
-gh pr comment 123 --body "LGTM"
-```
+Do not turn a read-only investigation into a mutation because the fix looks obvious.
+Do not send a comment, review, issue, or invitation whose recipient or content was not
+authorized in the current task.
 
-📚 See `references/pr_operations.md` for comprehensive PR workflows
+### 2. Bind identity, host, and target
 
-For parallel PRs, squash-merge verification, superseded PR closure, or remote
-branch convergence, read `references/pr_operations.md` § Converging parallel PRs
-and retiring remote branches before mutating the PR or branch.
-
-**PR Title Convention:**
-- With JIRA ticket: `GR-1234: Descriptive title`
-- Without JIRA ticket: `NOJIRA: Descriptive title`
-
-### Issues
+Before the first write, verify the active account and resolve a fully qualified target:
 
 ```bash
-# Create and manage issues
-gh issue create --title "Bug: Issue title" --body "Issue description"
-gh issue list --state open --label bug
-gh issue edit 456 --add-label "priority-high"
-gh issue close 456
+gh auth status --hostname HOST
+gh api --hostname HOST user --jq '.login'
+gh repo view HOST/OWNER/REPO \
+  --json nameWithOwner,visibility,isPrivate,viewerPermission,url
 ```
 
-📚 See `references/issue_operations.md` for detailed issue management
+For `github.com`, `OWNER/REPO` is sufficient. Never use `gh auth status --show-token`
+for routine diagnosis, and never print, paste, or log a token.
 
-### Repositories
+Before the first push to a remote in the current session, read its live visibility:
 
 ```bash
-# View and manage repos
-gh repo view --web
-gh repo clone owner/repo
-gh repo create my-new-repo --public
+gh repo view OWNER/REPO \
+  --json nameWithOwner,visibility,isPrivate,stargazerCount,forkCount,url
 ```
 
-### Workflows
+### 3. Read current authority and preview the delta
+
+Use GitHub-hosted state, not a stale local ref or remembered setting. Capture only the
+fields required to prove the requested transition. Before a consequential write, make
+this plan explicit:
+
+```text
+Target: fully qualified repository, organization, PR, issue, run, or account
+Current: authoritative fields and immutable IDs/SHAs
+Requested: exact field or state transition
+Blast radius: people, repositories, forks, runs, or public surfaces affected
+Recovery: exact inverse operation or explicit “not recoverable”
+Readback: independent GET/CLI query and expected result
+```
+
+If the user already authorized this exact consequence, execute it. Do not add a
+ceremonial second confirmation. If target, scope, public exposure, deletion, recipient,
+or recovery remains ambiguous, pause before the write.
+
+### 4. Choose an interface whose input contract actually supports the change
+
+Prefer, in order:
+
+1. a purpose-built `gh` subcommand;
+2. a documented REST endpoint for one resource or authoritative readback;
+3. GraphQL when the required mutation/query is GraphQL-only or combines related data;
+4. the documented GitHub UI when the setting has no supported API input.
+
+Response fields are not automatically writable fields. Before using `PATCH`, compare
+the desired key against the operation's current **request body parameters**, not the
+shape returned by `GET`. GitHub may ignore an unsupported key while still returning a
+successful response. Do not switch API families merely to make the command run.
+
+Use explicit methods with `gh api`. Adding `-f` or `-F` changes the default method to
+`POST`; filtered GET requests must include `-X GET`.
+
+### 5. Mutate once; do not retry ambiguity
+
+- Pin repository, object number, branch, run ID, username, and expected SHA where the
+  operation supports it.
+- Do not blindly retry non-idempotent writes such as comments, invitations, workflow
+  dispatches, releases, or PR/issue creation. After a timeout or 5xx, read back first to
+  determine whether the first request landed.
+- For bulk changes, freeze and display the finite target list, then process one target
+  at a time with per-item results. Never pipe an unreviewed live query directly into a
+  destructive `xargs` command.
+- Do not bypass repository hooks, required checks, branch protections, signatures, or
+  visibility-consequence acknowledgements.
+
+### 6. Verify through an independent readback
+
+Run a fresh read that does not trust the mutation response or a cached local ref:
+
+| Mutation | Required acceptance evidence |
+|---|---|
+| PR merge/close/edit | PR state plus accepted behavior on the fetched base when landing matters |
+| Branch deletion | Hosted branch/ref is absent; local remote-tracking cleanup is a separate check |
+| Issue/comment/review | Exact object exists once with the intended state/content |
+| Repository create/edit/visibility | Fully qualified repository readback matches owner, visibility, and requested fields |
+| Collaborator/team permission | Invitation state if pending, then effective permission; also identify remaining base/team grants when revoking |
+| Organization setting | A fresh organization/settings read returns every requested field; UI-only settings require UI readback plus any available API signal |
+| 2FA requirement | Preflight affected accounts, UI confirmation, API readback, then membership/outside-collaborator audit |
+| Workflow dispatch/rerun/cancel | The intended run ID reaches the expected state; command acceptance is not completion |
+| Secret/variable change | Metadata and consumer behavior, never secret value disclosure |
+
+For asynchronous state, poll with a bounded deadline and report `pending` if the terminal
+state is not observed. If readback differs, report `failed/no-op` or `partially applied`,
+show the mismatched fields, and keep recovery available. Never say “done” from the write
+receipt alone.
+
+### 7. Report the business outcome
+
+End with one of four honest states:
+
+- **changed and verified** — requested state is independently observed;
+- **already satisfied** — no write was necessary;
+- **pending** — accepted but not yet terminal, with the next authoritative check;
+- **failed/no-op or partial** — requested and observed states differ, with recovery and
+  unresolved risk.
+
+## High-impact boundaries
+
+- Repository creation requires an explicit `OWNER/REPO` and visibility. Never default
+  a generic example to `--public`; public exposure is a product decision.
+- Repository visibility changes can expose code, Actions logs, artifacts, forks, and
+  history. Use `gh repo edit --visibility ... --accept-visibility-change-consequences`
+  only after the consequences and exact repository are authorized, then read back.
+- Merges, branch deletions, repository creation/deletion/transfer/visibility changes,
+  organization-wide permissions, 2FA enforcement, and secret rotation require their
+  operation-specific reference.
+- PR and issue title formats are repository policy. Inspect templates, contribution
+  guidance, checks, or an accepted recent example; do not invent a universal JIRA prefix.
+- Enterprise policy can override organization or repository controls. Preserve `HOST`
+  explicitly and report when a lower layer cannot change the enforced state.
+
+## Safe read-only quick reference
 
 ```bash
-# Manage GitHub Actions
-gh workflow list
-gh workflow run workflow-name
-gh run watch run-id
-gh run download run-id
+gh pr list -R OWNER/REPO --state open --json number,title,state,url
+gh pr view 123 -R OWNER/REPO --json number,title,state,headRefOid,baseRefOid,url
+gh issue list -R OWNER/REPO --state open --json number,title,state,url
+gh workflow list -R OWNER/REPO
+gh run list -R OWNER/REPO --limit 20 \
+  --json databaseId,status,conclusion,headSha,url
+gh api -X GET 'repos/OWNER/REPO/branches?per_page=100' --paginate --jq '.[].name'
 ```
 
-📚 See `references/workflow_operations.md` for advanced workflow operations
-
-### GitHub API
-
-The `gh api` command provides direct access to GitHub REST API endpoints. Refer to `references/api_reference.md` for comprehensive API endpoint documentation.
-
-**Basic API operations:**
-```bash
-# Get PR details via API
-gh api repos/{owner}/{repo}/pulls/{pr_number}
-
-# Add PR comment
-gh api repos/{owner}/{repo}/issues/{pr_number}/comments \
-  -f body="Comment text"
-
-# List workflow runs
-gh api repos/{owner}/{repo}/actions/runs
-```
-
-For complex queries requiring multiple related resources, use GraphQL. See `references/api_reference.md` for GraphQL examples.
-
-## Authentication and Configuration
-
-```bash
-# Login to GitHub
-gh auth login
-
-# Login to GitHub Enterprise
-gh auth login --hostname github.enterprise.com
-
-# Check authentication status
-gh auth status
-
-# Set default repository
-gh repo set-default owner/repo
-
-# Configure gh settings
-gh config set editor vim
-gh config set git_protocol ssh
-gh config list
-```
-
-## Output Formats
-
-Control output format for programmatic processing:
-
-```bash
-# JSON output
-gh pr list --json number,title,state,author
-
-# JSON with jq processing
-gh pr list --json number,title | jq '.[] | select(.title | contains("bug"))'
-
-# Template output
-gh pr list --template '{{range .}}{{.number}}: {{.title}}{{"\n"}}{{end}}'
-```
-
-📚 See `references/best_practices.md` for shell patterns and automation strategies
-
-## Quick Reference
-
-**Most Common Operations:**
-```bash
-gh pr create --title "NOJIRA: Title" --body "Description"  # Create PR
-gh pr list                                                  # List PRs
-gh pr view 123                                              # View PR details
-gh pr checks 123                                            # Check PR status
-gh pr merge 123 --squash                                    # Merge PR
-gh pr comment 123 --body "LGTM"                            # Comment on PR
-gh issue create --title "Title" --body "Description"       # Create issue
-gh workflow run workflow-name                               # Run workflow
-gh repo view --web                                          # Open repo in browser
-gh api repos/{owner}/{repo}/pulls/{pr_number}              # Direct API call
-```
-
-## Resources
-
-### references/pr_operations.md
-
-Comprehensive pull request operations including:
-- Detailed PR creation patterns (JIRA integration, body from file, targeting branches)
-- Viewing and filtering strategies
-- Review workflows and approval patterns
-- PR lifecycle management
-- Bulk operations and automation examples
-
-Load this reference when working with complex PR workflows or bulk operations.
-
-### references/issue_operations.md
-
-Detailed issue management examples including:
-- Issue creation with labels and assignees
-- Advanced filtering and search
-- Issue lifecycle and state management
-- Bulk operations on multiple issues
-- Integration with PRs and projects
-
-Load this reference when managing issues at scale or setting up issue workflows.
-
-### references/workflow_operations.md
-
-Advanced GitHub Actions workflow operations including:
-- Workflow triggers and manual runs
-- Run monitoring and debugging
-- Artifact management
-- Secrets and variables
-- Purging public run history (run/deployment deletion, backup-first, anonymous readback)
-- Performance optimization strategies
-
-Load this reference when working with CI/CD workflows or debugging failed runs.
-
-### references/best_practices.md
-
-Shell scripting patterns and automation strategies including:
-- Output formatting (JSON, templates, jq)
-- Pagination and large result sets
-- Error handling and retry logic
-- Bulk operations and parallel execution
-- Enterprise GitHub patterns
-- Performance optimization
-
-Load this reference when building automation scripts or handling enterprise deployments.
-
-### references/api_reference.md
-
-Contains comprehensive GitHub REST API endpoint documentation including:
-- Complete API endpoint reference with examples
-- Request/response formats
-- Authentication patterns
-- Rate limiting guidance
-- Webhook configurations
-- Advanced GraphQL query patterns
-
-Load this reference when performing complex API operations or when needing detailed endpoint specifications.
+Use `--json`/`--jq` for decisions. Human-formatted output is for reading, not parsing.

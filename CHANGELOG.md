@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **github-ops** (v1.2.0): replace command-success GitHub automation with a verified-state
+  operating contract. Every mutation now binds the account, host, fully qualified target,
+  authorized consequence, recovery path, supported input schema, and an independent readback;
+  non-idempotent writes are read before retry and bulk targets are frozen before processing. Add
+  organization access and settings workflows for direct/team/base permission diagnosis,
+  collaborator invitations and revocation, repository-creation policy, UI-only member
+  privileges, and 2FA impact preflight. Add a complete repository route for safe clone, explicit-
+  visibility creation, settings, rename/archive, transfer, deletion, and hosted readback. The API
+  guide now distinguishes GET response fields from writable PATCH inputs and fixes request-method,
+  draft-PR, Actions filtering, GraphQL pagination, rate-limit, webhook, secret, artifact/log, and
+  high-level pagination examples; Actions bulk control now freezes separate cancel, rerun, and
+  artifact populations. Remove the organization-specific JIRA bypass convention and the generic
+  public-repository default while preserving the accepted parallel/superseded PR convergence
+  workflow and closing its exact-tip deletion race with an expected-SHA lease.
 - **transcript-fixer** (`daymade-audio` v1.32.1): pin the space-bearing person-name shapes that any future whitespace- or script-based prose heuristic would silently kill (`Ada Lovelace 老师`, `山田 花子`, alongside the already-covered `Alice Maria Chen` and `Joe 老师`). A residual gap is named rather than patched: prose written into the ASR-variant field survives when a Latin word splits it into CJK runs of eight characters or fewer, and the surviving atom then enters the correction dictionary at confidence 1.0 and actively rewrites those characters. Every discriminator measured against that gap kills a healthy shape — two-or-more inner spaces kills the Latin three-part and Latin-plus-honorific forms, two-or-more CJK tokens kills the space-separated CJK form, and adding a CJK-run length floor stops catching the target — which is the expensive direction for a fail-closed check and would reverse the module's stated syntax-only rule. Realistic prose is already caught: four of five hand-written wrong-field lines trip the existing length limit and the stderr warning names the whole line. Tripwire verified by injecting the naive rule into a scratch copy and confirming the pinned names die; synthetic names only.
 - **transcript-fixer** (`daymade-audio` v1.32.0): add a bounded clip-level second-recognizer rung for load-bearing tokens that exhaust local evidence. It calibrates transcript/media clocks, preserves distinct tight/medium clips, verifies neighbouring words, caps re-cuts, requires current authorization and known recognizer-family provenance, treats agreement as evidence about sound rather than spelling, and queues unresolved cases instead of guessing. The existing migration repair moves into the CI registry with its deterministic boundary suite; sanitized synthetic people-roster regressions join it, rejecting structurally malformed entries visibly while retaining quoted, multilingual, and multiword names without language-specific denylist guesses. An optional local gate checks the configured real roster without publishing names or paths, and manual promotion now verifies that the replaced form is absent instead of merely finding a corrected term that may already have existed.
 - **claude-switch-models-setup** (`daymade-claude-code` v3.6.0; marketplace v3.4.0): make `cmks-skills` a first-class managed local source marketplace. Discovery now accepts the Cemakanshan marketplace identity, checks the conventional `cemakanshan-skills` checkout beside the two Daymade sources, and includes its manifest in the LaunchAgent watch set. The existing explicit `codex-active-skills.json` policy remains authoritative, so adding the source does not bulk-activate its catalog; only selected names become `~/.agents/skills` links.
