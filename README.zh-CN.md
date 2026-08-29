@@ -168,6 +168,7 @@ claude plugin install daymade-docs@daymade-skills
 /daymade-docs:ppt-creator
 /daymade-docs:docs-cleaner
 /daymade-docs:excel-automation
+/daymade-docs:read-docx-review
 ```
 
 这些技能以套件形式整体发布，不再提供单独的单技能插件。所有文档技能都在 `daymade-docs/` 下，随套件一起安装。
@@ -233,6 +234,7 @@ claude plugin install daymade-claude-code@daymade-skills
 /daymade-claude-code:claude-code-hooks
 /daymade-claude-code:prior-work-retrieval
 /daymade-claude-code:lark-cli-router
+/daymade-claude-code:claude-code-ping-start-5h-quota
 ```
 
 安装后调用统一显示为 `daymade-claude-code:<skill>`，共享同一命名空间。这些技能仅作为套件发布——安装套件即可获得全部技能。
@@ -3335,6 +3337,32 @@ LibreOffice→PDF→PNG 视觉验证链（禁止用 qlmanage 缩略图——它�
 
 ---
 
+### **read-docx-review** - 读取 Word/WPS 审阅批注与修订
+
+> **安装**：`claude plugin install daymade-docs@daymade-skills`
+>（仅作为套件成员发布，调用方式 `daymade-docs:read-docx-review`）
+
+读取审阅后的 docx（Word/WPS），把批注与修订提取成可逐条裁决的对账表（markdown 或
+JSON）：谁批的、批在哪段、批了什么，外加修订模式的逐段增删。修订感知引擎走 OpenXML
+SDK——python-docx 裸读会漏掉修订插入（w:ins）、认不出整段删除（w:del），本 skill
+不漏。只读，不改对方文件。
+
+**核心能力：**
+- 逐条对账表自带空白「处置」列，为逐条裁决而生
+- 捕获 python-docx 静默漏掉的 w:ins / w:del 修订
+- WPS 仅引用式批注锚点有 fallback，每条批注都可定位
+- 零批注文件显式提示「无审阅痕迹」，不给静默空表
+- 边界：生成／排版 docx → docx-creator 或 minimax-docx；PDF 批注不在范围
+
+**使用示例：**
+```text
+提取这份 docx 的批注
+对方批注完的合同回来了，读一下审阅意见
+读一下修订，谁批了什么、批在哪
+```
+
+---
+
 ### **claude-code-hooks** - 编写、测试、调试 Claude Code Hook
 
 > **安装**：`claude plugin install daymade-claude-code@daymade-skills`
@@ -3505,6 +3533,28 @@ README、文件、实现、行为或验证，不会触发检索。真正运行�
 读取这个飞书文档
 查一下这条妙记的逐字稿
 lark-cli 提示 user 身份缺少 scope
+```
+
+### **claude-code-ping-start-5h-quota** - 额度重置后定时戳 Claude，开启新的 5 小时窗口
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`
+>（仅作为套件成员发布，调用方式 `daymade-claude-code:claude-code-ping-start-5h-quota`）
+
+设置一次性本机定时器（macOS），在订阅额度重置后自动发一条极简 `claude -p` 消息，
+让新的 5 小时用量窗口从你睡着时就开始计时，而不是从睡醒后。双保险设计：detached
+进程不怕会话或终端被关；会话若还开着，到点会被唤醒并回读 `ok` 回执确认结果。
+
+**核心能力：**
+- 跨零点的绝对时刻判定，显式的分钟→秒换算公式（含 5 分钟缓冲）
+- `caffeinate -is` 撑住等待期不进入闲置睡眠；`ps` 独立读回验证定时链
+- 触发时刻与 output 路径写入对话持久化，唤醒通知丢失也能找回现场
+- 特征串 `pkill` 取消命令（已实测）——禁止按 sleep 秒数匹配误杀无关进程
+- 诚实失败：本地无法确认时明说，不猜测
+
+**使用示例：**
+```text
+还有 1 小时 20 分钟重置额度，帮我定时戳一下 Claude
+我去睡觉了，额度重置后帮我 ping 一下开启新窗口
 ```
 
 ### **codex-1m-context-window-setup** - 为 Codex 设置模型感知的长上下文

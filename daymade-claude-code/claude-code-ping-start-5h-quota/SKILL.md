@@ -78,7 +78,7 @@ ps -ef | grep -E 'caffeinate -is|sleep <SLEEP_SECONDS>' | grep -v grep
 **预期输出**：至少三行——`/bin/sh -c sleep ...`、`caffeinate -is ...`、`sleep <SLEEP_SECONDS>`。
 少了 `sleep` 行说明进程没起来，回到 Step 2 查报错。
 
-### Step 4：向用户交代清楚（四件事）
+### Step 4：向用户交代清楚
 
 1. **几点戳**：具体墙钟时刻。
 2. **output 文件路径**：把 Step 2 启动回执里的任务 output 文件路径原样写进交代。
