@@ -7,9 +7,14 @@ description: >-
   one job none of them own alone: a single inventory spanning all three
   providers. Use when the provider is unknown or plural ("our history", "what
   have I been working on", "which chats did I have"), when the user wants Kimi
-  CLI sessions, when it is unclear whether they need evidence or resumption, or
-  when they ask for this skill by name. When the platform and the action are
-  both already clear, load that executor skill directly instead.
+  CLI history at all, when it is unclear whether they need evidence or
+  resumption, or when they ask for this skill by name. Vague recall that names
+  no platform ("we discussed this once, when was it?") belongs here rather than
+  to a single-provider reader, because a Claude-only answer to an unscoped
+  question cannot support an absence claim. When the platform and the action are
+  both already clear, load that executor skill directly instead — except Kimi
+  CLI, which has no reader or continuation skill of its own and always routes
+  through here.
 argument-hint: "[keywords | session-id | workspace-path]"
 ---
 
@@ -30,37 +35,49 @@ on, and whether the user wants **evidence** (what was said/done) or
 |---|---|---|
 | Claude Code | `daymade-claude-code:read-claude-code-history` | `daymade-claude-code:continue-claude-code-work` |
 | OpenAI Codex | `daymade-claude-code:read-codex-history` | `daymade-claude-code:continue-codex-work` |
-| Kimi CLI | see **Cross-provider inventory** below | no continuation skill exists |
+| Kimi CLI | `read-claude-code-history`, with the Kimi scope named — see **Provider scope** | no continuation skill exists |
 
 Resumption always follows a read. The continuation skills require a verified
 read receipt; routing straight to them without one is a defect, not a shortcut.
 
-## Cross-provider inventory — the job only this entry point routes
+**When the platform is not stated** — a bare session ID, "pick up where we left
+off" — do not guess it. Identify it first: try the Claude Code exact-session
+lookup in `read-claude-code-history`, then the Codex rollout locator in
+`read-codex-history`. Only a lookup that returns a verified identity decides
+which continuation skill runs; a plausible-looking ID prefix does not.
 
-"What have I been working on", "list my recent chats", an unknown provider, or
-Kimi CLI all need **one inventory across all three providers**. Both readers ship
-the same bundled inventory command, and its `--source` already defaults to `all`
-— but each reader's own task table pins it to that reader's provider
-(`--source claude`, `--source codex`). So a cross-provider inventory does not
-happen unless someone asks for it.
+## Provider scope — the job only this entry point routes
 
-Route it to `read-claude-code-history` and state the scope explicitly: run that
-skill's bundled inventory with `--source all` (or `--source kimi` for Kimi
-alone). Let it resolve its own command; this skill names the scope, not the
-path. **Kimi CLI has no other entry anywhere** — no dedicated skill exists, and
-its home resolves `--kimi-home` > `KIMI_HOME` > `~/.kimi-code`.
+Each executor defaults to its own provider, so a request that spans providers
+never widens by itself. **Naming the scope is this skill's whole job.** It has
+two axes, and they use different flags — conflating them is the failure this
+section exists to prevent.
 
-Let the executor own every flag beyond `--source`: scope (`--all-projects`,
-`--recursive`), date bounds, `--include-archived`, `--include-subagents`,
-`--include-automated`, and output format. This skill names the provider scope
-and nothing else.
+| Cross-provider need | Route to | Name this scope |
+|---|---|---|
+| **Inventory** — "what have I been working on", "list my recent chats", session titles/dates/IDs | `read-claude-code-history`, its bundled inventory | `--source all`, or `--source kimi` for Kimi alone |
+| **Content search** — "did we ever discuss X", find the conversation containing a quote, file, or tool result | `read-claude-code-history`, its bundled full-event search | add `--codex` and `--kimi` to the Claude search; each is a separate store the Claude registry never covers |
+
+Both readers ship the same inventory command and its `--source` already defaults
+to `all` — but each reader's own task table pins it to that reader's provider
+(`--source claude`, `--source codex`), so the default never fires on its own.
+Search is the mirror image: it is Claude-only unless the other two stores are
+added explicitly.
+
+**Kimi CLI has no other entry anywhere** — no dedicated skill exists for either
+axis. Its home resolves `--kimi-home` > `KIMI_HOME` > `~/.kimi-code`.
+
+Let the executor own every flag beyond provider scope: `--all-projects`,
+`--recursive`, date bounds, `--include-archived`, `--include-subagents`,
+`--include-automated`, output format, and every detail of how each store is
+parsed. This skill names which providers are in scope and nothing else.
 
 ## Intent decides the route — the word "history" does not
 
 | The user's requested result | Route |
 |---|---|
-| A list of conversations: titles, dates, session IDs | Cross-provider inventory above, or the matching reader when one platform is named |
-| The conversation where a topic, quote, file, or tool result appeared — "find that old chat", "did we ever discuss X" | The matching reader's **search**, not an inventory. When the provider is unknown, the search must cover all three; a Claude-only result cannot support an absence claim |
+| A list of conversations: titles, dates, session IDs | The inventory row under **Provider scope**, or the matching reader when one platform is named |
+| The conversation where a topic, quote, file, or tool result appeared — "find that old chat", "did we ever discuss X" | The **search** row under **Provider scope**, never an inventory. Listing titles is not searching content, and a title match is not evidence the content exists |
 | Their own raw inputs in chronological order, verbatim | The matching reader's verbatim-input path. Preserve duplicates and session boundaries; duplicates are part of the ledger, not noise |
 | Picking work back up from an identified session | The matching continuation skill, after a read |
 
