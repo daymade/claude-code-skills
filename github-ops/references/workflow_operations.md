@@ -389,3 +389,39 @@ gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs | \
 3. **Metrics tracking** - Monitor success rates and duration
 4. **Log retention** - Configure appropriate retention policies
 5. **Dependency updates** - Automate with Dependabot
+
+## Purging Public Run History
+
+Deleting workflow runs does NOT remove every publicly visible trace. The anonymous-visible surfaces of a repository are: releases, tags, `actions/runs`, `deployments`, `actions/artifacts`, pull requests (closed PRs and their commit history are permanent), branches, and attestations.
+
+### Back Up Before Deleting (runs are unrecoverable)
+
+```bash
+# Full run metadata, then per-run logs + jobs
+gh api "repos/OWNER/REPO/actions/runs?per_page=100" --paginate > runs-all.json
+gh api "repos/OWNER/REPO/actions/runs/RUN_ID/logs" > RUN_ID.zip
+gh api "repos/OWNER/REPO/actions/runs/RUN_ID/jobs?per_page=100" --paginate > RUN_ID-jobs.json
+unzip -tq RUN_ID.zip   # verify archive integrity; a non-empty file is not proof
+```
+
+### Delete Runs, Then Their Deployment Records
+
+Environment deployment records are an independent state surface: they survive run deletion and stay anonymously visible via `/deployments` and the repo homepage Environments panel. Deletion is two-step (active deployments refuse direct DELETE):
+
+```bash
+gh api -X DELETE "repos/OWNER/REPO/actions/runs/RUN_ID"
+
+gh api -X POST "repos/OWNER/REPO/deployments/DEPLOY_ID/statuses" -f state=inactive
+gh api -X DELETE "repos/OWNER/REPO/deployments/DEPLOY_ID"
+```
+
+### Verify by Readback, Anonymously
+
+Transient API failures (`EOF`, SSL resets) make single exit codes unreliable — retry failures, then treat an unauthenticated readback as the only acceptance evidence:
+
+```bash
+curl -s "https://api.github.com/repos/OWNER/REPO/actions/runs?per_page=5" | jq .total_count
+curl -s "https://api.github.com/repos/OWNER/REPO/deployments" | jq length
+```
+
+Notes: artifacts die with their run; release attestations disappear from the API when their release is deleted (underlying Sigstore transparency-log entries are append-only and cannot be removed); environments themselves are configuration, not history — keep them if workflows reference them.
