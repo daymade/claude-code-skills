@@ -86,7 +86,13 @@ class MainlineGuardTests(unittest.TestCase):
         self.env = os.environ.copy()
         self.env["GIT_MAINLINE_GUARD_TEST_CANONICAL"] = "1"
 
-    def guard(self, mode: str, input_text: str | None = None, *extra: str):
+    def guard(
+        self,
+        mode: str,
+        input_text: str | None = None,
+        *extra: str,
+        env: dict[str, str] | None = None,
+    ):
         return run(
             self.repo,
             "node",
@@ -94,12 +100,69 @@ class MainlineGuardTests(unittest.TestCase):
             mode,
             *extra,
             input_text=input_text,
-            env=self.env,
+            env=env or self.env,
             check=False,
         )
 
     def test_pre_commit_blocks_main(self) -> None:
         result = self.guard("pre-commit")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("read-only runtime mirror", result.stderr)
+
+    def test_pre_commit_blocks_main_when_canonical_remote_is_upstream(self) -> None:
+        run(self.repo, "git", "remote", "rename", "origin", "upstream")
+        run(
+            self.repo,
+            "git",
+            "remote",
+            "set-url",
+            "upstream",
+            "https://github.com/daymade/claude-code-skills.git",
+        )
+        env = self.env.copy()
+        env.pop("GIT_MAINLINE_GUARD_TEST_CANONICAL")
+        result = self.guard("pre-commit", env=env)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("read-only runtime mirror", result.stderr)
+
+    def test_pre_commit_uses_upstream_tracking_main(self) -> None:
+        run(self.repo, "git", "remote", "rename", "origin", "upstream")
+        run(
+            self.repo,
+            "git",
+            "remote",
+            "set-url",
+            "upstream",
+            "https://github.com/daymade/claude-code-skills.git",
+        )
+        run(self.repo, "git", "switch", "-qc", "feature")
+        (self.repo / "README.md").write_text("docs\n", encoding="utf-8")
+        run(self.repo, "git", "add", "README.md")
+        env = self.env.copy()
+        env.pop("GIT_MAINLINE_GUARD_TEST_CANONICAL")
+        self.assertEqual(self.guard("pre-commit", env=env).returncode, 0)
+
+    def test_pre_commit_recognizes_canonical_fetch_with_a_separate_push_url(self) -> None:
+        run(
+            self.repo,
+            "git",
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/daymade/claude-code-skills.git",
+        )
+        run(
+            self.repo,
+            "git",
+            "remote",
+            "set-url",
+            "--push",
+            "origin",
+            str(self.remote),
+        )
+        env = self.env.copy()
+        env.pop("GIT_MAINLINE_GUARD_TEST_CANONICAL")
+        result = self.guard("pre-commit", env=env)
         self.assertEqual(result.returncode, 1)
         self.assertIn("read-only runtime mirror", result.stderr)
 

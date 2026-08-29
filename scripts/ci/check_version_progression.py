@@ -32,6 +32,7 @@ class Plugin:
     source: str
     version: tuple[int, int, int]
     skills: tuple[str, ...]
+    payload_without_version: object
 
 
 def git(repo: Path, *args: str, input_text: str | None = None) -> str:
@@ -70,7 +71,9 @@ def load_index_manifest_text(repo: Path) -> str:
     return git(repo, "show", f":{MANIFEST_PATH}")
 
 
-def parse_manifest(text: str, label: str) -> tuple[tuple[int, int, int], dict[str, Plugin]]:
+def parse_manifest(
+    text: str, label: str
+) -> tuple[tuple[int, int, int], object, dict[str, Plugin]]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -80,6 +83,14 @@ def parse_manifest(text: str, label: str) -> tuple[tuple[int, int, int], dict[st
     if not isinstance(metadata, dict):
         raise CheckError(f"{label} marketplace manifest has no metadata object")
     metadata_version = parse_semver(metadata.get("version"), f"{label} metadata")
+    catalog_payload = {
+        key: value
+        for key, value in data.items()
+        if key not in {"metadata", "plugins"}
+    }
+    catalog_payload["metadata"] = {
+        key: value for key, value in metadata.items() if key != "version"
+    }
 
     raw_plugins = data.get("plugins")
     if not isinstance(raw_plugins, list) or not raw_plugins:
@@ -104,8 +115,14 @@ def parse_manifest(text: str, label: str) -> tuple[tuple[int, int, int], dict[st
             source=normalize_source(raw.get("source"), f"{label} plugin {name!r}"),
             version=parse_semver(raw.get("version"), f"{label} plugin {name!r}"),
             skills=tuple(str(v).removeprefix("./").strip("/") for v in skills_value),
+            payload_without_version={
+                key: value for key, value in raw.items() if key != "version"
+            },
         )
-    return metadata_version, plugins
+    # JSON array order is observable to marketplace readers even when every
+    # individual plugin object is byte-for-byte equivalent.
+    catalog_payload["plugin_order"] = list(plugins)
+    return metadata_version, catalog_payload, plugins
 
 
 def changed_paths(repo: Path, base: str, candidate: str | None) -> list[str]:
@@ -153,7 +170,7 @@ def check(repo: Path, base: str, candidate: str | None) -> list[str]:
     if candidate is not None:
         git(repo, "rev-parse", "--verify", f"{candidate}^{{commit}}")
 
-    base_metadata, base_plugins = parse_manifest(
+    base_metadata, base_catalog, base_plugins = parse_manifest(
         load_manifest_text(repo, base), f"base {base}"
     )
     if candidate is None:
@@ -162,12 +179,19 @@ def check(repo: Path, base: str, candidate: str | None) -> list[str]:
     else:
         candidate_text = load_manifest_text(repo, candidate)
         candidate_label = f"candidate {candidate}"
-    candidate_metadata, candidate_plugins = parse_manifest(candidate_text, candidate_label)
+    candidate_metadata, candidate_catalog, candidate_plugins = parse_manifest(
+        candidate_text, candidate_label
+    )
 
     failures: list[str] = []
     if candidate_metadata < base_metadata:
         failures.append(
             f"marketplace metadata regresses {base_metadata} -> {candidate_metadata}"
+        )
+    if candidate_catalog != base_catalog and candidate_metadata <= base_metadata:
+        failures.append(
+            "marketplace owner/name/metadata fields changed without a strict "
+            f"metadata bump above {base_metadata}"
         )
 
     for name in sorted(base_plugins.keys() & candidate_plugins.keys()):
@@ -175,6 +199,15 @@ def check(repo: Path, base: str, candidate: str | None) -> list[str]:
         after = candidate_plugins[name].version
         if after < before:
             failures.append(f"plugin {name!r} regresses {before} -> {after}")
+        if (
+            candidate_plugins[name].payload_without_version
+            != base_plugins[name].payload_without_version
+            and after <= before
+        ):
+            failures.append(
+                f"plugin {name!r} manifest metadata changed without a strict "
+                f"version bump above {before}"
+            )
 
     layout_changed = layout_signature(base_plugins) != layout_signature(candidate_plugins)
     if layout_changed and candidate_metadata <= base_metadata:

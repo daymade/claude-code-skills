@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -57,8 +58,10 @@ class VersionProgressionTests(unittest.TestCase):
         run(self.repo, "git", "config", "user.email", "test@example.invalid")
         run(self.repo, "git", "config", "user.name", "Test")
         (self.repo / ".claude-plugin").mkdir()
+        (self.repo / "scripts/ci").mkdir(parents=True)
         (self.repo / "daymade-audio/transcript-fixer").mkdir(parents=True)
         (self.repo / "daymade-docs").mkdir()
+        shutil.copy2(CHECKER, self.repo / "scripts/ci/check_version_progression.py")
         self.write_manifest(manifest())
         (self.repo / "daymade-audio/transcript-fixer/SKILL.md").write_text(
             "---\nname: transcript-fixer\ndescription: fixture\n---\n",
@@ -120,6 +123,31 @@ class VersionProgressionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("plugin 'docs' regresses", result.stderr)
 
+    def test_plugin_metadata_change_requires_plugin_bump(self) -> None:
+        value = manifest()
+        value["plugins"][1]["description"] = "changed docs description"
+        value["plugins"][1]["keywords"] = ["new-keyword"]
+        self.write_manifest(value)
+        result = self.check(self.commit())
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("manifest metadata changed without a strict", result.stderr)
+
+    def test_marketplace_metadata_change_requires_catalog_bump(self) -> None:
+        value = manifest()
+        value["metadata"]["description"] = "changed catalog description"
+        self.write_manifest(value)
+        result = self.check(self.commit())
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("metadata fields changed without a strict", result.stderr)
+
+    def test_plugin_order_change_requires_catalog_bump(self) -> None:
+        value = manifest()
+        value["plugins"].reverse()
+        self.write_manifest(value)
+        result = self.check(self.commit())
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("metadata fields changed without a strict", result.stderr)
+
     def test_reusing_version_after_base_moves_fails(self) -> None:
         skill = self.repo / "daymade-audio/transcript-fixer/SKILL.md"
         skill.write_text(skill.read_text() + "first\n", encoding="utf-8")
@@ -171,6 +199,47 @@ class VersionProgressionTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 1)
         self.assertIn("content changed but version did not strictly increase", result.stderr)
+
+    def test_candidate_cannot_replace_the_checker_that_judges_it(self) -> None:
+        skill = self.repo / "daymade-audio/transcript-fixer/SKILL.md"
+        skill.write_text(skill.read_text() + "changed\n", encoding="utf-8")
+        (self.repo / "scripts/ci/check_version_progression.py").write_text(
+            "raise SystemExit(0)\n", encoding="utf-8"
+        )
+        candidate = self.commit("candidate replaces its own judge")
+
+        candidate_result = run(
+            self.repo,
+            sys.executable,
+            "scripts/ci/check_version_progression.py",
+            check=False,
+        )
+        self.assertEqual(candidate_result.returncode, 0)
+
+        trusted_checker = self.repo / "trusted-checker.py"
+        trusted_checker.write_text(
+            run(
+                self.repo,
+                "git",
+                "show",
+                f"{self.base}:scripts/ci/check_version_progression.py",
+            ).stdout,
+            encoding="utf-8",
+        )
+        trusted_result = run(
+            self.repo,
+            sys.executable,
+            str(trusted_checker),
+            "--repo",
+            str(self.repo),
+            "--base",
+            self.base,
+            "--candidate",
+            candidate,
+            check=False,
+        )
+        self.assertEqual(trusted_result.returncode, 1)
+        self.assertIn("version did not strictly increase", trusted_result.stderr)
 
 
 if __name__ == "__main__":

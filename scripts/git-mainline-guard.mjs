@@ -60,6 +60,31 @@ function isCanonical(remoteUrl) {
   );
 }
 
+function findCanonicalRemote() {
+  let names = [];
+  try {
+    names = gitCapture("remote").split(/\r?\n/).filter(Boolean);
+  } catch {
+    names = [];
+  }
+  for (const name of names) {
+    try {
+      const urls = [
+        ...gitCapture("remote", "get-url", "--all", name).split(/\r?\n/),
+        ...gitCapture("remote", "get-url", "--push", "--all", name).split(/\r?\n/),
+      ].filter(Boolean);
+      const url = urls.find(canonicalRemote);
+      if (url) return { name, url };
+    } catch {
+      // One malformed remote must not hide another canonical one.
+    }
+  }
+  if (process.env.GIT_MAINLINE_GUARD_TEST_CANONICAL === "1") {
+    return { name: names[0] || "origin", url: "test-fixture" };
+  }
+  return null;
+}
+
 function fail(message, code = 1) {
   process.stderr.write(`claude-code-skills guard blocked: ${message}\n`);
   process.exit(code);
@@ -80,13 +105,8 @@ function runProgression(base, candidateArgs) {
 }
 
 function preCommit() {
-  let remoteUrl = "";
-  try {
-    remoteUrl = gitCapture("remote", "get-url", "--push", "origin");
-  } catch {
-    return;
-  }
-  if (!isCanonical(remoteUrl)) return;
+  const canonical = findCanonicalRemote();
+  if (!canonical) return;
 
   let branch = "";
   try {
@@ -99,11 +119,15 @@ function preCommit() {
   }
 
   try {
-    gitCapture("rev-parse", "--verify", "refs/remotes/origin/main^{commit}");
+    gitCapture(
+      "rev-parse",
+      "--verify",
+      `refs/remotes/${canonical.name}/main^{commit}`,
+    );
   } catch {
-    fail("origin/main is unavailable; fetch it before committing.");
+    fail(`${canonical.name}/main is unavailable; fetch it before committing.`);
   }
-  runProgression("refs/remotes/origin/main", ["--candidate-index"]);
+  runProgression(`refs/remotes/${canonical.name}/main`, ["--candidate-index"]);
 }
 
 function parsePushInput(input) {
