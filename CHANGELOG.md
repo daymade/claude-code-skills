@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **read-codex-history** (`daymade-claude-code` v3.7.1): define “one chronological
+  evidence briefing” as one immutable local artifact rather than one oversized model
+  payload. Large briefings are materialized once, hash- and line-count-bound, then read
+  through bounded non-overlapping ranges; unread ranges remain explicit gaps instead of
+  being hidden by rerunning and fusing differently truncated outputs. The compatibility
+  section now distinguishes the restored cross-provider router from its historical
+  combined-command reference while keeping Codex evidence ownership here.
 - **tunnel-doctor** (v1.11.0): correct a false negative in Step 2K that sent the reader to the
   wrong side of the fork. The step inferred "zero `sshd` journal entries → the packets never
   arrived → suspect your tunnel," but a host-local packet filter produces exactly that reading

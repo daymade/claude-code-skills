@@ -100,6 +100,14 @@ an ID, the reader accepts byte-identical copies or a strict append-only superset
 otherwise fails as ambiguous. Every selected and inherited JSONL record is parsed
 strictly; malformed lines cannot become a complete-looking receipt.
 
+If the complete briefing is too large for one model context, materialize it once to a
+private temporary file and record its SHA-256 plus line count before reading. That one
+immutable file is still the single briefing; “one briefing” does not mean one stdout
+payload or one monolithic context load. Read bounded, non-overlapping ranges using its
+existing headings or exact record coordinates, keep coverage against the recorded line
+count, and report every unread range as a gap. Do not rerun the reader with different
+truncation and fuse the outputs into a complete-looking chronology.
+
 ### Bounded full-event search
 
 ```text
@@ -150,10 +158,11 @@ negative result.
 - Do not infer Session state or ownership from process names, cwd, or writer-lock absence.
 - Keep raw history local unless the user explicitly asks to share it.
 
-## Legacy compatibility
+## Router and legacy compatibility
 
-The former `local-conversation-history` combined Claude, Codex, and Kimi inventory.
-Its complete instructions remain in
+The current `local-conversation-history` is a cross-provider router; it sends a
+provider-specific Codex read here and does not replace this Skill's identity,
+lineage, or evidence contract. The older combined command contract remains in
 [references/legacy_multi_provider_inventory.md](references/legacy_multi_provider_inventory.md)
-so the Kimi branch and old command contract are not silently erased. New Claude
-requests route to `daymade-claude-code:read-claude-code-history`.
+so its Kimi branch and historical flags are not silently erased. Provider-specific
+Claude requests route to `daymade-claude-code:read-claude-code-history`.
