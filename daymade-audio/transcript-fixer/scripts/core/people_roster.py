@@ -26,14 +26,37 @@ context — so the curated roster feeds the system without bypassing safety.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import Dict, Tuple
 
 # A person section header. Exactly 3 '#' (not ##, not ####).
 _HEADER_RE = re.compile(r'^###\s+(.+?)\s*$')
-# The ASR-variant line. Accepts half/full-width colon. Standardized format:
+# The ASR-variant line. Accepts half/full-width colon and an optional label note:
 #   - **ASR 变体**: a, b（note）, c
-_ASR_RE = re.compile(r'^-\s+\*\*ASR\s*变体\*\*\s*[:：]\s*(.+?)\s*$')
+#   - **ASR 变体**（仅独特形）: a、b、c
+_ASR_RE = re.compile(
+    r'^-\s+\*\*ASR\s*变体\*\*'
+    r'(?:\s*[（(][^（）()]*[）)])?\s*[:：]\s*(.+?)\s*$'
+)
+
+# Unquoted atoms deliberately use a narrow, observable grammar. Ambiguous long
+# forms remain expressible by wrapping the exact variant in balanced quotes.
+_MAX_VARIANT_LEN = 80
+_MAX_UNQUOTED_CJK_LEN = 8
+_MAX_UNQUOTED_TOKENS = 6
+_LIST_SEPARATORS = {',', '，', '、'}
+_COMMENT_TERMINATORS = {';', '；'}
+_BRACKET_PAIRS = {'(': ')', '（': '）', '[': ']', '【': '】'}
+_CLOSING_BRACKETS = {close: open_ for open_, close in _BRACKET_PAIRS.items()}
+_QUOTE_PAIRS = {'"': '"', '`': '`', '“': '”', '‘': '’', '「': '」', '『': '』'}
+_ALL_QUOTE_CHARS = set(_QUOTE_PAIRS) | set(_QUOTE_PAIRS.values())
+_UNQUOTED_FORBIDDEN_RE = re.compile(
+    r'[/／]|->|=>|[→←⇒⇐↔⇄]|[。！？!?=:<>]|——'
+)
+_LOWERCASE_NAME_PARTICLES = {
+    'al', 'bin', 'da', 'de', 'del', 'di', 'dos', 'du', 'la', 'van', 'von',
+}
 
 
 def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
@@ -56,6 +79,7 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
 
     corrections: Dict[str, str] = {}
     current_canonical: str | None = None
+    dropped: list[str] = []
 
     with open(path, 'r', encoding='utf-8') as f:
         for raw in f:
@@ -68,7 +92,7 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
 
             m = _ASR_RE.match(line)
             if m and current_canonical:
-                for variant in _split_variants(m.group(1)):
+                for variant in _split_variants(m.group(1), dropped):
                     variant = variant.strip()
                     # Never map a canonical to itself, and first-seen wins so a
                     # variant can't be hijacked by a later (less relevant) person.
@@ -77,39 +101,204 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
                 continue
             # `别名` / `易混` lines and body text are intentionally ignored.
 
+    if dropped:
+        print(
+            f"⚠️  people roster: dropped {len(dropped)} malformed ASR variant "
+            f"entry/entries from {path.name} (over {_MAX_VARIANT_LEN} characters, "
+            "unbalanced brackets, or unsupported top-level prose/separators). "
+            "Correct the roster syntax; the affected names were not auto-loaded.",
+            file=sys.stderr,
+        )
+        print(
+            "    Dropped content is omitted from logs. Use balanced outer quotes "
+            "for comma-bearing or otherwise ambiguous names.",
+            file=sys.stderr,
+        )
+
     return corrections, dict(corrections)
 
 
-def _split_variants(s: str) -> list[str]:
-    """Split 'a, b（note）, c' -> ['a', 'b', 'c'].
+def _split_variants(s: str, dropped: list[str] | None = None) -> list[str]:
+    """Split one roster value without guessing across syntax boundaries.
 
-    Splits on top-level half-width commas only (commas inside （）/() are part of a
-    per-variant note). Then strips a trailing parenthetical note from each variant.
+    ASCII/full-width/enumeration commas separate top-level variants. Commas inside
+    balanced outer quotes or bracketed notes stay literal. A top-level semicolon
+    starts commentary and ends the variant list. Malformed atoms are dropped while
+    already-complete siblings survive. ``dropped`` is optional for compatibility
+    with direct callers of this private helper.
     """
-    parts: list[str] = []
-    depth = 0
-    buf: list[str] = []
-    for ch in s:
-        if ch in '（([':
-            depth += 1
-            buf.append(ch)
-        elif ch in '）)]' and depth > 0:
-            depth -= 1
-            buf.append(ch)
-        elif ch == ',' and depth == 0:
-            parts.append(''.join(buf))
-            buf = []
-        else:
-            buf.append(ch)
-    if buf:
-        parts.append(''.join(buf))
+    if dropped is None:
+        dropped = []
 
     out: list[str] = []
-    for p in parts:
-        # Drop a trailing parenthetical note, if any.
-        p = re.sub(r'[（(].*?[)）]\s*$', '', p).strip()
-        # Tidy surrounding quotes/backticks (markdown residue).
-        p = p.strip('`"\' ').strip()
-        if p:
-            out.append(p)
+    buf: list[str] = []
+    brackets: list[str] = []
+    quote_closer: str | None = None
+    malformed = False
+
+    def finish() -> None:
+        nonlocal buf, malformed
+        raw = ''.join(buf).strip()
+        if raw:
+            if malformed or brackets or quote_closer:
+                dropped.append(raw)
+            else:
+                normalized = _normalize_variant(raw)
+                if normalized is None:
+                    dropped.append(raw)
+                else:
+                    out.append(normalized)
+        buf = []
+        malformed = False
+
+    for ch in s:
+        if quote_closer is not None:
+            buf.append(ch)
+            if ch == quote_closer:
+                quote_closer = None
+            continue
+
+        # Outer quotes are grammar, not decoration. Apostrophes inside a name such
+        # as O'Connor are ordinary characters because the buffer is already nonempty.
+        if ch in _QUOTE_PAIRS and not ''.join(buf).strip():
+            quote_closer = _QUOTE_PAIRS[ch]
+            buf.append(ch)
+            continue
+
+        if ch in _BRACKET_PAIRS:
+            brackets.append(ch)
+            buf.append(ch)
+            continue
+        if ch in _CLOSING_BRACKETS:
+            if not brackets or brackets[-1] != _CLOSING_BRACKETS[ch]:
+                malformed = True
+                # Resynchronize so a later top-level separator can preserve siblings.
+                brackets.clear()
+            else:
+                brackets.pop()
+            buf.append(ch)
+            continue
+
+        if not brackets and ch in _LIST_SEPARATORS:
+            finish()
+            continue
+        if not brackets and ch in _COMMENT_TERMINATORS:
+            finish()
+            break
+        buf.append(ch)
+    else:
+        finish()
+
     return out
+
+
+def _normalize_variant(raw: str) -> str | None:
+    value = _strip_trailing_parenthetical_note(raw.strip())
+    if not value:
+        return None
+
+    value, was_quoted = _strip_outer_quote(value)
+    if value is None or not value or len(value) > _MAX_VARIANT_LEN:
+        return None
+    if any(ord(ch) < 32 for ch in value):
+        return None
+
+    if was_quoted:
+        # Nested/mismatched quote syntax is deliberately unsupported. The caller can
+        # store an apostrophe normally; only quote glyphs themselves are excluded.
+        return None if any(ch in _ALL_QUOTE_CHARS for ch in value) else value
+
+    if _UNQUOTED_FORBIDDEN_RE.search(value):
+        return None
+    if any(ch in _ALL_QUOTE_CHARS for ch in value):
+        return None
+    if not _is_name_like_unquoted(value):
+        return None
+    return value
+
+
+def _strip_outer_quote(value: str) -> tuple[str | None, bool]:
+    for opener, closer in _QUOTE_PAIRS.items():
+        if value.startswith(opener):
+            if len(value) < 2 or not value.endswith(closer):
+                return None, True
+            return value[len(opener):-len(closer)].strip(), True
+    if value and value[-1] in _QUOTE_PAIRS.values():
+        return None, True
+    return value, False
+
+
+def _strip_trailing_parenthetical_note(value: str) -> str:
+    """Remove one balanced top-level ``(...)``/``（...）`` suffix."""
+    brackets: list[tuple[str, int]] = []
+    quote_closer: str | None = None
+    top_level_groups: list[tuple[int, int, str]] = []
+    for index, ch in enumerate(value):
+        if quote_closer is not None:
+            if ch == quote_closer:
+                quote_closer = None
+            continue
+        if ch in _QUOTE_PAIRS and not value[:index].strip():
+            quote_closer = _QUOTE_PAIRS[ch]
+            continue
+        if ch in _BRACKET_PAIRS:
+            brackets.append((ch, index))
+            continue
+        if ch in _CLOSING_BRACKETS:
+            if not brackets or brackets[-1][0] != _CLOSING_BRACKETS[ch]:
+                return value
+            opener, start = brackets.pop()
+            if not brackets:
+                top_level_groups.append((start, index, opener))
+
+    if brackets or quote_closer or not top_level_groups:
+        return value
+    start, end, opener = top_level_groups[-1]
+    if end == len(value) - 1 and opener in {'(', '（'} and value[:start].strip():
+        return value[:start].rstrip()
+    return value
+
+
+def _is_name_like_unquoted(value: str) -> bool:
+    tokens = value.split()
+    if not tokens or len(tokens) > _MAX_UNQUOTED_TOKENS:
+        return False
+
+    if all(_is_cjk_char(ch) or ch in {'·', '・'} for ch in value):
+        return len(value) <= _MAX_UNQUOTED_CJK_LEN
+
+    for token in tokens:
+        if not token or not all(
+            ch.isalpha() or ch.isdigit() or ch in {"-", "'", "’", "·", "・"}
+            for ch in token
+        ):
+            return False
+        for part in re.split(r"[-'’·・]", token):
+            if not part:
+                continue
+            if all(_is_cjk_char(ch) for ch in part):
+                if len(part) > _MAX_UNQUOTED_CJK_LEN:
+                    return False
+                continue
+            if part.isdigit():
+                continue
+            if not part.isalpha():
+                return False
+            folded = part.casefold()
+            if folded in _LOWERCASE_NAME_PARTICLES:
+                continue
+            if part.isupper() or (part[0].isupper() and part[1:].islower()):
+                continue
+            return False
+    return True
+
+
+def _is_cjk_char(ch: str) -> bool:
+    codepoint = ord(ch)
+    return (
+        0x3400 <= codepoint <= 0x4DBF
+        or 0x4E00 <= codepoint <= 0x9FFF
+        or 0xF900 <= codepoint <= 0xFAFF
+        or 0x3040 <= codepoint <= 0x30FF
+        or 0xAC00 <= codepoint <= 0xD7AF
+    )

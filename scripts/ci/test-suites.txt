@@ -62,4 +62,5 @@ python-unittest  daymade-skill/skill-governance/tests
 python-unittest  daymade-codex/codex-1m-context-window-setup/tests
 python-unittest  daymade-codex/interaction-design-board/tests
 python-unittest  daymade-audio/asr-transcribe-to-text/tests
+python-unittest  daymade-audio/transcript-fixer/tests
 python-unittest  feishu-doc-scraper/tests
