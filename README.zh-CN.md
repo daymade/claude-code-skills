@@ -2762,7 +2762,7 @@ claude plugin install daymade-claude-code@daymade-skills
 - 为学员配置课后环境，复现同样的多 provider 工作流
 
 **主要功能：**
-- 一键安装器把五个运行脚本链接到 `~/.config/claude-switch-models-setup/`，且只在激活清单不存在时创建空模板
+- 一键安装器把声明的运行脚本链接到 `~/.config/claude-switch-models-setup/`，且只在激活清单不存在时创建空模板
 - 内置 provider 专用的 `~/.claude/settings/<provider>.json` 模板，并带上必要的隔离标志
 - `claude-profiles-init` 创建隔离目录 `~/.claude-profiles/<provider>/`，其余资源通过 symlink 共享
 - profile 同步会镜像默认 Claude profile 的 enabled plugins，并共享 installed plugin state

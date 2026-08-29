@@ -59,7 +59,7 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    ```
 
    Or link them by hand. `REPO` **must be an absolute path**: with a relative
-   one every command below still succeeds and exits 0, leaving five dangling
+   one every command below still succeeds and exits 0, leaving dangling
    links that break `csk` and the LaunchAgent with no error to trace.
 
    ```bash
@@ -78,9 +78,9 @@ When the user says something like "set up Claude Code profiles" or "I want to us
      "$DST/codex-active-skills.json"
    ```
 
-   The five paths are spelled out rather than globbed so that reading this file
+   The deployed paths are spelled out rather than globbed so that reading this file
    tells you which scripts exist and where — `scripts/*.sh` would not. No
-   `chmod` step: all five are committed executable, so setting the bit again
+   `chmod` step: each listed script is committed executable, so setting the bit again
    would only dirty the checkout with mode changes that then ride into somebody
    else's commit.
 
@@ -112,7 +112,7 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    hold edits that exist nowhere else, which is the whole problem being
    described: `mv "$f" "$f.local-edits" && ln -sf <source> "$f"`, then diff.
 
-   On a machine **without** the repo, copy the five scripts out of this skill
+   On a machine **without** the repo, copy the scripts listed by the installer out of this skill
    bundle instead — and accept that repo fixes will not reach it until you copy
    again.
 
@@ -120,7 +120,7 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    - Source the profile manager in `~/.zshrc` or `~/.bashrc`
    - Add aliases: `csk`, `csks`, `csd`, `csg`, `css`
    - Add any further per-account/per-plan variant alias by hand if needed —
-     `claude-profiles.sh` only defines the five above
+     `claude-profiles.sh` only defines the aliases listed above
    - Tell the user to run `source ~/.zshrc` (or open a new terminal)
 
 4. **Generate provider settings files**
