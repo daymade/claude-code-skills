@@ -1,11 +1,12 @@
 # Advanced correction evidence
 
-Read the matching section when the transcript contains load-bearing numbers, a second recording, in-room written artifacts, or a multi-file batch.
+Read the matching section when the transcript contains load-bearing numbers, a second recording, an authorized clip-level recognizer cross-check, in-room written artifacts, or a multi-file batch.
 
 ## Contents
 
 - Common ASR error families
 - Numeric consistency and audio verification
+- One recording, two engines (clip-level cross-check)
 - Whiteboard and slide-photo evidence
 - Efficient batch correction
 - Large-batch agent constraints
@@ -138,6 +139,168 @@ title's leading date, a timezone offset) stay silent. Run it with
 The false-positive *rate* behind those choices was measured on a private
 transcript corpus that cannot ship, so the rate is not reproducible here — the
 behaviour it bought is.
+
+### One recording, two engines — the cross-check you can run yourself
+
+The two-recordings rule above needs a second recording, and the artifact rule
+below needs somebody to have photographed the board. Neither is available on a
+typical call. A second recognizer from a genuinely different family can still
+provide useful, partially independent evidence from the same signal. This is a
+clip-level application of recognizer-output comparison, not proof: correlated
+training data and shared acoustic ambiguity can make two engines agree while
+both are wrong.
+
+This fills a real gap in the paths above, not a duplicate of them. Whole-file
+independent ASR is the answer to "produce a better complete transcript"; the
+dashboard's `Q` is the answer to "let a human hear this one utterance." Neither
+is the answer to "the agent is stuck on one word right now" — which is precisely
+where an agent, out of cheaper options and under delivery pressure, starts
+reasoning from world knowledge and writes a fluent wrong guess. **That is the
+failure this section exists to prevent: it gives an exhausted search ladder a
+sanctioned next step.**
+
+**Method.** This route requires `ffmpeg` and `ffprobe` plus a recognizer whose
+family and authorization are already known. Check those prerequisites before
+starting; do not install a model, download weights, or send audio externally just
+because this section names the capability.
+
+- **Get the source audio** from whichever channel owns the recording — the
+  meeting platform's API, the local file the transcript came from, the
+  recorder's export. `fetch_minute_audio.py` implements one such platform; the
+  method is not limited to it. For a Feishu/Lark minute, run the bundled helper
+  only under the already-authorized owning profile and require its timeline
+  verification before using the file:
+
+  ~~~bash
+  uv run scripts/fetch_minute_audio.py --token <minute-token> \
+    --profile <authorized-profile> --output <session.m4a> \
+    --transcript <transcript.md>
+  ~~~
+
+  `ffmpeg -ss` counts from the start of the media file. Before trusting a
+  transcript timestamp, calibrate one timestamp whose neighbouring words you can
+  hear; a trimmed recording or wall-clock timestamp uses a different clock and
+  otherwise reproduces the same mis-cut failure this rung is meant to prevent.
+- **Cut two clips, not one.** A tight cut (~±5 s around the token) stops a
+  second engine from being dragged by surrounding context into "repairing" the
+  token into something fluent. A medium cut (~±20 s) keeps enough acoustic
+  context that the tight clip's own truncation doesn't distort it. A mismatch
+  between the two windows is itself a signal. Mono 16 kHz is what engines want; the
+  preprocessing is owned by `/daymade-audio:asr-transcribe-to-text`.
+- ⚠️ **A long turn's timestamp marks the turn's start, not the token's.** Cut
+  from the line's timestamp on a multi-minute turn and the clip can end tens of
+  seconds before the word ever arrives. You then read "the engine didn't produce
+  that token" as evidence, when you simply never played the right audio.
+  Three things make this tractable:
+  - **Estimate the offset by position in the turn**, since speech rate within one
+    turn is roughly constant: `token_start ≈ turn_start + (characters before the
+    token ÷ characters in the turn) × turn_duration`, where `turn_duration` is the
+    next speaker timestamp minus this one. For the final timestamped turn (or a
+    one-speaker file with no later timestamp), read the media duration and use
+    `audio_duration - turn_start` instead:
+
+    ~~~bash
+    ffprobe -v error -show_entries format=duration \
+      -of default=noprint_wrappers=1:nokey=1 <source-audio>
+    ~~~
+
+    If neither a later timestamp nor media duration is available, do not invent a
+    duration: enqueue the token or ask once. Widen the window rather than trusting
+    the estimate — a ±20 s cut absorbs a sizeable error.
+  - **Cut with the offsets you computed**, mono 16 kHz. Clamp each start at zero
+    and use distinct filenames; otherwise the medium cut can overwrite the tight
+    one and make a clip look as though it corroborated itself:
+
+    ~~~bash
+    TOKEN_START_SECONDS=123.456  # replace with the computed offset
+    SOURCE_AUDIO=/tmp/session.m4a
+    TIGHT_CLIP=/tmp/clip-tight.wav
+    MEDIUM_CLIP=/tmp/clip-medium.wav
+    tight_start="$(awk -v t="$TOKEN_START_SECONDS" 'BEGIN{s=t-5; if(s<0)s=0; printf "%.3f",s}')"
+    medium_start="$(awk -v t="$TOKEN_START_SECONDS" 'BEGIN{s=t-20; if(s<0)s=0; printf "%.3f",s}')"
+    ffmpeg -y -ss "$tight_start" -t 10 -i "$SOURCE_AUDIO" \
+      -ac 1 -ar 16000 -c:a pcm_s16le "$TIGHT_CLIP"
+    ffmpeg -y -ss "$medium_start" -t 40 -i "$SOURCE_AUDIO" \
+      -ac 1 -ar 16000 -c:a pcm_s16le "$MEDIUM_CLIP"
+    ~~~
+
+  - **Distinguish "I missed the token" from "the engines disagree"** — otherwise a
+    mis-cut reads as a finding. Check the returned text for the words that
+    *surround* the token in the transcript: absent → the window was wrong, re-cut;
+    present while the token itself differs → that is a real disagreement. **Stop
+    after two re-cuts** that still don't land the token: at that point the anchor
+    itself is unreliable, so enqueue the item rather than cutting indefinitely.
+    If the tight and medium windows yield different readings, that is
+    non-convergence; never choose the window whose answer you prefer.
+- **Use an engine from a different family than the one that produced the
+  transcript** — the same constraint the whole-file rule above states. Re-running
+  the same engine reproduces its own error, and two builds of the same family are
+  weak evidence. Use the second recognizer only when the current authorization
+  already covers its local or external execution; otherwise enqueue the item or
+  ask once rather than silently spending money or sending audio away. Route an
+  authorized clip through
+  `/daymade-audio:asr-transcribe-to-text` and take its plain-text opt-out
+  (`--no-diarization`) — speaker diarization on a ten-second clip is noise.
+  **Find out what produced the canonical text before you pick the second engine**:
+  the transcript's frontmatter or the project's ingest log normally names it (a
+  meeting platform's built-in ASR, a local model run). When nothing records it,
+  one extra result cannot establish cross-family agreement: use two clip engines
+  known to differ by construction, or keep the token Uncertain. When provenance
+  is known, the transcript producer plus one different-family clip result is the
+  minimum pair; the transcript text is evidence only after neighbouring words
+  prove the clip is aligned. **If the only recognizer available is the one that
+  produced the transcript**, you may still cut and read the clip yourself, but
+  say so: that run is not independent corroboration, the token stays Uncertain,
+  and the boundary gets stated the same way the whole-file rule states it.
+
+**Reading the result — and the first row's limit matters more than the row:**
+
+| Engines | Verdict |
+|---|---|
+| **Agree on token X** | The sound is strongly corroborated, not proven. Reject an unsupported rewrite of X into something that sounds different. If X is unfamiliar, keep it unchanged while checking an authority that is permitted for that token. |
+| **Disagree, and one reading is settled by the in-document self-proof** — step 6's three conditions, all required: the proof occurrence is verified in the **raw** text, only one of the candidates occurs correctly, and the passage is genuinely *about* that referent | Minimal edit to that reading, recorded like any other fix. **Person names are excluded from this row** — they go to the human gate whatever the clip says. |
+| **Don't converge** | Keep the original, enqueue it (the review queue), and wire the clip so a human listens once instead of the agent guessing four times. |
+
+**For an alphabetic token, try an exact local search before the clip.** An
+acronym, ticker, or model ID is often written byte-for-byte in project docs,
+configs, or the domain ledger; that local lookup is cheaper and does not expose
+an unknown internal token to an external service. Use WebSearch only when
+existing evidence makes the entity public, or the user explicitly authorizes the
+lookup. Whatever a search returns, it licenses no expansion: keep the token the
+speaker uttered rather than replacing it with a full phrase.
+
+**Agreement corroborates the sound, not the word.** Cross-family convergence is
+evidence about what was pronounced; it does not choose which written word that
+pronunciation denotes. For an alphabetic token — an acronym, ticker, or model
+ID — sound and spelling are often the same object, so the evidence is stronger.
+For a Mandarin homophone it settles much less: engines agreeing on `lì zhì`
+leaves `利智` / `离职` entirely open, and the correct written form may be a
+homophone neither engine produced. Use the first row only to reject unsupported
+sound-distant rewrites; it never overrides in-document self-proof or the human
+gate for person names. Tone alone is not sound distance for this decision: a
+tone-only difference remains a homophone question for the local authority ladder.
+
+**Cost boundary.** One token costs a download plus several ASR passes. Spend it
+only on a **load-bearing** token — one naming an entity, carrying a number, or
+anchoring a claim someone will act on — and only after the cheaper rungs have
+struck out. Firing it at ordinary disfluency is the over-armed check that trains
+operators to skip gates.
+
+That definition asks what the token *is*, which is exactly what you don't know in
+the case this rung exists for. Use the operational form instead: **an unresolvable
+non-word sitting in a document that will drive a decision is load-bearing by
+default** — the cost of one clip is small against a wrong entity in a deliverable.
+What the boundary actually excludes is the residue you *can* already read: filler,
+repetition, an intelligible common word you merely find inelegant.
+
+**Coverage is still a separate claim.** Clips constrain their own anchors and
+nothing else; the completeness rule above is unchanged by this section.
+
+**Example.** If both tight and medium clips return the same unfamiliar
+alphabetic token and its neighbouring words prove the window is correct, keep
+that token unchanged and search the permitted local authorities for its exact
+spelling. Do not replace it with a familiar phrase merely because the phrase
+fits the topic.
 
 ### In-room artifacts are another independent engine (whiteboard and slide photos)
 

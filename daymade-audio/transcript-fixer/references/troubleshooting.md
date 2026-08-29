@@ -319,8 +319,13 @@ The manual cleanup also leaves `_changes.md` and `_needs_review.md` untouched. R
 
 ```bash
 /bin/mv -f file_stage1.md file.md          # /bin/mv ignores the alias; -f forces overwrite
-grep -c '<a-term-you-corrected>' file.md   # confirm the corrected version is what remains
+grep -c '<the-WRONG-form-you-replaced>' file.md   # must print 0
 ```
+
+Verify the claim you need: absence of the old form. Presence of the corrected
+term is not evidence that this occurrence changed, because the correct term may
+already appear elsewhere in the transcript. A nonzero old-form count means the
+promotion or replacement is incomplete.
 
 ## Validation Commands
 

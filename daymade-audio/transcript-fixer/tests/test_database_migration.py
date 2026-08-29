@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from utils.database_migration import DatabaseMigrationManager, Migration
 from utils.migrations import ALL_MIGRATIONS
@@ -378,7 +378,9 @@ class DatabaseMigrationManagerTests(unittest.TestCase):
         self.assertEqual(manager.get_current_version(), "0.0")
 
     def test_schema_built_database_migrates_from_legacy_2_0_to_2_4(self) -> None:
-        schema_path = Path(__file__).resolve().parents[1] / "core" / "schema.sql"
+        schema_path = (
+            Path(__file__).resolve().parents[1] / "scripts" / "core" / "schema.sql"
+        )
         with sqlite3.connect(self.db_path) as connection:
             connection.executescript(schema_path.read_text(encoding="utf-8"))
             connection.execute(
