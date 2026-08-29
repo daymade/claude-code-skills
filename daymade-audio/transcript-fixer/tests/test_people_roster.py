@@ -172,6 +172,15 @@ class PeopleRosterTests(unittest.TestCase):
             {"Alice Maria Chen": "正名", "王小明": "正名"},
         )
 
+    def test_single_quoted_comma_name_keeps_apostrophe_and_camel_case(self) -> None:
+        corrections = self.roster(
+            "### 正名\n- **ASR 变体**: 'D'Angelo, John', McDonald\n"
+        )
+        self.assertEqual(
+            corrections,
+            {"D'Angelo, John": "正名", "McDonald": "正名"},
+        )
+
     def test_valid_siblings_survive_a_malformed_tail(self) -> None:
         corrections = self.roster(
             "### 正名\n- **ASR 变体**: Alice Maria Chen, 李 小龙, 尾项（note\n"

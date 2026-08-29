@@ -49,13 +49,17 @@ _LIST_SEPARATORS = {',', '，', '、'}
 _COMMENT_TERMINATORS = {';', '；'}
 _BRACKET_PAIRS = {'(': ')', '（': '）', '[': ']', '【': '】'}
 _CLOSING_BRACKETS = {close: open_ for open_, close in _BRACKET_PAIRS.items()}
-_QUOTE_PAIRS = {'"': '"', '`': '`', '“': '”', '‘': '’', '「': '」', '『': '』'}
+_QUOTE_PAIRS = {
+    '"': '"', "'": "'", '`': '`', '“': '”', '‘': '’', '「': '」', '『': '』',
+}
 _ALL_QUOTE_CHARS = set(_QUOTE_PAIRS) | set(_QUOTE_PAIRS.values())
+_NON_APOSTROPHE_QUOTE_CHARS = _ALL_QUOTE_CHARS - {"'"}
 _UNQUOTED_FORBIDDEN_RE = re.compile(
     r'[/／]|->|=>|[→←⇒⇐↔⇄]|[。！？!?=:<>]|——'
 )
 _LOWERCASE_NAME_PARTICLES = {
-    'al', 'bin', 'da', 'de', 'del', 'di', 'dos', 'du', 'la', 'van', 'von',
+    'al', 'bin', 'da', 'de', 'del', 'den', 'der', 'di', 'dos', 'du', 'el',
+    'la', 'le', 'ten', 'ter', 'van', 'von',
 }
 
 
@@ -151,10 +155,10 @@ def _split_variants(s: str, dropped: list[str] | None = None) -> list[str]:
         buf = []
         malformed = False
 
-    for ch in s:
+    for index, ch in enumerate(s):
         if quote_closer is not None:
             buf.append(ch)
-            if ch == quote_closer:
+            if ch == quote_closer and _quote_closes(s, index, quote_closer):
                 quote_closer = None
             continue
 
@@ -206,11 +210,11 @@ def _normalize_variant(raw: str) -> str | None:
     if was_quoted:
         # Nested/mismatched quote syntax is deliberately unsupported. The caller can
         # store an apostrophe normally; only quote glyphs themselves are excluded.
-        return None if any(ch in _ALL_QUOTE_CHARS for ch in value) else value
+        return None if any(ch in _NON_APOSTROPHE_QUOTE_CHARS for ch in value) else value
 
     if _UNQUOTED_FORBIDDEN_RE.search(value):
         return None
-    if any(ch in _ALL_QUOTE_CHARS for ch in value):
+    if any(ch in _NON_APOSTROPHE_QUOTE_CHARS for ch in value):
         return None
     if not _is_name_like_unquoted(value):
         return None
@@ -235,7 +239,7 @@ def _strip_trailing_parenthetical_note(value: str) -> str:
     top_level_groups: list[tuple[int, int, str]] = []
     for index, ch in enumerate(value):
         if quote_closer is not None:
-            if ch == quote_closer:
+            if ch == quote_closer and _quote_closes(value, index, quote_closer):
                 quote_closer = None
             continue
         if ch in _QUOTE_PAIRS and not value[:index].strip():
@@ -287,7 +291,9 @@ def _is_name_like_unquoted(value: str) -> bool:
             folded = part.casefold()
             if folded in _LOWERCASE_NAME_PARTICLES:
                 continue
-            if part.isupper() or (part[0].isupper() and part[1:].islower()):
+            if part.isupper() or (
+                part[0].isupper() and any(ch.islower() for ch in part[1:])
+            ):
                 continue
             return False
     return True
@@ -301,4 +307,18 @@ def _is_cjk_char(ch: str) -> bool:
         or 0xF900 <= codepoint <= 0xFAFF
         or 0x3040 <= codepoint <= 0x30FF
         or 0xAC00 <= codepoint <= 0xD7AF
+    )
+
+
+def _quote_closes(text: str, index: int, closer: str) -> bool:
+    """Treat an ASCII apostrophe inside a quoted name as content, not closure."""
+    if closer != "'":
+        return True
+    tail = text[index + 1:].lstrip()
+    return (
+        not tail
+        or tail[0] in _LIST_SEPARATORS
+        or tail[0] in _COMMENT_TERMINATORS
+        or tail[0] in _BRACKET_PAIRS
+        or tail[0] in _CLOSING_BRACKETS
     )
