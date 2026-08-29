@@ -146,21 +146,30 @@ class PeopleRosterTests(unittest.TestCase):
                     {},
                 )
 
-    def test_unquoted_prose_is_not_a_name_atom(self) -> None:
+    def test_structurally_invalid_prose_is_not_a_name_atom(self) -> None:
         for payload in (
             "this is prose not a name.",
             "昵称远哥已经录入词典",
-            "这是说明",
-            "已录入词典",
-            "This Is A Note",
-            "これは説明",
-            "이미 등록됨",
         ):
             with self.subTest(payload=payload):
                 self.assertEqual(
                     self.roster(f"### 正名\n- **ASR 变体**: {payload}\n"),
                     {},
                 )
+
+    def test_short_name_shaped_atoms_follow_the_explicit_roster_field(self) -> None:
+        corrections = self.roster(
+            "### 正名\n- **ASR 变体**: 이미주, ibn Khalid, Ana y Luz, Hans zu Berg\n"
+        )
+        self.assertEqual(
+            corrections,
+            {
+                "이미주": "正名",
+                "ibn Khalid": "正名",
+                "Ana y Luz": "正名",
+                "Hans zu Berg": "正名",
+            },
+        )
 
     def test_balanced_quotes_keep_internal_commas_and_are_not_keys(self) -> None:
         corrections = self.roster(

@@ -58,20 +58,6 @@ _NON_APOSTROPHE_QUOTE_CHARS = _ALL_QUOTE_CHARS - {"'", "’"}
 _UNQUOTED_FORBIDDEN_RE = re.compile(
     r'[/／]|->|=>|[→←⇒⇐↔⇄]|[。！？!?=:<>]|——'
 )
-_LOWERCASE_NAME_PARTICLES = {
-    'al', 'bin', 'da', 'de', 'del', 'den', 'der', 'di', 'dos', 'du', 'el',
-    'la', 'le', 'ten', 'ter', 'van', 'von',
-}
-_NOTE_LIKE_SUBSTRINGS = {
-    '说明', '备注', '已录入', '未录入', '词典', '昵称', '同音', '误识', '补录',
-    '已确认', '标准写法', '规范拼写', '规则', '禁用',
-    '説明', '注記', '備考', '登録', '辞書', '確認', 'これは',
-    '설명', '비고', '등록', '사전', '확인', '메모', '이미', '입니다',
-}
-_NOTE_LIKE_ENGLISH = {
-    'already', 'confirmed', 'description', 'dictionary', 'entered', 'note',
-    'notes', 'recorded', 'remark', 'remarks',
-}
 
 
 def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
@@ -229,8 +215,6 @@ def _normalize_variant(raw: str) -> str | None:
         return None
     if not _apostrophes_are_internal(value):
         return None
-    if _looks_like_note(value):
-        return None
     if not _is_name_like_unquoted(value):
         return None
     return value
@@ -279,6 +263,13 @@ def _strip_trailing_parenthetical_note(value: str) -> str:
 
 
 def _is_name_like_unquoted(value: str) -> bool:
+    """Validate syntax only; the curated roster field supplies semantic intent.
+
+    A short punctuation-free phrase can be byte-for-byte indistinguishable from a
+    legitimate name in many scripts. Guessing semantics here caused real names to
+    disappear. Authors put commentary after a top-level semicolon; balanced outer
+    quotes are the escape for atoms outside these conservative structural bounds.
+    """
     tokens = value.split()
     if not tokens or len(tokens) > _MAX_UNQUOTED_TOKENS:
         return False
@@ -305,23 +296,6 @@ def _is_name_like_unquoted(value: str) -> bool:
                 continue
             if not all(_is_letter_or_mark(ch) for ch in part):
                 return False
-            folded = part.casefold()
-            if folded in _LOWERCASE_NAME_PARTICLES:
-                continue
-            cased = [ch for ch in part if ch.lower() != ch.upper()]
-            if not cased:
-                continue
-            if part.isupper():
-                continue
-            if cased[0].isupper() and any(ch.islower() for ch in cased[1:]):
-                continue
-            if (
-                cased[0].islower()
-                and any(ch.isupper() for ch in cased[1:])
-                and any(ch.islower() for ch in cased[1:])
-            ):
-                continue
-            return False
     return True
 
 
@@ -358,17 +332,6 @@ def _quote_closes(text: str, index: int, closer: str) -> bool:
 
 def _is_letter_or_mark(ch: str) -> bool:
     return unicodedata.category(ch)[0] in {'L', 'M'}
-
-
-def _looks_like_note(value: str) -> bool:
-    folded = value.casefold()
-    if any(term in folded for term in _NOTE_LIKE_SUBSTRINGS):
-        return True
-    words = {
-        ''.join(ch for ch in token if _is_letter_or_mark(ch)).casefold()
-        for token in value.split()
-    }
-    return bool(words & _NOTE_LIKE_ENGLISH)
 
 
 def _apostrophes_are_internal(value: str) -> bool:
