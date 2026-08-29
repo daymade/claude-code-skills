@@ -21,17 +21,16 @@
 #     --clone <independent-clone> --survivor <kept-checkout> --out <new-backup-dir>
 #   git_prepare_clone_retirement.sh --verify-current <backup-dir>
 #
-# `--verify-current` is the final compare-and-swap gate. Finish other Git probes,
-# run the process-occupancy check by itself, then run this command immediately before
-# moving the clone to an explicit recoverable quarantine. Running occupancy beside
-# Git probes can make it observe the auditor's own sibling process.
+# `--verify-current` is the final compare-and-swap gate. Freeze an absent no-clobber
+# quarantine destination, run process occupancy by itself, then run this command.
+# After success, the move must be the next operation with no intervening probe.
 
 set -euo pipefail
 umask 077
 export GIT_OPTIONAL_LOCKS=0
 export GIT_NO_LAZY_FETCH=1
 
-git() {
+safe_git() {
   command git --no-pager \
     -c core.fsmonitor=false \
     -c core.untrackedCache=false \
@@ -56,7 +55,7 @@ normalize_remote() {
 }
 
 absolute_git_dir() {
-  git -C "$1" rev-parse --absolute-git-dir 2>/dev/null
+  safe_git -C "$1" rev-parse --absolute-git-dir 2>/dev/null
 }
 
 sha256_file() {
@@ -81,7 +80,7 @@ file_mode() {
 }
 
 list_refs() {
-  git -C "$1" for-each-ref --format='%(objectname) %(refname)' | LC_ALL=C sort
+  safe_git -C "$1" for-each-ref --format='%(objectname) %(refname)' | LC_ALL=C sort
 }
 
 list_symbolic_refs() {
@@ -89,9 +88,9 @@ list_symbolic_refs() {
   local head_target
 
   {
-    head_target="$(git -C "$checkout" symbolic-ref -q HEAD 2>/dev/null || true)"
+    head_target="$(safe_git -C "$checkout" symbolic-ref -q HEAD 2>/dev/null || true)"
     [ -z "$head_target" ] || printf 'HEAD %s\n' "$head_target"
-    git -C "$checkout" for-each-ref --format='%(refname) %(symref)' |
+    safe_git -C "$checkout" for-each-ref --format='%(refname) %(symref)' |
       awk 'NF == 2 { print $1, $2 }'
   } | LC_ALL=C sort -u
 }
@@ -99,13 +98,13 @@ list_symbolic_refs() {
 list_bundle_expected_heads() {
   local checkout="$1"
   {
-    git -C "$checkout" rev-parse HEAD | awk '{print $1 " HEAD"}'
+    safe_git -C "$checkout" rev-parse HEAD | awk '{print $1 " HEAD"}'
     list_refs "$checkout"
   } | LC_ALL=C sort
 }
 
 list_reflog_oids() {
-  git -C "$1" reflog --all --format='%H' 2>/dev/null | LC_ALL=C sort -u
+  safe_git -C "$1" reflog --all --format='%H' 2>/dev/null | LC_ALL=C sort -u
 }
 
 metadata_manifest() {
@@ -123,7 +122,7 @@ metadata_manifest() {
       printf -v escaped_target '%q' "$link_target"
       printf '%s|symlink|%s|%s\n' "$escaped_path" "$mode" "$escaped_target"
     elif [ -f "$entry" ]; then
-      object_id="$(git -C "$checkout" hash-object --no-filters -- "$entry")" || return 1
+      object_id="$(safe_git -C "$checkout" hash-object --no-filters -- "$entry")" || return 1
       printf '%s|file|%s|%s\n' "$escaped_path" "$mode" "$object_id"
     elif [ -d "$entry" ]; then
       printf '%s|directory|%s|-\n' "$escaped_path" "$mode"
@@ -153,7 +152,7 @@ check_metadata_scope() {
   git_dir="$(absolute_git_dir "$clone")" || return 1
   for config_file in "$git_dir/config" "$git_dir/config.worktree"; do
     [ -e "$config_file" ] || continue
-    config_keys="$(git config --file "$config_file" --no-includes --name-only --list)" || \
+    config_keys="$(safe_git config --file "$config_file" --no-includes --name-only --list)" || \
       unsafe "LOCAL_CONFIG_UNREADABLE" "$config_file"
     while IFS= read -r lowered_key; do
       [ -n "$lowered_key" ] || continue
@@ -181,7 +180,7 @@ check_no_linked_worktrees() {
   local clone="$1"
   local worktrees count
 
-  worktrees="$(git -C "$clone" worktree list --porcelain)" || \
+  worktrees="$(safe_git -C "$clone" worktree list --porcelain)" || \
     unsafe "WORKTREE_INVENTORY_UNREADABLE" "$clone"
   count="$(printf '%s\n' "$worktrees" | awk '$1 == "worktree" { count++ } END { print count + 0 }')"
   if [ "$count" -gt 1 ]; then
@@ -202,7 +201,7 @@ check_no_submodule_repositories() {
       "$git_dir/modules contains separate repositories; audit them independently before retirement"
   fi
 
-  if ! submodules="$(git -C "$clone" submodule status --recursive 2>&1)"; then
+  if ! submodules="$(safe_git -C "$clone" submodule status --recursive 2>&1)"; then
     unsafe "SUBMODULE_INVENTORY_UNREADABLE" "$submodules"
   fi
   while IFS= read -r line; do
@@ -223,7 +222,7 @@ check_no_promisor_clone() {
   local git_dir promisor_config key value lowered_value
 
   git_dir="$(absolute_git_dir "$clone")" || return 1
-  promisor_config="$(git -C "$clone" config --local --no-includes --get-regexp \
+  promisor_config="$(safe_git -C "$clone" config --local --no-includes --get-regexp \
     '^(extensions\.partialClone|remote\..*\.(promisor|partialclonefilter))$' 2>/dev/null || true)"
   while IFS=' ' read -r key value; do
     [ -n "$key" ] || continue
@@ -273,9 +272,9 @@ check_no_tracked_content_filters() {
   local clone="$1"
   local path _attribute value
 
-  git -C "$clone" ls-files -z >/dev/null || \
+  safe_git -C "$clone" ls-files -z >/dev/null || \
     unsafe "TRACKED_PATH_INVENTORY_UNREADABLE" "$clone"
-  git -C "$clone" check-attr -z --stdin filter </dev/null >/dev/null || \
+  safe_git -C "$clone" check-attr -z --stdin filter </dev/null >/dev/null || \
     unsafe "ATTRIBUTE_INVENTORY_UNREADABLE" "$clone"
   while IFS= read -r -d '' path && \
     IFS= read -r -d '' _attribute && \
@@ -287,8 +286,8 @@ check_no_tracked_content_filters() {
           "$path has filter=$value; audit that external content pipeline separately"
         ;;
     esac
-  done < <(git -C "$clone" ls-files -z | \
-    git -C "$clone" check-attr -z --stdin filter)
+  done < <(safe_git -C "$clone" ls-files -z | \
+    safe_git -C "$clone" check-attr -z --stdin filter)
 }
 
 check_identity() {
@@ -298,23 +297,23 @@ check_identity() {
 
   [ "$clone" != "$survivor" ] || die "clone and survivor resolve to the same checkout"
   [ -d "$clone/.git" ] || die "--clone must name an independent clone with a .git directory"
-  git -C "$clone" rev-parse --git-dir >/dev/null 2>&1 || die "clone is not a Git repository: $clone"
-  git -C "$survivor" rev-parse --git-dir >/dev/null 2>&1 || die "survivor is not a Git repository: $survivor"
+  safe_git -C "$clone" rev-parse --git-dir >/dev/null 2>&1 || die "clone is not a Git repository: $clone"
+  safe_git -C "$survivor" rev-parse --git-dir >/dev/null 2>&1 || die "survivor is not a Git repository: $survivor"
 
-  clone_remote="$(normalize_remote "$(git -C "$clone" remote get-url origin 2>/dev/null | head -1 || true)")"
-  survivor_remote="$(normalize_remote "$(git -C "$survivor" remote get-url origin 2>/dev/null | head -1 || true)")"
+  clone_remote="$(normalize_remote "$(safe_git -C "$clone" remote get-url origin 2>/dev/null | head -1 || true)")"
+  survivor_remote="$(normalize_remote "$(safe_git -C "$survivor" remote get-url origin 2>/dev/null | head -1 || true)")"
   if [ -n "$clone_remote" ] && [ -n "$survivor_remote" ] && [ "$clone_remote" = "$survivor_remote" ]; then
     echo remote
     return 0
   fi
 
-  clone_head="$(git -C "$clone" rev-parse --verify HEAD 2>/dev/null || true)"
-  survivor_head="$(git -C "$survivor" rev-parse --verify HEAD 2>/dev/null || true)"
-  if [ -n "$clone_head" ] && git -C "$survivor" cat-file -e "${clone_head}^{commit}" 2>/dev/null; then
+  clone_head="$(safe_git -C "$clone" rev-parse --verify HEAD 2>/dev/null || true)"
+  survivor_head="$(safe_git -C "$survivor" rev-parse --verify HEAD 2>/dev/null || true)"
+  if [ -n "$clone_head" ] && safe_git -C "$survivor" cat-file -e "${clone_head}^{commit}" 2>/dev/null; then
     echo shared-history
     return 0
   fi
-  if [ -n "$survivor_head" ] && git -C "$clone" cat-file -e "${survivor_head}^{commit}" 2>/dev/null; then
+  if [ -n "$survivor_head" ] && safe_git -C "$clone" cat-file -e "${survivor_head}^{commit}" 2>/dev/null; then
     echo shared-history
     return 0
   fi
@@ -325,21 +324,21 @@ check_physical_state() {
   local clone="$1"
   local normal_state physical_state stash_state
 
-  normal_state="$(git -C "$clone" status --porcelain=v1 --untracked-files=all)" || \
+  normal_state="$(safe_git -C "$clone" status --porcelain=v1 --untracked-files=all)" || \
     unsafe "STATUS_UNREADABLE" "$clone"
   [ -z "$normal_state" ] || {
     printf '%s\n' "$normal_state" >&2
     unsafe "UNTRACKED_OR_MODIFIED" "copy or commit every listed path before retirement"
   }
 
-  physical_state="$(git -C "$clone" status --porcelain=v1 --ignored --untracked-files=all)" || \
+  physical_state="$(safe_git -C "$clone" status --porcelain=v1 --ignored --untracked-files=all)" || \
     unsafe "IGNORED_STATUS_UNREADABLE" "$clone"
   [ -z "$physical_state" ] || {
     printf '%s\n' "$physical_state" >&2
     unsafe "IGNORED_PHYSICAL_FILES" "classify and copy uncertain ignored bytes before retirement"
   }
 
-  stash_state="$(git -C "$clone" stash list --format='%gd|%H|%gs')" || \
+  stash_state="$(safe_git -C "$clone" stash list --format='%gd|%H|%gs')" || \
     unsafe "STASH_STATUS_UNREADABLE" "$clone"
   [ -z "$stash_state" ] || {
     printf '%s\n' "$stash_state" >&2
@@ -353,9 +352,9 @@ check_reflog_coverage() {
 
   while IFS= read -r oid; do
     [ -n "$oid" ] || continue
-    git -C "$clone" cat-file -e "${oid}^{commit}" 2>/dev/null || \
+    safe_git -C "$clone" cat-file -e "${oid}^{commit}" 2>/dev/null || \
       unsafe "REFLOG_OBJECT_MISSING" "$oid"
-    containing_ref="$(git -C "$clone" for-each-ref --contains "$oid" --format='%(refname)' | head -1 || true)"
+    containing_ref="$(safe_git -C "$clone" for-each-ref --contains "$oid" --format='%(refname)' | head -1 || true)"
     [ -n "$containing_ref" ] || \
       unsafe "REFLOG_ONLY_COMMIT" "$oid has no current ref; pin it before bundling"
   done < <(list_reflog_oids "$clone")
@@ -366,14 +365,14 @@ check_clone_owned_unreachable_objects() {
   local survivor="$2"
   local fsck_output object_type oid missing
 
-  if ! fsck_output="$(git -C "$clone" fsck --no-reflogs --unreachable --no-progress 2>&1)"; then
+  if ! fsck_output="$(safe_git -C "$clone" fsck --no-reflogs --unreachable --no-progress 2>&1)"; then
     unsafe "FSCK_FAILED" "$fsck_output"
   fi
   missing=""
   while IFS=' ' read -r object_type oid; do
     [ -n "$object_type" ] || continue
     [ -n "$oid" ] || continue
-    if ! git -C "$survivor" cat-file -e "$oid" 2>/dev/null; then
+    if ! safe_git -C "$survivor" cat-file -e "$oid" 2>/dev/null; then
       missing="${missing}${object_type} ${oid}"$'\n'
     fi
   done < <(printf '%s\n' "$fsck_output" | awk \
@@ -449,9 +448,9 @@ verify_current() {
   [ "$current_metadata" = "$(cat "$out/metadata.manifest")" ] || \
     unsafe "METADATA_CHANGED" "config/hooks/info changed after preparation"
 
-  git -C "$clone" bundle verify "$out/all-refs.bundle" >/dev/null || \
+  safe_git -C "$clone" bundle verify "$out/all-refs.bundle" >/dev/null || \
     unsafe "BUNDLE_INVALID" "$out/all-refs.bundle"
-  bundle_heads="$(git bundle list-heads "$out/all-refs.bundle" | LC_ALL=C sort)"
+  bundle_heads="$(safe_git bundle list-heads "$out/all-refs.bundle" | LC_ALL=C sort)"
   [ "$bundle_heads" = "$(list_bundle_expected_heads "$clone")" ] || \
     unsafe "BUNDLE_REF_MISMATCH" "bundle heads no longer match the clone"
 
@@ -516,7 +515,7 @@ check_no_promisor_clone "$CLONE"
 check_no_extension_object_stores "$CLONE"
 check_no_tracked_content_filters "$CLONE"
 IDENTITY_MODE="$(check_identity "$CLONE" "$SURVIVOR")"
-SHALLOW_STATE="$(git -C "$CLONE" rev-parse --is-shallow-repository)"
+SHALLOW_STATE="$(safe_git -C "$CLONE" rev-parse --is-shallow-repository)"
 [ "$SHALLOW_STATE" = false ] || unsafe "SHALLOW_CLONE" "fetch complete history before retirement"
 check_no_linked_worktrees "$CLONE"
 check_no_submodule_repositories "$CLONE"
@@ -544,15 +543,15 @@ printf '%s\n' "$REFS" > "$OUT/refs.manifest"
 printf '%s\n' "$SYMREFS" > "$OUT/symrefs.manifest"
 printf '%s\n' "$REFLOG_OIDS" > "$OUT/reflog-oids.manifest"
 printf '%s\n' "$METADATA" > "$OUT/metadata.manifest"
-git -C "$CLONE" reflog --all --date=iso \
+safe_git -C "$CLONE" reflog --all --date=iso \
   --format='%H|%gD|%gs|%cd' > "$OUT/reflog.txt"
 copy_repository_metadata "$CLONE" "$OUT/repo-metadata.tar"
 METADATA_DIGEST="$(sha256_file "$OUT/repo-metadata.tar")"
 printf '%s  %s\n' "$METADATA_DIGEST" "repo-metadata.tar" > "$OUT/metadata.sha256"
 
-  git -C "$CLONE" bundle create "$OUT/all-refs.bundle" --all
-  git -C "$CLONE" bundle verify "$OUT/all-refs.bundle" >/dev/null
-  git bundle list-heads "$OUT/all-refs.bundle" | LC_ALL=C sort > "$OUT/bundle-heads.manifest"
+  safe_git -C "$CLONE" bundle create "$OUT/all-refs.bundle" --all
+  safe_git -C "$CLONE" bundle verify "$OUT/all-refs.bundle" >/dev/null
+  safe_git bundle list-heads "$OUT/all-refs.bundle" | LC_ALL=C sort > "$OUT/bundle-heads.manifest"
   if [ "$(cat "$OUT/bundle-heads.manifest")" != "$(list_bundle_expected_heads "$CLONE")" ]; then
     echo "FROZEN_REFS:" >&2
     list_bundle_expected_heads "$CLONE" >&2
@@ -568,8 +567,8 @@ printf '%s\n' \
   "clone=$CLONE" \
   "survivor=$SURVIVOR" \
   "identity_mode=$IDENTITY_MODE" \
-  "head=$(git -C "$CLONE" rev-parse HEAD)" \
-  "branch=$(git -C "$CLONE" branch --show-current)" \
+  "head=$(safe_git -C "$CLONE" rev-parse HEAD)" \
+  "branch=$(safe_git -C "$CLONE" branch --show-current)" \
   "borrowed_objects=$BORROWED_OBJECTS" \
   "bundle_sha256=$BUNDLE_DIGEST" \
   "metadata_sha256=$METADATA_DIGEST" > "$OUT/receipt.txt"
