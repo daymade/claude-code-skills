@@ -147,7 +147,15 @@ class PeopleRosterTests(unittest.TestCase):
                 )
 
     def test_unquoted_prose_is_not_a_name_atom(self) -> None:
-        for payload in ("this is prose not a name.", "昵称远哥已经录入词典"):
+        for payload in (
+            "this is prose not a name.",
+            "昵称远哥已经录入词典",
+            "这是说明",
+            "已录入词典",
+            "This Is A Note",
+            "これは説明",
+            "이미 등록됨",
+        ):
             with self.subTest(payload=payload):
                 self.assertEqual(
                     self.roster(f"### 正名\n- **ASR 变体**: {payload}\n"),
@@ -179,6 +187,37 @@ class PeopleRosterTests(unittest.TestCase):
         self.assertEqual(
             corrections,
             {"D'Angelo, John": "正名", "McDonald": "正名"},
+        )
+
+    def test_typographic_apostrophes_work_inside_and_outside_quotes(self) -> None:
+        corrections = self.roster(
+            "### 正名\n"
+            "- **ASR 变体**: O’Connor, “O’Connor, Sean”, 「D’Angelo, John」\n"
+        )
+        self.assertEqual(
+            corrections,
+            {
+                "O’Connor": "正名",
+                "O’Connor, Sean": "正名",
+                "D’Angelo, John": "正名",
+            },
+        )
+
+    def test_uncased_and_lower_camel_multilingual_names_are_supported(self) -> None:
+        corrections = self.roster(
+            "### 正名\n"
+            "- **ASR 变体**: محمد علي, דוד לוי, आनंद कुमार, "
+            "สมชาย ใจดี, Neil deGrasse Tyson\n"
+        )
+        self.assertEqual(
+            corrections,
+            {
+                "محمد علي": "正名",
+                "דוד לוי": "正名",
+                "आनंद कुमार": "正名",
+                "สมชาย ใจดี": "正名",
+                "Neil deGrasse Tyson": "正名",
+            },
         )
 
     def test_valid_siblings_survive_a_malformed_tail(self) -> None:

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -53,13 +54,23 @@ _QUOTE_PAIRS = {
     '"': '"', "'": "'", '`': '`', '“': '”', '‘': '’', '「': '」', '『': '』',
 }
 _ALL_QUOTE_CHARS = set(_QUOTE_PAIRS) | set(_QUOTE_PAIRS.values())
-_NON_APOSTROPHE_QUOTE_CHARS = _ALL_QUOTE_CHARS - {"'"}
+_NON_APOSTROPHE_QUOTE_CHARS = _ALL_QUOTE_CHARS - {"'", "’"}
 _UNQUOTED_FORBIDDEN_RE = re.compile(
     r'[/／]|->|=>|[→←⇒⇐↔⇄]|[。！？!?=:<>]|——'
 )
 _LOWERCASE_NAME_PARTICLES = {
     'al', 'bin', 'da', 'de', 'del', 'den', 'der', 'di', 'dos', 'du', 'el',
     'la', 'le', 'ten', 'ter', 'van', 'von',
+}
+_NOTE_LIKE_SUBSTRINGS = {
+    '说明', '备注', '已录入', '未录入', '词典', '昵称', '同音', '误识', '补录',
+    '已确认', '标准写法', '规范拼写', '规则', '禁用',
+    '説明', '注記', '備考', '登録', '辞書', '確認', 'これは',
+    '설명', '비고', '등록', '사전', '확인', '메모', '이미', '입니다',
+}
+_NOTE_LIKE_ENGLISH = {
+    'already', 'confirmed', 'description', 'dictionary', 'entered', 'note',
+    'notes', 'recorded', 'remark', 'remarks',
 }
 
 
@@ -216,6 +227,8 @@ def _normalize_variant(raw: str) -> str | None:
         return None
     if any(ch in _NON_APOSTROPHE_QUOTE_CHARS for ch in value):
         return None
+    if _looks_like_note(value):
+        return None
     if not _is_name_like_unquoted(value):
         return None
     return value
@@ -273,7 +286,9 @@ def _is_name_like_unquoted(value: str) -> bool:
 
     for token in tokens:
         if not token or not all(
-            ch.isalpha() or ch.isdigit() or ch in {"-", "'", "’", "·", "・"}
+            _is_letter_or_mark(ch)
+            or ch.isdigit()
+            or ch in {"-", "'", "’", "·", "・"}
             for ch in token
         ):
             return False
@@ -286,13 +301,22 @@ def _is_name_like_unquoted(value: str) -> bool:
                 continue
             if part.isdigit():
                 continue
-            if not part.isalpha():
+            if not all(_is_letter_or_mark(ch) for ch in part):
                 return False
             folded = part.casefold()
             if folded in _LOWERCASE_NAME_PARTICLES:
                 continue
-            if part.isupper() or (
-                part[0].isupper() and any(ch.islower() for ch in part[1:])
+            cased = [ch for ch in part if ch.lower() != ch.upper()]
+            if not cased:
+                continue
+            if part.isupper():
+                continue
+            if cased[0].isupper() and any(ch.islower() for ch in cased[1:]):
+                continue
+            if (
+                cased[0].islower()
+                and any(ch.isupper() for ch in cased[1:])
+                and any(ch.islower() for ch in cased[1:])
             ):
                 continue
             return False
@@ -311,9 +335,15 @@ def _is_cjk_char(ch: str) -> bool:
 
 
 def _quote_closes(text: str, index: int, closer: str) -> bool:
-    """Treat an ASCII apostrophe inside a quoted name as content, not closure."""
-    if closer != "'":
+    """Treat straight/typographic apostrophes between letters as content."""
+    if closer not in {"'", "’"}:
         return True
+    if (
+        0 < index < len(text) - 1
+        and _is_letter_or_mark(text[index - 1])
+        and _is_letter_or_mark(text[index + 1])
+    ):
+        return False
     tail = text[index + 1:].lstrip()
     return (
         not tail
@@ -322,3 +352,18 @@ def _quote_closes(text: str, index: int, closer: str) -> bool:
         or tail[0] in _BRACKET_PAIRS
         or tail[0] in _CLOSING_BRACKETS
     )
+
+
+def _is_letter_or_mark(ch: str) -> bool:
+    return unicodedata.category(ch)[0] in {'L', 'M'}
+
+
+def _looks_like_note(value: str) -> bool:
+    folded = value.casefold()
+    if any(term in folded for term in _NOTE_LIKE_SUBSTRINGS):
+        return True
+    words = {
+        ''.join(ch for ch in token if _is_letter_or_mark(ch)).casefold()
+        for token in value.split()
+    }
+    return bool(words & _NOTE_LIKE_ENGLISH)
