@@ -2662,7 +2662,7 @@ claude plugin install auto-repo-setup@daymade-skills
 - `bili-selftest.sh` 健康自检对着真实 API 验每个端点，API 一漂移就报一行清晰 FAIL，而非静默给错数据
 - NO-FABRICATION 纪律：拿不到的数字标"未核实"，绝不估算
 - 自动剥离本地代理（B站是国内服务）、带 UA+Referer（防 HTTP 412）、失败退避重试
-- API 参考含 `space/wbi/*` 扩展所需的 WBI 签名算法
+- API 参考含需登录的收藏夹枚举端点（`x/v3/fav/*`，实测免 WBI）、已验证的 SESSDATA 字幕路径，以及 `space/wbi/*` 扩展所需的 WBI 签名算法
 
 **示例用法：**
 ```bash

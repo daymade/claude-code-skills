@@ -1,6 +1,6 @@
 ---
 name: bilibili-source
-description: Fetch comprehensive, login-free data for any Bilibili (B站) video — title, UP name and follower count, publish date, partition, tags, per-part cids, live stats (view, like, coin, favorite, share, reply, danmaku), and full danmaku (bullet-comment) text. Use this skill whenever working with a Bilibili video and needing real, citable numbers or metadata — ingesting a Bilibili source into a knowledge base, analyzing why a video performed, verifying a creator's claimed metrics, building a case study, or any time a Bilibili view/like/favorite count is about to be written into a document — fetch it, never hand-type or estimate it. Accepts BVID, av numbers, b23.tv short links, or full URLs. Subtitles are also covered but require the user's Bilibili login.
+description: Fetch comprehensive, login-free data for any Bilibili (B站) video — title, UP name and follower count, publish date, partition, tags, per-part cids, live stats (view, like, coin, favorite, share, reply, danmaku), and full danmaku (bullet-comment) text. Use this skill whenever working with a Bilibili video and needing real, citable numbers or metadata — ingesting a Bilibili source into a knowledge base, analyzing why a video performed, verifying a creator's claimed metrics, building a case study, or any time a Bilibili view/like/favorite count is about to be written into a document — fetch it, never hand-type or estimate it. Accepts BVID, av numbers, b23.tv short links, or full URLs. Subtitles and favorites-folder (收藏夹) enumeration are also covered but require the user's Bilibili login.
 ---
 
 # bilibili-source
@@ -57,7 +57,7 @@ scripts/bili-danmaku.sh BV1xxxxxxxxx     # P1; add a part number for multi-part 
 
 - **Live metrics → always cite `fetched_at`.** The same video re-fetched minutes later drifts (a view count can tick up by a few within a single session). That is not an error — it is proof the data is live. A bare "12,000 views" with no timestamp is meaningless and silently goes stale.
 - **NO FABRICATION.** If a number can't be fetched, write "未获取/未核实" — never estimate. The whole point of the skill is that the number is cheap to fetch.
-- **The scripts already handle the network quirks** so you don't reinvent them: they strip the local proxy (Bilibili is a domestic CN service that a `127.0.0.1` proxy breaks), send a browser User-Agent + Referer (avoids the occasional HTTP 412), and retry with backoff. If you call the API by hand, do the same — see [references/bilibili_api.md](references/bilibili_api.md).
+- **The scripts already handle the network quirks** so you don't reinvent them: they strip the local proxy (Bilibili is a domestic CN service that a `127.0.0.1` proxy breaks), send a browser User-Agent + Referer (avoids the occasional HTTP 412), and retry with backoff. If you call the API by hand, do the same — see [references/bilibili_api.md](references/bilibili_api.md). One trap the env-strip does NOT cover: Python `urllib` falls back to the **macOS system proxy** when proxy env vars are absent, causing intermittent 503s in batches — build the opener with an explicit `ProxyHandler({})` (details in the reference's Request basics).
 - **CJK post-processing trap.** When you later grep/sort the fetched Chinese text or filenames, `sort`/`comm` mishandle CJK collation and report false "missing"/"broken" results. Verify with `find -name` or `grep -F`, not `comm`.
 
 ## Subtitles require login (no bypass)
@@ -74,12 +74,13 @@ The `ai-zh` track is Bilibili's AI-generated subtitle — treat it as a draft tr
 
 ## Going deeper
 
-For the full endpoint catalog (UP fan history, video tags, real-time viewer count, danmaku archive, the SESSDATA subtitle path), the WBI request-signing algorithm needed for `space/wbi/*` endpoints, and every gotcha with a tested command, see **[references/bilibili_api.md](references/bilibili_api.md)**.
+For the full endpoint catalog (UP fan history, video tags, real-time viewer count, danmaku archive, the SESSDATA subtitle path, **favorites-folder enumeration** — `x/v3/fav/*`, login-gated, no WBI needed), the WBI request-signing algorithm needed for `space/wbi/*` endpoints, and every gotcha with a tested command, see **[references/bilibili_api.md](references/bilibili_api.md)**.
 
 ## Verified status
 
 - **Stats / metadata / danmaku** (`view/detail`, `relation/stat`, `dm/list.so`, `online/total`): verified login-free, 2026-06-07. Metrics re-fetched repeatedly and matched independently; danmaku count matched `stat.danmaku`.
-- **Subtitles**: confirmed login-gated, 2026-06-07 (empty for anonymous across all videos tested). Needs `yt-dlp` for the cookie path.
+- **Subtitles**: confirmed login-gated, 2026-06-07 (empty for anonymous across all videos tested). Needs `yt-dlp` for the cookie path. The SESSDATA/cookie-jar API path verified logged-in 2026-08-29 across a ~400-video batch (multi-part included).
+- **Favorites** (`x/v3/fav/folder/created/list-all`, `x/v3/fav/resource/list`): verified logged-in 2026-08-29, plain params without WBI; 26 consecutive pages fetched without rate-limiting. Enumeration is login-gated (anonymous list-all answers code 0 with an empty list even for accounts with publicly-readable folders); a public folder's contents are anonymously readable only if you already know its media_id.
 
 ## Maintenance
 

@@ -73,6 +73,21 @@ else
   bad "subtitles: skipped — no cid from fetch"
 fi
 
+# 5) Favorites endpoint shape + its login-gate invariant (both verified 2026-08-29):
+#    anonymous list-all must answer code 0 with an EMPTY list — enumeration is login-gated
+#    even for accounts that have publicly-readable folders. code!=0 = endpoint drifted;
+#    a non-empty anonymous list = Bilibili opened enumeration up: update the docs.
+FAV=$(np_curl "https://api.bilibili.com/x/v3/fav/folder/created/list-all?up_mid=1" 2>/dev/null \
+      | jq -r '[(.code // "ERR"), ((.data.list // []) | length)] | @tsv' 2>/dev/null || echo "ERR	ERR")
+FAV_CODE=${FAV%%	*}; FAV_N=${FAV##*	}; [ -n "$FAV_CODE" ] || FAV_CODE=ERR
+if [ "$FAV_CODE" = "0" ] && [ "$FAV_N" = "0" ]; then
+  ok "favorites: list-all answers, anonymous enumeration still empty (login-gated, as documented)"
+elif [ "$FAV_CODE" = "0" ]; then
+  bad "favorites: anonymous list-all NON-empty ($FAV_N) — enumeration gate changed, update docs"
+else
+  bad "favorites: list-all failed (code=$FAV_CODE) — endpoint drifted"
+fi
+
 echo ""
 printf "Result: %d passed, %d failed\n" "$pass" "$fail"
 if [ "$fail" -eq 0 ]; then
