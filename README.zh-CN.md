@@ -386,20 +386,21 @@ CC-Switch 支持以下中国 AI 服务提供商：
 
 ### **github-ops** - GitHub 操作套件
 
-使用 gh CLI 和 GitHub API 进行全面的 GitHub 操作。
+通过 gh CLI 和 GitHub API 操作 GitHub；每次变更明确目标、影响范围，并独立读回状态。
 
 **使用场景：**
 - 创建、查看或管理拉取请求
 - 管理问题和仓库设置
+- 管理协作者、团队、组织权限与 2FA 要求
 - 查询 GitHub API 端点
 - 使用 GitHub Actions 工作流
 - 自动化 GitHub 操作
 
 **主要功能：**
-- 带 JIRA 集成的 PR 创建
-- 问题管理工作流
-- GitHub API（REST 和 GraphQL）操作
-- 工作流自动化
+- PR、问题、仓库与 Actions 的可验证变更流程
+- 并行或被替代 PR 的收敛
+- 组织访问、成员权限与 2FA 影响预检
+- REST、GraphQL 与 GitHub 设置页面的通道路由
 - 企业 GitHub 支持
 
 **🎬 实时演示**
@@ -3620,7 +3621,7 @@ lark-cli 提示 user 身份缺少 scope
 ## 🎯 使用场景
 
 ### GitHub 工作流
-使用 **github-ops** 简化 PR 创建、问题管理和 API 操作。维护者要对一个现有
+使用 **github-ops** 完成可验证的 PR、问题、Actions、仓库、组织访问和 API 操作。维护者要对一个现有
 贡献者 PR 或完整 open PR 队列做基于当前 base 的代码 review、责任归因或
 review 后修复/落地时，使用 **github-review-pr**。
 

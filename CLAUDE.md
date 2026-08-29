@@ -185,6 +185,11 @@ change-authorized / inspect-only / excluded partition and the scoped-vs-exhausti
 do not copy its detailed commands here or treat a visible collaborator ref/worktree as a cleanup
 target merely because it appears in the inventory.
 
+For GitHub-hosted state — PRs, issues, Actions, repository or organization settings, permissions,
+and API/UI mutations — treat `github-ops/SKILL.md` as the canonical operating contract. A command
+receipt is not completion; use that Skill's operation-specific independent readback. Keep detailed
+GitHub SOPs there rather than copying them into this repository-level instruction file.
+
 **Closing a PR unmerged (declined, or superseded by another PR) → delete its head
 branch in the same action.** `gh pr merge --delete-branch` only covers merged PRs.
 ⚠️ Deleting the branch does NOT remove `refs/pull/<N>/head` — GitHub keeps serving

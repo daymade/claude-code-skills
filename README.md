@@ -367,20 +367,22 @@ For full documentation in Chinese, see [README.zh-CN.md](./README.zh-CN.md).
 
 ### **github-ops** - GitHub Operations Suite
 
-Comprehensive GitHub operations using gh CLI and GitHub API.
+GitHub operations through gh CLI and GitHub APIs, with explicit targets, impact previews, and
+independent state verification.
 
 **When to use:**
 - Creating, viewing, or managing pull requests
 - Managing issues and repository settings
+- Managing collaborators, teams, organization permissions, and 2FA enforcement
 - Querying GitHub API endpoints
 - Working with GitHub Actions workflows
 - Automating GitHub operations
 
 **Key features:**
-- PR creation with JIRA integration
-- Issue management workflows
-- GitHub API (REST & GraphQL) operations
-- Workflow automation
+- Verified mutation workflow for PRs, issues, repositories, and Actions
+- Parallel and superseded PR convergence
+- Organization access, member privileges, and 2FA preflight
+- REST, GraphQL, and documented UI-path selection
 - Enterprise GitHub support
 
 **🎬 Live Demo**
@@ -3627,7 +3629,8 @@ Want to see all demos in one place with click-to-enlarge functionality? Check ou
 ## 🎯 Use Cases
 
 ### For GitHub Workflows
-Use **github-ops** to streamline PR creation, issue management, and API operations.
+Use **github-ops** for verified PR, issue, Actions, repository, organization-access, and API
+operations.
 Use **github-review-pr** when a maintainer needs a current-base code review, ownership
 decision, or review-gated repair/landing for one contributor PR or the complete open
 PR queue.

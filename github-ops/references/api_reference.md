@@ -1,6 +1,9 @@
 # GitHub API Reference
 
-This reference provides comprehensive documentation for GitHub REST and GraphQL APIs, focusing on common operations accessible via `gh api`.
+This reference provides common GitHub REST and GraphQL operations through `gh api`. GitHub's
+current official endpoint documentation and the installed `gh ... --help` output are the contract
+authority; this file is an execution guide, not a frozen copy of every schema. All writes follow
+the mutation contract in [`../SKILL.md`](../SKILL.md).
 
 ## Table of Contents
 
@@ -8,11 +11,12 @@ This reference provides comprehensive documentation for GitHub REST and GraphQL 
 2. [Pull Requests API](#pull-requests-api)
 3. [Issues API](#issues-api)
 4. [Repositories API](#repositories-api)
-5. [Actions/Workflows API](#actionsworkflows-api)
-6. [Search API](#search-api)
-7. [GraphQL API](#graphql-api)
-8. [Rate Limiting](#rate-limiting)
-9. [Webhooks](#webhooks)
+5. [Organization Access and Settings](#organization-access-and-settings)
+6. [Actions/Workflows API](#actionsworkflows-api)
+7. [Search API](#search-api)
+8. [GraphQL API](#graphql-api)
+9. [Rate Limiting](#rate-limiting)
+10. [Webhooks](#webhooks)
 
 ## Authentication
 
@@ -22,13 +26,20 @@ All API calls via `gh api` automatically use the authenticated token from `gh au
 # Check authentication status
 gh auth status
 
-# View current token (use cautiously)
-gh auth status --show-token
+# Verify the account without exposing its token
+gh api user --jq '.login'
 ```
+
+Never print a token for routine diagnosis. Keep the hostname explicit when operating more than
+one GitHub instance.
 
 **API Headers:**
 - `Accept: application/vnd.github+json` (automatically set)
-- `X-GitHub-Api-Version: 2022-11-28` (recommended)
+- `X-GitHub-Api-Version`: use the version required by the current official endpoint contract when
+  pinning behavior; do not persist a guessed “latest” version in automation.
+
+Use explicit methods. `-f` and `-F` switch the default method from `GET` to `POST`; filtered GET
+requests therefore require `-X GET`.
 
 ## Pull Requests API
 
@@ -41,10 +52,10 @@ gh auth status --show-token
 gh api repos/{owner}/{repo}/pulls
 
 # List PRs with filters
-gh api repos/{owner}/{repo}/pulls -f state=closed -f base=main
+gh api -X GET repos/{owner}/{repo}/pulls -f state=closed -f base=main
 
 # List PRs sorted by updated
-gh api repos/{owner}/{repo}/pulls -f sort=updated -f direction=desc
+gh api -X GET repos/{owner}/{repo}/pulls -f sort=updated -f direction=desc
 ```
 
 **Query Parameters:**
@@ -82,14 +93,14 @@ gh api repos/{owner}/{repo}/pulls/123 --jq '.title, .state, .mergeable'
 
 ```bash
 # Create PR via API
-gh api repos/{owner}/{repo}/pulls \
-  -f title="NOJIRA: New feature" \
+gh api -X POST repos/{owner}/{repo}/pulls \
+  -f title="Describe the user-visible change" \
   -f body="Description of changes" \
   -f head="feature-branch" \
   -f base="main"
 
 # Create draft PR
-gh api repos/{owner}/{repo}/pulls \
+gh api -X POST repos/{owner}/{repo}/pulls \
   -f title="WIP: Feature" \
   -f body="Work in progress" \
   -f head="feature-branch" \
@@ -118,10 +129,8 @@ gh api repos/{owner}/{repo}/pulls/123 \
   -f title="Updated title" \
   -f body="Updated description"
 
-# Convert to draft
-gh api repos/{owner}/{repo}/pulls/123 \
-  -X PATCH \
-  -F draft=true
+# Convert to draft (not a PATCH /pulls input)
+gh pr ready 123 --undo
 
 # Change base branch
 gh api repos/{owner}/{repo}/pulls/123 \
@@ -162,17 +171,17 @@ gh api repos/{owner}/{repo}/issues/123/comments
 
 ```bash
 # Approve PR
-gh api repos/{owner}/{repo}/pulls/123/reviews \
+gh api -X POST repos/{owner}/{repo}/pulls/123/reviews \
   -f event="APPROVE" \
   -f body="Looks good!"
 
 # Request changes
-gh api repos/{owner}/{repo}/pulls/123/reviews \
+gh api -X POST repos/{owner}/{repo}/pulls/123/reviews \
   -f event="REQUEST_CHANGES" \
   -f body="Please address these issues"
 
 # Comment without approval/rejection
-gh api repos/{owner}/{repo}/pulls/123/reviews \
+gh api -X POST repos/{owner}/{repo}/pulls/123/reviews \
   -f event="COMMENT" \
   -f body="Some feedback"
 ```
@@ -200,13 +209,13 @@ gh api repos/{owner}/{repo}/pulls/123/reviews --jq '[.[] | {user: .user.login, s
 
 ```bash
 # Request user reviewers
-gh api repos/{owner}/{repo}/pulls/123/requested_reviewers \
-  -f reviewers[]="user1" \
-  -f reviewers[]="user2"
+gh api -X POST repos/{owner}/{repo}/pulls/123/requested_reviewers \
+  -f 'reviewers[]=user1' \
+  -f 'reviewers[]=user2'
 
 # Request team reviewers
-gh api repos/{owner}/{repo}/pulls/123/requested_reviewers \
-  -f team_reviewers[]="team-slug"
+gh api -X POST repos/{owner}/{repo}/pulls/123/requested_reviewers \
+  -f 'team_reviewers[]=team-slug'
 ```
 
 ## Issues API
@@ -215,18 +224,21 @@ gh api repos/{owner}/{repo}/pulls/123/requested_reviewers \
 
 **Endpoint:** `GET /repos/{owner}/{repo}/issues`
 
+This endpoint can also return pull requests. Treat an item as an issue only when it has no
+`pull_request` key, or use `gh issue list` when that distinction matters.
+
 ```bash
 # List all issues
 gh api repos/{owner}/{repo}/issues
 
 # Filter by state and labels
-gh api repos/{owner}/{repo}/issues -f state=open -f labels="bug,priority-high"
+gh api -X GET repos/{owner}/{repo}/issues -f state=open -f labels="bug,priority-high"
 
 # Filter by assignee
-gh api repos/{owner}/{repo}/issues -f assignee="username"
+gh api -X GET repos/{owner}/{repo}/issues -f assignee="username"
 
 # Filter by milestone
-gh api repos/{owner}/{repo}/issues -f milestone="v1.0"
+gh api -X GET repos/{owner}/{repo}/issues -F milestone=1
 ```
 
 **Query Parameters:**
@@ -245,17 +257,17 @@ gh api repos/{owner}/{repo}/issues -f milestone="v1.0"
 
 ```bash
 # Create basic issue
-gh api repos/{owner}/{repo}/issues \
+gh api -X POST repos/{owner}/{repo}/issues \
   -f title="Bug: Something broke" \
   -f body="Detailed description"
 
 # Create issue with labels and assignees
-gh api repos/{owner}/{repo}/issues \
+gh api -X POST repos/{owner}/{repo}/issues \
   -f title="Enhancement request" \
   -f body="Description" \
-  -f labels[]="enhancement" \
-  -f labels[]="good-first-issue" \
-  -f assignees[]="username1"
+  -f 'labels[]=enhancement' \
+  -f 'labels[]=good-first-issue' \
+  -f 'assignees[]=username1'
 ```
 
 ### Update Issue
@@ -271,13 +283,13 @@ gh api repos/{owner}/{repo}/issues/456 \
 # Update labels
 gh api repos/{owner}/{repo}/issues/456 \
   -X PATCH \
-  -f labels[]="bug" \
-  -f labels[]="fixed"
+  -f 'labels[]=bug' \
+  -f 'labels[]=fixed'
 
 # Assign issue
 gh api repos/{owner}/{repo}/issues/456 \
   -X PATCH \
-  -f assignees[]="username"
+  -f 'assignees[]=username'
 ```
 
 ### Add Comment to Issue
@@ -286,7 +298,7 @@ gh api repos/{owner}/{repo}/issues/456 \
 
 ```bash
 # Add comment
-gh api repos/{owner}/{repo}/issues/456/comments \
+gh api -X POST repos/{owner}/{repo}/issues/456/comments \
   -f body="This is a comment"
 ```
 
@@ -346,13 +358,13 @@ gh api repos/{owner}/{repo}/branches/main/protection
 gh api repos/{owner}/{repo}/commits
 
 # Filter by branch
-gh api repos/{owner}/{repo}/commits -f sha="feature-branch"
+gh api -X GET repos/{owner}/{repo}/commits -f sha="feature-branch"
 
 # Filter by author
-gh api repos/{owner}/{repo}/commits -f author="username"
+gh api -X GET repos/{owner}/{repo}/commits -f author="username"
 
 # Filter by date range
-gh api repos/{owner}/{repo}/commits -f since="2024-01-01T00:00:00Z"
+gh api -X GET repos/{owner}/{repo}/commits -f since="2024-01-01T00:00:00Z"
 ```
 
 ### Get Commit
@@ -389,7 +401,20 @@ gh api repos/{owner}/{repo}/collaborators
 
 # Get collaborator permissions
 gh api repos/{owner}/{repo}/collaborators --jq '[.[] | {login: .login, permissions: .permissions}]'
+
+# List direct collaborators only
+gh api -X GET 'repos/{owner}/{repo}/collaborators?affiliation=direct&per_page=100' \
+  --paginate --jq '.[] | {login,role_name}'
+
+# Get one user's effective permission from all grant sources
+gh api repos/{owner}/{repo}/collaborators/USERNAME/permission \
+  --jq '{permission,role_name,user:.user.login}'
 ```
+
+The effective-permission response does not identify whether the highest grant came from the
+repository, a team, organization base permission, ownership, or enterprise policy. Use
+[`organization_access_and_settings.md`](organization_access_and_settings.md) for provenance and
+safe grant/revoke workflows.
 
 ### Create Release
 
@@ -397,7 +422,7 @@ gh api repos/{owner}/{repo}/collaborators --jq '[.[] | {login: .login, permissio
 
 ```bash
 # Create release
-gh api repos/{owner}/{repo}/releases \
+gh api -X POST repos/{owner}/{repo}/releases \
   -f tag_name="v1.0.0" \
   -f name="Release v1.0.0" \
   -f body="Release notes here" \
@@ -405,7 +430,7 @@ gh api repos/{owner}/{repo}/releases \
   -F prerelease=false
 
 # Create draft release
-gh api repos/{owner}/{repo}/releases \
+gh api -X POST repos/{owner}/{repo}/releases \
   -f tag_name="v1.1.0" \
   -f name="Release v1.1.0" \
   -f body="Release notes" \
@@ -422,6 +447,60 @@ gh api repos/{owner}/{repo}/releases
 
 # Get latest release
 gh api repos/{owner}/{repo}/releases/latest
+```
+
+## Organization Access and Settings
+
+### Read Organization Settings
+
+**Endpoint:** `GET /orgs/{org}`
+
+```bash
+gh api orgs/ORG --jq '{
+  login,
+  default_repository_permission,
+  members_can_create_repositories,
+  members_can_create_public_repositories,
+  members_can_create_private_repositories,
+  two_factor_requirement_enabled
+}'
+```
+
+### Update Supported Organization Inputs
+
+**Endpoint:** `PATCH /orgs/{org}`
+
+The authenticated user must be an organization owner and the token must carry the required
+organization administration permission. Verify the current official request-body schema before
+writing. A field present in the GET response is not automatically accepted as a PATCH input.
+
+```bash
+gh api -X PATCH orgs/ORG \
+  -f default_repository_permission=none \
+  -F members_can_create_repositories=false
+
+gh api orgs/ORG --jq '{
+  default_repository_permission,
+  members_can_create_repositories
+}'
+```
+
+Repository visibility-change permission, repository deletion/transfer permission, and the
+organization 2FA requirement are examples of settings currently documented through organization
+settings pages rather than as `PATCH /orgs/{org}` body parameters. Do not send response-only keys
+and accept `200 OK` as proof. Follow
+[`organization_access_and_settings.md`](organization_access_and_settings.md) for impact preflight,
+UI paths, readback, and recovery.
+
+### Find Accounts Without 2FA
+
+Organization owners can filter both members and outside collaborators before enforcement:
+
+```bash
+gh api -X GET 'orgs/ORG/members?filter=2fa_disabled&per_page=100' \
+  --paginate --jq '.[].login'
+gh api -X GET 'orgs/ORG/outside_collaborators?filter=2fa_disabled&per_page=100' \
+  --paginate --jq '.[].login'
 ```
 
 ## Actions/Workflows API
@@ -459,20 +538,20 @@ gh api repos/{owner}/{repo}/actions/workflows/ci.yml
 gh api repos/{owner}/{repo}/actions/runs
 
 # Filter by workflow
-gh api repos/{owner}/{repo}/actions/runs -f workflow_id=12345
+gh api -X GET repos/{owner}/{repo}/actions/workflows/12345/runs
 
 # Filter by branch
-gh api repos/{owner}/{repo}/actions/runs -f branch="main"
+gh api -X GET repos/{owner}/{repo}/actions/runs -f branch="main"
 
 # Filter by status
-gh api repos/{owner}/{repo}/actions/runs -f status="completed"
+gh api -X GET repos/{owner}/{repo}/actions/runs -f status="completed"
 
 # Filter by conclusion
-gh api repos/{owner}/{repo}/actions/runs -f conclusion="success"
+gh api -X GET repos/{owner}/{repo}/actions/runs -f status="success"
 ```
 
-**Status values:** `queued`, `in_progress`, `completed`
-**Conclusion values:** `success`, `failure`, `cancelled`, `skipped`, `timed_out`, `action_required`
+The endpoint's `status` filter accepts workflow-run statuses and conclusions. Read the current
+official enum instead of persisting a copied list that can drift.
 
 ### Get Workflow Run
 
@@ -492,14 +571,14 @@ gh api repos/{owner}/{repo}/actions/runs/123456 --jq '.status, .conclusion'
 
 ```bash
 # Trigger workflow on branch
-gh api repos/{owner}/{repo}/actions/workflows/ci.yml/dispatches \
+gh api -X POST repos/{owner}/{repo}/actions/workflows/ci.yml/dispatches \
   -f ref="main"
 
 # Trigger with inputs
-gh api repos/{owner}/{repo}/actions/workflows/deploy.yml/dispatches \
+gh api -X POST repos/{owner}/{repo}/actions/workflows/deploy.yml/dispatches \
   -f ref="main" \
-  -f inputs[environment]="production" \
-  -f inputs[version]="v1.0.0"
+  -f 'inputs[environment]=production' \
+  -f 'inputs[version]=v1.0.0'
 ```
 
 ### Cancel Workflow Run
@@ -508,7 +587,7 @@ gh api repos/{owner}/{repo}/actions/workflows/deploy.yml/dispatches \
 
 ```bash
 # Cancel run
-gh api repos/{owner}/{repo}/actions/runs/123456/cancel -X POST
+gh api -X POST repos/{owner}/{repo}/actions/runs/123456/cancel
 ```
 
 ### Rerun Workflow
@@ -517,10 +596,10 @@ gh api repos/{owner}/{repo}/actions/runs/123456/cancel -X POST
 
 ```bash
 # Rerun all jobs
-gh api repos/{owner}/{repo}/actions/runs/123456/rerun -X POST
+gh api -X POST repos/{owner}/{repo}/actions/runs/123456/rerun
 
 # Rerun failed jobs only
-gh api repos/{owner}/{repo}/actions/runs/123456/rerun-failed-jobs -X POST
+gh api -X POST repos/{owner}/{repo}/actions/runs/123456/rerun-failed-jobs
 ```
 
 ### Download Workflow Logs
@@ -540,10 +619,10 @@ gh api repos/{owner}/{repo}/actions/runs/123456/logs > logs.zip
 
 ```bash
 # Search repositories
-gh api search/repositories -f q="topic:spring-boot language:java"
+gh api -X GET search/repositories -f q="topic:spring-boot language:java"
 
 # Search with filters
-gh api search/repositories -f q="stars:>1000 language:python"
+gh api -X GET search/repositories -f q="stars:>1000 language:python"
 ```
 
 ### Search Code
@@ -552,10 +631,10 @@ gh api search/repositories -f q="stars:>1000 language:python"
 
 ```bash
 # Search code
-gh api search/code -f q="addClass repo:owner/repo"
+gh api -X GET search/code -f q="addClass repo:owner/repo"
 
 # Search in specific path
-gh api search/code -f q="function path:src/ repo:owner/repo"
+gh api -X GET search/code -f q="function path:src/ repo:owner/repo"
 ```
 
 ### Search Issues and PRs
@@ -564,10 +643,10 @@ gh api search/code -f q="function path:src/ repo:owner/repo"
 
 ```bash
 # Search issues
-gh api search/issues -f q="is:issue is:open label:bug repo:owner/repo"
+gh api -X GET search/issues -f q="is:issue is:open label:bug repo:owner/repo"
 
 # Search PRs
-gh api search/issues -f q="is:pr is:merged author:username"
+gh api -X GET search/issues -f q="is:pr is:merged author:username"
 ```
 
 ## GraphQL API
@@ -646,10 +725,10 @@ gh api graphql -f query='
 ### Query Multiple PRs with Pagination
 
 ```bash
-gh api graphql -f query='
-  query($owner: String!, $name: String!, $cursor: String) {
+gh api graphql --paginate -f query='
+  query($owner: String!, $name: String!, $endCursor: String) {
     repository(owner: $owner, name: $name) {
-      pullRequests(first: 10, states: OPEN, after: $cursor) {
+      pullRequests(first: 100, states: OPEN, after: $endCursor) {
         pageInfo {
           hasNextPage
           endCursor
@@ -685,10 +764,8 @@ gh api rate_limit --jq '.resources.core'
 gh api rate_limit --jq '.resources.graphql'
 ```
 
-**Rate limits:**
-- Authenticated: 5,000 requests/hour
-- GraphQL: 5,000 points/hour
-- Search: 30 requests/minute
+Rate limits vary by resource, authentication mode, plan, and platform policy. Read the live
+response rather than persisting copied limits in automation.
 
 ### Rate Limit Headers
 
@@ -714,12 +791,12 @@ gh api repos/{owner}/{repo}/hooks
 
 ```bash
 # Create webhook
-gh api repos/{owner}/{repo}/hooks \
+gh api -X POST repos/{owner}/{repo}/hooks \
   -f name="web" \
-  -f config[url]="https://example.com/webhook" \
-  -f config[content_type]="json" \
-  -f events[]="push" \
-  -f events[]="pull_request"
+  -f 'config[url]=https://example.com/webhook' \
+  -f 'config[content_type]=json' \
+  -f 'events[]=push' \
+  -f 'events[]=pull_request'
 ```
 
 ### Test Webhook
@@ -728,7 +805,7 @@ gh api repos/{owner}/{repo}/hooks \
 
 ```bash
 # Test webhook
-gh api repos/{owner}/{repo}/hooks/12345/tests -X POST
+gh api -X POST repos/{owner}/{repo}/hooks/12345/tests
 ```
 
 ## Pagination
@@ -739,13 +816,8 @@ For endpoints returning lists, use pagination:
 # First page (default)
 gh api repos/{owner}/{repo}/issues
 
-# Specific page
-gh api repos/{owner}/{repo}/issues -f page=2 -f per_page=50
-
-# Iterate through all pages
-for page in {1..10}; do
-  gh api repos/{owner}/{repo}/issues -f page=$page -f per_page=100
-done
+# All pages, without guessing a final page number
+gh api -X GET repos/{owner}/{repo}/issues -F per_page=100 --paginate
 ```
 
 **Link header:** Response includes `Link` header with `next`, `prev`, `first`, `last` URLs.
@@ -755,11 +827,12 @@ done
 **Common HTTP status codes:**
 - `200 OK`: Success
 - `201 Created`: Resource created
+- `202 Accepted`: Asynchronous work accepted, not completed
 - `204 No Content`: Success with no response body
 - `400 Bad Request`: Invalid request
 - `401 Unauthorized`: Authentication required
 - `403 Forbidden`: Insufficient permissions or rate limited
-- `404 Not Found`: Resource doesn't exist
+- `404 Not Found`: Resource may be absent, hidden, or inaccessible
 - `422 Unprocessable Entity`: Validation failed
 
 **Error response format:**
@@ -776,11 +849,15 @@ done
 }
 ```
 
+Any 2xx response still requires a resource-specific readback. Unsupported or response-only fields
+can be ignored without making the entire request fail, and asynchronous work can remain pending.
+
 ## Best Practices
 
 1. **Use conditional requests:** Include `If-None-Match` header with ETag to save rate limit quota
 2. **Paginate efficiently:** Use `per_page=100` (maximum) to minimize requests
-3. **Use GraphQL for complex queries:** Fetch multiple related resources in single request
+3. **Match the supported contract:** Prefer purpose-built CLI, then documented REST; use GraphQL
+   for GraphQL-only mutations or combined related data, and the UI for documented UI-only settings
 4. **Check rate limits proactively:** Monitor `X-RateLimit-Remaining` header
 5. **Handle errors gracefully:** Implement retry logic with exponential backoff for 5xx errors
 6. **Cache responses:** Cache GET responses when data doesn't change frequently

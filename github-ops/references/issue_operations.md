@@ -2,6 +2,10 @@
 
 Comprehensive examples for GitHub issue management using gh CLI.
 
+All writes follow the target, authorization, impact-preview, and independent-readback contract
+in [`../SKILL.md`](../SKILL.md). Creating, commenting on, transferring, or closing an issue is an
+external action; bind the exact repository and content before executing it.
+
 ## Creating Issues
 
 ### Basic Issue Creation
@@ -46,8 +50,8 @@ gh issue list --limit 50
 # List issues by multiple labels
 gh issue list --label "bug,priority-high"
 
-# List issues NOT assigned to anyone
-gh issue list --assignee ""
+# List issues not assigned to anyone
+gh issue list --search "no:assignee"
 
 # List issues mentioned in PR
 gh issue list --mention username
@@ -105,7 +109,7 @@ gh issue edit 456 --remove-assignee user1
 gh issue edit 456 --milestone "v2.0"
 
 # Remove milestone
-gh issue edit 456 --milestone ""
+gh issue edit 456 --remove-milestone
 ```
 
 ---
@@ -187,18 +191,26 @@ gh issue transfer 456 owner/other-repo
 
 ### Operating on Multiple Issues
 
+Freeze and preview the exact issue set before any bulk write. Do not feed a changing live query
+directly into a destructive `xargs` pipeline.
+
 ```bash
-# Close all bug issues
-gh issue list --label bug --json number -q '.[].number' | \
-  xargs -I {} gh issue close {}
+# Freeze and display candidates
+targets=$(gh issue list -R OWNER/REPO --label bug \
+  --json number,title,state,url)
+printf '%s\n' "$targets" | jq .
 
-# Add label to all open issues
-gh issue list --state open --json number -q '.[].number' | \
-  xargs -I {} gh issue edit {} --add-label "needs-triage"
+# After the target set and consequence are authorized, mutate and read back one at a time
+printf '%s\n' "$targets" | jq -r '.[].number' | while read -r issue; do
+  gh issue edit "$issue" -R OWNER/REPO --add-label "needs-triage"
+  gh issue view "$issue" -R OWNER/REPO --json number,state,labels,url
+done
 
-# Assign milestone to multiple issues
-gh issue list --label "v2.0" --json number -q '.[].number' | \
-  xargs -I {} gh issue edit {} --milestone "Release 2.0"
+# Closing uses the same frozen-set pattern and must preserve recovery information
+printf '%s\n' "$targets" | jq -r '.[].number' | while read -r issue; do
+  gh issue close "$issue" -R OWNER/REPO
+  gh issue view "$issue" -R OWNER/REPO --json number,state,stateReason,url
+done
 ```
 
 ---
