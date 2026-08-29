@@ -38,8 +38,9 @@ _HEADER_RE = re.compile(r'^###\s+(.+?)\s*$')
 #   - **ASR 变体**（仅独特形）: a、b、c
 _ASR_RE = re.compile(
     r'^-\s+\*\*ASR\s*变体\*\*'
-    r'(?:\s*[（(][^（）()]*[）)])?\s*[:：]\s*(.+?)\s*$'
+    r'(?:\s*(?:\([^()]*\)|（[^（）]*）))?\s*[:：]\s*(.+?)\s*$'
 )
+_ASR_PREFIX_RE = re.compile(r'^-\s+\*\*ASR\s*变体\*\*')
 
 # Unquoted atoms deliberately use a narrow, observable grammar. Ambiguous long
 # forms remain expressible by wrapping the exact variant in balanced quotes.
@@ -100,6 +101,11 @@ def load_people_roster(path: Path) -> Tuple[Dict[str, str], Dict[str, str]]:
                     if variant and variant != current_canonical and variant not in corrections:
                         corrections[variant] = current_canonical
                 continue
+            if current_canonical and _ASR_PREFIX_RE.match(line):
+                # A line that declares the field but violates its grammar must not
+                # disappear silently. Store only a sentinel; diagnostics never echo
+                # private roster content.
+                dropped.append("<malformed ASR variant line>")
             # `别名` / `易混` lines and body text are intentionally ignored.
 
     if dropped:
@@ -305,6 +311,9 @@ def _is_cjk_char(ch: str) -> bool:
         0x3400 <= codepoint <= 0x4DBF
         or 0x4E00 <= codepoint <= 0x9FFF
         or 0xF900 <= codepoint <= 0xFAFF
+        or 0x20000 <= codepoint <= 0x2EE5F
+        or 0x2F800 <= codepoint <= 0x2FA1F
+        or 0x30000 <= codepoint <= 0x323AF
         or 0x3040 <= codepoint <= 0x30FF
         or 0xAC00 <= codepoint <= 0xD7AF
     )

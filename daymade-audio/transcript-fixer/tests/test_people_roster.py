@@ -256,6 +256,36 @@ class PeopleRosterTests(unittest.TestCase):
             {"甲名": "正名", "乙名": "正名", "丙名": "正名"},
         )
 
+    def test_malformed_label_note_is_reported_without_raw_content(self) -> None:
+        for malformed in ("（note)", "(note）", "（note", "(note"):
+            with self.subTest(malformed=malformed):
+                stderr = io.StringIO()
+                self.roster_path.write_text(
+                    f"### 正名\n- **ASR 变体**{malformed}: 甲名\n",
+                    encoding="utf-8",
+                )
+                with contextlib.redirect_stderr(stderr):
+                    corrections, _ = load_people_roster(self.roster_path)
+                self.assertEqual(corrections, {})
+                self.assertIn("dropped 1 malformed ASR variant", stderr.getvalue())
+                self.assertNotIn("note", stderr.getvalue())
+                self.assertEqual(len(stderr.getvalue().splitlines()), 2)
+
+    def test_extension_b_cjk_uses_the_same_unquoted_length_limit(self) -> None:
+        extension_b = "𠀀"
+        self.assertEqual(
+            self.roster(f"### 正名\n- **ASR 变体**: {extension_b * 8}\n"),
+            {extension_b * 8: "正名"},
+        )
+        self.assertEqual(
+            self.roster(f"### 正名\n- **ASR 变体**: {extension_b * 9}\n"),
+            {},
+        )
+        self.assertEqual(
+            self.roster(f"### 正名\n- **ASR 变体**: 甲{extension_b * 8}\n"),
+            {},
+        )
+
     def test_private_split_helper_keeps_its_one_argument_compatibility(self) -> None:
         self.assertEqual(_split_variants("甲名, 乙名"), ["甲名", "乙名"])
 
