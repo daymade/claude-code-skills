@@ -24,6 +24,23 @@ SPEC.loader.exec_module(sync)
 
 
 class ActiveManifestTests(unittest.TestCase):
+    def test_cmks_marketplace_is_managed_and_discovered_from_common_workspace(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
+            root = Path(raw)
+            fake_home = root / "home"
+            repo = fake_home / "workspace" / "md" / "cemakanshan-skills"
+            (repo / ".claude-plugin").mkdir(parents=True)
+            (repo / ".claude-plugin" / "marketplace.json").write_text(
+                json.dumps({"name": "cmks-skills", "plugins": []}),
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(sync, "HOME", fake_home):
+                repos = sync.infer_repos(root / "outside" / "sync.py", root / "claude")
+
+            self.assertIn("cmks-skills", sync.LOCAL_MARKETPLACE_NAMES)
+            self.assertEqual(repos, [repo.resolve()])
+
     def test_legacy_codex_compatibility_must_be_an_active_subset(self) -> None:
         with tempfile.TemporaryDirectory(prefix="tinkle_skill_sync_") as raw:
             manifest = Path(raw) / "active.json"

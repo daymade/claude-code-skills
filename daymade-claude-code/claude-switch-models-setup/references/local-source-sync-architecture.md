@@ -61,7 +61,7 @@ Profile state uses `.claude.json` inside each `CLAUDE_CONFIG_DIR`. Older `claude
 4. Directory-source entries in `~/.claude/plugins/known_marketplaces.json`.
 5. Common local worktree candidates under `~/workspace` and `~/Workspace`.
 
-It only accepts repos whose `.claude-plugin/marketplace.json` name is `daymade-skills` or `daymade-skills-pro`. If none are found, it fails fast instead of guessing.
+It only accepts repos whose `.claude-plugin/marketplace.json` name is `daymade-skills`, `daymade-skills-pro`, or `cmks-skills`. If none are found, it fails fast instead of guessing. Common-workspace discovery checks `claude-code-skills`, `claude-code-skills-pro`, and `cemakanshan-skills`; other checkout names require `--repo`, `DAYMADE_SKILL_SOURCE_REPOS`, or a registered directory-source marketplace.
 
 ## Codex User-Skill Activation
 
@@ -153,6 +153,7 @@ The LaunchAgent label is `ai.daymade.claude-skill-source-sync`. It watches:
 - `~/.claude/plugins/installed_plugins.json`
 - `<daymade-skills>/.claude-plugin/marketplace.json`
 - `<daymade-skills-pro>/.claude-plugin/marketplace.json`
+- `<cmks-skills>/.claude-plugin/marketplace.json`
 
 Verify:
 

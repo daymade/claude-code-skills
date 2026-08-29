@@ -3,7 +3,7 @@
 
 Default mode is a dry-run audit. Use --apply to:
 
-- point configured daymade marketplaces at local directory sources;
+- point configured managed marketplaces at local directory sources;
 - replace installed Claude plugin cache version directories with symlinks to the
   local source directories;
 - update the latest installed_plugins.json records for those local plugins;
@@ -48,7 +48,7 @@ DEFAULT_ACTIVE_SKILLS_MANIFEST = (
 )
 ACTIVE_SKILLS_SCHEMA_VERSION = 1
 SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-LOCAL_MARKETPLACE_NAMES = ("daymade-skills", "daymade-skills-pro")
+LOCAL_MARKETPLACE_NAMES = ("daymade-skills", "daymade-skills-pro", "cmks-skills")
 SYNC_LOCK_NAME = ".daymade-skill-sync.lock"
 SYNC_LOCK_TIMEOUT_SECONDS = 120
 SYNC_LOCK_STALE_SECONDS = 600
@@ -785,6 +785,7 @@ def infer_repos(script_path: Path, claude_dir: Path) -> list[Path]:
     ]:
         add_repo(repos, base / "claude-code-skills")
         add_repo(repos, base / "claude-code-skills-pro")
+        add_repo(repos, base / "cemakanshan-skills")
 
     if not repos:
         raise RuntimeError(
