@@ -130,6 +130,15 @@ to the DB. Transcript-fixer auto-loads person-name corrections from this roster
 at Stage 1 time when `people_roster_path` is set in
 `~/.transcript-fixer/config.json`.
 
+Auto-loading is only one input to name correction, not an identity verdict.
+Before changing any person name, directly read both the configured global
+roster and the owning project's explicit person roster or alias ledger. The
+project source is never auto-loaded, while a direct global-roster read can
+surface suppressed, disabled, relationship-only, and not-yet-variant entries
+that Stage 1 does not expose. If either expected source is unavailable or the
+sources disagree, leave the token unchanged and enqueue it or ask once. Never
+use the most frequent spelling in the transcript as identity evidence.
+
 **Roster format** (canonical: `### Name` + `- **ASR 变体**: variant1, variant2`):
 ```markdown
 ### Ada Lovelace
