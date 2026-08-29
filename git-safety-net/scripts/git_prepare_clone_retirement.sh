@@ -3,7 +3,8 @@
 #
 # The script never moves or deletes a checkout and never changes repository refs.
 # It refuses to certify a clone that still has working-tree bytes, ignored files,
-# stashes, reflog-only commits, or clone-owned dangling commits. A successful run
+# stashes, reflog-only commits, clone-only unreachable objects, linked worktrees,
+# or local submodule repositories. A successful run
 # writes a private recovery directory containing:
 #   all-refs.bundle       self-contained history for every current ref
 #   refs.manifest         exact ref tips frozen before the bundle
@@ -17,10 +18,10 @@
 #     --clone <independent-clone> --survivor <kept-checkout> --out <new-backup-dir>
 #   git_prepare_clone_retirement.sh --verify-current <backup-dir>
 #
-# `--verify-current` is the final compare-and-swap gate. Run it immediately before
-# moving the clone to an explicit recoverable quarantine. Process checks must run
-# sequentially after this command; running them beside other Git probes can make the
-# probe observe the auditor's own sibling process.
+# `--verify-current` is the final compare-and-swap gate. Finish other Git probes,
+# run the process-occupancy check by itself, then run this command immediately before
+# moving the clone to an explicit recoverable quarantine. Running occupancy beside
+# Git probes can make it observe the auditor's own sibling process.
 
 set -euo pipefail
 umask 077
@@ -165,6 +166,33 @@ check_no_linked_worktrees() {
   fi
 }
 
+check_no_submodule_repositories() {
+  local clone="$1"
+  local git_dir submodules line
+
+  git_dir="$(absolute_git_dir "$clone")" || return 1
+  if [ -d "$git_dir/modules" ] && \
+    find "$git_dir/modules" -mindepth 1 -print -quit 2>/dev/null | grep -q .; then
+    unsafe "SUBMODULE_REPOSITORIES_PRESENT" \
+      "$git_dir/modules contains separate repositories; audit them independently before retirement"
+  fi
+
+  if ! submodules="$(git -C "$clone" submodule status --recursive 2>&1)"; then
+    unsafe "SUBMODULE_INVENTORY_UNREADABLE" "$submodules"
+  fi
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    case "$line" in
+      -*) ;;
+      *)
+        printf '%s\n' "$line" >&2
+        unsafe "SUBMODULE_REPOSITORIES_PRESENT" \
+          "audit every initialized submodule as an independent repository before retirement"
+        ;;
+    esac
+  done < <(printf '%s\n' "$submodules")
+}
+
 check_identity() {
   local clone="$1"
   local survivor="$2"
@@ -235,21 +263,28 @@ check_reflog_coverage() {
   done < <(list_reflog_oids "$clone")
 }
 
-check_clone_owned_danglers() {
+check_clone_owned_unreachable_objects() {
   local clone="$1"
   local survivor="$2"
-  local fsck_output oid
+  local fsck_output object_type oid missing
 
   if ! fsck_output="$(git -C "$clone" fsck --no-reflogs --unreachable --no-progress 2>&1)"; then
     unsafe "FSCK_FAILED" "$fsck_output"
   fi
-  while IFS= read -r oid; do
+  missing=""
+  while IFS=' ' read -r object_type oid; do
+    [ -n "$object_type" ] || continue
     [ -n "$oid" ] || continue
-    if ! git -C "$survivor" cat-file -e "${oid}^{commit}" 2>/dev/null; then
-      unsafe "CLONE_ONLY_DANGLING_COMMIT" "$oid is absent from the survivor; pin or export it before retirement"
+    if ! git -C "$survivor" cat-file -e "$oid" 2>/dev/null; then
+      missing="${missing}${object_type} ${oid}"$'\n'
     fi
   done < <(printf '%s\n' "$fsck_output" | awk \
-    '($1 == "dangling" || $1 == "unreachable") && $2 == "commit" {print $3}' | LC_ALL=C sort -u)
+    '($1 == "dangling" || $1 == "unreachable") && NF >= 3 {print $2, $3}' | LC_ALL=C sort -u)
+  if [ -n "$missing" ]; then
+    printf '%s' "$missing" >&2
+    unsafe "CLONE_ONLY_UNREACHABLE_OBJECT" \
+      "objects above are absent from the survivor; preserve them explicitly or keep the clone active"
+  fi
 }
 
 copy_repository_metadata() {
@@ -289,10 +324,11 @@ verify_current() {
   [ -d "$survivor" ] || unsafe "SURVIVOR_PATH_CHANGED" "$survivor"
   check_identity "$clone" "$survivor" >/dev/null
   check_no_linked_worktrees "$clone"
+  check_no_submodule_repositories "$clone"
   check_metadata_scope "$clone"
   check_physical_state "$clone"
   check_reflog_coverage "$clone"
-  check_clone_owned_danglers "$clone" "$survivor"
+  check_clone_owned_unreachable_objects "$clone" "$survivor"
 
   current_refs="$(list_refs "$clone")"
   [ "$current_refs" = "$(cat "$out/refs.manifest")" ] || \
@@ -373,10 +409,11 @@ IDENTITY_MODE="$(check_identity "$CLONE" "$SURVIVOR")"
 SHALLOW_STATE="$(git -C "$CLONE" rev-parse --is-shallow-repository)"
 [ "$SHALLOW_STATE" = false ] || unsafe "SHALLOW_CLONE" "fetch complete history before retirement"
 check_no_linked_worktrees "$CLONE"
+check_no_submodule_repositories "$CLONE"
 check_metadata_scope "$CLONE"
 check_physical_state "$CLONE"
 check_reflog_coverage "$CLONE"
-check_clone_owned_danglers "$CLONE" "$SURVIVOR"
+check_clone_owned_unreachable_objects "$CLONE" "$SURVIVOR"
 
 REFS="$(list_refs "$CLONE")"
 [ -n "$REFS" ] || unsafe "NO_REFS" "the clone has no ref to bundle"

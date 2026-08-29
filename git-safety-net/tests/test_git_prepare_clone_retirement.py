@@ -232,8 +232,146 @@ class PrepareCloneRetirementTests(unittest.TestCase):
         completed = self.prepare()
 
         self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
-        self.assertIn("CLONE_ONLY_DANGLING_COMMIT", completed.stderr)
+        self.assertIn("CLONE_ONLY_UNREACHABLE_OBJECT", completed.stderr)
         self.assertIn(hidden, completed.stderr)
+        self.assertFalse(self.backup.exists())
+
+    def test_refuses_clone_only_unreachable_blob(self) -> None:
+        hidden = self.git(
+            "-C",
+            str(self.clone),
+            "hash-object",
+            "-w",
+            "--stdin",
+            input_text="clone-only blob fixture\n",
+        ).stdout.strip()
+
+        completed = self.prepare()
+
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("CLONE_ONLY_UNREACHABLE_OBJECT", completed.stderr)
+        self.assertIn(hidden, completed.stderr)
+        self.assertFalse(self.backup.exists())
+
+    def test_refuses_clone_only_unreachable_annotated_tag(self) -> None:
+        hidden = self.git(
+            "-C",
+            str(self.clone),
+            "mktag",
+            input_text=(
+                f"object {self.second}\n"
+                "type commit\n"
+                "tag clone-only-fixture\n"
+                "tagger Fixture <fixture@example.invalid> 1700000000 +0000\n"
+                "\n"
+                "unreachable annotated tag fixture\n"
+            ),
+        ).stdout.strip()
+
+        completed = self.prepare()
+
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("CLONE_ONLY_UNREACHABLE_OBJECT", completed.stderr)
+        self.assertIn(hidden, completed.stderr)
+        self.assertFalse(self.backup.exists())
+
+    def test_refuses_clone_only_unreachable_tree(self) -> None:
+        shared_blob = self.git(
+            "-C",
+            str(self.survivor),
+            "hash-object",
+            "-w",
+            "--stdin",
+            input_text="survivor-owned blob fixture\n",
+        ).stdout.strip()
+        hidden = self.git(
+            "-C",
+            str(self.clone),
+            "mktree",
+            input_text=f"100644 blob {shared_blob}\tfixture.txt\n",
+        ).stdout.strip()
+
+        completed = self.prepare()
+
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("CLONE_ONLY_UNREACHABLE_OBJECT", completed.stderr)
+        self.assertIn(hidden, completed.stderr)
+        self.assertFalse(self.backup.exists())
+
+    def test_refuses_deinitialized_submodule_repository(self) -> None:
+        sub_source = self.root / "sub-source"
+        self.git("init", "-q", "-b", "main", str(sub_source))
+        sub_tree = self.git("-C", str(sub_source), "mktree", input_text="").stdout.strip()
+        sub_head = self.git(
+            "-C",
+            str(sub_source),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit-tree",
+            sub_tree,
+            input_text="submodule fixture\n",
+        ).stdout.strip()
+        self.git("-C", str(sub_source), "update-ref", "refs/heads/main", sub_head)
+        self.git(
+            "-C",
+            str(self.clone),
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            "-q",
+            str(sub_source),
+            "nested/sub",
+        )
+        self.git(
+            "-C",
+            str(self.clone),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "add submodule fixture",
+        )
+        sub_checkout = self.clone / "nested" / "sub"
+        clone_only = self.git(
+            "-C",
+            str(sub_checkout),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit-tree",
+            sub_tree,
+            "-p",
+            sub_head,
+            input_text="clone-only submodule history\n",
+        ).stdout.strip()
+        self.git(
+            "-C",
+            str(sub_checkout),
+            "update-ref",
+            "refs/heads/clone-only-fixture",
+            clone_only,
+        )
+        self.git(
+            "-C",
+            str(self.clone),
+            "submodule",
+            "deinit",
+            "-q",
+            "-f",
+            "nested/sub",
+        )
+
+        completed = self.prepare()
+
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("SUBMODULE_REPOSITORIES_PRESENT", completed.stderr)
         self.assertFalse(self.backup.exists())
 
     def test_refuses_shallow_clone(self) -> None:

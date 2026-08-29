@@ -466,15 +466,16 @@ retirement does not need.
   nothing about clone-only refs, reflog history, ignored bytes, stashes, hooks/config, or an
   `objects/info/alternates` dependency created by `git clone --shared`. Run
   `scripts/git_prepare_clone_retirement.sh --clone <absolute-clone> --survivor <absolute-kept-checkout> --out <new-external-backup-dir>`;
-  it refuses those hidden loss states, attached linked worktrees, and repository-local config/hook
-  indirection that the recovery archive cannot resolve safely; it also freezes file types and modes.
-  It then creates a self-contained all-refs bundle plus metadata and a content-bound receipt.
-  Immediately before action, run its `--verify-current <backup-dir>` mode, then perform the
-  process-occupancy check **sequentially after every other Git probe** — a parallel `lsof` can
-  observe the auditor's own sibling Git process. With current-session authority, move the exact
-  clone into a unique recoverable quarantine/OS Trash location and prove old-path absence +
-  new-path presence; permanent deletion is a separate explicit decision. Full READ-DO sequence
-  and `--shared` boundary:
+  it refuses those hidden loss states, every clone-only unreachable Git object, attached linked
+  worktrees, local submodule repositories, and repository-local config/hook indirection that the
+  recovery archive cannot resolve safely; it also freezes file types and modes. It then creates a
+  self-contained all-refs bundle plus metadata and a content-bound receipt. Finish every preliminary
+  Git probe, run process occupancy by itself, then run `--verify-current <backup-dir>` as the final
+  probe with the authorized quarantine move as the **next operation**. This order keeps `lsof` from
+  observing a sibling Git process without opening a larger post-verification gap. Move the exact
+  clone into a unique recoverable quarantine/OS Trash location and prove old-path absence + new-path
+  presence; permanent deletion is a separate explicit decision. Full READ-DO sequence and
+  `--shared` boundary:
   **[references/merge_verification.md](references/merge_verification.md)** § Independent clone retirement.
 
 **Step 4 — after the delete, re-check by content, not by filename.** When a cleanup (or a batch of
