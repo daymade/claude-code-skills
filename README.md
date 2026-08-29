@@ -2632,7 +2632,7 @@ Fetch real, citable data for any Bilibili (B站) video — title, UP follower co
 - `bili-selftest.sh` health-check verifies every endpoint against the live API, so API drift surfaces as one clear FAIL instead of a silent wrong answer
 - NO-FABRICATION discipline: an unfetchable number is marked unverified, never estimated
 - Strips the local proxy (Bilibili is a domestic CN service), sends UA+Referer (avoids HTTP 412), retries with backoff
-- API reference includes the WBI request-signing algorithm for `space/wbi/*` extension
+- API reference includes the login-gated favorites (收藏夹) enumeration endpoints (`x/v3/fav/*`, verified no-WBI), the verified SESSDATA subtitle path, and the WBI request-signing algorithm for `space/wbi/*` extension
 
 **Example usage:**
 ```bash

@@ -1,8 +1,9 @@
 # Bilibili API reference
 
 Endpoints, fields, and gotchas behind `bilibili-source`. Every command below was tested
-2026-06-07 (curl 8.7 / jq 1.7 / yt-dlp 2026.03). Prefix every request with the proxy-strip
-+ headers shown in [Request basics](#request-basics).
+2026-06-07 (curl 8.7 / jq 1.7 / yt-dlp 2026.03) unless a section notes a later date; the
+favorites section and the logged-in subtitle verification are from 2026-08-29. Prefix every
+request with the proxy-strip + headers shown in [Request basics](#request-basics).
 
 ## Contents
 - [Request basics](#request-basics) — proxy, headers, retries
@@ -12,6 +13,7 @@ Endpoints, fields, and gotchas behind `bilibili-source`. Every command below was
 - [Multi-part videos](#multi-part-videos)
 - [Danmaku decompression](#danmaku-decompression)
 - [Subtitles (login required)](#subtitles-login-required) — yt-dlp and SESSDATA paths
+- [Favorites 收藏夹 (login required)](#favorites-收藏夹-login-required) — enumerate a user's fav folders
 - [WBI signing](#wbi-signing) — only for `space/wbi/*`
 - [Gotchas](#gotchas)
 
@@ -23,7 +25,7 @@ UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/12
 HDR=(-H "User-Agent: $UA" -H "Referer: https://www.bilibili.com")
 ```
 
-- **Proxy:** Bilibili is a domestic CN service. A local forward proxy (e.g. `127.0.0.1:1082`) makes requests hang or fail — strip proxy env per request.
+- **Proxy:** Bilibili is a domestic CN service. A local forward proxy (e.g. `127.0.0.1:1082`) makes requests hang or fail — strip proxy env per request. **Stripping env vars is NOT enough for Python `urllib`:** with no proxy env set, urllib falls back to reading the macOS *system* proxy configuration, which resurfaces as intermittent `Tunnel connection failed: 503` on ~2-3% of calls in a batch (observed 2026-08-29, 8 of ~400). Build the opener with an explicit empty handler instead: `urllib.request.build_opener(urllib.request.ProxyHandler({}))`. (`requests` with `trust_env=False` and curl `--noproxy '*'` are already immune.)
 - **Headers:** UA + Referer avoid the occasional `HTTP 412`. (As of the test date a bare request often still succeeds, but the headers are a near-zero-cost defense against IP/time-windowed risk control — keep them.)
 - **Retries:** non-zero `code` such as `-412`/`-799` is transient rate-limiting; back off and retry 2–3×. For batches of many videos, add a small sleep between calls. Single-video fetches did not trip any limit across 35 rapid calls.
 
@@ -97,16 +99,57 @@ every anonymous request tested, new videos included). Two authenticated options:
    yt-dlp --skip-download --write-subs --sub-langs "ai-zh" --cookies-from-browser chrome \
      --add-header "Referer:https://www.bilibili.com" "https://www.bilibili.com/video/<BV>"
    ```
-2. **SESSDATA cookie + API** (documented; verify on first use with a real login — the empty-list
-   behavior above was only confirmable while logged out):
+2. **SESSDATA cookie + API** (verified logged-in 2026-08-29 across a ~400-video batch —
+   the full chain works: `view` for the cid → `player/wbi/v2` with cookies for the track
+   list → download the track JSON):
    ```bash
    NP curl -fsSL "${HDR[@]}" -b "SESSDATA=<your_sessdata>" \
      "https://api.bilibili.com/x/player/wbi/v2?bvid=<BV>&cid=<cid>" \
      | jq '.data.subtitle.subtitles[] | {lan, url:.subtitle_url}'
-   # then download the .subtitle_url JSON (json3 format: body[].content)
+   # then download the .subtitle_url JSON (json3 format: body[].content, body[].from = seconds)
    ```
+   Batch findings (2026-08-29): `subtitle_url` is protocol-relative (`//aisubtitle.hdslb.com/...`) —
+   prepend `https:`. For the SESSDATA path a full logged-in cookie jar also works (`curl -b <netscape-file>`;
+   extract once via `yt-dlp --cookies-from-browser chrome --cookies <file> --skip-download --simulate <any-video-URL>`
+   — the URL is required even though nothing downloads: bare `--cookies-from-browser` with no URL
+   exits 2 before reliably writing the jar. Then keep only bilibili
+   domains and delete the full dump — it contains every site's cookies). An empty `subtitles[]` on a
+   logged-in request means the video genuinely has no subtitle track (common for music/effects videos) —
+   record "none", don't invent one. Multi-part videos: query each part's own cid; each part has its own track.
 
 `ai-zh` is AI-generated — same-sound/segmentation errors; mark output as AI-ASR, never as verbatim.
+
+## Favorites 收藏夹 (login required)
+
+Enumerate a user's favorite folders and their contents. Verified 2026-08-29 with a logged-in
+cookie jar: **plain params, no WBI signing needed** (despite other personal-space endpoints
+requiring it). Login scope, measured not assumed: `folder/created/list-all` answers an anonymous
+request with `code:0` but an **empty list — even for an account whose folders are publicly
+readable** — so treat enumeration as login-required. `resource/list` on a **public** folder IS
+readable anonymously if you already know its `media_id`; private folders need the owner's login.
+
+```bash
+# 1. Who am I / get the mid (also the login sanity check)
+NP curl -fsSL "${HDR[@]}" -b <cookie-jar> "https://api.bilibili.com/x/web-interface/nav" \
+  | jq '{isLogin:.data.isLogin, mid:.data.mid}'
+
+# 2. List the user's created folders
+NP curl -fsSL "${HDR[@]}" -b <cookie-jar> \
+  "https://api.bilibili.com/x/v3/fav/folder/created/list-all?up_mid=<mid>" \
+  | jq '.data.list[] | {id, title, media_count}'
+
+# 3. Page through one folder (ps max 20; loop pn while .data.has_more)
+NP curl -fsSL "${HDR[@]}" -b <cookie-jar> \
+  "https://api.bilibili.com/x/v3/fav/resource/list?media_id=<folder-id>&pn=1&ps=20&order=mtime" \
+  | jq '{has_more:.data.has_more, items:[.data.medias[] | {bvid, title, attr, fav_time}]}'
+```
+
+Per-item fields worth keeping: `bvid`, `id` (avid), `type` (2 = video), `title`, `intro`,
+`upper{mid,name}`, `duration`, `page` (part count), `pubtime`, `fav_time`, `cnt_info` (stats
+snapshot), `attr`. **`attr != 0` means the video is dead** (deleted/blocked): `title` becomes
+`已失效视频` and no metadata is recoverable — which is the argument for archiving favorites
+early, not after they rot (one observed folder had lost 35 of 79 entries). Throttle page
+loops with a small sleep; ~26 consecutive pages at 0.4-0.6s spacing tripped nothing.
 
 ## WBI signing
 
@@ -131,3 +174,11 @@ Gotcha: `space/wbi/*` also needs an **anonymous `buvid3`** cookie (get it login-
 - **`-352` risk-control** usually means missing WBI signature or `buvid3`, not a bad request.
 - **CJK collation** — `sort`/`comm` give false negatives on Chinese strings; verify membership with `grep -F` / `find -name`.
 - **No login-free subtitles** — settle it once: the empty array from `player/wbi/v2` is the ceiling.
+- **Subtitle text is NOT in the video page's DOM** (verified 2026-08-29 by fetching a watch page
+  and grepping for known subtitle lines): the served HTML embeds only the track *metadata*
+  (`subtitle.list[]` — language, id); the text lives in the external track JSON on
+  `aisubtitle.hdslb.com`, fetched by the player at play time and painted line-by-line. Consequence:
+  DOM-capture tools (Obsidian Web Clipper, readability extractors, "save page" flows) cannot
+  capture a transcript — only the API path above can.
+- **Watch pages come back gzip'd even without `Accept-Encoding`** — add `--compressed` to curl
+  when fetching page HTML (the JSON API endpoints return plain JSON and don't need it).
