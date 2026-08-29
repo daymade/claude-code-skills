@@ -116,6 +116,34 @@ class PeopleRosterTests(unittest.TestCase):
             {"Alice Maria Chen": "甲明", "Joe 老师": "甲明"},
         )
 
+    def test_space_bearing_name_shapes_survive_any_future_prose_heuristic(self) -> None:
+        """Tripwire for the next author who reaches for a whitespace-based guard.
+
+        A residual gap is known and deliberately unpatched: prose written into the
+        variant field survives when a Latin word splits it into CJK runs of eight
+        characters or fewer, e.g. the two atoms of
+        "在东吴的 workshop 里叫他 Peter，别的场合叫本名". Every discriminator
+        considered for it kills a healthy shape that is pinned right here:
+
+          * "two or more inner spaces"        kills "Ada Lovelace 老师"
+          * "two or more CJK tokens"          kills "山田 花子"
+          * the two combined with a CJK-run
+            length floor                      stops catching the target atoms
+
+        So the guard stays syntax-only, matching the module's stated rule that
+        guessing semantics here made real names disappear. If a future change makes
+        this test red, that change is trading a narrow miss for a broad false
+        positive — the expensive direction for a fail-closed check.
+        """
+        corrections = self.roster(
+            "### 方远山\n"
+            "- **ASR 变体**: Ada Lovelace 老师, 山田 花子\n"
+        )
+        self.assertEqual(
+            corrections,
+            {"Ada Lovelace 老师": "方远山", "山田 花子": "方远山"},
+        )
+
     def test_dropped_entry_is_reported_instead_of_failing_silently(self) -> None:
         stderr = io.StringIO()
         self.roster_path.write_text(
