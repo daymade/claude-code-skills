@@ -2,7 +2,7 @@
 """
 People roster loader — derive person-name ASR corrections from a markdown roster.
 
-Reads a people-roster markdown file (e.g. PKM `next/_meta/people.md`) and extracts
+Reads a people-roster markdown file (the one `people_roster_path` points at) and extracts
 {asr_variant: canonical_name} pairs so transcript-fixer can auto-correct recurring
 person-name ASR errors without a per-name manual dictionary entry.
 
