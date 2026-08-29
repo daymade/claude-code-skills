@@ -270,6 +270,53 @@ class DatabaseMigrationManagerTests(unittest.TestCase):
             [("1.0", "Imported legacy schema state", "legacy-schema-version")],
         )
 
+    def test_hand_edited_zero_seed_is_not_promoted(self) -> None:
+        first_manager = DatabaseMigrationManager(self.db_path)
+        self.assertEqual(first_manager.get_current_version(), "0.0")
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute("CREATE TABLE corrections (id INTEGER)")
+            connection.execute("CREATE TABLE correction_history (id INTEGER)")
+            connection.execute("CREATE TABLE system_config (key TEXT PRIMARY KEY, value TEXT)")
+            connection.execute(
+                "INSERT INTO system_config (key, value) VALUES ('schema_version', '1.0')"
+            )
+            connection.execute(
+                "UPDATE schema_migrations SET checksum = 'hand-edited'"
+            )
+
+        manager = DatabaseMigrationManager(self.db_path)
+
+        self.assertEqual(manager.get_current_version(), "0.0")
+        with sqlite3.connect(self.db_path) as connection:
+            record = connection.execute(
+                "SELECT version, name, checksum FROM schema_migrations"
+            ).fetchone()
+        self.assertEqual(record, ("0.0", "Initial empty schema", "hand-edited"))
+
+    def test_incomplete_system_config_keeps_zero_seed(self) -> None:
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute("CREATE TABLE system_config (key TEXT PRIMARY KEY)")
+
+        manager = DatabaseMigrationManager(self.db_path)
+
+        self.assertEqual(manager.get_current_version(), "0.0")
+
+    def test_duplicate_legacy_version_rows_keep_zero_seed(self) -> None:
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute("CREATE TABLE corrections (id INTEGER)")
+            connection.execute("CREATE TABLE correction_history (id INTEGER)")
+            connection.execute("CREATE TABLE system_config (key TEXT, value TEXT)")
+            connection.execute(
+                "INSERT INTO system_config (key, value) VALUES ('schema_version', '1.0')"
+            )
+            connection.execute(
+                "INSERT INTO system_config (key, value) VALUES ('schema_version', '2.0')"
+            )
+
+        manager = DatabaseMigrationManager(self.db_path)
+
+        self.assertEqual(manager.get_current_version(), "0.0")
+
     def test_unknown_legacy_version_does_not_skip_migrations(self) -> None:
         with sqlite3.connect(self.db_path) as connection:
             connection.execute("CREATE TABLE corrections (id INTEGER)")

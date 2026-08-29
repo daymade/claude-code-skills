@@ -169,7 +169,8 @@ class DatabaseMigrationManager:
 
             legacy_version = self._get_legacy_schema_version(cursor)
             cursor.execute('''
-                SELECT id, version, name, status, direction
+                SELECT id, version, name, status, direction,
+                       execution_time_ms, checksum, error_message, details
                 FROM schema_migrations ORDER BY id
             ''')
             records = cursor.fetchall()
@@ -192,7 +193,14 @@ class DatabaseMigrationManager:
             elif (
                 len(records) == 1
                 and records[0][1:] == (
-                    "0.0", "Initial empty schema", "completed", "forward"
+                    "0.0",
+                    "Initial empty schema",
+                    "completed",
+                    "forward",
+                    0,
+                    "empty",
+                    None,
+                    None,
                 )
                 and legacy_version != "0.0"
             ):
@@ -220,13 +228,22 @@ class DatabaseMigrationManager:
         if not table_exists:
             return "0.0"
 
-        row = cursor.execute(
-            "SELECT value FROM system_config WHERE key = 'schema_version'"
-        ).fetchone()
-        if not row or not isinstance(row[0], str):
+        columns = {
+            column_row[1]
+            for column_row in cursor.execute(
+                "PRAGMA table_info(system_config)"
+            ).fetchall()
+        }
+        if not {"key", "value"} <= columns:
             return "0.0"
 
-        version = row[0].strip()
+        rows = cursor.execute(
+            "SELECT value FROM system_config WHERE key = 'schema_version'"
+        ).fetchall()
+        if len(rows) != 1 or not isinstance(rows[0][0], str):
+            return "0.0"
+
+        version = rows[0][0].strip()
         try:
             parts = tuple(int(part) for part in version.split('.'))
         except (TypeError, ValueError):
