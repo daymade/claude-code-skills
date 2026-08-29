@@ -68,9 +68,10 @@ frontier, checkpoints it, and only then atomically replaces the active index.
 Incremental reconciliation is one transaction: a mid-update failure cannot
 leave half the sessions updated under the previous complete marker. Session
 freshness fingerprints include content SHA-256, not only size and mtime.
-The earlier POC database at `~/.claude-history-index/v2.db` is not altered or
-trusted as a baseline: it has no schema/provenance metadata and its checked-in
-fresh-build schema drifted from the live database.
+An earlier POC database was never altered or trusted as a baseline: it had no
+schema/provenance metadata and its checked-in fresh-build schema drifted from
+the live database. It was retired after a source-presence audit confirmed it
+was fully derivable and held no unique conversation content.
 
 Run an incremental prose/FTS refresh after new conversations:
 
