@@ -314,12 +314,45 @@ class DatabaseMigrationManager:
             # second tie on executed_at (CURRENT_TIMESTAMP precision),
             # making the most recent row indeterminate.
             cursor.execute('''
-                SELECT version FROM schema_migrations
+                SELECT version, name, execution_time_ms, checksum,
+                       error_message, details
+                FROM schema_migrations
                 WHERE status = 'completed' AND direction = 'forward'
-                ORDER BY id DESC LIMIT 1
+                ORDER BY id DESC
             ''')
-            result = cursor.fetchone()
-            return result[0] if result else "0.0"
+            for record in cursor.fetchall():
+                version, name, execution_time_ms, checksum, error_message, details = record
+                if name == "Initial empty schema":
+                    if record == (
+                        "0.0",
+                        "Initial empty schema",
+                        0,
+                        "empty",
+                        None,
+                        None,
+                    ):
+                        return "0.0"
+                    logger.warning(
+                        "Ignoring modified initial schema sentinel for version %s",
+                        version,
+                    )
+                    continue
+                if name == "Imported legacy schema state":
+                    if (
+                        execution_time_ms == 0
+                        and checksum == "legacy-schema-version"
+                        and error_message is None
+                        and details is None
+                        and self._get_legacy_schema_version(cursor) == version
+                    ):
+                        return version
+                    logger.warning(
+                        "Ignoring stale or modified legacy schema baseline for version %s",
+                        version,
+                    )
+                    continue
+                return version
+            return "0.0"
 
     def get_migration_history(self) -> List[MigrationRecord]:
         """

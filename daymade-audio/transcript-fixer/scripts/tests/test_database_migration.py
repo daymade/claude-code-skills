@@ -293,6 +293,53 @@ class DatabaseMigrationManagerTests(unittest.TestCase):
             ).fetchone()
         self.assertEqual(record, ("0.0", "Initial empty schema", "hand-edited"))
 
+    def test_hand_edited_sentinel_version_does_not_skip_migrations(self) -> None:
+        DatabaseMigrationManager(self.db_path)
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute("CREATE TABLE corrections (id INTEGER)")
+            connection.execute("CREATE TABLE correction_history (id INTEGER)")
+            connection.execute("CREATE TABLE system_config (key TEXT PRIMARY KEY, value TEXT)")
+            connection.execute(
+                "INSERT INTO system_config (key, value) VALUES ('schema_version', '1.0')"
+            )
+            connection.execute(
+                "UPDATE schema_migrations SET version = '2.0'"
+            )
+
+        manager = DatabaseMigrationManager(self.db_path)
+        manager.register_migration(Migration(
+            version="1.0",
+            name="known migration",
+            description="must remain pending after sentinel tampering",
+            forward_sql="CREATE TABLE required_by_migration (id INTEGER);",
+        ))
+
+        self.assertEqual(manager.get_current_version(), "0.0")
+        self.assertEqual(
+            [migration.version for migration in manager.get_pending_migrations()],
+            ["1.0"],
+        )
+
+    def test_modified_imported_baseline_is_not_current(self) -> None:
+        DatabaseMigrationManager(self.db_path)
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute("CREATE TABLE corrections (id INTEGER)")
+            connection.execute("CREATE TABLE correction_history (id INTEGER)")
+            connection.execute("CREATE TABLE system_config (key TEXT PRIMARY KEY, value TEXT)")
+            connection.execute(
+                "INSERT INTO system_config (key, value) VALUES ('schema_version', '1.0')"
+            )
+        manager = DatabaseMigrationManager(self.db_path)
+        self.assertEqual(manager.get_current_version(), "1.0")
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "UPDATE schema_migrations SET version = '2.0'"
+            )
+
+        reloaded = DatabaseMigrationManager(self.db_path)
+
+        self.assertEqual(reloaded.get_current_version(), "0.0")
+
     def test_incomplete_system_config_keeps_zero_seed(self) -> None:
         with sqlite3.connect(self.db_path) as connection:
             connection.execute("CREATE TABLE system_config (key TEXT PRIMARY KEY)")
