@@ -63,7 +63,7 @@ execute unasked. Lever 5 is a power-user setup, not a shipping mechanism.
 skill:
 
 ```bash
-uv run python -m scripts.generate_supersede_kit <target-skill-dir> \
+uv run --frozen python -m scripts.generate_supersede_kit <target-skill-dir> \
     --competitor-plugin-id <name@marketplace> \
     --competitor-entry <plugin:skill> \
     [--self-plugin-grep "<suite>@"] \

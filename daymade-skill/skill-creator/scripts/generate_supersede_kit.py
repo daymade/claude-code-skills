@@ -16,7 +16,7 @@ references/skill-precedence-and-coexistence.md for the full decision guide
 (when a rename or a description tiebreaker is the better fix).
 
 Usage:
-  uv run python -m scripts.generate_supersede_kit <target-skill-dir> \
+  uv run --frozen python -m scripts.generate_supersede_kit <target-skill-dir> \
       --competitor-plugin-id skill-creator@claude-plugins-official \
       --competitor-entry skill-creator:skill-creator \
       [--skill-name NAME]            # default: basename of target-skill-dir

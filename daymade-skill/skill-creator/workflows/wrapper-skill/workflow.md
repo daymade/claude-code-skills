@@ -154,7 +154,7 @@ What **not** to put in the distilled skill:
 Run the scaffolding script:
 
 ```bash
-python3 skill-creator/workflows/wrapper-skill/scripts/init_wrapper_skill.py \
+uv run --project skill-creator --frozen python skill-creator/workflows/wrapper-skill/scripts/init_wrapper_skill.py \
   <wrapper-skill-name> \
   --tool "<tool-display-name>" \
   --target-dir <path/to/repo>

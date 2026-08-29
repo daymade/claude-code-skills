@@ -10,8 +10,7 @@ Stdlib only, shells out to git. Not registered in scripts/ci/test-suites.txt —
 python-pytest RUNNER note in that file for the repository's audited reason skill-creator's suites
 stay out of the shared registry; run this directly:
 
-    python3 -m unittest daymade-skill.skill-creator.tests.test_reference_net -v
-    # or, from this directory:  python3 -m unittest test_reference_net -v
+    uv run --frozen python -m unittest tests.test_reference_net -v
 """
 
 import os

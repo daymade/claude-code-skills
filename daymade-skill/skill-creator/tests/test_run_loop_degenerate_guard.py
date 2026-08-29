@@ -8,7 +8,7 @@ calls would be the same mistake one layer up.
 
 NOTE: this directory is not currently wired into scripts/ci/test-suites.txt (see that
 file's admission criteria) — run locally with:
-    uv run --with pytest --with PyYAML python -m pytest tests/test_run_loop_degenerate_guard.py -q
+    uv run --frozen python -m pytest tests/test_run_loop_degenerate_guard.py -q
 """
 
 from pathlib import Path

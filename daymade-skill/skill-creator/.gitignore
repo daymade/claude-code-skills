@@ -3,3 +3,6 @@
 
 # Local conversation-mining runs contain private source locations.
 .enrich/
+
+# Project-local runtime; packages are restored from uv's shared global cache.
+.venv/

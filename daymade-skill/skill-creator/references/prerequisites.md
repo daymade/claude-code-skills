@@ -7,14 +7,14 @@ Auto-detect and install all dependencies before starting skill creation. This pr
 Run all checks in one go:
 
 ```bash
+cd <skill-creator-path>
 echo "=== Skill Creator Prerequisites ==="
 echo -n "uv: "; uv --version 2>/dev/null || echo "MISSING"
-echo -n "Python: "; uv run python --version 2>/dev/null || echo "MISSING"
-echo -n "PyYAML: "; uv run --with PyYAML python -c "import yaml; print('OK')" 2>/dev/null || echo "MISSING"
-echo -n "tiktoken: "; uv run --with tiktoken python -c "import tiktoken; print('OK')" 2>/dev/null || echo "MISSING (conversation mining only)"
+echo -n "Python: "; uv run --frozen python --version 2>/dev/null || echo "MISSING"
+echo -n "PyYAML: "; uv run --frozen python -c "import yaml; print(yaml.__version__)" 2>/dev/null || echo "MISSING"
+echo -n "tiktoken: "; uv run --frozen python -c "import tiktoken; print(tiktoken.__version__)" 2>/dev/null || echo "MISSING (conversation mining only)"
 echo -n "gitleaks: "; gitleaks version 2>/dev/null || echo "MISSING"
 echo -n "claude CLI: "; which claude 2>/dev/null || echo "MISSING"
-echo -n "anthropic SDK: "; uv run --with anthropic python -c "import anthropic; print('OK')" 2>/dev/null || echo "MISSING (optional)"
 ```
 
 ## Dependencies by Phase
@@ -27,20 +27,22 @@ echo -n "anthropic SDK: "; uv run --with anthropic python -c "import anthropic; 
 | tiktoken | `mine_conversation.py` | Conversation mining | **Blocking for conversation mining** |
 | gitleaks | `security_scan.py` | Security Review (Step 6) | **Blocking for packaging** |
 | claude CLI | `run_eval.py`, `run_loop.py` | Testing, Description Optimization | **Blocking for evals** |
-| anthropic SDK | `improve_description.py`, `run_loop.py` | Description Optimization | Optional (only for desc optimization) |
 | webbrowser | `generate_review.py` (viewer) | Eval Review | Optional (can use `--static` fallback) |
 
 ## Auto-Installation
 
-### PyYAML (required)
+### Locked Python runtime (required)
 
 ```bash
-# Preferred: declare it at the call site
-uv run --with PyYAML python -c "import yaml; print(yaml.__version__)"
+# Restore the project-local environment from the committed lockfile.
+cd <skill-creator-path>
+uv sync --frozen
 
 # Validation
-uv run --with PyYAML python -m scripts.quick_validate <skill-path>
+uv run --frozen python -m scripts.quick_validate <skill-path>
 ```
+
+The environment belongs only to skill-creator. uv restores its pinned packages from the user's shared cache, so projects reuse package data without sharing one mutable environment. Keep the default global cache (or one user-configured global `UV_CACHE_DIR`); never set a global `UV_PROJECT_ENVIRONMENT`.
 
 ### gitleaks (required for packaging)
 
@@ -59,17 +61,9 @@ gitleaks version
 ### tiktoken (required for conversation mining)
 
 ```bash
-uv run --with tiktoken python -c "import tiktoken; print(tiktoken.get_encoding('cl100k_base').name)"
-uv run --with PyYAML --with tiktoken python -m scripts.mine_conversation --help
+uv run --frozen python -c "import tiktoken; print(tiktoken.get_encoding('cl100k_base').name)"
+uv run --frozen python -m scripts.mine_conversation --help
 ```
-
-### anthropic SDK (optional, for description optimization)
-
-```bash
-uv run --with anthropic python -c "import anthropic; print('OK')"
-```
-
-Also requires `ANTHROPIC_API_KEY` environment variable to be set.
 
 ### claude CLI (required for evals)
 
@@ -84,22 +78,22 @@ If missing, the user needs to install Claude Code from https://claude.ai/claude-
 
 ## Script Invocation
 
-Run scripts from the skill-creator root directory. Use `uv run --with ...` when a script has Python dependencies:
+Run scripts from the skill-creator root directory. Use the committed lockfile and its one project-local environment:
 
 ```bash
 # CORRECT — run from skill-creator directory
 cd <skill-creator-path>
-uv run --with PyYAML python -m scripts.quick_validate <skill-path>
-uv run --with PyYAML python -m scripts.package_skill <skill-path>
-uv run python -m scripts.security_scan <skill-path>
-uv run python -m scripts.aggregate_benchmark <workspace-path> --skill-name <name>
+uv run --frozen python -m scripts.quick_validate <skill-path>
+uv run --frozen python -m scripts.package_skill <skill-path>
+uv run --frozen python -m scripts.security_scan <skill-path>
+uv run --frozen python -m scripts.aggregate_benchmark <workspace-path> --skill-name <name>
 
 # WRONG — bare Python depends on ambient site packages
 python3 scripts/package_skill.py <skill-path>  # Can fail: No module named 'yaml'
 python3 -m scripts.quick_validate <skill-path>  # Can fail: No module named 'yaml'
 ```
 
-This avoids relying on machine-global Python packages and keeps validation/packaging reproducible.
+This avoids relying on machine-global Python packages, prevents caller projects from contributing dependencies, and avoids disposable `uv run --with` environments for the bundled toolchain.
 
 ## Presenting Results to User
 
@@ -108,11 +102,10 @@ After running all checks, present a summary table:
 ```
 Skill Creator Prerequisites:
   [x] Python 3.12.0
-  [x] PyYAML 6.0.1
+  [x] PyYAML 6.0.2
   [x] gitleaks 8.21.2
   [x] claude CLI (running inside Claude Code)
-  [ ] anthropic SDK — not installed (only needed for description optimization)
-  [x] uv 0.6.x
+  [x] uv 0.11.x
 ```
 
 If any **blocking** dependency is missing and auto-install fails, clearly explain what the user needs to do and stop before proceeding to skill creation.

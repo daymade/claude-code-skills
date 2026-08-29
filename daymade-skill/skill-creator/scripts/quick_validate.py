@@ -13,12 +13,11 @@ try:
 except ModuleNotFoundError:
     print(
         "Missing dependency: PyYAML.\n"
-        "Run validation with an explicit dependency declaration:\n"
-        "  uv run --with PyYAML python skill-creator/scripts/quick_validate.py <skill_directory>\n"
-        "Or from the skill-creator directory:\n"
-        "  uv run --with PyYAML python -m scripts.quick_validate <skill_directory>\n"
+        "Run from the locked skill-creator project:\n"
+        "  cd <skill-creator-path>\n"
+        "  uv run --frozen python -m scripts.quick_validate <skill_directory>\n"
         "For packaging from the skill-creator directory:\n"
-        "  uv run --with PyYAML python -m scripts.package_skill <skill_directory>",
+        "  uv run --frozen python -m scripts.package_skill <skill_directory>",
         file=sys.stderr,
     )
     sys.exit(2)
@@ -456,7 +455,7 @@ if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     flags = [a for a in sys.argv[1:] if a.startswith("--")]
     if len(args) != 1:
-        print("Usage: python quick_validate.py <skill_directory> [--audience public|private|auto]")
+        print("Usage: uv run --frozen python -m scripts.quick_validate <skill_directory> [--audience public|private|auto]")
         print("  --audience  who this skill ships to. Default 'auto' asks gh whether the")
         print("              containing repo is private. Private skills get portability and")
         print("              identifier findings as notes, not warnings — there, a real path")

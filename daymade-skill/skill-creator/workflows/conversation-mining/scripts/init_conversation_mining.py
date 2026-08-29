@@ -7,11 +7,11 @@ produces per-agent prompt files. Also supports a synthesize step that merges
 per-agent outputs into one canonical outline.
 
 Usage:
-  python workflows/conversation-mining/scripts/init_conversation_mining.py \
+  uv run --frozen python workflows/conversation-mining/scripts/init_conversation_mining.py \
       --enrich-dir <skill>/.enrich/<timestamp> \
       --agent patterns war-stories query-guide usage-patterns
 
-  python workflows/conversation-mining/scripts/init_conversation_mining.py \
+  uv run --frozen python workflows/conversation-mining/scripts/init_conversation_mining.py \
       --enrich-dir <skill>/.enrich/<timestamp> \
       --synthesize
 """

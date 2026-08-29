@@ -51,7 +51,7 @@ def get_token_counter(encoding_model: str):
     except ImportError as exc:
         raise RuntimeError(
             "tiktoken is required for deterministic conversation chunking; "
-            "run with `uv run --with tiktoken ...`"
+            "run `cd <skill-creator-path> && uv run --frozen python -m scripts.mine_conversation ...`"
         ) from exc
     enc = tiktoken.get_encoding(encoding_model)
     return lambda text: len(enc.encode(text))
