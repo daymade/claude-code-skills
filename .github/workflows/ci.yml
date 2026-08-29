@@ -77,6 +77,56 @@ jobs:
           git fetch --no-tags origin "+refs/heads/${target}:refs/remotes/origin/${target}"
           scripts/ci/validate_changed_skills.sh "origin/${target}"
 
+      - name: Reject stale or reused marketplace versions
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          case "${EVENT_NAME}" in
+            pull_request)
+              target="${BASE_REF:-${DEFAULT_BRANCH:-main}}"
+              git fetch --no-tags origin \
+                "+refs/heads/${target}:refs/remotes/origin/${target}"
+              base="refs/remotes/origin/${target}"
+              ;;
+            push)
+              case "${PUSH_BEFORE}" in
+                ""|0000000000000000000000000000000000000000)
+                  echo "FAIL: push event has no usable before SHA" >&2
+                  exit 1
+                  ;;
+              esac
+              git cat-file -e "${PUSH_BEFORE}^{commit}"
+              base="${PUSH_BEFORE}"
+              ;;
+            workflow_dispatch)
+              echo "SKIP: workflow_dispatch has no change base to compare"
+              exit 0
+              ;;
+            *)
+              echo "FAIL: unsupported event ${EVENT_NAME}" >&2
+              exit 1
+              ;;
+          esac
+
+          checker_path="scripts/ci/check_version_progression.py"
+          trusted_checker="$(mktemp)"
+          if git show "${base}:${checker_path}" >"${trusted_checker}" 2>/dev/null; then
+            :
+          elif git diff --diff-filter=A --name-only "${base}" HEAD -- "${checker_path}" \
+            | grep -Fxq "${checker_path}"; then
+            # One-time bootstrap: after this checker lands, every later PR/push
+            # executes the immutable base copy above, never candidate bytes.
+            cp "${checker_path}" "${trusted_checker}"
+          else
+            echo "FAIL: trusted base has no version-progression checker" >&2
+            exit 1
+          fi
+          python3 "${trusted_checker}" --repo . --base "${base}" --candidate HEAD
+
   tests:
     name: Registered test suites (Linux)
     runs-on: ubuntu-latest
