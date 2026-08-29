@@ -159,12 +159,28 @@ reasoning from world knowledge and writes a fluent wrong guess. **That is the
 failure this section exists to prevent: it gives an exhausted search ladder a
 sanctioned next step.**
 
-**Method.**
+**Method.** This route requires `ffmpeg` and `ffprobe` plus a recognizer whose
+family and authorization are already known. Check those prerequisites before
+starting; do not install a model, download weights, or send audio externally just
+because this section names the capability.
 
 - **Get the source audio** from whichever channel owns the recording — the
   meeting platform's API, the local file the transcript came from, the
   recorder's export. `fetch_minute_audio.py` implements one such platform; the
-  method is not limited to it.
+  method is not limited to it. For a Feishu/Lark minute, run the bundled helper
+  only under the already-authorized owning profile and require its timeline
+  verification before using the file:
+
+  ~~~bash
+  uv run scripts/fetch_minute_audio.py --token <minute-token> \
+    --profile <authorized-profile> --output <session.m4a> \
+    --transcript <transcript.md>
+  ~~~
+
+  `ffmpeg -ss` counts from the start of the media file. Before trusting a
+  transcript timestamp, calibrate one timestamp whose neighbouring words you can
+  hear; a trimmed recording or wall-clock timestamp uses a different clock and
+  otherwise reproduces the same mis-cut failure this rung is meant to prevent.
 - **Cut two clips, not one.** A tight cut (~±5 s around the token) stops a
   second engine from being dragged by surrounding context into "repairing" the
   token into something fluent. A medium cut (~±20 s) keeps enough acoustic
@@ -191,10 +207,21 @@ sanctioned next step.**
     If neither a later timestamp nor media duration is available, do not invent a
     duration: enqueue the token or ask once. Widen the window rather than trusting
     the estimate — a ±20 s cut absorbs a sizeable error.
-  - **Cut with the offsets you computed**, mono 16 kHz:
+  - **Cut with the offsets you computed**, mono 16 kHz. Clamp each start at zero
+    and use distinct filenames; otherwise the medium cut can overwrite the tight
+    one and make a clip look as though it corroborated itself:
 
     ~~~bash
-    ffmpeg -ss <start> -t <duration> -i <source-audio> -ac 1 -ar 16000 -c:a pcm_s16le clip.wav
+    TOKEN_START_SECONDS=123.456  # replace with the computed offset
+    SOURCE_AUDIO=/tmp/session.m4a
+    TIGHT_CLIP=/tmp/clip-tight.wav
+    MEDIUM_CLIP=/tmp/clip-medium.wav
+    tight_start="$(awk -v t="$TOKEN_START_SECONDS" 'BEGIN{s=t-5; if(s<0)s=0; printf "%.3f",s}')"
+    medium_start="$(awk -v t="$TOKEN_START_SECONDS" 'BEGIN{s=t-20; if(s<0)s=0; printf "%.3f",s}')"
+    ffmpeg -y -ss "$tight_start" -t 10 -i "$SOURCE_AUDIO" \
+      -ac 1 -ar 16000 -c:a pcm_s16le "$TIGHT_CLIP"
+    ffmpeg -y -ss "$medium_start" -t 40 -i "$SOURCE_AUDIO" \
+      -ac 1 -ar 16000 -c:a pcm_s16le "$MEDIUM_CLIP"
     ~~~
 
   - **Distinguish "I missed the token" from "the engines disagree"** — otherwise a
@@ -203,6 +230,8 @@ sanctioned next step.**
     present while the token itself differs → that is a real disagreement. **Stop
     after two re-cuts** that still don't land the token: at that point the anchor
     itself is unreliable, so enqueue the item rather than cutting indefinitely.
+    If the tight and medium windows yield different readings, that is
+    non-convergence; never choose the window whose answer you prefer.
 - **Use an engine from a different family than the one that produced the
   transcript** — the same constraint the whole-file rule above states. Re-running
   the same engine reproduces its own error, and two builds of the same family are
@@ -215,12 +244,14 @@ sanctioned next step.**
   **Find out what produced the canonical text before you pick the second engine**:
   the transcript's frontmatter or the project's ingest log normally names it (a
   meeting platform's built-in ASR, a local model run). When nothing records it,
-  pick one that differs *by construction* — a cloud API against a local model, or
-  two separate vendors — rather than assuming two names mean two families. **And
-  if the only recognizer available is the one that produced the transcript**, you
-  may still cut and read the clip yourself, but say so: that run is not
-  independent corroboration, the token stays Uncertain, and the boundary gets
-  stated the same way the whole-file rule states it.
+  one extra result cannot establish cross-family agreement: use two clip engines
+  known to differ by construction, or keep the token Uncertain. When provenance
+  is known, the transcript producer plus one different-family clip result is the
+  minimum pair; the transcript text is evidence only after neighbouring words
+  prove the clip is aligned. **If the only recognizer available is the one that
+  produced the transcript**, you may still cut and read the clip yourself, but
+  say so: that run is not independent corroboration, the token stays Uncertain,
+  and the boundary gets stated the same way the whole-file rule states it.
 
 **Reading the result — and the first row's limit matters more than the row:**
 
@@ -246,7 +277,8 @@ For a Mandarin homophone it settles much less: engines agreeing on `lì zhì`
 leaves `利智` / `离职` entirely open, and the correct written form may be a
 homophone neither engine produced. Use the first row only to reject unsupported
 sound-distant rewrites; it never overrides in-document self-proof or the human
-gate for person names.
+gate for person names. Tone alone is not sound distance for this decision: a
+tone-only difference remains a homophone question for the local authority ladder.
 
 **Cost boundary.** One token costs a download plus several ASR passes. Spend it
 only on a **load-bearing** token — one naming an entity, carrying a number, or

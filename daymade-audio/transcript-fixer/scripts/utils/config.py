@@ -113,7 +113,7 @@ class PathConfig:
     data_dir: Path
     log_dir: Path
     cache_dir: Path
-    # Markdown roster of person-name ASR variants (e.g. PKM next/_meta/people.md).
+    # Markdown roster of person-name ASR variants (e.g. <your-notes-vault>/people.md).
     # When set, its `### Person` + `- **ASR 变体**: ...` entries are merged into
     # Stage 1 at runtime as in-memory corrections (never written to the DB).
     people_roster_path: Optional[Path] = None
