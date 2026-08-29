@@ -207,10 +207,13 @@ class DatabaseMigrationManager:
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            # Order by id, not executed_at: migrations applied in the same
+            # second tie on executed_at (CURRENT_TIMESTAMP precision),
+            # making the most recent row indeterminate.
             cursor.execute('''
                 SELECT version FROM schema_migrations
                 WHERE status = 'completed' AND direction = 'forward'
-                ORDER BY executed_at DESC LIMIT 1
+                ORDER BY id DESC LIMIT 1
             ''')
             result = cursor.fetchone()
             return result[0] if result else "0.0"
@@ -291,7 +294,21 @@ class DatabaseMigrationManager:
 
         for statement in statements:
             if statement:
-                cursor.execute(statement)
+                try:
+                    cursor.execute(statement)
+                except sqlite3.OperationalError as e:
+                    # Idempotency guard: production databases are built by
+                    # schema.sql, so objects a migration creates may already
+                    # exist. SQLite has no ADD COLUMN IF NOT EXISTS, so a
+                    # guarded ADD COLUMN surfaces as "duplicate column name".
+                    # Both cases mean "already applied" - skip, never silent.
+                    if "already exists" in str(e) or "duplicate column name" in str(e):
+                        logger.warning(
+                            f"Skipping statement as already applied ({e}): "
+                            f"{statement.splitlines()[0][:80]}"
+                        )
+                        continue
+                    raise
 
     def _run_migration(self, migration: Migration, direction: MigrationDirection,
                      dry_run: bool = False) -> None:
@@ -341,11 +358,14 @@ class DatabaseMigrationManager:
                 execution_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)
 
                 # Update record as completed
+                # (version is UNIQUE, so this matches at most one row; the
+                # ORDER BY ... LIMIT form requires SQLite compiled with
+                # SQLITE_ENABLE_UPDATE_DELETE_LIMIT and is a syntax error
+                # in standard builds)
                 cursor.execute('''
                     UPDATE schema_migrations
                     SET status = 'completed', execution_time_ms = ?
                     WHERE version = ? AND status = 'running' AND direction = ?
-                    ORDER BY executed_at DESC LIMIT 1
                 ''', (execution_time_ms, migration.version, direction.value))
 
                 logger.info(f"Successfully applied {direction.value} migration {migration.version} "
@@ -359,7 +379,6 @@ class DatabaseMigrationManager:
                     UPDATE schema_migrations
                     SET status = 'failed', error_message = ?
                     WHERE version = ? AND status = 'running' AND direction = ?
-                    ORDER BY executed_at DESC LIMIT 1
                 ''', (str(e), migration.version, direction.value))
 
                 logger.error(f"Migration {migration.version} failed: {e}")
@@ -423,6 +442,11 @@ class DatabaseMigrationManager:
         """Execute forward migrations"""
         all_versions = sorted(self.migrations.keys(), key=lambda v: tuple(map(int, v.split('.'))))
 
+        # Dependencies of later migrations in this run are satisfied by
+        # earlier migrations in the same loop, so the dependency check must
+        # compare against the version applied so far, not from_version.
+        applied_version = from_version
+
         for version in all_versions:
             if version > from_version and version <= to_version:
                 migration = self.migrations[version]
@@ -436,13 +460,14 @@ class DatabaseMigrationManager:
 
                 # Check dependencies
                 for dep in migration.dependencies:
-                    if dep > from_version:
+                    if dep > applied_version:
                         raise RuntimeError(
                             f"Migration {migration.version} requires dependency {dep} "
                             f"which is not yet applied"
                         )
 
                 self._run_migration(migration, MigrationDirection.FORWARD, dry_run)
+                applied_version = version
 
     def _migrate_backward(self, from_version: str, to_version: str,
                           dry_run: bool = False, force: bool = False) -> None:
