@@ -82,8 +82,8 @@ Determine which scenario applies:
 - If DNS resolves to `198.18.x.x` virtual IPs → a TUN is active, which is **not** by itself a diagnosis: under TUN every hostname resolves this way, on success as well as failure. Go to Step 2H to find out which mechanism you have.
 - If connections to fake-IP-resolved domains die but the same host works via `curl --resolve <host>:443:<real-ip>` (real IP from `dig @<public-resolver>`) → the TUN tool's DIRECT forwarding state is broken, not your network and not the destination (Step 2J).
 - If `nc -z` succeeds on port 22 but SSH gets no banner (`kex_exchange_identification`) → Tailscale SSH proxy intercept (Step 5A). Confirm with `tcpdump -i any port 22` on the remote — 0 packets means Tailscale intercepts above the kernel.
-- If `nc -z` also succeeds on a port the destination does **not** serve (probe 65001) → under a TUN the local stack answers for the destination, so **no `nc -z` result on that host means anything**. Never read a port probe you have not calibrated this way (Step 2K).
-- If the destination's own `auth.log`/`journalctl -u ssh` shows **zero** entries for your attempts → the packets never arrived; the blocker is its firewall allowlist or your TUN, never its `sshd`. Reach the machine through the cloud provider's guest-agent channel to ask, since that path does not use the port you cannot reach (Step 2K).
+- If `nc -z` also succeeds on a port the destination does **not** serve (probe 65001) → under a TUN the local stack answers for the destination, so **no `nc -z` result on that host means anything**. Never read a port probe you have not calibrated this way. This supersedes the plain `nc -z` reading in the bullet above whenever a TUN — not just Tailscale — is in the path (Step 2K).
+- If the destination's own `journalctl -u ssh` shows **zero** entries for your attempts → the packets never arrived; the blocker is its firewall allowlist or your TUN, never its `sshd`. Reach the machine through the cloud provider's guest-agent channel to ask, since that path does not use the port you cannot reach. Check the journal, not `auth.log`: on Ubuntu 24.04 `sshd` writes nothing to `auth.log`, so an empty file there is not evidence (Step 2K).
 - If `tailscale ssh` fails with "not available on App Store builds" → install Standalone Tailscale (Step 5B).
 - If `nslookup <host>` is fast (<0.1s) but `dscacheutil -q host -a name <host>` takes 60s+ → a supplemental resolver in `scutil --dns` is dead (Step 2I).
 - If `ping <resolver-ip>` succeeds but `dig @<resolver-ip>` times out → daemon dead, `utun` interface zombied. ICMP is answered by the interface; the actual port-53 service is gone (Step 2I).
@@ -797,9 +797,9 @@ curl -x http://127.0.0.1:<proxy-port> -sS -o /dev/null -w 'overseas via proxy: %
 
 ### Step 2K: Decide Whether the Blocker Is Your Tunnel or the Destination's Firewall
 
-**Symptom**: SSH (or another non-HTTP service) to a public host fails with `kex_exchange_identification: Connection closed by <ip>` — or `Connection closed by UNKNOWN port 65535` — while HTTPS to the *same* host keeps working. `nc -z <ip> 22` reports the port open.
+**Symptom**: SSH to a public host fails with `kex_exchange_identification: Connection closed by <ip>` — or `Connection closed by UNKNOWN port 65535` — while HTTPS to the *same* host keeps working. `nc -z <ip> 22` reports the port open. The method below is written for SSH; for another blocked service substitute its own port, log path and service unit throughout.
 
-**Why this needs its own step**: it looks exactly like Step 2H, and Step 2H's fix (restart the TUN, flush DNS) will not help, because the cause may not be local at all. A destination-side allowlist — a cloud security group, a cloud firewall — produces client-side symptoms **indistinguishable** from a TUN forwarding failure. Both show "the connection opens, then dies before the protocol banner." You cannot separate them from the client, and under a TUN every additional client-side probe actively misleads you.
+**Why this needs its own step**: it looks exactly like Step 2H, and Step 2H's fix (restart the TUN, flush DNS) will not help, because the cause may not be local at all. It also looks exactly like Step 5A — but 5A is specifically Tailscale-on-WSL, while this step is for a TUN with no Tailscale in the path. The third mechanism neither of those covers is the destination's own firewall allowlist (a cloud security group) silently dropping you. From the client, a dropped-by-allowlist connection and a TUN forwarding failure are **indistinguishable**: both show "the connection opens, then dies before the protocol banner." Under a TUN, every additional local probe produces more misleading evidence rather than less.
 
 **First: stop trusting `nc -z`.** Under a TUN the local stack completes the TCP handshake on the destination's behalf, so `nc -z` succeeds for **every** port, including ports the destination has closed. Calibrate before reading any port probe:
 
@@ -810,21 +810,33 @@ nc -z -G 5 -w 5 <destination-ip> 65001 && echo "nc is lying: the TUN answered fo
 nc -z -G 5 -w 5 203.0.113.199 443 || echo "control OK: this probe can still report failure"
 ```
 
-If the first line prints, then on this machine `nc -z <that host> <any port>` carries **zero information** about the destination. The same trap applies to hostnames: fake-IP DNS answers for names that do not exist, so an HTTP 200 does not tell you *which* machine served it. Calibrate that too — `dig +short @1.1.1.1 <a-name-you-just-invented>` must come back empty.
+- **First line prints** → on this machine `nc -z <that host> <any port>` carries **zero information** about the destination. Continue with this step and ignore every port probe from here on.
+- **First line does not print** (and the control line does) → `nc -z` is trustworthy on this path, so this step's premise does not hold. Re-check whether a TUN is actually in play before continuing; if it is not, an open/closed port reading is real evidence and Step 2B/5A may fit better.
+
+The same trap applies to hostnames: fake-IP DNS answers for names that do not exist, so an HTTP 200 does not identify which machine served it. Calibrate that too — `dig +short @1.1.1.1 <a-name-you-just-invented>` should come back empty. If it returns an address (typically `198.18.x.x`), DNS answers are synthetic and no name-based result on this machine identifies a host.
 
 **Then ask the destination out-of-band.** The only way to settle "did my packets arrive?" is a channel that does not traverse the failing data path. On a cloud VM that is the provider's guest-agent control plane: it reaches the instance over the provider's own network, so it works even when every port you can dial is blocked.
 
-- **Alibaba Cloud** — `aliyun ecs DescribeCloudAssistantStatus` (a heartbeat within the last minute proves the machine is alive and its agent is healthy), then `aliyun ecs RunCommand --Type RunShellScript --ContentEncoding Base64 --CommandContent <base64>` to run a read-only diagnostic inside it, and `aliyun ecs DescribeInvocationResults --InvokeId <id>` to collect output (the `Output` field is base64). *Verified 2026-08-30.*
+- **Alibaba Cloud** — `aliyun ecs DescribeCloudAssistantStatus --RegionId <region> --InstanceId.1 <instance-id>` (a `LastHeartbeatTime` within the last minute proves the machine is alive and its agent is healthy), then `aliyun ecs RunCommand --RegionId <region> --InstanceId.1 <instance-id> --Type RunShellScript --ContentEncoding Base64 --CommandContent <base64> --Timeout 60`, and `aliyun ecs DescribeInvocationResults --RegionId <region> --InvokeId <id>` to collect output (the `Output` field is base64). *Commands executed and verified 2026-08-30.*
 - **AWS / GCP / Azure** have equivalents (SSM Run Command, guest-agent based access, the Run Command extension). Syntax not verified here — check the provider's docs.
+- **No guest agent, or the host is not on a provider that offers one** → this step cannot settle the question; you need someone with physical or console access to read the host's logs. Do not substitute another client-side probe.
+- **Heartbeat stale or absent** → the agent or the host is down. That is a fact about the host, not evidence for either side of the tunnel-vs-firewall question; fix or investigate that first.
 
 Ask the one question that settles ownership:
 
 ```bash
 # run these INSIDE the destination, through the out-of-band channel
-grep -a sshd /var/log/auth.log | tail -20    # Debian/Ubuntu
-grep -a sshd /var/log/secure   | tail -20    # RHEL family
-journalctl -u ssh -n 20 --no-pager           # unit is `ssh` on Debian/Ubuntu, `sshd` on RHEL
-ss -tn | grep ':22 '                         # connections open right now
+journalctl -u ssh -n 20 --no-pager || journalctl -u sshd -n 20 --no-pager   # unit is `ssh` on Debian/Ubuntu, `sshd` on RHEL
+grep -a sshd /var/log/auth.log 2>/dev/null | tail -20    # Debian/Ubuntu, only if rsyslog is installed
+grep -a sshd /var/log/secure   2>/dev/null | tail -20    # RHEL family
+```
+
+⚠️ **Check the journal first, and do not read an empty `auth.log` as an answer.** On Ubuntu 24.04 the file still exists and still receives `CRON` and `sudo` lines, but `rsyslog` is not installed by default and **`sshd` writes nothing to it** — measured on a live 24.04 host: 90 lines in `auth.log`, 0 of them from `sshd`, while `journalctl -u ssh` had the full record. Reading `auth.log` alone there manufactures exactly the false "no attempts arrived" this step exists to prevent.
+
+To see an attempt land in real time, run this on the host **while you retry the connection from the client** — it shows only sockets open at that instant, so it says nothing about an attempt that already failed and was torn down:
+
+```bash
+ss -tn | grep ':22 '
 ```
 
 - **No entries for your attempts** → your packets never arrived. The blocker sits before the destination: its firewall allowlist, or your own TUN. Continue below.
@@ -833,19 +845,31 @@ ss -tn | grep ':22 '                         # connections open right now
 **If nothing arrived, check the allowlist against your *real* egress IP.** Under a TUN, `curl ifconfig.me` returns the proxy exit, not the address the destination's firewall sees. The authoritative value is the source IP the provider recorded for **your own API calls**:
 
 ```bash
-# Alibaba Cloud example — every audit event carries sourceIpAddress
-aliyun actiontrail LookupEvents --MaxResults 20 | grep -o '"sourceIpAddress":"[^"]*"' | sort -u
+# Alibaba Cloud example. Do NOT grep for '"sourceIpAddress":"' — the CLI pretty-prints with a
+# space after the colon, so that pattern silently matches nothing. Parse the JSON instead.
+aliyun actiontrail LookupEvents --RegionId <region> --MaxResults 20   | python3 -c 'import json,sys,re; d=json.load(sys.stdin);       print("\n".join(sorted({e.get("sourceIpAddress","") for e in d.get("Events",[])
+            if re.fullmatch(r"[0-9.]+", e.get("sourceIpAddress",""))})))'
 ```
 
-Compare that with the security group's inbound rules for the port. Allowlists pinned to a dynamic residential or mobile address rot silently: the rule still reads as correct, and nothing logs the day your address changes.
+The IP filter is load-bearing: internal service-to-service events carry a **hostname** in that field (e.g. `rmc.resourcemanager.aliyuncs.com`), not your address.
 
-**If the allowlist is correct and packets still never arrive, the blocker is local.** Confirm it by asking the proxy to relay explicitly instead of letting the TUN intercept:
+⚠️ This is authoritative **only if your provider-API traffic and your blocked connection take the same forwarding plane** (both DIRECT, or both proxied). Step 2J is the reason: a TUN routes by rule, so the provider's API domain and your destination host can sit on different planes with different exits — in which case the recorded IP is not the IP the destination's firewall sees. Confirm the two match a common rule before trusting the comparison.
+
+Compare that address with the security group's inbound rules for the port:
+
+- **Your current egress IP is not in the allowlist** → that is the fix. Have the security-group owner add it (on Alibaba Cloud, `aliyun ecs AuthorizeSecurityGroup`; the reverse is `RevokeSecurityGroup`). Allowlists pinned to a dynamic residential or mobile address rot silently: the rule still reads as correct, and nothing logs the day your address changes.
+- **It is in the allowlist and packets still never arrive** → the blocker is local; continue below.
+
+**Confirm a local blocker** by asking the proxy to relay explicitly instead of letting the TUN intercept:
 
 ```bash
 ssh -o ProxyCommand="nc -X connect -x 127.0.0.1:<proxy-port> %h %p" <host>
 ```
 
-`HTTP/1.1 503 Service Unavailable` (or `SOCKS error 1`) means the proxy refuses to relay that port — common for 22, which many rule sets allow only for HTTP/HTTPS ports. Two fixes:
+- **`HTTP/1.1 503 Service Unavailable`** (or `SOCKS error 1`) → the proxy refuses to relay that port. Common for 22, which many rule sets allow only for HTTP/HTTPS ports.
+- **It connects** → the proxy *can* carry this traffic, so the blocker is specifically the TUN's automatic interception, and fix 1 below is the targeted remedy.
+
+Two fixes:
 
 1. Add a DIRECT rule for that host/port in the TUN tool, then re-test. This is a config change to someone's proxy — get the machine owner's agreement first if it is not yours.
 2. Better for anything unattended: move the automation off SSH and onto the out-of-band channel you just used. It survives **both** failure modes — the allowlist rotting *and* the proxy refusing the port — and depends on no local network state.
