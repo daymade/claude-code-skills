@@ -237,6 +237,7 @@ This suite bundles the skills that extend Claude Code itself — cross-project p
 /daymade-claude-code:claude-code-hooks
 /daymade-claude-code:prior-work-retrieval
 /daymade-claude-code:lark-cli-router
+/daymade-claude-code:claude-code-ping-start-5h-quota
 ```
 
 Installed names render as `daymade-claude-code:<skill>` under a single shared namespace. These skills are bundle-only — install the suite to get all members.
@@ -3330,6 +3331,34 @@ give me a Word file for this labor contract
 
 ---
 
+### **read-docx-review** - Read Word/WPS Review Comments & Tracked Changes
+
+> **Install**: `claude plugin install daymade-docs@daymade-skills`
+> (suite-only — invoked as `daymade-docs:read-docx-review`)
+
+Read a reviewed docx (Word/WPS) and extract every comment and tracked change into
+a per-item adjudication table (markdown or JSON): who commented, on which
+paragraph, what they said, plus revision-mode insertions and deletions.
+Revision-aware engine on the OpenXML SDK, so content inserted via track changes
+(w:ins) and paragraph-level deletions (w:del) that a bare python-docx read
+silently misses are captured. Read-only — never mutates the reviewer's file.
+
+**Key features:**
+- Per-item adjudication table with a blank disposition column, built for clause-by-clause triage
+- Captures the w:ins / w:del revisions that python-docx silently drops
+- WPS reference-only comment anchors get a fallback so every comment stays locatable
+- Zero-comment files emit an explicit "no review traces" warning instead of a silent empty table
+- Boundary: producing/formatting docx → docx-creator or minimax-docx; PDF annotations out of scope
+
+**Example usage:**
+```text
+提取这份 docx 的批注
+对方批注完的合同回来了，读一下审阅意见
+读一下修订，谁批了什么、批在哪
+```
+
+---
+
 ### **claude-code-hooks** - Write, Test, and Debug Claude Code Hooks
 
 > **Install**: `claude plugin install daymade-claude-code@daymade-skills`
@@ -3506,6 +3535,30 @@ Tencent IMA stays separate under `ima-skill`.
 读取这个飞书文档
 查一下这条妙记的逐字稿
 lark-cli says the user identity is missing a scope
+```
+
+### **claude-code-ping-start-5h-quota** - Ping Claude After Quota Reset to Start a Fresh 5h Window
+
+> **Install**: `claude plugin install daymade-claude-code@daymade-skills`
+> (suite-only — invoked as `daymade-claude-code:claude-code-ping-start-5h-quota`)
+
+Schedule a one-shot local timer (macOS) that sends one minimal `claude -p` message
+right after your subscription quota resets, so the next 5-hour usage window starts
+counting while you sleep instead of when you wake up. Dual redundancy: the detached
+ping survives closing the session, and a live session is re-woken to verify the
+`ok` receipt.
+
+**Key features:**
+- Cross-midnight absolute-time handling and an explicit minutes→seconds formula with a 5-minute buffer
+- `caffeinate -is` holds off idle sleep during the wait; independent `ps` read-back verifies the timer chain
+- Persists the trigger time and output path into the conversation, so a lost wake-up notification stays recoverable
+- Feature-string `pkill` cancel command (live-verified) — never kill by sleep seconds
+- Honest failure reporting: says "cannot confirm locally" instead of guessing
+
+**Example usage:**
+```text
+还有 1 小时 20 分钟重置额度，帮我定时戳一下 Claude
+我去睡觉了，额度重置后帮我 ping 一下开启新窗口
 ```
 
 ### **codex-1m-context-window-setup** - Model-Aware Long Context for Codex
