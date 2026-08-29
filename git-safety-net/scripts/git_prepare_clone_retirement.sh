@@ -8,7 +8,7 @@
 #   all-refs.bundle       self-contained history for every current ref
 #   refs.manifest         exact ref tips frozen before the bundle
 #   reflog-oids.manifest  every commit identity named by a reflog
-#   metadata.manifest     hashes for config/hooks/info files
+#   metadata.manifest     types, modes, and hashes for config/hooks/info
 #   repo-metadata.tar     exact config/hooks/info payload
 #   receipt.txt           source/survivor identity and bundle digest
 #
@@ -55,6 +55,17 @@ sha256_file() {
   fi
 }
 
+file_mode() {
+  local mode
+  if mode="$(stat -f '%Lp' "$1" 2>/dev/null)"; then
+    printf '%s' "$mode"
+  elif mode="$(stat -c '%a' "$1" 2>/dev/null)"; then
+    printf '%s' "$mode"
+  else
+    die "cannot read file mode: $1"
+  fi
+}
+
 list_refs() {
   git -C "$1" for-each-ref --format='%(objectname) %(refname)' | LC_ALL=C sort
 }
@@ -73,37 +84,85 @@ list_reflog_oids() {
 
 metadata_manifest() {
   local checkout="$1"
-  local git_dir rel_path object_id link_target
-  local entry
-  local entries=()
+  local git_dir rel_path object_id link_target entry mode
+  local escaped_path escaped_target
 
   git_dir="$(absolute_git_dir "$checkout")" || return 1
-  for entry in config config.worktree hooks info; do
-    if [ -e "$git_dir/$entry" ] || [ -L "$git_dir/$entry" ]; then
-      if [ -d "$git_dir/$entry" ] && [ ! -L "$git_dir/$entry" ]; then
-        while IFS= read -r rel_path; do
-          [ -n "$rel_path" ] && entries+=("$rel_path")
-        done < <(find "$git_dir/$entry" -mindepth 1 \( -type f -o -type l \) -print)
-      else
-        entries+=("$git_dir/$entry")
-      fi
-    fi
-  done
-
-  if [ ${#entries[@]} -eq 0 ]; then
-    return 0
-  fi
-
-  printf '%s\n' "${entries[@]}" | LC_ALL=C sort | while IFS= read -r entry; do
+  emit_metadata_entry() {
     rel_path="${entry#"$git_dir"/}"
+    printf -v escaped_path '%q' "$rel_path"
+    mode="$(file_mode "$entry")"
     if [ -L "$entry" ]; then
       link_target="$(readlink "$entry")" || return 1
-      printf '%s|symlink|%s\n' "$rel_path" "$link_target"
+      printf -v escaped_target '%q' "$link_target"
+      printf '%s|symlink|%s|%s\n' "$escaped_path" "$mode" "$escaped_target"
     elif [ -f "$entry" ]; then
       object_id="$(git -C "$checkout" hash-object --no-filters -- "$entry")" || return 1
-      printf '%s|file|%s\n' "$rel_path" "$object_id"
+      printf '%s|file|%s|%s\n' "$escaped_path" "$mode" "$object_id"
+    elif [ -d "$entry" ]; then
+      printf '%s|directory|%s|-\n' "$escaped_path" "$mode"
     fi
+  }
+
+  {
+    for entry in config config.worktree hooks info; do
+      entry="$git_dir/$entry"
+      if [ -e "$entry" ] || [ -L "$entry" ]; then
+        emit_metadata_entry
+        if [ -d "$entry" ] && [ ! -L "$entry" ]; then
+          while IFS= read -r -d '' entry; do
+            emit_metadata_entry
+          done < <(find "$entry" -mindepth 1 \
+            \( -type f -o -type d -o -type l \) -print0)
+        fi
+      fi
+    done
+  } | LC_ALL=C sort
+}
+
+check_metadata_scope() {
+  local clone="$1"
+  local git_dir config_file config_keys lowered_key symlink_path
+
+  git_dir="$(absolute_git_dir "$clone")" || return 1
+  for config_file in "$git_dir/config" "$git_dir/config.worktree"; do
+    [ -e "$config_file" ] || continue
+    config_keys="$(git config --file "$config_file" --no-includes --name-only --list)" || \
+      unsafe "LOCAL_CONFIG_UNREADABLE" "$config_file"
+    while IFS= read -r lowered_key; do
+      [ -n "$lowered_key" ] || continue
+      case "$lowered_key" in
+        include.path|includeif.*.path)
+          unsafe "LOCAL_CONFIG_INCLUDE" \
+            "$config_file contains $lowered_key; flatten or separately preserve its resolved config before retirement"
+          ;;
+        core.hookspath)
+          unsafe "LOCAL_HOOKS_PATH" \
+            "$config_file sets core.hooksPath; separately preserve and remove the local override before retirement"
+          ;;
+      esac
+    done < <(printf '%s\n' "$config_keys" | LC_ALL=C tr '[:upper:]' '[:lower:]')
   done
+
+  while IFS= read -r -d '' symlink_path; do
+    unsafe "SYMLINKED_REPOSITORY_METADATA" \
+      "$symlink_path may target bytes outside the recovery archive"
+  done < <(find "$git_dir/config" "$git_dir/config.worktree" "$git_dir/hooks" "$git_dir/info" \
+    -type l -print0 2>/dev/null)
+}
+
+check_no_linked_worktrees() {
+  local clone="$1"
+  local worktrees count
+
+  worktrees="$(git -C "$clone" worktree list --porcelain)" || \
+    unsafe "WORKTREE_INVENTORY_UNREADABLE" "$clone"
+  count="$(printf '%s\n' "$worktrees" | awk '$1 == "worktree" { count++ } END { print count + 0 }')"
+  if [ "$count" -gt 1 ]; then
+    printf '%s\n' "$worktrees" | awk '$1 == "worktree" { print $0 }' >&2
+    unsafe "LINKED_WORKTREES_PRESENT" \
+      "audit and retire every linked worktree before retiring its primary clone"
+  fi
 }
 
 check_identity() {
@@ -229,6 +288,8 @@ verify_current() {
   [ -d "$clone/.git" ] || unsafe "CLONE_PATH_CHANGED" "$clone"
   [ -d "$survivor" ] || unsafe "SURVIVOR_PATH_CHANGED" "$survivor"
   check_identity "$clone" "$survivor" >/dev/null
+  check_no_linked_worktrees "$clone"
+  check_metadata_scope "$clone"
   check_physical_state "$clone"
   check_reflog_coverage "$clone"
   check_clone_owned_danglers "$clone" "$survivor"
@@ -311,6 +372,8 @@ esac
 IDENTITY_MODE="$(check_identity "$CLONE" "$SURVIVOR")"
 SHALLOW_STATE="$(git -C "$CLONE" rev-parse --is-shallow-repository)"
 [ "$SHALLOW_STATE" = false ] || unsafe "SHALLOW_CLONE" "fetch complete history before retirement"
+check_no_linked_worktrees "$CLONE"
+check_metadata_scope "$CLONE"
 check_physical_state "$CLONE"
 check_reflog_coverage "$CLONE"
 check_clone_owned_danglers "$CLONE" "$SURVIVOR"

@@ -379,11 +379,14 @@ Use this READ-DO sequence for one explicitly authorized clone:
    ```
 
    The helper is intentionally non-destructive. It refuses tracked/untracked changes, ignored
-   physical files, stashes, reflog commits with no current ref, shallow history, and clone-owned
-   dangling commits. It snapshots every ref, every reflog OID, and config/hooks/info metadata;
-   creates `all-refs.bundle` without revision exclusions; runs `git bundle verify`; compares every
-   advertised bundle head (including `HEAD`) with the frozen ref set; and binds both the bundle and
-   repository-metadata archive to SHA-256 receipts.
+   physical files, stashes, reflog commits with no current ref, shallow history, clone-owned
+   dangling commits, and any attached linked worktree. It also refuses repository-local
+   `include.path` / `includeIf` config and local `core.hooksPath` overrides rather than pretending
+   their external closure was archived. It snapshots every ref, every reflog OID, and the default
+   config/hooks/info tree with file types and modes; creates `all-refs.bundle` without revision
+   exclusions; runs `git bundle verify`; compares every advertised bundle head (including `HEAD`)
+   with the frozen ref set; and binds both the bundle and repository-metadata archive to SHA-256
+   receipts.
    The regression suite also verifies the no-prerequisite bundle from an empty bare repository. A
    successful `READY_TO_QUARANTINE` means the recovery set is
    complete for that instant, not that deletion authority exists.
@@ -396,8 +399,9 @@ Use this READ-DO sequence for one explicitly authorized clone:
    scripts/git_prepare_clone_retirement.sh --verify-current <external-backup-dir>
    ```
 
-   It fails if refs, reflog identities, metadata, physical state, bundle bytes, or source/survivor
-   identity changed. Rebuild the recovery directory on any failure; do not edit the receipt.
+   It fails if refs, reflog identities, metadata bytes/types/modes, physical state, linked-worktree
+   inventory, bundle bytes, or source/survivor identity changed. Rebuild the recovery directory on
+   any failure; do not edit the receipt.
 5. **Run process occupancy as a separate, sequential probe.** Finish every other Git command first.
    On macOS, `/usr/sbin/lsof +D <absolute-clone>` is one available probe; use the platform-native
    equivalent elsewhere. A process result gathered in parallel with `git ls-remote`, `status`, or

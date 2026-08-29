@@ -299,6 +299,74 @@ class PrepareCloneRetirementTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
         self.assertIn("METADATA_ARCHIVE_CHANGED", completed.stderr)
 
+    def test_refuses_repository_local_config_include(self) -> None:
+        extra_config = self.clone / ".git" / "extra.cfg"
+        custom_hooks = self.clone / ".git" / "custom-hooks"
+        custom_hooks.mkdir()
+        (custom_hooks / "pre-commit").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        extra_config.write_text("[core]\n\thooksPath = custom-hooks\n", encoding="utf-8")
+        self.git(
+            "-C",
+            str(self.clone),
+            "config",
+            "include.path",
+            "extra.cfg",
+        )
+
+        completed = self.prepare()
+
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("LOCAL_CONFIG_INCLUDE", completed.stderr)
+        self.assertFalse(self.backup.exists())
+
+    def test_refuses_repository_local_hooks_path(self) -> None:
+        self.git(
+            "-C",
+            str(self.clone),
+            "config",
+            "core.hooksPath",
+            "custom-hooks",
+        )
+
+        completed = self.prepare()
+
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("LOCAL_HOOKS_PATH", completed.stderr)
+        self.assertFalse(self.backup.exists())
+
+    def test_verify_current_detects_hook_mode_change(self) -> None:
+        hook = self.clone / ".git" / "hooks" / "pre-commit"
+        hook.parent.mkdir(parents=True, exist_ok=True)
+        hook.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        hook.chmod(0o644)
+        prepared = self.prepare()
+        self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+        hook.chmod(0o755)
+
+        completed = self.run_script("--verify-current", str(self.backup))
+
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("METADATA_CHANGED", completed.stderr)
+
+    def test_refuses_clone_with_linked_worktree(self) -> None:
+        linked = self.root / "linked-worktree"
+        self.git(
+            "-C",
+            str(self.clone),
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "linked-retirement-fixture",
+            str(linked),
+        )
+
+        completed = self.prepare()
+
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("LINKED_WORKTREES_PRESENT", completed.stderr)
+        self.assertFalse(self.backup.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
