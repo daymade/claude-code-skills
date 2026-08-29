@@ -4,8 +4,9 @@
 # The script never moves or deletes a checkout and never changes repository refs.
 # It refuses to certify a clone that still has working-tree bytes, ignored files,
 # stashes, reflog-only commits, clone-only unreachable objects, linked worktrees,
-# local submodule repositories, partial/promisor clones, or known extension object
-# stores. A successful run
+# local submodule repositories, partial/promisor clones, known extension object
+# stores, or tracked content filters. Repository fsmonitor commands are disabled.
+# A successful run
 # writes a private recovery directory containing:
 #   all-refs.bundle       self-contained history for every current ref
 #   refs.manifest         exact ref tips frozen before the bundle
@@ -29,6 +30,14 @@ set -euo pipefail
 umask 077
 export GIT_OPTIONAL_LOCKS=0
 export GIT_NO_LAZY_FETCH=1
+
+git() {
+  command git --no-pager \
+    -c core.fsmonitor=false \
+    -c core.untrackedCache=false \
+    -c status.submoduleSummary=false \
+    "$@"
+}
 
 die() { echo "error: $*" >&2; exit 2; }
 unsafe() { echo "$1${2:+: $2}" >&2; exit 1; }
@@ -260,6 +269,28 @@ check_no_extension_object_stores() {
   done
 }
 
+check_no_tracked_content_filters() {
+  local clone="$1"
+  local path _attribute value
+
+  git -C "$clone" ls-files -z >/dev/null || \
+    unsafe "TRACKED_PATH_INVENTORY_UNREADABLE" "$clone"
+  git -C "$clone" check-attr -z --stdin filter </dev/null >/dev/null || \
+    unsafe "ATTRIBUTE_INVENTORY_UNREADABLE" "$clone"
+  while IFS= read -r -d '' path && \
+    IFS= read -r -d '' _attribute && \
+    IFS= read -r -d '' value; do
+    case "$value" in
+      ''|unspecified|unset) ;;
+      *)
+        unsafe "TRACKED_CONTENT_FILTER" \
+          "$path has filter=$value; audit that external content pipeline separately"
+        ;;
+    esac
+  done < <(git -C "$clone" ls-files -z | \
+    git -C "$clone" check-attr -z --stdin filter)
+}
+
 check_identity() {
   local clone="$1"
   local survivor="$2"
@@ -393,6 +424,7 @@ verify_current() {
   [ -d "$survivor" ] || unsafe "SURVIVOR_PATH_CHANGED" "$survivor"
   check_no_promisor_clone "$clone"
   check_no_extension_object_stores "$clone"
+  check_no_tracked_content_filters "$clone"
   check_identity "$clone" "$survivor" >/dev/null
   check_no_linked_worktrees "$clone"
   check_no_submodule_repositories "$clone"
@@ -482,6 +514,7 @@ esac
 
 check_no_promisor_clone "$CLONE"
 check_no_extension_object_stores "$CLONE"
+check_no_tracked_content_filters "$CLONE"
 IDENTITY_MODE="$(check_identity "$CLONE" "$SURVIVOR")"
 SHALLOW_STATE="$(git -C "$CLONE" rev-parse --is-shallow-repository)"
 [ "$SHALLOW_STATE" = false ] || unsafe "SHALLOW_CLONE" "fetch complete history before retirement"

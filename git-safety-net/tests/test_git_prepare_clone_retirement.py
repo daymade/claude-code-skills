@@ -613,6 +613,69 @@ class PrepareCloneRetirementTests(unittest.TestCase):
         self.assertIn("LOCAL_HOOKS_PATH", completed.stderr)
         self.assertFalse(self.backup.exists())
 
+    def test_does_not_execute_repository_fsmonitor(self) -> None:
+        marker = self.root / "FS_MONITOR_EXECUTED"
+        monitor = self.root / "fsmonitor.sh"
+        monitor.write_text("#!/bin/sh\nprintf x >> \"$1\"\nexit 0\n", encoding="utf-8")
+        monitor.chmod(0o755)
+        self.git(
+            "-C",
+            str(self.clone),
+            "config",
+            "core.fsmonitor",
+            f"{monitor} {marker}",
+        )
+
+        prepared = self.prepare()
+
+        self.assertFalse(marker.exists())
+        self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+        verified = self.run_script("--verify-current", str(self.backup))
+        self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
+        self.assertFalse(marker.exists())
+
+    def test_refuses_tracked_content_filter_without_executing_it(self) -> None:
+        tracked = self.clone / "tracked-filter.txt"
+        tracked.write_text("unchanged fixture\n", encoding="utf-8")
+        self.git("-C", str(self.clone), "add", "tracked-filter.txt")
+        self.git(
+            "-C",
+            str(self.clone),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "tracked filter fixture",
+        )
+        marker = self.root / "CONTENT_FILTER_EXECUTED"
+        filter_script = self.root / "content-filter.sh"
+        filter_script.write_text(
+            "#!/bin/sh\ncat\nprintf x >> \"$1\"\n", encoding="utf-8"
+        )
+        filter_script.chmod(0o755)
+        info_attributes = self.clone / ".git" / "info" / "attributes"
+        info_attributes.parent.mkdir(parents=True, exist_ok=True)
+        info_attributes.write_text(
+            "tracked-filter.txt filter=retirement-side-effect\n", encoding="utf-8"
+        )
+        self.git(
+            "-C",
+            str(self.clone),
+            "config",
+            "filter.retirement-side-effect.clean",
+            f"{filter_script} {marker}",
+        )
+
+        completed = self.prepare()
+
+        self.assertFalse(marker.exists())
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("TRACKED_CONTENT_FILTER", completed.stderr)
+        self.assertFalse(self.backup.exists())
+
     def test_verify_current_detects_hook_mode_change(self) -> None:
         hook = self.clone / ".git" / "hooks" / "pre-commit"
         hook.parent.mkdir(parents=True, exist_ok=True)

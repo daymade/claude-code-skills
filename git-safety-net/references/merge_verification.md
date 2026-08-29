@@ -386,13 +386,14 @@ Use this READ-DO sequence for one explicitly authorized clone:
    `GIT_NO_LAZY_FETCH=1`, so bundle creation cannot silently hydrate missing objects into the clone
    it promised not to mutate. A repository using another extension-managed object store must name
    and audit that store separately; a core Git bundle cannot prove those bytes exist elsewhere. The
-   helper also refuses repository-local `include.path` / `includeIf` config and local
-   `core.hooksPath` overrides rather than pretending their external closure was archived. It
-   snapshots every ref tip, every symbolic-ref target, every reflog OID, and the default
-   config/hooks/info tree with file types and modes; creates `all-refs.bundle` without revision
-   exclusions; runs `git bundle verify`; compares every advertised bundle head (including `HEAD`)
-   with the frozen ref set; and binds both the bundle and repository-metadata archive to SHA-256
-   receipts.
+   helper also refuses tracked content filters, repository-local `include.path` / `includeIf`
+   config, and local `core.hooksPath` overrides rather than pretending their external processes or
+   closure were archived. Every Git call disables repository `core.fsmonitor`, untracked-cache
+   refresh, and optional locks. It snapshots every ref tip, every symbolic-ref target, every reflog
+   OID, and the default config/hooks/info tree with file types and modes; creates `all-refs.bundle`
+   without revision exclusions; runs `git bundle verify`; compares every advertised bundle head
+   (including `HEAD`) with the frozen ref set; and binds both the bundle and repository-metadata
+   archive to SHA-256 receipts.
    The regression suite also verifies the no-prerequisite bundle from an empty bare repository. A
    successful `READY_TO_QUARANTINE` means the recovery set is
    complete for that instant, not that deletion authority exists.
@@ -405,8 +406,10 @@ Use this READ-DO sequence for one explicitly authorized clone:
 3. **Obtain current-session retirement authority.** A prior cleanup request or a different clone's
    approval does not transfer. Prefer a recoverable OS Trash/quarantine move; permanent deletion
    is a distinct consequence and requires an explicit decision plus the verified bundle.
-4. **Run process occupancy as a separate, sequential probe.** Finish every preliminary Git command
-   first.
+4. **Freeze the quarantine target, then run process occupancy as a separate probe.** Resolve one
+   absolute, unique quarantine/OS Trash destination, prove it does not exist, and select a
+   no-clobber move form now. Do not target the clone's parent unless a separate inventory proves
+   that parent contains nothing else. Then finish every preliminary Git command.
    On macOS, `/usr/sbin/lsof +D <absolute-clone>` is one available probe; use the platform-native
    equivalent elsewhere. A process result gathered in parallel with another Git probe can be the
    auditor observing its own sibling process, so it cannot authorize a move. Any genuine writer or
@@ -420,9 +423,10 @@ Use this READ-DO sequence for one explicitly authorized clone:
    It fails if refs, reflog identities, metadata bytes/types/modes, physical state, linked-worktree
    or submodule inventory, symbolic-ref topology, unreachable objects, promisor/extension-store
    state, bundle bytes, or source/survivor identity changed. Rebuild the recovery directory on any
-   failure; do not edit the receipt. After a successful final verification, check the destination
-   does not exist and move exactly one clone to a unique recoverable location with no clobber. This
-   move must be the next operation: another probe would
+   failure; do not edit the receipt. After a successful final verification, move exactly one clone
+   to the already-frozen destination with the selected no-clobber form. Do not recheck the
+   destination first; the move itself must refuse a race-created destination. This move must be the
+   next operation: another probe would
    reopen the very race the final verification closes. No unlocked filesystem sequence can remove
    the last verify-exit-to-move interval; if a writer or automation may still start in that interval,
    stop instead of claiming safety. Treat postconditions—not `mv`'s exit code—as authority: the old
