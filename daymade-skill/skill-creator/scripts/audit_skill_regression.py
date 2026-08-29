@@ -8,10 +8,10 @@ or agent disposition before the review can pass.
 
 Typical flow:
 
-    python -m scripts.audit_skill_regression snapshot \
+    uv run --frozen python -m scripts.audit_skill_regression snapshot \
       --source ./my-skill --output /tmp/my-skill-before
 
-    python -m scripts.audit_skill_regression compare \
+    uv run --frozen python -m scripts.audit_skill_regression compare \
       --before /tmp/skill-before --after ./my-skill \
       --output /tmp/my-skill-regression.json \
       --baseline-origin pre-edit-snapshot
@@ -26,7 +26,7 @@ to declare it explicitly; without it, a path change is rejected as an identity
 mismatch, on the assumption that ``--before``/``--after`` were paired by mistake.
 
     # Review every candidate in the JSON, then:
-    python -m scripts.audit_skill_regression verify \
+    uv run --frozen python -m scripts.audit_skill_regression verify \
       --before /tmp/skill-before --after ./my-skill \
       --review /tmp/my-skill-regression.json
 """

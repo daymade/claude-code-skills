@@ -161,9 +161,9 @@ Example: `service-usage-patterns`, not `project-session-notes-<date>`.
 3. Replace any remaining private names, project names, or instance nicknames with placeholders.
 4. Run the three validation gates:
    ```bash
-   uv run --with PyYAML python -m scripts.quick_validate <skill-dir>
-   python -m scripts.security_scan <skill-dir>
-   uv run --with PyYAML python -m scripts.check_references --skill <skill-dir> --enrich <skill-dir>/.enrich/<timestamp>
+   uv run --frozen python -m scripts.quick_validate <skill-dir>
+   uv run --frozen python -m scripts.security_scan <skill-dir>
+   uv run --frozen python -m scripts.check_references --skill <skill-dir> --enrich <skill-dir>/.enrich/<timestamp>
    ```
 5. Only after all gates pass, commit the new reference file.
 

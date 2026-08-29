@@ -3,13 +3,13 @@
 Skill Packager - Creates a distributable .skill file of a skill folder
 
 Usage:
-    uv run --with PyYAML python -m scripts.package_skill \
+    uv run --frozen python -m scripts.package_skill \
       <path/to/skill-folder> [output-directory] \
       [--regression-review <review.json>] [--new-skill]
 
 Example:
-    uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill
-    uv run --with PyYAML python -m scripts.package_skill skills/public/my-skill ./dist
+    uv run --frozen python -m scripts.package_skill skills/public/my-skill
+    uv run --frozen python -m scripts.package_skill skills/public/my-skill ./dist
 
 Notes:
     - The skill SOURCE OF TRUTH is the skill folder itself (e.g. skills/public/my-skill).
@@ -183,7 +183,7 @@ def package_skill(
 
     if not is_valid:
         print(f"BLOCKED: {message}")
-        print(f"   You MUST run: uv run --with PyYAML python -m scripts.security_scan {skill_path.name}")
+        print(f"   You MUST run: uv run --frozen python -m scripts.security_scan {skill_path.name}")
         print("   Security review is MANDATORY before packaging.")
         return None
     print(f"PASSED: {message}\n")

@@ -13,7 +13,7 @@ ran against the ABSOLUTE path. The attestation looked present, well-formed, and
 green — and had never hashed a single byte. Test 1 is the direct regression.
 
 Run from the skill-creator root:
-    uv run --with PyYAML python -m scripts.selftest_validators
+    uv run --frozen python -m scripts.selftest_validators
 """
 from __future__ import annotations
 

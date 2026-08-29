@@ -7,10 +7,10 @@ Reads grading.json files from run directories and produces:
 - delta between with_skill and without_skill configurations
 
 Usage:
-    python aggregate_benchmark.py <benchmark_dir>
+    uv run --frozen python -m scripts.aggregate_benchmark <benchmark_dir>
 
 Example:
-    python aggregate_benchmark.py benchmarks/2026-01-15T10-30-00/
+    uv run --frozen python -m scripts.aggregate_benchmark benchmarks/2026-01-15T10-30-00/
 
 The script supports two directory layouts:
 

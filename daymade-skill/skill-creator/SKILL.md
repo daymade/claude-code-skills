@@ -905,7 +905,7 @@ Once all runs are done:
 
 2. **Aggregate into benchmark** — run the aggregation script from the skill-creator directory:
    ```bash
-   python -m scripts.aggregate_benchmark <workspace>/iteration-N --skill-name <name>
+   uv run --frozen python -m scripts.aggregate_benchmark <workspace>/iteration-N --skill-name <name>
    ```
    This produces `benchmark.json` and `benchmark.md` with pass_rate, time, and tokens for each configuration, with mean +/- stddev and the delta. If generating benchmark.json manually, see `references/eval_pipeline_schemas.md` for the exact schema the viewer expects.
 Put each with_skill version before its baseline counterpart.
@@ -914,7 +914,8 @@ Put each with_skill version before its baseline counterpart.
 
 4. **Launch the viewer** with both qualitative outputs and quantitative data:
    ```bash
-   nohup python <skill-creator-path>/eval-viewer/generate_review.py \
+   cd <skill-creator-path>
+   nohup uv run --frozen python eval-viewer/generate_review.py \
      <workspace>/iteration-N \
      --skill-name "my-skill" \
      --benchmark <workspace>/iteration-N/benchmark.json \
@@ -1118,7 +1119,8 @@ Tell the user: "This will take some time — I'll run the optimization loop in t
 Save the eval set to the workspace, then run in the background:
 
 ```bash
-python -m scripts.run_loop \
+cd <skill-creator-path>
+uv run --frozen python -m scripts.run_loop \
   --eval-set <path-to-trigger-eval.json> \
   --skill-path <path-to-skill> \
   --model <model-id-powering-this-session> \
@@ -1237,7 +1239,9 @@ Before starting any skill work, auto-detect all dependencies and proactively ins
 
 Run the quick check from [references/prerequisites.md](references/prerequisites.md), auto-install what you can, and present the user a summary checklist. Only proceed when all blocking dependencies are satisfied.
 
-Key blockers: Python 3, uv, PyYAML (validation/packaging), and gitleaks (security scan). The claude CLI is blocking only when a separately authorized evidence plan actually runs agent evals. Run Python tools with explicit uv dependency declarations, for example `uv run --with PyYAML python -m scripts.quick_validate <skill-path>` from the skill-creator root directory. Bare `python3` depends on ambient site packages and can miss PyYAML.
+Key blockers: Python 3, uv, the locked skill-creator runtime (validation/packaging), and gitleaks (security scan). The claude CLI is blocking only when a separately authorized evidence plan actually runs agent evals. Run bundled Python tools from the skill-creator root with `uv run --frozen`, for example `uv run --frozen python -m scripts.quick_validate <skill-path>`. Bare `python3` depends on ambient site packages and can miss the locked dependencies.
+
+**uv isolation contract:** Treat this directory as one normal uv project. Keep its committed `pyproject.toml` and `uv.lock`, let uv materialize one project-local `.venv` from the shared global cache, and run bundled tools with `uv run --frozen`. Do not add per-call `--with` overlays for dependencies already locked here, do not set one global `UV_PROJECT_ENVIRONMENT` across projects, and do not create a project-specific `UV_CACHE_DIR`. Never use `--no-cache`, `uv cache clean`, or `uv cache prune` as part of ordinary Skill execution; cache maintenance is a separately authorized disk operation.
 
 ### Step 1: Understanding the Skill with Concrete Examples
 
@@ -1291,7 +1295,7 @@ When editing, remember that the skill is being created for another instance of C
 
    ```bash
    cd <skill-creator-path>
-   uv run --with PyYAML python -m scripts.audit_skill_regression snapshot \
+   uv run --frozen python -m scripts.audit_skill_regression snapshot \
      --source <path/to/skill-folder> \
      --output <workspace>/skill-before
    ```
@@ -1324,7 +1328,7 @@ When editing, remember that the skill is being created for another instance of C
 
    ```bash
    cd <skill-creator-path>
-   uv run --with PyYAML python -m scripts.audit_skill_regression compare \
+   uv run --frozen python -m scripts.audit_skill_regression compare \
      --before <workspace>/skill-before \
      --after <path/to/skill-folder> \
      --output <workspace>/skill-regression-review.json \
@@ -1374,7 +1378,7 @@ When editing, remember that the skill is being created for another instance of C
    reason; it only types them in:
 
    ```bash
-   uv run --with PyYAML python -m scripts.audit_skill_regression classify \
+   uv run --frozen python -m scripts.audit_skill_regression classify \
      --review <workspace>/skill-regression-review.json \
      --after <path/to/skill-folder> \
      --map <workspace>/dispositions.json \
@@ -1400,7 +1404,7 @@ When editing, remember that the skill is being created for another instance of C
    packaging authority; packaging re-verifies the completed review itself:
 
    ```bash
-   uv run --with PyYAML python -m scripts.audit_skill_regression verify \
+   uv run --frozen python -m scripts.audit_skill_regression verify \
      --before <workspace>/skill-before \
      --after <path/to/skill-folder> \
      --review <workspace>/skill-regression-review.json
@@ -1430,7 +1434,7 @@ unreachable reference is absent from the normal invocation path.
 
 ```bash
 cd <skill-creator-path>
-uv run --with PyYAML python -m scripts.quick_validate <path/to/skill-folder>
+uv run --frozen python -m scripts.quick_validate <path/to/skill-folder>
 ```
 
 **Write the description as a YAML block scalar** (`description: >-` followed by an indented paragraph) whenever it contains `: ` or ` #` or spans multiple sentences — block scalars tolerate both characters natively — the recommended convention for every new or edited description since the incident above.
@@ -1529,10 +1533,10 @@ Before packaging or distributing a skill, run the security scanner to detect har
 
 ```bash
 # Required before packaging
-uv run --with PyYAML python -m scripts.security_scan <path/to/skill-folder>
+uv run --frozen python -m scripts.security_scan <path/to/skill-folder>
 
 # Verbose mode includes additional checks for paths, emails, and code patterns
-uv run --with PyYAML python -m scripts.security_scan <path/to/skill-folder> --verbose
+uv run --frozen python -m scripts.security_scan <path/to/skill-folder> --verbose
 ```
 
 **Detection coverage:**
@@ -1586,7 +1590,7 @@ Once the skill is ready, package it into a distributable file:
 
 ```bash
 cd <skill-creator-path>
-uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder>
+uv run --frozen python -m scripts.package_skill <path/to/skill-folder>
 ```
 
 For every existing Git-tracked skill, packaging is blocked until the completed
@@ -1595,7 +1599,7 @@ so committing first or hand-writing a marker cannot bypass the review. The revie
 becomes stale on the next edit:
 
 ```bash
-uv run --with PyYAML python -m scripts.package_skill \
+uv run --frozen python -m scripts.package_skill \
   <path/to/skill-folder> \
   --regression-review <workspace>/skill-regression-review.json
 ```
@@ -1604,7 +1608,7 @@ Optional output directory, and `--include-evals` to ship the root `evals/` direc
 
 ```bash
 cd <skill-creator-path>
-uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder> ./dist --include-evals
+uv run --frozen python -m scripts.package_skill <path/to/skill-folder> ./dist --include-evals
 ```
 
 The packaging script will:
@@ -1662,7 +1666,7 @@ The step people skip is the one that catches a bad resolution — **after resolv
 ```bash
 # Every version the base has vs. what your branch has; the diff must contain
 # ONLY the entry you bumped. Anything else means the resolution ate someone's work.
-python3 -c "
+uv run --project <skill-creator-path> --frozen python -c "
 import json,subprocess
 mine=json.load(open('<manifest>'))
 base=json.loads(subprocess.run(['git','show','origin/main:<manifest>'],capture_output=True,text=True).stdout)
@@ -1716,7 +1720,7 @@ After testing the skill, users may request improvements. Often this happens righ
 Check whether you have access to the `present_files` tool. If you don't, skip this step. If you do, package the skill and present the .skill file to the user:
 
 ```bash
-uv run --with PyYAML python -m scripts.package_skill <path/to/skill-folder>
+uv run --frozen python -m scripts.package_skill <path/to/skill-folder>
 ```
 
 After packaging, direct the user to the resulting `.skill` file path so they can install it.

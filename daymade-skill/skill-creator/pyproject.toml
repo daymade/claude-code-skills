@@ -1,0 +1,13 @@
+[project]
+name = "daymade-skill-creator-runtime"
+version = "0.0.0"
+description = "Locked local runtime for the bundled skill-creator tools"
+requires-python = ">=3.10"
+dependencies = [
+    "PyYAML==6.0.2",
+    "pytest==9.1.1",
+    "tiktoken==0.14.0",
+]
+
+[tool.uv]
+package = false

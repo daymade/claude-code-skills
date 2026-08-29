@@ -9,12 +9,12 @@ unfinished scaffold is obvious on inspection — you cannot accidentally
 commit a half-filled wrapper and mistake it for a real one.
 
 Usage:
-    uv run python workflows/wrapper-skill/scripts/init_wrapper_skill.py <wrapper-skill-name> \\
+    uv run --frozen python workflows/wrapper-skill/scripts/init_wrapper_skill.py <wrapper-skill-name> \\
         --tool "<display-tool-name>" \\
         --target-dir <path/to/repo>
 
 Example:
-    uv run python workflows/wrapper-skill/scripts/init_wrapper_skill.py ima-copilot \\
+    uv run --frozen python workflows/wrapper-skill/scripts/init_wrapper_skill.py ima-copilot \\
         --tool "Tencent IMA" \\
         --target-dir <repo-root>
 

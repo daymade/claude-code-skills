@@ -36,7 +36,7 @@ repository or below the target skill's `.enrich/` directory.
 Run the discovery phase:
 
 ```bash
-uv run --with PyYAML --with tiktoken python -m scripts.mine_conversation \
+uv run --frozen python -m scripts.mine_conversation \
   --manifest <manifest.json> \
   --discover-only \
   --output <target-skill>/.enrich/<timestamp>
@@ -55,7 +55,7 @@ Review the discovery output. If too many files are selected, narrow the manifest
 Run the preparation phase:
 
 ```bash
-uv run --with PyYAML --with tiktoken python -m scripts.mine_conversation \
+uv run --frozen python -m scripts.mine_conversation \
   --manifest <manifest.json> \
   --output <target-skill>/.enrich/<timestamp>
 ```
@@ -113,7 +113,7 @@ when no recurring helper exists.
 A helper script generates one prompt file per chunk per agent:
 
 ```bash
-uv run python workflows/conversation-mining/scripts/init_conversation_mining.py \
+uv run --frozen python workflows/conversation-mining/scripts/init_conversation_mining.py \
   --enrich-dir <target-skill>/.enrich/<timestamp> \
   --agent <selected-role> [<second-role-if-justified>]
 ```
@@ -127,7 +127,7 @@ prompts in `patterns.md` and save each output as `chunk-XXX.md` beside the promp
 If two or more knowledge-mining outputs exist, generate the writer prompt:
 
 ```bash
-uv run python workflows/conversation-mining/scripts/init_conversation_mining.py \
+uv run --frozen python workflows/conversation-mining/scripts/init_conversation_mining.py \
   --enrich-dir <target-skill>/.enrich/<timestamp> \
   --synthesize
 ```
@@ -162,7 +162,7 @@ Replace anything in the second category. Pay special attention to:
 Run the automated scan as a secondary check:
 
 ```bash
-uv run --with PyYAML python -m scripts.security_scan <target-skill> --verbose
+uv run --frozen python -m scripts.security_scan <target-skill> --verbose
 ```
 
 A green scan does **not** mean the content is clean. The manual read-through is the real gate.
@@ -177,9 +177,9 @@ Once the outline is clean, create the real reference file:
 4. Update the `相关文件` section with real cross-links to other references in the skill.
 5. Run validation:
    ```bash
-   uv run --with PyYAML python -m scripts.quick_validate <target-skill>
-   uv run --with PyYAML python -m scripts.security_scan <target-skill>
-   uv run --with PyYAML python -m scripts.check_references --skill <target-skill> --enrich <target-skill>/.enrich/<timestamp>
+   uv run --frozen python -m scripts.quick_validate <target-skill>
+   uv run --frozen python -m scripts.security_scan <target-skill>
+   uv run --frozen python -m scripts.check_references --skill <target-skill> --enrich <target-skill>/.enrich/<timestamp>
    ```
 
 If any gate fails, fix the candidate in `.enrich/` and re-promote. Do not commit a partially clean file.
@@ -187,7 +187,7 @@ If any gate fails, fix the candidate in `.enrich/` and re-promote. Do not commit
 **Promoting `code-assets` candidates** goes to `scripts/`, not `references/`:
 take each surviving candidate's final code, apply its Parameterization notes
 (hardcoded values → arguments), save as `scripts/<name>`, and syntax-check it
-(`uv run python -m py_compile` / `node --check` / a no-arg dry run). Then point the
+(`uv run --frozen python -m py_compile` / `node --check` / a no-arg dry run). Then point the
 docs at the script instead of restating its logic — scripts carry the
 execution, docs carry the understanding. The same sanitization gate applies:
 re-read the code for private values; a green scanner is not a pass.

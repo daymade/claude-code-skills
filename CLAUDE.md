@@ -63,20 +63,22 @@ Behavior evaluation is risk-scaled by `daymade-skill:skill-creator`: bounded fix
 
 Treat `daymade-skill/skill-creator/scripts/packaging_policy.py` as the shipping-policy SSOT. Add or remove shipping exclusions only there, require every consumer to import it, and do not copy its directory list into documentation or consumer-specific filters.
 
+Treat `daymade-skill/skill-creator` as a locked uv project. Run its bundled Python tools from that directory with `uv run --frozen`; the project-local `.venv` is isolated from caller projects while uv's shared cache supplies the pinned packages. Do not reintroduce per-call `--with` overlays for dependencies already in its `pyproject.toml`.
+
 ```bash
 # Quick validation of a skill
-cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.quick_validate ../skill-name
+cd daymade-skill/skill-creator && uv run --frozen python -m scripts.quick_validate ../skill-name
 
 # Existing-skill old-vs-new audit (use git-ref:<ref> for a Git-reconstructed baseline)
-cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.audit_skill_regression snapshot --source ../skill-name --output <old-bundle>
-cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.audit_skill_regression compare --before <old-bundle> --after ../skill-name --output <review.json> --baseline-origin pre-edit-snapshot
-cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.audit_skill_regression verify --before <old-bundle> --after ../skill-name --review <review.json>
+cd daymade-skill/skill-creator && uv run --frozen python -m scripts.audit_skill_regression snapshot --source ../skill-name --output <old-bundle>
+cd daymade-skill/skill-creator && uv run --frozen python -m scripts.audit_skill_regression compare --before <old-bundle> --after ../skill-name --output <review.json> --baseline-origin pre-edit-snapshot
+cd daymade-skill/skill-creator && uv run --frozen python -m scripts.audit_skill_regression verify --before <old-bundle> --after ../skill-name --review <review.json>
 
 # Package a skill (every existing skill requires the completed review; marker alone is insufficient)
-cd daymade-skill/skill-creator && uv run --with PyYAML python -m scripts.package_skill ../skill-name [output-dir] [--regression-review <review.json>]
+cd daymade-skill/skill-creator && uv run --frozen python -m scripts.package_skill ../skill-name [output-dir] [--regression-review <review.json>]
 
 # Initialize a new skill from template
-uv run python daymade-skill/skill-creator/scripts/init_skill.py <skill-name> --path <output-directory>
+cd daymade-skill/skill-creator && uv run --frozen python -m scripts.init_skill <skill-name> --path <output-directory>
 ```
 
 ### Automated Test Suites (CI)
@@ -378,8 +380,8 @@ For the full step-by-step guide with templates and examples, see [references/new
 # 1. Validate & package the skill itself
 SKILL_DIR="<repo-root>/<skill-directory>"
 cd <repo-root>/daymade-skill/skill-creator
-uv run --with PyYAML python -m scripts.security_scan "$SKILL_DIR" --verbose
-uv run --with PyYAML python -m scripts.package_skill "$SKILL_DIR" <output-dir>
+uv run --frozen python -m scripts.security_scan "$SKILL_DIR" --verbose
+uv run --frozen python -m scripts.package_skill "$SKILL_DIR" <output-dir>
 
 # 2. Update all files listed above (see references/new-skill-guide.md for the
 #    detailed step-by-step)
