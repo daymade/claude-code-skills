@@ -231,7 +231,35 @@ class DatabaseMigrationManager:
             parts = tuple(int(part) for part in version.split('.'))
         except (TypeError, ValueError):
             return "0.0"
-        return version if parts and all(part >= 0 for part in parts) else "0.0"
+        if not parts or not all(part >= 0 for part in parts):
+            return "0.0"
+
+        required_tables = {
+            "1.0": {"corrections", "correction_history", "system_config"},
+            "2.0": {
+                "corrections",
+                "context_rules",
+                "correction_history",
+                "correction_changes",
+                "learned_suggestions",
+                "suggestion_examples",
+                "system_config",
+                "audit_log",
+            },
+        }.get(version)
+        if required_tables is None:
+            # Only versions written by the legacy schema/bootstrap path are
+            # trusted here. A future or hand-edited value must be taught an
+            # explicit schema fingerprint before it can skip migrations.
+            return "0.0"
+
+        existing_tables = {
+            table_row[0]
+            for table_row in cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        return version if required_tables <= existing_tables else "0.0"
 
     @contextmanager
     def _get_connection(self):
@@ -405,13 +433,116 @@ class DatabaseMigrationManager:
         normalize_type = lambda value: re.sub(
             r"\s+", "", str(value or "").upper()
         )
-        return (
+        pragma_matches = (
             normalize_type(actual[2]) == normalize_type(expected_type)
             and int(actual[3]) == 0  # NOT NULL
             and actual[4] is None    # DEFAULT
             and int(actual[5]) == 0  # PRIMARY KEY
             and (len(actual) < 7 or int(actual[6]) == 0)  # hidden/generated
         )
+        if not pragma_matches:
+            return False
+
+        # PRAGMA table_xinfo omits column collation and CHECK/UNIQUE clauses.
+        # Inspect sqlite_master as a second, independent boundary and accept
+        # only the exact simple declaration this helper claims to support.
+        create_row = cursor.execute(
+            """
+            SELECT sql FROM sqlite_master
+            WHERE type = 'table' AND name = ?
+            """,
+            (table_name,),
+        ).fetchone()
+        if not create_row or not create_row[0]:
+            return False
+
+        parts = DatabaseMigrationManager._split_table_definition(create_row[0])
+        if not parts:
+            return False
+        column_pattern = re.compile(
+            rf"^\s*{re.escape(column_name)}(?:\s|$)",
+            flags=re.IGNORECASE,
+        )
+        matching_parts = [part for part in parts if column_pattern.search(part)]
+        if len(matching_parts) != 1:
+            return False
+
+        column_reference = re.compile(
+            rf"(?<![A-Za-z0-9_]){re.escape(column_name)}(?![A-Za-z0-9_])",
+            flags=re.IGNORECASE,
+        )
+        if any(
+            column_reference.search(part)
+            for part in parts
+            if part != matching_parts[0]
+        ):
+            # A table-level CHECK/UNIQUE/FOREIGN KEY changes the column's
+            # semantics even when its own declaration is plain.
+            return False
+
+        normalize_declaration = lambda value: re.sub(
+            r"\s+", "", str(value).strip()
+        ).casefold()
+        return normalize_declaration(matching_parts[0]) == normalize_declaration(
+            f"{column_name} {expected_type}"
+        )
+
+    @staticmethod
+    def _split_table_definition(create_sql: str) -> List[str]:
+        """Split CREATE TABLE's outer column list without parsing inner commas."""
+        start = create_sql.find('(')
+        if start < 0:
+            return []
+
+        parts: List[str] = []
+        current: List[str] = []
+        depth = 1
+        quote_end: Optional[str] = None
+        index = start + 1
+
+        while index < len(create_sql):
+            char = create_sql[index]
+            if quote_end is not None:
+                current.append(char)
+                if char == quote_end:
+                    # SQL escapes quote characters by doubling them.
+                    if (
+                        quote_end != ']'
+                        and index + 1 < len(create_sql)
+                        and create_sql[index + 1] == quote_end
+                    ):
+                        current.append(create_sql[index + 1])
+                        index += 1
+                    else:
+                        quote_end = None
+                index += 1
+                continue
+
+            if char in ('\'', '"', '`'):
+                quote_end = char
+                current.append(char)
+            elif char == '[':
+                quote_end = ']'
+                current.append(char)
+            elif char == '(':
+                depth += 1
+                current.append(char)
+            elif char == ')':
+                depth -= 1
+                if depth == 0:
+                    tail = ''.join(current).strip()
+                    if tail:
+                        parts.append(tail)
+                    return parts
+                current.append(char)
+            elif char == ',' and depth == 1:
+                parts.append(''.join(current).strip())
+                current = []
+            else:
+                current.append(char)
+            index += 1
+
+        return []
 
     def _run_migration(self, migration: Migration, direction: MigrationDirection,
                      dry_run: bool = False) -> None:
@@ -443,6 +574,12 @@ class DatabaseMigrationManager:
         if dry_run:
             logger.info(f"[DRY RUN] Would apply {direction.value} migration {migration.version}")
             return
+
+        with self._get_connection() as conn:
+            prior_record = conn.execute('''
+                SELECT status, direction, details
+                FROM schema_migrations WHERE version = ?
+            ''', (migration.version,)).fetchone()
 
         try:
             # Keep the running record and schema changes in one transaction.
@@ -492,28 +629,61 @@ class DatabaseMigrationManager:
             execution_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)
             try:
                 with self._transaction() as cursor:
-                    cursor.execute('''
-                        INSERT INTO schema_migrations
-                        (version, name, status, direction, execution_time_ms,
-                         checksum, error_message)
-                        VALUES (?, ?, 'failed', ?, ?, ?, ?)
-                        ON CONFLICT(version) DO UPDATE SET
-                            name = excluded.name,
-                            status = 'failed',
-                            direction = excluded.direction,
-                            execution_time_ms = excluded.execution_time_ms,
-                            checksum = excluded.checksum,
-                            executed_at = CURRENT_TIMESTAMP,
-                            error_message = excluded.error_message,
-                            details = NULL
-                    ''', (
-                        migration.version,
-                        migration.name,
-                        direction.value,
-                        execution_time_ms,
-                        migration.get_hash(),
-                        str(e),
-                    ))
+                    if (
+                        direction == MigrationDirection.BACKWARD
+                        and prior_record is not None
+                        and prior_record[0:2] == ('completed', 'forward')
+                    ):
+                        try:
+                            details = json.loads(prior_record[2]) if prior_record[2] else {}
+                        except (TypeError, ValueError, json.JSONDecodeError):
+                            details = {}
+                        if not isinstance(details, dict):
+                            details = {}
+                        details['last_failed_attempt'] = {
+                            'direction': direction.value,
+                            'execution_time_ms': execution_time_ms,
+                            'error_message': str(e),
+                        }
+                        cursor.execute('''
+                            UPDATE schema_migrations
+                            SET error_message = ?, details = ?
+                            WHERE version = ?
+                              AND status = 'completed'
+                              AND direction = 'forward'
+                        ''', (
+                            f"Backward migration attempt failed: {e}",
+                            json.dumps(details, ensure_ascii=False, sort_keys=True),
+                            migration.version,
+                        ))
+                        if cursor.rowcount != 1:
+                            raise RuntimeError(
+                                "applied migration state changed before rollback "
+                                "failure could be recorded"
+                            )
+                    else:
+                        cursor.execute('''
+                            INSERT INTO schema_migrations
+                            (version, name, status, direction, execution_time_ms,
+                             checksum, error_message)
+                            VALUES (?, ?, 'failed', ?, ?, ?, ?)
+                            ON CONFLICT(version) DO UPDATE SET
+                                name = excluded.name,
+                                status = 'failed',
+                                direction = excluded.direction,
+                                execution_time_ms = excluded.execution_time_ms,
+                                checksum = excluded.checksum,
+                                executed_at = CURRENT_TIMESTAMP,
+                                error_message = excluded.error_message,
+                                details = NULL
+                        ''', (
+                            migration.version,
+                            migration.name,
+                            direction.value,
+                            execution_time_ms,
+                            migration.get_hash(),
+                            str(e),
+                        ))
             except Exception as record_error:
                 logger.error(
                     "Migration %s failed and its failure record could not be persisted: %s",

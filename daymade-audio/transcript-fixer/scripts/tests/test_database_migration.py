@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic regressions for the SQLite migration runner."""
 
+import json
 import sqlite3
 import sys
 import tempfile
@@ -88,6 +89,60 @@ class DatabaseMigrationManagerTests(unittest.TestCase):
         self.assertEqual(column_type, "INTEGER")
         self.assertEqual(history, ("failed",))
 
+    def test_collated_existing_column_is_not_equivalent_to_plain_text(self) -> None:
+        manager = DatabaseMigrationManager(self.db_path)
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                "CREATE TABLE context_rules (id INTEGER, domain TEXT COLLATE NOCASE)"
+            )
+        manager.register_migration(Migration(
+            version="1.0",
+            name="requires plain text",
+            description="collation changes equality semantics",
+            forward_sql="ALTER TABLE context_rules ADD COLUMN domain TEXT;",
+        ))
+
+        with self.assertRaisesRegex(RuntimeError, "duplicate column name"):
+            manager.migrate_to_version("1.0")
+
+        with sqlite3.connect(self.db_path) as connection:
+            schema = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE name = 'context_rules'"
+            ).fetchone()[0]
+            history = connection.execute(
+                "SELECT status FROM schema_migrations WHERE version = '1.0'"
+            ).fetchone()
+        self.assertIn("domain TEXT COLLATE NOCASE", schema)
+        self.assertEqual(history, ("failed",))
+
+    def test_table_constraint_on_existing_column_fails_closed(self) -> None:
+        manager = DatabaseMigrationManager(self.db_path)
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute(
+                """
+                CREATE TABLE context_rules (
+                    id INTEGER,
+                    domain TEXT,
+                    UNIQUE(domain)
+                )
+                """
+            )
+        manager.register_migration(Migration(
+            version="1.0",
+            name="requires unconstrained text",
+            description="table constraints are part of column semantics",
+            forward_sql="ALTER TABLE context_rules ADD COLUMN domain TEXT;",
+        ))
+
+        with self.assertRaisesRegex(RuntimeError, "duplicate column name"):
+            manager.migrate_to_version("1.0")
+
+        with sqlite3.connect(self.db_path) as connection:
+            history = connection.execute(
+                "SELECT status FROM schema_migrations WHERE version = '1.0'"
+            ).fetchone()
+        self.assertEqual(history, ("failed",))
+
     def test_existing_table_is_not_assumed_compatible(self) -> None:
         manager = DatabaseMigrationManager(self.db_path)
         with sqlite3.connect(self.db_path) as connection:
@@ -130,28 +185,103 @@ class DatabaseMigrationManagerTests(unittest.TestCase):
         self.assertEqual(history[0:2], ("failed", "forward"))
         self.assertIn("definitely_missing", history[2])
 
+    def test_failed_rollback_preserves_applied_version_and_records_attempt(self) -> None:
+        manager = DatabaseMigrationManager(self.db_path)
+        manager.register_migration(Migration(
+            version="1.0",
+            name="rollback failure",
+            description="failed rollback must not falsify current state",
+            forward_sql="CREATE TABLE demo (id INTEGER);",
+            backward_sql="DROP TABLE demo; SELECT * FROM definitely_missing;",
+        ))
+        manager.migrate_to_version("1.0")
+
+        with self.assertRaisesRegex(RuntimeError, "definitely_missing"):
+            manager.rollback_migration("1.0")
+
+        self.assertEqual(manager.get_current_version(), "1.0")
+        with sqlite3.connect(self.db_path) as connection:
+            demo_exists = connection.execute(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'demo'"
+            ).fetchone()[0]
+            record = connection.execute(
+                """
+                SELECT status, direction, error_message, details
+                FROM schema_migrations WHERE version = '1.0'
+                """
+            ).fetchone()
+        details = json.loads(record[3])
+        self.assertEqual(demo_exists, 1)
+        self.assertEqual(record[0:2], ("completed", "forward"))
+        self.assertIn("Backward migration attempt failed", record[2])
+        self.assertEqual(
+            details["last_failed_attempt"]["direction"],
+            "backward",
+        )
+        self.assertIn(
+            "definitely_missing",
+            details["last_failed_attempt"]["error_message"],
+        )
+
+    def test_successful_rollback_marks_version_backward(self) -> None:
+        manager = DatabaseMigrationManager(self.db_path)
+        manager.register_migration(Migration(
+            version="1.0",
+            name="rollback success",
+            description="successful rollback leaves the previous version current",
+            forward_sql="CREATE TABLE demo (id INTEGER);",
+            backward_sql="DROP TABLE demo;",
+        ))
+        manager.migrate_to_version("1.0")
+
+        manager.rollback_migration("1.0")
+
+        self.assertEqual(manager.get_current_version(), "0.0")
+        with sqlite3.connect(self.db_path) as connection:
+            demo_exists = connection.execute(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'demo'"
+            ).fetchone()[0]
+            record = connection.execute(
+                "SELECT status, direction FROM schema_migrations WHERE version = '1.0'"
+            ).fetchone()
+        self.assertEqual(demo_exists, 0)
+        self.assertEqual(record, ("completed", "backward"))
+
     def test_lone_zero_seed_upgrades_from_legacy_schema_version(self) -> None:
         first_manager = DatabaseMigrationManager(self.db_path)
         self.assertEqual(first_manager.get_current_version(), "0.0")
         with sqlite3.connect(self.db_path) as connection:
+            connection.execute("CREATE TABLE corrections (id INTEGER)")
+            connection.execute("CREATE TABLE correction_history (id INTEGER)")
+            connection.execute("CREATE TABLE system_config (key TEXT PRIMARY KEY, value TEXT)")
             connection.execute(
-                "CREATE TABLE system_config (key TEXT PRIMARY KEY, value TEXT)"
-            )
-            connection.execute(
-                "INSERT INTO system_config (key, value) VALUES ('schema_version', '2.0')"
+                "INSERT INTO system_config (key, value) VALUES ('schema_version', '1.0')"
             )
 
         upgraded_manager = DatabaseMigrationManager(self.db_path)
 
-        self.assertEqual(upgraded_manager.get_current_version(), "2.0")
+        self.assertEqual(upgraded_manager.get_current_version(), "1.0")
         with sqlite3.connect(self.db_path) as connection:
             history = connection.execute(
                 "SELECT version, name, checksum FROM schema_migrations"
             ).fetchall()
         self.assertEqual(
             history,
-            [("2.0", "Imported legacy schema state", "legacy-schema-version")],
+            [("1.0", "Imported legacy schema state", "legacy-schema-version")],
         )
+
+    def test_unknown_legacy_version_does_not_skip_migrations(self) -> None:
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute("CREATE TABLE corrections (id INTEGER)")
+            connection.execute("CREATE TABLE correction_history (id INTEGER)")
+            connection.execute("CREATE TABLE system_config (key TEXT PRIMARY KEY, value TEXT)")
+            connection.execute(
+                "INSERT INTO system_config (key, value) VALUES ('schema_version', '99.0')"
+            )
+
+        manager = DatabaseMigrationManager(self.db_path)
+
+        self.assertEqual(manager.get_current_version(), "0.0")
 
     def test_schema_built_database_migrates_from_legacy_2_0_to_2_4(self) -> None:
         schema_path = Path(__file__).resolve().parents[1] / "core" / "schema.sql"
