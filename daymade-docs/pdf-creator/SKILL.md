@@ -56,17 +56,40 @@ To create a new theme: copy `themes/default.css`, modify, save as `themes/your-t
 
 ## Backends
 
-The script auto-detects the best available backend **based on content**:
+The script auto-detects the best available backend from **content × theme** — the theme half matters because the reason CJK ever needed Chrome is a property of the theme's font stack, not of the text being Chinese:
 
-- **CJK content detected** → auto-selects **Chrome** (weasyprint subset-embeds PingFang SC as CID Type 0C OpenType, which macOS Preview / Adobe Reader fail to render — appears as garbled text on recipient devices even though it looks fine in Chrome's PDF viewer)
-- **Non-CJK content** → auto-selects **weasyprint** (faster, no browser startup)
+- **CJK + a Songti/Heiti theme** (`default`, `cjk-auto`) → **weasyprint**. These themes embed CID TrueType, which every reader renders, so Chrome buys nothing and costs the clip described below.
+- **CJK + a PingFang theme** (`warm-terra`, `mobile`, `warm-terra-menu`, and any theme not on the safe list) → **Chrome**. weasyprint subset-embeds PingFang SC as CID Type 0C OpenType, which macOS Preview / Adobe Reader fail to render — garbled text on the recipient's device even though Chrome's own PDF viewer looks fine.
+- **Non-CJK content** → **weasyprint** (faster, no browser startup).
+
+Routing is pinned by `scripts/tests/test_backend_routing.py`. A theme you add yourself is treated as PingFang-class until you add it to `_WEASYPRINT_SAFE_CJK_THEMES` in `md_to_pdf.py` — do that only after confirming its CJK faces are CID TrueType.
 
 | Backend | Install | Pros | Cons |
 |---------|---------|------|------|
-| `weasyprint` | `pip install weasyprint` | Precise CSS rendering, no browser needed | CJK font embedding bug on some readers |
-| `chrome` | Google Chrome installed | Zero Python deps, reliable CJK rendering | Larger binary, slightly less CSS control |
+| `weasyprint` | `pip install weasyprint` | Precise CSS rendering, no browser needed, does not clip overflow | Subsets PingFang SC as CID Type 0C — unreadable in Preview/Adobe |
+| `chrome` | Google Chrome installed | Zero Python deps, renders PingFang correctly | **Clips anything past the @page box** (see below) |
 
-Override with `--backend chrome` or `--backend weasyprint`.
+Override with `--backend chrome` or `--backend weasyprint`; an explicit flag always wins over auto-detection.
+
+### Chrome clips, it does not merely overflow
+
+Chrome wraps each page in a `re W* n` clip path at the `@page` content box. Content past that box is still in the PDF's object layer but is **never painted**. Measured on A4 with `margin: 2.5cm 2cm 2cm 2cm`: the clip path ends at **538.90pt**, while the table's right border sits at **545.18pt** — so the border is silently amputated.
+
+**This is not a "wide table" problem — under `default` and `cjk-auto` it is every table.** Those themes set `table { table-layout: fixed; width: 100% }`, so a two-column table spans the same full content width as a ten-column one and lands its right border at the same 545.18pt. Measured: a trivial `| 周一 | 周二 |` table clips identically to a six-column fee schedule. Content width is irrelevant; the theme's own `width: 100%` plus cell padding is what crosses the line.
+
+The overflow itself is **by design**: the CJK typography layer sets `overflow-wrap: normal` precisely so content overflows rather than breaking mid-token (see "CJK Typography" below). That trade-off is safe under weasyprint and destructive under Chrome.
+
+**The reason this survived repeated delivery is not that the preview lies — it is that the symptom looks deliberate.** The last column's text is complete and correctly spaced; only a hairline border is gone, which reads as a styling choice. Meanwhile the visual checklist below primes you to look for *text cut off*, which is exactly what does not happen here.
+
+Rasterisers do honour the clip, so the preview PNG this script already generates does show the defect (measured 2026-08-29: `pdftoppm -r 400` paints zero ink across the 25 pixel columns straddling the expected border). What does **not** show it is any check that reads coordinates instead of pixels — `pdfplumber` still reports a rect at 545.18pt, because the object is genuinely there.
+
+Rather than rely on noticing a missing hairline, run the check:
+
+```bash
+uv run --with pdfplumber --with pillow --with numpy scripts/check_table_borders.py out.pdf
+```
+
+It counts the vertical rules the object layer promises, counts the ones that actually have ink in a `pdftoppm` raster, and exits non-zero naming any rule that is present in the PDF but absent on paper. Run it on any PDF with tables that was produced by `--backend chrome`.
 
 ## Batch Convert
 
@@ -101,7 +124,7 @@ uv run --with weasyprint scripts/batch_convert.py *.md --theme mobile --output-d
 
 **weasyprint import error**: Run with `uv run --with weasyprint` or use `--backend chrome` instead.
 
-**CJK text in code blocks garbled (weasyprint)**: The script auto-detects code blocks containing Chinese/Japanese/Korean characters and converts them to styled divs with CJK-capable fonts. If you still see issues, use `--backend chrome` which has native CJK support. Alternatively, convert code blocks to markdown tables before generating the PDF.
+**CJK text in code blocks garbled (weasyprint)**: The script auto-detects code blocks containing Chinese/Japanese/Korean characters and converts them to styled divs with CJK-capable fonts. If you still see issues, use `--backend chrome` which has native CJK support — but if the document contains any table, run `scripts/check_table_borders.py` on the result, because Chrome clips table borders past the `@page` box (see "Chrome clips, it does not merely overflow" above). Alternatively, convert code blocks to markdown tables before generating the PDF.
 
 **Chrome header/footer appearing**: The script passes `--no-pdf-header-footer`. If it still appears, your Chrome version may not support this flag — update Chrome. **Note:** If you bypassed this skill and used manual Chrome headless, this is the first symptom — see "Anti-Pattern" section above.
 
@@ -120,6 +143,7 @@ uv run --with weasyprint scripts/batch_convert.py *.md --theme mobile --output-d
 **Why mandatory**: "PDF generated cleanly" ≠ "rendering matches markdown intent". Common silent failures include:
 - Paragraphs collapsing into one (CommonMark soft-break on consecutive non-blank lines)
 - Tables overflowing page margins
+- Tables missing their right border while the text stays intact (Chrome clip — the one failure on this list that does not look like a failure; `scripts/check_table_borders.py` decides it)
 - Missing CJK / emoji glyphs
 - Code block garbling
 - Chrome default headers/footers (if bypassed this skill)
@@ -143,7 +167,7 @@ The script applies two layers of CJK-aware processing automatically — **withou
 `_load_theme()` appends a CJK typography CSS patch to the loaded theme CSS. The patch:
 
 - `table { table-layout: fixed; width: 100% }` — equal column widths prevent weasyprint auto-layout from squeezing one column to ~10% width when an adjacent column has 5x more content
-- `td, th { word-break: keep-all; overflow-wrap: normal; line-break: strict }` — don't slice CJK characters apart. The deliberate trade-off encoded by `overflow-wrap: normal` (not `break-word`) is to let content overflow slightly rather than fall back to mid-token breaks — rationale documented in `md_to_pdf.py` L109-146 inline comments and locked in by `scripts/tests/test_cjk_tables.py`
+- `td, th { word-break: keep-all; overflow-wrap: normal; line-break: strict }` — don't slice CJK characters apart. The deliberate trade-off encoded by `overflow-wrap: normal` (not `break-word`) is to let content overflow slightly rather than fall back to mid-token breaks — rationale documented in the `CJK typography patch (auto-injected` comment block in `md_to_pdf.py` and locked in by `scripts/tests/test_cjk_tables.py`
 - `th { white-space: nowrap }` — short headers stay one line for predictable column widths
 
 This silently fixes the most common anti-pattern (cell content forcibly wrapped between CJK characters producing single-char-only lines), without touching the user's source. The user's theme CSS file on disk is never modified.
