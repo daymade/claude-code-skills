@@ -32,6 +32,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disk and memory fine — with the packet filter never inspected.
 
 ### Added
+- **local-conversation-history** (`daymade-claude-code` v3.7.0; marketplace v3.5.0): restore the
+  cross-provider entry point above the four provider-and-action-specific history skills. PR #357
+  converged local history into `read-claude-code-history`, `read-codex-history`,
+  `continue-claude-code-work` and `continue-codex-work`, and moved the old entry point's SKILL.md
+  into `read-codex-history` as a legacy reference; the router that was meant to sit above them was
+  specified the same day and never written — no branch, no commit, no PR. This adds it.
+
+  It routes by platform (Claude Code / Codex / Kimi CLI) x action (read evidence vs continue
+  interrupted work), and owns the one job none of the four own alone: a single inventory across all
+  three providers. Both readers already ship `list_local_history.py` and its `--source` defaults to
+  `all`, but each reader's task table pins it to that reader's own provider, so a cross-provider
+  listing never happened unless someone asked for it by name. Kimi CLI, which has no dedicated skill,
+  had no entry anywhere.
+
+  Deliberately thin: no parsing, no provider-specific flags beyond `--source`, and no copy of an
+  executor's commands, so it cannot drift into teaching a stale invocation. It does carry forward
+  three invariants the retired skill had established — the Claude source set is indivisible (active
+  homes plus every archive in `~/.claude/history-sources.json`), the current session self-matches and
+  must be excluded before a hit counts as historical evidence, and zero results are not absence.
 - **github-ops** (v1.2.0): replace command-success GitHub automation with a verified-state
   operating contract. Every mutation now binds the account, host, fully qualified target,
   authorized consequence, recovery path, supported input schema, and an independent readback;
