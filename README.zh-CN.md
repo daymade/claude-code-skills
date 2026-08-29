@@ -217,6 +217,7 @@ claude plugin install daymade-claude-code@daymade-skills
 一次安装即可获得扩展 Claude Code 本体的全部 power-user 技能——跨代码、项目文档、Skill/SOP、会议、微信归档与对话历史的已有工作检索；跨 Claude Code/Codex 的快速本地对话发现；会话恢复；CLAUDE.md 调优；随 lark-cli 版本同步的飞书路由；故障诊断；statusline 配置；导出修复；marketplace 开发与 suite 收敛；终端截图渲染；用量分析；以及多 Provider 模型切换：
 
 ```text
+/daymade-claude-code:local-conversation-history
 /daymade-claude-code:read-claude-code-history
 /daymade-claude-code:read-codex-history
 /daymade-claude-code:continue-claude-code-work
@@ -929,6 +930,28 @@ python3 scripts/calculate_metrics.py tests/TEST-EXECUTION-TRACKING.csv
 - `examples.md` - 包含前后对比的完整转换示例
 
 **💡 创新**：EARS 方法论通过强制明确条件、触发器和可测量标准来消除歧义。结合领域理论基础（GTD、BJ Fogg、格式塔等），它将"构建一个待办事项应用"转换为包含行为心理学原则、UX 最佳实践和具体测试用例的完整规范 - 从第一天起就支持测试驱动开发。
+
+---
+
+### **local-conversation-history** - 跨 provider 历史统一入口
+
+> **安装**：`claude plugin install daymade-claude-code@daymade-skills`（仅作为套件成员发布，调用方式 `daymade-claude-code:local-conversation-history`）
+
+四个「平台 × 动作」历史 Skill 之上的入口层。它按平台（Claude Code / OpenAI Codex /
+Kimi CLI）和动作（取证 vs 续做）把请求分流给真正拥有它的那一个，并独占一件谁都不单独
+拥有的事：**一次列出全部三家 provider 的会话清单**。
+
+**使用场景：**
+- provider 未知或不止一个——「我们的历史」「我最近都在忙什么」
+- 列 Kimi CLI 会话，它没有专属 Skill
+- 分不清要的是取证还是续做
+- 你记得的就是这个入口名
+
+**不适用**：平台和动作**都**已经明确时，直接加载对应的执行 Skill——此时路由只多一跳，
+不提供额外信息。
+
+**设计**：薄路由层。不含解析逻辑、不含 `--source` 以外的 provider 专属参数、不复制执行
+Skill 的命令，因此不会漂移成教一条过期的调用方式。
 
 ---
 
