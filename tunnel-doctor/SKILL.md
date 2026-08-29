@@ -4,15 +4,16 @@ description: >-
   Diagnoses concrete tunnel and proxy-path failures across macOS and Windows/WSL:
   Tailscale routing, proxy env/system bypass, SSH double tunneling, VM/container
   propagation, stalled DNS, TUN DIRECT split-brain, Windows-host TUN cascades, and
-  single-hop or chained proxy node/exit throughput. Use when Tailscale ping works
-  but SSH/HTTP fails, browser returns 503 while curl works, Git SSH closes through
-  the proxy, Docker pull/build fails behind TUN, getaddrinfo stalls while nslookup
-  is fast, raw probes report physically impossible results, domestic DIRECT-routed
-  sites fail while proxied sites work, or the proxy is reachable but real downloads
-  and full Git clones crawl. Also use when Git reports "failed to begin relaying via
-  HTTP", ssh -vvv freezes at "debug2: resolving", ping works but dig times out, or
-  setting up Tailscale SSH to WSL. Use debugging-network-issues only when the root
-  cause remains unknown or belongs to an application/protocol layer.
+  single-hop or chained proxy node/exit throughput. Use when Tailscale ping works but
+  SSH/HTTP fails, browser returns 503 while curl works, Git SSH closes through the
+  proxy, Docker pull/build fails behind TUN, getaddrinfo stalls while nslookup is fast,
+  raw probes report physically impossible results, domestic DIRECT-routed sites fail
+  while proxied sites work, or you cannot tell whether a blocked port is your own tunnel
+  or the destination host's firewall allowlist, or the proxy is reachable but real
+  downloads and full Git clones crawl. Also use when Git reports "failed to begin
+  relaying via HTTP", ssh -vvv freezes at "debug2: resolving", ping works but dig times
+  out, or setting up Tailscale SSH to WSL. Use debugging-network-issues only when the
+  root cause remains unknown or belongs to an application/protocol layer.
 allowed-tools: Read, Grep, Edit, Bash
 ---
 
@@ -64,6 +65,7 @@ Determine which scenario applies:
 - **SSH connects but `operation not permitted`** → Tailscale SSH config issue (Step 4)
 - **SSH connects but `be-child ssh` exits code 1** → WSL snap sandbox issue (Step 5)
 - **TCP port 22 reachable (`nc -z` succeeds) but SSH fails with `kex_exchange_identification: Connection closed`** → Tailscale SSH proxy intercept on WSL (Step 5A)
+- **Same `kex_exchange_identification` / `Connection closed by UNKNOWN port 65535`, but there is no Tailscale — you are behind a TUN and the host is a public cloud VM whose HTTPS still works** → could be your TUN *or* the destination's firewall allowlist; they are indistinguishable from the client. Step 2K settles it out-of-band
 - **`tailscale ssh` returns "not available on App Store builds"** → Wrong Tailscale distribution on macOS (Step 5B)
 - **Any tool using system DNS (`ssh`, `curl`, `git`) hangs ~60s before resolving, but `nslookup` returns instantly** → Stalled resolver in `getaddrinfo` chain (Step 2I)
 - **Windows+WSL host: everything offline at once (domestic AND overseas), WSL dead too, "even Tailscale won't come online" — and/or the user tried several recovery actions (switched NICs, toggled TUN) and can't tell which one fixed it** → Windows host TUN cascade + event-log forensics (Step 5C)
@@ -80,6 +82,8 @@ Determine which scenario applies:
 - If DNS resolves to `198.18.x.x` virtual IPs → a TUN is active, which is **not** by itself a diagnosis: under TUN every hostname resolves this way, on success as well as failure. Go to Step 2H to find out which mechanism you have.
 - If connections to fake-IP-resolved domains die but the same host works via `curl --resolve <host>:443:<real-ip>` (real IP from `dig @<public-resolver>`) → the TUN tool's DIRECT forwarding state is broken, not your network and not the destination (Step 2J).
 - If `nc -z` succeeds on port 22 but SSH gets no banner (`kex_exchange_identification`) → Tailscale SSH proxy intercept (Step 5A). Confirm with `tcpdump -i any port 22` on the remote — 0 packets means Tailscale intercepts above the kernel.
+- If `nc -z` also succeeds on a port the destination does **not** serve (probe 65001) → under a TUN the local stack answers for the destination, so **no `nc -z` result on that host means anything**. Never read a port probe you have not calibrated this way (Step 2K).
+- If the destination's own `auth.log`/`journalctl -u ssh` shows **zero** entries for your attempts → the packets never arrived; the blocker is its firewall allowlist or your TUN, never its `sshd`. Reach the machine through the cloud provider's guest-agent channel to ask, since that path does not use the port you cannot reach (Step 2K).
 - If `tailscale ssh` fails with "not available on App Store builds" → install Standalone Tailscale (Step 5B).
 - If `nslookup <host>` is fast (<0.1s) but `dscacheutil -q host -a name <host>` takes 60s+ → a supplemental resolver in `scutil --dns` is dead (Step 2I).
 - If `ping <resolver-ip>` succeeds but `dig @<resolver-ip>` times out → daemon dead, `utun` interface zombied. ICMP is answered by the interface; the actual port-53 service is gone (Step 2I).
@@ -790,6 +794,61 @@ curl -x http://127.0.0.1:<proxy-port> -sS -o /dev/null -w 'overseas via proxy: %
 ```
 
 **Watchdog blind spot**: if you run an automated proxy health checker, check what it actually probes. A watchdog that only tests an overseas endpoint through the proxy certifies the proxied plane and nothing else — in the incident that produced this section, the watchdog reported "healthy" every 5 minutes for 2+ hours while the DIRECT plane was completely down. A green health check is evidence only for the path it probes; probe each plane the tool forwards.
+
+### Step 2K: Decide Whether the Blocker Is Your Tunnel or the Destination's Firewall
+
+**Symptom**: SSH (or another non-HTTP service) to a public host fails with `kex_exchange_identification: Connection closed by <ip>` — or `Connection closed by UNKNOWN port 65535` — while HTTPS to the *same* host keeps working. `nc -z <ip> 22` reports the port open.
+
+**Why this needs its own step**: it looks exactly like Step 2H, and Step 2H's fix (restart the TUN, flush DNS) will not help, because the cause may not be local at all. A destination-side allowlist — a cloud security group, a cloud firewall — produces client-side symptoms **indistinguishable** from a TUN forwarding failure. Both show "the connection opens, then dies before the protocol banner." You cannot separate them from the client, and under a TUN every additional client-side probe actively misleads you.
+
+**First: stop trusting `nc -z`.** Under a TUN the local stack completes the TCP handshake on the destination's behalf, so `nc -z` succeeds for **every** port, including ports the destination has closed. Calibrate before reading any port probe:
+
+```bash
+# Probe a port the destination certainly does NOT serve
+nc -z -G 5 -w 5 <destination-ip> 65001 && echo "nc is lying: the TUN answered for a closed port"
+# Control: an address that cannot answer at all (TEST-NET-3, RFC 5737)
+nc -z -G 5 -w 5 203.0.113.199 443 || echo "control OK: this probe can still report failure"
+```
+
+If the first line prints, then on this machine `nc -z <that host> <any port>` carries **zero information** about the destination. The same trap applies to hostnames: fake-IP DNS answers for names that do not exist, so an HTTP 200 does not tell you *which* machine served it. Calibrate that too — `dig +short @1.1.1.1 <a-name-you-just-invented>` must come back empty.
+
+**Then ask the destination out-of-band.** The only way to settle "did my packets arrive?" is a channel that does not traverse the failing data path. On a cloud VM that is the provider's guest-agent control plane: it reaches the instance over the provider's own network, so it works even when every port you can dial is blocked.
+
+- **Alibaba Cloud** — `aliyun ecs DescribeCloudAssistantStatus` (a heartbeat within the last minute proves the machine is alive and its agent is healthy), then `aliyun ecs RunCommand --Type RunShellScript --ContentEncoding Base64 --CommandContent <base64>` to run a read-only diagnostic inside it, and `aliyun ecs DescribeInvocationResults --InvokeId <id>` to collect output (the `Output` field is base64). *Verified 2026-08-30.*
+- **AWS / GCP / Azure** have equivalents (SSM Run Command, guest-agent based access, the Run Command extension). Syntax not verified here — check the provider's docs.
+
+Ask the one question that settles ownership:
+
+```bash
+# run these INSIDE the destination, through the out-of-band channel
+grep -a sshd /var/log/auth.log | tail -20    # Debian/Ubuntu
+grep -a sshd /var/log/secure   | tail -20    # RHEL family
+journalctl -u ssh -n 20 --no-pager           # unit is `ssh` on Debian/Ubuntu, `sshd` on RHEL
+ss -tn | grep ':22 '                         # connections open right now
+```
+
+- **No entries for your attempts** → your packets never arrived. The blocker sits before the destination: its firewall allowlist, or your own TUN. Continue below.
+- **Entries present** → packets arrive and `sshd` is closing you. That is a server-side problem (`MaxStartups` exhaustion, `AllowUsers`/`DenyUsers`, `hosts.deny`, full disk, fork failure) — not a tunnel problem, and outside this skill.
+
+**If nothing arrived, check the allowlist against your *real* egress IP.** Under a TUN, `curl ifconfig.me` returns the proxy exit, not the address the destination's firewall sees. The authoritative value is the source IP the provider recorded for **your own API calls**:
+
+```bash
+# Alibaba Cloud example — every audit event carries sourceIpAddress
+aliyun actiontrail LookupEvents --MaxResults 20 | grep -o '"sourceIpAddress":"[^"]*"' | sort -u
+```
+
+Compare that with the security group's inbound rules for the port. Allowlists pinned to a dynamic residential or mobile address rot silently: the rule still reads as correct, and nothing logs the day your address changes.
+
+**If the allowlist is correct and packets still never arrive, the blocker is local.** Confirm it by asking the proxy to relay explicitly instead of letting the TUN intercept:
+
+```bash
+ssh -o ProxyCommand="nc -X connect -x 127.0.0.1:<proxy-port> %h %p" <host>
+```
+
+`HTTP/1.1 503 Service Unavailable` (or `SOCKS error 1`) means the proxy refuses to relay that port — common for 22, which many rule sets allow only for HTTP/HTTPS ports. Two fixes:
+
+1. Add a DIRECT rule for that host/port in the TUN tool, then re-test. This is a config change to someone's proxy — get the machine owner's agreement first if it is not yours.
+2. Better for anything unattended: move the automation off SSH and onto the out-of-band channel you just used. It survives **both** failure modes — the allowlist rotting *and* the proxy refusing the port — and depends on no local network state.
 
 ### Step 3: Fix Proxy Tool Configuration
 
