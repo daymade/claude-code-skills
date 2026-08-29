@@ -128,6 +128,10 @@ legacy-compatibility surface. Change the manifest and run the bundled syncer—d
 not restore bulk links in either user root. Detailed topology and recovery rules
 remain in
 `daymade-claude-code/claude-switch-models-setup/references/local-source-sync-architecture.md`.
+The syncer's managed marketplace identities, conventional checkout candidates,
+and generated watch paths are owned by `sync-local-skill-sources.py`; derive them
+from its constants/functions and `--print-watch-paths` output instead of copying
+their current members or counts into `CLAUDE.md`, READMEs, or references.
 
 In Claude Code, use `/plugin ...` slash commands. In your terminal, use `claude plugin ...`.
 

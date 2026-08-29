@@ -2732,7 +2732,7 @@ Set up multiple isolated Claude Code CLI profiles so you can run different LLM p
 - You're setting up a post-workshop environment for students who want the same multi-provider workflow
 
 **Key features:**
-- One-click installer links the five runtime scripts into `~/.config/claude-switch-models-setup/` and seeds an empty Codex activation manifest only when none exists
+- One-click installer links its declared runtime scripts into `~/.config/claude-switch-models-setup/` and seeds an empty Codex activation manifest only when none exists
 - Includes provider-specific `~/.claude/settings/<provider>.json` templates with required isolation flags
 - `claude-profiles-init` creates isolated `~/.claude-profiles/<provider>/` directories with symlinked shared resources
 - Profile sync mirrors enabled plugins from the default Claude profile and shares installed plugin state

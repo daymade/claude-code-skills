@@ -61,7 +61,7 @@ Profile state uses `.claude.json` inside each `CLAUDE_CONFIG_DIR`. Older `claude
 4. Directory-source entries in `~/.claude/plugins/known_marketplaces.json`.
 5. Common local worktree candidates under `~/workspace` and `~/Workspace`.
 
-It only accepts repos whose `.claude-plugin/marketplace.json` name is `daymade-skills`, `daymade-skills-pro`, or `cmks-skills`. If none are found, it fails fast instead of guessing. Common-workspace discovery checks `claude-code-skills`, `claude-code-skills-pro`, and `cemakanshan-skills`; other checkout names require `--repo`, `DAYMADE_SKILL_SOURCE_REPOS`, or a registered directory-source marketplace.
+Accepted marketplace identities are defined only by `LOCAL_MARKETPLACE_NAMES`, and conventional workspace candidates only by `infer_repos()` in `scripts/sync-local-skill-sources.py`. Do not copy either current set into documentation. The script's default dry-run prints the resolved source inventory; if none qualify, it fails fast instead of guessing. Non-conventional checkout paths require `--repo`, `DAYMADE_SKILL_SOURCE_REPOS`, or a registered directory-source marketplace.
 
 ## Codex User-Skill Activation
 
@@ -148,12 +148,9 @@ Install:
 
 The LaunchAgent label is `ai.daymade.claude-skill-source-sync`. It watches:
 
-- `~/.config/claude-switch-models-setup/codex-active-skills.json`
 - `~/.claude/settings.json`
 - `~/.claude/plugins/installed_plugins.json`
-- `<daymade-skills>/.claude-plugin/marketplace.json`
-- `<daymade-skills-pro>/.claude-plugin/marketplace.json`
-- `<cmks-skills>/.claude-plugin/marketplace.json`
+- every activation/marketplace path emitted by `sync-local-skill-sources.py --print-watch-paths`
 
 Verify:
 
@@ -232,12 +229,12 @@ If a `claude-profile <name> -p ...` probe starts successfully, debug logs should
 ## Design Boundaries
 
 - This system does not hot-reload already-running Claude Code or Codex sessions. Restart the session when skill metadata needs to be re-read.
-- This system does not install arbitrary new marketplaces. It only manages the local daymade source repos.
+- This system does not install arbitrary new marketplaces. It only manages source repositories accepted by the syncer's implementation-owned marketplace policy.
 - This system does not delete or automatically move real Skill copies. A real
   object or third-party link at a selected `~/.agents/skills` name fails visibly
   and remains in place for explicit `skill-governance` classification.
 - In `~/.agents/skills`, this system prunes a symlink only when its resolved
-  target is inside a managed daymade source repo and its name is outside the
+  target is inside a managed source repo and its name is outside the
   active set. Pruning atomically moves that exact entry into
   `.source-sync-backups/`; it does not delete the object. Classification and
   identity come from one entry snapshot, and the move uses the platform's
