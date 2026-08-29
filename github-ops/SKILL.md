@@ -26,6 +26,7 @@ Read only the reference required for the task:
 |---|---|
 | Create, review, merge, close, compare, or converge PRs; retire remote PR branches | [`references/pr_operations.md`](references/pr_operations.md) |
 | Create, edit, search, transfer, close, or bulk-manage issues | [`references/issue_operations.md`](references/issue_operations.md) |
+| Inspect, clone, create, edit, rename, archive, transfer, change visibility, or delete repositories | [`references/repository_operations.md`](references/repository_operations.md) |
 | Inspect or change collaborators, teams, base permissions, member privileges, or organization 2FA | [`references/organization_access_and_settings.md`](references/organization_access_and_settings.md) |
 | Trigger, inspect, rerun, cancel, or purge Actions; manage secrets or variables | [`references/workflow_operations.md`](references/workflow_operations.md) |
 | Use raw REST/GraphQL endpoints, pagination, rate limits, webhooks, or Enterprise hosts | [`references/api_reference.md`](references/api_reference.md) |
@@ -159,8 +160,9 @@ End with one of four honest states:
 - Repository visibility changes can expose code, Actions logs, artifacts, forks, and
   history. Use `gh repo edit --visibility ... --accept-visibility-change-consequences`
   only after the consequences and exact repository are authorized, then read back.
-- Merges, branch deletions, repository deletion/transfer, organization-wide permissions,
-  2FA enforcement, and secret rotation require their operation-specific reference.
+- Merges, branch deletions, repository creation/deletion/transfer/visibility changes,
+  organization-wide permissions, 2FA enforcement, and secret rotation require their
+  operation-specific reference.
 - PR and issue title formats are repository policy. Inspect templates, contribution
   guidance, checks, or an accepted recent example; do not invent a universal JIRA prefix.
 - Enterprise policy can override organization or repository controls. Preserve `HOST`

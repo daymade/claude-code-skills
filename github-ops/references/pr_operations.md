@@ -33,14 +33,14 @@ gh pr create -R OWNER/REPO \
   --title "Describe the user-visible change" \
   --body-file pr-description.md \
   --base main \
-  --head feature-branch
+  --head feature/new-feature
 
 # Create a draft when the change is not ready for review
 gh pr create -R OWNER/REPO \
   --title "Describe the work in progress" \
   --body-file pr-description.md \
   --base main \
-  --head feature-branch \
+  --head feature/new-feature \
   --draft
 ```
 
@@ -236,15 +236,25 @@ The local/ref backup and dirty-WIP gates belong to `git-safety-net`. Once it has
 re-verified a bundle, query each remote deletion target immediately before deleting it:
 
 ```bash
-gh api repos/{owner}/{repo}/git/ref/heads/{branch/path} --jq '.object.sha'
-git push origin --delete {branch/path}
+bundle_recorded_sha='RECORDED_SHA_FROM_VERIFIED_BUNDLE'
+expected_sha=$(gh api repos/{owner}/{repo}/git/ref/heads/{branch/path} --jq '.object.sha')
+test "$expected_sha" = "$bundle_recorded_sha" || {
+  printf 'Remote branch moved after preservation; rebuild the audit and backup.\n' >&2
+  exit 1
+}
+git push \
+  --force-with-lease="refs/heads/{branch/path}:$expected_sha" \
+  origin \
+  ":refs/heads/{branch/path}"
 gh api 'repos/{owner}/{repo}/branches?per_page=100' --paginate --jq '.[].name'
 git remote prune origin
 ```
 
-If the hosted SHA differs from the bundle's recorded SHA, stop: a parallel writer moved the branch
-after the audit. Classify the new tip and rebuild the backup. After deletion, verify both the hosted
-branch list and local remote-tracking refs; success in one does not prove the other converged.
+Set `bundle_recorded_sha` from the verified preservation receipt. The explicit expected-SHA lease
+closes the race between the last GET and the deletion push: if a parallel writer moves the branch,
+Git rejects the deletion. Never use an unspecified `--force-with-lease` or unconditional
+`--delete` for this path. After deletion, verify both the hosted branch list and local
+remote-tracking refs; success in one does not prove the other converged.
 
 #### 5. Terminal state
 
@@ -262,7 +272,7 @@ gh pr checks 123
 gh pr checks 123 --watch
 
 # Get checks as JSON
-gh pr checks 123 --json name,status,conclusion
+gh pr checks 123 --json name,state,bucket,workflow
 ```
 
 ### PR Metadata Operations

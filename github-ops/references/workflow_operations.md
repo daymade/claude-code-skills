@@ -239,28 +239,44 @@ Freeze and preview run IDs before any control operation. Do not pipe a changing 
 into `xargs`.
 
 ```bash
-# Freeze and display candidates
-targets=$(gh run list -R OWNER/REPO --status in_progress \
+# Freeze and display cancellation candidates
+cancel_targets=$(gh run list -R OWNER/REPO --status in_progress \
   --json databaseId,status,headSha,url)
-printf '%s\n' "$targets" | jq .
+printf '%s\n' "$cancel_targets" | jq .
 
-# A separate frozen set can use date filtering without changing during mutation
-failed_today=$(gh run list -R OWNER/REPO --status failure --created today \
+# Freeze failed runs separately for an authorized rerun
+rerun_targets=$(gh run list -R OWNER/REPO --status failure --created today \
+  --json databaseId,attempt,status,conclusion,headSha,url)
+printf '%s\n' "$rerun_targets" | jq .
+
+# Freeze completed build runs separately for artifact download
+artifact_targets=$(gh run list -R OWNER/REPO --workflow build --status success --limit 5 \
   --json databaseId,status,conclusion,headSha,url)
-printf '%s\n' "$failed_today" | jq .
+printf '%s\n' "$artifact_targets" | jq .
 
 # After this exact set is authorized, cancel and read back one at a time
-printf '%s\n' "$targets" | jq -r '.[].databaseId' | while read -r run_id; do
+printf '%s\n' "$cancel_targets" | jq -r '.[].databaseId' | while read -r run_id; do
   gh run cancel "$run_id" -R OWNER/REPO
   gh run view "$run_id" -R OWNER/REPO \
-    --json databaseId,status,conclusion,headSha,url
+    --json databaseId,attempt,status,conclusion,headSha,url
 done
 
-# Artifact download is read-only but still uses frozen run IDs
-printf '%s\n' "$targets" | jq -r '.[].databaseId' | while read -r run_id; do
+# Rerun only the separately authorized failed-run set, then read the new attempt state
+printf '%s\n' "$rerun_targets" | jq -r '.[].databaseId' | while read -r run_id; do
+  gh run rerun "$run_id" -R OWNER/REPO
+  gh run view "$run_id" -R OWNER/REPO \
+    --json databaseId,attempt,status,conclusion,headSha,url
+done
+
+# Artifact download is read-only but uses completed build runs with unique destinations
+printf '%s\n' "$artifact_targets" | jq -r '.[].databaseId' | while read -r run_id; do
   gh run download "$run_id" -R OWNER/REPO --dir "artifacts/$run_id"
 done
 ```
+
+If a workflow is not literally named `build`, replace that filter with the verified workflow file,
+name, or ID. A cancellation, rerun, and artifact download can concern different run populations;
+never reuse one frozen query merely because all three operations accept run IDs.
 
 ---
 
