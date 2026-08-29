@@ -4,10 +4,12 @@
 # The script never moves or deletes a checkout and never changes repository refs.
 # It refuses to certify a clone that still has working-tree bytes, ignored files,
 # stashes, reflog-only commits, clone-only unreachable objects, linked worktrees,
-# or local submodule repositories. A successful run
+# local submodule repositories, partial/promisor clones, or known extension object
+# stores. A successful run
 # writes a private recovery directory containing:
 #   all-refs.bundle       self-contained history for every current ref
 #   refs.manifest         exact ref tips frozen before the bundle
+#   symrefs.manifest      exact symbolic-ref name -> target topology
 #   reflog-oids.manifest  every commit identity named by a reflog
 #   metadata.manifest     types, modes, and hashes for config/hooks/info
 #   repo-metadata.tar     exact config/hooks/info payload
@@ -25,6 +27,8 @@
 
 set -euo pipefail
 umask 077
+export GIT_OPTIONAL_LOCKS=0
+export GIT_NO_LAZY_FETCH=1
 
 die() { echo "error: $*" >&2; exit 2; }
 unsafe() { echo "$1${2:+: $2}" >&2; exit 1; }
@@ -69,6 +73,18 @@ file_mode() {
 
 list_refs() {
   git -C "$1" for-each-ref --format='%(objectname) %(refname)' | LC_ALL=C sort
+}
+
+list_symbolic_refs() {
+  local checkout="$1"
+  local head_target
+
+  {
+    head_target="$(git -C "$checkout" symbolic-ref -q HEAD 2>/dev/null || true)"
+    [ -z "$head_target" ] || printf 'HEAD %s\n' "$head_target"
+    git -C "$checkout" for-each-ref --format='%(refname) %(symref)' |
+      awk 'NF == 2 { print $1, $2 }'
+  } | LC_ALL=C sort -u
 }
 
 list_bundle_expected_heads() {
@@ -193,6 +209,57 @@ check_no_submodule_repositories() {
   done < <(printf '%s\n' "$submodules")
 }
 
+check_no_promisor_clone() {
+  local clone="$1"
+  local git_dir promisor_config key value lowered_value
+
+  git_dir="$(absolute_git_dir "$clone")" || return 1
+  promisor_config="$(git -C "$clone" config --local --no-includes --get-regexp \
+    '^(extensions\.partialClone|remote\..*\.(promisor|partialclonefilter))$' 2>/dev/null || true)"
+  while IFS=' ' read -r key value; do
+    [ -n "$key" ] || continue
+    case "$key" in
+      extensions.partialClone|remote.*.partialclonefilter)
+        unsafe "PROMISOR_CLONE" \
+          "$key is configured; hydrate and convert the clone under a separate workflow"
+        ;;
+      remote.*.promisor)
+        lowered_value="$(printf '%s' "$value" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+        case "$lowered_value" in
+          true|yes|on|1)
+            unsafe "PROMISOR_CLONE" \
+              "$key=$value; lazy object hydration is outside this non-destructive helper"
+            ;;
+        esac
+        ;;
+    esac
+  done < <(printf '%s\n' "$promisor_config")
+
+  if [ -d "$git_dir/objects/pack" ] && \
+    find "$git_dir/objects/pack" -type f -name '*.promisor' -print -quit |
+      grep -q .; then
+    unsafe "PROMISOR_CLONE" \
+      "$git_dir/objects/pack contains promisor packs; lazy fetching is disabled"
+  fi
+}
+
+check_no_extension_object_stores() {
+  local clone="$1"
+  local git_dir store
+
+  git_dir="$(absolute_git_dir "$clone")" || return 1
+  for store in "$git_dir/lfs/objects" "$git_dir/annex/objects"; do
+    if [ -L "$store" ]; then
+      unsafe "EXTENSION_OBJECT_STORE" \
+        "$store is a symlink; audit the extension-managed object store separately"
+    fi
+    if [ -d "$store" ] && find "$store" -mindepth 1 -print -quit | grep -q .; then
+      unsafe "EXTENSION_OBJECT_STORE" \
+        "$store contains clone-private objects that a Git bundle does not preserve"
+    fi
+  done
+}
+
 check_identity() {
   local clone="$1"
   local survivor="$2"
@@ -307,7 +374,7 @@ verify_current() {
   local out="$1"
   local clone survivor expected_digest current_digest
   local expected_metadata_digest current_metadata_digest
-  local current_refs current_reflog current_metadata bundle_heads
+  local current_refs current_symrefs current_reflog current_metadata bundle_heads
 
   [ -d "$out" ] || die "backup directory does not exist: $out"
   for required in clone.path survivor.path refs.manifest metadata.manifest \
@@ -317,11 +384,15 @@ verify_current() {
   done
   [ -e "$out/reflog-oids.manifest" ] || \
     die "backup is incomplete: missing $out/reflog-oids.manifest"
+  [ -e "$out/symrefs.manifest" ] || \
+    die "backup is incomplete: missing $out/symrefs.manifest"
 
   IFS= read -r clone < "$out/clone.path"
   IFS= read -r survivor < "$out/survivor.path"
   [ -d "$clone/.git" ] || unsafe "CLONE_PATH_CHANGED" "$clone"
   [ -d "$survivor" ] || unsafe "SURVIVOR_PATH_CHANGED" "$survivor"
+  check_no_promisor_clone "$clone"
+  check_no_extension_object_stores "$clone"
   check_identity "$clone" "$survivor" >/dev/null
   check_no_linked_worktrees "$clone"
   check_no_submodule_repositories "$clone"
@@ -333,6 +404,10 @@ verify_current() {
   current_refs="$(list_refs "$clone")"
   [ "$current_refs" = "$(cat "$out/refs.manifest")" ] || \
     unsafe "REFSET_CHANGED" "rebuild the recovery directory before retirement"
+
+  current_symrefs="$(list_symbolic_refs "$clone")"
+  [ "$current_symrefs" = "$(cat "$out/symrefs.manifest")" ] || \
+    unsafe "SYMREFS_CHANGED" "symbolic-ref topology changed after preparation"
 
   current_reflog="$(list_reflog_oids "$clone")"
   [ "$current_reflog" = "$(cat "$out/reflog-oids.manifest")" ] || \
@@ -405,6 +480,8 @@ case "$OUT/" in
   "$CLONE/"*|"$SURVIVOR/"*) die "backup directory must be outside both repositories" ;;
 esac
 
+check_no_promisor_clone "$CLONE"
+check_no_extension_object_stores "$CLONE"
 IDENTITY_MODE="$(check_identity "$CLONE" "$SURVIVOR")"
 SHALLOW_STATE="$(git -C "$CLONE" rev-parse --is-shallow-repository)"
 [ "$SHALLOW_STATE" = false ] || unsafe "SHALLOW_CLONE" "fetch complete history before retirement"
@@ -417,6 +494,7 @@ check_clone_owned_unreachable_objects "$CLONE" "$SURVIVOR"
 
 REFS="$(list_refs "$CLONE")"
 [ -n "$REFS" ] || unsafe "NO_REFS" "the clone has no ref to bundle"
+SYMREFS="$(list_symbolic_refs "$CLONE")"
 REFLOG_OIDS="$(list_reflog_oids "$CLONE")"
 METADATA="$(metadata_manifest "$CLONE")"
 GIT_DIR="$(absolute_git_dir "$CLONE")"
@@ -430,6 +508,7 @@ fi
 printf '%s\n' "$CLONE" > "$OUT/clone.path"
 printf '%s\n' "$SURVIVOR" > "$OUT/survivor.path"
 printf '%s\n' "$REFS" > "$OUT/refs.manifest"
+printf '%s\n' "$SYMREFS" > "$OUT/symrefs.manifest"
 printf '%s\n' "$REFLOG_OIDS" > "$OUT/reflog-oids.manifest"
 printf '%s\n' "$METADATA" > "$OUT/metadata.manifest"
 git -C "$CLONE" reflog --all --date=iso \

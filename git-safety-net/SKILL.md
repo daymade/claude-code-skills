@@ -466,16 +466,16 @@ retirement does not need.
   nothing about clone-only refs, reflog history, ignored bytes, stashes, hooks/config, or an
   `objects/info/alternates` dependency created by `git clone --shared`. Run
   `scripts/git_prepare_clone_retirement.sh --clone <absolute-clone> --survivor <absolute-kept-checkout> --out <new-external-backup-dir>`;
-  it refuses those hidden loss states, every clone-only unreachable Git object, attached linked
-  worktrees, local submodule repositories, and repository-local config/hook indirection that the
-  recovery archive cannot resolve safely; it also freezes file types and modes. It then creates a
-  self-contained all-refs bundle plus metadata and a content-bound receipt. Finish every preliminary
-  Git probe, run process occupancy by itself, then run `--verify-current <backup-dir>` as the final
-  probe with the authorized quarantine move as the **next operation**. This order keeps `lsof` from
-  observing a sibling Git process without opening a larger post-verification gap. Move the exact
-  clone into a unique recoverable quarantine/OS Trash location and prove old-path absence + new-path
-  presence; permanent deletion is a separate explicit decision. Full READ-DO sequence and
-  `--shared` boundary:
+  it refuses those hidden loss states, every clone-only unreachable Git object, partial/promisor
+  clones, attached linked worktrees, local submodule repositories, known Git LFS/annex object stores,
+  and repository-local config/hook indirection that the recovery archive cannot resolve safely. It
+  freezes ref tips plus symbolic-ref topology and metadata file types/modes, then creates a
+  self-contained all-refs bundle and a content-bound receipt. Finish every preliminary Git probe,
+  run process occupancy by itself, then run `--verify-current <backup-dir>` as the final probe with
+  the authorized quarantine move as the **next operation**. This order keeps `lsof` from observing a
+  sibling Git process without opening a larger post-verification gap. Move the exact clone into a
+  unique recoverable quarantine/OS Trash location and prove old-path absence + new-path presence;
+  permanent deletion is a separate explicit decision. Full READ-DO sequence and `--shared` boundary:
   **[references/merge_verification.md](references/merge_verification.md)** § Independent clone retirement.
 
 **Step 4 — after the delete, re-check by content, not by filename.** When a cleanup (or a batch of
@@ -510,7 +510,7 @@ in place; the bundle restores full history via `git fetch <file>.bundle <branch>
 | `scripts/git_verify_branch_merged.sh <branch> [base]` | Refresh remotes, then give a content-level MERGED/UNMERGED verdict | Remote-tracking refs only |
 | `scripts/git_export_before_drop.sh [export options]` | Export stashes plus selected branches or every current ref into verified bundles | Writes backup files only (never drops/deletes) |
 | `scripts/git_export_before_drop.sh --verify-current BUNDLE` | Fail if any bundled ref moved or disappeared since export | Nothing (read-only) |
-| `scripts/git_prepare_clone_retirement.sh --clone PATH --survivor PATH --out DIR` | Refuse hidden clone state, then freeze every ref/reflog identity plus config/hooks/info into a self-contained recovery set; `--verify-current DIR` rechecks it immediately before quarantine | Writes only the new external backup directory; never moves/deletes or changes refs |
+| `scripts/git_prepare_clone_retirement.sh --clone PATH --survivor PATH --out DIR` | Refuse hidden/unhandled clone state, then freeze every ref tip, symbolic-ref target, reflog identity, and scoped config/hooks/info metadata into a self-contained recovery set; `--verify-current DIR` rechecks it immediately before quarantine | Writes only the new external backup directory; disables lazy fetch and never moves/deletes or changes refs |
 
 All six run from the repository root. They only ever `find`, `fetch`, `log`, `diff`, `show`,
 `status`, `cat-file`, `rev-list`, `rev-parse`, `fsck`, `for-each-ref`, `remote get-url`,

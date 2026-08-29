@@ -380,16 +380,28 @@ Use this READ-DO sequence for one explicitly authorized clone:
 
    The helper is intentionally non-destructive. It refuses tracked/untracked changes, ignored
    physical files, stashes, reflog commits with no current ref, shallow history, every clone-only
-   unreachable object reported by `git fsck`, any attached linked worktree, and local submodule
-   repositories that require their own audit. It also refuses repository-local `include.path` /
-   `includeIf` config and local `core.hooksPath` overrides rather than pretending their external
-   closure was archived. It snapshots every ref, every reflog OID, and the default config/hooks/info
-   tree with file types and modes; creates `all-refs.bundle` without revision exclusions; runs
-   `git bundle verify`; compares every advertised bundle head (including `HEAD`) with the frozen
-   ref set; and binds both the bundle and repository-metadata archive to SHA-256 receipts.
+   unreachable object reported by `git fsck`, partial/promisor clones, any attached linked worktree,
+   local submodule repositories, and known clone-private Git LFS/annex object stores that require
+   their own audit. The promisor check happens before object traversal and the helper exports
+   `GIT_NO_LAZY_FETCH=1`, so bundle creation cannot silently hydrate missing objects into the clone
+   it promised not to mutate. A repository using another extension-managed object store must name
+   and audit that store separately; a core Git bundle cannot prove those bytes exist elsewhere. The
+   helper also refuses repository-local `include.path` / `includeIf` config and local
+   `core.hooksPath` overrides rather than pretending their external closure was archived. It
+   snapshots every ref tip, every symbolic-ref target, every reflog OID, and the default
+   config/hooks/info tree with file types and modes; creates `all-refs.bundle` without revision
+   exclusions; runs `git bundle verify`; compares every advertised bundle head (including `HEAD`)
+   with the frozen ref set; and binds both the bundle and repository-metadata archive to SHA-256
+   receipts.
    The regression suite also verifies the no-prerequisite bundle from an empty bare repository. A
    successful `READY_TO_QUARANTINE` means the recovery set is
    complete for that instant, not that deletion authority exists.
+
+   A bundle records the OID advertised under each ref name; it does not recreate symbolic-ref
+   topology. `symrefs.manifest` is therefore part of the recovery contract. After fetching the
+   bundle's refs into a recovery repository, replay each `<name> <target>` line with
+   `git symbolic-ref <name> <target>`, then read every target back. A bundle-only restore that turns
+   `refs/remotes/origin/HEAD` or another symbolic alias into a direct ref is not complete.
 3. **Obtain current-session retirement authority.** A prior cleanup request or a different clone's
    approval does not transfer. Prefer a recoverable OS Trash/quarantine move; permanent deletion
    is a distinct consequence and requires an explicit decision plus the verified bundle.
@@ -406,10 +418,11 @@ Use this READ-DO sequence for one explicitly authorized clone:
    ```
 
    It fails if refs, reflog identities, metadata bytes/types/modes, physical state, linked-worktree
-   or submodule inventory, unreachable objects, bundle bytes, or source/survivor identity changed.
-   Rebuild the recovery directory on any failure; do not edit the receipt. After a successful final
-   verification, check the destination does not exist and move exactly one clone to a unique
-   recoverable location with no clobber. This move must be the next operation: another probe would
+   or submodule inventory, symbolic-ref topology, unreachable objects, promisor/extension-store
+   state, bundle bytes, or source/survivor identity changed. Rebuild the recovery directory on any
+   failure; do not edit the receipt. After a successful final verification, check the destination
+   does not exist and move exactly one clone to a unique recoverable location with no clobber. This
+   move must be the next operation: another probe would
    reopen the very race the final verification closes. No unlocked filesystem sequence can remove
    the last verify-exit-to-move interval; if a writer or automation may still start in that interval,
    stop instead of claiming safety. Treat postconditions—not `mv`'s exit code—as authority: the old
@@ -418,8 +431,9 @@ Use this READ-DO sequence for one explicitly authorized clone:
    Keep the external recovery set after the move.
 6. **Verify the user-visible result.** The survivor's HEAD/index/worktree must be unchanged; the
    old active path is absent; the quarantine copy or permanent backup is readable; `git bundle
-   verify` still succeeds; and `git bundle list-heads` still lists the frozen identities. Report
-   this as scoped clone retirement, not as proof that no other checkout exists anywhere.
+   verify` still succeeds; `git bundle list-heads` still lists the frozen identities; and
+   `symrefs.manifest` remains available for topology replay. Report this as scoped clone retirement,
+   not as proof that no other checkout exists anywhere.
 
 If the clone must remain active instead of being retired, stop this procedure. For a shared clone,
 use the official dissociation path (`git repack -a`) and verify it no longer depends on alternates;

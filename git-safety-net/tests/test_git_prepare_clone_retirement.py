@@ -124,6 +124,147 @@ class PrepareCloneRetirementTests(unittest.TestCase):
         self.assertEqual(current.returncode, 0, current.stdout + current.stderr)
         self.assertIn("READY_TO_QUARANTINE", current.stdout)
 
+    def test_preserves_symbolic_ref_topology_and_detects_change(self) -> None:
+        self.git(
+            "-C",
+            str(self.clone),
+            "symbolic-ref",
+            "refs/aliases/current",
+            "refs/heads/main",
+        )
+        prepared = self.prepare()
+        self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+        symrefs = (self.backup / "symrefs.manifest").read_text(encoding="utf-8")
+        self.assertIn("HEAD refs/heads/main", symrefs)
+        self.assertIn("refs/aliases/current refs/heads/main", symrefs)
+        restored = self.root / "symref restore.git"
+        self.git("init", "-q", "--bare", str(restored))
+        self.git(
+            "-C",
+            str(restored),
+            "fetch",
+            "-q",
+            str(self.backup / "all-refs.bundle"),
+            "refs/*:refs/*",
+        )
+        for line in symrefs.splitlines():
+            name, target = line.split(" ", maxsplit=1)
+            self.git("-C", str(restored), "symbolic-ref", name, target)
+        restored_target = self.git(
+            "-C", str(restored), "symbolic-ref", "refs/aliases/current"
+        ).stdout.strip()
+        self.assertEqual(restored_target, "refs/heads/main")
+
+        self.git(
+            "-C",
+            str(self.clone),
+            "symbolic-ref",
+            "--delete",
+            "refs/aliases/current",
+        )
+        self.git(
+            "-C",
+            str(self.clone),
+            "update-ref",
+            "refs/aliases/current",
+            self.second,
+        )
+        completed = self.run_script("--verify-current", str(self.backup))
+
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("SYMREFS_CHANGED", completed.stderr)
+
+    def test_refuses_promisor_clone_without_hydrating_it(self) -> None:
+        partial_source = self.root / "partial source"
+        partial_clone = self.root / "partial clone"
+        partial_backup = self.root / "partial backup"
+        self.git("init", "-q", "-b", "main", str(partial_source))
+        empty_tree = self.git(
+            "-C", str(partial_source), "mktree", input_text=""
+        ).stdout.strip()
+        main_commit = self.git(
+            "-C",
+            str(partial_source),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit-tree",
+            empty_tree,
+            input_text="partial main fixture\n",
+        ).stdout.strip()
+        promised_blob = self.git(
+            "-C",
+            str(partial_source),
+            "hash-object",
+            "-w",
+            "--stdin",
+            input_text="promised blob fixture\n",
+        ).stdout.strip()
+        late_tree = self.git(
+            "-C",
+            str(partial_source),
+            "mktree",
+            input_text=f"100644 blob {promised_blob}\tpromised.txt\n",
+        ).stdout.strip()
+        late_commit = self.git(
+            "-C",
+            str(partial_source),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit-tree",
+            late_tree,
+            "-p",
+            main_commit,
+            input_text="partial late fixture\n",
+        ).stdout.strip()
+        self.git(
+            "-C", str(partial_source), "update-ref", "refs/heads/main", main_commit
+        )
+        self.git(
+            "-C", str(partial_source), "update-ref", "refs/heads/late", late_commit
+        )
+        self.git(
+            "-C", str(partial_source), "config", "uploadpack.allowFilter", "true"
+        )
+        self.git(
+            "clone",
+            "-q",
+            "--filter=blob:none",
+            partial_source.resolve().as_uri(),
+            str(partial_clone),
+        )
+        pack_dir = partial_clone / ".git" / "objects" / "pack"
+        before_packs = sorted(path.name for path in pack_dir.iterdir())
+
+        completed = self.run_script(
+            "--clone",
+            str(partial_clone),
+            "--survivor",
+            str(partial_source),
+            "--out",
+            str(partial_backup),
+        )
+        after_packs = sorted(path.name for path in pack_dir.iterdir())
+
+        self.assertEqual(before_packs, after_packs)
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("PROMISOR_CLONE", completed.stderr)
+        self.assertFalse(partial_backup.exists())
+
+    def test_refuses_clone_private_extension_object_store(self) -> None:
+        lfs_object = self.clone / ".git" / "lfs" / "objects" / "aa" / "bb" / "fixture"
+        lfs_object.parent.mkdir(parents=True)
+        lfs_object.write_bytes(b"clone-private extension object")
+
+        completed = self.prepare()
+
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        self.assertIn("EXTENSION_OBJECT_STORE", completed.stderr)
+        self.assertFalse(self.backup.exists())
+
     def test_refuses_untracked_work(self) -> None:
         (self.clone / "only-copy.txt").write_text("valuable\n", encoding="utf-8")
 
