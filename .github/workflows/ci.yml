@@ -77,6 +77,17 @@ jobs:
           git fetch --no-tags origin "+refs/heads/${target}:refs/remotes/origin/${target}"
           scripts/ci/validate_changed_skills.sh "origin/${target}"
 
+      - name: Reject stale or reused marketplace versions
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          target="${BASE_REF:-${DEFAULT_BRANCH:-main}}"
+          git fetch --no-tags origin "+refs/heads/${target}:refs/remotes/origin/${target}"
+          python3 scripts/ci/check_version_progression.py \
+            --base "origin/${target}" --candidate HEAD
+
   tests:
     name: Registered test suites (Linux)
     runs-on: ubuntu-latest

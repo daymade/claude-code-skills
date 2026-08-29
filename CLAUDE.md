@@ -205,6 +205,10 @@ Squash-merged PRs rewrite commits under new SHAs, so every direct commit to
 local `main` guarantees divergence the moment its PR merges. Two rules keep
 `main` clean:
 
+`scripts/git-mainline-guard.mjs` enforces this at commit/push time and also
+rejects stale marketplace manifests or reused plugin versions against current
+`origin/main`; CI runs the same version-progression check on every PR.
+
 1. **Never commit directly to local `main`.** All work starts on a feature
    branch (`git checkout -b <topic>`), ships via PR, and lands by squash merge.
 2. **After every merge, run the 30-second ritual:** `git checkout main && git pull --ff-only`.
