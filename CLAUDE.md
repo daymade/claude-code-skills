@@ -209,7 +209,10 @@ local `main` guarantees divergence the moment its PR merges. Two rules keep
 `scripts/git-mainline-guard.mjs`, which rejects direct local-main work and stale
 marketplace manifests or reused plugin versions against current main. The
 dispatchers preserve the shared PII guard when it is installed. Activate this
-checkout with `git config core.hooksPath .githooks`; CI and the GitHub main
+repository **from the canonical primary main checkout** with
+`git config core.hooksPath "$(pwd -P)/.githooks"`. The absolute path matters:
+`core.hooksPath` is shared by linked worktrees, so a relative path would let a
+stale feature worktree select its own stale dispatcher. CI and the GitHub main
 ruleset independently require the same release checks on every PR.
 
 1. **Never commit directly to local `main`.** All work starts on a feature
@@ -271,7 +274,7 @@ Skills for public distribution must NOT contain:
 4. **gitleaks** (`.gitleaks.toml`) — deep scan with custom rules for this repo
 5. **AI semantic read-through** (the gate the other four structurally cannot be) — layers 1-4 are keyword/regex/gitleaks: they only match patterns someone listed, and are blind to private content with **no keyword** — a real name in another language (gitleaks doesn't cover CJK), a verbatim line from a real transcript, a real example dropped into an illustration. Before publishing, **read the whole skill yourself and judge each concrete name/example/snippet semantically** ("generic placeholder / public entity, or lifted from a real project / person / transcript?"). A green scan is **not** a clean bill of health; "grep found nothing" only means your word list didn't fire. Method: [`daymade-skill/skill-creator/references/sanitization_checklist.md`](./daymade-skill/skill-creator/references/sanitization_checklist.md).
 
-Most repositories enable PII Guard via `~/scripts/git-pii-guard/manage.sh enable <repo-path>`. This repository instead uses `core.hooksPath=.githooks`: its versioned dispatchers run the repository mainline guard and then delegate to the same shared PII guard when installed.
+Most repositories enable PII Guard via `~/scripts/git-pii-guard/manage.sh enable <repo-path>`. This repository instead points `core.hooksPath` at the canonical primary checkout's absolute `.githooks` directory: its versioned dispatchers run the repository mainline guard and then delegate to the same shared PII guard when installed.
 For repo-specific additions:
 - `.pii-patterns` — extra content regexes
 - `.pii-path-patterns` — extra forbidden path regexes
