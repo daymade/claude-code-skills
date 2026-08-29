@@ -184,7 +184,7 @@
       "description": "Documentation suite plugin that exposes document conversion, Mermaid diagram generation, PDF/PPT/DOCX creation, Excel workbook creation/parsing/control, and documentation cleanup, and docx review-comment/track-changes extraction skills under one shared namespace",
       "source": "./daymade-docs",
       "strict": false,
-      "version": "1.10.0",
+      "version": "1.11.0",
       "category": "suite",
       "keywords": [
         "suite",

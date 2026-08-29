@@ -88,15 +88,85 @@ def _has_cjk_content(md_file: str) -> bool:
         return False
 
 
-def _detect_backend(md_file: str | None = None) -> str:
+# Themes whose CJK stack is CID-TrueType (Songti SC body + Heiti SC headings).
+# The "CJK must use Chrome" rule below exists only because weasyprint subsets
+# PingFang SC as CID Type 0C OpenType, which macOS Preview / Adobe Reader fail
+# to render — and that is a property of the THEME's font stack, not of the
+# content being CJK. For these two themes weasyprint embeds CID TrueType, which
+# every reader renders, so routing them to Chrome buys nothing and costs the
+# clip bug documented on _render_chrome.
+#
+# Membership is an explicit list rather than a scan of the CSS: cjk-auto.css and
+# default.css both mention "PingFang" in a comment and in a fallback chain, so
+# grepping the stylesheet for that string mis-routes exactly the themes this
+# list exists to protect. A theme that is not listed (including any user-added
+# one) keeps the old conservative Chrome routing.
+_WEASYPRINT_SAFE_CJK_THEMES = frozenset({"default", "cjk-auto"})
+
+
+def _canonical_theme_name(theme_name: str | None) -> str | None:
+    """Resolve a theme argument to the on-disk theme's canonical stem.
+
+    `_load_theme` resolves `themes/{name}.css` through the filesystem, and on
+    macOS and Windows that lookup is case-insensitive: `--theme Default` loads
+    the very same bytes as `--theme default`. A routing table keyed on the raw
+    string would therefore disagree with the CSS that actually gets loaded — the
+    document would render with the Songti/Heiti stack while being routed as if
+    it were an unknown PingFang theme, silently restoring the clip this module
+    exists to avoid.
+
+    So ask the filesystem the same question `_load_theme` asks, and compare by
+    identity (`os.path.samefile`) rather than by lower-casing the string: the
+    set of names a filesystem folds together is its business, not ours, and it
+    differs between macOS, Linux and Windows.
+
+    Returns None when the name resolves to no theme file, which routes to the
+    conservative Chrome default — the same direction `_load_theme` takes when
+    it rejects the name outright.
+    """
+    if not theme_name:
+        return None
+    candidate = THEMES_DIR / f"{theme_name}.css"
+    if not candidate.exists():
+        return None
+    for f in THEMES_DIR.glob("*.css"):
+        try:
+            if os.path.samefile(f, candidate):
+                return f.stem
+        except OSError:
+            continue
+    return None
+
+
+def _detect_backend(md_file: str | None = None, theme: str | None = None) -> str:
     """Auto-detect best available backend.
 
-    CJK content → prefer Chrome (weasyprint subset-embeds PingFang SC as
-    CID Type 0C OpenType, which macOS Preview / Adobe Reader fail to render).
+    CJK content → depends on the theme's font stack:
+      - Songti/Heiti themes (see _WEASYPRINT_SAFE_CJK_THEMES) → weasyprint.
+        Chrome clips wide tables (see _render_chrome); weasyprint does not,
+        and its CID TrueType embedding renders everywhere.
+      - PingFang themes (warm-terra, mobile, warm-terra-menu, unknown themes)
+        → Chrome, because weasyprint's CID Type 0C subset of PingFang SC is
+        unreadable in macOS Preview / Adobe Reader.
     Non-CJK content → prefer weasyprint (faster, no browser needed).
     """
-    if md_file and _has_cjk_content(md_file) and _find_chrome():
-        return "chrome"
+    if md_file and _has_cjk_content(md_file):
+        if _canonical_theme_name(theme) in _WEASYPRINT_SAFE_CJK_THEMES:
+            if _has_weasyprint():
+                return "weasyprint"
+            if _find_chrome():
+                print(
+                    f"Warning: theme '{theme}' renders correctly under weasyprint, "
+                    "but weasyprint is not installed. Falling back to Chrome, whose "
+                    "page clip path cuts the right border off tables wider than the "
+                    "@page content box — invisible to pdftoppm/poppler previews but "
+                    "missing in Preview.app, QuickLook and WeChat. Install "
+                    "weasyprint, or verify the right border of every table.",
+                    file=sys.stderr,
+                )
+                return "chrome"
+        elif _find_chrome():
+            return "chrome"
     if _has_weasyprint():
         return "weasyprint"
     if _find_chrome():
@@ -306,7 +376,29 @@ def _render_weasyprint(full_html: str, pdf_file: str, css: str) -> None:
 
 
 def _render_chrome(full_html: str, pdf_file: str) -> None:
-    """Render PDF using headless Chrome."""
+    """Render PDF using headless Chrome.
+
+    Known limitation — content wider than the @page box is CLIPPED, not just
+    overflowed. Chrome wraps each page in a `re W* n` clip path at the @page
+    content box, so anything past it is present in the PDF's object layer but
+    never painted. Measured on A4 with `margin: 2.5cm 2cm 2cm 2cm`: the clip
+    path ends at 538.90pt while a wide CJK table's right border sits at
+    545.18pt, so the border is silently amputated.
+
+    Object-layer inspection does NOT reveal this: pdfplumber still reports a
+    rect at 545.18pt, so any check that reads coordinates instead of pixels
+    passes. Rasterisers, however, honour the clip — measured 2026-08-29,
+    `pdftoppm -r 400` paints zero ink across the 25 pixel columns straddling the
+    expected border, matching what Preview.app shows. So this script's own
+    preview step CAN expose the defect; what hid it was looking for the wrong
+    symptom. The last column's text is complete and correctly spaced; only a
+    hairline border is absent, which reads as a design choice rather than a
+    fault. `scripts/check_table_borders.py` turns that into a pass/fail.
+
+    _detect_backend therefore routes CID-TrueType CJK themes to weasyprint,
+    which lays the same table out inside its page box. Passing --backend chrome
+    explicitly still overrides that.
+    """
     chrome = _find_chrome()
     if not chrome:
         print("Error: Chrome not found.", file=sys.stderr)
@@ -583,6 +675,9 @@ def _print_self_check_hint(pages: list[Path]) -> None:
     print("         break = space). Fix in markdown: use `- ` real list, or")
     print("         insert blank lines between.")
     print("   [ ] Tables fit within page margins (no right-side text cut off)")
+    print("   [ ] Every table is CLOSED on the right — trace the rightmost")
+    print("       vertical rule top to bottom. Chrome clips it while leaving")
+    print("       the text intact, so a complete last column proves nothing.")
     print("   [ ] No inappropriate Chinese line breaks (per 中文文案排版指北)")
     print("       ↳ Symptoms: single CJK char alone on a line; broken bracket")
     print("         pairs (line ends with `（` while content wraps to next line,")
@@ -626,7 +721,7 @@ def markdown_to_pdf(
         pdf_file = str(md_path.with_suffix(".pdf"))
 
     if backend is None:
-        backend = _detect_backend(md_file)
+        backend = _detect_backend(md_file, theme)
 
     css = _load_theme(theme)
     html_content = _md_to_html(md_file)

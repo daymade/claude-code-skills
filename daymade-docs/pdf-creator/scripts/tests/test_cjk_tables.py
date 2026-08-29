@@ -7,7 +7,7 @@ under "CJK Typography":
   - table-layout: fixed (equal column widths)
   - word-break: keep-all (don't break inside CJK runs)
   - overflow-wrap: normal (let content overflow rather than break mid-token —
-    the explicit trade-off in md_to_pdf.py L109-146 inline comments)
+    the explicit trade-off in md_to_pdf.py's "CJK typography patch (auto-injected" comment block)
   - line-break: strict
   - th nowrap (predictable header widths)
   - colgroup neutralizer in default theme (overrides pandoc dash-count hints)
@@ -62,7 +62,7 @@ def test_layer1_patch_has_keep_all() -> None:
 def test_layer1_patch_has_overflow_wrap_normal() -> None:
     """The deliberate trade-off: prefer letting content overflow slightly
     rather than fall back to mid-token breaks. This is the rationale
-    documented in md_to_pdf.py L109-146 inline comments. SKILL.md
+    documented in md_to_pdf.py's "CJK typography patch (auto-injected" comment block. SKILL.md
     historically omits this line — separate doc-drift fix tracks that.
     """
     from md_to_pdf import _TYPOGRAPHY_CSS_PATCH
