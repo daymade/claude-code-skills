@@ -191,6 +191,7 @@ Advanced GitHub Actions workflow operations including:
 - Run monitoring and debugging
 - Artifact management
 - Secrets and variables
+- Purging public run history (run/deployment deletion, backup-first, anonymous readback)
 - Performance optimization strategies
 
 Load this reference when working with CI/CD workflows or debugging failed runs.
