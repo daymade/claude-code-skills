@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **tunnel-doctor** (v1.11.0): correct a false negative in Step 2K that sent the reader to the
+  wrong side of the fork. The step inferred "zero `sshd` journal entries → the packets never
+  arrived → suspect your tunnel," but a host-local packet filter produces exactly that reading
+  while the packets are in fact arriving. Verified against a live case: `tcpdump` on the
+  destination showed the client's SYNs landing on the NIC and being retransmitted, while
+  `ss` showed only `LISTEN` and no `SYN-RECV` — a default `-P INPUT DROP` with explicit accepts
+  for 80/443 was dropping them before the socket layer. Step 2K now requires `tcpdump` + `ss`
+  to separate "never arrived" from "arrived and dropped locally" before anyone blames a tunnel.
+
+  Two related corrections in the same step. A cloud host enforces an inbound port **twice** —
+  provider security group *and* host firewall (`ufw`/`firewalld`/`nftables`) — so the step now
+  checks both and states that satisfying one leaves the other blocking with no signal. And the
+  old bullet "it is in the allowlist and packets still never arrive → the blocker is local" is
+  replaced, because that is precisely the case where the blocker is the host firewall. Also adds
+  the cheapest control for "is it me or is it them": run the same probe from another host that
+  shares your egress but not your network stack — the one instrument a TUN cannot corrupt,
+  since it never traverses it. If that host succeeds, `ssh -J` through it is a working path
+  that keeps your key on your own machine.
+
+  Context for the correction: the earlier text let a blocked host be certified "completely
+  healthy" — `sshd` active and listening, config valid, no `fail2ban`, empty `hosts.deny`,
+  disk and memory fine — with the packet filter never inspected.
+
 ### Added
 - **github-ops** (v1.2.0): replace command-success GitHub automation with a verified-state
   operating contract. Every mutation now binds the account, host, fully qualified target,
