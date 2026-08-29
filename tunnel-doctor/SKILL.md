@@ -8,12 +8,12 @@ description: >-
   SSH/HTTP fails, browser returns 503 while curl works, Git SSH closes through the
   proxy, Docker pull/build fails behind TUN, getaddrinfo stalls while nslookup is fast,
   raw probes report physically impossible results, domestic DIRECT-routed sites fail
-  while proxied sites work, or you cannot tell whether a blocked port is your own tunnel
-  or the destination host's firewall allowlist, or the proxy is reachable but real
-  downloads and full Git clones crawl. Also use when Git reports "failed to begin
-  relaying via HTTP", ssh -vvv freezes at "debug2: resolving", ping works but dig times
-  out, or setting up Tailscale SSH to WSL. Use debugging-network-issues only when the
-  root cause remains unknown or belongs to an application/protocol layer.
+  while proxied sites work, a blocked port could be your tunnel or the destination's
+  firewall, or the proxy is reachable but real downloads and full Git clones crawl. Also
+  use when Git reports "failed to begin relaying via HTTP", ssh -vvv freezes at "debug2:
+  resolving", ping works but dig times out, or setting up Tailscale SSH to WSL. Use
+  debugging-network-issues only when the root cause remains unknown or belongs to an
+  application/protocol layer.
 allowed-tools: Read, Grep, Edit, Bash
 ---
 
