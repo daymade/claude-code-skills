@@ -1,0 +1,366 @@
+#!/usr/bin/env bash
+# git_prepare_clone_retirement.sh — freeze an independent clone before retirement.
+#
+# The script never moves or deletes a checkout and never changes repository refs.
+# It refuses to certify a clone that still has working-tree bytes, ignored files,
+# stashes, reflog-only commits, or clone-owned dangling commits. A successful run
+# writes a private recovery directory containing:
+#   all-refs.bundle       self-contained history for every current ref
+#   refs.manifest         exact ref tips frozen before the bundle
+#   reflog-oids.manifest  every commit identity named by a reflog
+#   metadata.manifest     hashes for config/hooks/info files
+#   repo-metadata.tar     exact config/hooks/info payload
+#   receipt.txt           source/survivor identity and bundle digest
+#
+# Usage:
+#   git_prepare_clone_retirement.sh \
+#     --clone <independent-clone> --survivor <kept-checkout> --out <new-backup-dir>
+#   git_prepare_clone_retirement.sh --verify-current <backup-dir>
+#
+# `--verify-current` is the final compare-and-swap gate. Run it immediately before
+# moving the clone to an explicit recoverable quarantine. Process checks must run
+# sequentially after this command; running them beside other Git probes can make the
+# probe observe the auditor's own sibling process.
+
+set -euo pipefail
+umask 077
+
+die() { echo "error: $*" >&2; exit 2; }
+unsafe() { echo "$1${2:+: $2}" >&2; exit 1; }
+
+usage() {
+  sed -n '2,/^$/s/^# \{0,1\}//p' "$0"
+}
+
+canonical_dir() {
+  (cd "$1" 2>/dev/null && pwd -P)
+}
+
+normalize_remote() {
+  printf '%s' "${1:-}" | sed -E \
+    's#^[a-z+]+://##; s#^[^@/]+@##; s#:#/#; s#\.git/?$##; s#/+$##'
+}
+
+absolute_git_dir() {
+  git -C "$1" rev-parse --absolute-git-dir 2>/dev/null
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    die "need sha256sum or shasum to fingerprint the recovery bundle"
+  fi
+}
+
+list_refs() {
+  git -C "$1" for-each-ref --format='%(objectname) %(refname)' | LC_ALL=C sort
+}
+
+list_bundle_expected_heads() {
+  local checkout="$1"
+  {
+    git -C "$checkout" rev-parse HEAD | awk '{print $1 " HEAD"}'
+    list_refs "$checkout"
+  } | LC_ALL=C sort
+}
+
+list_reflog_oids() {
+  git -C "$1" reflog --all --format='%H' 2>/dev/null | LC_ALL=C sort -u
+}
+
+metadata_manifest() {
+  local checkout="$1"
+  local git_dir rel_path object_id link_target
+  local entry
+  local entries=()
+
+  git_dir="$(absolute_git_dir "$checkout")" || return 1
+  for entry in config config.worktree hooks info; do
+    if [ -e "$git_dir/$entry" ] || [ -L "$git_dir/$entry" ]; then
+      if [ -d "$git_dir/$entry" ] && [ ! -L "$git_dir/$entry" ]; then
+        while IFS= read -r rel_path; do
+          [ -n "$rel_path" ] && entries+=("$rel_path")
+        done < <(find "$git_dir/$entry" -mindepth 1 \( -type f -o -type l \) -print)
+      else
+        entries+=("$git_dir/$entry")
+      fi
+    fi
+  done
+
+  if [ ${#entries[@]} -eq 0 ]; then
+    return 0
+  fi
+
+  printf '%s\n' "${entries[@]}" | LC_ALL=C sort | while IFS= read -r entry; do
+    rel_path="${entry#"$git_dir"/}"
+    if [ -L "$entry" ]; then
+      link_target="$(readlink "$entry")" || return 1
+      printf '%s|symlink|%s\n' "$rel_path" "$link_target"
+    elif [ -f "$entry" ]; then
+      object_id="$(git -C "$checkout" hash-object --no-filters -- "$entry")" || return 1
+      printf '%s|file|%s\n' "$rel_path" "$object_id"
+    fi
+  done
+}
+
+check_identity() {
+  local clone="$1"
+  local survivor="$2"
+  local clone_remote survivor_remote clone_head survivor_head
+
+  [ "$clone" != "$survivor" ] || die "clone and survivor resolve to the same checkout"
+  [ -d "$clone/.git" ] || die "--clone must name an independent clone with a .git directory"
+  git -C "$clone" rev-parse --git-dir >/dev/null 2>&1 || die "clone is not a Git repository: $clone"
+  git -C "$survivor" rev-parse --git-dir >/dev/null 2>&1 || die "survivor is not a Git repository: $survivor"
+
+  clone_remote="$(normalize_remote "$(git -C "$clone" remote get-url origin 2>/dev/null | head -1 || true)")"
+  survivor_remote="$(normalize_remote "$(git -C "$survivor" remote get-url origin 2>/dev/null | head -1 || true)")"
+  if [ -n "$clone_remote" ] && [ -n "$survivor_remote" ] && [ "$clone_remote" = "$survivor_remote" ]; then
+    echo remote
+    return 0
+  fi
+
+  clone_head="$(git -C "$clone" rev-parse --verify HEAD 2>/dev/null || true)"
+  survivor_head="$(git -C "$survivor" rev-parse --verify HEAD 2>/dev/null || true)"
+  if [ -n "$clone_head" ] && git -C "$survivor" cat-file -e "${clone_head}^{commit}" 2>/dev/null; then
+    echo shared-history
+    return 0
+  fi
+  if [ -n "$survivor_head" ] && git -C "$clone" cat-file -e "${survivor_head}^{commit}" 2>/dev/null; then
+    echo shared-history
+    return 0
+  fi
+  die "clone and survivor do not share a verified remote or commit history"
+}
+
+check_physical_state() {
+  local clone="$1"
+  local normal_state physical_state stash_state
+
+  normal_state="$(git -C "$clone" status --porcelain=v1 --untracked-files=all)" || \
+    unsafe "STATUS_UNREADABLE" "$clone"
+  [ -z "$normal_state" ] || {
+    printf '%s\n' "$normal_state" >&2
+    unsafe "UNTRACKED_OR_MODIFIED" "copy or commit every listed path before retirement"
+  }
+
+  physical_state="$(git -C "$clone" status --porcelain=v1 --ignored --untracked-files=all)" || \
+    unsafe "IGNORED_STATUS_UNREADABLE" "$clone"
+  [ -z "$physical_state" ] || {
+    printf '%s\n' "$physical_state" >&2
+    unsafe "IGNORED_PHYSICAL_FILES" "classify and copy uncertain ignored bytes before retirement"
+  }
+
+  stash_state="$(git -C "$clone" stash list --format='%gd|%H|%gs')" || \
+    unsafe "STASH_STATUS_UNREADABLE" "$clone"
+  [ -z "$stash_state" ] || {
+    printf '%s\n' "$stash_state" >&2
+    unsafe "STASHES_PRESENT" "export and classify every stash before retirement"
+  }
+}
+
+check_reflog_coverage() {
+  local clone="$1"
+  local oid containing_ref
+
+  while IFS= read -r oid; do
+    [ -n "$oid" ] || continue
+    git -C "$clone" cat-file -e "${oid}^{commit}" 2>/dev/null || \
+      unsafe "REFLOG_OBJECT_MISSING" "$oid"
+    containing_ref="$(git -C "$clone" for-each-ref --contains "$oid" --format='%(refname)' | head -1 || true)"
+    [ -n "$containing_ref" ] || \
+      unsafe "REFLOG_ONLY_COMMIT" "$oid has no current ref; pin it before bundling"
+  done < <(list_reflog_oids "$clone")
+}
+
+check_clone_owned_danglers() {
+  local clone="$1"
+  local survivor="$2"
+  local fsck_output oid
+
+  if ! fsck_output="$(git -C "$clone" fsck --no-reflogs --unreachable --no-progress 2>&1)"; then
+    unsafe "FSCK_FAILED" "$fsck_output"
+  fi
+  while IFS= read -r oid; do
+    [ -n "$oid" ] || continue
+    if ! git -C "$survivor" cat-file -e "${oid}^{commit}" 2>/dev/null; then
+      unsafe "CLONE_ONLY_DANGLING_COMMIT" "$oid is absent from the survivor; pin or export it before retirement"
+    fi
+  done < <(printf '%s\n' "$fsck_output" | awk \
+    '($1 == "dangling" || $1 == "unreachable") && $2 == "commit" {print $3}' | LC_ALL=C sort -u)
+}
+
+copy_repository_metadata() {
+  local clone="$1"
+  local destination="$2"
+  local git_dir entry
+  local entries=()
+
+  git_dir="$(absolute_git_dir "$clone")" || return 1
+  for entry in config config.worktree hooks info; do
+    if [ -e "$git_dir/$entry" ] || [ -L "$git_dir/$entry" ]; then
+      entries+=("$entry")
+    fi
+  done
+  [ ${#entries[@]} -gt 0 ] || return 0
+  tar -cf "$destination" -C "$git_dir" "${entries[@]}"
+}
+
+verify_current() {
+  local out="$1"
+  local clone survivor expected_digest current_digest
+  local expected_metadata_digest current_metadata_digest
+  local current_refs current_reflog current_metadata bundle_heads
+
+  [ -d "$out" ] || die "backup directory does not exist: $out"
+  for required in clone.path survivor.path refs.manifest metadata.manifest \
+    bundle-heads.manifest repo-metadata.tar metadata.sha256 all-refs.bundle \
+    bundle.sha256 receipt.txt; do
+    [ -s "$out/$required" ] || die "backup is incomplete: missing $out/$required"
+  done
+  [ -e "$out/reflog-oids.manifest" ] || \
+    die "backup is incomplete: missing $out/reflog-oids.manifest"
+
+  IFS= read -r clone < "$out/clone.path"
+  IFS= read -r survivor < "$out/survivor.path"
+  [ -d "$clone/.git" ] || unsafe "CLONE_PATH_CHANGED" "$clone"
+  [ -d "$survivor" ] || unsafe "SURVIVOR_PATH_CHANGED" "$survivor"
+  check_identity "$clone" "$survivor" >/dev/null
+  check_physical_state "$clone"
+  check_reflog_coverage "$clone"
+  check_clone_owned_danglers "$clone" "$survivor"
+
+  current_refs="$(list_refs "$clone")"
+  [ "$current_refs" = "$(cat "$out/refs.manifest")" ] || \
+    unsafe "REFSET_CHANGED" "rebuild the recovery directory before retirement"
+
+  current_reflog="$(list_reflog_oids "$clone")"
+  [ "$current_reflog" = "$(cat "$out/reflog-oids.manifest")" ] || \
+    unsafe "REFLOG_CHANGED" "rebuild the recovery directory before retirement"
+
+  current_metadata="$(metadata_manifest "$clone")"
+  [ "$current_metadata" = "$(cat "$out/metadata.manifest")" ] || \
+    unsafe "METADATA_CHANGED" "config/hooks/info changed after preparation"
+
+  git -C "$clone" bundle verify "$out/all-refs.bundle" >/dev/null || \
+    unsafe "BUNDLE_INVALID" "$out/all-refs.bundle"
+  bundle_heads="$(git bundle list-heads "$out/all-refs.bundle" | LC_ALL=C sort)"
+  [ "$bundle_heads" = "$(list_bundle_expected_heads "$clone")" ] || \
+    unsafe "BUNDLE_REF_MISMATCH" "bundle heads no longer match the clone"
+
+  expected_digest="$(awk 'NR == 1 {print $1}' "$out/bundle.sha256")"
+  current_digest="$(sha256_file "$out/all-refs.bundle")"
+  [ "$current_digest" = "$expected_digest" ] || \
+    unsafe "BUNDLE_DIGEST_CHANGED" "expected=$expected_digest current=$current_digest"
+
+  expected_metadata_digest="$(awk 'NR == 1 {print $1}' "$out/metadata.sha256")"
+  current_metadata_digest="$(sha256_file "$out/repo-metadata.tar")"
+  [ "$current_metadata_digest" = "$expected_metadata_digest" ] || \
+    unsafe "METADATA_ARCHIVE_CHANGED" \
+      "expected=$expected_metadata_digest current=$current_metadata_digest"
+
+  echo "READY_TO_QUARANTINE clone=$clone backup=$out sha256=$current_digest"
+}
+
+CLONE=""
+SURVIVOR=""
+OUT=""
+VERIFY_CURRENT=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --clone) CLONE="${2:?--clone needs a path}"; shift 2 ;;
+    --survivor) SURVIVOR="${2:?--survivor needs a path}"; shift 2 ;;
+    --out) OUT="${2:?--out needs a directory}"; shift 2 ;;
+    --verify-current)
+      [ -z "$VERIFY_CURRENT" ] || die "--verify-current may be passed only once"
+      VERIFY_CURRENT="${2:?--verify-current needs a backup directory}"
+      shift 2
+      ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown argument: $1 (see --help)" ;;
+  esac
+done
+
+if [ -n "$VERIFY_CURRENT" ]; then
+  [ -z "$CLONE" ] && [ -z "$SURVIVOR" ] && [ -z "$OUT" ] || \
+    die "--verify-current is standalone; do not combine it with preparation options"
+  verify_current "$VERIFY_CURRENT"
+  exit 0
+fi
+
+[ -n "$CLONE" ] || die "--clone is required"
+[ -n "$SURVIVOR" ] || die "--survivor is required"
+[ -n "$OUT" ] || die "--out is required"
+case "$CLONE" in /*) ;; *) die "--clone must be an absolute path" ;; esac
+case "$SURVIVOR" in /*) ;; *) die "--survivor must be an absolute path" ;; esac
+case "$OUT" in /*) ;; *) die "--out must be an absolute path" ;; esac
+
+CLONE="$(canonical_dir "$CLONE")" || die "clone path does not exist: $CLONE"
+SURVIVOR="$(canonical_dir "$SURVIVOR")" || die "survivor path does not exist: $SURVIVOR"
+[ ! -e "$OUT" ] || die "backup directory already exists; use a fresh path: $OUT"
+OUT_PARENT="$(canonical_dir "$(dirname "$OUT")")" || die "backup parent does not exist: $(dirname "$OUT")"
+OUT="$OUT_PARENT/$(basename "$OUT")"
+case "$OUT/" in
+  "$CLONE/"*|"$SURVIVOR/"*) die "backup directory must be outside both repositories" ;;
+esac
+
+IDENTITY_MODE="$(check_identity "$CLONE" "$SURVIVOR")"
+SHALLOW_STATE="$(git -C "$CLONE" rev-parse --is-shallow-repository)"
+[ "$SHALLOW_STATE" = false ] || unsafe "SHALLOW_CLONE" "fetch complete history before retirement"
+check_physical_state "$CLONE"
+check_reflog_coverage "$CLONE"
+check_clone_owned_danglers "$CLONE" "$SURVIVOR"
+
+REFS="$(list_refs "$CLONE")"
+[ -n "$REFS" ] || unsafe "NO_REFS" "the clone has no ref to bundle"
+REFLOG_OIDS="$(list_reflog_oids "$CLONE")"
+METADATA="$(metadata_manifest "$CLONE")"
+GIT_DIR="$(absolute_git_dir "$CLONE")"
+if [ -s "$GIT_DIR/objects/info/alternates" ]; then
+  BORROWED_OBJECTS=yes
+else
+  BORROWED_OBJECTS=no
+fi
+
+/bin/mkdir "$OUT"
+printf '%s\n' "$CLONE" > "$OUT/clone.path"
+printf '%s\n' "$SURVIVOR" > "$OUT/survivor.path"
+printf '%s\n' "$REFS" > "$OUT/refs.manifest"
+printf '%s\n' "$REFLOG_OIDS" > "$OUT/reflog-oids.manifest"
+printf '%s\n' "$METADATA" > "$OUT/metadata.manifest"
+git -C "$CLONE" reflog --all --date=iso \
+  --format='%H|%gD|%gs|%cd' > "$OUT/reflog.txt"
+copy_repository_metadata "$CLONE" "$OUT/repo-metadata.tar"
+METADATA_DIGEST="$(sha256_file "$OUT/repo-metadata.tar")"
+printf '%s  %s\n' "$METADATA_DIGEST" "repo-metadata.tar" > "$OUT/metadata.sha256"
+
+  git -C "$CLONE" bundle create "$OUT/all-refs.bundle" --all
+  git -C "$CLONE" bundle verify "$OUT/all-refs.bundle" >/dev/null
+  git bundle list-heads "$OUT/all-refs.bundle" | LC_ALL=C sort > "$OUT/bundle-heads.manifest"
+  if [ "$(cat "$OUT/bundle-heads.manifest")" != "$(list_bundle_expected_heads "$CLONE")" ]; then
+    echo "FROZEN_REFS:" >&2
+    list_bundle_expected_heads "$CLONE" >&2
+    echo "BUNDLE_HEADS:" >&2
+    cat "$OUT/bundle-heads.manifest" >&2
+    unsafe "BUNDLE_REF_MISMATCH" "bundle heads do not match the frozen clone refs"
+  fi
+
+BUNDLE_DIGEST="$(sha256_file "$OUT/all-refs.bundle")"
+printf '%s  %s\n' "$BUNDLE_DIGEST" "all-refs.bundle" > "$OUT/bundle.sha256"
+printf '%s\n' \
+  "prepared_at=$(date '+%F %T %Z')" \
+  "clone=$CLONE" \
+  "survivor=$SURVIVOR" \
+  "identity_mode=$IDENTITY_MODE" \
+  "head=$(git -C "$CLONE" rev-parse HEAD)" \
+  "branch=$(git -C "$CLONE" branch --show-current)" \
+  "borrowed_objects=$BORROWED_OBJECTS" \
+  "bundle_sha256=$BUNDLE_DIGEST" \
+  "metadata_sha256=$METADATA_DIGEST" > "$OUT/receipt.txt"
+
+verify_current "$OUT"
+echo "BORROWED_OBJECTS $BORROWED_OBJECTS"

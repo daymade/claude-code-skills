@@ -8,6 +8,7 @@
 - Why safety-biased: a false "merged" loses work, a false "unmerged" only costs a look
 - Manual-only investigation hints (do NOT auto-decide on these)
 - Converging many branches to one main under active concurrency
+- Independent clone retirement — preserve refs, metadata, and borrowed objects
 - Worktree retirement — prove the checkout is disposable before removal
 - Adversarial multi-agent verification (for a whole repo of branches)
 - Rules for the verification agents
@@ -346,6 +347,75 @@ convergence. Report **scoped completion** instead: the authorized refs/PRs are m
 the maintained main identities agree, and every excluded branch/worktree/PR is listed as untouched.
 Those exclusions are not blockers and must not be deleted to make a count reach one. Counts and
 checksums support these claims; they do not replace them.
+
+## Independent clone retirement — preserve refs, metadata, and borrowed objects
+
+An independent clone is not a linked worktree. Git has no registry connecting it to the checkout
+you intend to keep, so `git worktree list`, the survivor's branch inventory, and the survivor's
+loss audit cannot prove that deleting it is safe. A clean `git status` covers only one layer; the
+clone can still be the sole owner of a ref name, reflog-only commit, stash, ignored file, hook, or
+repository-local configuration.
+
+`git clone --shared` adds one more asymmetry: the clone starts with no objects of its own and reads
+the source through `.git/objects/info/alternates`. Git's official `git-clone` documentation calls
+this potentially dangerous because source-side maintenance can prune borrowed objects and corrupt
+the clone; `git repack -a` is the documented way to break that dependency when the clone will be
+kept. For retirement, an empty local object directory is therefore **not** evidence that the clone
+contains nothing — its refs remain unique state even while their objects live elsewhere.
+
+Use this READ-DO sequence for one explicitly authorized clone:
+
+1. **Name the survivor, clone, and external backup directory.** The backup must be a fresh absolute
+   path outside both repositories; reusing an existing directory can mix two audits while looking
+   valid. Confirm the clone has a `.git` directory. A `.git` file is a linked worktree and belongs
+   to the worktree-retirement procedure below.
+2. **Prepare the recovery set:**
+
+   ```bash
+   scripts/git_prepare_clone_retirement.sh \
+     --clone <absolute-clone> \
+     --survivor <absolute-kept-checkout> \
+     --out <new-external-backup-dir>
+   ```
+
+   The helper is intentionally non-destructive. It refuses tracked/untracked changes, ignored
+   physical files, stashes, reflog commits with no current ref, shallow history, and clone-owned
+   dangling commits. It snapshots every ref, every reflog OID, and config/hooks/info metadata;
+   creates `all-refs.bundle` without revision exclusions; runs `git bundle verify`; compares every
+   advertised bundle head (including `HEAD`) with the frozen ref set; and binds both the bundle and
+   repository-metadata archive to SHA-256 receipts.
+   The regression suite also verifies the no-prerequisite bundle from an empty bare repository. A
+   successful `READY_TO_QUARANTINE` means the recovery set is
+   complete for that instant, not that deletion authority exists.
+3. **Obtain current-session retirement authority.** A prior cleanup request or a different clone's
+   approval does not transfer. Prefer a recoverable OS Trash/quarantine move; permanent deletion
+   is a distinct consequence and requires an explicit decision plus the verified bundle.
+4. **Re-freeze immediately before the move:**
+
+   ```bash
+   scripts/git_prepare_clone_retirement.sh --verify-current <external-backup-dir>
+   ```
+
+   It fails if refs, reflog identities, metadata, physical state, bundle bytes, or source/survivor
+   identity changed. Rebuild the recovery directory on any failure; do not edit the receipt.
+5. **Run process occupancy as a separate, sequential probe.** Finish every other Git command first.
+   On macOS, `/usr/sbin/lsof +D <absolute-clone>` is one available probe; use the platform-native
+   equivalent elsewhere. A process result gathered in parallel with `git ls-remote`, `status`, or
+   bundle verification can be the auditor observing its own sibling process, so it cannot authorize
+   a move. Any genuine writer or unknown occupant stops the retirement.
+6. **Move exactly one clone to a unique recoverable location, then read back both sides.** Check the
+   destination does not exist, use a no-clobber move, and treat postconditions—not `mv`'s exit code—
+   as authority: the old path must be absent and the quarantine path must contain the clone's
+   `.git` directory. Do not target the clone's parent unless a separate inventory proves that parent
+   contains nothing else. Keep the external recovery set after the move.
+7. **Verify the user-visible result.** The survivor's HEAD/index/worktree must be unchanged; the
+   old active path is absent; the quarantine copy or permanent backup is readable; `git bundle
+   verify` still succeeds; and `git bundle list-heads` still lists the frozen identities. Report
+   this as scoped clone retirement, not as proof that no other checkout exists anywhere.
+
+If the clone must remain active instead of being retired, stop this procedure. For a shared clone,
+use the official dissociation path (`git repack -a`) and verify it no longer depends on alternates;
+that is a different outcome from clone retirement and should not be smuggled into cleanup.
 
 ## Worktree retirement — prove the checkout is disposable before removal
 
