@@ -2,6 +2,22 @@
 
 When creating a second Terraform environment (`staging`, `lab`, etc.) in the same cloud account alongside production, every item below must be verified. Skip one and you get silent name collisions or cross-contamination.
 
+## Configuration contract parity
+
+Keep one machine-readable list of runtime-required keys. Every environment must contain each key
+exactly once with a non-empty value. Only values differ by environment; requiredness does not.
+
+Do not use these as environment isolation mechanisms:
+
+- A production-only default that lets a missing key render as empty or as a guessed hostname
+- A staging-only assertion that production never runs
+- A hand-maintained list of variables inside one deploy writer
+- A validator that reads the operator shell instead of the candidate environment artifact
+
+Render each environment through the same production parser and compare the resulting key set before
+planning. For Compose, remember that shell variables outrank `--env-file` and project `.env`; sanitize
+ambient overrides or print `docker compose config --environment` as evidence.
+
 ## Terraform state isolation
 
 Two environments MUST use different state paths. Same OSS/S3 bucket is fine — different prefix isolates completely:
@@ -122,9 +138,12 @@ ENV ?= production
 ENV_DIR := environments/$(ENV)
 
 init: ; cd $(ENV_DIR) && terraform init
-plan: ; cd $(ENV_DIR) && terraform plan -out=tfplan
+plan: pre-deploy ; cd $(ENV_DIR) && terraform plan -out=tfplan
 apply: ; cd $(ENV_DIR) && terraform apply tfplan
 drift: ; cd $(ENV_DIR) && terraform plan -detailed-exitcode
 ```
 
 Usage: `make plan ENV=staging`
+
+In a real repository, keep Terraform behind its existing canonical Make/CI wrapper rather than
+copying this minimal example over stronger saved-plan, digest, authorization, or provenance gates.

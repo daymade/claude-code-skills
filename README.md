@@ -2162,7 +2162,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ### **terraform-skill** - Terraform Operational Traps
 
-Failure patterns from real Terraform deployments — every item caused an actual incident. Organized as *exact error → root cause → copy-paste fix*. Covers provisioner timing races, SSH connection conflicts, multi-environment isolation, DNS record duplication, volume permissions, database bootstrap gaps, snapshot cross-contamination, Cloudflare credential format errors, hardcoded domains in Caddyfiles/compose, and init-data-only-on-first-boot pitfalls.
+Designs and diagnoses safe Terraform releases as well as the provisioner traps learned from real incidents. It keeps staging and production on one required configuration schema, validates exact candidate bytes + the Compose-rendered environment + the immutable runtime before live mutation, and binds saved plans to staging evidence, source provenance, explicit production authorization, and independent readback.
 
 **When to use:**
 - Writing `null_resource` provisioners or `remote-exec` blocks that SSH into fresh instances
@@ -2171,11 +2171,14 @@ Failure patterns from real Terraform deployments — every item caused an actual
 - Hitting "docker: not found" in remote-exec, rsync connection drops in local-exec, or TLS cert errors
 - Troubleshooting drift or provisioner failures during re-runs
 - Configuring Caddy/gateway resources with Cloudflare credentials
+- Reviewing a saved plan or broad deploy resource that may also mutate a shared gateway
+- Closing staging/production config drift, receipt, provenance, or production-approval gaps
 
 **Key features:**
-- Copy-paste `.hcl` snippets for each trap, not abstract advice
-- Coverage spanning cloud-init, Docker, file provisioners, DNS, TLS, snapshots, and cross-env contamination
-- Every pattern tagged with the exact symptom so grep finds it fast
+- One required-key contract for every environment; values may differ, requiredness may not
+- Exact-bundle prevalidation for every normal and recovery writer before any live write/restart
+- Saved-plan, staging-receipt, remote-main provenance, production-approval, and live-readback gates
+- Corrected provider/provisioner patterns for cloud-init, Docker, DNS, TLS, snapshots, and fresh hosts
 
 **Example usage:**
 ```bash
@@ -2183,6 +2186,7 @@ Failure patterns from real Terraform deployments — every item caused an actual
 "I'm getting 'docker: not found' in my null_resource provisioner after apply"
 "My rsync local-exec is failing with 'connection unexpectedly closed'"
 "Help me write a multi-env Terraform setup without snapshot cross-contamination"
+"Staging has this Caddy variable but production leaves it empty — how do I validate both safely?"
 ```
 
 **🎬 Live Demo**
