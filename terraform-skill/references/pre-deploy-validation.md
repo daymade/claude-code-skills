@@ -27,12 +27,15 @@ configuration. Apply the same rules to staging and production:
 
 - Every required key appears exactly once.
 - Missing and empty are both failures.
+- Any unresolved `${IDENTIFIER}` token in a required effective value is a failure, including a
+  placeholder that references a different missing key.
 - Optional keys are explicitly classified; they do not share the required list.
 - Environment files may change values, never requiredness.
 - Caddy/Compose defaults are product defaults only, not a way to hide incomplete deployment input.
 
 Calibrate the checker with one known-good environment and known-bad fixtures for missing, duplicate,
-and explicit-empty values. A validator without a dangerous-input test has not proved it can fail.
+explicit-empty, self-placeholder, and foreign-placeholder values. A validator without a dangerous-input
+test has not proved it can fail.
 
 ## 3. Render the effective runtime model
 

@@ -48,7 +48,7 @@ Then:
 
 1. Render Compose's canonical JSON from explicit candidate paths and a controlled interpolation environment.
 2. Extract the gateway service's full environment map and exact image from that rendered model.
-3. Reject any missing/empty required key and any image mismatch.
+3. Reject any missing/empty required key, any unresolved `${IDENTIFIER}` token, and any image mismatch.
 4. Run the exact image with the complete environment and candidate config using the runtime's strongest
    non-starting validation mode.
 5. Promote only the candidate bytes that passed, under the same deployment lock.
@@ -88,6 +88,7 @@ Dangerous fixtures:
 
 - Required key absent.
 - Required key present but empty.
+- Required key remains an unresolved self- or foreign-key placeholder.
 - Ambient shell variable overrides the candidate env file.
 - Config uses a module absent from the exact production image.
 - A broad deploy writer bypasses the focused gateway validator.

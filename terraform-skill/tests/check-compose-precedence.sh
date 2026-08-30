@@ -26,5 +26,7 @@ grep -Fq 'the apply runner remains non-interactive and headless-compatible.' "$r
 grep -Fq 'compose.rendered.json" > "$GATEWAY_ENV_FILE"' "$predeploy"
 grep -Fq -- '--env-file "$GATEWAY_ENV_FILE"' "$predeploy"
 grep -Fq '(.value | type == "string")' "$predeploy"
+grep -Fq 'placeholder that references a different missing key' "$predeploy"
+grep -Fq 'unresolved self- or foreign-key placeholder' "$release_contract"
 
 echo "Compose precedence and headless release documentation are internally consistent."
