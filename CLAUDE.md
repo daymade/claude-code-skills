@@ -302,6 +302,7 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 - Keep SKILL.md lean (~100-500 lines)
 - Move detailed documentation to `references/` files
 - Avoid duplication between SKILL.md and references
+- Keep `tunnel-doctor` environment-neutral: it may teach discovery and presence checks, but exact private node labels, billing identities, endpoints, credentials, and current chain state remain in the owning private configuration/Skill and must not be copied into this public repository.
 - Scripts must be executable with proper shebangs
 - All bundled resources must be referenced in SKILL.md
 
