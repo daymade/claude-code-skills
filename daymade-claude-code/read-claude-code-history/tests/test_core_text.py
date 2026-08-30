@@ -25,7 +25,11 @@ from unittest import mock
 SKILL_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKILL_DIR / "scripts"))
 
-from _core.text import files_possibly_matching, iter_jsonl  # noqa: E402
+from _core.text import (  # noqa: E402
+    files_possibly_matching,
+    iter_jsonl,
+    keywords_are_file_prefilter_safe,
+)
 
 
 class FilesPossiblyMatchingTests(unittest.TestCase):
@@ -64,6 +68,95 @@ class FilesPossiblyMatchingTests(unittest.TestCase):
         result = files_possibly_matching([wrong_case], ["needle"], case_sensitive=True)
         self.assertIsNotNone(result)
         self.assertNotIn(wrong_case, result)
+
+    def test_cjk_keyword_uses_file_prefilter_without_losing_escaped_json(self) -> None:
+        raw = self._write(
+            "raw.jsonl",
+            json.dumps({"message": "这里有自动主线回锚"}, ensure_ascii=False) + "\n",
+        )
+        escaped = self._write(
+            "escaped.jsonl",
+            json.dumps({"message": "这里有自动主线回锚"}, ensure_ascii=True) + "\n",
+        )
+        mixed_raw_then_escaped = self._write(
+            "mixed-raw-escaped.jsonl",
+            '{"message":"这里有自\\u52a8主线回锚"}\n',
+        )
+        mixed_escaped_then_raw = self._write(
+            "mixed-escaped-raw.jsonl",
+            '{"message":"这里有\\u81EA动主线回锚"}\n',
+        )
+        noise = self._write("noise.jsonl", '{"message":"unrelated"}\n')
+        fold_noise = self._write(
+            "fold-noise.jsonl",
+            '{"message":"unrelated K İ ﬁ"}\n',
+        )
+        self.assertTrue(keywords_are_file_prefilter_safe(["自动主线回锚"]))
+        result = files_possibly_matching(
+            [
+                raw,
+                escaped,
+                mixed_raw_then_escaped,
+                mixed_escaped_then_raw,
+                noise,
+                fold_noise,
+            ],
+            ["自动主线回锚"],
+        )
+        self.assertIsNotNone(result)
+        self.assertIn(raw, result)
+        self.assertIn(escaped, result)
+        self.assertIn(mixed_raw_then_escaped, result)
+        self.assertIn(mixed_escaped_then_raw, result)
+        self.assertNotIn(noise, result)
+        self.assertNotIn(fold_noise, result)
+
+    def test_case_sensitive_unicode_matches_uppercase_json_hex(self) -> None:
+        escaped = self._write(
+            "uppercase-hex.jsonl",
+            '{"message":"\\u81EA\\u52A8"}\n',
+        )
+        result = files_possibly_matching(
+            [escaped], ["自动"], case_sensitive=True
+        )
+        self.assertIsNotNone(result)
+        self.assertIn(escaped, result)
+
+    def test_mixed_unicode_query_preserves_escaped_ascii_case_candidate(self) -> None:
+        escaped_lower = self._write(
+            "escaped-lower-ascii.jsonl",
+            '{"message":"自\\u0061动"}\n',
+        )
+        insensitive = files_possibly_matching(
+            [escaped_lower], ["自A动"], case_sensitive=False
+        )
+        sensitive = files_possibly_matching(
+            [escaped_lower], ["自A动"], case_sensitive=True
+        )
+        self.assertIsNotNone(insensitive)
+        self.assertIn(escaped_lower, insensitive)
+        self.assertIsNotNone(sensitive)
+        # A file containing any Unicode escape remains a conservative
+        # candidate because decoded full-fold equivalents can use a different
+        # code point. Structured matching still enforces case sensitivity.
+        self.assertIn(escaped_lower, sensitive)
+
+    def test_mixed_unicode_ascii_query_keeps_escaped_full_fold_candidate(self) -> None:
+        kelvin_escape = self._write(
+            "escaped-kelvin.jsonl",
+            '{"message":"自\\u212A"}\n',
+        )
+        self.assertTrue(keywords_are_file_prefilter_safe(["自k"]))
+        result = files_possibly_matching(
+            [kelvin_escape], ["自k"], case_sensitive=False
+        )
+        self.assertIsNotNone(result)
+        self.assertIn(kelvin_escape, result)
+
+    def test_cased_or_multicodepoint_unicode_disables_file_prefilter(self) -> None:
+        for keyword in ("café", "straße", "ẞ", "İ"):
+            with self.subTest(keyword=keyword):
+                self.assertFalse(keywords_are_file_prefilter_safe([keyword]))
 
     def test_or_semantics_across_multiple_keywords(self) -> None:
         only_second = self._write("second.jsonl", '{"message": "contains haystack only"}\n')

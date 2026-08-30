@@ -51,6 +51,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Calibration: 5 themes × single- and multi-page × both argument orders = 20 runs — the 12 pairs
   with no clipped file pass in both orders, the 8 that have one are caught in both; 14 real
   markdown documents × 2 themes = 28 single-file runs, zero false positives.
+- **read-claude-code-history** (`daymade-claude-code` v3.7.6):
+  make bounded keyword search usable as an observability path instead of parsing every
+  session twice before it can report one match. Search now de-duplicates aliased physical
+  project directories, builds a bounded internal-sessionId index, runs a native file-level
+  candidate pass, and fully parses only exact candidate paths while retaining renamed
+  active/archive copies of the same session. This keeps source provenance, date-window
+  untimed-record counts, and record unions exact. The shared file prefilter used by both
+  `read-claude-code-history` and `read-codex-history` now safely handles uncased Unicode such
+  as CJK with an exact matcher for every raw UTF-8 / JSON-escaped mixture; unsafe folds still
+  fall back to full parsing.
+  On a real 8,500+ physical-file / 5,200+ session / 260+ project inventory, a
+  representative one-day CJK search completed in about 11s and fewer than 1% of
+  sessions required full-session parsing. Deterministic regressions prove 1/41 full metadata parses,
+  byte-identical output with `--no-prefilter`, archived-copy untimed-count fidelity,
+  escaped-CJK recall, and honest zero-candidate reporting.
 - **read-claude-code-history / read-codex-history** (`daymade-claude-code` v3.7.5):
   stop scanning the same multi-gigabyte Claude history tree once per profile label.
   Multi-model profiles commonly expose distinct config homes whose `projects/` paths are

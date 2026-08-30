@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -18,6 +19,54 @@ class ClaudeSessionSummary:
     created_at: Optional[float]
     updated_at: Optional[float]
     timestamp_count: int
+
+
+def peek_final_claude_session_id(
+    path: Path,
+    *,
+    max_records: int = 32,
+    max_bytes: int = 64 * 1024,
+) -> Optional[str]:
+    """Read a bounded EOF suffix for the final internal session id.
+
+    The full metadata scanner preserves the last valid ``sessionId`` in a
+    JSONL file. Reading complete records backwards from EOF makes any ID found
+    here authoritative even when earlier records disagree, while keeping the
+    work bounded. ``None`` means the suffix did not prove an identity; callers
+    must conservatively promote that file to the full candidate path rather
+    than trusting a prefix or filename stem.
+    """
+    try:
+        with path.open("rb") as handle:
+            handle.seek(0, 2)
+            size = handle.tell()
+            start = max(0, size - max_bytes)
+            handle.seek(start)
+            suffix = handle.read(max_bytes)
+    except (OSError, UnicodeError):
+        return None
+
+    if start > 0:
+        first_newline = suffix.find(b"\n")
+        if first_newline < 0:
+            return None
+        suffix = suffix[first_newline + 1 :]
+
+    records_read = 0
+    for raw_line in reversed(suffix.splitlines()):
+        if records_read >= max_records:
+            return None
+        records_read += 1
+        try:
+            record = json.loads(raw_line)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        if not isinstance(record, dict):
+            continue
+        session_id = record.get("sessionId")
+        if isinstance(session_id, str) and session_id:
+            return session_id
+    return None
 
 
 def scan_claude_session(path: Path, max_title_chars: int = 120) -> ClaudeSessionSummary:

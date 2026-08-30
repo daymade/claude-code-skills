@@ -17,7 +17,10 @@ SKILL_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SKILL_DIR / "scripts" / "analyze_sessions.py"
 
 sys.path.insert(0, str(SKILL_DIR / "scripts"))
-from _core.text import keywords_are_raw_byte_safe  # noqa: E402
+from _core.text import (  # noqa: E402
+    keywords_are_file_prefilter_safe,
+    keywords_are_raw_byte_safe,
+)
 
 
 def _load_analyze_module():
@@ -403,19 +406,19 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertIn(matching_id, default_run.stdout)
         self.assertNotIn(no_match_id, default_run.stdout)
 
-    def test_prefilter_disabled_under_date_window_keeps_untimed_count_exact(self) -> None:
-        """The pre-filter is gated off automatically whenever a date window is
-        active (see search_sessions's use_prefilter docstring) because
-        excluded_untimed_records counts every untimed record in a session
-        regardless of keyword match, and skipping non-matching records would
-        silently under-report it. Prove the count is identical either way,
-        not just that both runs happen to exit 0."""
+    def test_candidate_prefilter_under_date_window_keeps_untimed_count_exact(self) -> None:
+        """Candidate-first filtering may skip whole non-matching sessions,
+        but once any copy of a session is a candidate it must parse every
+        active/archive copy with that internal sessionId, even if the files
+        were renamed. Otherwise a non-matching copy's untimed records and
+        provenance disappear. Prove byte-for-byte parity with --no-prefilter,
+        not merely the keyword hit."""
         session_id = "66666666-6666-4666-8666-666666666666"
+        active_copy = project_dir(self.active_home, self.workspace) / "renamed-active.jsonl"
         write_jsonl(
-            project_dir(self.active_home, self.workspace) / f"{session_id}.jsonl",
+            active_copy,
             [
-                user_record(session_id, self.workspace, "has the target keyword", "2026-04-15T00:00:00Z"),
-                {  # untimed record, no keyword — must still be counted while a date window is active
+                {  # non-matching active copy: still contributes untimed records
                     "type": "user",
                     "sessionId": session_id,
                     "cwd": str(self.workspace),
@@ -427,6 +430,13 @@ class SessionAnalyzerTests(unittest.TestCase):
                     "cwd": str(self.workspace),
                     "message": {"role": "user", "content": "another untimed filler"},
                 },
+            ],
+        )
+        archive_copy = project_dir(self.archive_home, self.workspace) / "renamed-archive.jsonl"
+        write_jsonl(
+            archive_copy,
+            [
+                user_record(session_id, self.workspace, "has the target keyword", "2026-04-15T00:00:00Z"),
             ],
         )
         default_run = self.run_cli(
@@ -441,6 +451,227 @@ class SessionAnalyzerTests(unittest.TestCase):
         )
         self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
         self.assertIn("excluded 2 record(s) without an internal timestamp", default_run.stdout)
+        self.assertIn("Session sources: active:main, archive:full-backup", default_run.stdout)
+        self.assertIn(str(archive_copy), default_run.stdout)
+
+    def test_candidate_first_discovery_parses_only_matching_session_metadata(self) -> None:
+        module = _load_analyze_module()
+        base = project_dir(self.active_home, self.workspace)
+        for index in range(40):
+            session_id = f"00000000-0000-4000-8000-{index:012d}"
+            write_jsonl(
+                base / f"{session_id}.jsonl",
+                [
+                    user_record(
+                        session_id,
+                        self.workspace,
+                        f"ordinary unrelated record {index}",
+                        "2026-04-01T00:00:00Z",
+                    )
+                ],
+            )
+        matching_id = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+        write_jsonl(
+            base / f"{matching_id}.jsonl",
+            [
+                user_record(
+                    matching_id,
+                    self.workspace,
+                    "包含自动主线回锚",
+                    "2026-04-15T00:00:00Z",
+                )
+            ],
+        )
+        analyzer = module.SessionAnalyzer(homes=[self.active_home])
+        original_scan = module.scan_claude_session
+        with mock.patch.object(
+            module, "scan_claude_session", wraps=original_scan
+        ) as scan:
+            sessions, total, projects, applied = analyzer.find_search_sessions(
+                project_path=str(self.workspace),
+                all_projects=False,
+                keywords=["自动主线回锚"],
+                case_sensitive=False,
+                use_prefilter=True,
+                exclude_sessions=set(),
+            )
+        self.assertTrue(applied)
+        self.assertEqual(total, 41)
+        self.assertEqual(projects, 1)
+        self.assertEqual([ref["session_id"] for ref in sessions], [matching_id])
+        self.assertEqual(scan.call_count, 1)
+
+    def test_same_filename_different_session_ids_do_not_expand_candidate(self) -> None:
+        module = _load_analyze_module()
+        shared_name = "same-name.jsonl"
+        matching_id = "abababab-abab-4bab-8bab-abababababab"
+        unrelated_id = "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd"
+        write_jsonl(
+            project_dir(self.active_home, self.workspace) / shared_name,
+            [
+                user_record(
+                    matching_id,
+                    self.workspace,
+                    "contains the candidate needle",
+                    "2026-04-15T00:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir(self.archive_home, self.workspace) / shared_name,
+            [
+                user_record(
+                    unrelated_id,
+                    self.workspace,
+                    "ordinary unrelated record",
+                    "2026-04-16T00:00:00Z",
+                )
+            ],
+        )
+        analyzer = module.SessionAnalyzer(
+            homes=[self.active_home, self.archive_home]
+        )
+        original_scan = module.scan_claude_session
+        with mock.patch.object(
+            module, "scan_claude_session", wraps=original_scan
+        ) as scan:
+            sessions, total, projects, applied = analyzer.find_search_sessions(
+                project_path=str(self.workspace),
+                all_projects=False,
+                keywords=["candidate needle"],
+                case_sensitive=False,
+                use_prefilter=True,
+                exclude_sessions=set(),
+            )
+        self.assertTrue(applied)
+        self.assertEqual(total, 2)
+        self.assertEqual(projects, 1)
+        self.assertEqual([ref["session_id"] for ref in sessions], [matching_id])
+        self.assertEqual(scan.call_count, 1)
+
+    def test_final_identity_peek_is_bounded_and_reads_from_eof(self) -> None:
+        from _core import claude as claude_core
+
+        no_id = self.root / "no-session-id.jsonl"
+        write_jsonl(
+            no_id,
+            [{"type": "progress", "message": f"record {index}"} for index in range(100)],
+        )
+        with mock.patch.object(
+            claude_core.json, "loads", wraps=json.loads
+        ) as loads:
+            session_id = claude_core.peek_final_claude_session_id(
+                no_id,
+                max_records=3,
+                max_bytes=1024 * 1024,
+            )
+        self.assertIsNone(session_id)
+        self.assertEqual(loads.call_count, 3)
+
+        oversized = self.root / "oversized-first-record.jsonl"
+        write_jsonl(
+            oversized,
+            [{"type": "progress", "message": "x" * 4096}],
+        )
+        with mock.patch.object(
+            claude_core.json, "loads", wraps=json.loads
+        ) as loads:
+            session_id = claude_core.peek_final_claude_session_id(
+                oversized,
+                max_records=32,
+                max_bytes=128,
+            )
+        self.assertIsNone(session_id)
+        self.assertEqual(loads.call_count, 0)
+
+        dangling = self.root / "dangling.jsonl"
+        dangling.symlink_to(self.root / "missing-target.jsonl")
+        self.assertIsNone(claude_core.peek_final_claude_session_id(dangling))
+
+        conflicting = self.root / "conflicting-identities.jsonl"
+        write_jsonl(
+            conflicting,
+            [
+                {"sessionId": "prefix-id", "type": "progress"},
+                {"sessionId": "final-id", "type": "progress"},
+            ],
+        )
+        self.assertEqual(
+            claude_core.peek_final_claude_session_id(conflicting),
+            "final-id",
+        )
+
+    def test_uncertain_identity_is_conservatively_fully_parsed(self) -> None:
+        no_id = project_dir(self.active_home, self.workspace) / "legacy-no-id.jsonl"
+        write_jsonl(
+            no_id,
+            [{"type": "progress", "message": "ordinary content without identity"}],
+        )
+        result = self.run_cli(
+            "search",
+            str(self.workspace),
+            "absent-marker",
+            "--history-sources",
+            str(self.manifest),
+            check=False,
+        )
+        self.assertIn("Searching 1 session(s)", result.stdout)
+        self.assertIn("No matches found.", result.stdout)
+        self.assertIn(
+            "Candidate prefilter: full-session parsing required for 1/1 session(s).",
+            result.stderr,
+        )
+
+    def test_dangling_jsonl_degrades_to_tolerant_full_scan(self) -> None:
+        dangling = project_dir(self.active_home, self.workspace) / "orphan.jsonl"
+        dangling.symlink_to(self.root / "missing-session.jsonl")
+        default_run = self.run_cli(
+            "search",
+            str(self.workspace),
+            "absent-marker",
+            "--history-sources",
+            str(self.manifest),
+        )
+        no_prefilter_run = self.run_cli(
+            "search",
+            str(self.workspace),
+            "absent-marker",
+            "--no-prefilter",
+            "--history-sources",
+            str(self.manifest),
+        )
+        self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
+        self.assertIn("No matches found.", default_run.stdout)
+        self.assertNotIn("Traceback", default_run.stderr)
+
+    def test_no_candidate_is_no_match_not_no_sessions(self) -> None:
+        session_id = "12121212-1212-4212-8212-121212121212"
+        write_jsonl(
+            project_dir(self.active_home, self.workspace) / f"{session_id}.jsonl",
+            [
+                user_record(
+                    session_id,
+                    self.workspace,
+                    "ordinary content",
+                    "2026-04-15T00:00:00Z",
+                )
+            ],
+        )
+        result = self.run_cli(
+            "search",
+            str(self.workspace),
+            "absent-marker",
+            "--history-sources",
+            str(self.manifest),
+            check=False,
+        )
+        self.assertIn("Searching 1 session(s)", result.stdout)
+        self.assertIn("No matches found.", result.stdout)
+        self.assertNotIn("No sessions found", result.stdout)
+        self.assertIn(
+            "Candidate prefilter: full-session parsing required for 0/1 session(s).",
+            result.stderr,
+        )
 
     def test_repeated_copy_sizes_flags_only_actual_duplicates(self) -> None:
         """Only sizes that repeat are worth hashing — a unique size cannot
@@ -791,6 +1022,134 @@ class SessionAnalyzerTests(unittest.TestCase):
         )
         self.assertIn(target_id, completed.stdout)
         self.assertNotIn(current_id, completed.stdout)
+
+    def test_exclude_session_does_not_treat_alias_filename_as_identity(self) -> None:
+        internal_id = "22222222-2222-4222-8222-222222222222"
+        alias_stem = "11111111-1111-4111-8111-111111111111"
+        write_jsonl(
+            project_dir(self.active_home, self.workspace) / f"{alias_stem}.jsonl",
+            [
+                user_record(
+                    internal_id,
+                    self.workspace,
+                    "renamed-copy-marker",
+                    "2026-04-20T10:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir(self.archive_home, self.workspace) / f"{internal_id}.jsonl",
+            [
+                user_record(
+                    internal_id,
+                    self.workspace,
+                    "ordinary archive copy",
+                    "2026-04-20T10:00:01Z",
+                )
+            ],
+        )
+        arguments = (
+            "search",
+            str(self.workspace),
+            "renamed-copy-marker",
+            "--exclude-session",
+            alias_stem,
+            "--history-sources",
+            str(self.manifest),
+        )
+        default_run = self.run_cli(*arguments)
+        no_prefilter_run = self.run_cli(*arguments, "--no-prefilter")
+        self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
+        self.assertIn("Found 1 session(s) with matches", default_run.stdout)
+        self.assertIn(f"{alias_stem}.jsonl", default_run.stdout)
+
+    def test_excluded_prefix_id_is_resolved_by_full_candidate_scan(self) -> None:
+        excluded_id = "33333333-3333-4333-8333-333333333333"
+        live_id = "44444444-4444-4444-8444-444444444444"
+        session_file = project_dir(self.active_home, self.workspace) / "mixed-identity.jsonl"
+        write_jsonl(
+            session_file,
+            [
+                user_record(
+                    excluded_id,
+                    self.workspace,
+                    "early record before identity correction",
+                    "2026-04-20T10:00:00Z",
+                ),
+                user_record(
+                    live_id,
+                    self.workspace,
+                    "final-identity-marker",
+                    "2026-04-20T10:00:01Z",
+                ),
+            ],
+        )
+        arguments = (
+            "search",
+            str(self.workspace),
+            "final-identity-marker",
+            "--exclude-session",
+            excluded_id,
+            "--history-sources",
+            str(self.manifest),
+        )
+        default_run = self.run_cli(*arguments)
+        no_prefilter_run = self.run_cli(*arguments, "--no-prefilter")
+        self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
+        self.assertIn("Found 1 session(s) with matches", default_run.stdout)
+
+    def test_candidate_final_id_expands_stable_renamed_copy(self) -> None:
+        prefix_id = "55555555-5555-4555-8555-555555555555"
+        final_id = "66666666-6666-4666-8666-666666666666"
+        active_copy = project_dir(self.active_home, self.workspace) / "changing-id.jsonl"
+        write_jsonl(
+            active_copy,
+            [
+                user_record(
+                    prefix_id,
+                    self.workspace,
+                    "early provisional identity",
+                    "2026-04-20T10:00:00Z",
+                ),
+                user_record(
+                    final_id,
+                    self.workspace,
+                    "final-id-union-marker",
+                    "2026-04-20T10:00:01Z",
+                ),
+            ],
+        )
+        archive_copy = project_dir(self.archive_home, self.workspace) / "stable-renamed.jsonl"
+        write_jsonl(
+            archive_copy,
+            [
+                {
+                    "type": "user",
+                    "sessionId": final_id,
+                    "cwd": str(self.workspace),
+                    "message": {
+                        "role": "user",
+                        "content": "untimed non-matching copy",
+                    },
+                }
+            ],
+        )
+        arguments = (
+            "search",
+            str(self.workspace),
+            "final-id-union-marker",
+            "--from-date",
+            "2026-04-01",
+            "--to-date",
+            "2026-04-30",
+            "--history-sources",
+            str(self.manifest),
+        )
+        default_run = self.run_cli(*arguments)
+        no_prefilter_run = self.run_cli(*arguments, "--no-prefilter")
+        self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
+        self.assertIn("Session sources: active:main, archive:full-backup", default_run.stdout)
+        self.assertIn("excluded 1 record(s) without an internal timestamp", default_run.stdout)
 
     def test_zero_match_hint_points_at_unapplied_widenings(self) -> None:
         write_jsonl(
@@ -1220,6 +1579,10 @@ class RawBytePrefilterSafetyTests(unittest.TestCase):
             with self.subTest(keyword=keyword):
                 self.assertFalse(keywords_are_raw_byte_safe([keyword]))
 
+    def test_cjk_is_safe_for_file_prefilter_but_not_line_prefilter(self) -> None:
+        self.assertTrue(keywords_are_file_prefilter_safe(["你好"]))
+        self.assertFalse(keywords_are_raw_byte_safe(["你好"]))
+
     def test_ascii_keyword_is_raw_byte_safe(self) -> None:
         # The guard must not misfire on ordinary input — killing the speedup
         # for everyone would be a worse outcome than the bug it prevents.
@@ -1255,6 +1618,7 @@ class RawBytePrefilterSafetyTests(unittest.TestCase):
             ("the ﬁnancial model is attached", "financial"),
             ("DIE STRAẞE IST LANG", "strasse"),
             ("a ﬅudy of ﬆate machines", "study"),
+            ("İstanbul and 自İ", "自i"),
         ):
             with self.subTest(content=content):
                 self._assert_search_finds(content, keyword)
@@ -1270,6 +1634,15 @@ class RawBytePrefilterSafetyTests(unittest.TestCase):
         for ch in _FOLDS_TO_ASCII:
             self.assertFalse(ch.isascii(), f"{ch!r} is already ASCII")
             self.assertTrue(ch.casefold().isascii(), f"{ch!r} does not fold to ASCII")
+
+        from _core.text import _FOLDS_CONTAINING_ASCII
+
+        self.assertIn("İ", _FOLDS_CONTAINING_ASCII)
+        for ch in _FOLDS_CONTAINING_ASCII:
+            self.assertTrue(
+                any(part.isascii() for part in ch.casefold()),
+                f"{ch!r} has no ASCII substring after casefold",
+            )
 
     def _assert_search_finds(self, content: str, keyword: str,
                              ensure_ascii: bool = False) -> None:
