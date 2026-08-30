@@ -58,7 +58,27 @@ skills="$(
 )"
 
 if [ -z "$skills" ]; then
+  # This OK must say WHAT IT LOOKED AT, for the same reason as the PREFLIGHT above: the
+  # walk reads the COMMITTED diff ($MERGE_BASE...HEAD), so staged-but-uncommitted edits are
+  # invisible to it. "you genuinely touched no skill" and "you touched three skills and have
+  # not committed them yet" then print the identical green line.
+  #
+  # Measured 2026-08-30: run locally right after `git add` on a change that edited three
+  # skills, this printed "OK: this change touches no skill directory". Read as a pass, it
+  # certifies work the run never examined.
+  #
+  # Deliberately NOT a failure: on CI, and for any genuinely skill-free commit, zero touched
+  # skills is the correct and common answer — failing there would kill healthy input and
+  # teach people to skip the check. Naming the scope is enough to make the vacuous case
+  # visible without arming a gate that misfires.
+  examined="$(git diff --name-only "$MERGE_BASE"...HEAD | wc -l | tr -d ' ')"
   echo "OK: this change touches no skill directory"
+  echo "    scope: the committed diff $MERGE_BASE...HEAD ($examined file(s) examined)"
+  uncommitted="$(git status --porcelain | wc -l | tr -d ' ')"
+  if [ "$uncommitted" != "0" ]; then
+    echo "    NOTE: $uncommitted uncommitted path(s) were NOT examined. If your skill edits are"
+    echo "          still staged or unstaged, this OK says nothing about them — commit and re-run."
+  fi
   exit 0
 fi
 
