@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **tunnel-doctor** v1.11.0 → v1.11.1: correct the Windows/v2rayN chain-repair note that assumed every manual exit was a residential VLESS profile and treated a fixed exit-IP range as the authority. The generic workflow now reads the exact protocol from the owning client, keeps credentials out of output and Git, discovers the live SQLite schema, independently reads back type/presence/pointers/active front, and treats IP/ASN as observation rather than proof of billing class.
 - **twitter-reader** v1.1.1 → v1.2.0: fix the single-source-of-failure on
   Jina exposed by live tests. Single-post text now routes through the
   fxtwitter mirror API first (login-free, key-free, direct connection,
