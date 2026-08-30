@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **read-claude-code-history / read-codex-history** (`daymade-claude-code` v3.7.5):
+  stop scanning the same multi-gigabyte Claude history tree once per profile label.
+  Multi-model profiles commonly expose distinct config homes whose `projects/` paths are
+  symlinks to one physical tree; the inventory previously parsed that tree again for every
+  alias and only de-duplicated sessions after paying the full I/O cost. It now groups sources
+  by the resolved physical `projects/` path, scans each tree once, and attaches every nominal
+  active/archive label to the resulting conversations before the existing cross-tree merge;
+  the original-word exporter now applies the same grouping to each of its two logical passes.
+  A deterministic main + aliased-profile + distinct-archive regression proves two physical
+  parses instead of three, full provenance retention, and non-inflated subagent exclusion
+  counts, while a second regression proves two exporter reads instead of four; both complete
+  reader suites remain green.
 - **prior-work-retrieval** (`daymade-claude-code` v3.7.4): the Search routing table was
   provider-blind in one row and short one row. "Meaning remembered, wording changed" carried no
   platform qualifier while its adapter is a Claude-only index, and no row covered prior

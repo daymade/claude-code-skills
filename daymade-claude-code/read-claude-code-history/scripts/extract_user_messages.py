@@ -47,7 +47,10 @@ from pathlib import Path
 
 # Multi-home discovery lives in the bundled `_core` package (see analyze_sessions.py).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _core.sources import discover_claude_sources  # noqa: E402
+from _core.sources import (  # noqa: E402
+    discover_claude_sources,
+    group_claude_sources_by_projects,
+)
 from _core.text import iter_jsonl  # noqa: E402
 
 CST = timezone(timedelta(hours=8))
@@ -118,7 +121,8 @@ def _iter_session_files(sources, cutoff: datetime):
     """Yield (source_label, Path) for session JSONL files. mtime is only a coarse
     prefilter with a 2-day grace band; the real window is applied per record."""
     grace = cutoff.timestamp() - 2 * 86400
-    for src in sources:
+    for group in group_claude_sources_by_projects(sources):
+        src = group[0]
         projects = src.home / 'projects'
         if not projects.is_dir():
             continue

@@ -32,6 +32,7 @@ from _core.sources import (  # noqa: E402
     HistorySource,
     HistorySourceConfigError,
     discover_claude_sources,
+    group_claude_sources_by_projects,
 )
 from _core.text import (  # noqa: E402
     is_automated_title,
@@ -726,6 +727,36 @@ def merge_claude_results(results: list[ProviderResult]) -> ProviderResult:
     )
 
 
+def collect_claude_sources(
+    args: argparse.Namespace, sources: list[HistorySource]
+) -> ProviderResult:
+    """Collect Claude inventory once per physical projects tree.
+
+    Profile homes can be distinct configuration roots while their ``projects/``
+    paths are symlinks to the same history tree.  Scanning once per source label
+    multiplies multi-gigabyte JSONL reads without adding evidence.  Collapse
+    only physical aliases here, attach every label to each conversation, then
+    retain the existing cross-tree/session merge for genuinely distinct copies.
+    """
+    grouped_results: list[ProviderResult] = []
+    for group in group_claude_sources_by_projects(sources):
+        primary = next(
+            (source for source in group if source.kind == "active"),
+            group[0],
+        )
+        result = collect_claude(args, primary)
+        labels = [source.display_label for source in group]
+        result.home = ", ".join(labels)
+        selected_kind = (
+            "active" if any(source.kind == "active" for source in group) else primary.kind
+        )
+        for conversation in result.conversations:
+            conversation.source_kind = selected_kind
+            conversation.source_labels = list(labels)
+        grouped_results.append(result)
+    return merge_claude_results(grouped_results)
+
+
 def apply_date_filter(
     result: ProviderResult,
     from_timestamp: Optional[float],
@@ -823,9 +854,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                     ]
         except HistorySourceConfigError as error:
             parser.error(str(error))
-        claude_result = merge_claude_results(
-            [collect_claude(args, source) for source in claude_sources]
-        )
+        claude_result = collect_claude_sources(args, claude_sources)
         claude_result.warnings = source_warnings + claude_result.warnings
         results.append(
             apply_date_filter(claude_result, from_timestamp, to_timestamp)

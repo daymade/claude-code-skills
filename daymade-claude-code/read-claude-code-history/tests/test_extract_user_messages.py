@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKILL_DIR / "scripts"))
@@ -60,6 +61,29 @@ def run_extract(home: Path, records: list) -> ex.Extraction:
 
 
 class ExtractUserMessagesTest(unittest.TestCase):
+    def test_aliased_profile_tree_is_read_once_per_logical_pass(self):
+        main = self.home
+        profile = self.home / 'profile'
+        records = [user('u1', '同一棵物理历史只读一次')]
+        write_jsonl(main / 'projects' / '-tmp-proj' / 's1.jsonl', records)
+        profile.mkdir(parents=True)
+        (profile / 'projects').symlink_to(
+            main / 'projects', target_is_directory=True
+        )
+        sources, _ = discover_claude_sources(
+            explicit_homes=[str(main), str(profile)]
+        )
+        cutoff = NOW - timedelta(days=1)
+
+        with mock.patch.object(ex, 'iter_jsonl', wraps=ex.iter_jsonl) as iterator:
+            ext = ex.extract(sources, cutoff)
+
+        self.assertEqual(iterator.call_count, 2)
+        self.assertEqual(
+            [entry.text for entry in ext.entries],
+            ['同一棵物理历史只读一次'],
+        )
+
     def test_typed_message_is_kept(self):
         ext = run_extract(self.home, [user('u1', '今天把这个修一下')])
         self.assertEqual([e.text for e in ext.entries], ['今天把这个修一下'])
