@@ -148,7 +148,7 @@ When the user says something like "set up Claude Code profiles" or "I want to us
    setup script. Do not hardcode dependency installs into shell scripts.
 
 6. **Register the settings converger**
-   - Add `~/.config/claude-switch-models-setup/sync-profile-settings.py` as a SessionStart hook in the **default** profile's `~/.claude/settings.json` `hooks.SessionStart` list (it no-ops when the active profile IS the default; its job there is to propagate into every profile's own `hooks` key on the first sync)
+   - Add the converger as a SessionStart hook in the **default** profile's `~/.claude/settings.json` `hooks.SessionStart` list, using an absolute direct-Python command such as `'/absolute/path/to/python3' '/absolute/path/to/sync-profile-settings.py'`. Do not register the `.py` file by shebang or through a package manager: this hook exists to repair every profile and must not wait on a shared environment/cache lock. It no-ops when the active profile IS the default; its job there is to propagate into every profile's own `hooks` key on the first sync.
    - Run the initial alignment: `python3 ~/.config/claude-switch-models-setup/sync-profile-settings.py --all`
    - From then on every profile converges its `settings.json` and the behavior slice of its `.claude.json` from the default profile at each session start (changes apply next session). Audit without writing: `--check --all`
 
