@@ -17,7 +17,14 @@ description: >-
   inventory, use local-conversation-history.
 ---
 
-# Claude Code History Files Finder
+# Claude Code History Files Finder — frozen snapshot, not a live contract
+
+> ⚠️ **`claude-code-history-files-finder` no longer exists.** This is its retired
+> PR #357 snapshot, kept for migration and regression evidence. Its Codex branch
+> now lives in `daymade-claude-code:read-codex-history`, and its Kimi branch is a
+> live surface of `daymade-claude-code:read-claude-code-history` — not, as the
+> frontmatter above implies, something reachable only through this file. Read this
+> for what the old contract said; read those skills for what ships today.
 
 Search and recover content from Claude Code session history stored in active
 homes and explicitly registered long-term archives.

@@ -65,7 +65,8 @@ Search is the mirror image: it is Claude-only unless the other two stores are
 added explicitly.
 
 **Kimi CLI has no other entry anywhere** — no dedicated skill exists for either
-axis. Its home resolves `--kimi-home` > `KIMI_HOME` > `~/.kimi-code`.
+axis, so both routes above land in `read-claude-code-history`, which documents
+its own Kimi home resolution.
 
 Let the executor own every flag beyond provider scope: `--all-projects`,
 `--recursive`, date bounds, `--include-archived`, `--include-subagents`,
@@ -107,7 +108,9 @@ the explanation's topic clues do not convert the request into a content search.
 - Do not run provider-specific parsing, SQLite, `rg`, `jq`, or JSONL pipelines
   here. Every one of those belongs to an executor that already handles its
   store's schema, archives, and failure modes.
-- Do not copy an executor's flags into this file beyond `--source`. They change;
-  this file would drift silently and then teach the wrong command.
+- Do not copy an executor's flags into this file beyond the three that name
+  provider scope (`--source`, `--codex`, `--kimi`) — those are this skill's own
+  subject. Every other flag changes on the executor's schedule; copying one here
+  makes this file drift silently and then teach the wrong command.
 - Do not route to a continuation skill to answer a question about the past.
   Reading is evidence; continuing changes the world.
