@@ -60,8 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prefilter now safely handles uncased Unicode such as CJK with an exact matcher for every
   raw UTF-8 / JSON-escaped mixture; cased or multi-codepoint folds still fall back to full parsing.
   On the real 8,532-physical-file / 5,275-session / 264-project inventory, the
-  previously interrupted `自动主线回锚` one-day search completed in 12.73s and
-  reported that only 19 sessions
+  previously interrupted `自动主线回锚` one-day search completed in 14.36s and
+  reported that only 90 sessions
   required full-session parsing. Deterministic regressions prove 1/41 full metadata parses,
   byte-identical output with `--no-prefilter`, archived-copy untimed-count fidelity,
   escaped-CJK recall, and honest zero-candidate reporting.

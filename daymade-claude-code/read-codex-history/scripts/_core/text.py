@@ -198,12 +198,24 @@ _FOLDS_TO_ASCII = tuple(
     and chr(cp).casefold().strip()
 )
 
+# A substring query needs one wider class: U+0130 casefolds to ``i`` plus a
+# combining dot, so the ASCII query ``i`` legitimately matches even though the
+# whole fold is not ASCII. Seven other code points have the same shape. Keep
+# the narrower table above as its existing contract and derive this superset
+# from Python's matcher semantics as well.
+_FOLDS_CONTAINING_ASCII = tuple(
+    chr(cp)
+    for cp in range(0x80, 0x11000)
+    if chr(cp).casefold() != chr(cp)
+    and any(character.isascii() for character in chr(cp).casefold())
+)
+
 # Any of these in a file/line means a byte scan cannot rule it out:
 #   - the fold-equivalent characters above
 #   - a "\u" escape: content written with ensure_ascii=True stores non-ASCII
 #     that way, and some writers (Go's encoding/json) escape even ASCII
 #     "<" ">" "&" as </>/&
-_UNSCANNABLE_MARKERS = _FOLDS_TO_ASCII + ("\\u",)
+_UNSCANNABLE_MARKERS = _FOLDS_CONTAINING_ASCII + ("\\u",)
 
 
 def keywords_are_raw_byte_safe(keywords: Iterable[str]) -> bool:
@@ -440,7 +452,7 @@ def files_possibly_matching(
         mixed_scan.append("--")
 
     marker_scan = [exe, "-a", "-F", "-l"]
-    markers = list(_FOLDS_TO_ASCII)
+    markers = list(_FOLDS_CONTAINING_ASCII)
     # Any ASCII character in a query can match a non-ASCII full-fold
     # equivalent stored as a JSON escape ("k" vs "\\u212a", "ss" vs
     # "\\u00df"). This also matters inside a mixed keyword such as "自k";

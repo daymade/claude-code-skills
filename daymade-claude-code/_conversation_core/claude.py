@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -20,20 +21,40 @@ class ClaudeSessionSummary:
     timestamp_count: int
 
 
-def scan_claude_session_id(path: Path) -> str:
-    """Read only until the first internal session id, then stop.
+def peek_claude_session_id(
+    path: Path,
+    *,
+    max_records: int = 32,
+    max_bytes: int = 256 * 1024,
+) -> Optional[str]:
+    """Read a bounded prefix for the first internal session id.
 
     Candidate discovery needs the authoritative JSONL identity so renamed
     active/archive copies still form one session, but it must not rescan every
-    transcript body merely to build that union. Valid Claude session files use
-    one stable ``sessionId`` throughout; files without one retain the same
-    filename-stem fallback as :func:`scan_claude_session`.
+    transcript body merely to build that union. ``None`` means the prefix did
+    not prove an identity; callers must conservatively promote that file to the
+    full candidate path rather than trusting its filename stem.
     """
-    for record in iter_jsonl(path):
-        session_id = record.get("sessionId")
-        if isinstance(session_id, str) and session_id:
-            return session_id
-    return path.stem
+    records_read = 0
+    bytes_read = 0
+    with path.open("rb") as handle:
+        for raw_line in handle:
+            if records_read >= max_records:
+                return None
+            bytes_read += len(raw_line)
+            if bytes_read > max_bytes:
+                return None
+            records_read += 1
+            try:
+                record = json.loads(raw_line)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue
+            if not isinstance(record, dict):
+                continue
+            session_id = record.get("sessionId")
+            if isinstance(session_id, str) and session_id:
+                return session_id
+    return None
 
 
 def scan_claude_session(path: Path, max_title_chars: int = 120) -> ClaudeSessionSummary:

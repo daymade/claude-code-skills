@@ -34,7 +34,7 @@ from collections import Counter, defaultdict
 # scripts/_core/ by sync_core.py so this skill stays self-contained. Make this
 # script's own dir importable regardless of how it is invoked, then import.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _core.claude import scan_claude_session, scan_claude_session_id  # noqa: E402
+from _core.claude import peek_claude_session_id, scan_claude_session  # noqa: E402
 from _core.codex import codex_meta_from_rollout, codex_session_id  # noqa: E402
 from _core.kimi import (  # noqa: E402
     iter_kimi_session_dirs,
@@ -1323,25 +1323,16 @@ class SessionAnalyzer:
                     unique_paths.setdefault(physical, file)
                     keys_by_path[physical].add(key)
 
-        identity_by_path: Dict[str, str] = {}
-        names_by_identity: Dict[tuple[str, str], set[str]] = defaultdict(set)
-        total_identities: set[tuple[str, str]] = set()
-        projects_with_sessions: set[str] = set()
-        searchable_paths: Dict[str, Path] = {}
+        identity_by_path: Dict[str, Optional[str]] = {}
+        uncertain_paths: set[str] = set()
         for physical, file in unique_paths.items():
-            session_id = scan_claude_session_id(file)
+            session_id = peek_claude_session_id(file)
             identity_by_path[physical] = session_id
-            if session_id in exclude_sessions:
-                continue
-            searchable_paths[physical] = file
-            for project_name, filename in keys_by_path[physical]:
-                identity = (project_name, session_id)
-                total_identities.add(identity)
-                projects_with_sessions.add(project_name)
-                names_by_identity[identity].add(filename)
+            if session_id is None:
+                uncertain_paths.add(physical)
 
         matched_files = files_possibly_matching(
-            searchable_paths.values(),
+            unique_paths.values(),
             keywords,
             case_sensitive=case_sensitive,
             on_progress=on_prefilter_progress,
@@ -1356,14 +1347,43 @@ class SessionAnalyzer:
                 exclude_sessions=exclude_sessions,
             )
 
-        candidate_identities: set[tuple[str, str]] = set()
+        matched_physical: set[str] = set()
         for file in matched_files:
             try:
-                physical = str(file.resolve())
+                matched_physical.add(str(file.resolve()))
             except (OSError, RuntimeError):
-                physical = str(file)
-            session_id = identity_by_path.get(physical, file.stem)
-            for project_name, _filename in keys_by_path.get(physical, set()):
+                matched_physical.add(str(file))
+
+        # A bounded identity miss is uncertainty, not evidence that filename
+        # identity is authoritative. Promote it to the candidate set, then pay
+        # the full metadata scan only for that small subset. This runs after
+        # the native keyword pass, so old/no-ID files cannot silently turn the
+        # identity index back into a full-corpus JSON parser.
+        candidate_physical = matched_physical | uncertain_paths
+        for physical in uncertain_paths:
+            identity_by_path[physical] = scan_claude_session(
+                unique_paths[physical]
+            ).session_id
+
+        names_by_identity: Dict[tuple[str, str], set[str]] = defaultdict(set)
+        total_identities: set[tuple[str, str]] = set()
+        projects_with_sessions: set[str] = set()
+        for physical in unique_paths:
+            session_id = identity_by_path[physical]
+            if session_id is None or session_id in exclude_sessions:
+                continue
+            for project_name, filename in keys_by_path[physical]:
+                identity = (project_name, session_id)
+                total_identities.add(identity)
+                projects_with_sessions.add(project_name)
+                names_by_identity[identity].add(filename)
+
+        candidate_identities: set[tuple[str, str]] = set()
+        for physical in candidate_physical:
+            session_id = identity_by_path.get(physical)
+            if session_id is None or session_id in exclude_sessions:
+                continue
+            for project_name, _filename in keys_by_path[physical]:
                 candidate_identities.add((project_name, session_id))
 
         candidate_names: Dict[str, set[str]] = defaultdict(set)

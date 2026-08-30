@@ -501,6 +501,62 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertEqual([ref["session_id"] for ref in sessions], [matching_id])
         self.assertEqual(scan.call_count, 1)
 
+    def test_identity_peek_is_bounded_when_session_id_is_absent(self) -> None:
+        from _core import claude as claude_core
+
+        no_id = self.root / "no-session-id.jsonl"
+        write_jsonl(
+            no_id,
+            [{"type": "progress", "message": f"record {index}"} for index in range(100)],
+        )
+        with mock.patch.object(
+            claude_core.json, "loads", wraps=json.loads
+        ) as loads:
+            session_id = claude_core.peek_claude_session_id(
+                no_id,
+                max_records=3,
+                max_bytes=1024 * 1024,
+            )
+        self.assertIsNone(session_id)
+        self.assertEqual(loads.call_count, 3)
+
+        oversized = self.root / "oversized-first-record.jsonl"
+        write_jsonl(
+            oversized,
+            [{"type": "progress", "message": "x" * 4096}],
+        )
+        with mock.patch.object(
+            claude_core.json, "loads", wraps=json.loads
+        ) as loads:
+            session_id = claude_core.peek_claude_session_id(
+                oversized,
+                max_records=32,
+                max_bytes=128,
+            )
+        self.assertIsNone(session_id)
+        self.assertEqual(loads.call_count, 0)
+
+    def test_uncertain_identity_is_conservatively_fully_parsed(self) -> None:
+        no_id = project_dir(self.active_home, self.workspace) / "legacy-no-id.jsonl"
+        write_jsonl(
+            no_id,
+            [{"type": "progress", "message": "ordinary content without identity"}],
+        )
+        result = self.run_cli(
+            "search",
+            str(self.workspace),
+            "absent-marker",
+            "--history-sources",
+            str(self.manifest),
+            check=False,
+        )
+        self.assertIn("Searching 1 session(s)", result.stdout)
+        self.assertIn("No matches found.", result.stdout)
+        self.assertIn(
+            "Candidate prefilter: full-session parsing required for 1/1 session(s).",
+            result.stderr,
+        )
+
     def test_no_candidate_is_no_match_not_no_sessions(self) -> None:
         session_id = "12121212-1212-4212-8212-121212121212"
         write_jsonl(
@@ -1347,6 +1403,7 @@ class RawBytePrefilterSafetyTests(unittest.TestCase):
             ("the ﬁnancial model is attached", "financial"),
             ("DIE STRAẞE IST LANG", "strasse"),
             ("a ﬅudy of ﬆate machines", "study"),
+            ("İstanbul and 自İ", "自i"),
         ):
             with self.subTest(content=content):
                 self._assert_search_finds(content, keyword)
@@ -1362,6 +1419,15 @@ class RawBytePrefilterSafetyTests(unittest.TestCase):
         for ch in _FOLDS_TO_ASCII:
             self.assertFalse(ch.isascii(), f"{ch!r} is already ASCII")
             self.assertTrue(ch.casefold().isascii(), f"{ch!r} does not fold to ASCII")
+
+        from _core.text import _FOLDS_CONTAINING_ASCII
+
+        self.assertIn("İ", _FOLDS_CONTAINING_ASCII)
+        for ch in _FOLDS_CONTAINING_ASCII:
+            self.assertTrue(
+                any(part.isascii() for part in ch.casefold()),
+                f"{ch!r} has no ASCII substring after casefold",
+            )
 
     def _assert_search_finds(self, content: str, keyword: str,
                              ensure_ascii: bool = False) -> None:

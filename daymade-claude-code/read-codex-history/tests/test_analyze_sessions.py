@@ -1280,6 +1280,7 @@ class RawBytePrefilterSafetyTests(unittest.TestCase):
             ("the ﬁnancial model is attached", "financial"),
             ("DIE STRAẞE IST LANG", "strasse"),
             ("a ﬅudy of ﬆate machines", "study"),
+            ("İstanbul and 自İ", "自i"),
         ):
             with self.subTest(content=content):
                 self._assert_search_finds(content, keyword)
@@ -1295,6 +1296,15 @@ class RawBytePrefilterSafetyTests(unittest.TestCase):
         for ch in _FOLDS_TO_ASCII:
             self.assertFalse(ch.isascii(), f"{ch!r} is already ASCII")
             self.assertTrue(ch.casefold().isascii(), f"{ch!r} does not fold to ASCII")
+
+        from _core.text import _FOLDS_CONTAINING_ASCII
+
+        self.assertIn("İ", _FOLDS_CONTAINING_ASCII)
+        for ch in _FOLDS_CONTAINING_ASCII:
+            self.assertTrue(
+                any(part.isascii() for part in ch.casefold()),
+                f"{ch!r} has no ASCII substring after casefold",
+            )
 
     def _assert_search_finds(self, content: str, keyword: str,
                              ensure_ascii: bool = False) -> None:
