@@ -1062,6 +1062,7 @@ class SessionAnalyzer:
         self,
         pairs: List[tuple],
         candidate_paths: Optional[set[str]] = None,
+        candidate_summaries: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Collect + de-duplicate sessions from ``(source, project_dir)`` pairs.
 
@@ -1101,14 +1102,20 @@ class SessionAnalyzer:
             for file in scan_dir.glob("*.jsonl"):
                 if file.name.startswith("agent-"):
                     continue
+                try:
+                    physical_file = str(file.resolve())
+                except (OSError, RuntimeError):
+                    physical_file = str(file)
                 if candidate_paths is not None:
-                    try:
-                        physical_file = str(file.resolve())
-                    except (OSError, RuntimeError):
-                        physical_file = str(file)
                     if physical_file not in candidate_paths:
                         continue
-                summary = scan_claude_session(file)
+                summary = (
+                    candidate_summaries.get(physical_file)
+                    if candidate_summaries is not None
+                    else None
+                )
+                if summary is None:
+                    summary = scan_claude_session(file)
                 sid = summary.session_id
                 copies = [
                     {
@@ -1371,10 +1378,11 @@ class SessionAnalyzer:
         # the native keyword pass, so old/no-ID files cannot silently turn the
         # identity index back into a full-corpus JSON parser.
         candidate_physical = matched_physical | uncertain_paths
-        for physical in uncertain_paths:
-            identity_by_path[physical] = scan_claude_session(
-                unique_paths[physical]
-            ).session_id
+        candidate_summaries: Dict[str, Any] = {}
+        for physical in candidate_physical:
+            summary = scan_claude_session(unique_paths[physical])
+            candidate_summaries[physical] = summary
+            identity_by_path[physical] = summary.session_id
 
         total_identities: set[tuple[str, str]] = set()
         projects_with_sessions: set[str] = set()
@@ -1412,6 +1420,7 @@ class SessionAnalyzer:
             for ref in self._merge_sessions_from_dirs(
                 pairs,
                 candidate_paths=candidate_paths,
+                candidate_summaries=candidate_summaries,
             ):
                 if ref["session_id"] in exclude_sessions:
                     continue

@@ -1085,6 +1085,59 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
         self.assertIn("Found 1 session(s) with matches", default_run.stdout)
 
+    def test_candidate_final_id_expands_stable_renamed_copy(self) -> None:
+        prefix_id = "55555555-5555-4555-8555-555555555555"
+        final_id = "66666666-6666-4666-8666-666666666666"
+        active_copy = project_dir(self.active_home, self.workspace) / "changing-id.jsonl"
+        write_jsonl(
+            active_copy,
+            [
+                user_record(
+                    prefix_id,
+                    self.workspace,
+                    "early provisional identity",
+                    "2026-04-20T10:00:00Z",
+                ),
+                user_record(
+                    final_id,
+                    self.workspace,
+                    "final-id-union-marker",
+                    "2026-04-20T10:00:01Z",
+                ),
+            ],
+        )
+        archive_copy = project_dir(self.archive_home, self.workspace) / "stable-renamed.jsonl"
+        write_jsonl(
+            archive_copy,
+            [
+                {
+                    "type": "user",
+                    "sessionId": final_id,
+                    "cwd": str(self.workspace),
+                    "message": {
+                        "role": "user",
+                        "content": "untimed non-matching copy",
+                    },
+                }
+            ],
+        )
+        arguments = (
+            "search",
+            str(self.workspace),
+            "final-id-union-marker",
+            "--from-date",
+            "2026-04-01",
+            "--to-date",
+            "2026-04-30",
+            "--history-sources",
+            str(self.manifest),
+        )
+        default_run = self.run_cli(*arguments)
+        no_prefilter_run = self.run_cli(*arguments, "--no-prefilter")
+        self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
+        self.assertIn("Session sources: active:main, archive:full-backup", default_run.stdout)
+        self.assertIn("excluded 1 record(s) without an internal timestamp", default_run.stdout)
+
     def test_zero_match_hint_points_at_unapplied_widenings(self) -> None:
         write_jsonl(
             project_dir(self.active_home, self.workspace)
