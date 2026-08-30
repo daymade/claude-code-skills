@@ -3506,10 +3506,10 @@ they become load-bearing data.
 的重置公告。别再凭记忆回答「什么时候重置」——用权威追踪站 API 现查。
 
 **Key features:**
-- 主通道 Tibo Radar JSON API + codexlimitwatch 双源核对，30 秒出结果
+- 公告索引 Tibo Radar JSON API 现查；读 X 原帖走 fxtwitter 镜像拿完整长文（30 秒出结果）
 - 解读 Tibo 糙时间写法（「14pm PST」混用 24 小时制、常年写 PST 实为 PDT）
 - 太平洋时间→北京时间当场实测换算命令，含夏令时跨时令处理
-- 证据纪律：tracker 标签 ≠ 已到账，官宣 ≠ 你的账户已到账
+- 证据纪律：tracker 标签 ≠ 已到账，官宣 ≠ 你的账户已到账；celebration 帖 = 里程碑重置预告
 
 **Example usage:**
 ```text
