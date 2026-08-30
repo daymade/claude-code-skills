@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **claude-code-hooks** (`daymade-claude-code` v3.7.9): refresh the tracked
+  security-scan attestation against the v3.7.8 content so a fresh checkout can
+  package the reviewed Skill without first regenerating derived evidence.
 - **claude-code-hooks** (`daymade-claude-code` v3.7.8): distinguish recurring
   advisory cadence from blocking remediation budgets. Advisory injectors remain
   available throughout long sessions and prove long-horizon liveness;
