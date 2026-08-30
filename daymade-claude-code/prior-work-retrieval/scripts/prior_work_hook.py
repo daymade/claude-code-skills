@@ -107,6 +107,27 @@ NEGATED_PRIOR_SIGNAL = re.compile(
 # "这些 Skill 也是很久之前写的" dates something to argue it is stale — the
 # opposite of asking to go find it. Excised like a negation.
 STALE_AGE_IDIOM = re.compile(r"(?:很久|太久|好久|老早|早就)\s*(?:以前|之前)")
+# 「我们这个对话最开始是想要干什么来着」/「我们的主线任务是什么来着」ask what the
+# CURRENT session is about. The answer is the conversation already in front of the
+# executor: no carrier to search, no candidate to verify, and no artifact produced —
+# so the gate can only add friction, and a gate that misfires on healthy input is
+# how an operator learns to bypass it reflexively.
+#
+# This is the same distinction the weak tier already draws with 这个脚本 (the script
+# in front of you) vs 那个脚本 (one being recalled), but 什么来着 sits in the strong
+# tier and so arms with no distal requirement. Demoting it to the weak tier is the
+# wrong fix: 「上次做的方案叫什么来着？」 is a genuine recall and carries no distal
+# determiner, so it would stop arming. Excising the proximal construct instead
+# leaves every distal phrasing untouched.
+#
+# The excised span MUST include the recall idiom itself — excising only 这个对话
+# leaves 什么来着 behind and the strong tier still matches it.
+CURRENT_SESSION_RECALL = re.compile(
+    r"(?:这个|这次|本次|当前|我们这)\s*(?:对话|会话|session)[^\n。；;，,]{0,30}"
+    r"(?:什么来着|想(?:要)?干什么|要干什么|是要做什么)"
+    r"|(?:主线|当前|本次)\s*(?:任务|目标)\s*(?:是)?\s*什么来着",
+    re.IGNORECASE,
+)
 HOOK_GUIDANCE_MARKER = "Prior Work Retrieval is required before substantial production"
 USER_OPTOUT = re.compile(
     r"(?:不用|不要|无需|跳过).{0,12}(?:查历史|检索历史|已有工作检索|prior work|历史检索)"
@@ -185,7 +206,9 @@ def classify_prompt(prompt: str, receipt_valid: bool = False) -> str:
         return "none"
     if USER_OPTOUT.search(text):
         return "opt_out"
-    scannable = STALE_AGE_IDIOM.sub(" ", NEGATED_PRIOR_SIGNAL.sub(" ", text))
+    scannable = CURRENT_SESSION_RECALL.sub(
+        " ", STALE_AGE_IDIOM.sub(" ", NEGATED_PRIOR_SIGNAL.sub(" ", text))
+    )
     if PRIOR_WORK_STRONG_SIGNAL.search(scannable):
         return "required_prior_signal"
     if PRIOR_WORK_WEAK_SIGNAL.search(scannable) and DISTAL_WORK_NOUN.search(scannable):

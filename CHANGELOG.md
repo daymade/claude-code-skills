@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **daymade-claude-code / prior-work-retrieval** (v3.7.3): stop arming the retrieval gate on
+  questions about the *current* session. `什么来着` sits in the strong-signal tier, so it armed
+  with no distal-referent requirement — and the gate's own `audit` command shows it firing twice
+  on prompts whose referent is the conversation already in front of the executor
+  (「我们这个对话最开始是想要干什么来着」,「我们的主线任务是什么来着」). Those have no carrier
+  to search, no candidate to verify, and produce no artifact, so the gate could only add
+  friction, and a gate that misfires on healthy input is how an operator learns to bypass it
+  reflexively.
+
+  Fixed by excising the proximal construct before signal matching, alongside the existing
+  negation and stale-age excisions. Demoting `什么来着` to the weak tier was the wrong fix:
+  「上次做的方案叫什么来着？」 is a genuine recall and carries no distal determiner, so it would
+  have stopped arming. The excised span must include the recall idiom itself — removing only
+  `这个对话` leaves `什么来着` behind and the strong tier still matches it. Calibrated in both
+  directions (4 proximal prompts no longer arm; 6 genuine-recall prompts still do) with
+  regression tests for each half; suite 66/66.
+
 - **read-claude-code-history** (`daymade-claude-code` v3.7.2): the Skill claimed Kimi
   CLI was reachable "only through that reference until a dedicated Kimi reader is
   justified," while its own bundled scripts ship a live `search --kimi`
