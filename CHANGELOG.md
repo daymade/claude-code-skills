@@ -61,10 +61,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `read-claude-code-history` and `read-codex-history` now safely handles uncased Unicode such
   as CJK with an exact matcher for every raw UTF-8 / JSON-escaped mixture; unsafe folds still
   fall back to full parsing.
-  On the real 8,532-physical-file / 5,275-session / 264-project inventory, the
-  previously interrupted `自动主线回锚` one-day search completed in 13.64s and
-  reported that only 78 sessions
-  required full-session parsing. Deterministic regressions prove 1/41 full metadata parses,
+  On a real 8,500+ physical-file / 5,200+ session / 260+ project inventory, a
+  representative one-day CJK search completed in about 11s and fewer than 1% of
+  sessions required full-session parsing. Deterministic regressions prove 1/41 full metadata parses,
   byte-identical output with `--no-prefilter`, archived-copy untimed-count fidelity,
   escaped-CJK recall, and honest zero-candidate reporting.
 - **read-claude-code-history / read-codex-history** (`daymade-claude-code` v3.7.5):

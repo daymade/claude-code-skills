@@ -34,7 +34,7 @@ from collections import Counter, defaultdict
 # scripts/_core/ by sync_core.py so this skill stays self-contained. Make this
 # script's own dir importable regardless of how it is invoked, then import.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _core.claude import peek_claude_session_id, scan_claude_session  # noqa: E402
+from _core.claude import peek_final_claude_session_id, scan_claude_session  # noqa: E402
 from _core.codex import codex_meta_from_rollout, codex_session_id  # noqa: E402
 from _core.kimi import (  # noqa: E402
     iter_kimi_session_dirs,
@@ -1283,7 +1283,7 @@ class SessionAnalyzer:
         contain the keyword.
 
         This method de-duplicates aliased physical directories, peeks only far
-        enough to read each file's authoritative internal ``sessionId``, and
+        enough from EOF to read each file's final internal ``sessionId``, and
         lets the native byte scanner identify candidate physical files. Once
         any copy is a candidate, every active/archive filename carrying that
         same session id is retained and fully parsed; that preserves renamed
@@ -1337,12 +1337,7 @@ class SessionAnalyzer:
         identity_by_path: Dict[str, Optional[str]] = {}
         uncertain_paths: set[str] = set()
         for physical, file in unique_paths.items():
-            session_id = peek_claude_session_id(file)
-            # A prefix ID is provisional: the tolerant full scanner preserves
-            # the last valid internal ID. If the prefix appears excluded, do
-            # not suppress the file yet — a later record may establish a
-            # different live identity. Promote it to the conservative full
-            # candidate path and apply exclusion only after that final scan.
+            session_id = peek_final_claude_session_id(file)
             if session_id is None or session_id in exclude_sessions:
                 identity_by_path[physical] = None
                 uncertain_paths.add(physical)

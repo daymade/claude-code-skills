@@ -549,7 +549,7 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertEqual([ref["session_id"] for ref in sessions], [matching_id])
         self.assertEqual(scan.call_count, 1)
 
-    def test_identity_peek_is_bounded_when_session_id_is_absent(self) -> None:
+    def test_final_identity_peek_is_bounded_and_reads_from_eof(self) -> None:
         from _core import claude as claude_core
 
         no_id = self.root / "no-session-id.jsonl"
@@ -560,7 +560,7 @@ class SessionAnalyzerTests(unittest.TestCase):
         with mock.patch.object(
             claude_core.json, "loads", wraps=json.loads
         ) as loads:
-            session_id = claude_core.peek_claude_session_id(
+            session_id = claude_core.peek_final_claude_session_id(
                 no_id,
                 max_records=3,
                 max_bytes=1024 * 1024,
@@ -576,7 +576,7 @@ class SessionAnalyzerTests(unittest.TestCase):
         with mock.patch.object(
             claude_core.json, "loads", wraps=json.loads
         ) as loads:
-            session_id = claude_core.peek_claude_session_id(
+            session_id = claude_core.peek_final_claude_session_id(
                 oversized,
                 max_records=32,
                 max_bytes=128,
@@ -586,7 +586,20 @@ class SessionAnalyzerTests(unittest.TestCase):
 
         dangling = self.root / "dangling.jsonl"
         dangling.symlink_to(self.root / "missing-target.jsonl")
-        self.assertIsNone(claude_core.peek_claude_session_id(dangling))
+        self.assertIsNone(claude_core.peek_final_claude_session_id(dangling))
+
+        conflicting = self.root / "conflicting-identities.jsonl"
+        write_jsonl(
+            conflicting,
+            [
+                {"sessionId": "prefix-id", "type": "progress"},
+                {"sessionId": "final-id", "type": "progress"},
+            ],
+        )
+        self.assertEqual(
+            claude_core.peek_final_claude_session_id(conflicting),
+            "final-id",
+        )
 
     def test_uncertain_identity_is_conservatively_fully_parsed(self) -> None:
         no_id = project_dir(self.active_home, self.workspace) / "legacy-no-id.jsonl"
