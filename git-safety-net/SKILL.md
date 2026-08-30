@@ -359,6 +359,24 @@ The habits that keep a branch tangle from ever stranding work:
   does not run the normal `git commit` hook path: execute the repository's exact pre-commit/security
   gates against the candidate before push, and still let pre-push run. This is the escape hatch for
   when commit-then-switch is off the table because someone else holds the tree.
+- **A bare `git commit` snapshots the *whole* index, not just what you staged — and a commit that
+  bypassed the index leaves a trap in it.** Moving the **current** branch without updating the
+  shared index advances HEAD while the index stays on its old baseline — via `commit-tree` +
+  `update-ref` on that branch, or a `git commit` through a temporary `GIT_INDEX_FILE`. (The
+  push-to-another-branch escape hatch above moves no *local* ref, so it leaves no drift.) Every
+  file the new commit introduced then shows as a *staged deletion* (`git status` prints `D `
+  lines plus matching `??` untracked entries). `git commit -- <path>` neither creates nor repairs
+  this drift — it only updates its own paths. The drift detonates on anyone's next bare
+  `git commit`: that commit snapshots the entire index, turning the phantom deletions real —
+  delivered files vanish from HEAD while the working tree looks untouched. Real incident:
+  a 24-file delivered directory sat in that window after a temporary-index commit; one bare commit
+  by a parallel session would have deleted it from the branch tip, and the only sign anywhere was
+  `D ` lines in `git status`. Two obligations follow. **Whoever advanced the branch past the index
+  re-syncs immediately** — `git diff --cached --name-status`, then `git restore --staged --
+  <the paths the commit touched>` until those paths no longer appear in the diff (a parallel
+  session's own staged entries are theirs, not yours to clear). **And before any bare commit on a
+  shared tree, read that same diff as your blast radius** — every entry, `D` lines included, must
+  be one you intended; an entry you don't recognize means stop, not commit.
 - **Before any rebase or branch-delete, run the applicable Mode B evidence path.** Use the full
   loss audit only when every worktree/ref/tag/stash/dangler it enumerates is in evidence scope;
   otherwise use the authorized checkout/ref's scoped checks and limit the safety claim accordingly.

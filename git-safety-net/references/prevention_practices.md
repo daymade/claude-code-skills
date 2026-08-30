@@ -206,14 +206,28 @@ If a collision already merged, fix it by bumping again above the collided value 
 
 **Failure mode:** `git add .` or `git commit -a` sweeps unrelated changes (another task's edits,
 generated files) into a commit; later that commit gets reverted/reset and takes the unrelated work
-with it.
+with it. On a shared tree the blast radius is wider than your own staging: a bare `git commit`
+snapshots the *entire* index, which may hold a parallel session's staged work — or phantom `D`
+entries left behind when a commit advanced the branch past the index (`commit-tree` +
+`update-ref`), so the files that commit delivered show as staged deletions. Committing then folds
+the collaborator's work into your commit, or turns the phantom deletions into real ones — the
+delivered files vanish from HEAD while the working tree looks untouched.
 
-**Prevention:** stage explicit paths, and verify the staged set before committing:
+**Prevention:** stage explicit paths, then read the *whole* staged set against your intent —
+including the lines you did not add:
 
 ```bash
 git add <the specific paths for THIS change>
-git diff --cached --name-only        # confirm ONLY the intended files are staged
+git diff --cached --name-status      # FULL staged set == your intent? `D` lines included
 ```
+
+Use `--name-status` here, not `--name-only`: the status letter is what exposes a phantom `D` for a
+file you never deleted. Any entry you don't recognize — a collaborator's staged file, a deletion
+you never made — means stop, not commit. And if it was *your* commit that advanced the branch past
+the index (plumbing, a temporary `GIT_INDEX_FILE`), re-sync immediately after:
+`git restore --staged -- <the paths your commit touched>` until those paths no longer appear in
+`git diff --cached` (a parallel session's own staged entries are theirs, not yours to clear).
+Leaving the drift in place hands the next bare commit a loaded gun.
 
 ## Set a wider reflog safety window once
 
