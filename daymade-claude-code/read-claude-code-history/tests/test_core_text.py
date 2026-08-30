@@ -87,6 +87,10 @@ class FilesPossiblyMatchingTests(unittest.TestCase):
             '{"message":"这里有\\u81EA动主线回锚"}\n',
         )
         noise = self._write("noise.jsonl", '{"message":"unrelated"}\n')
+        fold_noise = self._write(
+            "fold-noise.jsonl",
+            '{"message":"unrelated K İ ﬁ"}\n',
+        )
         self.assertTrue(keywords_are_file_prefilter_safe(["自动主线回锚"]))
         result = files_possibly_matching(
             [
@@ -95,6 +99,7 @@ class FilesPossiblyMatchingTests(unittest.TestCase):
                 mixed_raw_then_escaped,
                 mixed_escaped_then_raw,
                 noise,
+                fold_noise,
             ],
             ["自动主线回锚"],
         )
@@ -104,6 +109,7 @@ class FilesPossiblyMatchingTests(unittest.TestCase):
         self.assertIn(mixed_raw_then_escaped, result)
         self.assertIn(mixed_escaped_then_raw, result)
         self.assertNotIn(noise, result)
+        self.assertNotIn(fold_noise, result)
 
     def test_case_sensitive_unicode_matches_uppercase_json_hex(self) -> None:
         escaped = self._write(

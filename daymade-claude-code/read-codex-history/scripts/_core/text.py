@@ -451,23 +451,27 @@ def files_possibly_matching(
                 ]
         mixed_scan.append("--")
 
-    marker_scan = [exe, "-a", "-F", "-l"]
-    markers = list(_FOLDS_CONTAINING_ASCII)
+    has_ascii_query_character = any(
+        character.isascii()
+        for keyword in keyword_list
+        for character in keyword
+    )
+    markers: list[str] = []
     # Any ASCII character in a query can match a non-ASCII full-fold
     # equivalent stored as a JSON escape ("k" vs "\\u212a", "ss" vs
     # "\\u00df"). This also matters inside a mixed keyword such as "自k";
     # checking ``keyword.isascii()`` would miss that file before structured
     # casefold matching. Pure uncased-Unicode queries use the exact mixed regex
     # above, so they still avoid this broad archive marker.
-    if any(
-        character.isascii()
-        for keyword in keyword_list
-        for character in keyword
-    ):
+    if has_ascii_query_character:
+        markers.extend(_FOLDS_CONTAINING_ASCII)
         markers.append("\\u")
-    for marker in markers:
-        marker_scan += ["-e", marker]
-    marker_scan.append("--")
+    marker_scan: Optional[list[str]] = None
+    if markers:
+        marker_scan = [exe, "-a", "-F", "-l"]
+        for marker in markers:
+            marker_scan += ["-e", marker]
+        marker_scan.append("--")
 
     # Batch the paths: one exec per ~half of ARG_MAX. Passing every path in a
     # single argv fails with E2BIG once the corpus is large enough — measured
@@ -550,7 +554,7 @@ def files_possibly_matching(
 
     if (
         not scan_all(kw_scan)
-        or not scan_all(marker_scan)
+        or (marker_scan is not None and not scan_all(marker_scan))
         or (mixed_scan is not None and not scan_all(mixed_scan))
     ):
         return None
