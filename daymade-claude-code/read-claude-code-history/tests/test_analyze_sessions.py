@@ -1050,6 +1050,41 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertIn("Found 1 session(s) with matches", default_run.stdout)
         self.assertIn(f"{alias_stem}.jsonl", default_run.stdout)
 
+    def test_excluded_prefix_id_is_resolved_by_full_candidate_scan(self) -> None:
+        excluded_id = "33333333-3333-4333-8333-333333333333"
+        live_id = "44444444-4444-4444-8444-444444444444"
+        session_file = project_dir(self.active_home, self.workspace) / "mixed-identity.jsonl"
+        write_jsonl(
+            session_file,
+            [
+                user_record(
+                    excluded_id,
+                    self.workspace,
+                    "early record before identity correction",
+                    "2026-04-20T10:00:00Z",
+                ),
+                user_record(
+                    live_id,
+                    self.workspace,
+                    "final-identity-marker",
+                    "2026-04-20T10:00:01Z",
+                ),
+            ],
+        )
+        arguments = (
+            "search",
+            str(self.workspace),
+            "final-identity-marker",
+            "--exclude-session",
+            excluded_id,
+            "--history-sources",
+            str(self.manifest),
+        )
+        default_run = self.run_cli(*arguments)
+        no_prefilter_run = self.run_cli(*arguments, "--no-prefilter")
+        self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
+        self.assertIn("Found 1 session(s) with matches", default_run.stdout)
+
     def test_zero_match_hint_points_at_unapplied_widenings(self) -> None:
         write_jsonl(
             project_dir(self.active_home, self.workspace)

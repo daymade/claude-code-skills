@@ -1331,9 +1331,16 @@ class SessionAnalyzer:
         uncertain_paths: set[str] = set()
         for physical, file in unique_paths.items():
             session_id = peek_claude_session_id(file)
-            identity_by_path[physical] = session_id
-            if session_id is None:
+            # A prefix ID is provisional: the tolerant full scanner preserves
+            # the last valid internal ID. If the prefix appears excluded, do
+            # not suppress the file yet — a later record may establish a
+            # different live identity. Promote it to the conservative full
+            # candidate path and apply exclusion only after that final scan.
+            if session_id is None or session_id in exclude_sessions:
+                identity_by_path[physical] = None
                 uncertain_paths.add(physical)
+            else:
+                identity_by_path[physical] = session_id
 
         matched_files = files_possibly_matching(
             unique_paths.values(),
