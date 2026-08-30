@@ -79,6 +79,41 @@ class PriorWorkHookTests(unittest.TestCase):
                     hook.classify_prompt(prompt, False), "required_prior_signal"
                 )
 
+    def test_recall_about_the_current_session_does_not_arm(self) -> None:
+        # Observed twice in the audit log: 什么来着 sits in the strong tier, so it
+        # armed on questions whose referent is the conversation already in front of
+        # the executor. There is no carrier to search and no artifact produced, so
+        # the gate could only add friction — and a gate that misfires on healthy
+        # input is how an operator learns to bypass it reflexively.
+        prompts = [
+            "我们这个对话最开始是想要干什么来着",
+            "我们的主线任务是什么来着",
+            "本次会话最开始是要干什么来着",
+            "当前对话的主线任务是什么来着",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertNotEqual(
+                    hook.classify_prompt(prompt, False), "required_prior_signal"
+                )
+
+    def test_current_session_excision_does_not_swallow_distal_recall(self) -> None:
+        # The narrow half of the same fix: excising the proximal construct must not
+        # cost any genuine recall. 上次做的方案叫什么来着 carries no distal
+        # determiner, which is why demoting 什么来着 to the weak tier was the wrong
+        # fix and excision was the right one.
+        prompts = [
+            "之前用的那个框架是什么来着？",
+            "上次做的方案叫什么来着？",
+            "上次那个脚本叫什么",
+            "复用 Flowzero 长音频 checkpoint 与本地 ASR 实现",
+        ]
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    hook.classify_prompt(prompt, False), "required_prior_signal"
+                )
+
     def test_ordinary_production_prompt_does_not_create_requirement(self) -> None:
         event = {
             "hook_event_name": "UserPromptSubmit",
