@@ -539,15 +539,19 @@ variables-as-commands (`CMD=TRIGGER; $CMD -t x`); and mid-word `#` in the
 *miss* direction (`foo=#x TRIGGER` — bash treats it as an assignment and DOES
 run TRIGGER, shlex's commenter eats the line instead).
 
-**False-block-direction (currently blocks — declared, not patched):** non-git
-heredoc bodies (the residual below); multiline `case` patterns (`TRIGGER)` at a
-line head is a pattern, not a call); and `TRIGGER#frag` (shlex's posix lexer
-starts a comment at the mid-word `#`, bash doesn't — though in that shape bash
-itself errors command-not-found, so the practical harm is low).
+**False-block-direction (currently blocks — declared, not patched):** multiline
+`case` patterns (`TRIGGER)` at a line head is a pattern, not a call); and
+`TRIGGER#frag` (shlex's posix lexer starts a comment at the mid-word `#`, bash
+doesn't — though in that shape bash itself errors command-not-found, so the
+practical harm is low). **Non-git heredoc bodies used to head this list; they are
+now largely patchable** — see the sink-discriminating stripper below, which cuts
+the false-block surface without a grammar, at the cost of a bounded miss.
 
-Each miss-side entry is declared rather than patched per bias-to-under; each
-block-side entry is declared because fixing it takes real shell grammar, not
-more heuristics. Production qlmanage-guard shares most of these.
+Each miss-side entry is declared rather than patched per bias-to-under. The
+block-side entries left in that list are declared because fixing *them* takes
+real shell grammar rather than more heuristics — a claim worth stating per entry
+instead of as a rule about the whole side, since the heredoc entry disproved the
+general form. Production qlmanage-guard shares most of these.
 
 **What it splits but cannot fully parse:** a newline **inside a heredoc body** —
 a heredoc is not quote syntax, so `git commit -F - <<'MSG'` whose body quotes a
@@ -561,9 +565,77 @@ reminder, declare it and move on; for a fail-closed blocker, lift the git-write
 exemption (pitfall #7) to the whole command BEFORE this walk — exactly the
 order Pattern A shows. But note the exemption's name: it rescues **git**
 heredocs only. A non-git one (`cat <<'EOF'` whose body contains
-trigger-looking data) still false-blocks a fail-closed guard, and for that
-shape the honest options are declare-it-fail-open or a real shell grammar —
-there is no cheap middle ground.
+trigger-looking data) still false-blocks a fail-closed guard.
+
+**Generalizing the exemption: strip heredoc bodies by SINK, not wholesale.**
+The git-write exemption works because `git commit -F -` consumes its heredoc as
+*data*. That property is not specific to git, and it is decidable from the
+introducing line alone — which makes a cheap middle ground available after all,
+provided you take its contract with it.
+
+```python
+import re
+
+# Heredoc bodies whose sink is a DATA consumer are stripped; bodies whose sink is
+# a SHELL are kept, because there the body IS command text.
+SHELL_SINK = re.compile(
+    r">\s*\S+\.(?:sh|bash|zsh)\b"                    # cat > install.sh <<'EOS'
+    r"|(?:^|[|;&]|\$\()\s*(?:bash|sh|zsh|ssh)\b")    # bash <<'EOS' / ssh host <<'EOS'
+
+def strip_heredocs(cmd):
+    lines, out, i = cmd.split("\n"), [], 0
+    while i < len(lines):
+        intro = lines[i]
+        out.append(intro)
+        tags = [(a or b or c) for a, b, c in re.findall(
+            r"<<-?[ \t]*(?:'([^']*)'|\"([^\"]*)\"|([A-Za-z_][A-Za-z0-9_]*))", intro)]
+        keep = bool(SHELL_SINK.search(intro))        # this line decides
+        i += 1
+        for tag in tags:
+            if not tag:
+                continue
+            while i < len(lines) and lines[i].strip() != tag:
+                if keep:
+                    out.append(lines[i])             # shell source — still inspected
+                i += 1
+            i += 1                                   # eat the terminator line
+    return "\n".join(out)
+```
+
+The `keep` branch is the half a first cut gets wrong, and it is not a corner
+case: `cat > <file>.sh <<'EOS' … EOS` followed by executing that file is how
+agents routinely write scripts, so a stripper without it goes blind to exactly
+the commands most worth inspecting. Measured 2026-08-30, on the 852 real
+commands of the session that wrote the guard: the wholesale-strip version passed
+its fixtures and then **missed that shape's only true positive in the whole
+corpus**, because it lived inside `cat > watcher.sh <<'EOS'` and was executed
+two lines later. Swapping in the sink-discriminating version recovered it, and
+across all four of that guard's detectors the replay ended at **10 blocks, 0
+false blocks over 852 commands** — with three near-miss commands correctly
+*allowed*, all three of which quoted the guard's own target pattern verbatim as
+prose (see rule 9 in SKILL.md for why a text-pattern guard's corpus always
+contains those).
+
+Take the contract with the code, because this is a heuristic with a direction,
+not a parser:
+
+- **Failure direction is toward the miss.** A shell sink the regex does not name
+  means the body gets stripped and its contents go uninspected. Three real shapes,
+  all verified against the code above rather than assumed: an interpreter not in the
+  alternation (`fish <<EOS`), one reached **through a wrapper** (`timeout 5 bash
+  <<EOS`), and one **invoked by path** (`/bin/zsh <<EOS`) — the second branch anchors
+  the shell name at a command position (`^`, after `|;&`, or after `$(`), so a leading
+  `/bin/` or a wrapper token puts it out of reach. Missing them is rule 1's preferred
+  direction — a miss, never a false block — and it is why this is honest rather than
+  complete. Check your own additions the same way: run the function on the shape and
+  look at whether the body survived, because the alternation reads as if it covers
+  more than it does.
+- **It does not make the guard grammar-correct.** A command you genuinely want
+  blocked, sitting in a heredoc fed to an unlisted sink, still passes. If you need
+  that, you still need a real shell grammar; nothing here changes #11's ceiling.
+- **Extend the sink list, never the strip list.** Adding a sink to `SHELL_SINK`
+  can only turn a miss into a block on *executed* text. Loosening in the other
+  direction — stripping more bodies — is what re-opens the blind spot above.
 
 ---
 
