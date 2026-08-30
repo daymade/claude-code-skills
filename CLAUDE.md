@@ -184,6 +184,7 @@ the same worktree — a blanket stage piggybacks their work into your commit:
 ```bash
 git status
 git add path/to/file1 path/to/file2   # specific files only
+git diff --cached --name-status       # every staged entry (`D` lines included) must be one you intended; a `D` you never made = drift from a parallel session's index-bypassing commit — see git-safety-net Mode D
 git commit -m "message"
 git push
 ```
