@@ -116,7 +116,7 @@ class FilesPossiblyMatchingTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertIn(escaped, result)
 
-    def test_mixed_unicode_query_honors_ascii_case_after_json_decode(self) -> None:
+    def test_mixed_unicode_query_preserves_escaped_ascii_case_candidate(self) -> None:
         escaped_lower = self._write(
             "escaped-lower-ascii.jsonl",
             '{"message":"自\\u0061动"}\n',
@@ -130,7 +130,22 @@ class FilesPossiblyMatchingTests(unittest.TestCase):
         self.assertIsNotNone(insensitive)
         self.assertIn(escaped_lower, insensitive)
         self.assertIsNotNone(sensitive)
-        self.assertNotIn(escaped_lower, sensitive)
+        # A file containing any Unicode escape remains a conservative
+        # candidate because decoded full-fold equivalents can use a different
+        # code point. Structured matching still enforces case sensitivity.
+        self.assertIn(escaped_lower, sensitive)
+
+    def test_mixed_unicode_ascii_query_keeps_escaped_full_fold_candidate(self) -> None:
+        kelvin_escape = self._write(
+            "escaped-kelvin.jsonl",
+            '{"message":"自\\u212A"}\n',
+        )
+        self.assertTrue(keywords_are_file_prefilter_safe(["自k"]))
+        result = files_possibly_matching(
+            [kelvin_escape], ["自k"], case_sensitive=False
+        )
+        self.assertIsNotNone(result)
+        self.assertIn(kelvin_escape, result)
 
     def test_cased_or_multicodepoint_unicode_disables_file_prefilter(self) -> None:
         for keyword in ("café", "straße", "ẞ", "İ"):

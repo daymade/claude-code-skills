@@ -441,11 +441,17 @@ def files_possibly_matching(
 
     marker_scan = [exe, "-a", "-F", "-l"]
     markers = list(_FOLDS_TO_ASCII)
-    # An ASCII query can match a non-ASCII full-fold equivalent stored as a
-    # JSON escape ("financial" vs "\\ufb01nancial"). Keep every escaped file
-    # in that case. For uncased Unicode queries, the mixed raw/escaped regex
-    # above is exact, so the broad marker would only re-admit the whole archive.
-    if any(keyword.isascii() for keyword in keyword_list):
+    # Any ASCII character in a query can match a non-ASCII full-fold
+    # equivalent stored as a JSON escape ("k" vs "\\u212a", "ss" vs
+    # "\\u00df"). This also matters inside a mixed keyword such as "自k";
+    # checking ``keyword.isascii()`` would miss that file before structured
+    # casefold matching. Pure uncased-Unicode queries use the exact mixed regex
+    # above, so they still avoid this broad archive marker.
+    if any(
+        character.isascii()
+        for keyword in keyword_list
+        for character in keyword
+    ):
         markers.append("\\u")
     for marker in markers:
         marker_scan += ["-e", marker]
