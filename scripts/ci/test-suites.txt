@@ -65,3 +65,4 @@ python-unittest  daymade-macos/macos-cleaner/tests
 python-unittest  daymade-audio/asr-transcribe-to-text/tests
 python-unittest  daymade-audio/transcript-fixer/tests
 python-unittest  feishu-doc-scraper/tests
+python-unittest  peer-message/tests

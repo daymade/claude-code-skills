@@ -271,6 +271,9 @@ claude plugin install github-ops@daymade-skills
 # Teams communication
 claude plugin install teams-channel-post-writer@daymade-skills
 
+# Local Claude/Codex agent messaging
+claude plugin install peer-message@daymade-skills
+
 # Repomix extraction
 claude plugin install repomix-unmixer@daymade-skills
 
@@ -489,6 +492,37 @@ Creates educational Teams channel posts for internal knowledge sharing.
 **🎬 Live Demo**
 
 ![Teams Channel Post Writer Demo](./demos/teams-channel-post-writer/write-post.gif)
+
+---
+
+### **peer-message** - Local Claude/Codex Agent Communication
+
+> **Install**: `claude plugin install peer-message@daymade-skills`
+
+Discovers, messages, broadcasts to, and independently verifies local Claude Code sessions and Codex threads through each product's own transport.
+
+**When to use:**
+- Asking one terminal's Claude or Codex agent to coordinate with another
+- Sending a dependency, pause, handoff, or completion notice across sessions
+- Reaching a Claude inbox from a third-party profile or Codex process
+- Broadcasting one explicit coordination message to a reviewed target list
+
+**Key features:**
+- Official Claude `ListAgents`/`SendMessage` first, authenticated UDS fallback second
+- Codex delivery through `codex queue --thread`, never direct SQLite writes
+- Unified `claude:` / `codex:` addressing and source/reply envelopes
+- Receiver-side verification from Claude transcripts or Codex queue/thread history
+- Permission-laundering guard: peer messages never count as user approval
+
+**Example usage:**
+```bash
+python3 scripts/peer.py list
+python3 scripts/peer.py send codex:<thread-id> --message "The dependency is ready." --wait 120
+```
+
+📚 **Documentation**: See [peer-message/SKILL.md](./peer-message/SKILL.md) and [peer-message/references/](./peer-message/references/).
+
+**Requirements**: Python 3.10+; `codex queue` for Codex targets; Claude UDS fallback on macOS/Linux/WSL2.
 
 ---
 
@@ -3686,6 +3720,9 @@ Use **pdf-creator** to convert markdown to print-ready PDFs with proper Chinese 
 ### For Team Communication
 Use **teams-channel-post-writer** to share knowledge and **statusline-generator** to track costs while working.
 
+### For Local Agent Coordination
+Use **peer-message** when Claude Code profiles and Codex threads on the same machine need to exchange targeted handoffs, pause/resume notices, dependency updates, or an explicit multi-target broadcast. It keeps peer input separate from user authorization and independently reads back receiver-side evidence before calling a message delivered.
+
 ### For Repository Management & Security
 Use **repomix-unmixer** to extract and validate repomix-packed skills or repositories. Use **repomix-safe-mixer** to package codebases securely, automatically detecting and blocking hardcoded credentials before distribution.
 
@@ -3828,6 +3865,7 @@ Each skill includes:
 - **mermaid-tools**: See `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` for setup guide
 - **statusline-generator**: See `daymade-claude-code/statusline-generator/references/color_codes.md` for customization
 - **teams-channel-post-writer**: See `teams-channel-post-writer/references/writing-guidelines.md` for quality standards
+- **peer-message**: See `peer-message/SKILL.md` for the routing workflow and `peer-message/references/protocol-and-discovery.md` for Claude UDS, Codex queue, envelope, and verification contracts
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
 - **skill-creator**: See `daymade-skill/skill-creator/SKILL.md` for complete skill creation workflow
 - **llm-icon-finder**: See `llm-icon-finder/references/icons-list.md` for available icons
@@ -3901,6 +3939,7 @@ Each skill includes:
 - **Promptfoo** (for promptfoo-evaluation): `npx promptfoo@latest`
 - **macOS + Xcode, XcodeGen** (for developing-ios-apps)
 - **Codex CLI** (optional, for product-analysis multi-model mode)
+- **`codex queue` + Python 3.10+** (for peer-message Codex targets; Claude UDS fallback needs macOS/Linux/WSL2)
 - **uv + openpyxl** (for excel-automation): `uv run --with openpyxl ...`
 - **Bigdata.com API key** (for `daymade-financial:bigdata-skill`): `bd_v2_` key from [https://www.bigdata.com/](https://www.bigdata.com/)
 - **Gangtise credentials** (for `daymade-financial:gangtise-copilot`): accessKey + secretAccessKey from [https://open.gangtise.com/](https://open.gangtise.com/)
