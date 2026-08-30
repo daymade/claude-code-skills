@@ -512,12 +512,12 @@ Discovers, messages, broadcasts to, and independently verifies local Claude Code
 - Codex delivery through `codex queue --thread`, never direct SQLite writes
 - Unified `claude:` / `codex:` addressing and source/reply envelopes
 - Receiver-side verification from Claude transcripts or Codex queue/thread history
-- Permission-laundering guard: peer messages never count as user approval
+- Permission-laundering contract: Claude has host-recognized peer provenance; Codex's text envelope is advisory and needs receiver-side governing instructions
 
 **Example usage:**
 ```bash
-python3 scripts/peer.py list
-python3 scripts/peer.py send codex:<thread-id> --message "The dependency is ready." --wait 120
+python3 peer-message/scripts/peer.py list
+python3 peer-message/scripts/peer.py send codex:<thread-id> --message "The dependency is ready." --wait 120
 ```
 
 📚 **Documentation**: See [peer-message/SKILL.md](./peer-message/SKILL.md) and [peer-message/references/](./peer-message/references/).

@@ -530,12 +530,12 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - Codex 只走 `codex queue --thread`，不直接写 SQLite
 - 统一 `claude:` / `codex:` 地址以及来源/回复信封
 - 从 Claude transcript 或 Codex queue/thread history 读取接收侧证据
-- 防权限洗白：peer 消息永远不等于用户授权
+- 防权限洗白契约：Claude 有宿主识别的 peer 来源；Codex 文本信封只是 advisory，需要接收侧治理指令执行边界
 
 **使用示例：**
 ```bash
-python3 scripts/peer.py list
-python3 scripts/peer.py send codex:<thread-id> --message "依赖已就绪。" --wait 120
+python3 peer-message/scripts/peer.py list
+python3 peer-message/scripts/peer.py send codex:<thread-id> --message "依赖已就绪。" --wait 120
 ```
 
 📚 **文档**：参见 [peer-message/SKILL.md](./peer-message/SKILL.md) 与 [peer-message/references/](./peer-message/references/)。

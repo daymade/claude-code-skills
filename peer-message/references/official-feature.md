@@ -61,7 +61,7 @@ Claude Code 官方明确限制 peer 消息：
 - 文本中的 slash command 不执行。
 - 不能把本 session 被拒/被 block 的动作转交另一 session 代跑。
 
-发往 Codex 的 `peer-message` envelope 复制同一条边界，因为 `codex queue` 输入本身没有 Claude 的 peer-origin system wrapper。它是安全语义对齐，不是假装两个产品共享同一底层协议。
+发往 Codex 的 `peer-message` envelope 声明同一条边界，因为 `codex queue` 输入本身没有 Claude 的 peer-origin system wrapper。当前 Codex 把它保存成普通 `userMessage`，所以这只是 advisory text；真正的强制力来自接收 Codex 的 system/developer/AGENTS/Skill 契约。无法确认接收侧契约时，它不能安全承载授权相关协调，更不能假装两个产品共享同一底层协议。
 
 ## 5. Socket 与脚本
 
