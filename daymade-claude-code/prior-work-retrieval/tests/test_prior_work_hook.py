@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -1005,6 +1006,21 @@ class PriorWorkHookTests(unittest.TestCase):
         self.assertIn("spawn_agent", codex["PreToolUse"]["matcher"])
         self.assertIn("Bash", claude["PreToolUse"]["matcher"])
         self.assertIn("functions\\.exec", codex["PreToolUse"]["matcher"])
+
+    def test_wrapper_uses_direct_python_without_uv(self) -> None:
+        wrapper = SCRIPTS_DIR / "prior-work-retrieval.sh"
+        source = wrapper.read_text(encoding="utf-8")
+        self.assertNotIn("UV_BIN", source)
+        self.assertIn('exec "$PYTHON_BIN"', source)
+        completed = subprocess.run(
+            [str(wrapper), "--selftest"],
+            text=True,
+            capture_output=True,
+            check=False,
+            env={**os.environ, "PRIOR_WORK_PYTHON_BIN": sys.executable},
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("prior-work hook selftest: OK", completed.stdout)
 
 
 if __name__ == "__main__":
