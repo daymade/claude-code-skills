@@ -27,6 +27,7 @@ Dependencies:
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -58,6 +59,8 @@ class PostProcessStats:
     code_blocks_fixed: int = 0
     escaped_brackets_fixed: int = 0
     double_brackets_fixed: int = 0
+    pdf_ocr_blocks_removed: int = 0
+    pdf_header_footer_lines_removed: int = 0
 
     def any_fixes(self) -> bool:
         return any(
@@ -79,6 +82,10 @@ class PostProcessStats:
             parts.append(f"escaped brackets: {self.escaped_brackets_fixed}")
         if self.double_brackets_fixed:
             parts.append(f"double brackets: {self.double_brackets_fixed}")
+        if self.pdf_ocr_blocks_removed:
+            parts.append(f"OCR picture-text blocks: {self.pdf_ocr_blocks_removed}")
+        if self.pdf_header_footer_lines_removed:
+            parts.append(f"header/footer lines: {self.pdf_header_footer_lines_removed}")
         return ", ".join(parts) if parts else "no fixes needed"
 
 
@@ -606,6 +613,139 @@ def postprocess_docx_markdown(
     text = _cleanup_excessive_blank_lines(text)
 
     return text, stats
+
+
+# ── PDF post-processing (pymupdf4llm output) ─────────────────────────────────
+
+_RE_OCR_PICTURE_TEXT = re.compile(
+    r"<!--\s*Start of picture text\s*-->.*?<!--\s*End of picture text\s*-->",
+    re.S,
+)
+
+
+def _strip_ocr_picture_text(text: str, stats: PostProcessStats) -> str:
+    """Remove pymupdf4llm's Tesseract OCR blocks on image regions.
+
+    For text-layer PDFs these blocks are garbage injected into the markdown
+    (e.g. `foxes Soa ON<br>ABMS x RBA...`). The images themselves stay;
+    only the OCR'd pseudo-text between the comment markers is removed.
+    """
+    def _sub(_m: re.Match) -> str:
+        stats.pdf_ocr_blocks_removed += 1
+        return ""
+
+    return _RE_OCR_PICTURE_TEXT.sub(_sub, text)
+
+
+def _normalize_repeat_line(line: str) -> str:
+    """Normalize a line for cross-page repetition matching:
+    collapse whitespace, digits → #, strip markdown heading/bold shells."""
+    norm = re.sub(r"\s+", " ", line).strip()
+    norm = norm.replace("**", "")  # bold shells may sit mid-line, not only at edges
+    norm = norm.strip("#*| ").strip()
+    return re.sub(r"\d+", "#", norm)
+
+
+def _detect_repeating_lines(
+    pdf_path: Path, threshold: float = 0.6, max_len: int = 60
+) -> set[str]:
+    """Detect header/footer/watermark lines: same normalized text line
+    appearing on >= threshold fraction of pages. Watermarks (diagonal text
+    repeated every page) are caught by the same rule."""
+    import pymupdf  # already a transitive dep of pymupdf4llm
+
+    try:
+        doc = pymupdf.open(str(pdf_path))
+    except Exception:
+        return set()
+    if len(doc) < 3:
+        return set()
+
+    from collections import Counter
+
+    cnt: Counter = Counter()
+    for page in doc:
+        seen_on_page = set()
+        for ln in page.get_text().split("\n"):
+            norm = _normalize_repeat_line(ln)
+            if norm and len(norm) <= max_len:
+                seen_on_page.add(norm)
+        for ln in seen_on_page:
+            cnt[ln] += 1
+
+    thresh = max(3, int(len(doc) * threshold))
+    return {ln for ln, c in cnt.items() if c >= thresh}
+
+
+def _strip_repeating_lines(
+    text: str, patterns: set[str], stats: PostProcessStats
+) -> str:
+    if not patterns:
+        return text
+    # Patterns long enough to safely act as coverage parts (short ones only
+    # participate in exact full-line matches, to avoid false positives)
+    cover_parts = {p for p in patterns if len(p) >= 4}
+
+    def covered_by_patterns(bare: str) -> bool:
+        """True if the line is fully covered by 1+ pattern substrings
+        (handles converters that merge e.g. footer + page number into one line)."""
+        rest, iterations = bare, 0
+        while rest.strip() and iterations < 4:
+            iterations += 1
+            for p in cover_parts:
+                if p in rest:
+                    rest = rest.replace(p, " ", 1)
+                    break
+            else:
+                break
+        return not rest.strip()
+
+    out = []
+    for ln in text.split("\n"):
+        bare = _normalize_repeat_line(ln)
+        if bare and (bare in patterns or covered_by_patterns(bare)):
+            stats.pdf_header_footer_lines_removed += 1
+            continue
+        out.append(ln)
+    return "\n".join(out)
+
+
+def _make_image_paths_relative(
+    text: str, assets_dir: Path, output_dir: Path, stats: PostProcessStats
+) -> str:
+    """Rewrite absolute asset paths in image references to paths relative
+    to the output markdown file, so the output is portable."""
+    prefix = str(assets_dir.resolve()) + "/"
+    if prefix not in text:
+        return text
+    rel = Path(os.path.relpath(assets_dir.resolve(), output_dir.resolve()))
+
+    def fix_path(m: re.Match) -> str:
+        alt, path = m.group(1), m.group(2)
+        if path.startswith(prefix):
+            stats.image_paths_fixed += 1
+            return f"![{alt}]({rel / path[len(prefix):]})"
+        return m.group(0)
+
+    return re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", fix_path, text)
+
+
+def postprocess_pdf_markdown(
+    text: str,
+    pdf_path: Path,
+    assets_dir: Optional[Path],
+    output_dir: Optional[Path],
+    stats: PostProcessStats,
+) -> str:
+    """Post-process pymupdf4llm markdown output: strip OCR garbage blocks,
+    cross-page header/footer/watermark lines, absolutize-portable image paths."""
+    text = _strip_ocr_picture_text(text, stats)
+    patterns = _detect_repeating_lines(pdf_path)
+    text = _strip_repeating_lines(text, patterns, stats)
+    if assets_dir and output_dir:
+        text = _make_image_paths_relative(text, assets_dir, output_dir, stats)
+    text = re.sub(r"\n{4,}", "\n\n\n", text)
+    return text
 
 
 # ── DOCX deep parsing (python-docx) ──────────────────────────────────────────
@@ -1138,6 +1278,13 @@ Examples:
             print(f"FAIL ({result.error[:50]}...)")
 
     # Merge results if heavy mode
+    failed_tools = [r.tool for r in results if not r.success]
+    if mode == "heavy" and failed_tools and any(r.success for r in results):
+        print(
+            f"  ⚠️ HEAVY MODE DEGRADED: {', '.join(failed_tools)} failed — "
+            f"merging with remaining tool(s) only; output is NOT multi-tool verified",
+            file=sys.stderr,
+        )
     if mode == "heavy" and len(results) > 1:
         print("  Merging results...", end=" ", flush=True)
         final = merge_results(results)
@@ -1154,6 +1301,16 @@ Examples:
         print("  Post-processing DOCX output...", end=" ", flush=True)
         final.markdown, pp_stats = postprocess_docx_markdown(
             final.markdown, assets_dir
+        )
+        print(f"ok ({pp_stats.summary()})")
+
+    # Apply PDF post-processing
+    is_pdf = args.input.suffix.lower() == ".pdf"
+    if is_pdf and not args.no_postprocess and "pymupdf4llm" in final.tool:
+        print("  Post-processing PDF output...", end=" ", flush=True)
+        pp_stats = PostProcessStats()
+        final.markdown = postprocess_pdf_markdown(
+            final.markdown, args.input, assets_dir, output_path.parent, pp_stats
         )
         print(f"ok ({pp_stats.summary()})")
 

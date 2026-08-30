@@ -1,6 +1,6 @@
 ---
 name: doc-to-markdown
-description: Converts DOCX/PDF/PPTX to high-quality Markdown with automatic post-processing. Fixes pandoc grid tables, simple tables, image paths, CJK bold spacing, attribute noise, and code blocks. Benchmarked best-in-class (7.6/10) against Docling, MarkItDown, Pandoc raw, and Mammoth. Trigger on "convert document", "docx to markdown", "parse word", "doc to markdown", "解析word", "转换文档".
+description: Converts DOCX/PDF/PPTX to high-quality Markdown with automatic post-processing. Fixes pandoc grid tables, simple tables, image paths, CJK bold spacing, attribute noise, and code blocks; for PDFs also strips OCR garbage blocks, repeated headers/footers/watermarks, and absolute image paths from pymupdf4llm output. Benchmarked best-in-class (7.6/10) against Docling, MarkItDown, Pandoc raw, and Mammoth. Trigger on "convert document", "docx to markdown", "parse word", "doc to markdown", "解析word", "转换文档".
 ---
 
 # Doc to Markdown
@@ -52,6 +52,25 @@ When converting DOCX via pandoc, 8 cleanups are applied automatically:
 | Indented dashed code blocks | → fenced ``` with language detection | `test_code_block_with_language` |
 | Escaped brackets (`\[...\]`) | → `[...]` | `test_escaped_brackets_fixed` |
 | Double-bracket links (`[[text]](url)`) | → `[text](url)` | `test_double_bracket_links_fixed` |
+
+## PDF Post-Processing (automatic, 2026-08-30 起)
+
+When converting PDF via pymupdf4llm, 3 cleanups are applied automatically (skip with `--no-postprocess`):
+
+| Problem | Fix | Test coverage |
+|---------|-----|---------------|
+| Tesseract OCR garbage on image regions (`<!-- Start of picture text -->...`) | Block removed; images themselves kept | `TestStripOcrPictureText` |
+| Repeated header/footer/watermark lines (same normalized line on ≥60% of pages, incl. diagonal watermarks) | Detected via pymupdf cross-page scan, removed from markdown; bold-wrapped and merged-with-page-number variants also caught | `TestRepeatingLines` |
+| Absolute image paths (`![](/abs/tmp/assets/...)`) | Rewritten relative to the output markdown file (portable output) | `TestImagePathsRelative` |
+
+Heavy mode additionally prints a loud `⚠️ HEAVY MODE DEGRADED` warning on stderr when one engine fails and the merge would otherwise silently degrade to single-engine output.
+
+**Known limits (learned from a 62-page Chinese research-report conversion, 2026-08-30):**
+- pymupdf4llm may emit duplicated paragraphs (source text layer has only one copy) — not auto-fixed; spot-check.
+- Dotted TOC pages get detected as tables — rewrite the TOC manually if it matters.
+- Cross-page tables are NOT merged (each page's fragment keeps its own header row) — merge manually.
+- Table cells overlapped by diagonal watermarks can contain watermark character shards (`dn`, `uFE`, ...); the repeating-line stripper removes full lines only, not intra-cell shards. Watermark-heavy PDFs need cell-level rebuild (collect non-watermark spans per cell bbox).
+- Complex infographics (dense in-image text) come out as images only; transcribing in-image text needs a VLM pass, not this tool.
 
 ### CJK Bold Spacing — why and how
 
