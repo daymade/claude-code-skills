@@ -4,6 +4,7 @@ set -euo pipefail
 skill_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 checklist="$skill_root/references/zero-to-deploy-checklist.md"
 release_contract="$skill_root/references/release-safety-and-environment-parity.md"
+predeploy="$skill_root/references/pre-deploy-validation.md"
 
 stale_claim='Command-line env vars do NOT override `.env` values for compose interpolation.'
 if grep -RFn --include='*.md' -- "$stale_claim" "$skill_root"; then
@@ -21,5 +22,9 @@ if grep -Eq 'Production apply .*headless|GUI|interactive (apply|approval)|TTY.*a
 fi
 grep -Fq 'plan-bound production authorization/audit' "$release_contract"
 grep -Fq 'the apply runner remains non-interactive and headless-compatible.' "$release_contract"
+
+grep -Fq 'compose.rendered.json" > "$GATEWAY_ENV_FILE"' "$predeploy"
+grep -Fq -- '--env-file "$GATEWAY_ENV_FILE"' "$predeploy"
+grep -Fq '(.value | type == "string")' "$predeploy"
 
 echo "Compose precedence and headless release documentation are internally consistent."

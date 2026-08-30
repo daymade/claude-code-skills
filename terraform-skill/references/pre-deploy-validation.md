@@ -58,7 +58,27 @@ Use the same parser/module set that production will run. For Caddy, run the exac
 candidate directory and its full Compose-derived environment:
 
 ```bash
+GATEWAY_SERVICE=claude4dev-gateway
+GATEWAY_ENV_FILE="$CANDIDATE_ROOT/gateway.effective.env"
+
+jq -e --arg service "$GATEWAY_SERVICE" '
+  .services[$service].environment
+  | type == "object"
+    and all(to_entries[];
+      (.key | test("^[A-Za-z_][A-Za-z0-9_]*$"))
+      and (.value | type == "string")
+      and ((.value | contains("\n")) | not)
+    )
+' "$CANDIDATE_ROOT/compose.rendered.json" >/dev/null
+
+jq -r --arg service "$GATEWAY_SERVICE" '
+  .services[$service].environment
+  | to_entries | sort_by(.key)[] | "\(.key)=\(.value)"
+' "$CANDIDATE_ROOT/compose.rendered.json" > "$GATEWAY_ENV_FILE"
+chmod 600 "$GATEWAY_ENV_FILE"
+
 docker run --rm --pull=never --network none \
+  --env-file "$GATEWAY_ENV_FILE" \
   -v "$CANDIDATE_ROOT/gateway:/etc/caddy:ro" \
   "$EXPECTED_CADDY_IMAGE_DIGEST" \
   caddy adapt --config /etc/caddy/Caddyfile --validate
