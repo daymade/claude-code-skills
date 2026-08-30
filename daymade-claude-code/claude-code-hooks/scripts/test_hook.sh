@@ -171,7 +171,8 @@ run "non-bash-tool"  '{"tool_name":"Read","tool_input":{"file_path":"/x/TRIGGER.
 #    loop in production (pitfall #16) — fix the predicate, not the fixture.
 #
 #    Other mechanisms need a differently-shaped pair:
-#      • mechanism 3 (ceiling): no receipt to touch — feed the SAME event N+1 times
+#      • mechanism 3 (blocking-cycle ceiling, never advisory delivery): no receipt
+#        to touch — feed the SAME event N+1 times
 #        and assert the last one is 0. `rm -f "$CNT"` before AND after, or a stale
 #        counter makes the whole suite pass/fail depending on run history.
 #      • mechanism 1 (PreToolUse gate): the second row isn't "receipt present", it
