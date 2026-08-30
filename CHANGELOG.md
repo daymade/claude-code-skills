@@ -42,9 +42,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   listed the clip among the failures it exists to catch, then prescribed only "read the PNGs" —
   the procedure the same document calls unreliable for this defect.
 
-  Calibration: 5 themes × single- and multi-page × both argument orders = 20 runs, zero false
-  positives; 14 real markdown documents × 2 themes = 28 renders, zero false positives; the ink
-  check still fires on `default`/`cjk-auto` forced back to `--backend chrome`.
+  The reference file is ink-checked too, so argument order cannot decide whether the damaged
+  file is examined — for a border Chrome *clipped* rather than *dropped* both renders promise the
+  same rule count, so the count comparison sees nothing and only the ink check finds it. Measured:
+  before this, passing the clipped file as `--reference` produced an unqualified PASS.
+
+  Calibration: 5 themes × single- and multi-page × both argument orders = 20 runs — the 12 pairs
+  with no clipped file pass in both orders, the 8 that have one are caught in both; 14 real
+  markdown documents × 2 themes = 28 single-file runs, zero false positives.
 - **read-claude-code-history / read-codex-history** (`daymade-claude-code` v3.7.5):
   stop scanning the same multi-gigabyte Claude history tree once per profile label.
   Multi-model profiles commonly expose distinct config homes whose `projects/` paths are

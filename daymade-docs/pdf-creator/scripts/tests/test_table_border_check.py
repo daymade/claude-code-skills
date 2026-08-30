@@ -81,7 +81,7 @@ def _render(md: str, out: Path, theme: str = "default",
     Deliberately not `pytest.importorskip("weasyprint")`. WeasyPrint dlopens
     native libraries at import time and raises OSError, not ImportError, when
     they are missing — importorskip does not catch that, so a machine without
-    the libraries gets three red tests instead of three skips. The renderer is
+    the libraries gets red tests where it should get skips. The renderer is
     also only ever used out-of-process, so whether it imports *here* is not the
     question worth asking.
     """
@@ -262,6 +262,42 @@ def test_a_table_beside_a_horizontal_rule_is_still_checked():
 
     assert checked == 1
     assert ok
+
+
+@pytest.mark.skipif(not shutil.which("pdftoppm"), reason="needs poppler")
+@pytest.mark.parametrize("order", ["subject-first", "swapped"])
+def test_a_clipped_file_fails_whichever_slot_it_is_passed_in(order):
+    """Argument order must not decide whether the damaged file gets examined.
+
+    For a border Chrome CLIPPED rather than dropped, both renders promise the
+    same number of rules — the geometry is there, merely unpainted — so the
+    count comparison sees nothing and only the ink check finds it. Before the
+    reference was ink-checked too, passing the clipped file as --reference
+    produced an unqualified PASS on a PDF missing a table border.
+    """
+    if _chrome() is None:
+        pytest.skip("needs Chrome")
+
+    with tempfile.TemporaryDirectory() as td:
+        clipped = Path(td) / "chrome.pdf"
+        healthy = Path(td) / "weasy.pdf"
+        # `default` overflows Chrome's page clip by 6.28pt; forcing it there
+        # reproduces the original defect.
+        _render(TABLE_MD, clipped, theme="default", backend="chrome")
+        _render(TABLE_MD, healthy, theme="default", backend="weasyprint")
+        pair = ([clipped, healthy] if order == "subject-first"
+                else [healthy, clipped])
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT_DIR / "check_table_borders.py"),
+             str(pair[0]), "--reference", str(pair[1])],
+            capture_output=True, text=True,
+        )
+
+    assert proc.returncode == 1, (
+        f"clipped file passed as {'subject' if order == 'subject-first' else 'reference'} "
+        f"was not caught\n{proc.stdout}"
+    )
+    assert "no ink" in proc.stdout
 
 
 @pytest.mark.skipif(not shutil.which("pdftoppm"), reason="needs poppler")

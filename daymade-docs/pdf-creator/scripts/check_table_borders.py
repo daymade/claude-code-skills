@@ -56,9 +56,11 @@ USAGE
   uv run --with pdfplumber --with pillow --with numpy \
     scripts/check_table_borders.py out.pdf --reference other-backend.pdf
 
-Exit codes: 0 = measured at least one table and it passed, 1 = a rule is
-missing, 2 = could not run the check (missing pdftoppm, unreadable PDF, bad
-arguments), 3 = no table was detected in any input, so nothing was measured.
+Exit codes: 0 = measured at least one table and it passed, 1 = at least one
+check did not pass (a rule has no ink, or the two files disagree on how many
+rules they draw), 2 = could not run the check (missing pdftoppm, a file that is
+not there, bad arguments), 3 = no table was detected in any input, so nothing
+was measured.
 
 3 is deliberately not 0: a caller that gates on the exit status must not read
 "verified nothing" as "verified clean". It fires only when NO input had a
@@ -225,8 +227,9 @@ def document_rules(pdf: str) -> list[float]:
     """Distinct rule positions across the whole document.
 
     Deliberately not per page. The two backends break the same source into
-    different page counts (measured on one 60-row table: 5 vs 3 for `default`,
-    7 vs 4 for `mobile`, 3 vs 15 for `warm-terra-menu`), so a page-indexed
+    different page counts (measured on one particular 60-row CJK table, whose
+    row content decides where the breaks land: 5 vs 3 for `default`, 7 vs 4 for
+    `mobile`, 3 vs 15 for `warm-terra-menu`), so a page-indexed
     comparison would compare unrelated pages. A table's column positions do not
     move when a row lands on a different page, so the document-wide set is
     stable where the per-page one is not.
@@ -386,6 +389,20 @@ def main() -> None:
         if not ok:
             all_ok = False
         if args.reference and not check_against_reference(p, args.reference):
+            all_ok = False
+
+    if args.reference:
+        # The reference gets ink-checked too, so the order the caller passed the
+        # two files in cannot decide whether the damaged one is examined.
+        # Without this, swapping them hides the straddling defect completely:
+        # the ink check runs on the healthy file, and the rule COUNTS are equal
+        # in that case — Chrome kept the geometry and merely refused to paint it
+        # — so the count comparison has nothing to notice. Measured: the clipped
+        # file passed as --reference produced an unqualified PASS.
+        print(f"{args.reference} (reference):")
+        ok, checked = check_ink(args.reference, args.verbose)
+        total_tables += checked
+        if not ok:
             all_ok = False
 
     if not all_ok:

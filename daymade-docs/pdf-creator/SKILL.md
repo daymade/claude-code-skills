@@ -54,7 +54,7 @@ To create a new theme: copy `themes/default.css`, modify, save as `themes/your-t
 | Send via WeChat, read on phone | `mobile` | Narrow page (148mm), 15px font, 1.9 line-height — comfortable on small screens |
 | Both print AND mobile needed | Run twice with different themes | The skill is fast; generate both versions |
 
-**Decision rule:** If the user does not specify, default to `warm-terra` for training/course content and `default` for formal documents. Ask "是否需要手机版？" only when the output channel is unclear.
+**Decision rule:** If the user does not specify, default to `warm-terra` for training/course content and `default` for formal documents — but pick `cjk-auto` over `default` when the document's tables have uneven column content (schedules, itemized lists), which is what that theme's `table-layout: auto` exists for. Ask "是否需要手机版？" only when the output channel is unclear.
 
 ## Backends
 
@@ -73,6 +73,8 @@ Routing is pinned by `scripts/tests/test_backend_routing.py`. A theme you add yo
 
 Override with `--backend chrome` or `--backend weasyprint`; an explicit flag always wins over auto-detection.
 
+**The theme does not tell you which backend ran.** When weasyprint is not importable, a `default` / `cjk-auto` render falls back to Chrome — with a warning on stderr, and exit 0. Read the `backend=` field of the `Generated:` line to find out which one you got; that field, not the theme name, is what decides whether the Chrome-only step below applies.
+
 ### Chrome clips, it does not merely overflow
 
 Chrome wraps each page in a `re W* n` clip path at the `@page` content box. Content past that box is still in the PDF's object layer but is **never painted**. Measured on A4 with `margin: 2.5cm 2cm 2cm 2cm`: the clip path ends at **538.90pt**, while the table's right border sits at **545.18pt** — so the border is silently amputated.
@@ -83,7 +85,7 @@ The overflow itself is **by design**: the CJK typography layer sets `overflow-wr
 
 **The reason this survived repeated delivery is not that the preview lies — it is that the symptom looks deliberate.** The last column's text is complete and correctly spaced; only a hairline border is gone, which reads as a styling choice. Meanwhile the visual checklist below primes you to look for *text cut off*, which is exactly what does not happen here.
 
-Rasterisers do honour the clip, so the preview PNG this script already generates does show the defect (measured 2026-08-29: `pdftoppm -r 400` paints zero ink across the 25 pixel columns straddling the expected border). What does **not** show it is any check that reads coordinates instead of pixels — `pdfplumber` still reports a rect at 545.18pt, because the object is genuinely there.
+Rasterisers do honour the clip, so the preview PNGs this script already generates (`pdftoppm` at 130 dpi) do show the defect, as does a 400 dpi render — at 400 dpi, zero ink across the 25 pixel columns straddling the expected border. What does **not** show it is any check that reads coordinates instead of pixels — `pdfplumber` still reports a rect at 545.18pt, because the object is genuinely there.
 
 Rather than rely on noticing a missing hairline, run the check. **It takes two forms, and for a Chrome-rendered PDF only the second one is a verdict.**
 
@@ -94,7 +96,7 @@ uv run --with pdfplumber --with pillow --with numpy scripts/check_table_borders.
 
 Form 1 takes each detected table's column boundaries, counts the ones that actually have ink in a `pdftoppm` raster, and exits non-zero naming any boundary present in the PDF but absent on paper. It reports how many tables it measured, and says `NOTHING CHECKED` rather than `PASS` when it found none — a document whose table it could not detect has not been cleared, it has been skipped.
 
-The boundaries come from the cell grid rather than from raw vertical edges, because a `<hr>`'s end-caps and an inline `<code>` span's background look exactly like column rules to an edge-based reader. Measured on 49 WeasyPrint-produced PDFs from a real knowledge base, the edge-based version failed 34 of them. Residual limit: on PDFs from other tools, `pdfplumber` sometimes assembles decoration into a table that was never there, and the check will report rules for it. Treat a failure on a PDF this skill did not produce as a prompt to look, not a verdict.
+The boundaries come from the cell grid rather than from raw vertical edges, because a `<hr>`'s end-caps and an inline `<code>` span's background look exactly like column rules to an edge-based reader. Measured on 49 WeasyPrint-produced PDFs from a real knowledge base, 46 of which had geometry the edge-based version examined: it failed 34 of those 46. Residual limit: on PDFs from other tools, `pdfplumber` sometimes assembles decoration into a table that was never there, and the check will report rules for it. Treat a failure on a PDF this skill did not produce as a prompt to look, not a verdict.
 
 **It cannot clear a Chrome render on its own, because the clip destroys evidence two different ways.** Chrome keeps geometry that *straddles* the clip — form 1 catches that, since the rule is promised and unpainted — but drops geometry lying *entirely* outside it, and a rule that was never written into the object layer is never looked for. Measured: a table styled with vertical rules and no cell fills prints `5/5 promised rules painted — PASS` while its right border is genuinely gone. The bundled themes escape that only by accident; their cell background fills straddle the clip and leave an edge at the border's position for form 1 to find.
 
@@ -109,11 +111,15 @@ uv run --with pdfplumber --with pillow --with numpy \
   scripts/check_table_borders.py out.pdf --reference /tmp/ref.pdf
 ```
 
-Exit codes: `0` passed, `1` a rule is missing, `2` the check could not run, `3` no table was detected so nothing was measured — `3` is not a pass. `pdfplumber` prints `Could not get FontBBox from font descriptor` for subset CJK fonts on the way; that is parser noise, not a finding.
+Exit codes: `0` passed, `1` at least one check did not pass, `2` the check could not run, `3` no table was detected so nothing was measured. **`3` is not a pass**: if the document does have a table, its style drew no rules `pdfplumber` could find, so this check cannot speak for it — fall back to reading the raster at the table's right edge yourself, and say in your handoff that the gate did not run. `pdfplumber` prints `Could not get FontBBox from font descriptor` for subset CJK fonts on the way; that is parser noise, not a finding.
 
-The reference is a measuring stick, never a deliverable — it may well have the CID Type 0C problem that sent this theme to Chrome in the first place, which does not affect its geometry. The verdict is the **count** of distinct rule positions across the whole document, in both directions: fewer rules than the reference means the renderer dropped some; more means the arguments are swapped or the two files are not the same document. Counts rather than positions, and document-wide rather than per page, because the two backends break the same source differently — measured on one 60-row table: 5 pages vs 3 for `default`, 3 vs 15 for `warm-terra-menu`, with the rule counts identical throughout.
+The reference is a measuring stick, never a deliverable — it may well have the CID Type 0C problem that sent this theme to Chrome in the first place, which does not affect its geometry.
 
-Calibrated across 5 themes × single- and multi-page × both argument orders: 20 runs, zero false positives.
+**Both files are ink-checked, and the rule counts are compared in both directions**, so the order you pass them in cannot decide whether the damaged file gets examined. That matters more than it sounds: for a border that Chrome *clipped* rather than *dropped*, the two renders have the SAME rule count — the geometry is still there, merely unpainted — so the count comparison sees nothing, and only the ink check on the right file finds it. Before the reference was ink-checked too, passing the clipped file as `--reference` produced an unqualified PASS.
+
+The count comparison, in both directions: fewer rules than the reference means the renderer dropped some; more means the arguments are swapped or the two files are not the same document. Counts rather than positions, and document-wide rather than per page, because the two backends break the same source differently — measured on one 60-row CJK table, whose row content decides where the breaks land: 5 pages vs 3 for `default`, 3 vs 15 for `warm-terra-menu`, with the rule counts identical throughout.
+
+Calibrated across 5 themes × single- and multi-page × both argument orders, 20 runs: the 12 pairs containing no clipped file pass in both orders, and the 8 that do are caught in both orders. Separately, 14 real markdown documents × 2 themes = 28 single-file runs, zero false positives.
 
 ## Batch Convert
 
@@ -126,7 +132,13 @@ uv run --with weasyprint scripts/batch_convert.py *.md --theme warm-terra --outp
 
 # Mobile theme for phone reading
 uv run --with weasyprint scripts/batch_convert.py *.md --theme mobile --output-dir ./mobile-pdfs --no-preview
+
+# The border check takes several files at once, so a batch is still gated
+uv run --with pdfplumber --with pillow --with numpy \
+  scripts/check_table_borders.py ./pdfs/*.pdf
 ```
+
+`--no-preview` switches off the visual self-check, which is the point of a batch — but it does not switch off the obligation. Run the border check over the outputs as above. It takes many files; `--reference` does not, so a batch of Chrome-rendered documents with tables needs one paired run per document.
 
 ## Anti-Pattern: Do NOT Manually Invoke pandoc + Chrome
 
@@ -160,7 +172,7 @@ uv run --with weasyprint scripts/batch_convert.py *.md --theme mobile --output-d
 
 **This is not optional.** After every PDF generation, the script automatically:
 
-1. Converts each page to PNG via `pdftoppm` (poppler-utils) into a `<pdf-name>/` subdirectory under the **system temp dir** (NOT next to the PDF — previews are a throwaway self-check artifact and must never linger in your working tree / git repo). The exact path is printed after the run as `Previews: <path>/page-NN.png`
+1. Converts each page to PNG via `pdftoppm` (poppler-utils) into a `<pdf-name>/` subdirectory under the **system temp dir** (NOT next to the PDF — previews are a throwaway self-check artifact and must never linger in your working tree / git repo). The exact path is printed after the run as `Previews: <path>/page-NN.png`; the files themselves are `page-1.png`, `page-2.png`, … with no zero padding
 2. Prints a structured self-check checklist reminding the caller to visually inspect each page
 3. Runs typography lint to detect CJK line-break anti-patterns
 
@@ -174,7 +186,7 @@ uv run --with weasyprint scripts/batch_convert.py *.md --theme mobile --output-d
 
 **Workflow**, at the pause point between generating and delivering — two steps, and the second is not covered by the first:
 
-1. **Read the pages.** `Read` each `page-NN.png` at the printed `Previews:` path and verify against the markdown source. If anything renders differently from intent, **fix the markdown** (use `- ` real lists instead of pseudo-lists, insert blank lines, restructure tables) and rerun. The script does NOT silently "fix" non-standard markdown — that would mask the signal that the source is wrong, causing the same markdown to render incorrectly in other processors (Obsidian, GitHub, VS Code preview).
+1. **Read the pages.** `Read` each `page-N.png` at the printed `Previews:` path and verify against the markdown source. If anything renders differently from intent, **fix the markdown** (use `- ` real lists instead of pseudo-lists, insert blank lines, restructure tables) and rerun. The script does NOT silently "fix" non-standard markdown — that would mask the signal that the source is wrong, causing the same markdown to render incorrectly in other processors (Obsidian, GitHub, VS Code preview).
 
 2. **If the document has any table, run `scripts/check_table_borders.py` on the PDF** — and if the render went through Chrome, run its `--reference` form, which is the only form that is a verdict there (both forms are in "Chrome clips, it does not merely overflow" above). Step 1 cannot substitute for this. The missing border reads as a styling choice, and the checklist in step 1 primes you to look for text cut off, which is exactly what does not happen. Do not deliver a PDF with tables on the strength of step 1 alone.
 
