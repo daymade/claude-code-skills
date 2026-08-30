@@ -700,6 +700,15 @@ enforcement you actually need, not simply the first one.
    means **changing the event** — hang the injection on the tool call that
    produced the artifact (PostToolUse, Pattern D) — or admitting you wanted a
    gate after all, and going to mechanism 2.
+   **Keep a recurring advisory available for the whole session.** Limit its
+   *rate* with elapsed time, activity thresholds, and a reset after each prompt
+   or delivery; do not give it a lifetime per-session count. A lifetime count
+   does not reduce burst frequency after the cadence has already done so — it
+   changes eventual availability from periodic to permanently silent, usually
+   in the longest sessions that need the reminder most. Mechanism 3 below is a
+   termination budget for a blocking remediation loop, not a generic anti-spam
+   pattern. Test both sides as a sequence: below either cadence threshold stays
+   quiet, while the fifth, tenth, or later fully-due window still delivers.
    ⚠️ **"No loop" holds only if R isn't your own matcher's target.** An injector
    on `Bash` that tells the model to run `git ls-remote` fires again on that very
    command, and re-injects. Same shape, softer — the model can ignore it, so
@@ -755,9 +764,12 @@ enforcement you actually need, not simply the first one.
    model doesn't drive (the reviewer subagent's own output file, a git note), or
    accept that the hook is advisory and say so in its header.
 
-3. **A ceiling on repetitions.** At most N reminders per session per target —
-   `session_id` is the only stable key for this (it is on every event; see the
-   JSON contract in Pattern references):
+3. **A ceiling on blocking remediation cycles — never on recurring advisory
+   delivery.** Use at most N demands per session per target only when the hook
+   is forcing a bounded loop and the capped exit explicitly leaves the action
+   blocked, unshipped, or pending. `session_id` is the stable key for that
+   termination budget (it is on every event; see the JSON contract in Pattern
+   references):
 
    ```bash
    SID=$(printf '%s' "$INPUT" | python3 -c "import sys,json;print(json.load(sys.stdin).get('session_id','nosid'))" 2>/dev/null || echo nosid)
@@ -784,6 +796,12 @@ enforcement you actually need, not simply the first one.
    capped exit says an artifact remains unshipped, enforce that separately at
    the action boundary with PreToolUse.
 
+   Do not copy this counter into an injector whose product is continuing
+   availability. If its reminders are too dense, retune the cadence or
+   hysteresis from observed usage; if the capped state would be “the condition
+   still exists but the hook is silent forever,” the counter has no legitimate
+   terminal state and mechanism 3 is the wrong design.
+
 4. **Hysteresis / a cool-down window** (the control-theory answer to
    [alert flapping](https://utcc.utoronto.ca/~cks/space/blog/sysadmin/HysteresisMeaningAndAlerts)):
    after firing, suppress re-evaluation for a window — a stamp file plus
@@ -798,9 +816,8 @@ enforcement you actually need, not simply the first one.
    ends it then is the world, not your hook. So its `# TERMINATION:` line has to
    name that external fact ("by the time the stamp expires, X has been resolved
    by <whom>"). If you can't write that line honestly, what you needed was 2
-   or 3. (Family resemblance worth seeing: mechanism 0 is the limit case of both
-   — mechanism 3 with the ceiling set to 0, or mechanism 4 with the window set to
-   ∞. They differ in enforcement, not in termination.)
+   or 3. A cool-down controls how often an advisory can speak; it does not turn
+   a recurring advisory into the bounded remediation loop mechanism 3 governs.
 
 **Failure direction for the state itself: apply rule 5's question, don't match on
 the word.** If the state can't be read or written — unwritable `TMPDIR`, sandbox,
@@ -866,12 +883,15 @@ is the problem; if repeated fires share the *same* key — or the predicate has 
 key at all because it compares timestamps — you are in the counter-example above
 and the predicate needs replacing.) Three independent remediation cycles back-to-back are
 indistinguishable from a loop from the outside. The variant-proof settles the
-mechanism; it says nothing about **how many distinct remediations a session can
-demand**. If your domain produces that density (compounding artifacts ship
-several times a day here), consider pairing mechanism 2 (the existence fact) with
-mechanism 3 (a session-scoped ceiling), or accept the optics deliberately and say so in the
-hook's output — "reminder 2 of at most N" reads as progress, an unadorned
-repeat reads as a loop. **(2026-07-26 sequel: the same hook's fires that looked
+mechanism; it says nothing about **how many distinct blocking remediations a
+session can demand**. If a **blocking Stop hook** produces that density
+(compounding artifacts ship several times a day here), consider pairing
+mechanism 2 (the existence fact) with mechanism 3 (a session-scoped termination
+budget), or accept the optics deliberately and say so in the hook's output —
+"blocking demand 2 of at most N" reads as progress, an unadorned repeat reads as
+a loop. For a recurring advisory injector, solve density only by
+cadence/hysteresis; a lifetime ceiling silently retires the product mid-session.
+**(2026-07-26 sequel: the same hook's fires that looked
 like this density problem turned out to be 100% false positives — its review
 channel was schema-blind in team mode; see the observability form above. Before
 accepting density as "legitimate", verify the fires are evidence-based at all.)**
@@ -1027,6 +1047,11 @@ wall time.
    a PreToolUse guard on that action removes the loop instead of taming it.
    Can't name a quantity that strictly decreases per `trigger → remediate →
    re-check` cycle? The design is non-terminating — fix the design, not the regex.
+   Before adding any repetition counter, name its capped product state. A valid
+   loop budget ends as blocked, unshipped, pending, or another explicit terminal
+   state. “The advisory is permanently silent although the session continues”
+   is not a terminal state; keep recurring advisory delivery lifetime-uncapped
+   and prove long-horizon liveness after several fully-due windows instead.
 2. Write the script in the SSOT dir; `chmod +x`.
 3. **Detection** with shlex token-level matching (rule 1), keyed on a fact the
    world can answer rather than your own rendering or a naming convention (rule 6).

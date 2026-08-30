@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **claude-code-hooks** (`daymade-claude-code` v3.7.8): distinguish recurring
+  advisory cadence from blocking remediation budgets. Advisory injectors remain
+  available throughout long sessions and prove long-horizon liveness;
+  per-session ceilings are reserved for blocking loops whose capped exit
+  explicitly leaves work blocked, unshipped, or pending.
 - **claude-code-hooks** (`daymade-claude-code` v3.7.7): the skill asserted that a non-git
   heredoc whose body carries trigger-looking data leaves a fail-closed guard with "no cheap
   middle ground" — only declare-it-fail-open or a real shell grammar. That is now shown to be
