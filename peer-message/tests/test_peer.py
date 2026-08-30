@@ -21,14 +21,21 @@ SPEC.loader.exec_module(peer)
 
 
 class PeerMessageTests(unittest.TestCase):
-    def make_claude_target(self, root: Path, name: str = "worker"):
-        home = root / ".claude"
+    def make_claude_target(
+        self,
+        root: Path,
+        name: str = "worker",
+        *,
+        home: Path | None = None,
+        session_id: str = "11111111-1111-4111-8111-111111111111",
+    ):
+        home = home or root / ".claude"
         sessions = home / "sessions"
         sessions.mkdir(parents=True)
         socket_path = root / "peer.sock"
         entry = {
             "pid": peer.os.getpid(),
-            "sessionId": "11111111-1111-4111-8111-111111111111",
+            "sessionId": session_id,
             "name": name,
             "cwd": str(root / "project"),
             "status": "idle",
@@ -154,6 +161,25 @@ class PeerMessageTests(unittest.TestCase):
             with self.assertRaises(peer.PeerError) as caught:
                 peer.send_claude("claude:worker", "x", "sender", None, "id", home)
             self.assertEqual(caught.exception.exit_code, peer.EXIT_TARGET)
+
+    def test_claude_discovery_and_token_resolution_span_isolated_profiles(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            main_home = root / ".claude"
+            profile_home = root / ".claude-profiles" / "kimi"
+            self.make_claude_target(root, "main-peer", home=main_home)
+            _, profile_entry, _ = self.make_claude_target(
+                root,
+                "kimi-peer",
+                home=profile_home,
+                session_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            )
+            names = {entry["name"] for entry in peer.claude_registry(main_home)}
+            self.assertTrue({"main-peer", "kimi-peer"}.issubset(names))
+            resolved = peer.resolve_claude("claude:kimi-peer", main_home)
+            self.assertEqual(resolved["sessionId"], profile_entry["sessionId"])
+            self.assertEqual(Path(resolved["_claudeHome"]), profile_home.resolve())
+            self.assertEqual(peer.claude_token(resolved, main_home), "fixture-token")
 
     def test_claude_verification_survives_receiver_exit(self):
         with tempfile.TemporaryDirectory() as raw:

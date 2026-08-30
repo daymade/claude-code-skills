@@ -27,7 +27,7 @@ python3 scripts/peer.py list --provider claude
 python3 scripts/peer.py list --provider codex --limit 20
 ```
 
-Claude 行的 `reachable=True` 表示当前有活进程与 inbox socket。Codex 的 `status=saved` 只证明 thread 已登记，**不证明它此刻空闲或正在运行**；不要把更新时间或列表出现当活性证据。
+Claude 发现会合并主 config root 与标准 `~/.claude-profiles/*`，即使各 profile 的 `sessions/` 没有共享 symlink，也会用目标实际所属 home 读取 token；重复 symlink 记录按 session identity 去重。Claude 行的 `reachable=True` 表示当前有活进程与 inbox socket。Codex 的 `status=saved` 只证明 thread 已登记，**不证明它此刻空闲或正在运行**；不要把更新时间或列表出现当活性证据。
 
 Claude 的 `reachable=True` 也不等于 inbound 已放行。Codex/普通脚本无法向 Claude 证明自己属于哪个 permission-mode class；接收方是 `bypassPermissions` 且没有显式 inbound 设置时，当前 Claude 会把消息 hold 等用户审批。需要无人值守协调的 Claude endpoint，由用户在它实际加载的 settings 中显式设置 `crossSessionInbound: accept`；本 Skill 不替用户改配置。
 

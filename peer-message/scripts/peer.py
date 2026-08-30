@@ -64,17 +64,28 @@ def pid_alive(pid: Any) -> bool:
 
 def claude_registry(claude_home: Path) -> list[dict[str, Any]]:
     rows = []
-    for raw_path in glob.glob(str(claude_home / "sessions" / "*.json")):
-        value = read_json(Path(raw_path))
-        if not value or not isinstance(value.get("pid"), int):
-            continue
-        value = dict(value)
-        socket_path = value.get("messagingSocketPath")
-        value["alive"] = pid_alive(value["pid"])
-        value["socketExists"] = bool(
-            isinstance(socket_path, str) and socket_path and Path(socket_path).exists()
-        )
-        rows.append(value)
+    seen: set[tuple[Any, Any, Any]] = set()
+    for home in claude_homes(claude_home):
+        for raw_path in glob.glob(str(home / "sessions" / "*.json")):
+            value = read_json(Path(raw_path))
+            if not value or not isinstance(value.get("pid"), int):
+                continue
+            identity = (
+                value.get("pid"),
+                value.get("sessionId"),
+                value.get("messagingSocketPath"),
+            )
+            if identity in seen:
+                continue
+            seen.add(identity)
+            value = dict(value)
+            socket_path = value.get("messagingSocketPath")
+            value["alive"] = pid_alive(value["pid"])
+            value["socketExists"] = bool(
+                isinstance(socket_path, str) and socket_path and Path(socket_path).exists()
+            )
+            value["_claudeHome"] = str(home)
+            rows.append(value)
     return rows
 
 
@@ -120,7 +131,8 @@ def claude_token(entry: dict[str, Any], claude_home: Path) -> str:
             EXIT_TARGET,
         )
     digest = hashlib.sha256(socket_path.encode("utf-8")).hexdigest()
-    key_path = claude_home / "sessions" / f"{entry['pid']}.{digest}.key"
+    entry_home = Path(entry.get("_claudeHome", claude_home))
+    key_path = entry_home / "sessions" / f"{entry['pid']}.{digest}.key"
     value = read_json(key_path)
     token = value.get("peerToken") if value else None
     if not isinstance(token, str) or not token:
@@ -330,9 +342,14 @@ def send_codex(
 
 def claude_homes(primary: Path) -> list[Path]:
     homes = {primary.resolve(), (Path.home() / ".claude").resolve()}
-    profiles = Path.home() / ".claude-profiles"
-    if profiles.is_dir():
-        homes.update(path.resolve() for path in profiles.iterdir() if path.is_dir())
+    profile_roots = {Path.home() / ".claude-profiles"}
+    if primary.parent.name == ".claude-profiles":
+        profile_roots.add(primary.parent)
+    else:
+        profile_roots.add(primary.parent / ".claude-profiles")
+    for profiles in profile_roots:
+        if profiles.is_dir():
+            homes.update(path.resolve() for path in profiles.iterdir() if path.is_dir())
     return sorted(homes)
 
 
@@ -641,7 +658,12 @@ def common_message_arguments(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--claude-home", type=Path, default=default_claude_home())
+    parser.add_argument(
+        "--claude-home",
+        type=Path,
+        default=default_claude_home(),
+        help="primary Claude config root; standard sibling profiles are scanned too",
+    )
     parser.add_argument("--codex-home", type=Path, default=default_codex_home())
     subparsers = parser.add_subparsers(dest="command", required=True)
 

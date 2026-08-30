@@ -26,6 +26,8 @@ Claude Code 当前在 `<claude-config>/sessions/<pid>.json` 登记顶层 session
 - `messagingSocketPath`
 - `bridgeSessionId`
 
+脚本把主 config root、`~/.claude` 与标准 `~/.claude-profiles/*` 的 registry 合并，并在 profile 通过 symlink 共用 sessions 时按 pid/session/socket identity 去重。每条记录保留它实际所属的 config home，读取 peer token 时不会错误回落到 sender 的 profile。自定义 profile 根不在标准目录时，把其中一个根传给 `--claude-home`；脚本也会扫描其标准 sibling profiles。
+
 `messagingSocketPath` 缺失表示接收进程没有 inbox；脚本不能在另一个已经运行的 Claude 进程里补建它。socket 字段存在但 pid 已死或 socket 文件消失时也不可投递。
 
 socket 接受字节不等于 inbound delivered。Codex/普通脚本不是 Claude session，不能提供 Claude 官方 sender permission class；接收方是 bypass class 且没有显式 `crossSessionInbound` 时，当前 Claude 会 hold 这类消息。自动协调端点需要用户显式配置 `accept`，否则等待人工批准；禁止伪造 permission mode 字段绕过。
