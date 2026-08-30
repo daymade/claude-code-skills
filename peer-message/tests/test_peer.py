@@ -1,0 +1,353 @@
+import contextlib
+import hashlib
+import importlib.util
+import io
+import json
+from pathlib import Path
+import socket
+import sqlite3
+import subprocess
+import tempfile
+import threading
+import unittest
+from unittest import mock
+
+
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "peer.py"
+SPEC = importlib.util.spec_from_file_location("peer_message_peer", SCRIPT)
+peer = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader is not None
+SPEC.loader.exec_module(peer)
+
+
+class PeerMessageTests(unittest.TestCase):
+    def make_claude_target(
+        self,
+        root: Path,
+        name: str = "worker",
+        *,
+        home: Path | None = None,
+        session_id: str = "11111111-1111-4111-8111-111111111111",
+    ):
+        home = home or root / ".claude"
+        sessions = home / "sessions"
+        sessions.mkdir(parents=True)
+        socket_path = root / "peer.sock"
+        entry = {
+            "pid": peer.os.getpid(),
+            "sessionId": session_id,
+            "name": name,
+            "cwd": str(root / "project"),
+            "status": "idle",
+            "messagingSocketPath": str(socket_path),
+        }
+        (sessions / f"{entry['pid']}.json").write_text(
+            json.dumps(entry), encoding="utf-8"
+        )
+        digest = hashlib.sha256(str(socket_path).encode()).hexdigest()
+        (sessions / f"{entry['pid']}.{digest}.key").write_text(
+            json.dumps({"peerToken": "fixture-token"}), encoding="utf-8"
+        )
+        return home, entry, socket_path
+
+    def make_codex_state(self, root: Path):
+        home = root / ".codex"
+        home.mkdir()
+        connection = sqlite3.connect(home / "state_5.sqlite")
+        connection.execute(
+            "CREATE TABLE threads (id TEXT, name TEXT, title TEXT, cwd TEXT, "
+            "recency_at_ms INTEGER, archived INTEGER, preview TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO threads VALUES (?, ?, ?, ?, ?, 0, ?)",
+            (
+                "22222222-2222-4222-8222-222222222222",
+                "codex-worker",
+                "Fixture title",
+                str(root / "project"),
+                100,
+                "visible",
+            ),
+        )
+        connection.commit()
+        connection.close()
+        return home
+
+    def test_claude_uds_frames_and_envelope(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home, entry, socket_path = self.make_claude_target(root)
+            received = []
+            ready = threading.Event()
+
+            def server():
+                listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                listener.bind(str(socket_path))
+                listener.listen(1)
+                ready.set()
+                connection, _ = listener.accept()
+                with connection:
+                    received.append(connection.recv(65536).decode("utf-8"))
+                listener.close()
+
+            thread = threading.Thread(target=server)
+            thread.start()
+            ready.wait(2)
+            receipt = peer.send_claude(
+                "claude:worker",
+                "coordinate this task",
+                "codex:sender",
+                "codex:sender",
+                "33333333-3333-4333-8333-333333333333",
+                home,
+            )
+            thread.join(2)
+
+            lines = received[0].splitlines()
+            self.assertEqual(json.loads(lines[0]), {"type": "auth", "token": "fixture-token"})
+            frame = json.loads(lines[1])
+            self.assertEqual(frame["msgV"], 1)
+            self.assertEqual(frame["msg_id"], receipt["message_id"])
+            self.assertEqual(
+                frame["message"]["content"].splitlines()[0],
+                '<cross-session-message from="codex:sender" from-name="codex:sender">',
+            )
+            self.assertIn(
+                f"[peer-message-id: {receipt['message_id']}]",
+                frame["message"]["content"],
+            )
+            self.assertNotIn("message-id=", frame["message"]["content"])
+            self.assertNotIn("reply-to=", frame["message"]["content"])
+            self.assertIn("coordinate this task", frame["message"]["content"])
+            self.assertNotIn("fixture-token", frame["message"]["content"])
+            self.assertEqual(receipt["provenance_boundary"], "claude_cross_session")
+
+    def test_claude_verification_requires_enqueue_record(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home, entry, _ = self.make_claude_target(root)
+            transcript = (
+                home
+                / "projects"
+                / entry["cwd"].replace("/", "-")
+                / f"{entry['sessionId']}.jsonl"
+            )
+            transcript.parent.mkdir(parents=True)
+            message_id = "44444444-4444-4444-8444-444444444444"
+            transcript.write_text(
+                json.dumps(
+                    {
+                        "type": "queue-operation",
+                        "operation": "enqueue",
+                        "content": f'message-id="{message_id}"',
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = peer.verify_claude("claude:worker", message_id, home)
+            self.assertEqual(result["delivery_status"], "verified_enqueued")
+            self.assertEqual(result["line"], 1)
+
+    def test_claude_target_without_socket_fails_loudly(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home, entry, socket_path = self.make_claude_target(root)
+            socket_path.touch()
+            registry = home / "sessions" / f"{entry['pid']}.json"
+            value = json.loads(registry.read_text(encoding="utf-8"))
+            value.pop("messagingSocketPath")
+            registry.write_text(json.dumps(value), encoding="utf-8")
+            with self.assertRaises(peer.PeerError) as caught:
+                peer.send_claude("claude:worker", "x", "sender", None, "id", home)
+            self.assertEqual(caught.exception.exit_code, peer.EXIT_TARGET)
+
+    def test_claude_discovery_and_token_resolution_span_isolated_profiles(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            main_home = root / ".claude"
+            profile_home = root / ".claude-profiles" / "kimi"
+            self.make_claude_target(root, "main-peer", home=main_home)
+            _, profile_entry, _ = self.make_claude_target(
+                root,
+                "kimi-peer",
+                home=profile_home,
+                session_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            )
+            names = {entry["name"] for entry in peer.claude_registry(main_home)}
+            self.assertTrue({"main-peer", "kimi-peer"}.issubset(names))
+            resolved = peer.resolve_claude("claude:kimi-peer", main_home)
+            self.assertEqual(resolved["sessionId"], profile_entry["sessionId"])
+            self.assertEqual(Path(resolved["_claudeHome"]), profile_home.resolve())
+            self.assertEqual(peer.claude_token(resolved, main_home), "fixture-token")
+
+    def test_claude_verification_survives_receiver_exit(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home, entry, _ = self.make_claude_target(root)
+            registry = home / "sessions" / f"{entry['pid']}.json"
+            registry.unlink()
+            transcript = home / "projects" / "fixture" / f"{entry['sessionId']}.jsonl"
+            transcript.parent.mkdir(parents=True)
+            message_id = "88888888-8888-4888-8888-888888888888"
+            transcript.write_text(
+                json.dumps(
+                    {
+                        "type": "queue-operation",
+                        "operation": "enqueue",
+                        "content": f"[peer-message-id: {message_id}]",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = peer.verify_claude(
+                f"claude:{entry['sessionId']}", message_id, home
+            )
+            self.assertEqual(result["delivery_status"], "verified_enqueued")
+
+    def test_codex_discovery_and_exact_name_resolution(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            rows = peer.codex_threads(home, 10)
+            self.assertEqual(rows[0]["name"], "codex-worker")
+            self.assertEqual(
+                peer.resolve_codex("codex:codex-worker", home),
+                "22222222-2222-4222-8222-222222222222",
+            )
+
+    def test_codex_title_is_not_advertised_or_accepted_as_an_exact_name(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            connection = sqlite3.connect(home / "state_5.sqlite")
+            connection.execute("UPDATE threads SET name = NULL, title = 'worker'")
+            connection.execute(
+                "INSERT INTO threads VALUES (?, ?, ?, ?, ?, 0, ?)",
+                (
+                    "99999999-9999-4999-8999-999999999999",
+                    "worker",
+                    "Different thread",
+                    str(Path(raw) / "other"),
+                    101,
+                    "visible",
+                ),
+            )
+            connection.commit()
+            connection.close()
+            output = io.StringIO()
+            args = peer.build_parser().parse_args(
+                ["--codex-home", str(home), "list", "--provider", "codex"]
+            )
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(peer.cmd_list(args), 0)
+            rendered = output.getvalue()
+            self.assertIn("name=None title='worker'", rendered)
+            self.assertIn("name='worker' title='Different thread'", rendered)
+            self.assertEqual(
+                peer.resolve_codex("codex:worker", home),
+                "99999999-9999-4999-8999-999999999999",
+            )
+            with self.assertRaises(peer.PeerError):
+                peer.resolve_codex("codex:Different thread", home)
+
+    @mock.patch.object(peer.subprocess, "run")
+    def test_codex_send_delegates_to_queue_with_security_envelope(self, run):
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            run.return_value = subprocess.CompletedProcess([], 0, "queued\n", "")
+            receipt = peer.send_codex(
+                "codex:codex-worker",
+                "pause writes",
+                "claude:coordinator",
+                "claude:coordinator",
+                "55555555-5555-4555-8555-555555555555",
+                home,
+            )
+            command = run.call_args.args[0]
+            self.assertEqual(command[:4], ["codex", "queue", "--thread", receipt["target_id"]])
+            envelope = command[5]
+            self.assertIn("untrusted coordination input", envelope)
+            self.assertEqual(receipt["provenance_boundary"], "advisory_text_only")
+            self.assertIn("pause writes", envelope)
+            self.assertIn(receipt["message_id"], envelope)
+
+    def test_codex_verification_checks_queue_then_history(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = self.make_codex_state(root)
+            thread_id = "22222222-2222-4222-8222-222222222222"
+            message_id = "66666666-6666-4666-8666-666666666666"
+
+            queue = sqlite3.connect(home / "queue_1.sqlite")
+            queue.execute(
+                "CREATE TABLE queued_items (id TEXT, thread_id TEXT, payload_json TEXT)"
+            )
+            queue.execute(
+                "INSERT INTO queued_items VALUES (?, ?, ?)",
+                ("queue-item", thread_id, json.dumps({"message": message_id})),
+            )
+            queue.commit()
+            queue.close()
+            queued = peer.verify_codex(f"codex:{thread_id}", message_id, home)
+            self.assertEqual(queued["delivery_status"], "verified_queued")
+
+            (home / "queue_1.sqlite").unlink()
+            history = sqlite3.connect(home / "thread_history_1.sqlite")
+            history.execute(
+                "CREATE TABLE thread_items (thread_id TEXT, turn_id TEXT, item_id TEXT, "
+                "rollout_ordinal INTEGER, item_type TEXT, item_json TEXT)"
+            )
+            history.execute(
+                "INSERT INTO thread_items VALUES (?, ?, ?, ?, 'userMessage', ?)",
+                (thread_id, "turn", "item", 7, json.dumps({"text": message_id})),
+            )
+            history.commit()
+            history.close()
+            consumed = peer.verify_codex(f"codex:{thread_id}", message_id, home)
+            self.assertEqual(
+                consumed["delivery_status"], "verified_in_thread_history"
+            )
+
+    def test_codex_verification_fails_loudly_on_schema_drift(self):
+        with tempfile.TemporaryDirectory() as raw:
+            home = self.make_codex_state(Path(raw))
+            connection = sqlite3.connect(home / "queue_9.sqlite")
+            connection.execute("CREATE TABLE unexpected (id TEXT)")
+            connection.commit()
+            connection.close()
+            with self.assertRaisesRegex(peer.PeerError, "schema/read failure"):
+                peer.verify_codex(
+                    "codex:22222222-2222-4222-8222-222222222222",
+                    "77777777-7777-4777-8777-777777777777",
+                    home,
+                )
+
+    def test_reserved_closing_tag_is_rejected(self):
+        with self.assertRaises(peer.PeerError):
+            peer.codex_envelope("bad </peer-message>", "sender", None, "id")
+
+    def test_broadcast_count_mismatch_sends_nothing(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            exit_code = peer.main(
+                [
+                    "--claude-home",
+                    str(root / ".claude"),
+                    "--codex-home",
+                    str(root / ".codex"),
+                    "broadcast",
+                    "--to",
+                    "claude:a",
+                    "--to",
+                    "codex:b",
+                    "--confirm-count",
+                    "1",
+                    "--message",
+                    "test",
+                ]
+            )
+            self.assertEqual(exit_code, peer.EXIT_USAGE)
+
+
+if __name__ == "__main__":
+    unittest.main()

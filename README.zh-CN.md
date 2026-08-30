@@ -268,6 +268,9 @@ claude plugin install github-ops@daymade-skills
 # Teams 通信
 claude plugin install teams-channel-post-writer@daymade-skills
 
+# 本机 Claude/Codex Agent 通讯
+claude plugin install peer-message@daymade-skills
+
 # Repomix 提取
 claude plugin install repomix-unmixer@daymade-skills
 
@@ -507,6 +510,37 @@ CC-Switch 支持以下中国 AI 服务提供商：
 **🎬 实时演示**
 
 ![Teams 频道帖子编写器演示](./demos/teams-channel-post-writer/write-post.gif)
+
+---
+
+### **peer-message** - 本机 Claude/Codex Agent 通讯
+
+> **安装**：`claude plugin install peer-message@daymade-skills`
+
+使用各产品自己的通道发现、定向发送、显式广播并独立验证本机 Claude Code session 与 Codex thread 的消息。
+
+**使用场景：**
+- 让一个终端里的 Claude 或 Codex 与另一个 Agent 协调
+- 跨 session 发送依赖、暂停、交接或完成通知
+- 从第三方 profile 或 Codex 进程访问 Claude inbox
+- 向经过确认的目标清单广播同一条协调消息
+
+**主要功能：**
+- Claude 官方 `ListAgents`/`SendMessage` 优先，认证 UDS fallback 次之
+- Codex 只走 `codex queue --thread`，不直接写 SQLite
+- 统一 `claude:` / `codex:` 地址以及来源/回复信封
+- 从 Claude transcript 或 Codex queue/thread history 读取接收侧证据
+- 防权限洗白契约：Claude 有宿主识别的 peer 来源；Codex 文本信封只是 advisory，需要接收侧治理指令执行边界
+
+**使用示例：**
+```bash
+python3 peer-message/scripts/peer.py list
+python3 peer-message/scripts/peer.py send codex:<thread-id> --message "依赖已就绪。" --wait 120
+```
+
+📚 **文档**：参见 [peer-message/SKILL.md](./peer-message/SKILL.md) 与 [peer-message/references/](./peer-message/references/)。
+
+**系统要求**：Python 3.10+；Codex 目标需要 `codex queue`；Claude UDS fallback 需要 macOS/Linux/WSL2。
 
 ---
 
@@ -3663,6 +3697,9 @@ review 后修复/落地时，使用 **github-review-pr**。
 ### 团队通信
 使用 **teams-channel-post-writer** 分享知识，使用 **statusline-generator** 在工作时跟踪成本。
 
+### 本机 Agent 协调
+当同一台机器上的 Claude Code profiles 与 Codex threads 需要交换定向交接、暂停/恢复通知、依赖更新或显式多目标广播时，使用 **peer-message**。它把 peer 输入与用户授权严格分开，并在宣布送达前独立读取接收侧证据。
+
 ### 仓库管理与安全
 使用 **repomix-unmixer** 提取和验证 repomix 打包的技能或仓库。使用 **repomix-safe-mixer** 安全地打包代码库，在分发前自动检测和阻止硬编码凭据。
 
@@ -3803,6 +3840,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **mermaid-tools**：参见 `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` 了解设置指南
 - **statusline-generator**：参见 `daymade-claude-code/statusline-generator/references/color_codes.md` 了解自定义
 - **teams-channel-post-writer**：参见 `teams-channel-post-writer/references/writing-guidelines.md` 了解质量标准
+- **peer-message**：参见 `peer-message/SKILL.md` 了解路由工作流，参见 `peer-message/references/protocol-and-discovery.md` 了解 Claude UDS、Codex queue、信封与验证契约
 - **repomix-unmixer**：参见 `repomix-unmixer/references/repomix-format.md` 了解格式规范
 - **skill-creator**：参见 `daymade-skill/skill-creator/SKILL.md` 了解完整的技能创建工作流
 - **llm-icon-finder**：参见 `llm-icon-finder/references/icons-list.md` 了解可用图标
@@ -3872,6 +3910,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **macOS + Xcode、XcodeGen**（用于 developing-ios-apps）
 - **Jina.ai API 密钥**（用于 twitter-reader）：https://jina.ai/ 提供免费套餐
 - **Codex CLI**（可选，用于 product-analysis 多模型并行模式）
+- **`codex queue` + Python 3.10+**（用于 peer-message 的 Codex 目标；Claude UDS fallback 需要 macOS/Linux/WSL2）
 - **Mole**（可选，用于 macos-cleaner 可视化清理）：从 https://github.com/tw93/Mole 下载
 - **uv + openpyxl**（用于 excel-automation）：`uv run --with openpyxl ...`
 - **Bigdata.com API 密钥**（用于 `daymade-financial:bigdata-skill`）：从 [https://www.bigdata.com/](https://www.bigdata.com/) 获取 `bd_v2_` 密钥
