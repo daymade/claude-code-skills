@@ -1189,6 +1189,93 @@ with path.open("r+b") as handle:
         self.assertEqual(archive_only["source_kind"], "archive")
         self.assertEqual(archive_only["source_labels"], ["archive:full-backup"])
 
+    def test_aliased_profile_projects_are_scanned_once_with_all_provenance(self) -> None:
+        user_home = self.root / "user-home"
+        active_home = user_home / ".claude"
+        profile_home = user_home / ".claude-profiles" / "kimi"
+        archive_home = self.root / "conversation-archive"
+        active_project = claude_project_dir(active_home, self.workspace)
+        archive_project = claude_project_dir(archive_home, self.workspace)
+        profile_home.mkdir(parents=True)
+        (profile_home / "projects").symlink_to(
+            active_home / "projects", target_is_directory=True
+        )
+        session_id = "abababab-abab-4bab-8bab-abababababab"
+        active_path = active_project / f"{session_id}.jsonl"
+        archive_path = archive_project / f"{session_id}.jsonl"
+        write_jsonl(
+            active_path,
+            [
+                claude_user_record(
+                    session_id,
+                    self.workspace,
+                    "Active aliased profile conversation",
+                    "2026-08-30T01:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            archive_path,
+            [
+                claude_user_record(
+                    session_id,
+                    self.workspace,
+                    "Older archive copy",
+                    "2026-08-29T01:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            active_project / "agent-worker.jsonl",
+            [
+                claude_user_record(
+                    "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd",
+                    self.workspace,
+                    "Internal worker",
+                    "2026-08-30T01:05:00Z",
+                )
+            ],
+        )
+
+        spec = importlib.util.spec_from_file_location(
+            f"local_history_alias_under_test_{id(self)}",
+            SCRIPT,
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        args = module.argparse.Namespace(
+            cwd=str(self.workspace),
+            recursive=False,
+            all_projects=False,
+            include_subagents=False,
+            include_automated=True,
+            max_title_chars=120,
+        )
+        sources = [
+            module.HistorySource("claude", "active", "main", active_home),
+            module.HistorySource("claude", "active", "kimi", profile_home),
+            module.HistorySource("claude", "archive", "full-backup", archive_home),
+        ]
+
+        with mock.patch.object(
+            module,
+            "parse_claude_session",
+            wraps=module.parse_claude_session,
+        ) as parse_session:
+            result = module.collect_claude_sources(args, sources)
+
+        self.assertEqual(parse_session.call_count, 2)
+        self.assertEqual(result.excluded_subagents, 1)
+        self.assertEqual(len(result.conversations), 1)
+        conversation = result.conversations[0]
+        self.assertEqual(conversation.path, str(active_path))
+        self.assertEqual(conversation.title, "Active aliased profile conversation")
+        self.assertEqual(
+            conversation.source_labels,
+            ["active:main", "active:kimi", "archive:full-backup"],
+        )
+
     def test_date_filter_uses_session_overlap_and_excludes_unknown_time(self) -> None:
         project_dir = claude_project_dir(self.claude_home, self.workspace)
         spanning_id = "40404040-4040-4040-8040-404040404040"

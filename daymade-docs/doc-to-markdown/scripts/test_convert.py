@@ -240,3 +240,105 @@ class TestSimpleTable:
   ---------- ---------- ---------- ----------"""
         out, stats = postprocess_docx_markdown(inp)
         assert "| ![](a.png) | ![](b.png) | ![](c.png) | ![](d.png) |" in out
+
+
+# ── PDF post-processing (pymupdf4llm output) ────────────────────────────────
+
+from convert import (
+    _strip_ocr_picture_text,
+    _strip_repeating_lines,
+    _normalize_repeat_line,
+    _make_image_paths_relative,
+)
+
+
+class TestStripOcrPictureText:
+    """Tesseract OCR blocks on image regions must be removed (text-layer PDFs)."""
+
+    def test_ocr_block_removed(self):
+        inp = "正文段落\n<!-- Start of picture text -->foxes Soa ON<br>ABMS x RBA<br><!-- End of picture text -->\n下一段"
+        stats = PostProcessStats()
+        out = _strip_ocr_picture_text(inp, stats)
+        assert "foxes" not in out
+        assert "Start of picture" not in out
+        assert "正文段落" in out and "下一段" in out
+        assert stats.pdf_ocr_blocks_removed == 1
+
+    def test_multiline_ocr_block(self):
+        inp = "A\n<!-- Start of picture text -->\n乱码一行\n乱码二行<br>\n<!-- End of picture text -->\nB"
+        stats = PostProcessStats()
+        out = _strip_ocr_picture_text(inp, stats)
+        assert "乱码" not in out
+        assert stats.pdf_ocr_blocks_removed == 1
+
+    def test_no_block_untouched(self):
+        inp = "没有 OCR 块的普通文本"
+        stats = PostProcessStats()
+        assert _strip_ocr_picture_text(inp, stats) == inp
+        assert stats.pdf_ocr_blocks_removed == 0
+
+
+class TestRepeatingLines:
+    """Cross-page header/footer/watermark line stripping."""
+
+    PATTERNS = {"研究报告标题", "第# 页", "火星加速器X云启资本"}
+
+    def test_exact_line_removed(self):
+        inp = "正文\n研究报告标题\n第21 页\n下一段"
+        stats = PostProcessStats()
+        out = _strip_repeating_lines(inp, self.PATTERNS, stats)
+        assert "研究报告标题" not in out
+        assert "第21 页" not in out
+        assert "正文" in out and "下一段" in out
+        assert stats.pdf_header_footer_lines_removed == 2
+
+    def test_bold_wrapped_line_removed(self):
+        """Bold-wrapped header in markdown still matches plain-text pattern."""
+        inp = "**研究报告标题**  \n正文"
+        stats = PostProcessStats()
+        out = _strip_repeating_lines(inp, self.PATTERNS, stats)
+        assert "研究报告标题" not in out
+        assert stats.pdf_header_footer_lines_removed == 1
+
+    def test_merged_footer_and_pagenum_removed(self):
+        """Converter may merge footer + page number into one line."""
+        inp = "**火星加速器X云启资本** 第49 页\n正文段落"
+        stats = PostProcessStats()
+        out = _strip_repeating_lines(inp, self.PATTERNS, stats)
+        assert "火星加速器" not in out
+        assert "正文段落" in out
+        assert stats.pdf_header_footer_lines_removed == 1
+
+    def test_body_line_kept(self):
+        """Normal body lines are never touched."""
+        inp = "核心判断四：2026 年更适合被定义为规模化探索拐点年"
+        stats = PostProcessStats()
+        assert _strip_repeating_lines(inp, self.PATTERNS, stats) == inp
+        assert stats.pdf_header_footer_lines_removed == 0
+
+    def test_normalize_strips_bold_and_digits(self):
+        assert _normalize_repeat_line("**第21 页**") == "第# 页"
+        assert _normalize_repeat_line("## 第3 章 标题") == "第# 章 标题"
+
+
+class TestImagePathsRelative:
+    """Absolute asset paths in image refs become relative to output dir."""
+
+    def test_absolute_to_relative(self, tmp_path):
+        assets = tmp_path / "out" / "assets"
+        assets.mkdir(parents=True)
+        outdir = tmp_path / "out"
+        inp = f"![]({assets}/img1.png)"
+        stats = PostProcessStats()
+        out = _make_image_paths_relative(inp, assets, outdir, stats)
+        assert out == "![](assets/img1.png)"
+        assert stats.image_paths_fixed == 1
+
+    def test_other_paths_untouched(self, tmp_path):
+        assets = tmp_path / "assets"
+        assets.mkdir()
+        inp = "![](http://example.com/x.png) ![](local/y.png)"
+        stats = PostProcessStats()
+        out = _make_image_paths_relative(inp, assets, tmp_path, stats)
+        assert out == inp
+        assert stats.image_paths_fixed == 0

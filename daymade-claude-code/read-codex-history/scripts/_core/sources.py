@@ -72,6 +72,24 @@ def _active_sources(
     ]
 
 
+def group_claude_sources_by_projects(
+    sources: Sequence[HistorySource],
+) -> list[list[HistorySource]]:
+    """Group source labels that expose the same physical ``projects/`` tree.
+
+    Multi-model Claude profiles commonly symlink their ``projects/`` directory
+    to the main profile.  Inventory callers must scan that physical tree once,
+    while retaining every nominal source label as provenance.  Group order and
+    source order remain stable so representative-path selection stays
+    deterministic.  Distinct archive trees remain distinct groups.
+    """
+    groups: dict[str, list[HistorySource]] = {}
+    for source in sources:
+        key = _resolved_key(source.home / "projects")
+        groups.setdefault(key, []).append(source)
+    return list(groups.values())
+
+
 def _read_manifest(path: Path) -> dict:
     try:
         raw = path.read_text(encoding="utf-8")

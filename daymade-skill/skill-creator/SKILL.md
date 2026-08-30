@@ -1397,6 +1397,23 @@ When editing, remember that the skill is being created for another instance of C
    memory-paraphrased near-synonym characters (`也` vs `都`) — both escape
    self-review, and both get caught only by the tool rejecting your whole map (one
    map rejected twice in a row for exactly those two reasons).
+
+   **The needle proves a line survives, not that a concept survives.** A
+   `heading` candidate's needle can match any line in the new file while the
+   *section it titled* — the heading plus its body content — has been scattered
+   across other sections or compressed beyond recognition. Text-level survival
+   is not semantic survival. For every `heading` candidate, after the needle
+   passes, additionally verify: (a) the new file still has a section covering
+   the same topic (find the corresponding heading or content block by meaning,
+   not by string match), and (b) the new section's body is not trivially smaller
+   than the old one — count the old section's non-blank lines and compare with
+   the new section's. A section whose body shrank by more than half needs a
+   `semantic_review` explaining what was deliberately compressed and why the
+   compression is lossless. Skipping this check is how a restructure reports
+   "162/162 preserved" while a named principle the user later asks about has
+   silently lost its dedicated section (real case 2026-08-30: an "Outcome-first
+   gate" section was scattered into a summary table row; every needle passed;
+   the user had to ask "有没有丢失东西" to surface it).
 5. Verify the completed review. Hashes make the review stale after any further
    edit, so regenerate and reclassify when the candidate changes. A passing
    verification writes `.skill-regression-reviewed`, a content-bound local status
