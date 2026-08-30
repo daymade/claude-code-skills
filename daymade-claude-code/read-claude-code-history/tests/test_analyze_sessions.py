@@ -501,6 +501,54 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertEqual([ref["session_id"] for ref in sessions], [matching_id])
         self.assertEqual(scan.call_count, 1)
 
+    def test_same_filename_different_session_ids_do_not_expand_candidate(self) -> None:
+        module = _load_analyze_module()
+        shared_name = "same-name.jsonl"
+        matching_id = "abababab-abab-4bab-8bab-abababababab"
+        unrelated_id = "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd"
+        write_jsonl(
+            project_dir(self.active_home, self.workspace) / shared_name,
+            [
+                user_record(
+                    matching_id,
+                    self.workspace,
+                    "contains the candidate needle",
+                    "2026-04-15T00:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir(self.archive_home, self.workspace) / shared_name,
+            [
+                user_record(
+                    unrelated_id,
+                    self.workspace,
+                    "ordinary unrelated record",
+                    "2026-04-16T00:00:00Z",
+                )
+            ],
+        )
+        analyzer = module.SessionAnalyzer(
+            homes=[self.active_home, self.archive_home]
+        )
+        original_scan = module.scan_claude_session
+        with mock.patch.object(
+            module, "scan_claude_session", wraps=original_scan
+        ) as scan:
+            sessions, total, projects, applied = analyzer.find_search_sessions(
+                project_path=str(self.workspace),
+                all_projects=False,
+                keywords=["candidate needle"],
+                case_sensitive=False,
+                use_prefilter=True,
+                exclude_sessions=set(),
+            )
+        self.assertTrue(applied)
+        self.assertEqual(total, 2)
+        self.assertEqual(projects, 1)
+        self.assertEqual([ref["session_id"] for ref in sessions], [matching_id])
+        self.assertEqual(scan.call_count, 1)
+
     def test_identity_peek_is_bounded_when_session_id_is_absent(self) -> None:
         from _core import claude as claude_core
 
