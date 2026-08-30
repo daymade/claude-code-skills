@@ -15,7 +15,14 @@ description: >-
 argument-hint: "[workspace-path]"
 ---
 
-# Local Conversation History
+# Local Conversation History — frozen snapshot, not a live contract
+
+> ⚠️ **This is the retired PR #357 snapshot of a skill that has since been rebuilt
+> under the same name.** The frontmatter above describes an executor that listed
+> three providers itself; the live `daymade-claude-code:local-conversation-history`
+> is a thin router that owns no parsing at all. Read this file only for what the
+> old contract said. For what ships today, read that skill and the executors it
+> routes to — never quote the description above as current.
 
 List project-scoped histories or exact Codex prompt-ledger rows without
 reconstructing ad hoc `rg`, `stat`, `jq`, SQLite, or JSONL pipelines. The two

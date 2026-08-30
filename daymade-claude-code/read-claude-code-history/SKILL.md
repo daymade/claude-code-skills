@@ -8,7 +8,10 @@ description: >-
   Claude homes plus registered archives. Use whenever the user asks what they or
   Claude said, wants a Claude Code session ID or original context, remembers prior
   work vaguely, needs an old file from a transcript, or must prove what a Claude
-  session contained before continuing it. For Codex history use read-codex-history.
+  session contained before continuing it. Also owns the only Kimi CLI surface, via
+  its Kimi inventory and search flags. For Codex history use read-codex-history;
+  when the request names no platform at all or spans providers, start at
+  local-conversation-history.
 argument-hint: "[session-id | keywords | workspace-path]"
 ---
 
@@ -29,6 +32,7 @@ hand the verified evidence to `daymade-claude-code:continue-claude-code-work`.
 | Prior work whose wording may have changed | `scripts/history_index.py recall` after checking index status |
 | How sessions in a time window ended | `scripts/analyze_sessions.py triage` |
 | A deleted/overwritten file preserved in Claude file-history records | `scripts/recover_content.py` |
+| Kimi CLI sessions — this Skill owns the only live Kimi surface | inventory: `scripts/list_local_history.py --source kimi`; full-text: `scripts/analyze_sessions.py search --kimi` |
 | Continue a verified Claude session | Stop reading and invoke `daymade-claude-code:continue-claude-code-work` |
 
 The requested output wins over the background story. If the user asks for a
@@ -145,11 +149,20 @@ be checked against raw records and the current workspace for load-bearing claims
   it can contain credentials and private business context.
 - Do not report a search as complete after a timeout or malformed source.
 
-## Legacy compatibility
+## Router and legacy compatibility
+
+`daymade-claude-code:local-conversation-history` is the cross-provider router. It
+sends Claude reads and every Kimi CLI request here, and does not replace this
+Skill's identity or evidence contract. New Codex requests route to
+`daymade-claude-code:read-codex-history`.
+
+**Kimi CLI is a live surface of this Skill, not a legacy one.** It has no reader
+of its own, so the two commands in the task table above are the only way to reach
+it; a Kimi question answered from Claude data alone produces a false "never
+happened". Home resolution order is `--kimi-home` > `KIMI_HOME` > `~/.kimi-code`.
 
 The former `claude-code-history-files-finder` also exposed optional Codex and Kimi
-branches. Their original instructions are retained in
+branches. Its original instructions are retained in
 [references/legacy_cross_provider_workflow.md](references/legacy_cross_provider_workflow.md)
-for migration and regression evidence. New Codex requests must route to
-`daymade-claude-code:read-codex-history`; legacy Kimi commands remain available only
-through that reference until a dedicated Kimi reader is justified by real use.
+as a frozen snapshot for migration and regression evidence only — read it for what
+the old contract said, never as a description of what ships today.

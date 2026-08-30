@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **read-claude-code-history** (`daymade-claude-code` v3.7.2): the Skill claimed Kimi
+  CLI was reachable "only through that reference until a dedicated Kimi reader is
+  justified," while its own bundled scripts ship a live `search --kimi`
+  (`search_kimi_wires`) and `list_local_history.py --source kimi`. With the
+  cross-provider router now sending every Kimi request here, that stale sentence was
+  the last hop of a chain that answers a Kimi question from Claude data and reports a
+  false "never happened". Kimi is now a task-table row and a stated live surface, the
+  legacy section documents the router, and the two frozen PR #357 snapshots carry a
+  banner saying they describe retired contracts — one of them shares its `name:` with
+  a skill that has since been rebuilt around a different contract. The router drops
+  its duplicate copy of the Kimi home-resolution order, which belongs to the executor
+  that owns the surface, and widens its own "no executor flags here" rule to admit the
+  three flags that name provider scope, which it was already using.
 - **read-codex-history** (`daymade-claude-code` v3.7.1): define “one chronological
   evidence briefing” as one immutable local artifact rather than one oversized model
   payload. Large briefings are materialized once, hash- and line-count-bound, then read
