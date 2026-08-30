@@ -70,15 +70,36 @@ for e in json.load(sys.stdin)['events'][:5]:
 `official_window`、`reset_verification_status`。`type` 是内部小写值：`reset` = 广域
 重置公告、`credits` = banked/额度包、`boost`/`promo` = 消耗规则类。
 
-拿到 `url` 后优先读原帖；X 直连失败时可用 Jina Reader（2026-08-26 实测）：
+拿到 `url` 后优先读原帖。X 帖正文的制胜通道是 **fxtwitter 公开镜像 API**（2026-08-30 实测：
+免登录、直连即可、返回完整 JSON；**完整正文在 `tweet.text` 字段——不是 `full_text`**，该键
+不存在、照抄会 KeyError；note_tweet 长文全文也给，8-29 官宣长文实测 2324 字符完整拿到、以
+自然结尾收束）：
 
 ```bash
-curl -fsS -m 30 "https://r.jina.ai/https://x.com/thsottiaux/status/<status-id>"
+curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
+  | python3 -c "import json,sys; t=json.load(sys.stdin)['tweet']; print(t['created_at']); print(t['text'])"
 ```
 
+备胎与死路（同日实测）：
+- `cdn.syndication.twimg.com/tweet-result?id=<id>&lang=en&token=a`（官方端点，200）：**正文截断
+  276 字符**、note_tweet 只给 id 不给内容——只能核对开头与元数据，长文拿不到。
+- `publish.twitter.com/oembed`：301 落到 `publish.x.com` 后（加 `-L`）返回 200+JSON，但可见
+  文本同样截断（~273 字符、以省略号收尾，截断点与 syndication 相同）——**与 syndication
+  同一档**，够核对开头与元数据，拿不到 note_tweet 全文。
+- ~~Jina Reader~~ **已不可靠**：匿名访问 x.com 会因他人滥用被**全局封禁**（403，封禁窗口数小时、
+  错误信息点名第三方账号）；本仓 jina key 已 402 余额尽。别再把它当 X 的 fallback。
+- fxtwitter 不返回回复内容（`replies` 字段只是数值计数）；帖子下的 Tibo 澄清需要 WebSearch
+  找转录源补充。
+
 `codexlimitwatch.com/codex-reset-history` 与 Radar 都以 Tibo 动态为核心上游，属于**同一来源
-家族**，只能互查转录/解析是否一致，不能称为独立双源。HTML `codex-reset.com/tibo` 是 SPA，
-静态内容可能滞后；只作人类视图。
+家族**，只能互查转录/解析是否一致，不能称为独立双源。**LunarWerx Codex Forecast**
+（`codex.lunarwerx.com`）介于两者之间：它的**核验腿**独立（站点自述且 meta description 实测
+「checked against OpenAI's own status page」），但**数据上游**仍是公开重置记录（含 Tibo 动态、
+社区描述其模型由 Tibo hints 驱动）——所以它适合作「第三方对 Tibo 信号的**解读**交叉验证」
+（2026-08-30：对 celebration 帖它独立给出同样的「明天重置」读法，标注 95% confident），
+**不能当「独立观测到重置事件」的第二源**，否则就犯了本 skill 警告的同源错误。它是 SPA，
+静态抓取只能拿到 meta 与壳，正文内容经 WebSearch 引用。HTML
+`codex-reset.com/tibo` 是 SPA，静态内容可能滞后；只作人类视图。
 
 ### 2. 静默重置路径：查账户事实，而不是继续等帖子
 
@@ -112,8 +133,10 @@ curl -fsS -m 30 "https://r.jina.ai/https://x.com/thsottiaux/status/<status-id>"
 
 ### 4. 通道失败时
 
-Radar API 挂 → 读原始 X（已知 URL 用 Jina）→ codexlimitwatch 单源（标注同源镜像）→ WebSearch
-`thsottiaux reset`。用户报告产品已变化时，公告通道全空仍要走静默重置路径；全部产品/社区
+Radar API 挂 → fxtwitter 读原帖（上节命令）→ syndication 官方端点（截断 276 字符，只够核对元数据）→
+codexlimitwatch 单源（标注同源镜像）+ LunarWerx（仅 Tibo 信号解读交叉验证，非独立观测第二源）→
+WebSearch `thsottiaux reset`
+找转录。用户报告产品已变化时，公告通道全空仍要走静默重置路径；全部产品/社区
 证据也取不到，才写「只能确认该用户的观测，无法核实影响范围」，不要写「没有重置」。
 外部站优先用 `curl` 直连；WebFetch 被安全校验拦截不证明站点已挂。`feed.xml` 的历史实测
 比 API 更滞后，不作 fallback。
@@ -165,6 +188,16 @@ TZ=America/Los_Angeles date "+%F %T %Z(%z)"
   （2026-08-23 全量 51 条实测：落地两天的「has landed」条目仍是 pending）——**结构上不提供
   「已到账」正向信号**，别去等一个永不触发的字段翻转。到账证据 = Tibo 后续「has landed」类
   推文（会作为新 event 出现），或产品内余额实测。
+- **「celebration」在他的语义里 = 重置动作本身，不是发帖庆祝**（2026-08-30 实战教训：把
+  「This celebration is moved to tomorrow as the button was already pressed today」读成
+  「只是庆祝帖、无重置」，被两个独立源当场证伪）。他固定把重置绑在用户里程碑庆祝上——
+  7M/8M/20M 里程碑均以 banked/reset 兑现，8M 时原话「Tomorrow might be 8M active user
+  celebration day」，逼近 9M 时发起过「要不要再重置」的投票（poll 本体
+  x.com/thsottiaux/status/2077271889626706300）。所以「celebration 改期到明天」应读作**预告
+  明天有一次重置**。
+  分寸：这仍是暗示级官宣（他没写「we will reset again tomorrow」字面），结论措辞用「官方
+  暗示 + 多个独立 tracker 一致解读 = 大概率有」，并按惯例预测太平洋下午落地；只有官方明文
+  才能升格为「官宣确认」。
 - **多源时间有张力时先换算再叙述，别糅合**：2026-08-21 官宣 banked reset「8pm PST 前到账」，
   tracker 记落地推为 UTC 8/22 00:50——换算回太平洋是 8/21 17:50，**早于**承诺线；
   而媒体报道「8pm 过了很多账户没收到」。两个来源不矛盾（官宣早、部分账户晚到），

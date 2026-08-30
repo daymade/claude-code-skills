@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **tibo-reset-codex** v1.1.0 → v1.2.0: replace the dead Jina fallback for
+  reading Tibo's X posts with the fxtwitter mirror API — login-free, works
+  direct, and returns the full note_tweet body in `tweet.text` (**not**
+  `full_text`; the first draft shipped the wrong field name and failed the
+  reviewer's verbatim re-run). syndication/oembed demoted to metadata-grade
+  fallbacks (both truncate at the 276-char display limit; oembed needs `-L`
+  to follow the 301 to publish.x.com). Record the Jina kill mechanism:
+  anonymous x.com access through r.jina.ai gets 403-globally-banned for
+  hours over *third-party* abuse, and the repo's Jina key is out of
+  balance. Correct the LunarWerx positioning — its verification leg is
+  independent (it checks against OpenAI's status page) but its data inputs
+  are still public reset records including Tibo signals, so it cross-checks
+  third-party *readings* of Tibo posts, never serves as an
+  independently-observed second source; §4's chain now carries that
+  qualifier. Codify the milestone-celebration reading rule: Tibo binds
+  resets to user milestones (7M/8M/20M all delivered; 500k explicitly
+  excluded after re-verification showed it was a bug-compensation payout,
+  not a milestone), so "celebration moved to tomorrow" reads as a reset
+  announcement — the misreading that started this update. Two-round
+  independent fresh-context review: round 1 = 1 blocker (wrong field name)
+  + 4 should + 2 note, all fixed; round 2 = all seven confirmed fixed, plus
+  4 wording residues (500k milestone misread, unqualified "independent
+  second source" in §4, oembed 312→273 chars, "9M 时"→"逼近 9M 时") also
+  fixed. quick_validate + regression audit green.
 - **claude-code-hooks** (`daymade-claude-code` v3.7.9): refresh the tracked
   security-scan attestation against the v3.7.8 content so a fresh checkout can
   package the reviewed Skill without first regenerating derived evidence.
