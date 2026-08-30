@@ -990,6 +990,30 @@ blind spot one step short of self-lockout. Once a guard HAS locked you out, the 
 routes are in **#3**'s list (edit `settings.json` with the Edit/Write tool, which never
 fires a `Bash` matcher; or start a session with a different `CLAUDE_CONFIG_DIR`).
 
+That clustering is a tendency. For a guard whose detector is a **text pattern**, one
+family of it is a certainty instead: **documenting the anti-pattern reproduces its own
+trigger.** The commit message explaining the guard, the doc example, the note you write
+into your own knowledge base — each carries the banned shape verbatim, as data, and each
+lands in the corpus. Measured 2026-08-30 on an 852-command replay: of the 4 commands
+matching the guard's headline shape, **3 were healthy** — a commit message about the
+guard, a doc write embedding the pattern, and the calibration command that deliberately
+runs the bad form beside the good one to show the difference. A detector taking the
+pattern at face value would have been **75% wrong on its own signature shape**, and every
+one of those blocks would have landed on the author mid-sentence, while writing the guard
+up. Two exemptions retire the family, and neither is a special case: **data-sink heredoc
+bodies** (`references/hook_patterns.md`, under the command-position walker's heredoc
+limits — the sink-discriminating stripper), which covers the commit message and the doc
+write; and **the correct form present in the same command**, which covers the calibration
+— an author who wrote the fix beside the bug is demonstrating it, not committing it. The
+second is the same shape as the `pipefail` escape hatch a pipe-fallback guard uses: the
+command carries evidence that its author already knows, so stop arguing with them. Its
+mechanism is one more literal test, run **before** the detector and short-circuiting it —
+for `pipe-fallback-guard` that is the substring set `pipefail`/`PIPESTATUS`/`pipestatus`
+(rule 4); for a detector with a canonical fix, it is that fix's distinctive fragment.
+Keep it narrow and literal: a *pattern* for the correct form re-opens the whole guessing
+problem, whereas a fixed string an author had to type on purpose is hard to hit by
+accident, and its failure direction is a miss.
+
 Sizing, so this doesn't read as a research project: one harvest plus one loop, minutes of
 wall time.
 

@@ -8,6 +8,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **claude-code-hooks** (`daymade-claude-code` v3.7.7): the skill asserted that a non-git
+  heredoc whose body carries trigger-looking data leaves a fail-closed guard with "no cheap
+  middle ground" — only declare-it-fail-open or a real shell grammar. That is now shown to be
+  wrong, with the middle ground and its contract: **strip heredoc bodies by sink**. A body
+  feeding a data consumer (`git commit -F -`, `python3 - <<'PY'`) is data and comes out; a body
+  feeding a shell (`cat > x.sh <<'EOS'`, `bash <<'EOS'`, `ssh host <<'EOS'`) *is* command text
+  and stays in. The `keep` branch is the half a first cut omits, and omitting it is not
+  cosmetic: on an 852-command replay the wholesale-strip version passed its fixtures and then
+  missed that shape's only true positive in the corpus, which lived inside a `cat > … <<'EOS'`
+  that was executed two lines later. The published contract states the failure direction (an
+  unnamed sink means the body is stripped — a miss, never a false block, per rule 1), that it
+  does not raise pitfall #11's grammar ceiling, and that the sink list is the only side safe to
+  extend. The same walker section carried the overturned claim a second time — its
+  false-block-direction list headed with "non-git heredoc bodies (declared, not patched)" and a
+  blanket "each block-side entry is declared because fixing it takes real shell grammar." Both
+  were corrected in place; leaving them would have had the file assert "only a grammar fixes
+  this" and "a heuristic fixes most of this" about one category within twenty lines.
+  Recipe smoke-run verbatim (11 shapes, including the three the prose names as genuine misses).
+
+  Two new pitfalls, both measured while writing a guard under this skill's own rules:
+  **#42** — a hook that locates a sibling file with `dirname "${BASH_SOURCE[0]}"` looks in the
+  wrong directory, because rule 3 requires `~/.claude/hooks/<name>.sh` to be a symlink and
+  `BASH_SOURCE` is the *invocation* path. The sibling lookup exits 127, and the SessionStart
+  health check renders that as `selftest failed` for a completely healthy guard — a permanent
+  false alarm, the direction that trains operators to ignore the whole line. Same root as #41
+  (unresolved symlink), different victim (locates from the link vs stats the link); the two now
+  cross-reference. Fix is the portable link-walk loop, plus the calibration that catches it:
+  exercise the selftest through the *registered* path, not only the SSOT path.
+  **#43** — `settings.json` hook paths come in three spellings (measured in one active profile:
+  45 `~/…`, 8 absolute, 5 `$HOME/…`; all three fire). A consumer that expands only `~` leaves
+  `$HOME` literal, the path fails `[ -r ]`, and the tool files live guards under "can't check
+  this one" — four registered PreToolUse guards had never actually been audited. One-way
+  silent, and toward false *unknown*, which reads as noise. Fix expands both; the calibration
+  is asserting targets-found equals entries-registered.
+
+  Rule 9 (corpus replay) gains the false-positive family that is structural rather than
+  incidental: for a guard whose detector is a text pattern, **documenting the anti-pattern
+  reproduces its own trigger**. Of the 4 corpus commands matching that guard's headline shape,
+  3 were healthy — a commit message about the guard, a doc write embedding the pattern, and the
+  calibration command that runs the bad form beside the good one. A naive detector would have
+  been 75% wrong on its own signature shape, blocking its author mid-sentence. Retired by the
+  sink-discriminating stripper plus a "correct form present in the same command" exemption,
+  the same shape as a `pipefail` escape hatch.
 - **daymade-audio / asr-transcribe-to-text** (`daymade-audio` v1.32.4): prevent single-character or degenerate aligned turns from emitting `start == end` and `duration == 0`. The Qwen aligner and Whisper.cpp late-fusion producer now share one half-up integer-millisecond contract for direct and interpolated lattice points, turn fields, TXT, CSV, and alignment JSON; degenerate turns receive only the smallest 1 ms interval and never borrow a later timestamp across a speaker change or long silence. Both speaker-bundle producers record their reviewed edge-inheritance tolerance in the final receipt (Qwen 1 s; overlap-only fusion 0 s), and the shared time-contract module is covered by each pipeline hash. This keeps identically named artifacts semantically consistent without weakening downstream positive-duration or diarization-support checks; the receipt-less legacy cascade remains outside the strict bundle contract.
 - **pdf-creator** (`daymade-docs` v1.13.0): the table-border check could clear the defect it
   exists to catch, and separately failed most healthy documents. Both were found by calibrating

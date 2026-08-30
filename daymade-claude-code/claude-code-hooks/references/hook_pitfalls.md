@@ -2103,3 +2103,100 @@ this list and describe defects you reach by asking a different question):
   has to exercise the link: a case that **edits the SSOT without touching the
   symlink** and asserts the expensive path fires. A suite that stats a real file
   passes with `-L` missing, which is why the bug shipped in the first cut.
+- **Sibling:** #42 is the same root (rule 3's symlink, left unresolved) with a
+  different victim — that one **locates** a sibling file from the link's directory
+  instead of stat-ing the link. When you fix either, grep the hook for every other
+  use of its own path.
+
+## 42. A symlinked hook that locates a sibling file with `dirname "${BASH_SOURCE[0]}"` looks in the wrong directory — and the miss is reported as "selftest failed"
+
+- **Symptom:** the hook's `--selftest` passes when you run it by its SSOT path, and
+  the SessionStart health check reports `selftest failed: <hook>` for the same file
+  on every session. Nothing else is wrong: `bash -n` is clean, the detector blocks
+  and allows correctly, the registration is present. Only the health check disagrees,
+  and only ever in one direction.
+- **Precondition (or you will not see this at all):** the health check has to actually
+  run the selftest. Pattern C as printed in `hook_patterns.md` does **not** — it does
+  `bash -n` plus a registration `grep`. It is SKILL.md's **build order step 4** that
+  extends that same loop with `bash "$h" "$mode"` over the registered-hooks path. So
+  this pitfall bites the design this skill prescribes in full, not the compact skeleton
+  alone; if your health check only syntax-checks, a broken sibling lookup stays invisible
+  until the day you need the battery.
+- **Cause:** the same two prescriptions as #41, composing through a different
+  mechanism. Rule 3 requires `~/.claude/hooks/<name>.sh` to be a **symlink** into the
+  SSOT; that build-order health check invokes hooks by that path. `${BASH_SOURCE[0]}` is the path
+  bash was **invoked with**, not the resolved file — so inside the hook
+  `dirname "${BASH_SOURCE[0]}"` is `~/.claude/hooks`, and a sibling lookup such as
+  `exec bash "$(dirname "${BASH_SOURCE[0]}")/<name>.test.sh"` finds nothing and exits
+  **127**. To the health check 127 is simply non-zero, so a fully healthy guard is
+  advertised as broken at every session start — which is the expensive direction:
+  a permanent false alarm trains the operator to ignore that whole line of output.
+  Where #41 **stats** the link instead of the target, this one **locates from** it.
+  Anything that resolves a path out of `$0`/`BASH_SOURCE` is in this family:
+  a bundled library it sources, a fixture directory, a template.
+- **Fix:** walk the link chain before taking `dirname`. What you need is *resolve
+  every hop, then take the directory* — name the behavior rather than a flag, because
+  the flag's availability is exactly the thing that varies. `readlink -f` does it in
+  one call and **current macOS does ship it** (verified on Darwin 25.5: `/usr/bin/readlink`
+  is a real BSD binary and `-f` resolves a two-hop chain), but it is not in POSIX and
+  older BSDs omit it, and a hook runs on whatever machine installed it. The loop below
+  depends on no flag at all:
+  ```bash
+  _self="${BASH_SOURCE[0]}"
+  while [ -L "$_self" ]; do
+    _link=$(readlink "$_self")
+    case "$_link" in
+      /*) _self="$_link" ;;                          # absolute target
+      *)  _self="$(dirname "$_self")/$_link" ;;      # relative to the link's dir
+    esac
+  done
+  _dir=$(cd "$(dirname "$_self")" && pwd)
+  ```
+- **The calibration that catches it, and the reason it shipped:** the author tests
+  the hook the way the author invokes it — by the SSOT path, where `dirname` is
+  accidentally right. **Run the selftest through the registered path too**
+  (`bash ~/.claude/hooks/<name>.sh --selftest-full`), because that is the path the
+  harness will use. The general form: a hook reached through more than one path is a
+  hook that must be exercised through each of them. Same lesson as #41's
+  "the regression test has to exercise the link".
+- **Diagnosing it from the outside** (you see only `selftest failed`): run the two
+  paths side by side and compare — identical output means the fault is real, an
+  exit 127 from the registered path means it is this pitfall.
+
+## 43. `settings.json` hook paths come in three spellings, and a consumer that expands only `~` silently rates live guards "unreadable"
+
+- **Symptom:** an auditor, health check, or migration script that iterates the
+  **registered** hooks reports a subset as unreadable / unauditable / not found, and
+  therefore skips them. Those hooks are live and firing. The report is not empty and
+  not obviously wrong — it just quietly has a hole with a plausible-looking label.
+- **Cause:** a hook's `command` is a shell-ish string, and real settings files mix
+  spellings, because they accumulate over months from different sessions and
+  installers. One active profile, measured 2026-08-30: **45** entries as
+  `~/.claude/hooks/<name>.sh`, **8** fully absolute, **5** as
+  `$HOME/.claude/hooks/<name>.sh`. All three fire (verified live in both the `~` and
+  the `$HOME` form). Python's `os.path.expanduser` resolves `~` and passes absolute
+  paths through, but leaves `$HOME` **literal**; the path then fails `[ -r ]` /
+  `os.path.exists` and the consumer files it under "can't check this one". The tool
+  that surfaced this enumerates `PreToolUse` only (the one event where `exit 2` has
+  blocking semantics), and **4 of those 5 `$HOME`-spelled entries are `PreToolUse`** —
+  so four registered blocking guards had never actually been audited by it, which is
+  exactly the population it existed to cover. Quote the scope with the count, or the
+  two numbers look like they should match and don't.
+- **Direction:** one-way and silent. It never rates a broken guard healthy; it rates
+  **healthy guards unknown** — and "unknown" in an audit output reads as noise, so
+  nobody chases it. A checker with a blind spot is worse than a missing checker,
+  because its green covers the gap.
+- **Fix:** expand both, in either language.
+  ```python
+  p = os.path.expanduser(os.path.expandvars(cmd.split()[0]))   # $HOME then ~
+  ```
+  ```bash
+  p="${cmd%% *}"; p="${p/#\$HOME/$HOME}"; p="${p/#\~/$HOME}"   # no eval — the
+  # command string is config data, and `eval` on it turns a settings file into
+  # code execution
+  ```
+- **Calibration (the check that would have caught it in one line):** before trusting
+  any sweep over registered hooks, assert **targets found == entries registered**.
+  A sweep that silently drops 5 of 58 is indistinguishable from one that covers
+  everything, unless you compare the two counts. Same instrument discipline as
+  rule 9's "a replay returning zero blocks makes the harness a suspect".
