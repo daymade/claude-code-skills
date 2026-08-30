@@ -258,7 +258,7 @@
       "description": "Apple-platform development and operations suite bundling programmatic macOS window capture, iOS/macOS app development with XcodeGen and SwiftUI, safe disk-space diagnosis and cleanup, and disciplined launchd watchdog design under one shared namespace. Install once for the complete macOS and iOS toolkit.",
       "source": "./daymade-macos",
       "strict": false,
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "suite",
       "keywords": [
         "suite",
