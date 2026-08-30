@@ -16,6 +16,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   available throughout long sessions and prove long-horizon liveness;
   per-session ceilings are reserved for blocking loops whose capped exit
   explicitly leaves work blocked, unshipped, or pending.
+- **git-safety-net** (`git-safety-net` v1.13.0): Mode D now names the shared-index drift trap
+  that index-bypassing commits leave behind, and the prevention reference's commit-scope hygiene
+  check is upgraded to match. A bare `git commit` snapshots the *whole* index, not just what you
+  staged — but the skill never said so, and nothing warned that `commit-tree` + `update-ref` (or
+  a temporary `GIT_INDEX_FILE` commit) advances HEAD while the shared index stays on its old
+  baseline, so the commit's own files show as staged deletions (`D ` + `??` in `git status`) that
+  anyone's next bare commit turns real. Verified mechanically on throwaway repos: the drift
+  produces exactly those status pairs; a bare commit deletes the delivered files from HEAD while
+  the working tree looks untouched; `git restore --staged -- <paths>` re-syncs; and
+  `git commit -- <path>` neither creates nor repairs the drift. The new Mode D bullet assigns
+  the two obligations — whoever advanced the branch past the index re-syncs immediately, and
+  whoever commits bare on a shared tree reads `git diff --cached --name-status` as the blast
+  radius and stops on any entry they don't recognize. The hygiene section's pre-commit check
+  moves from `--name-only` to `--name-status`, because the status letter is what exposes a
+  phantom `D` for a file you never deleted. Real incident: a 24-file delivered directory sat in
+  the drift window with `D ` lines as the only sign; one bare commit by a parallel session would
+  have deleted it from the branch tip.
 - **claude-code-hooks** (`daymade-claude-code` v3.7.7): the skill asserted that a non-git
   heredoc whose body carries trigger-looking data leaves a fail-closed guard with "no cheap
   middle ground" — only declare-it-fail-open or a real shell grammar. That is now shown to be
