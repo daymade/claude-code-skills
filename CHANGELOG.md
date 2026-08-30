@@ -8,6 +8,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **pdf-creator** (`daymade-docs` v1.13.0): the table-border check could clear the defect it
+  exists to catch, and separately failed most healthy documents. Both were found by calibrating
+  it against real material rather than fixtures.
+
+  *False pass.* The check compares raster ink against the rules the object layer promises, but
+  Chrome DROPS geometry lying entirely outside its page clip, and a rule that was never written
+  is never looked for — measured, a table with vertical rules and no cell fills printed
+  `5/5 promised rules painted — PASS` with its right border genuinely absent. New `--reference`
+  mode compares the subject's distinct-rule count against the same document rendered by the other
+  backend; the verdict is symmetric, so a swapped pair fails rather than silently clearing the
+  damaged file. Counts rather than positions, and document-wide rather than per page, because the
+  backends break one 60-row table into 5 pages vs 3 (`default`) and 3 vs 15 (`warm-terra-menu`)
+  with identical rule counts throughout. A reference-free pass now states what it did not check,
+  and `NOTHING CHECKED` exits 3 rather than sharing 0 with a real pass.
+
+  *False failures.* Against 46 delivered PDFs the ink check failed 34. It read every vertical
+  edge as a promised rule, and an `<hr>` is a rect 0.7pt tall whose ends are vertical edges — so
+  it hunted for a full-height rule at the page margin of documents with no table at all. Scoping
+  to the table bbox left 10, on inline `<code>` backgrounds inside cells. The promised set now
+  comes from each table's detected cell grid, and degenerate detections (one row, or one column)
+  are declined rather than accused. A coverage threshold was tried and rejected: at a clipped
+  edge a single header-row fill is often the only geometry left (29.63pt of a 90pt table), so
+  "must span the table" silently switched the primary detection off.
+
+  *Also rejected*: requiring the rules to bracket the table's text. On healthy `warm-terra-menu`
+  output the text runs 65.50pt past the rightmost rule — a larger asymmetry than the 37.60pt of
+  the real defect. And `MAX_STROKE_PT`, added in the previous change to exclude fill edges, is
+  removed: it never excluded anything (pdfplumber reports `width=0` on a `rect_edge`), and had it
+  worked it would have blinded the check at the clipped edge.
+
+  The mandatory visual self-check now names the border check as its second step. It previously
+  listed the clip among the failures it exists to catch, then prescribed only "read the PNGs" —
+  the procedure the same document calls unreliable for this defect.
+
+  The reference file is ink-checked too, so argument order cannot decide whether the damaged
+  file is examined — for a border Chrome *clipped* rather than *dropped* both renders promise the
+  same rule count, so the count comparison sees nothing and only the ink check finds it. Measured:
+  before this, passing the clipped file as `--reference` produced an unqualified PASS.
+
+  Calibration: 5 themes × single- and multi-page × both argument orders = 20 runs — the 12 pairs
+  with no clipped file pass in both orders, the 8 that have one are caught in both; 14 real
+  markdown documents × 2 themes = 28 single-file runs, zero false positives.
 - **read-claude-code-history / read-codex-history** (`daymade-claude-code` v3.7.5):
   stop scanning the same multi-gigabyte Claude history tree once per profile label.
   Multi-model profiles commonly expose distinct config homes whose `projects/` paths are
