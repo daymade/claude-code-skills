@@ -1308,7 +1308,6 @@ class SessionAnalyzer:
                 ref
                 for ref in sessions
                 if ref["session_id"] not in exclude_sessions
-                and ref["path"].stem not in exclude_sessions
             ]
             project_count = len({ref.get("project") for ref in sessions}) if all_projects else int(bool(sessions))
             return sessions, len(sessions), project_count, False
@@ -1318,7 +1317,7 @@ class SessionAnalyzer:
         for project_name, pairs in project_pairs.items():
             for scan_dir, _group_members in self._group_project_dirs(pairs):
                 for file in scan_dir.glob("*.jsonl"):
-                    if file.name.startswith("agent-") or file.stem in exclude_sessions:
+                    if file.name.startswith("agent-"):
                         continue
                     key = (project_name, file.name)
                     try:

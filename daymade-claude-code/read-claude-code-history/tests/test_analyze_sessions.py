@@ -584,6 +584,10 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertIsNone(session_id)
         self.assertEqual(loads.call_count, 0)
 
+        dangling = self.root / "dangling.jsonl"
+        dangling.symlink_to(self.root / "missing-target.jsonl")
+        self.assertIsNone(claude_core.peek_claude_session_id(dangling))
+
     def test_uncertain_identity_is_conservatively_fully_parsed(self) -> None:
         no_id = project_dir(self.active_home, self.workspace) / "legacy-no-id.jsonl"
         write_jsonl(
@@ -604,6 +608,28 @@ class SessionAnalyzerTests(unittest.TestCase):
             "Candidate prefilter: full-session parsing required for 1/1 session(s).",
             result.stderr,
         )
+
+    def test_dangling_jsonl_degrades_to_tolerant_full_scan(self) -> None:
+        dangling = project_dir(self.active_home, self.workspace) / "orphan.jsonl"
+        dangling.symlink_to(self.root / "missing-session.jsonl")
+        default_run = self.run_cli(
+            "search",
+            str(self.workspace),
+            "absent-marker",
+            "--history-sources",
+            str(self.manifest),
+        )
+        no_prefilter_run = self.run_cli(
+            "search",
+            str(self.workspace),
+            "absent-marker",
+            "--no-prefilter",
+            "--history-sources",
+            str(self.manifest),
+        )
+        self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
+        self.assertIn("No matches found.", default_run.stdout)
+        self.assertNotIn("Traceback", default_run.stderr)
 
     def test_no_candidate_is_no_match_not_no_sessions(self) -> None:
         session_id = "12121212-1212-4212-8212-121212121212"
@@ -983,6 +1009,46 @@ class SessionAnalyzerTests(unittest.TestCase):
         )
         self.assertIn(target_id, completed.stdout)
         self.assertNotIn(current_id, completed.stdout)
+
+    def test_exclude_session_does_not_treat_alias_filename_as_identity(self) -> None:
+        internal_id = "22222222-2222-4222-8222-222222222222"
+        alias_stem = "11111111-1111-4111-8111-111111111111"
+        write_jsonl(
+            project_dir(self.active_home, self.workspace) / f"{alias_stem}.jsonl",
+            [
+                user_record(
+                    internal_id,
+                    self.workspace,
+                    "renamed-copy-marker",
+                    "2026-04-20T10:00:00Z",
+                )
+            ],
+        )
+        write_jsonl(
+            project_dir(self.archive_home, self.workspace) / f"{internal_id}.jsonl",
+            [
+                user_record(
+                    internal_id,
+                    self.workspace,
+                    "ordinary archive copy",
+                    "2026-04-20T10:00:01Z",
+                )
+            ],
+        )
+        arguments = (
+            "search",
+            str(self.workspace),
+            "renamed-copy-marker",
+            "--exclude-session",
+            alias_stem,
+            "--history-sources",
+            str(self.manifest),
+        )
+        default_run = self.run_cli(*arguments)
+        no_prefilter_run = self.run_cli(*arguments, "--no-prefilter")
+        self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
+        self.assertIn("Found 1 session(s) with matches", default_run.stdout)
+        self.assertIn(f"{alias_stem}.jsonl", default_run.stdout)
 
     def test_zero_match_hint_points_at_unapplied_widenings(self) -> None:
         write_jsonl(

@@ -37,23 +37,26 @@ def peek_claude_session_id(
     """
     records_read = 0
     bytes_read = 0
-    with path.open("rb") as handle:
-        for raw_line in handle:
-            if records_read >= max_records:
-                return None
-            bytes_read += len(raw_line)
-            if bytes_read > max_bytes:
-                return None
-            records_read += 1
-            try:
-                record = json.loads(raw_line)
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                continue
-            if not isinstance(record, dict):
-                continue
-            session_id = record.get("sessionId")
-            if isinstance(session_id, str) and session_id:
-                return session_id
+    try:
+        with path.open("rb") as handle:
+            for raw_line in handle:
+                if records_read >= max_records:
+                    return None
+                bytes_read += len(raw_line)
+                if bytes_read > max_bytes:
+                    return None
+                records_read += 1
+                try:
+                    record = json.loads(raw_line)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                session_id = record.get("sessionId")
+                if isinstance(session_id, str) and session_id:
+                    return session_id
+    except (OSError, UnicodeError):
+        return None
     return None
 
 
