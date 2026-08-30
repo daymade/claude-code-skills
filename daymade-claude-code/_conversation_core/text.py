@@ -258,6 +258,42 @@ def keywords_are_raw_byte_safe(keywords: Iterable[str]) -> bool:
     )
 
 
+def keywords_are_file_prefilter_safe(keywords: Iterable[str]) -> bool:
+    """Can the two-pass file scanner safely rule out non-matching files?
+
+    This is intentionally broader than :func:`keywords_are_raw_byte_safe`.
+    Line-level filtering must see the keyword's literal bytes on the exact
+    physical line, so it remains ASCII-only.  File-level filtering also runs
+    the conservative ``_UNSCANNABLE_MARKERS`` pass: any file containing a
+    ``\\u`` escape or a non-ASCII character that folds to ASCII remains a
+    candidate and is fully parsed later.  That extra pass makes ordinary CJK
+    and one-codepoint Unicode folds safe without losing escaped archives.
+
+    File-level Unicode filtering is limited to uncased code points (CJK,
+    emoji, symbols).  Cased non-ASCII text such as ``café`` falls back to full
+    parsing: raw UTF-8 can be handled by ``rg -i``, but an archive may encode
+    uppercase ``É`` as ``\\u00c9`` while the query's lowercase ``é`` is
+    ``\\u00e9``.  Treating every file containing any ``\\u`` as a candidate
+    preserved correctness but destroyed the speedup on real archives.
+
+    Multi-codepoint full folds (``ß`` -> ``ss``, ligatures, dotted I) likewise
+    fall back to full parsing because ``rg -i`` performs simple folding and
+    cannot prove their absence. JSON-required/optional escape characters
+    remain unsafe for the same reason documented by
+    :func:`keywords_are_raw_byte_safe`.
+    """
+    return all(
+        bool(keyword)
+        and not _JSON_ESCAPED_CHAR_RE.search(keyword)
+        and all(len(character.casefold()) == 1 for character in keyword)
+        and all(
+            character.isascii() or character.lower() == character.upper()
+            for character in keyword
+        )
+        for keyword in keywords
+    )
+
+
 def files_possibly_matching(
     paths: Iterable[Path],
     keywords: Iterable[str],
@@ -305,7 +341,11 @@ def files_possibly_matching(
     """
     path_list = list(paths)
     keyword_list = list(keywords)
-    if not path_list or not keyword_list or not keywords_are_raw_byte_safe(keyword_list):
+    if (
+        not path_list
+        or not keyword_list
+        or not keywords_are_file_prefilter_safe(keyword_list)
+    ):
         return None
     exe = shutil.which("rg") or shutil.which("grep")
     if not exe:
@@ -333,10 +373,20 @@ def files_possibly_matching(
         kw_scan.append("-i")
     for kw in keyword_list:
         kw_scan += ["-e", kw]
+        escaped = json.dumps(kw, ensure_ascii=True)[1:-1]
+        if escaped != kw:
+            kw_scan += ["-e", escaped]
     kw_scan.append("--")
 
     marker_scan = [exe, "-a", "-F", "-l"]
-    for marker in _UNSCANNABLE_MARKERS:
+    markers = list(_FOLDS_TO_ASCII)
+    # An ASCII query can match a non-ASCII full-fold equivalent stored as a
+    # JSON escape ("financial" vs "\\ufb01nancial"). Keep every escaped file
+    # in that case. For uncased Unicode queries, the exact escaped keyword was
+    # added above, so the broad marker would only re-admit the whole archive.
+    if any(keyword.isascii() for keyword in keyword_list):
+        markers.append("\\u")
+    for marker in markers:
         marker_scan += ["-e", marker]
     marker_scan.append("--")
 

@@ -1059,7 +1059,9 @@ class SessionAnalyzer:
         )
 
     def _merge_sessions_from_dirs(
-        self, pairs: List[tuple]
+        self,
+        pairs: List[tuple],
+        candidate_names: Optional[set[str]] = None,
     ) -> List[Dict[str, Any]]:
         """Collect + de-duplicate sessions from ``(source, project_dir)`` pairs.
 
@@ -1083,20 +1085,10 @@ class SessionAnalyzer:
         vanish from that field even though the ``sources``/``homes``
         label lists stayed correct.
         """
-        groups: Dict[str, tuple] = {}
-        for source, project_dir in pairs:
-            try:
-                key = str(project_dir.resolve())
-            except (OSError, RuntimeError):
-                key = str(project_dir)
-            group = groups.get(key)
-            if group is None:
-                groups[key] = (project_dir, [(source, project_dir)])
-            else:
-                group[1].append((source, project_dir))
+        groups = self._group_project_dirs(pairs)
 
         by_id: Dict[str, Dict[str, Any]] = {}
-        for scan_dir, group_members in groups.values():
+        for scan_dir, group_members in groups:
             group_sources = [source for source, _nominal_dir in group_members]
             # any(...) — not group_sources[0].kind — because "at least one
             # active alias in the group" must win regardless of which
@@ -1108,6 +1100,8 @@ class SessionAnalyzer:
             group_kind = "active" if group_has_active else group_sources[0].kind
             for file in scan_dir.glob("*.jsonl"):
                 if file.name.startswith("agent-"):
+                    continue
+                if candidate_names is not None and file.name not in candidate_names:
                     continue
                 summary = scan_claude_session(file)
                 sid = summary.session_id
@@ -1199,6 +1193,22 @@ class SessionAnalyzer:
             reverse=True,
         )
 
+    @staticmethod
+    def _group_project_dirs(pairs: List[tuple]) -> List[tuple]:
+        """Group nominal source dirs by physical directory identity."""
+        groups: Dict[str, tuple] = {}
+        for source, project_dir in pairs:
+            try:
+                key = str(project_dir.resolve())
+            except (OSError, RuntimeError):
+                key = str(project_dir)
+            group = groups.get(key)
+            if group is None:
+                groups[key] = (project_dir, [(source, project_dir)])
+            else:
+                group[1].append((source, project_dir))
+        return list(groups.values())
+
     def project_dir_pairs(self) -> Dict[str, List[tuple]]:
         """Enumerate every project dir across all sources.
 
@@ -1239,6 +1249,130 @@ class SessionAnalyzer:
                 else float("-inf")
             ),
             reverse=True,
+        )
+
+    def find_search_sessions(
+        self,
+        *,
+        project_path: Optional[str],
+        all_projects: bool,
+        keywords: List[str],
+        case_sensitive: bool,
+        use_prefilter: bool,
+        exclude_sessions: set[str],
+        on_prefilter_progress: Optional[Callable[[], None]] = None,
+    ) -> tuple[List[Dict[str, Any]], int, int, bool]:
+        """Collect search refs after a safe file-level candidate pass.
+
+        Metadata discovery used to call ``scan_claude_session`` for every
+        session before keyword or date filtering, then ``search_sessions``
+        parsed the same corpus again.  On the real 5,293-session inventory
+        that made a one-day query spend minutes parsing files that could not
+        contain the keyword.
+
+        This method enumerates filenames only, de-duplicates aliased physical
+        directories, and lets the native byte scanner identify candidate
+        ``(project, filename)`` pairs.  Once any physical copy is a candidate,
+        every same-named active/archive copy is retained and fully parsed; that
+        preserves record unions and the exact untimed-record count under date
+        windows.  ``None`` from the scanner means no trustworthy filtering
+        information, so it falls back to the original full metadata scan.
+
+        Returns ``(candidate_refs, total_sessions, project_count, applied)``.
+        The total is filename-derived so the user-visible searched-sessions
+        count stays stable even though only candidates pay JSON parsing cost.
+        Conversation chronology still comes exclusively from internal records.
+        """
+        if all_projects:
+            project_pairs = self.project_dir_pairs()
+        else:
+            pairs = self._resolve_project_dirs(project_path or "")
+            project_pairs = {pairs[0][1].name: pairs} if pairs else {}
+
+        if not use_prefilter:
+            sessions: List[Dict[str, Any]] = []
+            for project_name, pairs in project_pairs.items():
+                for ref in self._merge_sessions_from_dirs(pairs):
+                    if all_projects:
+                        ref["project"] = project_name
+                    sessions.append(ref)
+            sessions = [
+                ref
+                for ref in sessions
+                if ref["session_id"] not in exclude_sessions
+                and ref["path"].stem not in exclude_sessions
+            ]
+            project_count = len({ref.get("project") for ref in sessions}) if all_projects else int(bool(sessions))
+            return sessions, len(sessions), project_count, False
+
+        unique_paths: Dict[str, Path] = {}
+        keys_by_path: Dict[str, set[tuple[str, str]]] = defaultdict(set)
+        total_keys: set[tuple[str, str]] = set()
+        projects_with_sessions: set[str] = set()
+        for project_name, pairs in project_pairs.items():
+            for scan_dir, _group_members in self._group_project_dirs(pairs):
+                for file in scan_dir.glob("*.jsonl"):
+                    if file.name.startswith("agent-") or file.stem in exclude_sessions:
+                        continue
+                    key = (project_name, file.name)
+                    total_keys.add(key)
+                    projects_with_sessions.add(project_name)
+                    try:
+                        physical = str(file.resolve())
+                    except (OSError, RuntimeError):
+                        physical = str(file)
+                    unique_paths.setdefault(physical, file)
+                    keys_by_path[physical].add(key)
+
+        matched_files = files_possibly_matching(
+            unique_paths.values(),
+            keywords,
+            case_sensitive=case_sensitive,
+            on_progress=on_prefilter_progress,
+        )
+        if matched_files is None:
+            return self.find_search_sessions(
+                project_path=project_path,
+                all_projects=all_projects,
+                keywords=keywords,
+                case_sensitive=case_sensitive,
+                use_prefilter=False,
+                exclude_sessions=exclude_sessions,
+            )
+
+        candidate_names: Dict[str, set[str]] = defaultdict(set)
+        for file in matched_files:
+            try:
+                physical = str(file.resolve())
+            except (OSError, RuntimeError):
+                physical = str(file)
+            for project_name, filename in keys_by_path.get(physical, set()):
+                candidate_names[project_name].add(filename)
+
+        sessions = []
+        for project_name, pairs in project_pairs.items():
+            names = candidate_names.get(project_name, set())
+            if not names:
+                continue
+            for ref in self._merge_sessions_from_dirs(pairs, candidate_names=names):
+                if ref["session_id"] in exclude_sessions:
+                    continue
+                if all_projects:
+                    ref["project"] = project_name
+                sessions.append(ref)
+        sessions.sort(
+            key=lambda entry: (
+                entry["updated_at"]
+                if entry["updated_at"] is not None
+                else float("-inf")
+            ),
+            reverse=True,
+        )
+        return (
+            sessions,
+            len(total_keys),
+            len(projects_with_sessions),
+            True,
         )
 
     def _resolve_project_dirs(self, project_path: str) -> List[tuple]:
@@ -1908,6 +2042,33 @@ def _collect_sessions(analyzer: "SessionAnalyzer", args) -> List[Dict[str, Any]]
     return sessions
 
 
+def _collect_search_sessions(
+    analyzer: "SessionAnalyzer", args
+) -> tuple[List[Dict[str, Any]], int, int, bool]:
+    """Candidate-first collection for keyword search, with visible progress."""
+    exclude = set(getattr(args, "exclude_session", None) or [])
+    progress_count = 0
+
+    def prefilter_progress() -> None:
+        nonlocal progress_count
+        progress_count += 1
+        print(
+            "History keyword prefilter is still scanning physical files "
+            f"({progress_count * 15}s elapsed)...",
+            file=sys.stderr,
+        )
+
+    return analyzer.find_search_sessions(
+        project_path=args.project_path,
+        all_projects=args.all_projects,
+        keywords=args.keywords,
+        case_sensitive=args.case_sensitive,
+        use_prefilter=not args.no_prefilter,
+        exclude_sessions=exclude,
+        on_prefilter_progress=prefilter_progress,
+    )
+
+
 def _codex_home_for(args) -> Path:
     explicit = getattr(args, "codex_home", None)
     if explicit:
@@ -2403,10 +2564,15 @@ def main():
         from_timestamp, to_timestamp = _parse_date_window(args, parser)
         analyzer = _analyzer_or_exit(args)
         source_summary = _source_summary(analyzer.sources)
-        sessions = _collect_sessions(analyzer, args)
+        (
+            sessions,
+            discovered_session_count,
+            discovered_project_count,
+            candidate_prefilter_applied,
+        ) = _collect_search_sessions(analyzer, args)
         for warning in analyzer.warnings:
             print(f"Warning: {warning}", file=sys.stderr)
-        if not sessions and not args.codex and not args.kimi:
+        if discovered_session_count == 0 and not args.codex and not args.kimi:
             if args.all_projects:
                 print("No sessions found across all projects")
             else:
@@ -2419,14 +2585,20 @@ def main():
             sys.exit(1)
 
         scope_desc = (
-            f" in {len({ref.get('project') for ref in sessions})} project(s)"
+            f" in {discovered_project_count} project(s)"
             if args.all_projects
             else ""
         )
         print(
-            f"Searching {len(sessions)} session(s) across {len(analyzer.sources)} "
+            f"Searching {discovered_session_count} session(s) across {len(analyzer.sources)} "
             f"source(s) [{source_summary}]{scope_desc} for: {', '.join(args.keywords)}\n"
         )
+        if candidate_prefilter_applied:
+            print(
+                "Candidate prefilter: structured parsing required for "
+                f"{len(sessions)}/{discovered_session_count} session(s).",
+                file=sys.stderr,
+            )
         matches = (
             analyzer.search_sessions(
                 sessions,
@@ -2434,7 +2606,7 @@ def main():
                 args.case_sensitive,
                 from_timestamp,
                 to_timestamp,
-                not args.no_prefilter,
+                not args.no_prefilter and not candidate_prefilter_applied,
                 args.include_agent_prompts,
             )
             if sessions

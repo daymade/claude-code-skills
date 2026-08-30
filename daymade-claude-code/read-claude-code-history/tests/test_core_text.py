@@ -25,7 +25,11 @@ from unittest import mock
 SKILL_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKILL_DIR / "scripts"))
 
-from _core.text import files_possibly_matching, iter_jsonl  # noqa: E402
+from _core.text import (  # noqa: E402
+    files_possibly_matching,
+    iter_jsonl,
+    keywords_are_file_prefilter_safe,
+)
 
 
 class FilesPossiblyMatchingTests(unittest.TestCase):
@@ -64,6 +68,30 @@ class FilesPossiblyMatchingTests(unittest.TestCase):
         result = files_possibly_matching([wrong_case], ["needle"], case_sensitive=True)
         self.assertIsNotNone(result)
         self.assertNotIn(wrong_case, result)
+
+    def test_cjk_keyword_uses_file_prefilter_without_losing_escaped_json(self) -> None:
+        raw = self._write(
+            "raw.jsonl",
+            json.dumps({"message": "这里有自动主线回锚"}, ensure_ascii=False) + "\n",
+        )
+        escaped = self._write(
+            "escaped.jsonl",
+            json.dumps({"message": "这里有自动主线回锚"}, ensure_ascii=True) + "\n",
+        )
+        noise = self._write("noise.jsonl", '{"message":"unrelated"}\n')
+        self.assertTrue(keywords_are_file_prefilter_safe(["自动主线回锚"]))
+        result = files_possibly_matching(
+            [raw, escaped, noise], ["自动主线回锚"]
+        )
+        self.assertIsNotNone(result)
+        self.assertIn(raw, result)
+        self.assertIn(escaped, result)
+        self.assertNotIn(noise, result)
+
+    def test_cased_or_multicodepoint_unicode_disables_file_prefilter(self) -> None:
+        for keyword in ("café", "straße", "ẞ", "İ"):
+            with self.subTest(keyword=keyword):
+                self.assertFalse(keywords_are_file_prefilter_safe([keyword]))
 
     def test_or_semantics_across_multiple_keywords(self) -> None:
         only_second = self._write("second.jsonl", '{"message": "contains haystack only"}\n')

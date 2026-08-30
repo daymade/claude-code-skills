@@ -17,7 +17,10 @@ SKILL_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = SKILL_DIR / "scripts" / "analyze_sessions.py"
 
 sys.path.insert(0, str(SKILL_DIR / "scripts"))
-from _core.text import keywords_are_raw_byte_safe  # noqa: E402
+from _core.text import (  # noqa: E402
+    keywords_are_file_prefilter_safe,
+    keywords_are_raw_byte_safe,
+)
 
 
 def _load_analyze_module():
@@ -403,19 +406,23 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertIn(matching_id, default_run.stdout)
         self.assertNotIn(no_match_id, default_run.stdout)
 
-    def test_prefilter_disabled_under_date_window_keeps_untimed_count_exact(self) -> None:
-        """The pre-filter is gated off automatically whenever a date window is
-        active (see search_sessions's use_prefilter docstring) because
-        excluded_untimed_records counts every untimed record in a session
-        regardless of keyword match, and skipping non-matching records would
-        silently under-report it. Prove the count is identical either way,
-        not just that both runs happen to exit 0."""
+    def test_candidate_prefilter_under_date_window_keeps_untimed_count_exact(self) -> None:
+        """Candidate-first filtering may skip whole non-matching sessions,
+        but once any copy of a session is a candidate it must parse every
+        same-named active/archive copy. Otherwise a non-matching copy's untimed
+        records disappear from the warning. Prove byte-for-byte parity with
+        --no-prefilter, not merely the keyword hit."""
         session_id = "66666666-6666-4666-8666-666666666666"
         write_jsonl(
             project_dir(self.active_home, self.workspace) / f"{session_id}.jsonl",
             [
                 user_record(session_id, self.workspace, "has the target keyword", "2026-04-15T00:00:00Z"),
-                {  # untimed record, no keyword — must still be counted while a date window is active
+            ],
+        )
+        write_jsonl(
+            project_dir(self.archive_home, self.workspace) / f"{session_id}.jsonl",
+            [
+                {  # non-matching archived copy: still contributes untimed records
                     "type": "user",
                     "sessionId": session_id,
                     "cwd": str(self.workspace),
@@ -441,6 +448,82 @@ class SessionAnalyzerTests(unittest.TestCase):
         )
         self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
         self.assertIn("excluded 2 record(s) without an internal timestamp", default_run.stdout)
+
+    def test_candidate_first_discovery_parses_only_matching_session_metadata(self) -> None:
+        module = _load_analyze_module()
+        base = project_dir(self.active_home, self.workspace)
+        for index in range(40):
+            session_id = f"00000000-0000-4000-8000-{index:012d}"
+            write_jsonl(
+                base / f"{session_id}.jsonl",
+                [
+                    user_record(
+                        session_id,
+                        self.workspace,
+                        f"ordinary unrelated record {index}",
+                        "2026-04-01T00:00:00Z",
+                    )
+                ],
+            )
+        matching_id = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+        write_jsonl(
+            base / f"{matching_id}.jsonl",
+            [
+                user_record(
+                    matching_id,
+                    self.workspace,
+                    "包含自动主线回锚",
+                    "2026-04-15T00:00:00Z",
+                )
+            ],
+        )
+        analyzer = module.SessionAnalyzer(homes=[self.active_home])
+        original_scan = module.scan_claude_session
+        with mock.patch.object(
+            module, "scan_claude_session", wraps=original_scan
+        ) as scan:
+            sessions, total, projects, applied = analyzer.find_search_sessions(
+                project_path=str(self.workspace),
+                all_projects=False,
+                keywords=["自动主线回锚"],
+                case_sensitive=False,
+                use_prefilter=True,
+                exclude_sessions=set(),
+            )
+        self.assertTrue(applied)
+        self.assertEqual(total, 41)
+        self.assertEqual(projects, 1)
+        self.assertEqual([ref["session_id"] for ref in sessions], [matching_id])
+        self.assertEqual(scan.call_count, 1)
+
+    def test_no_candidate_is_no_match_not_no_sessions(self) -> None:
+        session_id = "12121212-1212-4212-8212-121212121212"
+        write_jsonl(
+            project_dir(self.active_home, self.workspace) / f"{session_id}.jsonl",
+            [
+                user_record(
+                    session_id,
+                    self.workspace,
+                    "ordinary content",
+                    "2026-04-15T00:00:00Z",
+                )
+            ],
+        )
+        result = self.run_cli(
+            "search",
+            str(self.workspace),
+            "absent-marker",
+            "--history-sources",
+            str(self.manifest),
+            check=False,
+        )
+        self.assertIn("Searching 1 session(s)", result.stdout)
+        self.assertIn("No matches found.", result.stdout)
+        self.assertNotIn("No sessions found", result.stdout)
+        self.assertIn(
+            "Candidate prefilter: structured parsing required for 0/1 session(s).",
+            result.stderr,
+        )
 
     def test_repeated_copy_sizes_flags_only_actual_duplicates(self) -> None:
         """Only sizes that repeat are worth hashing — a unique size cannot
@@ -1219,6 +1302,10 @@ class RawBytePrefilterSafetyTests(unittest.TestCase):
         for keyword in ("café", "你好", "straße", "ẞ"):
             with self.subTest(keyword=keyword):
                 self.assertFalse(keywords_are_raw_byte_safe([keyword]))
+
+    def test_cjk_is_safe_for_file_prefilter_but_not_line_prefilter(self) -> None:
+        self.assertTrue(keywords_are_file_prefilter_safe(["你好"]))
+        self.assertFalse(keywords_are_raw_byte_safe(["你好"]))
 
     def test_ascii_keyword_is_raw_byte_safe(self) -> None:
         # The guard must not misfire on ordinary input — killing the speedup
