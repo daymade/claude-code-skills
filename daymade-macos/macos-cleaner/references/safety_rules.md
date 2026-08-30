@@ -48,7 +48,7 @@ These paths and their descendants are blocked even when the user selects `all` i
 
 ### Rule 5: Suggest Backups for Large Deletions
 
-Before deleting >10 GB, recommend Time Machine backup.
+Before deleting >10 GiB, recommend Time Machine backup.
 
 ### Rule 6: Docker Prune Prohibition
 
@@ -152,7 +152,7 @@ uv run scripts/safe_delete.py "/exact/approved/path"
 
 ### Large Deletions
 
-**Threshold**: >10 GB
+**Threshold**: >10 GiB
 
 **Action**: Warn user and suggest Time Machine backup
 
@@ -285,24 +285,34 @@ for data_path in user_data_paths:
 ### Check 4: Not in Use
 
 ```python
-def is_in_use(path):
-    """Check if file/directory is in use."""
+def open_file_state(path):
+    """Return 'active', 'inactive', or 'unknown'; never fail open."""
+    canonical = os.path.realpath(path)
     try:
         result = subprocess.run(
-            ['lsof', path],
+            ['/usr/sbin/lsof', '-Fn', '+D', canonical],
             capture_output=True,
-            text=True
+            text=True,
+            timeout=120,
         )
-        # If lsof finds processes using the file, returncode is 0
-        if result.returncode == 0:
-            return True
-        return False
-    except:
-        return False  # Assume not in use if check fails
+    except (OSError, subprocess.TimeoutExpired):
+        return 'unknown'
 
-if is_in_use(path):
-    print(f"⚠️ Warning: {path} is currently in use")
-    print("   Close the application first, then try again.")
+    names = [os.path.realpath(line[1:]) for line in result.stdout.splitlines()
+             if line.startswith('n')]
+    prefix = canonical + os.sep
+    if any(name == canonical or name.startswith(prefix) for name in names):
+        return 'active'
+    if result.stderr.strip():
+        return 'unknown'
+    if result.returncode in (0, 1):
+        return 'inactive'
+    return 'unknown'
+
+state = open_file_state(path)
+if state != 'inactive':
+    print(f"⚠️ Refusing deletion because inactivity is not proven: {path}")
+    print(f"   Open-file state: {state}; refuse deletion until inactive is proven.")
     return False
 ```
 
@@ -357,7 +367,7 @@ def safe_delete(path, size, description):
         return (False, "No permission")
 
     # Backup warning for large deletions
-    if size > 10 * 1024 * 1024 * 1024:  # 10 GB
+    if size > 10 * 1024 * 1024 * 1024:  # 10 GiB
         if not confirm_large_deletion(size):
             return (False, "User cancelled")
 
@@ -438,7 +448,7 @@ tmutil browse
 ### Preventing Accidents
 
 1. **Use Trash instead of rm** when possible
-2. **Require Time Machine backup** for >10 GB deletions
+2. **Require Time Machine backup** for >10 GiB deletions
 3. **Test on small items first** before batch operations
 4. **Show dry-run results** before actual deletion
 

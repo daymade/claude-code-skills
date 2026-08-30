@@ -21,6 +21,16 @@ Use these templates after the read-only evidence phase. They implement the main 
 |---|---:|---|---|---|
 | <subsystem/path> | <value + unit> | <logical/physical> | `<command>` | <complete/partial> |
 
+## Ranked candidates
+
+Keep nominal/path-accounted size separate from expected physical release so a
+large APFS clone or shared-layer hotspot remains visible without becoming a
+false savings promise.
+
+| Rank | Exact candidate | Nominal/path-accounted size | Expected physical release | Confidence | Why this rank |
+|---:|---|---:|---:|---|---|
+| 1 | <exact target> | <observed or n/a> | <estimate or unknown> | <high/medium/low> | <safety + evidence + effort> |
+
 State permission errors and incomplete scans. Never present a partial `du` total as the complete category size.
 
 ## Protected-service baseline

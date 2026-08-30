@@ -180,6 +180,7 @@ Do not reopen a broad Mole scan for a named developer cache. Resolve one exact p
 
 | Target | Authority for the exact live path | Default candidate only when no override is found | Supported/narrow next step |
 |---|---|---|---|
+| Chromium code-sign clones | `scripts/analyze_code_sign_clones.py` resolves the current user's `DARWIN_USER_TEMP_DIR` sibling `X` directory and validates exact owned roots | None; do not scan every user's `/private/var/folders` tree | Read `chromium_code_sign_clones.md`; preserve active/unknown children and bind any inactive batch to the analyzer's exact candidate SHA |
 | Xcode DerivedData | Xcode **Settings → Locations → Derived Data** | `~/Library/Developer/Xcode/DerivedData` | Quit Xcode; prefer removing an exact inactive project child. Whole-root Trash requires explicit rebuild-cost approval. |
 | npm `_cacache` / `_npx` | `npm config get cache`, then append the exact child name | None; do not guess around npm's returned root | `_npx` may go to Trash after confirming no `npx` process. Keep `_cacache` by default; whole-cache removal requires explicit redownload approval. |
 | uv cache | `uv cache dir` (honors `--cache-dir`, `UV_CACHE_DIR`, and uv config) | `$XDG_CACHE_HOME/uv` or `~/.cache/uv` only as a candidate | Prefer `uv cache clean <exact-package>` for a named obsolete package, or `uv cache clean` only when the whole cache is approved. Do not edit uv's internal cache by hand. |
@@ -190,14 +191,24 @@ Do not reopen a broad Mole scan for a named developer cache. Resolve one exact p
 | JetBrains caches | **Help → Diagnostic Tools → Special Files and Folders** or `idea.system.path` | `~/Library/Caches/JetBrains/<product><version>` | Quit the IDE; prefer its cache invalidation UI. An exact cache for an uninstalled/retired product version may go to Trash. Never target config/plugins/local history by assuming every JetBrains directory is cache. |
 | Stopped Docker container | `docker inspect <exact-name-or-id>` plus `docker ps -a` | None | Use `references/docker_analysis.md`; stopped status alone never authorizes removal. |
 
-For the resolved `<exact-cache-path>`, use allocated blocks and an in-use check:
+For an ordinary resolved `<exact-cache-path>`, use path-accounted blocks and an
+in-use check. APFS code-sign clones use their dedicated analyzer/reference
+instead because shared extents and multi-child activity need separate handling:
 
 ```bash
 /usr/bin/du -sk "<exact-cache-path>"
 /usr/sbin/lsof +D "<exact-cache-path>"
 ```
 
-`lsof` exit 0 means the target is in use. Exit 1 with empty stdout/stderr is the no-open-files result; timeout, permission errors, or any other output leave the check incomplete. Combine this with the live owning-process check—an empty `lsof` result alone does not prove an application is inactive.
+Canonicalize the target path before interpreting `lsof`. Any output record
+naming the target or one of its descendants proves it is in use. Exit 1 with
+empty stdout/stderr is the no-open-files result. The bundled `lsof` 4.91
+observed during validation also returned 1 while printing valid `+D` matches,
+so treat exit 0 or 1 with empty stderr as a completed scan. A timeout, stderr,
+or an exit outside 0/1 leaves
+unmatched paths unknown; do not convert an incomplete scan into “not in use.”
+Combine this with the live owning-process check—an empty process-name search
+alone does not prove a path is inactive.
 
 The plan must name the exact supported command or exact Finder Trash target, rebuild/redownload impact, and a postcondition. After action, re-resolve the configured path, re-run `du -sk`, and read target-volume `df -k/-h`. Trash is a recovery step, not physical reclamation; do not claim freed bytes until the separately approved removal from Trash is reflected in `df`.
 

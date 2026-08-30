@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **macos-cleaner** (daymade-macos v1.0.0 → v1.1.0): add a targeted Chromium code-sign-clone branch and current-user-scoped analyzer that separates active, inactive, and unknown children, binds approved batches to a candidate SHA, preserves explicit exclusions across activity races, and supports a final read-only recheck while the exact-path deletion prompt waits. Rank nominal APFS path accounting separately from expected physical release, require df readback for actual reclaimed space, and stop the legacy deletion helper from silently shrinking a changed batch, labeling measured totals as physically “freed,” or continuing after the first failure.
+
 ### Fixed
 - **tunnel-doctor** v1.11.0 → v1.11.1: correct the Windows/v2rayN chain-repair note that assumed every manual exit was a residential VLESS profile and treated a fixed exit-IP range as the authority. The generic workflow now reads the exact protocol from the owning client, keeps credentials out of output and Git, discovers the live SQLite schema, independently reads back type/presence/pointers/active front, and treats IP/ASN as observation rather than proof of billing class.
 - **twitter-reader** v1.1.1 → v1.2.0: fix the single-source-of-failure on

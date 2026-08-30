@@ -152,7 +152,7 @@ def confirm_delete(path, size, description):
     print(f"\n🗑️  Confirm Deletion")
     print("━" * 50)
     print(f"Path:        {path}")
-    print(f"Size:        {format_size(size)}")
+    print(f"Measured size: {format_size(size)} (not a physical-release promise)")
     print(f"Description: {description}")
 
     # Additional safety check for important paths
@@ -194,7 +194,7 @@ def batch_confirm(items):
 
     total_size = sum(item[1] for item in items)
     print("-" * 70)
-    print(f"{'Total':<4} {format_size(total_size):<12}")
+    print(f"{'Measured total':<14} {format_size(total_size):<12}")
 
     print("\nOptions:")
     print("  'all'      - Delete all items")
@@ -316,15 +316,21 @@ def main():
 
     paths = allowed_paths
 
+    # A missing requested target means the approved set changed. Do not
+    # silently shrink a batch and present the remainder as the original plan.
+    missing_paths = [path for path in paths if not Path(path).exists()]
+    if missing_paths:
+        print("❌ Requested target set changed; missing paths:")
+        for path in missing_paths:
+            print(f"   {path}")
+        return 1
+
     # Prepare items
     items = []
     for path in paths:
         size = get_size(path)
         description = get_description(path)
         items.append((path, size, description))
-
-    # Remove non-existent paths
-    items = [(p, s, d) for p, s, d in items if Path(p).exists()]
 
     if not items:
         print("❌ No valid paths to delete")
@@ -341,7 +347,8 @@ def main():
         success, message = delete_path(path)
         if success:
             print(f"\n✅ {message}")
-            print(f"   Freed: {format_size(size)}")
+            print(f"   Measured size removed: {format_size(size)}")
+            print("   Physical release: verify with before/after df -k")
             return 0
         else:
             print(f"\n❌ {message}")
@@ -370,11 +377,15 @@ def main():
             if success:
                 success_count += 1
                 total_freed += size
+            else:
+                print("⛔ Stopping batch after the first failure.")
+                break
 
         print("━" * 50)
         print(f"\n📊 Results:")
         print(f"   Successfully deleted: {success_count}/{len(selected)}")
-        print(f"   Total freed:          {format_size(total_freed)}")
+        print(f"   Measured size removed: {format_size(total_freed)}")
+        print("   Physical release:      verify with before/after df -k")
 
         return 0 if success_count == len(selected) else 1
 
