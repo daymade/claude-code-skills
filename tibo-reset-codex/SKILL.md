@@ -86,8 +86,9 @@ curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<status-id>" \
 - `publish.twitter.com/oembed`：301 落到 `publish.x.com` 后（加 `-L`）返回 200+JSON，但可见
   文本同样截断（~273 字符、以省略号收尾，截断点与 syndication 相同）——**与 syndication
   同一档**，够核对开头与元数据，拿不到 note_tweet 全文。
-- ~~Jina Reader~~ **已不可靠**：匿名访问 x.com 会因他人滥用被**全局封禁**（403，封禁窗口数小时、
-  错误信息点名第三方账号）；本仓 jina key 已 402 余额尽。别再把它当 X 的 fallback。
+- ~~Jina Reader~~ **可用但间歇，不作主通道依赖**：匿名访问 x.com 会因他人滥用被**间歇性全局
+  封禁**（403，2026-08-30 实测：封禁数小时后解除，解除后匿名仍能拿到帖子正文；错误信息点名
+  触发滥用的第三方账号）；本仓 jina key 已 402 余额尽。fxtwitter 优先，Jina 只作它的备用。
 - fxtwitter 不返回回复内容（`replies` 字段只是数值计数）；帖子下的 Tibo 澄清需要 WebSearch
   找转录源补充。
 

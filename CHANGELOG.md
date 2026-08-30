@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **twitter-reader** v1.1.1 → v1.2.0: fix the single-source-of-failure on
+  Jina exposed by live tests. Single-post text now routes through the
+  fxtwitter mirror API first (login-free, key-free, direct connection,
+  full note_tweet body in `tweet.text` — 2,324-char long-form verified);
+  X Articles with images keep `fetch_article.py`. The Jina path is
+  demoted to fallback with its real reliability profile recorded: the
+  anonymous `r.jina.ai` lane gets 403-globally-banned for hours when
+  *third-party* users abuse x.com, then recovers (verified live — ban
+  expired and anonymous fetch returned post text), so it is intermittent,
+  never load-bearing; and `fetch_tweets.sh` hard-requires `JINA_API_KEY`,
+  which is currently 402 out of balance and blocks the batch script
+  until recharged. README facet updated to match.
+- **tibo-reset-codex** v1.2.0 → v1.2.1: precision pass on the Jina
+  verdict after re-test — the ban is *intermittent* (expired after hours;
+  anonymous fetch then returned the post body), not "dead". Jina is
+  usable-but-unreliable backup; fxtwitter stays primary.
 - **tibo-reset-codex** v1.1.0 → v1.2.0: replace the dead Jina fallback for
   reading Tibo's X posts with the fxtwitter mirror API — login-free, works
   direct, and returns the full note_tweet body in `tweet.text` (**not**

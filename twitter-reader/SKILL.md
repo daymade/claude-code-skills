@@ -7,6 +7,21 @@ description: Fetch Twitter/X post content including long-form Articles with full
 
 Fetch Twitter/X post and article content with full media support.
 
+## Reading a single post's text: fxtwitter first (2026-08-30)
+
+For plain post text, prefer the fxtwitter mirror API — login-free, key-free,
+works direct, and returns the **full note_tweet body in `tweet.text`** (the
+`full_text` key does not exist; a 2,324-char long-form announcement came back
+complete):
+
+```bash
+curl -sS --max-time 20 "https://api.fxtwitter.com/<user>/status/<id>" \
+  | python3 -c "import json,sys; t=json.load(sys.stdin)['tweet']; print(t['created_at']); print(t['text'])"
+```
+
+`replies` is a count, not the reply thread. For X Articles with images, use
+`fetch_article.py` below — fxtwitter does not carry article bodies.
+
 ## Quick Start (Recommended)
 
 For X Articles with images, use the new fetch_article.py script:
@@ -53,7 +68,16 @@ Downloading 15 images...
 
 ## Alternative: Jina API (Text-only)
 
-For simple text-only fetching without authentication:
+⚠️ **Known reliability risk (2026-08-30 live tests)**: anonymous `r.jina.ai`
+access to x.com gets **403-globally-banned for hours** when *third-party*
+users abuse the domain — the ban blocks every anonymous caller, then
+expires. Verified working again after expiry (anonymous fetch then returns
+post text), so treat Jina as **intermittent**, never a load-bearing path.
+The shared key in this repo is also currently out of balance (402
+InsufficientBalanceError), which makes `fetch_tweets.sh` — it hard-requires
+`JINA_API_KEY` — unusable until recharged.
+
+For simple text-only fetching:
 
 ```bash
 # Single tweet
@@ -75,8 +99,8 @@ scripts/fetch_tweets.sh url1 url2 url3
 
 ### Simple Mode (Jina API)
 - Text-only content
-- No authentication required beyond Jina API key
-- Good for quick text extraction
+- Intermittent availability (see risk note above); batch script hard-requires `JINA_API_KEY`
+- Good for quick text extraction when it's up
 
 ## Prerequisites
 
