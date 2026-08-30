@@ -20,6 +20,22 @@ class ClaudeSessionSummary:
     timestamp_count: int
 
 
+def scan_claude_session_id(path: Path) -> str:
+    """Read only until the first internal session id, then stop.
+
+    Candidate discovery needs the authoritative JSONL identity so renamed
+    active/archive copies still form one session, but it must not rescan every
+    transcript body merely to build that union. Valid Claude session files use
+    one stable ``sessionId`` throughout; files without one retain the same
+    filename-stem fallback as :func:`scan_claude_session`.
+    """
+    for record in iter_jsonl(path):
+        session_id = record.get("sessionId")
+        if isinstance(session_id, str) and session_id:
+            return session_id
+    return path.stem
+
+
 def scan_claude_session(path: Path, max_title_chars: int = 120) -> ClaudeSessionSummary:
     """Scan every valid record and return internal time bounds plus title metadata.
 

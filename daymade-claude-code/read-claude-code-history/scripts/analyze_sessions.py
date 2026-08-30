@@ -34,7 +34,7 @@ from collections import Counter, defaultdict
 # scripts/_core/ by sync_core.py so this skill stays self-contained. Make this
 # script's own dir importable regardless of how it is invoked, then import.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _core.claude import scan_claude_session  # noqa: E402
+from _core.claude import scan_claude_session, scan_claude_session_id  # noqa: E402
 from _core.codex import codex_meta_from_rollout, codex_session_id  # noqa: E402
 from _core.kimi import (  # noqa: E402
     iter_kimi_session_dirs,
@@ -1270,18 +1270,21 @@ class SessionAnalyzer:
         that made a one-day query spend minutes parsing files that could not
         contain the keyword.
 
-        This method enumerates filenames only, de-duplicates aliased physical
-        directories, and lets the native byte scanner identify candidate
-        ``(project, filename)`` pairs.  Once any physical copy is a candidate,
-        every same-named active/archive copy is retained and fully parsed; that
-        preserves record unions and the exact untimed-record count under date
-        windows.  ``None`` from the scanner means no trustworthy filtering
-        information, so it falls back to the original full metadata scan.
+        This method de-duplicates aliased physical directories, peeks only far
+        enough to read each file's authoritative internal ``sessionId``, and
+        lets the native byte scanner identify candidate physical files. Once
+        any copy is a candidate, every active/archive filename carrying that
+        same session id is retained and fully parsed; that preserves renamed
+        copy unions and the exact untimed-record count under date windows.
+        ``None`` from the scanner means no trustworthy filtering information,
+        so it falls back to the original full metadata scan.
 
         Returns ``(candidate_refs, total_sessions, project_count, applied)``.
-        The total is filename-derived so the user-visible searched-sessions
-        count stays stable even though only candidates pay JSON parsing cost.
-        Conversation chronology still comes exclusively from internal records.
+        The total is derived from ``(project, sessionId)`` identities so the
+        user-visible searched-session count stays stable even when copies were
+        renamed. Only the short identity peek is paid by every file; complete
+        metadata and conversation parsing remain candidate-only. Conversation
+        chronology still comes exclusively from internal records.
         """
         if all_projects:
             project_pairs = self.project_dir_pairs()
@@ -1307,16 +1310,12 @@ class SessionAnalyzer:
 
         unique_paths: Dict[str, Path] = {}
         keys_by_path: Dict[str, set[tuple[str, str]]] = defaultdict(set)
-        total_keys: set[tuple[str, str]] = set()
-        projects_with_sessions: set[str] = set()
         for project_name, pairs in project_pairs.items():
             for scan_dir, _group_members in self._group_project_dirs(pairs):
                 for file in scan_dir.glob("*.jsonl"):
                     if file.name.startswith("agent-") or file.stem in exclude_sessions:
                         continue
                     key = (project_name, file.name)
-                    total_keys.add(key)
-                    projects_with_sessions.add(project_name)
                     try:
                         physical = str(file.resolve())
                     except (OSError, RuntimeError):
@@ -1324,8 +1323,25 @@ class SessionAnalyzer:
                     unique_paths.setdefault(physical, file)
                     keys_by_path[physical].add(key)
 
+        identity_by_path: Dict[str, str] = {}
+        names_by_identity: Dict[tuple[str, str], set[str]] = defaultdict(set)
+        total_identities: set[tuple[str, str]] = set()
+        projects_with_sessions: set[str] = set()
+        searchable_paths: Dict[str, Path] = {}
+        for physical, file in unique_paths.items():
+            session_id = scan_claude_session_id(file)
+            identity_by_path[physical] = session_id
+            if session_id in exclude_sessions:
+                continue
+            searchable_paths[physical] = file
+            for project_name, filename in keys_by_path[physical]:
+                identity = (project_name, session_id)
+                total_identities.add(identity)
+                projects_with_sessions.add(project_name)
+                names_by_identity[identity].add(filename)
+
         matched_files = files_possibly_matching(
-            unique_paths.values(),
+            searchable_paths.values(),
             keywords,
             case_sensitive=case_sensitive,
             on_progress=on_prefilter_progress,
@@ -1340,14 +1356,20 @@ class SessionAnalyzer:
                 exclude_sessions=exclude_sessions,
             )
 
-        candidate_names: Dict[str, set[str]] = defaultdict(set)
+        candidate_identities: set[tuple[str, str]] = set()
         for file in matched_files:
             try:
                 physical = str(file.resolve())
             except (OSError, RuntimeError):
                 physical = str(file)
-            for project_name, filename in keys_by_path.get(physical, set()):
-                candidate_names[project_name].add(filename)
+            session_id = identity_by_path.get(physical, file.stem)
+            for project_name, _filename in keys_by_path.get(physical, set()):
+                candidate_identities.add((project_name, session_id))
+
+        candidate_names: Dict[str, set[str]] = defaultdict(set)
+        for identity in candidate_identities:
+            project_name, _session_id = identity
+            candidate_names[project_name].update(names_by_identity[identity])
 
         sessions = []
         for project_name, pairs in project_pairs.items():
@@ -1370,7 +1392,7 @@ class SessionAnalyzer:
         )
         return (
             sessions,
-            len(total_keys),
+            len(total_identities),
             len(projects_with_sessions),
             True,
         )
@@ -2594,7 +2616,7 @@ def main():
         )
         if candidate_prefilter_applied:
             print(
-                "Candidate prefilter: structured parsing required for "
+                "Candidate prefilter: full-session parsing required for "
                 f"{len(sessions)}/{discovered_session_count} session(s).",
                 file=sys.stderr,
             )

@@ -409,20 +409,16 @@ class SessionAnalyzerTests(unittest.TestCase):
     def test_candidate_prefilter_under_date_window_keeps_untimed_count_exact(self) -> None:
         """Candidate-first filtering may skip whole non-matching sessions,
         but once any copy of a session is a candidate it must parse every
-        same-named active/archive copy. Otherwise a non-matching copy's untimed
-        records disappear from the warning. Prove byte-for-byte parity with
-        --no-prefilter, not merely the keyword hit."""
+        active/archive copy with that internal sessionId, even if the files
+        were renamed. Otherwise a non-matching copy's untimed records and
+        provenance disappear. Prove byte-for-byte parity with --no-prefilter,
+        not merely the keyword hit."""
         session_id = "66666666-6666-4666-8666-666666666666"
+        active_copy = project_dir(self.active_home, self.workspace) / "renamed-active.jsonl"
         write_jsonl(
-            project_dir(self.active_home, self.workspace) / f"{session_id}.jsonl",
+            active_copy,
             [
-                user_record(session_id, self.workspace, "has the target keyword", "2026-04-15T00:00:00Z"),
-            ],
-        )
-        write_jsonl(
-            project_dir(self.archive_home, self.workspace) / f"{session_id}.jsonl",
-            [
-                {  # non-matching archived copy: still contributes untimed records
+                {  # non-matching active copy: still contributes untimed records
                     "type": "user",
                     "sessionId": session_id,
                     "cwd": str(self.workspace),
@@ -434,6 +430,13 @@ class SessionAnalyzerTests(unittest.TestCase):
                     "cwd": str(self.workspace),
                     "message": {"role": "user", "content": "another untimed filler"},
                 },
+            ],
+        )
+        archive_copy = project_dir(self.archive_home, self.workspace) / "renamed-archive.jsonl"
+        write_jsonl(
+            archive_copy,
+            [
+                user_record(session_id, self.workspace, "has the target keyword", "2026-04-15T00:00:00Z"),
             ],
         )
         default_run = self.run_cli(
@@ -448,6 +451,8 @@ class SessionAnalyzerTests(unittest.TestCase):
         )
         self.assertEqual(default_run.stdout, no_prefilter_run.stdout)
         self.assertIn("excluded 2 record(s) without an internal timestamp", default_run.stdout)
+        self.assertIn("Session sources: active:main, archive:full-backup", default_run.stdout)
+        self.assertIn(str(archive_copy), default_run.stdout)
 
     def test_candidate_first_discovery_parses_only_matching_session_metadata(self) -> None:
         module = _load_analyze_module()
@@ -521,7 +526,7 @@ class SessionAnalyzerTests(unittest.TestCase):
         self.assertIn("No matches found.", result.stdout)
         self.assertNotIn("No sessions found", result.stdout)
         self.assertIn(
-            "Candidate prefilter: structured parsing required for 0/1 session(s).",
+            "Candidate prefilter: full-session parsing required for 0/1 session(s).",
             result.stderr,
         )
 
