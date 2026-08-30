@@ -63,6 +63,15 @@ Behavior evaluation is risk-scaled by `daymade-skill:skill-creator`: bounded fix
 
 Treat `daymade-skill/skill-creator/scripts/packaging_policy.py` as the shipping-policy SSOT. Add or remove shipping exclusions only there, require every consumer to import it, and do not copy its directory list into documentation or consumer-specific filters.
 
+For hook loop and reminder semantics, load
+`daymade-claude-code:claude-code-hooks` and follow rule 7. Keep recurring
+advisory injectors available for the whole session, using cadence/hysteresis
+and reset semantics to limit frequency; never add a lifetime session cap.
+Reserve repetition budgets for blocking remediation loops whose capped exit is
+explicitly blocked, unshipped, or pending. Test advisory liveness across later
+fully-due windows, and leave current thresholds in the owning implementation
+rather than copying them into this file.
+
 Treat `daymade-skill/skill-creator` as a locked uv project. Run its bundled Python tools from that directory with `uv run --frozen`; the project-local `.venv` is isolated from caller projects while uv's shared cache supplies the pinned packages. Do not reintroduce per-call `--with` overlays for dependencies already in its `pyproject.toml`.
 
 ```bash
