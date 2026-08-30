@@ -873,6 +873,10 @@ class LongAudioSafetyTests(unittest.TestCase):
             self.assertEqual(receipt["schema"], speaker.FINAL_RECEIPT_SCHEMA)
             self.assertEqual(receipt["parameters"], parameters)
             self.assertEqual(
+                receipt["validation"],
+                {"speaker_edge_tolerance_s": 1.0},
+            )
+            self.assertEqual(
                 receipt["model_contract"]["revision"],
                 local_mlx.DEFAULT_MODEL_REVISION,
             )

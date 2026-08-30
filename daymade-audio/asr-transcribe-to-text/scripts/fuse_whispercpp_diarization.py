@@ -24,9 +24,17 @@ import unicodedata
 import wave
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+from speaker_time_contract import (
+    format_timestamp,
+    positive_turn_bounds,
+)
 
 PIPELINE_ID = "whispercpp-pyannote-late-fusion-v1"
 FINAL_RECEIPT_SCHEMA = "speaker-bundle-receipt-v1"
+SPEAKER_VALIDATION_CONTRACT = {"speaker_edge_tolerance_s": 0.0}
 CSV_FIELDS = ("file", "start", "end", "duration", "speaker", "text")
 
 
@@ -350,11 +358,19 @@ def merge_turns(segments, max_gap):
     return turns
 
 
-def format_timestamp(seconds):
-    milliseconds = round(seconds * 1000)
-    minutes, remainder = divmod(milliseconds, 60_000)
-    secs, millis = divmod(remainder, 1000)
-    return f"{minutes:02d}:{secs:02d}.{millis:03d}"
+def canonicalize_turns(turns):
+    canonical = []
+    for turn in turns:
+        start, end, duration = positive_turn_bounds(
+            turn["start"], turn["end"]
+        )
+        canonical.append({
+            **turn,
+            "start": start,
+            "end": end,
+            "duration": duration,
+        })
+    return canonical
 
 
 def render_txt(source_name, turns):
@@ -382,9 +398,9 @@ def render_csv(source_name, turns):
         writer.writerow(
             {
                 "file": source_name,
-                "start": round(turn["start"], 3),
-                "end": round(turn["end"], 3),
-                "duration": round(turn["end"] - turn["start"], 3),
+                "start": turn["start"],
+                "end": turn["end"],
+                "duration": turn["duration"],
                 "speaker": turn["speaker"],
                 "text": turn["text"],
             }
@@ -396,9 +412,9 @@ def csv_turn_contract_sha256(turns, source_name):
     rows = [
         {
             "file": source_name,
-            "start": str(round(turn["start"], 3)),
-            "end": str(round(turn["end"], 3)),
-            "duration": str(round(turn["end"] - turn["start"], 3)),
+            "start": str(turn["start"]),
+            "end": str(turn["end"]),
+            "duration": str(turn["duration"]),
             "speaker": turn["speaker"],
             "text": turn["text"],
         }
@@ -467,10 +483,16 @@ def main():
     script_path = Path(__file__).resolve()
     runner_path = script_path.with_name("transcribe_long_whispercpp.py")
     diarizer_path = script_path.with_name("diarize_speakers.py")
+    time_contract_path = script_path.with_name("speaker_time_contract.py")
     diarizer_lock_path = diarizer_path.with_suffix(
         f"{diarizer_path.suffix}.lock"
     )
-    for producer_path in (runner_path, diarizer_path, diarizer_lock_path):
+    for producer_path in (
+        runner_path,
+        diarizer_path,
+        diarizer_lock_path,
+        time_contract_path,
+    ):
         if not producer_path.is_file():
             raise ValueError(f"pipeline producer is missing: {producer_path}")
     frozen_producers = {
@@ -478,6 +500,7 @@ def main():
         "fuse_whispercpp_diarization.py": source_identity(script_path),
         "diarize_speakers.py": source_identity(diarizer_path),
         "diarize_speakers.py.lock": source_identity(diarizer_lock_path),
+        "speaker_time_contract.py": source_identity(time_contract_path),
     }
     whisper_segments = timed_segments(whisper_payload)
     diar_segments = diarization_segments(diarization_payload)
@@ -568,7 +591,7 @@ def main():
         whisper_segments, diar_segments, args.min_speech_overlap
     )
     deduplicated, discarded_repeats = collapse_repeat_runs(grounded)
-    turns = merge_turns(deduplicated, args.max_gap)
+    turns = canonicalize_turns(merge_turns(deduplicated, args.max_gap))
     if not turns:
         raise RuntimeError("fusion produced no speech-grounded turns")
     require_owner_alive(args.owner_pid)
@@ -699,6 +722,7 @@ def main():
         "pipeline": pipeline_contract,
         "parameters": parameters_contract,
         "model_contract": model_contract,
+        "validation": dict(SPEAKER_VALIDATION_CONTRACT),
     }
     atomic_write_json(receipt_path, receipt)
     print(

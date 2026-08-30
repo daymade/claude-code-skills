@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **daymade-audio / asr-transcribe-to-text** (`daymade-audio` v1.32.4): prevent single-character or degenerate aligned turns from emitting `start == end` and `duration == 0`. The Qwen aligner and Whisper.cpp late-fusion producer now share one half-up integer-millisecond contract for direct and interpolated lattice points, turn fields, TXT, CSV, and alignment JSON; degenerate turns receive only the smallest 1 ms interval and never borrow a later timestamp across a speaker change or long silence. Both speaker-bundle producers record their reviewed edge-inheritance tolerance in the final receipt (Qwen 1 s; overlap-only fusion 0 s), and the shared time-contract module is covered by each pipeline hash. This keeps identically named artifacts semantically consistent without weakening downstream positive-duration or diarization-support checks; the receipt-less legacy cascade remains outside the strict bundle contract.
 - **pdf-creator** (`daymade-docs` v1.13.0): the table-border check could clear the defect it
   exists to catch, and separately failed most healthy documents. Both were found by calibrating
   it against real material rather than fixtures.

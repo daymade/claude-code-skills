@@ -168,6 +168,24 @@ class WhisperCppFusionTests(unittest.TestCase):
     def test_long_timestamp_uses_total_minutes_for_existing_bundle_parser(self):
         self.assertEqual(fusion.format_timestamp(3 * 3600 + 22 * 60 + 4.55), "202:04.550")
 
+    def test_fusion_artifacts_share_half_up_millisecond_turns(self):
+        turns = fusion.canonicalize_turns([
+            {
+                "start": 59.9985,
+                "end": 60.0005,
+                "speaker": "SPEAKER_00",
+                "text": "half millisecond",
+            }
+        ])
+        txt = fusion.render_txt("fixture.wav", turns)
+        csv_text = fusion.render_csv("fixture.wav", turns)
+
+        self.assertEqual(turns[0]["start"], 59.999)
+        self.assertEqual(turns[0]["end"], 60.001)
+        self.assertEqual(turns[0]["duration"], 0.002)
+        self.assertIn("[00:59.999 - 01:00.001]", txt)
+        self.assertIn("fixture.wav,59.999,60.001,0.002", csv_text)
+
     def test_main_emits_the_existing_speaker_bundle_contract(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -199,6 +217,11 @@ class WhisperCppFusionTests(unittest.TestCase):
         self.assertEqual(alignment["parameters"]["processing_end_s"], 1.0)
         self.assertEqual(alignment["report"]["num_turns"], 1)
         self.assertIn("diarize_speakers.py.lock", receipt["pipeline"])
+        self.assertIn("speaker_time_contract.py", receipt["pipeline"])
+        self.assertEqual(
+            receipt["validation"],
+            {"speaker_edge_tolerance_s": 0.0},
+        )
         self.assertEqual(
             receipt["model_contract"]["diarization"]["id"],
             "pyannote/speaker-diarization-3.1",
