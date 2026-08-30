@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **prior-work-retrieval** (`daymade-claude-code` v3.7.4): the Search routing table was
+  provider-blind in one row and short one row. "Meaning remembered, wording changed" carried no
+  platform qualifier while its adapter is a Claude-only index, and no row covered prior
+  conversation evidence whose platform is unknown, plural, or simply not Claude — so a
+  cross-provider retrieval could satisfy the table, search Claude alone, and write "no prior work
+  found" into a receipt. The recall row now states its Claude scope and a new row routes
+  unscoped/non-Claude conversation evidence to `local-conversation-history`. The description was
+  audited for a trigger collision with that router and does not have one: it is limited to reuse
+  before substantial new production, which the router never claims.
 - **daymade-claude-code / prior-work-retrieval** (v3.7.3): stop arming the retrieval gate on
   questions about the *current* session. `什么来着` sits in the strong-signal tier, so it armed
   with no distal-referent requirement — and the gate's own `audit` command shows it firing twice
