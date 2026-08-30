@@ -1197,15 +1197,19 @@ xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build
 
 ### **twitter-reader** - Twitter/X Content Fetching
 
-Fetch Twitter/X post content using Jina.ai API to bypass JavaScript restrictions without authentication.
+Fetch Twitter/X post and article content. Single-post text goes through the
+fxtwitter mirror API (login-free, key-free, full long-form body); X Articles
+with images go through `fetch_article.py`; the Jina API path remains as a
+fallback with a known intermittent-ban risk.
 
 **When to use:**
 - Retrieving tweet content for analysis or documentation
-- Fetching thread replies and conversation context
+- Fetching X Articles (long-form) with all images downloaded locally
 - Extracting images and media from posts
 - Batch downloading multiple tweets for reference
 
 **Key features:**
+- Single posts: fxtwitter mirror — no key, no login, full `tweet.text` body including note_tweet long-form
 - No JavaScript rendering or browser automation needed
 - No Twitter authentication required
 - Returns markdown-formatted content with metadata
@@ -1215,10 +1219,16 @@ Fetch Twitter/X post content using Jina.ai API to bypass JavaScript restrictions
 
 **Example usage:**
 ```bash
-# Set your Jina API key (get from https://jina.ai/)
-export JINA_API_KEY="your_api_key_here"
+# Single post text (preferred): fxtwitter mirror, no key needed
+curl -sS "https://api.fxtwitter.com/USER/status/TWEET_ID" \
+  | python3 -c "import json,sys; t=json.load(sys.stdin)['tweet']; print(t['text'])"
 
-# Fetch a single tweet
+# X Article with images (full mode)
+uv run --with pyyaml python scripts/fetch_article.py \
+  "https://x.com/USER/status/TWEET_ID" ./Clippings
+
+# Jina fallback (intermittent — see SKILL.md risk note)
+export JINA_API_KEY="your_api_key_here"
 curl "https://r.jina.ai/https://x.com/USER/status/TWEET_ID" \
   -H "Authorization: Bearer ${JINA_API_KEY}"
 
@@ -1238,9 +1248,9 @@ python scripts/fetch_tweet.py https://x.com/user/status/123 output.md
 📚 **Documentation**: See [twitter-reader/SKILL.md](./twitter-reader/SKILL.md) for full details and URL format support.
 
 **Requirements**:
-- **Jina.ai API key** (get from https://jina.ai/ - free tier available)
-- **curl** (pre-installed on most systems)
-- **Python 3.6+** (for Python script)
+- **curl** (pre-installed on most systems) — single-post path needs nothing else
+- **Python 3.6+** (for Python scripts)
+- **Jina.ai API key** (only for the Jina fallback; intermittent-ban risk, and the shared repo key is currently out of balance / 402)
 
 ---
 
