@@ -38,6 +38,16 @@ import json
 import sys
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+from speaker_time_contract import (
+    MILLISECOND_S,
+    format_timestamp,
+    positive_turn_bounds,
+    to_seconds,
+)
+
 # Chars dropped when normalizing for alignment (CJK + ASCII punctuation, spaces).
 _DROP = set(" \t\n\r，。！？；：、（）【】《》〈〉“”‘’\"'—…·~～.,!?;:'\"()[]{}<>-—_+*=/\\|@#$%^&`…‥•·、　")
 
@@ -54,6 +64,11 @@ MIN_ANCHOR_RATIO = 0.5
 # is adversarial inputs, not real double-transcribed audio), but warn at scale
 # rather than hang silently. For multi-hour recordings, split the audio.
 ALIGN_LEN_WARN = 25000
+# Output timestamps have millisecond precision, so one millisecond is the
+# smallest representable positive turn. Single-character interjections can
+# otherwise inherit one timing-lattice midpoint for both boundaries and emit a
+# zero-duration CSV row that downstream evidence players cannot consume.
+MIN_TURN_DURATION_S = MILLISECOND_S
 
 
 def log(msg):
@@ -89,7 +104,7 @@ def whisper_char_lattice(words):
             # Linear interpolation across the word span, midpoint of each slot.
             t = start + (end - start) * (j + 0.5) / n
             chars.append(c.lower() if "A" <= c <= "Z" else c)
-            times.append(round(t, 3))
+            times.append(to_seconds(t))
     return chars, times
 
 
@@ -127,7 +142,7 @@ def assign_times(qwen_chars, whisper_times, anchors):
         span = hi - lo
         for i in range(lo + 1, hi):
             frac = (i - lo) / span
-            times[i] = round(t_lo + (t_hi - t_lo) * frac, 3)
+            times[i] = to_seconds(t_lo + (t_hi - t_lo) * frac)
     anchored_ratio = len(anchor_by_q) / n if n else 0.0
     return times, round(anchored_ratio, 4)
 
@@ -193,12 +208,16 @@ def build_turns(qwen_raw, raw_idx, times, speakers, max_gap):
         text = qwen_raw[raw_lo:raw_hi].strip()
         if not text:
             continue
+        # Do not borrow the next char's midpoint: the turn may have been split
+        # precisely because that next point is another speaker or a long
+        # silence beyond max_gap. The shared contract adds only one millisecond.
+        start, end, duration = positive_turn_bounds(
+            times[lo], times[hi - 1]
+        )
         out.append({
-            "start": times[lo],
-            "end": times[hi - 1],
-            # Clamp >=0: overlapping whisper word spans can make end<start locally;
-            # a negative duration would confuse downstream consumers.
-            "duration": round(max(0.0, (times[hi - 1] or 0) - (times[lo] or 0)), 3),
+            "start": start,
+            "end": end,
+            "duration": duration,
             "speaker": sp,
             "text": text,
         })
@@ -233,9 +252,7 @@ def align(qwen_text, whisper_words, diar_segments, max_gap=MAX_GAP_DEFAULT):
 
 
 def fmt(sec):
-    sec = sec or 0
-    m, s = int(sec // 60), int(sec % 60)
-    return f"{m:02d}:{s:02d}.{int((sec % 1) * 1000):03d}"
+    return format_timestamp(sec)
 
 
 def write_outputs(turns, report, wav_name, out_dir, stem):

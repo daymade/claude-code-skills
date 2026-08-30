@@ -47,6 +47,7 @@ import argparse
 import csv
 import io
 import json
+import math
 import os
 import re
 import signal
@@ -273,11 +274,22 @@ def _pipeline_contract():
         "word_timestamps_whisper.py",
         "diarize_speakers.py",
         "align_speakers.py",
+        "speaker_time_contract.py",
     )
     return {
         name: _sha256_file(HERE / name)
         for name in scripts
     }
+
+
+def _validation_contract():
+    """Freeze producer-owned bounds that downstream artifact checks consume."""
+    from align_speakers import SEG_EDGE_TOLERANCE
+
+    tolerance = float(SEG_EDGE_TOLERANCE)
+    if not math.isfinite(tolerance) or tolerance < 0:
+        raise RuntimeError("aligner speaker-edge tolerance is invalid")
+    return {"speaker_edge_tolerance_s": tolerance}
 
 
 def _external_text_identity(text_file):
@@ -293,7 +305,12 @@ def _external_text_identity(text_file):
 
 
 def _write_final_receipt(
-    wav, out_dir, stem, parameters, pipeline_contract=None
+    wav,
+    out_dir,
+    stem,
+    parameters,
+    pipeline_contract=None,
+    validation_contract=None,
 ):
     """Atomically commit the complete bundle after every final artifact exists."""
     artifacts = {}
@@ -312,6 +329,7 @@ def _write_final_receipt(
         "artifacts": artifacts,
         "pipeline": pipeline_contract or _pipeline_contract(),
         "parameters": parameters,
+        "validation": validation_contract or _validation_contract(),
         "model_contract": {
             "id": DEFAULT_MODEL_ID,
             "revision": DEFAULT_MODEL_REVISION,
@@ -867,6 +885,7 @@ def leg_align(
     text_file=None,
     receipt_parameters=None,
     receipt_pipeline=None,
+    receipt_validation=None,
 ):
     """Leg 4: attach speakers to full text, write the output contract.
     Per-file resilient — one bad file is recorded as failed, not a batch crash;
@@ -951,6 +970,7 @@ def leg_align(
             stem,
             receipt_parameters or {},
             receipt_pipeline,
+            receipt_validation,
         )
     if failed:
         log(f"FAILED/skipped files: {failed}")
@@ -1023,6 +1043,7 @@ def main():
     # this process runs, downstream current-contract validation rejects the old
     # process instead of attributing its outputs to the new on-disk code.
     receipt_pipeline = _pipeline_contract()
+    receipt_validation = _validation_contract()
 
     decoder = diarize_all(
         args.inputs,
@@ -1052,6 +1073,7 @@ def main():
         args.text_file,
         receipt_parameters,
         receipt_pipeline,
+        receipt_validation,
     )
     log("Done.")
 
