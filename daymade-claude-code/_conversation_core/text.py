@@ -246,10 +246,10 @@ def keywords_are_raw_byte_safe(keywords: Iterable[str]) -> bool:
        some writers emit ``\\/``, so it is excluded for the same reason.
 
     Falling back is always the safe direction: it costs speed, never a missed
-    match. The cost is real and worth naming — a non-ASCII query (any CJK one)
-    gets no pre-filter at all and pays the full parse. Correctness first: this
-    tool's callers are told they may conclude a topic is absent from a
-    no-match result.
+    match. This function therefore keeps non-ASCII out of the *line-level*
+    literal filter. Callers may still use the separate file-level mixed-JSON
+    regex below for uncased Unicode such as CJK. Correctness first: this tool's
+    callers are told they may conclude a topic is absent from a no-match result.
     """
     return all(
         kw.isascii()
@@ -263,11 +263,11 @@ def keywords_are_file_prefilter_safe(keywords: Iterable[str]) -> bool:
 
     This is intentionally broader than :func:`keywords_are_raw_byte_safe`.
     Line-level filtering must see the keyword's literal bytes on the exact
-    physical line, so it remains ASCII-only.  File-level filtering also runs
-    the conservative ``_UNSCANNABLE_MARKERS`` pass: any file containing a
-    ``\\u`` escape or a non-ASCII character that folds to ASCII remains a
-    candidate and is fully parsed later.  That extra pass makes ordinary CJK
-    and one-codepoint Unicode folds safe without losing escaped archives.
+    physical line, so it remains ASCII-only. File-level filtering can use an
+    exact regex whose every code point accepts either raw UTF-8 or its JSON
+    ``\\u`` representation; that covers fully escaped *and mixed* JSON strings
+    without admitting every file that happens to contain some unrelated
+    Unicode escape.
 
     File-level Unicode filtering is limited to uncased code points (CJK,
     emoji, symbols).  Cased non-ASCII text such as ``café`` falls back to full
@@ -292,6 +292,39 @@ def keywords_are_file_prefilter_safe(keywords: Iterable[str]) -> bool:
         )
         for keyword in keywords
     )
+
+
+def _json_unicode_escape(character: str) -> str:
+    """Encode one code point using JSON's ``\\u`` form, including ASCII."""
+    if character.isascii():
+        return f"\\u{ord(character):04x}"
+    return json.dumps(character, ensure_ascii=True)[1:-1]
+
+
+def _mixed_json_keyword_regex(keyword: str, *, case_sensitive: bool) -> str:
+    """Return an exact regex for every legal raw/``\\u`` mixture of keyword.
+
+    JSON permits each otherwise-safe character to appear literally or as a
+    Unicode escape, even inside one word (``自\\u52a8``). A pair of fixed-string
+    patterns for the all-raw and all-escaped forms therefore under-approximates
+    the parsed text. One linear-size regex avoids the exponential list of all
+    mixtures. Scoped ``(?i:...)`` applies only to hexadecimal escape digits so
+    ``--case-sensitive`` still governs the decoded text rather than the JSON
+    encoder's arbitrary choice of ``a-f`` versus ``A-F``.
+    """
+    pieces: list[str] = []
+    for character in keyword:
+        raw = re.escape(character)
+        codepoints = {ord(character)}
+        if not case_sensitive and character.isascii() and character.isalpha():
+            codepoints.update({ord(character.lower()), ord(character.upper())})
+        escaped_alternatives = {
+            f"(?i:{re.escape(_json_unicode_escape(chr(codepoint)))})"
+            for codepoint in codepoints
+        }
+        alternatives = [raw, *sorted(escaped_alternatives)]
+        pieces.append(f"(?:{'|'.join(alternatives)})")
+    return "".join(pieces)
 
 
 def files_possibly_matching(
@@ -350,18 +383,30 @@ def files_possibly_matching(
     exe = shutil.which("rg") or shutil.which("grep")
     if not exe:
         return None
+    has_unicode_keyword = any(
+        not character.isascii()
+        for keyword in keyword_list
+        for character in keyword
+    )
+    # The exact mixed raw/escaped matcher below relies on ripgrep's Rust regex
+    # syntax. Plain grep remains a safe ASCII fallback; Unicode degrades to the
+    # original full structured scan instead of trusting a different regex
+    # dialect.
+    if has_unicode_keyword and Path(exe).name != "rg":
+        return None
     # -a/--text: never let the binary-content heuristic skip a JSONL file that
     #   happens to contain a byte sequence that looks binary.
     # -F: keywords are literal substrings everywhere else in this codebase
     #   (Python's str.count(), not a regex) — a raw scan must match the same
     #   semantics, not treat a keyword like "a.b" as a wildcard pattern.
     # -l: list matching filenames only; we don't need line numbers here.
-    # Two scans, unioned — they need opposite case settings.
+    # Three scans are unioned; the fixed-string and structural-marker passes
+    # need opposite case settings, while the regex pass models decoded JSON.
     #
     # Pass 1 matches the keywords the way the real matcher does (folded, unless
     # the caller asked for case-sensitive).
     #
-    # Pass 2 looks for content the byte scanner cannot reason about at all
+    # Pass 3 looks for content the byte scanner cannot reason about at all
     # (fold-equivalent characters, "\u" escapes) and MUST be case-sensitive.
     # Handing those characters to a "-i" scan is self-defeating: "-i" folds the
     # *pattern* too, so `ſ` matches a plain `s` and `K` (U+212A) matches `k` —
@@ -378,12 +423,28 @@ def files_possibly_matching(
             kw_scan += ["-e", escaped]
     kw_scan.append("--")
 
+    mixed_scan: Optional[list[str]] = None
+    if has_unicode_keyword:
+        mixed_scan = [exe, "-a", "-l"]
+        if not case_sensitive:
+            mixed_scan.append("-i")
+        for keyword in keyword_list:
+            if any(not character.isascii() for character in keyword):
+                mixed_scan += [
+                    "-e",
+                    _mixed_json_keyword_regex(
+                        keyword,
+                        case_sensitive=case_sensitive,
+                    ),
+                ]
+        mixed_scan.append("--")
+
     marker_scan = [exe, "-a", "-F", "-l"]
     markers = list(_FOLDS_TO_ASCII)
     # An ASCII query can match a non-ASCII full-fold equivalent stored as a
     # JSON escape ("financial" vs "\\ufb01nancial"). Keep every escaped file
-    # in that case. For uncased Unicode queries, the exact escaped keyword was
-    # added above, so the broad marker would only re-admit the whole archive.
+    # in that case. For uncased Unicode queries, the mixed raw/escaped regex
+    # above is exact, so the broad marker would only re-admit the whole archive.
     if any(keyword.isascii() for keyword in keyword_list):
         markers.append("\\u")
     for marker in markers:
@@ -469,7 +530,11 @@ def files_possibly_matching(
             used += size
         return not batch or run_batch(scan_prefix, batch)
 
-    if not scan_all(kw_scan) or not scan_all(marker_scan):
+    if (
+        not scan_all(kw_scan)
+        or not scan_all(marker_scan)
+        or (mixed_scan is not None and not scan_all(mixed_scan))
+    ):
         return None
     return matched
 

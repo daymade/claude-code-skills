@@ -2165,14 +2165,13 @@ def main():
     search_parser.add_argument(
         "--no-prefilter",
         action="store_true",
-        help="Disable the rg/grep raw-byte pre-filter and fully parse every "
-        "session file. The pre-filter is designed to be a pure speedup: it "
-        "only runs for keywords whose bytes must appear verbatim in the file "
-        "(ASCII, no '/', no control characters), and disables itself for the "
-        "rest — so a non-ASCII query (any CJK one) already parses everything "
-        "and this flag changes nothing for it. Use this to verify the "
-        "pre-filter's neutrality on an ASCII query, or to rule it out when "
-        "diagnosing a suspected missed match.",
+        help="Disable native file/line pre-filters and fully parse every "
+        "session file. The filters are conservative speedups: ordinary ASCII "
+        "uses literal matching, and uncased Unicode such as CJK uses an exact "
+        "raw/JSON-escaped file regex when ripgrep is available. Unsafe escape "
+        "characters, cased or multi-codepoint Unicode folds, missing tools, "
+        "and scanner errors already fall back to full parsing. Use this flag "
+        "to verify output neutrality or diagnose a suspected missed match.",
     )
     _add_home_flags(search_parser)
 

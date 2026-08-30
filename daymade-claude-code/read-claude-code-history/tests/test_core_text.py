@@ -78,15 +78,59 @@ class FilesPossiblyMatchingTests(unittest.TestCase):
             "escaped.jsonl",
             json.dumps({"message": "这里有自动主线回锚"}, ensure_ascii=True) + "\n",
         )
+        mixed_raw_then_escaped = self._write(
+            "mixed-raw-escaped.jsonl",
+            '{"message":"这里有自\\u52a8主线回锚"}\n',
+        )
+        mixed_escaped_then_raw = self._write(
+            "mixed-escaped-raw.jsonl",
+            '{"message":"这里有\\u81EA动主线回锚"}\n',
+        )
         noise = self._write("noise.jsonl", '{"message":"unrelated"}\n')
         self.assertTrue(keywords_are_file_prefilter_safe(["自动主线回锚"]))
         result = files_possibly_matching(
-            [raw, escaped, noise], ["自动主线回锚"]
+            [
+                raw,
+                escaped,
+                mixed_raw_then_escaped,
+                mixed_escaped_then_raw,
+                noise,
+            ],
+            ["自动主线回锚"],
         )
         self.assertIsNotNone(result)
         self.assertIn(raw, result)
         self.assertIn(escaped, result)
+        self.assertIn(mixed_raw_then_escaped, result)
+        self.assertIn(mixed_escaped_then_raw, result)
         self.assertNotIn(noise, result)
+
+    def test_case_sensitive_unicode_matches_uppercase_json_hex(self) -> None:
+        escaped = self._write(
+            "uppercase-hex.jsonl",
+            '{"message":"\\u81EA\\u52A8"}\n',
+        )
+        result = files_possibly_matching(
+            [escaped], ["自动"], case_sensitive=True
+        )
+        self.assertIsNotNone(result)
+        self.assertIn(escaped, result)
+
+    def test_mixed_unicode_query_honors_ascii_case_after_json_decode(self) -> None:
+        escaped_lower = self._write(
+            "escaped-lower-ascii.jsonl",
+            '{"message":"自\\u0061动"}\n',
+        )
+        insensitive = files_possibly_matching(
+            [escaped_lower], ["自A动"], case_sensitive=False
+        )
+        sensitive = files_possibly_matching(
+            [escaped_lower], ["自A动"], case_sensitive=True
+        )
+        self.assertIsNotNone(insensitive)
+        self.assertIn(escaped_lower, insensitive)
+        self.assertIsNotNone(sensitive)
+        self.assertNotIn(escaped_lower, sensitive)
 
     def test_cased_or_multicodepoint_unicode_disables_file_prefilter(self) -> None:
         for keyword in ("café", "straße", "ẞ", "İ"):

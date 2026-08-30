@@ -57,10 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   project directories, runs a native file-level candidate pass before metadata extraction,
   and fully parses only candidate sessions while retaining every same-named active/archive
   copy so date-window untimed-record counts and record unions remain exact. The file-level
-  prefilter now safely handles uncased Unicode such as CJK by checking both raw UTF-8 and
-  exact JSON-escaped forms; cased or multi-codepoint folds still fall back to full parsing.
+  prefilter now safely handles uncased Unicode such as CJK with an exact matcher for every
+  raw UTF-8 / JSON-escaped mixture; cased or multi-codepoint folds still fall back to full parsing.
   On the real 5,298-session / 264-project inventory, the previously interrupted
-  `自动主线回锚` one-day search completed in 13.78s and reported that only 10 sessions
+  `自动主线回锚` one-day search completed in 15.75s and reported that only 18 sessions
   required structured parsing. Deterministic regressions prove 1/41 metadata parses,
   byte-identical output with `--no-prefilter`, archived-copy untimed-count fidelity,
   escaped-CJK recall, and honest zero-candidate reporting.
