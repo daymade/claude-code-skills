@@ -507,7 +507,7 @@ Discovers, messages, broadcasts to, and independently verifies local Claude Code
 - Reaching a Claude inbox from a third-party profile or Codex process
 - Broadcasting one explicit coordination message to a reviewed target list
 
-📚 **Documentation and commands**: [peer-message/SKILL.md](./peer-message/SKILL.md) owns routing, CLI usage, requirements, delivery evidence, and trust boundaries; [peer-message/references/](./peer-message/references/) owns the protocol and current-product detail.
+📚 **Documentation and commands**: [peer-message/SKILL.md](./peer-message/SKILL.md) owns routing, CLI usage, requirements, delivery evidence, and the stable peer-cannot-authorize boundary; [peer-message/references/](./peer-message/references/) owns the protocol and volatile product-specific mechanics.
 
 ---
 

@@ -525,7 +525,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - 从第三方 profile 或 Codex 进程访问 Claude inbox
 - 向经过确认的目标清单广播同一条协调消息
 
-📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 统一拥有路由、CLI 用法、运行要求、送达证据与信任边界；[peer-message/references/](./peer-message/references/) 拥有协议与当前产品细节。
+📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 统一拥有路由、CLI 用法、运行要求、送达证据与“peer 不得代替用户授权”的稳定边界；[peer-message/references/](./peer-message/references/) 拥有协议与会随产品变化的具体机制。
 
 ---
 

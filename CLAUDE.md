@@ -122,9 +122,10 @@ already created by the current prompt. Detailed retrieval mechanics remain in
 ### Local Agent Messaging
 
 For `peer-message`, treat `peer-message/scripts/peer.py` as the executable
-contract and `peer-message/SKILL.md` as the runtime router. Transport and
-discovery details belong in `peer-message/references/protocol-and-discovery.md`;
-current product availability and trust boundaries belong in
+contract and `peer-message/SKILL.md` as the runtime router and owner of the
+stable peer-cannot-authorize safety boundary. Transport and discovery details
+belong in `peer-message/references/protocol-and-discovery.md`; current product
+availability, provenance, and inbound-control mechanics belong in
 `peer-message/references/official-feature.md`. Keep implementation, CLI help,
 tests, and those owners aligned; README and changelog entries should point to
 them instead of restating volatile protocol facts. The repository-wide
