@@ -61,8 +61,24 @@ Use the same parser/module set that production will run. For Caddy, run the exac
 candidate directory and its full Compose-derived environment:
 
 ```bash
+set -euo pipefail
+
 GATEWAY_SERVICE=claude4dev-gateway
+: "${CANDIDATE_ROOT:?candidate root is required}"
+: "${EXPECTED_CADDY_IMAGE_DIGEST:?reviewed Caddy image digest is required}"
 GATEWAY_ENV_FILE="$CANDIDATE_ROOT/gateway.effective.env"
+
+RENDERED_GATEWAY_IMAGE="$(jq -er --arg service "$GATEWAY_SERVICE" '
+  .services[$service].image
+  | select(type == "string" and length > 0)
+' "$CANDIDATE_ROOT/compose.rendered.json")"
+
+printf '%s\n' "$EXPECTED_CADDY_IMAGE_DIGEST" \
+  | grep -Eq '@sha256:[0-9a-f]{64}$' \
+  || { echo "FATAL: expected Caddy image is not an immutable digest" >&2; exit 1; }
+
+[ "$RENDERED_GATEWAY_IMAGE" = "$EXPECTED_CADDY_IMAGE_DIGEST" ] \
+  || { echo "FATAL: rendered gateway image differs from the reviewed digest" >&2; exit 1; }
 
 jq -e --arg service "$GATEWAY_SERVICE" '
   .services[$service].environment
@@ -71,8 +87,10 @@ jq -e --arg service "$GATEWAY_SERVICE" '
       (.key | test("^[A-Za-z_][A-Za-z0-9_]*$"))
       and (.value | type == "string")
       and ((.value | contains("\n")) | not)
+      and ((.value | test("\\$\\{[A-Za-z_][A-Za-z0-9_]*\\}")) | not)
     )
-' "$CANDIDATE_ROOT/compose.rendered.json" >/dev/null
+' "$CANDIDATE_ROOT/compose.rendered.json" >/dev/null \
+  || { echo "FATAL: rendered gateway environment contains an invalid key, value, or unresolved placeholder" >&2; exit 1; }
 
 jq -r --arg service "$GATEWAY_SERVICE" '
   .services[$service].environment
