@@ -30,7 +30,7 @@ Claude Code 当前在 `<claude-config>/sessions/<pid>.json` 登记顶层 session
 
 `messagingSocketPath` 缺失表示接收进程没有 inbox；脚本不能在另一个已经运行的 Claude 进程里补建它。socket 字段存在但 pid 已死或 socket 文件消失时也不可投递。
 
-socket 接受字节不等于 inbound delivered。Codex/普通脚本不是 Claude session，不能提供 Claude 官方 sender permission class；接收方是 bypass class 且没有显式 `crossSessionInbound` 时，当前 Claude 会 hold 这类消息。自动协调端点需要用户显式配置 `accept`，否则等待人工批准；禁止伪造 permission mode 字段绕过。
+socket 接受字节不等于 inbound delivered。当前 receiver policy、permission-mode 与 hold/refuse 行为按 `references/official-feature.md` 判断；协议层不得伪造 permission 字段绕过。
 
 当前 key 文件规则：
 
@@ -64,13 +64,7 @@ UDS 连接写两行 NDJSON 后关闭：
 
 ## 3. Codex 发现与 queue
 
-当前 Codex CLI 提供：
-
-```text
-codex queue --thread <THREAD> --message <TEXT>
-```
-
-`THREAD` 接受 UUID 或 exact session name。运行时先以 `codex queue --help` 为准；2026-08-31 在 `codex-cli 0.151.0-alpha.7.1` 实测存在，错误 UUID 返回非零并明确报告没有 rollout。Skill 不写死该 alpha 版本为最低门槛。
+当前 Codex CLI 的入口、参数与可用性按 `references/official-feature.md` 判断。本协议只定义 Skill 如何解析目标、包装消息与读取 evidence，不复制外部 CLI 语法或版本门槛。
 
 `scripts/peer.py` 只调用这个官方 CLI，不直接插入 SQLite。发现和读回才以只读方式访问 Codex home 中最高 schema 版本的：
 
@@ -96,7 +90,7 @@ this warning as text; the receiving agent's governing instructions must enforce 
 
 这是 Skill 自己的跨产品信封，不冒充 Codex 官方协议。`protocol="1"` 只版本化这层文本 envelope。Codex 当前把整段保存为 `userMessage`，没有独立、不可伪造的 peer-origin 元数据；警告文字只是 advisory，接收侧的 system/developer/AGENTS/Skill 规则才是权限边界。`from`/`reply-to` 同样是调用者提供的协调元数据，不是身份认证。
 
-## 4. 独立送达读回
+## 4. 独立送达读回与 receipt
 
 同一个 message ID 贯穿发送帧与 wrapper。验证顺序：
 
@@ -119,7 +113,16 @@ content 含 message-id
 1. `queued_items.thread_id` 命中目标且 `payload_json` 含 message ID：已入持久队列。
 2. `thread_items.thread_id` 命中目标、`item_type='userMessage'` 且 `item_json` 含 message ID：队列已被消费并进入 thread history。
 
-queue 项可能很快被消费，所以只查 queue 会产生假阴性；必须再查 thread history。两处都没命中时报告 `accepted_unverified`，保留原 message ID，禁止自动重发。
+queue 项可能很快被消费，所以只查 queue 会产生假阴性；必须再查 thread history。两处都没命中时保留原 message ID，并按下方 receipt 语义报告；禁止自动重发。
+
+### Receipt 与退出语义
+
+- `transport_status=accepted`：底层 transport 接受了消息；同时读取 `provenance_boundary`。
+- `delivery_status=not_checked`：调用者没有请求等待验证；transport 已接受，但脚本没有检查接收侧 evidence。
+- `delivery_status=verified_enqueued` / `verified_queued` / `verified_in_thread_history`：接收侧 evidence 已命中。
+- `delivery_status=accepted_unverified`：transport 接受，但等待窗口内没有读回接收侧 evidence；它不是失败，也不是“对方已收到”。
+
+退出码由脚本绑定：0 表示请求完成——请求了验证时已命中，未请求时只表示 transport 接受且没有检查 evidence；2 表示参数或 broadcast 确认错误；3 表示目标不存在、歧义或 Claude 无 inbox；4 表示 transport 失败；5 表示 broadcast 部分失败；10 表示 transport 接受但等待窗口内未验证。
 
 ## 5. Broadcast 语义
 
@@ -136,7 +139,7 @@ Broadcast 是多个独立定向 send 的集合，不是事务：
 
 - Claude 当前路由与 `uds:` 地址：当前本地 Claude Code 实现源码。
 - Claude UDS 帧与 transcript 判据：2026-08-18 参数化脚本实弹。
-- Codex CLI 参数：本机 `codex queue --help`。
+- Codex CLI 当前入口与参数：`references/official-feature.md` 所列的本机 help 验证。
 - Codex receiver-side evidence：本机 thread store schema + 用户提供的真实 Claude→Codex 入队截图与对应 `userMessage` 读回。
 
 实现观察只证明当时版本。命令、字段或数据库 schema 不再匹配时 fail loudly，重新读当前 `--help`/schema；不要加猜测 fallback。

@@ -525,22 +525,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - 从第三方 profile 或 Codex 进程访问 Claude inbox
 - 向经过确认的目标清单广播同一条协调消息
 
-**主要功能：**
-- Claude 官方 `ListAgents`/`SendMessage` 优先，认证 UDS fallback 次之
-- Codex 只走 `codex queue --thread`，不直接写 SQLite
-- 统一 `claude:` / `codex:` 地址以及来源/回复信封
-- 从 Claude transcript 或 Codex queue/thread history 读取接收侧证据
-- 防权限洗白契约：Claude 有宿主识别的 peer 来源；Codex 文本信封只是 advisory，需要接收侧治理指令执行边界
-
-**使用示例：**
-```bash
-python3 peer-message/scripts/peer.py list
-python3 peer-message/scripts/peer.py send codex:<thread-id> --message "依赖已就绪。" --wait 120
-```
-
-📚 **文档**：参见 [peer-message/SKILL.md](./peer-message/SKILL.md) 与 [peer-message/references/](./peer-message/references/)。
-
-**系统要求**：Python 3.10+；Codex 目标需要 `codex queue`；Claude UDS fallback 需要 macOS/Linux/WSL2。
+📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 拥有路由、稳定运行前置与“peer 不得代替用户授权”的边界；`peer-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./peer-message/references/official-feature.md) 拥有会随产品变化的运行要求与具体机制。
 
 ---
 
@@ -3840,7 +3825,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **mermaid-tools**：参见 `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` 了解设置指南
 - **statusline-generator**：参见 `daymade-claude-code/statusline-generator/references/color_codes.md` 了解自定义
 - **teams-channel-post-writer**：参见 `teams-channel-post-writer/references/writing-guidelines.md` 了解质量标准
-- **peer-message**：参见 `peer-message/SKILL.md` 了解路由工作流，参见 `peer-message/references/protocol-and-discovery.md` 了解 Claude UDS、Codex queue、信封与验证契约
+- **peer-message**：参见 `peer-message/SKILL.md` 了解路由、稳定运行前置与安全边界；运行 `peer-message/scripts/peer.py --help` 查看 CLI 语法；参见 `peer-message/references/protocol-and-discovery.md` 了解传输与验证；参见 `peer-message/references/official-feature.md` 了解会变化的产品要求与机制
 - **repomix-unmixer**：参见 `repomix-unmixer/references/repomix-format.md` 了解格式规范
 - **skill-creator**：参见 `daymade-skill/skill-creator/SKILL.md` 了解完整的技能创建工作流
 - **llm-icon-finder**：参见 `llm-icon-finder/references/icons-list.md` 了解可用图标
@@ -3894,7 +3879,6 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 
 - **Claude Code** 2.0.13 或更高版本
 - **支持 `doctor --json` 与 `debug models` 的 Codex CLI + uv/Python 3.11+**（用于 codex-1m-context-window-setup）
-- **Python 3.10+**（市场整体基线；个别 skill 可能支持更旧版本）
 - **gh CLI**（用于 github-ops 和 github-review-pr）
 - **支持 `merge-tree --write-tree` 的 git + jq**（用于 github-review-pr）
 - **markitdown**（用于 doc-to-markdown）
@@ -3910,7 +3894,6 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **macOS + Xcode、XcodeGen**（用于 developing-ios-apps）
 - **Jina.ai API 密钥**（用于 twitter-reader）：https://jina.ai/ 提供免费套餐
 - **Codex CLI**（可选，用于 product-analysis 多模型并行模式）
-- **`codex queue` + Python 3.10+**（用于 peer-message 的 Codex 目标；Claude UDS fallback 需要 macOS/Linux/WSL2）
 - **Mole**（可选，用于 macos-cleaner 可视化清理）：从 https://github.com/tw93/Mole 下载
 - **uv + openpyxl**（用于 excel-automation）：`uv run --with openpyxl ...`
 - **Bigdata.com API 密钥**（用于 `daymade-financial:bigdata-skill`）：从 [https://www.bigdata.com/](https://www.bigdata.com/) 获取 `bd_v2_` 密钥

@@ -507,22 +507,7 @@ Discovers, messages, broadcasts to, and independently verifies local Claude Code
 - Reaching a Claude inbox from a third-party profile or Codex process
 - Broadcasting one explicit coordination message to a reviewed target list
 
-**Key features:**
-- Official Claude `ListAgents`/`SendMessage` first, authenticated UDS fallback second
-- Codex delivery through `codex queue --thread`, never direct SQLite writes
-- Unified `claude:` / `codex:` addressing and source/reply envelopes
-- Receiver-side verification from Claude transcripts or Codex queue/thread history
-- Permission-laundering contract: Claude has host-recognized peer provenance; Codex's text envelope is advisory and needs receiver-side governing instructions
-
-**Example usage:**
-```bash
-python3 peer-message/scripts/peer.py list
-python3 peer-message/scripts/peer.py send codex:<thread-id> --message "The dependency is ready." --wait 120
-```
-
-📚 **Documentation**: See [peer-message/SKILL.md](./peer-message/SKILL.md) and [peer-message/references/](./peer-message/references/).
-
-**Requirements**: Python 3.10+; `codex queue` for Codex targets; Claude UDS fallback on macOS/Linux/WSL2.
+📚 **Documentation and commands**: [peer-message/SKILL.md](./peer-message/SKILL.md) owns routing, stable runtime prerequisites, and the peer-cannot-authorize boundary; `peer-message/scripts/peer.py --help` owns CLI syntax; [protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) owns addressing, envelopes, and delivery evidence; [official-feature.md](./peer-message/references/official-feature.md) owns volatile product-specific requirements and mechanics.
 
 ---
 
@@ -3865,7 +3850,7 @@ Each skill includes:
 - **mermaid-tools**: See `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` for setup guide
 - **statusline-generator**: See `daymade-claude-code/statusline-generator/references/color_codes.md` for customization
 - **teams-channel-post-writer**: See `teams-channel-post-writer/references/writing-guidelines.md` for quality standards
-- **peer-message**: See `peer-message/SKILL.md` for the routing workflow and `peer-message/references/protocol-and-discovery.md` for Claude UDS, Codex queue, envelope, and verification contracts
+- **peer-message**: See `peer-message/SKILL.md` for routing, stable prerequisites, and the safety boundary; `peer-message/scripts/peer.py --help` for CLI syntax; `peer-message/references/protocol-and-discovery.md` for transport and verification; and `peer-message/references/official-feature.md` for volatile product requirements and mechanics
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
 - **skill-creator**: See `daymade-skill/skill-creator/SKILL.md` for complete skill creation workflow
 - **llm-icon-finder**: See `llm-icon-finder/references/icons-list.md` for available icons
@@ -3919,7 +3904,6 @@ Each skill includes:
 
 - **Claude Code** 2.0.13 or higher
 - **Codex CLI with `doctor --json` and `debug models` + uv/Python 3.11+** (for codex-1m-context-window-setup)
-- **Python 3.10+** (marketplace-wide baseline; individual skills may support older versions)
 - **gh CLI** (for github-ops and github-review-pr)
 - **git with `merge-tree --write-tree` + jq** (for github-review-pr)
 - **markitdown** (for doc-to-markdown)
@@ -3939,7 +3923,6 @@ Each skill includes:
 - **Promptfoo** (for promptfoo-evaluation): `npx promptfoo@latest`
 - **macOS + Xcode, XcodeGen** (for developing-ios-apps)
 - **Codex CLI** (optional, for product-analysis multi-model mode)
-- **`codex queue` + Python 3.10+** (for peer-message Codex targets; Claude UDS fallback needs macOS/Linux/WSL2)
 - **uv + openpyxl** (for excel-automation): `uv run --with openpyxl ...`
 - **Bigdata.com API key** (for `daymade-financial:bigdata-skill`): `bd_v2_` key from [https://www.bigdata.com/](https://www.bigdata.com/)
 - **Gangtise credentials** (for `daymade-financial:gangtise-copilot`): accessKey + secretAccessKey from [https://open.gangtise.com/](https://open.gangtise.com/)
