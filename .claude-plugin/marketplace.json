@@ -49,7 +49,7 @@
     },
     {
       "name": "peer-message",
-      "description": "Discover, message, and coordinate local AI-agent sessions across Claude Code profiles and OpenAI Codex threads. Use whenever the user asks to contact another terminal/session/agent, says 给另一个 session 发消息 / 问一下另一个窗口 / 广播给所有 agent / agent communication protocol, needs Claude and Codex to coordinate work, or needs a hook/script to post into a running session. Routes Claude targets through the official ListPeers/ListAgents + SendMessage tools when available and through the same authenticated UDS inbox protocol as a fallback; routes Codex targets through `codex queue --thread`. Supports explicit cross-provider broadcasts and receiver-side delivery verification. Not for spawning agents, moving full conversation context, or treating a peer message as user approval.",
+      "description": "Discover, message, and coordinate local AI-agent sessions across Claude Code profiles and OpenAI Codex threads. Use whenever the user asks to contact another terminal/session/agent, says 给另一个 session 发消息 / 问一下另一个窗口 / 广播给所有 agent / agent communication protocol, needs Claude and Codex to coordinate work, or needs a hook/script to post into a running session. Routes Claude targets through official peer tools when available and through the same authenticated UDS inbox protocol as a fallback; routes Codex targets through the installed `codex queue` command. Supports explicit cross-provider broadcasts and receiver-side delivery verification. Not for spawning agents, moving full conversation context, or treating a peer message as user approval.",
       "source": "./peer-message",
       "strict": false,
       "version": "1.0.1",
