@@ -507,22 +507,7 @@ Discovers, messages, broadcasts to, and independently verifies local Claude Code
 - Reaching a Claude inbox from a third-party profile or Codex process
 - Broadcasting one explicit coordination message to a reviewed target list
 
-**Key features:**
-- Official Claude `ListAgents`/`SendMessage` first, authenticated UDS fallback second
-- Codex delivery through `codex queue --thread`, never direct SQLite writes
-- Unified `claude:` / `codex:` addressing and source/reply envelopes
-- Receiver-side verification from Claude transcripts or Codex queue/thread history
-- Permission-laundering contract: Claude has host-recognized peer provenance; Codex's text envelope is advisory and needs receiver-side governing instructions
-
-**Example usage:**
-```bash
-python3 peer-message/scripts/peer.py list
-python3 peer-message/scripts/peer.py send codex:<thread-id> --message "The dependency is ready." --wait 120
-```
-
-📚 **Documentation**: See [peer-message/SKILL.md](./peer-message/SKILL.md) and [peer-message/references/](./peer-message/references/).
-
-**Requirements**: Python 3.10+; `codex queue` for Codex targets; Claude UDS fallback on macOS/Linux/WSL2.
+📚 **Documentation and commands**: [peer-message/SKILL.md](./peer-message/SKILL.md) owns routing, CLI usage, requirements, delivery evidence, and trust boundaries; [peer-message/references/](./peer-message/references/) owns the protocol and current-product detail.
 
 ---
 
@@ -3939,7 +3924,6 @@ Each skill includes:
 - **Promptfoo** (for promptfoo-evaluation): `npx promptfoo@latest`
 - **macOS + Xcode, XcodeGen** (for developing-ios-apps)
 - **Codex CLI** (optional, for product-analysis multi-model mode)
-- **`codex queue` + Python 3.10+** (for peer-message Codex targets; Claude UDS fallback needs macOS/Linux/WSL2)
 - **uv + openpyxl** (for excel-automation): `uv run --with openpyxl ...`
 - **Bigdata.com API key** (for `daymade-financial:bigdata-skill`): `bd_v2_` key from [https://www.bigdata.com/](https://www.bigdata.com/)
 - **Gangtise credentials** (for `daymade-financial:gangtise-copilot`): accessKey + secretAccessKey from [https://open.gangtise.com/](https://open.gangtise.com/)

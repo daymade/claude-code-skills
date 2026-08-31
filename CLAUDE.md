@@ -23,7 +23,7 @@ skill-name/
 
 ### Progressive Disclosure Pattern
 
-Skills use a three-level loading system:
+Skills use progressive loading:
 1. **Metadata** (name + description in YAML frontmatter) - Always in context
 2. **SKILL.md body** - Loaded when skill triggers
 3. **Bundled resources** - Loaded as needed by Claude
@@ -118,6 +118,18 @@ reuse, or history request. Ordinary implementation, reports, and read-only
 inspection do not arm it; PreToolUse and Stop may enforce only a requirement
 already created by the current prompt. Detailed retrieval mechanics remain in
 `daymade-claude-code/prior-work-retrieval/SKILL.md`.
+
+### Local Agent Messaging
+
+For `peer-message`, treat `peer-message/scripts/peer.py` as the executable
+contract and `peer-message/SKILL.md` as the runtime router. Transport and
+discovery details belong in `peer-message/references/protocol-and-discovery.md`;
+current product availability and trust boundaries belong in
+`peer-message/references/official-feature.md`. Keep implementation, CLI help,
+tests, and those owners aligned; README and changelog entries should point to
+them instead of restating volatile protocol facts. The repository-wide
+local-source activation contract below still applies—never hand-create Codex
+Skill links.
 
 ### WeCom Send Boundary
 
@@ -226,7 +238,7 @@ fix was written; the pull ref had to be moved via the reopen dance before deleti
 ### Local `main` Is a Read-Only Mirror
 
 Squash-merged PRs rewrite commits under new SHAs, so every direct commit to
-local `main` guarantees divergence the moment its PR merges. Two rules keep
+local `main` guarantees divergence the moment its PR merges. These rules keep
 `main` clean:
 
 `.githooks/pre-commit` and `.githooks/pre-push` dispatch to
@@ -241,7 +253,7 @@ ruleset independently require the same release checks on every PR.
 
 1. **Never commit directly to local `main`.** All work starts on a feature
    branch (`git checkout -b <topic>`), ships via PR, and lands by squash merge.
-2. **After every merge, run the 30-second ritual:** `git checkout main && git pull --ff-only`.
+2. **After every merge, run the post-merge ritual:** `git checkout main && git pull --ff-only`.
    A successful ff-only pull proves nobody broke rule 1. If it fails, someone
    committed to local `main` — inspect `git log origin/main..main` and rebase
    the stray commits onto a feature branch; do not merge or force-push `main`.
@@ -291,7 +303,7 @@ Skills for public distribution must NOT contain:
 - OneDrive paths or environment-specific absolute paths
 - Use relative paths within skill bundle or standard placeholders (`<workspace>/`, `<user_id>`)
 
-**Five-layer defense system:**
+**Defense layers:**
 1. **CLAUDE.md rules** (this section) — Claude avoids generating sensitive content
 2. **Global PII Guard pre-commit hook** (`~/scripts/git-pii-guard/pre-commit`) — blocks staged PII/secrets and generated/local artifact paths
 3. **Global PII Guard pre-push hook** (`~/scripts/git-pii-guard/pre-push`) — scans commits about to be pushed, catching bad local history before it hits GitHub
@@ -308,7 +320,7 @@ If it fires, fix the issue — do NOT use `--no-verify` to bypass.
 
 ### Content Organization
 
-- Keep SKILL.md lean (~100-500 lines)
+- Size SKILL.md by information density, not a line-count target
 - Move detailed documentation to `references/` files
 - Avoid duplication between SKILL.md and references
 - Keep `tunnel-doctor` environment-neutral: it may teach discovery and presence checks, but exact private node labels, billing identities, endpoints, credentials, and current chain state remain in the owning private configuration/Skill and must not be copied into this public repository.
@@ -326,7 +338,7 @@ The marketplace is configured in `.claude-plugin/marketplace.json`:
 
 ### Versioning Architecture
 
-**Two separate version tracking systems:**
+**Version tracking layers:**
 
 1. **Marketplace Version** (`.claude-plugin/marketplace.json` → `metadata.version`)
    - Tracks the marketplace catalog as a whole

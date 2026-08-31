@@ -525,22 +525,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - 从第三方 profile 或 Codex 进程访问 Claude inbox
 - 向经过确认的目标清单广播同一条协调消息
 
-**主要功能：**
-- Claude 官方 `ListAgents`/`SendMessage` 优先，认证 UDS fallback 次之
-- Codex 只走 `codex queue --thread`，不直接写 SQLite
-- 统一 `claude:` / `codex:` 地址以及来源/回复信封
-- 从 Claude transcript 或 Codex queue/thread history 读取接收侧证据
-- 防权限洗白契约：Claude 有宿主识别的 peer 来源；Codex 文本信封只是 advisory，需要接收侧治理指令执行边界
-
-**使用示例：**
-```bash
-python3 peer-message/scripts/peer.py list
-python3 peer-message/scripts/peer.py send codex:<thread-id> --message "依赖已就绪。" --wait 120
-```
-
-📚 **文档**：参见 [peer-message/SKILL.md](./peer-message/SKILL.md) 与 [peer-message/references/](./peer-message/references/)。
-
-**系统要求**：Python 3.10+；Codex 目标需要 `codex queue`；Claude UDS fallback 需要 macOS/Linux/WSL2。
+📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 统一拥有路由、CLI 用法、运行要求、送达证据与信任边界；[peer-message/references/](./peer-message/references/) 拥有协议与当前产品细节。
 
 ---
 
@@ -3910,7 +3895,6 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **macOS + Xcode、XcodeGen**（用于 developing-ios-apps）
 - **Jina.ai API 密钥**（用于 twitter-reader）：https://jina.ai/ 提供免费套餐
 - **Codex CLI**（可选，用于 product-analysis 多模型并行模式）
-- **`codex queue` + Python 3.10+**（用于 peer-message 的 Codex 目标；Claude UDS fallback 需要 macOS/Linux/WSL2）
 - **Mole**（可选，用于 macos-cleaner 可视化清理）：从 https://github.com/tw93/Mole 下载
 - **uv + openpyxl**（用于 excel-automation）：`uv run --with openpyxl ...`
 - **Bigdata.com API 密钥**（用于 `daymade-financial:bigdata-skill`）：从 [https://www.bigdata.com/](https://www.bigdata.com/) 获取 `bd_v2_` 密钥
