@@ -18,7 +18,7 @@ description: >-
 |---|---|
 | 当前 Claude 能使用官方 peer tools | 先用官方发现与发送；由宿主适配地址和版本 |
 | Claude 官方工具不可用，但目标已有本地 inbox | 用 `scripts/peer.py` 的 Claude route |
-| 目标是 Codex thread | 用 `scripts/peer.py` 的 Codex route；脚本只读本地 stores，不直接写 SQLite |
+| 目标是 Codex thread | 用 `scripts/peer.py` 的 Codex route |
 | 多目标协调 | 只用显式 broadcast；禁止从单发请求推断全机广播 |
 
 当前官方工具、平台与 inbound 行为按 `references/official-feature.md` 判断。地址、发现、信封、broadcast、receipt 与 exit 语义按 `references/protocol-and-discovery.md` 判断。

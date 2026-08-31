@@ -118,10 +118,11 @@ queue 项可能很快被消费，所以只查 queue 会产生假阴性；必须�
 ### Receipt 与退出语义
 
 - `transport_status=accepted`：底层 transport 接受了消息；同时读取 `provenance_boundary`。
+- `delivery_status=not_checked`：调用者没有请求等待验证；transport 已接受，但脚本没有检查接收侧 evidence。
 - `delivery_status=verified_enqueued` / `verified_queued` / `verified_in_thread_history`：接收侧 evidence 已命中。
 - `delivery_status=accepted_unverified`：transport 接受，但等待窗口内没有读回接收侧 evidence；它不是失败，也不是“对方已收到”。
 
-退出码由脚本绑定：0 表示请求完成且所要求的验证命中；2 表示参数或 broadcast 确认错误；3 表示目标不存在、歧义或 Claude 无 inbox；4 表示 transport 失败；5 表示 broadcast 部分失败；10 表示 transport 接受但等待窗口内未验证。
+退出码由脚本绑定：0 表示请求完成——请求了验证时已命中，未请求时只表示 transport 接受且没有检查 evidence；2 表示参数或 broadcast 确认错误；3 表示目标不存在、歧义或 Claude 无 inbox；4 表示 transport 失败；5 表示 broadcast 部分失败；10 表示 transport 接受但等待窗口内未验证。
 
 ## 5. Broadcast 语义
 
