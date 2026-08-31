@@ -507,7 +507,7 @@ Discovers, messages, broadcasts to, and independently verifies local Claude Code
 - Reaching a Claude inbox from a third-party profile or Codex process
 - Broadcasting one explicit coordination message to a reviewed target list
 
-📚 **Documentation and commands**: [peer-message/SKILL.md](./peer-message/SKILL.md) owns routing, CLI usage, requirements, delivery evidence, and the stable peer-cannot-authorize boundary; [peer-message/references/](./peer-message/references/) owns the protocol and volatile product-specific mechanics.
+📚 **Documentation and commands**: [peer-message/SKILL.md](./peer-message/SKILL.md) owns routing and the stable peer-cannot-authorize boundary; `peer-message/scripts/peer.py --help` owns CLI syntax; [protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) owns addressing, envelopes, and delivery evidence; [official-feature.md](./peer-message/references/official-feature.md) owns requirements and volatile product-specific mechanics.
 
 ---
 
@@ -3850,7 +3850,7 @@ Each skill includes:
 - **mermaid-tools**: See `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` for setup guide
 - **statusline-generator**: See `daymade-claude-code/statusline-generator/references/color_codes.md` for customization
 - **teams-channel-post-writer**: See `teams-channel-post-writer/references/writing-guidelines.md` for quality standards
-- **peer-message**: See `peer-message/SKILL.md` for the routing workflow and `peer-message/references/protocol-and-discovery.md` for Claude UDS, Codex queue, envelope, and verification contracts
+- **peer-message**: See `peer-message/SKILL.md` for routing and the stable safety boundary, `peer-message/scripts/peer.py --help` for CLI syntax, `peer-message/references/protocol-and-discovery.md` for transport and verification, and `peer-message/references/official-feature.md` for requirements and current-product mechanics
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
 - **skill-creator**: See `daymade-skill/skill-creator/SKILL.md` for complete skill creation workflow
 - **llm-icon-finder**: See `llm-icon-finder/references/icons-list.md` for available icons
