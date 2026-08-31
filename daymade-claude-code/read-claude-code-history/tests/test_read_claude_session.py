@@ -360,6 +360,12 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
             workspace_b = root / "project-b"
             workspace_a.mkdir()
             workspace_b.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=workspace_b, check=True)
+            subprocess.run(
+                ["git", "checkout", "-q", "-b", "branch-b"],
+                cwd=workspace_b,
+                check=True,
+            )
             active_home = root / "active-home"
             projects_dir = active_home / "projects"
             project_a_dir = projects_dir / str(workspace_a.resolve()).replace("/", "-")
@@ -409,6 +415,7 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn(f"**ID**: `{target_id}`", result.stdout)
+            self.assertIn("**Current branch**: `branch-b`", result.stdout)
             self.assertIn("target objective", result.stdout)
             self.assertNotIn("unrelated objective", result.stdout)
 
