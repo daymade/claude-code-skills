@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **macos-cleaner** (daymade-macos v1.0.0 → v1.1.0): add a targeted Chromium code-sign-clone branch and current-user-scoped analyzer that separates active, inactive, and unknown children, binds approved batches to a candidate SHA, preserves explicit exclusions across activity races, and supports a final read-only recheck while the exact-path deletion prompt waits. Rank nominal APFS path accounting separately from expected physical release, require df readback for actual reclaimed space, and stop the legacy deletion helper from silently shrinking a changed batch, labeling measured totals as physically “freed,” or continuing after the first failure.
+- **tibo-reset-codex** v1.2.1 → v1.2.2: fold in the 2026-08-31 live run.
+  The Radar timeline command now prints each event's `url` inline, removing
+  the second lookup before reading the original post; the
+  celebration-as-reset rule gains its full next-day fulfillment chain
+  (8-29 "moved to tomorrow" → 8-30 12:24 PT "will land at 6pm PST" →
+  19:34 PT "hit 25M active users…we have now reset usage for all paid
+  subscriptions"), and 25M joins the milestone list; landed-confirmation
+  evidence now lists both observed phrasings ("has landed" and "we have
+  now reset usage…"). Independent review caught two first-draft defects —
+  an invented "<24h" duration contradicting the measured 29h10m span, and
+  an order-inverted stitched quote — both fixed and re-verified pre-ship.
 
 ### Fixed
 - **peer-message** v1.0.0 → v1.0.1: make documentation ownership executable instead of duplicative. `SKILL.md` keeps only routing, stable prerequisites, safety, and owner pointers; `peer.py --help` owns CLI syntax; the protocol reference owns addressing, envelopes, receipt, exit, transport, and verification semantics; the official-feature reference owns volatile product interfaces and inbound mechanics. README/README.zh-CN and `CLAUDE.md` point to those owners, while the changelog and private review stop persisting derived test, session, reachability, and file totals.
