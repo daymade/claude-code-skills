@@ -63,14 +63,15 @@ import json,sys
 for e in json.load(sys.stdin)['events'][:5]:
     print(e['announced_at'], '|', e.get('type'), '|', str(e.get('summary'))[:100])
     ow = e.get('official_window')
-    if ow: print('   窗口:', ow.get('label'), '=', ow.get('start_at'), '→', ow.get('end_at'), 'UTC')"
+    if ow: print('   窗口:', ow.get('label'), '=', ow.get('start_at'), '→', ow.get('end_at'), 'UTC')
+    print('   url:', e.get('url'))"
 ```
 
 新条目在前。关键字段：`announced_at`（UTC ISO）、`summary`（可能截断）、`url`（原帖）、
 `official_window`、`reset_verification_status`。`type` 是内部小写值：`reset` = 广域
 重置公告、`credits` = banked/额度包、`boost`/`promo` = 消耗规则类。
 
-拿到 `url` 后优先读原帖。X 帖正文的制胜通道是 **fxtwitter 公开镜像 API**（2026-08-30 实测：
+`url` 已在上面命令的输出里（2026-08-31 起直接打印，免去二次查询），拿到后优先读原帖。X 帖正文的制胜通道是 **fxtwitter 公开镜像 API**（2026-08-30 实测：
 免登录、直连即可、返回完整 JSON；**完整正文在 `tweet.text` 字段——不是 `full_text`**，该键
 不存在、照抄会 KeyError；note_tweet 长文全文也给，8-29 官宣长文实测 2324 字符完整拿到、以
 自然结尾收束）：
@@ -187,12 +188,15 @@ TZ=America/Los_Angeles date "+%F %T %Z(%z)"
   8-23 那条预告打了「Reset confirmed」——预告未落地也标 confirmed；Radar 历史上也有）。判「已到账」
   只看落地后的实际信号，不看标签：API 的 `reset_verification_status` 只有 pending/rejected/null
   （2026-08-23 全量 51 条实测：落地两天的「has landed」条目仍是 pending）——**结构上不提供
-  「已到账」正向信号**，别去等一个永不触发的字段翻转。到账证据 = Tibo 后续「has landed」类
-  推文（会作为新 event 出现），或产品内余额实测。
+  「已到账」正向信号**，别去等一个永不触发的字段翻转。到账证据 = Tibo 后续确认推
+  （会作为新 event 出现；实测两种措辞：「has landed」类，以及 2026-08-31 的「we have
+  now reset usage for all paid subscriptions…」），或产品内余额实测。
 - **「celebration」在他的语义里 = 重置动作本身，不是发帖庆祝**（2026-08-30 实战教训：把
   「This celebration is moved to tomorrow as the button was already pressed today」读成
-  「只是庆祝帖、无重置」，被两个独立源当场证伪）。他固定把重置绑在用户里程碑庆祝上——
-  7M/8M/20M 里程碑均以 banked/reset 兑现，8M 时原话「Tomorrow might be 8M active user
+  「只是庆祝帖、无重置」，被两个独立源当场证伪；次日完整兑现——12:24 PT 发「reset will
+  land at 6pm PST」预告，19:34 PT 发「hit 25M active users…we have now reset usage
+  for all paid subscriptions」落地确认）。他固定把重置绑在用户里程碑庆祝上——
+  7M/8M/20M/25M 里程碑均以 banked/reset 兑现，8M 时原话「Tomorrow might be 8M active user
   celebration day」，逼近 9M 时发起过「要不要再重置」的投票（poll 本体
   x.com/thsottiaux/status/2077271889626706300）。所以「celebration 改期到明天」应读作**预告
   明天有一次重置**。
