@@ -166,11 +166,16 @@ scripts/prior-work-retrieval.sh --selftest
 scripts/prior-work-retrieval.sh --install
 ```
 
-The installer adds three handlers to both Claude and Codex without replacing
+The versioned wrapper is the synchronous hook-runtime SSOT. It resolves a
+direct Python interpreter and never enters a package-manager/cache lifecycle;
+keep the `uv run ... prior_work.py` commands above as explicit retrieval and
+receipt operations, not as hook launchers.
+
+The installer adds the required handlers to both Claude and Codex without replacing
 unrelated hooks:
 
 - `UserPromptSubmit` creates a prompt-scoped requirement only for an explicit
-  prior-work/reuse/history signal and injects the Skill route. Five filters keep
+  prior-work/reuse/history signal and injects the Skill route. The filters keep
   that signal from firing on things the user did not ask for:
   - **Not the user speaking.** Internal templates (`You are a/an …`,
     `# Overview`), harness envelopes (`<agent-message …>`,

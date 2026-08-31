@@ -1011,6 +1011,7 @@ class PriorWorkHookTests(unittest.TestCase):
         wrapper = SCRIPTS_DIR / "prior-work-retrieval.sh"
         source = wrapper.read_text(encoding="utf-8")
         self.assertNotIn("UV_BIN", source)
+        self.assertNotIn("command -v python3", source)
         self.assertIn('exec "$PYTHON_BIN"', source)
         completed = subprocess.run(
             [str(wrapper), "--selftest"],
@@ -1021,6 +1022,47 @@ class PriorWorkHookTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("prior-work hook selftest: OK", completed.stdout)
+
+    def test_wrapper_fails_closed_instead_of_using_path_python(self) -> None:
+        wrapper = SCRIPTS_DIR / "prior-work-retrieval.sh"
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            marker = root / "path-python-ran"
+            fake_python = fake_bin / "python3"
+            fake_python.write_text(
+                f"#!/bin/sh\ntouch '{marker}'\nexit 0\n", encoding="utf-8"
+            )
+            fake_python.chmod(0o755)
+            env = {
+                **os.environ,
+                "HOME": str(root),
+                "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}",
+            }
+            env.pop("PRIOR_WORK_PYTHON_BIN", None)
+            completed = subprocess.run(
+                [str(wrapper), "--selftest"],
+                text=True,
+                capture_output=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn("direct Python runtime missing", completed.stderr)
+            self.assertFalse(marker.exists())
+
+    def test_wrapper_rejects_relative_python_override(self) -> None:
+        wrapper = SCRIPTS_DIR / "prior-work-retrieval.sh"
+        completed = subprocess.run(
+            [str(wrapper), "--selftest"],
+            text=True,
+            capture_output=True,
+            check=False,
+            env={**os.environ, "PRIOR_WORK_PYTHON_BIN": "python3"},
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("must be an absolute path", completed.stderr)
 
 
 if __name__ == "__main__":
