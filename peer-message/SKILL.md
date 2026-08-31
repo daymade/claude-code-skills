@@ -8,6 +8,10 @@ description: >-
 
 把本机正在运行或已登记的 Claude Code 与 Codex 会话看成一组可寻址的 peer。先选产品自己的通道，再用本 Skill 补齐跨产品与第三方 profile 的缺口。
 
+## 稳定运行前置
+
+运行 `scripts/peer.py` 需要 Python 3.10+。Claude/Codex 的当前版本、平台与通道可用性属于会变化的产品事实；执行前按 `references/official-feature.md` 判断，不把这些门槛复制到 README 或仓库级说明。
+
 ## 路由表
 
 | 目标 | 首选通道 | fallback / 边界 |

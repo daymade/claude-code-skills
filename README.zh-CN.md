@@ -525,7 +525,7 @@ CC-Switch 支持以下中国 AI 服务提供商：
 - 从第三方 profile 或 Codex 进程访问 Claude inbox
 - 向经过确认的目标清单广播同一条协调消息
 
-📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 拥有路由与“peer 不得代替用户授权”的稳定边界；`peer-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./peer-message/references/official-feature.md) 拥有运行要求与会随产品变化的具体机制。
+📚 **文档与命令**：[peer-message/SKILL.md](./peer-message/SKILL.md) 拥有路由、稳定运行前置与“peer 不得代替用户授权”的边界；`peer-message/scripts/peer.py --help` 拥有 CLI 语法；[protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) 拥有寻址、信封与送达证据；[official-feature.md](./peer-message/references/official-feature.md) 拥有会随产品变化的运行要求与具体机制。
 
 ---
 
@@ -3825,7 +3825,7 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 - **mermaid-tools**：参见 `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` 了解设置指南
 - **statusline-generator**：参见 `daymade-claude-code/statusline-generator/references/color_codes.md` 了解自定义
 - **teams-channel-post-writer**：参见 `teams-channel-post-writer/references/writing-guidelines.md` 了解质量标准
-- **peer-message**：参见 `peer-message/SKILL.md` 了解路由与稳定安全边界，运行 `peer-message/scripts/peer.py --help` 查看 CLI 语法，参见 `peer-message/references/protocol-and-discovery.md` 了解传输与验证，参见 `peer-message/references/official-feature.md` 了解运行要求与当前产品机制
+- **peer-message**：参见 `peer-message/SKILL.md` 了解路由、稳定运行前置与安全边界；运行 `peer-message/scripts/peer.py --help` 查看 CLI 语法；参见 `peer-message/references/protocol-and-discovery.md` 了解传输与验证；参见 `peer-message/references/official-feature.md` 了解会变化的产品要求与机制
 - **repomix-unmixer**：参见 `repomix-unmixer/references/repomix-format.md` 了解格式规范
 - **skill-creator**：参见 `daymade-skill/skill-creator/SKILL.md` 了解完整的技能创建工作流
 - **llm-icon-finder**：参见 `llm-icon-finder/references/icons-list.md` 了解可用图标
@@ -3879,7 +3879,6 @@ rollout 身份、fork／compaction lineage 与 Codex-only 搜索使用
 
 - **Claude Code** 2.0.13 或更高版本
 - **支持 `doctor --json` 与 `debug models` 的 Codex CLI + uv/Python 3.11+**（用于 codex-1m-context-window-setup）
-- **Python 3.10+**（市场整体基线；个别 skill 可能支持更旧版本）
 - **gh CLI**（用于 github-ops 和 github-review-pr）
 - **支持 `merge-tree --write-tree` 的 git + jq**（用于 github-review-pr）
 - **markitdown**（用于 doc-to-markdown）
