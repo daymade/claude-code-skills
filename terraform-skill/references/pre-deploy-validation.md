@@ -67,6 +67,9 @@ GATEWAY_SERVICE=claude4dev-gateway
 : "${CANDIDATE_ROOT:?candidate root is required}"
 : "${EXPECTED_CADDY_IMAGE_DIGEST:?reviewed Caddy image digest is required}"
 GATEWAY_ENV_FILE="$CANDIDATE_ROOT/gateway.effective.env"
+REQUIRED_ENV_FILE="$CANDIDATE_ROOT/gateway/required-env.keys"
+[ -s "$REQUIRED_ENV_FILE" ] \
+  || { echo "FATAL: required-key manifest is missing or empty" >&2; exit 1; }
 
 RENDERED_GATEWAY_IMAGE="$(jq -er --arg service "$GATEWAY_SERVICE" '
   .services[$service].image
@@ -91,6 +94,40 @@ jq -e --arg service "$GATEWAY_SERVICE" '
     )
 ' "$CANDIDATE_ROOT/compose.rendered.json" >/dev/null \
   || { echo "FATAL: rendered gateway environment contains an invalid key, value, or unresolved placeholder" >&2; exit 1; }
+
+required_count=0
+seen_required=' '
+while IFS= read -r required_key || [ -n "$required_key" ]; do
+  case "$required_key" in
+    ''|'#'*) continue ;;
+    [A-Za-z_]*)
+      case "$required_key" in
+        *[!A-Za-z0-9_]*) echo "FATAL: invalid required key: $required_key" >&2; exit 1 ;;
+      esac
+      ;;
+    *) echo "FATAL: invalid required key: $required_key" >&2; exit 1 ;;
+  esac
+  case "$seen_required" in
+    *" $required_key "*) echo "FATAL: duplicate required key: $required_key" >&2; exit 1 ;;
+  esac
+  seen_required="$seen_required$required_key "
+  required_count=$((required_count + 1))
+
+  if ! required_value="$(jq -er --arg service "$GATEWAY_SERVICE" --arg key "$required_key" '
+    .services[$service].environment[$key] | select(type == "string")
+  ' "$CANDIDATE_ROOT/compose.rendered.json")"; then
+    echo "FATAL: required gateway environment key is missing: $required_key" >&2
+    exit 1
+  fi
+  [ -n "$required_value" ] \
+    || { echo "FATAL: required gateway environment key is empty: $required_key" >&2; exit 1; }
+  if printf '%s\n' "$required_value" | grep -Eq '\$\{[A-Za-z_][A-Za-z0-9_]*\}'; then
+    echo "FATAL: required gateway environment key is unresolved: $required_key" >&2
+    exit 1
+  fi
+done < "$REQUIRED_ENV_FILE"
+[ "$required_count" -gt 0 ] \
+  || { echo "FATAL: required-key manifest contains no keys" >&2; exit 1; }
 
 jq -r --arg service "$GATEWAY_SERVICE" '
   .services[$service].environment

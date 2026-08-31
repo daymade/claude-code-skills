@@ -32,6 +32,8 @@ grep -Fq '(.value | type == "string")' "$predeploy"
 grep -Fq '.services[$service].image' "$predeploy"
 grep -Fq '[ "$RENDERED_GATEWAY_IMAGE" = "$EXPECTED_CADDY_IMAGE_DIGEST" ]' "$predeploy"
 grep -Fq 'test("\\$\\{[A-Za-z_][A-Za-z0-9_]*\\}")' "$predeploy"
+grep -Fq 'REQUIRED_ENV_FILE="$CANDIDATE_ROOT/gateway/required-env.keys"' "$predeploy"
+grep -Fq '[ -n "$required_value" ]' "$predeploy"
 grep -Fq 'placeholder that references a different missing key' "$predeploy"
 grep -Fq 'unresolved self- or foreign-key placeholder' "$release_contract"
 
@@ -59,13 +61,15 @@ image_b="ghcr.io/example/gateway@sha256:$(printf 'b%.0s' {1..64})"
 write_fixture() {
   local root=$1 value=$2 image=$3
   mkdir -p "$root/gateway"
+  printf '%s\n' MB_SITE_ADDRESS MB_COOKIE_TOKEN > "$root/gateway/required-env.keys"
   jq -n --arg value "$value" --arg image "$image" '{
     services: {
       "claude4dev-gateway": {
         image: $image,
         environment: {
           MB_SITE_ADDRESS: "example.invalid",
-          MB_COOKIE_TOKEN: $value
+          MB_COOKIE_TOKEN: $value,
+          OPTIONAL_NOTE: ""
         }
       }
     }
@@ -99,5 +103,30 @@ if run_documented_validator "$tmp/foreign-placeholder" "$image_a" "$tmp/foreign-
   exit 1
 fi
 test ! -e "$tmp/foreign-placeholder.docker"
+
+write_fixture "$tmp/required-empty" '' "$image_a"
+if run_documented_validator "$tmp/required-empty" "$image_a" "$tmp/required-empty.docker" 2>/dev/null; then
+  echo "ERROR: documented validator accepted an explicit-empty required value" >&2
+  exit 1
+fi
+test ! -e "$tmp/required-empty.docker"
+
+write_fixture "$tmp/required-missing" token-value "$image_a"
+jq 'del(.services["claude4dev-gateway"].environment.MB_COOKIE_TOKEN)' \
+  "$tmp/required-missing/compose.rendered.json" > "$tmp/required-missing/compose.rendered.next.json"
+mv "$tmp/required-missing/compose.rendered.next.json" "$tmp/required-missing/compose.rendered.json"
+if run_documented_validator "$tmp/required-missing" "$image_a" "$tmp/required-missing.docker" 2>/dev/null; then
+  echo "ERROR: documented validator accepted a missing required value" >&2
+  exit 1
+fi
+test ! -e "$tmp/required-missing.docker"
+
+write_fixture "$tmp/required-duplicate" token-value "$image_a"
+printf '%s\n' MB_COOKIE_TOKEN >> "$tmp/required-duplicate/gateway/required-env.keys"
+if run_documented_validator "$tmp/required-duplicate" "$image_a" "$tmp/required-duplicate.docker" 2>/dev/null; then
+  echo "ERROR: documented validator accepted a duplicate required key" >&2
+  exit 1
+fi
+test ! -e "$tmp/required-duplicate.docker"
 
 echo "Compose precedence and headless release documentation are internally consistent."
