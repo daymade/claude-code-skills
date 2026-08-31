@@ -492,6 +492,11 @@ Agent rules when an external PR appears:
 Always consult Anthropic's skill authoring best practices before creating or updating skills:
 https://docs.claude.com/en/docs/agents-and-tools/agent-skills/best-practices.md
 
+Infrastructure/SRE operating contracts stay in their owning Skills rather than this repository guide:
+`terraform-skill` owns generic Terraform release safety and environment-parity rules; an application's
+project-level health-check Skill owns that application's concrete audit facets. Keep those two layers
+aligned without copying project hostnames, variable lists, or rollout commands into this file.
+
 ## Plugin and Skill Architecture
 
 For full architecture documentation (core concepts, installation flow, data flow, common misconceptions, best practices), see [references/plugin-architecture.md](./references/plugin-architecture.md).

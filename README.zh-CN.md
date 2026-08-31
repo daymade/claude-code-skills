@@ -2179,7 +2179,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 
 ### **terraform-skill** - Terraform 实操陷阱
 
-来自真实 Terraform 部署的失败模式——每一条都对应一次真实事故。组织为*确切报错 → 根本原因 → 复制粘贴修复*。覆盖 provisioner 时序竞争、SSH 连接冲突、多环境隔离、DNS 记录重复、数据卷权限、数据库 bootstrap 缺口、快照跨环境污染、Cloudflare 凭据格式错误、Caddyfile/compose 里的硬编码域名，以及 init-data-only-on-first-boot 陷阱。
+设计并诊断安全的 Terraform 发布，同时保留来自真实事故的 provisioner 陷阱。它要求 staging 和 production 使用同一份必填配置 schema，在修改 live 文件或重启前，用最终 Compose 环境与不可变运行镜像验证精确候选产物，并把 saved plan、staging 实测凭据、远端源码 provenance、明确生产授权和独立读回串成一条链。
 
 **使用场景：**
 - 写 `null_resource` provisioner 或 `remote-exec` SSH 到新实例
@@ -2188,11 +2188,14 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 - 遇到 remote-exec 的 "docker: not found"、local-exec 的 rsync connection drops、或 TLS 证书错误
 - 重跑时遇到 drift 或 provisioner 失败
 - 配置 Caddy/网关资源和 Cloudflare 凭据
+- 审查一个可能顺带改写共享网关的 saved plan 或宽部署资源
+- 修复 staging/production 配置、receipt、provenance 或生产授权不一致
 
 **主要功能：**
-- 每个陷阱都有可复制粘贴的 `.hcl` 片段，不是抽象建议
-- 覆盖 cloud-init、Docker、file provisioner、DNS、TLS、快照、跨环境污染
-- 每个模式都标了确切症状，方便 grep 快速定位
+- 所有环境共用一份必填键契约：值可以不同，必填性不能不同
+- 每个正常/恢复写入路径在 live mutation 前都做 exact-bundle 预验证
+- saved plan、staging receipt、远端 main provenance、生产授权和 live readback 闭环
+- 覆盖 cloud-init、Docker、DNS、TLS、快照与 fresh host 的已纠正模式
 
 **示例用法：**
 ```bash
@@ -2200,6 +2203,7 @@ uv run douban-skill/scripts/douban-rss-sync.py <douban-user-id>
 "我的 null_resource provisioner apply 后报 'docker: not found'"
 "我的 rsync local-exec 报 'connection unexpectedly closed'"
 "帮我写一个多环境 Terraform setup，避免快照跨环境污染"
+"staging 有这个 Caddy 变量，但 production 留空了，怎么安全验证两边？"
 ```
 
 **🎬 实时演示**

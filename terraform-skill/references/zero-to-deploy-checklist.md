@@ -20,11 +20,11 @@ These run at OS boot, before Terraform provisioners:
 Terraform provisioners execute in declaration order within a resource, but resources execute in parallel unless `depends_on` is set.
 
 ```
-lobehub_deploy ──────────────────→ channel_sync (depends_on lobehub)
-                                 → casdoor_sync (depends_on lobehub)
-                                 → minio_sync (depends_on lobehub)
+gateway_backend_deploy ──────────→ channel_sync (depends_on gateway backend)
+                                 → identity_sync (depends_on gateway backend)
+                                 → object_store_sync (depends_on gateway backend)
 
-claude4dev_deploy (depends_on lobehub_deploy)
+app_deploy (depends_on gateway_backend_deploy)
   ├─ wait for cloud-init
   ├─ upload source (tarball via file provisioner)
   ├─ upload .env (staging variant)
@@ -82,16 +82,24 @@ done
 
 ### Proxy mode
 
-Docker Compose reads build args from `.env` via `${VAR:-default}`. Command-line env vars do NOT override `.env` values for compose interpolation.
+Docker Compose interpolation gives the invoking shell higher precedence than `--env-file` or the
+project `.env`. An explicit one-command assignment therefore overrides the reviewed env file; an old
+ambient export can do the same accidentally.
 
 ```bash
-# WRONG: compose still reads DOCKER_WITH_PROXY_MODE from .env
+# Explicit one-off override: this value wins over .env for interpolation.
 DOCKER_WITH_PROXY_MODE=disabled docker compose build myapp
 
-# RIGHT: modify .env so compose reads the correct value
-grep -q DOCKER_WITH_PROXY_MODE .env || echo 'DOCKER_WITH_PROXY_MODE=disabled' >> .env
-docker compose build myapp
+# Audited release: make the selected env file authoritative and inspect the effective inputs first.
+env -u DOCKER_WITH_PROXY_MODE \
+  docker compose --env-file .env config --environment
+env -u DOCKER_WITH_PROXY_MODE \
+  docker compose --env-file .env build myapp
 ```
+
+Do not edit a tracked or shared `.env` merely to perform a one-off build. For a release, freeze the
+intended environment artifact, remove ambient overrides for its keys, and review the rendered Compose
+model before the build or deployment mutates live state.
 
 ### Memory management
 
@@ -126,7 +134,9 @@ USER myuser  # runs as uid 1001
 
 ## Environment-specific .env files
 
-Production `.env` contains production URLs. Staging needs its own `.env` with:
+Production and staging need different values under one schema. A key required by the runtime must be
+required, present exactly once, and non-empty in both. Do not make production rely on an implicit
+fallback merely because staging has an explicit value.
 
 | Variable | Production | Staging |
 |---|---|---|
@@ -135,7 +145,8 @@ Production `.env` contains production URLs. Staging needs its own `.env` with:
 | `NEW_API_URL` | `http://api-container:3000` | Same (internal Docker network) |
 | `DOCKER_WITH_PROXY_MODE` | `required` (if behind proxy) | `disabled` (direct internet) |
 
-**Pattern**: Create `.env.staging` alongside `.env`. In Terraform:
+**Pattern**: Create environment-specific source files from the same schema. Freeze the selected file
+into the release artifact or saved plan before apply:
 ```hcl
 locals {
   env_src = "${local.repo}/.env.staging"  # staging-specific
@@ -147,10 +158,15 @@ provisioner "file" {
 }
 ```
 
-Rsync must exclude `.env` files (otherwise production .env overwrites staging .env):
+Generic source sync must exclude repository env templates so it cannot overwrite the explicitly
+selected runtime environment:
 ```
 --exclude=.env --exclude='.env.*'
 ```
+
+Before promoting it, render the candidate's complete Compose service environment and validate the
+candidate configuration with the exact immutable image that will run it. Never select six remembered
+keys from a seven-key service; derive the set from the one required-key manifest.
 
 ## Verification template
 
