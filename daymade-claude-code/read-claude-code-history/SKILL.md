@@ -79,6 +79,9 @@ internal time range, project, title, and archive/subagent markers. Use
 ### Exact Session evidence
 
 ```text
+<skill-dir>/scripts/read_claude_session.py --session <SESSION_ID>
+
+# Add this only when the caller intentionally wants to restrict lookup to one workspace.
 <skill-dir>/scripts/read_claude_session.py --session <SESSION_ID> --project <workspace>
 ```
 
@@ -90,7 +93,9 @@ including records before compaction; `--full` only removes output character
 clipping. It checks active and registered-archive copies, accepts only identical
 or strict append-only supersets, and fails visibly on divergent copies, multiple
 Session identities, a missing record-level Session identity, malformed JSONL, or
-unreadable bytes. A filename alone never proves Session identity.
+unreadable bytes. With an exact Session ID and no `--project`, it searches every
+project across the discovered active homes and registered archives; an explicit
+`--project` remains a strict scope. A filename alone never proves Session identity.
 
 ### Full-event keyword search
 

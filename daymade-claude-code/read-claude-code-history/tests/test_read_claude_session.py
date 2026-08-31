@@ -353,6 +353,129 @@ class ClaudeSessionEvidenceTests(unittest.TestCase):
             self.assertIn("archive:test-archive", labels)
             self.assertEqual(copies, [selected])
 
+    def test_cli_exact_session_without_project_searches_all_projects(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            workspace_a = root / "project-a"
+            workspace_b = root / "project-b"
+            workspace_a.mkdir()
+            workspace_b.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=workspace_b, check=True)
+            subprocess.run(
+                ["git", "checkout", "-q", "-b", "branch-b"],
+                cwd=workspace_b,
+                check=True,
+            )
+            active_home = root / "active-home"
+            projects_dir = active_home / "projects"
+            project_a_dir = projects_dir / str(workspace_a.resolve()).replace("/", "-")
+            project_b_dir = projects_dir / str(workspace_b.resolve()).replace("/", "-")
+            project_a_dir.mkdir(parents=True)
+            project_b_dir.mkdir(parents=True)
+
+            unrelated_id = "session-in-project-a"
+            target_id = "session-in-project-b"
+            (project_a_dir / f"{unrelated_id}.jsonl").write_text(
+                json.dumps(
+                    {
+                        "type": "user",
+                        "sessionId": unrelated_id,
+                        "cwd": str(workspace_a),
+                        "message": {"role": "user", "content": "unrelated objective"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (project_b_dir / f"{target_id}.jsonl").write_text(
+                json.dumps(
+                    {
+                        "type": "user",
+                        "sessionId": target_id,
+                        "cwd": str(workspace_b),
+                        "message": {"role": "user", "content": "target objective"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            process_env = os.environ.copy()
+            process_env["HOME"] = str(root / "home")
+            process_env["CLAUDE_CONFIG_DIR"] = str(active_home)
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "--session", target_id, "--full"],
+                cwd=workspace_a,
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                env=process_env,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(f"**ID**: `{target_id}`", result.stdout)
+            self.assertIn("**Current branch**: `branch-b`", result.stdout)
+            self.assertIn("target objective", result.stdout)
+            self.assertNotIn("unrelated objective", result.stdout)
+
+    def test_cli_explicit_wrong_project_remains_scoped(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            workspace_a = root / "project-a"
+            workspace_b = root / "project-b"
+            workspace_a.mkdir()
+            workspace_b.mkdir()
+            active_home = root / "active-home"
+            projects_dir = active_home / "projects"
+            project_a_dir = projects_dir / str(workspace_a.resolve()).replace("/", "-")
+            project_b_dir = projects_dir / str(workspace_b.resolve()).replace("/", "-")
+            project_a_dir.mkdir(parents=True)
+            project_b_dir.mkdir(parents=True)
+
+            unrelated_id = "session-in-project-a"
+            target_id = "session-in-project-b"
+            for project_dir, workspace, session_id in (
+                (project_a_dir, workspace_a, unrelated_id),
+                (project_b_dir, workspace_b, target_id),
+            ):
+                (project_dir / f"{session_id}.jsonl").write_text(
+                    json.dumps(
+                        {
+                            "type": "user",
+                            "sessionId": session_id,
+                            "cwd": str(workspace),
+                            "message": {"role": "user", "content": session_id},
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+
+            process_env = os.environ.copy()
+            process_env["HOME"] = str(root / "home")
+            process_env["CLAUDE_CONFIG_DIR"] = str(active_home)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--project",
+                    str(workspace_a),
+                    "--session",
+                    target_id,
+                ],
+                cwd=workspace_a,
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                env=process_env,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertIn(f"session file not found for {target_id}", result.stderr)
+
     def test_briefing_keeps_user_and_reply_together(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             project_dir = Path(temp_dir)
