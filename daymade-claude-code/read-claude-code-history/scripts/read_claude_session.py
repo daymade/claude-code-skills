@@ -48,6 +48,7 @@ PROJECTS_DIR = CLAUDE_DIR / "projects"  # default home only; discovery below spa
 # project whose history lives under a per-model profile home is not missed.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _core.homes import discover_claude_homes  # noqa: E402
+from _core.claude import scan_claude_session  # noqa: E402
 from _core.sources import (  # noqa: E402
     HistorySourceConfigError,
     discover_claude_sources,
@@ -154,6 +155,68 @@ def discover_session_refs(
     sources, warnings = discover_claude_sources(manifest_path=manifest_path)
     analyzer = SessionAnalyzer(sources=sources, warnings=warnings)
     return analyzer.find_project_sessions(project_path), warnings
+
+
+def discover_exact_session_refs(
+    session_id: str, manifest_path: Optional[str] = None
+) -> tuple[List[Dict], List[str]]:
+    """Find exact Session candidates across every project and source.
+
+    An exact Session ID is evidence identity, not a project guess. Reuse the
+    analyzer's candidate-first byte scan so this does not fully parse every
+    Session in every project. Candidate files still pass the exact reader's
+    record-identity and copy-divergence gates before any briefing is emitted.
+    """
+    sources, warnings = discover_claude_sources(manifest_path=manifest_path)
+    analyzer = SessionAnalyzer(sources=sources, warnings=warnings)
+
+    # Claude's canonical file name is <Session-ID>.jsonl. Check that exact
+    # shape across every project first: it is bounded by the number of project
+    # directories and avoids scanning a multi-gigabyte history corpus for the
+    # UUID. Filename identity only selects candidates; parse-time record
+    # identity remains authoritative below.
+    copies = []
+    matched_sources = []
+    for source in sources:
+        projects_dir = source.home / "projects"
+        if not projects_dir.is_dir():
+            continue
+        for project_dir in projects_dir.iterdir():
+            if not project_dir.is_dir():
+                continue
+            candidate = project_dir / f"{session_id}.jsonl"
+            if not candidate.is_file():
+                continue
+            copies.append({"path": candidate, "source": source})
+            if source not in matched_sources:
+                matched_sources.append(source)
+
+    if copies:
+        return (
+            [
+                {
+                    "session_id": session_id,
+                    "path": Path(copies[0]["path"]),
+                    "copies": copies,
+                    "sources": matched_sources,
+                    "homes": [source.home for source in matched_sources],
+                }
+            ],
+            warnings,
+        )
+
+    # A registered archive may preserve the right record identity under a
+    # renamed file. Fall back to the analyzer's byte-level candidate scan only
+    # when the canonical filename was absent everywhere.
+    refs, _total, _projects, _prefiltered = analyzer.find_search_sessions(
+        project_path=None,
+        all_projects=True,
+        keywords=[session_id],
+        case_sensitive=True,
+        use_prefilter=True,
+        exclude_sessions=set(),
+    )
+    return refs, warnings
 
 
 def _resolved_path_key(path: Path) -> str:
@@ -993,8 +1056,11 @@ def main():
     )
     parser.add_argument(
         "--project", "-p",
-        default=os.getcwd(),
-        help="Project path (default: current directory)",
+        default=None,
+        help=(
+            "Project path (default: current directory; with an exact --session, "
+            "omitting this flag searches all projects)"
+        ),
     )
     parser.add_argument(
         "--session", "-s",
@@ -1037,11 +1103,19 @@ def main():
     )
     args = parser.parse_args()
 
-    project_path = os.path.abspath(args.project)
+    project_path = os.path.abspath(args.project or os.getcwd())
+    global_exact_session = bool(
+        args.session and args.project is None and not args.query and not args.list
+    )
     try:
-        session_refs, source_warnings = discover_session_refs(
-            project_path, args.history_sources
-        )
+        if global_exact_session:
+            session_refs, source_warnings = discover_exact_session_refs(
+                args.session, args.history_sources
+            )
+        else:
+            session_refs, source_warnings = discover_session_refs(
+                project_path, args.history_sources
+            )
     except HistorySourceConfigError as error:
         print(f"History source configuration error: {error}", file=sys.stderr)
         sys.exit(2)
@@ -1054,7 +1128,13 @@ def main():
         ]
 
     if not session_refs:
-        print(f"Error: no Claude session data found for {project_path}", file=sys.stderr)
+        if global_exact_session:
+            print(f"Error: session file not found for {args.session}", file=sys.stderr)
+        else:
+            print(
+                f"Error: no Claude session data found for {project_path}",
+                file=sys.stderr,
+            )
         print(
             "Looked across active Claude homes and every registered archive.",
             file=sys.stderr,
@@ -1185,6 +1265,13 @@ def main():
     parsed["selected_session_id"] = session_id
     parsed["source_labels"] = source_labels
     parsed["copy_paths"] = copy_paths
+    if global_exact_session:
+        # The caller may be standing in an unrelated repository. Bind the
+        # workspace-state readback to the selected Session's own recorded cwd;
+        # an explicit --project remains the caller's intentional scope.
+        selected_cwd = scan_claude_session(session_file).cwd
+        if selected_cwd:
+            project_path = os.path.abspath(selected_cwd)
     briefing = build_briefing(
         session_entry,
         parsed,
