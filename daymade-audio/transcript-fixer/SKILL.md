@@ -212,6 +212,7 @@ Safety rules:
 - Resolve one occurrence at a time; sweep sibling entity occurrences only after the whole batch is resolved.
 - A `pending` row is a blocking state for a high-quality/final transcript, not proof that the issue was handled. Queue detection without a human/evidence verdict leaves the artifact incomplete.
 - Read `resolved_text` after an override; the listing can still display the rejected suggestion.
+- A single-line `asr_note` ledger is masked on the accept path too, so resolving an item never edits the provenance line that cites the old form. If you applied the fix by hand before resolving, the item now fails closed with `ReAnchorNeeded` (nothing is written) — resolve with `--decision kept_original`, or `--reanchor-review <id>` first if the anchor merely drifted.
 - If the file moved or drifted, run `--reanchor-review`. Add `--reanchor-root` or `--reanchor-to` when requested. Do not hand-edit around a pending item.
 - Promote every `decision_note` by meaning; storing a note does not change the dictionary, roster, context, or false-positive state.
 

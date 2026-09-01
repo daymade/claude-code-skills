@@ -33,6 +33,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+# Ledger frontmatter (`asr_note`) masking, shared with Stage 1 and the AI
+# passes. Imported here so the ACCEPT path honours the same contract the
+# dictionary path does — see _plan_file_edit.
+from core.dictionary_processor import (
+    _mask_ledger_spans,
+    _restore_ledger_spans,
+)
+
 VALID_SOURCES = ("native_pass", "stage1_deferred", "learned_suggestion", "manual")
 VALID_KINDS = ("entity", "homophone", "wording", "unknown")
 VALID_DECISIONS = ("accepted", "overridden", "kept_original", "skipped", "reopen")
@@ -941,19 +949,39 @@ class ReviewQueue:
         self, content: str, action: dict[str, Any], item: ReviewItem
     ) -> tuple[str, str]:
         old, new = action["old"], action["new"]
-        count = content.count(old)
+        # A correction-ledger frontmatter field (`asr_note`) quotes old forms on
+        # purpose — "修正含：<旧形>→<正确形>". Stage 1 and trap-scan both mask it;
+        # so must the accept path, or resolving an item rewrites the very
+        # provenance record that documents it. dictionary_processor's own
+        # comment predicted this failure ("a phantom review item whose accept
+        # would corrupt the ledger"); only the enqueue half had been closed.
+        # (Observed 2026-09: an agent applied a name fix by hand, then resolved
+        # the matching item; the ledger citation was the last occurrence left, so
+        # "<变体>→<正名>" became "<正名>→<正名>" — a ledger contradicting itself,
+        # reported as a successful replace.)
+        masked, ledger_spans = _mask_ledger_spans(content)
+        count = masked.count(old)
         if count == 0:
             raise ReAnchorNeeded(
                 f"anchor text not found: {old[:60]!r} — the file changed since "
                 f"enqueue (or an earlier action in this pack consumed it); "
                 f"nothing was modified (repair with --reanchor-review <id> first)"
             )
-        if count == 1:
-            idx = content.find(old)
+        line_no = action.get("expect_line") or item.line_number
+        if count == 1 and not line_no:
+            # No hint to validate against; a sole occurrence is all we have.
+            idx = masked.find(old)
         else:
-            line_no = action.get("expect_line") or item.line_number
-            idx = self._locate_anchor(content, old, line_no, item.context_snippet)
-        return content[:idx] + new + content[idx + len(old):], new
+            # Validate even a UNIQUE occurrence against the anchor. Skipping
+            # that was the second half of the 2026-09-01 corruption: with the
+            # anchored line already fixed, `count == 1` matched a different
+            # line entirely and the careful ladder below never ran. "CONTENT
+            # outranks POSITION" has to hold at every count, not just >1.
+            idx = self._locate_anchor(masked, old, line_no, item.context_snippet)
+        edited = masked[:idx] + new + masked[idx + len(old):]
+        if ledger_spans:
+            edited = _restore_ledger_spans(edited, ledger_spans)
+        return edited, new
 
     @staticmethod
     def _locate_anchor(
