@@ -12,6 +12,7 @@ import argparse
 import glob
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import socket
@@ -210,6 +211,44 @@ def auto_sender() -> str:
         return f"claude:{claude_name}"
     claude_id = os.environ.get("CLAUDE_CODE_SESSION_ID")
     return f"claude:{claude_id}" if claude_id else "local-script"
+
+
+def current_address(claude_home: Path, codex_home: Path) -> str:
+    """Return an exact address for the current hosted session or fail loudly."""
+    codex_id = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
+    claude_id = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    claude_name = os.environ.get("CLAUDE_CODE_SESSION_NAME")
+    if codex_id and (claude_id or claude_name):
+        raise PeerError(
+            "both Claude and Codex session identities are present; pass an explicit "
+            "reply address instead of guessing the current host",
+            EXIT_TARGET,
+        )
+    if codex_id:
+        thread_id = resolve_codex(f"codex:{codex_id}", codex_home)
+        return f"codex:{thread_id}"
+
+    if claude_id:
+        try:
+            return f"claude:{uuid.UUID(claude_id)}"
+        except ValueError as exc:
+            raise PeerError(
+                "CLAUDE_CODE_SESSION_ID is not a UUID; pass an explicit reply address",
+                EXIT_TARGET,
+            ) from exc
+
+    if claude_name:
+        entry = resolve_claude(f"claude:{claude_name}", claude_home)
+        session_id = entry.get("sessionId")
+        if isinstance(session_id, str) and session_id:
+            return f"claude:{session_id}"
+        return f"claude:{claude_name}"
+
+    raise PeerError(
+        "current host did not expose a Claude or Codex session identity; "
+        "pass an explicit reply address",
+        EXIT_TARGET,
+    )
 
 
 def safe_attr(value: str) -> str:
@@ -574,6 +613,15 @@ def cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_whoami(args: argparse.Namespace) -> int:
+    address = current_address(args.claude_home, args.codex_home)
+    if args.json:
+        print(json.dumps({"address": address}, ensure_ascii=False, sort_keys=True))
+    else:
+        print(address)
+    return 0
+
+
 def cmd_send(args: argparse.Namespace) -> int:
     sender = args.sender or auto_sender()
     reply_to = args.reply_to or (sender if sender != "local-script" else None)
@@ -652,8 +700,18 @@ def common_message_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--message", help="inline message text")
     parser.add_argument("--from", "--from-name", dest="sender", help="sender address/name")
     parser.add_argument("--reply-to", help="address the receiver should use to reply")
-    parser.add_argument("--wait", type=float, default=0, metavar="SECONDS")
+    parser.add_argument("--wait", type=wait_seconds, default=0, metavar="SECONDS")
     parser.add_argument("--json", action="store_true")
+
+
+def wait_seconds(value: str) -> float:
+    try:
+        seconds = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("wait must be a number of seconds") from exc
+    if not math.isfinite(seconds) or seconds < 0:
+        raise argparse.ArgumentTypeError("wait must be finite and nonnegative")
+    return seconds
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -673,6 +731,12 @@ def build_parser() -> argparse.ArgumentParser:
     list_parser.add_argument("--json", action="store_true")
     list_parser.set_defaults(handler=cmd_list)
 
+    whoami_parser = subparsers.add_parser(
+        "whoami", help="print this session's exact reply address"
+    )
+    whoami_parser.add_argument("--json", action="store_true")
+    whoami_parser.set_defaults(handler=cmd_whoami)
+
     send_parser = subparsers.add_parser("send", help="send one peer message")
     send_parser.add_argument("target")
     common_message_arguments(send_parser)
@@ -687,7 +751,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser = subparsers.add_parser("verify", help="read receiver-side evidence")
     verify_parser.add_argument("target")
     verify_parser.add_argument("--message-id", required=True)
-    verify_parser.add_argument("--wait", type=float, default=0)
+    verify_parser.add_argument("--wait", type=wait_seconds, default=0)
     verify_parser.add_argument("--json", action="store_true")
     verify_parser.set_defaults(handler=cmd_verify)
     return parser

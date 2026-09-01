@@ -507,7 +507,7 @@ Discovers, messages, broadcasts to, and independently verifies local Claude Code
 - Reaching a Claude inbox from a third-party profile or Codex process
 - Broadcasting one explicit coordination message to a reviewed target list
 
-📚 **Documentation and commands**: [peer-message/SKILL.md](./peer-message/SKILL.md) owns routing, stable runtime prerequisites, and the peer-cannot-authorize boundary; `peer-message/scripts/peer.py --help` owns CLI syntax; [protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) owns addressing, envelopes, and delivery evidence; [official-feature.md](./peer-message/references/official-feature.md) owns volatile product-specific requirements and mechanics.
+📚 **Documentation and commands**: [peer-message/SKILL.md](./peer-message/SKILL.md) owns routing, stable runtime prerequisites, and the peer-cannot-authorize boundary; `peer-message/scripts/peer.py --help` owns CLI syntax; [protocol-and-discovery.md](./peer-message/references/protocol-and-discovery.md) owns addressing, envelopes, and delivery evidence; [official-feature.md](./peer-message/references/official-feature.md) owns volatile product-specific requirements and mechanics; [coordination-and-learning-loop.md](./peer-message/references/coordination-and-learning-loop.md) owns parent/worker handoff language and evidence-gated Skill improvement.
 
 ---
 
@@ -3854,7 +3854,7 @@ Each skill includes:
 - **mermaid-tools**: See `daymade-docs/mermaid-tools/references/setup_and_troubleshooting.md` for setup guide
 - **statusline-generator**: See `daymade-claude-code/statusline-generator/references/color_codes.md` for customization
 - **teams-channel-post-writer**: See `teams-channel-post-writer/references/writing-guidelines.md` for quality standards
-- **peer-message**: See `peer-message/SKILL.md` for routing, stable prerequisites, and the safety boundary; `peer-message/scripts/peer.py --help` for CLI syntax; `peer-message/references/protocol-and-discovery.md` for transport and verification; and `peer-message/references/official-feature.md` for volatile product requirements and mechanics
+- **peer-message**: See `peer-message/SKILL.md` for routing, stable prerequisites, and the safety boundary; `peer-message/scripts/peer.py --help` for CLI syntax; `peer-message/references/protocol-and-discovery.md` for transport and verification; `peer-message/references/official-feature.md` for volatile product requirements and mechanics; and `peer-message/references/coordination-and-learning-loop.md` for parent/worker handoffs and evidence-gated improvement
 - **repomix-unmixer**: See `repomix-unmixer/references/repomix-format.md` for format specifications
 - **skill-creator**: See `daymade-skill/skill-creator/SKILL.md` for complete skill creation workflow
 - **llm-icon-finder**: See `llm-icon-finder/references/icons-list.md` for available icons
