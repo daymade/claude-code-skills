@@ -612,3 +612,76 @@ class TestReanchor:
         queue.reanchor(ids[0])
         queue.resolve(ids[0], "accepted")  # must NOT bounce on stale expect_line=2
         assert "定词在这里。" in f.read_text(encoding="utf-8")
+
+
+# ==================== ledger (asr_note) protection on the accept path ====================
+
+
+class TestLedgerFrontmatterIsNotRewritten:
+    """`asr_note` cites old forms on purpose; accepting an item must not edit it.
+
+    Stage 1 (dictionary_processor._mask_ledger_spans) and trap-scan both mask
+    the ledger. The accept path did not — and dictionary_processor's own
+    comment predicted the consequence: a phantom item "whose accept would
+    corrupt the ledger". Real occurrence 2026-09-01: an agent applied a name
+    fix by hand, then resolved the matching queue item; the anchored line no
+    longer held the old form, the ledger's citation was the only occurrence
+    left, `count == 1` took the unvalidated fast path, and the provenance
+    record was rewritten into a self-contradiction (`<正名>→<正名>`).
+    """
+
+    @pytest.fixture
+    def ledger_transcript(self, tmp_path: Path) -> Path:
+        work = tmp_path / "work"
+        work.mkdir(exist_ok=True)
+        f = work / "ledger-meeting.md"
+        f.write_text(
+            "---\n"
+            "participants: [陈一, 周明轩, 李二]\n"
+            "asr_note: 2026-09-01 修正含：周明轩→邹明轩、孙立成→孙丽成\n"
+            "---\n"
+            "\n"
+            "周明轩 00:01:22\n"
+            "这个链接得从浏览器复制。\n",
+            encoding="utf-8",
+        )
+        return f
+
+    def test_ledger_citation_is_never_the_edit_target(self, queue, ledger_transcript):
+        """The anchored line is edited; the ledger's identical citation is not."""
+        added = queue.enqueue([{
+            "source": "stage1_deferred", "domain": "embodied_ai",
+            "file": str(ledger_transcript), "line": 2,
+            "original": "周明轩", "suggested": "邹明轩", "kind": "homophone",
+            "context": "participants: [陈一, 周明轩, 李二]",
+            "evidence": "roster: 邹明轩 is canonical",
+        }])["added"]
+        queue.resolve(added[0], "accepted", by="test")
+        text = ledger_transcript.read_text(encoding="utf-8")
+        assert "participants: [陈一, 邹明轩, 李二]" in text
+        assert "asr_note: 2026-09-01 修正含：周明轩→邹明轩、孙立成→孙丽成" in text
+
+    def test_hand_applied_fix_fails_closed_instead_of_eating_the_ledger(
+        self, queue, ledger_transcript
+    ):
+        """Anchored line already fixed by hand -> refuse, do not fall through
+        to the ledger citation (the 2026-09-01 corruption)."""
+        added = queue.enqueue([{
+            "source": "stage1_deferred", "domain": "embodied_ai",
+            "file": str(ledger_transcript), "line": 2,
+            "original": "周明轩", "suggested": "邹明轩", "kind": "homophone",
+            "context": "participants: [陈一, 周明轩, 李二]",
+            "evidence": "roster: 邹明轩 is canonical",
+        }])["added"]
+        # the agent applies the frontmatter + body fix by hand first
+        text = ledger_transcript.read_text(encoding="utf-8")
+        ledger_transcript.write_text(
+            text.replace("participants: [陈一, 周明轩, 李二]", "participants: [陈一, 邹明轩, 李二]")
+                .replace("周明轩 00:01:22", "邹明轩 00:01:22"),
+            encoding="utf-8",
+        )
+        before = ledger_transcript.read_text(encoding="utf-8")
+        with pytest.raises(ReAnchorNeeded):
+            queue.resolve(added[0], "accepted", by="test")
+        assert ledger_transcript.read_text(encoding="utf-8") == before
+        assert queue.get(added[0]).status == "pending"
