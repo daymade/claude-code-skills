@@ -3526,7 +3526,9 @@ A 股行业投研工作流：全板块成分股 Top N 涨幅计算、公告窗�
 不要凭记忆回答“什么时候恢复额度”，应通过权威追踪通道现查并换算北京时间。
 
 **核心能力：**
-- Tibo Radar JSON API 与 codexlimitwatch 双源核对
+- Tibo Radar JSON API 现查公告；Radar 与 codexlimitwatch 属同一来源家族，只能互查解析一致，不作独立双源
+- 另查官方故障线（@ChatGPT / status.openai.com）：重置有里程碑与故障补偿两个触发，Radar 只索引前者
+- 本机 `~/.codex` rollout 快照取证：重建周额度曲线、把重置定位到分钟级区间
 - 识别公告中的混合时间写法和 PST/PDT 夏令时差异
 - 太平洋时间到北京时间的当场实测换算
 - 区分 tracker 标签、官方公告与用户账户实际到账状态

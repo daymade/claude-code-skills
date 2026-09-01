@@ -3542,6 +3542,8 @@ they become load-bearing data.
 - 公告索引 Tibo Radar JSON API 现查；读 X 原帖走 fxtwitter 镜像拿完整长文（30 秒出结果）
 - 解读 Tibo 糙时间写法（「14pm PST」混用 24 小时制、常年写 PST 实为 PDT）
 - 太平洋时间→北京时间当场实测换算命令，含夏令时跨时令处理
+- 本机 `~/.codex` rollout 快照取证：重建周额度曲线、把重置定位到分钟级区间，不必让用户去截图
+- 同时查官方故障线（@ChatGPT / status.openai.com）——重置有里程碑与故障补偿两个触发，Radar 只索引前者
 - 证据纪律：tracker 标签 ≠ 已到账，官宣 ≠ 你的账户已到账；celebration 帖 = 里程碑重置预告
 
 **Example usage:**

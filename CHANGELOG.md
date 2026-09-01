@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **peer-message** v1.0.0 (marketplace v3.6.0): restore the previously uncommitted Claude UDS messenger from its source session and extend it into a local Claude Code ↔ Codex coordination layer. The bundled stdlib CLI discovers `claude:` and `codex:` targets across isolated standard Claude profiles, preserves the original authenticated UDS fallback, routes Codex through the first-party `codex queue --thread` command, supports explicitly counted cross-provider broadcasts, adds source/reply envelopes with explicit provenance strength, and verifies delivery from Claude transcripts or Codex queue/thread history without writing either product's SQLite stores. Claude uses a host-recognized peer wrapper; Codex provenance remains advisory text enforced by receiver-side governing instructions. The Skill-local official-feature reference owns the corrected availability and inbound-policy boundaries. The registered test suite, live Codex queue acceptance, and subsequent thread-history consumption were independently verified.
 
 ### Changed
+- **tibo-reset-codex** v1.2.2 → v1.3.1: add the missing local-account
+  forensics leg and close the announcement path's structural blind spot,
+  both exposed by the 2026-09-01 live run. The skill previously could only
+  point the user at the product usage page or `/status`; it now reads the
+  `rate_limits` snapshots in `~/.codex/sessions/**/rollout-*.jsonl`, which
+  are the same evidence tier but scriptable, historical, and precise enough
+  to bound a reset to a minutes-wide interval. Three traps that return
+  plausible wrong answers without erroring are documented with the filters
+  that defeat them: `primary` does not always denote the weekly window,
+  `limit_id` includes a permanently-zero decoy bucket that manufactures
+  dozens of phantom resets, and `resets_at` drifts by seconds on every
+  snapshot so it cannot be used as a reset predicate. Window-anchor shape
+  now distinguishes a button-press reset (clean +7d) from a quota
+  reconfiguration (anchor moved into the past), and concurrent sessions are
+  noted as emitting the same reset twice. On the announcement side, Radar
+  indexes only @thsottiaux and therefore cannot see @ChatGPT or
+  status.openai.com — half the predictive signal, since resets fire on
+  outage compensation as well as milestones — so the outage line and
+  codexrunway.com join the channel list. Both new scripts were executed
+  verbatim as a reader would paste them; that is how the status-page command
+  was found to need built-in retries rather than a bare call.
 - **peer-message** v1.0.1 → v1.1.0: add an operational coordination and learning contract distilled from post-release Claude/Codex use. A read-only `whoami` command gives parent tasks an exact reply address before delegation; worker reports correlate the incoming task through `in_reply_to`; multiline or data-rich reports use the CLI's UTF-8 message-file entry; and bounded verification stops at transport, receiver queue/history, explicit reply, or independently verified task completion instead of collapsing them into “delivered.” The evidence-gated improvement loop admits layer-bounded sender errors as well as receiver records, task outcomes, deterministic tests, and user corrections, routes each failure to its owner, requires executable When/Do/Evidence/Missing/Do-not-infer/Stop rules, and separates bounded Skill evolution from unsupported autonomous RSI. Existing transports, receipts, exit codes, and authorization boundaries are unchanged.
 - **terraform-skill** v1.0.1 → v1.1.0: replace deploy-and-pray advice with a release-safety contract grounded in current Terraform, Docker Compose, Caddy, and Cloudflare behavior. Staging and production now share one required-key schema; every runtime writer must validate the exact candidate bytes, full Compose-rendered environment, and immutable image before live mutation. Saved plans are bound to source/artifact provenance, staging receipts follow live verification, and production authorization remains a distinct last-reversible-point decision. Correct the prior claims that Compose ignores shell overrides, `terraform validate` proves environment/runtime behavior, token shape proves Cloudflare capability, and disabling `set -e` is the right way to preserve failure diagnostics.
 - **macos-cleaner** (daymade-macos v1.0.0 → v1.1.0): add a targeted Chromium code-sign-clone branch and current-user-scoped analyzer that separates active, inactive, and unknown children, binds approved batches to a candidate SHA, preserves explicit exclusions across activity races, and supports a final read-only recheck while the exact-path deletion prompt waits. Rank nominal APFS path accounting separately from expected physical release, require df readback for actual reclaimed space, and stop the legacy deletion helper from silently shrinking a changed batch, labeling measured totals as physically “freed,” or continuing after the first failure.
