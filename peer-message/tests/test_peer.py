@@ -149,6 +149,104 @@ class PeerMessageTests(unittest.TestCase):
             self.assertEqual(result["delivery_status"], "verified_enqueued")
             self.assertEqual(result["line"], 1)
 
+    def test_claude_verification_fails_loudly_on_transcript_read_error(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home = mock.MagicMock(name="claude_home")
+            projects = mock.MagicMock(name="projects")
+            transcript = mock.MagicMock(name="transcript")
+            home.__truediv__.return_value = projects
+            projects.is_dir.return_value = True
+            projects.glob.return_value = [transcript]
+            transcript.open.side_effect = OSError("permission denied")
+
+            with mock.patch.object(
+                peer,
+                "resolve_claude",
+                return_value={"sessionId": "11111111-1111-4111-8111-111111111111"},
+            ), mock.patch.object(peer, "claude_homes", return_value=[home]):
+                with self.assertRaisesRegex(
+                    peer.PeerError, "Claude delivery evidence read/parse failure"
+                ):
+                    peer.verify_claude("claude:worker", "message-id", home)
+
+    def test_claude_verification_fails_loudly_on_matching_malformed_json(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home, entry, _ = self.make_claude_target(root)
+            transcript = (
+                home
+                / "projects"
+                / entry["cwd"].replace("/", "-")
+                / f"{entry['sessionId']}.jsonl"
+            )
+            transcript.parent.mkdir(parents=True)
+            message_id = "55555555-5555-4555-8555-555555555555"
+            transcript.write_text(f"{message_id} not-json\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                peer.PeerError, "Claude delivery evidence read/parse failure"
+            ):
+                peer.verify_claude("claude:worker", message_id, home)
+
+    def test_claude_verification_prefers_later_valid_evidence_over_parse_error(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home, entry, _ = self.make_claude_target(root)
+            transcript = (
+                home
+                / "projects"
+                / entry["cwd"].replace("/", "-")
+                / f"{entry['sessionId']}.jsonl"
+            )
+            transcript.parent.mkdir(parents=True)
+            message_id = "66666666-6666-4666-8666-666666666666"
+            transcript.write_text(
+                f"{message_id} not-json\n"
+                + json.dumps(
+                    {
+                        "type": "queue-operation",
+                        "operation": "enqueue",
+                        "content": f'message-id="{message_id}"',
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = peer.verify_claude("claude:worker", message_id, home)
+            self.assertEqual(result["delivery_status"], "verified_enqueued")
+            self.assertEqual(result["line"], 2)
+
+    def test_claude_verification_clean_miss_remains_unverified(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            home, entry, _ = self.make_claude_target(root)
+            transcript = (
+                home
+                / "projects"
+                / entry["cwd"].replace("/", "-")
+                / f"{entry['sessionId']}.jsonl"
+            )
+            transcript.parent.mkdir(parents=True)
+            transcript.write_text(
+                json.dumps(
+                    {
+                        "type": "queue-operation",
+                        "operation": "enqueue",
+                        "content": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            self.assertIsNone(
+                peer.verify_claude(
+                    "claude:worker", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", home
+                )
+            )
+
     def test_claude_target_without_socket_fails_loudly(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

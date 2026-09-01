@@ -106,6 +106,8 @@ content 含 message-id
 
 脚本同时检查主 Claude home 与 `~/.claude-profiles/*/projects/`。mid-turn 消息可能先留在内存队列，等当前回合结束才写 transcript；等待超时是 unknown，不是投递失败。
 
+只有成功读取所有候选 transcript 且没有命中时，验证才能返回 `unverified`。候选 transcript 无法读取，或含本次 message ID 的行无法解析时，属于 receiver-evidence read/parse failure：继续检查其他候选与后续行；若最终没有合法命中则显式报错，不能静默降级成普通未命中。
+
 ### Codex
 
 满足任一即可：
