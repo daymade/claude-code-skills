@@ -249,6 +249,33 @@ class PeerMessageTests(unittest.TestCase):
                     peer.current_address(root / ".claude", root / ".codex")
             self.assertEqual(caught.exception.exit_code, peer.EXIT_TARGET)
 
+    def test_current_address_rejects_dual_provider_identity(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            environment = {
+                "CODEX_THREAD_ID": "22222222-2222-4222-8222-222222222222",
+                "CLAUDE_CODE_SESSION_ID": "11111111-1111-4111-8111-111111111111",
+            }
+            with mock.patch.dict(peer.os.environ, environment, clear=True):
+                with self.assertRaises(peer.PeerError) as caught:
+                    peer.current_address(root / ".claude", root / ".codex")
+            self.assertEqual(caught.exception.exit_code, peer.EXIT_TARGET)
+
+    def test_wait_rejects_negative_and_nonfinite_values(self):
+        parser = peer.build_parser()
+        for value in ("-1", "nan", "inf", "-inf"):
+            with self.subTest(value=value), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as caught:
+                    parser.parse_args(
+                        ["send", "codex:worker", "--message", "x", "--wait", value]
+                    )
+                self.assertEqual(caught.exception.code, peer.EXIT_USAGE)
+                with self.assertRaises(SystemExit) as caught:
+                    parser.parse_args(
+                        ["verify", "codex:worker", "--message-id", "x", "--wait", value]
+                    )
+                self.assertEqual(caught.exception.code, peer.EXIT_USAGE)
+
     def test_codex_title_is_not_advertised_or_accepted_as_an_exact_name(self):
         with tempfile.TemporaryDirectory() as raw:
             home = self.make_codex_state(Path(raw))

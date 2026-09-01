@@ -12,6 +12,7 @@ import argparse
 import glob
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import socket
@@ -215,11 +216,18 @@ def auto_sender() -> str:
 def current_address(claude_home: Path, codex_home: Path) -> str:
     """Return an exact address for the current hosted session or fail loudly."""
     codex_id = os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID")
+    claude_id = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    claude_name = os.environ.get("CLAUDE_CODE_SESSION_NAME")
+    if codex_id and (claude_id or claude_name):
+        raise PeerError(
+            "both Claude and Codex session identities are present; pass an explicit "
+            "reply address instead of guessing the current host",
+            EXIT_TARGET,
+        )
     if codex_id:
         thread_id = resolve_codex(f"codex:{codex_id}", codex_home)
         return f"codex:{thread_id}"
 
-    claude_id = os.environ.get("CLAUDE_CODE_SESSION_ID")
     if claude_id:
         try:
             return f"claude:{uuid.UUID(claude_id)}"
@@ -229,7 +237,6 @@ def current_address(claude_home: Path, codex_home: Path) -> str:
                 EXIT_TARGET,
             ) from exc
 
-    claude_name = os.environ.get("CLAUDE_CODE_SESSION_NAME")
     if claude_name:
         entry = resolve_claude(f"claude:{claude_name}", claude_home)
         session_id = entry.get("sessionId")
@@ -693,8 +700,18 @@ def common_message_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--message", help="inline message text")
     parser.add_argument("--from", "--from-name", dest="sender", help="sender address/name")
     parser.add_argument("--reply-to", help="address the receiver should use to reply")
-    parser.add_argument("--wait", type=float, default=0, metavar="SECONDS")
+    parser.add_argument("--wait", type=wait_seconds, default=0, metavar="SECONDS")
     parser.add_argument("--json", action="store_true")
+
+
+def wait_seconds(value: str) -> float:
+    try:
+        seconds = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("wait must be a number of seconds") from exc
+    if not math.isfinite(seconds) or seconds < 0:
+        raise argparse.ArgumentTypeError("wait must be finite and nonnegative")
+    return seconds
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -734,7 +751,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser = subparsers.add_parser("verify", help="read receiver-side evidence")
     verify_parser.add_argument("target")
     verify_parser.add_argument("--message-id", required=True)
-    verify_parser.add_argument("--wait", type=float, default=0)
+    verify_parser.add_argument("--wait", type=wait_seconds, default=0)
     verify_parser.add_argument("--json", action="store_true")
     verify_parser.set_defaults(handler=cmd_verify)
     return parser
