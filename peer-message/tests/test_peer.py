@@ -216,6 +216,39 @@ class PeerMessageTests(unittest.TestCase):
                 "22222222-2222-4222-8222-222222222222",
             )
 
+    def test_current_address_uses_exact_codex_thread_id(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            codex_home = self.make_codex_state(root)
+            thread_id = "22222222-2222-4222-8222-222222222222"
+            with mock.patch.dict(
+                peer.os.environ, {"CODEX_THREAD_ID": thread_id}, clear=True
+            ):
+                self.assertEqual(
+                    peer.current_address(root / ".claude", codex_home),
+                    f"codex:{thread_id}",
+                )
+
+    def test_current_address_resolves_claude_name_to_session_id(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            claude_home, entry, _ = self.make_claude_target(root)
+            with mock.patch.dict(
+                peer.os.environ, {"CLAUDE_CODE_SESSION_NAME": "worker"}, clear=True
+            ):
+                self.assertEqual(
+                    peer.current_address(claude_home, root / ".codex"),
+                    f"claude:{entry['sessionId']}",
+                )
+
+    def test_current_address_fails_without_host_identity(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            with mock.patch.dict(peer.os.environ, {}, clear=True):
+                with self.assertRaises(peer.PeerError) as caught:
+                    peer.current_address(root / ".claude", root / ".codex")
+            self.assertEqual(caught.exception.exit_code, peer.EXIT_TARGET)
+
     def test_codex_title_is_not_advertised_or_accepted_as_an_exact_name(self):
         with tempfile.TemporaryDirectory() as raw:
             home = self.make_codex_state(Path(raw))

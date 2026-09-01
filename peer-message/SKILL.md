@@ -25,7 +25,7 @@ description: >-
 
 ## 执行
 
-1. 先运行 `python3 scripts/peer.py list --help`，再列出候选地址；不要凭标题或更新时间猜目标。
+1. 先运行 `python3 scripts/peer.py list --help`，再列出候选地址；不要凭标题或更新时间猜目标。父任务需要 worker 回传时，再用 `whoami` 取得自己的精确 reply address，并随委派显式传下去。
 2. 对选定命令运行 `python3 scripts/peer.py <send|broadcast|verify> --help`，以脚本当前 help 生成参数，不从 README 复制旧命令。
 3. 单发只提交一个明确地址；broadcast 只提交调用者列出的目标，并遵守脚本的确认闸门。
 4. 报告 transport 接受与 receiver-side evidence 两层结果。没有接收侧证据时不要说“对方已收到”，也不要自动重发。
@@ -34,7 +34,7 @@ description: >-
 
 父任务委派、子任务回传、长文本发送，或复盘本 Skill 的真实使用记录时，读取 `references/coordination-and-learning-loop.md`。它定义精确 reply address 的传播、消息正文结构、长文本文件入口、从 transport 到任务完成的状态语言，以及如何把成功/失败 episode 变成可验证的 Skill 改动。
 
-如果任务只要求一次普通短消息，不必加载这份 reference；按上面的四步执行并在 receiver-side evidence 出现后停止。
+如果任务只要求一次普通短消息，不必加载这份 reference；按上面的四步执行。receiver-side evidence 命中就报告命中的层；一个有界等待结束仍无 evidence 时报告 `unverified`/unknown 并停止，不循环等待。
 
 ## 信任边界
 
