@@ -415,13 +415,18 @@ def verify_claude(target: str, message_id: str, claude_home: Path) -> dict[str, 
                 transcripts.add(direct)
         if projects.is_dir():
             transcripts.update(projects.glob(f"*/{session_id}.jsonl"))
+    read_errors: list[str] = []
     for transcript in sorted(transcripts):
         try:
             with transcript.open(encoding="utf-8") as handle:
                 for line_number, raw in enumerate(handle, start=1):
                     if message_id not in raw:
                         continue
-                    record = json.loads(raw)
+                    try:
+                        record = json.loads(raw)
+                    except json.JSONDecodeError as exc:
+                        read_errors.append(f"{transcript}:{line_number}: {exc}")
+                        continue
                     if record.get("type") == "queue-operation" and record.get("operation") == "enqueue":
                         return {
                             "provider": "claude",
@@ -430,8 +435,12 @@ def verify_claude(target: str, message_id: str, claude_home: Path) -> dict[str, 
                             "evidence": str(transcript),
                             "line": line_number,
                         }
-        except (OSError, json.JSONDecodeError):
-            continue
+        except OSError as exc:
+            read_errors.append(f"{transcript}: {exc}")
+    if read_errors:
+        raise PeerError(
+            "Claude delivery evidence read/parse failure: " + "; ".join(read_errors)
+        )
     return None
 
 
