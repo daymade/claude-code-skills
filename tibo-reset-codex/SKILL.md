@@ -258,7 +258,7 @@ PY
 
 ### 5. 通道失败时
 
-Radar API 挂 → fxtwitter 读原帖（上节命令）→ syndication 官方端点（截断 276 字符，只够核对元数据）→
+Radar API 挂 → fxtwitter 读原帖（§1 的命令）→ syndication 官方端点（截断 276 字符，只够核对元数据）→
 codexlimitwatch 单源（标注同源镜像）+ LunarWerx（仅 Tibo 信号解读交叉验证，非独立观测第二源）→
 WebSearch `thsottiaux reset`
 找转录。用户报告产品已变化时，公告通道全空仍要走静默重置路径；全部产品/社区
