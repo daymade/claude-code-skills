@@ -264,15 +264,19 @@ scripts/git_verify_branch_merged.sh <branch> [<base>]   # base defaults to origi
 This mode is the one direction where a stale base is *unsafe* (rule 1): judged against yesterday's
 `origin/main`, a branch whose content landed hours ago still reads UNMERGED, and "rescuing" it
 re-applies an older version over whatever was built on top. The script fetches first for exactly
-that reason — but if the fetch fails it falls back to cached refs and says so **on stderr only**.
+that reason. Because fetch moves remote-tracking refs, run it only after existing coordination has
+quiesced every checkout writer and transferred exclusive ownership. If that cannot happen, stay
+read-only and report that the merge verdict is unavailable. If the fetch itself fails after
+ownership transfer, the script falls back to cached refs and says so **on stderr only**.
 Treat that line as a blocker, not a footnote: rerun once the network is back before acting on the
 verdict. Comparing by hand (`git diff origin/main <branch>`, `git log origin/main..<branch>`) has
-no such safety net at all — fetch yourself first, every time.
+no such safety net at all — the sole writer must refresh authority first.
 
-It reports **MERGED (ancestor)** or **MERGED (content contained)** — safe to delete — versus
+It reports **MERGED (ancestor)** or **MERGED (content contained)** — content-safe for a separately
+authorized Mode E deletion gate — versus
 **UNMERGED / NEEDS REVIEW**, listing the files the branch would still change. The verdict is sound,
 not heuristic: it does a trial 3-way merge of the branch *into* the base with `git merge-tree`
-(in memory, no checkout) and only says "safe to delete" when that merge changes nothing — so a
+(in memory, no checkout) and only reports content containment when that merge changes nothing — so a
 squash-merged branch reads MERGED despite a nonzero commit count, while a revert/edit/new-file the
 base lacks reads UNMERGED. It is **safety-biased**: anything it can't prove contained is reported
 for review, because a false "merged" loses work while a false "unmerged" only costs a look. Full
@@ -286,52 +290,61 @@ re-checked): **[references/merge_verification.md](references/merge_verification.
 The habits that keep a branch tangle from ever stranding work:
 **[references/prevention_practices.md](references/prevention_practices.md)**. The load-bearing few:
 
-- **Commit before you switch — neither `git stash` nor `git worktree`.** Uncommitted work is what
-  gets stranded: a `git stash` you later can't find, or edits a `switch` buries. Commit each line
-  of work to its own branch and push it early (a committed, pushed branch can't be orphaned), then
-  bring it where you need it *live* by merging — not by stashing, and not by spinning up a second
-  `git worktree` checkout (which is one more place to forget work and won't even have your
-  gitignored deps). A shared working tree with commit-then-switch discipline is the safe default.
-- **If you truly need a second checkout, make it a worktree — never a second `git clone`.** Both
-  are extra places to forget work, which is why commit-then-switch above is still the default. But
-  the failure modes are not equal: a linked worktree announces itself in `git worktree list`, so
-  every audit finds it, while an independent clone is invisible to every command run from the
-  original repository. Choosing `clone` for a few days of parallel work quietly opts out of all
-  the safety tooling. When a clone already exists (a colleague made it, a script made it, you
-  inherited it), register it somewhere the team actually reads and retire it the day it's done —
-  and until then, treat it as an audit target in its own right, not as a scratch directory.
-- **Push a work-in-progress branch to a remote early.** The one commit only on a local branch is
-  the only commit that a dead laptop actually loses.
+- **Read the current collaboration contract before prescribing topology.** An explicit user or
+  project decision about shared checkouts, worktrees, branches, or contribution flow outranks this
+  generic guidance. Do not turn one messy audit into a permanent "one worktree per session" rule.
+- **One physical checkout gets one writer; parallel agents and sessions stay read-only.** A topic
+  branch inside the same checkout does not isolate the shared working files, current branch, or
+  index. Writer ownership comes from the repository's task/coordination contract, not a guessed
+  file list. If ownership is unclear or another writer is active, do not mutate the checkout.
+- **Commit before switching and push WIP early.** Prefer a remote-backed commit over stash
+  juggling, but preserve a higher-authority narrow stash exception; never use an unscoped stash
+  to make a dirty checkout look ready.
+- **Worktrees are explicitly authorized, named exceptions — not the standing default.** They
+  isolate working files, `HEAD`, and index but still share refs, stashes, object storage, config,
+  and hooks, and do not copy ignored dependencies. When approved, a linked worktree is safer than
+  an invisible independent clone but remains a separately audited retirement target.
+- **Handoff and merge by exact commit, then finish with an AND gate.** Record branch, local `HEAD`,
+  and fresh remote tip; require them to equal the handoff SHA. Direct merges name that SHA, not the
+  branch. Hosted merges use an expected-head-SHA precondition when available, or an immediately
+  preceding hosted head readback that must still equal the handoff SHA. Every session-owned byte
+  must be in that remote-backed commit, and every residual path must be enumerated and attributed.
+- **A process snapshot is not a lock, and a merge is not cleanup authority.** Any scheduler that
+  can write this checkout counts as a writer even when its paths are disjoint. Before Git mutation,
+  the project's existing coordination must prove it quiescent and transfer exclusive ownership;
+  without that mechanism, stay read-only and report the gap. Do not stop, reconfigure, or invent a
+  lease for automation under this generic Skill. Retire refs or checkouts only through separately
+  authorized Mode E evidence.
 - **Confirm the current branch before committing** (`git branch --show-current`) — a fix committed
   onto the wrong feature branch is invisible to its real PR and easy to lose on cleanup.
-- **In a shared tree, never aim a destructive command at "the current branch" — name the branch
-  explicitly.** `reset --hard`, `merge`, and `rebase` all act on *whatever is checked out at the
-  instant they run*, so a branch check is stale the moment it returns: a parallel session can
-  `switch` in between, and your command lands on **their** branch. This is the inverse of the
-  bullet below (that one protects *your* work from *their* switch; this one protects *theirs*
-  from *your* command), and re-checking harder does not fix it — the race is inherent. Use the
-  checkout-independent forms instead, which name their target and never touch the working tree:
+- **Never race another writer with checkout-relative mutation.** If another writer is active, stop
+  until the repository's coordination system transfers exclusive write ownership. After transfer,
+  name the exact ref and object when repairing or advancing state; do not rely on whichever branch
+  happens to be checked out. `reset --hard`, `merge`, and `rebase` all act on *whatever is checked
+  out at the instant they run*. Use checkout-independent forms for ref repair when they match the
+  authorized outcome:
   ```bash
   git branch -f <branch> <target>          # instead of: switch <branch> && reset --hard <target>
   git fetch origin <branch>:<branch>       # fast-forward a branch you are not on
   git push origin <sha>:refs/heads/<branch>
   ```
-  Real incident: a `reset --hard origin/main` issued seconds after `git branch --show-current`
-  said `main` landed on a parallel session's feature branch and moved it back two commits; the
-  follow-up "repair" then missed *again* because the tree had been switched a second time.
-  `git branch -f` fixed both in one shot precisely because it never consults the checkout.
-- **If a parallel session switched the shared tree onto its branch** and stranded your uncommitted
-  work there, don't commit onto their branch — carry your edits to a branch off the base
-  (`git checkout origin/main -b …`, after `git diff --quiet` proves your files match across bases),
-  commit only your explicit paths, then switch the tree back to their branch to restore their state.
-- **If a parallel session is *actively* writing the shared tree** — files keep appearing while you
-  work — don't `switch`, `add`, or `reset` at all: each would either strand their uncommitted work
-  or trip a worktree guard. When your own change is self-contained (new files, or edits that belong
-  on `origin/main` rather than on their in-progress tree), build the commit with plumbing that never
-  touches the working tree, then push it to a branch and open a PR. Freeze every candidate as the
-  exact Git entry tuple `(mode, object ID, path)` — bytes alone are insufficient because `100755`,
-  `120000`, and `160000` carry executable, symlink, and gitlink behavior. The safest source is an
-  immutable candidate commit:
+  Real incident: a `reset --hard origin/main` issued while another session still owned the checkout
+  landed on that session's feature branch and moved it back two commits. The correct first action is
+  to stop and transfer ownership; once transferred, an explicitly targeted ref repair avoids making
+  checkout position part of the operation.
+- **If a parallel session previously switched the shared tree and stranded your uncommitted work,**
+  do not mutate it until that session is quiescent and exclusive ownership has transferred. Then
+  follow the incident-only relocation procedure in the prevention reference: prove your files match
+  across bases, commit only explicit paths, and restore the prior branch before handing ownership
+  back. Branch deletion remains a separately authorized Mode E action.
+- **If a parallel session is *actively* writing the shared tree, all repository mutation stops.**
+  Do not `switch`, `add`, `reset`, create commits with a temporary index, update refs, or push. Use
+  the repository's coordination system to quiesce that writer and transfer exclusive ownership; if
+  none exists, report the gap and preserve the current evidence. Once you are the sole writer, an
+  object-store-only commit can keep attributable foreign WIP out of the shared index and working
+  tree. Freeze every candidate as the exact Git entry tuple `(mode, object ID, path)` — bytes alone
+  are insufficient because `100755`, `120000`, and `160000` carry executable, symlink, and gitlink
+  behavior. The safest source is an immutable candidate commit:
   ```bash
   candidate_ref=<immutable-candidate-commit-oid>
   candidate_path=path/to/file
@@ -340,7 +353,7 @@ The habits that keep a branch tangle from ever stranding work:
   candidate_oid=$(printf '%s\n' "$candidate_entry" | awk 'NR == 1 { print $3 }')
   test -n "$candidate_mode" && test -n "$candidate_oid" || exit 1
 
-  candidate_index=$(mktemp /tmp/tinkle_git_index.XXXXXX)
+  candidate_index=$(mktemp /tmp/git_safety_candidate_index.XXXXXX)
   export GIT_INDEX_FILE="$candidate_index"   # the tree's real index is untouched
   git read-tree origin/main           # start from the pushed base, not the dirty tree
   git update-index --add --cacheinfo "$candidate_mode,$candidate_oid,$candidate_path"
@@ -355,15 +368,17 @@ The habits that keep a branch tangle from ever stranding work:
   applying that route to a symlink or submodule. For those entry types, first freeze an immutable
   candidate commit and copy its mode/object tuple as above. Never source an entry from a shared path
   that another session is editing. The sequence reads and writes only the object store and a
-  throwaway index, so `git status` in the shared tree is byte-for-byte unchanged. `commit-tree`
+  throwaway index, so `git status` in the shared tree is byte-for-byte unchanged. It is a
+  sole-writer preservation technique, not permission to mutate while someone else owns the repo.
+  `commit-tree`
   does not run the normal `git commit` hook path: execute the repository's exact pre-commit/security
-  gates against the candidate before push, and still let pre-push run. This is the escape hatch for
-  when commit-then-switch is off the table because someone else holds the tree.
+  gates against the candidate before push, and still let pre-push run. Use it only after ownership
+  transfer, when preserved foreign WIP makes checkout switching or shared-index staging unsuitable.
 - **A bare `git commit` snapshots the *whole* index, not just what you staged — and a commit that
   bypassed the index leaves a trap in it.** Moving the **current** branch without updating the
   shared index advances HEAD while the index stays on its old baseline — via `commit-tree` +
   `update-ref` on that branch, or a `git commit` through a temporary `GIT_INDEX_FILE`. (The
-  push-to-another-branch escape hatch above moves no *local* ref, so it leaves no drift.) Every
+  sole-writer push-to-another-branch path above moves no *local* ref, so it leaves no drift.) Every
   file the new commit introduced then shows as a *staged deletion* (`git status` prints `D `
   lines plus matching `??` untracked entries). `git commit -- <path>` neither creates nor repairs
   this drift — it only updates its own paths. The drift detonates on anyone's next bare
@@ -447,9 +462,11 @@ one branch into a repo export.
 
 For a multi-branch "only one main" cleanup while other sessions may still commit or open PRs, read
 **[references/merge_verification.md](references/merge_verification.md)** § Converging many branches
-to one main under active concurrency before Step 3. It adds the moving-ref inventory, dirty-WIP
-preservation, immutable-candidate, duplicate-PR, and final branch-count gates that a single-branch
-retirement does not need.
+to one main through single-writer windows before Step 3. While another writer is active, that route
+is read-only: fetch, object/ref creation, bundle export, push/PR, and deletion wait for existing
+coordination to prove quiescence and transfer exclusive ownership through final readback. The
+reference adds the moving-ref inventory, dirty-WIP preservation, immutable-candidate, duplicate-PR,
+and final branch-count gates that a single-branch retirement does not need.
 
 **Step 3 — destroy, in the safe order:**
 
@@ -521,6 +538,10 @@ in place; the bundle restores full history via `git fetch <file>.bundle <branch>
 
 ## Scripts (execute these; they are non-destructive unless noted)
 
+Every `scripts/...` path below is relative to this Skill's bundle root, not a command promised on
+`PATH` or in the target repository. Resolve the loaded Skill directory and invoke the bundled path;
+never tell a user to run bare `git_verify_branch_merged.sh` unless `command -v` actually finds it.
+
 | Script | Does | Mutates? |
 |---|---|---|
 | `scripts/git_find_all_checkouts.sh [root ...]` | Find every checkout of this repo on the machine — including independent clones invisible to `git worktree list` — and flag uncommitted/untracked/unpushed work, remote-cache age, and borrowed alternates object stores | Nothing (read-only, no fetch) |
@@ -534,10 +555,11 @@ in place; the bundle restores full history via `git fetch <file>.bundle <branch>
 All six run from the repository root. They use read-only enumeration/configuration commands such as
 `find`, `config`, `symbolic-ref`, `submodule status`, `status`, `cat-file`, `rev-list`, `rev-parse`,
 `fsck`, `for-each-ref`, and `remote get-url`; plus scoped `fetch`, `archive`, `bundle create/verify`,
-metadata hashing/archive, and (preserve only) `update-ref` where each script's table row says so — never
-`checkout`, `reset`, `push`, `stash drop`, `branch -d`, or `gc`, so they are safe to run in a
-dirty tree or alongside other agents. `git_find_all_checkouts.sh` additionally never fetches, so
-it works offline and behind a proxy.
+metadata hashing/archive, and (preserve only) `update-ref` where each script's table row says so.
+Only `git_find_all_checkouts.sh` is repository-read-only and safe beside read-only agents; it never
+fetches, so it also works offline and behind a proxy. Any helper that fetches, writes backup state,
+or adds refs runs only after existing coordination transfers exclusive writer ownership. None of
+the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, or `gc`.
 
 ## Troubleshooting
 

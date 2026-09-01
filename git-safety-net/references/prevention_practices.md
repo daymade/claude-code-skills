@@ -4,10 +4,14 @@ Each practice below maps to a specific way work actually gets lost. They are che
 ceremony; adopt the ones whose failure mode you're exposed to.
 
 ## Contents
-- Parallel / multi-branch work: commit before you switch (not stash, not worktree)
+- Choose topology from current authority
+- Shared checkout and concurrent sessions: one writer
+- Exact-SHA handoff and scoped completion
+- Known automated writers are not session-owned WIP
+- Parallel / multi-branch work: commit before switching; exceptions follow current authority
 - Push work-in-progress branches early
 - Confirm the branch before every commit
-- Relocate your work when a parallel session switched the shared tree under you
+- Recover stranded work after a parallel session switched the shared tree
 - Audit before rebase / branch-delete
 - Audit every authorized worktree before retirement
 - Snapshot before any history rewrite
@@ -15,7 +19,117 @@ ceremony; adopt the ones whose failure mode you're exposed to.
 - Commit-scope hygiene (don't sweep unrelated staged work)
 - Set a wider reflog safety window once
 
-## Parallel / multi-branch work: commit before you switch (not stash, not worktree)
+## Choose topology from current authority
+
+Before recommending branches, worktrees, or a second checkout, read the current user and project
+instructions. Their explicit collaboration and contribution model wins. A generic post-incident
+lesson cannot silently replace a user's existing no-worktree decision, a repository's PR-only
+flow, or a task registry's single-writer rule.
+
+Default here: keep one maintained checkout and commit before switching. Do **not** turn worktrees
+into a standing rule for every concurrent session. When the current authority explicitly approves
+a named second checkout and simultaneous writing truly requires it, prefer a linked worktree over
+an independent clone because audits can discover it. That exception does not make it independent:
+linked worktrees separate working files, `HEAD`, and index, but share refs, stashes, object storage,
+config, and hooks; ignored dependencies and local-only assets are not copied.
+
+## Shared checkout and concurrent sessions: one writer
+
+**Failure mode:** separate sessions edit different files and assume they are independent, but they
+share the checkout's current branch and index. One session can switch the branch under another;
+one bare commit snapshots every staged entry, including another session's work or a phantom `D`
+left by an index-bypassing commit. File ownership alone cannot close that race.
+
+**Prevention:** one physical checkout has one writer. Parallel agents or sibling sessions may do
+read-only investigation, but they do not mutate files, refs, index, stash, or working-tree state.
+Writer ownership comes from the repository's existing task/coordination system. If that authority
+is unavailable, another writer is active, or foreign dirty paths cannot be attributed, stop the
+write path; do not create a branch, stash the tree, or "just stage your files" as a workaround.
+
+When you hold write ownership, keep the stage-to-commit interval bounded and inspect the complete
+index, not merely the paths you just added:
+
+```bash
+git -C <absolute-repo> branch --show-current
+git -C <absolute-repo> add -- <exact-path-1> <exact-path-2>
+git -C <absolute-repo> diff --cached --name-status
+git -C <absolute-repo> diff --cached --stat
+git -C <absolute-repo> commit -m "<message>"
+```
+
+Every staged status letter must match the intended change. In particular, an unfamiliar `D` is a
+stop signal, not a harmless leftover. Follow the repository's contribution policy for push/PR;
+this prevention Skill does not widen push or merge authority.
+
+Prefer a WIP commit and early remote copy to stash juggling. Do not rewrite an existing narrow
+stash exception as an absolute prohibition: if the current contract permits it, only the single
+writer may use its exact absolute-repository and explicit-file form, such as
+`git -C <absolute-repo> stash push [options] -- <exact-file>...`. An unscoped stash remains invalid.
+
+## Exact-SHA handoff and scoped completion
+
+A branch name is a routing label, not a frozen deliverable. The writer can add another commit after
+handoff, and linked worktrees share that ref. A later `merge <topic>` may therefore merge bytes the
+integrator never reviewed.
+
+Freeze and read back the handoff:
+
+```bash
+topic_branch=$(git -C <absolute-repo> branch --show-current)
+topic_sha=$(git -C <absolute-repo> rev-parse HEAD)
+remote_sha=$(git -C <absolute-repo> ls-remote origin "refs/heads/$topic_branch" | awk 'NR == 1 {print $1}')
+test -n "$remote_sha" && test "$topic_sha" = "$remote_sha"
+```
+
+Report the absolute checkout path, branch, and `topic_sha`. Immediately before the merge, the
+integrator must re-read the intended remote tip and require it to equal `topic_sha`. A direct merge
+names the frozen object, not the branch:
+
+```bash
+current_remote_sha=$(git -C <absolute-repo> ls-remote origin "refs/heads/$topic_branch" | awk 'NR == 1 {print $1}')
+test -n "$current_remote_sha" && test "$current_remote_sha" = "$topic_sha"
+git -C <absolute-repo> merge "$topic_sha"
+```
+
+For a hosted PR, use the platform's expected-head-SHA precondition when it exists. Otherwise make a
+fresh hosted head-SHA readback the immediately preceding step and abort instead of merging if it no
+longer equals `topic_sha`. A moved ref means "handoff expired," not "take whatever is newest."
+
+Completion requires all of these, never an OR between them:
+
+1. every session-owned tracked and untracked byte is present in the handed-off commit;
+2. the exact commit is present on the intended remote, proven by independent readback;
+3. every residual path in the checkout is enumerated and attributed;
+4. no branch, stash, worktree, or remote ref is deleted as an implicit completion step.
+
+The claim is intentionally scoped. A checkout can remain dirty because an authorized automation
+writer or another named owner left unrelated paths. That does not make the session incomplete, but
+it forbids claiming the **whole repository** is clean or sweeping the residuals into this commit.
+Retirement is a separate Mode E task with new authority and fresh evidence.
+
+## Known automated writers are not session-owned WIP
+
+**Failure mode:** an integration session checks that a scheduled writer is idle, then treats the
+next few commands as exclusive. The job starts after the check and writes during stage, merge, or
+final verification. A process snapshot is an observation, not a lock.
+
+Do not stop, disable, or reconfigure an authorized job merely to make the generic Git routine easy;
+that is a new operations decision. A scheduler that can write anywhere in this physical checkout is
+still a writer even when its usual paths are disjoint from the current task. Before any Git mutation,
+the project's existing coordination mechanism must prove it quiescent and transfer exclusive writer
+ownership through commit and final readback. A process snapshot alone cannot do that. Then:
+
+- read the project's owner contract for the generated paths;
+- do not manually edit generated files or co-stage them with an unrelated task;
+- when the current task explicitly owns one generated batch and exclusive ownership has transferred,
+  stage only its exact paths, complete the Git operation, then re-read the working tree after handing
+  ownership back because the next batch may already have arrived;
+- if no existing mechanism can prove quiescence and transfer ownership, stay read-only, enumerate
+  the residual paths, and report the gap rather than treating disjoint paths or an idle check as
+  mutual exclusion;
+- treat a new lock, lease, pause, or schedule change as a separately authorized design.
+
+## Parallel / multi-branch work: commit before switching; exceptions follow current authority
 
 **Failure mode:** the classic disaster is `git stash` → switch branch → work → `git stash` again →
 rebase → switch back. Each `stash` that gets superseded or dropped orphans a commit; after a busy
@@ -30,27 +144,32 @@ stashed away or stranded:
 ```bash
 # instead of `git stash` before switching:
 git switch -c <branch-for-this-work>              # a branch for this line of work
-git add <the paths for THIS work> && git commit -m "wip: ..."
+git add -- <the paths for THIS work>
+git diff --cached --name-status                   # inspect the whole shared index
+git diff --cached --stat
+git commit -m "wip: ..."
 git push -u origin <branch-for-this-work>         # early; re-push as you go
 git switch <other-branch>                         # nothing left behind — no stash to drop
 ```
 
-Then bring the work back to wherever you need it **live in the working tree** by merging — not by
-fishing it out of a stash and not from a second checkout:
+After sole-writer ownership has transferred to the integrator, bring the frozen work back wherever
+it is needed **live in the working tree** by merging the reviewed SHA — not by fishing it out of a
+stash or following a movable branch name:
 
 ```bash
 git switch <target-branch>
-git merge <branch-for-this-work>                  # the work is now in THIS working tree too
+git merge "$topic_sha"                            # exact reviewed object, not a movable ref
 ```
 
-**Deliberately avoided here — two tempting shortcuts that both cause the loss this skill exists to prevent:**
+**Deliberately avoided here — shortcuts that cause the loss this skill exists to prevent:**
 
 - **`git stash` + switch juggling** — orphans stashes (the failure mode above). Commit instead; a
   commit on a branch never silently disappears from `git stash list`.
-- **`git worktree`** — a second checkout is one more place to leave work in and forget, it does
-  **not** copy gitignored dependencies (`node_modules`, `.venv`), so tools/tests run there fail on
-  the missing deps, and it can hand back a stale checkout of an older commit. A shared working tree
-  with disciplined *commit-then-switch* is safer and simpler than juggling worktrees.
+- **Defaulting every concurrent session to `git worktree`** — a second checkout is one more place
+  to leave work in and forget, it does **not** copy gitignored dependencies (`node_modules`,
+  `.venv`), and it still shares refs/stashes/config/hooks. A shared checkout with one writer and
+  disciplined *commit-then-switch* is safer unless current authority explicitly approves the named
+  worktree exception described above.
 - **`git clone --shared` as temporary isolation** — the clone's refs and object ownership split:
   `.git/objects/info/alternates` borrows objects from the source while the clone owns its refs.
   Git's official documentation warns that source maintenance can prune those borrowed objects and
@@ -91,10 +210,11 @@ to, and gets deleted along with the wrong branch during cleanup.
 git branch --show-current      # is this where this change belongs?
 ```
 
-If you commit to the wrong branch anyway, it's recoverable: `git log` the sha, `git branch
-correct-branch <sha>`, then remove it from the wrong branch — but confirming up front is free.
+If you commit to the wrong branch anyway, it's recoverable: `git log` the SHA, then create a
+preserving ref with `git branch correct-branch <sha>`. Leave removal from the wrong branch to
+separately authorized Mode E retirement; confirming up front is free.
 
-## Relocate your work when a parallel session switched the shared tree under you
+## Recover stranded work after a parallel session switched the shared tree
 
 **Failure mode:** two agents share one working tree. While you were editing, a *parallel* session
 ran `git switch` and moved the shared tree onto **its** feature branch — so your uncommitted changes
@@ -103,8 +223,13 @@ switched, so "commit before you switch" never got a chance to fire. A naive `git
 commit` here buries your work inside the other branch's PR (wrong attribution, wrong review) and can
 sweep in their file; committing onto their branch also couples your change to their merge.
 
-**Fix — carry your uncommitted work onto a branch off the base, commit only your paths, then put the
-tree back exactly where the other session left it:**
+**Incident-only recovery:** do not run the sequence below while the other writer is active. First
+use the repository's coordination system to quiesce that writer, freeze the observed dirty paths,
+and transfer exclusive write ownership. If no such authority exists, stop with the evidence intact;
+do not treat checkout plumbing as a concurrency loophole.
+
+Once exclusive ownership is established, carry your uncommitted work onto a branch off the base,
+commit only your paths, then put the tree back exactly where the other session left it:
 
 ```bash
 # 1. See what the hijacked branch is, and prove YOUR files are safe to carry across the switch.
@@ -119,11 +244,10 @@ git checkout origin/main -b fix/your-work
 # 3. Commit ONLY your explicit paths — never `git add -A`; the other session's file is still here.
 git add <your-path-1> <your-path-2>
 git diff --cached --name-only                        # verify: only yours, not their file
-git commit -m "…"                                    # then push / PR / merge as normal
+git commit -m "…"                                    # freeze/push this SHA; never merge the branch name
 
-# 4. Restore the other session's state: put the shared tree back on their branch.
+# 4. Restore the other session's state before handing write ownership back.
 git checkout <their-branch>                           # their uncommitted file carries back untouched
-git branch -d fix/your-work                           # safe once merged (the branch tracked origin/main)
 ```
 
 **Why this and not the alternatives:** `git stash` to move your edits risks the orphaned-stash loss
@@ -133,6 +257,11 @@ branch's tip and the base, which is exactly the condition under which `checkout 
 uncommitted edits with no conflict (if it reports a difference, stop and resolve it deliberately
 rather than forcing the switch). Step 4 is correctness, not just courtesy: the parallel session
 expects to find its own branch checked out with its work intact, exactly as it left it.
+Branch deletion is not part of this recovery; it requires separately authorized Mode E evidence.
+After Step 3, return to **Exact-SHA handoff and scoped completion** above: record the commit as
+`topic_sha`, push and read back that exact object, use `git merge "$topic_sha"` for a direct merge,
+and require the hosted expected-head-SHA gate (or immediately preceding hosted head readback) for a
+PR merge. Any branch-tip drift expires the handoff.
 
 ## Audit before rebase / branch-delete
 
@@ -180,7 +309,7 @@ the pre-rewrite commits.
 **Prevention:** a throwaway backup branch makes the whole operation reversible:
 
 ```bash
-git branch backup/pre-rewrite      # points at the current tip; delete once you're happy
+git branch backup/pre-rewrite      # points at the current tip; retire later through Mode E
 ```
 
 If the rewrite goes wrong, `git reset --hard backup/pre-rewrite` restores it exactly.

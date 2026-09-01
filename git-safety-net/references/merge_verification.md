@@ -7,7 +7,7 @@
 - Pick the diff FORM from the question you're asking (two-dot vs three-dot)
 - Why safety-biased: a false "merged" loses work, a false "unmerged" only costs a look
 - Manual-only investigation hints (do NOT auto-decide on these)
-- Converging many branches to one main under active concurrency
+- Converging many branches to one main through single-writer windows
 - Independent clone retirement — preserve refs, metadata, and borrowed objects
 - Worktree retirement — prove the checkout is disposable before removal
 - Adversarial multi-agent verification (for a whole repo of branches)
@@ -75,9 +75,10 @@ base's parallel work is the point. It is the wrong form for "what does the base 
 
 For each branch, the script decides among three outcomes:
 
-- **MERGED (ancestor)** — in the base's history. Delete freely.
+- **MERGED (ancestor)** — in the base's history. Content containment is proven; deletion still
+  requires the separately authorized Mode E target, current ref equality, and preservation gate.
 - **MERGED (content contained)** — a trial merge into the base changes nothing; the "commits
-  ahead" count is a squash/rebase artifact. Delete freely.
+  ahead" count is a squash/rebase artifact. This proves content containment, not deletion authority.
 - **UNMERGED / NEEDS REVIEW** — a trial merge *would* change the base, so the branch carries
   content the base does not already have (a genuinely new/edited/reverted/deleted file). Review
   the listed contribution before deleting.
@@ -214,12 +215,15 @@ most likely to be restored on instinct.
 
 Same safety bias as everywhere else in this skill: prove supersession per item, or keep the item.
 
-## Converging many branches to one main under active concurrency
+## Converging many branches to one main through single-writer windows
 
 Use this READ-DO sequence when the outcome is not one deletion but a repository-wide convergence:
 keep every unique behavior, preserve current WIP, and leave exactly one maintained `main`. A branch
 list is a moving snapshot while other sessions are alive, so the start-of-task audit cannot double
-as the deletion gate.
+as the deletion gate. Another active writer makes this sequence read-only: do not fetch, create
+objects, update refs, export bundles, push/open PRs, or delete until the repository's existing
+coordination proves quiescence and transfers exclusive writer ownership. Hold that ownership
+through commit and final readback. If it is lost, stop and restart from a fresh authority snapshot.
 
 The executing agent owns only the explicitly authorized slice of this sequence, not every object
 the inventory reveals. `--verify-current` mechanically decides only whether exact ref tips stayed
@@ -239,9 +243,14 @@ Before interpreting the inventory, partition objects into three sets:
 Generic phrases such as "take over", "continue", or "finish this" do not move an object between
 sets. The user must name the additional object or otherwise make the expansion unambiguous.
 
-Record the exact local and remote-tracking refs, then query the hosting service for its current
-branch list and PR heads. Keep the two inventories separate: remote-tracking refs are a Git cache;
-the hosting API is authority for branches that exist on the server. Record every exact tip SHA.
+Before spawning reviewers or interpreting refs, the sole writer performs one authority refresh,
+including any required fetch, then freezes the exact local and remote-tracking refs and queries the
+hosting service for its current branch list and PR heads. Keep the two inventories separate:
+remote-tracking refs are a Git cache; the hosting API is authority for branches that exist on the
+server. Record every exact tip SHA and give reviewers those immutable SHAs. If another writer is
+active and ownership cannot transfer, hosting/API and existing immutable-object reads may inventory
+what is already known, but the inability to refresh authority is a reported gap, not permission to
+fetch concurrently.
 
 Classify each change-authorized non-main ref by content. Use the trial-merge verdict first. For
 NEEDS REVIEW refs, walk the supersession ladder above and open distinctive code/tests at authority.
@@ -250,17 +259,19 @@ Merge or adapt the smallest unique behavior; never merge an old whole branch mer
 many `+` commits or a compelling name. Report inspect-only and excluded refs separately without
 turning their existence into an action item.
 
-### 2. Build keeper commits without touching a shared writer
+### 2. Build keeper commits after exclusive ownership transfers
 
-When another session is actively changing files, do not switch the shared checkout or use its real
-index. Build from the freshly fetched base with Mode D's alternate-index plumbing. Preserve each
-candidate as an exact `(mode, object ID, path)` tuple from an immutable commit; copying only blob
-bytes can silently strip executable (`100755`), symlink (`120000`), or gitlink (`160000`) behavior.
-An owned temporary regular file may be hashed only after its intended `100644`/`100755` mode is
-verified explicitly; symlinks and submodules must use the immutable-entry route. Never hash the
-shared worktree, which can silently capture someone else's in-progress bytes. Run the candidate's
+When another session or scheduler is actively changing files, do not switch, use the real index,
+create objects with an alternate index, update refs, or publish a PR. Wait for the existing
+coordination mechanism to quiesce that writer and transfer exclusive ownership. Once transferred,
+build from the freshly fetched frozen base with Mode D's sole-writer alternate-index technique.
+Preserve each candidate as an exact `(mode, object ID, path)` tuple from an immutable commit;
+copying only blob bytes can silently strip executable (`100755`), symlink (`120000`), or gitlink
+(`160000`) behavior. An owned temporary regular file may be hashed only after its intended
+`100644`/`100755` mode is verified explicitly; symlinks and submodules must use the immutable-entry
+route. Never hash a shared-worktree path attributed to someone else's WIP. Run the candidate's
 deterministic tests and the exact hook/security gates that a normal commit would have run before
-opening the PR.
+opening the PR, and retain exclusive ownership through push and final readback.
 
 After a squash merge, do not compare commit SHAs: GitHub creates a new base-branch commit. If the
 base did not otherwise move, equal tree IDs prove byte-identical landing. If it did move, compare
@@ -268,6 +279,10 @@ the owned path set or re-run the trial merge so unrelated base work does not man
 GitHub-side duplicate/superseded PR handling belongs to the `github-ops` skill.
 
 ### 3. Preserve refs and dirty WIP through different channels
+
+This section creates refs, objects, external backups, or hosted state. Run it only while the
+exclusive writer window from Step 1 remains valid. If another writer resumes, stop before the next
+mutation; the frozen evidence remains useful, but it does not authorize continuing.
 
 Create a repository-external bundle containing only the branches/refs whose deletion is authorized,
 then verify it. The bundle is the ref manifest: immediately before deletion run:
@@ -305,14 +320,15 @@ with checkout materialization. Move that exact path to the verified external bac
 clean base, then restore the saved bytes; it should naturally become a tracked modification. Never
 drop it because "main now has a file with that name."
 
-If another writer is still active, leave the real HEAD/index/worktree alone and postpone local
-branch convergence. Publishing an isolated PR is safe; switching the shared checkout is not. When
-an exclusive window exists, update only paths proven clean, or restore the complete verified WIP
-set after materializing the new base.
+If another writer is active, leave the real HEAD/index/worktree, object store, refs, and hosted
+branches unchanged and postpone both local convergence and PR publication. When the existing
+coordination restores an exclusive window, restart at Step 1, update only paths proven clean, or
+restore the complete verified WIP set after materializing the new base.
 
 ### 4. Re-freeze immediately before deletion
 
-Fetch again, re-query hosting branches/PRs, and re-enumerate local refs. Compare the result with the
+While retaining exclusive writer ownership, fetch again, re-query hosting branches/PRs, and
+re-enumerate local refs. Compare the result with the
 bundle heads. A new branch, changed tip, or late PR inside the change-authorized set is new evidence:
 stop, classify its unique behavior, and rebuild the bundle. A newly discovered collaborator object
 does not silently join that set; record it as inspect-only or excluded and rebuild only if the next
@@ -516,6 +532,7 @@ high-stakes "is *everything* merged?" verdict, fan out:
    never by commit count. Report per branch: MERGED / **UNMERGED / NEEDS REVIEW (with the file(s)
    the trial merge would change)**."
 3. **Lock them read-only** (see rules below) so concurrent agents don't corrupt each other's tree.
+   The sole writer refreshes authority first and hands them frozen SHAs; reviewers never fetch.
 4. **Counter-review every finding yourself.** An agent's "UNMERGED" is a *hypothesis*: re-run the
    trial-merge / inspect the specific files before believing it (agents produce false positives
    too). An agent's "all merged" is only as good as its method — spot-check that it judged by
@@ -530,12 +547,13 @@ a subagent cannot spawn subagents.
 
 Put these in every agent's prompt — they are what make parallel verification safe and correct:
 
-- **Read-only, always.** Only `fetch --quiet`, `merge-base`, `merge-tree`, `diff`, `log`, `show`,
-  `cat-file`, `rev-list`, `rev-parse`, `ls-tree`, `for-each-ref`, `branch -r --contains`. **Never**
-  `checkout`, `switch`, `reset`, `rebase`, `commit`, `push`, `update-ref`, or `gc`. Multiple agents
-  share one working tree; a single `checkout` corrupts everyone else's run.
-- **Explicit refs only** (`origin/main`, `origin/<branch>`) so nothing depends on the current
-  checkout.
+- **Read-only, always.** Only `merge-base`, `merge-tree`, `diff`, `log`, `show`, `cat-file`,
+  `rev-list`, `rev-parse`, `ls-tree`, `for-each-ref`, `branch -r --contains`. **Never** `fetch`,
+  `checkout`, `switch`, `reset`, `rebase`, `commit`, `push`, `update-ref`, or `gc`. The sole writer
+  refreshes once before fan-out and supplies immutable SHAs; a reviewer does not move even a
+  remote-tracking ref.
+- **Explicit frozen SHAs first.** Use the supplied immutable object IDs for conclusions. Named refs
+  (`origin/main`, `origin/<branch>`) may be displayed for attribution but are not merge authority.
 - **Judge by content via the trial merge, not by counts** — restate the check in the prompt.
 - **Return structured per-branch verdicts with the file(s) the trial merge would change for any
   UNMERGED**, not prose.
