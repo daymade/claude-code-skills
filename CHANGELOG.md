@@ -48,6 +48,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an order-inverted stitched quote — both fixed and re-verified pre-ship.
 
 ### Fixed
+- **git-safety-net** v1.13.0 → v1.14.0: replace the over-broad “one worktree per
+  concurrent session” prescription with an authority-first, single-writer shared-checkout
+  contract. Mode D now treats worktrees as explicitly authorized named exceptions, preserves
+  narrow higher-authority stash contracts instead of declaring a universal ban, stops every
+  repository mutation while another writer is active, freezes handoffs and merges by exact
+  local/remote SHA, makes completion an AND gate over session-owned bytes,
+  remote containment, and attributed residuals, and keeps cleanup in separately authorized
+  Mode E. The prevention reference now counts any scheduled job that can write the checkout as a
+  writer even when paths are disjoint: an idle process snapshot is not a lock, so existing
+  coordination must quiesce it and transfer exclusive ownership before Git mutation; stopping,
+  leasing, or rescheduling automation remains a separate design decision. The reachable Mode E
+  convergence workflow now applies the same gate to alternate-index commits, ref/bundle writes,
+  push/PR, and fetch; parallel verification agents receive frozen SHAs and never move
+  remote-tracking refs. Bundle-relative helpers are no longer presented as commands assumed to
+  exist on `PATH`.
 - **peer-message** v1.1.0 → v1.1.1: stop Claude receiver-evidence verification from collapsing unreadable transcripts or malformed matching JSONL into ordinary `unverified`. The verifier now keeps scanning other candidates and later lines for valid enqueue evidence, but fails loudly if no valid match exists and any evidence read/parse error occurred; a clean, fully readable miss remains `unverified`. Four deterministic regression cases cover read failure, malformed matching JSON, later valid evidence, and the healthy-miss control.
 - **peer-message** v1.0.0 → v1.0.1: make documentation ownership executable instead of duplicative. `SKILL.md` keeps only routing, stable prerequisites, safety, and owner pointers; `peer.py --help` owns CLI syntax; the protocol reference owns addressing, envelopes, receipt, exit, transport, and verification semantics; the official-feature reference owns volatile product interfaces and inbound mechanics. README/README.zh-CN and `CLAUDE.md` point to those owners, while the changelog and private review stop persisting derived test, session, reachability, and file totals.
 - **prior-work-retrieval / claude-switch-models-setup** (daymade-claude-code v3.7.9 → v3.7.13): remove `uv run` from the synchronous Claude/Codex prior-work hook entrypoint and require the profile-convergence SessionStart hook to use an absolute direct-Python command. The prior-work wrapper now also fails closed when that runtime is missing or a relative override is supplied, rather than falling back to PATH `python3`. Repository and Skill contracts distinguish package-manager-free hook launch from explicit `uv` retrieval, validation, and test lifecycles. Shared UV cache cleanup or lock contention can no longer stall every PreToolUse decision or prevent profile repair.
