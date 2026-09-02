@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **peer-message** v1.0.0 (marketplace v3.6.0): restore the previously uncommitted Claude UDS messenger from its source session and extend it into a local Claude Code ↔ Codex coordination layer. The bundled stdlib CLI discovers `claude:` and `codex:` targets across isolated standard Claude profiles, preserves the original authenticated UDS fallback, routes Codex through the first-party `codex queue --thread` command, supports explicitly counted cross-provider broadcasts, adds source/reply envelopes with explicit provenance strength, and verifies delivery from Claude transcripts or Codex queue/thread history without writing either product's SQLite stores. Claude uses a host-recognized peer wrapper; Codex provenance remains advisory text enforced by receiver-side governing instructions. The Skill-local official-feature reference owns the corrected availability and inbound-policy boundaries. The registered test suite, live Codex queue acceptance, and subsequent thread-history consumption were independently verified.
 
 ### Changed
+- **claude-switch-models-setup** (`daymade-claude-code` v3.7.14 → v3.7.15): close the
+  enabledPlugins write-back hole that erased installed skills. `claude plugin
+  install/enable` writes the new key into the ACTIVE profile's settings.json only; the
+  next `claude-plugins-sync.py` pass then mirrored the default profile's map wholesale,
+  wiping the key from every profile — the mechanical root cause of recurring "my skills
+  disappeared" losses. The sync now adopts profile-only enabledPlugins keys back into
+  the default settings.json before mirroring: consistent values only; cross-profile
+  conflicts are kept per-profile behind a standing warning instead of being silently
+  overwritten, and a corrupted profile settings file now skips its own mirror instead of
+  crashing the whole pass. Adds `skill-install-audit.py`, a read-only reconciliation
+  across the local marketplace registries, installed_plugins.json, enabledPlugins, the
+  codex-active-skills.json manifest, and the real `~/.agents/skills` links (sections:
+  ENABLED / INSTALLED_DISABLED / INSTALLED_NO_KEY / REGISTERED_NOT_INSTALLED /
+  ORPHAN_INSTALLED / PROFILE_ONLY_RISK / MANUAL_LINK_RISK / CODEX_UNLISTED_ENABLED).
+  Deterministic fixture suite registered as `scripts/claude-plugins-sync.test.py`
+  (27 checks, tmp-dir isolated via CLAUDE_BASE_DIR / CLAUDE_PROFILES_DIR).
 - **git-safety-net** v1.16.0 → v1.16.1: closes a discrimination gap in the
   eval suite's first negative case. `evals.json` eval 9 asserted that ordinary
   edit-and-commit work draws no forensic sweep, but it did so by enumerating
