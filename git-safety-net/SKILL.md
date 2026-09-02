@@ -346,9 +346,17 @@ The habits that keep a branch tangle from ever stranding work:
   run it before every push and before opening any PR:
   ```bash
   base=<the base SHA you recorded when you created the branch>
+  git rev-parse --verify "$base^{commit}"   # must print a SHA — see below before trusting the rest
   git log  --oneline "$base"..HEAD     # every commit here must be yours
   git diff --name-only "$base" HEAD    # every path here must be yours
   ```
+  **The verify line is load-bearing.** If `$base` is empty or unresolvable, `"$base"..HEAD` becomes
+  `HEAD..HEAD` and the `git log` prints nothing with exit 0 — indistinguishable from "no foreign
+  commits". The check fails green, which is the direction that matters. And **"yours" is not
+  derivable from Git**: in a shared checkout both sessions write the same author and committer, so
+  no flag separates them. It comes from the SHAs you recorded as you committed. If you cannot say
+  which commits are yours, stop and ask — the repair deletes a commit, so a guess here is the loss
+  this skill exists to prevent.
   Record that base SHA when you branch. Recovering it later with `git merge-base origin/main HEAD`
   reads a *cached* remote ref, and the fetch that would refresh it is itself gated on exclusive
   ownership — so on a contended checkout the derived base is the one input you cannot safely
@@ -658,11 +666,17 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
   so the test reports "already gone" for a branch whose fate is unknown — and you stop preserving
   it. Merge the streams (`> f 2>&1`, `&> f`) and the same failure writes 155 bytes, so the test
   reports "still there" for a branch that is long gone. Use the exit code the command has for
-  exactly this: `git ls-remote --exit-code <remote> <ref>` returns **0** when the ref matched, **2**
-  when it did not, and anything else (**128** for an unreachable remote) means the probe itself
-  failed — three outcomes the file-size test collapses into two, differently each time. Same trap in the working tree: `[ -e <path> ]` cannot tell a tracked-and-clean
-  file from an untracked collision. Ask Git instead — `git cat-file -e <branch>:<path>` (0 = the
-  branch has it, non-zero = it does not).
+  exactly this: `git ls-remote --exit-code <remote> refs/heads/<branch>` returns **0** when the ref
+  matched, **2** when it did not, and anything else (**128** for an unreachable remote) means the
+  probe itself failed — three outcomes the file-size test collapses into two, differently each time.
+  Pass the **fully-qualified** ref: `ls-remote` matches on the tail of the name across all
+  namespaces, so a bare branch name also matches a same-named tag and returns 0 for a branch that
+  was deleted (measured — a common shape after a release tags its branch name). Same trap in the working tree: `[ -e <path> ]` cannot tell a tracked-and-clean
+  file from an untracked collision. Ask Git instead — `git cat-file -e <branch>:<path>`, where 0 means the
+  branch has it. Do not read non-zero as "it does not": 128 also covers a mistyped branch name and a
+  path that traverses a tracked symlink, and Git distinguishes them only in the stderr text — so
+  read that text rather than the code alone, or you have rebuilt the very defect this entry opened
+  with.
 - **You're on a detached HEAD after checking out a commit** — that commit is safe as long as you
   `git switch -c <branch> HEAD` (or the reflog remembers it for ~90 days). Don't leave important
   new work on a detached HEAD across a `gc`.

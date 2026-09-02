@@ -53,6 +53,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `rebase.autoStash` hazard is documented from measurement: on a conflicted rebase
   a sibling session's uncommitted work leaves the working tree while
   `git stash list` shows nothing, because an autostash is not a stash entry.
+  Every probe that ships carries the guard that stops it failing green: an
+  unresolvable base turns `"$base"..HEAD` into `HEAD..HEAD` and prints nothing at
+  exit 0, indistinguishable from "clean", so the base is verified first; Git cannot
+  attribute commits in a shared checkout (both sessions write the same author), so
+  "which are mine" is a recorded fact and a stop condition, not a query; the
+  content grep needs its diff `+` stripped and its path checked, since a renamed
+  file and an unstripped needle both return 0 with the control line passing;
+  `--contains` stops reporting zero the moment the rescue ref exists, so the
+  reading must exclude it; `ls-remote` takes a fully-qualified `refs/heads/<branch>`
+  because a bare name also matches a same-named tag; and `cat-file -e` returns 128
+  for a mistyped branch and a symlinked path as well as a missing file.
   Every exit code, both failure directions, and each of the three wrong
   instruments were measured, not recalled.
 - **tibo-reset-codex** v1.2.2 → v1.3.1: add the missing local-account

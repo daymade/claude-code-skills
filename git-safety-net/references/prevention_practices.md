@@ -287,9 +287,18 @@ precondition:
 
 ```bash
 base=<the base SHA you recorded when you created the branch>
+git rev-parse --verify "$base^{commit}"   # must print a SHA, or everything below is meaningless
 git log  --oneline "$base"..HEAD          # every commit here must be yours
 git diff --name-only "$base" HEAD         # every path here must be yours
 ```
+
+Two things this check cannot do for you. If `$base` is empty or unresolvable, `"$base"..HEAD`
+degenerates to `HEAD..HEAD`: the `git log` prints nothing and exits 0, which is exactly what "clean"
+looks like — hence the verify line above, which fails loudly instead. And **Git cannot tell you
+which commits are yours**: a shared checkout gives both sessions the same author and committer
+identity, so no `--author` filter separates them. The answer comes from the SHAs you recorded as you
+committed, which is the second reason to record as you go. If you cannot say with certainty which
+commits are yours, stop and ask rather than proceed — every step below deletes a commit.
 
 **Record the base SHA at branch creation.** `git merge-base origin/main HEAD` recovers it only from
 a *cached* remote ref, and refreshing that cache is a fetch — which **Shared checkout and concurrent
@@ -324,6 +333,10 @@ existing sequence in order:
    ```bash
    git branch rescue/foreign-<short-sha> <foreign-sha>
    ```
+   If this exits 128 with `a branch named ... already exists`, do not shrug it off and continue:
+   confirm the existing ref points at the same object (`git rev-parse rescue/foreign-<short-sha>`)
+   before treating this step as done. A same-named ref at a *different* object means someone else's
+   repair is already in flight.
 4. **Rebase onto the foreign commit's parent — not onto the base.** `git rebase --onto X Y branch`
    replays `Y..branch`, so `--onto "$base" <foreign-sha>` discards **everything before the foreign
    commit, including your own earlier commits**, and reports success with exit 0. That is only
@@ -370,7 +383,11 @@ a real commit whose work had definitively shipped:
 - **"No ref contains it" does *not* prove the work is unique.** `git for-each-ref --contains <sha>`
   (or `git branch -a --contains <sha>`) reports **zero** refs for a commit that already merged,
   because a **squash or rebase merge re-writes it under a new SHA** — the original object survives
-  only as an unreachable dangler while its content sits in the integration branch.
+  only as an unreachable dangler while its content sits in the integration branch. Note you can no
+  longer observe that zero once step 3 has run: your own `rescue/foreign-<sha>` contains it, so the
+  count is never zero again (measured: 1 → 2 on creating the rescue ref). Exclude your own ref —
+  `git for-each-ref --contains <sha> --format='%(refname)' | grep -v '^refs/heads/rescue/'` — or the
+  reading is about a ref you created a minute ago.
 - **Hash-equality comparison of whole files against the integration branch does not prove it
   either.** Hashing `git show <sha>:<path>` against `git show origin/main:<path>` reports
   "different" for every file as soon as the branch moves on; any later commit touching the same
@@ -380,11 +397,18 @@ a real commit whose work had definitively shipped:
 - **A string the commit added, grepped against the integration branch, does answer** — with the
   control line that makes it an instrument rather than a guess:
   ```bash
+  git show origin/main:<path> >/dev/null   # must succeed first: 128 here means the path moved, and
+                                           # then BOTH greps below return 0 and the control passes
   git show <sha> -- <path> | grep '^+' | grep -v '^+++'   # read these; pick one distinctive line
-  needle='<a distinctive phrase from that output>'
+  needle='<that phrase WITHOUT its leading + — diff output carries one, and grep -cF is literal>'
   git show origin/main:<path> | grep -cF "$needle"                  # >0 ⇒ the work is in main
   git show origin/main:<path> | grep -cF 'string-that-cannot-exist' # must be 0, or the probe is broken
   ```
+  Both leading-`+` and a renamed path produce the same false negative — 0 hits with the control line
+  passing — so neither is caught by the control alone; that is what the first line and the `+` note
+  are for. If the file was renamed or moved in the integration branch, this probe cannot answer:
+  fall through to Mode E's rung 4 function/marker-level probe, which is
+  built for exactly the absorbed-into-a-refactor case.
   Treat the result as an explanation of *why* an ancestry check disagreed, not as deletion
   authority: it reads one string in one file, while Mode C's trial merge is the check this skill
   records as right every time. If the work turns out to exist only on your branch, it was never
