@@ -46,6 +46,18 @@ into every profile's settings.json. Claude Code treats enabled plugin state as
 config-dir-local, so sharing the cache is not enough: without this mirror, Kimi/GLM/etc.
 see the files but silently don't load most skills.
 
+ADOPTION (the write-back half of the mirror; added after the 2026-09-03 loss incident)
+------------------------
+`claude plugin install/enable` writes enabledPlugins keys into the ACTIVE profile's
+settings.json only — main never learns the key, so the replace-style mirror above then
+wipes it from every profile (and eventually from the active one too). Every "my skills
+disappeared" report traced back to this. The sync therefore ADOPTS first: before
+mirroring, each profile's enabledPlugins is scanned for keys main lacks; keys whose
+value is consistent across profiles are written back into main's settings.json (atomic,
+other keys preserved), then mirrored everywhere. Keys whose value CONFLICTS across
+profiles are not adopted and are preserved per-profile until resolved manually —
+never silently overwritten.
+
 Usage:
     python3 claude-plugins-sync.py            # apply
     python3 claude-plugins-sync.py --dry-run  # preview
@@ -312,25 +324,136 @@ def read_default_enabled_plugins():
     return enabled
 
 
+def _iter_profile_settings(skip: str | None):
+    """Yield (profile_dir, parsed settings.json) for every readable profile.
+
+    Malformed/unreadable profile settings are tolerated (skip + warn) — same posture as
+    collect_canonical() toward profile known_marketplaces.json. The default profile is
+    excluded via its path; `skip` optionally narrows to one profile name (--profile)."""
+    if not PROFILES_DIR.is_dir():
+        return
+    for profile_dir in sorted(PROFILES_DIR.iterdir()):
+        if not profile_dir.is_dir() or profile_dir == BASE:
+            continue
+        if skip and profile_dir.name != skip:
+            continue
+        f = profile_dir / SETTINGS
+        if not f.exists():
+            continue
+        try:
+            with open(f, encoding="utf-8") as fh:
+                settings = json.load(fh)
+        except (json.JSONDecodeError, OSError) as e:
+            err(f"WARNING: {f} unreadable ({e}); skipping it for adoption scan")
+            continue
+        if not isinstance(settings, dict):
+            err(f"WARNING: {f}: settings root is not an object; skipping it for adoption scan")
+            continue
+        yield profile_dir, settings
+
+
+def adopt_profile_only_enabled_keys(default_enabled: dict, skip: str | None) -> bool:
+    """Write back enabledPlugins keys that only profile settings contain (main lacks).
+
+    `claude plugin install/enable` writes into the ACTIVE profile's settings.json only;
+    the replace-style mirror would then erase those keys from every profile. Adoption
+    closes that hole. A key is adopted only when its value is IDENTICAL in every profile
+    that has it; conflicting keys are left alone (and preserved per-profile by
+    write_profile_settings) so an explicit enable/disable is never silently overwritten.
+    Returns True when main's settings.json was rewritten. No-ops in --dry-run."""
+    observed = {}  # key -> {value: [profile names]}  (value order-independent)
+    for _pd, settings in _iter_profile_settings(skip):
+        enabled = settings.get("enabledPlugins")
+        if enabled is None:
+            continue
+        if not isinstance(enabled, dict):
+            err(f"WARNING: {_pd / SETTINGS}: enabledPlugins is not an object; adoption scan skipped for it")
+            continue
+        for key, value in enabled.items():
+            if key in default_enabled:
+                continue  # main already owns the key; main wins (existing merge rule)
+            observed.setdefault(key, {}).setdefault(bool(value), []).append(_pd.name)
+
+    adopted, conflicts = [], []
+    for key, by_value in observed.items():
+        if len(by_value) == 1:
+            value = next(iter(by_value))
+            default_enabled[key] = value
+            adopted.append(f"{key}={value}")
+        else:
+            conflicts.append(key)
+            err(
+                f"WARNING: enabledPlugins key {key!r} has conflicting values across profiles "
+                f"({ {v: names for v, names in by_value.items()} }); NOT adopted — resolve by "
+                "setting it in the default settings.json, then re-run."
+            )
+    if DRY:
+        for a in adopted:
+            log(f"  [default] would adopt profile-only key {a}")
+        return False
+    if not adopted:
+        return False
+    return _write_default_enabled_plugins(default_enabled, adopted)
+
+
+def _write_default_enabled_plugins(default_enabled: dict, adopted: list) -> bool:
+    """Atomically rewrite <base>/settings.json with the adopted enabledPlugins map,
+    preserving every other key. Caller guarantees something actually changed."""
+    settings_path = BASE / SETTINGS
+    with open(settings_path, encoding="utf-8") as fh:
+        settings = json.load(fh)
+    if not isinstance(settings, dict):
+        raise ValueError(f"{settings_path}: settings root must be an object")
+    settings["enabledPlugins"] = json.loads(json.dumps(default_enabled))
+    tmp = settings_path.with_name(f"{settings_path.name}.{os.getpid()}.tmp")
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(settings, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    os.replace(tmp, settings_path)
+    log(f"  [default] adopted {len(adopted)} profile-only enabledPlugins key(s): {', '.join(adopted)}")
+    return True
+
+
 def write_profile_settings(config_dir: Path, default_enabled: dict):
-    """Mirror default enabledPlugins into a profile settings.json, preserving other keys."""
+    """Mirror default enabledPlugins into a profile settings.json, preserving other keys.
+
+    Key-level semantics: the default map is the BASE, and this profile's own enabledPlugins
+    keys that main lacks are PRESERVED as-is. Those survivors are exactly the keys whose
+    values conflict across profiles (adopt_profile_only_enabled_keys skips them with a
+    warning), so an explicit per-profile enable/disable is never silently overwritten —
+    the profile keeps its value and the conflict warning keeps firing every run until the
+    key is resolved into main's settings.json."""
     if config_dir == BASE:
         return
     out = config_dir / SETTINGS
     if out.exists():
-        with open(out, encoding="utf-8") as fh:
-            settings = json.load(fh)
+        try:
+            with open(out, encoding="utf-8") as fh:
+                settings = json.load(fh)
+        except (json.JSONDecodeError, OSError) as e:
+            # Same posture as the adoption scan: skip the broken profile with a warning
+            # instead of letting one bad file crash the whole sync pass.
+            err(f"WARNING: {out} unreadable ({e}); skipping enabledPlugins mirror for this profile")
+            return
     else:
         settings = {}
     if not isinstance(settings, dict):
         raise ValueError(f"{out}: settings root must be an object")
 
-    if settings.get("enabledPlugins") == default_enabled:
+    current = settings.get("enabledPlugins")
+    if not isinstance(current, dict):
+        current = {}
+    merged = dict(default_enabled)
+    for key, value in current.items():
+        if key not in merged:
+            merged[key] = value  # profile-only survivor (conflicting key): keep per-profile value
+
+    if current == merged:
         return
 
-    settings["enabledPlugins"] = json.loads(json.dumps(default_enabled))
+    settings["enabledPlugins"] = merged
     if DRY:
-        log(f"  [{config_dir.name}] would mirror enabledPlugins ({len(default_enabled)} entries)")
+        log(f"  [{config_dir.name}] would mirror enabledPlugins ({len(merged)} entries)")
         return
 
     tmp = out.with_name(f"{out.name}.{os.getpid()}.tmp")
@@ -338,7 +461,7 @@ def write_profile_settings(config_dir: Path, default_enabled: dict):
         json.dump(settings, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, out)
-    log(f"  [{config_dir.name}] mirrored enabledPlugins ({len(default_enabled)} entries)")
+    log(f"  [{config_dir.name}] mirrored enabledPlugins ({len(merged)} entries)")
 
 
 def _target_profile():
@@ -375,12 +498,17 @@ def _main_locked():
         return
     log(f"canonical: {len(canonical)} marketplace(s) (union of default + profiles)")
 
+    # 0) adoption: bring profile-only enabledPlugins keys back into main BEFORE mirroring,
+    #    so a `claude plugin install` done inside any profile survives the mirror instead
+    #    of being wiped from every profile. Mutates default_enabled in place.
+    target = _target_profile()
+    adopt_profile_only_enabled_keys(default_enabled, target)
+
     # 1) default (~/.claude): canonicalise its JSON only, never restructure the real store.
     write_profile_json(BASE, canonical)
     log(f"  [default] synced {BASE_PLUGINS / KM}")
 
     # 2) profiles: ensure structure + write own JSON (one if --profile given, else all).
-    target = _target_profile()
     if PROFILES_DIR.is_dir():
         for profile_dir in sorted(PROFILES_DIR.iterdir()):
             if not profile_dir.is_dir():
