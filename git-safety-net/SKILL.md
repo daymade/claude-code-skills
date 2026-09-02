@@ -381,20 +381,15 @@ The load-bearing few:
   git log  --oneline "$base"..HEAD     # every commit here must be yours
   git diff --name-only "$base" HEAD    # every path here must be yours
   ```
-  **The verify line is load-bearing, for one input in particular.** If `$base` is **empty** —
-  unset variable, a command substitution that failed — `"$base"..HEAD` becomes `HEAD..HEAD`, and the
-  `git log` prints nothing at exit 0, indistinguishable from "no foreign commits". A non-empty but
-  unresolvable base is not this problem: it fails loudly (`fatal: Invalid revision range`, exit
-  128). Measured — so the case the guard is there for is the quiet one, and it is the only one you
-  would otherwise miss. And **"yours" is not
-  derivable from Git**: in a shared checkout both sessions write the same author and committer, so
-  no flag separates them. It comes from the SHAs you recorded as you committed. If you cannot say
-  which commits are yours, stop and ask — the repair deletes a commit, so a guess here is the loss
-  this skill exists to prevent.
-  Record that base SHA when you branch. Recovering it later with `git merge-base origin/main HEAD`
-  reads a *cached* remote ref, and the fetch that would refresh it is itself gated on exclusive
-  ownership — so on a contended checkout the derived base is the one input you cannot safely
-  recompute at the moment you need it.
+  **The verify line is load-bearing.** An **empty** `$base` turns `"$base"..HEAD` into `HEAD..HEAD`:
+  no output at exit 0, indistinguishable from "no foreign commits". That silent case is the one the
+  guard exists for; § A foreign commit adopted onto your branch has it and the louder one measured.
+  And **"yours" is not derivable from Git**: in a shared checkout both sessions write the same
+  author and committer, so no flag separates them. It comes from the SHAs you recorded as you
+  committed. If you cannot say which commits are yours, stop and ask — the repair deletes a commit,
+  so a guess here is the loss this skill exists to prevent.
+  Record that base SHA when you branch — deriving it later reads a cached remote ref, and the fetch
+  that would refresh it is itself ownership-gated § A foreign commit adopted onto your branch.
   **A foreign commit in that range is evidence another writer was in this checkout, so repair is
   not yours to start.** Stop; the ownership rules above apply unchanged. Once ownership has
   transferred, repair is a history rewrite of *your* branch — `git rebase --onto` checks out the

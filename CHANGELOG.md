@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **peer-message** v1.0.0 (marketplace v3.6.0): restore the previously uncommitted Claude UDS messenger from its source session and extend it into a local Claude Code ↔ Codex coordination layer. The bundled stdlib CLI discovers `claude:` and `codex:` targets across isolated standard Claude profiles, preserves the original authenticated UDS fallback, routes Codex through the first-party `codex queue --thread` command, supports explicitly counted cross-provider broadcasts, adds source/reply envelopes with explicit provenance strength, and verifies delivery from Claude transcripts or Codex queue/thread history without writing either product's SQLite stores. Claude uses a host-recognized peer wrapper; Codex provenance remains advisory text enforced by receiver-side governing instructions. The Skill-local official-feature reference owns the corrected availability and inbound-policy boundaries. The registered test suite, live Codex queue acceptance, and subsequent thread-history consumption were independently verified.
 
 ### Changed
+- **git-safety-net** v1.15.2 → v1.16.0: adds the Skill's first behavioural eval
+  suite and trims one paragraph of Mode D.
+
+  `evals/evals.json` holds ten scenarios. Eight are failure shapes measured
+  first-hand rather than imagined: an empty `git branch --contains` for work that
+  did land (a squash merge rewrote the SHA); a sibling session's commit adopted
+  onto your branch, invisible to `git status` and to every per-commit check; a
+  `git rebase --onto <base> <foreign-sha>` that silently discards the commits
+  before the foreign one and exits 0; `merge-base --is-ancestor` answering 1 for
+  squash-merged work and 128 for a SHA it does not have; an `ls-remote > file`
+  emptiness probe that reports "gone" for any failure written to stderr; an
+  autostash that a conflicted rebase leaves outside `git stash list`; a shared
+  index carrying another session's staged files; and a `git worktree remove` that
+  refuses over untracked files, where forcing past it destroys content the object
+  store holds no copy of while the branch's commits would have survived anyway. The remaining two are negative: an
+  ordinary edit-and-commit in a clean solo repo, and a week-old stash in a
+  fully-pushed one, must not draw an audit, a rescue ref, or an alarm — the
+  Skill's own boundary is forensics, not routine work, and a check that fires on
+  healthy input trains its reader to bypass it. Assertions are written against
+  intent rather than a named script, so an agent reaching the same outcome by
+  another sanctioned route passes; each is a statement a grader holding only the
+  session transcript can mark true or false.
+
+  Separately, the Mode D paragraph on the base-SHA verify line moves its measured
+  detail — the `HEAD..HEAD` degeneration, the contrasting `fatal: Invalid
+  revision range` at exit 128, and the full rationale for recording the base at
+  branch creation — into `prevention_practices.md`, newly routed by two
+  `§`-pointers. The directional fact the guard exists for, that the empty case is
+  the silent one, stays inline: a reader who cannot see why the guard matters
+  deletes it as noise.
 - **daymade-audio** v1.32.5 → v1.33.0 (`asr-transcribe-to-text`): replaces the stale “Minute URL always ends the job” rule with explicit outcomes. Upload-only still stops at the URL; a request that names upload but no downstream result lands at resumable `outcome_pending` instead of forcing a guess; transcript-only waits for a readable Feishu transcript; project delivery hands preprocessing into `meeting-ingest` and cannot finish until routing, full correction, project indexes, verified Git handoff, and the pushed delivery receipt are complete. A later downstream request preserves the same `minute_token`/URL and resumes instead of re-uploading.
 - **git-safety-net** v1.15.1 → v1.15.2: give the references section-level
   routing. Measured before the change: of 39 reference sections, only 11 had any
