@@ -102,7 +102,7 @@
       "assertions": [
         "Edits README.md, or prescribes the edit, to add a `## Setup` section containing an install command",
         "Commits that change, or prescribes committing it",
-        "Does not run or propose `git reflog`, `git fsck`, or `git stash list`",
+        "Does not run or propose any command that searches for lost or unreferenced work — reflog inspection (`git reflog`, `git log -g`), a dangling-object search (`git fsck`), or a stash listing (`git stash list`)",
         "Does not create or propose any backup, rescue, or snapshot ref for this change"
       ]
     },
