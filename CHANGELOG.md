@@ -12,6 +12,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **daymade-audio** v1.32.5 → v1.33.0 (`asr-transcribe-to-text`): replaces the stale “Minute URL always ends the job” rule with explicit outcomes. Upload-only still stops at the URL; a request that names upload but no downstream result lands at resumable `outcome_pending` instead of forcing a guess; transcript-only waits for a readable Feishu transcript; project delivery hands preprocessing into `meeting-ingest` and cannot finish until routing, full correction, project indexes, verified Git handoff, and the pushed delivery receipt are complete. A later downstream request preserves the same `minute_token`/URL and resumes instead of re-uploading.
+- **git-safety-net** v1.15.0 → v1.15.1: put mechanical judges under the three
+  scripts that had none — and they were the load-bearing three.
+  `git_verify_branch_merged.sh` is what the Skill's own rules call the only check
+  that was right every time, what Mode E rung 1 accepts as deletion-grade evidence,
+  and what Mode C routes "is everything merged?" to; it is referenced six times and
+  had zero tests. `git_loss_audit.sh` (the Mode B evidence path, required before any
+  rebase or branch-delete) and `git_preserve_danglers.sh` (the only script here that
+  writes refs) were likewise untested, while the three scripts that did have tests
+  were the lower-stakes ones. 27 tests close that inversion. No runtime behaviour
+  changes: not one line of any script was edited.
+  Every expectation was calibrated by running the script against the fixture first,
+  which is how two wrong assumptions were caught before they became tests — deleting
+  a branch does not create a dangling commit (the reflog keeps it reachable until
+  expired, so a naive fixture would have asserted against an empty run and passed for
+  the wrong reason), and a branch whose content is a textual subset of the base's is
+  still correctly reported UNMERGED, because containment is decided by a three-way
+  merge rather than by line presence.
+  The suite was then mutation-calibrated rather than trusted for being green: breaking
+  the containment check turns six tests red, restoring the `set -e` abort that the
+  script's own comments record as a past regression turns the conflict test red,
+  inverting the local-vs-remote ref precedence turns three red, widening the audit's
+  exit 1 to cover a routine stash turns the two alarm-fatigue tests red, and making
+  the pinning script delete a ref or use the wrong namespace turns the
+  non-destructive-invariant test red. One mutation was NOT caught — removing the `--`
+  pathspec guard leaves every test green, because the script resolves to a fully
+  qualified ref before the diff — so that test was renamed to what it actually proves
+  and the gap is stated in its docstring instead of being implied away.
+  The content-containment expectations are skipped below git 2.38, where
+  `merge-tree --write-tree` does not exist and the script deliberately degrades to a
+  conservative verdict; failing a healthy older runner would teach people to bypass
+  the suite.
 - **git-safety-net** v1.14.0 → v1.15.0: add the inverse of the shared-checkout
   failure the previous release covered. v1.14.0 handles *your uncommitted work*
   being stranded on *another session's* branch; this adds *their commit* landing
