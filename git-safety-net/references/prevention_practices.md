@@ -324,21 +324,44 @@ existing sequence in order:
    ```bash
    git branch rescue/foreign-<short-sha> <foreign-sha>
    ```
-4. **Rebase — and confirm the working tree is clean before you do.** With `rebase.autoStash`
-   enabled (measured behaviour), a rebase on a shared tree silently stashes whatever a sibling
-   session left uncommitted. On a clean run it is restored and you would never know. If the rebase
-   **stops on a conflict**, their files are gone from the working tree and `git stash list` shows
-   **nothing** — an autostash is not a stash entry, so the first check anyone runs comes back empty
-   while their work sits at `.git/rebase-merge/autostash` and in the one `Created autostash: <sha>`
-   line the rebase already printed. `git rebase --abort` restores it, but only if someone knows to
-   look. This is the unscoped stash of another session's work that this skill forbids, performed on
-   your behalf by a config flag.
+4. **Rebase onto the foreign commit's parent — not onto the base.** `git rebase --onto X Y branch`
+   replays `Y..branch`, so `--onto "$base" <foreign-sha>` discards **everything before the foreign
+   commit, including your own earlier commits**, and reports success with exit 0. That is only
+   harmless when the foreign commit happens to be the first commit after the base. The general form
+   drops exactly one commit and keeps yours on both sides of it:
    ```bash
-   git rebase --onto "$base" <foreign-sha> <your-branch>   # replays only the commits after it
+   git rebase --onto "<foreign-sha>^" "<foreign-sha>" <your-branch>
    ```
-5. **Retiring either ref is a Mode E action** under Mode C evidence — the same standard this skill
+   Measured on a branch whose history was `A(yours) → F(foreign) → C(yours)`: the `--onto "$base"`
+   form left only `C` and silently dropped `A`; the form above kept `A` and `C` and dropped only `F`.
+   Bounds: it removes **one non-merge commit**. For several foreign commits, or one that is a merge,
+   stop and drop them explicitly through an interactive rebase, re-reading this list first.
+   The tree must be clean before you start. If it is not, `git rebase` refuses with
+   `error: cannot rebase: You have unstaged changes. / Please commit or stash them.` — and note that
+   the second half of Git's own suggestion is the unscoped stash this skill forbids. The correct
+   response is that you are not the sole writer yet: go back to the ownership step.
+   With `rebase.autoStash` enabled the refusal never happens, and that is worse (measured): the
+   rebase silently stashes whatever a sibling session left uncommitted, and if it then **stops on a
+   conflict**, their files are gone from the working tree while `git stash list` shows **nothing** —
+   an autostash is not a stash entry, so the first check anyone runs comes back empty. Their work is
+   at `.git/rebase-merge/autostash`, and in the single `Created autostash: <sha>` line already
+   printed. `git rebase --abort` restores it, but only if someone knows to look.
+5. **Re-run the detection.** The repair is not verified by the rebase's exit code:
+   ```bash
+   git log  --oneline "$base"..<your-branch>    # every commit yours — and your earlier ones still here
+   git diff --name-only "$base" <your-branch>   # every path yours
+   ```
+   Check for both failures at once: the foreign commit gone, *and* nothing of yours gone with it.
+6. **If the branch was already pushed** — which the incident above describes, since the foreign work
+   reached a PR — the rewrite makes your local branch diverge and the next `git push` is rejected
+   with `Updates were rejected because the tip of your current branch is behind`. Do not resolve that
+   here: force-updating a published ref is governed by **Destructive-operation safety (reset /
+   force-push / rewrite)** in [recovery_playbook.md](recovery_playbook.md), which requires
+   `--force-with-lease` over `--force`. Anyone else who fetched that branch also needs telling.
+7. **Retiring either ref is a Mode E action** under Mode C evidence — the same standard this skill
    applies to every other preserving ref it tells you to create, and no weaker. Do not delete
-   `rescue/foreign-<sha>` on a heuristic.
+   `rescue/foreign-<sha>` on a heuristic. Note the rescue ref may also be the only anchor for *your*
+   own commits if step 4 was run in the discarding form; step 5 is what catches that.
 
 **Why the obvious "did their work survive?" probes mislead.** These are worth knowing before you
 reach Mode C, because both look authoritative and both were measured returning the wrong answer on

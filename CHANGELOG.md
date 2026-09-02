@@ -35,11 +35,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `merge-base --is-ancestor` answers only where the merge preserved the commit, so
   under squash merges its exit 1 means "not this object", not "not landed" — the
   probe that survives either strategy is a content grep carrying a known-absent
-  control line. Troubleshooting also gains the lost-receipt entry (a moved remote
+  control line; `--is-ancestor` also has a third exit code, 128, for a SHA this
+  repository does not have — a different answer from 1. The prescribed rebase is
+  `--onto "<foreign-sha>^"`, never `--onto "$base"`: the latter replays
+  `<foreign-sha>..<branch>` and so discards the author's *own* earlier commits when
+  the foreign one is not first after the base, silently and with exit 0 (measured
+  on an `A(yours) → F(foreign) → C(yours)` branch: `A` vanished). Because a rebase
+  exit code cannot report that, re-running the detection is now a required step,
+  and the already-pushed case routes to the existing force-push contract instead of
+  inventing one. Troubleshooting also gains the lost-receipt entry (a moved remote
   ref is not proof *your* write landed when concurrent sessions are merging) and a
-  probe-shape entry (`git ls-remote > f; [ -s f ]` reports "still exists" for a
-  deleted branch because network error text makes the file non-empty;
-  `--exit-code` separates matched (0), no match (2), and probe failure (128)). The
+  probe-shape entry: `git ls-remote > f; [ -s f ]` is wrong in **both** directions
+  depending on one redirection detail — bare `> f` leaves 0 bytes because Git
+  writes the failure to stderr, so a live branch reads as "already gone", while
+  `2>&1` writes 155 bytes and a deleted branch reads as "still there";
+  `--exit-code` separates matched (0), no match (2), and probe failure (128). The
   `rebase.autoStash` hazard is documented from measurement: on a conflicted rebase
   a sibling session's uncommitted work leaves the working tree while
   `git stash list` shows nothing, because an autostash is not a stash entry.

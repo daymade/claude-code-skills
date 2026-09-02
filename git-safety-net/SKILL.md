@@ -359,8 +359,12 @@ The habits that keep a branch tangle from ever stranding work:
   branch it rewrites — so it runs the existing sequence rather than a shortcut: the Mode B evidence
   path, then `git branch backup/pre-rewrite <your-branch>` (**Snapshot before any history rewrite**
   — this is what makes the rebase reversible), then `git branch rescue/foreign-<sha> <foreign-sha>`
-  (this preserves *their* work, a separate obligation and a different ref), then the rebase.
-  Retiring either ref afterwards is Mode C/E deletion-grade evidence, not a guess. Full procedure,
+  (this preserves *their* work, a separate obligation and a different ref), then
+  `git rebase --onto "<foreign-sha>^" "<foreign-sha>" <your-branch>` — **onto the foreign commit's
+  parent, never onto the base**, because `--onto "$base"` discards everything before the foreign
+  commit, your own earlier commits included, and exits 0. Then re-run the detection above: the
+  rebase's exit code does not tell you whether it took something of yours with it. Retiring either
+  ref afterwards is Mode C/E deletion-grade evidence, not a guess. Full procedure,
   and why the two obvious "did their work survive?" probes return the wrong answer, in **A foreign
   commit adopted onto your branch** in
   [references/prevention_practices.md](references/prevention_practices.md). Real incident: a
@@ -637,7 +641,10 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
   your commit — a squash or rebase merge re-writes it, so exit 1 there means "not this object", not
   "not landed", and acting on it produces exactly the double-apply this entry warns about (measured
   in one repository on one day: one merged PR's commit was an ancestor, another's was not, and both
-  had landed). The probe that survives either merge strategy is content, with its control line:
+  had landed). It has a third exit code too: **128** when `<your-sha>` is not a commit this
+  repository has — which is what you get for a hosted merge that created its own object, and it is
+  not the same answer as 1. The probe that survives either merge strategy is content, with its
+  control line:
   ```bash
   git show origin/<branch>:<path> | grep -cF '<a string only your version contains>'
   git show origin/<branch>:<path> | grep -cF 'string-that-cannot-exist'  # must be 0, or the probe is broken
@@ -645,12 +652,15 @@ the helpers authorizes `checkout`, `reset`, `push`, `stash drop`, `branch -d`, o
   Real incident: three merge attempts failed at the network layer while `origin/main` advanced
   twice — once for this author's merge, once for a parallel session's.
 - **A "did that branch get deleted?" probe says it still exists** — check the shape of the probe
-  before believing it. `git ls-remote <remote> <ref> > f` writes *error text* into that file when the
-  network fails, so a following `[ -s f ]` reads non-empty and reports "still there" for a branch
-  that is long gone. Use the exit code the command has for exactly this: `git ls-remote --exit-code
-  <remote> <ref>` returns **0** when the ref matched, **2** when it did not, and anything else (128
-  for an unreachable remote) means the probe itself failed — three outcomes the file-size test
-  collapses into two. Same trap in the working tree: `[ -e <path> ]` cannot tell a tracked-and-clean
+  before believing it, because `git ls-remote <remote> <ref> > f` followed by `[ -s f ]` is wrong in
+  **both** directions and which one you get depends on a redirection detail. Measured against an
+  unreachable remote: bare `> f` leaves the file at **0 bytes** (Git writes the failure to stderr),
+  so the test reports "already gone" for a branch whose fate is unknown — and you stop preserving
+  it. Merge the streams (`> f 2>&1`, `&> f`) and the same failure writes 155 bytes, so the test
+  reports "still there" for a branch that is long gone. Use the exit code the command has for
+  exactly this: `git ls-remote --exit-code <remote> <ref>` returns **0** when the ref matched, **2**
+  when it did not, and anything else (**128** for an unreachable remote) means the probe itself
+  failed — three outcomes the file-size test collapses into two, differently each time. Same trap in the working tree: `[ -e <path> ]` cannot tell a tracked-and-clean
   file from an untracked collision. Ask Git instead — `git cat-file -e <branch>:<path>` (0 = the
   branch has it, non-zero = it does not).
 - **You're on a detached HEAD after checking out a commit** — that commit is safe as long as you
