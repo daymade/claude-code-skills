@@ -15,8 +15,19 @@ class FeishuDeliveryContractTests(unittest.TestCase):
         cls.upload_flat = " ".join(cls.upload.split())
 
     def test_upload_route_distinguishes_all_terminal_outcomes(self):
-        for phrase in ("Upload-only", "Transcript-only", "Project delivery"):
+        for phrase in (
+            "Upload-only",
+            "Transcript-only",
+            "Project delivery",
+            "Downstream unspecified",
+        ):
             self.assertIn(phrase, self.upload)
+
+    def test_bare_upload_request_enters_resumable_pending_outcome(self):
+        self.assertIn("上传到飞书妙记，先转成适合 ASR 的格式", self.upload)
+        self.assertIn("outcome_pending", self.upload)
+        self.assertIn("next_required_phase=outcome_decision", self.upload)
+        self.assertIn("resumes that same", self.upload)
 
     def test_project_delivery_cannot_end_at_minute_url(self):
         self.assertIn("meeting-ingest", self.upload)

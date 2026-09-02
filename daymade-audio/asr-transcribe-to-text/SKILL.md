@@ -253,7 +253,7 @@ that requires a failed local run first.
 
 **Trigger phrases**: 传到妙记 / 上传到飞书妙记 / 让妙记转写 / create a minute from this audio / upload to Feishu minutes.
 
-**Decide the terminal outcome before uploading**:
+**Track the requested outcome before uploading**:
 
 - **Upload-only** — the user explicitly says they only want a Minute link or
   only want the media uploaded. Creating `minute_url` is the terminal state.
@@ -264,6 +264,12 @@ that requires a failed local run first.
   file, project indexes, or Git handoff. `meeting-ingest` owns the overall job;
   this skill is only its preprocessing participant. Switch to that orchestrator
   before upload and keep running until its delivery receipt is verified.
+- **Downstream unspecified** — the request says to preprocess/upload (for
+  example, “上传到飞书妙记，先转成适合 ASR 的格式”) but does not say what should
+  happen after the Minute exists. Honor the requested upload without inventing
+  transcript or project scope, then emit `outcome_pending` with the durable
+  token/URL. A later transcript or knowledge-base request resumes that same
+  Minute; it never starts over or depends on the original guess.
 
 Do not infer upload-only merely because the user's first clause says “上传到妙记”.
 An explicit downstream outcome in the same request or project context wins.
@@ -318,6 +324,9 @@ An explicit downstream outcome in the same request or project context wins.
      the cloud transcript, invokes `sync-feishu-minutes` for token-scoped
      ingest/routing/delegation, runs full `transcript-fixer`, updates every
      project-owned index, completes Git handoff, and records delivery.
+   - Downstream unspecified: return `minute_token`, `minute_url`,
+     `outcome_pending`, and `next_required_phase=outcome_decision`. Do not wait
+     for or file a transcript until the user supplies that downstream outcome.
 
 If readiness times out or a downstream stage blocks, report the exact last
 completed phase plus the durable `minute_token`/`minute_url`. Resume that same
@@ -325,6 +334,9 @@ token; never re-upload just to obtain a fresh URL.
 
 **Expected output**:
 - Upload-only success: a single `minute_url` the user can open.
+- Downstream-unspecified success: the requested upload is complete, while the
+  run remains explicitly resumable at `outcome_pending`; do not call it project
+  delivery.
 - Transcript-only success: `minute_url` plus a readable transcript artifact.
 - Project-delivery success: only the `meeting-ingest` pushed delivery receipt;
   preprocessing, URL creation, and transcript download are intermediate phases.
