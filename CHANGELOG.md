@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **peer-message** v1.0.0 (marketplace v3.6.0): restore the previously uncommitted Claude UDS messenger from its source session and extend it into a local Claude Code ↔ Codex coordination layer. The bundled stdlib CLI discovers `claude:` and `codex:` targets across isolated standard Claude profiles, preserves the original authenticated UDS fallback, routes Codex through the first-party `codex queue --thread` command, supports explicitly counted cross-provider broadcasts, adds source/reply envelopes with explicit provenance strength, and verifies delivery from Claude transcripts or Codex queue/thread history without writing either product's SQLite stores. Claude uses a host-recognized peer wrapper; Codex provenance remains advisory text enforced by receiver-side governing instructions. The Skill-local official-feature reference owns the corrected availability and inbound-policy boundaries. The registered test suite, live Codex queue acceptance, and subsequent thread-history consumption were independently verified.
 
 ### Changed
+- **git-safety-net** v1.16.0 → v1.16.1: closes a discrimination gap in the
+  eval suite's first negative case. `evals.json` eval 9 asserted that ordinary
+  edit-and-commit work draws no forensic sweep, but it did so by enumerating
+  three commands — so an agent that reached for `git log -g`, which inspects
+  the same reflog, would have passed a check written to catch exactly that
+  over-triggering. The assertion now names the category (any command searching
+  for lost or unreferenced work) and keeps the three commands as anchoring
+  examples, which is what a grader with no knowledge of this Skill can still
+  match against.
+
+  Found by the second independent reviewer and deliberately reported outside
+  its own scope: it was judging assertion *judgeability*, and noted this as a
+  weakness of a different kind rather than folding it into its findings. Kept
+  as a separate change so the axis boundary stays visible.
 - **git-safety-net** v1.15.2 → v1.16.0: adds the Skill's first behavioural eval
   suite and trims one paragraph of Mode D.
 
